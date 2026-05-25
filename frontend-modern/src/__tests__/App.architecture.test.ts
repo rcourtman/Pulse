@@ -46,7 +46,9 @@ describe('App architecture', () => {
     expect(appSource).not.toContain('const WorkloadsPage = lazy(');
     expect(appSource).not.toContain('const StoragePage = lazy(');
     expect(appSource).not.toContain('const RecoveryPage = lazy(');
-    expect(appSource).not.toContain("import('./features/infrastructure/InfrastructurePageSurface')");
+    expect(appSource).not.toContain(
+      "import('./features/infrastructure/InfrastructurePageSurface')",
+    );
     expect(appSource).not.toContain('component={InfrastructurePage}');
     expect(appSource).not.toContain('INFRASTRUCTURE_PATH');
     expect(appSource).not.toContain('<Route path={WORKLOADS_PATH}');
@@ -110,7 +112,7 @@ describe('App architecture', () => {
     expect(appLayoutSource).not.toContain("id: 'workloads',");
     expect(appLayoutSource).not.toContain("id: 'storage',");
     expect(appLayoutSource).not.toContain("id: 'recovery',");
-    expect(appLayoutSource).not.toContain("aria-label=\"Workspaces\"");
+    expect(appLayoutSource).not.toContain('aria-label="Workspaces"');
     expect(appLayoutSource).not.toContain('buildStorageRecoveryTabSpecs(');
     expect(appSource).not.toContain('DashboardPage');
     expect(headerAuditSource).not.toContain("['src/pages/Dashboard.tsx', 'PageHeader']");
@@ -183,6 +185,15 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain(
       "import { dialogStackHasBlockingDialog } from '@/components/shared/useDialogState';",
     );
+    expect(appLayoutSource).toContain(
+      "import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';",
+    );
+    expect(appLayoutSource).toContain(
+      'const ROOT_INFRASTRUCTURE_SETTINGS_PATH = buildInfrastructureWorkspacePath();',
+    );
+    expect(appLayoutSource).toContain('settingsRoute: ROOT_INFRASTRUCTURE_SETTINGS_PATH');
+    expect(appLayoutSource).not.toContain("settingsRoute: '/settings/workloads");
+    expect(appLayoutSource).not.toContain("settingsRoute: '/settings/infrastructure/platforms");
     expect(appLayoutSource).toContain('<OrgSwitcher');
     expect(appLayoutSource).toContain('const status = () => props.connectionStatus();');
     expect(appLayoutSource).toContain(

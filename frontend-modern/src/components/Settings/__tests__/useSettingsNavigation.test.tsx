@@ -80,52 +80,28 @@ describe('useSettingsNavigation', () => {
     });
   });
 
-  it('syncs the selected proxmox agent from canonical deep links on initial load', async () => {
+  it('does not derive selected agents from retired infrastructure deep links', async () => {
     renderHarness('/settings/infrastructure/platforms/proxmox/pbs');
-
-    await waitFor(() => {
-      expect(screen.getByTestId('selected-agent')).toHaveTextContent('pbs');
-    });
-  });
-
-  it('defaults the selected proxmox agent to pve on the base proxmox route', async () => {
-    renderHarness('/settings/infrastructure/platforms/proxmox');
 
     await waitFor(() => {
       expect(screen.getByTestId('selected-agent')).toHaveTextContent('pve');
     });
+    expect(navigateSpy).not.toHaveBeenCalled();
   });
 
-  it('translates the legacy install route into the canonical onboarding query', async () => {
+  it('does not translate retired infrastructure setup paths', async () => {
     renderHarness('/settings/infrastructure/install');
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=linux-host', {
-        replace: true,
-        scroll: false,
-      });
+      expect(navigateSpy).not.toHaveBeenCalled();
     });
   });
 
-  it('translates the legacy platform chooser route into the canonical onboarding query', async () => {
-    renderHarness('/settings/infrastructure/platforms');
+  it('does not translate retired workloads settings paths', async () => {
+    renderHarness('/settings/workloads/docker');
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=pick', {
-        replace: true,
-        scroll: false,
-      });
-    });
-  });
-
-  it('keeps legacy platform-management paths out of onboarding mode', async () => {
-    renderHarness('/settings/infrastructure/platforms/truenas');
-
-    await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure', {
-        replace: true,
-        scroll: false,
-      });
+      expect(navigateSpy).not.toHaveBeenCalled();
     });
   });
 });

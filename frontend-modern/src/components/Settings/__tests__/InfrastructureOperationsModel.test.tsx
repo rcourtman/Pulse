@@ -166,6 +166,10 @@ describe('infrastructure operations model', () => {
     expect(hasMachineInstallActions(row)).toBe(false);
     expect(getCapabilitySurfaceLabel('availability')).toBe('Availability data');
     expect(getCapabilityManagementPath('availability')).toBe('/settings/infrastructure');
+    expect(getCapabilityManagementPath('proxmox')).toBe('/settings/infrastructure');
+    expect(getCapabilityManagementPath('pbs')).toBe('/settings/infrastructure');
+    expect(getCapabilityManagementPath('pmg')).toBe('/settings/infrastructure');
+    expect(getCapabilityManagementPath('truenas')).toBe('/settings/infrastructure');
     expect(getPlatformConnectionsViewForCapability('availability')).toBeNull();
   });
 

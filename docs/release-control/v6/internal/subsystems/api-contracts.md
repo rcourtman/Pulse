@@ -220,7 +220,7 @@ output or bypass the normal non-admin redaction path.
 21. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts` shared with `security-privacy`: the API token settings state hook is both a security/privacy control surface and a canonical API payload contract boundary.
 22. `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts` shared with `agent-lifecycle`: the direct-node infrastructure settings state hook is both an agent lifecycle control surface and a shared Proxmox node API contract boundary.
 23. `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts` shared with `agent-lifecycle`: the infrastructure discovery runtime state hook is both an agent lifecycle control surface and a shared discovery/settings API contract boundary.
-    That same shared boundary also owns settings-route polling scope for discovery payloads: the `/api/discover` refresh loop and websocket-backed discovery status hydration may run only while the operator is on the infrastructure connections workspace under `/settings/infrastructure/platforms*`, not on the systems ledger or install workspace.
+    That same shared boundary also owns settings-route polling scope for discovery payloads: the `/api/discover` refresh loop and websocket-backed discovery status hydration may run only while the operator is on the canonical Infrastructure settings workspace at `/settings/infrastructure`, not on retired infrastructure sub-routes.
     Discovery refreshes and scan results are route-scoped state updates. If the
     settings route unmounts while a request is in flight, the hook must drop the
     result and avoid surfacing stale background errors into the next settings

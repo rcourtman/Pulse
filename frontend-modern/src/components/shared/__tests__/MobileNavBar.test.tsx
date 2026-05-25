@@ -146,7 +146,7 @@ describe('MobileNavBar', () => {
             id: 'proxmox',
             label: 'Proxmox',
             route: '/proxmox/overview',
-            settingsRoute: '/settings/infrastructure/platforms/proxmox/pve',
+            settingsRoute: '/settings/infrastructure',
             tooltip: 'Proxmox',
             enabled: true,
             live: true,

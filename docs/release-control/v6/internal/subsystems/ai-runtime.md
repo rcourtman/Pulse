@@ -676,7 +676,10 @@ platform/runtime surfaces must stay hidden from the AI-adjacent shell and must
 not be kept as disabled placeholders. The legacy `/infrastructure` route shell
 was retired alongside its page wrapper, and `/workloads`, `/storage`,
 `/recovery`, `/ceph`, `/ai`, and `/operations/*` remain unregistered
-top-level routes. The AI Chat launcher, Patrol surfaces, and
+top-level routes. Primary platform tab `settingsRoute` handoffs must also point
+to the canonical `/settings/infrastructure` workspace rather than retired
+settings aliases such as `/settings/workloads/docker` or nested
+`/settings/infrastructure/platforms/*` paths. The AI Chat launcher, Patrol surfaces, and
 `AssistantHandoffPayload` deep links must use canonical platform or runtime
 routes (`/proxmox/overview`, `/proxmox/storage`, `/kubernetes/workloads`, etc.)
 rather than reviving retired Infrastructure or aggregate workspace paths;

@@ -2,11 +2,11 @@ import type { JSX } from 'solid-js';
 import type { ConnectedInfrastructureItem, ConnectedInfrastructureSurface } from '@/types/api';
 import { getAgentCapabilityLabel, type AgentCapability } from '@/utils/agentCapabilityPresentation';
 import { getSourcePlatformLabel } from '@/utils/sourcePlatforms';
-import { type PlatformConnectionsView } from './platformConnectionsModel';
 import { buildInfrastructureWorkspacePath } from './infrastructureWorkspaceModel';
 
 export const TOKEN_PLACEHOLDER = '<api-token>';
 
+export type PlatformConnectionsView = 'proxmox' | 'truenas' | 'vmware';
 export type AgentPlatform = 'linux' | 'macos' | 'freebsd' | 'windows';
 export type UnifiedAgentStatus = 'active' | 'removed';
 export type ScopeCategory = 'default' | 'profile' | 'ai-managed' | 'na';

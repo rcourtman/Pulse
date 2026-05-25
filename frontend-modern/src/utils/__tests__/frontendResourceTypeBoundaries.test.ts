@@ -951,9 +951,7 @@ describe('frontend resource type boundaries', () => {
     expect(tagBadgesSource).toContain("from '@/components/shared/Tooltip'");
     expect(resourceDetailSummarySource).toContain("from '@/components/shared/TagBadges'");
     expect(resourceDetailDrawerOverviewSource).toContain('getAllFilterOptionLabel');
-    expect(resourceDetailSummarySource).not.toContain(
-      "from '@/components/Workloads/TagBadges'",
-    );
+    expect(resourceDetailSummarySource).not.toContain("from '@/components/Workloads/TagBadges'");
     expect(resourceDetailDrawerShellSource).toContain("from './ResourceDetailDrawerOverviewTab'");
     expect(resourceDetailDrawerShellSource).toContain("from './ResourceDetailDrawerDebugTab'");
     expect(resourceDetailDrawerStateSource).toContain(
@@ -3317,7 +3315,7 @@ describe('frontend resource type boundaries', () => {
       '@/components/Settings/infrastructureWorkspaceModel'.replace('@/components/Settings/', './'),
     );
     expect(infrastructureWorkspaceSource).not.toContain('inferViewFromPath');
-    expect(infrastructureWorkspaceModelSource).toContain(
+    expect(infrastructureWorkspaceModelSource).not.toContain(
       'export function deriveAddStepFromLegacyPath',
     );
     expect(infrastructureWorkspaceModelSource).toContain(

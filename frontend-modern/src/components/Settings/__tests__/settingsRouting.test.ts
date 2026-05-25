@@ -3,13 +3,13 @@ import {
   buildLegacyOperationsSettingsPath,
   agentKeyFromPlatformType,
   DEFAULT_SETTINGS_TAB,
-  deriveAgentFromPath,
   deriveTabFromPath,
   deriveTabFromQuery,
+  isRetiredSettingsCompatibilityPath,
+  isRouteableSettingsPath,
   resolveCanonicalSettingsPath,
   settingsAgentLabel,
   settingsAgentNodeLabel,
-  settingsAgentPath,
   settingsAgentPlatformType,
   settingsTabPath,
   type SettingsTab,
@@ -66,12 +66,8 @@ describe('settingsNavigationModel', () => {
 
   it('resolves only canonical settings paths', () => {
     expect(resolveCanonicalSettingsPath('/settings')).toBe('/settings/infrastructure');
-    expect(resolveCanonicalSettingsPath('/settings/workloads')).toBe(
-      '/settings/infrastructure',
-    );
-    expect(resolveCanonicalSettingsPath('/settings/workloads/docker')).toBe(
-      '/settings/infrastructure',
-    );
+    expect(resolveCanonicalSettingsPath('/settings/workloads')).toBeNull();
+    expect(resolveCanonicalSettingsPath('/settings/workloads/docker')).toBeNull();
     expect(resolveCanonicalSettingsPath('/settings/support')).toBe('/settings/support/diagnostics');
     expect(resolveCanonicalSettingsPath('/settings/system-updates')).toBe(
       '/settings/system-updates',
@@ -79,29 +75,13 @@ describe('settingsNavigationModel', () => {
     expect(resolveCanonicalSettingsPath('/settings/infrastructure')).toBe(
       '/settings/infrastructure',
     );
-    // All infrastructure sub-paths collapse to the single workspace.
-    expect(resolveCanonicalSettingsPath('/settings/infrastructure/install')).toBe(
-      '/settings/infrastructure',
-    );
-    expect(resolveCanonicalSettingsPath('/settings/infrastructure/platforms')).toBe(
-      '/settings/infrastructure',
-    );
-    expect(resolveCanonicalSettingsPath('/settings/infrastructure/platforms/truenas')).toBe(
-      '/settings/infrastructure',
-    );
-    expect(resolveCanonicalSettingsPath('/settings/infrastructure/operations')).toBe(
-      '/settings/infrastructure',
-    );
-    // Legacy proxmox paths redirect to the workspace.
-    expect(resolveCanonicalSettingsPath('/settings/infrastructure/api')).toBe(
-      '/settings/infrastructure',
-    );
-    expect(resolveCanonicalSettingsPath('/settings/infrastructure/api/pve')).toBe(
-      '/settings/infrastructure',
-    );
-    expect(resolveCanonicalSettingsPath('/settings/infrastructure/proxmox')).toBe(
-      '/settings/infrastructure',
-    );
+    expect(resolveCanonicalSettingsPath('/settings/infrastructure/install')).toBeNull();
+    expect(resolveCanonicalSettingsPath('/settings/infrastructure/platforms')).toBeNull();
+    expect(resolveCanonicalSettingsPath('/settings/infrastructure/platforms/truenas')).toBeNull();
+    expect(resolveCanonicalSettingsPath('/settings/infrastructure/operations')).toBeNull();
+    expect(resolveCanonicalSettingsPath('/settings/infrastructure/api')).toBeNull();
+    expect(resolveCanonicalSettingsPath('/settings/infrastructure/api/pve')).toBeNull();
+    expect(resolveCanonicalSettingsPath('/settings/infrastructure/proxmox')).toBeNull();
     expect(resolveCanonicalSettingsPath('/settings/integrations/api')).toBe(
       '/settings/security/api',
     );
@@ -121,6 +101,31 @@ describe('settingsNavigationModel', () => {
       '/settings/system/billing/plan',
     );
     expect(resolveCanonicalSettingsPath('/not-settings')).toBeNull();
+  });
+
+  it('keeps retired infrastructure settings aliases out of routeable settings paths', () => {
+    const retiredPaths = [
+      '/settings/workloads',
+      '/settings/workloads/docker',
+      '/settings/workloads/docker/agents',
+      '/settings/infrastructure/install',
+      '/settings/infrastructure/platforms',
+      '/settings/infrastructure/platforms/proxmox/pve',
+      '/settings/infrastructure/api/pve',
+      '/settings/infrastructure/proxmox',
+      '/settings/infrastructure/truenas',
+      '/settings/infrastructure/vmware',
+    ];
+
+    for (const path of retiredPaths) {
+      expect(isRetiredSettingsCompatibilityPath(path)).toBe(true);
+      expect(isRouteableSettingsPath(path)).toBe(false);
+    }
+
+    expect(isRouteableSettingsPath('/settings')).toBe(true);
+    expect(isRouteableSettingsPath('/settings/infrastructure')).toBe(true);
+    expect(isRouteableSettingsPath('/settings/security/api')).toBe(true);
+    expect(isRouteableSettingsPath('/settings/unknown')).toBe(false);
   });
 
   it('maps organization routing contracts', () => {
@@ -143,13 +148,6 @@ describe('settingsNavigationModel', () => {
   it('maps query deep-links contract values', () => {
     const queryCases: Array<[string, SettingsTab | null]> = [
       ['?tab=infrastructure', 'infrastructure-systems'],
-      ['?tab=agents', 'infrastructure-systems'],
-      ['?tab=workloads', 'infrastructure-systems'],
-      ['?tab=proxmox', 'infrastructure-systems'],
-      ['?tab=connections', 'infrastructure-systems'],
-      ['?tab=platforms', 'infrastructure-systems'],
-      ['?tab=install', 'infrastructure-systems'],
-      ['?tab=docker', 'infrastructure-systems'],
       ['?tab=system-ai', 'system-ai'],
       ['?tab=system-relay', 'system-relay'],
       ['?tab=system-pro', 'system-billing'],
@@ -163,6 +161,9 @@ describe('settingsNavigationModel', () => {
       ['?tab=security-overview', 'security-overview'],
       ['?tab=data-handling', 'security-data-handling'],
       ['?tab=resource-privacy', 'security-data-handling'],
+      ['?tab=workloads', null],
+      ['?tab=install', null],
+      ['?tab=docker', null],
       ['?tab=unknown', null],
     ];
     for (const [query, expectedTab] of queryCases) {
@@ -198,36 +199,15 @@ describe('settingsNavigationModel', () => {
     expect(isTabLocked('infrastructure-systems', hasFeatures([]), () => true)).toBe(false);
   });
 
-  it('maps deriveAgentFromPath contracts for canonical infrastructure routes', () => {
-    const agentCases: Array<[string, 'pve' | 'pbs' | 'pmg' | null]> = [
-      // Legacy api/* paths now resolve to the workspace base — no agent derived.
-      ['/settings/infrastructure/api/pve', null],
-      ['/settings/infrastructure/api/pbs', null],
-      ['/settings/infrastructure/api/pmg', null],
-      // Canonical platform paths still resolve correctly.
-      ['/settings/infrastructure/platforms/proxmox/pve', 'pve'],
-      ['/settings/infrastructure/platforms/proxmox/pbs', 'pbs'],
-      ['/settings/infrastructure/platforms/proxmox/pmg', 'pmg'],
-      ['/settings/infrastructure', null],
-      ['/settings/infrastructure/operations', null],
-    ];
-    for (const [path, expectedAgent] of agentCases) {
-      expect(deriveAgentFromPath(path)).toBe(expectedAgent);
-    }
-  });
-
-  it('maps settings agent keys to canonical platform types, labels, and paths', () => {
-    expect(settingsAgentPath('pve')).toBe('/settings/infrastructure/platforms/proxmox/pve');
+  it('maps settings agent keys to platform types and labels', () => {
     expect(settingsAgentPlatformType('pve')).toBe('proxmox-pve');
     expect(settingsAgentLabel('pve')).toBe('Proxmox VE');
     expect(settingsAgentNodeLabel('pve')).toBe('Proxmox VE node');
 
-    expect(settingsAgentPath('pbs')).toBe('/settings/infrastructure/platforms/proxmox/pbs');
     expect(settingsAgentPlatformType('pbs')).toBe('proxmox-pbs');
     expect(settingsAgentLabel('pbs')).toBe('Proxmox Backup Server');
     expect(settingsAgentNodeLabel('pbs')).toBe('Proxmox Backup Server');
 
-    expect(settingsAgentPath('pmg')).toBe('/settings/infrastructure/platforms/proxmox/pmg');
     expect(settingsAgentPlatformType('pmg')).toBe('proxmox-pmg');
     expect(settingsAgentLabel('pmg')).toBe('Proxmox Mail Gateway');
     expect(settingsAgentNodeLabel('pmg')).toBe('Proxmox Mail Gateway');
@@ -241,18 +221,6 @@ describe('settingsNavigationModel', () => {
     expect(agentKeyFromPlatformType('pbs')).toBe('pbs');
     expect(agentKeyFromPlatformType('pmg')).toBe('pmg');
     expect(agentKeyFromPlatformType('agent')).toBeNull();
-  });
-
-  it('treats proxmox deep links as infrastructure aliases', () => {
-    expect(deriveTabFromPath('/settings/infrastructure/platforms')).toBe('infrastructure-systems');
-    expect(deriveTabFromPath('/settings/infrastructure/platforms/proxmox')).toBe(
-      'infrastructure-systems',
-    );
-    expect(deriveTabFromPath('/settings/infrastructure/platforms/proxmox/pve')).toBe(
-      'infrastructure-systems',
-    );
-    expect(deriveTabFromPath('/settings/infrastructure/api/pve')).toBe('infrastructure-systems');
-    expect(deriveTabFromPath('/settings/infrastructure/install')).toBe('infrastructure-systems');
   });
 
   it('maps support and legacy settings operations routes back to support tabs', () => {

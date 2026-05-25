@@ -1401,10 +1401,11 @@ not a replacement status card, CTA band, or page-local nested card.
     `frontend-modern/src/App.tsx` must land authenticated `/` and `/login`
     handoffs on the first visible provider/runtime platform in the canonical
     shell order: Proxmox, Containers, Kubernetes, TrueNAS, vSphere, then Agents
-    only for agent-only estates. Legacy Infrastructure remains route-compatible
-    and may still guide first-time operators into `Add infrastructure`, but it
-    is not the default operational landing surface once provider evidence is
-    present.
+    only for agent-only estates. The retired Infrastructure aggregate route and
+    nested settings infrastructure aliases are not compatibility commitments:
+    first-time operator setup must enter through the canonical Settings →
+    Infrastructure workspace and its query-backed add flow, while provider
+    evidence still owns the operational landing surface.
     The authenticated app shell's boot-time route preloads must be owned by
     `frontend-modern/src/routing/routePreload.ts` so top-level cold-tab
     readiness cannot drift from the route-module preloader. Workloads,
@@ -2796,8 +2797,8 @@ shared discovery draft and subnet-validation state,
 owns infrastructure workspace prop assembly and resource-derived infrastructure
 read-model shaping for the shell,
 `frontend-modern/src/components/Settings/settingsNavigationModel.ts` owns
-settings tab identity, canonical route derivation, legacy alias normalization,
-and Proxmox agent route metadata. `settingsRouting.ts` and
+settings tab identity, canonical route derivation, route eligibility, and
+retired infrastructure/workloads alias rejection. `settingsRouting.ts` and
 `settingsTypes.ts` remain thin compatibility re-export shims only, so external
 consumers can bridge to the canonical owner without reintroducing a second
 settings navigation model. `settingsNavCatalog.ts` owns settings navigation
@@ -2809,13 +2810,14 @@ including the route-owned billing focus contract where
 `/settings/system/billing/plan` is the canonical settings-tab destination,
 `/settings/system/billing/usage` is a same-tab child state, and legacy billing
 base/hash links are compatibility inputs rather than primary runtime routes.
-That same route-sync owner must also preserve Proxmox platform-selection truth
-across canonical deep links such as
-`/settings/infrastructure/platforms/proxmox/pbs` and
-`/settings/infrastructure/platforms/proxmox/pmg`: even though those routes
-collapse into the shared `infrastructure-operations` tab, the selected
-platform state must still be derived from the path instead of silently
-falling back to `pve` on reload or remount.
+Infrastructure settings no longer has route-level platform-selection state:
+`/settings/infrastructure` and `/settings/infrastructure?add=<step>` are the
+only routeable Infrastructure settings entry points. Former nested aliases such
+as `/settings/infrastructure/install`,
+`/settings/infrastructure/platforms/proxmox/pbs`,
+`/settings/infrastructure/api/pve`, and `/settings/workloads/docker` must fail
+route eligibility instead of being normalized back into the Infrastructure
+workspace.
 That same settings access boundary must keep route eligibility separate from
 sidebar visibility. Panel-owned feature gates such as Relay, Reporting, RBAC,
 Audit Log, and Audit Webhooks may be hidden from the navigation on Community
@@ -3533,17 +3535,16 @@ The settings navigation model now exposes a single `infrastructure-systems`
 sidebar entry for the infrastructure settings area. The former
 `infrastructure-connections` and `infrastructure-install` entries have been
 removed from `SettingsTab`, `settingsNavCatalog.ts`, `settingsPanelRegistry.ts`,
-and `settingsNavigationModel.ts`. All canonical redirects and tab-derivation
-logic that previously mapped to those two entries now collapse to
-`infrastructure-systems`. No future additions to the settings nav may restore
+and `settingsNavigationModel.ts`. No future additions to the settings nav may restore
 `infrastructure-connections` or `infrastructure-install` as independent tab
 identifiers; panel routing within the infrastructure area must use
 `InfrastructurePanelStep` in-page state instead of URL sub-routes.
-`frontend-modern/src/components/Settings/settingsNavigationModel.ts` now uses
-the normalised (not canonical) path when resolving Proxmox agent and path
-checks so that deep links such as `/settings/infrastructure/platforms/proxmox/pbs`
-resolve to the correct agent before the canonical-redirect fires, rather than
-after it has already collapsed the path.
+`frontend-modern/src/components/Settings/settingsNavigationModel.ts` owns the
+explicit routeability check that rejects retired infrastructure/workloads
+aliases before the settings shell mounts. `useSettingsNavigation.ts` may
+redirect `/settings` and still canonicalize current settings destinations, but
+it must not translate removed infrastructure subpaths into onboarding queries or
+derive Proxmox platform state from those paths.
 The shared frontend source/platform vocabulary now also includes
 `availability` as an agentless infrastructure source and `network-endpoint` as
 the canonical resource projection. Picker cards, source labels, badges, and

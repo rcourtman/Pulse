@@ -50,6 +50,7 @@ import { isPro } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { AI_CHAT_LAUNCHER_ARIA_LABEL, getAIChatLauncherTitle } from '@/utils/aiChatPresentation';
 import type { AppConnectionStatus } from '@/useAppRuntimeState';
+import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
 
 const ROOT_PROXMOX_PATH = buildProxmoxPath();
 const ROOT_DOCKER_PATH = buildDockerPath();
@@ -57,6 +58,7 @@ const ROOT_KUBERNETES_PATH = buildKubernetesPath();
 const ROOT_TRUENAS_PATH = buildTrueNASPath();
 const ROOT_VMWARE_PATH = buildVmwarePath();
 const ROOT_AGENTS_PATH = buildAgentsPath();
+const ROOT_INFRASTRUCTURE_SETTINGS_PATH = buildInfrastructureWorkspacePath();
 const ROOT_ALERTS_PATH = '/alerts';
 const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';
 const AI_CHAT_LAUNCHER_BUTTON_CLASS =
@@ -332,7 +334,7 @@ export function AppLayout(props: AppLayoutProps) {
         id: 'proxmox',
         label: 'Proxmox',
         route: ROOT_PROXMOX_PATH,
-        settingsRoute: '/settings/infrastructure/platforms/proxmox/pve',
+        settingsRoute: ROOT_INFRASTRUCTURE_SETTINGS_PATH,
         tooltip: 'Proxmox VE, Backup Server, Mail Gateway, storage, backups, and guests',
         enabled: isVisible('proxmox'),
         live: isVisible('proxmox'),
@@ -343,7 +345,7 @@ export function AppLayout(props: AppLayoutProps) {
         id: 'docker',
         label: 'Containers',
         route: ROOT_DOCKER_PATH,
-        settingsRoute: '/settings/workloads/docker',
+        settingsRoute: ROOT_INFRASTRUCTURE_SETTINGS_PATH,
         tooltip: 'Docker / Podman runtime lens: hosts, containers, and Swarm services',
         enabled: isVisible('docker'),
         live: isVisible('docker'),
@@ -354,7 +356,7 @@ export function AppLayout(props: AppLayoutProps) {
         id: 'kubernetes',
         label: 'Kubernetes',
         route: ROOT_KUBERNETES_PATH,
-        settingsRoute: '/settings',
+        settingsRoute: ROOT_INFRASTRUCTURE_SETTINGS_PATH,
         tooltip: 'Kubernetes clusters, nodes, pods, deployments, and services',
         enabled: isVisible('kubernetes'),
         live: isVisible('kubernetes'),
@@ -365,7 +367,7 @@ export function AppLayout(props: AppLayoutProps) {
         id: 'truenas',
         label: 'TrueNAS',
         route: ROOT_TRUENAS_PATH,
-        settingsRoute: '/settings/infrastructure',
+        settingsRoute: ROOT_INFRASTRUCTURE_SETTINGS_PATH,
         tooltip: 'TrueNAS hosts, storage, and apps',
         enabled: isVisible('truenas'),
         live: isVisible('truenas'),
@@ -376,7 +378,7 @@ export function AppLayout(props: AppLayoutProps) {
         id: 'vmware',
         label: 'vSphere',
         route: ROOT_VMWARE_PATH,
-        settingsRoute: '/settings/infrastructure',
+        settingsRoute: ROOT_INFRASTRUCTURE_SETTINGS_PATH,
         tooltip: 'VMware vSphere hosts, virtual machines, datastores, and networks',
         enabled: isVisible('vmware'),
         live: isVisible('vmware'),
@@ -387,7 +389,7 @@ export function AppLayout(props: AppLayoutProps) {
         id: 'agents',
         label: 'Agents',
         route: ROOT_AGENTS_PATH,
-        settingsRoute: '/settings/infrastructure',
+        settingsRoute: ROOT_INFRASTRUCTURE_SETTINGS_PATH,
         tooltip: 'Standalone Pulse Agent machines, OS telemetry, storage, and command eligibility',
         enabled: isVisible('agents'),
         live: isVisible('agents'),

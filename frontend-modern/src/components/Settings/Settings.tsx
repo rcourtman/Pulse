@@ -17,6 +17,8 @@ import { useSettingsSystemPanels } from './useSettingsSystemPanels';
 import { useSystemSettingsState } from './useSystemSettingsState';
 import { useSettingsNavigation } from './useSettingsNavigation';
 import { getSettingsLoadingState } from '@/utils/settingsShellPresentation';
+import { isRouteableSettingsPath } from './settingsNavigationModel';
+import NotFound from '@/pages/NotFound';
 
 import { getRuntimeLimit, loadRuntimeCapabilities } from '@/stores/license';
 import { isPro } from '@/stores/licenseCommercial';
@@ -33,7 +35,7 @@ const SettingsPanelLoadingFallback = () => (
   </div>
 );
 
-const Settings: Component<SettingsProps> = (props) => {
+const SettingsWorkspace: Component<SettingsProps> = (props) => {
   const { state, connected: _connected } = useWebSocket();
   const navigate = useNavigate();
   const location = useLocation();
@@ -216,6 +218,17 @@ const Settings: Component<SettingsProps> = (props) => {
         }}
       />
     </>
+  );
+};
+
+const Settings: Component<SettingsProps> = (props) => {
+  const location = useLocation();
+  const isRouteableSettingsRoute = createMemo(() => isRouteableSettingsPath(location.pathname));
+
+  return (
+    <Show when={isRouteableSettingsRoute()} fallback={<NotFound />}>
+      <SettingsWorkspace {...props} />
+    </Show>
   );
 };
 

@@ -3,7 +3,6 @@ import {
   buildInfrastructureOnboardingPath,
   buildInfrastructureWorkspacePath,
   deriveAddStepFromLocation,
-  deriveAddStepFromLegacyPath,
 } from '../infrastructureWorkspaceModel';
 
 describe('infrastructureWorkspaceModel', () => {
@@ -20,29 +19,20 @@ describe('infrastructureWorkspaceModel', () => {
     expect(buildInfrastructureOnboardingPath('truenas')).toBe(
       '/settings/infrastructure?add=truenas',
     );
-    expect(buildInfrastructureOnboardingPath('unraid')).toBe(
-      '/settings/infrastructure?add=unraid',
-    );
-    expect(buildInfrastructureOnboardingPath('docker')).toBe(
-      '/settings/infrastructure?add=docker',
-    );
-    expect(buildInfrastructureOnboardingPath('vmware')).toBe(
-      '/settings/infrastructure?add=vmware',
-    );
+    expect(buildInfrastructureOnboardingPath('unraid')).toBe('/settings/infrastructure?add=unraid');
+    expect(buildInfrastructureOnboardingPath('docker')).toBe('/settings/infrastructure?add=docker');
+    expect(buildInfrastructureOnboardingPath('vmware')).toBe('/settings/infrastructure?add=vmware');
   });
 
-  it('derives add steps from onboarding deep links', () => {
-    expect(deriveAddStepFromLegacyPath('/settings/infrastructure/install')).toBe('linux-host');
-    expect(deriveAddStepFromLegacyPath('/settings/infrastructure/platforms')).toBe('pick');
-    expect(deriveAddStepFromLegacyPath('/settings/infrastructure/platforms/truenas')).toBeNull();
+  it('derives add steps only from the canonical infrastructure workspace query', () => {
     expect(deriveAddStepFromLocation('/settings/infrastructure', '?add=agent')).toBe('agent');
     expect(deriveAddStepFromLocation('/settings/infrastructure', '?add=pick')).toBe('pick');
-    expect(deriveAddStepFromLocation('/settings/infrastructure', '?add=truenas')).toBe(
-      'truenas',
-    );
+    expect(deriveAddStepFromLocation('/settings/infrastructure', '?add=truenas')).toBe('truenas');
     expect(deriveAddStepFromLocation('/settings/infrastructure', '?add=unraid')).toBe('unraid');
     expect(deriveAddStepFromLocation('/settings/infrastructure', '?add=kubernetes')).toBe(
       'kubernetes',
     );
+    expect(deriveAddStepFromLocation('/settings/infrastructure/install', '')).toBeNull();
+    expect(deriveAddStepFromLocation('/settings/infrastructure/platforms', '?add=pick')).toBeNull();
   });
 });

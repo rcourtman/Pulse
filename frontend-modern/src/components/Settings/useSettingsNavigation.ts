@@ -4,17 +4,11 @@ import {
   sessionPresentationPolicyResolved,
 } from '@/stores/sessionPresentationPolicy';
 import { resolveCanonicalSelfHostedBillingHref } from '@/utils/pricingHandoff';
-import {
-  buildInfrastructureOnboardingPath,
-  buildInfrastructureWorkspacePath,
-  deriveAddStepFromLegacyPath,
-} from './infrastructureWorkspaceModel';
+import { buildInfrastructureWorkspacePath } from './infrastructureWorkspaceModel';
 import {
   DEFAULT_SETTINGS_TAB,
-  deriveAgentFromPath,
   deriveTabFromPath,
   deriveTabFromQuery,
-  isProxmoxSettingsPath,
   resolveCanonicalSettingsPath,
   settingsTabPath,
   type AgentKey,
@@ -96,29 +90,9 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
         if (
           sessionPresentationPolicyResolved() &&
           presentationPolicyIsReadOnly() &&
-          (path.startsWith('/settings/infrastructure') ||
-            path === '/settings/workloads' ||
-            path === '/settings/workloads/docker')
+          path.startsWith('/settings/infrastructure')
         ) {
           navigate(buildInfrastructureWorkspacePath(), {
-            replace: true,
-            scroll: false,
-          });
-          return;
-        }
-
-        // Sync Proxmox agent from the raw path before any redirect so deep
-        // links like /platforms/proxmox/pbs still seed the correct agent.
-        if (isProxmoxSettingsPath(path)) {
-          const agentFromPath = deriveAgentFromPath(path) ?? 'pve';
-          if (selectedAgent() !== agentFromPath) {
-            setSelectedAgent(agentFromPath);
-          }
-        }
-
-        const infrastructureOnboardingStep = deriveAddStepFromLegacyPath(path);
-        if (infrastructureOnboardingStep) {
-          navigate(buildInfrastructureOnboardingPath(infrastructureOnboardingStep), {
             replace: true,
             scroll: false,
           });

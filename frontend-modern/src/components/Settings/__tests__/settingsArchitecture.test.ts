@@ -95,7 +95,7 @@ describe('settings architecture guardrails', () => {
     expect(settingsDialogsSource).toContain('export const SettingsDialogs');
   });
 
-  it('keeps infrastructure onboarding route-backed under the shared settings shell', () => {
+  it('keeps infrastructure onboarding query-backed under the shared settings shell', () => {
     expect(settingsHeaderMetaSource).toContain("'infrastructure-systems': {");
     expect(settingsHeaderMetaSource).toContain(
       'Add, discover, and verify the infrastructure Pulse monitors.',
@@ -105,10 +105,10 @@ describe('settings architecture guardrails', () => {
       'Manage organization invitations, member roles, and ownership transfers.',
     );
 
-    expect(settingsNavigationHookSource).toContain('deriveAddStepFromLegacyPath(path)');
-    expect(settingsNavigationHookSource).toContain(
-      'navigate(buildInfrastructureOnboardingPath(infrastructureOnboardingStep), {',
-    );
+    expect(settingsSource).toContain("import NotFound from '@/pages/NotFound';");
+    expect(settingsSource).toContain('isRouteableSettingsPath(location.pathname)');
+    expect(settingsNavigationHookSource).not.toContain('deriveAddStepFromLegacyPath');
+    expect(settingsNavigationHookSource).not.toContain('buildInfrastructureOnboardingPath');
     expect(settingsNavigationHookSource).toContain(
       'navigate(buildInfrastructureWorkspacePath(), {',
     );
@@ -120,9 +120,7 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureWorkspaceModelSource).toContain(
       'export function buildInfrastructureOnboardingPath(',
     );
-    expect(infrastructureWorkspaceModelSource).toContain(
-      'export function deriveAddStepFromLegacyPath(',
-    );
+    expect(infrastructureWorkspaceModelSource).not.toContain('deriveAddStepFromLegacyPath');
     expect(infrastructureWorkspaceModelSource).toContain(
       'export function deriveAddStepFromSearch(',
     );

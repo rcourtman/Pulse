@@ -86,15 +86,11 @@ export type SettingsHeaderMetaMap = Record<SettingsTab, SettingsHeaderMeta>;
 // Default landing tab for /settings when no deep-link tab is provided.
 export const DEFAULT_SETTINGS_TAB: SettingsTab = 'infrastructure-systems';
 const INFRASTRUCTURE_SYSTEMS_PREFIX = '/settings/infrastructure';
-const LEGACY_AGENTS_PREFIX = '/settings/workloads';
-const LEGACY_DOCKER_PREFIX = '/settings/workloads/docker';
+const RETIRED_SETTINGS_WORKLOADS_PREFIX = '/settings/workloads';
 const SUPPORT_PREFIX = '/settings/support';
 const SUPPORT_DIAGNOSTICS_PREFIX = `${SUPPORT_PREFIX}/diagnostics`;
 const SUPPORT_REPORTING_PREFIX = `${SUPPORT_PREFIX}/reporting`;
 const SUPPORT_LOGS_PREFIX = `${SUPPORT_PREFIX}/logs`;
-const PROXMOX_PREFIX = `${INFRASTRUCTURE_SYSTEMS_PREFIX}/platforms/proxmox`;
-const LEGACY_PROXMOX_PREFIX = '/settings/infrastructure/proxmox';
-const LEGACY_PROXMOX_API_PREFIX = '/settings/infrastructure/api';
 const LEGACY_INTEGRATIONS_API_PREFIX = '/settings/integrations/api';
 const LEGACY_SETTINGS_OPERATIONS_PREFIX = '/settings/operations';
 const SECURITY_API_PREFIX = '/settings/security/api';
@@ -104,26 +100,22 @@ const LEGACY_SYSTEM_PRO_PREFIX = '/settings/system-pro';
 const PROXMOX_AGENT_META: Record<
   AgentKey,
   {
-    path: string;
     platformType: ProxmoxPlatformType;
     label: string;
     nodeLabel: string;
   }
 > = {
   pve: {
-    path: `${PROXMOX_PREFIX}/pve`,
     platformType: 'proxmox-pve',
     label: 'Proxmox VE',
     nodeLabel: 'Proxmox VE node',
   },
   pbs: {
-    path: `${PROXMOX_PREFIX}/pbs`,
     platformType: 'proxmox-pbs',
     label: 'Proxmox Backup Server',
     nodeLabel: 'Proxmox Backup Server',
   },
   pmg: {
-    path: `${PROXMOX_PREFIX}/pmg`,
     platformType: 'proxmox-pmg',
     label: 'Proxmox Mail Gateway',
     nodeLabel: 'Proxmox Mail Gateway',
@@ -139,21 +131,21 @@ const normalizeSettingsPath = (path: string): string => {
   return trimmed;
 };
 
+export function isRetiredSettingsCompatibilityPath(path: string): boolean {
+  const normalizedPath = normalizeSettingsPath(path);
+  return (
+    normalizedPath === RETIRED_SETTINGS_WORKLOADS_PREFIX ||
+    normalizedPath.startsWith(`${RETIRED_SETTINGS_WORKLOADS_PREFIX}/`) ||
+    normalizedPath.startsWith(`${INFRASTRUCTURE_SYSTEMS_PREFIX}/`)
+  );
+}
+
 export function resolveCanonicalSettingsPath(path: string): string | null {
   const normalizedPath = normalizeSettingsPath(path);
-  if (!normalizedPath.startsWith('/settings')) return null;
+  if (normalizedPath !== '/settings' && !normalizedPath.startsWith('/settings/')) return null;
+  if (isRetiredSettingsCompatibilityPath(normalizedPath)) return null;
   if (normalizedPath === '/settings') {
     return settingsTabPath(DEFAULT_SETTINGS_TAB);
-  }
-  if (normalizedPath === LEGACY_AGENTS_PREFIX) {
-    return settingsTabPath(DEFAULT_SETTINGS_TAB);
-  }
-  if (normalizedPath === LEGACY_DOCKER_PREFIX) {
-    return settingsTabPath(DEFAULT_SETTINGS_TAB);
-  }
-  // All infrastructure sub-paths collapse to the single infrastructure workspace.
-  if (normalizedPath.startsWith(`${INFRASTRUCTURE_SYSTEMS_PREFIX}/`)) {
-    return INFRASTRUCTURE_SYSTEMS_PREFIX;
   }
   if (normalizedPath === INFRASTRUCTURE_SYSTEMS_PREFIX) {
     return settingsTabPath(DEFAULT_SETTINGS_TAB);
@@ -166,14 +158,6 @@ export function resolveCanonicalSettingsPath(path: string): string | null {
   }
   if (normalizedPath.startsWith(`${LEGACY_SETTINGS_OPERATIONS_PREFIX}/`)) {
     return buildLegacyOperationsSettingsPath(normalizedPath);
-  }
-  if (
-    normalizedPath.startsWith(`${LEGACY_PROXMOX_API_PREFIX}/`) ||
-    normalizedPath === LEGACY_PROXMOX_API_PREFIX ||
-    normalizedPath.startsWith(`${LEGACY_PROXMOX_PREFIX}/`) ||
-    normalizedPath === LEGACY_PROXMOX_PREFIX
-  ) {
-    return INFRASTRUCTURE_SYSTEMS_PREFIX;
   }
   if (normalizedPath === LEGACY_INTEGRATIONS_API_PREFIX) {
     return SECURITY_API_PREFIX;
@@ -191,12 +175,7 @@ export function deriveTabFromPath(path: string): SettingsTab {
   const canonicalPath = resolveCanonicalSettingsPath(path) ?? normalizeSettingsPath(path);
 
   if (canonicalPath === '/settings') return DEFAULT_SETTINGS_TAB;
-  if (
-    canonicalPath === INFRASTRUCTURE_SYSTEMS_PREFIX ||
-    canonicalPath.startsWith(`${INFRASTRUCTURE_SYSTEMS_PREFIX}/`) ||
-    canonicalPath === LEGACY_AGENTS_PREFIX ||
-    canonicalPath === LEGACY_DOCKER_PREFIX
-  ) {
+  if (canonicalPath === INFRASTRUCTURE_SYSTEMS_PREFIX) {
     return 'infrastructure-systems';
   }
 
@@ -206,7 +185,10 @@ export function deriveTabFromPath(path: string): SettingsTab {
   if (canonicalPath.includes('/settings/system-recovery')) return 'system-recovery';
   if (canonicalPath.includes('/settings/system-ai')) return 'system-ai';
   if (canonicalPath.includes('/settings/system-relay')) return 'system-relay';
-  if (canonicalPath.includes(SYSTEM_BILLING_PREFIX) || canonicalPath.includes(LEGACY_SYSTEM_PRO_PREFIX))
+  if (
+    canonicalPath.includes(SYSTEM_BILLING_PREFIX) ||
+    canonicalPath.includes(LEGACY_SYSTEM_PRO_PREFIX)
+  )
     return 'system-billing';
   if (canonicalPath.startsWith(SUPPORT_LOGS_PREFIX)) return 'support-logs';
   if (canonicalPath.startsWith(SUPPORT_REPORTING_PREFIX)) return 'support-reporting';
@@ -232,29 +214,6 @@ export function deriveTabFromPath(path: string): SettingsTab {
   if (canonicalPath.includes('/settings/security-webhooks')) return 'security-webhooks';
 
   return DEFAULT_SETTINGS_TAB;
-}
-
-export function deriveAgentFromPath(path: string): AgentKey | null {
-  const normalizedPath = normalizeSettingsPath(path);
-  for (const [agent, meta] of Object.entries(PROXMOX_AGENT_META) as Array<
-    [AgentKey, (typeof PROXMOX_AGENT_META)[AgentKey]]
-  >) {
-    if (normalizedPath.includes(meta.path)) return agent;
-  }
-  return null;
-}
-
-export function isProxmoxSettingsPath(path: string): boolean {
-  const normalizedPath = normalizeSettingsPath(path);
-  return (
-    normalizedPath.startsWith(PROXMOX_PREFIX) ||
-    normalizedPath.startsWith(LEGACY_PROXMOX_PREFIX) ||
-    normalizedPath.startsWith(LEGACY_PROXMOX_API_PREFIX)
-  );
-}
-
-export function settingsAgentPath(agent: AgentKey): string {
-  return PROXMOX_AGENT_META[agent].path;
 }
 
 export function settingsAgentPlatformType(agent: AgentKey): ProxmoxPlatformType {
@@ -290,13 +249,6 @@ export function deriveTabFromQuery(search: string): SettingsTab | null {
 
   switch (tab) {
     case 'infrastructure':
-    case 'workloads':
-    case 'agents':
-      return 'infrastructure-systems';
-    case 'connections':
-    case 'platforms':
-    case 'proxmox':
-    case 'install':
       return 'infrastructure-systems';
     case 'system-recovery':
       return 'system-recovery';
@@ -324,8 +276,6 @@ export function deriveTabFromQuery(search: string): SettingsTab | null {
       return 'support-logs';
     case 'api':
       return 'api';
-    case 'docker':
-      return 'infrastructure-systems';
     case 'organization-overview':
       return 'organization-overview';
     case 'organization-access':
@@ -390,6 +340,44 @@ export function settingsTabPath(tab: SettingsTab): string {
     default:
       return `/settings/${tab}`;
   }
+}
+
+const ROUTEABLE_SETTINGS_PATHS = new Set<string>([
+  settingsTabPath('infrastructure-systems'),
+  settingsTabPath('system-general'),
+  settingsTabPath('system-network'),
+  settingsTabPath('system-updates'),
+  settingsTabPath('system-recovery'),
+  settingsTabPath('system-ai'),
+  settingsTabPath('system-relay'),
+  settingsTabPath('system-billing'),
+  `${SYSTEM_BILLING_PREFIX}/usage`,
+  settingsTabPath('support-diagnostics'),
+  settingsTabPath('support-reporting'),
+  settingsTabPath('support-logs'),
+  settingsTabPath('organization-overview'),
+  settingsTabPath('organization-access'),
+  settingsTabPath('organization-billing'),
+  settingsTabPath('organization-billing-admin'),
+  settingsTabPath('organization-sharing'),
+  settingsTabPath('api'),
+  settingsTabPath('security-overview'),
+  settingsTabPath('security-data-handling'),
+  settingsTabPath('security-auth'),
+  settingsTabPath('security-sso'),
+  settingsTabPath('security-roles'),
+  settingsTabPath('security-users'),
+  settingsTabPath('security-audit'),
+  settingsTabPath('security-webhooks'),
+]);
+
+export function isRouteableSettingsPath(path: string): boolean {
+  const normalizedPath = normalizeSettingsPath(path);
+  if (normalizedPath === '/settings') return true;
+  if (isRetiredSettingsCompatibilityPath(normalizedPath)) return false;
+
+  const canonicalPath = resolveCanonicalSettingsPath(normalizedPath);
+  return canonicalPath ? ROUTEABLE_SETTINGS_PATHS.has(canonicalPath) : false;
 }
 
 export function isInfrastructureSettingsTab(tab: SettingsTab): tab is InfrastructureSettingsTab {

@@ -15,16 +15,6 @@ export type InfrastructurePanelStep = 'pick' | InfrastructureAddStep;
 
 const INFRASTRUCTURE_BASE_PATH = '/settings/infrastructure';
 export const INFRASTRUCTURE_ADD_QUERY_PARAM = 'add';
-const LEGACY_INSTALL_PATH = `${INFRASTRUCTURE_BASE_PATH}/install`;
-const LEGACY_PLATFORMS_PATH = `${INFRASTRUCTURE_BASE_PATH}/platforms`;
-
-function matchesExactPath(pathname: string, expected: string): boolean {
-  return pathname === expected || pathname === `${expected}/`;
-}
-
-function matchesPathPrefix(pathname: string, expected: string): boolean {
-  return pathname === expected || pathname.startsWith(`${expected}/`);
-}
 
 export function normalizeInfrastructurePanelStep(
   value: string | null | undefined,
@@ -59,12 +49,6 @@ export function buildInfrastructureOnboardingPath(step: InfrastructurePanelStep 
   return `${INFRASTRUCTURE_BASE_PATH}?${params.toString()}`;
 }
 
-export function deriveAddStepFromLegacyPath(pathname: string): InfrastructurePanelStep | null {
-  if (matchesPathPrefix(pathname, LEGACY_INSTALL_PATH)) return 'linux-host';
-  if (matchesExactPath(pathname, LEGACY_PLATFORMS_PATH)) return 'pick';
-  return null;
-}
-
 export function deriveAddStepFromSearch(search: string): InfrastructurePanelStep | null {
   const params = new URLSearchParams(search);
   return normalizeInfrastructurePanelStep(params.get(INFRASTRUCTURE_ADD_QUERY_PARAM));
@@ -74,15 +58,9 @@ export function deriveAddStepFromLocation(
   pathname: string,
   search: string,
 ): InfrastructurePanelStep | null {
-  if (
-    pathname === INFRASTRUCTURE_BASE_PATH ||
-    pathname.startsWith(`${INFRASTRUCTURE_BASE_PATH}/`)
-  ) {
-    const stepFromQuery = deriveAddStepFromSearch(search);
-    if (stepFromQuery) {
-      return stepFromQuery;
-    }
+  if (pathname !== INFRASTRUCTURE_BASE_PATH && pathname !== `${INFRASTRUCTURE_BASE_PATH}/`) {
+    return null;
   }
 
-  return deriveAddStepFromLegacyPath(pathname);
+  return deriveAddStepFromSearch(search);
 }

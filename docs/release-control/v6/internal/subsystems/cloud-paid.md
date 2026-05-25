@@ -512,7 +512,11 @@ or other self-hosted uncapped continuity plans.
     paid or hosted app shell. Infrastructure is not an equal primary tab in
     that list. Workloads, Storage, and Recovery are not standalone aggregate
     workspace tabs; their component surfaces remain reusable inside platform
-    pages via embedded `tableOnly` surfaces. Each platform page must remain
+    pages via embedded `tableOnly` surfaces. Platform primary-tab settings
+    handoffs in `AppLayout.tsx` must target the canonical
+    `/settings/infrastructure` workspace and must not retain retired settings
+    aliases such as `/settings/workloads/docker` or nested
+    `/settings/infrastructure/platforms/*` paths. Each platform page must remain
     chrome-only:
     routing plus sub-tab navigation that embeds the canonical
     `WorkloadsSurface`, `StorageSurface`, `RecoverySurface`, or
