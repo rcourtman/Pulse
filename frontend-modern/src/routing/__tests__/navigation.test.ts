@@ -9,13 +9,13 @@ describe('navigation routing helpers', () => {
     expect(getActiveTabForPath('/agents/overview')).toBe('agents');
     expect(getActiveTabForPath('/proxmox')).toBe('proxmox');
     expect(getActiveTabForPath('/proxmox/storage')).toBe('proxmox');
-    // Legacy top-level routes (/infrastructure, /workloads, /storage,
-    // /recovery, /ceph) were retired when primary nav moved to platform-first.
+    // Infrastructure and Ceph are not standalone tabs. The aggregate
+    // Workloads, Storage, and Recovery workspaces remain first-class tabs.
     expect(getActiveTabForPath('/infrastructure')).toBeNull();
-    expect(getActiveTabForPath('/workloads?type=pod')).toBeNull();
-    expect(getActiveTabForPath('/storage')).toBeNull();
+    expect(getActiveTabForPath('/workloads?type=pod')).toBe('workloads');
+    expect(getActiveTabForPath('/storage')).toBe('storage');
     expect(getActiveTabForPath('/ceph')).toBeNull();
-    expect(getActiveTabForPath('/recovery')).toBeNull();
+    expect(getActiveTabForPath('/recovery')).toBe('recovery');
     expect(getActiveTabForPath('/alerts/open')).toBe('alerts');
     expect(getActiveTabForPath('/patrol')).toBe('ai');
     expect(getActiveTabForPath('/ai')).toBe('ai');

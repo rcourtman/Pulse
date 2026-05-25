@@ -45,6 +45,7 @@ import {
   PATROL_PATH,
   PROXMOX_PATH,
   RECOVERY_PATH,
+  STORAGE_PATH,
   TRUENAS_PATH,
   VMWARE_PATH,
   WORKLOADS_PATH,
@@ -52,7 +53,6 @@ import {
   buildDockerPath,
   buildKubernetesPath,
   buildProxmoxPath,
-  buildStoragePath,
   buildTrueNASPath,
   buildVmwarePath,
 } from './routing/resourceLinks';
@@ -115,7 +115,6 @@ const SetupCompletionPreviewPage = lazy(() =>
   })),
 );
 const ROOT_PATROL_PATH = PATROL_PATH;
-const STORAGE_PATH = buildStoragePath();
 
 const PRIMARY_INFRASTRUCTURE_ROUTE_BY_ID: Record<PrimaryInfrastructureNavId, string> = {
   proxmox: buildProxmoxPath(),

@@ -8,7 +8,7 @@ describe('route preloading', () => {
     expect(APP_SHELL_ROUTE_PRELOAD_PATHS).toContain(buildProxmoxPath());
   });
 
-  it('keeps all cold top-level app shell targets in the shared preload set', () => {
+  it('keeps the eager authenticated-shell preload set bounded', () => {
     expect([...APP_SHELL_ROUTE_PRELOAD_PATHS]).toEqual([
       buildProxmoxPath(),
       buildAgentsPath(),

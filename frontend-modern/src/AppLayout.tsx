@@ -11,6 +11,9 @@ import ServerIcon from 'lucide-solid/icons/server';
 import ShipWheelIcon from 'lucide-solid/icons/ship-wheel';
 import DatabaseIcon from 'lucide-solid/icons/database';
 import CpuIcon from 'lucide-solid/icons/cpu';
+import BoxesIcon from 'lucide-solid/icons/boxes';
+import HardDriveIcon from 'lucide-solid/icons/hard-drive';
+import RotateCcwIcon from 'lucide-solid/icons/rotate-ccw';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import {
   MobileNavBar,
@@ -40,8 +43,11 @@ import {
   buildDockerPath,
   buildKubernetesPath,
   buildProxmoxPath,
+  buildRecoveryPath,
+  buildStoragePath,
   buildTrueNASPath,
   buildVmwarePath,
+  buildWorkloadsPath,
 } from '@/routing/resourceLinks';
 import { getKioskModePreference, setKioskMode } from '@/utils/url';
 import { updateStore } from '@/stores/updates';
@@ -57,6 +63,9 @@ const ROOT_KUBERNETES_PATH = buildKubernetesPath();
 const ROOT_TRUENAS_PATH = buildTrueNASPath();
 const ROOT_VMWARE_PATH = buildVmwarePath();
 const ROOT_AGENTS_PATH = buildAgentsPath();
+const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
+const ROOT_STORAGE_PATH = buildStoragePath();
+const ROOT_RECOVERY_PATH = buildRecoveryPath();
 const ROOT_ALERTS_PATH = '/alerts';
 const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';
 const AI_CHAT_LAUNCHER_BUTTON_CLASS =
@@ -212,6 +221,9 @@ export function AppLayout(props: AppLayoutProps) {
     truenas: 'TrueNAS',
     vmware: 'vSphere',
     agents: 'Agents',
+    workloads: 'Workloads',
+    storage: 'Storage',
+    recovery: 'Recovery',
     alerts: 'Alerts',
     ai: 'Patrol',
     settings: 'Settings',
@@ -320,13 +332,9 @@ export function AppLayout(props: AppLayoutProps) {
   const getActiveTabDesktop = () => getActiveTabForPath(location.pathname);
   const getActiveTabMobile = () => getActiveTabForPath(location.pathname);
 
-  // Primary nav is resource-admitted. A platform or runtime lens only appears
-  // when the support manifest says the surface is supported and the current
-  // resource snapshot proves that surface is actually present.
-  // Infrastructure / Workloads / Storage / Recovery are NOT duplicated as
-  // equal primary tabs — their tables are reused inside each platform page
-  // via embedded tableOnly surfaces, and their routes remain wired in App.tsx
-  // purely for route-compatibility with existing deep links.
+  // Platform/runtime nav is resource-admitted. A platform or runtime lens only
+  // appears when the support manifest says the surface is supported and the
+  // current resource snapshot proves that surface is actually present.
   const primaryTabs = createMemo<PrimaryTab[]>(() => {
     const visible = infrastructureNavigationVisibility();
     const isVisible = (id: PrimaryTab['id']) =>
@@ -402,6 +410,44 @@ export function AppLayout(props: AppLayoutProps) {
 
     return allPrimaryTabs.filter((tab) => tab.alwaysShow || tab.enabled);
   });
+
+  const workspaceTabs = createMemo<PrimaryTab[]>(() => [
+    {
+      id: 'workloads',
+      label: 'Workloads',
+      route: ROOT_WORKLOADS_PATH,
+      settingsRoute: '/settings/infrastructure',
+      tooltip: 'Aggregate workload inventory across VMs, containers, and Kubernetes resources',
+      enabled: true,
+      live: true,
+      icon: BoxesIcon,
+      alwaysShow: true,
+    },
+    {
+      id: 'storage',
+      label: 'Storage',
+      route: ROOT_STORAGE_PATH,
+      settingsRoute: '/settings/infrastructure',
+      tooltip: 'Aggregate storage pools, disks, datastores, and capacity posture',
+      enabled: true,
+      live: true,
+      icon: HardDriveIcon,
+      alwaysShow: true,
+    },
+    {
+      id: 'recovery',
+      label: 'Recovery',
+      route: ROOT_RECOVERY_PATH,
+      settingsRoute: '/settings/system-recovery',
+      tooltip: 'Backup, snapshot, replication, and recovery-point activity',
+      enabled: true,
+      live: true,
+      icon: RotateCcwIcon,
+      alwaysShow: true,
+    },
+  ]);
+
+  const mobilePrimaryTabs = createMemo<PrimaryTab[]>(() => [...primaryTabs(), ...workspaceTabs()]);
 
   const utilityTabs = createMemo(() => {
     const allAlerts = props.state().activeAlerts || [];
@@ -506,6 +552,59 @@ export function AppLayout(props: AppLayoutProps) {
       return tab.route;
     }
     return tab.settingsRoute;
+  };
+
+  const renderPrimaryNavigationTab = (tab: PrimaryTab) => {
+    const isActive = () => getActiveTabDesktop() === tab.id;
+    const disabled = () => !tab.enabled;
+    const Icon = tab.icon;
+    const baseClasses =
+      'tab relative px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
+
+    const className = () => {
+      if (isActive()) {
+        return `${baseClasses} bg-surface text-blue-600 dark:text-blue-400 border-border border-b border-b-surface shadow-sm font-semibold`;
+      }
+      if (disabled()) {
+        return `${baseClasses} cursor-not-allowed text-muted opacity-70 bg-base`;
+      }
+      return `${baseClasses} text-muted hover:text-base-content hover:bg-surface-hover`;
+    };
+
+    const title = () =>
+      disabled() ? `${tab.label} is not configured yet. Click to open settings.` : tab.tooltip;
+
+    return (
+      <div
+        class={className()}
+        role="tab"
+        tabIndex={0}
+        aria-label={tab.label}
+        aria-disabled={disabled()}
+        onMouseEnter={() => warmNavigationTarget(getPrimaryTargetRoute(tab))}
+        onClick={() => handlePrimaryClick(tab)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            handlePrimaryClick(tab);
+          }
+        }}
+        title={title()}
+      >
+        <span aria-hidden="true" class="inline-flex items-center justify-center">
+          <Icon class={NAV_TAB_ICON_CLASS} />
+        </span>
+        <span class="hidden xs:inline-flex items-center gap-1">
+          <span>{tab.label}</span>
+          <Show when={tab.badge}>
+            <span class="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted bg-surface-hover rounded">
+              {tab.badge}
+            </span>
+          </Show>
+        </span>
+        <span class="xs:hidden">{tab.label.charAt(0)}</span>
+      </div>
+    );
   };
 
   return (
@@ -692,62 +791,10 @@ export function AppLayout(props: AppLayoutProps) {
           aria-label="Primary navigation"
         >
           <div class="flex items-end gap-1" role="group" aria-label="Infrastructure">
-            <For each={primaryTabs()}>
-              {(tab) => {
-                const isActive = () => getActiveTabDesktop() === tab.id;
-                const disabled = () => !tab.enabled;
-                const Icon = tab.icon;
-                const baseClasses =
-                  'tab relative px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
-
-                const className = () => {
-                  if (isActive()) {
-                    return `${baseClasses} bg-surface text-blue-600 dark:text-blue-400 border-border border-b border-b-surface shadow-sm font-semibold`;
-                  }
-                  if (disabled()) {
-                    return `${baseClasses} cursor-not-allowed text-muted opacity-70 bg-base`;
-                  }
-                  return `${baseClasses} text-muted hover:text-base-content hover:bg-surface-hover`;
-                };
-
-                const title = () =>
-                  disabled()
-                    ? `${tab.label} is not configured yet. Click to open settings.`
-                    : tab.tooltip;
-
-                return (
-                  <div
-                    class={className()}
-                    role="tab"
-                    tabIndex={0}
-                    aria-label={tab.label}
-                    aria-disabled={disabled()}
-                    onMouseEnter={() => warmNavigationTarget(getPrimaryTargetRoute(tab))}
-                    onClick={() => handlePrimaryClick(tab)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        handlePrimaryClick(tab);
-                      }
-                    }}
-                    title={title()}
-                  >
-                    <span aria-hidden="true" class="inline-flex items-center justify-center">
-                      <Icon class={NAV_TAB_ICON_CLASS} />
-                    </span>
-                    <span class="hidden xs:inline-flex items-center gap-1">
-                      <span>{tab.label}</span>
-                      <Show when={tab.badge}>
-                        <span class="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted bg-surface-hover rounded">
-                          {tab.badge}
-                        </span>
-                      </Show>
-                    </span>
-                    <span class="xs:hidden">{tab.label.charAt(0)}</span>
-                  </div>
-                );
-              }}
-            </For>
+            <For each={primaryTabs()}>{renderPrimaryNavigationTab}</For>
+          </div>
+          <div class="flex items-end gap-1 pl-1 sm:pl-3" role="group" aria-label="Workspaces">
+            <For each={workspaceTabs()}>{renderPrimaryNavigationTab}</For>
           </div>
           <div class="flex items-end gap-1 ml-auto" role="group" aria-label="System">
             <div class="flex items-end gap-1 pl-1 sm:pl-4">
@@ -847,7 +894,7 @@ export function AppLayout(props: AppLayoutProps) {
       <Show when={!kioskMode()}>
         <MobileNavBar
           activeTab={getActiveTabMobile}
-          primaryTabs={primaryTabs}
+          primaryTabs={mobilePrimaryTabs}
           utilityTabs={utilityTabs}
           onPrimaryClick={handlePrimaryClick}
           onUtilityClick={handleUtilityClick}

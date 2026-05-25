@@ -5,8 +5,11 @@ import {
   buildDockerPath,
   buildKubernetesPath,
   buildProxmoxPath,
+  buildRecoveryPath,
+  buildStoragePath,
   buildTrueNASPath,
   buildVmwarePath,
+  buildWorkloadsPath,
 } from '@/routing/resourceLinks';
 import {
   buildCommandPaletteCommands,
@@ -30,6 +33,9 @@ export function useCommandPaletteState(props: CommandPaletteModalProps) {
         dockerPath: buildDockerPath(),
         kubernetesPath: buildKubernetesPath(),
         kubernetesWorkloadsPath: buildKubernetesPath('workloads'),
+        workloadsPath: buildWorkloadsPath(),
+        storagePath: buildStoragePath(),
+        recoveryPath: buildRecoveryPath(),
         trueNasPath: buildTrueNASPath(),
         vmwarePath: buildVmwarePath(),
         vmwareNetworksPath: buildVmwarePath('networks'),

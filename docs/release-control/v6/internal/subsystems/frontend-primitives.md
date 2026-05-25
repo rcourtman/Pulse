@@ -463,12 +463,12 @@ not a replacement status card, CTA band, or page-local nested card.
    the Cloud control plane rather than a local in-product trial page.
    The former top-level `/infrastructure` operator route never shipped as a
    stable v6 surface and must remain unregistered instead of being kept as a
-   compatibility redirect. Other retired top-level operator routes such as
-   `/workloads`, `/storage`, `/recovery`, and `/ceph` may remain registered in
-   `frontend-modern/src/App.tsx` only as thin routes into their owning product
-   surfaces or canonical redirect targets. They must not become preloaded
-   primary nav tabs, duplicate app shells, or local `NotFound` fallbacks for
-   still-supported operator destinations.
+   compatibility redirect. `/workloads`, `/storage`, and `/recovery` are
+   explicit aggregate workspace routes owned by their product surfaces and the
+   authenticated shell; they must appear through the same navigation, command
+   palette, shortcut, route-preload, and active-tab owners as other first-class
+   destinations rather than lingering as hidden compatibility routes. `/ceph`
+   remains a thin redirect to the Proxmox-owned Ceph tab.
    The same settings-shell boundary owns read-only landing posture: when the
    session presentation policy says the operator cannot manage setup, `/settings`
    and sidebar navigation must land on the canonical reporting/control surface
@@ -1093,9 +1093,9 @@ not a replacement status card, CTA band, or page-local nested card.
     families stay hidden rather than rendering as disabled placeholders.
     The `MOBILE_NAV_PLATFORM_PRIORITY` ordering in
     `frontend-modern/src/components/shared/mobileNavBarModel.ts` mirrors
-    that platform-first set so mobile and desktop primary navigation stay
-    aligned; legacy Infrastructure / Workloads / Storage / Recovery entries
-    are intentionally absent from that priority list.
+    that platform-first set plus the aggregate Workloads / Storage / Recovery
+    workspace tabs, so mobile and desktop navigation stay aligned while the
+    legacy Infrastructure entry remains absent from that priority list.
     The support-manifest `agent` platform may be presented as `Agents` in the
     same shell. Its primary tab, mobile priority, command-palette destination,
     and keyboard shortcut must all route through `buildAgentsPath()` and the
@@ -1416,8 +1416,8 @@ not a replacement status card, CTA band, or page-local nested card.
     responsibilities: the shared route preload inventory must stay module-only,
     while chart payload warming must route through the route or interaction that
     renders the chart. `frontend-modern/src/useAppRuntimeState.ts` must not
-    prewarm retired Infrastructure or Workloads summary-chart caches as a
-    generic authenticated-shell side effect.
+    prewarm retired Infrastructure summary-chart caches or eager Workloads
+    chart caches as a generic authenticated-shell side effect.
 24. Keep relay settings shell copy on the shared presentation owner in
     `frontend-modern/src/utils/relayPresentation.ts`. The route metadata in
     `settingsHeaderMeta.ts` and the leading `SettingsPanel` in
@@ -1574,23 +1574,26 @@ in-place through their existing handoff buttons and inline actions. Future
 cross-surface drilldown chips must not reanimate the legacy helpers.
 
 Command palette and keyboard shortcuts moved to platform-first on 2026-05-16
+and aggregate-workspace ownership was clarified on 2026-05-25
 (`frontend-modern/src/components/shared/commandPaletteModel.ts`,
 `frontend-modern/src/components/shared/useCommandPaletteState.ts`,
 `frontend-modern/src/components/shared/KeyboardShortcutsModal.tsx`,
 `frontend-modern/src/hooks/useKeyboardShortcuts.ts`,
 `frontend-modern/src/routing/routePreload.ts`,
-`frontend-modern/src/routing/navigation.ts`). The legacy `nav-infrastructure`,
-`nav-workloads`, `nav-storage`, and `nav-recovery` palette entries — together
-with the `g i` / `g w` / `g s` / `g b` chord bindings — were retired and
-replaced with `nav-proxmox`, `nav-docker`, `nav-kubernetes`, `nav-truenas`,
-`nav-vmware` (chords `g p` / `g d` / `g k` / `g n` / `g v`) plus a dedicated
-`nav-kubernetes-workloads` entry that lands on `/kubernetes/workloads`. The shell
-preload set and `getActiveTabForPath` matcher no longer recognize the legacy
-top-level routes. New palette commands and shortcut chords must therefore
-anchor on canonical platform routes and must flow through the same platform
-visibility model as primary navigation; do not reintroduce hidden platform
-families or top-level Infrastructure / Workloads / Storage / Recovery entries
-by reanimating the legacy paths.
+`frontend-modern/src/routing/navigation.ts`). The legacy
+`nav-infrastructure` palette entry and `g i` chord remain retired with the
+unregistered Infrastructure route. `nav-workloads`, `nav-storage`, and
+`nav-recovery` are first-class aggregate workspace commands; Workloads and
+Storage own the `g w` / `g s` chord bindings, while Recovery is available
+through visible navigation and the command palette. Platform commands remain
+`nav-proxmox`, `nav-docker`, `nav-kubernetes`, `nav-truenas`, `nav-vmware`
+(chords `g p` / `g d` / `g k` / `g n` / `g v`) plus a dedicated
+`nav-kubernetes-workloads` entry that lands on `/kubernetes/workloads`.
+The route-module preload registry and `getActiveTabForPath` matcher must
+recognize the aggregate workspace routes as owned destinations. New palette
+commands and shortcut chords must flow through the same shell owners; do not
+reintroduce hidden platform families or the retired top-level Infrastructure
+entry by reanimating legacy paths.
 
 The shared table chrome now allows `TableCardHeader` to expose a right-aligned
 action slot, currently used by the Workloads/Proxmox metric display control.

@@ -25,6 +25,8 @@ const UNIFIED_NAV_SHORTCUTS: ShortcutGroup = {
     { keys: 'g then k', description: 'Go to Kubernetes' },
     { keys: 'g then n', description: 'Go to TrueNAS' },
     { keys: 'g then v', description: 'Go to vSphere' },
+    { keys: 'g then w', description: 'Go to Workloads' },
+    { keys: 'g then s', description: 'Go to Storage' },
     { keys: 'g then a', description: 'Go to Alerts' },
     { keys: 'g then r', description: 'Go to Patrol' },
     { keys: 'g then t', description: 'Go to Settings' },

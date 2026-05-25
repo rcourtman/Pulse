@@ -662,23 +662,26 @@ runtime cost control, and shared AI transport surfaces.
 
 ## Current State
 
-Primary nav moved to governed platform/runtime destinations on 2026-05-16 through
-`frontend-modern/src/App.tsx` and `frontend-modern/src/AppLayout.tsx`: the top
-of the app may expose canonical platform pages (Proxmox, Kubernetes, TrueNAS,
-vSphere) plus the container-runtime lens (shown as Containers for Docker /
-Podman), Alerts, Patrol, and Settings, but those destinations must pass the
-shared support-and-resource-evidence gate before they appear in navigation,
-command palette entries, keyboard shortcuts, or landing fallbacks.
-Admitted-only or absent platform/runtime surfaces must stay hidden from the
-AI-adjacent shell and must not be kept as disabled placeholders. The legacy
-`/infrastructure`, `/workloads`, `/storage`, `/recovery`, and `/ceph` route
-shells were retired alongside their page wrappers. The AI Chat launcher, the
-Patrol surfaces, and the `AssistantHandoffPayload` deep links must use
-platform routes (`/proxmox/overview`, `/proxmox/storage`,
-`/kubernetes/workloads`, etc.) as canonical anchors rather than the retired
-top-level paths; adding a
-platform tab through the same shell files must not fork Assistant or Patrol
-shell state or smuggle in AI-owned platform reads.
+Primary nav moved to governed platform/runtime destinations on 2026-05-16 and
+was clarified on 2026-05-25 through `frontend-modern/src/App.tsx` and
+`frontend-modern/src/AppLayout.tsx`: the top of the app may expose canonical
+platform pages (Proxmox, Kubernetes, TrueNAS, vSphere) plus the
+container-runtime lens (shown as Containers for Docker / Podman), aggregate
+Workloads / Storage / Recovery workspaces, Alerts, Patrol, and Settings.
+Provider/runtime destinations must pass the shared support-and-resource-
+evidence gate before they appear in navigation, command palette entries,
+keyboard shortcuts, or landing fallbacks. Aggregate workspace tabs are
+first-class product surfaces, not compatibility placeholders. Admitted-only or
+absent platform/runtime surfaces must stay hidden from the AI-adjacent shell
+and must not be kept as disabled placeholders. The legacy `/infrastructure`
+route shell was retired alongside its page wrapper, and `/ceph` remains only a
+thin redirect to `/proxmox/ceph`. The AI Chat launcher, Patrol surfaces, and
+`AssistantHandoffPayload` deep links must use canonical platform or aggregate
+workspace routes (`/proxmox/overview`, `/proxmox/storage`,
+`/kubernetes/workloads`, `/workloads`, `/storage`, `/recovery`, etc.) rather
+than reviving retired Infrastructure paths; adding a platform tab through the
+same shell files must not fork Assistant or Patrol shell state or smuggle in
+AI-owned platform reads.
 Post-auth `/` and `/login` resolution follows that same provider-first
 platform order, with Agents only as the agent-only fallback, so the
 assistant-capable shell never treats Agents or legacy Infrastructure as the

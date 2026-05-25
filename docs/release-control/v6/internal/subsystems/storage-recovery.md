@@ -181,12 +181,13 @@ recovery scope, or a storage/recovery-owned secret source.
 
 1. Add or change recovery-point persistence, rollups, or series derivation through `internal/recovery/`
 2. Add or change recovery page UX through `frontend-modern/src/components/Recovery/` and keep canonical route/query/filter state ownership in `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`
-   `/recovery` remains a supported authenticated operator destination even
-   when Recovery is not a primary platform tab. Route compatibility in
-   `frontend-modern/src/App.tsx` must render the canonical Recovery surface
-   rather than `NotFound`, and `/storage` compatibility must likewise render
-   the Storage owner surface instead of duplicating storage/recovery state in
-   the app shell.
+   `/recovery` is a first-class authenticated aggregate workspace.
+   `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, the command
+   palette, keyboard shortcuts, route preloading, and active-tab routing must
+   treat Recovery as canonical product navigation rather than hidden
+   compatibility. `/storage` has the same aggregate-workspace status for the
+   Storage owner surface. The app shell may route to those surfaces, but it
+   must not duplicate storage/recovery state outside their owning components.
    Recovery table surfaces must consume the frontend-primitives-owned
    `TableCard` frame and `TableCardHeader` header band for protected-item,
    recovery-event, and adjacent table-fallback chrome. Storage/recovery may own
@@ -256,7 +257,7 @@ recovery scope, or a storage/recovery-owned secret source.
    A selected timeline day is an active event-history filter: table totals,
    footer ranges, empty states, and search/date matching must describe the
    visible filtered recovery points, not the unfiltered API page metadata.
-3. Add or change storage UX through `frontend-modern/src/components/Storage/Storage.tsx` (the canonical `StorageSurface`, embedded inside platform pages), `frontend-modern/src/components/Storage/`, `frontend-modern/src/features/storageBackups/`, the shared storage-source contract in `frontend-modern/src/utils/storageSources.ts`, and the Proxmox-native Ceph table at `frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx`. The standalone Storage, Ceph, and Recovery route shells under the legacy frontend-modern pages directory were retired with the platform-first primary nav (2026-05-16); the underlying surfaces stay alive as embedded views inside the matching platform page sub-tabs through `frontend-modern/src/pages/Proxmox.tsx`.
+3. Add or change storage UX through `frontend-modern/src/components/Storage/Storage.tsx` (the canonical `StorageSurface`, embedded inside platform pages and mounted by the aggregate Storage workspace), `frontend-modern/src/components/Storage/`, `frontend-modern/src/features/storageBackups/`, the shared storage-source contract in `frontend-modern/src/utils/storageSources.ts`, and the Proxmox-native Ceph table at `frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx`. The old standalone page wrappers under the legacy frontend-modern pages directory were retired with the platform-first primary nav (2026-05-16); the canonical component surfaces remain alive both as aggregate Workloads / Storage / Recovery workspaces and as embedded views inside matching platform page sub-tabs. The Ceph legacy route remains a thin redirect to the Proxmox-owned Ceph tab.
    The retired dashboard route must not reintroduce storage or recovery
    widgets as compatibility panels. Storage capacity, storage health,
    protected-item, and recovery-outcome readiness claims belong on the Storage
@@ -854,7 +855,7 @@ recovery scope, or a storage/recovery-owned secret source.
     top-level tabs are warm after authentication, but it must not fetch storage
     summary charts, recovery history, provider state, or preview data from
     `frontend-modern/src/App.tsx` itself. The shared runtime bootstrap must
-    likewise avoid prewarming retired Infrastructure or Workloads chart caches
+    likewise avoid prewarming Infrastructure or Workloads chart caches
     as a generic authenticated-shell side effect; storage/recovery chart data
     stays owned by the route or interaction that renders it.
     The shared app shell's authenticated landing and primary-tab routing may

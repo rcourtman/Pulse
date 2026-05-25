@@ -146,7 +146,7 @@ The alert resource-incident panel
 (`frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx`)
 dropped its "Open in Infrastructure / Workloads / Storage / Recovery"
 cross-jump chip strip on 2026-05-16 when the surrounding platform-first
-migration retired the underlying top-level routes. The panel now keeps
+migration retired broad surface-link chips. The panel now keeps
 investigation flow in-place through `IncidentAssistantHandoffButton` and the
 shared incident-timeline cards; it must not reintroduce a chip strip that
 links to the retired top-level routes, and the supporting

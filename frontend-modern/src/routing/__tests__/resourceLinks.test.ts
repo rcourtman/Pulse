@@ -25,6 +25,7 @@ import {
   parseStorageLinkSearch,
   parseWorkloadsLinkSearch,
   STORAGE_QUERY_PARAMS,
+  STORAGE_PATH,
   WORKLOADS_QUERY_PARAMS,
 } from '@/routing/resourceLinks';
 
@@ -120,6 +121,7 @@ describe('resource link routing contract', () => {
   });
 
   it('builds and parses storage query params', () => {
+    expect(STORAGE_PATH).toBe('/storage');
     const href = buildStoragePath({
       tab: 'disks',
       group: 'storage',

@@ -5,8 +5,10 @@ import {
   buildDockerPath,
   buildKubernetesPath,
   buildProxmoxPath,
+  buildStoragePath,
   buildTrueNASPath,
   buildVmwarePath,
+  buildWorkloadsPath,
 } from '@/routing/resourceLinks';
 import {
   createEmptyInfrastructureNavigationVisibility,
@@ -98,6 +100,8 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
     );
     return {
       ...infrastructureRoutes,
+      w: buildWorkloadsPath(),
+      s: buildStoragePath(),
       a: '/alerts',
       r: '/patrol',
       t: '/settings',

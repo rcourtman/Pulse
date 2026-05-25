@@ -61,13 +61,12 @@ describe('CommandPaletteModal', () => {
     expect(commandPaletteStateSource).toContain('buildProxmoxPath');
     expect(commandPaletteStateSource).toContain('export function useCommandPaletteState');
 
-    // Legacy navigation entries (Infrastructure / Workloads / Storage / Recovery)
-    // were retired when primary nav moved to platform-first. The palette
-    // exposes the platform pages directly instead.
+    // Infrastructure was retired when route ownership moved to explicit
+    // platform and aggregate workspace destinations.
     expect(commandPaletteStateSource).not.toContain('buildInfrastructurePath');
-    expect(commandPaletteStateSource).not.toContain('buildWorkloadsPath');
-    expect(commandPaletteStateSource).not.toContain('buildStoragePath');
-    expect(commandPaletteStateSource).not.toContain('buildRecoveryPath');
+    expect(commandPaletteStateSource).toContain('buildWorkloadsPath');
+    expect(commandPaletteStateSource).toContain('buildStoragePath');
+    expect(commandPaletteStateSource).toContain('buildRecoveryPath');
 
     expect(commandPaletteModelSource).toContain('buildCommandPaletteCommands');
     expect(commandPaletteModelSource).toContain('normalizeCommandPaletteQuery');
@@ -81,9 +80,9 @@ describe('CommandPaletteModal', () => {
     expect(commandPaletteModelSource).toContain("id: 'nav-vmware'");
     expect(commandPaletteModelSource).toContain("id: 'nav-vmware-networks'");
     expect(commandPaletteModelSource).not.toContain("id: 'nav-infrastructure'");
-    expect(commandPaletteModelSource).not.toContain("id: 'nav-workloads'");
-    expect(commandPaletteModelSource).not.toContain("id: 'nav-storage'");
-    expect(commandPaletteModelSource).not.toContain("id: 'nav-recovery'");
+    expect(commandPaletteModelSource).toContain("id: 'nav-workloads'");
+    expect(commandPaletteModelSource).toContain("id: 'nav-storage'");
+    expect(commandPaletteModelSource).toContain("id: 'nav-recovery'");
   });
 
   it('renders platform entries, runtime lens commands, and vSphere network inventory', () => {
@@ -100,6 +99,12 @@ describe('CommandPaletteModal', () => {
     expect(screen.getByText('Go to Containers')).toBeInTheDocument();
     expect(screen.getByText('Go to Kubernetes Workloads')).toBeInTheDocument();
     expect(screen.getByText('/kubernetes/workloads')).toBeInTheDocument();
+    expect(screen.getByText('Go to Workloads')).toBeInTheDocument();
+    expect(screen.getByText('/workloads')).toBeInTheDocument();
+    expect(screen.getByText('Go to Storage')).toBeInTheDocument();
+    expect(screen.getByText('/storage')).toBeInTheDocument();
+    expect(screen.getByText('Go to Recovery')).toBeInTheDocument();
+    expect(screen.getByText('/recovery')).toBeInTheDocument();
     expect(screen.getByText('Go to vSphere')).toBeInTheDocument();
     expect(screen.getByText('Go to vSphere Networks')).toBeInTheDocument();
     expect(screen.getByText('/vmware/networks')).toBeInTheDocument();
@@ -142,6 +147,22 @@ describe('CommandPaletteModal', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('navigates to aggregate workspace routes', async () => {
+    const onClose = vi.fn();
+    render(() => (
+      <CommandPaletteModal
+        isOpen={true}
+        onClose={onClose}
+        infrastructureVisibility={infrastructureVisibility}
+      />
+    ));
+
+    await fireEvent.click(screen.getByText('Go to Storage'));
+
+    expect(navigateMock).toHaveBeenCalledWith('/storage');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('uses the shared search input and keeps Enter selection behavior', async () => {
     const onClose = vi.fn();
     render(() => (
@@ -174,6 +195,9 @@ describe('CommandPaletteModal', () => {
     ));
 
     expect(screen.getByText('Go to Proxmox')).toBeInTheDocument();
+    expect(screen.getByText('Go to Workloads')).toBeInTheDocument();
+    expect(screen.getByText('Go to Storage')).toBeInTheDocument();
+    expect(screen.getByText('Go to Recovery')).toBeInTheDocument();
     expect(screen.queryByText('Go to Agents')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to Containers')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to Kubernetes')).not.toBeInTheDocument();

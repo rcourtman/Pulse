@@ -661,11 +661,10 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).toContain('href={action().href}');
     });
 
-    it('does not cross-jump expanded findings to the retired top-level Infrastructure/Workloads/Storage/Recovery routes', () => {
+    it('does not cross-jump expanded findings to broad Infrastructure or aggregate workspace routes', () => {
       // The platform-first migration retired buildResolvedResourceSurfaceLinks
-      // alongside the standalone /infrastructure, /workloads, /storage, and
-      // /recovery routes; Patrol findings now stay in place rather than
-      // offering external surface jumps.
+      // and the broad surface-link chips; Patrol findings now stay in place
+      // rather than offering external surface jumps.
       expect(findingsPanelSource).not.toContain("from '@/hooks/useResources'");
       expect(findingsPanelSource).not.toContain('buildResolvedResourceSurfaceLinks');
       expect(findingsPanelSource).not.toContain('useResources()');

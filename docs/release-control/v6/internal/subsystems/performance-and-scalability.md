@@ -613,20 +613,24 @@ shell clickable behind another overlay.
     2s dial / 1s read with at most 5 concurrent fingerprints so the probe
     endpoint cannot be repurposed into a slow-leak scanner that starves the
     dashboard hot path.
-    Platform-first top-level pages must remain in the app-shell route
-    preload registry. `frontend-modern/src/routing/routePreload.ts` carries
-    a `ROUTE_PRELOADERS` entry per supported platform (Agents, Proxmox plus
-    the Docker, Kubernetes, TrueNAS, and vSphere families) so first-paint
-    navigation between platform tabs stays warm and does not depend on a
-    cold dynamic import after the user clicks. New supported platform
-    families must extend that registry rather than skipping the preload
-    hot path; presentation-only platforms must not be registered. Preload
-    entries may warm route modules, but they must not trigger additional
-    unfiltered resource fetches, metrics-history fan-out, or provider scans
-    before the destination page owns its normal data query. The preload order
-    follows the provider-first shell order as a hot-path hint: Proxmox remains
-    ahead of Agents when both surfaces are available, while Agents stays in
-    the preload set so agent-only estates still get a warm first destination.
+    Platform-first and aggregate workspace top-level pages must remain in the
+    app-shell route preload registry. `frontend-modern/src/routing/routePreload.ts`
+    carries a `ROUTE_PRELOADERS` entry per supported platform (Agents, Proxmox
+    plus the Docker, Kubernetes, TrueNAS, and vSphere families) and per
+    first-class aggregate workspace (Workloads, Storage, and Recovery) so
+    first-paint navigation between visible shell tabs stays warm and does not
+    depend on a cold dynamic import after the user clicks. New supported
+    platform families or first-class aggregate workspaces must extend that
+    registry rather than skipping the preload hot path; presentation-only or
+    retired routes must not be registered. Preload entries may warm route
+    modules, but they must not trigger additional unfiltered resource fetches,
+    metrics-history fan-out, recovery-history fan-out, storage scans, or
+    provider scans before the destination page owns its normal data query. The
+    preload order follows the provider-first shell order as a hot-path hint:
+    Proxmox remains ahead of Agents when both surfaces are available, while
+    Agents stays in the preload set so agent-only estates still get a warm
+    first destination; aggregate workspace entries are addressable for
+    hover/click warming without becoming generic app-bootstrap data work.
     The authenticated app shell must not separately prewarm retired
     Infrastructure or Workloads chart caches as a generic side effect; those
     chart fetches belong to the route that renders the chart surface or to the

@@ -36,14 +36,14 @@ describe('App architecture', () => {
     expect(routePreloadSource).toContain('export const APP_SHELL_ROUTE_PRELOAD_PATHS = [');
     expect(routePreloadSource).toContain('ROOT_PROXMOX_PATH,');
     expect(routePreloadSource).toContain('PATROL_PATH,');
-    // Legacy top-level routes (Infrastructure/Workloads/Storage/Recovery/Ceph)
-    // were retired as primary nav tabs when navigation moved to platform-first.
     // Infrastructure never shipped as a stable top-level route, so it must not
-    // remain wired as a hidden compatibility surface.
+    // remain wired as a hidden compatibility surface. Workloads, Storage, and
+    // Recovery are explicit aggregate workspaces and must be owned by the shell
+    // instead of lingering as hidden routes.
     expect(routePreloadSource).not.toContain('ROOT_INFRASTRUCTURE_PATH');
-    expect(routePreloadSource).not.toContain('ROOT_WORKLOADS_PATH');
-    expect(routePreloadSource).not.toContain('RECOVERY_ROUTE_PATH');
-    expect(routePreloadSource).not.toContain('STORAGE_PATH');
+    expect(routePreloadSource).toContain("id: 'workloads',");
+    expect(routePreloadSource).toContain("id: 'storage',");
+    expect(routePreloadSource).toContain("id: 'recovery',");
     expect(appSource).not.toContain('const InfrastructurePage = lazy(');
     expect(appSource).not.toContain("import('./features/infrastructure/InfrastructurePageSurface')");
     expect(appSource).not.toContain('component={InfrastructurePage}');
@@ -98,10 +98,10 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain(
       "tooltip: 'Standalone Pulse Agent machines, OS telemetry, storage, and command eligibility'",
     );
-    // Governed platform/runtime primary nav: Infrastructure / Workloads /
-    // Storage / Recovery are not duplicated as equal primary tab
-    // entries, and the Docker / Podman route is presented as the Containers
-    // runtime lens in shell chrome.
+    // Governed shell nav: Infrastructure is not a standalone tab; the
+    // aggregate Workloads / Storage / Recovery destinations are first-class
+    // workspace tabs, and Docker / Podman is presented as the Containers
+    // runtime lens.
     expect(appSource).toContain('getDefaultWorkspaceRoute');
     expect(appSource).toContain('infrastructureNavigationResolved');
     expect(appSource).toContain('buildPrimaryInfrastructureNavigationVisibility');
@@ -110,7 +110,10 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain("label: 'Containers'");
     expect(appLayoutSource).toContain("'Docker / Podman runtime lens");
     expect(appLayoutSource).not.toContain("id: 'infrastructure',");
-    expect(appLayoutSource).not.toContain("id: 'workloads',");
+    expect(appLayoutSource).toContain("id: 'workloads',");
+    expect(appLayoutSource).toContain("id: 'storage',");
+    expect(appLayoutSource).toContain("id: 'recovery',");
+    expect(appLayoutSource).toContain("aria-label=\"Workspaces\"");
     expect(appLayoutSource).not.toContain('buildStorageRecoveryTabSpecs(');
     expect(appSource).not.toContain('DashboardPage');
     expect(headerAuditSource).not.toContain("['src/pages/Dashboard.tsx', 'PageHeader']");
@@ -354,7 +357,9 @@ describe('App architecture', () => {
     expect(routePreloadSource).not.toContain("import('@/pages/Recovery')");
     expect(routePreloadSource).not.toContain("import('@/pages/Storage')");
     expect(routePreloadSource).not.toContain("import('@/pages/Ceph')");
-    expect(routePreloadSource).not.toContain("import('@/components/Workloads/WorkloadsSurface')");
+    expect(routePreloadSource).toContain("import('@/components/Workloads/WorkloadsSurface')");
+    expect(routePreloadSource).toContain("import('@/components/Storage/Storage')");
+    expect(routePreloadSource).toContain("import('@/components/Recovery/Recovery')");
     expect(routePreloadSource).not.toContain("import('@/pages/RecoveryRoute')");
     expect(appRuntimeContextSource).toContain(
       "import { createContext, useContext } from 'solid-js';",

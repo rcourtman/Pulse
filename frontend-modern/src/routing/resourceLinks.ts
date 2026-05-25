@@ -33,6 +33,7 @@ export const ALERTS_OVERVIEW_PATH = '/alerts/overview';
 export const PATROL_PATH = '/patrol';
 // Deprecated compatibility alias while older callers migrate off `/ai`.
 export const AI_PATROL_PATH = PATROL_PATH;
+export const STORAGE_PATH = '/storage';
 // Canonical "Recovery" surface (was historically called Backups).
 export const RECOVERY_PATH = '/recovery';
 
@@ -250,7 +251,7 @@ export const buildStoragePath = (options: StorageLinkOptions = {}): string => {
   if (summaryGroup) params.set(STORAGE_QUERY_PARAMS.summaryGroup, summaryGroup);
 
   const serialized = params.toString();
-  return serialized ? `/storage?${serialized}` : '/storage';
+  return serialized ? `${STORAGE_PATH}?${serialized}` : STORAGE_PATH;
 };
 
 export const parseRecoveryLinkSearch = (search: string) => {

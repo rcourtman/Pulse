@@ -509,19 +509,18 @@ or other self-hosted uncapped continuity plans.
     from the governed support manifest plus canonical resource evidence in
     `state.resources`. Admitted-only, presentation-only, unsupported, or
     absent platform families must not render as disabled placeholders in the
-    paid or hosted app shell. Infrastructure, Workloads, Storage, and Recovery
-    are not duplicated as equal primary tabs in that list; their tables are
-    reused inside the platform pages via embedded
-    `tableOnly` surfaces, and their routes remain wired in `App.tsx` purely
-    for deep-link compatibility. Each platform page must remain chrome-only:
+    paid or hosted app shell. Infrastructure is not an equal primary tab in
+    that list. Workloads, Storage, and Recovery are explicit aggregate
+    workspace tabs, while their component surfaces also remain reusable inside
+    platform pages via embedded `tableOnly` surfaces. Each platform page must
+    remain chrome-only:
     routing plus sub-tab navigation that embeds the canonical
     `WorkloadsSurface`, `StorageSurface`, `RecoverySurface`, or
     `UnifiedResourceTable` in `embedded tableOnly` mode with a forced
     platform/source filter. The shell must not introduce dashboard cards,
     bespoke per-family tables, synthetic placeholder data, or reintroduce
-    Infrastructure / Workloads / Storage / Recovery as equal
-    primary navigation entries without a governed contract decision recorded
-    here.
+    Infrastructure as a primary navigation entry without a governed contract
+    decision recorded here.
     The presence of an `Agents` tab is not a new commercial usage unit:
     hosted and paid surfaces continue to meter the governed monitored-system
     grouping result rather than counting primary navigation destinations.
@@ -673,9 +672,10 @@ follow the same canonical home. The hosted bootstrap / activation / recovery
 routes (`/pricing`, `/preview/setup-complete`, `/login`, settings panels
 under `/settings/...`) are unchanged. Pricing-handoff and hosted-signup
 upgrade paths must use platform routes as their canonical "back to product"
-destination instead of the retired top-level Infrastructure / Workloads /
-Storage / Recovery pages. The Docker / Podman runtime route remains `/docker`
-for compatibility and search familiarity, but the shell may label the
+destination instead of the retired top-level Infrastructure route; aggregate
+Workloads / Storage / Recovery pages are product workspaces, not hosted
+acquisition destinations. The Docker / Podman runtime route remains `/docker`
+for search familiarity, but the shell may label the
 destination as Containers so it reads as a runtime lens rather than an owning
 infrastructure platform.
 

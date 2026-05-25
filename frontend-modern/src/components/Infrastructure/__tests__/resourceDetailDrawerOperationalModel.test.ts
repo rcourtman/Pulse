@@ -124,7 +124,7 @@ describe('resourceDetailDrawerOperationalModel', () => {
 
   it('returns no cross-jump links for docker-host resources after the platform-first migration', () => {
     // Surface link injection through buildResourceSurfaceLinksForResource was
-    // retired with the standalone /workloads, /storage, /recovery routes;
+    // retired with the old broad cross-surface chip strip;
     // only service-detail links (PMG thresholds) remain.
     expect(
       buildRelatedLinks(

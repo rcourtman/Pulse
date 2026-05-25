@@ -470,9 +470,9 @@ describe('tab path helpers', () => {
     );
     expect(alertResourceIncidentsPanelSource).toContain('IncidentEventFilters');
     expect(alertResourceIncidentsPanelSource).toContain('IncidentTimelineEventCard');
-    // Cross-jump links to the legacy top-level Infrastructure / Workloads /
-    // Storage / Recovery routes were retired with the platform-first
-    // migration; the incidents panel no longer renders surface-link chips.
+    // Broad cross-jump chips into Infrastructure or aggregate workspaces were
+    // retired with the platform-first migration; the incidents panel no
+    // longer renders surface-link chips.
     expect(alertResourceIncidentsPanelSource).not.toContain('buildResolvedResourceSurfaceLinks');
     expect(alertResourceIncidentsPanelSource).not.toContain('allowInfrastructureFallback');
     expect(alertResourceIncidentsPanelSource).not.toContain('buildInfrastructureResourceLink');

@@ -41,6 +41,9 @@ const MOBILE_NAV_PRIMARY_PRIORITY = [
   'truenas',
   'vmware',
   'agents',
+  'workloads',
+  'storage',
+  'recovery',
 ] as const;
 
 const MOBILE_NAV_UTILITY_PRIORITY = ['alerts', 'ai', 'settings'] as const;

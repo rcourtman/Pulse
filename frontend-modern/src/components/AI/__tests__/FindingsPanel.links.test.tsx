@@ -206,8 +206,8 @@ describe('FindingsPanel resource links', () => {
     expect(
       screen.getByText('Nextcloud is unreachable for users until readiness recovers.'),
     ).toBeInTheDocument();
-    // The cross-jump chips to /infrastructure?resource=... and
-    // /workloads?... were retired with the platform-first migration;
+    // Broad cross-jump chips into /infrastructure and aggregate workspaces
+    // were retired with the platform-first migration;
     // Patrol findings now stay in place inside the panel.
     expect(
       screen.queryByRole('link', { name: 'Open related infrastructure for Nextcloud' }),

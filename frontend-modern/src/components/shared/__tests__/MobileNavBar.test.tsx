@@ -16,6 +16,7 @@ const AgentsIcon: Component<{ class?: string }> = (props) => <span class={props.
 const ProxmoxIcon: Component<{ class?: string }> = (props) => <span class={props.class}>PX</span>;
 const WorkloadsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>WO</span>;
 const StorageIcon: Component<{ class?: string }> = (props) => <span class={props.class}>ST</span>;
+const RecoveryIcon: Component<{ class?: string }> = (props) => <span class={props.class}>RC</span>;
 const AlertsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>AL</span>;
 const SettingsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>SE</span>;
 const PatrolIcon: Component<{ class?: string }> = (props) => (
@@ -48,10 +49,10 @@ describe('MobileNavBar', () => {
     expect(mobileNavBarModelSource).toContain("'kubernetes'");
     expect(mobileNavBarModelSource).toContain("'truenas'");
     expect(mobileNavBarModelSource).toContain("'vmware'");
+    expect(mobileNavBarModelSource).toContain("'workloads'");
+    expect(mobileNavBarModelSource).toContain("'storage'");
+    expect(mobileNavBarModelSource).toContain("'recovery'");
     expect(mobileNavBarModelSource).not.toContain("'infrastructure'");
-    expect(mobileNavBarModelSource).not.toContain("'workloads'");
-    expect(mobileNavBarModelSource).not.toContain("'storage'");
-    expect(mobileNavBarModelSource).not.toContain("'recovery'");
   });
 
   it('keeps decorative icon labels out of mobile tab accessible names', () => {
@@ -83,7 +84,7 @@ describe('MobileNavBar', () => {
     expect(within(navList).queryByRole('button', { name: 'Pulse Patrol Patrol' })).toBeNull();
   });
 
-  it('allows retired shell routes to render without an active mobile tab', () => {
+  it('allows inactive workspace tabs to render without an active mobile tab', () => {
     const { container } = render(() => (
       <MobileNavBar
         activeTab={() => null}
@@ -177,6 +178,17 @@ describe('MobileNavBar', () => {
             icon: StorageIcon,
             alwaysShow: true,
           },
+          {
+            id: 'recovery',
+            label: 'Recovery',
+            route: '/recovery',
+            settingsRoute: '/settings/system-recovery',
+            tooltip: 'Recovery',
+            enabled: true,
+            live: true,
+            icon: RecoveryIcon,
+            alwaysShow: true,
+          },
         ]}
         utilityTabs={() => [
           {
@@ -217,8 +229,9 @@ describe('MobileNavBar', () => {
     expect(buttons[1]).toHaveAttribute('data-tab-id', 'agents');
     expect(buttons[2]).toHaveAttribute('data-tab-id', 'workloads');
     expect(buttons[3]).toHaveAttribute('data-tab-id', 'storage');
-    expect(buttons[4]).toHaveAttribute('data-tab-id', 'alerts');
-    expect(buttons[5]).toHaveAttribute('data-tab-id', 'settings');
+    expect(buttons[4]).toHaveAttribute('data-tab-id', 'recovery');
+    expect(buttons[5]).toHaveAttribute('data-tab-id', 'alerts');
+    expect(buttons[6]).toHaveAttribute('data-tab-id', 'settings');
 
     expect(screen.getByText('2')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();

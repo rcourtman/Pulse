@@ -995,8 +995,8 @@ icon
 (`frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`)
 and the PBS "Open Recovery Events" link
 (`frontend-modern/src/components/Infrastructure/serviceDetailLinks.ts`) were
-removed because they targeted the retired `/workloads` and `/recovery` route
-shells; the workloads-href helper module
+removed because they were drawer-local cross-jump chips into broad aggregate
+workspaces rather than platform-aware resource actions; the workloads-href helper module
 (`frontend-modern/src/components/Infrastructure/workloadsLink.ts`) was deleted
 in the same pass. The K8s Namespaces and Deployments drawer "Open Pods" /
 "View Pods" buttons

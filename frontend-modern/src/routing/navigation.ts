@@ -4,8 +4,11 @@ import {
   KUBERNETES_PATH,
   PATROL_PATH,
   PROXMOX_PATH,
+  RECOVERY_PATH,
+  STORAGE_PATH,
   TRUENAS_PATH,
   VMWARE_PATH,
+  WORKLOADS_PATH,
 } from './resourceLinks';
 
 export type AppTabId =
@@ -15,6 +18,9 @@ export type AppTabId =
   | 'kubernetes'
   | 'truenas'
   | 'vmware'
+  | 'workloads'
+  | 'storage'
+  | 'recovery'
   | 'alerts'
   | 'ai'
   | 'settings';
@@ -28,6 +34,9 @@ export function getActiveTabForPath(path: string): ActiveAppTabId {
   if (path.startsWith(TRUENAS_PATH)) return 'truenas';
   if (path.startsWith(VMWARE_PATH)) return 'vmware';
   if (path.startsWith(AGENTS_PATH)) return 'agents';
+  if (path.startsWith(WORKLOADS_PATH)) return 'workloads';
+  if (path.startsWith(STORAGE_PATH)) return 'storage';
+  if (path.startsWith(RECOVERY_PATH)) return 'recovery';
   if (path.startsWith('/alerts')) return 'alerts';
   if (path.startsWith(PATROL_PATH) || path.startsWith('/ai')) return 'ai';
   if (path.startsWith('/settings')) return 'settings';

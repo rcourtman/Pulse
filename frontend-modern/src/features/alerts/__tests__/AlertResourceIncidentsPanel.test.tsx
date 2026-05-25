@@ -22,10 +22,9 @@ describe('AlertResourceIncidentsPanel', () => {
     vi.restoreAllMocks();
   });
 
-  it('does not surface cross-jump links to the retired top-level routes', () => {
-    // Surface link chips to /infrastructure?resource=...,
-    // /workloads?type=...&platform=..., /storage?source=..., and
-    // /recovery?platform=... were retired with the platform-first migration.
+  it('does not surface broad cross-jump links from incident details', () => {
+    // Surface link chips into /infrastructure and broad aggregate workspaces
+    // were retired with the platform-first migration.
     render(() => (
       <AlertResourceIncidentsPanel
         state={
