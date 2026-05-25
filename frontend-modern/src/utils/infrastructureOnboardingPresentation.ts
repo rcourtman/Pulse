@@ -247,7 +247,19 @@ const PRODUCT_PRESENTATION: Record<
     bestFor: 'Devices that expose ICMP, TCP, or HTTP but cannot run Pulse Agent',
     coverage: 'Agentless availability checks and downtime alerts',
     catalogDescription: 'Ping, TCP port, and HTTP availability checks',
-    searchAliases: ['ping', 'tcp', 'http', 'endpoint', 'website', 'ip address'],
+    searchAliases: [
+      'ping',
+      'icmp',
+      'tcp',
+      'http',
+      'endpoint',
+      'probe',
+      'port',
+      'website',
+      'ip address',
+      'mqtt',
+      'esphome',
+    ],
     sourceStrategy: 'probe',
     autoDetect: false,
     primaryMode: 'api-backed',
@@ -304,7 +316,8 @@ const AGENT_CATALOG_ITEMS: Record<
     routeStep: 'docker',
     label: 'Docker',
     bestFor: 'Docker hosts where containers should be discovered from the machine running them.',
-    coverage: 'Docker inventory plus host CPU, memory, disk, network, services, and SMART telemetry',
+    coverage:
+      'Docker inventory plus host CPU, memory, disk, network, services, and SMART telemetry',
     catalogDescription: 'Containers plus host telemetry',
     searchAliases: ['containers', 'container host', 'compose'],
     sourceStrategy: 'agent',
@@ -517,8 +530,9 @@ export const getInfrastructureApiProductsByGovernanceState = (
     (product) => product.governanceState === governanceState,
   );
 
-export const getInfrastructureSourcePickerItems = (): InfrastructureSourcePickerItemPresentation[] =>
-  SOURCE_PICKER_ITEM_ORDER.map((id) => getInfrastructureSourcePickerItemPresentation(id));
+export const getInfrastructureSourcePickerItems =
+  (): InfrastructureSourcePickerItemPresentation[] =>
+    SOURCE_PICKER_ITEM_ORDER.map((id) => getInfrastructureSourcePickerItemPresentation(id));
 
 export const getInfrastructureAutoDetectLabels = (): string[] =>
   getInfrastructureApiProductPresentations()

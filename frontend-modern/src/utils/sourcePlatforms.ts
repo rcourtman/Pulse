@@ -10,7 +10,8 @@ import {
 import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 
 export type PresentationOnlySourcePlatform = (typeof PRESENTATION_ONLY_PLATFORM_IDS)[number];
-export type KnownSourcePlatform = GeneratedKnownSourcePlatform;
+export type ProviderSourcePlatform = 'availability';
+export type KnownSourcePlatform = GeneratedKnownSourcePlatform | ProviderSourcePlatform;
 
 export interface SourcePlatformPresentation {
   label: string;
@@ -29,15 +30,29 @@ export interface SourcePlatformFlags {
 }
 
 export const SOURCE_PLATFORM_PRESENTATION: Record<KnownSourcePlatform, SourcePlatformPresentation> =
-  GENERATED_SOURCE_PLATFORM_PRESENTATION as Record<KnownSourcePlatform, SourcePlatformPresentation>;
+  {
+    ...GENERATED_SOURCE_PLATFORM_PRESENTATION,
+    availability: {
+      label: 'Availability',
+      tone: 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
+    },
+  } as Record<KnownSourcePlatform, SourcePlatformPresentation>;
 
-export const KNOWN_SOURCE_PLATFORM_KEYS =
-  GENERATED_KNOWN_SOURCE_PLATFORM_KEYS as readonly KnownSourcePlatform[];
+export const KNOWN_SOURCE_PLATFORM_KEYS = [
+  ...GENERATED_KNOWN_SOURCE_PLATFORM_KEYS,
+  'availability',
+] as readonly KnownSourcePlatform[];
 
 const PLATFORM_ALIASES = SOURCE_PLATFORM_ALIAS_MAP as Record<
   string,
   Exclude<KnownSourcePlatform, 'generic'>
 >;
+
+const SOURCE_PROVIDER_ALIASES: Record<string, ProviderSourcePlatform> = {
+  'availability-probe': 'availability',
+  endpoint: 'availability',
+  'network-endpoint': 'availability',
+};
 
 export const normalizeSourcePlatformKey = (
   value: string | null | undefined,
@@ -49,6 +64,9 @@ export const normalizeSourcePlatformKey = (
   }
   if (Object.prototype.hasOwnProperty.call(PLATFORM_ALIASES, normalized)) {
     return PLATFORM_ALIASES[normalized];
+  }
+  if (Object.prototype.hasOwnProperty.call(SOURCE_PROVIDER_ALIASES, normalized)) {
+    return SOURCE_PROVIDER_ALIASES[normalized];
   }
   return null;
 };
@@ -158,7 +176,7 @@ const hasGenericSource = (sources?: string[]): boolean =>
   );
 
 const hasAvailabilitySource = (sources?: string[]): boolean =>
-  Boolean(sources?.some((source) => source.trim().toLowerCase() === 'availability'));
+  Boolean(sources?.some((source) => normalizeSourcePlatformKey(source) === 'availability'));
 
 export const resolvePlatformTypeFromSources = (sources?: string[]): PlatformType | undefined => {
   const flags = readSourcePlatformFlags(sources);

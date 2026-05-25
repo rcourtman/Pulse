@@ -32,20 +32,33 @@ describe('infrastructurePageModel', () => {
         status: 'degraded',
         platformData: { sources: ['proxmox'] },
       }),
+      makeResource({
+        id: 'resource-3',
+        type: 'network-endpoint',
+        platformType: 'availability',
+        status: 'offline',
+        platformData: { sources: ['availability'] },
+      }),
     ];
 
     const derivation = buildInfrastructurePageFilterDerivation(resources, '', '', '');
 
-    expect(Array.from(derivation.availableSources)).toEqual(['agent', 'proxmox-pve']);
+    expect(Array.from(derivation.availableSources)).toEqual([
+      'agent',
+      'proxmox-pve',
+      'availability',
+    ]);
     // sourceOptions follow DEFAULT_INFRASTRUCTURE_SOURCE_ORDER from the
-    // platform manifest: agent, truenas, proxmox-pve, ...
+    // source contract: agent, availability, truenas, proxmox-pve, ...
     expect(derivation.sourceOptions).toEqual([
       { key: 'agent', label: 'Agent' },
+      { key: 'availability', label: 'Availability' },
       { key: 'proxmox-pve', label: 'PVE' },
     ]);
     expect(derivation.statusOptions).toEqual([
       { key: 'online', label: 'Online' },
       { key: 'degraded', label: 'Degraded' },
+      { key: 'offline', label: 'Offline' },
     ]);
     expect(derivation.activeFilterCount).toBe(0);
     expect(derivation.hasActiveFilters).toBe(false);
@@ -84,12 +97,7 @@ describe('infrastructurePageModel', () => {
   });
 
   it('reports an empty filtered result without losing the active-filter signal', () => {
-    const derivation = buildInfrastructurePageFilterDerivation(
-      [makeResource()],
-      '',
-      'offline',
-      '',
-    );
+    const derivation = buildInfrastructurePageFilterDerivation([makeResource()], '', 'offline', '');
 
     expect(derivation.activeFilterCount).toBe(1);
     expect(derivation.hasActiveFilters).toBe(true);
@@ -142,6 +150,31 @@ describe('infrastructurePageModel', () => {
     expect(derivation.sourceOptions).toEqual([{ key: 'vmware-vsphere', label: 'vSphere' }]);
     expect(derivation.filteredResources.map((resource) => resource.id)).toEqual([
       'resource-vmware-1',
+    ]);
+    expect(derivation.hasFilteredResources).toBe(true);
+  });
+
+  it('normalizes availability sources into the infrastructure source filter', () => {
+    const derivation = buildInfrastructurePageFilterDerivation(
+      [
+        makeResource({
+          id: 'resource-availability-1',
+          displayName: 'MQTT power meter',
+          type: 'network-endpoint',
+          platformType: 'availability',
+          sourceType: 'api',
+          platformData: { sources: ['network-endpoint'] },
+        }),
+      ],
+      'availability',
+      '',
+      '',
+    );
+
+    expect(Array.from(derivation.availableSources)).toEqual(['availability']);
+    expect(derivation.sourceOptions).toEqual([{ key: 'availability', label: 'Availability' }]);
+    expect(derivation.filteredResources.map((resource) => resource.id)).toEqual([
+      'resource-availability-1',
     ]);
     expect(derivation.hasFilteredResources).toBe(true);
   });

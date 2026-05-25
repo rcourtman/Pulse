@@ -6,7 +6,11 @@ export interface SourcePlatformOption {
   label: string;
 }
 
-const DEFAULT_SOURCE_PLATFORM_ORDER = DEFAULT_INFRASTRUCTURE_SOURCE_ORDER;
+const DEFAULT_SOURCE_PLATFORM_ORDER = [
+  'agent',
+  'availability',
+  ...DEFAULT_INFRASTRUCTURE_SOURCE_ORDER.filter((key) => key !== 'agent'),
+];
 
 export const orderSourcePlatformKeys = (
   keys: Iterable<string>,

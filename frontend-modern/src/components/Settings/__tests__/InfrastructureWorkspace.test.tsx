@@ -293,9 +293,7 @@ describe('InfrastructureWorkspace', () => {
     // Row-level 'Install agent' surfaces per system that has API coverage
     // but no Pulse Agent yet. The fixture has one such system, so at least
     // one of these buttons should exist.
-    expect(
-      screen.getAllByRole('button', { name: /^Install agent$/i }).length,
-    ).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: /^Install agent$/i }).length).toBeGreaterThan(0);
     const readiness = screen.getByRole('region', {
       name: /Infrastructure setup summary/i,
     });
@@ -634,11 +632,16 @@ describe('InfrastructureWorkspace', () => {
       screen.getByText('Choose the system, platform, host, or service you want Pulse to monitor.'),
     ).toBeInTheDocument();
     expect(
-      within(dialog).getByPlaceholderText('Search platforms, hosts, services...'),
+      within(dialog).getByPlaceholderText('Search sources, devices, services...'),
     ).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: /Detect API platform/i })).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', { name: /Detect API platform/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', { name: /Monitor network endpoint/i }),
+    ).toBeInTheDocument();
     expect(within(dialog).getByText('Choose how Pulse should connect')).toBeInTheDocument();
-    expect(within(dialog).getByText('Or pick a specific platform')).toBeInTheDocument();
+    expect(within(dialog).getByText('Or pick a specific source')).toBeInTheDocument();
     expect(within(dialog).queryByText('Agent telemetry')).toBeNull();
     expect(within(dialog).queryByText('API inventory')).toBeNull();
     expect(within(dialog).getByRole('button', { name: /TrueNAS SCALE/i })).toBeInTheDocument();

@@ -96,9 +96,11 @@ describe('infrastructureSelectors', () => {
 
     it('normalizes and deduplicates resource sources', () => {
       const resource = makeResource(1, {
-        platformData: { sources: ['PVE', 'proxmox-pve', 'k8s', 'kubernetes', 'invalid'] },
+        platformData: {
+          sources: ['PVE', 'proxmox-pve', 'k8s', 'kubernetes', 'network-endpoint', 'invalid'],
+        },
       });
-      expect(getResourceSources(resource)).toEqual(['proxmox-pve', 'kubernetes']);
+      expect(getResourceSources(resource)).toEqual(['proxmox-pve', 'kubernetes', 'availability']);
     });
 
     it('collects available sources and statuses with deduplication', () => {
@@ -108,10 +110,13 @@ describe('infrastructureSelectors', () => {
       const resources = [
         makeResource(1, { status: 'online', platformData: { sources: ['proxmox', 'pve'] } }),
         makeResource(2, { status: 'offline', platformData: { sources: ['docker', 'docker'] } }),
+        makeResource(4, { status: 'online', platformData: { sources: ['availability'] } }),
         uppercaseStatus,
       ];
 
-      expect(collectAvailableSources(resources)).toEqual(new Set(['proxmox-pve', 'docker']));
+      expect(collectAvailableSources(resources)).toEqual(
+        new Set(['proxmox-pve', 'docker', 'availability']),
+      );
       expect(collectAvailableStatuses(resources)).toEqual(new Set(['online', 'offline']));
     });
   });

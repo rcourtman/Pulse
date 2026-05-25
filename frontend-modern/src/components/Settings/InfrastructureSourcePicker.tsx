@@ -31,10 +31,9 @@ const readinessBadgeClass =
 const searchInputClass =
   'h-10 w-full rounded-md border border-border bg-surface py-2 pl-9 pr-3 text-sm text-base-content outline-none transition-colors placeholder:text-muted focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20';
 
-// Primary-path cards present the two onboarding journeys (API connection vs
-// agent install) up front so users pick a path before scanning the per-
-// platform card grid. The grid below stays as a direct alternative for users
-// who already know which platform they want.
+// Primary-path cards present the main onboarding journeys up front so users
+// pick a path before scanning the per-source card grid. The grid below stays
+// as a direct alternative for users who already know which source they want.
 const primaryPathCardClass =
   'group flex h-full items-start gap-3 rounded-md border border-blue-200 bg-blue-50 p-4 text-left transition-colors hover:border-blue-500 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:hover:bg-blue-900';
 
@@ -51,16 +50,19 @@ const CARD_ICON: Record<InfrastructureSourcePickerItemId, Component<{ class?: st
   availability: Activity,
 };
 
-// Popular platforms shown by default. The rest are hidden behind 'Show more
-// platforms' to keep the picker scannable at a glance and let users scroll
-// to fewer cards before deciding. Search bypasses this split — searching
-// for any platform surfaces it regardless of popular status.
+const PRIMARY_PATH_PICKER_ITEM_IDS: ReadonlySet<InfrastructureSourcePickerItemId> = new Set([
+  'availability',
+]);
+
+// Popular sources shown by default. The rest are hidden behind 'Show more
+// sources' to keep the picker scannable at a glance and let users scroll to
+// fewer cards before deciding. Search bypasses this split, including source
+// types already represented by a primary path.
 const POPULAR_PICKER_ITEM_IDS: ReadonlySet<InfrastructureSourcePickerItemId> = new Set([
   'pve',
   'truenas',
   'unraid',
   'linux-host',
-  'availability',
 ]);
 
 const itemMatchesQuery = (item: InfrastructureSourcePickerItemPresentation, query: string) => {
@@ -84,26 +86,30 @@ const itemMatchesQuery = (item: InfrastructureSourcePickerItemPresentation, quer
 
 export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerProps> = (props) => {
   const [query, setQuery] = createSignal('');
-  const [showAllPlatforms, setShowAllPlatforms] = createSignal(false);
+  const [showAllSources, setShowAllSources] = createSignal(false);
   const items = () => getInfrastructureSourcePickerItems();
   const normalizedQuery = createMemo(() => query().trim().toLowerCase());
   const matchedItems = createMemo(() =>
     items().filter((item) => itemMatchesQuery(item, normalizedQuery())),
   );
-  // When the user is searching, show every match regardless of popular
-  // status. Otherwise gate the long tail behind a 'Show more platforms'
-  // disclosure so the default scan is short.
+  const catalogItems = createMemo(() => {
+    if (normalizedQuery()) return matchedItems();
+    return matchedItems().filter((item) => !PRIMARY_PATH_PICKER_ITEM_IDS.has(item.id));
+  });
+  // When the user is searching, show every match regardless of popular status.
+  // Otherwise gate the long tail behind a 'Show more sources' disclosure so
+  // the default scan is short.
   const visibleItems = createMemo(() => {
-    if (normalizedQuery() || showAllPlatforms()) return matchedItems();
-    return matchedItems().filter((item) => POPULAR_PICKER_ITEM_IDS.has(item.id));
+    if (normalizedQuery() || showAllSources()) return catalogItems();
+    return catalogItems().filter((item) => POPULAR_PICKER_ITEM_IDS.has(item.id));
   });
   const hiddenCount = createMemo(() =>
-    normalizedQuery() || showAllPlatforms()
+    normalizedQuery() || showAllSources()
       ? 0
-      : matchedItems().filter((item) => !POPULAR_PICKER_ITEM_IDS.has(item.id)).length,
+      : catalogItems().filter((item) => !POPULAR_PICKER_ITEM_IDS.has(item.id)).length,
   );
   const heading = createMemo(() =>
-    normalizedQuery() ? 'Matching choices' : 'Or pick a specific platform',
+    normalizedQuery() ? 'Matching choices' : 'Or pick a specific source',
   );
 
   return (
@@ -111,9 +117,13 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
       <Show when={!normalizedQuery()}>
         <section class="space-y-2">
           <h3 class="text-sm font-semibold text-base-content">Choose how Pulse should connect</h3>
-          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <Show when={props.onDetectApiPlatform}>
-              <button type="button" onClick={props.onDetectApiPlatform} class={primaryPathCardClass}>
+              <button
+                type="button"
+                onClick={props.onDetectApiPlatform}
+                class={primaryPathCardClass}
+              >
                 <div
                   aria-hidden="true"
                   class="flex h-10 w-10 flex-none items-center justify-center rounded-md border border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200"
@@ -129,6 +139,25 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
                 </div>
               </button>
             </Show>
+            <button
+              type="button"
+              onClick={() => props.onSelectStep('availability')}
+              class={primaryPathCardClass}
+            >
+              <div
+                aria-hidden="true"
+                class="flex h-10 w-10 flex-none items-center justify-center rounded-md border border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200"
+              >
+                <Activity class="h-5 w-5" />
+              </div>
+              <div class="min-w-0 flex-1 space-y-1">
+                <div class="text-sm font-semibold text-base-content">Monitor network endpoint</div>
+                <p class="text-xs leading-5 text-muted">
+                  Use ICMP ping, TCP port, or HTTP checks for devices and services that cannot run
+                  the agent.
+                </p>
+              </div>
+            </button>
             <button
               type="button"
               onClick={() => props.onSelectStep('linux-host')}
@@ -164,7 +193,7 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
             value={query()}
             onInput={(event) => setQuery(event.currentTarget.value)}
             class={searchInputClass}
-            placeholder="Search platforms, hosts, services..."
+            placeholder="Search sources, devices, services..."
           />
         </label>
       </div>
@@ -224,10 +253,10 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
           <Show when={hiddenCount() > 0}>
             <button
               type="button"
-              onClick={() => setShowAllPlatforms(true)}
+              onClick={() => setShowAllSources(true)}
               class="mt-1 inline-flex items-center text-xs font-medium text-blue-700 hover:text-blue-900 hover:underline dark:text-blue-300 dark:hover:text-blue-100"
             >
-              Show {hiddenCount()} more platform{hiddenCount() === 1 ? '' : 's'}
+              Show {hiddenCount()} more source{hiddenCount() === 1 ? '' : 's'}
             </button>
           </Show>
         </Show>

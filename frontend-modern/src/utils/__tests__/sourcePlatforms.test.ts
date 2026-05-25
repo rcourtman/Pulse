@@ -37,6 +37,7 @@ describe('sourcePlatforms', () => {
       expect(normalizeSourcePlatformKey('pbs')).toBe('proxmox-pbs');
       expect(normalizeSourcePlatformKey('pmg')).toBe('proxmox-pmg');
       expect(normalizeSourcePlatformKey('k8s')).toBe('kubernetes');
+      expect(normalizeSourcePlatformKey('network-endpoint')).toBe('availability');
     });
   });
 
@@ -45,6 +46,9 @@ describe('sourcePlatforms', () => {
       expect(getSourcePlatformPresentation('proxmox-pve')).toMatchObject({ label: 'PVE' });
       expect(getSourcePlatformPresentation('proxmox-pbs')).toMatchObject({ label: 'PBS' });
       expect(getSourcePlatformPresentation('agent')).toMatchObject({ label: 'Agent' });
+      expect(getSourcePlatformPresentation('availability')).toMatchObject({
+        label: 'Availability',
+      });
       expect(getSourcePlatformPresentation('agent')?.tone).toContain('emerald');
     });
 
@@ -66,6 +70,7 @@ describe('sourcePlatforms', () => {
     it('returns label for known platforms', () => {
       expect(getSourcePlatformLabel('docker')).toBe('Docker / Podman');
       expect(getSourcePlatformLabel('kubernetes')).toBe('K8s');
+      expect(getSourcePlatformLabel('availability')).toBe('Availability');
     });
 
     it('returns canonical labels for normalized aliases', () => {
@@ -86,6 +91,7 @@ describe('sourcePlatforms', () => {
     it('canonicalizes query values while preserving all and unknown tokens', () => {
       expect(normalizeSourcePlatformQueryValue('pve')).toBe('proxmox-pve');
       expect(normalizeSourcePlatformQueryValue('pbs')).toBe('proxmox-pbs');
+      expect(normalizeSourcePlatformQueryValue('endpoint')).toBe('availability');
       expect(normalizeSourcePlatformQueryValue(' all ')).toBe('all');
       expect(normalizeSourcePlatformQueryValue('custom-platform')).toBe('custom-platform');
       expect(normalizeSourcePlatformQueryValue('')).toBe('');
@@ -164,7 +170,12 @@ describe('sourcePlatforms', () => {
     it('keeps VMware on the admitted vCenter-backed floor until live proof lands', () => {
       expect(ADMITTED_PLATFORM_IDS).toEqual(['vmware-vsphere']);
       expect(getSourcePlatformReadinessStage('vmware')).toBe('first-lab-ready');
-      expect(getSourcePlatformCanonicalProjections('vmware')).toEqual(['agent', 'vm', 'storage']);
+      expect(getSourcePlatformCanonicalProjections('vmware')).toEqual([
+        'agent',
+        'vm',
+        'storage',
+        'network',
+      ]);
       expect(getSourcePlatformSupportFloor('vmware')).toMatchObject({
         setup: 'supported',
         visibility: 'supported',
