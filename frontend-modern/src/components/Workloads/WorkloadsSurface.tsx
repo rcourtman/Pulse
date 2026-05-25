@@ -4,6 +4,10 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { TableCard } from '@/components/shared/TableCard';
 import { WorkloadsFilter } from './WorkloadsFilter';
+import {
+  DEFAULT_WORKLOADS_VIEW_MODE,
+  hasActiveWorkloadsFilters,
+} from './workloadsFilterModel';
 import { WorkloadsSummary } from '@/components/Workloads/WorkloadsSummary';
 import { ScrollToTopButton } from '@/components/shared/ScrollToTopButton';
 import { StickySummarySection } from '@/components/shared/StickySummarySection';
@@ -25,6 +29,27 @@ interface WorkloadsSurfaceComponentProps extends WorkloadsSurfaceProps {
 
 export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
   const state = props.state ?? useWorkloadsState(props);
+  const tableOnlyFiltersActive = () =>
+    hasActiveWorkloadsFilters({
+      search: state.search(),
+      viewMode: props.forcedViewMode !== undefined ? DEFAULT_WORKLOADS_VIEW_MODE : state.viewMode(),
+      statusMode: state.statusMode(),
+      hostFilterValue: state.hostFilterConfig()?.value,
+      platformFilterValue: state.platformFilterConfig()?.value,
+      namespaceFilterValue: state.namespaceFilterConfig()?.value,
+      containerRuntimeFilterValue: state.containerRuntimeFilterConfig()?.value,
+    });
+  const tableOnlyEmptyState = () => {
+    if (tableOnlyFiltersActive()) {
+      return state.workloadsGuestsEmptyState();
+    }
+
+    return {
+      title: props.emptyStateTitle ?? 'No workloads',
+      description:
+        props.emptyStateDescription ?? 'Workloads appear here when inventory is available.',
+    };
+  };
 
   return (
     <div ref={state.setClearSurfaceRootRef} class="space-y-3" data-testid="workloads-page">
@@ -210,11 +235,8 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
           <TableCard>
             <div class="p-6">
               <EmptyState
-                title={props.emptyStateTitle ?? 'No workloads'}
-                description={
-                  props.emptyStateDescription ??
-                  'Workloads appear here when inventory is available.'
-                }
+                title={tableOnlyEmptyState().title}
+                description={tableOnlyEmptyState().description}
               />
             </div>
           </TableCard>

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, waitFor } from '@solidjs/testing-library';
+import { render, screen, waitFor } from '@solidjs/testing-library';
 import { createEffect } from 'solid-js';
 import { WorkloadsSurface } from '../WorkloadsSurface';
 import type { State } from '@/types/api';
@@ -230,6 +230,88 @@ describe('Workloads pod workloads integration', () => {
     });
 
     expect(getByTestId('workloads-filter')).toHaveTextContent('host-filter-enabled');
+  });
+
+  it('uses filtered-empty copy for table-only surfaces when filters remove every workload', () => {
+    render(() => (
+      <WorkloadsSurface
+        vms={[]}
+        containers={[]}
+        nodes={[]}
+        useWorkloads
+        embedded
+        tableOnly
+        forcedViewMode="vm"
+        emptyStateTitle="No vSphere VMs"
+        emptyStateDescription="Virtual machines appear here once the vCenter connection enumerates them."
+        state={
+          {
+            setClearSurfaceRootRef: vi.fn(),
+            surfaceConnected: () => true,
+            surfaceInitialDataReceived: () => true,
+            allGuests: () => [{ id: 'vm-1' }],
+            filteredGuests: () => [],
+            search: () => '',
+            viewMode: () => 'vm',
+            statusMode: () => 'stopped',
+            hostFilterConfig: () => undefined,
+            platformFilterConfig: () => undefined,
+            namespaceFilterConfig: () => undefined,
+            containerRuntimeFilterConfig: () => undefined,
+            workloadsGuestsEmptyState: () => ({
+              title: 'No guests found',
+              description: 'No guests match your current filters',
+            }),
+          } as any
+        }
+      />
+    ));
+
+    expect(screen.getByText('No guests found')).toBeInTheDocument();
+    expect(screen.getByText('No guests match your current filters')).toBeInTheDocument();
+    expect(screen.queryByText('No vSphere VMs')).not.toBeInTheDocument();
+  });
+
+  it('keeps page-owned table-only empty copy when no operator filters are active', () => {
+    render(() => (
+      <WorkloadsSurface
+        vms={[]}
+        containers={[]}
+        nodes={[]}
+        useWorkloads
+        embedded
+        tableOnly
+        forcedViewMode="vm"
+        emptyStateTitle="No vSphere VMs"
+        emptyStateDescription="Virtual machines appear here once the vCenter connection enumerates them."
+        state={
+          {
+            setClearSurfaceRootRef: vi.fn(),
+            surfaceConnected: () => true,
+            surfaceInitialDataReceived: () => true,
+            allGuests: () => [],
+            filteredGuests: () => [],
+            search: () => '',
+            viewMode: () => 'vm',
+            statusMode: () => 'all',
+            hostFilterConfig: () => undefined,
+            platformFilterConfig: () => undefined,
+            namespaceFilterConfig: () => undefined,
+            containerRuntimeFilterConfig: () => undefined,
+            workloadsGuestsEmptyState: () => ({
+              title: 'No guests found',
+              description: 'No guests match your current filters',
+            }),
+          } as any
+        }
+      />
+    ));
+
+    expect(screen.getByText('No vSphere VMs')).toBeInTheDocument();
+    expect(
+      screen.getByText('Virtual machines appear here once the vCenter connection enumerates them.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('No guests found')).not.toBeInTheDocument();
   });
 
   it('does not let preselected host filtering suppress pod workloads', async () => {
