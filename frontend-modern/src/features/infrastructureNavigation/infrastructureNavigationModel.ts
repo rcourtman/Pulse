@@ -160,6 +160,12 @@ export function buildPrimaryInfrastructureNavigationVisibility(
   resources: readonly Resource[],
 ): InfrastructureNavigationVisibility {
   const presentNavigableScopes = buildNavigableResourceInfrastructureScopeSet(resources);
+  const hasAvailabilityEndpoints = resources.some(
+    (resource) =>
+      resource.type === 'network-endpoint' ||
+      resource.platformType === 'availability' ||
+      resource.sources?.includes('availability'),
+  );
   return {
     proxmox: PRIMARY_INFRASTRUCTURE_NAV_SCOPE_IDS.proxmox.some((id) =>
       presentNavigableScopes.has(id),
@@ -176,7 +182,7 @@ export function buildPrimaryInfrastructureNavigationVisibility(
     vmware: PRIMARY_INFRASTRUCTURE_NAV_SCOPE_IDS.vmware.some((id) =>
       presentNavigableScopes.has(id),
     ),
-    agents: resources.some(isPulseAgentPlatformResource),
+    agents: resources.some(isPulseAgentPlatformResource) || hasAvailabilityEndpoints,
   };
 }
 

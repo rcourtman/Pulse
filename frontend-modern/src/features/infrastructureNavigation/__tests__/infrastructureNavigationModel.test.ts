@@ -146,6 +146,20 @@ describe('infrastructureNavigationModel', () => {
     ).toBe(true);
   });
 
+  it('shows Agents for agentless availability endpoints', () => {
+    expect(
+      buildPrimaryInfrastructureNavigationVisibility([
+        resource({
+          id: 'mqtt-meter',
+          type: 'network-endpoint',
+          platformType: 'availability',
+          sourceType: 'api',
+          sources: ['availability'],
+        }),
+      ]).agents,
+    ).toBe(true);
+  });
+
   it('does not show Agents for provider-owned host rows even when the agent source is present', () => {
     expect(
       buildPrimaryInfrastructureNavigationVisibility([

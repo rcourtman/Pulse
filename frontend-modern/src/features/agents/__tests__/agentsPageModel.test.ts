@@ -62,5 +62,23 @@ describe('agentsPageModel', () => {
     ]);
 
     expect(model.resources.map((item) => item.id)).toEqual(['legacy-agent']);
+    expect(model.machines.map((item) => item.id)).toEqual(['legacy-agent']);
+    expect(model.availabilityChecks).toEqual([]);
+  });
+
+  it('keeps agentless availability checks beside standalone machines', () => {
+    const model = buildAgentsPageModel([
+      resource({ id: 'mac-mini', platformType: 'agent', type: 'agent', sources: ['agent'] }),
+      resource({
+        id: 'endpoint-1',
+        platformType: 'availability',
+        type: 'network-endpoint',
+        sources: ['availability'],
+      }),
+    ]);
+
+    expect(model.machines.map((item) => item.id)).toEqual(['mac-mini']);
+    expect(model.availabilityChecks.map((item) => item.id)).toEqual(['endpoint-1']);
+    expect(model.resources.map((item) => item.id)).toEqual(['mac-mini']);
   });
 });

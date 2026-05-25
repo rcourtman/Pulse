@@ -1,0 +1,137 @@
+import { cleanup, render, screen } from '@solidjs/testing-library';
+import type { JSX } from 'solid-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Resource } from '@/types/resource';
+import { AgentsPageSurface } from '../AgentsPageSurface';
+
+const mocks = vi.hoisted(() => ({
+  pathname: '/agents/overview',
+  useUnifiedResources: vi.fn(),
+  AgentsMachinesTable: vi.fn((props: { resources: Resource[] }) => (
+    <div data-testid="agents-machines-table" data-resource-count={props.resources.length} />
+  )),
+  AvailabilityChecksTable: vi.fn((props: { resources: Resource[] }) => (
+    <div data-testid="availability-checks-table" data-resource-count={props.resources.length} />
+  )),
+}));
+
+vi.mock('@/hooks/useUnifiedResources', () => ({
+  useUnifiedResources: mocks.useUnifiedResources,
+}));
+
+vi.mock('@solidjs/router', async () => {
+  const actual = await vi.importActual<typeof import('@solidjs/router')>('@solidjs/router');
+  return {
+    ...actual,
+    useLocation: () => ({
+      get pathname() {
+        return mocks.pathname;
+      },
+    }),
+    useNavigate: () => vi.fn(),
+    A: (props: { href: string; children: JSX.Element }) => (
+      <a href={props.href}>{props.children}</a>
+    ),
+  };
+});
+
+vi.mock('../AgentsMachinesTable', () => ({
+  AgentsMachinesTable: mocks.AgentsMachinesTable,
+}));
+
+vi.mock('../AvailabilityChecksTable', () => ({
+  AvailabilityChecksTable: mocks.AvailabilityChecksTable,
+}));
+
+vi.mock('@/features/platformPage/sharedPlatformPage', () => ({
+  PlatformErrorState: () => <div data-testid="platform-error-state" />,
+  PlatformSectionTabs: (props: {
+    active: string;
+    tabs: Array<{ id: string; label: string; path: string }>;
+  }) => (
+    <div
+      data-testid="agents-section-tabs"
+      data-active={props.active}
+      data-tabs={props.tabs.map((tab) => tab.id).join(',')}
+    />
+  ),
+  PlatformTableEmptyState: () => <div data-testid="platform-table-empty-state" />,
+  PlatformTableLoadingState: () => <div data-testid="platform-table-loading-state" />,
+}));
+
+const resource = (overrides: Partial<Resource>): Resource =>
+  ({
+    id: overrides.id ?? 'resource-1',
+    name: overrides.name ?? overrides.id ?? 'resource-1',
+    displayName: overrides.displayName ?? overrides.name ?? overrides.id ?? 'resource-1',
+    type: overrides.type ?? 'agent',
+    platformId: overrides.platformId ?? 'platform-1',
+    platformType: overrides.platformType ?? 'agent',
+    sourceType: overrides.sourceType ?? 'agent',
+    status: overrides.status ?? 'online',
+    lastSeen: overrides.lastSeen ?? 1_700_000_000_000,
+    ...overrides,
+  }) as Resource;
+
+beforeEach(() => {
+  mocks.pathname = '/agents/overview';
+  mocks.useUnifiedResources.mockReturnValue({
+    resources: () => [
+      resource({ id: 'mac-mini', type: 'agent', platformType: 'agent', sources: ['agent'] }),
+      resource({
+        id: 'mqtt-meter',
+        type: 'network-endpoint',
+        platformType: 'availability',
+        sources: ['availability'],
+      }),
+    ],
+    loading: () => false,
+    error: () => null,
+    refetch: vi.fn(),
+  });
+});
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
+describe('AgentsPageSurface', () => {
+  it('loads standalone machines and agentless availability checks into the Agents surface', () => {
+    render(() => <AgentsPageSurface />);
+
+    expect(mocks.useUnifiedResources).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: 'type=agent,network-endpoint',
+      }),
+    );
+    expect(screen.getByTestId('agents-section-tabs')).toHaveAttribute(
+      'data-tabs',
+      'overview,availability',
+    );
+    expect(screen.getByTestId('agents-machines-table')).toHaveAttribute(
+      'data-resource-count',
+      '1',
+    );
+    expect(screen.getByTestId('availability-checks-table')).toHaveAttribute(
+      'data-resource-count',
+      '1',
+    );
+  });
+
+  it('uses the availability tab as a focused check monitor', () => {
+    mocks.pathname = '/agents/availability';
+
+    render(() => <AgentsPageSurface />);
+
+    expect(screen.getByTestId('agents-section-tabs')).toHaveAttribute(
+      'data-active',
+      'availability',
+    );
+    expect(screen.queryByTestId('agents-machines-table')).not.toBeInTheDocument();
+    expect(screen.getByTestId('availability-checks-table')).toHaveAttribute(
+      'data-resource-count',
+      '1',
+    );
+  });
+});

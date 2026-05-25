@@ -3575,3 +3575,8 @@ and latest latency or failure result once, inline in the agentless endpoint's
 metric slot, while keeping recent check timing and fuller failure context in
 the tooltip or drawer so operators can understand what was measured without
 duplicated row chrome.
+Operational navigation for those agentless endpoints belongs to the existing
+standalone Agents surface rather than a new primary nav item. The page may
+show availability checks beside standalone Pulse Agent machines and provide a
+focused availability tab, but Settings remains the add/edit owner and the app
+shell must not add a separate top-level Availability destination.

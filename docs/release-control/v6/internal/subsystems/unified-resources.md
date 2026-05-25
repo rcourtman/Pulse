@@ -126,21 +126,22 @@ cross-source deduplication.
 102. `frontend-modern/src/features/agents/agentsPageModel.ts`
 103. `frontend-modern/src/features/agents/AgentsPageSurface.tsx`
 104. `frontend-modern/src/features/agents/AgentsMachinesTable.tsx`
-105. `internal/platformsupport/manifest_generated.go`
-106. `frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx`
-107. `frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx`
-108. `frontend-modern/src/features/kubernetes/kubernetesPageModel.ts`
-109. `frontend-modern/src/features/kubernetes/KubernetesClustersTable.tsx`
-110. `frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx`
-111. `frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx`
-112. `frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx`
-113. `frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx`
-114. `frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx`
-115. `frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx`
-116. `frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx`
-117. `frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx`
-118. `frontend-modern/src/features/kubernetes/KubernetesAutoscalingTable.tsx`
-119. `frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx`
+105. `frontend-modern/src/features/agents/AvailabilityChecksTable.tsx`
+106. `internal/platformsupport/manifest_generated.go`
+107. `frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx`
+108. `frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx`
+109. `frontend-modern/src/features/kubernetes/kubernetesPageModel.ts`
+110. `frontend-modern/src/features/kubernetes/KubernetesClustersTable.tsx`
+111. `frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx`
+112. `frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx`
+113. `frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx`
+114. `frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx`
+115. `frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx`
+116. `frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx`
+117. `frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx`
+118. `frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx`
+119. `frontend-modern/src/features/kubernetes/KubernetesAutoscalingTable.tsx`
+120. `frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx`
 
 ## Shared Boundaries
 
@@ -1138,6 +1139,13 @@ or the live-state `platformData.availability` mirror: the System column uses
 the probe protocol as the compact identity badge (`ICMP`, `TCP`, or `HTTP`),
 while the metric cell shows only the target detail and latest latency or
 failure result, such as `6053: 11 ms`, `/status: 503`, `3 ms`, or `timed out`.
+The standalone Agents surface is the operational home for those same
+agentless checks, not a new top-level platform page. `AgentsPageSurface.tsx`
+must fetch both `agent` and `network-endpoint` resources, keep standalone
+machines and availability checks as separate buckets in `agentsPageModel.ts`,
+and let `AvailabilityChecksTable.tsx` render saved probe method, target,
+latest result, check age, failure count, and cadence from the canonical
+availability payload.
 Recent check timing and fuller failure context may stay in tooltip or drawer
 detail, but the table row must not duplicate the same probe protocol and
 result text across both identity and metric cells.
@@ -2783,9 +2791,11 @@ surface and is intentionally removed rather than preserved as a compatibility
 redirect. Canonical infrastructure management lives under
 `/settings/infrastructure`, while agentless endpoint availability management
 lives under `/settings/monitoring/availability`; day-to-day resource
-inspection lives on the platform/runtime pages and shared resource components.
-Future infrastructure work must extend those owners rather than recreating
-`frontend-modern/src/features/infrastructure/` or a `/infrastructure` route.
+inspection lives on the platform/runtime pages, with standalone agent machines
+and agentless endpoint checks sharing the Agents surface. Future
+infrastructure work must extend those owners rather than recreating
+`frontend-modern/src/features/infrastructure/`, a `/infrastructure` route, or
+a separate top-level availability route.
 Shared unified-resource consumers now also normalize org scope through
 `frontend-modern/src/utils/orgScope.ts` before building cache keys or
 multi-tenant resource fetch state, so the canonical resource hooks do not
