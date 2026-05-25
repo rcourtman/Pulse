@@ -140,6 +140,7 @@ describe('InfrastructurePageSurface guardrails', () => {
     expect(infrastructurePageSurfaceSource).toContain('<FilterBar');
     expect(infrastructurePageSurfaceSource).toContain('isMobile={isMobile}');
     expect(infrastructurePageSurfaceSource).toContain("id: 'platform'");
+    expect(infrastructurePageSurfaceSource).toContain("label: 'Source'");
     expect(infrastructurePageSurfaceSource).toContain("id: 'status'");
     expect(infrastructurePageSurfaceSource).toContain("group: 'scope'");
     expect(infrastructurePageSurfaceSource).toContain("group: 'status'");

@@ -629,7 +629,7 @@ describe('InfrastructureWorkspace', () => {
     const dialog = screen.getByRole('dialog');
     expect(screen.getAllByText('Add infrastructure').length).toBeGreaterThan(0);
     expect(
-      screen.getByText('Choose the system, platform, host, or service you want Pulse to monitor.'),
+      screen.getByText('Choose the system, device, host, or service you want Pulse to monitor.'),
     ).toBeInTheDocument();
     expect(
       within(dialog).getByPlaceholderText('Search sources, devices, services...'),

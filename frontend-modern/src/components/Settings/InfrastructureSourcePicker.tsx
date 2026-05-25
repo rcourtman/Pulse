@@ -212,7 +212,8 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
           when={visibleItems().length > 0}
           fallback={
             <div class="rounded-md border border-dashed border-border bg-surface-alt p-4 text-sm text-muted">
-              No matching source yet. Try a platform, host type, service, or API endpoint address.
+              No matching source yet. Try a device, host type, service, platform, or endpoint
+              address.
             </div>
           }
         >

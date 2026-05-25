@@ -837,7 +837,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   const addDialogDescription = createMemo(() => {
     const step = routeStep();
     if (!step || step === 'pick') {
-      return 'Choose the system, platform, host, or service you want Pulse to monitor.';
+      return 'Choose the system, device, host, or service you want Pulse to monitor.';
     }
     if (step === 'detect') {
       return 'Probe a management API endpoint and let Pulse open the matching credential flow when it recognizes the platform.';

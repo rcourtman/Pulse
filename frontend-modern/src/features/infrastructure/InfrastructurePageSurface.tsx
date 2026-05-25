@@ -82,7 +82,7 @@ export function InfrastructurePageSurface() {
     <div ref={setSummaryClearSurfaceRootRef} data-testid="infrastructure-page" class="space-y-4">
       <PageHeader
         title="Infrastructure"
-        description="Inspect connected resources, filter by platform and status, and drill into live health and capacity."
+        description="Inspect connected resources, filter by source and status, and drill into live health and capacity."
       />
 
       <Show
@@ -185,7 +185,7 @@ export function InfrastructurePageSurface() {
                         [
                           {
                             id: 'platform',
-                            label: 'Platform',
+                            label: 'Source',
                             group: 'scope',
                             value: selectedSource,
                             setValue: setSelectedSource,
