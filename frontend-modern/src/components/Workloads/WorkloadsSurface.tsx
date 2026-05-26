@@ -1,18 +1,11 @@
 import { Show } from 'solid-js';
-import { InfrastructureSelector } from '@/components/shared/InfrastructureSelector';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { PageHeader } from '@/components/shared/PageHeader';
 import { TableCard } from '@/components/shared/TableCard';
 import { WorkloadsFilter } from './WorkloadsFilter';
 import {
   DEFAULT_WORKLOADS_VIEW_MODE,
   hasActiveWorkloadsFilters,
 } from './workloadsFilterModel';
-import { WorkloadsSummary } from '@/components/Workloads/WorkloadsSummary';
-import { ScrollToTopButton } from '@/components/shared/ScrollToTopButton';
-import { StickySummarySection } from '@/components/shared/StickySummarySection';
-import { WorkloadsStateCards } from './WorkloadsStateCards';
-import { WorkloadsStatsStrip } from './WorkloadsStatsStrip';
 import { WorkloadsTable } from './WorkloadsTable';
 import {
   useWorkloadsState,
@@ -53,72 +46,9 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
 
   return (
     <div ref={state.setClearSurfaceRootRef} class="space-y-3" data-testid="workloads-page">
-      <Show when={!props.embedded}>
-        <PageHeader
-          title="Workloads"
-          description="Inspect live workloads, filter by platform and status, and drill into compute, memory, and I/O posture."
-        />
-      </Show>
-
-      <Show
-        when={!props.tableOnly && state.isWorkloadsRoute() && !state.workloadsSummaryCollapsed()}
-      >
-        <StickySummarySection>
-          <WorkloadsSummary
-            timeRange={state.workloadsSummaryRange()}
-            onTimeRangeChange={state.setWorkloadsSummaryRange}
-            selectedNodeId={state.selectedNode()}
-            fallbackGuestCounts={state.workloadsSummaryFallbackCounts()}
-            fallbackSnapshots={state.workloadsSummaryFallbackSnapshots()}
-            visibleWorkloadIds={state.workloadsSummaryVisibleIds()}
-            chartHoverSync={state.chartHoverSync()}
-            hoveredGroupScope={state.hoveredSummaryWorkloadGroupScope()}
-            focusedGroupScope={state.focusedSummaryWorkloadGroupScope()}
-            hoveredWorkloadId={state.hoveredWorkloadId()}
-            focusedWorkloadId={state.selectedGuestId()}
-            onChartHoverSyncChange={state.setChartHoverSync}
-            showJumpToActiveRow={state.shouldShowJumpToActiveWorkloadRow()}
-            onJumpToActiveRow={state.jumpToActiveWorkloadRow}
-          />
-        </StickySummarySection>
-      </Show>
-
-      <Show when={!props.embedded}>
-        <InfrastructureSelector
-          currentTab="workloads"
-          globalTemperatureMonitoringEnabled={state.ws.state.temperatureMonitoringEnabled}
-          onNodeSelect={state.handleNodeSelect}
-          nodes={state.infrastructureNodes()}
-          searchTerm={state.search()}
-          showNodeSummary={!state.isWorkloadsRoute()}
-        />
-      </Show>
-
-      <Show when={!props.tableOnly}>
-        <WorkloadsStateCards
-          allGuests={state.allGuests}
-          connected={state.surfaceConnected}
-          workloadsDisconnectedState={state.workloadsDisconnectedState}
-          workloadsGuestsEmptyState={state.workloadsGuestsEmptyState}
-          workloadsInfrastructureEmptyState={state.workloadsInfrastructureEmptyState}
-          workloadsLoadingState={state.workloadsLoadingState}
-          workloadsNoInventoryState={state.workloadsNoInventoryState}
-          filteredGuests={state.filteredGuests}
-          hasInfrastructureSources={state.hasInfrastructureSources}
-          infrastructureSourceStateReady={state.infrastructureSourceStateReady}
-          initialDataReceived={state.surfaceInitialDataReceived}
-          kioskMode={state.kioskMode}
-          navigate={state.navigate}
-          reconnect={state.reconnectSurface}
-          workloadInventoryIssues={state.workloadInventoryIssues}
-          workloads={state.workloads}
-        />
-      </Show>
-
       <div class="space-y-3" data-testid="workloads-interaction-surface">
         <Show
           when={
-            (props.showFilterToolbar || !props.tableOnly) &&
             !state.kioskMode() &&
             state.surfaceConnected() &&
             state.surfaceInitialDataReceived() &&
@@ -144,14 +74,6 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
               searchEmptyMessage={props.filterSearchEmptyMessage}
               statusOptions={props.filterStatusOptions}
               columnVisibility={state.workloadsFilterColumnVisibility()}
-              chartsCollapsed={
-                state.isWorkloadsRoute() ? state.workloadsSummaryCollapsed : undefined
-              }
-              onChartsToggle={
-                state.isWorkloadsRoute()
-                  ? () => state.setWorkloadsSummaryCollapsed((collapsed) => !collapsed)
-                  : undefined
-              }
               containerRuntimeFilter={state.containerRuntimeFilterConfig()}
               hostFilter={state.hostFilterConfig()}
               namespaceFilter={state.namespaceFilterConfig()}
@@ -226,7 +148,6 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
         </Show>
         <Show
           when={
-            props.tableOnly &&
             state.surfaceConnected() &&
             state.surfaceInitialDataReceived() &&
             state.filteredGuests().length === 0
@@ -242,18 +163,6 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
           </TableCard>
         </Show>
       </div>
-
-      <Show when={!props.embedded}>
-        <WorkloadsStatsStrip
-          connected={state.surfaceConnected}
-          initialDataReceived={state.surfaceInitialDataReceived}
-          totalStats={state.totalStats}
-        />
-      </Show>
-
-      <Show when={!props.embedded}>
-        <ScrollToTopButton />
-      </Show>
     </div>
   );
 }

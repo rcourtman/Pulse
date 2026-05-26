@@ -2,7 +2,18 @@ import { createMemo, type Accessor } from 'solid-js';
 
 import type { Alert, Node } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
-import type { WorkloadSummarySnapshot } from '@/components/Workloads/WorkloadsSummary';
+// Snapshot shape historically owned by WorkloadsSummary.tsx. The component
+// was retired with the platform-first IA migration; the snapshot shape is
+// kept here because the fallback memo is still returned by the workloads
+// state hook for any external consumer that wants it.
+type WorkloadSummarySnapshot = {
+  id: string;
+  name: string;
+  cpu: number;
+  memory: number;
+  disk: number;
+  network: number;
+};
 import { getNodeDisplayName } from '@/utils/nodes';
 import { getCanonicalWorkloadId } from '@/utils/workloads';
 

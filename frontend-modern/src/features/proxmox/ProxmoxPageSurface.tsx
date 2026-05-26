@@ -203,12 +203,8 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
     containers: [],
     nodes: [],
     useWorkloads: true,
-    embedded: true,
-    tableOnly: true,
     forcedPlatform: PROXMOX_PLATFORM_FILTER,
-    showFilterToolbar: true,
     suppressPlatformFilter: true,
-    allowEmbeddedScopeFilters: true,
     statusModeStorageScope: PROXMOX_WORKLOAD_STATUS_STORAGE_SCOPE,
     compactGroupHeaders: true,
     groupNodeDrawerMode: 'disabled',
@@ -283,8 +279,6 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
         containers={[]}
         nodes={[]}
         useWorkloads
-        embedded
-        tableOnly
         forcedPlatform={PROXMOX_PLATFORM_FILTER}
         compactGroupHeaders
         groupNodeDrawerMode="disabled"

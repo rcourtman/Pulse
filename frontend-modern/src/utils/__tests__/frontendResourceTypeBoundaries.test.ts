@@ -155,8 +155,6 @@ import recoveryTablePresentationSource from '@/utils/recoveryTablePresentation.t
 import recoveryTimelineChartPresentationSource from '@/utils/recoveryTimelineChartPresentation.ts?raw';
 import recoveryTimelinePresentationSource from '@/utils/recoveryTimelinePresentation.ts?raw';
 import workloadsSurfaceSource from '@/components/Workloads/WorkloadsSurface.tsx?raw';
-import workloadsStateCardsSource from '@/components/Workloads/WorkloadsStateCards.tsx?raw';
-import workloadsStatsStripSource from '@/components/Workloads/WorkloadsStatsStrip.tsx?raw';
 import workloadsFilterSource from '@/components/Workloads/WorkloadsFilter.tsx?raw';
 import workloadsWorkloadTableSource from '@/components/Workloads/WorkloadsTable.tsx?raw';
 import workloadPanelSource from '@/components/Workloads/WorkloadPanel.tsx?raw';
@@ -189,7 +187,6 @@ import stackedDiskBarStateSource from '@/components/Workloads/useStackedDiskBarS
 import stackedMemoryBarSource from '@/components/Workloads/StackedMemoryBar.tsx?raw';
 import stackedMemoryBarModelSource from '@/components/Workloads/stackedMemoryBarModel.ts?raw';
 import stackedMemoryBarStateSource from '@/components/Workloads/useStackedMemoryBarState.ts?raw';
-import workloadsSummarySource from '@/components/Workloads/WorkloadsSummary.tsx?raw';
 import thresholdSliderSource from '@/components/Workloads/ThresholdSlider.tsx?raw';
 import problemResourcePresentationSource from '@/utils/problemResourcePresentation.ts?raw';
 import guestRowSource from '@/components/Workloads/GuestRow.tsx?raw';
@@ -649,8 +646,6 @@ describe('frontend resource type boundaries', () => {
     expect(orgScopeSource).toContain("export const DEFAULT_ORG_SCOPE = 'default'");
     expect(orgScopeSource).toContain('export const normalizeOrgScope');
     expect(workloadsSurfaceSource).toContain('useWorkloadsState');
-    expect(workloadsSurfaceSource).toContain('WorkloadsStateCards');
-    expect(workloadsSurfaceSource).toContain('WorkloadsStatsStrip');
     expect(workloadsSurfaceSource).toContain('WorkloadsTable');
     expect(workloadsSurfaceSource).not.toContain('const [search, setSearch] = createSignal(');
     expect(workloadsStateSource).toContain('useWorkloadsControlsState');
@@ -880,9 +875,6 @@ describe('frontend resource type boundaries', () => {
     expect(enhancedCpuBarStateSource).toContain('useTooltip');
     expect(enhancedCpuBarModelSource).toContain('export function buildEnhancedCPUBarPresentation');
     expect(enhancedCpuBarModelSource).toContain('tooltipUsageClass');
-    expect(workloadsSummarySource).toContain('normalizeOrgScope(getOrgID())');
-    expect(workloadsSummarySource).not.toContain("const DEFAULT_ORG_SCOPE = 'default'");
-    expect(workloadsSummarySource).not.toContain('const normalizeOrgScope =');
     expect(infrastructureSummaryCacheSource).toContain('normalizeOrgScope(getOrgID())');
     expect(infrastructureSummaryCacheSource).not.toContain('const normalizeOrgScope =');
     expect(useWorkloadsSource).toContain('normalizeOrgScope(getOrgID())');
@@ -989,7 +981,6 @@ describe('frontend resource type boundaries', () => {
     expect(guestDrawerSource).not.toContain('WebInterfaceUrlField');
     expect(guestDrawerOverviewSource).toContain('WebInterfaceUrlField');
     expect(guestDrawerOverviewSource).toContain('DiskList');
-    expect(workloadsStateCardsSource).toContain('workloadsDisconnectedState().actionLabel');
     expect(workloadsWorkloadTableSource).toContain('WorkloadTableHeader');
     expect(workloadsWorkloadTableSource).toContain('WorkloadPanel');
     expect(workloadsWorkloadTableSource).not.toContain('<TableHead');
@@ -1002,7 +993,6 @@ describe('frontend resource type boundaries', () => {
     expect(workloadPanelSource).toContain('GuestDrawer');
     expect(workloadPanelSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
     expect(workloadPanelSource).not.toContain('TableHead');
-    expect(workloadsStatsStripSource).toContain('totalStats().running');
     expect(emptyStateSource).toContain('getEmptyStatePresentation');
     expect(emptyStateSource).not.toContain('const iconBgClass: Record<EmptyStateTone, string> =');
     expect(emptyStateSource).not.toContain(

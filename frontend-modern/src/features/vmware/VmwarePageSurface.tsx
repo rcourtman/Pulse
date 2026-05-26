@@ -232,13 +232,9 @@ function VmwareOverview(props: VmwareOverviewProps) {
     containers: [],
     nodes: [],
     useWorkloads: true,
-    embedded: true,
-    tableOnly: true,
     forcedPlatform: VMWARE_PLATFORM_FILTER,
     forcedViewMode: 'vm',
-    showFilterToolbar: true,
     suppressPlatformFilter: true,
-    allowEmbeddedScopeFilters: true,
     statusModeStorageScope: VMWARE_WORKLOAD_STATUS_STORAGE_SCOPE,
     columnVisibilityStorageScope: VMWARE_WORKLOAD_COLUMN_VISIBILITY_SCOPE,
     additionalDefaultHiddenColumnIds: [...VMWARE_WORKLOAD_DEFAULT_HIDDEN_COLUMN_IDS],
@@ -310,8 +306,6 @@ function VmwareOverview(props: VmwareOverviewProps) {
         containers={[]}
         nodes={[]}
         useWorkloads
-        embedded
-        tableOnly
         forcedPlatform={VMWARE_PLATFORM_FILTER}
         forcedViewMode="vm"
         compactGroupHeaders

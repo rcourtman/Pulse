@@ -60,8 +60,6 @@ export interface WorkloadsSurfaceProps {
   containers: Container[];
   nodes: Node[];
   useWorkloads?: boolean;
-  embedded?: boolean;
-  tableOnly?: boolean;
   forcedPlatform?: string;
   forcedViewMode?: ViewMode;
   forcedGroupingMode?: WorkloadsGroupingMode;
@@ -71,14 +69,10 @@ export interface WorkloadsSurfaceProps {
   filterSearchEmptyMessage?: string;
   filterStatusOptions?: readonly WorkloadsStatusOption[];
   // When the surface is mounted inside a platform-first page, the page owns
-  // platform scope through `forcedPlatform`. Setting `showFilterToolbar`
-  // keeps the operator-facing WorkloadsFilter visible alongside the table
-  // even when `tableOnly` hides the summary cards/strip, and
-  // `suppressPlatformFilter` removes the redundant Platform chip from that
-  // filter row since the platform is already fixed by the owning page.
-  showFilterToolbar?: boolean;
+  // platform scope through `forcedPlatform`. `suppressPlatformFilter`
+  // removes the redundant Platform chip from the filter row since the
+  // platform is already fixed by the owning page.
   suppressPlatformFilter?: boolean;
-  allowEmbeddedScopeFilters?: boolean;
   statusModeStorageScope?: string;
   // Platform pages that render their own hosts table above the embedded
   // workloads surface (e.g. Proxmox overview) own the per-host CPU / Memory
@@ -193,8 +187,6 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     containerRuntimeOptions,
   } = useWorkloadRouteState({
     allGuests,
-    allowEmbeddedScopeFilters: props.allowEmbeddedScopeFilters,
-    embedded: props.embedded,
     forcedPlatform: props.forcedPlatform,
     forcedViewMode: props.forcedViewMode,
     showFilters,

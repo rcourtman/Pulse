@@ -4,8 +4,6 @@ import { createSignal, onCleanup, onMount } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { WorkloadsSurface } from '../WorkloadsSurface';
 import workloadsSource from '../WorkloadsSurface.tsx?raw';
-import workloadsStateCardsSource from '../WorkloadsStateCards.tsx?raw';
-import workloadsStatsStripSource from '../WorkloadsStatsStrip.tsx?raw';
 import workloadsFilterSource from '../WorkloadsFilter.tsx?raw';
 import workloadsWorkloadTableSource from '../WorkloadsTable.tsx?raw';
 import metricDisplayModeSegmentedControlSource from '../MetricDisplayModeSegmentedControl.tsx?raw';
@@ -82,7 +80,6 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
 let mockLocationSearch = '';
 let mockWorkloads: Array<Record<string, unknown>> = [];
 let mockInfrastructureResources: Resource[] = [];
-let mockUnifiedResourcesQuery = '';
 let setMockWorkloadsSignal: ((next: Array<Record<string, unknown>>) => void) | null = null;
 const workloadsRefetchMock = vi.fn();
 const navigateSpy = vi.fn();
@@ -171,7 +168,7 @@ vi.mock('@/hooks/useWorkloads', () => ({
 
 vi.mock('@/hooks/useUnifiedResources', () => ({
   useUnifiedResources: (options?: { query?: string }) => {
-    mockUnifiedResourcesQuery = options?.query ?? '';
+    void (options?.query ?? '');
     const [resources] = createSignal(mockInfrastructureResources);
     return {
       resources,
@@ -373,15 +370,6 @@ const flushEffects = async () => {
 };
 
 describe('Workloads platform-page embed contract', () => {
-  it('exposes showFilterToolbar and suppressPlatformFilter on WorkloadsSurfaceProps', async () => {
-    const stateSource = (await import('../useWorkloadsState.ts?raw')).default;
-    expect(stateSource).toContain('showFilterToolbar?: boolean;');
-    expect(stateSource).toContain('suppressPlatformFilter?: boolean;');
-    expect(stateSource).toContain('suppressPlatformFilter');
-    const surfaceSource = (await import('../WorkloadsSurface.tsx?raw')).default;
-    expect(surfaceSource).toContain('props.showFilterToolbar || !props.tableOnly');
-  });
-
   it('exposes metric-display-mode + history-range override hooks so platform pages can share the toggle across multiple tables', async () => {
     const stateSource = (await import('../useWorkloadsState.ts?raw')).default;
     expect(stateSource).toContain('metricDisplayMode?: Accessor<WorkloadsMetricDisplayMode>;');
@@ -483,7 +471,6 @@ describe('Workloads performance contract', () => {
     mockLocationSearch = '';
     mockWorkloads = [];
     mockInfrastructureResources = [];
-    mockUnifiedResourcesQuery = '';
     setMockWorkloadsSignal = null;
     setWsConnectedSignal = null;
     workloadsRefetchMock.mockReset();
@@ -511,25 +498,6 @@ describe('Workloads performance contract', () => {
   });
 
   describe('Baseline structural contracts', () => {
-    it('renders Profile S workloads table and guest rows', async () => {
-      mockLocationSearch = '?type=all';
-      mockWorkloads = makeGuests(PROFILES.S);
-
-      const { container, getByTestId } = render(() => (
-        <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-      ));
-
-      await waitFor(() => {
-        expect(getByTestId('workloads-summary')).toBeInTheDocument();
-      });
-      await waitFor(() => {
-        expect(container.querySelector('table')).toBeInTheDocument();
-      });
-      await waitFor(() => {
-        expect(getGuestRowCount(container)).toBe(PROFILES.S);
-      });
-    });
-
     it('keeps the workloads route visible when websocket connectivity degrades but REST workload data is healthy', async () => {
       mockLocationSearch = '?type=all';
       wsConnected = false;
@@ -602,28 +570,6 @@ describe('Workloads performance contract', () => {
       );
       expect(navigateSpy).not.toHaveBeenCalled();
       expect(mockLocationSearch).toBe(routeSearchBeforeOpen);
-    });
-
-    it('does not label an empty workload resource list as missing infrastructure when sources exist', async () => {
-      mockLocationSearch = '?type=all';
-      mockWorkloads = [];
-      mockInfrastructureResources = [
-        makeResource({
-          id: 'agent:pve-hrc-dev-proxmox1',
-          type: 'agent',
-          name: 'hrc-dev-proxmox1',
-          sourceType: 'api',
-          status: 'offline',
-        }),
-      ];
-
-      render(() => <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
-
-      await waitFor(() => {
-        expect(document.body).toHaveTextContent('No workload inventory available');
-      });
-      expect(document.body).not.toHaveTextContent('No infrastructure sources connected');
-      expect(mockUnifiedResourcesQuery).toContain('type=agent');
     });
 
     it('searches policy-redacted resources by their raw display name in operator-local UI', () => {
@@ -845,8 +791,6 @@ describe('Workloads performance contract', () => {
 
     it('keeps hot-path workloads state in the shared workloads state owner', () => {
       expect(workloadsSource).toContain('useWorkloadsState');
-      expect(workloadsSource).toContain('WorkloadsStateCards');
-      expect(workloadsSource).toContain('WorkloadsStatsStrip');
       expect(workloadsSource).toContain('WorkloadsTable');
       expect(workloadsSource).not.toContain('const [search, setSearch] = createSignal(');
       expect(workloadsStateSource).toContain('useWorkloadsControlsState');
@@ -858,7 +802,6 @@ describe('Workloads performance contract', () => {
       expect(workloadsStateSource).toContain('createNonSuspendingQuery<ConnectionsListResponse');
       expect(workloadsStateSource).toContain('connectionsSnapshot.refetch({ background: true })');
       expect(workloadsStateSource).not.toContain('createResource<ConnectionsListResponse');
-      expect(workloadsStateCardsSource).toContain('workloadInventoryIssues');
       expect(workloadInventorySourceIssuesSource).toContain('WORKLOAD_CAPABLE_TYPES');
       expect(workloadInventorySourceIssuesSource).toContain('formatConnectionErrorMessage');
       expect(workloadsStateSource).toContain('createWorkloadSortComparator');
@@ -1289,8 +1232,6 @@ describe('Workloads performance contract', () => {
     });
 
     it('keeps workloads shell rendering in canonical section owners', () => {
-      expect(workloadsSource).toContain('WorkloadsStateCards');
-      expect(workloadsSource).toContain('WorkloadsStatsStrip');
       expect(workloadsSource).toContain('WorkloadsTable');
       expect(workloadsSource).not.toContain('TableHeader');
       expect(workloadsSource).not.toContain('NodeGroupHeader');
@@ -1329,18 +1270,7 @@ describe('Workloads performance contract', () => {
       expect(workloadsSelectionStateSource).toContain('setHoveredWorkloadGroupScope');
       expect(workloadsWorkloadTableSource).toContain('focusedSummaryWorkloadGroupScope');
       expect(workloadsWorkloadTableSource).toContain('hoveredSummaryWorkloadGroupScope');
-      expect(workloadsSource).toContain(
-        'hoveredGroupScope={state.hoveredSummaryWorkloadGroupScope()}',
-      );
-      expect(workloadsSource).toContain(
-        'focusedGroupScope={state.focusedSummaryWorkloadGroupScope()}',
-      );
       expect(workloadPanelSource).not.toContain('TableHead');
-      expect(workloadsStateCardsSource).toContain('workloadsInfrastructureEmptyState().title');
-      expect(workloadsStateCardsSource).toContain('workloadsDisconnectedState().actionLabel');
-      expect(workloadsStateCardsSource).toContain("buildInfrastructureOnboardingPath('pick')");
-      expect(workloadsStatsStripSource).toContain('totalStats().running');
-      expect(workloadsStatsStripSource).toContain('totalStats().stopped');
     });
 
     it('keeps disk-list runtime and derivations in canonical disk-list owners', () => {

@@ -239,14 +239,13 @@ describe('Workloads pod workloads integration', () => {
         containers={[]}
         nodes={[]}
         useWorkloads
-        embedded
-        tableOnly
         forcedViewMode="vm"
         emptyStateTitle="No vSphere VMs"
         emptyStateDescription="Virtual machines appear here once the vCenter connection enumerates them."
         state={
           {
             setClearSurfaceRootRef: vi.fn(),
+            kioskMode: () => false,
             surfaceConnected: () => true,
             surfaceInitialDataReceived: () => true,
             allGuests: () => [{ id: 'vm-1' }],
@@ -279,14 +278,13 @@ describe('Workloads pod workloads integration', () => {
         containers={[]}
         nodes={[]}
         useWorkloads
-        embedded
-        tableOnly
         forcedViewMode="vm"
         emptyStateTitle="No vSphere VMs"
         emptyStateDescription="Virtual machines appear here once the vCenter connection enumerates them."
         state={
           {
             setClearSurfaceRootRef: vi.fn(),
+            kioskMode: () => false,
             surfaceConnected: () => true,
             surfaceInitialDataReceived: () => true,
             allGuests: () => [],
