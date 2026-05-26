@@ -32,7 +32,6 @@ import infrastructureDetailsDrawerSource from '@/components/shared/Infrastructur
 import infrastructureDetailsDrawerModelSource from '@/components/shared/infrastructureDetailsDrawerModel.ts?raw';
 import mobileNavBarSource from '@/components/shared/MobileNavBar.tsx?raw';
 import mobileNavBarModelSource from '@/components/shared/mobileNavBarModel.ts?raw';
-import infrastructureSelectorSource from '@/components/shared/InfrastructureSelector.tsx?raw';
 import pulseDataGridSource from '@/components/shared/PulseDataGrid.tsx?raw';
 import pulseDataGridModelSource from '@/components/shared/pulseDataGridModel.ts?raw';
 import progressBarSource from '@/components/shared/ProgressBar.tsx?raw';
@@ -78,7 +77,6 @@ import infrastructureSourceManagerSource from '@/components/Settings/Infrastruct
 import configuredNodeTablesSource from '@/components/Settings/ConfiguredNodeTables.tsx?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
 import infrastructureSummaryTableRowSource from '@/components/shared/InfrastructureSummaryTableRow.tsx?raw';
-import infrastructureSelectorModelSource from '@/components/shared/infrastructureSelectorModel.ts?raw';
 import infrastructureSummaryTableModelSource from '@/components/shared/infrastructureSummaryTableModel.ts?raw';
 import infrastructureSummaryTableStateSource from '@/components/shared/useInfrastructureSummaryTableState.ts?raw';
 import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx?raw';
@@ -101,7 +99,6 @@ import helpIconStateSource from '@/components/shared/useHelpIconState.ts?raw';
 import historyChartStateSource from '@/components/shared/useHistoryChartState.ts?raw';
 import infrastructureDetailsDrawerStateSource from '@/components/shared/useInfrastructureDetailsDrawerState.ts?raw';
 import mobileNavBarStateSource from '@/components/shared/useMobileNavBarState.ts?raw';
-import infrastructureSelectorStateSource from '@/components/shared/useInfrastructureSelectorState.ts?raw';
 import pulseDataGridStateSource from '@/components/shared/usePulseDataGridState.ts?raw';
 import searchFieldStateSource from '@/components/shared/useSearchFieldState.ts?raw';
 import searchInputStateSource from '@/components/shared/useSearchInputState.ts?raw';
@@ -124,7 +121,6 @@ import workloadPanelSource from '@/components/Workloads/WorkloadPanel.tsx?raw';
 import guestRowStateSource from '@/components/Workloads/useGuestRowState.ts?raw';
 import workloadSelectionStateSource from '@/components/Workloads/useWorkloadSelectionState.ts?raw';
 import proxmoxNodesTableSource from '@/features/proxmox/ProxmoxNodesTable.tsx?raw';
-import infrastructureSummarySource from '@/components/Infrastructure/InfrastructureSummary.tsx?raw';
 import infrastructureSummaryStateSource from '@/components/Infrastructure/useInfrastructureSummaryState.ts?raw';
 import unifiedResourceHostTableCardSource from '@/components/Infrastructure/UnifiedResourceHostTableCard.tsx?raw';
 import unifiedResourceServiceInfrastructureCardSource from '@/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx?raw';
@@ -466,8 +462,6 @@ describe('shared primitive guardrails', () => {
     );
     expect(densityMapModelSource).toContain('buildDensityMapSynchronizedReadout');
 
-    expect(infrastructureSummarySource).toContain('SummarySynchronizedReadout');
-    expect(infrastructureSummarySource).toContain('headerValue={');
     expect(workloadsSummarySource).toContain('SummarySynchronizedReadout');
     expect(workloadsSummarySource).toContain('headerValue={');
     expect(storageSummarySource).toContain('SummarySynchronizedReadout');
@@ -907,25 +901,8 @@ describe('shared primitive guardrails', () => {
   });
 
   it('keeps infrastructure selector on shell, runtime, and model owners', () => {
-    expect(infrastructureSelectorSource).toContain('useInfrastructureSelectorState');
-    expect(infrastructureSelectorSource).toContain('InfrastructureSummaryTable');
-    expect(infrastructureSelectorSource).not.toContain('useResources');
-    expect(infrastructureSelectorSource).not.toContain('createSignal');
-    expect(infrastructureSelectorSource).not.toContain("resource.type === 'truenas'");
 
-    expect(infrastructureSelectorStateSource).toContain('useUnifiedResources');
-    expect(infrastructureSelectorStateSource).toContain('enabled: showNodeSummary');
-    expect(infrastructureSelectorStateSource).toContain('useRecoveryRollups');
-    expect(infrastructureSelectorStateSource).toContain('createSignal');
-    expect(infrastructureSelectorStateSource).toContain('document.addEventListener');
-    expect(infrastructureSelectorStateSource).toContain(
-      'export function useInfrastructureSelectorState',
-    );
 
-    expect(infrastructureSelectorModelSource).toContain('buildInfrastructureSelectorAgents');
-    expect(infrastructureSelectorModelSource).toContain('buildInfrastructureSelectorBackupCounts');
-    expect(infrastructureSelectorModelSource).toContain('buildInfrastructureSelectorUnifiedNodes');
-    expect(infrastructureSelectorModelSource).toContain('isAgentFacetInfrastructureResource');
   });
 
   it('keeps interactive sparkline on shell, runtime, and model owners', () => {

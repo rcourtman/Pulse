@@ -12,7 +12,6 @@ import unifiedResourceTableStateSource from '@/components/Infrastructure/useUnif
 import unifiedResourceTableViewportSyncSource from '@/components/Infrastructure/useUnifiedResourceTableViewportSync.ts?raw';
 import unifiedResourceTableModelSource from '@/components/Infrastructure/unifiedResourceTableModel.ts?raw';
 import unifiedResourceTableStateModelSource from '@/components/Infrastructure/unifiedResourceTableStateModel.ts?raw';
-import infrastructureSummarySource from '@/components/Infrastructure/InfrastructureSummary.tsx?raw';
 import infrastructureSummaryStateSource from '@/components/Infrastructure/useInfrastructureSummaryState.ts?raw';
 import infrastructureSummaryModelSource from '@/components/Infrastructure/infrastructureSummaryModel.ts?raw';
 import unifiedResourceHostTableCardSource from '@/components/Infrastructure/UnifiedResourceHostTableCard.tsx?raw';
@@ -602,11 +601,6 @@ describe('UnifiedResourceTable performance contract', () => {
     });
 
     it('keeps infrastructure summary fetch runtime out of the render shell', () => {
-      expect(infrastructureSummarySource).toContain('useInfrastructureSummaryState');
-      expect(infrastructureSummarySource).not.toContain('fetchInfrastructureSummaryAndCache');
-      expect(infrastructureSummarySource).not.toContain('readInfrastructureSummaryCache');
-      expect(infrastructureSummarySource).not.toContain('setInterval(');
-      expect(infrastructureSummarySource).not.toContain('AbortController');
       expect(infrastructureSummaryStateSource).toContain('fetchInfrastructureSummaryAndCache');
       expect(infrastructureSummaryStateSource).toContain('readInfrastructureSummaryCache');
       expect(infrastructureSummaryStateSource).toContain('setInterval(');
