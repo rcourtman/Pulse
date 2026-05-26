@@ -1,4 +1,4 @@
-import { Show, For } from 'solid-js';
+import { Show, For, Suspense } from 'solid-js';
 import type { Component } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { StatusDot } from '@/components/shared/StatusDot';
@@ -14,6 +14,8 @@ import {
 import { ResourceDetailDrawerDebugTab } from './ResourceDetailDrawerDebugTab';
 import { ResourceDetailDrawerOverviewTab } from './ResourceDetailDrawerOverviewTab';
 import { useResourceDetailDrawerState } from './useResourceDetailDrawerState';
+import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
+import { getDiscoveryLoadingState } from '@/utils/discoveryPresentation';
 import {
   DEFAULT_RESOURCE_DETAIL_DRAWER_PRESENTATION,
   type ResourceDetailDrawerPresentation,
@@ -171,6 +173,39 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   fallbackMetrics={drawer.metricsHistoryFallbackMetrics()}
                 />
               </div>
+            )}
+          </Show>
+        </Show>
+      </div>
+
+      {/* Discovery Tab */}
+      <div
+        class={drawer.activeTab() === 'discovery' ? '' : 'hidden'}
+        style={{ 'overflow-anchor': 'none' }}
+      >
+        <Show when={drawer.activeTab() === 'discovery'}>
+          <Show
+            when={drawer.discoveryConfig()}
+            fallback={<TabAvailabilityNotice message="Discovery is unavailable." />}
+          >
+            {(config) => (
+              <Suspense
+                fallback={
+                  <div class="flex items-center justify-center py-8">
+                    <div class="h-6 w-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+                    <span class="ml-2 text-sm text-muted">{getDiscoveryLoadingState().text}</span>
+                  </div>
+                }
+              >
+                <DiscoveryTab
+                  resourceType={config().resourceType}
+                  agentId={config().agentId}
+                  resourceId={config().resourceId}
+                  hostname={config().hostname}
+                  commandsEnabled={drawer.agentMeta()?.commandsEnabled}
+                  showManualRunAction
+                />
+              </Suspense>
             )}
           </Show>
         </Show>

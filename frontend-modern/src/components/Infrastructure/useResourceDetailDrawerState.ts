@@ -9,7 +9,15 @@ import { useResourceDetailDrawerHistoryState } from './useResourceDetailDrawerHi
 import { useResourceDetailDrawerDerivedState } from './useResourceDetailDrawerDerivedState';
 import type { ResourceDetailDrawerPresentation } from './resourceDetailDrawerPresentation';
 
-type DrawerTab = 'overview' | 'history' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
+type DrawerTab =
+  | 'overview'
+  | 'history'
+  | 'discovery'
+  | 'mail'
+  | 'namespaces'
+  | 'deployments'
+  | 'swarm'
+  | 'debug';
 
 export interface UseResourceDetailDrawerStateOptions {
   resource: Resource;

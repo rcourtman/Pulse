@@ -59,6 +59,7 @@ export type AgentPlatformData = {
   raid?: HostRAIDArray[];
   cpuCount?: number;
   memory?: Partial<Memory>;
+  commandsEnabled?: boolean;
 };
 
 export type PBSPlatformData = {
@@ -313,6 +314,7 @@ export const toAgentFromResource = (
     uptimeSeconds: agent.uptimeSeconds ?? resource.uptime ?? 0,
     lastSeen: resource.lastSeen,
     agentVersion: agent.agentVersion,
+    commandsEnabled: agent.commandsEnabled,
     tags: resource.tags,
   } as Agent;
 };

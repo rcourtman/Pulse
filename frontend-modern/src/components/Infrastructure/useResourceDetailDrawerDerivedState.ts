@@ -19,6 +19,7 @@ import {
   getPreferredResourceClusterName,
   getPreferredInfrastructureDisplayName,
 } from '@/utils/resourceIdentity';
+import { isPulseAgentPlatformResource } from '@/utils/agentResources';
 import { areSystemSettingsLoaded, shouldHideDockerUpdateActions } from '@/stores/systemSettings';
 import {
   getResourcePolicyBadges,
@@ -80,7 +81,15 @@ import {
 } from './resourceDetailDrawerTrueNASModel';
 import { getResourceHealthIssuePresentation } from './resourceHealthPresentation';
 
-type DrawerTab = 'overview' | 'history' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
+type DrawerTab =
+  | 'overview'
+  | 'history'
+  | 'discovery'
+  | 'mail'
+  | 'namespaces'
+  | 'deployments'
+  | 'swarm'
+  | 'debug';
 
 interface ResourceDrawerDiscoverySourceKey {
   type: DiscoveryResourceType;
@@ -336,6 +345,9 @@ export const useResourceDetailDrawerDerivedState = (
     getResourceMetricsHistoryFallbackMetrics(resource),
   );
   const hasMetricsHistory = createMemo(() => resourceSupportsMetricsHistory(resource));
+  const hasDiscoveryTab = createMemo(
+    () => isPulseAgentPlatformResource(resource) && Boolean(discoveryConfig()),
+  );
 
   const relatedLinks = createMemo(() => buildRelatedLinks(resource, displayName()));
   const accessSummary = createMemo(() =>
@@ -367,6 +379,7 @@ export const useResourceDetailDrawerDerivedState = (
     const base = [
       { id: 'overview' as DrawerTab, label: 'Overview' },
       ...(hasMetricsHistory() ? [{ id: 'history' as DrawerTab, label: 'History' }] : []),
+      ...(hasDiscoveryTab() ? [{ id: 'discovery' as DrawerTab, label: 'Discovery' }] : []),
       ...(resource.type === 'pmg' ? [{ id: 'mail' as DrawerTab, label: 'Mail' }] : []),
       ...(resource.type === 'k8s-cluster'
         ? [{ id: 'namespaces' as DrawerTab, label: 'Namespaces' }]
@@ -462,6 +475,7 @@ export const useResourceDetailDrawerDerivedState = (
     metricsHistoryTarget,
     metricsHistoryFallbackMetrics,
     hasMetricsHistory,
+    hasDiscoveryTab,
     hasVMwareDetails,
     vmwareDetailsSummary,
     vmwareDetailSections,

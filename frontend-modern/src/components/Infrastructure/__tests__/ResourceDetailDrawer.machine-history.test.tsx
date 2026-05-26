@@ -33,6 +33,25 @@ vi.mock('@/components/Workloads/GuestDrawerHistory', () => ({
   ),
 }));
 
+vi.mock('@/components/Discovery/DiscoveryTab', () => ({
+  DiscoveryTab: (props: {
+    resourceType: string;
+    agentId?: string;
+    resourceId: string;
+    hostname: string;
+    showManualRunAction?: boolean;
+  }) => (
+    <div
+      data-testid="machine-discovery"
+      data-resource-type={props.resourceType}
+      data-agent-id={props.agentId}
+      data-resource-id={props.resourceId}
+      data-hostname={props.hostname}
+      data-manual-run={String(props.showManualRunAction === true)}
+    />
+  ),
+}));
+
 const resource = (overrides: Partial<Resource>): Resource =>
   ({
     id: overrides.id ?? 'agent-1',
@@ -88,6 +107,34 @@ describe('ResourceDetailDrawer machine metrics history', () => {
     ));
 
     expect(screen.queryByRole('button', { name: 'History' })).not.toBeInTheDocument();
+  });
+
+  it('adds a first-class discovery tab for Pulse Agent machines', async () => {
+    render(() => (
+      <ResourceDetailDrawer
+        resource={resource({
+          id: 'agent-mac-mini',
+          displayName: 'Mac Mini',
+          discoveryTarget: {
+            resourceType: 'agent',
+            agentId: 'agent-mac-mini',
+            resourceId: 'agent-mac-mini',
+            hostname: 'richard-mac-mini.local',
+          },
+        })}
+      />
+    ));
+
+    expect(screen.getByRole('button', { name: 'Discovery' })).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Discovery' }));
+
+    const discovery = screen.getByTestId('machine-discovery');
+    expect(discovery).toHaveAttribute('data-resource-type', 'agent');
+    expect(discovery).toHaveAttribute('data-agent-id', 'agent-mac-mini');
+    expect(discovery).toHaveAttribute('data-resource-id', 'agent-mac-mini');
+    expect(discovery).toHaveAttribute('data-hostname', 'richard-mac-mini.local');
+    expect(discovery).toHaveAttribute('data-manual-run', 'true');
   });
 
   it('opens agent machine facts by default in table-row presentation', () => {

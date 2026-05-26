@@ -585,50 +585,53 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                         embedded
                       />
 
-                      <div
-                        class="space-y-2 border-t border-border pt-3"
-                        data-testid="resource-access-analysis"
-                      >
-                        <div class="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <div class="text-[10px] font-medium uppercase tracking-wide text-base-content">
-                              Analysis
+                      <Show when={!drawer.hasDiscoveryTab()}>
+                        <div
+                          class="space-y-2 border-t border-border pt-3"
+                          data-testid="resource-access-analysis"
+                        >
+                          <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <div class="text-[10px] font-medium uppercase tracking-wide text-base-content">
+                                Analysis
+                              </div>
+                              <Show when={drawer.discoveryContextSummary()}>
+                                <div class="mt-1 text-[10px] text-base-content">
+                                  {drawer.discoveryContextSummary()}
+                                </div>
+                              </Show>
                             </div>
-                            <Show when={drawer.discoveryContextSummary()}>
-                              <div class="mt-1 text-[10px] text-base-content">
-                                {drawer.discoveryContextSummary()}
-                              </div>
-                            </Show>
+                            <button
+                              type="button"
+                              onClick={() => drawer.setShowDiscoveryContext((value) => !value)}
+                              class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-base"
+                            >
+                              {drawer.showDiscoveryContext() ? 'Hide analysis' : 'Open analysis'}
+                            </button>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => drawer.setShowDiscoveryContext((value) => !value)}
-                            class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-base"
-                          >
-                            {drawer.showDiscoveryContext() ? 'Hide analysis' : 'Open analysis'}
-                          </button>
-                        </div>
 
-                        <Show when={drawer.showDiscoveryContext()}>
-                          <Suspense
-                            fallback={
-                              <div class="flex items-center justify-center py-8">
-                                <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-                                <span class="ml-2 text-sm text-muted">
-                                  {getDiscoveryLoadingState().text}
-                                </span>
-                              </div>
-                            }
-                          >
-                            <DiscoveryTab
-                              resourceType={config().resourceType}
-                              agentId={config().agentId}
-                              resourceId={config().resourceId}
-                              hostname={config().hostname}
-                            />
-                          </Suspense>
-                        </Show>
-                      </div>
+                          <Show when={drawer.showDiscoveryContext()}>
+                            <Suspense
+                              fallback={
+                                <div class="flex items-center justify-center py-8">
+                                  <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
+                                  <span class="ml-2 text-sm text-muted">
+                                    {getDiscoveryLoadingState().text}
+                                  </span>
+                                </div>
+                              }
+                            >
+                              <DiscoveryTab
+                                resourceType={config().resourceType}
+                                agentId={config().agentId}
+                                resourceId={config().resourceId}
+                                hostname={config().hostname}
+                                commandsEnabled={drawer.agentMeta()?.commandsEnabled}
+                              />
+                            </Suspense>
+                          </Show>
+                        </div>
+                      </Show>
                     </div>
                   )}
                 </Show>
