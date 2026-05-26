@@ -6,6 +6,16 @@ import {
 } from '../availabilityTargetPresets';
 
 describe('availabilityTargetPresets', () => {
+  it('includes pingable machines as ICMP availability presets', () => {
+    expect(availabilityPresetById('ping-machine')).toEqual(
+      expect.objectContaining({
+        label: 'Pingable machine',
+        targetKind: 'machine',
+        protocol: 'icmp',
+      }),
+    );
+  });
+
   it('includes ESPHome as a TCP availability preset', () => {
     expect(availabilityPresetById('esphome-device')).toEqual(
       expect.objectContaining({

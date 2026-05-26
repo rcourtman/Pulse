@@ -73,6 +73,7 @@ describe('AvailabilityTargetSlot', () => {
       <AvailabilityTargetSlot initialTargetKind="machine" onCancel={vi.fn()} onSaved={onSaved} />
     ));
 
+    expect(screen.getByLabelText('Preset')).toHaveValue('ping-machine');
     expect(screen.getByLabelText('Target type')).toHaveValue('machine');
     expect(screen.getByPlaceholderText('mac-mini')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('server.local')).toBeInTheDocument();

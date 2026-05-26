@@ -4,6 +4,7 @@ export const CUSTOM_AVAILABILITY_PRESET_ID = 'custom';
 
 export type AvailabilityTargetPresetID =
   | typeof CUSTOM_AVAILABILITY_PRESET_ID
+  | 'ping-machine'
   | 'ping-device'
   | 'mqtt-broker'
   | 'esphome-device'
@@ -28,6 +29,13 @@ export interface AvailabilityPresetFields {
 }
 
 export const AVAILABILITY_TARGET_PRESETS: readonly AvailabilityTargetPreset[] = [
+  {
+    id: 'ping-machine',
+    label: 'Pingable machine',
+    targetKind: 'machine',
+    protocol: 'icmp',
+    addressPlaceholder: 'server.local',
+  },
   {
     id: 'ping-device',
     label: 'Pingable device',

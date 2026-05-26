@@ -119,12 +119,17 @@ const presetSensitiveFormKeys: ReadonlySet<keyof AvailabilityForm> = new Set([
   'targetKind',
 ]);
 
+const initialPresetForTargetKind = (
+  targetKind: AvailabilityTargetKind | undefined,
+): AvailabilityTargetPresetID =>
+  targetKind === 'machine' ? 'ping-machine' : CUSTOM_AVAILABILITY_PRESET_ID;
+
 export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (props) => {
   const [form, setForm] = createSignal<AvailabilityForm>(
     newAvailabilityForm(props.initialTargetKind),
   );
   const [selectedPreset, setSelectedPreset] = createSignal<AvailabilityTargetPresetID>(
-    CUSTOM_AVAILABILITY_PRESET_ID,
+    initialPresetForTargetKind(props.initialTargetKind),
   );
   const [loading, setLoading] = createSignal(false);
   const [saving, setSaving] = createSignal(false);

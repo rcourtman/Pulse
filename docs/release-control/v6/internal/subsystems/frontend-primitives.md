@@ -3576,12 +3576,12 @@ and availability management copy must use shared presentation helpers instead
 of feature-local wording, so availability probes stay visually aligned with
 the Monitoring availability settings surface without pretending to be a host
 agent install or a platform API connection.
-Availability setup presets for pingable devices, MQTT, ESPHome, or similar
-agentless endpoints must also stay on the shared settings form vocabulary:
-presets may fill target kind, protocol, port, and path defaults, but display
-badges and drawers still derive `Availability` and `Network Endpoint` labels
-from the shared resource presentation helpers rather than from preset-local
-copy.
+Availability setup presets for pingable machines/devices, MQTT, ESPHome, or
+similar agentless endpoints must also stay on the shared settings form
+vocabulary: presets may fill target kind, protocol, port, and path defaults,
+but display badges and drawers still derive `Availability` and
+`Network Endpoint` labels from the shared resource presentation helpers rather
+than from preset-local copy.
 Infrastructure rows for those same agentless endpoints must surface probe
 evidence directly in the row, not just as a green status dot or an
 `Availability` badge. The shared row presentation must expose the probe method
