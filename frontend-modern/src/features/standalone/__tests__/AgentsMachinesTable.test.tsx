@@ -240,4 +240,46 @@ describe('AgentsMachinesTable', () => {
     );
     expect(screen.getByTestId('agent-machine-memory-bar')).toHaveAttribute('data-balloon', '8000');
   });
+
+  it('shows structured agent temperature details from the table value', async () => {
+    const { container } = render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({
+            id: 'thermal-host',
+            name: 'Thermal Host',
+            agent: {
+              sensors: {
+                temperatureCelsius: { 'cpu.package': 61 },
+                fanRpm: { cpu_fan: 1_400 },
+                additional: { nvme0: 42 },
+                smart: [
+                  { device: '/dev/sda', model: 'Cold Standby', temperature: 33, standby: true },
+                  { device: '/dev/sdb', model: 'Archive HDD', temperature: 38 },
+                ],
+              },
+            },
+          }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    const trigger = container.querySelector('[data-agent-machine-temperature-trigger="true"]');
+    expect(trigger).not.toBeNull();
+    if (!trigger) return;
+
+    await fireEvent.mouseEnter(trigger);
+
+    expect(await screen.findByText('Temperatures')).toBeInTheDocument();
+    expect(screen.getByText('Disk Temperatures')).toBeInTheDocument();
+    expect(screen.getByText('Fan Speeds')).toBeInTheDocument();
+    expect(screen.getByText('Other Sensors')).toBeInTheDocument();
+    expect(screen.getByText('Disk /dev/sdb Archive HDD')).toBeInTheDocument();
+    expect(screen.getByText('Disk /dev/sda Cold Standby')).toBeInTheDocument();
+    expect(screen.getByText('standby')).toBeInTheDocument();
+    expect(screen.getByText('1400 RPM')).toBeInTheDocument();
+  });
 });

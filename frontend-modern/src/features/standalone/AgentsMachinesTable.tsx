@@ -14,6 +14,7 @@ import {
 } from '@/components/shared/Table';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
+import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import {
   PlatformResourceDetailTableRow,
   createPlatformResourceDetailState,
@@ -49,6 +50,7 @@ import {
   getAgentMachinePrimaryIp,
   getAgentMachineRaidSummary,
   getAgentMachineTemperatureCelsius,
+  getAgentMachineTemperatureDetailSections,
   getAgentMachineTemperatureTitle,
   getNextAgentMachineSortState,
   sortAgentMachines,
@@ -56,6 +58,7 @@ import {
   type AgentMachineColumn,
   type AgentMachineColumnId,
   type AgentMachineSortKey,
+  type AgentMachineTemperatureDetailSection,
 } from './agentMachineTableModel';
 
 const formatUptime = (seconds: number | undefined): string => {
@@ -66,17 +69,6 @@ const formatUptime = (seconds: number | undefined): string => {
   if (hours > 0) return `${hours}h`;
   const mins = Math.floor(seconds / 60);
   return `${mins}m`;
-};
-
-const formatTemperature = (celsius: number | undefined, title?: string): JSX.Element => {
-  if (typeof celsius !== 'number' || !Number.isFinite(celsius) || celsius <= 0) {
-    return <span class="text-muted">—</span>;
-  }
-  return (
-    <span class="tabular-nums" title={title}>
-      {formatTemperatureValue(celsius)}
-    </span>
-  );
 };
 
 const formatLastSeen = (value: number | string | Date | undefined): string => {
@@ -101,6 +93,93 @@ const metricFallback = () => (
 
 const finiteMetric = (value: number | undefined): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+const hasPositiveTemperature = (celsius: number | undefined): celsius is number =>
+  typeof celsius === 'number' && Number.isFinite(celsius) && celsius > 0;
+
+const AgentMachineTemperatureCell: Component<{
+  celsius: number | undefined;
+  sections: AgentMachineTemperatureDetailSection[];
+  title: string;
+}> = (props) => {
+  const [visible, setVisible] = createSignal(false);
+  const [position, setPosition] = createSignal({ x: 0, y: 0 });
+  const hasDetails = () => props.sections.length > 0;
+  const positiveTemperature = () =>
+    hasPositiveTemperature(props.celsius) ? props.celsius : undefined;
+  const open = (event: MouseEvent | FocusEvent) => {
+    if (!hasDetails()) return;
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    setPosition({ x: rect.left + rect.width / 2, y: rect.top });
+    setVisible(true);
+  };
+  const close = () => setVisible(false);
+
+  return (
+    <>
+      <span
+        data-agent-machine-temperature-trigger="true"
+        class="inline-flex min-w-[2.25rem] justify-end text-xs tabular-nums"
+        aria-label={props.title || undefined}
+        tabIndex={hasDetails() ? 0 : undefined}
+        onMouseEnter={open}
+        onMouseOver={open}
+        onMouseLeave={close}
+        onFocus={open}
+        onBlur={close}
+        onClick={(event) => {
+          event.stopPropagation();
+          open(event);
+        }}
+      >
+        <Show when={positiveTemperature()} fallback={<span class="text-muted">—</span>}>
+          {(value) => formatTemperatureValue(value())}
+        </Show>
+      </span>
+      <TooltipPortal
+        when={visible() && hasDetails()}
+        x={position().x}
+        y={position().y}
+        maxWidth={320}
+      >
+        <div
+          data-agent-machine-temperature-tooltip="true"
+          class="min-w-[190px] max-w-[300px] space-y-2"
+        >
+          <For each={props.sections}>
+            {(section) => (
+              <section>
+                <div class="mb-1 border-b border-border pb-1 font-semibold text-muted">
+                  {section.heading}
+                </div>
+                <div class="space-y-0.5">
+                  <For each={section.rows}>
+                    {(row) => (
+                      <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+                        <span class="min-w-0 truncate text-muted" title={row.label}>
+                          {row.label}
+                        </span>
+                        <span
+                          classList={{
+                            'text-base-content': !row.muted,
+                            'text-muted': row.muted,
+                          }}
+                          class="font-mono tabular-nums"
+                        >
+                          {row.value}
+                        </span>
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </section>
+            )}
+          </For>
+        </div>
+      </TooltipPortal>
+    </>
+  );
+};
 
 const availabilityFor = (machine: Resource): ResourceAvailabilityMeta | undefined =>
   machine.availability ??
@@ -430,6 +509,8 @@ export const AgentsMachinesTable: Component<{
                     const ipValues = () => getAgentMachineIpValues(machine);
                     const raidSummary = () => getAgentMachineRaidSummary(machine);
                     const temperature = () => getAgentMachineTemperatureCelsius(machine);
+                    const temperatureSections = () =>
+                      getAgentMachineTemperatureDetailSections(machine);
                     const temperatureTitle = () => getAgentMachineTemperatureTitle(machine);
                     const isExpanded = () => drawer.isExpanded(machine);
                     const detailRowId = () => drawer.detailRowId(machine);
@@ -598,7 +679,11 @@ export const AgentsMachinesTable: Component<{
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} ${machineColumnWidthClass('temp')} text-base-content`}
                             >
-                              {formatTemperature(temperature(), temperatureTitle())}
+                              <AgentMachineTemperatureCell
+                                celsius={temperature()}
+                                sections={temperatureSections()}
+                                title={temperatureTitle()}
+                              />
                             </TableCell>
                           </Show>
                           <Show when={columnVisibility.isColumnVisible('lastSeen')}>

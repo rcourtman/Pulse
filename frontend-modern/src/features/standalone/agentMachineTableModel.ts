@@ -118,6 +118,17 @@ type SmartTemperatureReading = TemperatureReading & {
   standby?: boolean;
 };
 
+export type AgentMachineTemperatureDetailRow = {
+  label: string;
+  value: string;
+  muted?: boolean;
+};
+
+export type AgentMachineTemperatureDetailSection = {
+  heading: string;
+  rows: AgentMachineTemperatureDetailRow[];
+};
+
 const positiveTemperature = (value: number | undefined): number | undefined => {
   const metric = finiteMetric(value);
   return metric !== undefined && metric > 0 ? metric : undefined;
@@ -172,11 +183,20 @@ const byHighestTemperature = (left: TemperatureReading, right: TemperatureReadin
 const byLabel = (left: TemperatureReading, right: TemperatureReading): number =>
   left.label.localeCompare(right.label, undefined, { numeric: true });
 
-const formatTemperatureLine = (reading: TemperatureReading): string =>
-  `${reading.label}: ${Math.round(reading.value)}°C`;
+const formatTemperatureValue = (reading: TemperatureReading): string =>
+  `${Math.round(reading.value)}°C`;
 
-const formatSection = (heading: string, lines: readonly string[]): string[] =>
-  lines.length > 0 ? [heading, ...lines] : [];
+const section = (
+  heading: string,
+  rows: AgentMachineTemperatureDetailRow[],
+): AgentMachineTemperatureDetailSection[] => (rows.length > 0 ? [{ heading, rows }] : []);
+
+const flattenTemperatureSections = (
+  sections: readonly AgentMachineTemperatureDetailSection[],
+): string =>
+  sections
+    .flatMap((entry) => [entry.heading, ...entry.rows.map((row) => `${row.label}: ${row.value}`)])
+    .join('\n');
 
 const getMetricPercent = (metric: Resource['cpu'] | undefined): number | undefined =>
   finiteMetric(metric?.current);
@@ -226,35 +246,56 @@ export const getAgentMachineTemperatureCelsius = (machine: Resource): number | u
   );
 };
 
-export const getAgentMachineTemperatureTitle = (machine: Resource): string => {
+export const getAgentMachineTemperatureDetailSections = (
+  machine: Resource,
+): AgentMachineTemperatureDetailSection[] => {
   const sensorReadings = getSensorTemperatureReadings(machine)
     .sort(byHighestTemperature)
     .slice(0, 6)
-    .map(formatTemperatureLine);
+    .map((reading) => ({
+      label: reading.label,
+      value: formatTemperatureValue(reading),
+    }));
   const activeSmartReadings = getActiveSmartTemperatureReadings(machine)
     .sort(byHighestTemperature)
     .slice(0, 6)
-    .map((reading) => `Disk ${reading.label}: ${Math.round(reading.value)}°C`);
+    .map((reading) => ({
+      label: `Disk ${reading.label}`,
+      value: formatTemperatureValue(reading),
+    }));
   const standbySmartReadings = getSmartTemperatureReadings(machine)
     .filter((reading) => reading.standby)
     .sort(byLabel)
     .slice(0, 6)
-    .map((reading) => `Disk ${reading.label}: standby`);
+    .map((reading) => ({
+      label: `Disk ${reading.label}`,
+      value: 'standby',
+      muted: true,
+    }));
   const fanReadings = getFanReadings(machine)
     .sort(byLabel)
     .slice(0, 6)
-    .map((reading) => `${reading.label}: ${Math.round(reading.value)} RPM`);
+    .map((reading) => ({
+      label: reading.label,
+      value: `${Math.round(reading.value)} RPM`,
+    }));
   const additionalReadings = getAdditionalTemperatureReadings(machine)
     .sort(byHighestTemperature)
     .slice(0, 6)
-    .map(formatTemperatureLine);
+    .map((reading) => ({
+      label: reading.label,
+      value: formatTemperatureValue(reading),
+    }));
   return [
-    ...formatSection('Temperatures', sensorReadings),
-    ...formatSection('Disk Temperatures', [...activeSmartReadings, ...standbySmartReadings]),
-    ...formatSection('Fan Speeds', fanReadings),
-    ...formatSection('Other Sensors', additionalReadings),
-  ].join('\n');
+    ...section('Temperatures', sensorReadings),
+    ...section('Disk Temperatures', [...activeSmartReadings, ...standbySmartReadings]),
+    ...section('Fan Speeds', fanReadings),
+    ...section('Other Sensors', additionalReadings),
+  ];
 };
+
+export const getAgentMachineTemperatureTitle = (machine: Resource): string =>
+  flattenTemperatureSections(getAgentMachineTemperatureDetailSections(machine));
 
 export const timestampMillisFrom = (
   value: number | string | Date | undefined,
