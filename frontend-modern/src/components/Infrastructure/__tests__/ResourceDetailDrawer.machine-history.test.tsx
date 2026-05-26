@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '../ResourceDetailDrawer';
@@ -88,5 +88,91 @@ describe('ResourceDetailDrawer machine metrics history', () => {
     ));
 
     expect(screen.queryByRole('button', { name: 'History' })).not.toBeInTheDocument();
+  });
+
+  it('opens agent machine facts by default in table-row presentation', () => {
+    render(() => (
+      <ResourceDetailDrawer
+        presentation="table-row"
+        resource={resource({
+          id: 'agent-mac-mini',
+          displayName: 'Mac Mini',
+          agent: {
+            hostname: 'richard-mac-mini.local',
+            osName: 'macOS',
+            osVersion: '15.5',
+            kernelVersion: '24.5.0',
+            architecture: 'arm64',
+            cpuCount: 10,
+            memory: {
+              total: 24 * 1024 * 1024 * 1024,
+              used: 12 * 1024 * 1024 * 1024,
+              free: 12 * 1024 * 1024 * 1024,
+              usage: 0.5,
+            },
+            disks: [
+              {
+                mountpoint: '/',
+                total: 994 * 1024 * 1024 * 1024,
+                used: 512 * 1024 * 1024 * 1024,
+                free: 482 * 1024 * 1024 * 1024,
+              },
+            ],
+            networkInterfaces: [
+              {
+                name: 'en0',
+                mac: '00:11:22:33:44:55',
+                addresses: ['192.168.0.42'],
+              },
+            ],
+            agentVersion: '6.0.0',
+            uptimeSeconds: 3600,
+          },
+        })}
+      />
+    ));
+
+    const machineSection = screen.getByTestId('resource-host-details-section');
+    expect(within(machineSection).getByText('Machine')).toBeInTheDocument();
+    expect(
+      within(machineSection).getByRole('button', { name: 'Hide machine' }),
+    ).toBeInTheDocument();
+    expect(within(machineSection).queryByRole('button', { name: 'Show machine' })).toBeNull();
+    expect(within(machineSection).getByText('richard-mac-mini.local')).toBeInTheDocument();
+    expect(within(machineSection).getByText('Network')).toBeInTheDocument();
+    expect(within(machineSection).getByText('192.168.0.42')).toBeInTheDocument();
+    expect(within(machineSection).getByText('Disks')).toBeInTheDocument();
+  });
+
+  it('keeps provider-owned host facts collapsed in table-row presentation', () => {
+    render(() => (
+      <ResourceDetailDrawer
+        presentation="table-row"
+        resource={resource({
+          id: 'pve-node-1',
+          displayName: 'pve-node-1',
+          platformType: 'proxmox-pve',
+          sourceType: 'api',
+          sources: ['proxmox'],
+          platformData: {
+            sources: ['proxmox'],
+            proxmox: {
+              nodeName: 'pve-node-1',
+              pveVersion: '8.2.7',
+              kernelVersion: '6.8.12',
+              cpuInfo: {
+                cores: 8,
+              },
+            },
+          },
+        })}
+      />
+    ));
+
+    const hostSection = screen.getByTestId('resource-host-details-section');
+    expect(within(hostSection).getByText('Host')).toBeInTheDocument();
+    expect(within(hostSection).getByRole('button', { name: 'Show host' })).toBeInTheDocument();
+    expect(within(hostSection).queryByRole('button', { name: 'Hide host' })).toBeNull();
+    expect(within(hostSection).queryByText('Hardware')).toBeNull();
   });
 });

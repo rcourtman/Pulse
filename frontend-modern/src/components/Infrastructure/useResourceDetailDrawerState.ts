@@ -3,6 +3,7 @@ import type { Resource } from '@/types/resource';
 import type { HistoryTimeRange } from '@/api/charts';
 import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from '@/components/Workloads/guestDrawerModel';
 import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
+import { isPulseAgentPlatformResource } from '@/utils/agentResources';
 import { useResourceDetailDrawerDockerActionsState } from './useResourceDetailDrawerDockerActionsState';
 import { useResourceDetailDrawerHistoryState } from './useResourceDetailDrawerHistoryState';
 import { useResourceDetailDrawerDerivedState } from './useResourceDetailDrawerDerivedState';
@@ -30,7 +31,9 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
   const [showAccessContext, setShowAccessContext] = createSignal(false);
   const [showInvestigationContext, setShowInvestigationContext] = createSignal(false);
   const [showDiscoveryContext, setShowDiscoveryContext] = createSignal(false);
-  const [showHostDetails, setShowHostDetails] = createSignal(false);
+  const [showHostDetails, setShowHostDetails] = createSignal(
+    options.presentation === 'table-row' && isPulseAgentPlatformResource(resource),
+  );
   const [showServiceDetails, setShowServiceDetails] = createSignal(false);
   const [showVMwareDetails, setShowVMwareDetails] = createSignal(false);
   const [showTrueNASDetails, setShowTrueNASDetails] = createSignal(

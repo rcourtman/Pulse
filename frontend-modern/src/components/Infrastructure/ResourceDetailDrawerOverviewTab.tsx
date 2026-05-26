@@ -37,6 +37,7 @@ import {
 import { formatConfidenceLabel } from '@/utils/confidencePresentation';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
 import { shouldShowResourcePlatformId } from '@/utils/resourceIdentity';
+import { isPulseAgentPlatformResource } from '@/utils/agentResources';
 import { getDiscoveryLoadingState } from '@/utils/discoveryPresentation';
 import { formatInteger } from './resourceDetailMappers';
 import { buildPbsJobHealthEvidenceModel } from './resourceDetailDrawerServiceModel';
@@ -83,6 +84,60 @@ const TrueNASDetailsDisclosure: Component<{
     <TrueNASDetailSectionTable sections={props.drawer.trueNASDetailSections()} />
   </SupportDisclosure>
 );
+
+const machineHostDetailsTitle = (resource: Resource): string =>
+  isPulseAgentPlatformResource(resource) ? 'Machine' : 'Host';
+
+const machineHostDetailsNoun = (resource: Resource): string =>
+  isPulseAgentPlatformResource(resource) ? 'machine' : 'host';
+
+const HostDetailsDisclosure: Component<{
+  resource: Resource;
+  drawer: UseResourceDetailDrawerStateResult;
+  class?: string;
+  contentClass?: string;
+}> = (props) => {
+  const noun = () => machineHostDetailsNoun(props.resource);
+
+  return (
+    <SupportDisclosure
+      title={machineHostDetailsTitle(props.resource)}
+      summary={props.drawer.hostDetailSummary()}
+      expanded={props.drawer.showHostDetails()}
+      onToggle={() => props.drawer.setShowHostDetails((value) => !value)}
+      showLabel={`Show ${noun()}`}
+      hideLabel={`Hide ${noun()}`}
+      class={props.class}
+      contentClass={
+        props.contentClass ??
+        'mt-3 flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(50%-0.375rem)] [&>*]:min-w-[220px] [&>*]:max-w-full [&>*]:overflow-hidden'
+      }
+      dataTestId="resource-host-details-section"
+    >
+      <Show when={props.drawer.proxmoxNode()}>
+        {(node) => (
+          <>
+            <SystemInfoCard variant="node" node={node()} />
+            <HardwareCard variant="node" node={node()} />
+            <RootDiskCard node={node()} />
+          </>
+        )}
+      </Show>
+      <Show when={props.drawer.agentInfo()}>
+        {(agent) => (
+          <>
+            <SystemInfoCard variant="agent" agent={agent()} />
+            <HardwareCard variant="agent" agent={agent()} />
+            <NetworkInterfacesCard interfaces={agent().networkInterfaces} />
+            <DisksCard disks={agent().disks} />
+            <RaidCard arrays={props.drawer.agentMeta()?.raid} />
+            <TemperaturesCard rows={props.drawer.temperatureRows()} />
+          </>
+        )}
+      </Show>
+    </SupportDisclosure>
+  );
+};
 
 const pbsEvidenceBadgeClass = (tone: string): string => {
   switch (tone) {
@@ -147,11 +202,17 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
       drawer.actionAuditCount() > 0 ||
       Boolean(drawer.actionAuditError()));
   const shouldPromoteTrueNASDetails = () => compactTableRow() && drawer.hasTrueNASDetails();
+  const shouldPromoteHostDetails = () =>
+    compactTableRow() && isPulseAgentPlatformResource(resource) && drawer.hasHostDetails();
 
   return (
     <div class="space-y-3">
       <Show when={shouldPromoteTrueNASDetails()}>
         <TrueNASDetailsDisclosure drawer={drawer} class="space-y-2" contentClass="space-y-2" />
+      </Show>
+
+      <Show when={shouldPromoteHostDetails()}>
+        <HostDetailsDisclosure resource={resource} drawer={drawer} />
       </Show>
 
       <Show
@@ -456,7 +517,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             drawer.hasServiceDetails() ||
             drawer.hasVMwareDetails() ||
             drawer.hasTrueNASDetails() ||
-            drawer.hasHostDetails() ||
+            (drawer.hasHostDetails() && !shouldPromoteHostDetails()) ||
             drawer.hasAccessContext() ||
             drawer.hasInvestigationContext()
           }
@@ -1188,40 +1249,8 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
               </SupportDisclosure>
             </Show>
 
-            <Show when={drawer.hasHostDetails()}>
-              <SupportDisclosure
-                title="Host"
-                summary={drawer.hostDetailSummary()}
-                expanded={drawer.showHostDetails()}
-                onToggle={() => drawer.setShowHostDetails((value) => !value)}
-                showLabel="Show host"
-                hideLabel="Hide host"
-                class="h-full"
-                contentClass="mt-3 flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(50%-0.375rem)] [&>*]:min-w-[220px] [&>*]:max-w-full [&>*]:overflow-hidden"
-                dataTestId="resource-host-details-section"
-              >
-                <Show when={drawer.proxmoxNode()}>
-                  {(node) => (
-                    <>
-                      <SystemInfoCard variant="node" node={node()} />
-                      <HardwareCard variant="node" node={node()} />
-                      <RootDiskCard node={node()} />
-                    </>
-                  )}
-                </Show>
-                <Show when={drawer.agentInfo()}>
-                  {(agent) => (
-                    <>
-                      <SystemInfoCard variant="agent" agent={agent()} />
-                      <HardwareCard variant="agent" agent={agent()} />
-                      <NetworkInterfacesCard interfaces={agent().networkInterfaces} />
-                      <DisksCard disks={agent().disks} />
-                      <RaidCard arrays={drawer.agentMeta()?.raid} />
-                      <TemperaturesCard rows={drawer.temperatureRows()} />
-                    </>
-                  )}
-                </Show>
-              </SupportDisclosure>
+            <Show when={drawer.hasHostDetails() && !shouldPromoteHostDetails()}>
+              <HostDetailsDisclosure resource={resource} drawer={drawer} class="h-full" />
             </Show>
           </div>
         </Show>
