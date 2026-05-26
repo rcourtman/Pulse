@@ -52,6 +52,12 @@ vi.mock('@/components/Discovery/DiscoveryTab', () => ({
   ),
 }));
 
+vi.mock('@/components/Workloads/StackedDiskBar', () => ({
+  StackedDiskBar: (props: { mode?: string }) => (
+    <div data-testid="stacked-disk-bar" data-mode={props.mode} />
+  ),
+}));
+
 const resource = (overrides: Partial<Resource>): Resource =>
   ({
     id: overrides.id ?? 'agent-1',
