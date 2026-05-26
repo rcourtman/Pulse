@@ -171,8 +171,6 @@ export const STORAGE_KEYS = {
   STORAGE_SHOW_FILTERS: 'storageShowFilters',
   STORAGE_VIEW_MODE: 'storageViewMode',
   STORAGE_SOURCE_FILTER: 'storageSourceFilter',
-  STORAGE_SUMMARY_RANGE: 'storageSummaryRange',
-  STORAGE_SUMMARY_COLLAPSED: 'storageSummaryCollapsed',
 
   // Recovery settings
   RECOVERY_SHOW_FILTERS: 'backupsShowFilters',
@@ -184,15 +182,9 @@ export const STORAGE_KEYS = {
   WORKLOADS_CARD_VIEW: 'workloadsCardView',
   WORKLOADS_AUTO_REFRESH: 'workloadsAutoRefresh',
   WORKLOADS_SEARCH_HISTORY: 'workloadsSearchHistory',
-  WORKLOADS_SUMMARY_RANGE: 'workloadsSummaryRange',
-  WORKLOADS_SUMMARY_COLLAPSED: 'workloadsSummaryCollapsed',
   WORKLOADS_METRIC_DISPLAY_MODE: 'workloadsMetricDisplayMode',
   WORKLOADS_METRIC_HISTORY_RANGE: 'workloadsMetricHistoryRange',
-  INFRASTRUCTURE_SUMMARY_RANGE: 'infrastructureSummaryRange',
-  INFRASTRUCTURE_SUMMARY_COLLAPSED: 'infrastructureSummaryCollapsed',
   AGENTS_SEARCH_HISTORY: 'agentsSearchHistory',
-  AGENTS_SUMMARY_RANGE: 'agentsSummaryRange',
-  AGENTS_SUMMARY_COLLAPSED: 'agentsSummaryCollapsed',
 
   // Storage search
   STORAGE_SEARCH_HISTORY: 'storageSearchHistory',

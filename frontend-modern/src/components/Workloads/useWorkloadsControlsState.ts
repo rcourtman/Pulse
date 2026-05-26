@@ -6,7 +6,6 @@ import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { blurFocusedTypeToSearch } from '@/hooks/useTypeToSearch';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { aiChatStore } from '@/stores/aiChat';
-import { isSummaryTimeRange } from '@/components/shared/summaryTimeRange';
 import type { ViewMode } from '@/types/workloads';
 
 import {
@@ -84,19 +83,6 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     () => options.forcedGroupingMode ?? groupingMode(),
   );
 
-  const [workloadsSummaryRange, setWorkloadsSummaryRange] = usePersistentSignal(
-    STORAGE_KEYS.WORKLOADS_SUMMARY_RANGE,
-    '1h',
-    {
-      deserialize: (raw) => (isSummaryTimeRange(raw) ? raw : '1h'),
-    },
-  );
-
-  const [workloadsSummaryCollapsed, setWorkloadsSummaryCollapsed] = usePersistentSignal<boolean>(
-    STORAGE_KEYS.WORKLOADS_SUMMARY_COLLAPSED,
-    false,
-    { deserialize: (raw) => raw === 'true' },
-  );
   const [internalMetricDisplayMode, setInternalMetricDisplayMode] =
     usePersistentSignal<WorkloadsMetricDisplayMode>(
       STORAGE_KEYS.WORKLOADS_METRIC_DISPLAY_MODE,
@@ -284,12 +270,8 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     workloadMetricDisplayMode,
     workloadTableVisibleColumnIds,
     workloadTableVisibleColumns,
-    workloadsSummaryCollapsed,
-    workloadsSummaryRange,
     workloadTableLayoutMode,
     setWorkloadMetricHistoryRange,
     setWorkloadMetricDisplayMode,
-    setWorkloadsSummaryCollapsed,
-    setWorkloadsSummaryRange,
   } as const;
 }

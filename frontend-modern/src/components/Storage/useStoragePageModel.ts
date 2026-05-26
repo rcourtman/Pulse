@@ -2,7 +2,6 @@ import { createEffect, createMemo, createSignal, onCleanup, untrack } from 'soli
 import { useLocation, useNavigate } from '@solidjs/router';
 import {
   SUMMARY_TIME_RANGE_LABEL,
-  isSummaryTimeRange,
   type SummaryTimeRange,
 } from '@/components/shared/summaryTimeRange';
 import { buildStorageCapacityDeltaPresentation } from '@/features/storageBackups/storageCapacityDeltaPresentation';
@@ -11,14 +10,12 @@ import {
   resolveStorageRecordMetricResourceId,
 } from '@/features/storageBackups/storageMetricsIdentity';
 import { useKioskMode } from '@/hooks/useKioskMode';
-import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { useSummaryPageInteractionState } from '@/components/shared/summaryTableFocus';
 import {
   isSummarySeriesInGroupScope,
   type SummarySeriesGroupScope,
 } from '@/components/shared/summaryCardInteraction';
 import { createRouteStateNavigateScheduler } from '@/utils/routeStateNavigation';
-import { STORAGE_KEYS } from '@/utils/localStorage';
 import { areSearchParamsEquivalent } from '@/utils/searchParams';
 import { parseStorageLinkSearch, STORAGE_QUERY_PARAMS } from '@/routing/resourceLinks';
 import { useStorageExpansionState } from './useStorageExpansionState';
@@ -56,18 +53,11 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
   const [selectedStorageGroupId, setSelectedStorageGroupIdRaw] = createSignal<string | null>(null);
   const [handledSummaryGroupId, setHandledSummaryGroupId] = createSignal<string | null>(null);
   const [selectedDiskId, setSelectedDiskId] = createSignal<string | null>(null);
-  const [summaryTimeRange, setSummaryTimeRange] = usePersistentSignal<SummaryTimeRange>(
-    STORAGE_KEYS.STORAGE_SUMMARY_RANGE,
-    '24h',
-    {
-      deserialize: (raw) => (isSummaryTimeRange(raw) ? raw : '24h'),
-    },
-  );
-  const [storageSummaryCollapsed, setStorageSummaryCollapsed] = usePersistentSignal<boolean>(
-    STORAGE_KEYS.STORAGE_SUMMARY_COLLAPSED,
-    false,
-    { deserialize: (raw) => raw === 'true' },
-  );
+  // Growth column on the storage table is anchored to a 24h window. The
+  // standalone summary chart that let operators retune the range was
+  // retired with the platform-first IA migration; nothing reads or sets
+  // this now, so the previous persistent signal collapsed to a constant.
+  const summaryTimeRange = (): SummaryTimeRange => '24h';
   const {
     state,
     activeAlerts,
@@ -138,7 +128,6 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     diskGroupOptions,
     filteredRecords,
     groupedRecords,
-    cephSummaryStats,
   } = useStoragePageData({
     state: () => state,
     resources: storageRecoveryResources.resources,
@@ -452,21 +441,13 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
   });
 
   return {
-    activeSummaryScopeState: summaryInteraction.activeScopeState,
     activeSummaryStorageGroupScope: summaryInteraction.activeGroupScope,
     activeSummaryStorageResourceId: summaryInteraction.activeSeriesId,
     clearPinnedSummaryScope,
     kioskMode,
     reconnect: reconnectSurface,
-    summaryTimeRange,
-    setSummaryTimeRange,
-    storageSummaryCollapsed,
-    setStorageSummaryCollapsed,
     storageGrowthBySeriesId,
     storageGrowthColumnLabel,
-    storageSummaryData: storageSummaryCharts.data,
-    storageSummaryLoaded: storageSummaryCharts.loaded,
-    storageSummaryFetchFailed: storageSummaryCharts.fetchFailed,
     selectedNodeId,
     setSelectedNodeId,
     view,
@@ -494,7 +475,6 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     sourceFilterOptions,
     nodeFilterOptions,
     activeBannerKind,
-    cephSummaryStats,
     connected: surfaceConnected,
     filteredRecords,
     initialDataReceived: surfaceInitialDataReceived,
@@ -506,25 +486,20 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     toggleGroup,
     expandedPoolId,
     setExpandedPoolId,
-    chartHoverSync: summaryInteraction.chartHoverSync,
-    focusedStorageResourceId,
     nodeOnlineByLabel,
     highlightedRecordId,
     getRecordAlertState,
     hoveredStorageResourceId,
     isLoadingPools,
-    jumpToActiveStorageRow: summaryInteraction.jumpToActiveRow,
     focusedSummaryStorageGroupScope: focusedStorageGroupScope,
     focusedSummaryStorageGroupId: selectedStorageGroupId,
     hoveredSummaryStorageGroupScope: hoveredStorageGroupScope,
     selectedDiskId,
-    setChartHoverSync: summaryInteraction.setChartHoverSync,
     setClearSurfaceRootRef: summaryInteraction.setClearSurfaceRootRef,
     setFocusedStorageGroupScope,
     setHoveredStorageGroupScope,
     setHoveredStorageResourceId,
     setSelectedDiskId,
     setSummaryTableRootRef: summaryInteraction.setTableRootRef,
-    shouldShowJumpToActiveStorageRow: summaryInteraction.shouldShowJumpToActiveRow,
   };
 };

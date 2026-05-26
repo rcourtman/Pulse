@@ -7,7 +7,6 @@ import type { Alert } from '@/types/api';
 import type { Resource, ResourceType } from '@/types/resource';
 import Storage from '@/components/Storage/Storage';
 import { ROUTE_STATE_REPLACE_OPTIONS } from '@/utils/routeStateNavigation';
-import { STORAGE_KEYS } from '@/utils/localStorage';
 
 const buildVisibleRect = (): DOMRect =>
   ({
@@ -430,8 +429,6 @@ describe('Storage', () => {
     hookResources = [];
     hookLoading = false;
     hookError = undefined;
-    window.localStorage.removeItem(STORAGE_KEYS.STORAGE_SUMMARY_COLLAPSED);
-    window.localStorage.removeItem(STORAGE_KEYS.STORAGE_SUMMARY_RANGE);
   });
 
   afterEach(() => {

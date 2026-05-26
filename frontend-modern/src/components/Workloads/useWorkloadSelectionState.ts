@@ -183,19 +183,15 @@ export function useWorkloadSelectionState(options: UseWorkloadsSelectionStateOpt
   });
 
   return {
-    activeSummaryScopeState: summaryInteraction.activeScopeState,
     activeSummaryWorkloadGroupScope: summaryInteraction.activeGroupScope,
     activeSummaryWorkloadId: summaryInteraction.activeSeriesId,
-    chartHoverSync: summaryInteraction.chartHoverSync,
     clearPinnedSummaryScope,
     focusedSummaryWorkloadGroupScope: focusedWorkloadGroupScope,
     hoveredWorkloadId,
     hoveredSummaryWorkloadGroupScope: hoveredWorkloadGroupScope,
-    jumpToActiveWorkloadRow: summaryInteraction.jumpToActiveRow,
     focusedSummaryWorkloadGroupId: selectedWorkloadGroupId,
     revealedGuestId,
     selectedGuestId,
-    setChartHoverSync: summaryInteraction.setChartHoverSync,
     setClearSurfaceRootRef,
     setFocusedWorkloadGroupScope,
     setHoveredWorkloadGroupScope,
@@ -204,7 +200,6 @@ export function useWorkloadSelectionState(options: UseWorkloadsSelectionStateOpt
     setTableBodyRef,
     setTableRootRef,
     setTableWrapperRef,
-    shouldShowJumpToActiveWorkloadRow: summaryInteraction.shouldShowJumpToActiveRow,
     tableBodyRef,
   } as const;
 }

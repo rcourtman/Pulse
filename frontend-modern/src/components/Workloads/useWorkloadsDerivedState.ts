@@ -2,23 +2,10 @@ import { createMemo, type Accessor } from 'solid-js';
 
 import type { Alert, Node } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
-// Snapshot shape historically owned by WorkloadsSummary.tsx. The component
-// was retired with the platform-first IA migration; the snapshot shape is
-// kept here because the fallback memo is still returned by the workloads
-// state hook for any external consumer that wants it.
-type WorkloadSummarySnapshot = {
-  id: string;
-  name: string;
-  cpu: number;
-  memory: number;
-  disk: number;
-  network: number;
-};
 import { getNodeDisplayName } from '@/utils/nodes';
 import { getCanonicalWorkloadId } from '@/utils/workloads';
 
 import {
-  getDiskUsagePercent,
   getWorkloadGroupLabel,
   groupWorkloads,
   computeWorkloadStats,
@@ -31,12 +18,6 @@ import { useGroupedTableWindowing } from './useGroupedTableWindowing';
 type GroupingMode = 'grouped' | 'flat';
 
 const WORKLOADS_TABLE_ESTIMATED_ROW_HEIGHT = 32;
-
-const workloadMetricPercent = (value: number | null | undefined): number => {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
-  if (value <= 1) return Math.max(0, value * 100);
-  return Math.max(0, value);
-};
 
 interface WorkloadsWorkloadDerivedStateOptions {
   activeAlerts: Accessor<Record<string, Alert>>;
@@ -54,68 +35,6 @@ interface WorkloadsWorkloadDerivedStateOptions {
 
 export function useWorkloadsDerivedState(options: WorkloadsWorkloadDerivedStateOptions) {
   const filteredGuests = createMemo<WorkloadGuest[]>(() => options.filteredGuests() ?? []);
-
-  const workloadsSummaryVisibleIds = createMemo<string[]>(() =>
-    filteredGuests().map((guest) => getCanonicalWorkloadId(guest)),
-  );
-
-  const workloadsSummaryFallbackCounts = createMemo(() => {
-    const guests = filteredGuests();
-    const running = guests.filter(
-      (guest) => guest.status === 'running' || guest.status === 'online',
-    ).length;
-    let alerting = 0;
-    if (options.alertsEnabled()) {
-      const alertingResourceIds = new Set<string>();
-      for (const alert of Object.values(options.activeAlerts())) {
-        if (!alert.acknowledged && alert.resourceId) {
-          alertingResourceIds.add(alert.resourceId);
-        }
-      }
-      if (alertingResourceIds.size > 0) {
-        for (const guest of guests) {
-          if (alertingResourceIds.has(getCanonicalWorkloadId(guest))) {
-            alerting++;
-          }
-        }
-      }
-    }
-    return {
-      total: guests.length,
-      running,
-      stopped: Math.max(0, guests.length - running),
-      alerting,
-    };
-  });
-
-  const workloadsSummaryFallbackSnapshots = createMemo<WorkloadSummarySnapshot[]>(() =>
-    filteredGuests().map((guest) => {
-      const guestId = getCanonicalWorkloadId(guest);
-      const memoryUsage = workloadMetricPercent(guest.memory?.usage);
-      let diskUsage = workloadMetricPercent(guest.disk?.usage);
-      if (
-        (!diskUsage || diskUsage <= 0) &&
-        typeof guest.disk?.used === 'number' &&
-        typeof guest.disk?.total === 'number' &&
-        Number.isFinite(guest.disk.used) &&
-        Number.isFinite(guest.disk.total) &&
-        guest.disk.total > 0
-      ) {
-        const selectorDiskUsage = getDiskUsagePercent(guest);
-        const rawDiskUsage = (guest.disk.used / guest.disk.total) * 100;
-        diskUsage = rawDiskUsage > 100 ? rawDiskUsage : (selectorDiskUsage ?? rawDiskUsage);
-      }
-
-      return {
-        id: guestId,
-        name: guest.name || guestId,
-        cpu: workloadMetricPercent(guest.cpu),
-        memory: memoryUsage,
-        disk: Math.max(0, diskUsage),
-        network: Math.max(0, guest.networkIn || 0) + Math.max(0, guest.networkOut || 0),
-      };
-    }),
-  );
 
   const nodeByInstance = createMemo(() => buildNodeByInstance(options.nodes()));
   const guestParentNodeMap = createMemo(() =>
@@ -258,8 +177,5 @@ export function useWorkloadsDerivedState(options: WorkloadsWorkloadDerivedStateO
     visibleGroupKeys,
     windowedGroupedGuests,
     workloadIOEmphasis,
-    workloadsSummaryFallbackCounts,
-    workloadsSummaryFallbackSnapshots,
-    workloadsSummaryVisibleIds,
   } as const;
 }
