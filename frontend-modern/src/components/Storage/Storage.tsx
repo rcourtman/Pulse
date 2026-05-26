@@ -1,31 +1,18 @@
-import { Component, Show, createEffect } from 'solid-js';
-import StorageCephSection from '@/components/Storage/StorageCephSection';
+import { Component, createEffect } from 'solid-js';
 import StorageContentCard from '@/components/Storage/StorageContentCard';
-import StoragePageBanners from '@/components/Storage/StoragePageBanners';
 import StoragePageControls from '@/components/Storage/StoragePageControls';
-import StoragePageSummary from '@/components/Storage/StoragePageSummary';
 import { StorageViewSegmentedControl } from '@/components/Storage/StorageViewSegmentedControl';
-import { PageHeader } from '@/components/shared/PageHeader';
-import { StickySummarySection } from '@/components/shared/StickySummarySection';
-import { DEFAULT_STORAGE_SELECTED_NODE_ID, isStorageRecordCeph } from './storagePageState';
+import { DEFAULT_STORAGE_SELECTED_NODE_ID } from './storagePageState';
 import { useStoragePageModel } from './useStoragePageModel';
 
 type StorageProps = {
-  embedded?: boolean;
-  tableOnly?: boolean;
   forcedView?: 'pools' | 'disks';
   forcedSourceFilter?: string;
-  // Mirrors the WorkloadsSurface platform-page contract: when a platform
-  // page mounts StorageSurface inside its own chrome, set
-  // `showFilterToolbar` so the canonical StoragePageControls row stays
-  // visible alongside the table even when `tableOnly` hides the summary
-  // section. The page owns source scope via `forcedSourceFilter`; the
-  // controls toolbar still exposes search, status, grouping, and sort to
-  // the operator. `suppressSourceFilter` drops the redundant Source chip
-  // from the controls toolbar since the platform page already locks source
-  // scope through `forcedSourceFilter`; `suppressNodeFilter` lets platform
-  // pages use search for host/node scoping, matching their overview pages.
-  showFilterToolbar?: boolean;
+  // `suppressSourceFilter` drops the redundant Source chip from the
+  // controls toolbar since the platform page already locks source scope
+  // through `forcedSourceFilter`. `suppressNodeFilter` lets platform
+  // pages use the search input for host/node scoping, matching their
+  // overview-page filter contract.
   suppressSourceFilter?: boolean;
   suppressNodeFilter?: boolean;
   filterAriaLabel?: string;
@@ -36,16 +23,6 @@ type StorageProps = {
 const Storage: Component<StorageProps> = (props) => {
   const {
     kioskMode,
-    reconnect,
-    summaryTimeRange,
-    setSummaryTimeRange,
-    storageSummaryCollapsed,
-    setStorageSummaryCollapsed,
-    storageGrowthBySeriesId,
-    storageGrowthColumnLabel,
-    storageSummaryData,
-    storageSummaryLoaded,
-    storageSummaryFetchFailed,
     selectedNodeId,
     setSelectedNodeId,
     view,
@@ -72,16 +49,12 @@ const Storage: Component<StorageProps> = (props) => {
     storageFilterGroupBy,
     sourceFilterOptions,
     nodeFilterOptions,
-    activeBannerKind,
-    cephSummaryStats,
     clearPinnedSummaryScope,
-    filteredRecords,
     activeSummaryStorageGroupScope,
     activeSummaryStorageResourceId,
     focusedSummaryStorageGroupScope,
     focusedSummaryStorageGroupId,
     hoveredSummaryStorageGroupScope,
-    nodeOptions,
     physicalDisks,
     nodes,
     groupedRecords,
@@ -89,23 +62,20 @@ const Storage: Component<StorageProps> = (props) => {
     toggleGroup,
     expandedPoolId,
     setExpandedPoolId,
+    storageGrowthBySeriesId,
+    storageGrowthColumnLabel,
     nodeOnlineByLabel,
     highlightedRecordId,
     getRecordAlertState,
-    chartHoverSync,
     hoveredStorageResourceId,
     isLoadingPools,
-    focusedStorageResourceId,
-    jumpToActiveStorageRow,
     selectedDiskId,
-    setChartHoverSync,
     setClearSurfaceRootRef,
     setFocusedStorageGroupScope,
     setHoveredStorageGroupScope,
     setHoveredStorageResourceId,
     setSelectedDiskId,
     setSummaryTableRootRef,
-    shouldShowJumpToActiveStorageRow,
   } = useStoragePageModel({
     forcedSourceFilter: () => props.forcedSourceFilter,
   });
@@ -132,116 +102,50 @@ const Storage: Component<StorageProps> = (props) => {
     }
   });
 
-  // Namespace saved views per platform context. Standalone /storage uses the
-  // bare "storage" key; a platform-embedded storage tab (which forces a
-  // single source via forcedSourceFilter) gets its own scope so views
-  // saved on the Proxmox tab do not appear on /storage and vice versa.
-  const savedViewsKey = (() => {
-    const scope = (props.forcedSourceFilter ?? '').trim().toLowerCase();
-    return scope ? `storage-${scope}` : 'storage';
-  })();
+  // Namespace saved views per platform context. Every live consumer is a
+  // platform-embedded storage tab that locks source scope via
+  // forcedSourceFilter; views never leak across platforms.
+  const savedViewsKey = `storage-${(props.forcedSourceFilter ?? '').trim().toLowerCase()}`;
 
   return (
     <div ref={setClearSurfaceRootRef} class="space-y-4" data-testid="storage-page">
-      <Show when={!props.embedded}>
-        <PageHeader
-          title="Storage"
-          description="Review capacity, topology, protection, and physical media across connected storage platforms."
-        />
-      </Show>
-
-      <Show when={!props.tableOnly && !storageSummaryCollapsed()}>
-        <StickySummarySection desktopOnly={false} stickyDesktopOnly>
-          <div class="space-y-2">
-            <StoragePageSummary
-              filteredRecords={filteredRecords}
-              search={search}
-              sourceFilter={sourceFilter}
-              healthFilter={healthFilter}
-              diskRoleFilter={diskRoleFilter}
-              diskGroupFilter={diskGroupFilter}
-              selectedNodeId={selectedNodeId}
-              nodeOptions={nodeOptions}
-              physicalDisks={physicalDisks}
-              summaryTimeRange={summaryTimeRange}
-              setSummaryTimeRange={setSummaryTimeRange}
-              storageSummaryData={storageSummaryData}
-              storageSummaryLoaded={storageSummaryLoaded}
-              storageSummaryFetchFailed={storageSummaryFetchFailed}
-              hoveredResourceId={hoveredStorageResourceId}
-              hoveredGroupScope={hoveredSummaryStorageGroupScope}
-              focusedResourceId={focusedStorageResourceId}
-              focusedGroupScope={focusedSummaryStorageGroupScope}
-              chartHoverSync={chartHoverSync}
-              onChartHoverSyncChange={setChartHoverSync}
-              showJumpToActiveRow={shouldShowJumpToActiveStorageRow}
-              onJumpToActiveRow={jumpToActiveStorageRow}
-              onScopeToDegradedPools={() => {
-                setView('pools');
-                setStorageFilterStatus('attention');
-              }}
-              onScopeToFailingDisks={() => {
-                setView('disks');
-                setStorageFilterStatus('attention');
-              }}
-            />
-          </div>
-        </StickySummarySection>
-      </Show>
-
-      <Show when={!props.tableOnly}>
-        <StorageCephSection
-          view={view}
-          summary={cephSummaryStats}
-          filteredRecords={filteredRecords}
-          isCephRecord={isStorageRecordCeph}
-        />
-      </Show>
-
       <div class="space-y-4" data-testid="storage-interaction-surface">
-        <Show when={props.showFilterToolbar || !props.tableOnly}>
-          <div data-summary-clear-ignore>
-            <StoragePageControls
-              kioskMode={kioskMode}
-              savedViewsKey={savedViewsKey}
-              view={view}
-              setView={setView}
-              search={search}
-              setSearch={setSearch}
-              filterAriaLabel={props.filterAriaLabel}
-              searchPlaceholder={props.filterSearchPlaceholder}
-              searchEmptyMessage={props.filterSearchEmptyMessage}
-              groupBy={groupBy}
-              setGroupBy={setGroupBy}
-              sortKey={sortKey}
-              setSortKey={setSortKey}
-              sortDirection={sortDirection}
-              setSortDirection={setSortDirection}
-              statusFilter={storageFilterStatus}
-              setStatusFilter={setStorageFilterStatus}
-              sourceFilter={sourceFilter}
-              setSourceFilter={setSourceFilter}
-              sourceOptions={sourceFilterOptions}
-              suppressSourceFilter={props.suppressSourceFilter || Boolean(props.forcedSourceFilter)}
-              suppressNodeFilter={props.suppressNodeFilter}
-              diskRoleFilter={diskRoleFilter}
-              setDiskRoleFilter={setDiskRoleFilter}
-              diskRoleOptions={diskRoleOptions}
-              diskGroupFilter={diskGroupFilter}
-              setDiskGroupFilter={setDiskGroupFilter}
-              diskGroupOptions={diskGroupOptions}
-              nodeFilterOptions={nodeFilterOptions()}
-              selectedNodeId={selectedNodeId}
-              setSelectedNodeId={setSelectedNodeId}
-              storageFilterGroupBy={storageFilterGroupBy}
-              chartsCollapsed={storageSummaryCollapsed}
-              onChartsToggle={() => setStorageSummaryCollapsed((collapsed) => !collapsed)}
-            />
-          </div>
-        </Show>
-        <Show when={!props.tableOnly}>
-          <StoragePageBanners kind={activeBannerKind} reconnect={reconnect} />
-        </Show>
+        <div data-summary-clear-ignore>
+          <StoragePageControls
+            kioskMode={kioskMode}
+            savedViewsKey={savedViewsKey}
+            view={view}
+            setView={setView}
+            search={search}
+            setSearch={setSearch}
+            filterAriaLabel={props.filterAriaLabel}
+            searchPlaceholder={props.filterSearchPlaceholder}
+            searchEmptyMessage={props.filterSearchEmptyMessage}
+            groupBy={groupBy}
+            setGroupBy={setGroupBy}
+            sortKey={sortKey}
+            setSortKey={setSortKey}
+            sortDirection={sortDirection}
+            setSortDirection={setSortDirection}
+            statusFilter={storageFilterStatus}
+            setStatusFilter={setStorageFilterStatus}
+            sourceFilter={sourceFilter}
+            setSourceFilter={setSourceFilter}
+            sourceOptions={sourceFilterOptions}
+            suppressSourceFilter={props.suppressSourceFilter || Boolean(props.forcedSourceFilter)}
+            suppressNodeFilter={props.suppressNodeFilter}
+            diskRoleFilter={diskRoleFilter}
+            setDiskRoleFilter={setDiskRoleFilter}
+            diskRoleOptions={diskRoleOptions}
+            diskGroupFilter={diskGroupFilter}
+            setDiskGroupFilter={setDiskGroupFilter}
+            diskGroupOptions={diskGroupOptions}
+            nodeFilterOptions={nodeFilterOptions()}
+            selectedNodeId={selectedNodeId}
+            setSelectedNodeId={setSelectedNodeId}
+            storageFilterGroupBy={storageFilterGroupBy}
+          />
+        </div>
 
         <StorageContentCard
           view={view}
@@ -283,7 +187,7 @@ const Storage: Component<StorageProps> = (props) => {
           selectedDiskId={selectedDiskId}
           setSelectedDiskId={setSelectedDiskId}
           actions={
-            props.tableOnly && !props.forcedView && !kioskMode() ? (
+            !props.forcedView && !kioskMode() ? (
               <StorageViewSegmentedControl value={view()} onChange={setView} />
             ) : undefined
           }

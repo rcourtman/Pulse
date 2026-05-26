@@ -146,9 +146,6 @@ export function ProxmoxPageSurface() {
             </Show>
             <Show when={activeTab() === 'storage'}>
               <StorageSurface
-                embedded
-                tableOnly
-                showFilterToolbar
                 forcedSourceFilter={PROXMOX_PLATFORM_FILTER}
                 suppressNodeFilter
                 filterAriaLabel="Proxmox storage filters"

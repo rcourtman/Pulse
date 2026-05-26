@@ -236,20 +236,12 @@ import storageDetailMetricCardSource from '@/components/Storage/StorageDetailMet
 import diskLiveMetricSource from '@/components/Storage/DiskLiveMetric.tsx?raw';
 import useDiskLiveMetricModelSource from '@/components/Storage/useDiskLiveMetricModel.ts?raw';
 import storagePageControlsSource from '@/components/Storage/StoragePageControls.tsx?raw';
-import storageCephSectionSource from '@/components/Storage/StorageCephSection.tsx?raw';
 import storageContentCardSource from '@/components/Storage/StorageContentCard.tsx?raw';
 import storagePageSource from '@/components/Storage/Storage.tsx?raw';
-import storagePageBannerSource from '@/components/Storage/StoragePageBanner.tsx?raw';
-import useStoragePageBannerModelSource from '@/components/Storage/useStoragePageBannerModel.ts?raw';
-import storagePageBannersSource from '@/components/Storage/StoragePageBanners.tsx?raw';
-import useStoragePageBannersModelSource from '@/components/Storage/useStoragePageBannersModel.ts?raw';
-import storageSummarySource from '@/components/Storage/useStorageSummaryCharts.ts?raw';
 import storageSummaryCacheSource from '@/utils/storageSummaryCache.ts?raw';
-import storagePageSummarySource from '@/components/Storage/StoragePageSummary.tsx?raw';
 import storageCephSummaryCardSource from '@/components/Storage/StorageCephSummaryCard.tsx?raw';
 import useStorageCephSummaryCardModelSource from '@/components/Storage/useStorageCephSummaryCardModel.ts?raw';
 import useStorageContentCardModelSource from '@/components/Storage/useStorageContentCardModel.ts?raw';
-import useStorageCephSectionModelSource from '@/components/Storage/useStorageCephSectionModel.ts?raw';
 import useZFSHealthMapModelSource from '@/components/Storage/useZFSHealthMapModel.ts?raw';
 import storagePoolsTableSource from '@/components/Storage/StoragePoolsTable.tsx?raw';
 import useStoragePoolsTableModelSource from '@/components/Storage/useStoragePoolsTableModel.ts?raw';
@@ -268,7 +260,6 @@ import storagePageDataSource from '@/components/Storage/useStoragePageData.ts?ra
 import storagePageModelSource from '@/components/Storage/useStoragePageModel.ts?raw';
 import storagePageResourcesSource from '@/components/Storage/useStoragePageResources.ts?raw';
 import storagePageStatusHookSource from '@/components/Storage/useStoragePageStatus.ts?raw';
-import storagePageSummaryHookSource from '@/components/Storage/useStoragePageSummary.ts?raw';
 import storagePageStateSource from '@/components/Storage/storagePageState.ts?raw';
 import storageResourceHighlightSource from '@/components/Storage/useStorageResourceHighlight.ts?raw';
 import useStorageModelSource from '@/components/Storage/useStorageModel.ts?raw';
@@ -915,7 +906,6 @@ describe('frontend resource type boundaries', () => {
     );
     expect(infrastructureSummaryStateSource).not.toContain("getOrgID() || 'default'");
     expect(storageSummaryCacheSource).toContain('normalizeOrgScope(getOrgID())');
-    expect(storageSummarySource).not.toContain("getOrgID() || 'default'");
     expect(guestRowSource).toContain('useGuestRowState');
     expect(guestRowSource).toContain("from './GuestRowCells'");
     expect(guestRowSource).toContain("from '@/components/shared/TagBadges'");
@@ -1543,10 +1533,7 @@ describe('frontend resource type boundaries', () => {
     expect(storagePoolRowSource).not.toContain('const compactIssueSummary = createMemo(() => {');
     expect(storagePageSource).toContain("from './storagePageState'");
     expect(storagePageSource).toContain('useStoragePageModel');
-    expect(storagePageSource).toContain('isStorageRecordCeph');
-    expect(storagePageSource).toContain('StorageCephSection');
     expect(storagePageSource).toContain('StoragePageControls');
-    expect(storagePageSource).toContain('StoragePageSummary');
     expect(storagePageSource).not.toContain('const normalizeHealthFilter =');
     expect(storagePageSource).not.toContain('const normalizeSortKey =');
     expect(storagePageSource).not.toContain('const normalizeGroupKey =');
@@ -1679,8 +1666,6 @@ describe('frontend resource type boundaries', () => {
     expect(storagePageModelSource).toContain('useStorageFilterState');
     expect(storagePageModelSource).toContain('useStoragePageStatus');
     expect(storagePageModelSource).toContain('useStorageResourceHighlight');
-    expect(storagePageSummaryHookSource).toContain('export const useStoragePageSummary');
-    expect(storagePageSummaryHookSource).toContain('matchesPhysicalDiskNode');
     expect(storagePageFiltersSource).toContain('export const useStoragePageFilters');
     expect(storagePageFiltersSource).toContain('useStorageRouteState');
     expect(storagePageFiltersSource).toContain('buildStorageRouteFields');
@@ -1692,8 +1677,6 @@ describe('frontend resource type boundaries', () => {
     expect(storageFilterStateSource).toContain('PHYSICAL_DISK_ALL_ROLES_FILTER_LABEL');
     expect(storageFilterStateSource).toContain('PHYSICAL_DISK_ALL_GROUPS_FILTER_LABEL');
     expect(storagePageSource).toContain('StorageContentCard');
-    expect(storagePageSource).toContain('StoragePageBanners');
-    expect(storagePageSource).toContain('StoragePageSummary');
     expect(storagePageControlsSource).toContain('FilterBar');
     expect(storagePageControlsSource).toContain('Subtabs');
     expect(storagePageControlsSource).toContain('STORAGE_VIEW_OPTIONS');
@@ -1721,26 +1704,6 @@ describe('frontend resource type boundaries', () => {
       "props.view() === 'pools' ? props.storageFilterGroupBy : undefined",
     );
     expect(storagePageControlsSource).toContain('const sortDisabled = () => !isPoolsView()');
-    expect(storageCephSectionSource).toContain('export const StorageCephSection');
-    expect(storageCephSectionSource).toContain('useStorageCephSectionModel');
-    expect(storageCephSectionSource).toContain('StorageCephSummaryCard');
-    expect(storagePageBannerSource).toContain('useStoragePageBannerModel');
-    expect(storagePageBannerSource).toContain('STORAGE_BANNER_ACTION_BUTTON_CLASS');
-    expect(storagePageBannerSource).toContain('STORAGE_PAGE_BANNER_ROW_CLASS');
-    expect(storagePageBannerSource).not.toContain('const actionLabel = () =>');
-    expect(storagePageBannerSource).not.toContain('text-xs text-amber-800 dark:text-amber-200');
-    expect(useStoragePageBannerModelSource).toContain('getStoragePageBannerMessage');
-    expect(useStoragePageBannerModelSource).toContain('getStoragePageBannerActionLabel');
-    expect(storagePageBannersSource).toContain('export const StoragePageBanners');
-    expect(storagePageBannersSource).toContain('StoragePageBanner');
-    expect(storagePageBannersSource).toContain('useStoragePageBannersModel');
-    expect(storagePageBannersSource).not.toContain("props.kind() === 'reconnecting'");
-    expect(useStoragePageBannersModelSource).toContain(
-      "kind === 'reconnecting' || kind === 'disconnected'",
-    );
-    expect(storagePageSummarySource).toContain('export const StoragePageSummary');
-    expect(storagePageSummarySource).toContain('useStoragePageSummary');
-    expect(storagePageSummarySource).toContain('StorageSummary');
     expect(storageCephSummaryCardSource).toContain('useStorageCephSummaryCardModel');
     expect(storageCephSummaryCardSource).toContain('CEPH_SUMMARY_CARD_GRID_CLASS');
     expect(storageCephSummaryCardSource).toContain('CEPH_SUMMARY_CARD_HEALTH_BADGE_CLASS');
@@ -1775,7 +1738,6 @@ describe('frontend resource type boundaries', () => {
     );
     expect(useStorageContentCardModelSource).toContain('getStorageTableHeading');
     expect(useStorageContentCardModelSource).toContain("options.view() === 'disks'");
-    expect(useStorageCephSectionModelSource).toContain('shouldShowCephSummaryCard');
     expect(storagePoolsTableSource).toContain('export const StoragePoolsTable');
     expect(storagePoolsTableSource).toContain('getStoragePoolTableColumns');
     expect(storagePoolsTableSource).toContain('getStorageLoadingMessage');
@@ -1829,7 +1791,6 @@ describe('frontend resource type boundaries', () => {
     );
     expect(storagePageSource).not.toContain('flex flex-wrap items-center justify-between gap-3');
     expect(storagePageSource).not.toContain('<Table class="w-full text-xs">');
-    expect(storagePageSource).not.toContain('<StoragePageBanner kind=');
     expect(storagePageSource).not.toContain('<StorageCephSummaryCard summary=');
     expect(storageRowAlertPresentationSource).toContain(
       'export const getStorageRowAlertPresentation',

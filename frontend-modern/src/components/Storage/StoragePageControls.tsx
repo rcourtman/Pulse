@@ -1,7 +1,6 @@
 import { Component, JSX, Show, createMemo } from 'solid-js';
 import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';
 import { Subtabs } from '@/components/shared/Subtabs';
-import { ChartVisibilityToggleButton } from '@/components/shared/FilterToolbar';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import {
@@ -68,8 +67,6 @@ type StoragePageControlsProps = {
   selectedNodeId: () => string;
   setSelectedNodeId: (value: string) => void;
   storageFilterGroupBy: () => StorageGroupKey;
-  chartsCollapsed?: () => boolean;
-  onChartsToggle?: () => void;
   // Mirrors the WorkloadsFilter `suppressPlatformFilter` contract: when a
   // platform page mounts StorageSurface with `forcedSourceFilter`, the
   // Source filter chip is redundant (it is already locked by the page)
@@ -351,12 +348,6 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
                   </svg>
                 </button>
               </div>
-              <Show when={props.onChartsToggle}>
-                <ChartVisibilityToggleButton
-                  collapsed={props.chartsCollapsed?.() ?? false}
-                  onToggle={() => props.onChartsToggle?.()}
-                />
-              </Show>
             </>
           }
           onClearAll={handleClearAll}

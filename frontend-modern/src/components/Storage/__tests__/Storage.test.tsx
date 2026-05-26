@@ -362,13 +362,6 @@ vi.mock('@/components/Storage/DiskList', () => ({
 }));
 
 describe('Storage platform-page embed contract', () => {
-  it('exposes showFilterToolbar on StorageProps so platform pages keep StoragePageControls visible under tableOnly', async () => {
-    const storageSource = (await import('../Storage.tsx?raw')).default;
-    expect(storageSource).toContain('showFilterToolbar?: boolean;');
-    expect(storageSource).toContain('suppressNodeFilter?: boolean;');
-    expect(storageSource).toContain('props.showFilterToolbar || !props.tableOnly');
-  });
-
   it('auto-suppresses the Source filter chip whenever forcedSourceFilter is set', async () => {
     const storageSource = (await import('../Storage.tsx?raw')).default;
     expect(storageSource).toContain(
@@ -543,150 +536,6 @@ describe('Storage', () => {
     expect(await within(storageContentSurface).findByText(/\+40(?:\.0)? GB/)).toBeInTheDocument();
     expect(within(storageContentSurface).getByText(/-20(?:\.0)? GB/)).toBeInTheDocument();
     expect(storageSummarySpy).toHaveBeenCalledWith('24h', undefined, { nodeId: undefined });
-
-    storageSummarySpy.mockRestore();
-  });
-
-  it('routes hovered pool rows into the shared summary highlight contract and keeps the summary sticky only on desktop widths', async () => {
-    const storageSummarySpy = vi.spyOn(ChartsAPI, 'getStorageSummaryCharts').mockResolvedValue({
-      pools: {
-        'pool:alpha': {
-          name: 'Alpha-Store',
-          usage: [
-            { timestamp: Date.now() - 60_000, value: 45 },
-            { timestamp: Date.now(), value: 47 },
-          ],
-          used: [
-            { timestamp: Date.now() - 60_000, value: 450 },
-            { timestamp: Date.now(), value: 470 },
-          ],
-          avail: [
-            { timestamp: Date.now() - 60_000, value: 550 },
-            { timestamp: Date.now(), value: 530 },
-          ],
-        },
-        'pool:beta': {
-          name: 'Beta-Store',
-          usage: [
-            { timestamp: Date.now() - 60_000, value: 68 },
-            { timestamp: Date.now(), value: 70 },
-          ],
-          used: [
-            { timestamp: Date.now() - 60_000, value: 680 },
-            { timestamp: Date.now(), value: 700 },
-          ],
-          avail: [
-            { timestamp: Date.now() - 60_000, value: 320 },
-            { timestamp: Date.now(), value: 300 },
-          ],
-        },
-      },
-      disks: {},
-      stats: {
-        oldestDataTimestamp: Date.now() - 60_000,
-      },
-    });
-
-    hookResources = [
-      buildStorageResource('storage-display-alpha', 'Alpha-Store', 'pve1', {
-        metricsTarget: {
-          resourceType: 'storage',
-          resourceId: 'pool:alpha',
-        },
-      }),
-      buildStorageResource('storage-display-beta', 'Beta-Store', 'pve2', {
-        metricsTarget: {
-          resourceType: 'storage',
-          resourceId: 'pool:beta',
-        },
-      }),
-    ];
-
-    render(() => <Storage />);
-
-    const summary = await screen.findByTestId('storage-summary');
-    const stickyWrapper = summary.closest('[data-sticky-summary="true"]');
-    expect(stickyWrapper).toHaveAttribute('data-sticky-summary-desktop-only', 'false');
-    expect(stickyWrapper).toHaveAttribute('data-sticky-summary-sticky-desktop-only', 'true');
-    expect(stickyWrapper?.className).toContain('static');
-    expect(stickyWrapper?.className).toContain('lg:sticky');
-    expect(stickyWrapper?.className).toContain('top-0');
-
-    const alphaRow = document.querySelector('tr[data-summary-series-id="pool:alpha"]')!;
-    expect(alphaRow).toHaveAttribute('data-summary-series-id', 'pool:alpha');
-    expect(alphaRow).toHaveAttribute('data-summary-row-active', 'false');
-
-    fireEvent.pointerEnter(alphaRow, { pointerType: 'mouse' });
-
-    await waitFor(() => {
-      expect(alphaRow).toHaveAttribute('data-summary-row-active', 'true');
-      expect(alphaRow.className).not.toContain('bg-sky-50');
-      expect(alphaRow.className).not.toContain('ring-sky-400/25');
-      expect(
-        summary.querySelectorAll(
-          '[data-highlight-series-active="true"][data-highlight-series-id="pool:alpha"]',
-        ).length,
-      ).toBe(3);
-      expect(
-        summary.querySelectorAll(
-          '[data-highlight-series-active="true"][data-highlight-series-id="pool:alpha"][data-active-series-display="isolate"][data-rendered-series-count="1"]',
-        ).length,
-      ).toBe(3);
-      expect(summary.querySelectorAll('[data-summary-card-state="inactive"]').length).toBe(0);
-    });
-
-    fireEvent.pointerLeave(alphaRow, { pointerType: 'mouse' });
-
-    await waitFor(() => {
-      expect(alphaRow).toHaveAttribute('data-summary-row-active', 'false');
-      expect(summary.querySelectorAll('[data-highlight-series-active="true"]').length).toBe(0);
-      expect(summary.querySelectorAll('[data-summary-card-state="inactive"]').length).toBe(0);
-    });
-
-    const poolUsageChart = screen
-      .getByText('Storage Usage')
-      .closest('[data-summary-card-state]')
-      ?.querySelector('svg');
-    expect(poolUsageChart).not.toBeNull();
-    if (!poolUsageChart) {
-      storageSummarySpy.mockRestore();
-      return;
-    }
-
-    (
-      poolUsageChart as unknown as {
-        getBoundingClientRect: () => DOMRect;
-      }
-    ).getBoundingClientRect = () =>
-      ({
-        left: 0,
-        top: 0,
-        width: 200,
-        height: 50,
-        right: 200,
-        bottom: 50,
-        x: 0,
-        y: 0,
-        toJSON: () => ({}),
-      }) as unknown as DOMRect;
-
-    fireEvent.mouseMove(poolUsageChart, { clientX: 199, clientY: 26 });
-
-    await waitFor(() => {
-      expect(
-        summary.querySelectorAll(
-          '[data-highlight-series-active="true"][data-highlight-series-id="pool:alpha"]',
-        ).length,
-      ).toBe(3);
-      expect(summary.querySelectorAll('[data-summary-card-state="inactive"]').length).toBe(0);
-    });
-
-    fireEvent.mouseLeave(poolUsageChart);
-
-    await waitFor(() => {
-      expect(summary.querySelectorAll('[data-highlight-series-active="true"]').length).toBe(0);
-      expect(summary.querySelectorAll('[data-summary-card-state="inactive"]').length).toBe(0);
-    });
 
     storageSummarySpy.mockRestore();
   });
@@ -1030,68 +879,6 @@ describe('Storage', () => {
     });
   });
 
-  it('shows ceph summary card and pool expand chevron', async () => {
-    hookResources = [
-      buildStorageResource('storage-ceph', 'Ceph-Pool-1', 'pve1', {
-        storageType: 'cephfs',
-        platformId: 'cluster-main',
-        current: 35,
-        used: 350,
-        free: 650,
-        total: 1_000,
-      }),
-    ];
-
-    nodeResources = [
-      ...nodeResources,
-      {
-        id: 'ceph-1',
-        type: 'ceph',
-        name: 'Primary Ceph',
-        displayName: 'Primary Ceph',
-        platformId: 'cluster-main',
-        platformType: 'proxmox-pve',
-        sourceType: 'api',
-        status: 'online',
-        disk: { current: 35, total: 1_000, used: 350, free: 650 },
-        lastSeen: Date.now(),
-        platformData: {
-          proxmox: { instance: 'cluster-main' },
-          ceph: {
-            healthStatus: 'HEALTH_WARN',
-            healthMessage: '1 OSD nearfull',
-            numMons: 3,
-            numMgrs: 2,
-            numOsds: 6,
-            numOsdsUp: 6,
-            numOsdsIn: 6,
-            numPGs: 256,
-            pools: [
-              {
-                name: 'rbd',
-                storedBytes: 350,
-                availableBytes: 650,
-                objects: 10_000,
-                percentUsed: 35,
-              },
-            ],
-            services: [],
-          },
-        },
-      } as Resource,
-    ];
-
-    render(() => <Storage />);
-
-    expect(screen.getByText('Ceph Summary')).toBeInTheDocument();
-    expect(screen.getByText('Primary Ceph')).toBeInTheDocument();
-
-    // All pools now have a toggle details button (not just Ceph)
-    const toggleBtn = screen.getByRole('button', { name: 'Expand Ceph-Pool-1' });
-    expect(toggleBtn).toBeInTheDocument();
-    fireEvent.click(toggleBtn);
-  });
-
   it('uses canonical storage metrics target ids for expanded pool history charts', async () => {
     const metricsHistorySpy = vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue({
       resourceType: 'storage',
@@ -1194,91 +981,6 @@ describe('Storage', () => {
         'false',
       );
     });
-  });
-
-  it('keeps storage summary page-scoped when a focused pool is expanded', async () => {
-    const storageSummarySpy = vi.spyOn(ChartsAPI, 'getStorageSummaryCharts').mockResolvedValue({
-      pools: {
-        'pool:alpha': {
-          name: 'Alpha-Store',
-          usage: [
-            { timestamp: Date.now() - 60_000, value: 45 },
-            { timestamp: Date.now(), value: 47 },
-          ],
-          used: [],
-          avail: [],
-        },
-        'pool:beta': {
-          name: 'Beta-Store',
-          usage: [
-            { timestamp: Date.now() - 60_000, value: 58 },
-            { timestamp: Date.now(), value: 60 },
-          ],
-          used: [
-            { timestamp: Date.now() - 60_000, value: 680 },
-            { timestamp: Date.now(), value: 700 },
-          ],
-          avail: [
-            { timestamp: Date.now() - 60_000, value: 320 },
-            { timestamp: Date.now(), value: 300 },
-          ],
-        },
-      },
-      disks: {},
-      stats: {
-        oldestDataTimestamp: Date.now() - 60_000,
-      },
-    });
-
-    hookResources = [
-      buildStorageResource('storage-display-alpha', 'Alpha-Store', 'pve1', {
-        metricsTarget: {
-          resourceType: 'storage',
-          resourceId: 'pool:alpha',
-        },
-      }),
-      buildStorageResource('storage-display-beta', 'Beta-Store', 'pve2', {
-        metricsTarget: {
-          resourceType: 'storage',
-          resourceId: 'pool:beta',
-        },
-      }),
-    ];
-
-    render(() => <Storage />);
-
-    const summary = await screen.findByTestId('storage-summary');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Expand Alpha-Store' }));
-
-    await waitFor(() => {
-      expect(
-        summary.querySelectorAll(
-          '[data-highlight-series-active="true"][data-highlight-series-id="pool:alpha"]',
-        ).length,
-      ).toBe(1);
-      expect(summary.querySelectorAll('[data-summary-card-state="inactive"]').length).toBe(2);
-      expect(
-        screen
-          .getByText('Used Capacity')
-          .closest('[data-summary-card-state]')
-          ?.textContent?.includes('No history yet'),
-      ).toBe(false);
-      expect(
-        screen
-          .getByText('Available Space')
-          .closest('[data-summary-card-state]')
-          ?.textContent?.includes('No history yet'),
-      ).toBe(false);
-      expect(
-        screen
-          .getByText('Storage Usage')
-          .closest('[data-summary-card-state]')
-          ?.getAttribute('data-summary-card-state'),
-      ).toBe('active');
-    });
-
-    storageSummarySpy.mockRestore();
   });
 
   it('shows compact synchronized readouts on sibling storage cards without duplicating the source card tooltip', async () => {
@@ -1385,183 +1087,6 @@ describe('Storage', () => {
       }
     });
 
-    storageSummarySpy.mockRestore();
-  });
-
-  it('offers a deliberate jump affordance when the focused storage row is off-screen', async () => {
-    const storageSummarySpy = vi.spyOn(ChartsAPI, 'getStorageSummaryCharts').mockResolvedValue({
-      pools: {
-        'pool:alpha': {
-          name: 'Alpha-Store',
-          usage: [
-            { timestamp: Date.now() - 60_000, value: 45 },
-            { timestamp: Date.now(), value: 47 },
-          ],
-          used: [
-            { timestamp: Date.now() - 60_000, value: 450 },
-            { timestamp: Date.now(), value: 470 },
-          ],
-          avail: [
-            { timestamp: Date.now() - 60_000, value: 550 },
-            { timestamp: Date.now(), value: 530 },
-          ],
-        },
-      },
-      disks: {},
-      stats: {
-        oldestDataTimestamp: Date.now() - 60_000,
-      },
-    });
-
-    hookResources = [
-      buildStorageResource('storage-display-alpha', 'Alpha-Store', 'pve1', {
-        metricsTarget: {
-          resourceType: 'storage',
-          resourceId: 'pool:alpha',
-        },
-      }),
-    ];
-
-    render(() => <Storage />);
-
-    await screen.findByTestId('storage-summary');
-    const alphaRow = document.querySelector(
-      'tr[data-summary-series-id="pool:alpha"]',
-    ) as HTMLTableRowElement;
-    expect(alphaRow).toBeTruthy();
-
-    alphaRow.getBoundingClientRect = vi.fn(() => ({
-      top: window.innerHeight + 120,
-      bottom: window.innerHeight + 168,
-      left: 0,
-      right: 480,
-      width: 480,
-      height: 48,
-      x: 0,
-      y: window.innerHeight + 120,
-      toJSON: () => ({}),
-    })) as unknown as typeof alphaRow.getBoundingClientRect;
-    alphaRow.scrollIntoView = vi.fn();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Expand Alpha-Store' }));
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Jump to row' })).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Jump to row' }));
-
-    expect(alphaRow.scrollIntoView).toHaveBeenCalledWith({
-      behavior: 'smooth',
-      block: 'center',
-    });
-
-    storageSummarySpy.mockRestore();
-  });
-
-  it('reveals opened pool detail without hard-centering the focused row', async () => {
-    const storageSummarySpy = vi.spyOn(ChartsAPI, 'getStorageSummaryCharts').mockResolvedValue({
-      pools: {
-        'pool:alpha': {
-          name: 'Alpha-Store',
-          usage: [
-            { timestamp: Date.now() - 60_000, value: 45 },
-            { timestamp: Date.now(), value: 47 },
-          ],
-          used: [
-            { timestamp: Date.now() - 60_000, value: 450 },
-            { timestamp: Date.now(), value: 470 },
-          ],
-          avail: [
-            { timestamp: Date.now() - 60_000, value: 550 },
-            { timestamp: Date.now(), value: 530 },
-          ],
-        },
-      },
-      disks: {},
-      stats: {
-        oldestDataTimestamp: Date.now() - 60_000,
-      },
-    });
-
-    const scrollToSpy = vi.fn();
-    Object.defineProperty(window, 'innerHeight', {
-      configurable: true,
-      value: 800,
-    });
-    Object.defineProperty(window, 'scrollY', {
-      configurable: true,
-      value: 180,
-    });
-    Object.defineProperty(window, 'scrollTo', {
-      configurable: true,
-      value: scrollToSpy,
-    });
-
-    const rowRect = {
-      top: 680,
-      bottom: 728,
-      left: 0,
-      right: 480,
-      width: 480,
-      height: 48,
-      x: 0,
-      y: 680,
-      toJSON: () => ({}),
-    } satisfies DOMRect;
-    const detailRect = {
-      top: 732,
-      bottom: 1012,
-      left: 0,
-      right: 480,
-      width: 480,
-      height: 280,
-      x: 0,
-      y: 732,
-      toJSON: () => ({}),
-    } satisfies DOMRect;
-    const rectSpy = vi
-      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
-      .mockImplementation(function mockRect(this: HTMLElement) {
-        if (this.dataset.summarySeriesId === 'pool:alpha') {
-          return rowRect;
-        }
-        if (this.dataset.inlineDetailFor === 'pool:alpha') {
-          return detailRect;
-        }
-        return {
-          top: 0,
-          bottom: 32,
-          left: 0,
-          right: 32,
-          width: 32,
-          height: 32,
-          x: 0,
-          y: 0,
-          toJSON: () => ({}),
-        } satisfies DOMRect;
-      });
-
-    hookResources = [
-      buildStorageResource('storage-display-alpha', 'Alpha-Store', 'pve1', {
-        metricsTarget: {
-          resourceType: 'storage',
-          resourceId: 'pool:alpha',
-        },
-      }),
-    ];
-
-    render(() => <Storage />);
-
-    await screen.findByTestId('storage-summary');
-    fireEvent.click(screen.getByRole('button', { name: 'Expand Alpha-Store' }));
-
-    await waitFor(() => {
-      expect(document.querySelector('[data-inline-detail-for="pool:alpha"]')).toBeTruthy();
-      expect(scrollToSpy).toHaveBeenCalledWith({ top: 636, behavior: 'smooth' });
-    });
-
-    rectSpy.mockRestore();
     storageSummarySpy.mockRestore();
   });
 
@@ -1750,16 +1275,6 @@ describe('Storage', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('shows warning when v2 fetch reports an error', () => {
-    hookError = new Error('network');
-
-    render(() => <Storage />);
-
-    expect(
-      screen.getByText('Unable to refresh storage resources. Showing latest available data.'),
-    ).toBeInTheDocument();
-  });
-
   it('switches to physical disks view', () => {
     render(() => <Storage />);
 
@@ -1877,7 +1392,7 @@ describe('Storage', () => {
       buildStorageResource('storage-1', 'Local-LVM-PVE1', 'pve1'),
     ];
 
-    render(() => <Storage embedded tableOnly forcedSourceFilter="proxmox-pve" />);
+    render(() => <Storage forcedSourceFilter="proxmox-pve" />);
 
     const viewOptions = screen.getByRole('group', { name: 'Storage table view' });
     expect(within(viewOptions).getByRole('button', { name: 'Storage' })).toHaveAttribute(
@@ -1951,9 +1466,6 @@ describe('Storage', () => {
 
     render(() => (
       <Storage
-        embedded
-        tableOnly
-        showFilterToolbar
         forcedSourceFilter="vmware-vsphere"
         suppressNodeFilter
         filterAriaLabel="vSphere datastore filters"
@@ -1975,51 +1487,6 @@ describe('Storage', () => {
 
     expect(screen.queryByText('vsan-prod')).not.toBeInTheDocument();
     expect(screen.getByText('archive-cold')).toBeInTheDocument();
-  });
-
-  it('supports Proxmox platform table embedding without standalone page chrome', async () => {
-    mockLocationPath = '/proxmox/storage';
-    hookResources = [
-      buildPhysicalDiskResource('sda', 'node-1', 'pve1'),
-      buildStorageResource('storage-1', 'Local-LVM-PVE1', 'pve1'),
-    ];
-
-    render(() => (
-      <Storage embedded tableOnly forcedSourceFilter="proxmox-pve" forcedView="disks" />
-    ));
-
-    await waitFor(() => {
-      expect(screen.getByTestId('disk-list')).toHaveTextContent('disk-view:all:');
-    });
-    expect(
-      screen.queryByText(
-        'Review capacity, topology, protection, and physical media across connected storage platforms.',
-      ),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByTestId('storage-summary')).not.toBeInTheDocument();
-    expect(screen.queryByText('Ceph')).not.toBeInTheDocument();
-    expect(screen.queryByRole('tablist', { name: 'Storage view' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('group', { name: 'Storage table view' })).not.toBeInTheDocument();
-  });
-
-  it('collapses and restores storage charts from the shared toolbar toggle', async () => {
-    hookResources = [buildStorageResource('storage-1', 'Local-LVM-PVE1', 'pve1')];
-
-    render(() => <Storage />);
-
-    expect(await screen.findByTestId('storage-summary')).toBeInTheDocument();
-
-    const chartsButton = screen.getByRole('button', { name: /charts/i });
-    fireEvent.click(chartsButton);
-
-    await waitFor(() => {
-      expect(screen.queryByTestId('storage-summary')).not.toBeInTheDocument();
-    });
-    expect(window.localStorage.getItem(STORAGE_KEYS.STORAGE_SUMMARY_COLLAPSED)).toBe('true');
-
-    fireEvent.click(screen.getByRole('button', { name: /charts/i }));
-
-    expect(await screen.findByTestId('storage-summary')).toBeInTheDocument();
   });
 
   it('shows loading placeholder when pool resources are loading', () => {

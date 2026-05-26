@@ -1605,7 +1605,6 @@ describe('shared primitive guardrails', () => {
     expect(storagePageControlsSource).toContain('viewOptionsTrailing={');
     expect(storagePageControlsSource).toContain('aria-label="Sort by"');
     expect(storagePageControlsSource).toContain('aria-label="Sort direction"');
-    expect(storagePageControlsSource).toContain('ChartVisibilityToggleButton');
     expect(storagePageControlsSource).toContain('onClearAll={handleClearAll}');
     expect(storagePageControlsSource).toContain('showClearAll={showClearAll}');
     // The component name is StoragePageControls but it must not import or
