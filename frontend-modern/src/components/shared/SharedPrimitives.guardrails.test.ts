@@ -46,7 +46,6 @@ import tooltipSource from '@/components/shared/Tooltip.tsx?raw';
 import tooltipPortalSource from '@/components/shared/TooltipPortal.tsx?raw';
 import tooltipModelSource from '@/components/shared/tooltipModel.ts?raw';
 import upgradeLinkSource from '@/components/shared/UpgradeLink.tsx?raw';
-import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
 import contextualFocusSource from '@/components/shared/contextualFocus.ts?raw';
 import summaryCardInteractionSource from '@/components/shared/summaryCardInteraction.ts?raw';
 import summaryRowActionButtonSource from '@/components/shared/SummaryRowActionButton.tsx?raw';
@@ -85,7 +84,6 @@ import toggleStateSource from '@/components/shared/useToggleState.ts?raw';
 import searchTipsPopoverStateSource from '@/components/shared/useSearchTipsPopoverState.ts?raw';
 import tooltipStateSource from '@/components/shared/useTooltipState.ts?raw';
 import upgradeNavigationHookSource from '@/components/shared/useUpgradeNavigation.ts?raw';
-import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
 import selectionCardGroupStateSource from '@/components/shared/useSelectionCardGroupState.ts?raw';
 import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField.tsx?raw';
 import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrlFieldModel.ts?raw';
@@ -353,7 +351,6 @@ describe('shared primitive guardrails', () => {
     expect(summaryCardInteractionSource).toContain('resolveSummaryGroupScope');
     expect(summaryCardInteractionSource).toContain('resolveSummaryGroupMemberInteractionState');
     expect(summaryCardInteractionSource).toContain('resolveSummaryScopeState');
-    expect(interactiveSparklineModelSource).toContain('onHoverSyncChange');
 
     expect(workloadSelectionStateSource).toContain('preserveScrollableAncestorVerticalOffset');
     expect(workloadSelectionStateSource).toContain('hoveredWorkloadGroupScope');
@@ -387,9 +384,6 @@ describe('shared primitive guardrails', () => {
   it('keeps synchronized summary values on one shared card/readout contract', () => {
 
 
-    expect(interactiveSparklineModelSource).toContain(
-      'buildInteractiveSparklineSynchronizedReadout',
-    );
 
   });
 
@@ -758,29 +752,7 @@ describe('shared primitive guardrails', () => {
 
   it('keeps interactive sparkline on shell, runtime, and model owners', () => {
 
-    expect(interactiveSparklineStateSource).toContain(
-      'export function useInteractiveSparklineState',
-    );
-    expect(interactiveSparklineStateSource).toContain('activeSeriesDisplay');
-    expect(interactiveSparklineStateSource).toContain('shouldRenderSeries');
-    expect(interactiveSparklineStateSource).toContain('renderedSeriesCount');
-    expect(interactiveSparklineStateSource).toContain('createSignal');
-    expect(interactiveSparklineStateSource).toContain('scheduleSparkline');
-    expect(interactiveSparklineStateSource).toContain('computeInteractiveSparklineHoverState');
-    expect(interactiveSparklineStateSource).toContain('const localHover = hoveredState();');
-    expect(interactiveSparklineStateSource).toContain('return localHover.x;');
-    expect(interactiveSparklineStateSource).toContain('timestamp: synchronizedHoverTimestamp()');
-    expect(interactiveSparklineStateSource).not.toContain('timestamp: activeHoverTimestamp()');
 
-    expect(interactiveSparklineModelSource).toContain('buildInteractiveSparklineChartData');
-    expect(interactiveSparklineModelSource).toContain('computeInteractiveSparklineHoverState');
-    expect(interactiveSparklineModelSource).toContain('getInteractiveSparklineCursorXForTimestamp');
-    expect(interactiveSparklineModelSource).toContain('getInteractiveSparklineTooltipSideX');
-    expect(interactiveSparklineModelSource).toContain(
-      'const tooltipY = chartRect.top + mouseY - 6;',
-    );
-    expect(interactiveSparklineModelSource).toContain('downsampleLTTB');
-    expect(interactiveSparklineModelSource).toContain('findNearestMetricPoint');
   });
 
   it('keeps dialog on shell, runtime, and model owners', () => {

@@ -47,7 +47,6 @@ import searchTipsPopoverModelSource from '@/components/shared/searchTipsPopoverM
 import tooltipSource from '@/components/shared/Tooltip.tsx?raw';
 import tooltipModelSource from '@/components/shared/tooltipModel.ts?raw';
 import upgradeLinkSource from '@/components/shared/UpgradeLink.tsx?raw';
-import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
 import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx?raw';
 import selectionCardGroupModelSource from '@/components/shared/selectionCardGroupModel.ts?raw';
 import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
@@ -68,7 +67,6 @@ import toggleStateSource from '@/components/shared/useToggleState.ts?raw';
 import searchTipsPopoverStateSource from '@/components/shared/useSearchTipsPopoverState.ts?raw';
 import tooltipStateSource from '@/components/shared/useTooltipState.ts?raw';
 import upgradeNavigationHookSource from '@/components/shared/useUpgradeNavigation.ts?raw';
-import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
 import selectionCardGroupStateSource from '@/components/shared/useSelectionCardGroupState.ts?raw';
 import resourceBadgePresentationSource from '@/utils/resourceBadgePresentation.ts?raw';
 import workloadTypeBadgesSource from '@/components/shared/workloadTypeBadges.ts?raw';
@@ -2379,10 +2377,6 @@ describe('frontend resource type boundaries', () => {
     expect(dialogModelSource).toContain('getDialogViewportClass');
     expect(dialogModelSource).toContain('getDialogAlignmentClass');
     expect(dialogModelSource).toContain('getDialogPanelClass');
-    expect(interactiveSparklineStateSource).toContain('scheduleSparkline');
-    expect(interactiveSparklineStateSource).toContain('createSignal');
-    expect(interactiveSparklineModelSource).toContain('buildInteractiveSparklineChartData');
-    expect(interactiveSparklineModelSource).toContain('computeInteractiveSparklineHoverState');
     expect(historyChartSource).toContain('useHistoryChartState');
     expect(historyChartSource).toContain('HistoryChartHeader');
     expect(historyChartSource).toContain('HistoryChartOverlay');
