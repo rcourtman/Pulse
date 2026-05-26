@@ -130,7 +130,7 @@ import unifiedResourceHostTableCardSource from '@/components/Infrastructure/Unif
 import unifiedResourceServiceInfrastructureCardSource from '@/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx?raw';
 import unifiedResourcePBSTableSectionSource from '@/components/Infrastructure/UnifiedResourcePBSTableSection.tsx?raw';
 import unifiedResourcePMGTableSectionSource from '@/components/Infrastructure/UnifiedResourcePMGTableSection.tsx?raw';
-import pmgInstanceDrawerSource from '@/components/PMG/PMGInstanceDrawer.tsx?raw';
+import proxmoxMailGatewayDrawerSource from '@/features/proxmox/ProxmoxMailGatewayDrawer.tsx?raw';
 import swarmServicesDrawerSource from '@/components/Docker/SwarmServicesDrawer.tsx?raw';
 import k8sDeploymentsDrawerSource from '@/components/Kubernetes/K8sDeploymentsDrawer.tsx?raw';
 import k8sNamespacesDrawerSource from '@/components/Kubernetes/K8sNamespacesDrawer.tsx?raw';
@@ -581,7 +581,7 @@ describe('shared primitive guardrails', () => {
       deployDeployingStepSource,
       deployPreflightStepSource,
       deployResultsStepSource,
-      pmgInstanceDrawerSource,
+      proxmoxMailGatewayDrawerSource,
       pmgInstancePanelSource,
       pmgMailGatewaySource,
       pulseDataGridSource,

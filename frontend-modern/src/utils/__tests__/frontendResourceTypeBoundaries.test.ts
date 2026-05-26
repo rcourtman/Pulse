@@ -282,7 +282,7 @@ import useStorageModelSource from '@/components/Storage/useStorageModel.ts?raw';
 import useStorageCephModelSource from '@/components/Storage/useStorageCephModel.ts?raw';
 import useStorageAlertStateSource from '@/components/Storage/useStorageAlertState.ts?raw';
 import temperatureUtilSource from '@/utils/temperature.ts?raw';
-import pmgInstanceDrawerSource from '@/components/PMG/PMGInstanceDrawer.tsx?raw';
+import proxmoxMailGatewayDrawerSource from '@/features/proxmox/ProxmoxMailGatewayDrawer.tsx?raw';
 import serviceHealthPresentationSource from '@/utils/serviceHealthPresentation.ts?raw';
 import alertIncidentEventFiltersSource from '@/components/Alerts/IncidentEventFilters.tsx?raw';
 import alertIncidentTimelinePanelSource from '@/components/Alerts/IncidentTimelinePanel.tsx?raw';
@@ -2354,8 +2354,7 @@ describe('frontend resource type boundaries', () => {
     expect(cephRecordPresentationSource).toContain('export const getCephPoolsText');
     expect(cephRecordPresentationSource).toContain('export const collectCephClusterNodes');
     expect(temperatureUtilSource).toContain('export const getTemperatureTextClass');
-    expect(pmgInstanceDrawerSource).toContain('getServiceHealthPresentation');
-    expect(pmgInstanceDrawerSource).not.toContain('const statusTone =');
+    expect(proxmoxMailGatewayDrawerSource).not.toContain('const statusTone =');
     expect(serviceHealthPresentationSource).toContain(
       'export function getServiceHealthPresentation',
     );
@@ -2636,8 +2635,8 @@ describe('frontend resource type boundaries', () => {
     expect(swarmServicesDrawerSource).not.toContain(
       "const normalize = (value?: string | null) => (value || '').trim();",
     );
-    expect(pmgInstanceDrawerSource).toContain('asTrimmedString');
-    expect(pmgInstanceDrawerSource).not.toContain(
+    expect(proxmoxMailGatewayDrawerSource).toContain('asTrimmedString');
+    expect(proxmoxMailGatewayDrawerSource).not.toContain(
       "const normalize = (value?: string | null) => (value || '').trim();",
     );
     expect(k8sNamespacesDrawerSource).toContain('asTrimmedString');
@@ -3245,19 +3244,13 @@ describe('frontend resource type boundaries', () => {
     expect(mailGatewaySource).not.toContain('Reconnect now');
     expect(mailGatewaySource).not.toContain('Clear search');
     expect(mailGatewaySource).not.toContain('const StatusBadge: Component');
-    expect(pmgInstanceDrawerSource).toContain('getPMGDetailsDrawerPresentation');
-    expect(pmgInstanceDrawerSource).toContain('PMG_DETAILS_EMPTY_STATE_TITLE');
-    expect(pmgInstanceDrawerSource).toContain('PMG_DETAILS_EMPTY_STATE_DESCRIPTION');
-    expect(pmgInstanceDrawerSource).toContain('PMG_DETAILS_LOADING_STATE_TITLE');
-    expect(pmgInstanceDrawerSource).toContain('PMG_DETAILS_LOADING_STATE_DESCRIPTION');
-    expect(pmgInstanceDrawerSource).toContain('PMG_DETAILS_FAILURE_STATE_TITLE');
-    expect(pmgInstanceDrawerSource).toMatch(/<Table(?:\s|>)/);
-    expect(pmgInstanceDrawerSource).toContain('PLATFORM_TABLE_HEADER_ROW_CLASS');
-    expect(pmgInstanceDrawerSource).toContain('PLATFORM_TABLE_BODY_CLASS');
-    expect(pmgInstanceDrawerSource).toContain('getPlatformTableHeadClassForKind');
-    expect(pmgInstanceDrawerSource).toContain('getPlatformTableCellClassForKind');
-    expect(pmgInstanceDrawerSource).not.toContain('divide-y divide-border-subtle');
-    expect(pmgInstanceDrawerSource).not.toContain('<div class="mt-2 overflow-x-auto">');
+    expect(proxmoxMailGatewayDrawerSource).toMatch(/<Table(?:\s|>)/);
+    expect(proxmoxMailGatewayDrawerSource).toContain('PLATFORM_TABLE_HEADER_ROW_CLASS');
+    expect(proxmoxMailGatewayDrawerSource).toContain('PLATFORM_TABLE_BODY_CLASS');
+    expect(proxmoxMailGatewayDrawerSource).toContain('getPlatformTableHeadClassForKind');
+    expect(proxmoxMailGatewayDrawerSource).toContain('getPlatformTableCellClassForKind');
+    expect(proxmoxMailGatewayDrawerSource).not.toContain('divide-y divide-border-subtle');
+    expect(proxmoxMailGatewayDrawerSource).not.toContain('<div class="mt-2 overflow-x-auto">');
     expect(mailGatewaySource).not.toContain('<div class="overflow-x-auto -mx-4 px-4">');
     expect(mailGatewaySource).not.toContain('wrapperClass="-mx-4 px-4"');
     expect(pmgInstancePanelSource).not.toContain('<div class="overflow-x-auto -mx-4 px-4">');
@@ -3268,12 +3261,12 @@ describe('frontend resource type boundaries', () => {
     expect(pmgInstancePanelSource).not.toContain(
       '<div class="overflow-auto max-h-[260px] rounded-md border border-border">',
     );
-    expect(pmgInstanceDrawerSource).not.toContain('Search domains...');
-    expect(pmgInstanceDrawerSource).not.toContain('Unknown host');
-    expect(pmgInstanceDrawerSource).not.toContain('Spam Distribution');
-    expect(pmgInstanceDrawerSource).not.toContain('No PMG details for this resource yet');
-    expect(pmgInstanceDrawerSource).not.toContain('Loading mail gateway details...');
-    expect(pmgInstanceDrawerSource).not.toContain('Failed to load PMG details');
+    expect(proxmoxMailGatewayDrawerSource).not.toContain('Search domains...');
+    expect(proxmoxMailGatewayDrawerSource).not.toContain('Unknown host');
+    expect(proxmoxMailGatewayDrawerSource).not.toContain('Spam Distribution');
+    expect(proxmoxMailGatewayDrawerSource).not.toContain('No PMG details for this resource yet');
+    expect(proxmoxMailGatewayDrawerSource).not.toContain('Loading mail gateway details...');
+    expect(proxmoxMailGatewayDrawerSource).not.toContain('Failed to load PMG details');
     expect(pmgInstancePanelSource).toContain('getPMGThreatPresentation');
     expect(pmgInstancePanelSource).not.toContain('const barColor =');
     expect(pmgInstancePanelSource).not.toContain('const textColor =');
@@ -3288,12 +3281,6 @@ describe('frontend resource type boundaries', () => {
     expect(pmgPresentationSource).toContain('export const PMG_LOADING_STATE_DESCRIPTION');
     expect(pmgPresentationSource).toContain('export const PMG_DISCONNECTED_STATE_TITLE');
     expect(pmgPresentationSource).toContain('export const PMG_SEARCH_PLACEHOLDER');
-    expect(pmgPresentationSource).toContain('export const PMG_DETAILS_EMPTY_STATE_TITLE');
-    expect(pmgPresentationSource).toContain('export const PMG_DETAILS_EMPTY_STATE_DESCRIPTION');
-    expect(pmgPresentationSource).toContain('export const PMG_DETAILS_LOADING_STATE_TITLE');
-    expect(pmgPresentationSource).toContain('export const PMG_DETAILS_LOADING_STATE_DESCRIPTION');
-    expect(pmgPresentationSource).toContain('export const PMG_DETAILS_FAILURE_STATE_TITLE');
-    expect(pmgPresentationSource).toContain('export function getPMGDetailsDrawerPresentation');
     expect(pmgPresentationSource).toContain('export function getPMGDisconnectedState');
     expect(pmgPresentationSource).toContain('export function getPMGSearchEmptyState');
     expect(pmgThreatPresentationSource).toContain('export function getPMGThreatPresentation');
