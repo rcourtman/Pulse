@@ -1,8 +1,8 @@
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
+import { EnhancedCPUBar } from '@/components/Workloads/EnhancedCPUBar';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
-import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StatusDot } from '@/components/shared/StatusDot';
 import {
   Table,
@@ -135,6 +135,23 @@ const memoryPercentOnlyFor = (machine: Resource): number | undefined => {
   if (memoryTotalFor(machine) > 0) return undefined;
   return finiteMetric(machine.memory?.current) ?? finiteMetric(machine.agent?.memory?.usage);
 };
+
+const memoryBalloonFor = (machine: Resource): number | undefined =>
+  finiteMetric(machine.agent?.memory?.balloon);
+
+const memorySwapUsedFor = (machine: Resource): number | undefined =>
+  finiteMetric(machine.agent?.memory?.swapUsed);
+
+const memorySwapTotalFor = (machine: Resource): number | undefined =>
+  finiteMetric(machine.agent?.memory?.swapTotal);
+
+const cpuCoresFor = (machine: Resource): number | undefined => {
+  const cores = finiteMetric(machine.agent?.cpuCount);
+  return cores && cores > 0 ? cores : undefined;
+};
+
+const cpuLoadAverageFor = (machine: Resource): number | undefined =>
+  finiteMetric(machine.agent?.loadAverage?.[0]);
 
 const aggregateDiskFor = (machine: Resource): Disk | undefined => {
   if (!machine.disk) return undefined;
@@ -393,8 +410,13 @@ export const AgentsMachinesTable: Component<{
                     const canRenderMetrics = () => indicator().variant !== 'danger';
                     const metricsKey = () => buildMetricKeyForUnifiedResource(machine);
                     const cpuPercent = () => getAgentMachineCpuPercent(machine);
+                    const cpuCores = () => cpuCoresFor(machine);
+                    const cpuLoadAverage = () => cpuLoadAverageFor(machine);
                     const memoryUsed = () => memoryUsedFor(machine);
                     const memoryTotal = () => memoryTotalFor(machine);
+                    const memoryBalloon = () => memoryBalloonFor(machine);
+                    const memorySwapUsed = () => memorySwapUsedFor(machine);
+                    const memorySwapTotal = () => memorySwapTotalFor(machine);
                     const memoryPercentOnly = () => memoryPercentOnlyFor(machine);
                     const hasMemoryMetric = () =>
                       memoryTotal() > 0 || memoryPercentOnly() !== undefined;
@@ -465,14 +487,17 @@ export const AgentsMachinesTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('metric-bar')} ${machineColumnWidthClass('cpu')}`}
                           >
-                            <ResponsiveMetricCell
-                              class="w-full"
-                              value={cpuPercent() ?? 0}
-                              type="cpu"
-                              resourceId={metricsKey()}
-                              isRunning={canRenderMetrics() && cpuPercent() !== undefined}
-                              showMobile={false}
-                            />
+                            <Show
+                              when={canRenderMetrics() && cpuPercent() !== undefined}
+                              fallback={metricFallback()}
+                            >
+                              <EnhancedCPUBar
+                                usage={cpuPercent() ?? 0}
+                                loadAverage={cpuLoadAverage()}
+                                cores={cpuCores()}
+                                resourceId={metricsKey()}
+                              />
+                            </Show>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('metric-bar')} ${machineColumnWidthClass('memory')}`}
@@ -485,6 +510,10 @@ export const AgentsMachinesTable: Component<{
                                 used={memoryUsed()}
                                 total={memoryTotal()}
                                 percentOnly={memoryPercentOnly()}
+                                balloon={memoryBalloon()}
+                                swapUsed={memorySwapUsed()}
+                                swapTotal={memorySwapTotal()}
+                                resourceId={metricsKey()}
                               />
                             </Show>
                           </TableCell>

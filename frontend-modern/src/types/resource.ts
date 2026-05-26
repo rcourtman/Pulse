@@ -531,6 +531,7 @@ export interface ResourceAgentMeta {
   architecture?: string;
   uptimeSeconds?: number;
   cpuCount?: number;
+  loadAverage?: number[];
   memory?: Partial<Memory>;
   networkInterfaces?: HostNetworkInterface[];
   disks?: ResourceAgentDisk[];

@@ -7,6 +7,46 @@ vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
   ResourceDetailDrawer: () => <div data-testid="resource-detail-drawer" />,
 }));
 
+vi.mock('@/components/Workloads/EnhancedCPUBar', () => ({
+  EnhancedCPUBar: (props: {
+    usage: number;
+    loadAverage?: number;
+    cores?: number;
+    resourceId?: string;
+  }) => (
+    <div
+      data-testid="agent-machine-cpu-bar"
+      data-usage={props.usage}
+      data-load-average={props.loadAverage}
+      data-cores={props.cores}
+      data-resource-id={props.resourceId}
+    />
+  ),
+}));
+
+vi.mock('@/components/Workloads/StackedMemoryBar', () => ({
+  StackedMemoryBar: (props: {
+    used: number;
+    total: number;
+    percentOnly?: number;
+    balloon?: number;
+    swapUsed?: number;
+    swapTotal?: number;
+    resourceId?: string;
+  }) => (
+    <div
+      data-testid="agent-machine-memory-bar"
+      data-used={props.used}
+      data-total={props.total}
+      data-percent-only={props.percentOnly}
+      data-balloon={props.balloon}
+      data-swap-used={props.swapUsed}
+      data-swap-total={props.swapTotal}
+      data-resource-id={props.resourceId}
+    />
+  ),
+}));
+
 const resource = (overrides: Partial<Resource>): Resource =>
   ({
     id: overrides.id ?? 'machine-1',
@@ -153,5 +193,51 @@ describe('AgentsMachinesTable', () => {
     await fireEvent.click(screen.getByLabelText('Arch'));
 
     expect(screen.getByText('arm64')).toBeInTheDocument();
+  });
+
+  it('preserves agent CPU load and memory swap details in row metrics', () => {
+    render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({
+            id: 'workstation',
+            name: 'Workstation',
+            cpu: { current: 48 },
+            memory: { current: 61 },
+            agent: {
+              cpuCount: 12,
+              loadAverage: [2.45, 2.1, 1.9],
+              memory: {
+                used: 6_000,
+                total: 12_000,
+                free: 6_000,
+                usage: 50,
+                balloon: 8_000,
+                swapUsed: 1_024,
+                swapTotal: 2_048,
+              },
+            },
+          }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    expect(screen.getByTestId('agent-machine-cpu-bar')).toHaveAttribute(
+      'data-load-average',
+      '2.45',
+    );
+    expect(screen.getByTestId('agent-machine-cpu-bar')).toHaveAttribute('data-cores', '12');
+    expect(screen.getByTestId('agent-machine-memory-bar')).toHaveAttribute(
+      'data-swap-used',
+      '1024',
+    );
+    expect(screen.getByTestId('agent-machine-memory-bar')).toHaveAttribute(
+      'data-swap-total',
+      '2048',
+    );
+    expect(screen.getByTestId('agent-machine-memory-bar')).toHaveAttribute('data-balloon', '8000');
   });
 });
