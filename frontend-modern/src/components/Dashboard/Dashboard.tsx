@@ -1040,10 +1040,10 @@ export function Dashboard(props: DashboardProps) {
           <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
             <div ref={tableRef} class="overflow-x-auto">
               <table
-                class="border-collapse whitespace-nowrap"
+                class="w-full border-collapse whitespace-nowrap"
                 style={{
                   "table-layout": "fixed",
-                  width: `${tableWidthPx()}px`,
+                  width: "100%",
                   "min-width": `${tableWidthPx()}px`,
                 }}
               >
