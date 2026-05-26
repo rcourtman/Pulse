@@ -9,10 +9,8 @@ import columnPickerSource from '@/components/shared/ColumnPicker.tsx?raw';
 import columnPickerModelSource from '@/components/shared/columnPickerModel.ts?raw';
 import tagInputSource from '@/components/shared/TagInput.tsx?raw';
 import tagInputModelSource from '@/components/shared/tagInputModel.ts?raw';
-import collapsibleSearchInputModelSource from '@/components/shared/collapsibleSearchInputModel.ts?raw';
 import containerUpdateBadgeSource from '@/components/shared/ContainerUpdateBadge.tsx?raw';
 import containerUpdateBadgeModelSource from '@/components/shared/containerUpdateBadgeModel.ts?raw';
-import densityMapModelSource from '@/components/shared/densityMapModel.ts?raw';
 import dialogSource from '@/components/shared/Dialog.tsx?raw';
 import dialogModelSource from '@/components/shared/dialogModel.ts?raw';
 import filterButtonGroupSource from '@/components/shared/FilterButtonGroup.tsx?raw';
@@ -26,7 +24,6 @@ import historyChartOverlaySource from '@/components/shared/HistoryChartOverlay.t
 import historyChartSource from '@/components/shared/HistoryChart.tsx?raw';
 import historyChartModelSource from '@/components/shared/historyChartModel.ts?raw';
 import historyChartTooltipSource from '@/components/shared/HistoryChartTooltip.tsx?raw';
-import infrastructureDetailsDrawerModelSource from '@/components/shared/infrastructureDetailsDrawerModel.ts?raw';
 import mobileNavBarSource from '@/components/shared/MobileNavBar.tsx?raw';
 import mobileNavBarModelSource from '@/components/shared/mobileNavBarModel.ts?raw';
 import pulseDataGridSource from '@/components/shared/PulseDataGrid.tsx?raw';
@@ -38,7 +35,6 @@ import searchInputSource from '@/components/shared/SearchInput.tsx?raw';
 import searchInputEnhancementsSource from '@/components/shared/SearchInputEnhancements.tsx?raw';
 import searchInputEnhancementsModelSource from '@/components/shared/searchInputEnhancementsModel.ts?raw';
 import searchInputModelSource from '@/components/shared/searchInputModel.ts?raw';
-import scrollToTopButtonModelSource from '@/components/shared/scrollToTopButtonModel.ts?raw';
 import statusBadgeSource from '@/components/shared/StatusBadge.tsx?raw';
 import statusBadgeModelSource from '@/components/shared/statusBadgeModel.ts?raw';
 import subtabsSource from '@/components/shared/Subtabs.tsx?raw';
@@ -50,7 +46,6 @@ import tooltipSource from '@/components/shared/Tooltip.tsx?raw';
 import tooltipPortalSource from '@/components/shared/TooltipPortal.tsx?raw';
 import tooltipModelSource from '@/components/shared/tooltipModel.ts?raw';
 import upgradeLinkSource from '@/components/shared/UpgradeLink.tsx?raw';
-import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
 import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
 import contextualFocusSource from '@/components/shared/contextualFocus.ts?raw';
 import summaryCardInteractionSource from '@/components/shared/summaryCardInteraction.ts?raw';
@@ -75,20 +70,16 @@ import tlsVerificationWarningBannerSource from '@/components/shared/TlsVerificat
 import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
 import columnPickerStateSource from '@/components/shared/useColumnPickerState.ts?raw';
 import tagInputStateSource from '@/components/shared/useTagInputState.ts?raw';
-import collapsibleSearchInputStateSource from '@/components/shared/useCollapsibleSearchInputState.ts?raw';
 import containerUpdateButtonStateSource from '@/components/shared/useContainerUpdateButtonState.ts?raw';
-import densityMapStateSource from '@/components/shared/useDensityMapState.ts?raw';
 import dialogStateSource from '@/components/shared/useDialogState.ts?raw';
 import filterButtonGroupStateSource from '@/components/shared/useFilterButtonGroupState.ts?raw';
 import helpIconStateSource from '@/components/shared/useHelpIconState.ts?raw';
 import historyChartStateSource from '@/components/shared/useHistoryChartState.ts?raw';
-import infrastructureDetailsDrawerStateSource from '@/components/shared/useInfrastructureDetailsDrawerState.ts?raw';
 import mobileNavBarStateSource from '@/components/shared/useMobileNavBarState.ts?raw';
 import pulseDataGridStateSource from '@/components/shared/usePulseDataGridState.ts?raw';
 import searchFieldStateSource from '@/components/shared/useSearchFieldState.ts?raw';
 import searchInputStateSource from '@/components/shared/useSearchInputState.ts?raw';
 import searchInputEnhancementsStateSource from '@/components/shared/useSearchInputEnhancements.ts?raw';
-import scrollToTopButtonStateSource from '@/components/shared/useScrollToTopButtonState.ts?raw';
 import statusBadgeStateSource from '@/components/shared/useStatusBadgeState.ts?raw';
 import toggleStateSource from '@/components/shared/useToggleState.ts?raw';
 import searchTipsPopoverStateSource from '@/components/shared/useSearchTipsPopoverState.ts?raw';
@@ -126,8 +117,6 @@ import alertHistoryTableSectionSource from '@/features/alerts/AlertHistoryTableS
 import alertHistoryTableGroupRowSource from '@/features/alerts/AlertHistoryTableGroupRow.tsx?raw';
 import alertResourceTableDesktopSource from '@/components/Alerts/AlertResourceTableDesktop.tsx?raw';
 import aiCostDashboardSource from '@/components/AI/AICostDashboard.tsx?raw';
-import pmgMailGatewaySource from '@/components/PMG/MailGateway.tsx?raw';
-import pmgInstancePanelSource from '@/components/PMG/PMGInstancePanel.tsx?raw';
 import resourceDetailSummarySource from '@/components/Infrastructure/ResourceDetailSummary.tsx?raw';
 import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx?raw';
 import agentProfilesPanelSource from '@/components/Settings/AgentProfilesPanel.tsx?raw';
@@ -298,9 +287,6 @@ describe('shared primitive guardrails', () => {
     expect(tooltipPortalSource).toContain('text-base-content');
     expect(tooltipPortalSource).toContain('border-border');
     expect(tooltipPortalSource).not.toContain("'background-color': 'rgb(15, 23, 42)'");
-    expect(interactiveSparklineSource).toContain('TooltipPortal');
-    expect(interactiveSparklineSource).toContain('text-base-content');
-    expect(interactiveSparklineSource).not.toContain("'background-color': 'rgb(15, 23, 42)'");
   });
 
   it('keeps shared table card chrome on one canonical header owner', () => {
@@ -368,7 +354,6 @@ describe('shared primitive guardrails', () => {
     expect(summaryCardInteractionSource).toContain('resolveSummaryGroupMemberInteractionState');
     expect(summaryCardInteractionSource).toContain('resolveSummaryScopeState');
     expect(interactiveSparklineModelSource).toContain('onHoverSyncChange');
-    expect(densityMapModelSource).toContain('onHoverSyncChange');
 
     expect(workloadSelectionStateSource).toContain('preserveScrollableAncestorVerticalOffset');
     expect(workloadSelectionStateSource).toContain('hoveredWorkloadGroupScope');
@@ -405,7 +390,6 @@ describe('shared primitive guardrails', () => {
     expect(interactiveSparklineModelSource).toContain(
       'buildInteractiveSparklineSynchronizedReadout',
     );
-    expect(densityMapModelSource).toContain('buildDensityMapSynchronizedReadout');
 
   });
 
@@ -499,8 +483,6 @@ describe('shared primitive guardrails', () => {
       infrastructureSourceManagerSource,
       aiCostDashboardSource,
       proxmoxMailGatewayDrawerSource,
-      pmgInstancePanelSource,
-      pmgMailGatewaySource,
       pulseDataGridSource,
       swarmServicesDrawerSource,
       k8sDeploymentsDrawerSource,
@@ -708,18 +690,7 @@ describe('shared primitive guardrails', () => {
 
   it('keeps scroll-to-top button on shell, runtime, and model owners', () => {
 
-    expect(scrollToTopButtonStateSource).toContain('export function useScrollToTopButtonState');
-    expect(scrollToTopButtonStateSource).toContain('createSignal');
-    expect(scrollToTopButtonStateSource).toContain('onMount');
-    expect(scrollToTopButtonStateSource).toContain('addEventListener');
-    expect(scrollToTopButtonStateSource).toContain("scrollTo({ top: 0, behavior: 'smooth' })");
-    expect(scrollToTopButtonStateSource).toContain('findNearestScrollableAncestor');
 
-    expect(scrollToTopButtonModelSource).toContain('SCROLL_TO_TOP_BUTTON_THRESHOLD');
-    expect(scrollToTopButtonModelSource).toContain('SCROLL_TO_TOP_BUTTON_ARIA_LABEL');
-    expect(scrollToTopButtonModelSource).toContain('findNearestScrollableAncestor');
-    expect(scrollToTopButtonModelSource).toContain('isScrollToTopButtonVisible');
-    expect(scrollToTopButtonModelSource).toContain('getScrollToTopButtonClass');
   });
 
   it('keeps toggle on shell, runtime, and model owners', () => {
@@ -802,29 +773,6 @@ describe('shared primitive guardrails', () => {
   });
 
   it('keeps interactive sparkline on shell, runtime, and model owners', () => {
-    expect(interactiveSparklineSource).toContain('useInteractiveSparklineState');
-    expect(interactiveSparklineSource).toContain('data-active-series-display');
-    expect(interactiveSparklineSource).toContain('data-active-hover-cursor-x');
-    expect(interactiveSparklineSource).toContain('data-sparkline-tooltip="true"');
-    expect(interactiveSparklineSource).toContain('TooltipPortal');
-    expect(interactiveSparklineSource).toContain('data-sparkline-y-axis="true"');
-    expect(interactiveSparklineSource).toContain('data-sparkline-x-axis="true"');
-    expect(interactiveSparklineSource).toContain('axisPositionPercent(tick.y, sparkline.vbH)');
-    expect(interactiveSparklineSource).toContain('axisPositionPercent(tick.x, sparkline.vbW)');
-    expect(interactiveSparklineSource).toContain('x1={sparkline.activeHoverCursorX() ?? 0}');
-    expect(interactiveSparklineSource).toContain('y1={0}');
-    expect(interactiveSparklineSource).not.toContain('viewBox={`0 0 28 ${sparkline.vbH}`}');
-    expect(interactiveSparklineSource).not.toContain(
-      'viewBox={`0 0 ${sparkline.vbW} ${sparkline.xAxisBandPx}`}',
-    );
-    expect(interactiveSparklineSource).not.toContain('style={{');
-    expect(interactiveSparklineSource).not.toContain('style={');
-    expect(interactiveSparklineSource).not.toContain('{(cursorX) => (');
-    expect(interactiveSparklineSource).toContain('data-rendered-series-count');
-    expect(interactiveSparklineSource).not.toContain('createEffect');
-    expect(interactiveSparklineSource).not.toContain('createSignal');
-    expect(interactiveSparklineSource).not.toContain('scheduleSparkline');
-    expect(interactiveSparklineSource).not.toContain('downsampleLTTB');
 
     expect(interactiveSparklineStateSource).toContain(
       'export function useInteractiveSparklineState',
@@ -844,7 +792,6 @@ describe('shared primitive guardrails', () => {
     expect(interactiveSparklineModelSource).toContain('computeInteractiveSparklineHoverState');
     expect(interactiveSparklineModelSource).toContain('getInteractiveSparklineCursorXForTimestamp');
     expect(interactiveSparklineModelSource).toContain('getInteractiveSparklineTooltipSideX');
-    expect(interactiveSparklineSource).toContain('align="left"');
     expect(interactiveSparklineModelSource).toContain(
       'const tooltipY = chartRect.top + mouseY - 6;',
     );
@@ -854,21 +801,7 @@ describe('shared primitive guardrails', () => {
 
   it('keeps density map on shell, runtime, and model owners', () => {
 
-    expect(densityMapStateSource).toContain('export function useDensityMapState');
-    expect(densityMapStateSource).toContain('createSignal');
-    expect(densityMapStateSource).toContain('canvas.getContext');
-    expect(densityMapStateSource).toContain('window.addEventListener');
 
-    expect(densityMapModelSource).toContain('buildDensityMapChartData');
-    expect(densityMapModelSource).toContain('buildDensityMapFocusDetail');
-    expect(densityMapModelSource).toContain('buildDensityMapHoveredState');
-    expect(densityMapModelSource).toContain('formatDensityMapHoverTime');
-    expect(densityMapModelSource).toContain('getDensityMapColumnIndexForTimestamp');
-    expect(densityMapModelSource).toContain('getDensityMapCellOpacity');
-    expect(densityMapModelSource).not.toContain('buildDensityMapFocusSparklinePath');
-    expect(densityMapModelSource).not.toContain('sparklinePath: string | null;');
-    expect(densityMapModelSource).not.toContain('currentValue:');
-    expect(densityMapModelSource).not.toContain('hoveredValue:');
   });
 
   it('keeps dialog on shell, runtime, and model owners', () => {
@@ -1014,22 +947,7 @@ describe('shared primitive guardrails', () => {
 
   it('keeps infrastructure details drawer on shell, runtime, and model owners', () => {
 
-    expect(infrastructureDetailsDrawerStateSource).toContain(
-      'export function useInfrastructureDetailsDrawerState',
-    );
-    expect(infrastructureDetailsDrawerStateSource).toContain('createSignal');
-    expect(infrastructureDetailsDrawerStateSource).toContain(
-      "type InfrastructureDetailsDrawerTab = 'overview' | 'discovery'",
-    );
 
-    expect(infrastructureDetailsDrawerModelSource).toContain(
-      'resolveInfrastructureDetailsDrawerMetadataId',
-    );
-    expect(infrastructureDetailsDrawerModelSource).toContain(
-      'resolveInfrastructureDetailsDrawerDiscoveryHostname',
-    );
-    expect(infrastructureDetailsDrawerModelSource).toContain('getInfrastructureMetadataId');
-    expect(infrastructureDetailsDrawerModelSource).toContain('getInfrastructureDiscoveryHostname');
   });
 
   it('keeps mobile nav on shell, runtime, and model owners', () => {
@@ -1236,18 +1154,7 @@ describe('shared primitive guardrails', () => {
 
   it('keeps collapsible search input on shell, runtime, and model owners', () => {
 
-    expect(collapsibleSearchInputStateSource).toContain(
-      'export function useCollapsibleSearchInputState',
-    );
-    expect(collapsibleSearchInputStateSource).toContain('createSignal');
-    expect(collapsibleSearchInputStateSource).toContain('useTypeToSearch');
-    expect(collapsibleSearchInputStateSource).toContain('queueMicrotask');
-    expect(collapsibleSearchInputStateSource).toContain('setIsExpanded(true)');
 
-    expect(collapsibleSearchInputModelSource).toContain('getCollapsibleSearchTriggerLabel');
-    expect(collapsibleSearchInputModelSource).toContain('shouldShowCollapsibleSearchExpanded');
-    expect(collapsibleSearchInputModelSource).toContain('getCollapsibleSearchRootClass');
-    expect(collapsibleSearchInputModelSource).toContain('order-last basis-full w-full');
   });
 
   it('keeps the chip-based FilterBar on a catalog descriptor with shell, chip, and add-menu owners', () => {

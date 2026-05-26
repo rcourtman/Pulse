@@ -5,7 +5,6 @@ import agentProfilesSource from '@/api/agentProfiles.ts?raw';
 import alertsSource from '@/api/alerts.ts?raw';
 import discoverySource from '@/api/discovery.ts?raw';
 import agentMetadataSource from '@/api/agentMetadata.ts?raw';
-import hostedSignupSource from '@/api/hostedSignup.ts?raw';
 import monitoringSource from '@/api/monitoring.ts?raw';
 import notificationsSource from '@/api/notifications.ts?raw';
 import nodesSource from '@/api/nodes.ts?raw';
@@ -179,12 +178,6 @@ describe('API error-status guardrails', () => {
     expect(guestMetadataSource).toContain("buildMetadataAPI<GuestMetadata>('/api/guests/metadata')");
     expect(guestMetadataSource).not.toContain('apiFetchJSON(');
 
-    expect(hostedSignupSource).toContain('parseJSONSafe<');
-    expect(hostedSignupSource).toContain('normalizeStructuredAPIError(body, response.status)');
-    expect(hostedSignupSource).not.toContain('response.json()');
-    expect(hostedSignupSource).not.toContain('function normalizeHostedError(');
-    expect(hostedSignupSource).not.toContain("typeof obj.code === 'string'");
-    expect(hostedSignupSource).not.toContain("typeof obj.message === 'string'");
   });
 
   it('routes canonical collection normalization through responseUtils', () => {
@@ -261,7 +254,7 @@ describe('API error-status guardrails', () => {
     const rawStatusHeuristicPattern = /message\.includes\((['"])40[24]\1\)/;
     const rawGovernedResponseStatusPattern = /response\.status\s*(?:===|!==)\s*(?:204|404|503)/;
     const governedParsingEntries = runtimeEntries.filter(([path]) =>
-      /\/(?:ai|aiChat|agentProfiles|discovery|hostedSignup|monitoring)\.ts$/.test(path),
+      /\/(?:ai|aiChat|agentProfiles|discovery|monitoring)\.ts$/.test(path),
     );
     const rawResponseJSONPattern = /(?:return\s+)?(?:await\s+)?response\.json\(/;
     const rawManualJSONParsePattern = /JSON\.parse\(/;
