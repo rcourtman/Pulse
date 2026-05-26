@@ -1,12 +1,15 @@
-import { Component, Suspense } from 'solid-js';
+import { Component, Suspense, createMemo } from 'solid-js';
 import { DiscoveryTab } from '../Discovery/DiscoveryTab';
 import { SystemInfoCard } from '@/components/shared/cards/SystemInfoCard';
 import { HardwareCard } from '@/components/shared/cards/HardwareCard';
 import { RootDiskCard } from '@/components/shared/cards/RootDiskCard';
 import { NetworkInterfacesCard } from '@/components/shared/cards/NetworkInterfacesCard';
 import { DisksCard } from '@/components/shared/cards/DisksCard';
+import { StatusDot } from '@/components/shared/StatusDot';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import { getDiscoveryLoadingState } from '@/utils/discoveryPresentation';
+import { getNodeDisplayName } from '@/utils/nodes';
+import { getSimpleStatusIndicator } from '@/utils/status';
 import {
   resolveInfrastructureDetailsDrawerDiscoveryHostname,
   resolveInfrastructureDetailsDrawerMetadataId,
@@ -19,9 +22,25 @@ export const InfrastructureDetailsDrawer: Component<InfrastructureDetailsDrawerP
   const metadataId = () => resolveInfrastructureDetailsDrawerMetadataId(props.node, props.agent);
   const discoveryHostname = () =>
     resolveInfrastructureDetailsDrawerDiscoveryHostname(props.node, props.agent);
+  const displayName = createMemo(() => getNodeDisplayName(props.node));
+  const headerIndicator = createMemo(() => getSimpleStatusIndicator(props.node.status));
 
   return (
     <div class="space-y-3">
+      <div class="flex items-center gap-2 min-w-0">
+        <StatusDot
+          size="sm"
+          variant={headerIndicator().variant}
+          title={headerIndicator().label}
+          ariaLabel={headerIndicator().label}
+        />
+        <h2
+          class="text-sm font-semibold text-base-content truncate m-0"
+          title={displayName()}
+        >
+          {displayName()}
+        </h2>
+      </div>
       {/* Tabs */}
       <div class="flex items-center gap-6 border-b border-border px-1 mb-1">
         <button

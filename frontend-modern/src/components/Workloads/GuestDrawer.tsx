@@ -1,5 +1,7 @@
 import { Component, Show, Suspense, createMemo } from 'solid-js';
 import { DiscoveryTab } from '../Discovery/DiscoveryTab';
+import { StatusDot } from '@/components/shared/StatusDot';
+import { getSimpleStatusIndicator } from '@/utils/status';
 import { getGuestDrawerHistoryFallbackMetrics, type GuestDrawerProps } from './guestDrawerModel';
 import { useGuestDrawerState } from './useGuestDrawerState';
 import { GuestDrawerHistory, GuestDrawerHistoryRangeSelect } from './GuestDrawerHistory';
@@ -40,11 +42,25 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     getGuestDrawerHistoryFallbackMetrics(props.guest),
   );
 
+  const headerIndicator = createMemo(() => getSimpleStatusIndicator(props.guest.status));
+
   return (
     <section class="space-y-3" aria-labelledby={headingId()}>
-      <h2 id={headingId()} class="sr-only">
-        {props.guest.name} details
-      </h2>
+      <div class="flex items-center gap-2 min-w-0">
+        <StatusDot
+          size="sm"
+          variant={headerIndicator().variant}
+          title={headerIndicator().label}
+          ariaLabel={headerIndicator().label}
+        />
+        <h2
+          id={headingId()}
+          class="text-sm font-semibold text-base-content truncate m-0"
+          title={props.guest.name}
+        >
+          {props.guest.name}
+        </h2>
+      </div>
       {/* Tabs */}
       <div class="mb-1 flex items-center justify-between gap-3 border-b border-border px-1">
         <div class="flex items-center gap-6">

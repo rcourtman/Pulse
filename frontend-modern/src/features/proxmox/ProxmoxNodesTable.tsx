@@ -12,6 +12,7 @@ import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { NodeDrawer } from '@/components/Workloads/NodeDrawer';
+import { toDiscoveryConfig } from '@/components/Infrastructure/resourceDetailDiscoveryModel';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { MetricMiniSparkline } from '@/components/Workloads/MetricMiniSparkline';
@@ -451,6 +452,12 @@ export const ProxmoxNodesTable: Component<{
                               <NodeDrawer
                                 node={selectedNode()}
                                 disks={normalizeDiskArray(node.agent?.disks)}
+                                discoveryTarget={(() => {
+                                  const config = toDiscoveryConfig(node);
+                                  return config
+                                    ? { agentId: config.agentId, hostname: config.hostname }
+                                    : undefined;
+                                })()}
                               />
                             </div>
                           </TableCell>
