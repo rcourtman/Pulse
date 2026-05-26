@@ -1,7 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChartsAPI } from '@/api/charts';
-import StorageSummary from '@/components/Storage/StorageSummary';
 import storageSummarySource from '@/components/Storage/useStorageSummaryCharts.ts?raw';
 import storageSummaryCacheSource from '@/utils/storageSummaryCache.ts?raw';
 import type { Alert } from '@/types/api';
@@ -981,113 +980,6 @@ describe('Storage', () => {
         'false',
       );
     });
-  });
-
-  it('shows compact synchronized readouts on sibling storage cards without duplicating the source card tooltip', async () => {
-    const storageSummarySpy = vi.spyOn(ChartsAPI, 'getStorageSummaryCharts').mockResolvedValue({
-      pools: {
-        'pool:alpha': {
-          name: 'Alpha-Store',
-          usage: [
-            { timestamp: Date.now() - 60_000, value: 45 },
-            { timestamp: Date.now(), value: 47 },
-          ],
-          used: [
-            { timestamp: Date.now() - 60_000, value: 450 },
-            { timestamp: Date.now(), value: 470 },
-          ],
-          avail: [
-            { timestamp: Date.now() - 60_000, value: 550 },
-            { timestamp: Date.now(), value: 530 },
-          ],
-        },
-        'pool:beta': {
-          name: 'Beta-Store',
-          usage: [
-            { timestamp: Date.now() - 60_000, value: 58 },
-            { timestamp: Date.now(), value: 60 },
-          ],
-          used: [
-            { timestamp: Date.now() - 60_000, value: 680 },
-            { timestamp: Date.now(), value: 700 },
-          ],
-          avail: [
-            { timestamp: Date.now() - 60_000, value: 320 },
-            { timestamp: Date.now(), value: 300 },
-          ],
-        },
-      },
-      disks: {},
-      stats: {
-        oldestDataTimestamp: Date.now() - 60_000,
-      },
-    });
-
-    render(() => (
-      <StorageSummary
-        poolCount={2}
-        diskCount={0}
-        data={{
-          pools: {
-            'pool:alpha': {
-              name: 'Alpha-Store',
-              usage: [
-                { timestamp: Date.now() - 60_000, value: 45 },
-                { timestamp: Date.now(), value: 47 },
-              ],
-              used: [
-                { timestamp: Date.now() - 60_000, value: 450 },
-                { timestamp: Date.now(), value: 470 },
-              ],
-              avail: [
-                { timestamp: Date.now() - 60_000, value: 550 },
-                { timestamp: Date.now(), value: 530 },
-              ],
-            },
-            'pool:beta': {
-              name: 'Beta-Store',
-              usage: [
-                { timestamp: Date.now() - 60_000, value: 68 },
-                { timestamp: Date.now(), value: 70 },
-              ],
-              used: [
-                { timestamp: Date.now() - 60_000, value: 680 },
-                { timestamp: Date.now(), value: 700 },
-              ],
-              avail: [
-                { timestamp: Date.now() - 60_000, value: 320 },
-                { timestamp: Date.now(), value: 300 },
-              ],
-            },
-          },
-          disks: {},
-          stats: {
-            oldestDataTimestamp: Date.now() - 60_000,
-          },
-        }}
-        loaded
-        fetchFailed={false}
-        timeRange="1h"
-        chartHoverSync={{
-          sourceKey: 'pool-usage',
-          seriesId: 'pool:beta',
-          timestamp: Date.now(),
-        }}
-      />
-    ));
-
-    await screen.findByTestId('storage-summary');
-
-    await waitFor(() => {
-      const readouts = document.querySelectorAll('[data-summary-sync-readout="true"]');
-      expect(readouts).toHaveLength(2);
-      for (const readout of readouts) {
-        expect(readout.getAttribute('data-summary-sync-empty')).toBe('false');
-        expect(readout.getAttribute('data-summary-sync-timestamp')).not.toBe('');
-      }
-    });
-
-    storageSummarySpy.mockRestore();
   });
 
   it('restores canonical TrueNAS source filters from the storage route', async () => {

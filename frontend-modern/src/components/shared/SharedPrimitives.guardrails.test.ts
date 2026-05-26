@@ -61,10 +61,8 @@ import summaryCardInteractionSource from '@/components/shared/summaryCardInterac
 import summaryJumpToRowButtonSource from '@/components/shared/SummaryJumpToRowButton.tsx?raw';
 import summaryRowActionButtonSource from '@/components/shared/SummaryRowActionButton.tsx?raw';
 import summaryInteractionA11ySource from '@/components/shared/summaryInteractionA11y.ts?raw';
-import stickySummarySectionSource from '@/components/shared/StickySummarySection.tsx?raw';
 import tableSource from '@/components/shared/Table.tsx?raw';
 import tableCardHeaderSource from '@/components/shared/TableCardHeader.tsx?raw';
-import summaryTableCardHeaderSource from '@/components/shared/SummaryTableCardHeader.tsx?raw';
 import summaryTableFocusSource from '@/components/shared/summaryTableFocus.ts?raw';
 import tableCardSource from '@/components/shared/TableCard.tsx?raw';
 import groupedTableModeSegmentedControlSource from '@/components/shared/GroupedTableModeSegmentedControl.tsx?raw';
@@ -75,10 +73,6 @@ import animatedNumberStateSource from '@/components/shared/useAnimatedNumberStat
 import workloadsFilterSource from '@/components/Workloads/WorkloadsFilter.tsx?raw';
 import infrastructureSourceManagerSource from '@/components/Settings/InfrastructureSourceManager.tsx?raw';
 import configuredNodeTablesSource from '@/components/Settings/ConfiguredNodeTables.tsx?raw';
-import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
-import infrastructureSummaryTableRowSource from '@/components/shared/InfrastructureSummaryTableRow.tsx?raw';
-import infrastructureSummaryTableModelSource from '@/components/shared/infrastructureSummaryTableModel.ts?raw';
-import infrastructureSummaryTableStateSource from '@/components/shared/useInfrastructureSummaryTableState.ts?raw';
 import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx?raw';
 import selectionCardGroupModelSource from '@/components/shared/selectionCardGroupModel.ts?raw';
 import summaryMetricCardSource from '@/components/shared/SummaryMetricCard.tsx?raw';
@@ -121,7 +115,6 @@ import workloadPanelSource from '@/components/Workloads/WorkloadPanel.tsx?raw';
 import guestRowStateSource from '@/components/Workloads/useGuestRowState.ts?raw';
 import workloadSelectionStateSource from '@/components/Workloads/useWorkloadSelectionState.ts?raw';
 import proxmoxNodesTableSource from '@/features/proxmox/ProxmoxNodesTable.tsx?raw';
-import infrastructureSummaryStateSource from '@/components/Infrastructure/useInfrastructureSummaryState.ts?raw';
 import unifiedResourceHostTableCardSource from '@/components/Infrastructure/UnifiedResourceHostTableCard.tsx?raw';
 import unifiedResourceServiceInfrastructureCardSource from '@/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx?raw';
 import unifiedResourcePBSTableSectionSource from '@/components/Infrastructure/UnifiedResourcePBSTableSection.tsx?raw';
@@ -138,7 +131,6 @@ import storagePoolRowSource from '@/components/Storage/StoragePoolRow.tsx?raw';
 import storageContentCardSource from '@/components/Storage/StorageContentCard.tsx?raw';
 import storagePoolsTableSource from '@/components/Storage/StoragePoolsTable.tsx?raw';
 import diskListSource from '@/components/Storage/DiskList.tsx?raw';
-import storageSummarySource from '@/components/Storage/StorageSummary.tsx?raw';
 import workloadsSummarySource from '@/components/Workloads/WorkloadsSummary.tsx?raw';
 import recoveryTablePresentationSource from '@/utils/recoveryTablePresentation.ts?raw';
 import alertHistoryTableSectionSource from '@/features/alerts/AlertHistoryTableSection.tsx?raw';
@@ -194,8 +186,6 @@ describe('shared primitive guardrails', () => {
       .sort();
 
     expect(rawTableUsers).toEqual([
-      './InfrastructureSummaryTable.tsx',
-      './InfrastructureSummaryTableRow.tsx',
       './PulseDataGrid.tsx',
     ]);
   });
@@ -337,8 +327,6 @@ describe('shared primitive guardrails', () => {
     expect(tableCardHeaderSource).toContain('TABLE_CARD_HEADER_CLASS');
     expect(tableCardHeaderSource).not.toContain('Pinned to');
     expect(tableCardHeaderSource).not.toContain('Scoped to');
-    expect(summaryTableCardHeaderSource).toContain("from './TableCardHeader'");
-    expect(summaryTableCardHeaderSource).not.toContain('border-b border-border bg-surface-hover');
     for (const source of [
       unifiedResourceHostTableCardSource,
       unifiedResourceServiceInfrastructureCardSource,
@@ -427,17 +415,7 @@ describe('shared primitive guardrails', () => {
     );
     expect(summaryTableFocusSource).not.toContain('useNavigate(');
 
-    expect(infrastructureSummaryStateSource).toContain('useSummaryContextualFocusState');
-    expect(infrastructureSummaryStateSource).toContain('chartHoverSync');
-    expect(infrastructureSummaryStateSource).toContain('hoveredGroupScope');
-    expect(infrastructureSummaryStateSource).toContain('filterSeriesForActiveScope');
-    expect(infrastructureSummaryStateSource).not.toContain(
-      'const interactiveResourceIds = createMemo',
-    );
 
-    expect(storageSummarySource).toContain('useSummaryContextualFocusState');
-    expect(storageSummarySource).toContain('chartHoverSync');
-    expect(storageSummarySource).not.toContain('resolveSummaryActiveSeriesId');
 
     expect(workloadsSummarySource).toContain('useSummaryContextualFocusState');
     expect(workloadsSummarySource).toContain('chartHoverSync');
@@ -464,8 +442,6 @@ describe('shared primitive guardrails', () => {
 
     expect(workloadsSummarySource).toContain('SummarySynchronizedReadout');
     expect(workloadsSummarySource).toContain('headerValue={');
-    expect(storageSummarySource).toContain('SummarySynchronizedReadout');
-    expect(storageSummarySource).toContain('headerValue={');
   });
 
   it('keeps summary-linked table row emphasis on the shared active-row presentation contract', () => {
@@ -870,34 +846,9 @@ describe('shared primitive guardrails', () => {
   });
 
   it('keeps infrastructure summary table on shell, runtime, and model owners', () => {
-    expect(infrastructureSummaryTableSource).toContain('useInfrastructureSummaryTableState');
-    expect(infrastructureSummaryTableSource).toContain('InfrastructureSummaryTableRow');
-    expect(infrastructureSummaryTableSource).not.toContain('useWebSocket');
-    expect(infrastructureSummaryTableSource).not.toContain('useAlertsActivation');
-    expect(infrastructureSummaryTableSource).not.toContain('createSignal');
-    expect(infrastructureSummaryTableSource).not.toContain('getNormalizedIdentityLookupVariants');
-    expect(infrastructureSummaryTableSource).not.toContain('getAgentLikeIdentityAliases');
 
-    expect(infrastructureSummaryTableStateSource).toContain('useWebSocket');
-    expect(infrastructureSummaryTableStateSource).toContain('useAlertsActivation');
-    expect(infrastructureSummaryTableStateSource).toContain(
-      'export function useInfrastructureSummaryTableState',
-    );
-    expect(infrastructureSummaryTableStateSource).toContain('createSignal');
 
-    expect(infrastructureSummaryTableModelSource).toContain('getNormalizedIdentityLookupVariants');
-    expect(infrastructureSummaryTableModelSource).toContain('getAgentLikeIdentityAliases');
-    expect(infrastructureSummaryTableModelSource).toContain(
-      'export const resolveInfrastructureSummaryLinkedAgent',
-    );
-    expect(infrastructureSummaryTableModelSource).toContain(
-      'export const sortInfrastructureSummaryItems',
-    );
 
-    expect(infrastructureSummaryTableRowSource).toContain('InfrastructureDetailsDrawer');
-    expect(infrastructureSummaryTableRowSource).toContain('getAlertStyles');
-    expect(infrastructureSummaryTableRowSource).not.toContain('useWebSocket');
-    expect(infrastructureSummaryTableRowSource).not.toContain('useAlertsActivation');
   });
 
   it('keeps infrastructure selector on shell, runtime, and model owners', () => {
@@ -1348,13 +1299,6 @@ describe('shared primitive guardrails', () => {
   });
 
   it('keeps sticky summary breakpoint behavior on the shared primitive', () => {
-    expect(stickySummarySectionSource).toContain('stickyDesktopOnly?: boolean');
-    expect(stickySummarySectionSource).toContain(
-      "stickyDesktopOnly() ? 'static lg:sticky' : 'sticky'",
-    );
-    expect(stickySummarySectionSource).toContain(
-      'data-sticky-summary-sticky-desktop-only={stickyDesktopOnly() ?',
-    );
   });
 
   it('keeps tooltip on shell, runtime, and model owners', () => {

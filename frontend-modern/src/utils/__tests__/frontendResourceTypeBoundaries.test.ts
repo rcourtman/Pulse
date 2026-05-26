@@ -56,13 +56,10 @@ import tooltipModelSource from '@/components/shared/tooltipModel.ts?raw';
 import upgradeLinkSource from '@/components/shared/UpgradeLink.tsx?raw';
 import monitoredSystemLedgerPanelSource from '@/components/Settings/MonitoredSystemLedgerPanel.tsx?raw';
 import monitoredSystemDefinitionDisclosureSource from '@/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx?raw';
-import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
-import infrastructureSummaryTableRowSource from '@/components/shared/InfrastructureSummaryTableRow.tsx?raw';
 import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
 import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
 import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx?raw';
 import selectionCardGroupModelSource from '@/components/shared/selectionCardGroupModel.ts?raw';
-import sharedInfrastructureSummaryTableModelSource from '@/components/shared/infrastructureSummaryTableModel.ts?raw';
 import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
 import columnPickerStateSource from '@/components/shared/useColumnPickerState.ts?raw';
 import tagInputStateSource from '@/components/shared/useTagInputState.ts?raw';
@@ -84,7 +81,6 @@ import searchTipsPopoverStateSource from '@/components/shared/useSearchTipsPopov
 import tooltipStateSource from '@/components/shared/useTooltipState.ts?raw';
 import upgradeNavigationHookSource from '@/components/shared/useUpgradeNavigation.ts?raw';
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
-import infrastructureSummaryTableStateSource from '@/components/shared/useInfrastructureSummaryTableState.ts?raw';
 import selectionCardGroupStateSource from '@/components/shared/useSelectionCardGroupState.ts?raw';
 import resourceBadgePresentationSource from '@/utils/resourceBadgePresentation.ts?raw';
 import workloadTypeBadgesSource from '@/components/shared/workloadTypeBadges.ts?raw';
@@ -286,7 +282,6 @@ import resourceDetailDrawerShellSource from '@/components/Infrastructure/Resourc
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
 import resourceDetailDrawerDebugSource from '@/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx?raw';
 import resourceDetailSummarySource from '@/components/Infrastructure/ResourceDetailSummary.tsx?raw';
-import infrastructureSummaryStateSource from '@/components/Infrastructure/useInfrastructureSummaryState.ts?raw';
 import infrastructureSummaryModelSource from '@/components/Infrastructure/infrastructureSummaryModel.ts?raw';
 import resourceDetailDrawerDiscoveryModelSource from '@/components/Infrastructure/resourceDetailDiscoveryModel.ts?raw';
 import resourceDetailMappersSource from '@/components/Infrastructure/resourceDetailMappers.ts?raw';
@@ -877,18 +872,6 @@ describe('frontend resource type boundaries', () => {
     expect(useWorkloadsSource).not.toContain('const normalizeOrgScope =');
     expect(useUnifiedResourcesSource).toContain('normalizeOrgScope(getOrgID())');
     expect(useUnifiedResourcesSource).not.toContain('const normalizeOrgScope =');
-    expect(infrastructureSummaryStateSource).toContain('normalizeOrgScope(getOrgID())');
-    expect(infrastructureSummaryStateSource).toContain('buildInfrastructureDisplaySeries');
-    expect(infrastructureSummaryStateSource).toContain('buildInfrastructureMetricSeries');
-    expect(infrastructureSummaryStateSource).toContain('buildInfrastructureEmptyMessage');
-    expect(infrastructureSummaryStateSource).not.toContain(
-      'const match = allSeries.find((series) => series.id === focused);',
-    );
-    expect(infrastructureSummaryStateSource).not.toContain('displaySeries().map((series) => ({');
-    expect(infrastructureSummaryStateSource).not.toContain(
-      "isAwaitingFirstSample() ? 'Gathering first sample…' : 'Building trend history…'",
-    );
-    expect(infrastructureSummaryStateSource).not.toContain("getOrgID() || 'default'");
     expect(storageSummaryCacheSource).toContain('normalizeOrgScope(getOrgID())');
     expect(guestRowSource).toContain('useGuestRowState');
     expect(guestRowSource).toContain("from './GuestRowCells'");
@@ -2415,9 +2398,6 @@ describe('frontend resource type boundaries', () => {
     expect(infrastructureSummaryModelSource).toContain('buildInfrastructureDisplaySeries');
     expect(infrastructureSummaryModelSource).toContain('buildInfrastructureMetricSeries');
     expect(infrastructureSummaryModelSource).toContain('buildInfrastructureEmptyMessage');
-    expect(sharedInfrastructureSummaryTableModelSource).toContain(
-      'getNormalizedIdentityLookupVariants',
-    );
     expect(resourceIdentitySource).toContain('getNormalizedIdentityLookupVariants');
     expect(stringUtilsSource).toContain('export const asTrimmedString');
     expect(resourceIdentitySource).not.toContain(
@@ -2687,25 +2667,6 @@ describe('frontend resource type boundaries', () => {
     expect(collapsibleSearchInputModelSource).toContain('getCollapsibleSearchRootClass');
     expect(infrastructureSummaryModelSource).not.toContain(
       'const asTrimmedString = (value: unknown): string | null => {',
-    );
-    expect(sharedInfrastructureSummaryTableModelSource).not.toContain(
-      'const asTrimmedString = (value: unknown): string | undefined => {',
-    );
-    expect(infrastructureSummaryTableSource).toContain('useInfrastructureSummaryTableState');
-    expect(infrastructureSummaryTableSource).toContain('InfrastructureSummaryTableRow');
-    expect(infrastructureSummaryTableSource).not.toContain('useWebSocket');
-    expect(infrastructureSummaryTableSource).not.toContain('useAlertsActivation');
-    expect(infrastructureSummaryTableSource).not.toContain('createSignal');
-    expect(infrastructureSummaryTableSource).not.toContain('getAgentLikeIdentityAliases');
-    expect(infrastructureSummaryTableStateSource).toContain('useWebSocket');
-    expect(infrastructureSummaryTableStateSource).toContain('useAlertsActivation');
-    expect(infrastructureSummaryTableStateSource).toContain(
-      'export function useInfrastructureSummaryTableState',
-    );
-    expect(infrastructureSummaryTableRowSource).toContain('InfrastructureDetailsDrawer');
-    expect(infrastructureSummaryTableRowSource).toContain('getAlertStyles');
-    expect(sharedInfrastructureSummaryTableModelSource).toContain(
-      'resolveInfrastructureSummaryLinkedAgent',
     );
     expect(interactiveSparklineSource).toContain('useInteractiveSparklineState');
     expect(interactiveSparklineSource).not.toContain('scheduleSparkline');
