@@ -1,13 +1,13 @@
-import { Card } from '@/components/shared/Card';
-import { LabeledFilterSelect } from '@/components/shared/FilterToolbar';
-import { PageControls } from '@/components/shared/PageControls';
-import { SearchInput } from '@/components/shared/SearchInput';
+import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 import {
   ALERT_HISTORY_ALL_TIME_FILTER_LABEL,
   getAlertHistorySearchPlaceholder,
 } from '@/utils/alertOverviewPresentation';
-
+import type { AlertHistoryRange, AlertSeverityFilter } from './alertHistoryModel';
 import type { AlertHistoryState } from './useAlertHistoryState';
+
+const severityDot = (className: string) => <span class={`h-2 w-2 rounded-full ${className}`} />;
 
 interface AlertHistoryFiltersCardProps {
   state: AlertHistoryState;
@@ -15,56 +15,63 @@ interface AlertHistoryFiltersCardProps {
 }
 
 export function AlertHistoryFiltersCard(props: AlertHistoryFiltersCardProps) {
+  const buildFilters = (): FilterDef[] => [
+    {
+      id: 'alert-period',
+      label: 'Period',
+      group: 'scope',
+      inline: true,
+      value: props.state.timeFilter,
+      setValue: (value: string) => props.state.setTimeFilter(value as AlertHistoryRange),
+      defaultValue: '7d',
+      options: () => [
+        { value: '24h', label: 'Last 24h' },
+        { value: '7d', label: 'Last 7d' },
+        { value: '30d', label: 'Last 30d' },
+        { value: 'all', label: ALERT_HISTORY_ALL_TIME_FILTER_LABEL },
+      ],
+    },
+    {
+      id: 'alert-severity',
+      label: 'Severity',
+      group: 'status',
+      inline: true,
+      value: props.state.severityFilter,
+      setValue: (value: string) =>
+        props.state.setSeverityFilter(value as AlertSeverityFilter),
+      defaultValue: 'all',
+      options: () => [
+        { value: 'all', label: 'All' },
+        {
+          value: 'critical',
+          label: 'Critical',
+          leading: severityDot('bg-red-500'),
+          tone: 'danger',
+        },
+        {
+          value: 'warning',
+          label: 'Warning',
+          leading: severityDot('bg-amber-500'),
+          tone: 'warning',
+        },
+      ],
+    },
+  ];
+
   return (
-    <Card padding="sm" class="mb-4">
-      <PageControls
-        search={
-          <SearchInput
-            value={props.state.searchTerm}
-            onChange={props.state.setSearchTerm}
-            placeholder={getAlertHistorySearchPlaceholder()}
-            class="w-full"
-            clearOnEscape
-            history={{ storageKey: props.state.STORAGE_KEYS.ALERTS_SEARCH_HISTORY }}
-          />
-        }
-        mobileFilters={{
-          enabled: props.isMobile,
-          onToggle: () => props.state.setFiltersOpen((open) => !open),
-          count: props.state.activeFilterCount(),
-        }}
-        showFilters={!props.isMobile || props.state.filtersOpen()}
-      >
-        <LabeledFilterSelect
-          id="alert-time-filter"
-          label="Period"
-          value={props.state.timeFilter()}
-          onChange={(event) =>
-            props.state.setTimeFilter(event.currentTarget.value as '24h' | '7d' | '30d' | 'all')
-          }
-          selectClass="min-w-[7rem]"
-        >
-          <option value="24h">Last 24h</option>
-          <option value="7d">Last 7d</option>
-          <option value="30d">Last 30d</option>
-          <option value="all">{ALERT_HISTORY_ALL_TIME_FILTER_LABEL}</option>
-        </LabeledFilterSelect>
-        <LabeledFilterSelect
-          id="alert-severity-filter"
-          label="Severity"
-          value={props.state.severityFilter()}
-          onChange={(event) =>
-            props.state.setSeverityFilter(
-              event.currentTarget.value as 'warning' | 'critical' | 'all',
-            )
-          }
-          selectClass="min-w-[7rem]"
-        >
-          <option value="all">All</option>
-          <option value="critical">Critical</option>
-          <option value="warning">Warning</option>
-        </LabeledFilterSelect>
-      </PageControls>
-    </Card>
+    <FilterBar
+      role="group"
+      ariaLabel="Alert history filters"
+      isMobile={() => props.isMobile}
+      savedViewsKey="alerts-history"
+      search={{
+        value: props.state.searchTerm,
+        setValue: props.state.setSearchTerm,
+        placeholder: getAlertHistorySearchPlaceholder(),
+        historyKey: STORAGE_KEYS.ALERTS_SEARCH_HISTORY,
+        clearOnEscape: true,
+      }}
+      filters={buildFilters()}
+    />
   );
 }

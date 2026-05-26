@@ -1,8 +1,8 @@
 import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import type { Accessor } from 'solid-js';
+import { useLocation, useNavigate } from '@solidjs/router';
 
 import { AlertsAPI } from '@/api/alerts';
-import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
 import type { Alert } from '@/types/api';
@@ -40,27 +40,68 @@ export interface UseAlertHistoryStateProps {
   allResources: () => Resource[];
 }
 
+const DEFAULT_TIME_FILTER: AlertHistoryRange = '7d';
+const DEFAULT_SEVERITY_FILTER: AlertSeverityFilter = 'all';
+
+const parsePeriod = (raw: string | null | undefined): AlertHistoryRange =>
+  raw === '24h' || raw === '7d' || raw === '30d' || raw === 'all' ? raw : DEFAULT_TIME_FILTER;
+
+const parseSeverity = (raw: string | null | undefined): AlertSeverityFilter =>
+  raw === 'warning' || raw === 'critical' ? raw : DEFAULT_SEVERITY_FILTER;
+
 export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
-  const [timeFilter, setTimeFilter] = usePersistentSignal<AlertHistoryRange>(
-    'alertHistoryTimeFilter',
-    '7d',
-    {
-      deserialize: (raw) =>
-        raw === '24h' || raw === '7d' || raw === '30d' || raw === 'all' ? raw : '7d',
-    },
-  );
-  const [severityFilter, setSeverityFilter] = usePersistentSignal<AlertSeverityFilter>(
-    'alertHistorySeverityFilter',
-    'all',
-    {
-      deserialize: (raw) => (raw === 'warning' || raw === 'critical' ? raw : 'all'),
-    },
-  );
-  const [searchTerm, setSearchTerm] = createSignal('');
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const timeFilter: Accessor<AlertHistoryRange> = () =>
+    parsePeriod(new URLSearchParams(location.search).get('period'));
+  const severityFilter: Accessor<AlertSeverityFilter> = () =>
+    parseSeverity(new URLSearchParams(location.search).get('severity'));
+  const searchTerm: Accessor<string> = () =>
+    new URLSearchParams(location.search).get('q') ?? '';
+
+  const updateSearchParam = (
+    mutate: (params: URLSearchParams) => void,
+  ): void => {
+    const params = new URLSearchParams(location.search);
+    mutate(params);
+    const query = params.toString();
+    navigate(`${location.pathname}${query ? `?${query}` : ''}`, { replace: true });
+  };
+
+  const setTimeFilter = (value: AlertHistoryRange): void => {
+    updateSearchParam((params) => {
+      if (value === DEFAULT_TIME_FILTER) {
+        params.delete('period');
+      } else {
+        params.set('period', value);
+      }
+    });
+  };
+
+  const setSeverityFilter = (value: AlertSeverityFilter): void => {
+    updateSearchParam((params) => {
+      if (value === DEFAULT_SEVERITY_FILTER) {
+        params.delete('severity');
+      } else {
+        params.set('severity', value);
+      }
+    });
+  };
+
+  const setSearchTerm = (value: string): void => {
+    updateSearchParam((params) => {
+      if (value === '') {
+        params.delete('q');
+      } else {
+        params.set('q', value);
+      }
+    });
+  };
+
   const [alertHistory, setAlertHistory] = createSignal<Alert[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [selectedBarIndex, setSelectedBarIndex] = createSignal<number | null>(null);
-  const [filtersOpen, setFiltersOpen] = createSignal(false);
   const resourceIncidentsState = useAlertResourceIncidentsState();
 
   const {
@@ -131,6 +172,36 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
   });
 
   onMount(() => {
+    // Migrate legacy localStorage-backed filter prefs into the URL on first
+    // visit after upgrade. Keeps the dead localStorage keys in place rather
+    // than evicting them; harmless and avoids an eviction migration.
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      let mutated = false;
+
+      if (!params.has('period')) {
+        const legacy = window.localStorage.getItem('alertHistoryTimeFilter');
+        const parsed = parsePeriod(legacy);
+        if (parsed !== DEFAULT_TIME_FILTER && legacy === parsed) {
+          params.set('period', parsed);
+          mutated = true;
+        }
+      }
+
+      if (!params.has('severity')) {
+        const legacy = window.localStorage.getItem('alertHistorySeverityFilter');
+        const parsed = parseSeverity(legacy);
+        if (parsed !== DEFAULT_SEVERITY_FILTER && legacy === parsed) {
+          params.set('severity', parsed);
+          mutated = true;
+        }
+      }
+
+      if (mutated) {
+        navigate(`${location.pathname}?${params.toString()}`, { replace: true });
+      }
+    }
+
     void fetchHistory(timeFilter());
 
     const unsubscribeOrgSwitched = eventBus.on('org_switched', () => {
@@ -232,8 +303,6 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     expandedResourceIncidentIds: resourceIncidentsState.expandedResourceIncidentIds,
     resourceIncidentEventFilters: resourceIncidentsState.resourceIncidentEventFilters,
     setResourceIncidentEventFilters: resourceIncidentsState.setResourceIncidentEventFilters,
-    filtersOpen,
-    setFiltersOpen,
     activeFilterCount,
     incidentTimelines,
     incidentLoading,

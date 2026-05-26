@@ -7,6 +7,41 @@ import { eventBus } from '@/stores/events';
 
 import { useAlertHistoryState } from '../useAlertHistoryState';
 
+const mockRouterPathname = '/alerts/history';
+const [mockRouterSearch, setMockRouterSearch] = createSignal('');
+
+const setMockLocation = (search: string) => {
+  setMockRouterSearch(search);
+  if (typeof window !== 'undefined') {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      writable: true,
+      value: {
+        ...window.location,
+        pathname: mockRouterPathname,
+        search,
+      },
+    });
+  }
+};
+
+const navigateSpy = vi.fn((path: string) => {
+  const queryIndex = path.indexOf('?');
+  setMockLocation(queryIndex >= 0 ? path.slice(queryIndex) : '');
+});
+
+vi.mock('@solidjs/router', () => ({
+  useLocation: () => ({
+    get pathname() {
+      return mockRouterPathname;
+    },
+    get search() {
+      return mockRouterSearch();
+    },
+  }),
+  useNavigate: () => navigateSpy,
+}));
+
 vi.mock('@/api/alerts', () => ({
   AlertsAPI: {
     addIncidentNote: vi.fn(),
@@ -42,6 +77,8 @@ describe('useAlertHistoryState', () => {
     vi.mocked(AlertsAPI.getIncidentsForResource).mockReset();
     vi.mocked(AlertsAPI.clearHistory).mockReset();
     vi.mocked(eventBus.on).mockClear();
+    navigateSpy.mockClear();
+    setMockLocation('');
     vi.stubGlobal('confirm', vi.fn(() => true));
     localStorage.clear();
   });
