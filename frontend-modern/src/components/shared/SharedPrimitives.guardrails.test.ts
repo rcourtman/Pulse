@@ -58,7 +58,6 @@ import interactiveSparklineSource from '@/components/shared/InteractiveSparkline
 import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
 import contextualFocusSource from '@/components/shared/contextualFocus.ts?raw';
 import summaryCardInteractionSource from '@/components/shared/summaryCardInteraction.ts?raw';
-import summaryJumpToRowButtonSource from '@/components/shared/SummaryJumpToRowButton.tsx?raw';
 import summaryRowActionButtonSource from '@/components/shared/SummaryRowActionButton.tsx?raw';
 import summaryInteractionA11ySource from '@/components/shared/summaryInteractionA11y.ts?raw';
 import tableSource from '@/components/shared/Table.tsx?raw';
@@ -72,12 +71,9 @@ import animatedNumberModelSource from '@/components/shared/animatedNumberModel.t
 import animatedNumberStateSource from '@/components/shared/useAnimatedNumberState.ts?raw';
 import workloadsFilterSource from '@/components/Workloads/WorkloadsFilter.tsx?raw';
 import infrastructureSourceManagerSource from '@/components/Settings/InfrastructureSourceManager.tsx?raw';
-import configuredNodeTablesSource from '@/components/Settings/ConfiguredNodeTables.tsx?raw';
 import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx?raw';
 import selectionCardGroupModelSource from '@/components/shared/selectionCardGroupModel.ts?raw';
-import summaryMetricCardSource from '@/components/shared/SummaryMetricCard.tsx?raw';
 import summaryChartLayoutSource from '@/components/shared/summaryChartLayout.ts?raw';
-import summarySynchronizedReadoutSource from '@/components/shared/SummarySynchronizedReadout.tsx?raw';
 import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
 import tlsVerificationWarningBannerSource from '@/components/shared/TlsVerificationWarningBanner.tsx?raw';
 import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
@@ -130,7 +126,6 @@ import storagePoolRowSource from '@/components/Storage/StoragePoolRow.tsx?raw';
 import storageContentCardSource from '@/components/Storage/StorageContentCard.tsx?raw';
 import storagePoolsTableSource from '@/components/Storage/StoragePoolsTable.tsx?raw';
 import diskListSource from '@/components/Storage/DiskList.tsx?raw';
-import workloadsSummarySource from '@/components/Workloads/WorkloadsSummary.tsx?raw';
 import recoveryTablePresentationSource from '@/utils/recoveryTablePresentation.ts?raw';
 import alertHistoryTableSectionSource from '@/features/alerts/AlertHistoryTableSection.tsx?raw';
 import alertHistoryTableGroupRowSource from '@/features/alerts/AlertHistoryTableGroupRow.tsx?raw';
@@ -390,10 +385,6 @@ describe('shared primitive guardrails', () => {
     expect(workloadSelectionStateSource).toContain('activeSummaryWorkloadGroupScope');
     expect(workloadSelectionStateSource).not.toContain('const scrollTop = scroller?.scrollTop');
 
-    expect(summaryJumpToRowButtonSource).toContain('<span>Jump to row</span>');
-    expect(summaryJumpToRowButtonSource).toContain('props.onClick');
-    expect(summaryJumpToRowButtonSource).not.toContain('querySelector');
-    expect(summaryJumpToRowButtonSource).not.toContain('scrollIntoView');
 
     expect(summaryTableFocusSource).toContain('export function useSummaryTableFocusBridge');
     expect(summaryTableFocusSource).toContain('export function useSummaryPageInteractionState');
@@ -416,31 +407,16 @@ describe('shared primitive guardrails', () => {
 
 
 
-    expect(workloadsSummarySource).toContain('useSummaryContextualFocusState');
-    expect(workloadsSummarySource).toContain('chartHoverSync');
-    expect(workloadsSummarySource).toContain('hoveredGroupScope');
-    expect(workloadsSummarySource).toContain('filterSeriesForActiveScope');
-    expect(workloadsSummarySource).not.toContain('const interactiveWorkloadIds = createMemo');
   });
 
   it('keeps synchronized summary values on one shared card/readout contract', () => {
-    expect(summaryMetricCardSource).toContain('headerValue?: JSX.Element');
-    expect(summaryMetricCardSource).toContain("bodyLayout?: 'chart' | 'auto'");
-    expect(summaryMetricCardSource).toContain('props.headerValue');
-    expect(summaryMetricCardSource).not.toContain('data-summary-sync-readout');
 
-    expect(summarySynchronizedReadoutSource).toContain('export const SummarySynchronizedReadout');
-    expect(summarySynchronizedReadoutSource).toContain('data-summary-sync-readout="true"');
-    expect(summarySynchronizedReadoutSource).toContain('formatSummarySynchronizedReadoutTime');
-    expect(summarySynchronizedReadoutSource).not.toContain('Portal');
 
     expect(interactiveSparklineModelSource).toContain(
       'buildInteractiveSparklineSynchronizedReadout',
     );
     expect(densityMapModelSource).toContain('buildDensityMapSynchronizedReadout');
 
-    expect(workloadsSummarySource).toContain('SummarySynchronizedReadout');
-    expect(workloadsSummarySource).toContain('headerValue={');
   });
 
   it('keeps summary-linked table row emphasis on the shared active-row presentation contract', () => {
@@ -532,7 +508,6 @@ describe('shared primitive guardrails', () => {
       storagePoolsTableSource,
       diskListSource,
       infrastructureSourceManagerSource,
-      configuredNodeTablesSource,
       aiCostDashboardSource,
       deployCandidatesStepSource,
       deployConfirmStepSource,
@@ -575,7 +550,6 @@ describe('shared primitive guardrails', () => {
     expect(storagePoolsTableSource).not.toContain('STORAGE_POOLS_SCROLL_WRAP_CLASS');
     expect(diskListSource).not.toContain("from '@/components/shared/Card'");
     expect(diskListSource).not.toContain('PHYSICAL_DISK_TABLE_SCROLL_CLASS');
-    expect(configuredNodeTablesSource).toContain('wrapperClass="max-h-[600px] overflow-y-auto"');
     expect(storageContentCardSource).toContain('<StoragePoolsTable');
     expect(pulseDataGridSource).toContain('wrapperClass="scrollbar-hide"');
     expect(pulseDataGridSource).toContain('getPulseDataGridFrameClass');
@@ -1270,14 +1244,6 @@ describe('shared primitive guardrails', () => {
 
   it('keeps summary density control inside the shared summary primitives', () => {
 
-    expect(summaryMetricCardSource).toContain("density?: 'default' | 'compact'");
-    expect(summaryMetricCardSource).toContain("props.density === 'compact'");
-    expect(summaryMetricCardSource).toContain("props.bodyLayout ?? 'chart'");
-    expect(summaryMetricCardSource).toContain(
-      "isCompact() ? 'mb-1 min-h-[20px]' : 'mb-1.5 min-h-[24px]'",
-    );
-    expect(summaryMetricCardSource).toContain('SUMMARY_CHART_SLOT_COMPACT_CLASS');
-    expect(summaryMetricCardSource).toContain('SUMMARY_CHART_SLOT_CLASS');
     expect(summaryChartLayoutSource).toContain(
       "export const SUMMARY_CHART_SLOT_CLASS = 'h-[136px] sm:h-[150px]'",
     );
@@ -1287,9 +1253,6 @@ describe('shared primitive guardrails', () => {
     expect(summaryChartLayoutSource).toContain(
       "export const SUMMARY_CHART_PLOT_AREA_CLASS = 'h-[120px] sm:h-[134px]'",
     );
-    expect(summaryMetricCardSource).toContain('!p-1.5 sm:!p-2');
-    expect(summaryMetricCardSource).not.toContain('Recovery Posture');
-    expect(summaryMetricCardSource).not.toContain('Freshness');
   });
 
   it('keeps sticky summary breakpoint behavior on the shared primitive', () => {

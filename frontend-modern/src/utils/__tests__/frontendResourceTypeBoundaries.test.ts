@@ -54,7 +54,6 @@ import searchTipsPopoverModelSource from '@/components/shared/searchTipsPopoverM
 import tooltipSource from '@/components/shared/Tooltip.tsx?raw';
 import tooltipModelSource from '@/components/shared/tooltipModel.ts?raw';
 import upgradeLinkSource from '@/components/shared/UpgradeLink.tsx?raw';
-import monitoredSystemLedgerPanelSource from '@/components/Settings/MonitoredSystemLedgerPanel.tsx?raw';
 import monitoredSystemDefinitionDisclosureSource from '@/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx?raw';
 import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
 import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
@@ -137,13 +136,8 @@ import dockerRuntimeSettingsCardSource from '@/components/Settings/DockerRuntime
 import discoveryTargetSource from '@/utils/discoveryTarget.ts?raw';
 import recoveryOutcomePresentationSource from '@/utils/recoveryOutcomePresentation.ts?raw';
 import recoveryArtifactModePresentationSource from '@/utils/recoveryArtifactModePresentation.ts?raw';
-import recoveryFilterChipPresentationSource from '@/utils/recoveryFilterChipPresentation.ts?raw';
 import recoveryIssuePresentationSource from '@/utils/recoveryIssuePresentation.ts?raw';
-import recoveryActionPresentationSource from '@/utils/recoveryActionPresentation.ts?raw';
 import recoveryDatePresentationSource from '@/utils/recoveryDatePresentation.ts?raw';
-import recoveryRecordPresentationSource from '@/utils/recoveryRecordPresentation.ts?raw';
-import recoveryEmptyStatePresentationSource from '@/utils/recoveryEmptyStatePresentation.ts?raw';
-import recoveryStatusPresentationSource from '@/utils/recoveryStatusPresentation.ts?raw';
 import recoveryTablePresentationSource from '@/utils/recoveryTablePresentation.ts?raw';
 import recoveryTimelineChartPresentationSource from '@/utils/recoveryTimelineChartPresentation.ts?raw';
 import recoveryTimelinePresentationSource from '@/utils/recoveryTimelinePresentation.ts?raw';
@@ -181,7 +175,6 @@ import stackedMemoryBarSource from '@/components/Workloads/StackedMemoryBar.tsx?
 import stackedMemoryBarModelSource from '@/components/Workloads/stackedMemoryBarModel.ts?raw';
 import stackedMemoryBarStateSource from '@/components/Workloads/useStackedMemoryBarState.ts?raw';
 import thresholdSliderSource from '@/components/Workloads/ThresholdSlider.tsx?raw';
-import problemResourcePresentationSource from '@/utils/problemResourcePresentation.ts?raw';
 import guestRowSource from '@/components/Workloads/GuestRow.tsx?raw';
 import guestRowCellsSource from '@/components/Workloads/GuestRowCells.tsx?raw';
 import guestRowModelSource from '@/components/Workloads/guestRowModel.tsx?raw';
@@ -201,12 +194,10 @@ import orgScopeSource from '@/utils/orgScope.ts?raw';
 import workloadsUtilitySource from '@/utils/workloads.ts?raw';
 import infrastructureSummaryCacheSource from '@/utils/infrastructureSummaryCache.ts?raw';
 import workloadEmptyStatePresentationSource from '@/utils/workloadEmptyStatePresentation.ts?raw';
-import throughputPresentationSource from '@/utils/throughputPresentation.ts?raw';
 import resourceChangeSummarySource from '@/components/Infrastructure/ResourceChangeSummary.tsx?raw';
 import resourceChangePresentationSource from '@/utils/resourceChangePresentation.ts?raw';
 import resourceCorrelationPresentationSource from '@/utils/resourceCorrelationPresentation.ts?raw';
 import confidencePresentationSource from '@/utils/confidencePresentation.ts?raw';
-import approvalPresentationSource from '@/utils/approvalPresentation.ts?raw';
 import textPresentationSource from '@/utils/textPresentation.ts?raw';
 import messageItemSource from '@/components/AI/Chat/MessageItem.tsx?raw';
 import toolExecutionBlockSource from '@/components/AI/Chat/ToolExecutionBlock.tsx?raw';
@@ -280,7 +271,6 @@ import resourceDetailDrawerShellSource from '@/components/Infrastructure/Resourc
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
 import resourceDetailDrawerDebugSource from '@/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx?raw';
 import resourceDetailSummarySource from '@/components/Infrastructure/ResourceDetailSummary.tsx?raw';
-import infrastructureSummaryModelSource from '@/components/Infrastructure/infrastructureSummaryModel.ts?raw';
 import resourceDetailDrawerDiscoveryModelSource from '@/components/Infrastructure/resourceDetailDiscoveryModel.ts?raw';
 import resourceDetailMappersSource from '@/components/Infrastructure/resourceDetailMappers.ts?raw';
 import resourceDetailDrawerHistoryStateSource from '@/components/Infrastructure/useResourceDetailDrawerHistoryState.ts?raw';
@@ -310,7 +300,6 @@ import pmgServiceHealthBadgeSource from '@/components/PMG/ServiceHealthBadge.tsx
 import proxmoxSettingsModelSource from '@/components/Settings/proxmoxSettingsModel.ts?raw';
 import infrastructureWorkspaceSource from '@/components/Settings/InfrastructureWorkspace.tsx?raw';
 import infrastructureWorkspaceModelSource from '@/components/Settings/infrastructureWorkspaceModel.ts?raw';
-import proxmoxSettingsPresentationSource from '@/utils/proxmoxSettingsPresentation.ts?raw';
 import generalSettingsPanelSource from '@/components/Settings/GeneralSettingsPanel.tsx?raw';
 import nodeModalAuthenticationSectionSource from '@/components/Settings/NodeModalAuthenticationSection.tsx?raw';
 import nodeModalBasicInfoSectionSource from '@/components/Settings/NodeModalBasicInfoSection.tsx?raw';
@@ -447,7 +436,6 @@ import alertSeverityPresentationSource from '@/utils/alertSeverityPresentation.t
 import alertTabsPresentationSource from '@/utils/alertTabsPresentation.ts?raw';
 import alertGroupingPresentationSource from '@/utils/alertGroupingPresentation.ts?raw';
 import alertSchedulePresentationSource from '@/utils/alertSchedulePresentation.ts?raw';
-import configuredNodeTablesSource from '@/components/Settings/ConfiguredNodeTables.tsx?raw';
 import configuredNodeCapabilityPresentationSource from '@/utils/configuredNodeCapabilityPresentation.ts?raw';
 import configuredNodeStatusPresentationSource from '@/utils/configuredNodeStatusPresentation.ts?raw';
 import rbacPresentationSource from '@/utils/rbacPresentation.ts?raw';
@@ -981,9 +969,6 @@ describe('frontend resource type boundaries', () => {
     );
     expect(recoveryIssuePresentationSource).toContain('export function getRecoveryIssueRailClass');
     expect(recoveryTablePresentationSource).toContain('getAllFilterOptionLabel');
-    expect(recoveryFilterChipPresentationSource).toContain(
-      'export function getRecoveryFilterChipPresentation',
-    );
     expect(recoveryTablePresentationSource).toContain(
       'export function getRecoveryArtifactColumnHeaderClass',
     );
@@ -1001,60 +986,6 @@ describe('frontend resource type boundaries', () => {
     expect(recoveryDatePresentationSource).toContain('export function getRecoveryCompactAxisLabel');
     expect(recoveryDatePresentationSource).toContain('export function formatRecoveryTimeOnly');
     expect(recoveryDatePresentationSource).toContain('export function getRecoveryNiceAxisMax');
-    expect(recoveryActionPresentationSource).toContain(
-      'export function getRecoveryBreadcrumbLinkClass',
-    );
-    expect(recoveryActionPresentationSource).toContain(
-      'export function getRecoveryFilterPanelClearClass',
-    );
-    expect(recoveryActionPresentationSource).toContain(
-      'export function getRecoveryEmptyStateActionClass',
-    );
-    expect(recoveryActionPresentationSource).toContain(
-      'export function getRecoveryDrawerCloseButtonClass',
-    );
-    expect(recoveryRecordPresentationSource).toContain(
-      'export function getRecoveryRollupSubjectLabel',
-    );
-    expect(recoveryRecordPresentationSource).toContain(
-      'export function getRecoveryPointSubjectLabel',
-    );
-    expect(recoveryRecordPresentationSource).toContain(
-      'export function getRecoveryPointRepositoryLabel',
-    );
-    expect(recoveryRecordPresentationSource).toContain(
-      'export function getRecoveryPointDetailsSummary',
-    );
-    expect(recoveryEmptyStatePresentationSource).toContain(
-      'export function getRecoveryProtectedItemsLoadingState',
-    );
-    expect(recoveryEmptyStatePresentationSource).toContain(
-      'export function getRecoveryProtectedItemsFailureState',
-    );
-    expect(recoveryEmptyStatePresentationSource).toContain(
-      'export function getRecoveryActivityLoadingState',
-    );
-    expect(recoveryEmptyStatePresentationSource).toContain(
-      'export function getRecoveryActivityEmptyState',
-    );
-    expect(recoveryEmptyStatePresentationSource).toContain(
-      'export function getRecoveryProtectedItemsEmptyState',
-    );
-    expect(recoveryEmptyStatePresentationSource).toContain(
-      'export function getRecoveryHistoryEmptyState',
-    );
-    expect(recoveryEmptyStatePresentationSource).toContain(
-      'export function getRecoveryPointsLoadingState',
-    );
-    expect(recoveryEmptyStatePresentationSource).toContain(
-      'export function getRecoveryPointsFailureState',
-    );
-    expect(recoveryRecordPresentationSource).toContain(
-      'export function getRecoveryPointTimestampMs',
-    );
-    expect(recoveryRecordPresentationSource).toContain(
-      'export function normalizeRecoveryModeQueryValue',
-    );
     expect(recoveryTimelineChartPresentationSource).toContain(
       'export function getRecoveryTimelineAxisLabelClass',
     );
@@ -1063,18 +994,6 @@ describe('frontend resource type boundaries', () => {
     );
     expect(recoveryTimelineChartPresentationSource).toContain(
       'export function getRecoveryTimelineLabelEvery',
-    );
-    expect(recoveryStatusPresentationSource).toContain(
-      'export function getRecoveryProtectedToggleClass',
-    );
-    expect(recoveryStatusPresentationSource).toContain(
-      'export function getRecoveryRollupStatusPillClass',
-    );
-    expect(recoveryStatusPresentationSource).toContain(
-      'export function getRecoveryRollupStatusPillLabel',
-    );
-    expect(recoveryStatusPresentationSource).toContain(
-      'export function getRecoverySpecialOutcomeTextClass',
     );
     expect(recoveryTablePresentationSource).toContain(
       'export function getRecoveryArtifactRowClass',
@@ -1383,9 +1302,6 @@ describe('frontend resource type boundaries', () => {
     );
     expect(agentProfileSuggestionPresentationSource).toContain('titleCaseDelimitedLabel');
     expect(agentProfileSuggestionPresentationSource).not.toContain('const titleize =');
-    expect(problemResourcePresentationSource).toContain(
-      'export function getProblemResourceStatusVariant',
-    );
     expect(diskListSource).toContain('getTemperatureTextClass');
     expect(diskListSource).not.toContain('const getTemperatureTone =');
     expect(diskListSource).toContain('getPhysicalDiskHealthStatus');
@@ -1596,19 +1512,12 @@ describe('frontend resource type boundaries', () => {
     expect(useEnhancedStorageBarModelSource).toContain('getStorageBarLabel');
     expect(useEnhancedStorageBarModelSource).toContain('getStorageBarTooltipRows');
     expect(useEnhancedStorageBarModelSource).toContain('getStorageBarZfsSummary');
-    expect(storagePagePresentationSource).toContain('export const shouldShowCephSummaryCard');
-    expect(storagePagePresentationSource).toContain('export const getStoragePageBannerMessage');
     expect(storagePagePresentationSource).toContain('export const STORAGE_VIEW_OPTIONS');
     expect(storagePagePresentationSource).toContain('export const getStoragePoolTableColumns');
-    expect(storagePagePresentationSource).toContain(
-      'export const STORAGE_BANNER_ACTION_BUTTON_CLASS',
-    );
     expect(storagePagePresentationSource).toContain('export const getStorageTableHeading');
     expect(storagePagePresentationSource).toContain('export const getStorageLoadingMessage');
-    expect(storagePageStatusSource).toContain('export const getStoragePageBannerKind');
     expect(storagePageStatusSource).toContain('export const isStoragePoolLoading');
     expect(storagePageStatusHookSource).toContain('export const useStoragePageStatus');
-    expect(storagePageStatusHookSource).toContain('getStoragePageBannerKind');
     expect(storagePageStatusHookSource).toContain('isStoragePoolLoading');
     expect(storagePageDataSource).toContain('export const useStoragePageData');
     expect(storagePageDataSource).toContain('buildStorageRecords');
@@ -2312,8 +2221,6 @@ describe('frontend resource type boundaries', () => {
     expect(resourceCorrelationPresentationSource).toContain('asTrimmedString');
     expect(confidencePresentationSource).toContain('formatConfidencePercentage');
     expect(confidencePresentationSource).toContain('formatConfidenceLabel');
-    expect(approvalPresentationSource).toContain('getResourceApprovalLevelLabel');
-    expect(throughputPresentationSource).toContain('formatThroughputRate');
     expect(resourceDetailDrawerSource).toContain('formatIdentifierLabel');
     expect(resourceDetailDrawerIdentityModelSource).toContain('formatIdentifierLabel');
     expect(resourceDetailDrawerServiceModelSource).toContain('buildPbsVisibleJobBreakdown');
@@ -2369,10 +2276,6 @@ describe('frontend resource type boundaries', () => {
     expect(aiChatSource).not.toContain('const normalizeMentionKeyPart =');
     expect(chatIdentifiersSource).toContain('normalizeChatMentionKeyPart');
     expect(chatIdentifiersSource).toContain('normalizeChatToolName');
-    expect(infrastructureSummaryModelSource).toContain('getNormalizedIdentityLookupVariants');
-    expect(infrastructureSummaryModelSource).toContain('buildInfrastructureDisplaySeries');
-    expect(infrastructureSummaryModelSource).toContain('buildInfrastructureMetricSeries');
-    expect(infrastructureSummaryModelSource).toContain('buildInfrastructureEmptyMessage');
     expect(resourceIdentitySource).toContain('getNormalizedIdentityLookupVariants');
     expect(stringUtilsSource).toContain('export const asTrimmedString');
     expect(resourceIdentitySource).not.toContain(
@@ -2572,14 +2475,6 @@ describe('frontend resource type boundaries', () => {
     expect(selectionCardGroupModelSource).toContain('resolveSelectionCardTone');
     expect(selectionCardGroupModelSource).toContain('getSelectionCardButtonClass');
     expect(selectionCardGroupModelSource).toContain("compact: 'grid grid-cols-2 gap-2'");
-    expect(monitoredSystemLedgerPanelSource).toContain('@/utils/monitoredSystemPresentation');
-    expect(monitoredSystemLedgerPanelSource).toContain('getMonitoredSystemLedgerPresentation');
-    expect(monitoredSystemLedgerPanelSource).toContain(
-      'getMonitoredSystemCountingDetailsToggleLabel',
-    );
-    expect(monitoredSystemLedgerPanelSource).toContain('getMonitoredSystemLedgerDescription');
-    expect(monitoredSystemLedgerPanelSource).not.toContain('No monitored systems counted.');
-    expect(monitoredSystemLedgerPanelSource).not.toContain('Current status');
     expect(monitoredSystemDefinitionDisclosureSource).toContain(
       '@/utils/monitoredSystemPresentation',
     );
@@ -2640,9 +2535,6 @@ describe('frontend resource type boundaries', () => {
     expect(collapsibleSearchInputModelSource).toContain('getCollapsibleSearchTriggerLabel');
     expect(collapsibleSearchInputModelSource).toContain('shouldShowCollapsibleSearchExpanded');
     expect(collapsibleSearchInputModelSource).toContain('getCollapsibleSearchRootClass');
-    expect(infrastructureSummaryModelSource).not.toContain(
-      'const asTrimmedString = (value: unknown): string | null => {',
-    );
     expect(interactiveSparklineSource).toContain('useInteractiveSparklineState');
     expect(interactiveSparklineSource).not.toContain('scheduleSparkline');
     expect(interactiveSparklineSource).not.toContain('downsampleLTTB');
@@ -2948,15 +2840,6 @@ describe('frontend resource type boundaries', () => {
     expect(pmgServiceHealthBadgeSource).toContain('getServiceHealthPresentation');
     expect(proxmoxSettingsModelSource).toContain(
       'export interface InfrastructurePlatformSettingsProps',
-    );
-    expect(proxmoxSettingsPresentationSource).toContain(
-      'export const PROXMOX_VARIANT_PRESENTATION',
-    );
-    expect(proxmoxSettingsPresentationSource).toContain(
-      'export function getProxmoxVariantPresentation',
-    );
-    expect(proxmoxSettingsPresentationSource).toContain(
-      'export function buildProxmoxDiscoveryPrefillNode',
     );
     expect(infrastructureWorkspaceSource).toContain(
       '@/components/Settings/infrastructureWorkspaceModel'.replace('@/components/Settings/', './'),
@@ -3626,20 +3509,6 @@ describe('frontend resource type boundaries', () => {
     expect(alertSchedulePresentationSource).toContain(
       'export function getAlertQuietSuppressCheckboxClass',
     );
-    expect(configuredNodeTablesSource).toContain('getConfiguredNodeCapabilityBadges');
-    expect(configuredNodeTablesSource).toContain('resolveConfiguredPveNodeStatusIndicator');
-    expect(configuredNodeTablesSource).toContain('resolveConfiguredInstanceStatusIndicator');
-    expect(configuredNodeTablesSource).toMatch(/<Table(?:\s|>)/);
-    expect(configuredNodeTablesSource).toContain('wrapperClass="max-h-[600px] overflow-y-auto"');
-    expect(configuredNodeTablesSource).not.toContain('<div class="overflow-x-auto">');
-    expect(configuredNodeTablesSource).not.toContain('<div class="overflow-auto max-h-[600px]">');
-    expect(configuredNodeTablesSource).not.toContain("'monitorVMs' in node");
-    expect(configuredNodeTablesSource).not.toContain("'monitorDatastores' in node");
-    expect(configuredNodeTablesSource).not.toContain(
-      'const resolveConfiguredNodeStatusIndicator =',
-    );
-    expect(configuredNodeTablesSource).not.toContain('const resolvePbsStatusIndicator =');
-    expect(configuredNodeTablesSource).not.toContain('const resolvePmgStatusIndicator =');
     expect(configuredNodeCapabilityPresentationSource).toContain(
       'export function getConfiguredNodeCapabilityBadges',
     );

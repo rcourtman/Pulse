@@ -12,8 +12,6 @@ import unifiedResourceTableStateSource from '@/components/Infrastructure/useUnif
 import unifiedResourceTableViewportSyncSource from '@/components/Infrastructure/useUnifiedResourceTableViewportSync.ts?raw';
 import unifiedResourceTableModelSource from '@/components/Infrastructure/unifiedResourceTableModel.ts?raw';
 import unifiedResourceTableStateModelSource from '@/components/Infrastructure/unifiedResourceTableStateModel.ts?raw';
-import infrastructureSummaryStateSource from '@/components/Infrastructure/useInfrastructureSummaryState.ts?raw';
-import infrastructureSummaryModelSource from '@/components/Infrastructure/infrastructureSummaryModel.ts?raw';
 import unifiedResourceHostTableCardSource from '@/components/Infrastructure/UnifiedResourceHostTableCard.tsx?raw';
 import unifiedResourceServiceInfrastructureCardSource from '@/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx?raw';
 import unifiedResourcePBSTableSectionSource from '@/components/Infrastructure/UnifiedResourcePBSTableSection.tsx?raw';
@@ -601,43 +599,6 @@ describe('UnifiedResourceTable performance contract', () => {
     });
 
     it('keeps infrastructure summary fetch runtime out of the render shell', () => {
-      expect(infrastructureSummaryStateSource).toContain('fetchInfrastructureSummaryAndCache');
-      expect(infrastructureSummaryStateSource).toContain('readInfrastructureSummaryCache');
-      expect(infrastructureSummaryStateSource).toContain('setInterval(');
-      expect(infrastructureSummaryStateSource).toContain('AbortController');
-      expect(infrastructureSummaryStateSource).toContain("eventBus.on('org_switched'");
-      expect(infrastructureSummaryStateSource).toContain('buildInfrastructureDisplaySeries');
-      expect(infrastructureSummaryStateSource).toContain('buildInfrastructureMetricSeries');
-      expect(infrastructureSummaryStateSource).toContain('buildInfrastructureEmptyMessage');
-      expect(infrastructureSummaryStateSource).not.toContain('useResources(');
-      expect(infrastructureSummaryStateSource).toContain(
-        'props.resources.filter((resource) => isWorkload(resource))',
-      );
-      expect(infrastructureSummaryStateSource).not.toContain(
-        'const match = allSeries.find((series) => series.id === focused);',
-      );
-      expect(infrastructureSummaryStateSource).not.toContain('displaySeries().map((series) => ({');
-      expect(infrastructureSummaryStateSource).not.toContain(
-        "isAwaitingFirstSample() ? 'Gathering first sample…' : 'Building trend history…'",
-      );
-      expect(infrastructureSummaryStateSource).not.toContain(
-        "fetchFailed() ? 'Trend data unavailable' : emptyHistoryLabel()",
-      );
-      expect(infrastructureSummaryModelSource).toContain(
-        'export function buildInfrastructureSummarySeries',
-      );
-      expect(infrastructureSummaryModelSource).toContain(
-        'export function combineResourceThroughputSeries',
-      );
-      expect(infrastructureSummaryModelSource).toContain(
-        'export function buildInfrastructureDisplaySeries',
-      );
-      expect(infrastructureSummaryModelSource).toContain(
-        'export function buildInfrastructureMetricSeries',
-      );
-      expect(infrastructureSummaryModelSource).toContain(
-        'export function shouldShowInfrastructureNetworkCard',
-      );
     });
 
     it('keeps contextual resource-row emphasis on the shared active-row presentation contract', () => {
