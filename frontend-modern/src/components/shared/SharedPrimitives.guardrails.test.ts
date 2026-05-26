@@ -688,11 +688,6 @@ describe('shared primitive guardrails', () => {
     expect(tagInputModelSource).toContain('getTagInputRemoveTitle');
   });
 
-  it('keeps scroll-to-top button on shell, runtime, and model owners', () => {
-
-
-  });
-
   it('keeps toggle on shell, runtime, and model owners', () => {
     expect(toggleSource).toContain('useToggleState');
     expect(toggleSource).toContain('getToggleTrackClass');
@@ -761,17 +756,6 @@ describe('shared primitive guardrails', () => {
     );
   });
 
-  it('keeps infrastructure summary table on shell, runtime, and model owners', () => {
-
-
-
-  });
-
-  it('keeps infrastructure selector on shell, runtime, and model owners', () => {
-
-
-  });
-
   it('keeps interactive sparkline on shell, runtime, and model owners', () => {
 
     expect(interactiveSparklineStateSource).toContain(
@@ -797,11 +781,6 @@ describe('shared primitive guardrails', () => {
     );
     expect(interactiveSparklineModelSource).toContain('downsampleLTTB');
     expect(interactiveSparklineModelSource).toContain('findNearestMetricPoint');
-  });
-
-  it('keeps density map on shell, runtime, and model owners', () => {
-
-
   });
 
   it('keeps dialog on shell, runtime, and model owners', () => {
@@ -943,11 +922,6 @@ describe('shared primitive guardrails', () => {
     expect(helpIconModelSource).toContain('resolveHelpContent');
     expect(helpIconModelSource).toContain('calculateHelpPopoverPosition');
     expect(helpIconModelSource).toContain('helpIconSizeClasses');
-  });
-
-  it('keeps infrastructure details drawer on shell, runtime, and model owners', () => {
-
-
   });
 
   it('keeps mobile nav on shell, runtime, and model owners', () => {
@@ -1118,9 +1092,6 @@ describe('shared primitive guardrails', () => {
     );
   });
 
-  it('keeps sticky summary breakpoint behavior on the shared primitive', () => {
-  });
-
   it('keeps tooltip on shell, runtime, and model owners', () => {
     expect(tooltipSource).toContain('useTooltipState');
     expect(tooltipSource).toContain('createTooltipSystemState');
@@ -1150,11 +1121,6 @@ describe('shared primitive guardrails', () => {
     expect(tooltipModelSource).toContain('export function resolveTooltipPosition');
     expect(tooltipModelSource).toContain("export type TooltipAlignment = 'left' | 'center'");
     expect(tooltipModelSource).toContain("export type TooltipDirection = 'up' | 'down'");
-  });
-
-  it('keeps collapsible search input on shell, runtime, and model owners', () => {
-
-
   });
 
   it('keeps the chip-based FilterBar on a catalog descriptor with shell, chip, and add-menu owners', () => {

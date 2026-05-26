@@ -598,10 +598,7 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(unifiedResourcePBSTableSectionSource).not.toContain('getPbsActivitySummary');
     });
 
-    it('keeps infrastructure summary fetch runtime out of the render shell', () => {
-    });
-
-    it('keeps contextual resource-row emphasis on the shared active-row presentation contract', () => {
+      it('keeps contextual resource-row emphasis on the shared active-row presentation contract', () => {
       expect(frontendIndexCssSource).toContain("tr[data-summary-row-active='true'] > td");
       expect(frontendIndexCssSource).toContain('--color-summary-row-bg');
       expect(frontendIndexCssSource).toContain('--color-summary-row-accent');
