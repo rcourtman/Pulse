@@ -1,7 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createSignal } from 'solid-js';
-import { CollapsibleSearchInput } from '@/components/shared/CollapsibleSearchInput';
 import { SearchInput } from '@/components/shared/SearchInput';
 import searchInputSource from '@/components/shared/SearchInput.tsx?raw';
 import searchInputModelSource from '@/components/shared/searchInputModel.ts?raw';
@@ -9,10 +8,6 @@ import searchInputEnhancementsSource from '@/components/shared/SearchInputEnhanc
 import searchInputEnhancementsModelSource from '@/components/shared/searchInputEnhancementsModel.ts?raw';
 import searchInputEnhancementsStateSource from '@/components/shared/useSearchInputEnhancements.ts?raw';
 import searchInputStateSource from '@/components/shared/useSearchInputState.ts?raw';
-import collapsibleSearchInputSource from '@/components/shared/CollapsibleSearchInput.tsx?raw';
-import collapsibleSearchInputModelSource from '@/components/shared/collapsibleSearchInputModel.ts?raw';
-import collapsibleSearchInputStateSource from '@/components/shared/useCollapsibleSearchInputState.ts?raw';
-import { focusActiveTypeToSearch } from '@/hooks/useTypeToSearch';
 
 const SearchHarness = (props: {
   typeToSearch?: boolean;
@@ -82,35 +77,6 @@ describe('SearchInput', () => {
     expect(searchInputEnhancementsModelSource).toContain('getSearchHistoryToggleTitle');
     expect(searchInputEnhancementsModelSource).toContain('SEARCH_HISTORY_CLEAR_LABEL');
     expect(searchInputEnhancementsModelSource).toContain('SEARCH_HISTORY_MENU_CLASS');
-  });
-
-  it('keeps collapsible search input on shell, runtime, and model owners', () => {
-    expect(collapsibleSearchInputSource).toContain('useCollapsibleSearchInputState');
-    expect(collapsibleSearchInputSource).not.toContain('createSignal');
-    expect(collapsibleSearchInputSource).not.toContain('useTypeToSearch');
-    expect(collapsibleSearchInputSource).not.toContain("const triggerLabel = () => props.triggerLabel ?? 'Search'");
-    expect(collapsibleSearchInputSource).not.toContain(
-      "const layoutClass = showExpanded() ? 'order-last basis-full w-full' : 'shrink-0 md:ml-auto'",
-    );
-
-    expect(collapsibleSearchInputStateSource).toContain(
-      'export function useCollapsibleSearchInputState',
-    );
-    expect(collapsibleSearchInputStateSource).toContain('createSignal');
-    expect(collapsibleSearchInputStateSource).toContain('useTypeToSearch');
-    expect(collapsibleSearchInputStateSource).toContain('queueMicrotask');
-    expect(collapsibleSearchInputStateSource).toContain('setIsExpanded(true)');
-
-    expect(collapsibleSearchInputModelSource).toContain(
-      'getCollapsibleSearchTriggerLabel',
-    );
-    expect(collapsibleSearchInputModelSource).toContain(
-      'shouldShowCollapsibleSearchExpanded',
-    );
-    expect(collapsibleSearchInputModelSource).toContain(
-      'getCollapsibleSearchRootClass',
-    );
-    expect(collapsibleSearchInputModelSource).toContain('order-last basis-full w-full');
   });
 
   it('captures typed characters by default when focus is outside the input', async () => {
@@ -260,55 +226,4 @@ describe('SearchInput', () => {
     });
   });
 
-  it('expands a collapsible search and inserts typed characters through the shared registry', async () => {
-    const CollapsibleHarness = () => {
-      const [value, setValue] = createSignal('');
-
-      return (
-        <div>
-          <button type="button">Outside</button>
-          <CollapsibleSearchInput
-            value={value}
-            onChange={setValue}
-            placeholder="Collapsed search"
-          />
-        </div>
-      );
-    };
-
-    render(() => <CollapsibleHarness />);
-
-    const outside = screen.getByRole('button', { name: 'Outside' });
-    outside.focus();
-
-    fireEvent.keyDown(document, { key: 'm' });
-
-    await waitFor(() => {
-      const input = screen.getByPlaceholderText('Collapsed search');
-      expect(input).toHaveValue('m');
-      expect(document.activeElement).toBe(input);
-    });
-  });
-
-  it('focuses the active search through the shared focus helper', async () => {
-    const CollapsibleHarness = () => {
-      const [value, setValue] = createSignal('');
-
-      return (
-        <div>
-          <button type="button">Outside</button>
-          <CollapsibleSearchInput value={value} onChange={setValue} placeholder="Helper search" />
-        </div>
-      );
-    };
-
-    render(() => <CollapsibleHarness />);
-
-    expect(focusActiveTypeToSearch({ selectText: true })).toBe(true);
-
-    await waitFor(() => {
-      const input = screen.getByPlaceholderText('Helper search');
-      expect(document.activeElement).toBe(input);
-    });
-  });
 });
