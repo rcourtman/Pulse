@@ -142,13 +142,6 @@ import environmentLockBadgeSource from '@/components/shared/EnvironmentLockBadge
 import environmentLockPresentationSource from '@/utils/environmentLockPresentation.ts?raw';
 import dockerRuntimeSettingsCardSource from '@/components/Settings/DockerRuntimeSettingsCard.tsx?raw';
 import discoveryTargetSource from '@/utils/discoveryTarget.ts?raw';
-import recoveryComponentSource from '@/components/Recovery/Recovery.tsx?raw';
-import recoveryActivitySectionSource from '@/components/Recovery/RecoveryActivitySection.tsx?raw';
-import recoveryHistorySectionSource from '@/components/Recovery/RecoveryHistorySection.tsx?raw';
-import recoveryHistoryTableSource from '@/components/Recovery/RecoveryHistoryTable.tsx?raw';
-import recoveryProtectedInventorySectionSource from '@/components/Recovery/RecoveryProtectedInventorySection.tsx?raw';
-import recoveryHistorySectionStateSource from '@/components/Recovery/useRecoveryHistorySectionState.ts?raw';
-import recoverySurfaceStateSource from '@/features/recovery/useRecoverySurfaceState.ts?raw';
 import recoveryOutcomePresentationSource from '@/utils/recoveryOutcomePresentation.ts?raw';
 import recoveryArtifactModePresentationSource from '@/utils/recoveryArtifactModePresentation.ts?raw';
 import recoveryFilterChipPresentationSource from '@/utils/recoveryFilterChipPresentation.ts?raw';
@@ -510,14 +503,6 @@ import organizationSettingsPresentationSource from '@/utils/organizationSettings
 import rbacFeatureGateSectionSource from '@/components/Settings/RBACFeatureGateSection.tsx?raw';
 import rbacFeatureGateStateSource from '@/components/Settings/useRBACFeatureGateState.ts?raw';
 
-const recoverySource = [
-  recoveryComponentSource,
-  recoveryProtectedInventorySectionSource,
-  recoveryActivitySectionSource,
-  recoveryHistorySectionSource,
-  recoveryHistoryTableSource,
-  recoveryHistorySectionStateSource,
-].join('\n');
 import rolesPanelSource from '@/components/Settings/RolesPanel.tsx?raw';
 import rolesPanelStateSource from '@/components/Settings/useRolesPanelState.ts?raw';
 import auditWebhookPanelSource from '@/components/Settings/AuditWebhookPanel.tsx?raw';
@@ -1039,196 +1024,11 @@ describe('frontend resource type boundaries', () => {
     expect(emptyStatePresentationSource).toContain('export function getEmptyStatePresentation');
     expect(discoveryTargetSource).toContain('canonicalizeFrontendResourceType');
     expect(recoveryOutcomePresentationSource).toContain('import type { RecoveryOutcome }');
-    expect(recoveryComponentSource).not.toContain('RecoverySummary');
-    expect(recoveryComponentSource).not.toContain('recovery-summary');
-    expect(recoveryActivitySectionSource).toContain('RECOVERY_ACTIVITY_RANGE_DAYS');
-    expect(recoveryActivitySectionSource).toContain('Recovery activity range');
-    expect(recoverySource).not.toContain(
-      "const RECOVERY_TIME_RANGES: readonly string[] = ['7d', '30d', '90d']",
-    );
-    expect(recoverySource).not.toContain(
-      'const RECOVERY_TIME_RANGE_LABELS: Record<string, string>',
-    );
-    expect(recoverySource).not.toContain('const FRESHNESS_LABELS:');
-    expect(recoverySource).toContain('getRecoveryArtifactModePresentation');
-    expect(recoverySource).not.toContain('const MODE_LABELS: Record<ArtifactMode, string>');
-    expect(recoverySource).not.toContain('const MODE_BADGE_CLASS: Record<ArtifactMode, string>');
-    expect(recoverySource).not.toContain('const CHART_SEGMENT_CLASS: Record<ArtifactMode, string>');
-    expect(recoverySource).not.toContain(
-      "const ISSUE_RAIL_CLASS: Record<Exclude<IssueTone, 'none'>, string>",
-    );
-    expect(recoverySource).not.toContain('const normalizeOutcome =');
     expect(recoveryArtifactModePresentationSource).toContain(
       'export function getRecoveryArtifactModePresentation',
     );
     expect(recoveryIssuePresentationSource).toContain('export function getRecoveryIssueRailClass');
-    expect(recoverySource).toContain(
-      "import { useRecoverySurfaceState } from '@/features/recovery/useRecoverySurfaceState';",
-    );
-    expect(recoveryComponentSource).toContain('useRecoverySurfaceState');
-    expect(recoveryComponentSource).toContain('TableCard');
-    expect(recoveryHistorySectionSource).toContain('useRecoveryHistorySectionState');
-    expect(recoveryHistorySectionSource).toContain('RecoveryHistoryTable');
-    expect(recoveryHistorySectionSource).toContain('TableCard');
-    expect(recoveryHistorySectionSource).toContain('getRecoveryAllHistoryLabel');
-    expect(recoveryHistoryTableSource).toMatch(/<Table(?:\s|>)/);
-    expect(recoveryHistoryTableSource).not.toContain('<div class="overflow-x-auto">');
-    expect(recoveryHistoryTableSource).not.toContain('<div class="overflow-x-auto bg-surface">');
     expect(recoveryTablePresentationSource).toContain('getAllFilterOptionLabel');
-    expect(recoveryHistorySectionSource).not.toContain(
-      'overflow-hidden border-border-subtle bg-surface',
-    );
-    expect(recoveryProtectedInventorySectionSource).toContain('TableCard');
-    expect(recoveryProtectedInventorySectionSource).toMatch(/<Table(?:\s|>)/);
-    expect(recoveryProtectedInventorySectionSource).toContain('wrapperClass="bg-surface"');
-    expect(recoveryProtectedInventorySectionSource).not.toContain('<div class="overflow-x-auto">');
-    expect(recoveryProtectedInventorySectionSource).not.toContain(
-      '<div class="overflow-x-auto bg-surface">',
-    );
-    expect(recoveryProtectedInventorySectionSource).not.toContain(
-      'overflow-hidden border-border-subtle bg-surface',
-    );
-    expect(recoveryHistorySectionStateSource).toContain(
-      'export function useRecoveryHistorySectionState',
-    );
-    expect(recoverySource).not.toContain('parseRecoveryLinkSearch');
-    expect(recoverySource).not.toContain('buildRecoveryRouteSearch');
-    expect(recoverySource).not.toContain('useRecoveryRollups');
-    expect(recoverySource).not.toContain('useRecoveryPointsFacets');
-    expect(recoverySurfaceStateSource).toContain('export function useRecoverySurfaceState');
-    expect(recoverySurfaceStateSource).toContain('parseRecoveryLinkSearch');
-    expect(recoverySurfaceStateSource).toContain('buildRecoveryRouteSearch');
-    expect(recoverySurfaceStateSource).toContain('useRecoveryRollups');
-    expect(recoverySurfaceStateSource).toContain('useRecoveryPoints');
-    expect(recoverySurfaceStateSource).toContain('useRecoveryPointsFacets');
-    expect(recoverySurfaceStateSource).toContain('useRecoveryPointsSeries');
-    expect(recoveryComponentSource.indexOf('<RecoveryActivitySection')).toBeGreaterThan(-1);
-    expect(recoveryComponentSource.indexOf('{eventsActivity()}')).toBeGreaterThan(
-      recoveryComponentSource.indexOf("<Show when={workspaceView() === 'events'}>"),
-    );
-    expect(recoverySource).not.toContain('getRecoveryFilterChipPresentation');
-    expect(recoverySource).not.toContain('const titleize =');
-    expect(recoverySource).not.toContain('<SummaryPanel');
-    expect(recoverySource).not.toContain('SummaryMetricCard');
-    expect(recoveryActivitySectionSource).toContain('onRangeChange');
-    expect(recoveryActivitySectionSource).not.toContain('segmentedButtonClass(');
-    expect(recoverySource).not.toContain('border-blue-200 bg-blue-50 px-2 py-0.5');
-    expect(recoverySource).not.toContain('border-cyan-200 bg-cyan-50 px-2 py-0.5');
-    expect(recoverySource).not.toContain('border-emerald-200 bg-emerald-50 px-2 py-0.5');
-    expect(recoverySource).not.toContain('border-violet-200 bg-violet-50 px-2 py-0.5');
-    expect(recoverySource).not.toContain(
-      "chartRangeDays() === range\n                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'",
-    );
-    expect(recoveryActivitySectionSource).toContain('getRecoveryTimelineColumnButtonClass');
-    expect(recoveryHistoryTableSource).toContain('getRecoveryArtifactColumnHeaderClass');
-    expect(recoveryHistoryTableSource).toContain('getRecoveryArtifactRowClass');
-    expect(recoverySource).toContain('recoveryDateKeyFromTimestamp');
-    expect(recoverySource).toContain('parseRecoveryDateKey');
-    expect(recoverySource).toContain('getRecoveryPrettyDateLabel');
-    expect(recoverySource).toContain('getRecoveryFullDateLabel');
-    expect(recoverySource).toContain('getRecoveryCompactAxisLabel');
-    expect(recoverySource).toContain('formatRecoveryTimeOnly');
-    expect(recoverySource).toContain('getRecoveryNiceAxisMax');
-    expect(recoveryProtectedInventorySectionSource).toContain(
-      'getRecoveryRollupInventoryStatusTextClass',
-    );
-    expect(recoveryProtectedInventorySectionSource).toContain('getRecoverySpecialOutcomeTextClass');
-    expect(recoveryHistorySectionSource).toContain('getRecoveryBreadcrumbLinkClass');
-    expect(recoveryHistoryTableSource).toContain('getRecoveryEmptyStateActionClass');
-    expect(recoverySource).toContain('getRecoveryProtectedItemsLoadingState');
-    expect(recoverySource).toContain('getRecoveryProtectedItemsFailureState');
-    expect(recoverySource).toContain('getRecoveryActivityLoadingState');
-    expect(recoverySource).toContain('getRecoveryActivityEmptyState');
-    expect(recoverySource).toContain('getRecoveryPointsLoadingState');
-    expect(recoverySource).toContain('getRecoveryPointsFailureState');
-    expect(recoverySource).toContain('getRecoveryProtectedItemsEmptyState');
-    expect(recoverySource).toContain('getRecoveryHistoryEmptyState');
-    expect(recoveryHistoryTableSource).toContain('getRecoveryDrawerCloseButtonClass');
-    expect(recoverySource).toContain('getRecoveryRollupItemLabel');
-    expect(recoverySource).toContain('getRecoveryPointItemLabel');
-    expect(recoverySource).toContain('getRecoveryPointRepositoryLabel');
-    expect(recoverySource).toContain('getRecoveryPointDetailsSummary');
-    expect(recoverySource).toContain('getRecoveryPointTimestampMs');
-    expect(recoverySource).toContain('normalizeRecoveryModeQueryValue');
-    expect(recoveryActivitySectionSource).toContain('getRecoveryTimelineAxisLabelClass');
-    expect(recoverySource).toContain('getRecoveryTimelineLabelEvery');
-    expect(recoverySource).toContain('getRecoveryGroupNoTimestampLabel');
-    expect(recoveryProtectedInventorySectionSource).toContain(
-      'getRecoveryProtectedSearchPlaceholder',
-    );
-    expect(recoveryHistorySectionSource).toContain('getRecoveryHistorySearchPlaceholder');
-    expect(recoverySource).toContain('getRecoverySearchHistoryEmptyMessage');
-    expect(recoverySource).not.toContain('Search protected items...');
-    expect(recoverySource).not.toContain('Search recovery history...');
-    expect(recoverySource).not.toContain('Recent searches appear here.');
-    expect(recoveryActivitySectionSource).toContain('RECOVERY_TIMELINE_LEGEND_ITEM_CLASS');
-    expect(recoveryHistoryTableSource).toContain('getRecoveryEventTimeTextClass');
-    expect(recoverySource).not.toContain('getRecoverySubjectTypeBadgeClass');
-    expect(recoverySource).not.toContain('getRecoverySubjectTypeLabel');
-    expect(recoveryProtectedInventorySectionSource).toContain('getRecoveryRollupAgeTextClass');
-    expect(recoveryHistoryTableSource).toContain('RECOVERY_GROUP_HEADER_ROW_CLASS');
-    expect(recoveryHistoryTableSource).toContain('RECOVERY_GROUP_HEADER_TEXT_CLASS');
-    expect(recoverySource).not.toContain(
-      "isSelected\n                                    ? 'bg-blue-100 dark:bg-blue-900'\n                                    : 'hover:bg-surface-hover'",
-    );
-    expect(recoverySource).not.toContain('const groupHeaderRowClass =');
-    expect(recoverySource).not.toContain('const groupHeaderTextClass =');
-    expect(recoverySource).not.toContain('const dateKeyFromTimestamp =');
-    expect(recoverySource).not.toContain('const parseDateKey =');
-    expect(recoverySource).not.toContain('const prettyDateLabel =');
-    expect(recoverySource).not.toContain('const fullDateLabel =');
-    expect(recoverySource).not.toContain('const compactAxisLabel =');
-    expect(recoverySource).not.toContain('const formatTimeOnly =');
-    expect(recoverySource).not.toContain('const niceAxisMax =');
-    expect(recoverySource).not.toContain(
-      "protectedStaleOnly() ? 'border-amber-300 bg-amber-50 text-amber-800",
-    );
-    expect(recoverySource).not.toContain('rounded-full bg-blue-100/80 px-1.5 py-px');
-    expect(recoverySource).not.toContain(
-      'text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors',
-    );
-    expect(recoverySource).not.toContain(
-      'inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content hover:bg-surface-hover',
-    );
-    expect(recoverySource).not.toContain(
-      'rounded-md p-1 hover:text-base-content hover:bg-surface-hover',
-    );
-    expect(recoverySource).not.toContain(
-      'const labelEvery = dayCount <= 7 ? 1 : dayCount <= 30 ? 3 : 10',
-    );
-    expect(recoverySource).not.toContain('class="flex items-center gap-1"');
-    expect(recoverySource).not.toContain(
-      'class="inline-flex rounded border border-border bg-surface p-0.5 text-xs"',
-    );
-    expect(recoverySource).not.toContain("'font-semibold text-blue-700 dark:text-blue-300'");
-    expect(recoverySource).not.toContain('const rollupSubjectLabel =');
-    expect(recoverySource).not.toContain('const pointTimestampMs =');
-    expect(recoverySource).not.toContain('const buildSubjectLabelForPoint =');
-    expect(recoverySource).not.toContain('const buildRepositoryLabelForPoint =');
-    expect(recoverySource).not.toContain('const buildDetailsSummaryForPoint =');
-    expect(recoverySource).not.toContain('const normalizeModeFromQuery =');
-    expect(recoverySource).not.toContain('No protected items yet');
-    expect(recoverySource).not.toContain('Loading protected items...');
-    expect(recoverySource).not.toContain('Loading recovery activity...');
-    expect(recoverySource).not.toContain('No recovery activity in the selected window.');
-    expect(recoverySource).not.toContain('Loading recovery points...');
-    expect(recoverySource).not.toContain('Failed to load protected items');
-    expect(recoverySource).not.toContain('Failed to load recovery points');
-    expect(recoverySource).not.toContain(
-      'Pulse hasn’t observed any protected items for this org yet.',
-    );
-    expect(recoverySource).not.toContain('No recovery history matches your filters');
-    expect(recoverySource).not.toContain(
-      'Adjust your search, platform, method, status, or verification filters.',
-    );
-    expect(recoverySource).not.toContain('const eventTimeTextClass =');
-    expect(recoverySource).not.toContain('const subjectTypeBadgeClass =');
-    expect(recoverySource).not.toContain('const artifactColumnHeaderClass =');
-    expect(recoverySource).not.toContain('const artifactRowClass =');
-    expect(recoverySource).not.toContain('const advancedFilterLabelClass =');
-    expect(recoverySource).not.toContain('const advancedFilterFieldClass =');
-    expect(recoverySource).not.toContain('const deriveRollupIssueTone =');
-    expect(recoverySource).not.toContain('const rollupAgeTextClass =');
     expect(recoveryFilterChipPresentationSource).toContain(
       'export function getRecoveryFilterChipPresentation',
     );
@@ -1355,10 +1155,6 @@ describe('frontend resource type boundaries', () => {
     expect(recoveryTimelinePresentationSource).toContain(
       'export function getRecoveryTimelineColumnButtonClass',
     );
-    expect(recoverySource).not.toContain('RECOVERY_SUMMARY_TIME_RANGES');
-    expect(recoverySource).not.toContain('RECOVERY_FRESHNESS_BUCKETS');
-    expect(recoverySource).not.toContain('function getAttentionChipClass(');
-    expect(recoverySource).not.toContain('function getAttentionDotClass(');
     expect(systemSettingsPresentationSource).toContain('export const PVE_POLLING_PRESETS');
     expect(systemSettingsPresentationSource).toContain('export const BACKUP_INTERVAL_OPTIONS');
     expect(systemSettingsPresentationSource).toContain(

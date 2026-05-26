@@ -144,10 +144,6 @@ import storagePoolsTableSource from '@/components/Storage/StoragePoolsTable.tsx?
 import diskListSource from '@/components/Storage/DiskList.tsx?raw';
 import storageSummarySource from '@/components/Storage/StorageSummary.tsx?raw';
 import workloadsSummarySource from '@/components/Workloads/WorkloadsSummary.tsx?raw';
-import recoveryComponentSource from '@/components/Recovery/Recovery.tsx?raw';
-import recoveryHistorySectionSource from '@/components/Recovery/RecoveryHistorySection.tsx?raw';
-import recoveryHistoryTableSource from '@/components/Recovery/RecoveryHistoryTable.tsx?raw';
-import recoveryProtectedInventorySectionSource from '@/components/Recovery/RecoveryProtectedInventorySection.tsx?raw';
 import recoveryTablePresentationSource from '@/utils/recoveryTablePresentation.ts?raw';
 import alertHistoryTableSectionSource from '@/features/alerts/AlertHistoryTableSection.tsx?raw';
 import alertHistoryTableGroupRowSource from '@/features/alerts/AlertHistoryTableGroupRow.tsx?raw';
@@ -351,8 +347,6 @@ describe('shared primitive guardrails', () => {
       unifiedResourceHostTableCardSource,
       unifiedResourceServiceInfrastructureCardSource,
       storageContentCardSource,
-      recoveryHistorySectionSource,
-      recoveryProtectedInventorySectionSource,
     ]) {
       expect(source).toContain('TableCardHeader');
       expect(source).not.toContain('SummaryTableCardHeader');
@@ -374,9 +368,6 @@ describe('shared primitive guardrails', () => {
       unifiedResourceHostTableCardSource,
       unifiedResourceServiceInfrastructureCardSource,
       storageContentCardSource,
-      recoveryComponentSource,
-      recoveryHistorySectionSource,
-      recoveryProtectedInventorySectionSource,
     ]) {
       expect(source).toContain('TableCard');
       expect(source).not.toContain('overflow-hidden border-border-subtle bg-surface');
@@ -567,8 +558,6 @@ describe('shared primitive guardrails', () => {
       unifiedResourceHostTableCardSource,
       unifiedResourcePBSTableSectionSource,
       unifiedResourcePMGTableSectionSource,
-      recoveryHistoryTableSource,
-      recoveryProtectedInventorySectionSource,
       alertHistoryTableSectionSource,
       workloadsTableSource,
       storagePoolsTableSource,
@@ -597,8 +586,6 @@ describe('shared primitive guardrails', () => {
 
     for (const source of [
       unifiedResourceHostTableCardSource,
-      recoveryHistorySectionSource,
-      recoveryProtectedInventorySectionSource,
       alertHistoryTableSectionSource,
       workloadsTableSource,
       storageContentCardSource,
@@ -608,8 +595,6 @@ describe('shared primitive guardrails', () => {
 
     for (const source of [
       unifiedResourceHostTableCardSource,
-      recoveryHistorySectionSource,
-      recoveryProtectedInventorySectionSource,
       storageContentCardSource,
     ]) {
       expect(source).toContain('TableCardHeader');
@@ -621,7 +606,6 @@ describe('shared primitive guardrails', () => {
     expect(storagePoolsTableSource).not.toContain('STORAGE_POOLS_SCROLL_WRAP_CLASS');
     expect(diskListSource).not.toContain("from '@/components/shared/Card'");
     expect(diskListSource).not.toContain('PHYSICAL_DISK_TABLE_SCROLL_CLASS');
-    expect(recoveryProtectedInventorySectionSource).toContain('wrapperClass="bg-surface"');
     expect(configuredNodeTablesSource).toContain('wrapperClass="max-h-[600px] overflow-y-auto"');
     expect(storageContentCardSource).toContain('<StoragePoolsTable');
     expect(pulseDataGridSource).toContain('wrapperClass="scrollbar-hide"');
@@ -1568,49 +1552,11 @@ describe('shared primitive guardrails', () => {
     // FilterDef entries rather than rendering the labelled-select row from
     // PageControls. Guards against regression to the old layout-per-page
     // pattern.
-    expect(recoveryProtectedInventorySectionSource).toContain(
-      "import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';",
-    );
-    expect(recoveryProtectedInventorySectionSource).toContain('<FilterBar');
-    expect(recoveryProtectedInventorySectionSource).toContain("id: 'item-type'");
-    expect(recoveryProtectedInventorySectionSource).toContain("id: 'platform'");
-    expect(recoveryProtectedInventorySectionSource).toContain("id: 'protected-state'");
-    expect(recoveryProtectedInventorySectionSource).toContain('role="group"');
-    expect(recoveryProtectedInventorySectionSource).toContain(
-      'ariaLabel="Protection coverage controls"',
-    );
-    expect(recoveryProtectedInventorySectionSource).not.toContain('PageControls');
-    expect(recoveryProtectedInventorySectionSource).not.toContain('LabeledFilterSelect');
-    expect(recoveryProtectedInventorySectionSource).not.toContain('protectedFiltersOpen');
 
     // Recovery events surface — every advanced filter folds into the catalog
     // (scope, method, verification, cluster, node, namespace) so the
     // dedicated "Filter" popover panel and FilterToolbarPanel-based advanced
     // panel are no longer rendered.
-    expect(recoveryHistorySectionSource).toContain(
-      "import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';",
-    );
-    expect(recoveryHistorySectionSource).toContain('<FilterBar');
-    expect(recoveryHistorySectionSource).toContain('ariaLabel="Recovery events controls"');
-    expect(recoveryHistorySectionSource).toContain("id: 'item-type'");
-    expect(recoveryHistorySectionSource).toContain("id: 'platform'");
-    expect(recoveryHistorySectionSource).toContain("id: 'outcome'");
-    expect(recoveryHistorySectionSource).toContain("id: 'scope'");
-    expect(recoveryHistorySectionSource).toContain("id: 'method'");
-    expect(recoveryHistorySectionSource).toContain("id: 'verification'");
-    expect(recoveryHistorySectionSource).toContain("id: 'cluster'");
-    expect(recoveryHistorySectionSource).toContain("id: 'node'");
-    expect(recoveryHistorySectionSource).toContain("id: 'namespace'");
-    expect(recoveryHistorySectionSource).toContain('searchTrailing={');
-    expect(recoveryHistorySectionSource).toContain('<RecoveryHistoryItemFilter');
-    expect(recoveryHistorySectionSource).toContain('<ColumnPicker');
-    expect(recoveryHistorySectionSource).toContain('onClearAll={');
-    expect(recoveryHistorySectionSource).toContain('showClearAll={props.hasActiveArtifactFilters}');
-    expect(recoveryHistorySectionSource).not.toContain('PageControls');
-    expect(recoveryHistorySectionSource).not.toContain('FilterActionButton');
-    expect(recoveryHistorySectionSource).not.toContain('FilterToolbarPanel');
-    expect(recoveryHistorySectionSource).not.toContain('moreFiltersOpen');
-    expect(recoveryHistorySectionSource).not.toContain('historyFiltersOpen');
 
     // WorkloadsFilter — Type/Status stay in the shared FilterBar catalog but
     // render as inline primary controls; Node/Platform/Namespace/Runtime

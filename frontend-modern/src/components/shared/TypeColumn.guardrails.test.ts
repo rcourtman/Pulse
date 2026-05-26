@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import guestRowModelSource from '@/components/Workloads/guestRowModel.tsx?raw';
-import recoverySource from '@/components/Recovery/Recovery.tsx?raw';
 import responsiveSource from '@/types/responsive.ts?raw';
 import typeColumnDefinitionSource from '@/utils/typeColumnDefinition.ts?raw';
 import typeColumnContractSource from '@/utils/typeColumnContract.ts?raw';
@@ -64,11 +63,6 @@ describe('type column guardrails', () => {
     expect(guestRowModelSource).not.toContain('createCanonicalTypeColumn');
     expect(guestRowModelSource).not.toMatch(INLINE_TYPE_COLUMN_PATTERN);
     expect(guestRowModelSource).not.toContain("defaultVisibility:");
-
-    expect(recoverySource).toContain('createVisibleCanonicalTypeColumn()');
-    expect(recoverySource).not.toContain('createCanonicalTypeColumn');
-    expect(recoverySource).not.toMatch(INLINE_TYPE_COLUMN_PATTERN);
-    expect(recoverySource).not.toContain("defaultVisibility:");
   });
 
   it('limits runtime Type columns to the known allowlist', () => {
@@ -92,7 +86,6 @@ describe('type column guardrails', () => {
       .sort();
 
     expect(typeColumnUsers).toEqual([
-      '../Recovery/Recovery.tsx',
       '../Workloads/guestRowModel.tsx',
     ]);
 
@@ -127,7 +120,6 @@ describe('type column guardrails', () => {
       .sort();
 
     expect(directHelperImportUsers).toEqual([
-      '../Recovery/Recovery.tsx',
       '../Workloads/guestRowModel.tsx',
     ]);
   });

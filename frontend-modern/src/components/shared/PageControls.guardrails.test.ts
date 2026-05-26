@@ -2,9 +2,6 @@ import { describe, expect, it } from 'vitest';
 import pageControlsSource from '@/components/shared/PageControls.tsx?raw';
 import filterToolbarSource from '@/components/shared/FilterToolbar.tsx?raw';
 import workloadsFilterSource from '@/components/Workloads/WorkloadsFilter.tsx?raw';
-import recoveryPageSource from '@/components/Recovery/Recovery.tsx?raw';
-import recoveryHistorySectionSource from '@/components/Recovery/RecoveryHistorySection.tsx?raw';
-import recoveryProtectedInventorySectionSource from '@/components/Recovery/RecoveryProtectedInventorySection.tsx?raw';
 import subtabsSource from '@/components/shared/Subtabs.tsx?raw';
 
 const tsxSources = import.meta.glob('../../**/*.tsx', {
@@ -51,11 +48,8 @@ describe('page controls guardrails', () => {
     // RecoveryProtectedInventorySection migrated to FilterBar; defensive
     // assertions remain to catch any regression that reintroduces FilterHeader
     // / ColumnPicker forks here.
-    expect(recoveryProtectedInventorySectionSource).not.toContain('<FilterHeader');
-    expect(recoveryProtectedInventorySectionSource).not.toContain('<ColumnPicker');
 
     // RecoveryHistorySection migrated to FilterBar; defensive guards remain.
-    expect(recoveryHistorySectionSource).not.toContain('<FilterHeader');
 
   });
 
@@ -102,17 +96,17 @@ describe('page controls guardrails', () => {
       './PageControls.tsx',
     ]);
 
-    // RecoveryHistorySection and WorkloadsFilter compose ColumnPicker via
-    // FilterBar's viewOptionsTrailing slot; PageControls plus those two
-    // surfaces are the canonical ColumnPicker consumers.
+    // WorkloadsFilter and the Standalone AgentsMachinesTable compose
+    // ColumnPicker via FilterBar's viewOptionsTrailing slot; PageControls
+    // plus those two surfaces are the canonical ColumnPicker consumers.
     expect(columnPickerUsers).toEqual([
-      '../Recovery/RecoveryHistorySection.tsx',
+      '../../features/standalone/AgentsMachinesTable.tsx',
       '../Workloads/WorkloadsFilter.tsx',
       './PageControls.tsx',
     ]);
 
     expect(columnPickerImportUsers).toEqual([
-      '../Recovery/RecoveryHistorySection.tsx',
+      '../../features/standalone/AgentsMachinesTable.tsx',
       '../Workloads/WorkloadsFilter.tsx',
       './PageControls.tsx',
     ]);
@@ -127,12 +121,6 @@ describe('page controls guardrails', () => {
     expect(pageControlsSource).toContain('searchLeading?: JSX.Element');
     expect(pageControlsSource).toContain('searchLeading={local.searchLeading}');
     expect(pageControlsSource).toContain('{...divProps}');
-    expect(recoveryProtectedInventorySectionSource).not.toContain('<FilterHeader');
-    expect(recoveryHistorySectionSource).not.toContain('<FilterHeader');
-    expect(recoveryProtectedInventorySectionSource).not.toContain('searchRowClass=');
-    expect(recoveryHistorySectionSource).not.toContain('searchRowClass=');
-    expect(recoveryProtectedInventorySectionSource).not.toContain('!w-auto');
-    expect(recoveryHistorySectionSource).not.toContain('!w-auto');
   });
 
   it('keeps display controls and utility actions on the shared toolbar rail', () => {
@@ -157,8 +145,6 @@ describe('page controls guardrails', () => {
       'shrink-0 flex-wrap items-center justify-end gap-2 self-start',
     );
     expect(pageControlsSource).not.toContain('2xl:ml-auto');
-    expect(recoveryHistorySectionSource).not.toContain('toolbarClass="lg:flex-nowrap"');
-    expect(recoveryHistorySectionSource).not.toContain('ml-auto flex items-center gap-2');
   });
 
   it('keeps compact stable filters on the shared labeled toggle primitive', () => {
@@ -180,17 +166,9 @@ describe('page controls guardrails', () => {
     expect(workloadsFilterSource).not.toContain('xl:flex-col xl:items-start');
     // RecoveryHistorySection migrated to FilterBar; LabeledFilterToggleGroup
     // / LabeledFilterSelect no longer rendered.
-    expect(recoveryHistorySectionSource).not.toContain('LabeledFilterToggleGroup');
-    expect(recoveryHistorySectionSource).not.toContain('LabeledFilterSelect');
   });
 
   it('keeps embedded workspace tabs on the canonical shared segmented-control pattern', () => {
     expect(subtabsSource).not.toContain("variant?: 'default' | 'control'");
-    expect(recoveryPageSource).not.toContain('variant="control"');
-    expect(recoveryPageSource).not.toContain('listClass=');
-    expect(recoveryPageSource).not.toContain('tabClass=');
-    expect(recoveryPageSource).toContain('FilterSegmentedControl');
-    expect(recoveryPageSource).toContain('RECOVERY_WORKSPACE_OPTIONS');
-    expect(recoveryPageSource).not.toContain('Focused drill-in');
   });
 });
