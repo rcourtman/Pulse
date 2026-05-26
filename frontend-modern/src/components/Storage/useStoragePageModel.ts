@@ -61,7 +61,6 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
   const {
     state,
     activeAlerts,
-    reconnecting,
     reconnect,
     storageRecoveryResources,
     nodes,
@@ -389,13 +388,9 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     groupBy,
   });
 
-  const { activeBannerKind, isLoadingPools } = useStoragePageStatus({
+  const { isLoadingPools } = useStoragePageStatus({
     loading: storageRecoveryResources.loading,
-    error: storageRecoveryResources.error,
     filteredRecordCount: () => filteredRecords().length,
-    connected: surfaceConnected,
-    initialDataReceived: surfaceInitialDataReceived,
-    reconnecting,
     view,
   });
 
@@ -474,7 +469,6 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     storageFilterGroupBy,
     sourceFilterOptions,
     nodeFilterOptions,
-    activeBannerKind,
     connected: surfaceConnected,
     filteredRecords,
     initialDataReceived: surfaceInitialDataReceived,

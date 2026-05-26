@@ -67,20 +67,17 @@ type StoragePageControlsProps = {
   selectedNodeId: () => string;
   setSelectedNodeId: (value: string) => void;
   storageFilterGroupBy: () => StorageGroupKey;
-  // Mirrors the WorkloadsFilter `suppressPlatformFilter` contract: when a
-  // platform page mounts StorageSurface with `forcedSourceFilter`, the
-  // Source filter chip is redundant (it is already locked by the page)
-  // and would render as a user-visible pinned filter. Setting this drops
-  // the Source chip from the rendered filter row.
+  // When a platform page mounts StorageSurface with `forcedSourceFilter`
+  // the Source chip is already locked by the page and would otherwise
+  // render as a redundant pinned filter. Setting this drops it from the
+  // rendered filter row.
   suppressSourceFilter?: boolean;
-  // Platform-owned storage tabs use the search box for host/node scoping,
-  // matching the overview-page filter contract. Standalone /storage keeps
-  // the explicit Node filter so canonical node query links remain visible.
+  // Platform-embedded storage tabs use the search box for host/node
+  // scoping, matching the platform overview filter contract.
   suppressNodeFilter?: boolean;
-  // Enables the SavedViews menu in the FilterBar. Caller is responsible for
-  // picking a key that namespaces views per platform context so saved
-  // queries from a platform-embedded tab do not leak into standalone
-  // /storage and vice versa.
+  // Enables the SavedViews menu in the FilterBar. Caller is responsible
+  // for picking a key that namespaces views per platform context so
+  // saved queries from one platform do not leak into another.
   savedViewsKey?: string;
 };
 

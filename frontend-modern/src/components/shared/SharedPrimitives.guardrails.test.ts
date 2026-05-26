@@ -76,7 +76,6 @@ import configuredNodeTablesSource from '@/components/Settings/ConfiguredNodeTabl
 import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx?raw';
 import selectionCardGroupModelSource from '@/components/shared/selectionCardGroupModel.ts?raw';
 import summaryMetricCardSource from '@/components/shared/SummaryMetricCard.tsx?raw';
-import summaryPanelSource from '@/components/shared/SummaryPanel.tsx?raw';
 import summaryChartLayoutSource from '@/components/shared/summaryChartLayout.ts?raw';
 import summarySynchronizedReadoutSource from '@/components/shared/SummarySynchronizedReadout.tsx?raw';
 import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
@@ -1270,11 +1269,6 @@ describe('shared primitive guardrails', () => {
   });
 
   it('keeps summary density control inside the shared summary primitives', () => {
-    expect(summaryPanelSource).toContain("density?: 'default' | 'compact'");
-    expect(summaryPanelSource).toContain("props.density === 'compact'");
-    expect(summaryPanelSource).toContain('grid-cols-2 lg:grid-cols-4');
-    expect(summaryPanelSource).not.toContain('Recovery Posture');
-    expect(summaryPanelSource).not.toContain('stale items');
 
     expect(summaryMetricCardSource).toContain("density?: 'default' | 'compact'");
     expect(summaryMetricCardSource).toContain("props.density === 'compact'");

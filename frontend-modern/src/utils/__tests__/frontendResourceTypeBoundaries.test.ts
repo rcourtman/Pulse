@@ -229,8 +229,6 @@ import storagePageControlsSource from '@/components/Storage/StoragePageControls.
 import storageContentCardSource from '@/components/Storage/StorageContentCard.tsx?raw';
 import storagePageSource from '@/components/Storage/Storage.tsx?raw';
 import storageSummaryCacheSource from '@/utils/storageSummaryCache.ts?raw';
-import storageCephSummaryCardSource from '@/components/Storage/StorageCephSummaryCard.tsx?raw';
-import useStorageCephSummaryCardModelSource from '@/components/Storage/useStorageCephSummaryCardModel.ts?raw';
 import useStorageContentCardModelSource from '@/components/Storage/useStorageContentCardModel.ts?raw';
 import useZFSHealthMapModelSource from '@/components/Storage/useZFSHealthMapModel.ts?raw';
 import storagePoolsTableSource from '@/components/Storage/StoragePoolsTable.tsx?raw';
@@ -334,7 +332,6 @@ import storageAdapterCoreSource from '@/features/storageBackups/storageAdapterCo
 import storageAlertStateSource from '@/features/storageBackups/storageAlertState.ts?raw';
 import cephRecordPresentationSource from '@/features/storageBackups/cephRecordPresentation.ts?raw';
 import cephSummaryPresentationSource from '@/features/storageBackups/cephSummaryPresentation.ts?raw';
-import cephSummaryCardPresentationSource from '@/features/storageBackups/cephSummaryCardPresentation.ts?raw';
 import storageDomainSource from '@/features/storageBackups/storageDomain.ts?raw';
 import storagePoolDetailPresentationSource from '@/features/storageBackups/storagePoolDetailPresentation.ts?raw';
 import storageBarPresentationSource from '@/features/storageBackups/storageBarPresentation.ts?raw';
@@ -1669,21 +1666,6 @@ describe('frontend resource type boundaries', () => {
       "props.view() === 'pools' ? props.storageFilterGroupBy : undefined",
     );
     expect(storagePageControlsSource).toContain('const sortDisabled = () => !isPoolsView()');
-    expect(storageCephSummaryCardSource).toContain('useStorageCephSummaryCardModel');
-    expect(storageCephSummaryCardSource).toContain('CEPH_SUMMARY_CARD_GRID_CLASS');
-    expect(storageCephSummaryCardSource).toContain('CEPH_SUMMARY_CARD_HEALTH_BADGE_CLASS');
-    expect(storageCephSummaryCardSource).not.toContain('const summary = () => props.summary');
-    expect(storageCephSummaryCardSource).not.toContain(
-      'rounded-md border border-border bg-surface p-3',
-    );
-    expect(storageCephSummaryCardSource).not.toContain(
-      'text-[11px] text-muted truncate max-w-[240px]',
-    );
-    expect(storageCephSummaryCardSource).not.toContain(
-      'flex flex-wrap items-center justify-between gap-3',
-    );
-    expect(useStorageCephSummaryCardModelSource).toContain('getCephSummaryHeaderPresentation');
-    expect(useStorageCephSummaryCardModelSource).toContain('getCephSummaryClusterCards');
     expect(storageContentCardSource).toContain('export const StorageContentCard');
     expect(storageContentCardSource).toContain('useStorageContentCardModel');
     expect(storageContentCardSource).toContain('DiskList');
@@ -1817,13 +1799,6 @@ describe('frontend resource type boundaries', () => {
     expect(zfsHealthMapSource).not.toContain('fixed z-[9999] pointer-events-none');
     expect(zfsHealthMapSource).not.toContain(
       'bg-surface text-base-content text-[10px] rounded-md shadow-sm px-2 py-1.5 min-w-[120px] border border-border',
-    );
-    expect(cephSummaryCardPresentationSource).toContain(
-      'export const getCephSummaryHeaderPresentation',
-    );
-    expect(cephSummaryCardPresentationSource).toContain('export const getCephSummaryClusterCards');
-    expect(cephSummaryCardPresentationSource).toContain(
-      'export const CEPH_SUMMARY_CARD_GRID_CLASS',
     );
     expect(zfsPresentationSource).toContain('export const getZfsPoolStateTextClass');
     expect(diskPresentationSource).toContain('export function getPhysicalDiskHealthStatus');
