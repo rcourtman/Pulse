@@ -1084,6 +1084,13 @@ not a replacement status card, CTA band, or page-local nested card.
     shared canonical surface already exists; new shared platform-page
     primitives live under `frontend-modern/src/features/platformPage/` so the
     chrome stays reusable across families.
+    Source-specific platform product surfaces under
+    `frontend-modern/src/features/`, such as the Proxmox Backups tab, may own
+    domain IA and row models in their product subsystem while consuming shared
+    primitives for table shells, alignment, filter buttons, charts, and empty
+    states. Frontend-primitives owns those reusable controls and guardrails,
+    not the storage/recovery semantics that decide which PBS, PVE archive,
+    snapshot, task, or workload-coverage rows are shown.
     `frontend-modern/src/AppLayout.tsx` may extend the `PrimaryTab` list with
     new platform or runtime-family entries, but primary navigation is a
     support-and-evidence-gated surface: rendered tabs, command/search

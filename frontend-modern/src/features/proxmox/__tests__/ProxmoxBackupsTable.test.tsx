@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ProxmoxBackupsTable } from '../ProxmoxBackupsTable';
+import type { Resource } from '@/types/resource';
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
 
@@ -97,6 +98,19 @@ function mockBackupAPIs() {
   });
 }
 
+const workloadResource = {
+  id: 'ct-112',
+  type: 'system-container',
+  name: 'pbs-docker',
+  displayName: 'pbs-docker',
+  platformId: 'pve-a',
+  platformType: 'proxmox-pve',
+  sourceType: 'api',
+  status: 'running',
+  lastSeen: Date.parse('2026-05-25T00:00:00Z'),
+  proxmox: { vmid: 112, node: 'pve-a', instance: 'pve-a' },
+} as Resource;
+
 afterEach(() => {
   cleanup();
   apiFetchMock.mockReset();
@@ -106,10 +120,15 @@ describe('ProxmoxBackupsTable', () => {
   it('shows PBS artifacts from the PBS backup endpoint when PBS is present', async () => {
     mockBackupAPIs();
 
-    render(() => <ProxmoxBackupsTable emptyIcon={<span />} hasPBS />);
+    render(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} hasPBS workloads={[workloadResource]} />
+    ));
 
-    expect(await screen.findByText('CT 112')).toBeInTheDocument();
+    expect(await screen.findByText('pbs-docker (CT 112)')).toBeInTheDocument();
     expect(screen.getByText('main / minipc')).toBeInTheDocument();
+    expect(screen.getAllByText('Current').length).toBeGreaterThan(0);
+
+    await fireEvent.click(screen.getByRole('button', { name: /pbs artifacts/i }));
     expect(screen.getByText('2 files')).toBeInTheDocument();
     expect(screen.getAllByText('Verified').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Protected').length).toBeGreaterThan(0);
@@ -122,6 +141,7 @@ describe('ProxmoxBackupsTable', () => {
 
     render(() => <ProxmoxBackupsTable emptyIcon={<span />} hasPBS={false} />);
 
+    await fireEvent.click(await screen.findByRole('button', { name: /snapshots/i }));
     expect(await screen.findByText('CT 112')).toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: /total size/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: /^ram$/i })).not.toBeInTheDocument();
@@ -137,5 +157,24 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.getAllByText('OK').length).toBeGreaterThan(0);
     expect(screen.queryByRole('columnheader', { name: /^size$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: /error/i })).not.toBeInTheDocument();
+  });
+
+  it('adds a cross-source recoverable inventory without collapsing source tabs', async () => {
+    mockBackupAPIs();
+
+    render(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} hasPBS workloads={[workloadResource]} />
+    ));
+
+    await fireEvent.click(await screen.findByRole('button', { name: /all recoverable/i }));
+
+    expect(screen.getByRole('columnheader', { name: /source/i })).toBeInTheDocument();
+    expect(screen.getAllByText('PBS').length).toBeGreaterThan(0);
+    expect(screen.getByText('PVE archive')).toBeInTheDocument();
+    expect(screen.getAllByText('Snapshot').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('pbs-docker (CT 112)').length).toBeGreaterThan(0);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Snapshots 1' }));
+    expect(screen.getByRole('columnheader', { name: /snapshots/i })).toBeInTheDocument();
   });
 });

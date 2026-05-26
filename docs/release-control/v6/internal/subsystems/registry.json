@@ -4890,6 +4890,13 @@
         "internal/recovery/"
       ],
       "owned_files": [
+        "frontend-modern/src/features/proxmox/BackupActivityChart.tsx",
+        "frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts",
+        "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
+        "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx",
+        "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+        "frontend-modern/src/features/proxmox/proxmoxBackupSummaryPresentation.ts",
+        "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
         "frontend-modern/src/features/recovery/useRecoverySurfaceState.ts",
         "frontend-modern/src/hooks/useRecoveryPoints.ts",
         "frontend-modern/src/hooks/useRecoveryPointsFacets.ts",
@@ -5000,6 +5007,28 @@
               "frontend-modern/src/features/storageBackups/__tests__/storagePagePresentation.test.ts",
               "frontend-modern/src/features/storageBackups/__tests__/storagePoolsTablePresentation.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
+            ]
+          },
+          {
+            "id": "proxmox-backup-product-surface",
+            "label": "proxmox backup product surface proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/features/proxmox/BackupActivityChart.tsx",
+              "frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts",
+              "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
+              "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx",
+              "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+              "frontend-modern/src/features/proxmox/proxmoxBackupSummaryPresentation.ts",
+              "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupActivityPresentation.test.ts",
+              "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupRecoveryModel.test.ts",
+              "frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupsTable.test.tsx",
+              "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupSummaryPresentation.test.ts"
             ]
           }
         ]

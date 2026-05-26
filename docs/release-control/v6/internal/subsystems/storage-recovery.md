@@ -58,6 +58,13 @@ state.
 29. `frontend-modern/src/utils/storageSummaryCache.ts`
 30. `frontend-modern/src/components/Storage/useStorageSummaryCharts.ts`
 31. `frontend-modern/src/features/storageBackups/storageCapacityDeltaPresentation.ts`
+32. `frontend-modern/src/features/proxmox/BackupActivityChart.tsx`
+33. `frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx`
+34. `frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx`
+35. `frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts`
+36. `frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts`
+37. `frontend-modern/src/features/proxmox/proxmoxBackupSummaryPresentation.ts`
+38. `frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx`
 
 ## Shared Boundaries
 
@@ -85,6 +92,18 @@ verification, namespace, owner, and file facts from `models.PBSBackup`. PVE
 snapshot, storage-archive, and task tables consume `/api/backups/pve` and must
 keep columns source-aware: columns that PVE cannot populate for the current data
 set are omitted rather than rendered as all-dash placeholders.
+The Proxmox Backups tab also owns a workload-level coverage view and an
+all-recoverable inventory above the source-specific tabs. Those aggregate views
+may correlate unified-resource workload identity with PBS artifacts, PVE backup
+archives, guest snapshots, and backup tasks, but they must keep each artifact's
+source visible and must not flatten PBS verification/protection facts into PVE
+archive or snapshot semantics. Workload coverage posture must be derived from
+real recovery evidence and recent task outcomes, including explicit uncovered
+and failed-latest-task states, rather than from source-tab row counts alone.
+The platform page embedding point may pass read-only Proxmox guest inventory
+into that backup surface solely for workload identity correlation; the backup
+surface must still source restore evidence from the PVE/PBS backup APIs rather
+than treating the page shell as recovery state.
 
 Storage/recovery auth-adjacent changes may consume SSO-authenticated sessions,
 but they must not reinterpret SAML or multi-provider SSO availability as a

@@ -12,7 +12,9 @@ import {
 import ArchiveIcon from 'lucide-solid/icons/archive';
 import CameraIcon from 'lucide-solid/icons/camera';
 import ActivityIcon from 'lucide-solid/icons/activity';
+import DatabaseIcon from 'lucide-solid/icons/database';
 import ServerIcon from 'lucide-solid/icons/server';
+import ShieldCheckIcon from 'lucide-solid/icons/shield-check';
 import ArrowDownIcon from 'lucide-solid/icons/arrow-down';
 import ArrowUpIcon from 'lucide-solid/icons/arrow-up';
 import ArrowUpDownIcon from 'lucide-solid/icons/arrow-up-down';
@@ -56,6 +58,7 @@ import type {
   PVEBackupsResponse,
   StorageBackup,
 } from '@/types/api';
+import type { Resource } from '@/types/resource';
 import { BackupActivityChart } from './BackupActivityChart';
 import {
   buildBackupActivityTimeline,
@@ -74,9 +77,23 @@ import {
   guestKey,
   taskDurationSeconds,
 } from './proxmoxBackupSummaryPresentation';
+import {
+  buildProxmoxBackupRecoveryModel,
+  coverageRowMatchesSearch,
+  getWorkloadRecoveryPostureLabel,
+  isCoverageAttention,
+  recoverableArtifactMatchesSearch,
+  type RecoverableArtifact,
+  type WorkloadCoverageRow,
+} from './proxmoxBackupRecoveryModel';
 import { ProxmoxBackupsCoverageStrip } from './ProxmoxBackupsCoverageStrip';
 
 // Proxmox backups split into source-owned surfaces:
+//   - Workload coverage: one operator posture row per workload so coverage
+//     questions do not require scanning individual artifacts by hand.
+//   - All recoverable: one cross-source restore inventory for "what can I
+//     restore?" while preserving each artifact's source and source-specific
+//     semantics.
 //   - PBS artifacts: deduplicated backup snapshots owned by Proxmox Backup
 //     Server, including verification/protection state from PBS itself.
 //   - Snapshots: qm/pct snapshots taken on the host (no external storage)
@@ -85,7 +102,7 @@ import { ProxmoxBackupsCoverageStrip } from './ProxmoxBackupsCoverageStrip';
 //   - Recent tasks: the rolling backup-job execution log; this is what
 //     surfaces "did last night's backup actually run?"
 
-type BackupTabId = 'pbs' | 'snapshots' | 'archives' | 'tasks';
+type BackupTabId = 'coverage' | 'recoverable' | 'pbs' | 'snapshots' | 'archives' | 'tasks';
 
 interface BackupTabSpec {
   id: BackupTabId;
@@ -96,6 +113,20 @@ interface BackupTabSpec {
 }
 
 const TABS: BackupTabSpec[] = [
+  {
+    id: 'coverage',
+    label: 'Workload coverage',
+    icon: () => <ShieldCheckIcon class="h-4 w-4" aria-hidden="true" />,
+    emptyTitle: 'No workload coverage',
+    emptyDescription: 'VM and container restore posture will appear here once backup data exists.',
+  },
+  {
+    id: 'recoverable',
+    label: 'All recoverable',
+    icon: () => <DatabaseIcon class="h-4 w-4" aria-hidden="true" />,
+    emptyTitle: 'No recoverable artifacts',
+    emptyDescription: 'PBS artifacts, PVE backup files, and snapshots will appear here.',
+  },
   {
     id: 'pbs',
     label: 'PBS artifacts',
@@ -240,6 +271,26 @@ const TASK_STATUS_FILTERS: FilterOption<'all' | 'ok' | 'failed' | 'running'>[] =
   { value: 'running', label: 'Running', tone: 'info', leading: statusDot('bg-blue-500') },
 ];
 
+type CoverageFilterValue = 'all' | 'attention' | 'current' | 'uncovered';
+
+const COVERAGE_FILTERS: FilterOption<CoverageFilterValue>[] = [
+  { value: 'all', label: 'All' },
+  { value: 'attention', label: 'Attention', tone: 'warning', leading: statusDot('bg-amber-500') },
+  { value: 'current', label: 'Current', tone: 'success', leading: statusDot('bg-emerald-500') },
+  { value: 'uncovered', label: 'Uncovered', tone: 'danger', leading: statusDot('bg-red-500') },
+];
+
+type RecoverableFilterValue = 'all' | 'pbs' | 'archive' | 'snapshot' | 'verified' | 'unverified';
+
+const RECOVERABLE_FILTERS: FilterOption<RecoverableFilterValue>[] = [
+  { value: 'all', label: 'All' },
+  { value: 'pbs', label: 'PBS', tone: 'info', leading: statusDot('bg-cyan-500') },
+  { value: 'archive', label: 'Archives', tone: 'info', leading: statusDot('bg-blue-500') },
+  { value: 'snapshot', label: 'Snapshots', tone: 'info', leading: statusDot('bg-violet-500') },
+  { value: 'verified', label: 'Verified', tone: 'success', leading: statusDot('bg-emerald-500') },
+  { value: 'unverified', label: 'Unverified', tone: 'warning', leading: statusDot('bg-amber-500') },
+];
+
 type SnapshotFilterValue = 'all' | 'recent' | 'stale' | 'with-ram';
 
 const SNAPSHOT_FILTERS: FilterOption<SnapshotFilterValue>[] = [
@@ -303,6 +354,61 @@ function RowMetricBar(props: {
       />
     </div>
   );
+}
+
+function RecoverySourceSummary(props: {
+  artifact?: RecoverableArtifact;
+  count: number;
+  emptyLabel: string;
+}) {
+  return (
+    <Show when={props.artifact} fallback={<span class="text-muted">{props.emptyLabel}</span>}>
+      {(artifact) => (
+        <div class="min-w-0">
+          <div class="text-base-content">
+            {formatRelativeTime(artifact().createdAt, { compact: true })}
+          </div>
+          <div class="truncate text-[10px] text-muted" title={artifact().location}>
+            {props.count === 1
+              ? artifact().location
+              : `${props.count} total · ${artifact().location}`}
+          </div>
+        </div>
+      )}
+    </Show>
+  );
+}
+
+function ArtifactStateBadge(props: { artifact: RecoverableArtifact; label: string }) {
+  if (props.artifact.sourceKind === 'snapshot') {
+    return (
+      <span class="inline-flex items-center rounded-sm bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-900/40 dark:text-violet-200">
+        {props.label}
+      </span>
+    );
+  }
+  if (props.artifact.protected) {
+    return (
+      <span class="inline-flex items-center rounded-sm bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-200">
+        {props.label}
+      </span>
+    );
+  }
+  if (props.artifact.verified === true) {
+    return (
+      <span class="inline-flex items-center rounded-sm bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
+        {props.label}
+      </span>
+    );
+  }
+  if (props.artifact.verified === false) {
+    return (
+      <span class="inline-flex items-center rounded-sm bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-200">
+        {props.label}
+      </span>
+    );
+  }
+  return <span class="text-muted">{props.label}</span>;
 }
 
 // SLA-aligned row swatch helpers exposed for inner-table rendering — both
@@ -413,6 +519,27 @@ function cmpBool(a: boolean, b: boolean, direction: 'asc' | 'desc'): number {
 // sysadmin-default question on a backup page. String columns default to
 // `asc` (A→Z). Boolean columns default to `desc` so "true" sorts first.
 
+type CoverageSortKey = 'posture' | 'workload' | 'latest' | 'pbs' | 'archive' | 'snapshot' | 'task';
+const COVERAGE_SORT_DEFAULT_DIRECTION: Record<CoverageSortKey, 'asc' | 'desc'> = {
+  posture: 'asc',
+  workload: 'asc',
+  latest: 'desc',
+  pbs: 'desc',
+  archive: 'desc',
+  snapshot: 'desc',
+  task: 'desc',
+};
+
+type RecoverableSortKey = 'workload' | 'source' | 'location' | 'created' | 'size' | 'state';
+const RECOVERABLE_SORT_DEFAULT_DIRECTION: Record<RecoverableSortKey, 'asc' | 'desc'> = {
+  workload: 'asc',
+  source: 'asc',
+  location: 'asc',
+  created: 'desc',
+  size: 'desc',
+  state: 'asc',
+};
+
 type PBSSortKey = 'workload' | 'repository' | 'created' | 'size' | 'protected' | 'verified';
 const PBS_SORT_DEFAULT_DIRECTION: Record<PBSSortKey, 'asc' | 'desc'> = {
   workload: 'asc',
@@ -467,11 +594,14 @@ const TASK_SORT_DEFAULT_DIRECTION: Record<TaskSortKey, 'asc' | 'desc'> = {
 export const ProxmoxBackupsTable: Component<{
   emptyIcon: JSX.Element;
   hasPBS?: boolean;
+  workloads?: readonly Resource[];
 }> = (props) => {
   const [backups, { refetch }] = createResource<PVEBackupsPayload>(fetchPVEBackups);
   const [pbsBackups, { refetch: refetchPBS }] = createResource<PBSBackupsPayload>(fetchPBSBackups);
-  const [tab, setTab] = createSignal<BackupTabId>(props.hasPBS ? 'pbs' : 'snapshots');
+  const [tab, setTab] = createSignal<BackupTabId>('coverage');
   const [search, setSearch] = createSignal('');
+  const [coverageFilter, setCoverageFilter] = createSignal<CoverageFilterValue>('all');
+  const [recoverableFilter, setRecoverableFilter] = createSignal<RecoverableFilterValue>('all');
   const [pbsFilter, setPBSFilter] = createSignal<'all' | 'protected' | 'verified' | 'unverified'>(
     'all',
   );
@@ -482,10 +612,18 @@ export const ProxmoxBackupsTable: Component<{
   const [snapshotFilter, setSnapshotFilter] = createSignal<SnapshotFilterValue>('all');
   const [chartRange, setChartRange] = createSignal<BackupActivityRangeDays>(30);
   const [selectedDateKey, setSelectedDateKey] = createSignal<string | null>(null);
+  const [recoverableMetricMode, setRecoverableMetricMode] =
+    createSignal<BackupActivityMetricMode>('count');
   const [pbsMetricMode, setPBSMetricMode] = createSignal<BackupActivityMetricMode>('count');
   const [archiveMetricMode, setArchiveMetricMode] = createSignal<BackupActivityMetricMode>('count');
   const [expandedGuests, setExpandedGuests] = createSignal<ReadonlySet<string>>(new Set<string>());
 
+  const [coverageSortKey, setCoverageSortKey] = createSignal<CoverageSortKey>('posture');
+  const [coverageSortDirection, setCoverageSortDirection] = createSignal<'asc' | 'desc'>('asc');
+  const [recoverableSortKey, setRecoverableSortKey] = createSignal<RecoverableSortKey>('created');
+  const [recoverableSortDirection, setRecoverableSortDirection] = createSignal<'asc' | 'desc'>(
+    'desc',
+  );
   const [pbsSortKey, setPBSSortKey] = createSignal<PBSSortKey>('created');
   const [pbsSortDirection, setPBSSortDirection] = createSignal<'asc' | 'desc'>('desc');
   const [snapshotSortKey, setSnapshotSortKey] = createSignal<SnapshotSortKey>('latest');
@@ -504,6 +642,22 @@ export const ProxmoxBackupsTable: Component<{
     }
   });
 
+  const handleCoverageSort = (key: CoverageSortKey) => {
+    if (coverageSortKey() === key) {
+      setCoverageSortDirection(coverageSortDirection() === 'asc' ? 'desc' : 'asc');
+    } else {
+      setCoverageSortKey(key);
+      setCoverageSortDirection(COVERAGE_SORT_DEFAULT_DIRECTION[key]);
+    }
+  };
+  const handleRecoverableSort = (key: RecoverableSortKey) => {
+    if (recoverableSortKey() === key) {
+      setRecoverableSortDirection(recoverableSortDirection() === 'asc' ? 'desc' : 'asc');
+    } else {
+      setRecoverableSortKey(key);
+      setRecoverableSortDirection(RECOVERABLE_SORT_DEFAULT_DIRECTION[key]);
+    }
+  };
   const handlePBSSort = (key: PBSSortKey) => {
     if (pbsSortKey() === key) {
       setPBSSortDirection(pbsSortDirection() === 'asc' ? 'desc' : 'asc');
@@ -558,6 +712,16 @@ export const ProxmoxBackupsTable: Component<{
   const snapshotCoverage = createMemo(() => buildSnapshotCoverageSummary(snapshots(), nowMs()));
   const archiveCoverage = createMemo(() => buildArchiveCoverageSummary(archives(), nowMs()));
   const taskOutcome = createMemo(() => buildTaskOutcomeSummary(tasks()));
+  const recoveryModel = createMemo(() =>
+    buildProxmoxBackupRecoveryModel({
+      workloads: props.workloads ?? [],
+      pbsBackups: pbsArtifacts(),
+      archives: archives(),
+      snapshots: snapshots(),
+      tasks: tasks(),
+      nowMs: nowMs(),
+    }),
+  );
   const pbsCoverage = createMemo(() => {
     const backups = pbsArtifacts();
     const namespaces = new Set<string>();
@@ -637,6 +801,11 @@ export const ProxmoxBackupsTable: Component<{
   const TASK_SEGMENT_KINDS: readonly BackupActivitySegmentKind[] = ['ok', 'failed', 'running'];
   const SNAPSHOT_SEGMENT_KINDS: readonly BackupActivitySegmentKind[] = ['snapshot'];
   const PBS_SEGMENT_KINDS: readonly BackupActivitySegmentKind[] = ['pbs'];
+  const RECOVERABLE_SEGMENT_KINDS: readonly BackupActivitySegmentKind[] = [
+    'pbs',
+    'archive',
+    'snapshot',
+  ];
 
   const pbsTimeline = createMemo(() =>
     buildBackupActivityTimeline<PBSBackup>(
@@ -652,6 +821,42 @@ export const ProxmoxBackupsTable: Component<{
       },
     ),
   );
+
+  const recoverableTimeline = createMemo(() =>
+    buildBackupActivityTimeline<RecoverableArtifact>(
+      chartRange(),
+      recoveryModel().recoverableArtifacts,
+      (artifact) => artifact.createdMs,
+      (artifact) =>
+        artifact.sourceKind === 'pbs'
+          ? 'pbs'
+          : artifact.sourceKind === 'archive'
+            ? 'archive'
+            : 'snapshot',
+      {
+        getValue:
+          recoverableMetricMode() === 'volume'
+            ? (artifact) => (artifact.size && artifact.size > 0 ? artifact.size : 0)
+            : undefined,
+      },
+    ),
+  );
+
+  const artifactStateLabel = (artifact: RecoverableArtifact): string => {
+    if (artifact.sourceKind === 'snapshot') return 'Snapshot';
+    if (artifact.protected) return 'Protected';
+    if (artifact.verified === true) return 'Verified';
+    if (artifact.verified === false) return 'Unverified';
+    return 'Archive';
+  };
+
+  const coveragePostureVariant = (
+    posture: WorkloadCoverageRow['posture'],
+  ): StatusIndicatorVariant => {
+    if (posture === 'current') return 'success';
+    if (posture === 'uncovered' || posture === 'failed' || posture === 'stale') return 'danger';
+    return 'warning';
+  };
 
   const snapshotMatchesSearch = (snap: GuestSnapshot, term: string): boolean => {
     if (!term) return true;
@@ -955,6 +1160,92 @@ export const ProxmoxBackupsTable: Component<{
     return list;
   });
 
+  const filteredCoverageRows = createMemo(() => {
+    const term = search().trim().toLowerCase();
+    const filter = coverageFilter();
+    const dateKey = selectedDateKey();
+    const list = recoveryModel().coverageRows.filter((row) => {
+      if (filter === 'attention' && !isCoverageAttention(row.posture)) return false;
+      if (filter === 'current' && row.posture !== 'current') return false;
+      if (filter === 'uncovered' && row.posture !== 'uncovered') return false;
+      if (
+        dateKey &&
+        !row.artifacts.some(
+          (artifact) =>
+            artifact.createdMs !== undefined &&
+            recoveryDateKeyFromTimestamp(artifact.createdMs) === dateKey,
+        )
+      ) {
+        return false;
+      }
+      return coverageRowMatchesSearch(row, term);
+    });
+    const sortKey = coverageSortKey();
+    const direction = coverageSortDirection();
+    list.sort((a, b) => {
+      switch (sortKey) {
+        case 'posture':
+          return cmpNumber(a.postureRank, b.postureRank, direction);
+        case 'workload':
+          return cmpString(a.workload.label, b.workload.label, direction);
+        case 'latest':
+          return cmpNumber(a.latestRecovery?.createdMs, b.latestRecovery?.createdMs, direction);
+        case 'pbs':
+          return cmpNumber(a.latestPBS?.createdMs, b.latestPBS?.createdMs, direction);
+        case 'archive':
+          return cmpNumber(a.latestArchive?.createdMs, b.latestArchive?.createdMs, direction);
+        case 'snapshot':
+          return cmpNumber(a.latestSnapshot?.createdMs, b.latestSnapshot?.createdMs, direction);
+        case 'task':
+          return cmpNumber(a.latestTask?.startedMs, b.latestTask?.startedMs, direction);
+      }
+    });
+    return list;
+  });
+
+  const filteredRecoverableArtifacts = createMemo(() => {
+    const term = search().trim().toLowerCase();
+    const filter = recoverableFilter();
+    const dateKey = selectedDateKey();
+    const list = recoveryModel().recoverableArtifacts.filter((artifact) => {
+      if (
+        (filter === 'pbs' || filter === 'archive' || filter === 'snapshot') &&
+        artifact.sourceKind !== filter
+      ) {
+        return false;
+      }
+      if (filter === 'verified' && artifact.verified !== true) return false;
+      if (filter === 'unverified' && artifact.verified !== false) return false;
+      if (
+        dateKey &&
+        (artifact.createdMs === undefined ||
+          recoveryDateKeyFromTimestamp(artifact.createdMs) !== dateKey)
+      ) {
+        return false;
+      }
+      return recoverableArtifactMatchesSearch(artifact, term);
+    });
+    const sortKey = recoverableSortKey();
+    const direction = recoverableSortDirection();
+    list.sort((a, b) => {
+      switch (sortKey) {
+        case 'workload':
+          return cmpString(a.workload.label, b.workload.label, direction);
+        case 'source':
+          return cmpString(a.sourceLabel, b.sourceLabel, direction);
+        case 'location':
+          return cmpString(a.location, b.location, direction);
+        case 'created':
+          return cmpNumber(a.createdMs, b.createdMs, direction);
+        case 'size':
+          return cmpNumber(a.size, b.size, direction);
+        case 'state':
+          return cmpString(artifactStateLabel(a), artifactStateLabel(b), direction);
+      }
+    });
+    return list;
+  });
+
   const showSnapshotSizeColumn = createMemo(() =>
     snapshots().some((snap) => typeof snap.sizeBytes === 'number' && snap.sizeBytes > 0),
   );
@@ -972,6 +1263,10 @@ export const ProxmoxBackupsTable: Component<{
 
   const totalForTab = createMemo<number>(() => {
     switch (tab()) {
+      case 'coverage':
+        return recoveryModel().coverageRows.length;
+      case 'recoverable':
+        return recoveryModel().recoverableArtifacts.length;
       case 'pbs':
         return pbsArtifacts().length;
       case 'snapshots':
@@ -987,6 +1282,10 @@ export const ProxmoxBackupsTable: Component<{
 
   const visibleForTab = createMemo<number>(() => {
     switch (tab()) {
+      case 'coverage':
+        return filteredCoverageRows().length;
+      case 'recoverable':
+        return filteredRecoverableArtifacts().length;
       case 'pbs':
         return filteredPBSBackups().length;
       case 'snapshots':
@@ -1024,6 +1323,31 @@ export const ProxmoxBackupsTable: Component<{
       if (arc.size > max) max = arc.size;
     }
     return max;
+  });
+
+  const recoverableSizeMaxBytes = createMemo(() => {
+    let max = 0;
+    for (const artifact of filteredRecoverableArtifacts()) {
+      if (artifact.size && artifact.size > max) max = artifact.size;
+    }
+    return max;
+  });
+
+  const activeTabNoun = createMemo(() => {
+    switch (tab()) {
+      case 'coverage':
+        return 'workloads';
+      case 'recoverable':
+        return 'recoverable artifacts';
+      case 'pbs':
+        return 'PBS artifacts';
+      case 'archives':
+        return 'archives';
+      case 'tasks':
+        return 'tasks';
+      case 'snapshots':
+        return 'guests';
+    }
   });
 
   const visibleSnapshotGuestCount = createMemo(() => filteredSnapshotGuests().length);
@@ -1079,18 +1403,118 @@ export const ProxmoxBackupsTable: Component<{
                   {spec.icon()}
                   <span>{spec.label}</span>
                   <span class="text-[10px] text-muted tabular-nums">
-                    {spec.id === 'pbs'
-                      ? pbsArtifacts().length
-                      : spec.id === 'snapshots'
-                        ? snapshots().length
-                        : spec.id === 'archives'
-                          ? archives().length
-                          : tasks().length}
+                    {spec.id === 'coverage'
+                      ? recoveryModel().coverageRows.length
+                      : spec.id === 'recoverable'
+                        ? recoveryModel().recoverableArtifacts.length
+                        : spec.id === 'pbs'
+                          ? pbsArtifacts().length
+                          : spec.id === 'snapshots'
+                            ? snapshots().length
+                            : spec.id === 'archives'
+                              ? archives().length
+                              : tasks().length}
                   </span>
                 </button>
               )}
             </For>
           </div>
+
+          <Show when={tab() === 'coverage'}>
+            <ProxmoxBackupsCoverageStrip
+              title="Workload restore posture"
+              tail={
+                <span>
+                  {recoveryModel().coverageSummary.totalWorkloads} workloads ·{' '}
+                  {recoveryModel().coverageSummary.recoverableArtifacts} recoverable artifacts
+                  <Show when={recoveryModel().coverageSummary.withPBS > 0}>
+                    {' · '}
+                    {recoveryModel().coverageSummary.withPBS} with PBS
+                  </Show>
+                </span>
+              }
+              segments={[
+                {
+                  key: 'current',
+                  value: recoveryModel().coverageSummary.current,
+                  label: 'current',
+                  toneClass: 'bg-emerald-500',
+                },
+                {
+                  key: 'attention',
+                  value: recoveryModel().coverageSummary.attention,
+                  label: 'attention',
+                  toneClass: 'bg-amber-500',
+                  muted: recoveryModel().coverageSummary.attention === 0,
+                },
+                {
+                  key: 'uncovered',
+                  value: recoveryModel().coverageSummary.uncovered,
+                  label: 'uncovered',
+                  toneClass: 'bg-red-500',
+                  muted: recoveryModel().coverageSummary.uncovered === 0,
+                },
+              ]}
+            />
+          </Show>
+
+          <Show when={tab() === 'recoverable' && recoveryModel().recoverableArtifacts.length > 0}>
+            <BackupActivityChart
+              title={
+                recoverableMetricMode() === 'volume'
+                  ? 'Recoverable volume per day'
+                  : 'Recoverable artifacts per day'
+              }
+              noun="artifact"
+              segmentKinds={RECOVERABLE_SEGMENT_KINDS}
+              range={chartRange}
+              onRangeChange={setChartRange}
+              timeline={recoverableTimeline}
+              selectedDateKey={selectedDateKey}
+              onToggleDay={toggleDay}
+              metricToggle={{ mode: recoverableMetricMode, onChange: setRecoverableMetricMode }}
+            />
+            <ProxmoxBackupsCoverageStrip
+              title="Restore inventory"
+              tail={
+                <span>
+                  {recoveryModel().coverageSummary.recoverableArtifacts} artifacts ·{' '}
+                  {formatBytes(recoveryModel().coverageSummary.totalBytes)} logical
+                </span>
+              }
+              segments={[
+                {
+                  key: 'pbs',
+                  value: recoveryModel().recoverableArtifacts.filter((a) => a.sourceKind === 'pbs')
+                    .length,
+                  label: 'PBS',
+                  toneClass: 'bg-cyan-500',
+                },
+                {
+                  key: 'archives',
+                  value: recoveryModel().recoverableArtifacts.filter(
+                    (a) => a.sourceKind === 'archive',
+                  ).length,
+                  label: 'archives',
+                  toneClass: 'bg-blue-500',
+                  muted:
+                    recoveryModel().recoverableArtifacts.filter((a) => a.sourceKind === 'archive')
+                      .length === 0,
+                },
+                {
+                  key: 'snapshots',
+                  value: recoveryModel().recoverableArtifacts.filter(
+                    (a) => a.sourceKind === 'snapshot',
+                  ).length,
+                  label: 'snapshots',
+                  toneClass: 'bg-violet-500',
+                  muted:
+                    recoveryModel().recoverableArtifacts.filter((a) => a.sourceKind === 'snapshot')
+                      .length === 0,
+                },
+              ]}
+            />
+          </Show>
 
           <Show when={tab() === 'pbs' && pbsArtifacts().length > 0}>
             <BackupActivityChart
@@ -1293,16 +1717,36 @@ export const ProxmoxBackupsTable: Component<{
                 value={search}
                 onChange={setSearch}
                 placeholder={
-                  tab() === 'pbs'
-                    ? 'Search PBS artifacts, namespaces, guests'
-                    : tab() === 'snapshots'
-                      ? 'Search snapshots, guests, nodes'
-                      : tab() === 'archives'
-                        ? 'Search archives, storages, nodes'
-                        : 'Search tasks, nodes, errors'
+                  tab() === 'coverage'
+                    ? 'Search workload coverage, guests, posture'
+                    : tab() === 'recoverable'
+                      ? 'Search recoverable artifacts, sources, namespaces'
+                      : tab() === 'pbs'
+                        ? 'Search PBS artifacts, namespaces, guests'
+                        : tab() === 'snapshots'
+                          ? 'Search snapshots, guests, nodes'
+                          : tab() === 'archives'
+                            ? 'Search archives, storages, nodes'
+                            : 'Search tasks, nodes, errors'
                 }
               />
             </div>
+            <Show when={tab() === 'coverage'}>
+              <FilterButtonGroup
+                variant="compact"
+                options={COVERAGE_FILTERS}
+                value={coverageFilter()}
+                onChange={setCoverageFilter}
+              />
+            </Show>
+            <Show when={tab() === 'recoverable'}>
+              <FilterButtonGroup
+                variant="compact"
+                options={RECOVERABLE_FILTERS}
+                value={recoverableFilter()}
+                onChange={setRecoverableFilter}
+              />
+            </Show>
             <Show when={tab() === 'pbs'}>
               <FilterButtonGroup
                 variant="compact"
@@ -1359,21 +1803,11 @@ export const ProxmoxBackupsTable: Component<{
                     when={visibleForTab() !== totalForTab()}
                     fallback={
                       <>
-                        {totalForTab()}{' '}
-                        {tab() === 'pbs'
-                          ? 'PBS artifacts'
-                          : tab() === 'archives'
-                            ? 'archives'
-                            : 'tasks'}
+                        {totalForTab()} {activeTabNoun()}
                       </>
                     }
                   >
-                    {visibleForTab()} of {totalForTab()}{' '}
-                    {tab() === 'pbs'
-                      ? 'PBS artifacts'
-                      : tab() === 'archives'
-                        ? 'archives'
-                        : 'tasks'}
+                    {visibleForTab()} of {totalForTab()} {activeTabNoun()}
                   </Show>
                 }
               >
@@ -1386,6 +1820,387 @@ export const ProxmoxBackupsTable: Component<{
               </Show>
             </span>
           </div>
+
+          <Show when={tab() === 'coverage'}>
+            <Show
+              when={filteredCoverageRows().length > 0}
+              fallback={
+                <Card padding="lg">
+                  <EmptyState
+                    icon={props.emptyIcon}
+                    title={
+                      recoveryModel().coverageRows.length === 0
+                        ? tabSpecFor('coverage').emptyTitle
+                        : 'No workload coverage rows match current filters'
+                    }
+                    description={
+                      recoveryModel().coverageRows.length === 0
+                        ? tabSpecFor('coverage').emptyDescription
+                        : 'Adjust the search, posture filter, or selected day to see more workloads.'
+                    }
+                  />
+                </Card>
+              }
+            >
+              <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
+                <Table class="min-w-[1200px] text-xs">
+                  <TableHeader>
+                    <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                      <SortableHead
+                        label="Workload"
+                        sortKey="workload"
+                        currentSort={coverageSortKey}
+                        direction={coverageSortDirection}
+                        onSort={handleCoverageSort}
+                        align="left"
+                        headClass={getPlatformTableHeadClassForKind('name')}
+                      />
+                      <SortableHead
+                        label="Posture"
+                        sortKey="posture"
+                        currentSort={coverageSortKey}
+                        direction={coverageSortDirection}
+                        onSort={handleCoverageSort}
+                        align="left"
+                        headClass={getPlatformTableHeadClassForKind('text')}
+                      />
+                      <SortableHead
+                        label="Latest restore"
+                        sortKey="latest"
+                        currentSort={coverageSortKey}
+                        direction={coverageSortDirection}
+                        onSort={handleCoverageSort}
+                        align="right"
+                        headClass={getPlatformTableHeadClassForKind('numeric-value')}
+                      />
+                      <SortableHead
+                        label="PBS"
+                        sortKey="pbs"
+                        currentSort={coverageSortKey}
+                        direction={coverageSortDirection}
+                        onSort={handleCoverageSort}
+                        align="left"
+                        headClass={getPlatformTableHeadClassForKind('text')}
+                      />
+                      <SortableHead
+                        label="Archive"
+                        sortKey="archive"
+                        currentSort={coverageSortKey}
+                        direction={coverageSortDirection}
+                        onSort={handleCoverageSort}
+                        align="left"
+                        headClass={getPlatformTableHeadClassForKind('text')}
+                      />
+                      <SortableHead
+                        label="Snapshot"
+                        sortKey="snapshot"
+                        currentSort={coverageSortKey}
+                        direction={coverageSortDirection}
+                        onSort={handleCoverageSort}
+                        align="left"
+                        headClass={getPlatformTableHeadClassForKind('text')}
+                      />
+                      <SortableHead
+                        label="Latest task"
+                        sortKey="task"
+                        currentSort={coverageSortKey}
+                        direction={coverageSortDirection}
+                        onSort={handleCoverageSort}
+                        align="left"
+                        headClass={getPlatformTableHeadClassForKind('text')}
+                      />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+                    <For each={filteredCoverageRows()}>
+                      {(row) => (
+                        <TableRow class="hover:bg-surface-hover">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
+                          >
+                            <div class="min-w-0">
+                              <div class="font-semibold">{row.workload.label}</div>
+                              <div class="truncate font-mono text-[10px] uppercase text-muted">
+                                {row.workload.typeLabel} {row.workload.vmid}
+                                <Show when={row.workload.node}>
+                                  {' · '}
+                                  {row.workload.node}
+                                </Show>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell class={getPlatformTableCellClassForKind('text')}>
+                            <div class="flex items-center gap-2">
+                              <StatusDot
+                                size="sm"
+                                variant={coveragePostureVariant(row.posture)}
+                                title={getWorkloadRecoveryPostureLabel(row.posture)}
+                                ariaHidden
+                              />
+                              <span class="text-[11px] font-medium text-base-content">
+                                {getWorkloadRecoveryPostureLabel(row.posture)}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
+                            <Show
+                              when={row.latestRecovery}
+                              fallback={<span class="text-muted">No restore point</span>}
+                            >
+                              {(artifact) => (
+                                <div class="min-w-0 text-right">
+                                  <div>
+                                    {formatRelativeTime(artifact().createdAt, { compact: true })}
+                                  </div>
+                                  <div class="truncate text-[10px] text-muted">
+                                    {artifact().sourceLabel}
+                                  </div>
+                                </div>
+                              )}
+                            </Show>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <RecoverySourceSummary
+                              artifact={row.latestPBS}
+                              count={row.pbsCount}
+                              emptyLabel="No PBS"
+                            />
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <RecoverySourceSummary
+                              artifact={row.latestArchive}
+                              count={row.archiveCount}
+                              emptyLabel="No archive"
+                            />
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <RecoverySourceSummary
+                              artifact={row.latestSnapshot}
+                              count={row.snapshotCount}
+                              emptyLabel="No snapshot"
+                            />
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <Show
+                              when={row.latestTask}
+                              fallback={<span class="text-muted">No recent task</span>}
+                            >
+                              {(task) => (
+                                <div class="min-w-0">
+                                  <div class="flex items-center gap-2">
+                                    <StatusDot
+                                      size="sm"
+                                      variant={
+                                        task().label === 'Failed'
+                                          ? 'danger'
+                                          : task().label === 'OK'
+                                            ? 'success'
+                                            : 'warning'
+                                      }
+                                      title={task().label}
+                                      ariaHidden
+                                    />
+                                    <span>{task().label}</span>
+                                  </div>
+                                  <div class="truncate text-[10px] text-muted">
+                                    {formatRelativeTime(task().startedAt, { compact: true })}
+                                  </div>
+                                </div>
+                              )}
+                            </Show>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </For>
+                  </TableBody>
+                </Table>
+              </TableCard>
+            </Show>
+          </Show>
+
+          <Show when={tab() === 'recoverable'}>
+            <Show
+              when={filteredRecoverableArtifacts().length > 0}
+              fallback={
+                <Card padding="lg">
+                  <EmptyState
+                    icon={props.emptyIcon}
+                    title={
+                      recoveryModel().recoverableArtifacts.length === 0
+                        ? tabSpecFor('recoverable').emptyTitle
+                        : 'No recoverable artifacts match current filters'
+                    }
+                    description={
+                      recoveryModel().recoverableArtifacts.length === 0
+                        ? tabSpecFor('recoverable').emptyDescription
+                        : 'Adjust the search, source filter, or selected day to see more artifacts.'
+                    }
+                  />
+                </Card>
+              }
+            >
+              <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
+                <Table class="min-w-[1150px] text-xs">
+                  <TableHeader>
+                    <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+                      <SortableHead
+                        label="Workload"
+                        sortKey="workload"
+                        currentSort={recoverableSortKey}
+                        direction={recoverableSortDirection}
+                        onSort={handleRecoverableSort}
+                        align="left"
+                        headClass={getPlatformTableHeadClassForKind('name')}
+                      />
+                      <SortableHead
+                        label="Source"
+                        sortKey="source"
+                        currentSort={recoverableSortKey}
+                        direction={recoverableSortDirection}
+                        onSort={handleRecoverableSort}
+                        align="left"
+                        headClass={getPlatformTableHeadClassForKind('text')}
+                      />
+                      <SortableHead
+                        label="Location"
+                        sortKey="location"
+                        currentSort={recoverableSortKey}
+                        direction={recoverableSortDirection}
+                        onSort={handleRecoverableSort}
+                        align="left"
+                        headClass={getPlatformTableHeadClassForKind('text')}
+                      />
+                      <SortableHead
+                        label="Created"
+                        sortKey="created"
+                        currentSort={recoverableSortKey}
+                        direction={recoverableSortDirection}
+                        onSort={handleRecoverableSort}
+                        align="right"
+                        headClass={getPlatformTableHeadClassForKind('numeric-value')}
+                      />
+                      <SortableHead
+                        label="Size"
+                        sortKey="size"
+                        currentSort={recoverableSortKey}
+                        direction={recoverableSortDirection}
+                        onSort={handleRecoverableSort}
+                        align="center"
+                        headClass={getPlatformTableHeadClassForKind('metric-bar')}
+                      />
+                      <SortableHead
+                        label="State"
+                        sortKey="state"
+                        currentSort={recoverableSortKey}
+                        direction={recoverableSortDirection}
+                        onSort={handleRecoverableSort}
+                        align="left"
+                        headClass={getPlatformTableHeadClassForKind('text')}
+                      />
+                      <TableHead class={getPlatformTableHeadClassForKind('text')}>
+                        Details
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+                    <For each={filteredRecoverableArtifacts()}>
+                      {(artifact) => (
+                        <TableRow class="hover:bg-surface-hover">
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
+                          >
+                            <div class="min-w-0">
+                              <div class="font-semibold">{artifact.workload.label}</div>
+                              <div class="font-mono text-[10px] uppercase text-muted">
+                                {artifact.workload.typeLabel} {artifact.workload.vmid}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <span
+                              class={`inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-semibold ${
+                                artifact.sourceKind === 'pbs'
+                                  ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-200'
+                                  : artifact.sourceKind === 'archive'
+                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200'
+                                    : 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200'
+                              }`}
+                            >
+                              {artifact.sourceLabel}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <span
+                              class="inline-block max-w-[16rem] truncate"
+                              title={artifact.location}
+                            >
+                              {artifact.location}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
+                            {formatRelativeTime(artifact.createdAt, { compact: true })}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} text-base-content`}
+                          >
+                            <Show
+                              when={artifact.size && artifact.size > 0}
+                              fallback={<span class="text-muted">No size</span>}
+                            >
+                              <RowMetricBar
+                                valuePct={
+                                  recoverableSizeMaxBytes() > 0 && artifact.size
+                                    ? (artifact.size / recoverableSizeMaxBytes()) * 100
+                                    : 0
+                                }
+                                fillClass="bg-blue-500/40 dark:bg-blue-500/40"
+                                label={formatBytes(artifact.size ?? 0)}
+                                tooltip={`${formatBytes(artifact.size ?? 0)} (relative to largest artifact in view)`}
+                              />
+                            </Show>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <ArtifactStateBadge
+                              artifact={artifact}
+                              label={artifactStateLabel(artifact)}
+                            />
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <span
+                              class="inline-block max-w-[20rem] truncate"
+                              title={artifact.detail}
+                            >
+                              {artifact.detail || '—'}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </For>
+                  </TableBody>
+                </Table>
+              </TableCard>
+            </Show>
+          </Show>
 
           <Show when={tab() === 'pbs'}>
             <Show
