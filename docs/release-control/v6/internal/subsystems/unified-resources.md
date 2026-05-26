@@ -742,8 +742,9 @@ AI-only summary payloads, or page-local heuristics.
    add handoffs must include `targetKind=machine`; service and device check
    handoffs must include `targetKind=service`. Saved availability targets carry
    a `targetKind` so agentless servers, laptops, desktops, and comparable
-   computers can participate in the Machines inventory without reclassifying
-   service or device checks as machines.
+   computers can use machine-specific reachability copy in Availability checks
+   without reclassifying service or device checks as machines. Machines
+   inventory membership still requires Pulse Agent resource evidence.
 6. Keep infrastructure source visibility on canonical unified-resource truth.
    Settings infrastructure source filters and summaries must preserve known
    sources such as `truenas` and `availability` through the shared source
@@ -2804,8 +2805,9 @@ redirect. Canonical infrastructure management lives under
 lives under `/settings/monitoring/availability`; day-to-day resource
 inspection lives on the platform/runtime pages named by the
 frontend-primitives-owned IA contract, with unified resources projecting
-standalone agent machines and agentless endpoint checks for the Machines
-consumer. Future infrastructure work must extend those owners rather than
+standalone agent machines for the Machines consumer and agentless endpoint
+checks for the Availability checks consumer. Future infrastructure work must
+extend those owners rather than
 recreating
 `frontend-modern/src/features/infrastructure/`, a `/infrastructure` route, or
 a separate top-level availability route.

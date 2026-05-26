@@ -15,22 +15,8 @@ export const isAgentlessAvailabilityResource = (resource: Resource): boolean =>
   resource.platformType === 'availability' ||
   resource.sources?.includes('availability') === true;
 
-const availabilityTargetKindFor = (resource: Resource): string =>
-  String(
-    resource.availability?.targetKind ??
-      (resource.platformData?.availability as { targetKind?: string } | undefined)?.targetKind ??
-      '',
-  )
-    .trim()
-    .toLowerCase();
-
-export const isAgentlessMachineResource = (resource: Resource): boolean =>
-  isAgentlessAvailabilityResource(resource) && availabilityTargetKindFor(resource) === 'machine';
-
 export function buildStandalonePageModel(resources: readonly Resource[]): StandalonePageModel {
-  const machines = resources.filter(
-    (resource) => isStandaloneMachineResource(resource) || isAgentlessMachineResource(resource),
-  );
+  const machines = resources.filter(isStandaloneMachineResource);
   const availabilityChecks = resources.filter(isAgentlessAvailabilityResource);
   return {
     machines,

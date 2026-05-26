@@ -436,12 +436,13 @@ the canonical monitored-system blocked payload.
     `frontend-modern/src/api/availabilityTargets.ts`, and the unified-resource
     availability payload together. The bounded `targetKind` vocabulary is
     `machine`, `service`, and `device`; missing legacy values default to
-    `service`, and browser consumers may place only explicitly classified
-    `machine` targets into Standalone Machines. Browser add-dialog routes may
-    carry a `targetKind` query value to preselect that bounded kind, but the
-    persisted contract remains the `AvailabilityTarget.targetKind` payload.
-    API clients must not infer that classification from protocol, hostname,
-    port, or row label.
+    `service`. Browser add-dialog routes may carry a `targetKind` query value
+    to preselect that bounded kind, but the persisted contract remains the
+    `AvailabilityTarget.targetKind` payload. Browser consumers must not place
+    availability targets into Standalone Machines from that classification;
+    Machines membership requires Pulse Agent resource evidence. API clients
+    must not infer that classification from protocol, hostname, port, or row
+    label.
 3. Add dedicated contract tests for new stable payloads
    Unified resource type-filter and organization-share resource type additions
    must route through `internal/api/resources.go`, `internal/api/org_handlers.go`,

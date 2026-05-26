@@ -204,7 +204,7 @@ export const AgentsMachinesTable: Component<{
             <PlatformTableEmptyState
               icon={props.emptyIcon}
               title="No machines match current filters"
-              description="Adjust the search or status filter to see more Pulse Agent or agentless machines."
+              description="Adjust the search or status filter to see more Pulse Agent machines."
             />
           }
         >

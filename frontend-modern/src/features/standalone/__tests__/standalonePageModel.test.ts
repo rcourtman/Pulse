@@ -66,7 +66,7 @@ describe('standalonePageModel', () => {
     expect(model.availabilityChecks).toEqual([]);
   });
 
-  it('keeps agentless availability checks beside standalone machines', () => {
+  it('keeps agentless availability checks out of standalone machines', () => {
     const model = buildStandalonePageModel([
       resource({ id: 'mac-mini', platformType: 'agent', type: 'agent', sources: ['agent'] }),
       resource({
@@ -85,8 +85,8 @@ describe('standalonePageModel', () => {
       }),
     ]);
 
-    expect(model.machines.map((item) => item.id)).toEqual(['mac-mini', 'router-ping']);
+    expect(model.machines.map((item) => item.id)).toEqual(['mac-mini']);
     expect(model.availabilityChecks.map((item) => item.id)).toEqual(['router-ping', 'endpoint-1']);
-    expect(model.resources.map((item) => item.id)).toEqual(['mac-mini', 'router-ping']);
+    expect(model.resources.map((item) => item.id)).toEqual(['mac-mini']);
   });
 });

@@ -112,7 +112,7 @@ afterEach(() => {
 });
 
 describe('StandalonePageSurface', () => {
-  it('keeps overview focused on standalone machines, including agentless machines only', () => {
+  it('keeps overview focused on Pulse Agent machines only', () => {
     render(() => <StandalonePageSurface />);
 
     expect(mocks.useUnifiedResources).toHaveBeenCalledWith(
@@ -124,7 +124,7 @@ describe('StandalonePageSurface', () => {
       'data-tabs',
       'machines,availability',
     );
-    expect(screen.getByTestId('agents-machines-table')).toHaveAttribute('data-resource-count', '2');
+    expect(screen.getByTestId('agents-machines-table')).toHaveAttribute('data-resource-count', '1');
     expect(screen.queryByTestId('availability-checks-table')).not.toBeInTheDocument();
   });
 
@@ -176,18 +176,16 @@ describe('StandalonePageSurface', () => {
 
     expect(screen.queryByTestId('agents-machines-table')).not.toBeInTheDocument();
     expect(screen.queryByTestId('availability-checks-table')).not.toBeInTheDocument();
-    expect(screen.getByText('No machines')).toBeInTheDocument();
+    expect(screen.getByText('No Pulse Agent machines')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add agent' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View checks' })).toHaveAttribute(
       'href',
       '/standalone/availability',
     );
-    expect(screen.getByRole('link', { name: 'Add machine check' })).toHaveAttribute(
-      'href',
-      '/settings/monitoring/availability?add=target&targetKind=machine',
-    );
+    expect(screen.queryByRole('link', { name: 'Add machine check' })).not.toBeInTheDocument();
   });
 
-  it('renders the machines table when only an agentless machine is present', () => {
+  it('keeps agentless machine checks in the availability handoff', () => {
     mocks.useUnifiedResources.mockReturnValue({
       resources: () => [
         resource({
@@ -205,7 +203,11 @@ describe('StandalonePageSurface', () => {
 
     render(() => <StandalonePageSurface />);
 
-    expect(screen.getByTestId('agents-machines-table')).toHaveAttribute('data-resource-count', '1');
-    expect(screen.queryByText('No machines')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('agents-machines-table')).not.toBeInTheDocument();
+    expect(screen.getByText('No Pulse Agent machines')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View checks' })).toHaveAttribute(
+      'href',
+      '/standalone/availability',
+    );
   });
 });

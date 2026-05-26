@@ -1,10 +1,8 @@
 import { Show, createEffect, createMemo, createSignal } from 'solid-js';
 import { A, useLocation, useNavigate } from '@solidjs/router';
 import ActivityIcon from 'lucide-solid/icons/activity';
-import PlusIcon from 'lucide-solid/icons/plus';
 import ServerIcon from 'lucide-solid/icons/server';
 import SettingsIcon from 'lucide-solid/icons/settings';
-import { buildAvailabilityTargetAddPath } from '@/components/Settings/availabilitySettingsModel';
 import { buildInfrastructureOnboardingPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import {
   PlatformErrorState,
@@ -89,7 +87,7 @@ export function StandalonePageSurface() {
         fallback={
           <PlatformTableLoadingState
             title="Loading machines"
-            description="Pulse is loading Pulse Agent machines, agentless computers, and availability checks."
+            description="Pulse is loading Pulse Agent machines and availability checks."
           />
         }
       >
@@ -118,8 +116,8 @@ export function StandalonePageSurface() {
               fallback={
                 <PlatformTableEmptyState
                   icon={machineIcon()}
-                  title="No monitored machines"
-                  description="Install Pulse Agent on servers, laptops, and desktops for full telemetry, or add an agentless machine check when reachability is enough."
+                  title="No Pulse Agent machines"
+                  description="Install Pulse Agent on servers, laptops, and desktops for CPU, memory, disk, and network telemetry. Agentless reachability checks live in Availability checks."
                   actions={
                     <div class="flex flex-wrap items-center justify-center gap-2">
                       <button
@@ -130,12 +128,9 @@ export function StandalonePageSurface() {
                         <SettingsIcon class="h-3.5 w-3.5" />
                         Add agent
                       </button>
-                      <A
-                        href={buildAvailabilityTargetAddPath('machine')}
-                        class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content shadow-sm hover:bg-slate-50"
-                      >
-                        <PlusIcon class="h-3.5 w-3.5" />
-                        Add machine check
+                      <A href={buildStandalonePath('availability')} class={overviewActionClass}>
+                        <ActivityIcon class="h-3.5 w-3.5" />
+                        View checks
                       </A>
                     </div>
                   }
@@ -149,23 +144,24 @@ export function StandalonePageSurface() {
                     <Show when={model().availabilityChecks.length > 0}>
                       <PlatformTableEmptyState
                         icon={machineIcon()}
-                        title="No machines"
-                        description="Service and device checks are monitored from the Availability checks tab. Mark an availability target as a machine when it represents a server, laptop, or desktop."
+                        title="No Pulse Agent machines"
+                        description="Availability checks, including ICMP checks for computers, stay in the Availability checks tab. Install Pulse Agent when you need full machine telemetry."
                         actions={
                           <div class="flex flex-wrap items-center justify-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => navigate(buildInfrastructureOnboardingPath('pick'))}
+                              class={overviewActionClass}
+                            >
+                              <SettingsIcon class="h-3.5 w-3.5" />
+                              Add agent
+                            </button>
                             <A
                               href={buildStandalonePath('availability')}
                               class={overviewActionClass}
                             >
                               <ActivityIcon class="h-3.5 w-3.5" />
                               View checks
-                            </A>
-                            <A
-                              href={buildAvailabilityTargetAddPath('machine')}
-                              class={overviewActionClass}
-                            >
-                              <PlusIcon class="h-3.5 w-3.5" />
-                              Add machine check
                             </A>
                           </div>
                         }
@@ -177,7 +173,7 @@ export function StandalonePageSurface() {
                     resources={model().machines}
                     emptyIcon={machineIcon()}
                     emptyTitle="No machines"
-                    emptyDescription="Install the Pulse Agent on Linux, macOS, Windows, or Unraid systems for full telemetry, or add an agentless machine check when reachability is enough."
+                    emptyDescription="Install Pulse Agent on Linux, macOS, Windows, or Unraid systems for full CPU, memory, disk, and network telemetry."
                   />
                 </Show>
               </div>

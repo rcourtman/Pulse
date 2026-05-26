@@ -2836,7 +2836,9 @@ availability settings at `/settings/monitoring/availability`, with
 Machine entry points must add `targetKind=machine`, while the focused
 availability checks entry points for services and devices must add
 `targetKind=service`, so deep links open the same owned dialog with the correct
-bounded target kind already selected.
+bounded target kind already selected. That target kind only scopes the
+availability form copy and payload; it must not make agentless reachability
+targets eligible for the Machines table.
 Former nested aliases such as `/settings/infrastructure/install`,
 `/settings/infrastructure/platforms/proxmox/pbs`,
 `/settings/infrastructure/api/pve`, and `/settings/workloads/docker` must fail
@@ -3590,16 +3592,16 @@ metric slot, while keeping recent check timing and fuller failure context in
 the tooltip or drawer so operators can understand what was measured without
 duplicated row chrome.
 Operational navigation for those agentless endpoints belongs to the
-frontend-primitives-owned Machines surface rather than a new primary nav item.
-The page may show availability checks beside standalone Pulse Agent machines and
-provide a focused availability tab, but Settings remains the add/edit owner and
+frontend-primitives-owned Machines surface as a focused Availability checks tab
+rather than a new primary nav item. The page may show availability checks beside
+standalone Pulse Agent machines, but Settings remains the add/edit owner and
 the app shell must not add a separate top-level Availability destination.
 The Machines page must not pretend its machine list is a generic overview:
-the default tab is `Machines`, and the full availability-check row list belongs
+the default tab is `Machines`, the Machines table is only for Pulse Agent-backed
+resources with host telemetry, and the full availability-check row list belongs
 to the `Availability checks` tab. Servers, laptops, desktops, and comparable
-computers that are monitored by agentless reachability checks are still
-machines when the availability target is classified as `machine`; service and
-device checks stay in the focused availability tab and may only trigger a
-compact handoff from Machines. The Machines empty and handoff actions must use
-the machine-targeted availability add route, while Availability checks actions
-must use the service/device-targeted route.
+computers monitored only by agentless reachability checks may use
+`targetKind=machine` in the availability form, but they stay in Availability
+checks until a Pulse Agent registers and supplies CPU, memory, disk, and network
+telemetry. Machines empty and handoff actions must lead to Pulse Agent install
+or the Availability checks tab, not to an agentless machine row in Machines.

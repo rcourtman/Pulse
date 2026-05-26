@@ -801,9 +801,10 @@ recovery scope, or a storage/recovery-owned secret source.
 32. Keep agentless availability endpoints neutral on the shared unified-resource and API contracts. When `internal/api/availability_handlers.go`, `internal/api/connections_handlers.go`, `internal/api/platform_mock_connections.go`, or `frontend-modern/src/hooks/useUnifiedResources.ts` surface `network-endpoint` availability resources, storage and recovery may consume their liveness as infrastructure context only; they must not reinterpret ping/TCP/HTTP endpoints as storage providers, backup targets, recovery repositories, or protected-workload evidence.
     That neutrality includes availability targets whose `targetKind` is
     `machine`. A Linux server, desktop, laptop, or Mac mini monitored by an
-    agentless reachability check may appear in Standalone Machines, but storage
-    and recovery must still treat the row as liveness context unless a separate
-    storage/recovery-owned relationship ties it to backup or restore evidence.
+    agentless reachability check still belongs to Availability checks rather
+    than Standalone Machines; storage and recovery must treat the row as
+    liveness context unless a separate storage/recovery-owned relationship ties
+    it to backup or restore evidence.
 33. Keep infrastructure summary chart bucketing and short response caching presentation-only on the adjacent shared API boundary. When `internal/api/router.go` normalizes mixed-cadence infrastructure history into equal-time summary buckets or serves a cached summary payload for repeated operator-facing summary-card requests, storage and recovery may consume the resulting visual context only; they must not reinterpret those normalized chart samples, cached timestamps, or cache hits as recovery freshness windows, backup cadence, or restore evidence.
 34. Keep workload chart downsampling and short response caching presentation-only on that same adjacent shared API boundary. When `internal/api/router.go` caps mixed-cadence workload history into equal-time buckets or serves a cached workload-summary payload for repeated operator-facing workload-card requests, storage and recovery may consume the resulting visual context only; they must not reinterpret those shaped chart samples, cached timestamps, or cache hits as recovery freshness windows, backup cadence, or restore evidence.
     The same adjacent chart boundary now covers compact storage capacity
@@ -1363,10 +1364,10 @@ storage or recovery inventory. Storage/recovery consumers may receive
 they must not fold those endpoints into protected-item counts, storage health
 rollups, recovery evidence, or storage/recovery licensing or readiness
 messages unless a separately governed storage/recovery relationship is added.
-The agentless `machine` target kind does not change that boundary: it is a
-Standalone presentation classification for computer-shaped reachability targets,
-not storage ownership, repository membership, backup coverage, or restore
-authority.
+The agentless `machine` target kind does not change that boundary: it is
+availability presentation vocabulary for computer-shaped reachability targets,
+not Standalone Machines membership, storage ownership, repository membership,
+backup coverage, or restore authority.
 That same owned summary path now also runs through
 `useStorageSummaryCharts.ts`: the storage page owns one page-scoped summary
 range and one shared storage-summary history fetch, and both the sticky
