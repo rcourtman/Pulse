@@ -7,6 +7,10 @@ import { PMGInstanceDrawer } from '@/components/PMG/PMGInstanceDrawer';
 import { K8sDeploymentsDrawer } from '@/components/Kubernetes/K8sDeploymentsDrawer';
 import { K8sNamespacesDrawer } from '@/components/Kubernetes/K8sNamespacesDrawer';
 import { SwarmServicesDrawer } from '@/components/Docker/SwarmServicesDrawer';
+import {
+  GuestDrawerHistory,
+  GuestDrawerHistoryRangeSelect,
+} from '@/components/Workloads/GuestDrawerHistory';
 import { ResourceDetailDrawerDebugTab } from './ResourceDetailDrawerDebugTab';
 import { ResourceDetailDrawerOverviewTab } from './ResourceDetailDrawerOverviewTab';
 import { useResourceDetailDrawerState } from './useResourceDetailDrawerState';
@@ -141,6 +145,35 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           drawer={drawer}
           presentation={presentation()}
         />
+      </div>
+
+      {/* Agent Machine Metrics History Tab */}
+      <div
+        class={drawer.activeTab() === 'history' ? '' : 'hidden'}
+        style={{ 'overflow-anchor': 'none' }}
+      >
+        <Show when={drawer.activeTab() === 'history'}>
+          <Show
+            when={drawer.metricsHistoryTarget()}
+            fallback={<TabAvailabilityNotice message="Metrics history is unavailable." />}
+          >
+            {(target) => (
+              <div class="space-y-3" data-testid="resource-metrics-history-tab">
+                <div class="flex items-center justify-end">
+                  <GuestDrawerHistoryRangeSelect
+                    range={drawer.metricsHistoryRange()}
+                    onRangeChange={drawer.setMetricsHistoryRange}
+                  />
+                </div>
+                <GuestDrawerHistory
+                  target={target()}
+                  range={drawer.metricsHistoryRange()}
+                  fallbackMetrics={drawer.metricsHistoryFallbackMetrics()}
+                />
+              </div>
+            )}
+          </Show>
+        </Show>
       </div>
 
       {/* PMG Mail Tab */}

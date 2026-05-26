@@ -1,12 +1,14 @@
 import { createEffect, createSignal } from 'solid-js';
 import type { Resource } from '@/types/resource';
+import type { HistoryTimeRange } from '@/api/charts';
+import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from '@/components/Workloads/guestDrawerModel';
 import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
 import { useResourceDetailDrawerDockerActionsState } from './useResourceDetailDrawerDockerActionsState';
 import { useResourceDetailDrawerHistoryState } from './useResourceDetailDrawerHistoryState';
 import { useResourceDetailDrawerDerivedState } from './useResourceDetailDrawerDerivedState';
 import type { ResourceDetailDrawerPresentation } from './resourceDetailDrawerPresentation';
 
-type DrawerTab = 'overview' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
+type DrawerTab = 'overview' | 'history' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
 
 export interface UseResourceDetailDrawerStateOptions {
   resource: Resource;
@@ -18,6 +20,9 @@ export interface UseResourceDetailDrawerStateOptions {
 export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerStateOptions) => {
   const { resource, resolveResourceLabel: resolveResourceLabelInput } = options;
   const [activeTab, setActiveTab] = createSignal<DrawerTab>('overview');
+  const [metricsHistoryRange, setMetricsHistoryRange] = createSignal<HistoryTimeRange>(
+    GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
+  );
   const [debugEnabled] = createLocalStorageBooleanSignal(STORAGE_KEYS.DEBUG_MODE, false);
   const [copied, setCopied] = createSignal(false);
   const [showReportModal, setShowReportModal] = createSignal(false);
@@ -91,6 +96,8 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
   return {
     activeTab,
     setActiveTab,
+    metricsHistoryRange,
+    setMetricsHistoryRange,
     debugEnabled,
     copied,
     showReportModal,

@@ -59,6 +59,11 @@ import {
   hasRuntimeOperationalContext as buildHasRuntimeOperationalContext,
 } from './resourceDetailDrawerOperationalModel';
 import {
+  getResourceMetricsHistoryFallbackMetrics,
+  getResourceMetricsHistoryTarget,
+  resourceSupportsMetricsHistory,
+} from './resourceDetailDrawerMetricsHistoryModel';
+import {
   buildDiscoveryContextSummary,
   buildIdentityMatchInfo,
   buildResourceDebugBundle,
@@ -75,7 +80,7 @@ import {
 } from './resourceDetailDrawerTrueNASModel';
 import { getResourceHealthIssuePresentation } from './resourceHealthPresentation';
 
-type DrawerTab = 'overview' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
+type DrawerTab = 'overview' | 'history' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
 
 interface ResourceDrawerDiscoverySourceKey {
   type: DiscoveryResourceType;
@@ -326,6 +331,11 @@ export const useResourceDetailDrawerDerivedState = (
   const trueNASDetailSections = createMemo(() => buildTrueNASDetailSections(resource));
   const hasTrueNASDetails = createMemo(() => trueNASDetailSections().length > 0);
   const trueNASDetailsSummary = createMemo(() => buildTrueNASDetailsSummary(resource));
+  const metricsHistoryTarget = createMemo(() => getResourceMetricsHistoryTarget(resource));
+  const metricsHistoryFallbackMetrics = createMemo(() =>
+    getResourceMetricsHistoryFallbackMetrics(resource),
+  );
+  const hasMetricsHistory = createMemo(() => resourceSupportsMetricsHistory(resource));
 
   const relatedLinks = createMemo(() => buildRelatedLinks(resource, displayName()));
   const accessSummary = createMemo(() =>
@@ -356,6 +366,7 @@ export const useResourceDetailDrawerDerivedState = (
   const tabs = createMemo(() => {
     const base = [
       { id: 'overview' as DrawerTab, label: 'Overview' },
+      ...(hasMetricsHistory() ? [{ id: 'history' as DrawerTab, label: 'History' }] : []),
       ...(resource.type === 'pmg' ? [{ id: 'mail' as DrawerTab, label: 'Mail' }] : []),
       ...(resource.type === 'k8s-cluster'
         ? [{ id: 'namespaces' as DrawerTab, label: 'Namespaces' }]
@@ -448,6 +459,9 @@ export const useResourceDetailDrawerDerivedState = (
     hostDetailSummary,
     hasServiceDetails,
     serviceDetailsSummary,
+    metricsHistoryTarget,
+    metricsHistoryFallbackMetrics,
+    hasMetricsHistory,
     hasVMwareDetails,
     vmwareDetailsSummary,
     vmwareDetailSections,

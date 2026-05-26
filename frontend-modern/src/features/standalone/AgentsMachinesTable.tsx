@@ -1,6 +1,7 @@
-import { For, Show, type Component, type JSX } from 'solid-js';
+import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
+import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StatusDot } from '@/components/shared/StatusDot';
 import {
@@ -31,12 +32,31 @@ import {
   getPlatformTableHeadClassForKind,
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
+import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import type { Disk } from '@/types/api';
 import type { Resource, ResourceAvailabilityMeta } from '@/types/resource';
-import { normalizeDiskArray } from '@/utils/format';
+import { formatSpeed, normalizeDiskArray } from '@/utils/format';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { formatTemperature as formatTemperatureValue } from '@/utils/temperature';
+import {
+  AGENT_MACHINE_COLUMNS,
+  getAgentMachineCpuPercent,
+  getAgentMachineDiskIOTotal,
+  getAgentMachineIpValues,
+  getAgentMachineNetworkTotal,
+  getAgentMachinePrimaryIp,
+  getAgentMachineRaidSummary,
+  getAgentMachineTemperatureCelsius,
+  getAgentMachineTemperatureTitle,
+  getNextAgentMachineSortState,
+  sortAgentMachines,
+  timestampMillisFrom,
+  type AgentMachineColumn,
+  type AgentMachineColumnId,
+  type AgentMachineSortKey,
+} from './agentMachineTableModel';
 
 const formatUptime = (seconds: number | undefined): string => {
   if (!seconds || seconds <= 0) return '—';
@@ -48,24 +68,15 @@ const formatUptime = (seconds: number | undefined): string => {
   return `${mins}m`;
 };
 
-const formatTemperature = (celsius: number | undefined): JSX.Element => {
+const formatTemperature = (celsius: number | undefined, title?: string): JSX.Element => {
   if (typeof celsius !== 'number' || !Number.isFinite(celsius) || celsius <= 0) {
     return <span class="text-muted">—</span>;
   }
-  return <span class="tabular-nums">{Math.round(celsius)}°C</span>;
-};
-
-const timestampMillisFrom = (value: number | string | Date | undefined): number | undefined => {
-  if (value instanceof Date) {
-    const millis = value.getTime();
-    return Number.isFinite(millis) ? millis : undefined;
-  }
-  if (typeof value === 'string') {
-    const millis = Date.parse(value);
-    return Number.isFinite(millis) ? millis : undefined;
-  }
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return undefined;
-  return value < 10_000_000_000 ? value * 1000 : value;
+  return (
+    <span class="tabular-nums" title={title}>
+      {formatTemperatureValue(celsius)}
+    </span>
+  );
 };
 
 const formatLastSeen = (value: number | string | Date | undefined): string => {
@@ -114,9 +125,6 @@ const availabilityAddressFor = (machine: Resource): string => {
   return asTrimmedString(machine.identity?.hostname) ?? '';
 };
 
-const percentFromMetric = (metric: Resource['cpu'] | undefined): number | undefined =>
-  finiteMetric(metric?.current);
-
 const memoryTotalFor = (machine: Resource): number =>
   finiteMetric(machine.memory?.total) ?? finiteMetric(machine.agent?.memory?.total) ?? 0;
 
@@ -160,6 +168,118 @@ const systemLabelFor = (machine: Resource): string => {
   );
 };
 
+const agentVersionFor = (machine: Resource): string =>
+  isAgentlessMachine(machine) ? 'Agentless' : asTrimmedString(machine.agent?.agentVersion) || '—';
+
+const networkTitleFor = (machine: Resource): string => {
+  if (!machine.network) return '';
+  return `In ${formatSpeed(machine.network.rxBytes)}\nOut ${formatSpeed(machine.network.txBytes)}`;
+};
+
+const diskIOTitleFor = (machine: Resource): string => {
+  if (!machine.diskIO) return '';
+  return `Read ${formatSpeed(machine.diskIO.readRate)}\nWrite ${formatSpeed(machine.diskIO.writeRate)}`;
+};
+
+const machineColumnWidthClass = (columnId: AgentMachineColumnId): string => {
+  switch (columnId) {
+    case 'machine':
+      return 'w-[34%] md:w-[16%]';
+    case 'system':
+      return 'hidden md:table-cell md:w-[12%]';
+    case 'agent':
+      return 'hidden md:table-cell md:w-[6%]';
+    case 'cpu':
+    case 'memory':
+    case 'disk':
+      return 'w-[22%] md:w-[8%]';
+    case 'network':
+    case 'diskio':
+      return 'hidden lg:table-cell lg:w-[9%]';
+    case 'uptime':
+    case 'temp':
+      return 'hidden md:table-cell md:w-[5%]';
+    case 'lastSeen':
+      return 'hidden lg:table-cell lg:w-[6%]';
+    case 'ip':
+      return 'hidden xl:table-cell xl:w-[8%]';
+    case 'raid':
+      return 'hidden xl:table-cell xl:w-[6%]';
+    case 'arch':
+      return 'hidden xl:table-cell xl:w-[5%]';
+    case 'kernel':
+      return 'hidden xl:table-cell xl:w-[10%]';
+  }
+};
+
+const getSortIndicator = (
+  activeKey: AgentMachineSortKey,
+  direction: 'asc' | 'desc',
+  key: AgentMachineSortKey | undefined,
+): '▲' | '▼' | '' => {
+  if (!key || activeKey !== key) return '';
+  return direction === 'asc' ? '▲' : '▼';
+};
+
+const getCompactColumnLabel = (column: AgentMachineColumn): string => {
+  switch (column.id) {
+    case 'uptime':
+      return 'Up';
+    case 'lastSeen':
+      return 'Seen';
+    default:
+      return column.label;
+  }
+};
+
+const AgentMachineSortableHead: Component<{
+  column: AgentMachineColumn;
+  activeSort: AgentMachineSortKey;
+  direction: 'asc' | 'desc';
+  onSort: (key: AgentMachineSortKey) => void;
+}> = (props) => {
+  const sortIndicator = () =>
+    getSortIndicator(props.activeSort, props.direction, props.column.sortKey);
+  const kind = (): NonNullable<AgentMachineColumn['kind']> => props.column.kind ?? 'text';
+
+  return (
+    <TableHead
+      class={`${getPlatformTableHeadClassForKind(kind())} ${machineColumnWidthClass(props.column.id)}`}
+      aria-sort={
+        props.column.sortKey && props.activeSort === props.column.sortKey
+          ? props.direction === 'asc'
+            ? 'ascending'
+            : 'descending'
+          : undefined
+      }
+    >
+      <Show when={props.column.sortKey} fallback={props.column.label}>
+        {(sortKey) => (
+          <button
+            type="button"
+            class="inline-flex max-w-full items-center gap-1 truncate hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
+            onClick={() => props.onSort(sortKey())}
+            aria-label={`Sort by ${props.column.label}`}
+          >
+            <span class="truncate">
+              <Show
+                when={props.column.id === 'memory'}
+                fallback={getCompactColumnLabel(props.column)}
+              >
+                <span class="md:hidden">Mem</span>
+                <span class="hidden md:inline">Memory</span>
+              </Show>
+            </span>
+            <span class="w-2 shrink-0 text-[9px]" aria-hidden="true">
+              {sortIndicator()}
+            </span>
+          </button>
+        )}
+      </Show>
+    </TableHead>
+  );
+};
+
 export const AgentsMachinesTable: Component<{
   resources: Resource[];
   emptyIcon: JSX.Element;
@@ -171,8 +291,31 @@ export const AgentsMachinesTable: Component<{
     initialStatus: 'all' as PlatformResourceStatusFilter,
     filter: filterPlatformResources,
   });
+  const [sortKey, setSortKey] = createSignal<AgentMachineSortKey>('name');
+  const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
+  const columnVisibility = useColumnVisibility(
+    'pulse:standalone:machines:columns:v3',
+    AGENT_MACHINE_COLUMNS,
+  );
   const drawer = createPlatformResourceDetailState({ idPrefix: 'agents-machine-drawer' });
-  const detailColspan = 9;
+  const visibleColumns = createMemo(
+    () => columnVisibility.visibleColumns() as AgentMachineColumn[],
+  );
+  const detailColspan = createMemo(() => visibleColumns().length);
+  const sortedMachines = createMemo(() =>
+    sortAgentMachines(
+      tableState.filtered(),
+      sortKey(),
+      sortDirection(),
+      systemLabelFor,
+      agentVersionFor,
+    ),
+  );
+  const handleSort = (key: AgentMachineSortKey) => {
+    const next = getNextAgentMachineSortState(sortKey(), sortDirection(), key);
+    setSortKey(next.key);
+    setSortDirection(next.direction);
+  };
 
   return (
     <Show
@@ -186,17 +329,27 @@ export const AgentsMachinesTable: Component<{
       }
     >
       <div class="space-y-3">
-        <PlatformTableToolbar
-          search={tableState.search}
-          onSearchChange={tableState.setSearch}
-          searchPlaceholder="Search machines"
-          status={tableState.status()}
-          onStatusChange={tableState.setStatus}
-          statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
-          visible={tableState.visible()}
-          total={tableState.total()}
-          rowNoun="machines"
-        />
+        <div class="flex flex-wrap items-center gap-2">
+          <div class="min-w-[280px] flex-1">
+            <PlatformTableToolbar
+              search={tableState.search}
+              onSearchChange={tableState.setSearch}
+              searchPlaceholder="Search machines"
+              status={tableState.status()}
+              onStatusChange={tableState.setStatus}
+              statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
+              visible={tableState.visible()}
+              total={tableState.total()}
+              rowNoun="machines"
+            />
+          </div>
+          <ColumnPicker
+            columns={columnVisibility.availableToggles()}
+            isHidden={columnVisibility.isHiddenByUser}
+            onToggle={columnVisibility.toggle}
+            onReset={columnVisibility.resetToDefaults}
+          />
+        </div>
 
         <Show
           when={tableState.filtered().length > 0}
@@ -210,59 +363,23 @@ export const AgentsMachinesTable: Component<{
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <TableCardHeader title="Machines" />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1120px]">
+            <Table class="min-w-full table-fixed text-xs md:min-w-[1160px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('name')} w-[40%] md:w-[19%]`}
-                  >
-                    Machine
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
-                  >
-                    System
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[8%]`}
-                  >
-                    Agent
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('metric-bar')} w-[20%] md:w-[12%]`}
-                  >
-                    CPU
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('metric-bar')} w-[20%] md:w-[12%]`}
-                  >
-                    <span class="md:hidden">Mem</span>
-                    <span class="hidden md:inline">Memory</span>
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('metric-bar')} w-[20%] md:w-[12%]`}
-                  >
-                    Disk
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[7%]`}
-                  >
-                    Uptime
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[7%]`}
-                  >
-                    Temp
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell lg:w-[9%]`}
-                  >
-                    Last seen
-                  </TableHead>
+                  <For each={visibleColumns()}>
+                    {(column) => (
+                      <AgentMachineSortableHead
+                        column={column}
+                        activeSort={sortKey()}
+                        direction={sortDirection()}
+                        onSort={handleSort}
+                      />
+                    )}
+                  </For>
                 </TableRow>
               </TableHeader>
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
-                <For each={tableState.filtered()}>
+                <For each={sortedMachines()}>
                   {(machine) => {
                     const name = () => asTrimmedString(machine.name) || machine.id;
                     const hostname = () =>
@@ -271,14 +388,11 @@ export const AgentsMachinesTable: Component<{
                         : asTrimmedString(machine.agent?.hostname) ||
                           asTrimmedString(machine.identity?.hostname);
                     const systemLabel = () => systemLabelFor(machine);
-                    const agentVersion = () =>
-                      isAgentlessMachine(machine)
-                        ? 'Agentless'
-                        : asTrimmedString(machine.agent?.agentVersion) || '—';
+                    const agentVersion = () => agentVersionFor(machine);
                     const indicator = () => getSimpleStatusIndicator(machine.status);
                     const canRenderMetrics = () => indicator().variant !== 'danger';
                     const metricsKey = () => buildMetricKeyForUnifiedResource(machine);
-                    const cpuPercent = () => percentFromMetric(machine.cpu);
+                    const cpuPercent = () => getAgentMachineCpuPercent(machine);
                     const memoryUsed = () => memoryUsedFor(machine);
                     const memoryTotal = () => memoryTotalFor(machine);
                     const memoryPercentOnly = () => memoryPercentOnlyFor(machine);
@@ -288,6 +402,13 @@ export const AgentsMachinesTable: Component<{
                     const disks = () => normalizeDiskArray(machine.agent?.disks);
                     const hasDiskMetric = () =>
                       aggregateDisk() !== undefined || (disks()?.length ?? 0) > 0;
+                    const networkTotal = () => getAgentMachineNetworkTotal(machine);
+                    const diskIOTotal = () => getAgentMachineDiskIOTotal(machine);
+                    const primaryIp = () => getAgentMachinePrimaryIp(machine);
+                    const ipValues = () => getAgentMachineIpValues(machine);
+                    const raidSummary = () => getAgentMachineRaidSummary(machine);
+                    const temperature = () => getAgentMachineTemperatureCelsius(machine);
+                    const temperatureTitle = () => getAgentMachineTemperatureTitle(machine);
                     const isExpanded = () => drawer.isExpanded(machine);
                     const detailRowId = () => drawer.detailRowId(machine);
 
@@ -303,7 +424,7 @@ export const AgentsMachinesTable: Component<{
                           tabIndex={0}
                         >
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('name')} w-[40%] md:w-auto`}
+                            class={`${getPlatformTableCellClassForKind('name')} ${machineColumnWidthClass('machine')}`}
                           >
                             <div class="flex min-w-0 items-center gap-2">
                               <StatusDot
@@ -323,20 +444,26 @@ export const AgentsMachinesTable: Component<{
                               {hostname() || systemLabel()}
                             </span>
                           </TableCell>
+                          <Show when={columnVisibility.isColumnVisible('system')}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} ${machineColumnWidthClass('system')} text-base-content`}
+                            >
+                              <span class="truncate" title={systemLabel()}>
+                                {systemLabel()}
+                              </span>
+                            </TableCell>
+                          </Show>
+                          <Show when={columnVisibility.isColumnVisible('agent')}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} ${machineColumnWidthClass('agent')} font-mono text-[11px] text-base-content`}
+                            >
+                              <span class="truncate" title={agentVersion()}>
+                                {agentVersion()}
+                              </span>
+                            </TableCell>
+                          </Show>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                          >
-                            <span class="truncate" title={systemLabel()}>
-                              {systemLabel()}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden font-mono text-[11px] text-base-content md:table-cell`}
-                          >
-                            {agentVersion()}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('metric-bar')} w-[20%] md:w-auto`}
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} ${machineColumnWidthClass('cpu')}`}
                           >
                             <ResponsiveMetricCell
                               class="w-full"
@@ -348,7 +475,7 @@ export const AgentsMachinesTable: Component<{
                             />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('metric-bar')} w-[20%] md:w-auto`}
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} ${machineColumnWidthClass('memory')}`}
                           >
                             <Show
                               when={canRenderMetrics() && hasMemoryMetric()}
@@ -362,7 +489,7 @@ export const AgentsMachinesTable: Component<{
                             </Show>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('metric-bar')} w-[20%] md:w-auto`}
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} ${machineColumnWidthClass('disk')}`}
                           >
                             <Show
                               when={canRenderMetrics() && hasDiskMetric()}
@@ -375,31 +502,129 @@ export const AgentsMachinesTable: Component<{
                               />
                             </Show>
                           </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
-                          >
-                            {formatUptime(machine.uptime ?? machine.agent?.uptimeSeconds)}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
-                          >
-                            {formatTemperature(machine.temperature)}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
-                          >
-                            {formatLastSeen(
-                              isAgentlessMachine(machine)
-                                ? availabilityFor(machine)?.lastChecked
-                                : machine.lastSeen,
-                            )}
-                          </TableCell>
+                          <Show when={columnVisibility.isColumnVisible('network')}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} ${machineColumnWidthClass('network')} text-base-content`}
+                            >
+                              <Show
+                                when={canRenderMetrics() && networkTotal() !== undefined}
+                                fallback={metricFallback()}
+                              >
+                                <div
+                                  class="grid w-full grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[11px] tabular-nums"
+                                  title={networkTitleFor(machine)}
+                                >
+                                  <span class="inline-flex w-3 justify-center text-emerald-500">
+                                    ↓
+                                  </span>
+                                  <span class="min-w-0 truncate">
+                                    {formatSpeed(machine.network?.rxBytes ?? 0)}
+                                  </span>
+                                  <span class="inline-flex w-3 justify-center text-orange-400">
+                                    ↑
+                                  </span>
+                                  <span class="min-w-0 truncate">
+                                    {formatSpeed(machine.network?.txBytes ?? 0)}
+                                  </span>
+                                </div>
+                              </Show>
+                            </TableCell>
+                          </Show>
+                          <Show when={columnVisibility.isColumnVisible('diskio')}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} ${machineColumnWidthClass('diskio')} text-base-content`}
+                            >
+                              <Show
+                                when={canRenderMetrics() && diskIOTotal() !== undefined}
+                                fallback={metricFallback()}
+                              >
+                                <div
+                                  class="grid w-full grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[11px] tabular-nums"
+                                  title={diskIOTitleFor(machine)}
+                                >
+                                  <span class="inline-flex w-3 justify-center font-mono text-blue-500">
+                                    R
+                                  </span>
+                                  <span class="min-w-0 truncate">
+                                    {formatSpeed(machine.diskIO?.readRate ?? 0)}
+                                  </span>
+                                  <span class="inline-flex w-3 justify-center font-mono text-amber-500">
+                                    W
+                                  </span>
+                                  <span class="min-w-0 truncate">
+                                    {formatSpeed(machine.diskIO?.writeRate ?? 0)}
+                                  </span>
+                                </div>
+                              </Show>
+                            </TableCell>
+                          </Show>
+                          <Show when={columnVisibility.isColumnVisible('uptime')}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} ${machineColumnWidthClass('uptime')} text-base-content`}
+                            >
+                              {formatUptime(machine.uptime ?? machine.agent?.uptimeSeconds)}
+                            </TableCell>
+                          </Show>
+                          <Show when={columnVisibility.isColumnVisible('temp')}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} ${machineColumnWidthClass('temp')} text-base-content`}
+                            >
+                              {formatTemperature(temperature(), temperatureTitle())}
+                            </TableCell>
+                          </Show>
+                          <Show when={columnVisibility.isColumnVisible('lastSeen')}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} ${machineColumnWidthClass('lastSeen')} text-base-content`}
+                            >
+                              {formatLastSeen(
+                                isAgentlessMachine(machine)
+                                  ? availabilityFor(machine)?.lastChecked
+                                  : machine.lastSeen,
+                              )}
+                            </TableCell>
+                          </Show>
+                          <Show when={columnVisibility.isColumnVisible('ip')}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} ${machineColumnWidthClass('ip')} text-base-content`}
+                            >
+                              <span class="truncate" title={ipValues().join('\n')}>
+                                {primaryIp() || '—'}
+                              </span>
+                            </TableCell>
+                          </Show>
+                          <Show when={columnVisibility.isColumnVisible('raid')}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} ${machineColumnWidthClass('raid')} text-base-content`}
+                            >
+                              <span class="truncate" title={raidSummary()}>
+                                {raidSummary() || '—'}
+                              </span>
+                            </TableCell>
+                          </Show>
+                          <Show when={columnVisibility.isColumnVisible('arch')}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} ${machineColumnWidthClass('arch')} text-base-content`}
+                            >
+                              <span class="truncate" title={machine.agent?.architecture}>
+                                {machine.agent?.architecture || '—'}
+                              </span>
+                            </TableCell>
+                          </Show>
+                          <Show when={columnVisibility.isColumnVisible('kernel')}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} ${machineColumnWidthClass('kernel')} text-base-content`}
+                            >
+                              <span class="truncate" title={machine.agent?.kernelVersion}>
+                                {machine.agent?.kernelVersion || '—'}
+                              </span>
+                            </TableCell>
+                          </Show>
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={machine}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
-                          colSpan={detailColspan}
+                          colSpan={detailColspan()}
                           onClose={() => drawer.close(machine)}
                         />
                       </>

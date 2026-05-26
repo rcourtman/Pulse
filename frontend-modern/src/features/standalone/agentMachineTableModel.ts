@@ -1,0 +1,379 @@
+import type { ColumnDef } from '@/hooks/useColumnVisibility';
+import type { Resource } from '@/types/resource';
+import { asTrimmedString } from '@/utils/stringUtils';
+
+export type AgentMachineColumnId =
+  | 'machine'
+  | 'system'
+  | 'agent'
+  | 'cpu'
+  | 'memory'
+  | 'disk'
+  | 'network'
+  | 'diskio'
+  | 'uptime'
+  | 'temp'
+  | 'lastSeen'
+  | 'ip'
+  | 'raid'
+  | 'arch'
+  | 'kernel';
+
+export type AgentMachineSortKey =
+  | 'name'
+  | 'system'
+  | 'agent'
+  | 'cpu'
+  | 'memory'
+  | 'disk'
+  | 'network'
+  | 'diskio'
+  | 'uptime'
+  | 'temp'
+  | 'lastSeen'
+  | 'ip'
+  | 'raid'
+  | 'arch'
+  | 'kernel';
+
+export type AgentMachineSortDirection = 'asc' | 'desc';
+
+export type AgentMachineColumn = ColumnDef & {
+  id: AgentMachineColumnId;
+  sortKey?: AgentMachineSortKey;
+};
+
+export const AGENT_MACHINE_COLUMNS: AgentMachineColumn[] = [
+  { id: 'machine', label: 'Machine', kind: 'name', sortKey: 'name' },
+  { id: 'system', label: 'System', kind: 'text', sortKey: 'system', toggleable: true },
+  { id: 'agent', label: 'Agent', kind: 'text', sortKey: 'agent', toggleable: true },
+  { id: 'cpu', label: 'CPU', kind: 'metric-bar', sortKey: 'cpu' },
+  { id: 'memory', label: 'Memory', kind: 'metric-bar', sortKey: 'memory' },
+  { id: 'disk', label: 'Disk', kind: 'metric-bar', sortKey: 'disk' },
+  { id: 'network', label: 'Net I/O', kind: 'numeric-value', sortKey: 'network', toggleable: true },
+  { id: 'diskio', label: 'Disk I/O', kind: 'numeric-value', sortKey: 'diskio', toggleable: true },
+  { id: 'uptime', label: 'Uptime', kind: 'numeric-value', sortKey: 'uptime', toggleable: true },
+  { id: 'temp', label: 'Temp', kind: 'numeric-value', sortKey: 'temp', toggleable: true },
+  {
+    id: 'lastSeen',
+    label: 'Last seen',
+    kind: 'numeric-value',
+    sortKey: 'lastSeen',
+    toggleable: true,
+  },
+  {
+    id: 'ip',
+    label: 'IP',
+    kind: 'text',
+    sortKey: 'ip',
+    toggleable: true,
+    defaultHidden: true,
+  },
+  {
+    id: 'raid',
+    label: 'RAID',
+    kind: 'text',
+    sortKey: 'raid',
+    toggleable: true,
+    defaultHidden: true,
+  },
+  {
+    id: 'arch',
+    label: 'Arch',
+    kind: 'text',
+    sortKey: 'arch',
+    toggleable: true,
+    defaultHidden: true,
+  },
+  {
+    id: 'kernel',
+    label: 'Kernel',
+    kind: 'text',
+    sortKey: 'kernel',
+    toggleable: true,
+    defaultHidden: true,
+  },
+];
+
+const AGENT_MACHINE_SORT_DESC_DEFAULTS = new Set<AgentMachineSortKey>([
+  'cpu',
+  'memory',
+  'disk',
+  'network',
+  'diskio',
+  'uptime',
+  'temp',
+  'lastSeen',
+]);
+
+const finiteMetric = (value: number | undefined): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+const getMetricPercent = (metric: Resource['cpu'] | undefined): number | undefined =>
+  finiteMetric(metric?.current);
+
+export const getAgentMachineCpuPercent = (machine: Resource): number | undefined =>
+  getMetricPercent(machine.cpu);
+
+export const getAgentMachineMemoryPercent = (machine: Resource): number | undefined => {
+  const total = finiteMetric(machine.memory?.total);
+  const used = finiteMetric(machine.memory?.used);
+  if (total && total > 0 && typeof used === 'number') {
+    return (used / total) * 100;
+  }
+  return finiteMetric(machine.memory?.current) ?? finiteMetric(machine.agent?.memory?.usage);
+};
+
+export const getAgentMachineDiskPercent = (machine: Resource): number | undefined => {
+  const total = finiteMetric(machine.disk?.total);
+  const used = finiteMetric(machine.disk?.used);
+  if (total && total > 0 && typeof used === 'number') {
+    return (used / total) * 100;
+  }
+  return finiteMetric(machine.disk?.current);
+};
+
+export const getAgentMachineNetworkTotal = (machine: Resource): number | undefined => {
+  const rx = finiteMetric(machine.network?.rxBytes);
+  const tx = finiteMetric(machine.network?.txBytes);
+  if (rx === undefined && tx === undefined) return undefined;
+  return (rx ?? 0) + (tx ?? 0);
+};
+
+export const getAgentMachineDiskIOTotal = (machine: Resource): number | undefined => {
+  const read = finiteMetric(machine.diskIO?.readRate);
+  const write = finiteMetric(machine.diskIO?.writeRate);
+  if (read === undefined && write === undefined) return undefined;
+  return (read ?? 0) + (write ?? 0);
+};
+
+export const getAgentMachineTemperatureCelsius = (machine: Resource): number | undefined => {
+  const direct = finiteMetric(machine.temperature);
+  if (direct !== undefined && direct > 0) return direct;
+
+  const values = Object.values(machine.agent?.sensors?.temperatureCelsius ?? {}).filter(
+    (value): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0,
+  );
+  return values.length > 0 ? Math.max(...values) : undefined;
+};
+
+export const getAgentMachineTemperatureTitle = (machine: Resource): string => {
+  const readings = Object.entries(machine.agent?.sensors?.temperatureCelsius ?? {})
+    .filter(([, value]) => typeof value === 'number' && Number.isFinite(value) && value > 0)
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 6)
+    .map(([label, value]) => `${label}: ${Math.round(value)}°C`);
+  return readings.join('\n');
+};
+
+export const timestampMillisFrom = (
+  value: number | string | Date | undefined,
+): number | undefined => {
+  if (value instanceof Date) {
+    const millis = value.getTime();
+    return Number.isFinite(millis) ? millis : undefined;
+  }
+  if (typeof value === 'string') {
+    const millis = Date.parse(value);
+    return Number.isFinite(millis) ? millis : undefined;
+  }
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return undefined;
+  return value < 10_000_000_000 ? value * 1000 : value;
+};
+
+export const getAgentMachineIpValues = (machine: Resource): string[] => {
+  const candidates = [
+    ...(machine.identity?.ips ?? []),
+    ...(machine.agent?.networkInterfaces ?? []).flatMap((iface) => iface.addresses ?? []),
+  ];
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const candidate of candidates) {
+    const value = asTrimmedString(candidate);
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    result.push(value);
+  }
+  return result;
+};
+
+export const getAgentMachinePrimaryIp = (machine: Resource): string =>
+  getAgentMachineIpValues(machine)[0] ?? '';
+
+export const getAgentMachineRaidSummary = (machine: Resource): string => {
+  const arrays = machine.agent?.raid ?? [];
+  if (arrays.length === 0) return '';
+
+  const failed = arrays.filter((array) => (array.failedDevices ?? 0) > 0).length;
+  if (failed > 0) {
+    return `${failed}/${arrays.length} degraded`;
+  }
+
+  const rebuilding = arrays.filter((array) => (array.rebuildPercent ?? 0) > 0).length;
+  if (rebuilding > 0) {
+    return `${rebuilding}/${arrays.length} rebuilding`;
+  }
+
+  const states = new Set(
+    arrays
+      .map((array) => asTrimmedString(array.state)?.toLowerCase())
+      .filter((state): state is string => Boolean(state)),
+  );
+  if (states.size === 1) {
+    return `${arrays.length} ${[...states][0]}`;
+  }
+  return `${arrays.length} arrays`;
+};
+
+export const getNextAgentMachineSortState = (
+  currentKey: AgentMachineSortKey,
+  currentDirection: AgentMachineSortDirection,
+  nextKey: AgentMachineSortKey,
+): { key: AgentMachineSortKey; direction: AgentMachineSortDirection } => {
+  if (currentKey === nextKey) {
+    return { key: nextKey, direction: currentDirection === 'asc' ? 'desc' : 'asc' };
+  }
+
+  return {
+    key: nextKey,
+    direction: AGENT_MACHINE_SORT_DESC_DEFAULTS.has(nextKey) ? 'desc' : 'asc',
+  };
+};
+
+const compareNullableNumber = (
+  left: number | undefined,
+  right: number | undefined,
+  direction: AgentMachineSortDirection,
+): number => {
+  const leftMissing = left === undefined;
+  const rightMissing = right === undefined;
+  if (leftMissing && rightMissing) return 0;
+  if (leftMissing) return 1;
+  if (rightMissing) return -1;
+  return direction === 'asc' ? left - right : right - left;
+};
+
+const compareText = (
+  left: string | undefined,
+  right: string | undefined,
+  direction: AgentMachineSortDirection,
+): number => {
+  const leftValue = (left ?? '').trim().toLowerCase();
+  const rightValue = (right ?? '').trim().toLowerCase();
+  if (!leftValue && !rightValue) return 0;
+  if (!leftValue) return 1;
+  if (!rightValue) return -1;
+  const result = leftValue.localeCompare(rightValue, undefined, { numeric: true });
+  return direction === 'asc' ? result : -result;
+};
+
+export const sortAgentMachines = (
+  machines: readonly Resource[],
+  sortKey: AgentMachineSortKey,
+  direction: AgentMachineSortDirection,
+  getSystemLabel: (machine: Resource) => string,
+  getAgentLabel: (machine: Resource) => string,
+): Resource[] =>
+  [...machines].sort((left, right) => {
+    let result = 0;
+    switch (sortKey) {
+      case 'cpu':
+        result = compareNullableNumber(
+          getAgentMachineCpuPercent(left),
+          getAgentMachineCpuPercent(right),
+          direction,
+        );
+        break;
+      case 'memory':
+        result = compareNullableNumber(
+          getAgentMachineMemoryPercent(left),
+          getAgentMachineMemoryPercent(right),
+          direction,
+        );
+        break;
+      case 'disk':
+        result = compareNullableNumber(
+          getAgentMachineDiskPercent(left),
+          getAgentMachineDiskPercent(right),
+          direction,
+        );
+        break;
+      case 'network':
+        result = compareNullableNumber(
+          getAgentMachineNetworkTotal(left),
+          getAgentMachineNetworkTotal(right),
+          direction,
+        );
+        break;
+      case 'diskio':
+        result = compareNullableNumber(
+          getAgentMachineDiskIOTotal(left),
+          getAgentMachineDiskIOTotal(right),
+          direction,
+        );
+        break;
+      case 'uptime':
+        result = compareNullableNumber(
+          left.uptime ?? left.agent?.uptimeSeconds,
+          right.uptime ?? right.agent?.uptimeSeconds,
+          direction,
+        );
+        break;
+      case 'temp':
+        result = compareNullableNumber(
+          getAgentMachineTemperatureCelsius(left),
+          getAgentMachineTemperatureCelsius(right),
+          direction,
+        );
+        break;
+      case 'lastSeen':
+        result = compareNullableNumber(
+          timestampMillisFrom(left.lastSeen),
+          timestampMillisFrom(right.lastSeen),
+          direction,
+        );
+        break;
+      case 'system':
+        result = compareText(getSystemLabel(left), getSystemLabel(right), direction);
+        break;
+      case 'agent':
+        result = compareText(getAgentLabel(left), getAgentLabel(right), direction);
+        break;
+      case 'ip':
+        result = compareText(
+          getAgentMachinePrimaryIp(left),
+          getAgentMachinePrimaryIp(right),
+          direction,
+        );
+        break;
+      case 'raid':
+        result = compareText(
+          getAgentMachineRaidSummary(left),
+          getAgentMachineRaidSummary(right),
+          direction,
+        );
+        break;
+      case 'arch':
+        result = compareText(left.agent?.architecture, right.agent?.architecture, direction);
+        break;
+      case 'kernel':
+        result = compareText(left.agent?.kernelVersion, right.agent?.kernelVersion, direction);
+        break;
+      case 'name':
+      default:
+        result = compareText(
+          left.displayName || left.name || left.id,
+          right.displayName || right.name || right.id,
+          direction,
+        );
+        break;
+    }
+
+    if (result !== 0) return result;
+    return compareText(
+      left.displayName || left.name || left.id,
+      right.displayName || right.name || right.id,
+      'asc',
+    );
+  });
