@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 import {
+  getAgentMachineNetworkInterfaceDetails,
   getAgentMachineTemperatureCelsius,
   getAgentMachineTemperatureTitle,
   sortAgentMachines,
@@ -21,6 +22,48 @@ const resource = (overrides: Partial<Resource>): Resource =>
   }) as Resource;
 
 describe('agentMachineTableModel', () => {
+  it('normalizes agent network interface details for table inspection', () => {
+    const details = getAgentMachineNetworkInterfaceDetails(
+      resource({
+        agent: {
+          networkInterfaces: [
+            {
+              name: ' en0 ',
+              mac: ' 10:20:30:40:50:60 ',
+              addresses: [' 192.168.0.20 ', '192.168.0.20', '', ' fe80::1 '],
+              rxBytes: 1024,
+              txBytes: 2048,
+              speedMbps: 1000,
+            },
+            {
+              name: '   ',
+              addresses: ['10.0.0.2'],
+              txBytes: 512,
+              speedMbps: 0,
+            },
+            { name: '' },
+          ],
+        },
+      }),
+    );
+
+    expect(details).toEqual([
+      {
+        name: 'en0',
+        mac: '10:20:30:40:50:60',
+        addresses: ['192.168.0.20', 'fe80::1'],
+        rxBytes: 1024,
+        txBytes: 2048,
+        speedMbps: 1000,
+      },
+      {
+        name: 'eth1',
+        addresses: ['10.0.0.2'],
+        txBytes: 512,
+      },
+    ]);
+  });
+
   it('falls back to active SMART disk temperatures when machine sensors are absent', () => {
     const machine = resource({
       agent: {

@@ -41,11 +41,13 @@ import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { formatTemperature as formatTemperatureValue } from '@/utils/temperature';
+import { getWorkloadsGuestNetworkEmptyState } from '@/utils/workloadGuestPresentation';
 import {
   AGENT_MACHINE_COLUMNS,
   getAgentMachineCpuPercent,
   getAgentMachineDiskIOTotal,
   getAgentMachineIpValues,
+  getAgentMachineNetworkInterfaceDetails,
   getAgentMachineNetworkTotal,
   getAgentMachinePrimaryIp,
   getAgentMachineRaidSummary,
@@ -57,6 +59,7 @@ import {
   timestampMillisFrom,
   type AgentMachineColumn,
   type AgentMachineColumnId,
+  type AgentMachineNetworkInterfaceDetail,
   type AgentMachineSortKey,
   type AgentMachineTemperatureDetailSection,
 } from './agentMachineTableModel';
@@ -97,18 +100,26 @@ const finiteMetric = (value: number | undefined): number | undefined =>
 const hasPositiveTemperature = (celsius: number | undefined): celsius is number =>
   typeof celsius === 'number' && Number.isFinite(celsius) && celsius > 0;
 
-const AgentMachineTemperatureCell: Component<{
-  celsius: number | undefined;
-  sections: AgentMachineTemperatureDetailSection[];
-  title: string;
+const AgentMachineMetricTooltip: Component<{
+  triggerDataAttribute: string;
+  tooltipDataAttribute: string;
+  triggerClass: string;
+  tooltipClass: string;
+  enabled: boolean;
+  ariaLabel?: string;
+  title?: string;
+  maxWidth: number;
+  trigger: JSX.Element;
+  children: JSX.Element;
 }> = (props) => {
   const [visible, setVisible] = createSignal(false);
   const [position, setPosition] = createSignal({ x: 0, y: 0 });
-  const hasDetails = () => props.sections.length > 0;
-  const positiveTemperature = () =>
-    hasPositiveTemperature(props.celsius) ? props.celsius : undefined;
+  const triggerDataAttributes = () => ({ [props.triggerDataAttribute]: 'true' });
+  const tooltipDataAttributes = () => ({ [props.tooltipDataAttribute]: 'true' });
+  const enabled = () => props.enabled;
+  const label = () => props.ariaLabel || props.title || undefined;
   const open = (event: MouseEvent | FocusEvent) => {
-    if (!hasDetails()) return;
+    if (!enabled()) return;
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
     setPosition({ x: rect.left + rect.width / 2, y: rect.top });
     setVisible(true);
@@ -118,10 +129,11 @@ const AgentMachineTemperatureCell: Component<{
   return (
     <>
       <span
-        data-agent-machine-temperature-trigger="true"
-        class="inline-flex min-w-[2.25rem] justify-end text-xs tabular-nums"
-        aria-label={props.title || undefined}
-        tabIndex={hasDetails() ? 0 : undefined}
+        {...triggerDataAttributes()}
+        class={props.triggerClass}
+        aria-label={label()}
+        title={!enabled() ? props.title || undefined : undefined}
+        tabIndex={enabled() ? 0 : undefined}
         onMouseEnter={open}
         onMouseOver={open}
         onMouseLeave={close}
@@ -132,52 +144,192 @@ const AgentMachineTemperatureCell: Component<{
           open(event);
         }}
       >
-        <Show when={positiveTemperature()} fallback={<span class="text-muted">—</span>}>
-          {(value) => formatTemperatureValue(value())}
-        </Show>
+        {props.trigger}
       </span>
       <TooltipPortal
-        when={visible() && hasDetails()}
+        when={visible() && enabled()}
         x={position().x}
         y={position().y}
-        maxWidth={320}
+        maxWidth={props.maxWidth}
       >
-        <div
-          data-agent-machine-temperature-tooltip="true"
-          class="min-w-[190px] max-w-[300px] space-y-2"
-        >
-          <For each={props.sections}>
-            {(section) => (
-              <section>
-                <div class="mb-1 border-b border-border pb-1 font-semibold text-muted">
-                  {section.heading}
-                </div>
-                <div class="space-y-0.5">
-                  <For each={section.rows}>
-                    {(row) => (
-                      <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-                        <span class="min-w-0 truncate text-muted" title={row.label}>
-                          {row.label}
-                        </span>
-                        <span
-                          classList={{
-                            'text-base-content': !row.muted,
-                            'text-muted': row.muted,
-                          }}
-                          class="font-mono tabular-nums"
-                        >
-                          {row.value}
-                        </span>
-                      </div>
-                    )}
-                  </For>
-                </div>
-              </section>
-            )}
-          </For>
+        <div {...tooltipDataAttributes()} class={props.tooltipClass}>
+          {props.children}
         </div>
       </TooltipPortal>
     </>
+  );
+};
+
+const AgentMachineTemperatureCell: Component<{
+  celsius: number | undefined;
+  sections: AgentMachineTemperatureDetailSection[];
+  title: string;
+}> = (props) => {
+  const hasDetails = () => props.sections.length > 0;
+  const positiveTemperature = () =>
+    hasPositiveTemperature(props.celsius) ? props.celsius : undefined;
+
+  return (
+    <AgentMachineMetricTooltip
+      triggerDataAttribute="data-agent-machine-temperature-trigger"
+      tooltipDataAttribute="data-agent-machine-temperature-tooltip"
+      triggerClass="inline-flex min-w-[2.25rem] justify-end text-xs tabular-nums"
+      tooltipClass="min-w-[190px] max-w-[300px] space-y-2"
+      enabled={hasDetails()}
+      ariaLabel={props.title || undefined}
+      maxWidth={320}
+      trigger={
+        <Show when={positiveTemperature()} fallback={<span class="text-muted">—</span>}>
+          {(value) => formatTemperatureValue(value())}
+        </Show>
+      }
+    >
+      <For each={props.sections}>
+        {(section) => (
+          <section>
+            <div class="mb-1 border-b border-border pb-1 font-semibold text-muted">
+              {section.heading}
+            </div>
+            <div class="space-y-0.5">
+              <For each={section.rows}>
+                {(row) => (
+                  <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+                    <span class="min-w-0 truncate text-muted" title={row.label}>
+                      {row.label}
+                    </span>
+                    <span
+                      classList={{
+                        'text-base-content': !row.muted,
+                        'text-muted': row.muted,
+                      }}
+                      class="font-mono tabular-nums"
+                    >
+                      {row.value}
+                    </span>
+                  </div>
+                )}
+              </For>
+            </div>
+          </section>
+        )}
+      </For>
+    </AgentMachineMetricTooltip>
+  );
+};
+
+const AgentMachineNetworkCell: Component<{
+  network: Resource['network'] | undefined;
+  interfaces: AgentMachineNetworkInterfaceDetail[];
+  title: string;
+}> = (props) => {
+  const hasDetails = () => props.interfaces.length > 0;
+  const shownInterfaces = () => props.interfaces.slice(0, 8);
+  const hiddenInterfaceCount = () =>
+    Math.max(0, props.interfaces.length - shownInterfaces().length);
+  const ariaLabel = () => props.title.replace(/\n/g, ', ') || 'Network throughput';
+
+  return (
+    <AgentMachineMetricTooltip
+      triggerDataAttribute="data-agent-machine-network-trigger"
+      tooltipDataAttribute="data-agent-machine-network-tooltip"
+      triggerClass="grid w-full grid-cols-[0.75rem_minmax(0,1fr)] grid-rows-2 items-center gap-x-1 gap-y-0.5 text-[11px] leading-tight tabular-nums"
+      tooltipClass="min-w-[230px] max-w-[360px] space-y-2"
+      enabled={hasDetails()}
+      ariaLabel={ariaLabel()}
+      title={props.title}
+      maxWidth={380}
+      trigger={
+        <>
+          <span class="inline-flex w-3 justify-center text-emerald-500">↓</span>
+          <span class="min-w-0 truncate">{formatSpeed(props.network?.rxBytes ?? 0)}</span>
+          <span class="inline-flex w-3 justify-center text-orange-400">↑</span>
+          <span class="min-w-0 truncate">{formatSpeed(props.network?.txBytes ?? 0)}</span>
+        </>
+      }
+    >
+      <section>
+        <div class="mb-1 border-b border-border pb-1 font-semibold text-muted">
+          Network Interfaces
+        </div>
+        <div class="max-h-[280px] space-y-1.5 overflow-y-auto pr-1">
+          <For each={shownInterfaces()}>
+            {(iface, index) => (
+              <div class="min-w-0" classList={{ 'border-t border-border pt-1.5': index() > 0 }}>
+                <div class="flex min-w-0 items-center gap-2">
+                  <span class="min-w-0 truncate font-semibold text-base-content" title={iface.name}>
+                    {iface.name}
+                  </span>
+                  <Show when={iface.mac}>
+                    {(mac) => (
+                      <span
+                        class="max-w-[150px] shrink-0 truncate font-mono text-[9px] text-muted"
+                        title={mac()}
+                      >
+                        {mac()}
+                      </span>
+                    )}
+                  </Show>
+                </div>
+                <Show
+                  when={iface.addresses.length > 0}
+                  fallback={
+                    <div class="mt-0.5 text-[9px] text-muted">
+                      {getWorkloadsGuestNetworkEmptyState()}
+                    </div>
+                  }
+                >
+                  <div class="mt-1 flex flex-wrap gap-1">
+                    <For each={iface.addresses.slice(0, 4)}>
+                      {(address) => (
+                        <span
+                          class="max-w-full truncate rounded border border-border bg-surface-alt px-1.5 py-0.5 font-mono text-[9px] text-base-content"
+                          title={address}
+                        >
+                          {address}
+                        </span>
+                      )}
+                    </For>
+                    <Show when={iface.addresses.length > 4}>
+                      <span class="rounded border border-border px-1.5 py-0.5 text-[9px] text-muted">
+                        +{iface.addresses.length - 4}
+                      </span>
+                    </Show>
+                  </div>
+                </Show>
+                <Show
+                  when={
+                    iface.rxBytes !== undefined ||
+                    iface.txBytes !== undefined ||
+                    iface.speedMbps !== undefined
+                  }
+                >
+                  <div class="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[9px] text-muted">
+                    <Show when={iface.rxBytes !== undefined || iface.txBytes !== undefined}>
+                      <span>
+                        <span class="font-mono text-emerald-500">RX</span>{' '}
+                        {formatSpeed(iface.rxBytes ?? 0)}
+                      </span>
+                      <span>
+                        <span class="font-mono text-orange-400">TX</span>{' '}
+                        {formatSpeed(iface.txBytes ?? 0)}
+                      </span>
+                    </Show>
+                    <Show when={iface.speedMbps !== undefined}>
+                      <span>{iface.speedMbps} Mbps</span>
+                    </Show>
+                  </div>
+                </Show>
+              </div>
+            )}
+          </For>
+          <Show when={hiddenInterfaceCount() > 0}>
+            <div class="border-t border-border pt-1 text-[9px] text-muted">
+              +{hiddenInterfaceCount()} more interfaces
+            </div>
+          </Show>
+        </div>
+      </section>
+    </AgentMachineMetricTooltip>
   );
 };
 
@@ -504,6 +656,7 @@ export const AgentsMachinesTable: Component<{
                     const hasDiskMetric = () =>
                       aggregateDisk() !== undefined || (disks()?.length ?? 0) > 0;
                     const networkTotal = () => getAgentMachineNetworkTotal(machine);
+                    const networkInterfaces = () => getAgentMachineNetworkInterfaceDetails(machine);
                     const diskIOTotal = () => getAgentMachineDiskIOTotal(machine);
                     const primaryIp = () => getAgentMachinePrimaryIp(machine);
                     const ipValues = () => getAgentMachineIpValues(machine);
@@ -620,23 +773,11 @@ export const AgentsMachinesTable: Component<{
                                 when={canRenderMetrics() && networkTotal() !== undefined}
                                 fallback={metricFallback()}
                               >
-                                <div
-                                  class="grid w-full grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[11px] tabular-nums"
+                                <AgentMachineNetworkCell
+                                  network={machine.network}
+                                  interfaces={networkInterfaces()}
                                   title={networkTitleFor(machine)}
-                                >
-                                  <span class="inline-flex w-3 justify-center text-emerald-500">
-                                    ↓
-                                  </span>
-                                  <span class="min-w-0 truncate">
-                                    {formatSpeed(machine.network?.rxBytes ?? 0)}
-                                  </span>
-                                  <span class="inline-flex w-3 justify-center text-orange-400">
-                                    ↑
-                                  </span>
-                                  <span class="min-w-0 truncate">
-                                    {formatSpeed(machine.network?.txBytes ?? 0)}
-                                  </span>
-                                </div>
+                                />
                               </Show>
                             </TableCell>
                           </Show>

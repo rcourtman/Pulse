@@ -129,6 +129,15 @@ export type AgentMachineTemperatureDetailSection = {
   rows: AgentMachineTemperatureDetailRow[];
 };
 
+export type AgentMachineNetworkInterfaceDetail = {
+  name: string;
+  mac?: string;
+  addresses: string[];
+  rxBytes?: number;
+  txBytes?: number;
+  speedMbps?: number;
+};
+
 const positiveTemperature = (value: number | undefined): number | undefined => {
   const metric = finiteMetric(value);
   return metric !== undefined && metric > 0 ? metric : undefined;
@@ -229,6 +238,61 @@ export const getAgentMachineNetworkTotal = (machine: Resource): number | undefin
   return (rx ?? 0) + (tx ?? 0);
 };
 
+const positiveMetric = (value: number | undefined): number | undefined => {
+  const metric = finiteMetric(value);
+  return metric !== undefined && metric > 0 ? metric : undefined;
+};
+
+const uniqueTrimmedValues = (values: readonly string[] | undefined): string[] => {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const candidate of values ?? []) {
+    const value = asTrimmedString(candidate);
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    result.push(value);
+  }
+
+  return result;
+};
+
+export const getAgentMachineNetworkInterfaceDetails = (
+  machine: Resource,
+): AgentMachineNetworkInterfaceDetail[] =>
+  (machine.agent?.networkInterfaces ?? []).reduce<AgentMachineNetworkInterfaceDetail[]>(
+    (details, iface, index) => {
+      const name = asTrimmedString(iface.name);
+      const mac = asTrimmedString(iface.mac);
+      const addresses = uniqueTrimmedValues(iface.addresses);
+      const rxBytes = finiteMetric(iface.rxBytes);
+      const txBytes = finiteMetric(iface.txBytes);
+      const speedMbps = positiveMetric(iface.speedMbps);
+
+      if (
+        !name &&
+        !mac &&
+        addresses.length === 0 &&
+        rxBytes === undefined &&
+        txBytes === undefined &&
+        speedMbps === undefined
+      ) {
+        return details;
+      }
+
+      details.push({
+        name: name ?? `eth${index}`,
+        ...(mac ? { mac } : {}),
+        addresses,
+        ...(rxBytes !== undefined ? { rxBytes } : {}),
+        ...(txBytes !== undefined ? { txBytes } : {}),
+        ...(speedMbps !== undefined ? { speedMbps } : {}),
+      });
+      return details;
+    },
+    [],
+  );
+
 export const getAgentMachineDiskIOTotal = (machine: Resource): number | undefined => {
   const read = finiteMetric(machine.diskIO?.readRate);
   const write = finiteMetric(machine.diskIO?.writeRate);
@@ -317,16 +381,7 @@ export const getAgentMachineIpValues = (machine: Resource): string[] => {
     ...(machine.identity?.ips ?? []),
     ...(machine.agent?.networkInterfaces ?? []).flatMap((iface) => iface.addresses ?? []),
   ];
-  const seen = new Set<string>();
-  const result: string[] = [];
-
-  for (const candidate of candidates) {
-    const value = asTrimmedString(candidate);
-    if (!value || seen.has(value)) continue;
-    seen.add(value);
-    result.push(value);
-  }
-  return result;
+  return uniqueTrimmedValues(candidates);
 };
 
 export const getAgentMachinePrimaryIp = (machine: Resource): string =>

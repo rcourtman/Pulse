@@ -103,6 +103,16 @@ describe('AgentsMachinesTable', () => {
               osVersion: '7.2.2',
               architecture: 'x86_64',
               kernelVersion: '6.12.24',
+              networkInterfaces: [
+                {
+                  name: 'br0',
+                  mac: 'aa:bb:cc:dd:ee:ff',
+                  addresses: ['192.168.0.10'],
+                  rxBytes: 1024,
+                  txBytes: 2048,
+                  speedMbps: 1000,
+                },
+              ],
               raid: [
                 {
                   device: '/dev/md0',
@@ -138,6 +148,52 @@ describe('AgentsMachinesTable', () => {
 
     expect(screen.getByText('192.168.0.10')).toBeInTheDocument();
     expect(screen.getByText('1 clean')).toBeInTheDocument();
+  });
+
+  it('shows structured agent network interface details from the Net I/O value', async () => {
+    const { container } = render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({
+            id: 'network-host',
+            name: 'Network Host',
+            network: { rxBytes: 1024, txBytes: 2048 },
+            agent: {
+              networkInterfaces: [
+                {
+                  name: 'en0',
+                  mac: '10:20:30:40:50:60',
+                  addresses: ['192.168.0.20', 'fe80::1'],
+                  rxBytes: 1024,
+                  txBytes: 2048,
+                  speedMbps: 1000,
+                },
+              ],
+            },
+          }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    const trigger = container.querySelector('[data-agent-machine-network-trigger="true"]');
+    expect(trigger).not.toBeNull();
+    if (!trigger) return;
+
+    await fireEvent.mouseEnter(trigger);
+
+    expect(await screen.findByText('Network Interfaces')).toBeInTheDocument();
+    expect(screen.getByText('en0')).toBeInTheDocument();
+    expect(screen.getByText('10:20:30:40:50:60')).toBeInTheDocument();
+    expect(screen.getByText('192.168.0.20')).toBeInTheDocument();
+    expect(screen.getByText('fe80::1')).toBeInTheDocument();
+    expect(screen.getByText('RX')).toBeInTheDocument();
+    expect(screen.getByText('TX')).toBeInTheDocument();
+    expect(screen.getAllByText('1.00 KB/s').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('2.00 KB/s').length).toBeGreaterThan(0);
+    expect(screen.getByText('1000 Mbps')).toBeInTheDocument();
   });
 
   it('sorts machines by operational metrics from the column headers', async () => {
