@@ -167,20 +167,10 @@ export const STORAGE_KEYS = {
   ALERT_HISTORY_TIME_FILTER: 'alertHistoryTimeFilter',
   ALERT_HISTORY_SEVERITY_FILTER: 'alertHistorySeverityFilter',
 
-  // Storage settings
-  STORAGE_SHOW_FILTERS: 'storageShowFilters',
-  STORAGE_VIEW_MODE: 'storageViewMode',
-  STORAGE_SOURCE_FILTER: 'storageSourceFilter',
-
   // Recovery settings
-  RECOVERY_SHOW_FILTERS: 'backupsShowFilters',
-  RECOVERY_USE_RELATIVE_TIME: 'backupsUseRelativeTime',
   RECOVERY_SEARCH_HISTORY: 'backupsSearchHistory',
 
   // Workloads settings
-  WORKLOADS_SHOW_FILTERS: 'workloadsShowFilters',
-  WORKLOADS_CARD_VIEW: 'workloadsCardView',
-  WORKLOADS_AUTO_REFRESH: 'workloadsAutoRefresh',
   WORKLOADS_SEARCH_HISTORY: 'workloadsSearchHistory',
   WORKLOADS_METRIC_DISPLAY_MODE: 'workloadsMetricDisplayMode',
   WORKLOADS_METRIC_HISTORY_RANGE: 'workloadsMetricHistoryRange',
