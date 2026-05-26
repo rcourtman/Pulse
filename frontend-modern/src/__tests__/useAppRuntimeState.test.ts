@@ -291,14 +291,14 @@ describe('useAppRuntimeState', () => {
       throw new Error(`Unhandled apiFetch URL: ${url}`);
     });
 
-    const demoModeModule = await import('@/stores/demoMode');
+    const presentationPolicyModule = await import('@/stores/sessionPresentationPolicy');
     const { hookState, dispose } = mountHook();
 
     await flushAsync();
     await flushAsync();
 
-    expect(demoModeModule.demoModeResolved()).toBe(true);
-    expect(demoModeModule.demoModeEnabled()).toBe(true);
+    expect(presentationPolicyModule.sessionPresentationPolicyResolved()).toBe(true);
+    expect(presentationPolicyModule.presentationPolicyIsDemoMode()).toBe(true);
     expect(aiChatSetEnabledMock).toHaveBeenCalledWith(true);
     expect(orgsListMock).not.toHaveBeenCalled();
     expect(hookState.organizations()).toEqual([
