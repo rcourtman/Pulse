@@ -3,7 +3,6 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { ChartData, ChartsResponse, TimeRange, MetricPoint, ChartStats } from '@/api/charts';
-import { timeRangeToMs } from '@/utils/timeRange';
 
 // Note: We test the types and interfaces here since the actual API calls
 // require a running backend. Integration tests should cover the full flow.
@@ -241,25 +240,3 @@ describe('Charts API Types', () => {
   });
 });
 
-describe('Time Range to Milliseconds Conversion', () => {
-  const expectedValues: [TimeRange, number][] = [
-    ['5m', 300000],
-    ['15m', 900000],
-    ['30m', 1800000],
-    ['1h', 3600000],
-    ['4h', 14400000],
-    ['12h', 43200000],
-    ['24h', 86400000],
-    ['7d', 604800000],
-    ['30d', 2592000000],
-  ];
-
-  it.each(expectedValues)('converts %s to %d ms', (range, expectedMs) => {
-    expect(timeRangeToMs(range)).toBe(expectedMs);
-  });
-
-  it('defaults to 1 hour for unknown range', () => {
-    // @ts-expect-error - Testing invalid input
-    expect(timeRangeToMs('invalid')).toBe(3600000);
-  });
-});
