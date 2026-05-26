@@ -1,16 +1,33 @@
-import type { AvailabilityTarget } from '@/api/availabilityTargets';
+import type { AvailabilityTarget, AvailabilityTargetKind } from '@/api/availabilityTargets';
 
 export const AVAILABILITY_SETTINGS_PATH = '/settings/monitoring/availability';
 export const AVAILABILITY_ADD_QUERY_PARAM = 'add';
 export const AVAILABILITY_ADD_TARGET_VALUE = 'target';
+export const AVAILABILITY_TARGET_KIND_QUERY_PARAM = 'targetKind';
 
 export function buildAvailabilitySettingsPath(): string {
   return AVAILABILITY_SETTINGS_PATH;
 }
 
-export function buildAvailabilityTargetAddPath(): string {
+const AVAILABILITY_TARGET_KIND_VALUES: readonly AvailabilityTargetKind[] = [
+  'machine',
+  'service',
+  'device',
+];
+
+export function normalizeAvailabilityTargetKind(
+  value: string | null | undefined,
+): AvailabilityTargetKind | undefined {
+  const normalized = value?.trim().toLowerCase();
+  return AVAILABILITY_TARGET_KIND_VALUES.find((kind) => kind === normalized);
+}
+
+export function buildAvailabilityTargetAddPath(targetKind?: AvailabilityTargetKind): string {
   const params = new URLSearchParams();
   params.set(AVAILABILITY_ADD_QUERY_PARAM, AVAILABILITY_ADD_TARGET_VALUE);
+  if (targetKind) {
+    params.set(AVAILABILITY_TARGET_KIND_QUERY_PARAM, targetKind);
+  }
   return `${AVAILABILITY_SETTINGS_PATH}?${params.toString()}`;
 }
 
@@ -19,7 +36,21 @@ export function shouldOpenAvailabilityTargetAddDialog(pathname: string, search: 
     return false;
   }
   const params = new URLSearchParams(search);
-  return params.get(AVAILABILITY_ADD_QUERY_PARAM)?.trim() === AVAILABILITY_ADD_TARGET_VALUE;
+  if (params.get(AVAILABILITY_ADD_QUERY_PARAM)?.trim() !== AVAILABILITY_ADD_TARGET_VALUE) {
+    return false;
+  }
+  if (!params.has(AVAILABILITY_TARGET_KIND_QUERY_PARAM)) return true;
+  return Boolean(normalizeAvailabilityTargetKind(params.get(AVAILABILITY_TARGET_KIND_QUERY_PARAM)));
+}
+
+export function getAvailabilityTargetAddKind(
+  pathname: string,
+  search: string,
+): AvailabilityTargetKind | undefined {
+  if (!shouldOpenAvailabilityTargetAddDialog(pathname, search)) return undefined;
+  return normalizeAvailabilityTargetKind(
+    new URLSearchParams(search).get(AVAILABILITY_TARGET_KIND_QUERY_PARAM),
+  );
 }
 
 export function getAvailabilityTargetMethodLabel(target: AvailabilityTarget): string {

@@ -2833,6 +2833,10 @@ only routeable Infrastructure settings entry points for platform/API and
 agent-backed source setup. Agentless ping/TCP/HTTP checks are monitoring
 availability settings at `/settings/monitoring/availability`, with
 `/settings/monitoring/availability?add=target` as the route-owned add dialog.
+Machine entry points must add `targetKind=machine`, while the focused
+availability checks entry points for services and devices must add
+`targetKind=service`, so deep links open the same owned dialog with the correct
+bounded target kind already selected.
 Former nested aliases such as `/settings/infrastructure/install`,
 `/settings/infrastructure/platforms/proxmox/pbs`,
 `/settings/infrastructure/api/pve`, and `/settings/workloads/docker` must fail
@@ -3596,4 +3600,6 @@ to the `Availability checks` tab. Servers, laptops, desktops, and comparable
 computers that are monitored by agentless reachability checks are still
 machines when the availability target is classified as `machine`; service and
 device checks stay in the focused availability tab and may only trigger a
-compact handoff from Machines.
+compact handoff from Machines. The Machines empty and handoff actions must use
+the machine-targeted availability add route, while Availability checks actions
+must use the service/device-targeted route.

@@ -39,7 +39,8 @@ const settingsLinkClass =
   'inline-flex min-h-8 items-center justify-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover';
 
 const availabilityFor = (resource: Resource): ResourceAvailabilityMeta | undefined =>
-  resource.availability ?? (resource.platformData?.availability as ResourceAvailabilityMeta | undefined);
+  resource.availability ??
+  (resource.platformData?.availability as ResourceAvailabilityMeta | undefined);
 
 const formatTarget = (resource: Resource): string => {
   const availability = availabilityFor(resource);
@@ -99,9 +100,9 @@ export const AvailabilityChecksTable: Component<{
           title={props.emptyTitle}
           description={props.emptyDescription}
           actions={
-            <A href={buildAvailabilityTargetAddPath()} class={settingsLinkClass}>
+            <A href={buildAvailabilityTargetAddPath('service')} class={settingsLinkClass}>
               <PlusIcon class="h-3.5 w-3.5" />
-              Add check
+              Add service/device check
             </A>
           }
         />
@@ -134,34 +135,54 @@ export const AvailabilityChecksTable: Component<{
             <TableCardHeader
               title="Availability checks"
               actions={
-                <A href={buildAvailabilitySettingsPath()} class={settingsLinkClass}>
-                  <SettingsIcon class="h-3.5 w-3.5" />
-                  Manage
-                </A>
+                <div class="flex flex-wrap items-center justify-end gap-2">
+                  <A href={buildAvailabilityTargetAddPath('service')} class={settingsLinkClass}>
+                    <PlusIcon class="h-3.5 w-3.5" />
+                    Add service/device check
+                  </A>
+                  <A href={buildAvailabilitySettingsPath()} class={settingsLinkClass}>
+                    <SettingsIcon class="h-3.5 w-3.5" />
+                    Manage
+                  </A>
+                </div>
               }
             />
             <Table class="min-w-full table-fixed text-xs md:min-w-[900px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} w-[42%] md:w-[22%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('name')} w-[42%] md:w-[22%]`}
+                  >
                     Check
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[12%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[12%]`}
+                  >
                     Method
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[28%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[28%]`}
+                  >
                     Target
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} w-[28%] md:w-[12%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} w-[28%] md:w-[12%]`}
+                  >
                     Result
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[10%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[10%]`}
+                  >
                     Checked
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell lg:w-[8%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell lg:w-[8%]`}
+                  >
                     Failures
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell lg:w-[8%]`}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell lg:w-[8%]`}
+                  >
                     Interval
                   </TableHead>
                 </TableRow>
@@ -172,13 +193,19 @@ export const AvailabilityChecksTable: Component<{
                     const availability = () => availabilityFor(check);
                     const probe = () => getAvailabilityProbePresentation(check);
                     const indicator = () => getSimpleStatusIndicator(check.status);
-                    const method = () => probe()?.methodLabel ?? availability()?.protocol ?? 'Probe';
+                    const method = () =>
+                      probe()?.methodLabel ?? availability()?.protocol ?? 'Probe';
                     const result = () => probe()?.resultLabel ?? indicator().label;
                     const target = () => formatTarget(check);
 
                     return (
-                      <TableRow data-availability-check-row={check.id} class="text-[11px] sm:text-xs">
-                        <TableCell class={`${getPlatformTableCellClassForKind('name')} w-[42%] md:w-auto`}>
+                      <TableRow
+                        data-availability-check-row={check.id}
+                        class="text-[11px] sm:text-xs"
+                      >
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('name')} w-[42%] md:w-auto`}
+                        >
                           <div class="flex min-w-0 items-center gap-2">
                             <StatusDot
                               size="sm"
@@ -186,7 +213,10 @@ export const AvailabilityChecksTable: Component<{
                               title={indicator().label}
                               ariaHidden
                             />
-                            <span class="truncate font-semibold text-base-content" title={check.name}>
+                            <span
+                              class="truncate font-semibold text-base-content"
+                              title={check.name}
+                            >
                               {check.name}
                             </span>
                           </div>
@@ -194,24 +224,36 @@ export const AvailabilityChecksTable: Component<{
                             {method()} · {target()}
                           </span>
                         </TableCell>
-                        <TableCell class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                        >
                           {method()}
                         </TableCell>
-                        <TableCell class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                        >
                           <span class="block truncate" title={target()}>
                             {target()}
                           </span>
                         </TableCell>
-                        <TableCell class={`${getPlatformTableCellClassForKind('numeric-value')} w-[28%] text-base-content md:w-auto`}>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} w-[28%] text-base-content md:w-auto`}
+                        >
                           <span class={probe()?.toneClassName ?? ''}>{result()}</span>
                         </TableCell>
-                        <TableCell class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
+                        >
                           {formatChecked(availability())}
                         </TableCell>
-                        <TableCell class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
+                        >
                           {formatFailures(availability())}
                         </TableCell>
-                        <TableCell class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
+                        >
                           {formatInterval(availability())}
                         </TableCell>
                       </TableRow>

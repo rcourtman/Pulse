@@ -30,10 +30,15 @@ vi.mock('@/api/availabilityTargets', () => ({
 }));
 
 vi.mock('../ConnectionEditor/CredentialSlots/AvailabilityTargetSlot', () => ({
-  AvailabilityTargetSlot: (props: { editingTargetId?: string | null; onSaved: () => void }) => (
+  AvailabilityTargetSlot: (props: {
+    editingTargetId?: string | null;
+    initialTargetKind?: string;
+    onSaved: () => void;
+  }) => (
     <div
       data-testid="availability-target-slot"
       data-editing-target-id={props.editingTargetId ?? ''}
+      data-initial-target-kind={props.initialTargetKind ?? ''}
     >
       availability target slot
       <button type="button" onClick={props.onSaved}>
@@ -100,15 +105,33 @@ describe('AvailabilitySettingsPanel', () => {
     render(() => <AvailabilitySettingsPanel />);
 
     await waitFor(() => expect(screen.getByText('MQTT broker')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /^Add check$/i }));
-    expect(navigateSpy).toHaveBeenLastCalledWith('/settings/monitoring/availability?add=target', {
-      scroll: false,
-    });
+    fireEvent.click(screen.getByRole('button', { name: /^Add service\/device check$/i }));
+    expect(navigateSpy).toHaveBeenLastCalledWith(
+      '/settings/monitoring/availability?add=target&targetKind=service',
+      {
+        scroll: false,
+      },
+    );
 
-    routeState.search = '?add=target';
+    routeState.search = '?add=target&targetKind=service';
     cleanup();
     render(() => <AvailabilitySettingsPanel />);
     await waitFor(() => expect(screen.getByTestId('availability-target-slot')).toBeInTheDocument());
+    expect(screen.getByRole('heading', { name: 'Add service/device check' })).toBeInTheDocument();
+    expect(screen.getByTestId('availability-target-slot')).toHaveAttribute(
+      'data-initial-target-kind',
+      'service',
+    );
+
+    cleanup();
+    routeState.search = '?add=target&targetKind=machine';
+    render(() => <AvailabilitySettingsPanel />);
+    await waitFor(() => expect(screen.getByTestId('availability-target-slot')).toBeInTheDocument());
+    expect(screen.getByRole('heading', { name: 'Add machine check' })).toBeInTheDocument();
+    expect(screen.getByTestId('availability-target-slot')).toHaveAttribute(
+      'data-initial-target-kind',
+      'machine',
+    );
 
     cleanup();
     routeState.search = '';

@@ -14,11 +14,16 @@ import Activity from 'lucide-solid/icons/activity';
 import X from 'lucide-solid/icons/x';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Dialog } from '@/components/shared/Dialog';
-import { AvailabilityTargetsAPI, type AvailabilityTarget } from '@/api/availabilityTargets';
+import {
+  AvailabilityTargetsAPI,
+  type AvailabilityTarget,
+  type AvailabilityTargetKind,
+} from '@/api/availabilityTargets';
 import { AvailabilityTargetSlot } from './ConnectionEditor/CredentialSlots/AvailabilityTargetSlot';
 import {
   buildAvailabilitySettingsPath,
   buildAvailabilityTargetAddPath,
+  getAvailabilityTargetAddKind,
   getAvailabilityTargetAddressLabel,
   getAvailabilityTargetKindLabel,
   getAvailabilityTargetMethodLabel,
@@ -38,7 +43,7 @@ const closeButtonClass =
   'inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-base-content transition-colors hover:bg-surface-hover';
 
 type AvailabilityDialogState =
-  | { mode: 'add' }
+  | { mode: 'add'; initialTargetKind?: AvailabilityTargetKind }
   | { mode: 'edit'; target: AvailabilityTarget }
   | null;
 
@@ -68,9 +73,9 @@ export const AvailabilitySettingsPanel: Component = () => {
     }
   };
 
-  const openAddDialog = () => {
+  const openAddDialog = (targetKind: AvailabilityTargetKind = 'service') => {
     setDeleteConfirmingId(null);
-    navigate(buildAvailabilityTargetAddPath(), { scroll: false });
+    navigate(buildAvailabilityTargetAddPath(targetKind), { scroll: false });
   };
 
   const closeDialog = (replace = false) => {
@@ -138,7 +143,10 @@ export const AvailabilitySettingsPanel: Component = () => {
 
   createEffect(() => {
     if (shouldOpenAvailabilityTargetAddDialog(location.pathname, location.search)) {
-      setDialog({ mode: 'add' });
+      setDialog({
+        mode: 'add',
+        initialTargetKind: getAvailabilityTargetAddKind(location.pathname, location.search),
+      });
       return;
     }
 
@@ -155,6 +163,15 @@ export const AvailabilitySettingsPanel: Component = () => {
   const dialogTitle = createMemo(() => {
     const current = dialog();
     if (current?.mode === 'edit') return `Manage ${current.target.name}`;
+    if (current?.mode === 'add' && current.initialTargetKind === 'machine') {
+      return 'Add machine check';
+    }
+    if (
+      current?.mode === 'add' &&
+      (current.initialTargetKind === 'service' || current.initialTargetKind === 'device')
+    ) {
+      return 'Add service/device check';
+    }
     return 'Add availability check';
   });
 
@@ -162,6 +179,9 @@ export const AvailabilitySettingsPanel: Component = () => {
     const current = dialog();
     if (current?.mode === 'edit') {
       return `${getAvailabilityTargetMethodLabel(current.target)} · ${getAvailabilityTargetAddressLabel(current.target)}`;
+    }
+    if (current?.mode === 'add' && current.initialTargetKind === 'machine') {
+      return 'Use reachability checks for servers, desktops, laptops, and other computers that do not run Pulse Agent.';
     }
     return 'Use ICMP ping, TCP port, or HTTP checks for devices and services that cannot run Pulse Agent.';
   });
@@ -189,9 +209,13 @@ export const AvailabilitySettingsPanel: Component = () => {
                 <RotateCw class={`h-4 w-4 ${loading() ? 'animate-spin' : ''}`} />
                 Refresh
               </button>
-              <button type="button" onClick={openAddDialog} class={primaryButtonClass}>
+              <button
+                type="button"
+                onClick={() => openAddDialog('service')}
+                class={primaryButtonClass}
+              >
                 <Plus class="h-4 w-4" />
-                Add check
+                Add service/device check
               </button>
             </div>
           </div>
@@ -229,9 +253,13 @@ export const AvailabilitySettingsPanel: Component = () => {
                     endpoint that only needs reachability monitoring.
                   </p>
                 </div>
-                <button type="button" onClick={openAddDialog} class={primaryButtonClass}>
+                <button
+                  type="button"
+                  onClick={() => openAddDialog('service')}
+                  class={primaryButtonClass}
+                >
                   <Plus class="h-4 w-4" />
-                  Add check
+                  Add service/device check
                 </button>
               </div>
             }
@@ -325,6 +353,9 @@ export const AvailabilitySettingsPanel: Component = () => {
                 <div class="min-h-0 flex-1 overflow-y-auto p-4">
                   <AvailabilityTargetSlot
                     editingTargetId={editingTarget?.id}
+                    initialTargetKind={
+                      current.mode === 'add' ? current.initialTargetKind : undefined
+                    }
                     onCancel={() => closeDialog(true)}
                     onSaved={handleSaved}
                     onToggleEnabled={

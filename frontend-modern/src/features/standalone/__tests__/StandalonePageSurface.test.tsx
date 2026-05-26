@@ -181,6 +181,10 @@ describe('StandalonePageSurface', () => {
       'href',
       '/standalone/availability',
     );
+    expect(screen.getByRole('link', { name: 'Add machine check' })).toHaveAttribute(
+      'href',
+      '/settings/monitoring/availability?add=target&targetKind=machine',
+    );
   });
 
   it('renders the machines table when only an agentless machine is present', () => {

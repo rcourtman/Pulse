@@ -131,11 +131,11 @@ export function StandalonePageSurface() {
                         Add agent
                       </button>
                       <A
-                        href={buildAvailabilityTargetAddPath()}
+                        href={buildAvailabilityTargetAddPath('machine')}
                         class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content shadow-sm hover:bg-slate-50"
                       >
                         <PlusIcon class="h-3.5 w-3.5" />
-                        Add check
+                        Add machine check
                       </A>
                     </div>
                   }
@@ -152,10 +152,22 @@ export function StandalonePageSurface() {
                         title="No machines"
                         description="Service and device checks are monitored from the Availability checks tab. Mark an availability target as a machine when it represents a server, laptop, or desktop."
                         actions={
-                          <A href={buildStandalonePath('availability')} class={overviewActionClass}>
-                            <ActivityIcon class="h-3.5 w-3.5" />
-                            View checks
-                          </A>
+                          <div class="flex flex-wrap items-center justify-center gap-2">
+                            <A
+                              href={buildStandalonePath('availability')}
+                              class={overviewActionClass}
+                            >
+                              <ActivityIcon class="h-3.5 w-3.5" />
+                              View checks
+                            </A>
+                            <A
+                              href={buildAvailabilityTargetAddPath('machine')}
+                              class={overviewActionClass}
+                            >
+                              <PlusIcon class="h-3.5 w-3.5" />
+                              Add machine check
+                            </A>
+                          </div>
                         }
                       />
                     </Show>

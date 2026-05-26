@@ -45,6 +45,7 @@ export interface AvailabilityTargetSlotProps {
   editingTargetId?: string | null;
   onCancel: () => void;
   onSaved: () => void;
+  initialTargetKind?: AvailabilityTargetKind;
   onToggleEnabled?: () => void;
   togglePending?: boolean;
   connectionEnabled?: boolean;
@@ -54,10 +55,12 @@ export interface AvailabilityTargetSlotProps {
   deleteError?: string | null;
 }
 
-const newAvailabilityForm = (): AvailabilityForm => ({
+const newAvailabilityForm = (
+  initialTargetKind: AvailabilityTargetKind = 'service',
+): AvailabilityForm => ({
   id: '',
   name: '',
-  targetKind: 'service',
+  targetKind: initialTargetKind,
   address: '',
   protocol: 'icmp',
   port: '',
@@ -117,7 +120,9 @@ const presetSensitiveFormKeys: ReadonlySet<keyof AvailabilityForm> = new Set([
 ]);
 
 export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (props) => {
-  const [form, setForm] = createSignal<AvailabilityForm>(newAvailabilityForm());
+  const [form, setForm] = createSignal<AvailabilityForm>(
+    newAvailabilityForm(props.initialTargetKind),
+  );
   const [selectedPreset, setSelectedPreset] = createSignal<AvailabilityTargetPresetID>(
     CUSTOM_AVAILABILITY_PRESET_ID,
   );
@@ -143,10 +148,30 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
 
   const addressPlaceholder = () =>
     selectedPresetConfig()?.addressPlaceholder ??
-    (form().protocol === 'http' ? 'http://device.local/status' : 'device.local');
+    (form().protocol === 'http'
+      ? 'http://service.local/status'
+      : form().targetKind === 'machine'
+        ? 'server.local'
+        : form().targetKind === 'service'
+          ? 'service.local'
+          : 'device.local');
 
   const portPlaceholder = () =>
     selectedPresetConfig()?.portPlaceholder ?? (form().protocol === 'http' ? 'Optional' : '1883');
+
+  const namePlaceholder = () =>
+    form().targetKind === 'machine'
+      ? 'mac-mini'
+      : form().targetKind === 'service'
+        ? 'mqtt-broker'
+        : 'energy-monitor';
+
+  const addButtonLabel = () =>
+    form().targetKind === 'machine'
+      ? 'Add machine check'
+      : form().targetKind === 'service' || form().targetKind === 'device'
+        ? 'Add service/device check'
+        : 'Add target';
 
   const handlePresetChange = (presetId: AvailabilityTargetPresetID) => {
     setSelectedPreset(presetId);
@@ -252,7 +277,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
             class={formControl}
             value={form().name}
             onInput={(event) => updateForm({ name: event.currentTarget.value })}
-            placeholder="energy-monitor"
+            placeholder={namePlaceholder()}
           />
         </label>
         <FormSelect
@@ -440,7 +465,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
               class={primaryButtonClass}
               disabled={isBusy()}
             >
-              {saving() ? 'Saving…' : isEditing() ? 'Save target' : 'Add target'}
+              {saving() ? 'Saving…' : isEditing() ? 'Save target' : addButtonLabel()}
             </button>
           </div>
         </div>

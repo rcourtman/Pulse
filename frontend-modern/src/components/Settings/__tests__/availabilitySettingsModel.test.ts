@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   buildAvailabilitySettingsPath,
   buildAvailabilityTargetAddPath,
+  getAvailabilityTargetAddKind,
   getAvailabilityTargetAddressLabel,
   getAvailabilityTargetKindLabel,
   getAvailabilityTargetMethodLabel,
   getAvailabilityTargetStatusLabel,
   getAvailabilityTargetsSummary,
+  normalizeAvailabilityTargetKind,
   shouldOpenAvailabilityTargetAddDialog,
 } from '../availabilitySettingsModel';
 import type { AvailabilityTarget } from '@/api/availabilityTargets';
@@ -25,12 +27,41 @@ describe('availabilitySettingsModel', () => {
   it('owns the canonical monitoring availability settings path', () => {
     expect(buildAvailabilitySettingsPath()).toBe('/settings/monitoring/availability');
     expect(buildAvailabilityTargetAddPath()).toBe('/settings/monitoring/availability?add=target');
+    expect(buildAvailabilityTargetAddPath('machine')).toBe(
+      '/settings/monitoring/availability?add=target&targetKind=machine',
+    );
+    expect(buildAvailabilityTargetAddPath('service')).toBe(
+      '/settings/monitoring/availability?add=target&targetKind=service',
+    );
     expect(
       shouldOpenAvailabilityTargetAddDialog('/settings/monitoring/availability', '?add=target'),
     ).toBe(true);
     expect(
+      shouldOpenAvailabilityTargetAddDialog(
+        '/settings/monitoring/availability',
+        '?add=target&targetKind=machine',
+      ),
+    ).toBe(true);
+    expect(
+      shouldOpenAvailabilityTargetAddDialog(
+        '/settings/monitoring/availability',
+        '?add=target&targetKind=vm',
+      ),
+    ).toBe(false);
+    expect(
+      getAvailabilityTargetAddKind(
+        '/settings/monitoring/availability',
+        '?add=target&targetKind=machine',
+      ),
+    ).toBe('machine');
+    expect(getAvailabilityTargetAddKind('/settings/monitoring/availability', '?add=target')).toBe(
+      undefined,
+    );
+    expect(
       shouldOpenAvailabilityTargetAddDialog('/settings/infrastructure', '?add=availability'),
     ).toBe(false);
+    expect(normalizeAvailabilityTargetKind('Machine')).toBe('machine');
+    expect(normalizeAvailabilityTargetKind('vm')).toBe(undefined);
   });
 
   it('formats endpoint methods and addresses without infrastructure copy', () => {

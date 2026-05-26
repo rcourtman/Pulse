@@ -242,7 +242,9 @@ Pulse Agent actually registers for that host. That classification exists so
 servers, desktops, laptops, and comparable computers such as a Mac mini can
 appear in Standalone Machines when monitored by reachability probes; it must
 not create lifecycle authority, install state, agent profile membership, or
-host-command capability.
+host-command capability. A `targetKind=machine` add-dialog handoff is only a
+preselected availability-resource creation path, not an agent install or
+lifecycle onboarding state.
 The lifecycle-owned onboarding presentation helper must consume the governed
 platform support manifest for readiness stage, primary mode, canonical
 projections, and support-floor posture.

@@ -50,7 +50,7 @@ describe('AvailabilityTargetSlot', () => {
     fireEvent.input(screen.getByPlaceholderText('sensor.local'), {
       target: { value: 'rack-sensor.local' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Add target' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add service/device check' }));
 
     await waitFor(() =>
       expect(mockedCreate).toHaveBeenCalledWith(
@@ -60,6 +60,38 @@ describe('AvailabilityTargetSlot', () => {
           address: 'rack-sensor.local',
           protocol: 'tcp',
           port: 6053,
+          enabled: true,
+        }),
+      ),
+    );
+    expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts machine add routes as machine reachability checks', async () => {
+    const onSaved = vi.fn();
+    render(() => (
+      <AvailabilityTargetSlot initialTargetKind="machine" onCancel={vi.fn()} onSaved={onSaved} />
+    ));
+
+    expect(screen.getByLabelText('Target type')).toHaveValue('machine');
+    expect(screen.getByPlaceholderText('mac-mini')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('server.local')).toBeInTheDocument();
+
+    fireEvent.input(screen.getByLabelText('Name'), {
+      target: { value: 'mac-mini' },
+    });
+    fireEvent.input(screen.getByPlaceholderText('server.local'), {
+      target: { value: 'mac-mini.local' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add machine check' }));
+
+    await waitFor(() =>
+      expect(mockedCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'mac-mini',
+          targetKind: 'machine',
+          address: 'mac-mini.local',
+          protocol: 'icmp',
           enabled: true,
         }),
       ),

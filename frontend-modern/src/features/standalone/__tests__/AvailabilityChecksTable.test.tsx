@@ -63,9 +63,9 @@ describe('AvailabilityChecksTable', () => {
   it('links the empty state back to the availability check add flow', () => {
     renderTable([]);
 
-    expect(screen.getByRole('link', { name: 'Add check' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Add service/device check' })).toHaveAttribute(
       'href',
-      '/settings/monitoring/availability?add=target',
+      '/settings/monitoring/availability?add=target&targetKind=service',
     );
   });
 });
