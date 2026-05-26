@@ -196,6 +196,64 @@ describe('AgentsMachinesTable', () => {
     expect(screen.getByText('1000 Mbps')).toBeInTheDocument();
   });
 
+  it('shows structured agent RAID array details from the RAID value', async () => {
+    const { container } = render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({
+            id: 'raid-host',
+            name: 'RAID Host',
+            agent: {
+              raid: [
+                {
+                  device: '/dev/md0',
+                  name: 'media',
+                  level: 'raid6',
+                  state: 'recovering',
+                  totalDevices: 6,
+                  activeDevices: 5,
+                  workingDevices: 5,
+                  failedDevices: 1,
+                  spareDevices: 1,
+                  devices: [
+                    { device: '/dev/sda', state: 'active', slot: 0 },
+                    { device: '/dev/sdb', state: 'faulty', slot: 1 },
+                    { device: '/dev/sdc', state: 'spare', slot: 2 },
+                  ],
+                  rebuildPercent: 37.2,
+                  rebuildSpeed: '120 MB/s',
+                },
+              ],
+            },
+          }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    await fireEvent.click(screen.getByTitle('Choose which columns to display'));
+    await fireEvent.click(screen.getByLabelText('RAID'));
+
+    const trigger = container.querySelector('[data-agent-machine-raid-trigger="true"]');
+    expect(trigger).not.toBeNull();
+    if (!trigger) return;
+
+    await fireEvent.mouseEnter(trigger);
+
+    expect(await screen.findByText('RAID Arrays')).toBeInTheDocument();
+    expect(screen.getByText('media')).toBeInTheDocument();
+    expect(screen.getByText('raid6')).toBeInTheDocument();
+    expect(screen.getByText('recovering')).toBeInTheDocument();
+    expect(screen.getByText('/dev/md0')).toBeInTheDocument();
+    expect(screen.getByText('/dev/sda')).toBeInTheDocument();
+    expect(screen.getByText('/dev/sdb')).toBeInTheDocument();
+    expect(screen.getByText('/dev/sdc')).toBeInTheDocument();
+    expect(screen.getByText('37%')).toBeInTheDocument();
+    expect(screen.getByText('120 MB/s')).toBeInTheDocument();
+  });
+
   it('sorts machines by operational metrics from the column headers', async () => {
     const { container } = render(() => (
       <AgentsMachinesTable

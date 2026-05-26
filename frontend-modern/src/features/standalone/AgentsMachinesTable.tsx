@@ -38,6 +38,11 @@ import type { Disk } from '@/types/api';
 import type { Resource, ResourceAvailabilityMeta } from '@/types/resource';
 import { formatSpeed, normalizeDiskArray } from '@/utils/format';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
+import {
+  getRaidDeviceBadgeClass,
+  getRaidStateTextClass,
+  getRaidStateVariant,
+} from '@/utils/raidPresentation';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { formatTemperature as formatTemperatureValue } from '@/utils/temperature';
@@ -50,6 +55,7 @@ import {
   getAgentMachineNetworkInterfaceDetails,
   getAgentMachineNetworkTotal,
   getAgentMachinePrimaryIp,
+  getAgentMachineRaidArrayDetails,
   getAgentMachineRaidSummary,
   getAgentMachineTemperatureCelsius,
   getAgentMachineTemperatureDetailSections,
@@ -60,6 +66,7 @@ import {
   type AgentMachineColumn,
   type AgentMachineColumnId,
   type AgentMachineNetworkInterfaceDetail,
+  type AgentMachineRaidArrayDetail,
   type AgentMachineSortKey,
   type AgentMachineTemperatureDetailSection,
 } from './agentMachineTableModel';
@@ -325,6 +332,152 @@ const AgentMachineNetworkCell: Component<{
           <Show when={hiddenInterfaceCount() > 0}>
             <div class="border-t border-border pt-1 text-[9px] text-muted">
               +{hiddenInterfaceCount()} more interfaces
+            </div>
+          </Show>
+        </div>
+      </section>
+    </AgentMachineMetricTooltip>
+  );
+};
+
+const AgentMachineRaidCell: Component<{
+  arrays: AgentMachineRaidArrayDetail[];
+  summary: string;
+}> = (props) => {
+  const hasDetails = () => props.arrays.length > 0;
+  const shownArrays = () => props.arrays.slice(0, 6);
+  const hiddenArrayCount = () => Math.max(0, props.arrays.length - shownArrays().length);
+  const triggerLabel = () => props.summary || '—';
+  const stateLabel = (state: string) => asTrimmedString(state) ?? 'unknown';
+  const arrayLabel = (array: AgentMachineRaidArrayDetail) =>
+    asTrimmedString(array.name) ?? asTrimmedString(array.device) ?? 'RAID array';
+  const rebuildWidth = (percent: number) => `${Math.min(100, Math.max(0, percent))}%`;
+
+  return (
+    <AgentMachineMetricTooltip
+      triggerDataAttribute="data-agent-machine-raid-trigger"
+      tooltipDataAttribute="data-agent-machine-raid-tooltip"
+      triggerClass="inline-flex max-w-full justify-start"
+      tooltipClass="min-w-[250px] max-w-[380px] space-y-2"
+      enabled={hasDetails()}
+      ariaLabel={hasDetails() ? `RAID details: ${triggerLabel()}` : 'RAID unavailable'}
+      title={triggerLabel()}
+      maxWidth={400}
+      trigger={
+        <span
+          class="max-w-full truncate text-[11px] font-medium"
+          classList={{
+            'text-base-content': hasDetails(),
+            'text-muted': !hasDetails(),
+          }}
+        >
+          {triggerLabel()}
+        </span>
+      }
+    >
+      <section>
+        <div class="mb-1 border-b border-border pb-1 font-semibold text-muted">RAID Arrays</div>
+        <div class="max-h-[300px] space-y-2 overflow-y-auto pr-1">
+          <For each={shownArrays()}>
+            {(array, index) => {
+              const rebuilding = () =>
+                Number.isFinite(array.rebuildPercent) && array.rebuildPercent > 0;
+
+              return (
+                <div class="min-w-0" classList={{ 'border-t border-border pt-2': index() > 0 }}>
+                  <div class="flex min-w-0 items-start justify-between gap-2">
+                    <div class="min-w-0">
+                      <div
+                        class="truncate font-semibold text-base-content"
+                        title={arrayLabel(array)}
+                      >
+                        {arrayLabel(array)}
+                      </div>
+                      <div class="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[9px] text-muted">
+                        <span class="font-mono uppercase">{array.level}</span>
+                        <Show when={array.device && array.device !== arrayLabel(array)}>
+                          <span class="font-mono">{array.device}</span>
+                        </Show>
+                      </div>
+                    </div>
+                    <div class="flex shrink-0 items-center gap-1.5" title={stateLabel(array.state)}>
+                      <StatusDot variant={getRaidStateVariant(array.state)} size="xs" ariaHidden />
+                      <span class={`text-[10px] font-medium ${getRaidStateTextClass(array.state)}`}>
+                        {stateLabel(array.state)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[9px] text-muted">
+                    <span>
+                      Active <span class="font-mono text-base-content">{array.activeDevices}</span>/
+                      <span class="font-mono text-base-content">{array.totalDevices}</span>
+                    </span>
+                    <span>
+                      Working{' '}
+                      <span class="font-mono text-base-content">{array.workingDevices}</span>
+                    </span>
+                    <Show when={array.spareDevices > 0}>
+                      <span>
+                        Spare <span class="font-mono text-base-content">{array.spareDevices}</span>
+                      </span>
+                    </Show>
+                    <Show when={array.failedDevices > 0}>
+                      <span>
+                        Failed{' '}
+                        <span class="font-mono text-red-600 dark:text-red-400">
+                          {array.failedDevices}
+                        </span>
+                      </span>
+                    </Show>
+                  </div>
+
+                  <Show when={rebuilding()}>
+                    <div class="mt-1.5">
+                      <div class="mb-0.5 flex items-center justify-between gap-3 text-[9px]">
+                        <span class="text-amber-600 dark:text-amber-400">Rebuilding</span>
+                        <span class="font-mono text-base-content">
+                          {Math.round(array.rebuildPercent)}%
+                        </span>
+                      </div>
+                      <div class="h-1 overflow-hidden rounded-full bg-surface-alt">
+                        <div
+                          class="h-full rounded-full bg-amber-500"
+                          style={{ width: rebuildWidth(array.rebuildPercent) }}
+                        />
+                      </div>
+                      <Show when={array.rebuildSpeed}>
+                        {(speed) => <div class="mt-0.5 text-[9px] text-muted">{speed()}</div>}
+                      </Show>
+                    </div>
+                  </Show>
+
+                  <Show when={array.devices.length > 0}>
+                    <div class="mt-1.5 flex flex-wrap gap-1">
+                      <For each={array.devices.slice(0, 12)}>
+                        {(device) => (
+                          <span
+                            class={`inline-flex max-w-full items-center truncate rounded border px-1.5 py-0.5 text-[9px] font-medium ${getRaidDeviceBadgeClass(device)}`}
+                            title={`slot ${device.slot} - ${device.state}`}
+                          >
+                            {device.device}
+                          </span>
+                        )}
+                      </For>
+                      <Show when={array.devices.length > 12}>
+                        <span class="rounded border border-border px-1.5 py-0.5 text-[9px] text-muted">
+                          +{array.devices.length - 12}
+                        </span>
+                      </Show>
+                    </div>
+                  </Show>
+                </div>
+              );
+            }}
+          </For>
+          <Show when={hiddenArrayCount() > 0}>
+            <div class="border-t border-border pt-1 text-[9px] text-muted">
+              +{hiddenArrayCount()} more arrays
             </div>
           </Show>
         </div>
@@ -660,6 +813,7 @@ export const AgentsMachinesTable: Component<{
                     const diskIOTotal = () => getAgentMachineDiskIOTotal(machine);
                     const primaryIp = () => getAgentMachinePrimaryIp(machine);
                     const ipValues = () => getAgentMachineIpValues(machine);
+                    const raidArrays = () => getAgentMachineRaidArrayDetails(machine);
                     const raidSummary = () => getAgentMachineRaidSummary(machine);
                     const temperature = () => getAgentMachineTemperatureCelsius(machine);
                     const temperatureSections = () =>
@@ -851,9 +1005,7 @@ export const AgentsMachinesTable: Component<{
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('text')} ${machineColumnWidthClass('raid')} text-base-content`}
                             >
-                              <span class="truncate" title={raidSummary()}>
-                                {raidSummary() || '—'}
-                              </span>
+                              <AgentMachineRaidCell arrays={raidArrays()} summary={raidSummary()} />
                             </TableCell>
                           </Show>
                           <Show when={columnVisibility.isColumnVisible('arch')}>

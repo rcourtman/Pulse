@@ -1,4 +1,5 @@
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
+import type { HostRAIDArray, HostRAIDDevice } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { asTrimmedString } from '@/utils/stringUtils';
 
@@ -138,6 +139,8 @@ export type AgentMachineNetworkInterfaceDetail = {
   speedMbps?: number;
 };
 
+export type AgentMachineRaidArrayDetail = HostRAIDArray;
+
 const positiveTemperature = (value: number | undefined): number | undefined => {
   const metric = finiteMetric(value);
   return metric !== undefined && metric > 0 ? metric : undefined;
@@ -241,6 +244,11 @@ export const getAgentMachineNetworkTotal = (machine: Resource): number | undefin
 const positiveMetric = (value: number | undefined): number | undefined => {
   const metric = finiteMetric(value);
   return metric !== undefined && metric > 0 ? metric : undefined;
+};
+
+const nonNegativeMetric = (value: number | undefined): number => {
+  const metric = finiteMetric(value);
+  return metric !== undefined && metric > 0 ? metric : 0;
 };
 
 const uniqueTrimmedValues = (values: readonly string[] | undefined): string[] => {
@@ -387,8 +395,72 @@ export const getAgentMachineIpValues = (machine: Resource): string[] => {
 export const getAgentMachinePrimaryIp = (machine: Resource): string =>
   getAgentMachineIpValues(machine)[0] ?? '';
 
+const getAgentMachineRaidDeviceDetails = (
+  devices: readonly HostRAIDDevice[] | undefined,
+): HostRAIDDevice[] =>
+  (devices ?? []).reduce<HostRAIDDevice[]>((details, device, index) => {
+    const deviceName = asTrimmedString(device.device);
+    const state = asTrimmedString(device.state);
+    const slot = finiteMetric(device.slot);
+
+    if (!deviceName && !state && slot === undefined) return details;
+
+    details.push({
+      device: deviceName ?? `disk-${index + 1}`,
+      state: state ?? 'unknown',
+      slot: slot !== undefined ? Math.round(slot) : index,
+    });
+    return details;
+  }, []);
+
+export const getAgentMachineRaidArrayDetails = (machine: Resource): AgentMachineRaidArrayDetail[] =>
+  (machine.agent?.raid ?? []).reduce<AgentMachineRaidArrayDetail[]>((details, array, index) => {
+    const device = asTrimmedString(array.device);
+    const name = asTrimmedString(array.name);
+    const level = asTrimmedString(array.level);
+    const state = asTrimmedString(array.state);
+    const devices = getAgentMachineRaidDeviceDetails(array.devices);
+    const counts = [
+      array.totalDevices,
+      array.activeDevices,
+      array.workingDevices,
+      array.failedDevices,
+      array.spareDevices,
+    ].map(nonNegativeMetric);
+    const rebuildPercent = nonNegativeMetric(array.rebuildPercent);
+    const rebuildSpeed = asTrimmedString(array.rebuildSpeed);
+
+    if (
+      !device &&
+      !name &&
+      !level &&
+      !state &&
+      devices.length === 0 &&
+      counts.every((count) => count === 0) &&
+      rebuildPercent === 0
+    ) {
+      return details;
+    }
+
+    details.push({
+      device: device ?? name ?? `array-${index + 1}`,
+      ...(name ? { name } : {}),
+      level: level ?? 'unknown',
+      state: state ?? 'unknown',
+      totalDevices: counts[0],
+      activeDevices: counts[1],
+      workingDevices: counts[2],
+      failedDevices: counts[3],
+      spareDevices: counts[4],
+      devices,
+      rebuildPercent,
+      ...(rebuildSpeed ? { rebuildSpeed } : {}),
+    });
+    return details;
+  }, []);
+
 export const getAgentMachineRaidSummary = (machine: Resource): string => {
-  const arrays = machine.agent?.raid ?? [];
+  const arrays = getAgentMachineRaidArrayDetails(machine);
   if (arrays.length === 0) return '';
 
   const failed = arrays.filter((array) => (array.failedDevices ?? 0) > 0).length;

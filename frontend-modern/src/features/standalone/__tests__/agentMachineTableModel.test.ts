@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 import {
   getAgentMachineNetworkInterfaceDetails,
+  getAgentMachineRaidArrayDetails,
   getAgentMachineTemperatureCelsius,
   getAgentMachineTemperatureTitle,
   sortAgentMachines,
@@ -22,6 +23,66 @@ const resource = (overrides: Partial<Resource>): Resource =>
   }) as Resource;
 
 describe('agentMachineTableModel', () => {
+  it('normalizes agent RAID array details for table inspection', () => {
+    const details = getAgentMachineRaidArrayDetails(
+      resource({
+        agent: {
+          raid: [
+            {
+              device: ' /dev/md0 ',
+              name: ' media ',
+              level: ' raid6 ',
+              state: ' clean ',
+              totalDevices: 6,
+              activeDevices: 6,
+              workingDevices: 6,
+              failedDevices: 0,
+              spareDevices: 1,
+              devices: [
+                { device: ' /dev/sda ', state: ' active ', slot: 0 },
+                { device: '', state: ' spare ', slot: 7 },
+              ],
+              rebuildPercent: 12.4,
+              rebuildSpeed: ' 120 MB/s ',
+            },
+            {
+              device: '',
+              level: '',
+              state: '',
+              totalDevices: 0,
+              activeDevices: 0,
+              workingDevices: 0,
+              failedDevices: 0,
+              spareDevices: 0,
+              devices: [],
+              rebuildPercent: 0,
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(details).toEqual([
+      {
+        device: '/dev/md0',
+        name: 'media',
+        level: 'raid6',
+        state: 'clean',
+        totalDevices: 6,
+        activeDevices: 6,
+        workingDevices: 6,
+        failedDevices: 0,
+        spareDevices: 1,
+        devices: [
+          { device: '/dev/sda', state: 'active', slot: 0 },
+          { device: 'disk-2', state: 'spare', slot: 7 },
+        ],
+        rebuildPercent: 12.4,
+        rebuildSpeed: '120 MB/s',
+      },
+    ]);
+  });
+
   it('normalizes agent network interface details for table inspection', () => {
     const details = getAgentMachineNetworkInterfaceDetails(
       resource({
