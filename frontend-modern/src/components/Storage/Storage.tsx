@@ -132,6 +132,15 @@ const Storage: Component<StorageProps> = (props) => {
     }
   });
 
+  // Namespace saved views per platform context. Standalone /storage uses the
+  // bare "storage" key; a platform-embedded storage tab (which forces a
+  // single source via forcedSourceFilter) gets its own scope so views
+  // saved on the Proxmox tab do not appear on /storage and vice versa.
+  const savedViewsKey = (() => {
+    const scope = (props.forcedSourceFilter ?? '').trim().toLowerCase();
+    return scope ? `storage-${scope}` : 'storage';
+  })();
+
   return (
     <div ref={setClearSurfaceRootRef} class="space-y-4" data-testid="storage-page">
       <Show when={!props.embedded}>
@@ -194,6 +203,7 @@ const Storage: Component<StorageProps> = (props) => {
           <div data-summary-clear-ignore>
             <StoragePageControls
               kioskMode={kioskMode}
+              savedViewsKey={savedViewsKey}
               view={view}
               setView={setView}
               search={search}

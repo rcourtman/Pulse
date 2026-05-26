@@ -80,6 +80,11 @@ type StoragePageControlsProps = {
   // matching the overview-page filter contract. Standalone /storage keeps
   // the explicit Node filter so canonical node query links remain visible.
   suppressNodeFilter?: boolean;
+  // Enables the SavedViews menu in the FilterBar. Caller is responsible for
+  // picking a key that namespaces views per platform context so saved
+  // queries from a platform-embedded tab do not leak into standalone
+  // /storage and vice versa.
+  savedViewsKey?: string;
 };
 
 const VIEW_TABS = STORAGE_VIEW_OPTIONS as { value: string; label: string }[];
@@ -294,6 +299,7 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
           role="group"
           ariaLabel={props.filterAriaLabel ?? 'Storage filters'}
           isMobile={isMobile}
+          savedViewsKey={props.savedViewsKey}
           search={{
             value: props.search,
             setValue: props.setSearch,
