@@ -22,6 +22,12 @@ import {
   getPlatformTableHeadClassForKind,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
+  PlatformResourceDetailTableRow,
+  createPlatformResourceDetailState,
+  createPlatformResourceLabelResolver,
+  getPlatformResourceDetailRowClass,
+} from '@/features/platformPage/PlatformResourceDetailTableRow';
+import {
   DockerResourceNameCell,
   dockerHostName,
   dockerJoinValues,
@@ -129,6 +135,8 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
     filter: filterDockerResources,
   });
   const sortedRows = createMemo(() => [...tableState.filtered()].sort(compareDockerContainers));
+  const drawer = createPlatformResourceDetailState({ idPrefix: 'docker-container-drawer' });
+  const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
 
   return (
     <Show
@@ -234,13 +242,21 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
                     const mounts = () => mountsSummary(resource);
                     const updates = () => updateStatusLabel(resource);
                     const updateTitle = () => updateStatusTitle(resource);
+                    const detailRowId = () => drawer.detailRowId(resource);
+                    const isExpanded = () => drawer.isExpanded(resource);
 
                     return (
-                      <TableRow
-                        class="text-[11px] sm:text-xs"
-                        data-docker-container-row={resource.id}
-                      >
-                        <DockerResourceNameCell resource={resource} indicator={indicator} />
+                      <>
+                        <TableRow
+                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                          aria-controls={isExpanded() ? detailRowId() : undefined}
+                          aria-expanded={isExpanded() ? 'true' : 'false'}
+                          data-docker-container-row={resource.id}
+                          onClick={() => drawer.toggle(resource)}
+                          onKeyDown={drawer.handleActivationKey(resource)}
+                          tabIndex={0}
+                        >
+                          <DockerResourceNameCell resource={resource} indicator={indicator} />
                         <TableCell
                           class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                         >
@@ -308,7 +324,16 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
                             {updates()}
                           </span>
                         </TableCell>
-                      </TableRow>
+                        </TableRow>
+                        <PlatformResourceDetailTableRow
+                          resource={resource}
+                          open={isExpanded()}
+                          detailRowId={detailRowId()}
+                          colSpan={11}
+                          resolveResourceLabel={resolveResourceLabel}
+                          onClose={() => drawer.close(resource)}
+                        />
+                      </>
                     );
                   }}
                 </For>

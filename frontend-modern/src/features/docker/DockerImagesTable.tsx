@@ -21,6 +21,12 @@ import {
   getPlatformTableHeadClassForKind,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
+  PlatformResourceDetailTableRow,
+  createPlatformResourceDetailState,
+  createPlatformResourceLabelResolver,
+  getPlatformResourceDetailRowClass,
+} from '@/features/platformPage/PlatformResourceDetailTableRow';
+import {
   DockerResourceNameCell,
   dockerByteValue,
   dockerHostName,
@@ -36,6 +42,8 @@ export const DockerImagesTable: Component<DockerNativeTableProps> = (props) => {
     initialStatus: 'all' as DockerResourceStatusFilter,
     filter: filterDockerResources,
   });
+  const drawer = createPlatformResourceDetailState({ idPrefix: 'docker-image-drawer' });
+  const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
 
   return (
     <Show
@@ -108,46 +116,68 @@ export const DockerImagesTable: Component<DockerNativeTableProps> = (props) => {
               </TableHeader>
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                 <For each={tableState.filtered()}>
-                  {(resource) => (
-                    <TableRow class="text-[11px] sm:text-xs" data-docker-image-row={resource.id}>
-                      <DockerResourceNameCell resource={resource} />
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                      >
-                        <span
-                          class="inline-block max-w-[18rem] truncate"
-                          title={dockerJoinValues(resource.docker?.repoTags)}
+                  {(resource) => {
+                    const detailRowId = () => drawer.detailRowId(resource);
+                    const isExpanded = () => drawer.isExpanded(resource);
+                    return (
+                      <>
+                        <TableRow
+                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                          aria-controls={isExpanded() ? detailRowId() : undefined}
+                          aria-expanded={isExpanded() ? 'true' : 'false'}
+                          data-docker-image-row={resource.id}
+                          onClick={() => drawer.toggle(resource)}
+                          onKeyDown={drawer.handleActivationKey(resource)}
+                          tabIndex={0}
                         >
-                          {dockerJoinValues(resource.docker?.repoTags)}
-                        </span>
-                      </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                      >
-                        <span
-                          class="inline-block max-w-[22rem] truncate"
-                          title={dockerJoinValues(resource.docker?.repoDigests)}
-                        >
-                          {dockerJoinValues(resource.docker?.repoDigests)}
-                        </span>
-                      </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                      >
-                        {dockerByteValue(resource.docker?.sizeBytes)}
-                      </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                      >
-                        {dockerNumberValue(resource.docker?.imageContainers)}
-                      </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                      >
-                        {dockerHostName(resource)}
-                      </TableCell>
-                    </TableRow>
-                  )}
+                          <DockerResourceNameCell resource={resource} />
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <span
+                              class="inline-block max-w-[18rem] truncate"
+                              title={dockerJoinValues(resource.docker?.repoTags)}
+                            >
+                              {dockerJoinValues(resource.docker?.repoTags)}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                          >
+                            <span
+                              class="inline-block max-w-[22rem] truncate"
+                              title={dockerJoinValues(resource.docker?.repoDigests)}
+                            >
+                              {dockerJoinValues(resource.docker?.repoDigests)}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
+                            {dockerByteValue(resource.docker?.sizeBytes)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
+                            {dockerNumberValue(resource.docker?.imageContainers)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                          >
+                            {dockerHostName(resource)}
+                          </TableCell>
+                        </TableRow>
+                        <PlatformResourceDetailTableRow
+                          resource={resource}
+                          open={isExpanded()}
+                          detailRowId={detailRowId()}
+                          colSpan={6}
+                          resolveResourceLabel={resolveResourceLabel}
+                          onClose={() => drawer.close(resource)}
+                        />
+                      </>
+                    );
+                  }}
                 </For>
               </TableBody>
             </Table>

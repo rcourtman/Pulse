@@ -21,6 +21,12 @@ import {
   getPlatformTableHeadClassForKind,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
+  PlatformResourceDetailTableRow,
+  createPlatformResourceDetailState,
+  createPlatformResourceLabelResolver,
+  getPlatformResourceDetailRowClass,
+} from '@/features/platformPage/PlatformResourceDetailTableRow';
+import {
   DockerResourceNameCell,
   dockerByteValue,
   dockerNumberValue,
@@ -35,6 +41,8 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
     initialStatus: 'all' as DockerResourceStatusFilter,
     filter: filterDockerResources,
   });
+  const drawer = createPlatformResourceDetailState({ idPrefix: 'docker-volume-drawer' });
+  const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
 
   return (
     <Show
@@ -112,51 +120,73 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
               </TableHeader>
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                 <For each={tableState.filtered()}>
-                  {(resource) => (
-                    <TableRow class="text-[11px] sm:text-xs" data-docker-volume-row={resource.id}>
-                      <DockerResourceNameCell resource={resource} />
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                      >
-                        {dockerTextValue(resource.docker?.driver)}
-                      </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                      >
-                        {dockerTextValue(resource.docker?.scope)}
-                      </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                      >
-                        {dockerByteValue(resource.docker?.sizeBytes)}
-                      </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
-                      >
-                        {dockerNumberValue(resource.docker?.refCount)}
-                      </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                      >
-                        <span
-                          class="inline-block max-w-[12rem] truncate"
-                          title={dockerTextValue(resource.docker?.createdAt)}
+                  {(resource) => {
+                    const detailRowId = () => drawer.detailRowId(resource);
+                    const isExpanded = () => drawer.isExpanded(resource);
+                    return (
+                      <>
+                        <TableRow
+                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                          aria-controls={isExpanded() ? detailRowId() : undefined}
+                          aria-expanded={isExpanded() ? 'true' : 'false'}
+                          data-docker-volume-row={resource.id}
+                          onClick={() => drawer.toggle(resource)}
+                          onKeyDown={drawer.handleActivationKey(resource)}
+                          tabIndex={0}
                         >
-                          {dockerTextValue(resource.docker?.createdAt)}
-                        </span>
-                      </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                      >
-                        <span
-                          class="inline-block max-w-[22rem] truncate"
-                          title={dockerTextValue(resource.docker?.mountpoint)}
-                        >
-                          {dockerTextValue(resource.docker?.mountpoint)}
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                  )}
+                          <DockerResourceNameCell resource={resource} />
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            {dockerTextValue(resource.docker?.driver)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                          >
+                            {dockerTextValue(resource.docker?.scope)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
+                            {dockerByteValue(resource.docker?.sizeBytes)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
+                          >
+                            {dockerNumberValue(resource.docker?.refCount)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                          >
+                            <span
+                              class="inline-block max-w-[12rem] truncate"
+                              title={dockerTextValue(resource.docker?.createdAt)}
+                            >
+                              {dockerTextValue(resource.docker?.createdAt)}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                          >
+                            <span
+                              class="inline-block max-w-[22rem] truncate"
+                              title={dockerTextValue(resource.docker?.mountpoint)}
+                            >
+                              {dockerTextValue(resource.docker?.mountpoint)}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                        <PlatformResourceDetailTableRow
+                          resource={resource}
+                          open={isExpanded()}
+                          detailRowId={detailRowId()}
+                          colSpan={7}
+                          resolveResourceLabel={resolveResourceLabel}
+                          onClose={() => drawer.close(resource)}
+                        />
+                      </>
+                    );
+                  }}
                 </For>
               </TableBody>
             </Table>

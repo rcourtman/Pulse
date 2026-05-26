@@ -22,6 +22,12 @@ import {
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
 } from '@/features/platformPage/sharedPlatformPage';
+import {
+  PlatformResourceDetailTableRow,
+  createPlatformResourceDetailState,
+  createPlatformResourceLabelResolver,
+  getPlatformResourceDetailRowClass,
+} from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource, ResourceKubernetesPodContainerStatus } from '@/types/resource';
 import {
   compareKubernetesPods,
@@ -103,6 +109,8 @@ export const KubernetesPodsTable: Component<{
     filter: filterKubernetesResources,
   });
   const sortedRows = createMemo(() => [...tableState.filtered()].sort(compareKubernetesPods));
+  const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-pod-drawer' });
+  const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
 
   return (
     <Show
@@ -199,11 +207,19 @@ export const KubernetesPodsTable: Component<{
                     const owner = () => ownerValue(resource);
                     const image = () => imageValue(resource);
                     const age = () => ageValue(resource);
+                    const detailRowId = () => drawer.detailRowId(resource);
+                    const isExpanded = () => drawer.isExpanded(resource);
 
                     return (
+                      <>
                       <TableRow
-                        class="text-[11px] sm:text-xs"
+                        class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                        aria-controls={isExpanded() ? detailRowId() : undefined}
+                        aria-expanded={isExpanded() ? 'true' : 'false'}
                         data-kubernetes-pod-row={resource.id}
+                        onClick={() => drawer.toggle(resource)}
+                        onKeyDown={drawer.handleActivationKey(resource)}
+                        tabIndex={0}
                       >
                         <TableCell class={getPlatformTableCellClassForKind('name')}>
                           <div class="flex min-w-0 items-center gap-2">
@@ -267,6 +283,15 @@ export const KubernetesPodsTable: Component<{
                           {age()}
                         </TableCell>
                       </TableRow>
+                      <PlatformResourceDetailTableRow
+                        resource={resource}
+                        open={isExpanded()}
+                        detailRowId={detailRowId()}
+                        colSpan={9}
+                        resolveResourceLabel={resolveResourceLabel}
+                        onClose={() => drawer.close(resource)}
+                      />
+                      </>
                     );
                   }}
                 </For>

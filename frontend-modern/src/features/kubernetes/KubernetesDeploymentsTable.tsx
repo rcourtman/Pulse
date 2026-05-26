@@ -23,6 +23,12 @@ import {
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
 } from '@/features/platformPage/sharedPlatformPage';
+import {
+  PlatformResourceDetailTableRow,
+  createPlatformResourceDetailState,
+  createPlatformResourceLabelResolver,
+  getPlatformResourceDetailRowClass,
+} from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource } from '@/types/resource';
 import {
   compareKubernetesDeployments,
@@ -63,6 +69,8 @@ export const KubernetesDeploymentsTable: Component<{
   const sortedRows = createMemo(() =>
     [...tableState.filtered()].sort(compareKubernetesDeployments),
   );
+  const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-deployment-drawer' });
+  const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
 
   return (
     <Show
@@ -168,10 +176,18 @@ export const KubernetesDeploymentsTable: Component<{
                       '—';
                     const indicator = () => mapKubernetesDeploymentStatus(deployment);
                     const age = () => formatAge(deployment.kubernetes?.createdAt);
+                    const detailRowId = () => drawer.detailRowId(deployment);
+                    const isExpanded = () => drawer.isExpanded(deployment);
                     return (
+                      <>
                       <TableRow
-                        class="text-[11px] sm:text-xs"
+                        class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                        aria-controls={isExpanded() ? detailRowId() : undefined}
+                        aria-expanded={isExpanded() ? 'true' : 'false'}
                         data-kubernetes-deployment-row={deployment.id}
+                        onClick={() => drawer.toggle(deployment)}
+                        onKeyDown={drawer.handleActivationKey(deployment)}
+                        tabIndex={0}
                       >
                         <TableCell class={getPlatformTableCellClassForKind('name')}>
                           <div class="flex min-w-0 items-center gap-2">
@@ -229,6 +245,15 @@ export const KubernetesDeploymentsTable: Component<{
                           </span>
                         </TableCell>
                       </TableRow>
+                      <PlatformResourceDetailTableRow
+                        resource={deployment}
+                        open={isExpanded()}
+                        detailRowId={detailRowId()}
+                        colSpan={9}
+                        resolveResourceLabel={resolveResourceLabel}
+                        onClose={() => drawer.close(deployment)}
+                      />
+                      </>
                     );
                   }}
                 </For>
