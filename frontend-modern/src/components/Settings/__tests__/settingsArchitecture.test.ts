@@ -137,7 +137,7 @@ describe('settings architecture guardrails', () => {
       "export const AVAILABILITY_SETTINGS_PATH = '/settings/monitoring/availability';",
     );
     expect(availabilitySettingsModelSource).toContain(
-      'export function buildAvailabilityTargetAddPath()',
+      'export function buildAvailabilityTargetAddPath(',
     );
   });
 

@@ -24,31 +24,34 @@ const TABLE_CARD_HEADER_ACTIONS_CLEAR_BUTTON_CLASS = TABLE_CARD_HEADER_CLEAR_BUT
 
 export const TableCardHeader: Component<TableCardHeaderProps> = (props) => {
   const hasActions = () => Boolean(props.actions || (props.showClearAction && props.onClear));
+  const hasContent = () => Boolean(props.title) || hasActions();
   const clearLabel = () => props.clearLabel ?? 'Clear';
   const clearAriaLabel = () => props.clearAriaLabel ?? 'Clear selection';
 
   return (
-    <Show when={hasActions()}>
+    <Show when={hasContent()}>
       <div class={TABLE_CARD_HEADER_CLASS}>
         <Show when={props.title}>
           <span>{props.title}</span>
         </Show>
-        <div class="ml-auto flex items-center gap-2 normal-case tracking-normal">
-          {props.actions}
-          <Show when={props.showClearAction && props.onClear}>
-            <button
-              type="button"
-              class={TABLE_CARD_HEADER_ACTIONS_CLEAR_BUTTON_CLASS}
-              aria-label={clearAriaLabel()}
-              onClick={(event) => {
-                event.stopPropagation();
-                props.onClear?.();
-              }}
-            >
-              {clearLabel()}
-            </button>
-          </Show>
-        </div>
+        <Show when={hasActions()}>
+          <div class="ml-auto flex items-center gap-2 normal-case tracking-normal">
+            {props.actions}
+            <Show when={props.showClearAction && props.onClear}>
+              <button
+                type="button"
+                class={TABLE_CARD_HEADER_ACTIONS_CLEAR_BUTTON_CLASS}
+                aria-label={clearAriaLabel()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  props.onClear?.();
+                }}
+              >
+                {clearLabel()}
+              </button>
+            </Show>
+          </div>
+        </Show>
       </div>
     </Show>
   );

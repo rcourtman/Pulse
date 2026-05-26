@@ -255,12 +255,12 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       <ResourceDetailDrawer resource={resource} />
     ));
 
-    expect(getByText('Host')).toBeInTheDocument();
+    expect(getByText('Machine')).toBeInTheDocument();
     expect(getByText('System, Hardware, Network, and Disks')).toBeInTheDocument();
     expect(queryByText('Hardware')).toBeNull();
     expect(queryByText('Network')).toBeNull();
 
-    fireEvent.click(getByRole('button', { name: 'Show host' }));
+    fireEvent.click(getByRole('button', { name: 'Show machine' }));
 
     await waitFor(() => {
       expect(getByText('Hardware')).toBeInTheDocument();

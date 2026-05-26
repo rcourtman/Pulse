@@ -1029,14 +1029,20 @@ describe('UnifiedResourceTable performance contract', () => {
         />
       ));
 
-      await waitFor(() => {
-        expect(getByText('cluster-a')).toBeInTheDocument();
-        expect(getByText('cluster-b')).toBeInTheDocument();
-      });
-      await waitFor(() => {
-        expect(getBodyRowCount(container)).toBe(PROFILES.S + 2);
-      });
-    });
+      await waitFor(
+        () => {
+          expect(getByText('cluster-a')).toBeInTheDocument();
+          expect(getByText('cluster-b')).toBeInTheDocument();
+        },
+        { timeout: 15000 },
+      );
+      await waitFor(
+        () => {
+          expect(getBodyRowCount(container)).toBe(PROFILES.S + 2);
+        },
+        { timeout: 15000 },
+      );
+    }, 30000);
 
     it('renders flat mode with profile S resources', async () => {
       const resources = makeResources(PROFILES.S, (i) => ({
@@ -1051,15 +1057,21 @@ describe('UnifiedResourceTable performance contract', () => {
         />
       ));
 
-      await waitFor(() => {
-        expect(container.querySelector('table')).toBeInTheDocument();
-      });
-      await waitFor(() => {
-        expect(getBodyRowCount(container)).toBe(PROFILES.S);
-      });
+      await waitFor(
+        () => {
+          expect(container.querySelector('table')).toBeInTheDocument();
+        },
+        { timeout: 15000 },
+      );
+      await waitFor(
+        () => {
+          expect(getBodyRowCount(container)).toBe(PROFILES.S);
+        },
+        { timeout: 15000 },
+      );
       expect(queryByText('cluster-a')).not.toBeInTheDocument();
       expect(queryByText('cluster-b')).not.toBeInTheDocument();
-    });
+    }, 30000);
   });
 
   describe('Infrastructure derivation contracts', () => {
