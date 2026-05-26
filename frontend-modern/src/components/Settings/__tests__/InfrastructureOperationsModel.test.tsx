@@ -277,6 +277,10 @@ describe('infrastructure operations model', () => {
     expect(infrastructureOperationsModelSource).toContain(
       'preflights this Pulse URL, verifies the matching agent binary is available',
     );
+    expect(infrastructureOperationsModelSource).toContain(
+      'verifies the matching Windows agent binary is available',
+    );
+    expect(infrastructureOperationsModelSource).toContain('token-file handoff');
     expect(infrastructureOperationsModelSource).toContain('macOS may ask for your');
     expect(infrastructureOperationsModelSource).toContain('admin password');
   });
@@ -329,6 +333,16 @@ describe('infrastructure operations model', () => {
       (mod) => (mod as { default: string }).default,
     );
     expect(operationsStateSource).not.toContain('useInfrastructureReportingState');
+  });
+
+  it('routes Windows upgrade commands through the shared seamless installer command builder', async () => {
+    const operationsStateSource = await import('../useInfrastructureOperationsState?raw').then(
+      (mod) => (mod as { default: string }).default,
+    );
+
+    expect(operationsStateSource).toContain('buildWindowsAgentInstallCommand({');
+    expect(operationsStateSource).toContain('extraEnvAssignments: envAssignments');
+    expect(operationsStateSource).not.toContain('const tokenEnv = token ?');
   });
 
   it('keeps discovered-node filtering anchored to canonical represented-host dedupe', async () => {

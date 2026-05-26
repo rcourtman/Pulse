@@ -127,11 +127,21 @@ reverse.
 15. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` shared with `api-contracts`: the shared infrastructure operations state hook is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
 16. `frontend-modern/src/components/Settings/useNodeModalState.ts` shared with `api-contracts`: the node setup modal state hook is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 17. `frontend-modern/src/utils/agentInstallCommand.ts` shared with `api-contracts`: the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary.
+    Operator-facing agent install commands must preflight the selected
+    OS/architecture download before they mutate the target host, and generated
+    commands must pass enrollment secrets through short-lived token files
+    rather than long-lived service/environment arguments. Windows, macOS, and
+    Linux commands must keep custom CA, insecure/plain-HTTP, and optional-auth
+    behavior aligned so the Machines onboarding path does not diverge by OS.
 18. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` shared with `api-contracts`: the infrastructure settings presentation helper is both an agent lifecycle control surface and an API-backed direct-node/discovery settings boundary.
 19. `internal/api/agent_install_command_shared.go` shared with `api-contracts`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
 20. `internal/api/config_setup_handlers.go` shared with `api-contracts`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
 21. `internal/api/unified_agent.go` shared with `api-contracts`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
 22. `scripts/install.ps1` shared with `deployment-installability`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+    The Windows installer must support a non-mutating download preflight that
+    can run before Administrator-only install work, must accept token-file
+    enrollment input, and must persist plain-HTTP/insecure runtime continuity
+    consistently with the Unix installer.
 23. `scripts/install.sh` shared with `deployment-installability`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
 
 Agent lifecycle and fleet-operation surfaces may consume

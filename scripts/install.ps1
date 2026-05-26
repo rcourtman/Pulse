@@ -20,7 +20,11 @@ param (
     [bool]$Uninstall = $false,
     [string]$CACertPath = $env:PULSE_CACERT,
     [string]$AgentId = $env:PULSE_AGENT_ID,
-    [string]$Hostname = $env:PULSE_HOSTNAME
+    [string]$Hostname = $env:PULSE_HOSTNAME,
+    [string]$TokenFile = $env:PULSE_TOKEN_FILE,
+    [bool]$PreflightOnly = $false,
+    [string]$Output = $env:PULSE_OUTPUT,
+    [bool]$NonInteractive = $false
 )
 
 $ErrorActionPreference = "Stop"
@@ -85,6 +89,12 @@ if (-not $PSBoundParameters.ContainsKey('Insecure') -and -not [string]::IsNullOr
 if (-not $PSBoundParameters.ContainsKey('Uninstall') -and -not [string]::IsNullOrWhiteSpace($env:PULSE_UNINSTALL)) {
     $Uninstall = Parse-Bool $env:PULSE_UNINSTALL $Uninstall
 }
+if (-not $PSBoundParameters.ContainsKey('PreflightOnly') -and -not [string]::IsNullOrWhiteSpace($env:PULSE_PREFLIGHT_ONLY)) {
+    $PreflightOnly = Parse-Bool $env:PULSE_PREFLIGHT_ONLY $PreflightOnly
+}
+if (-not $PSBoundParameters.ContainsKey('NonInteractive') -and -not [string]::IsNullOrWhiteSpace($env:PULSE_NON_INTERACTIVE)) {
+    $NonInteractive = Parse-Bool $env:PULSE_NON_INTERACTIVE $NonInteractive
+}
 
 # Docker-only installs should not silently fall back to host metrics unless the
 # caller explicitly opts back in.
@@ -94,7 +104,7 @@ if ($EnableDocker -and -not $PSBoundParameters.ContainsKey('EnableHost') -and [s
 
 # --- Administrator Check ---
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-not $isAdmin) {
+if (-not $isAdmin -and -not $PreflightOnly) {
     Write-Host "ERROR: This script must be run as Administrator" -ForegroundColor Red
     Write-Host "Right-click PowerShell and select 'Run as Administrator'" -ForegroundColor Yellow
     Exit 1
@@ -124,6 +134,22 @@ function Show-Error {
     } catch {
         # Ignore if GUI not available
     }
+}
+
+function Write-InstallerEvent {
+    param(
+        [string]$Phase,
+        [string]$Code,
+        [string]$Message,
+        [int]$ExitCode = 0
+    )
+
+    if ($Output -eq "json") {
+        @{ phase = $Phase; code = $Code; message = $Message; exitCode = $ExitCode } | ConvertTo-Json -Compress
+        return
+    }
+
+    Write-Host $Message
 }
 
 function Test-ValidUrl {
@@ -515,6 +541,20 @@ if ($Uninstall) {
     Exit 0
 }
 
+if ([string]::IsNullOrWhiteSpace($Token) -and -not [string]::IsNullOrWhiteSpace($TokenFile)) {
+    try {
+        $resolvedTokenFile = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($TokenFile)
+        if (-not (Test-Path $resolvedTokenFile)) {
+            Show-Error "Invalid token file. File does not exist.`nProvided: $TokenFile"
+            Exit 1
+        }
+        $Token = (Get-Content -Path $resolvedTokenFile -Raw -ErrorAction Stop).Trim()
+    } catch {
+        Show-Error "Failed to read token file.`nProvided: $TokenFile`nError: $_"
+        Exit 1
+    }
+}
+
 # --- Input Validation ---
 Write-Host "Validating parameters..." -ForegroundColor Cyan
 
@@ -559,6 +599,10 @@ if (-not [string]::IsNullOrWhiteSpace($NormalizedProxmoxType) -and $NormalizedPr
 
 # Normalize URL (remove trailing slash)
 $Url = $Url.TrimEnd('/')
+if ($Url.ToLowerInvariant().StartsWith("http://") -and -not $Insecure) {
+    Write-Host "Plain HTTP Pulse URL detected; enabling insecure mode for persisted agent update checks." -ForegroundColor Yellow
+    $Insecure = $true
+}
 
 # --- Download ---
 # Determine architecture
@@ -573,6 +617,34 @@ if ($processorArch -eq "ARM64" -or $processorArch64 -eq "ARM64") {
 }
 $ArchParam = "windows-$Arch"
 $DownloadUrl = "$Url/download/pulse-agent?arch=$ArchParam"
+
+function Invoke-AgentDownloadPreflight {
+    param([string]$Uri)
+
+    try {
+        $preflightResponse = $null
+        Invoke-WithOptionalInsecureTls -AllowInsecure $Insecure -CustomCaCertificate $CustomCaCertificate -Action {
+            $preflightResponse = Invoke-WebRequest -Uri $Uri -Method Head -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+        }
+
+        $checksum = $preflightResponse.Headers["X-Checksum-Sha256"]
+        if ([string]::IsNullOrWhiteSpace($checksum)) {
+            Write-InstallerEvent -Phase "preflight" -Code "agent_download_checksum_missing" -Message "Agent download exists but did not include a checksum header: $Uri" -ExitCode 12
+            Exit 12
+        }
+
+        Write-InstallerEvent -Phase "preflight" -Code "agent_download_available" -Message "Agent download is available for $ArchParam." -ExitCode 0
+    } catch {
+        Write-InstallerEvent -Phase "preflight" -Code "agent_download_unavailable" -Message "Agent download is not available for $ArchParam at $Uri. $_" -ExitCode 11
+        Exit 11
+    }
+}
+
+if ($PreflightOnly) {
+    Invoke-AgentDownloadPreflight $DownloadUrl
+    return
+}
+
 Write-Host "Downloading agent from $DownloadUrl..." -ForegroundColor Cyan
 
 if (-not (Test-Path $InstallDir)) {
@@ -613,9 +685,11 @@ try {
 } catch {
     Cleanup
     Show-Error "Failed to download agent: $_"
-    Write-Host ""
-    Write-Host "Press Enter to exit..." -ForegroundColor Yellow
-    Read-Host
+    if (-not $NonInteractive) {
+        Write-Host ""
+        Write-Host "Press Enter to exit..." -ForegroundColor Yellow
+        Read-Host
+    }
     Exit 1
 } finally {
     if ($webClient) { $webClient.Dispose() }

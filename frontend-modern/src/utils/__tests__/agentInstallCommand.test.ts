@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildPowerShellInstallScriptBootstrap,
   buildUnixAgentInstallCommand,
   buildWindowsAgentInstallCommand,
   normalizeInstallerBaseUrl,
@@ -127,11 +126,21 @@ describe('agentInstallCommand', () => {
       caCertPath: 'C:\\Pulse\\custom-ca.cer',
     });
 
-    expect(command).toContain('$env:PULSE_URL="https://pulse.example/base"');
-    expect(command).toContain('$env:PULSE_TOKEN="token-123"');
-    expect(command).toContain('$env:PULSE_INSECURE_SKIP_VERIFY="true"');
-    expect(command).toContain('$env:PULSE_CACERT="C:\\Pulse\\custom-ca.cer"');
+    expect(command).toContain(
+      '$pulseTmp=Join-Path ([System.IO.Path]::GetTempPath()) ("pulse-agent-install-"+[System.Guid]::NewGuid().ToString("N"))',
+    );
     expect(command).toContain('$pulseScriptUrl="https://pulse.example/base/install.ps1"');
+    expect(command).toContain(
+      '[System.IO.File]::WriteAllText($pulseTokenFile, "token-123", [System.Text.Encoding]::ASCII)',
+    );
+    expect(command).toContain('-TokenFile $pulseTokenFile');
+    expect(command).toContain('-PreflightOnly $true');
+    expect(command).toContain('-Output "json"');
+    expect(command).toContain('-NonInteractive $true');
+    expect(command).toContain('-Insecure $true');
+    expect(command).toContain('-CACertPath "C:\\Pulse\\custom-ca.cer"');
+    expect(command).toContain('Invoke-WebRequest -Uri $pulseScriptUrl -UseBasicParsing -OutFile $pulseInstallScript');
+    expect(command).not.toContain('$env:PULSE_TOKEN=');
   });
 
   it('supports tokenless shared Windows install transport for optional auth', () => {
@@ -140,9 +149,11 @@ describe('agentInstallCommand', () => {
       token: null,
     });
 
-    expect(command).toContain('$env:PULSE_URL="https://pulse.example"');
+    expect(command).toContain('$pulseScriptUrl="https://pulse.example/install.ps1"');
     expect(command).not.toContain('$env:PULSE_TOKEN=');
-    expect(command).toContain(buildPowerShellInstallScriptBootstrap('https://pulse.example'));
+    expect(command).not.toContain('-TokenFile $pulseTokenFile');
+    expect(command).toContain('-PreflightOnly $true');
+    expect(command).toContain('-NonInteractive $true');
   });
 
   it('fails closed when the install endpoint URL is blank', () => {
@@ -183,9 +194,22 @@ describe('agentInstallCommand', () => {
       ],
     });
 
-    expect(command).toContain('$env:PULSE_TOKEN="token-123"');
+    expect(command).not.toContain('$env:PULSE_TOKEN="token-123"');
+    expect(command).toContain('-TokenFile $pulseTokenFile');
     expect(command).toContain('$env:PULSE_ENABLE_PROXMOX="true"');
     expect(command).toContain('$env:PULSE_PROXMOX_TYPE="pbs"');
     expect(command).toContain('$env:PULSE_ENABLE_COMMANDS="true"');
+  });
+
+  it('passes insecure runtime continuity for plain-http Windows installs', () => {
+    const command = buildWindowsAgentInstallCommand({
+      baseUrl: 'http://pulse.example:7655',
+      token: 'token-123',
+    });
+
+    expect(command).toContain('-Url "http://pulse.example:7655"');
+    expect(command).toContain('-Insecure $true');
+    expect(command).toContain('-PreflightOnly $true');
+    expect(command).not.toContain('$env:PULSE_TOKEN=');
   });
 });

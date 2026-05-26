@@ -116,6 +116,10 @@ server-side update execution surfaces.
    host storage while they remain running.
 5. `internal/cloudcp/tenant_runtime_rollout.go` shared with `cloud-paid`: hosted tenant runtime rollout is both a Pulse Cloud runtime contract boundary and a deployment-installability release-rollout boundary.
 6. `scripts/install.ps1` shared with `agent-lifecycle`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+   It must expose a non-mutating preflight for the exact Windows agent
+   architecture before Administrator-only install changes, accept token-file
+   enrollment input, and avoid interactive download-failure prompts when
+   launched by generated non-interactive onboarding commands.
 7. `scripts/install.sh` shared with `agent-lifecycle`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
 
 ## Extension Points

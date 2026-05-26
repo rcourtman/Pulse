@@ -392,7 +392,7 @@ export const buildCommandsByPlatform = (
   windows: {
     title: 'Install on Windows',
     description:
-      'Run the PowerShell script to install and configure the unified agent as a Windows service with automatic startup.',
+      'The PowerShell installer preflights this Pulse URL, verifies the matching Windows agent binary is available, and configures the agent as a Windows service with automatic startup.',
     snippets: [
       {
         label: 'Install as Windows Service (PowerShell)',
@@ -400,8 +400,8 @@ export const buildCommandsByPlatform = (
         note: (
           <span>
             Run in PowerShell as Administrator. The script will prompt for the Pulse URL and API
-            token, download the agent binary, and install it as a Windows service with automatic
-            startup.
+            token, preflight the matching agent binary, and install it as a Windows service with
+            automatic startup.
           </span>
         ),
       },
@@ -410,7 +410,8 @@ export const buildCommandsByPlatform = (
         command: windowsParameterizedCommand,
         note: (
           <span>
-            Non-interactive installation. Set environment variables before running to skip prompts.
+            Non-interactive installation with token-file handoff and the same download preflight as
+            the interactive command.
           </span>
         ),
       },

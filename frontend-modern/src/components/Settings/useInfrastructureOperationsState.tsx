@@ -1,6 +1,7 @@
 import { createContext, useContext, type ParentComponent } from 'solid-js';
 import {
   buildPowerShellInstallScriptBootstrap,
+  buildWindowsAgentInstallCommand,
   powerShellQuote,
 } from '@/utils/agentInstallCommand';
 import {
@@ -129,9 +130,13 @@ export const useInfrastructureOperationsState = (
       if (hostname) {
         envAssignments.push(`$env:PULSE_HOSTNAME="${powerShellQuote(hostname)}"`);
       }
-      const prefix = envAssignments.length > 0 ? `${envAssignments.join('; ')}; ` : '';
-      const tokenEnv = token ? `$env:PULSE_TOKEN="${powerShellQuote(token)}"; ` : '';
-      return `${prefix}$env:PULSE_URL="${powerShellQuote(url)}"; ${tokenEnv}${buildPowerShellInstallScriptBootstrap(url)}`;
+      return buildWindowsAgentInstallCommand({
+        baseUrl: url,
+        token,
+        insecure: installState.insecureMode(),
+        caCertPath: selectedCustomCaPath(),
+        extraEnvAssignments: envAssignments,
+      });
     }
     let command = `curl ${getCurlFlags()}${getShellCustomCaCurlFlag()} ${shellQuoteArg(`${url}/install.sh`)} | bash -s -- --url ${shellQuoteArg(url)}`;
     if (token) {

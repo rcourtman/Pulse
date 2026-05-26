@@ -54,7 +54,10 @@ func TestInstallPS1AllowsMissingTokenForOptionalAuth(t *testing.T) {
 
 	script := string(content)
 	required := []string{
+		`[string]$TokenFile = $env:PULSE_TOKEN_FILE,`,
 		`if (-not [string]::IsNullOrWhiteSpace($Token) -and -not (Test-ValidToken $Token)) {`,
+		`if ([string]::IsNullOrWhiteSpace($Token) -and -not [string]::IsNullOrWhiteSpace($TokenFile)) {`,
+		`$Token = (Get-Content -Path $resolvedTokenFile -Raw -ErrorAction Stop).Trim()`,
 		`function Write-RuntimeTokenFile {`,
 		`if (-not [string]::IsNullOrWhiteSpace($Token)) { $ServiceArgs += @("--token-file", "` + "`" + `"$TokenFilePath` + "`" + `"") }`,
 	}
@@ -142,6 +145,8 @@ func TestInstallPS1UsesInsecureTlsForRuntimeTransport(t *testing.T) {
 		`if ($AllowInsecure -or $null -ne $CustomCaCertificate) {`,
 		`if ($AllowInsecure) {`,
 		`return Test-CertificateTrustedByCustomCa -Certificate $certificate -CustomCaCertificate $CustomCaCertificate`,
+		`if ($Url.ToLowerInvariant().StartsWith("http://") -and -not $Insecure) {`,
+		`Plain HTTP Pulse URL detected; enabling insecure mode for persisted agent update checks.`,
 		`Invoke-WithOptionalInsecureTls -AllowInsecure $Insecure -CustomCaCertificate $CustomCaCertificate -Action {`,
 		`Invoke-RestMethod @invokeArgs | Out-Null`,
 		`$downloadTask = $webClient.DownloadFileTaskAsync($DownloadUrl, $TempPath)`,
@@ -149,6 +154,36 @@ func TestInstallPS1UsesInsecureTlsForRuntimeTransport(t *testing.T) {
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
 			t.Fatalf("install.ps1 missing insecure runtime transport handling: %s", needle)
+		}
+	}
+}
+
+func TestInstallPS1SupportsDownloadPreflightBeforeAdministratorInstall(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.ps1"))
+	if err != nil {
+		t.Fatalf("read install.ps1: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`[bool]$PreflightOnly = $false,`,
+		`[string]$Output = $env:PULSE_OUTPUT,`,
+		`[bool]$NonInteractive = $false`,
+		`if (-not $isAdmin -and -not $PreflightOnly) {`,
+		`function Write-InstallerEvent {`,
+		`function Invoke-AgentDownloadPreflight {`,
+		`Invoke-WebRequest -Uri $Uri -Method Head -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop`,
+		`$checksum = $preflightResponse.Headers["X-Checksum-Sha256"]`,
+		`agent_download_checksum_missing`,
+		`agent_download_available`,
+		`agent_download_unavailable`,
+		`if ($PreflightOnly) {`,
+		`Invoke-AgentDownloadPreflight $DownloadUrl`,
+		`if (-not $NonInteractive) {`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.ps1 missing download preflight handling: %s", needle)
 		}
 	}
 }
