@@ -128,6 +128,7 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.getByText('main / minipc')).toBeInTheDocument();
     expect(screen.getAllByText('Current').length).toBeGreaterThan(0);
 
+    await fireEvent.click(screen.getByRole('button', { name: /source details/i }));
     await fireEvent.click(screen.getByRole('button', { name: /pbs artifacts/i }));
     expect(screen.getByText('2 files')).toBeInTheDocument();
     expect(screen.getAllByText('Verified').length).toBeGreaterThan(0);
@@ -141,7 +142,8 @@ describe('ProxmoxBackupsTable', () => {
 
     render(() => <ProxmoxBackupsTable emptyIcon={<span />} hasPBS={false} />);
 
-    await fireEvent.click(await screen.findByRole('button', { name: /snapshots/i }));
+    await fireEvent.click(await screen.findByRole('button', { name: /source details/i }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Snapshots 1' }));
     expect(await screen.findByText('CT 112')).toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: /total size/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: /^ram$/i })).not.toBeInTheDocument();
@@ -153,20 +155,23 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.queryByRole('columnheader', { name: /protection/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: /verified/i })).not.toBeInTheDocument();
 
-    await fireEvent.click(screen.getByRole('button', { name: /recent tasks/i }));
+    await fireEvent.click(screen.getByRole('button', { name: /job history/i }));
     expect(screen.getAllByText('OK').length).toBeGreaterThan(0);
     expect(screen.queryByRole('columnheader', { name: /^size$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: /error/i })).not.toBeInTheDocument();
   });
 
-  it('adds a cross-source recoverable inventory without collapsing source tabs', async () => {
+  it('keeps restore points searchable while moving raw sources behind source details', async () => {
     mockBackupAPIs();
 
     render(() => (
       <ProxmoxBackupsTable emptyIcon={<span />} hasPBS workloads={[workloadResource]} />
     ));
 
-    await fireEvent.click(await screen.findByRole('button', { name: /all recoverable/i }));
+    expect(await screen.findByText('pbs-docker (CT 112)')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /pbs artifacts/i })).not.toBeInTheDocument();
+
+    await fireEvent.click(await screen.findByRole('button', { name: /restore points/i }));
 
     expect(screen.getByRole('columnheader', { name: /source/i })).toBeInTheDocument();
     expect(screen.getAllByText('PBS').length).toBeGreaterThan(0);
@@ -174,7 +179,26 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.getAllByText('Snapshot').length).toBeGreaterThan(0);
     expect(screen.getAllByText('pbs-docker (CT 112)').length).toBeGreaterThan(0);
 
+    await fireEvent.click(screen.getByRole('button', { name: /source details/i }));
     await fireEvent.click(screen.getByRole('button', { name: 'Snapshots 1' }));
     expect(screen.getByRole('columnheader', { name: /snapshots/i })).toBeInTheDocument();
+  });
+
+  it('expands coverage rows to show inline restore evidence', async () => {
+    mockBackupAPIs();
+
+    render(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} hasPBS workloads={[workloadResource]} />
+    ));
+
+    await screen.findByText('pbs-docker (CT 112)');
+
+    await fireEvent.click(
+      screen.getByRole('button', { name: /show restore evidence for pbs-docker/i }),
+    );
+
+    expect(screen.getByText('Restore evidence')).toBeInTheDocument();
+    expect(screen.getAllByText('PVE archive').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Snapshot').length).toBeGreaterThan(0);
   });
 });

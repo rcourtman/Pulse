@@ -178,7 +178,11 @@ those workflows, so Docker `Storage` owns engine disk usage plus volumes and
 Docker `Swarm` owns services, tasks, nodes, secrets, and configs; Kubernetes
 `Workloads` owns Pods, Deployments, controllers, and autoscaling, `Services`
 owns Services plus ingress/endpoint inventory, and `Configuration` owns config
-plus policy inventory. Legacy object-specific URLs may resolve to the owning
+plus policy inventory. Backup and recovery platform pages follow the same
+navigation primitive boundary: source-specific evidence tables may be exposed as
+secondary drilldowns under an owning workflow tab, but the shared tab shell must
+not grow one top-level tab for each API source merely because that source has a
+table. Legacy object-specific URLs may resolve to the owning
 workflow tab, but they must not reappear as top-level platform navigation unless
 the product IA is intentionally changed. Overview tabs must stay deliberately
 narrow instead of repeating every detail table: Docker / Podman Overview owns

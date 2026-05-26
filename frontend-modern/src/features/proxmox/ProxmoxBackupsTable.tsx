@@ -88,21 +88,16 @@ import {
 } from './proxmoxBackupRecoveryModel';
 import { ProxmoxBackupsCoverageStrip } from './ProxmoxBackupsCoverageStrip';
 
-// Proxmox backups split into source-owned surfaces:
-//   - Workload coverage: one operator posture row per workload so coverage
-//     questions do not require scanning individual artifacts by hand.
-//   - All recoverable: one cross-source restore inventory for "what can I
-//     restore?" while preserving each artifact's source and source-specific
-//     semantics.
-//   - PBS artifacts: deduplicated backup snapshots owned by Proxmox Backup
-//     Server, including verification/protection state from PBS itself.
-//   - Snapshots: qm/pct snapshots taken on the host (no external storage)
-//   - vzdump files: backup archives written to a PVE storage (often a
-//     remote PBS or NFS share). Each is a discrete restorable artifact.
-//   - Recent tasks: the rolling backup-job execution log; this is what
-//     surfaces "did last night's backup actually run?"
+// Proxmox backups are intentionally organized around operator questions, not
+// storage-source mechanics:
+//   - Workload coverage answers "does this workload have a backup?" by default.
+//   - Restore points answers "what exactly can I restore?" across every source.
+//   - Source details keeps PBS/PVE evidence available without making those
+//     implementation-specific tables equal-weight primary destinations.
+//   - Job history shows whether backup jobs are actually running successfully.
 
-type BackupTabId = 'coverage' | 'recoverable' | 'pbs' | 'snapshots' | 'archives' | 'tasks';
+type BackupTabId = 'coverage' | 'recoverable' | 'sources' | 'tasks';
+type SourceDetailTabId = 'pbs' | 'snapshots' | 'archives';
 
 interface BackupTabSpec {
   id: BackupTabId;
@@ -122,11 +117,40 @@ const TABS: BackupTabSpec[] = [
   },
   {
     id: 'recoverable',
-    label: 'All recoverable',
+    label: 'Restore points',
     icon: () => <DatabaseIcon class="h-4 w-4" aria-hidden="true" />,
     emptyTitle: 'No recoverable artifacts',
     emptyDescription: 'PBS artifacts, PVE backup files, and snapshots will appear here.',
   },
+  {
+    id: 'sources',
+    label: 'Source details',
+    icon: () => <ServerIcon class="h-4 w-4" aria-hidden="true" />,
+    emptyTitle: 'No source artifacts',
+    emptyDescription: 'PBS artifacts, PVE backup files, and guest snapshots will appear here.',
+  },
+  {
+    id: 'tasks',
+    label: 'Job history',
+    icon: () => <ActivityIcon class="h-4 w-4" aria-hidden="true" />,
+    emptyTitle: 'No recent backup tasks',
+    emptyDescription: 'Backup-job task results from the past few days will appear here.',
+  },
+];
+
+function tabSpecFor(id: BackupTabId): BackupTabSpec {
+  return TABS.find((spec) => spec.id === id)!;
+}
+
+interface SourceDetailTabSpec {
+  id: SourceDetailTabId;
+  label: string;
+  icon: () => JSX.Element;
+  emptyTitle: string;
+  emptyDescription: string;
+}
+
+const SOURCE_DETAIL_TABS: SourceDetailTabSpec[] = [
   {
     id: 'pbs',
     label: 'PBS artifacts',
@@ -148,17 +172,10 @@ const TABS: BackupTabSpec[] = [
     emptyTitle: 'No backup archives',
     emptyDescription: 'vzdump archives written to PVE-attached storage will appear here.',
   },
-  {
-    id: 'tasks',
-    label: 'Recent tasks',
-    icon: () => <ActivityIcon class="h-4 w-4" aria-hidden="true" />,
-    emptyTitle: 'No recent backup tasks',
-    emptyDescription: 'Backup-job task results from the past few days will appear here.',
-  },
 ];
 
-function tabSpecFor(id: BackupTabId): BackupTabSpec {
-  return TABS.find((spec) => spec.id === id)!;
+function sourceDetailSpecFor(id: SourceDetailTabId): SourceDetailTabSpec {
+  return SOURCE_DETAIL_TABS.find((spec) => spec.id === id)!;
 }
 
 // Replication colours the per-row status word to match its dot (emerald
@@ -411,6 +428,22 @@ function ArtifactStateBadge(props: { artifact: RecoverableArtifact; label: strin
   return <span class="text-muted">{props.label}</span>;
 }
 
+function ArtifactSourceBadge(props: { artifact: RecoverableArtifact }) {
+  return (
+    <span
+      class={`inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-semibold ${
+        props.artifact.sourceKind === 'pbs'
+          ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-200'
+          : props.artifact.sourceKind === 'archive'
+            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200'
+            : 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200'
+      }`}
+    >
+      {props.artifact.sourceLabel}
+    </span>
+  );
+}
+
 // SLA-aligned row swatch helpers exposed for inner-table rendering — both
 // the guest row's leftmost dot and the per-snapshot inner row dot use the
 // same `classifySnapshotRowAge` so colours match the coverage strip.
@@ -599,6 +632,7 @@ export const ProxmoxBackupsTable: Component<{
   const [backups, { refetch }] = createResource<PVEBackupsPayload>(fetchPVEBackups);
   const [pbsBackups, { refetch: refetchPBS }] = createResource<PBSBackupsPayload>(fetchPBSBackups);
   const [tab, setTab] = createSignal<BackupTabId>('coverage');
+  const [sourceDetailTab, setSourceDetailTab] = createSignal<SourceDetailTabId>('pbs');
   const [search, setSearch] = createSignal('');
   const [coverageFilter, setCoverageFilter] = createSignal<CoverageFilterValue>('all');
   const [recoverableFilter, setRecoverableFilter] = createSignal<RecoverableFilterValue>('all');
@@ -617,6 +651,9 @@ export const ProxmoxBackupsTable: Component<{
   const [pbsMetricMode, setPBSMetricMode] = createSignal<BackupActivityMetricMode>('count');
   const [archiveMetricMode, setArchiveMetricMode] = createSignal<BackupActivityMetricMode>('count');
   const [expandedGuests, setExpandedGuests] = createSignal<ReadonlySet<string>>(new Set<string>());
+  const [expandedCoverageRows, setExpandedCoverageRows] = createSignal<ReadonlySet<string>>(
+    new Set<string>(),
+  );
 
   const [coverageSortKey, setCoverageSortKey] = createSignal<CoverageSortKey>('posture');
   const [coverageSortDirection, setCoverageSortDirection] = createSignal<'asc' | 'desc'>('asc');
@@ -633,12 +670,10 @@ export const ProxmoxBackupsTable: Component<{
   const [taskSortKey, setTaskSortKey] = createSignal<TaskSortKey>('started');
   const [taskSortDirection, setTaskSortDirection] = createSignal<'asc' | 'desc'>('desc');
 
-  const activeTabs = createMemo(() =>
-    props.hasPBS ? TABS : TABS.filter((spec) => spec.id !== 'pbs'),
-  );
+  const activeTabs = createMemo(() => TABS);
   createEffect(() => {
     if (!activeTabs().some((spec) => spec.id === tab())) {
-      setTab(activeTabs()[0]?.id ?? 'snapshots');
+      setTab(activeTabs()[0]?.id ?? 'coverage');
     }
   });
 
@@ -699,11 +734,34 @@ export const ProxmoxBackupsTable: Component<{
       else next.add(key);
       return next;
     });
+  const toggleCoverageExpansion = (key: string) =>
+    setExpandedCoverageRows((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   const pbsArtifacts = createMemo<PBSBackup[]>(() => pbsBackups()?.backups ?? []);
   const snapshots = createMemo<GuestSnapshot[]>(() => backups()?.guestSnapshots ?? []);
   const archives = createMemo<StorageBackup[]>(() => backups()?.storageBackups ?? []);
   const tasks = createMemo<BackupTask[]>(() => backups()?.backupTasks ?? []);
+  const activeSourceDetailTabs = createMemo(() =>
+    props.hasPBS ? SOURCE_DETAIL_TABS : SOURCE_DETAIL_TABS.filter((spec) => spec.id !== 'pbs'),
+  );
+  createEffect(() => {
+    if (!activeSourceDetailTabs().some((spec) => spec.id === sourceDetailTab())) {
+      setSourceDetailTab(activeSourceDetailTabs()[0]?.id ?? 'snapshots');
+    }
+  });
+  const sourceDetailTotal = (id: SourceDetailTabId): number => {
+    if (id === 'pbs') return pbsArtifacts().length;
+    if (id === 'snapshots') return snapshots().length;
+    return archives().length;
+  };
+  const totalSourceArtifacts = createMemo(
+    () => (props.hasPBS ? pbsArtifacts().length : 0) + snapshots().length + archives().length,
+  );
   // Render-time `now` used for age bucketing. We snapshot once per render
   // so all comparisons within a single render share a reference moment;
   // not reactive to ticking time (good enough for sysadmin grouping).
@@ -1267,12 +1325,8 @@ export const ProxmoxBackupsTable: Component<{
         return recoveryModel().coverageRows.length;
       case 'recoverable':
         return recoveryModel().recoverableArtifacts.length;
-      case 'pbs':
-        return pbsArtifacts().length;
-      case 'snapshots':
-        return snapshots().length;
-      case 'archives':
-        return archives().length;
+      case 'sources':
+        return sourceDetailTotal(sourceDetailTab());
       case 'tasks':
         return tasks().length;
       default:
@@ -1286,11 +1340,9 @@ export const ProxmoxBackupsTable: Component<{
         return filteredCoverageRows().length;
       case 'recoverable':
         return filteredRecoverableArtifacts().length;
-      case 'pbs':
-        return filteredPBSBackups().length;
-      case 'snapshots':
-        return filteredSnapshots().length;
-      case 'archives':
+      case 'sources':
+        if (sourceDetailTab() === 'pbs') return filteredPBSBackups().length;
+        if (sourceDetailTab() === 'snapshots') return filteredSnapshots().length;
         return filteredArchives().length;
       case 'tasks':
         return filteredTasks().length;
@@ -1338,15 +1390,13 @@ export const ProxmoxBackupsTable: Component<{
       case 'coverage':
         return 'workloads';
       case 'recoverable':
-        return 'recoverable artifacts';
-      case 'pbs':
-        return 'PBS artifacts';
-      case 'archives':
-        return 'archives';
+        return 'restore points';
+      case 'sources':
+        if (sourceDetailTab() === 'pbs') return 'PBS artifacts';
+        if (sourceDetailTab() === 'snapshots') return 'snapshots';
+        return 'backup files';
       case 'tasks':
         return 'tasks';
-      case 'snapshots':
-        return 'guests';
     }
   });
 
@@ -1407,18 +1457,39 @@ export const ProxmoxBackupsTable: Component<{
                       ? recoveryModel().coverageRows.length
                       : spec.id === 'recoverable'
                         ? recoveryModel().recoverableArtifacts.length
-                        : spec.id === 'pbs'
-                          ? pbsArtifacts().length
-                          : spec.id === 'snapshots'
-                            ? snapshots().length
-                            : spec.id === 'archives'
-                              ? archives().length
-                              : tasks().length}
+                        : spec.id === 'sources'
+                          ? totalSourceArtifacts()
+                          : tasks().length}
                   </span>
                 </button>
               )}
             </For>
           </div>
+
+          <Show when={tab() === 'sources'}>
+            <div class="flex flex-wrap items-center gap-1 rounded-md border border-border bg-surface p-1">
+              <For each={activeSourceDetailTabs()}>
+                {(spec) => (
+                  <button
+                    type="button"
+                    onClick={() => setSourceDetailTab(spec.id)}
+                    class={`inline-flex min-h-8 items-center gap-1.5 rounded-sm px-2.5 text-xs font-medium transition-colors ${
+                      sourceDetailTab() === spec.id
+                        ? 'bg-surface-hover text-base-content'
+                        : 'text-muted hover:text-base-content'
+                    }`}
+                    aria-pressed={sourceDetailTab() === spec.id}
+                  >
+                    {spec.icon()}
+                    <span>{spec.label}</span>
+                    <span class="text-[10px] text-muted tabular-nums">
+                      {sourceDetailTotal(spec.id)}
+                    </span>
+                  </button>
+                )}
+              </For>
+            </div>
+          </Show>
 
           <Show when={tab() === 'coverage'}>
             <ProxmoxBackupsCoverageStrip
@@ -1516,7 +1587,9 @@ export const ProxmoxBackupsTable: Component<{
             />
           </Show>
 
-          <Show when={tab() === 'pbs' && pbsArtifacts().length > 0}>
+          <Show
+            when={tab() === 'sources' && sourceDetailTab() === 'pbs' && pbsArtifacts().length > 0}
+          >
             <BackupActivityChart
               title={
                 pbsMetricMode() === 'volume' ? 'PBS backup volume per day' : 'PBS backups per day'
@@ -1563,7 +1636,11 @@ export const ProxmoxBackupsTable: Component<{
             />
           </Show>
 
-          <Show when={tab() === 'snapshots' && snapshots().length > 0}>
+          <Show
+            when={
+              tab() === 'sources' && sourceDetailTab() === 'snapshots' && snapshots().length > 0
+            }
+          >
             <BackupActivityChart
               title="Snapshots per day"
               noun="snapshot"
@@ -1613,7 +1690,7 @@ export const ProxmoxBackupsTable: Component<{
               ]}
             />
           </Show>
-          <Show when={tab() === 'archives'}>
+          <Show when={tab() === 'sources' && sourceDetailTab() === 'archives'}>
             <BackupActivityChart
               title={
                 archiveMetricMode() === 'volume' ? 'Backup volume per day' : 'Backup files per day'
@@ -1718,16 +1795,16 @@ export const ProxmoxBackupsTable: Component<{
                 onChange={setSearch}
                 placeholder={
                   tab() === 'coverage'
-                    ? 'Search workload coverage, guests, posture'
+                    ? 'Search workload coverage or restore evidence'
                     : tab() === 'recoverable'
-                      ? 'Search recoverable artifacts, sources, namespaces'
-                      : tab() === 'pbs'
-                        ? 'Search PBS artifacts, namespaces, guests'
-                        : tab() === 'snapshots'
-                          ? 'Search snapshots, guests, nodes'
-                          : tab() === 'archives'
-                            ? 'Search archives, storages, nodes'
-                            : 'Search tasks, nodes, errors'
+                      ? 'Search restore points, workloads, sources'
+                      : tab() === 'sources'
+                        ? sourceDetailTab() === 'pbs'
+                          ? 'Search PBS artifacts, namespaces, guests'
+                          : sourceDetailTab() === 'snapshots'
+                            ? 'Search snapshots, guests, nodes'
+                            : 'Search backup files, storages, nodes'
+                        : 'Search tasks, nodes, errors'
                 }
               />
             </div>
@@ -1747,7 +1824,7 @@ export const ProxmoxBackupsTable: Component<{
                 onChange={setRecoverableFilter}
               />
             </Show>
-            <Show when={tab() === 'pbs'}>
+            <Show when={tab() === 'sources' && sourceDetailTab() === 'pbs'}>
               <FilterButtonGroup
                 variant="compact"
                 options={PBS_STATUS_FILTERS}
@@ -1755,7 +1832,7 @@ export const ProxmoxBackupsTable: Component<{
                 onChange={setPBSFilter}
               />
             </Show>
-            <Show when={tab() === 'snapshots'}>
+            <Show when={tab() === 'sources' && sourceDetailTab() === 'snapshots'}>
               <FilterButtonGroup
                 variant="compact"
                 options={SNAPSHOT_FILTERS}
@@ -1763,7 +1840,11 @@ export const ProxmoxBackupsTable: Component<{
                 onChange={setSnapshotFilter}
               />
             </Show>
-            <Show when={tab() === 'archives' && showArchivePBSColumns()}>
+            <Show
+              when={
+                tab() === 'sources' && sourceDetailTab() === 'archives' && showArchivePBSColumns()
+              }
+            >
               <FilterButtonGroup
                 variant="compact"
                 options={ARCHIVE_STATUS_FILTERS}
@@ -1797,7 +1878,7 @@ export const ProxmoxBackupsTable: Component<{
             </Show>
             <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
               <Show
-                when={tab() === 'snapshots'}
+                when={tab() === 'sources' && sourceDetailTab() === 'snapshots'}
                 fallback={
                   <Show
                     when={visibleForTab() !== totalForTab()}
@@ -1913,114 +1994,236 @@ export const ProxmoxBackupsTable: Component<{
                   </TableHeader>
                   <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
                     <For each={filteredCoverageRows()}>
-                      {(row) => (
-                        <TableRow class="hover:bg-surface-hover">
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
-                          >
-                            <div class="min-w-0">
-                              <div class="font-semibold">{row.workload.label}</div>
-                              <div class="truncate font-mono text-[10px] uppercase text-muted">
-                                {row.workload.typeLabel} {row.workload.vmid}
-                                <Show when={row.workload.node}>
-                                  {' · '}
-                                  {row.workload.node}
-                                </Show>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('text')}>
-                            <div class="flex items-center gap-2">
-                              <StatusDot
-                                size="sm"
-                                variant={coveragePostureVariant(row.posture)}
-                                title={getWorkloadRecoveryPostureLabel(row.posture)}
-                                ariaHidden
-                              />
-                              <span class="text-[11px] font-medium text-base-content">
-                                {getWorkloadRecoveryPostureLabel(row.posture)}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
-                            <Show
-                              when={row.latestRecovery}
-                              fallback={<span class="text-muted">No restore point</span>}
-                            >
-                              {(artifact) => (
-                                <div class="min-w-0 text-right">
-                                  <div>
-                                    {formatRelativeTime(artifact().createdAt, { compact: true })}
-                                  </div>
-                                  <div class="truncate text-[10px] text-muted">
-                                    {artifact().sourceLabel}
-                                  </div>
-                                </div>
-                              )}
-                            </Show>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            <RecoverySourceSummary
-                              artifact={row.latestPBS}
-                              count={row.pbsCount}
-                              emptyLabel="No PBS"
-                            />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            <RecoverySourceSummary
-                              artifact={row.latestArchive}
-                              count={row.archiveCount}
-                              emptyLabel="No archive"
-                            />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            <RecoverySourceSummary
-                              artifact={row.latestSnapshot}
-                              count={row.snapshotCount}
-                              emptyLabel="No snapshot"
-                            />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            <Show
-                              when={row.latestTask}
-                              fallback={<span class="text-muted">No recent task</span>}
-                            >
-                              {(task) => (
-                                <div class="min-w-0">
-                                  <div class="flex items-center gap-2">
-                                    <StatusDot
-                                      size="sm"
-                                      variant={
-                                        task().label === 'Failed'
-                                          ? 'danger'
-                                          : task().label === 'OK'
-                                            ? 'success'
-                                            : 'warning'
-                                      }
-                                      title={task().label}
-                                      ariaHidden
+                      {(row) => {
+                        const isExpanded = () => expandedCoverageRows().has(row.key);
+                        const evidence = () =>
+                          [...row.artifacts]
+                            .sort((left, right) => (right.createdMs ?? 0) - (left.createdMs ?? 0))
+                            .slice(0, 8);
+                        return (
+                          <>
+                            <TableRow class="hover:bg-surface-hover">
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
+                              >
+                                <div class="flex min-w-0 items-center gap-2">
+                                  <button
+                                    type="button"
+                                    class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                                    onClick={() => toggleCoverageExpansion(row.key)}
+                                    aria-label={`${isExpanded() ? 'Hide' : 'Show'} restore evidence for ${row.workload.label}`}
+                                    aria-expanded={isExpanded()}
+                                  >
+                                    <ChevronRightIcon
+                                      class={`h-3.5 w-3.5 transition-transform ${
+                                        isExpanded() ? 'rotate-90' : ''
+                                      }`}
+                                      aria-hidden="true"
                                     />
-                                    <span>{task().label}</span>
-                                  </div>
-                                  <div class="truncate text-[10px] text-muted">
-                                    {formatRelativeTime(task().startedAt, { compact: true })}
+                                  </button>
+                                  <div class="min-w-0">
+                                    <div class="font-semibold">{row.workload.label}</div>
+                                    <div class="truncate font-mono text-[10px] uppercase text-muted">
+                                      {row.workload.typeLabel} {row.workload.vmid}
+                                      <Show when={row.workload.node}>
+                                        {' · '}
+                                        {row.workload.node}
+                                      </Show>
+                                    </div>
                                   </div>
                                 </div>
-                              )}
+                              </TableCell>
+                              <TableCell class={getPlatformTableCellClassForKind('text')}>
+                                <div class="flex items-center gap-2">
+                                  <StatusDot
+                                    size="sm"
+                                    variant={coveragePostureVariant(row.posture)}
+                                    title={getWorkloadRecoveryPostureLabel(row.posture)}
+                                    ariaHidden
+                                  />
+                                  <span class="text-[11px] font-medium text-base-content">
+                                    {getWorkloadRecoveryPostureLabel(row.posture)}
+                                  </span>
+                                </div>
+                              </TableCell>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                              >
+                                <Show
+                                  when={row.latestRecovery}
+                                  fallback={<span class="text-muted">No restore point</span>}
+                                >
+                                  {(artifact) => (
+                                    <div class="min-w-0 text-right">
+                                      <div>
+                                        {formatRelativeTime(artifact().createdAt, {
+                                          compact: true,
+                                        })}
+                                      </div>
+                                      <div class="truncate text-[10px] text-muted">
+                                        {artifact().sourceLabel}
+                                      </div>
+                                    </div>
+                                  )}
+                                </Show>
+                              </TableCell>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                              >
+                                <RecoverySourceSummary
+                                  artifact={row.latestPBS}
+                                  count={row.pbsCount}
+                                  emptyLabel="No PBS"
+                                />
+                              </TableCell>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                              >
+                                <RecoverySourceSummary
+                                  artifact={row.latestArchive}
+                                  count={row.archiveCount}
+                                  emptyLabel="No archive"
+                                />
+                              </TableCell>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                              >
+                                <RecoverySourceSummary
+                                  artifact={row.latestSnapshot}
+                                  count={row.snapshotCount}
+                                  emptyLabel="No snapshot"
+                                />
+                              </TableCell>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                              >
+                                <Show
+                                  when={row.latestTask}
+                                  fallback={<span class="text-muted">No recent task</span>}
+                                >
+                                  {(task) => (
+                                    <div class="min-w-0">
+                                      <div class="flex items-center gap-2">
+                                        <StatusDot
+                                          size="sm"
+                                          variant={
+                                            task().label === 'Failed'
+                                              ? 'danger'
+                                              : task().label === 'OK'
+                                                ? 'success'
+                                                : 'warning'
+                                          }
+                                          title={task().label}
+                                          ariaHidden
+                                        />
+                                        <span>{task().label}</span>
+                                      </div>
+                                      <div class="truncate text-[10px] text-muted">
+                                        {formatRelativeTime(task().startedAt, { compact: true })}
+                                      </div>
+                                    </div>
+                                  )}
+                                </Show>
+                              </TableCell>
+                            </TableRow>
+                            <Show when={isExpanded()}>
+                              <TableRow class="bg-surface-alt/40">
+                                <TableCell class="px-3 py-2" colspan={7}>
+                                  <Show
+                                    when={evidence().length > 0}
+                                    fallback={
+                                      <div class="text-xs text-muted">
+                                        No restore evidence has been discovered for this workload.
+                                      </div>
+                                    }
+                                  >
+                                    <div class="overflow-hidden">
+                                      <div class="mb-1 flex items-center justify-between gap-2 text-[11px]">
+                                        <span class="font-medium text-base-content">
+                                          Restore evidence
+                                        </span>
+                                        <Show when={row.artifacts.length > evidence().length}>
+                                          <span class="text-muted">
+                                            Showing {evidence().length} of {row.artifacts.length}
+                                          </span>
+                                        </Show>
+                                      </div>
+                                      <table class="w-full text-[11px]">
+                                        <thead>
+                                          <tr class="bg-surface-alt text-muted">
+                                            <th class="px-2 py-0.5 text-left font-medium">
+                                              Source
+                                            </th>
+                                            <th class="px-2 py-0.5 text-left font-medium">
+                                              Location
+                                            </th>
+                                            <th class="px-2 py-0.5 text-right font-medium">
+                                              Created
+                                            </th>
+                                            <th class="px-2 py-0.5 text-right font-medium">Size</th>
+                                            <th class="px-2 py-0.5 text-left font-medium">State</th>
+                                            <th class="px-2 py-0.5 text-left font-medium">
+                                              Details
+                                            </th>
+                                          </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-border-subtle">
+                                          <For each={evidence()}>
+                                            {(artifact) => (
+                                              <tr class="hover:bg-surface-hover">
+                                                <td class="px-2 py-1">
+                                                  <ArtifactSourceBadge artifact={artifact} />
+                                                </td>
+                                                <td class="px-2 py-1 text-base-content">
+                                                  <span
+                                                    class="inline-block max-w-[18rem] truncate"
+                                                    title={artifact.location}
+                                                  >
+                                                    {artifact.location}
+                                                  </span>
+                                                </td>
+                                                <td class="px-2 py-1 text-right text-base-content">
+                                                  {formatRelativeTime(artifact.createdAt, {
+                                                    compact: true,
+                                                  })}
+                                                </td>
+                                                <td class="px-2 py-1 text-right tabular-nums text-base-content">
+                                                  <Show
+                                                    when={artifact.size && artifact.size > 0}
+                                                    fallback={
+                                                      <span class="text-muted">No size</span>
+                                                    }
+                                                  >
+                                                    {formatBytes(artifact.size ?? 0)}
+                                                  </Show>
+                                                </td>
+                                                <td class="px-2 py-1">
+                                                  <ArtifactStateBadge
+                                                    artifact={artifact}
+                                                    label={artifactStateLabel(artifact)}
+                                                  />
+                                                </td>
+                                                <td class="px-2 py-1 text-base-content">
+                                                  <span
+                                                    class="inline-block max-w-[24rem] truncate"
+                                                    title={artifact.detail}
+                                                  >
+                                                    {artifact.detail || '—'}
+                                                  </span>
+                                                </td>
+                                              </tr>
+                                            )}
+                                          </For>
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </Show>
+                                </TableCell>
+                              </TableRow>
                             </Show>
-                          </TableCell>
-                        </TableRow>
-                      )}
+                          </>
+                        );
+                      }}
                     </For>
                   </TableBody>
                 </Table>
@@ -2129,17 +2332,7 @@ export const ProxmoxBackupsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span
-                              class={`inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-semibold ${
-                                artifact.sourceKind === 'pbs'
-                                  ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-200'
-                                  : artifact.sourceKind === 'archive'
-                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200'
-                                    : 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200'
-                              }`}
-                            >
-                              {artifact.sourceLabel}
-                            </span>
+                            <ArtifactSourceBadge artifact={artifact} />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
@@ -2202,7 +2395,7 @@ export const ProxmoxBackupsTable: Component<{
             </Show>
           </Show>
 
-          <Show when={tab() === 'pbs'}>
+          <Show when={tab() === 'sources' && sourceDetailTab() === 'pbs'}>
             <Show
               when={!pbsBackups.error}
               fallback={
@@ -2246,12 +2439,12 @@ export const ProxmoxBackupsTable: Component<{
                         icon={props.emptyIcon}
                         title={
                           pbsArtifacts().length === 0
-                            ? tabSpecFor('pbs').emptyTitle
+                            ? sourceDetailSpecFor('pbs').emptyTitle
                             : 'No PBS artifacts match current filters'
                         }
                         description={
                           pbsArtifacts().length === 0
-                            ? tabSpecFor('pbs').emptyDescription
+                            ? sourceDetailSpecFor('pbs').emptyDescription
                             : 'Adjust the search or status filter to see more PBS artifacts.'
                         }
                       />
@@ -2425,7 +2618,7 @@ export const ProxmoxBackupsTable: Component<{
             </Show>
           </Show>
 
-          <Show when={tab() === 'snapshots'}>
+          <Show when={tab() === 'sources' && sourceDetailTab() === 'snapshots'}>
             <Show
               when={filteredSnapshotGuests().length > 0}
               fallback={
@@ -2434,12 +2627,12 @@ export const ProxmoxBackupsTable: Component<{
                     icon={props.emptyIcon}
                     title={
                       snapshots().length === 0
-                        ? tabSpecFor('snapshots').emptyTitle
+                        ? sourceDetailSpecFor('snapshots').emptyTitle
                         : 'No snapshots match current filters'
                     }
                     description={
                       snapshots().length === 0
-                        ? tabSpecFor('snapshots').emptyDescription
+                        ? sourceDetailSpecFor('snapshots').emptyDescription
                         : 'Adjust the search or filters to see more snapshots.'
                     }
                   />
@@ -2682,7 +2875,7 @@ export const ProxmoxBackupsTable: Component<{
             </Show>
           </Show>
 
-          <Show when={tab() === 'archives'}>
+          <Show when={tab() === 'sources' && sourceDetailTab() === 'archives'}>
             <Show
               when={filteredArchives().length > 0}
               fallback={
@@ -2691,12 +2884,12 @@ export const ProxmoxBackupsTable: Component<{
                     icon={props.emptyIcon}
                     title={
                       archives().length === 0
-                        ? tabSpecFor('archives').emptyTitle
+                        ? sourceDetailSpecFor('archives').emptyTitle
                         : 'No archives match current filters'
                     }
                     description={
                       archives().length === 0
-                        ? tabSpecFor('archives').emptyDescription
+                        ? sourceDetailSpecFor('archives').emptyDescription
                         : 'Adjust the search or status filter to see more archives.'
                     }
                   />

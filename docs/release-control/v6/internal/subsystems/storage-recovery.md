@@ -86,20 +86,23 @@ for privilege-separated tokens by assigning the same `PVEDatastoreAdmin` role to
 both the service user and the concrete token id.
 
 Proxmox platform backup surfaces may embed source-specific backup evidence, but
-the source of truth must stay explicit. PBS artifacts on the Proxmox Backups tab
-consume `/api/backups/pbs` and render PBS-authored size, protection,
-verification, namespace, owner, and file facts from `models.PBSBackup`. PVE
-snapshot, storage-archive, and task tables consume `/api/backups/pve` and must
-keep columns source-aware: columns that PVE cannot populate for the current data
-set are omitted rather than rendered as all-dash placeholders.
-The Proxmox Backups tab also owns a workload-level coverage view and an
-all-recoverable inventory above the source-specific tabs. Those aggregate views
-may correlate unified-resource workload identity with PBS artifacts, PVE backup
-archives, guest snapshots, and backup tasks, but they must keep each artifact's
-source visible and must not flatten PBS verification/protection facts into PVE
-archive or snapshot semantics. Workload coverage posture must be derived from
-real recovery evidence and recent task outcomes, including explicit uncovered
-and failed-latest-task states, rather than from source-tab row counts alone.
+the source of truth must stay explicit. PBS source-detail tables on the Proxmox
+Backups tab consume `/api/backups/pbs` and render PBS-authored size,
+protection, verification, namespace, owner, and file facts from
+`models.PBSBackup`. PVE snapshot, storage-archive, and task tables consume
+`/api/backups/pve` and must keep columns source-aware: columns that PVE cannot
+populate for the current data set are omitted rather than rendered as all-dash
+placeholders. The Proxmox Backups tab owns a workload-level coverage view and a
+cross-source restore-point inventory as its primary operator workflows; raw
+PBS, snapshot, and backup-file tables remain a secondary source-detail drilldown
+for audit evidence instead of equal-weight primary destinations. Those aggregate
+views may correlate unified-resource workload identity with PBS artifacts, PVE
+backup archives, guest snapshots, and backup tasks, but they must keep each
+artifact's source visible and must not flatten PBS verification/protection facts
+into PVE archive or snapshot semantics. Workload coverage posture must be
+derived from real recovery evidence and recent task outcomes, including
+explicit uncovered and failed-latest-task states, rather than from source-detail
+row counts alone.
 The platform page embedding point may pass read-only Proxmox guest inventory
 into that backup surface solely for workload identity correlation; the backup
 surface must still source restore evidence from the PVE/PBS backup APIs rather
