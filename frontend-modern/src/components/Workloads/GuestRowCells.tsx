@@ -4,7 +4,7 @@ import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import { useTooltip } from '@/hooks/useTooltip';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { GuestNetworkInterface } from '@/types/api';
-import { formatBytes, getBackupInfo } from '@/utils/format';
+import { formatBytes, formatRelativeTime, getBackupInfo, type BackupInfo } from '@/utils/format';
 import {
   getWorkloadsGuestBackupStatusPresentation,
   getWorkloadsGuestBackupTooltip,
@@ -69,6 +69,35 @@ function BackupIndicator(props: {
       </span>
     </Show>
   );
+}
+
+function getBackupAgeBadgeLabel(
+  lastBackup: string | number | null | undefined,
+  info: BackupInfo,
+): string {
+  if (info.status === 'never') return 'None';
+  const compact = formatRelativeTime(lastBackup ?? undefined, {
+    compact: true,
+    emptyText: 'Unknown',
+  });
+  if (compact === 'just now') return 'Now';
+  return compact.replace(/\s+ago$/, '');
+}
+
+function getBackupAgeBadgeClass(status: BackupInfo['status']): string {
+  const base =
+    'inline-flex h-5 min-w-[3.25rem] items-center justify-center gap-1 rounded-full border px-1.5 text-[10px] font-semibold leading-none tabular-nums cursor-help';
+
+  switch (status) {
+    case 'fresh':
+      return `${base} border-green-200 bg-green-50 text-green-700 dark:border-green-900/70 dark:bg-green-950/40 dark:text-green-300`;
+    case 'stale':
+      return `${base} border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-900/70 dark:bg-yellow-950/40 dark:text-yellow-300`;
+    case 'critical':
+      return `${base} border-red-200 bg-red-50 text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-300`;
+    case 'never':
+      return `${base} border-border bg-surface-alt text-muted`;
+  }
 }
 
 function NetworkInfoCell(props: {
@@ -276,17 +305,23 @@ function BackupStatusCell(props: { lastBackup: string | number | null | undefine
     getBackupInfo(props.lastBackup, alertsActivation.getBackupThresholds()),
   );
   const config = createMemo(() => getWorkloadsGuestBackupStatusPresentation(info().status));
+  const badgeLabel = createMemo(() => getBackupAgeBadgeLabel(props.lastBackup, info()));
+  const ariaLabel = createMemo(() => {
+    const currentInfo = info();
+    if (currentInfo.status === 'never') return 'Backup status: never';
+    return `Backup status: ${currentInfo.status}, last backup ${currentInfo.ageFormatted}`;
+  });
 
   return (
     <>
       <span
-        class={`flex-shrink-0 cursor-help ${config().color}`}
+        class={getBackupAgeBadgeClass(info().status)}
         onMouseEnter={tip.onMouseEnter}
         onMouseLeave={tip.onMouseLeave}
-        aria-label={`Backup status: ${info().status}`}
+        aria-label={ariaLabel()}
       >
         <svg
-          class="w-4 h-4"
+          class="h-3 w-3 flex-shrink-0"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -306,6 +341,7 @@ function BackupStatusCell(props: { lastBackup: string | number | null | undefine
             <path d="M10 10l4 4M14 10l-4 4" />
           </Show>
         </svg>
+        <span>{badgeLabel()}</span>
       </span>
 
       <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>

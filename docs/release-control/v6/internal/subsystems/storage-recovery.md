@@ -103,6 +103,12 @@ into PVE archive or snapshot semantics. Workload coverage posture must be
 derived from real recovery evidence and recent task outcomes, including
 explicit uncovered and failed-latest-task states, rather than from source-detail
 row counts alone.
+The Proxmox overview workload table's Backup column is the primary
+glance-level protection signal for current guests. It must remain visible,
+dense, and backed by the canonical guest `LastBackup` synchronization from PVE
+storage and PBS evidence; the Proxmox Backups tab is the drilldown for
+coverage, restore-point, and source-detail evidence, not the first place users
+must visit to learn whether a guest is backed up.
 The platform page embedding point may pass read-only Proxmox guest inventory
 into that backup surface solely for workload identity correlation; the backup
 surface must still source restore evidence from the PVE/PBS backup APIs rather

@@ -303,7 +303,8 @@ export const GUEST_COLUMNS: ColumnDef[] = [
         />
       </svg>
     ),
-    width: '50px',
+    width: '72px',
+    minWidth: '68px',
     toggleable: true,
     kind: 'badge',
   },

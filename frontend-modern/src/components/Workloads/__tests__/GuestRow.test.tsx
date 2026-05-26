@@ -187,6 +187,7 @@ function renderGuestRow(props: Parameters<typeof GuestRow>[0]) {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.clearAllMocks();
   isMobileMock.mockReturnValue(false);
 });
@@ -1172,6 +1173,33 @@ describe('context column for PVE workloads', () => {
 });
 
 describe('backup column', () => {
+  it('shows compact age text for supported guests with a backup', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-26T12:00:00Z'));
+
+    const { container } = renderGuestRow({
+      guest: makeGuest({
+        type: 'qemu',
+        workloadType: 'vm',
+        lastBackup: Date.parse('2026-05-26T07:00:00Z'),
+      }),
+      visibleColumnIds: ['name', 'backup'],
+    });
+
+    expect(screen.getByText('5h')).toBeTruthy();
+    expect(
+      container.querySelector('[aria-label="Backup status: fresh, last backup 5 hours ago"]'),
+    ).toBeTruthy();
+  });
+
+  it('shows None for supported guests without a backup', () => {
+    renderGuestRow({
+      guest: makeGuest({ type: 'qemu', workloadType: 'vm', lastBackup: 0 }),
+      visibleColumnIds: ['name', 'backup'],
+    });
+    expect(screen.getByText('None')).toBeTruthy();
+  });
+
   it('shows dash for app-container workloads (no backup support)', () => {
     renderGuestRow({
       guest: makeGuest({ type: 'app-container', workloadType: 'app-container' }),

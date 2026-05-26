@@ -299,6 +299,10 @@ regression protection.
     namespace reference in tooltip/detail metadata, and the image column must
     stay left-aligned as text; table rows should optimize for
     container/version scanning, not registry path inspection.
+    Workload backup cells may expose a compact visible freshness label derived
+    from the row's scalar `lastBackup` value, but they must remain
+    presentation-only: no per-row backup API calls, recovery evidence joins, or
+    provider-specific backup fetches belong in the shared workload hot path.
 11. Extend workload drawer derivations and runtime wiring through `frontend-modern/src/components/Workloads/guestDrawerModel.ts` and `frontend-modern/src/components/Workloads/useGuestDrawerState.ts`, and extend drawer overview rendering through `frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx`, rather than rebuilding canonical guest identity, discovery routing, or drawer-local normalization inside `frontend-modern/src/components/Workloads/GuestDrawer.tsx`
     Drawer history charts belong to `frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx`.
     History cards must let the plot area stretch to the card height instead of
