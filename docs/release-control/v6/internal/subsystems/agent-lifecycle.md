@@ -141,7 +141,11 @@ reverse.
     The Windows installer must support a non-mutating download preflight that
     can run before Administrator-only install work, must accept token-file
     enrollment input, and must persist plain-HTTP/insecure runtime continuity
-    consistently with the Unix installer.
+    consistently with the Unix installer. The installed Windows service must
+    also expose the same local health/readiness server as foreground
+    `pulse-agent` runs so installer "healthy" verification and post-install
+    smoke checks prove a live agent runtime, not merely a running service
+    wrapper.
 23. `scripts/install.sh` shared with `deployment-installability`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
 
 Agent lifecycle and fleet-operation surfaces may consume

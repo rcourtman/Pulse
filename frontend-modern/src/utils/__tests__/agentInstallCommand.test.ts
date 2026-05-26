@@ -134,12 +134,22 @@ describe('agentInstallCommand', () => {
       '[System.IO.File]::WriteAllText($pulseTokenFile, "token-123", [System.Text.Encoding]::ASCII)',
     );
     expect(command).toContain('-TokenFile $pulseTokenFile');
-    expect(command).toContain('-PreflightOnly $true');
-    expect(command).toContain('-Output "json"');
-    expect(command).toContain('-NonInteractive $true');
-    expect(command).toContain('-Insecure $true');
-    expect(command).toContain('-CACertPath "C:\\Pulse\\custom-ca.cer"');
+    expect(command).toContain('$env:PULSE_PREFLIGHT_ONLY="true"');
+    expect(command).toContain('$env:PULSE_OUTPUT="json"');
+    expect(command).toContain('$env:PULSE_NON_INTERACTIVE="true"');
+    expect(command).toContain('$env:PULSE_INSECURE_SKIP_VERIFY="true"');
+    expect(command).toContain('$env:PULSE_CACERT="C:\\Pulse\\custom-ca.cer"');
     expect(command).toContain('Invoke-WebRequest -Uri $pulseScriptUrl -UseBasicParsing -OutFile $pulseInstallScript');
+    expect(command).toContain(
+      '& $pulsePowerShell -NoProfile -ExecutionPolicy Bypass -File $pulseInstallScript -Url',
+    );
+    expect(command).toContain('if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }');
+    expect(command).toContain(
+      'Remove-Item Env:PULSE_PREFLIGHT_ONLY -ErrorAction SilentlyContinue',
+    );
+    expect(command).not.toContain('-PreflightOnly $true');
+    expect(command).not.toContain('-NonInteractive $true');
+    expect(command).not.toContain('-Insecure $true');
     expect(command).not.toContain('$env:PULSE_TOKEN=');
   });
 
@@ -152,8 +162,10 @@ describe('agentInstallCommand', () => {
     expect(command).toContain('$pulseScriptUrl="https://pulse.example/install.ps1"');
     expect(command).not.toContain('$env:PULSE_TOKEN=');
     expect(command).not.toContain('-TokenFile $pulseTokenFile');
-    expect(command).toContain('-PreflightOnly $true');
-    expect(command).toContain('-NonInteractive $true');
+    expect(command).toContain('$env:PULSE_PREFLIGHT_ONLY="true"');
+    expect(command).toContain('$env:PULSE_NON_INTERACTIVE="true"');
+    expect(command).not.toContain('-PreflightOnly $true');
+    expect(command).not.toContain('-NonInteractive $true');
   });
 
   it('fails closed when the install endpoint URL is blank', () => {
@@ -199,6 +211,9 @@ describe('agentInstallCommand', () => {
     expect(command).toContain('$env:PULSE_ENABLE_PROXMOX="true"');
     expect(command).toContain('$env:PULSE_PROXMOX_TYPE="pbs"');
     expect(command).toContain('$env:PULSE_ENABLE_COMMANDS="true"');
+    expect(command).toContain(
+      '& $pulsePowerShell -NoProfile -ExecutionPolicy Bypass -File $pulseInstallScript -Url',
+    );
   });
 
   it('passes insecure runtime continuity for plain-http Windows installs', () => {
@@ -208,8 +223,10 @@ describe('agentInstallCommand', () => {
     });
 
     expect(command).toContain('-Url "http://pulse.example:7655"');
-    expect(command).toContain('-Insecure $true');
-    expect(command).toContain('-PreflightOnly $true');
+    expect(command).toContain('$env:PULSE_INSECURE_SKIP_VERIFY="true"');
+    expect(command).toContain('$env:PULSE_PREFLIGHT_ONLY="true"');
+    expect(command).not.toContain('-Insecure $true');
+    expect(command).not.toContain('-PreflightOnly $true');
     expect(command).not.toContain('$env:PULSE_TOKEN=');
   });
 });

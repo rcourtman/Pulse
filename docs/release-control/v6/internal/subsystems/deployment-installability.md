@@ -1353,6 +1353,10 @@ when `PULSE_INSECURE_SKIP_VERIFY` is enabled, `scripts/install.ps1` must use
 that relaxed certificate policy for its own agent download and uninstall
 deregistration requests so self-signed deployments do not fail before the
 persisted Windows service ever starts.
+Windows installability proof must also verify the installed service's local
+readiness endpoint, not just SCM `Running` state: the Windows service runtime
+must start the shared Pulse Agent health/readiness server so `/readyz` can prove
+the agent modules initialized after install.
 Copied PowerShell uninstall commands must preserve that same
 `PULSE_INSECURE_SKIP_VERIFY` setting so the governed deregistration request can
 still reach self-signed Pulse deployments during removal.

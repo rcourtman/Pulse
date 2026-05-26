@@ -1935,6 +1935,27 @@ func TestRunAsWindowsServiceStub(t *testing.T) {
 	}
 }
 
+func TestWindowsServiceRuntimeStartsHealthServer(t *testing.T) {
+	source, err := os.ReadFile("service_windows.go")
+	if err != nil {
+		t.Fatalf("read pulse-agent service_windows.go: %v", err)
+	}
+	text := string(source)
+
+	required := []string{
+		`var ready atomic.Bool`,
+		`startHealthServer(ctx, ws.cfg.HealthAddr, &ready, &ws.logger)`,
+		`ready.Store(true)`,
+		`agentUp.Set(1)`,
+		`defer agentUp.Set(0)`,
+	}
+	for _, want := range required {
+		if !strings.Contains(text, want) {
+			t.Fatalf("expected Windows service runtime to include %q", want)
+		}
+	}
+}
+
 func TestRun_KubeRetry(t *testing.T) {
 	origKube := newKubeAgent
 	defer func() { newKubeAgent = origKube }()

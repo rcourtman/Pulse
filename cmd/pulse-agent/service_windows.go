@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
@@ -38,6 +39,20 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, cha
 	defer cancel()
 
 	g, ctx := errgroup.WithContext(ctx)
+
+	agentInfo.WithLabelValues(
+		Version,
+		fmt.Sprintf("%t", ws.cfg.EnableHost),
+		fmt.Sprintf("%t", ws.cfg.EnableDocker),
+		fmt.Sprintf("%t", ws.cfg.EnableKubernetes),
+	).Set(1)
+	agentUp.Set(1)
+	defer agentUp.Set(0)
+
+	var ready atomic.Bool
+	if ws.cfg.HealthAddr != "" {
+		startHealthServer(ctx, ws.cfg.HealthAddr, &ready, &ws.logger)
+	}
 
 	// Start Auto-Updater
 	updater := newUpdater(agentupdate.Config{
@@ -130,6 +145,8 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, cha
 			return agent.Run(ctx)
 		})
 	}
+
+	ready.Store(true)
 
 	changes <- svc.Status{State: svc.Running, Accepts: cmdsAccepted}
 	ws.logger.Info().

@@ -148,11 +148,7 @@ export const buildWindowsAgentInstallCommand = ({
   const installArgs = [
     `-Url "${powerShellQuote(normalizedBaseUrl)}"`,
     ...(normalizedToken ? ['-TokenFile $pulseTokenFile'] : []),
-    ...(installRequiresInsecure ? ['-Insecure $true'] : []),
-    ...(normalizedCaCertPath ? [`-CACertPath "${powerShellQuote(normalizedCaCertPath)}"`] : []),
-    '-NonInteractive $true',
   ];
-  const preflightArgs = [...installArgs, '-PreflightOnly $true', '-Output "json"'];
   const customTrustFetch = installerFetchRequiresCustomTrust
     ? `$pulseCustomCa=$null; if (-not [string]::IsNullOrWhiteSpace($pulseCaCertPath)) { $pulseCustomCaBytes=[System.IO.File]::ReadAllBytes($pulseCaCertPath); $pulseCustomCaText=[System.Text.Encoding]::ASCII.GetString($pulseCustomCaBytes); if ($pulseCustomCaText.Contains("-----BEGIN CERTIFICATE-----")) { $pulseCustomCa=[System.Security.Cryptography.X509Certificates.X509Certificate2]::CreateFromPem($pulseCustomCaText) } else { $pulseCustomCa=[System.Security.Cryptography.X509Certificates.X509Certificate2]::new($pulseCustomCaBytes) } }; $pulsePrev=[System.Net.ServicePointManager]::ServerCertificateValidationCallback; try { [System.Net.ServicePointManager]::ServerCertificateValidationCallback={ param($sender,$certificate,$chain,$sslPolicyErrors) if ($pulseAllowInsecure) { return $true }; if ($null -eq $pulseCustomCa) { return $sslPolicyErrors -eq [System.Net.Security.SslPolicyErrors]::None }; if ($null -eq $certificate) { return $false }; $pulseChain=[System.Security.Cryptography.X509Certificates.X509Chain]::new(); $pulseChain.ChainPolicy.RevocationMode=[System.Security.Cryptography.X509Certificates.X509RevocationMode]::NoCheck; $null=$pulseChain.ChainPolicy.ExtraStore.Add($pulseCustomCa); $null=$pulseChain.Build($certificate); foreach ($pulseElement in $pulseChain.ChainElements) { if ($pulseElement.Certificate.Thumbprint -eq $pulseCustomCa.Thumbprint) { return $true } }; return $false }; Invoke-WebRequest -Uri $pulseScriptUrl -UseBasicParsing -OutFile $pulseInstallScript } finally { [System.Net.ServicePointManager]::ServerCertificateValidationCallback=$pulsePrev }`
     : `Invoke-WebRequest -Uri $pulseScriptUrl -UseBasicParsing -OutFile $pulseInstallScript`;
@@ -163,6 +159,11 @@ export const buildWindowsAgentInstallCommand = ({
   const extraEnvBootstrap = normalizedExtraEnvAssignments.length
     ? `${normalizedExtraEnvAssignments.join('; ')}; `
     : '';
+  const runtimeEnvBootstrap =
+    `${installRequiresInsecure ? '$env:PULSE_INSECURE_SKIP_VERIFY="true"; ' : ''}` +
+    `${normalizedCaCertPath ? `$env:PULSE_CACERT="${powerShellQuote(normalizedCaCertPath)}"; ` : ''}` +
+    '$env:PULSE_NON_INTERACTIVE="true"; ';
+  const installCommand = `& $pulsePowerShell -NoProfile -ExecutionPolicy Bypass -File $pulseInstallScript ${installArgs.join(' ')}`;
 
   return (
     `& { $ErrorActionPreference="Stop"; ` +
@@ -176,10 +177,13 @@ export const buildWindowsAgentInstallCommand = ({
     `${customTrustFetch}; ` +
     `${tokenBootstrap}` +
     `${extraEnvBootstrap}` +
+    `${runtimeEnvBootstrap}` +
     `$pulsePowerShell=(Get-Process -Id $PID).Path; ` +
-    `& $pulsePowerShell -NoProfile -ExecutionPolicy Bypass -File $pulseInstallScript ${preflightArgs.join(' ')}; ` +
+    `$env:PULSE_PREFLIGHT_ONLY="true"; $env:PULSE_OUTPUT="json"; ` +
+    `${installCommand}; ` +
     `if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; ` +
-    `& $pulsePowerShell -NoProfile -ExecutionPolicy Bypass -File $pulseInstallScript ${installArgs.join(' ')}; ` +
+    `Remove-Item Env:PULSE_PREFLIGHT_ONLY -ErrorAction SilentlyContinue; Remove-Item Env:PULSE_OUTPUT -ErrorAction SilentlyContinue; ` +
+    `${installCommand}; ` +
     `if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } ` +
     `} finally { Remove-Item -LiteralPath $pulseTmp -Recurse -Force -ErrorAction SilentlyContinue } }`
   );

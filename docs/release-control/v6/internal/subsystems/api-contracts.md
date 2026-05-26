@@ -266,7 +266,11 @@ platform page needs source-native backup columns.
     behavior, and `/download/pulse-agent?arch=...` availability proof into the
     installer invocation. Windows, macOS, and Linux commands must therefore
     preflight the exact platform artifact and avoid raw token process
-    arguments.
+    arguments. Windows generated commands must pass boolean installer intent
+    through environment variables and invoke `install.ps1` through child
+    PowerShell `-File` calls so Windows PowerShell argument binding cannot
+    reinterpret copied `$true` values as strings or let preflight-only returns
+    abort the parent wrapper before install.
 29. `frontend-modern/src/utils/apiTokenPresentation.ts` shared with `security-privacy`: the API token presentation helper is both a security/privacy control surface and a canonical API token management boundary.
     It owns the operator-facing Docker / Podman token vocabulary used by API
     Access, token presets, usage summaries, and revoke warnings.

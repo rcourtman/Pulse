@@ -152,6 +152,45 @@ function Write-InstallerEvent {
     Write-Host $Message
 }
 
+function Get-ResponseHeaderValue {
+    param(
+        $Headers,
+        [string]$Name
+    )
+
+    if ($null -eq $Headers -or [string]::IsNullOrWhiteSpace($Name)) {
+        return ""
+    }
+
+    try {
+        $value = $Headers[$Name]
+        if ($null -ne $value) {
+            if ($value -is [array]) {
+                return [string]$value[0]
+            }
+            return [string]$value
+        }
+    } catch {
+        # Fall back to case-insensitive enumeration below.
+    }
+
+    try {
+        foreach ($key in $Headers.Keys) {
+            if ([string]::Equals([string]$key, $Name, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $value = $Headers[$key]
+                if ($value -is [array]) {
+                    return [string]$value[0]
+                }
+                return [string]$value
+            }
+        }
+    } catch {
+        return ""
+    }
+
+    return ""
+}
+
 function Test-ValidUrl {
     param([string]$TestUrl)
     if ([string]::IsNullOrWhiteSpace($TestUrl)) { return $false }
@@ -482,9 +521,8 @@ if ($Uninstall) {
                         $lookupArgs.Headers = @{ "X-API-Token" = $Token }
                     }
 
-                    $lookupResult = $null
-                    Invoke-WithOptionalInsecureTls -AllowInsecure $Insecure -CustomCaCertificate $customCaCertificate -Action {
-                        $lookupResult = Invoke-RestMethod @lookupArgs
+                    $lookupResult = Invoke-WithOptionalInsecureTls -AllowInsecure $Insecure -CustomCaCertificate $customCaCertificate -Action {
+                        Invoke-RestMethod @lookupArgs
                     }
                     if ($lookupResult -and $lookupResult.agent -and -not [string]::IsNullOrWhiteSpace($lookupResult.agent.id)) {
                         $detectedAgentId = $lookupResult.agent.id.Trim()
@@ -622,12 +660,11 @@ function Invoke-AgentDownloadPreflight {
     param([string]$Uri)
 
     try {
-        $preflightResponse = $null
-        Invoke-WithOptionalInsecureTls -AllowInsecure $Insecure -CustomCaCertificate $CustomCaCertificate -Action {
-            $preflightResponse = Invoke-WebRequest -Uri $Uri -Method Head -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+        $preflightResponse = Invoke-WithOptionalInsecureTls -AllowInsecure $Insecure -CustomCaCertificate $CustomCaCertificate -Action {
+            Invoke-WebRequest -Uri $Uri -Method Head -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
         }
 
-        $checksum = $preflightResponse.Headers["X-Checksum-Sha256"]
+        $checksum = Get-ResponseHeaderValue -Headers $preflightResponse.Headers -Name "X-Checksum-Sha256"
         if ([string]::IsNullOrWhiteSpace($checksum)) {
             Write-InstallerEvent -Phase "preflight" -Code "agent_download_checksum_missing" -Message "Agent download exists but did not include a checksum header: $Uri" -ExitCode 12
             Exit 12
@@ -662,24 +699,57 @@ try {
     # Configure TLS 1.2 minimum
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
 
-    Invoke-WithOptionalInsecureTls -AllowInsecure $Insecure -CustomCaCertificate $CustomCaCertificate -Action {
+    $downloadPreflightResponse = Invoke-WithOptionalInsecureTls -AllowInsecure $Insecure -CustomCaCertificate $CustomCaCertificate -Action {
+        Invoke-WebRequest -Uri $DownloadUrl -Method Head -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+    }
+    $serverChecksum = Get-ResponseHeaderValue -Headers $downloadPreflightResponse.Headers -Name "X-Checksum-Sha256"
+    $serverSshSignature = Get-ResponseHeaderValue -Headers $downloadPreflightResponse.Headers -Name $InstallerSignatureHeaderName
+    if ([string]::IsNullOrWhiteSpace($serverChecksum)) {
+        Cleanup
+        Show-Error "Server did not provide checksum header; refusing install."
+        Exit 1
+    }
+
+    $downloadMetadata = Invoke-WithOptionalInsecureTls -AllowInsecure $Insecure -CustomCaCertificate $CustomCaCertificate -Action {
         # Download with timeout
         $webClient = New-Object System.Net.WebClient
-        $webClient.Headers.Add("User-Agent", "PulseInstaller/1.0")
+        try {
+            $webClient.Headers.Add("User-Agent", "PulseInstaller/1.0")
 
-        # Set up async download with timeout
-        $downloadTask = $webClient.DownloadFileTaskAsync($DownloadUrl, $TempPath)
-        if (-not $downloadTask.Wait($DownloadTimeoutSec * 1000)) {
-            $webClient.CancelAsync()
-            throw "Download timed out after $DownloadTimeoutSec seconds"
-        }
-        if ($downloadTask.IsFaulted) {
-            throw $downloadTask.Exception.InnerException
-        }
+            # Set up async download with timeout
+            $downloadTask = $webClient.DownloadFileTaskAsync($DownloadUrl, $TempPath)
+            if (-not $downloadTask.Wait($DownloadTimeoutSec * 1000)) {
+                $webClient.CancelAsync()
+                throw "Download timed out after $DownloadTimeoutSec seconds"
+            }
+            if ($downloadTask.IsFaulted) {
+                throw $downloadTask.Exception.InnerException
+            }
 
-        # Get checksum from server response headers if available
-        $serverChecksum = $webClient.ResponseHeaders["X-Checksum-Sha256"]
-        $serverSshSignature = $webClient.ResponseHeaders[$InstallerSignatureHeaderName]
+            # Prefer the same-download headers if Windows exposes them; otherwise
+            # retain the HEAD metadata captured immediately before download.
+            $downloadChecksum = Get-ResponseHeaderValue -Headers $webClient.ResponseHeaders -Name "X-Checksum-Sha256"
+            $downloadSshSignature = Get-ResponseHeaderValue -Headers $webClient.ResponseHeaders -Name $InstallerSignatureHeaderName
+            if (-not [string]::IsNullOrWhiteSpace($downloadChecksum)) {
+                $serverChecksum = $downloadChecksum
+            }
+            if (-not [string]::IsNullOrWhiteSpace($downloadSshSignature)) {
+                $serverSshSignature = $downloadSshSignature
+            }
+
+            @{
+                Checksum = $serverChecksum
+                SshSignature = $serverSshSignature
+            }
+        } finally {
+            $webClient.Dispose()
+        }
+    }
+    if ($downloadMetadata -and -not [string]::IsNullOrWhiteSpace($downloadMetadata.Checksum)) {
+        $serverChecksum = $downloadMetadata.Checksum
+    }
+    if ($downloadMetadata -and -not [string]::IsNullOrWhiteSpace($downloadMetadata.SshSignature)) {
+        $serverSshSignature = $downloadMetadata.SshSignature
     }
 
 } catch {
@@ -691,8 +761,6 @@ try {
         Read-Host
     }
     Exit 1
-} finally {
-    if ($webClient) { $webClient.Dispose() }
 }
 
 # --- Binary Verification ---
