@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import agentsMachinesTableSource from '@/features/standalone/AgentsMachinesTable.tsx?raw';
+import agentMachineTableModelSource from '@/features/standalone/agentMachineTableModel.ts?raw';
 import standalonePageModelSource from '@/features/standalone/standalonePageModel.ts?raw';
 import standalonePageSurfaceSource from '@/features/standalone/StandalonePageSurface.tsx?raw';
 import dockerConfigsTableSource from '@/features/docker/DockerConfigsTable.tsx?raw';
@@ -356,17 +357,23 @@ describe('platform overview layout guardrails', () => {
       /getPlatformTableHeadClassForKind\('numeric-value'\)[\s\S]{0,200}?VMs/,
     );
     expect(vsphereHostsTableSource).toContain('hidden md:table-cell');
+    // AgentsMachinesTable uses a column-config pattern: kind helpers are
+    // applied dynamically in the table render, with labels living in the
+    // model. Assert against the model's column declarations.
     expect(agentsMachinesTableSource).toMatch(
-      /getPlatformTableHeadClassForKind\('name'\)[\s\S]{0,200}?Machine/,
+      /getPlatformTableHeadClassForKind\(kind\(\)\)/,
     );
-    expect(agentsMachinesTableSource).toMatch(
-      /getPlatformTableHeadClassForKind\('metric-bar'\)[\s\S]{0,200}?CPU/,
+    expect(agentMachineTableModelSource).toMatch(
+      /id:\s*'machine'[\s\S]{0,80}?label:\s*'Machine'[\s\S]{0,80}?kind:\s*'name'/,
     );
-    expect(agentsMachinesTableSource).toMatch(
-      /getPlatformTableHeadClassForKind\('metric-bar'\)[\s\S]{0,200}?Memory/,
+    expect(agentMachineTableModelSource).toMatch(
+      /id:\s*'cpu'[\s\S]{0,80}?label:\s*'CPU'[\s\S]{0,80}?kind:\s*'metric-bar'/,
     );
-    expect(agentsMachinesTableSource).toMatch(
-      /getPlatformTableHeadClassForKind\('metric-bar'\)[\s\S]{0,200}?Disk/,
+    expect(agentMachineTableModelSource).toMatch(
+      /id:\s*'memory'[\s\S]{0,80}?label:\s*'Memory'[\s\S]{0,80}?kind:\s*'metric-bar'/,
+    );
+    expect(agentMachineTableModelSource).toMatch(
+      /id:\s*'disk'[\s\S]{0,80}?label:\s*'Disk'[\s\S]{0,80}?kind:\s*'metric-bar'/,
     );
   });
 });

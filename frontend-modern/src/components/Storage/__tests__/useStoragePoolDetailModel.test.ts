@@ -91,6 +91,12 @@ describe('useStoragePoolDetailModel', () => {
         model: 'Disk A',
         temperature: 44,
         hasIssue: false,
+        errorCount: 0,
+        ioLabel: '',
+        role: '',
+        sizeLabel: '',
+        spunDown: false,
+        state: '',
       },
     ]);
   });

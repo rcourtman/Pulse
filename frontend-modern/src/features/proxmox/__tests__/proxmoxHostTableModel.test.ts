@@ -38,11 +38,11 @@ describe('proxmoxHostTableModel', () => {
     expect(compactIds).toEqual([
       'node',
       'version',
-      'uptime',
       'cpu',
       'memory',
       'disk',
       'temp',
+      'uptime',
       'vms',
       'cts',
       'cluster',
