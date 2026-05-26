@@ -228,7 +228,7 @@ function InOutBar(props: {
 
 export const ProxmoxMailGatewayDrawer: Component<{
   instanceRow: Resource;
-  onClose: () => void;
+  onClose?: () => void;
 }> = (props) => {
   const id = () => {
     const meta = props.instanceRow.pmg;
@@ -314,14 +314,16 @@ export const ProxmoxMailGatewayDrawer: Component<{
             <div class="font-mono text-[10px] text-muted break-all">{hostname()}</div>
           </Show>
         </div>
-        <button
-          type="button"
-          onClick={props.onClose}
-          class="shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-sm text-muted hover:bg-surface-hover hover:text-base-content"
-          aria-label="Close mail gateway drawer"
-        >
-          <XIcon class="h-4 w-4" />
-        </button>
+        <Show when={props.onClose}>
+          <button
+            type="button"
+            onClick={() => props.onClose?.()}
+            class="shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-sm text-muted hover:bg-surface-hover hover:text-base-content"
+            aria-label="Close mail gateway drawer"
+          >
+            <XIcon class="h-4 w-4" />
+          </button>
+        </Show>
       </header>
 
       <Show

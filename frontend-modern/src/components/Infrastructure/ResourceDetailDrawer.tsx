@@ -3,7 +3,7 @@ import type { Component } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ReportMergeModal } from './ReportMergeModal';
-import { PMGInstanceDrawer } from '@/components/PMG/PMGInstanceDrawer';
+import { ProxmoxMailGatewayDrawer } from '@/features/proxmox/ProxmoxMailGatewayDrawer';
 import { K8sDeploymentsDrawer } from '@/components/Kubernetes/K8sDeploymentsDrawer';
 import { K8sNamespacesDrawer } from '@/components/Kubernetes/K8sNamespacesDrawer';
 import { SwarmServicesDrawer } from '@/components/Docker/SwarmServicesDrawer';
@@ -224,10 +224,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               <TabAvailabilityNotice message={getSpecializedTabAvailabilityMessage('mail')} />
             }
           >
-            <PMGInstanceDrawer
-              resourceId={props.resource.id}
-              resourceName={drawer.displayName() || props.resource.id}
-            />
+            <ProxmoxMailGatewayDrawer instanceRow={props.resource} />
           </Show>
         </Show>
       </div>
