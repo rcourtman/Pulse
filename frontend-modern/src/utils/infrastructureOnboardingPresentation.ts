@@ -294,7 +294,7 @@ const AGENT_CATALOG_ITEMS: Record<
   'linux-host': {
     routeStep: 'linux-host',
     label: 'Linux, macOS, Windows host',
-    bestFor: 'Standalone machines where you want low-overhead node-local telemetry.',
+    bestFor: 'Machines where you want low-overhead node-local telemetry from Pulse Agent.',
     coverage: 'Host telemetry, services, SMART, sensors, network metrics, and remote update state',
     catalogDescription: 'Machine telemetry, services, SMART, sensors',
     searchAliases: ['host', 'server', 'machine', 'node', 'ubuntu', 'debian', 'freebsd', 'windows'],
@@ -380,7 +380,7 @@ const SOURCE_MANAGER_LABEL_OVERRIDES: Partial<
   >
 > = {
   agent: {
-    label: 'Standalone hosts',
+    label: 'Pulse Agent hosts',
     actionLabel: 'Install Pulse Agent',
   },
 };
@@ -552,7 +552,7 @@ export const getInfrastructureEmptyStateSummary = (): string =>
   'Choose an infrastructure source to start monitoring your environment.';
 
 export const getInfrastructureEmptyStateDetail = (): string =>
-  'Supported source types include TrueNAS SCALE, Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, and standalone hosts through Pulse Agent. VMware vCenter is available as a preview platform pending live support proof. Docker and Kubernetes are discovered from supported agent hosts.';
+  'Supported source types include TrueNAS SCALE, Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, and Pulse Agent hosts. VMware vCenter is available as a preview platform pending live support proof. Docker and Kubernetes are discovered from supported agent hosts.';
 
 export const getInfrastructureCoverageCompleteActionPresentation =
   (): InfrastructureCoverageCompleteActionPresentation => ({

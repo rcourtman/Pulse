@@ -1445,6 +1445,14 @@ On token-optional Pulse instances, that same governed install surface must
 support both valid paths: no-token transport after explicit confirmation, and
 credentialed transport when the operator still generates a real token. Optional
 auth may not silently downgrade the settings surface to tokenless-only mode.
+For Unix-family copied host installs, the deployment-owned shell installer must
+support preflight before privilege escalation: `--preflight-only` may run
+without root, must check both `/api/health` and the exact
+`/download/pulse-agent?arch=...` artifact for checksum metadata, and must fail
+before installation if the server cannot provide that binary. Token-bearing
+copy-paste commands must pass credentials through ephemeral `--token-file`
+transport and leave the installed service configured with the persistent
+runtime token file, never a raw `--token` process argument.
 That Windows installer-owned state must also be cleared after successful
 PowerShell uninstall, so a removed installation does not leave stale ProgramData
 identity or transport continuity behind for later lifecycle commands.

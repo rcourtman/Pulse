@@ -100,6 +100,136 @@ func TestInstallSHAgentServiceSecurityDefaults(t *testing.T) {
 	}
 }
 
+func TestInstallSHPreflightChecksAgentDownloadArtifact(t *testing.T) {
+	var requestedDownloadPath string
+	var requestedDownloadArch string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/health":
+			w.WriteHeader(http.StatusOK)
+		case "/download/pulse-agent":
+			requestedDownloadPath = r.URL.Path
+			requestedDownloadArch = r.URL.Query().Get("arch")
+			w.Header().Set("X-Checksum-Sha256", strings.Repeat("a", 64))
+			w.WriteHeader(http.StatusOK)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	cmd := exec.Command(
+		"bash",
+		repoFile("scripts", "install.sh"),
+		"--url",
+		server.URL,
+		"--preflight-only",
+		"--output",
+		"json",
+		"--non-interactive",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("preflight failed: %v\n%s", err, out)
+	}
+
+	got := string(out)
+	if !strings.Contains(got, `"code":"agent_download_available"`) {
+		t.Fatalf("preflight did not report agent download availability:\n%s", got)
+	}
+	if requestedDownloadPath != "/download/pulse-agent" {
+		t.Fatalf("download path = %q, want /download/pulse-agent", requestedDownloadPath)
+	}
+	if requestedDownloadArch == "" {
+		t.Fatalf("download arch query was empty")
+	}
+}
+
+func TestInstallSHPreflightDoesNotRequireRoot(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`if [[ $EUID -ne 0 && "$PREFLIGHT_ONLY" != "true" ]]; then`,
+		`DOWNLOAD_CHECK_URL="${PULSE_URL}/download/${BINARY_NAME}?arch=${PF_ARCH_PARAM}"`,
+		`CURL_DOWNLOAD_CHECK_ARGS=(-fsSI --connect-timeout 5 --max-time 30 -D "$PREFLIGHT_HEADERS" -o /dev/null)`,
+		`grep -i '^X-Checksum-Sha256:' "$PREFLIGHT_HEADERS"`,
+		`"agent_download_available"`,
+		`"agent_download_unavailable"`,
+		`"agent_download_checksum_missing"`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing non-root preflight download check: %s", needle)
+		}
+	}
+}
+
+func TestBuildPlistProgramArgumentsUsesSharedExecArgs(t *testing.T) {
+	script := `
+` + extractInstallShellFunction(t, "build_exec_arg_items") + `
+` + extractInstallShellFunction(t, "xml_escape") + `
+` + extractInstallShellFunction(t, "append_plist_arg") + `
+` + extractInstallShellFunction(t, "build_plist_program_arguments") + `
+		PULSE_URL="https://pulse.example/a&b"
+		PULSE_TOKEN="deadbeef"
+		INTERVAL="30s"
+		ENABLE_HOST="true"
+		ENABLE_DOCKER="false"
+		DOCKER_EXPLICIT="true"
+		ENABLE_KUBERNETES="true"
+		KUBECONFIG_PATH="/etc/kube config"
+		ENABLE_PROXMOX="true"
+		PROXMOX_TYPE="pbs"
+		INSECURE="true"
+		RUNTIME_TOKEN_FILE="/var/lib/pulse-agent/token"
+		ENABLE_COMMANDS="true"
+		HEALTH_ADDR_SET="true"
+		HEALTH_ADDR=""
+		ENROLL="true"
+		KUBE_INCLUDE_ALL_PODS="true"
+		KUBE_INCLUDE_ALL_DEPLOYMENTS="true"
+		AGENT_ID="agent-1"
+		HOSTNAME_OVERRIDE="Richard's Mac & Mini"
+		STATE_DIR="/var/lib/pulse-agent"
+		DISK_EXCLUDES=("Time Machine")
+		build_plist_program_arguments "/usr/local/bin/pulse-agent"
+		printf '%s\n' "$PLIST_ARGS"
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	got := string(out)
+	required := []string{
+		`<string>/usr/local/bin/pulse-agent</string>`,
+		`<string>https://pulse.example/a&amp;b</string>`,
+		`<string>--token-file</string>`,
+		`<string>/var/lib/pulse-agent/token</string>`,
+		`<string>--enable-docker=false</string>`,
+		`<string>--enable-proxmox</string>`,
+		`<string>--proxmox-type</string>`,
+		`<string>pbs</string>`,
+		`<string>--health-addr</string>`,
+		`<string>--hostname</string>`,
+		`<string>Richard's Mac &amp; Mini</string>`,
+		`<string>--disk-exclude</string>`,
+		`<string>Time Machine</string>`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(got, needle) {
+			t.Fatalf("plist args missing %s:\n%s", needle, got)
+		}
+	}
+	if strings.Contains(got, "--token</string>") || strings.Contains(got, "deadbeef") {
+		t.Fatalf("plist args leaked raw token:\n%s", got)
+	}
+}
+
 // TestConnectionEnvRecovery verifies the canonical helper logic that parses
 // connection.env without using shell source (to prevent injection).
 func TestConnectionEnvRecovery(t *testing.T) {

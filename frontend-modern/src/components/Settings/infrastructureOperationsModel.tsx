@@ -338,7 +338,7 @@ export const buildCommandsByPlatform = (
   linux: {
     title: 'Install on Linux',
     description:
-      'The unified installer downloads the agent binary and configures the appropriate service for your system.',
+      'The unified installer preflights this Pulse URL, verifies the matching agent binary is available, and configures the appropriate service for your system.',
     snippets: [
       {
         label: 'Install',
@@ -356,16 +356,16 @@ export const buildCommandsByPlatform = (
   macos: {
     title: 'Install on macOS',
     description:
-      'The unified installer downloads the universal binary and sets up a launchd service for background monitoring.',
+      'The unified installer preflights this Pulse URL, verifies the matching agent binary is available, and sets up a launchd service for background monitoring.',
     snippets: [
       {
         label: 'Install with launchd',
         command: unixCommand,
         note: (
           <span>
-            Command auto-escalates with <code>sudo</code> when available; otherwise run from a root
-            shell. Creates <code>/Library/LaunchDaemons/com.pulse.agent.plist</code> and starts the
-            agent automatically.
+            Command auto-escalates with <code>sudo</code> when available, so macOS may ask for your
+            admin password. Creates <code>/Library/LaunchDaemons/com.pulse.agent.plist</code> and
+            starts the agent automatically.
           </span>
         ),
       },

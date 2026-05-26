@@ -2,13 +2,6 @@ const shellQuoteArg = (value: string) => `'${value.replace(/'/g, `'\"'\"'`)}'`;
 export const powerShellQuote = (value: string) =>
   value.replace(/`/g, '``').replace(/"/g, '`"').replace(/\$/g, '`$');
 
-const withPrivilegeEscalation = (command: string) => {
-  if (!command.includes('| bash -s --')) return command;
-  return command.replace(/\|\s*bash -s --([\s\S]*)$/, (_match, args: string) => {
-    return `| { if [ "$(id -u)" -eq 0 ]; then bash -s --${args}; elif command -v sudo >/dev/null 2>&1; then sudo bash -s --${args}; else echo "Root privileges required. Run as root (su -) and retry." >&2; exit 1; fi; }`;
-  });
-};
-
 export const normalizeInstallerBaseUrl = (baseUrl: string) => baseUrl.replace(/\/+$/, '');
 
 export const resolveInstallerBaseUrl = (customBaseUrl: string, fallbackBaseUrl: string) => {
@@ -48,28 +41,50 @@ export const buildUnixAgentInstallCommand = ({
   }
   const normalizedCaCertPath = (caCertPath || '').trim();
   const normalizedToken = (token || '').trim();
-  const normalizedExtraArgs = extraArgs
-    .map((arg) => arg.trim())
-    .filter((arg) => arg.length > 0)
-    .join(' ');
-  const curlFlags = insecure ? ' -kfsSL' : ' -fsSL';
-  let command =
-    `curl${curlFlags}${normalizedCaCertPath ? ` --cacert ${shellQuoteArg(normalizedCaCertPath)}` : ''} ${shellQuoteArg(`${normalizedBaseUrl}/install.sh`)} | bash -s -- --url ${shellQuoteArg(normalizedBaseUrl)}` +
-    `${normalizedToken ? ` --token ${shellQuoteArg(normalizedToken)}` : ''}`;
+  const normalizedExtraArgs = extraArgs.map((arg) => arg.trim()).filter((arg) => arg.length > 0);
+  const installRequiresInsecure = insecure || normalizedBaseUrl.startsWith('http://');
+  const curlFlags = insecure ? '-kfsSL' : '-fsSL';
+  const caCertArg = normalizedCaCertPath
+    ? ` \\\n    --cacert ${shellQuoteArg(normalizedCaCertPath)}`
+    : '';
+  const insecureArg = installRequiresInsecure ? ` \\\n    --insecure` : '';
+  const preflightArgs = [
+    `--url ${shellQuoteArg(normalizedBaseUrl)}`,
+    '--preflight-only',
+    '--output json',
+    '--non-interactive',
+  ].join(' \\\n    ');
+  const installArgs = [
+    `--url ${shellQuoteArg(normalizedBaseUrl)}`,
+    ...(normalizedToken ? ['--token-file "$token_file"'] : []),
+    ...normalizedExtraArgs,
+    '--non-interactive',
+  ].join(' \\\n    ');
 
-  if (normalizedExtraArgs) {
-    command += ` ${normalizedExtraArgs}`;
+  return `(
+  set -e
+  tmp_dir=$(mktemp -d)
+  install_script="$tmp_dir/install.sh"
+  trap 'rm -rf "$tmp_dir"' EXIT
+  curl ${curlFlags}${normalizedCaCertPath ? ` --cacert ${shellQuoteArg(normalizedCaCertPath)}` : ''} ${shellQuoteArg(`${normalizedBaseUrl}/install.sh`)} -o "$install_script"
+  chmod +x "$install_script"${
+    normalizedToken
+      ? `
+  token_file="$tmp_dir/token"
+  umask 077
+  printf %s ${shellQuoteArg(normalizedToken)} > "$token_file"`
+      : ''
   }
-
-  if (normalizedCaCertPath) {
-    command += ` --cacert ${shellQuoteArg(normalizedCaCertPath)}`;
-  }
-
-  if (insecure || normalizedBaseUrl.startsWith('http://')) {
-    command += ' --insecure';
-  }
-
-  return withPrivilegeEscalation(command);
+  bash "$install_script" ${preflightArgs}${caCertArg}${insecureArg}
+  if [ "$(id -u)" -eq 0 ]; then
+    bash "$install_script" ${installArgs}${caCertArg}${insecureArg}
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo bash "$install_script" ${installArgs}${caCertArg}${insecureArg}
+  else
+    echo "Root privileges required. Run as root (su -) and retry." >&2
+    exit 1
+  fi
+)`;
 };
 
 export const buildPowerShellInstallScriptBootstrap = (baseUrl: string) => {

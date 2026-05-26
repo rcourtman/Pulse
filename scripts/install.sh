@@ -1278,6 +1278,32 @@ build_exec_args_array() {
     EXEC_ARGS_ARRAY=("${EXEC_ARG_ITEMS[@]}")
 }
 
+xml_escape() {
+    local value="$1"
+    value="${value//&/&amp;}"
+    value="${value//</&lt;}"
+    value="${value//>/&gt;}"
+    printf '%s' "$value"
+}
+
+append_plist_arg() {
+    local arg="$1"
+    PLIST_ARGS="${PLIST_ARGS}
+        <string>$(xml_escape "$arg")</string>"
+}
+
+build_plist_program_arguments() {
+    local executable="$1"
+    PLIST_ARGS=""
+    append_plist_arg "$executable"
+    build_exec_arg_items "true"
+
+    local arg=""
+    for arg in ${EXEC_ARG_ITEMS[@]+"${EXEC_ARG_ITEMS[@]}"}; do
+        append_plist_arg "$arg"
+    done
+}
+
 ensure_runtime_token_file() {
     local state_dir="${1:-$STATE_DIR}"
     local token_file="${state_dir}/token"
@@ -1502,7 +1528,7 @@ if [[ -n "$PROXMOX_TYPE" && "$PROXMOX_TYPE" != "pve" && "$PROXMOX_TYPE" != "pbs"
 fi
 
 # --- Check Root ---
-if [[ $EUID -ne 0 ]]; then
+if [[ $EUID -ne 0 && "$PREFLIGHT_ONLY" != "true" ]]; then
    echo "This script must be run as root. Please use sudo." 
    exit 1
 fi
@@ -1872,7 +1898,8 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
         i386|i686) PF_ARCH="386" ;;
         *) fail "Unsupported architecture: $PF_ARCH" "$EXIT_UNSUPPORTED_ARCH" ;;
     esac
-    json_event "preflight" "arch_ok" "Architecture: ${PF_OS}-${PF_ARCH}"
+    PF_ARCH_PARAM="${PF_OS}-${PF_ARCH}"
+    json_event "preflight" "arch_ok" "Architecture: ${PF_ARCH_PARAM}"
 
     # Check 2: Existing agent
     AGENT_STATUS="not_installed"
@@ -1883,7 +1910,7 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
     fi
     json_event "preflight" "$AGENT_STATUS" "Agent status: ${AGENT_STATUS}"
 
-    # Check 3: Pulse URL reachability
+    # Check 3: Pulse URL reachability and agent binary availability
     PREFLIGHT_EXIT="$EXIT_OK"
     if [[ -n "$PULSE_URL" ]]; then
         CURL_TEST_ARGS=(-sf --connect-timeout 5 -o /dev/null)
@@ -1895,6 +1922,26 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
             json_event "preflight" "pulse_unreachable" "Pulse URL not reachable" "$EXIT_PREFLIGHT_FAILED"
             PREFLIGHT_EXIT="$EXIT_PREFLIGHT_FAILED"
         fi
+
+        PREFLIGHT_HEADERS=$(mktemp)
+        TMP_FILES+=("$PREFLIGHT_HEADERS")
+        CURL_DOWNLOAD_CHECK_ARGS=(-fsSI --connect-timeout 5 --max-time 30 -D "$PREFLIGHT_HEADERS" -o /dev/null)
+        if [[ "$INSECURE" == "true" ]]; then CURL_DOWNLOAD_CHECK_ARGS+=(-k); fi
+        if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_DOWNLOAD_CHECK_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
+
+        DOWNLOAD_CHECK_URL="${PULSE_URL}/download/${BINARY_NAME}?arch=${PF_ARCH_PARAM}"
+        if curl "${CURL_DOWNLOAD_CHECK_ARGS[@]}" "$DOWNLOAD_CHECK_URL"; then
+            PREFLIGHT_EXPECTED_SHA=$(grep -i '^X-Checksum-Sha256:' "$PREFLIGHT_HEADERS" 2>/dev/null | tr -d '\r' | awk '{print $2}' || true)
+            if [[ -n "$PREFLIGHT_EXPECTED_SHA" ]]; then
+                json_event "preflight" "agent_download_available" "Agent binary available for ${PF_ARCH_PARAM}"
+            else
+                json_event "preflight" "agent_download_checksum_missing" "Agent binary download did not include checksum header" "$EXIT_CHECKSUM_FAILED"
+                PREFLIGHT_EXIT="$EXIT_CHECKSUM_FAILED"
+            fi
+        else
+            json_event "preflight" "agent_download_unavailable" "Agent binary unavailable for ${PF_ARCH_PARAM}" "$EXIT_DOWNLOAD_FAILED"
+            PREFLIGHT_EXIT="$EXIT_DOWNLOAD_FAILED"
+        fi
     fi
 
     # Output summary
@@ -1903,14 +1950,14 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
             printf '{"phase":"preflight_complete","code":"ok","message":"Preflight checks passed","exitCode":0,"data":{"arch":"%s-%s","agent_status":"%s"}}\n' \
                 "$PF_OS" "$PF_ARCH" "$AGENT_STATUS"
         else
-            log_info "Preflight checks passed (arch: ${PF_OS}-${PF_ARCH}, agent: ${AGENT_STATUS})"
+            log_info "Preflight checks passed (arch: ${PF_ARCH_PARAM}, agent: ${AGENT_STATUS})"
         fi
     else
         if [[ "$OUTPUT_FORMAT" == "json" ]]; then
             printf '{"phase":"preflight_complete","code":"failed","message":"Preflight checks failed","exitCode":%d,"data":{"arch":"%s-%s","agent_status":"%s"}}\n' \
                 "$PREFLIGHT_EXIT" "$PF_OS" "$PF_ARCH" "$AGENT_STATUS"
         else
-            log_error "Preflight checks failed (arch: ${PF_OS}-${PF_ARCH}, agent: ${AGENT_STATUS})"
+            log_error "Preflight checks failed (arch: ${PF_ARCH_PARAM}, agent: ${AGENT_STATUS})"
         fi
     fi
     exit "$PREFLIGHT_EXIT"
@@ -2043,83 +2090,16 @@ if [[ "$OS" == "darwin" ]]; then
     ensure_runtime_token_file "$STATE_DIR"
     clear_proxmox_state_if_needed
 
-    # Build program arguments array
-    PLIST_ARGS="        <string>${INSTALL_DIR}/${BINARY_NAME}</string>
-        <string>--url</string>
-        <string>${PULSE_URL}</string>
-        <string>--interval</string>
-        <string>${INTERVAL}</string>"
-    if [[ -n "$RUNTIME_TOKEN_FILE" ]]; then
-        PLIST_ARGS="${PLIST_ARGS}
-        <string>--token-file</string>
-        <string>${RUNTIME_TOKEN_FILE}</string>"
-    fi
-
-    # Always pass enable-host flag since agent defaults to true
-    if [[ "$ENABLE_HOST" == "true" ]]; then
-        PLIST_ARGS="${PLIST_ARGS}
-        <string>--enable-host</string>"
-    else
-        PLIST_ARGS="${PLIST_ARGS}
-        <string>--enable-host=false</string>"
-    fi
-    if [[ "$ENABLE_DOCKER" == "true" ]]; then
-        PLIST_ARGS="${PLIST_ARGS}
-        <string>--enable-docker</string>"
-    fi
-    if [[ "$ENABLE_KUBERNETES" == "true" ]]; then
-        PLIST_ARGS="${PLIST_ARGS}
-        <string>--enable-kubernetes</string>"
-    fi
-    if [[ -n "$KUBECONFIG_PATH" ]]; then
-        PLIST_ARGS="${PLIST_ARGS}
-        <string>--kubeconfig</string>
-        <string>${KUBECONFIG_PATH}</string>"
-    fi
-    if [[ "$KUBE_INCLUDE_ALL_PODS" == "true" ]]; then
-        PLIST_ARGS="${PLIST_ARGS}
-        <string>--kube-include-all-pods</string>"
-    fi
-    if [[ "$KUBE_INCLUDE_ALL_DEPLOYMENTS" == "true" ]]; then
-        PLIST_ARGS="${PLIST_ARGS}
-        <string>--kube-include-all-deployments</string>"
-    fi
-    if [[ "$INSECURE" == "true" ]]; then
-        PLIST_ARGS="${PLIST_ARGS}
-        <string>--insecure</string>"
-    fi
-    if [[ "$ENABLE_COMMANDS" == "true" ]]; then
-        PLIST_ARGS="${PLIST_ARGS}
-        <string>--enable-commands</string>"
-    fi
-    if [[ "$ENROLL" == "true" ]]; then
-        PLIST_ARGS="${PLIST_ARGS}
-        <string>--enroll</string>"
-    fi
-    if [[ -n "$AGENT_ID" ]]; then
-        PLIST_ARGS="${PLIST_ARGS}
-        <string>--agent-id</string>
-        <string>${AGENT_ID}</string>"
-    fi
-    if [[ -n "$STATE_DIR" ]]; then
-        PLIST_ARGS="${PLIST_ARGS}
-        <string>--state-dir</string>
-        <string>${STATE_DIR}</string>"
-    fi
-    # Add disk exclude patterns (use ${arr[@]+"${arr[@]}"} for bash 3.2 compatibility with set -u)
-    for pattern in ${DISK_EXCLUDES[@]+"${DISK_EXCLUDES[@]}"}; do
-        PLIST_ARGS="${PLIST_ARGS}
-        <string>--disk-exclude</string>
-        <string>${pattern}</string>"
-    done
+    build_plist_program_arguments "${INSTALL_DIR}/${BINARY_NAME}"
 
     PLIST_ENV=""
     if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
+        PLIST_SSL_CERT_ENV_VALUE=$(xml_escape "$SSL_CERT_ENV_VALUE")
         PLIST_ENV="
     <key>EnvironmentVariables</key>
     <dict>
         <key>${SSL_CERT_ENV_NAME}</key>
-        <string>${SSL_CERT_ENV_VALUE}</string>
+        <string>${PLIST_SSL_CERT_ENV_VALUE}</string>
     </dict>"
     fi
 

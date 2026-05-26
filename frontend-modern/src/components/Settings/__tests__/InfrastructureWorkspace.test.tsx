@@ -314,7 +314,7 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByText('Proxmox VE').closest('tr')?.className).toContain('grouped-table-row');
     expect(screen.queryByText('VMware vCenter')).toBeNull();
     expect(screen.queryByText('TrueNAS SCALE')).toBeNull();
-    expect(screen.queryByText('Standalone hosts')).toBeNull();
+    expect(screen.queryByText('Pulse Agent hosts')).toBeNull();
     expect(screen.getByRole('button', { name: /Add Proxmox VE/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Add TrueNAS SCALE/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /Install Pulse Agent/i })).toBeNull();
@@ -443,7 +443,7 @@ describe('InfrastructureWorkspace', () => {
 
     await waitFor(() => expect(screen.getByText('Proxmox VE')).toBeInTheDocument());
     const pveGroup = screen.getByText('Proxmox VE');
-    const hostGroup = screen.getByText('Standalone hosts');
+    const hostGroup = screen.getByText('Pulse Agent hosts');
     expect(pveGroup.compareDocumentPosition(hostGroup) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
@@ -489,7 +489,7 @@ describe('InfrastructureWorkspace', () => {
     expect(
       screen.getByText(/VMware vCenter is available as a preview platform/i),
     ).toBeInTheDocument();
-    expect(screen.getByText(/standalone hosts through Pulse Agent/i)).toBeInTheDocument();
+    expect(screen.getByText(/Pulse Agent hosts/i)).toBeInTheDocument();
   });
 
   it('routes discovery actions from the manager and shows discovered candidates in the matching platform group', async () => {
@@ -798,7 +798,7 @@ describe('InfrastructureWorkspace', () => {
     renderWorkspace();
 
     await waitFor(() => expect(screen.getByText('Unraid')).toBeInTheDocument());
-    expect(screen.queryByText('Standalone hosts')).toBeNull();
+    expect(screen.queryByText('Pulse Agent hosts')).toBeNull();
     expect(screen.getByText('Tower')).toBeInTheDocument();
     expect(screen.getByText('Unraid 7.1.0')).toBeInTheDocument();
     expect(screen.getByText('192.168.0.10')).toBeInTheDocument();
@@ -1006,7 +1006,7 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.queryByText('Config pending')).toBeNull();
     expect(screen.queryByText('Rollout pending')).toBeNull();
     expect(screen.getAllByText('Host telemetry').length).toBeGreaterThan(0);
-    expect(screen.queryByText('Standalone hosts')).toBeNull();
+    expect(screen.queryByText('Pulse Agent hosts')).toBeNull();
     expect(screen.getAllByText('delly')).toHaveLength(1);
     expect(screen.getAllByText('minipc')).toHaveLength(1);
   });

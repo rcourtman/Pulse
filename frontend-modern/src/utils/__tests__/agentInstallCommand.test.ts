@@ -15,19 +15,42 @@ describe('agentInstallCommand', () => {
     });
 
     expect(command).toContain("--url 'http://pulse.example:7655'");
-    expect(command).toContain("--token 'token-123'");
+    expect(command).toContain('printf %s \'token-123\' > "$token_file"');
+    expect(command).toContain('--token-file "$token_file"');
     expect(command).toContain('--insecure');
   });
 
-  it('shell-quotes canonical URL and token transport', () => {
+  it('shell-quotes canonical URL and token-file bootstrap transport', () => {
     const command = buildUnixAgentInstallCommand({
       baseUrl: "https://pulse.example/base path/agent's",
       token: "tok'en",
     });
 
-    expect(command).toContain("curl -fsSL 'https://pulse.example/base path/agent'\"'\"'s/install.sh'");
+    expect(command).toContain(
+      "curl -fsSL 'https://pulse.example/base path/agent'\"'\"'s/install.sh' -o \"$install_script\"",
+    );
     expect(command).toContain("--url 'https://pulse.example/base path/agent'\"'\"'s'");
-    expect(command).toContain("--token 'tok'\"'\"'en'");
+    expect(command).toContain("printf %s 'tok'\"'\"'en' > \"$token_file\"");
+    expect(command).toContain('--token-file "$token_file"');
+    expect(command).not.toContain("--token 'tok");
+  });
+
+  it('runs a non-root preflight before privilege escalation for Unix installs', () => {
+    const command = buildUnixAgentInstallCommand({
+      baseUrl: 'https://pulse.example',
+      token: 'token-123',
+    });
+
+    const preflightIndex = command.indexOf('--preflight-only');
+    const sudoIndex = command.indexOf('sudo bash "$install_script"');
+
+    expect(command).toContain('tmp_dir=$(mktemp -d)');
+    expect(command).toContain('trap \'rm -rf "$tmp_dir"\' EXIT');
+    expect(command).toContain('bash "$install_script" --url');
+    expect(command).toContain('--output json');
+    expect(command).toContain('--non-interactive');
+    expect(preflightIndex).toBeGreaterThan(-1);
+    expect(sudoIndex).toBeGreaterThan(preflightIndex);
   });
 
   it('normalizes trailing slashes before building installer transport', () => {
@@ -59,9 +82,11 @@ describe('agentInstallCommand', () => {
       caCertPath: '/etc/pulse/custom-ca.pem',
     });
 
-    expect(command).toContain("curl -fsSL --cacert '/etc/pulse/custom-ca.pem' 'https://pulse.example/install.sh'");
+    expect(command).toContain(
+      "curl -fsSL --cacert '/etc/pulse/custom-ca.pem' 'https://pulse.example/install.sh' -o \"$install_script\"",
+    );
     expect(command).toContain("--url 'https://pulse.example'");
-    expect(command).toContain("--token 'token-123'");
+    expect(command).toContain('--token-file "$token_file"');
     expect(command).toContain("--cacert '/etc/pulse/custom-ca.pem'");
   });
 
@@ -72,9 +97,11 @@ describe('agentInstallCommand', () => {
       insecure: true,
     });
 
-    expect(command).toContain("curl -kfsSL 'https://pulse.example/install.sh'");
+    expect(command).toContain(
+      'curl -kfsSL \'https://pulse.example/install.sh\' -o "$install_script"',
+    );
     expect(command).toContain("--url 'https://pulse.example'");
-    expect(command).toContain("--token 'token-123'");
+    expect(command).toContain('--token-file "$token_file"');
     expect(command).toContain('--insecure');
   });
 
@@ -84,9 +111,12 @@ describe('agentInstallCommand', () => {
       token: null,
     });
 
-    expect(command).toContain("curl -fsSL 'https://pulse.example/install.sh'");
+    expect(command).toContain(
+      'curl -fsSL \'https://pulse.example/install.sh\' -o "$install_script"',
+    );
     expect(command).toContain("--url 'https://pulse.example'");
     expect(command).not.toContain('--token');
+    expect(command).not.toContain('token_file=');
   });
 
   it('builds shared Windows install transport with token, insecure TLS, and custom CA continuity', () => {
@@ -138,8 +168,8 @@ describe('agentInstallCommand', () => {
       extraArgs: ['--enable-docker', '--disable-host', '--enable-commands'],
     });
 
-    expect(command).toContain("--token 'token-123'");
-    expect(command).toContain('--enable-docker --disable-host --enable-commands');
+    expect(command).toContain('--token-file "$token_file"');
+    expect(command).toContain('--enable-docker \\\n    --disable-host \\\n    --enable-commands');
   });
 
   it('preserves extra env assignments for shared Windows install transport', () => {

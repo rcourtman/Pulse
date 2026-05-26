@@ -1058,9 +1058,16 @@ profile and assignment columns, but embedded table framing must route through
 13. Keep API-backed platform onboarding explicit across
     `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`,
     `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`,
+    `frontend-modern/src/utils/agentInstallCommand.ts`,
     `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`,
     `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`, and
     `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`.
+    Machines/host onboarding means a Pulse Agent install with full host
+    telemetry, while agentless machine reachability remains Availability-owned.
+    Unix-family copied installer commands must run the shared installer
+    preflight before privilege escalation, verify the exact agent binary
+    artifact, and pass token-bearing installs through ephemeral `--token-file`
+    transport instead of raw service arguments.
     TrueNAS must be presented as an API-backed source flow through Add
     infrastructure first, not as a dedicated Unified Agent install profile. The
     agent install path may remain available for optional later agent
@@ -3064,6 +3071,14 @@ clipboard transport: the rendered Linux/macOS/BSD and Windows install snippets
 must already include the active token choice, custom-CA trust, insecure/plain-
 HTTP handling, install-profile flags, and command-execution mode instead of
 displaying one command and mutating it only during copy.
+For Unix-family host installs, that same seamless installer contract requires
+the copied command to fetch the shared installer into an ephemeral directory,
+run `install.sh --preflight-only` before privilege escalation, and fail before
+`sudo` if the selected Pulse URL or exact `/download/pulse-agent?arch=...`
+artifact is unavailable or missing checksum metadata. Token-bearing copied
+commands must pass the credential to the installer through an ephemeral
+`--token-file` and clean it up with the downloaded installer script, so the
+installed service never receives a raw `--token` argument.
 That same Windows install boundary must preserve the canonical server URL even
 for the interactive PowerShell snippet: copied commands that still prompt for a
 token must export `PULSE_URL` before invoking `install.ps1`, so the selected

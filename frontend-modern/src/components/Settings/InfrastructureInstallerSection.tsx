@@ -54,7 +54,7 @@ const INSTALLER_FOCUS_PRESENTATION: Record<
       'Start here to add the first system you want Pulse to monitor, then expand into Docker, Kubernetes, Proxmox, and related infrastructure.',
     recommendationTitle: 'Recommended install model',
     recommendationDetail:
-      'Pulse Agent is a low-overhead background service. Install it on each machine where you want full node-local telemetry such as temperatures, SMART disk health, services, Docker, or Kubernetes coverage. For Proxmox clusters, keep the cluster API connection for platform inventory and add the agent to each node for host-level augmentation.',
+      'Pulse Agent is a low-overhead background service. Machines in Pulse are systems with the agent installed and reporting full node-local telemetry such as CPU, memory, disks, network I/O, temperatures, SMART disk health, services, Docker, or Kubernetes coverage. Use Availability checks for ping-only or agentless device monitoring. For Proxmox clusters, keep the cluster API connection for platform inventory and add the agent to each node for host-level augmentation.',
     preferredProfile: 'auto',
     platforms: ALL_AGENT_PLATFORMS,
   },
@@ -64,7 +64,7 @@ const INSTALLER_FOCUS_PRESENTATION: Record<
       'Choose the command for the operating system on the machine you want Pulse to monitor.',
     recommendationTitle: 'Host install path',
     recommendationDetail:
-      'Install Pulse Agent on the machine itself. Pulse will collect host telemetry, services, SMART disk health, sensors, and network metrics from that host after it checks in.',
+      'Install Pulse Agent on the machine itself. Pulse will collect CPU, memory, disk, network I/O, services, SMART disk health, sensors, and other host telemetry after it checks in. Use Availability checks instead when you only want an agentless reachability probe.',
     preferredProfile: 'auto',
     platforms: ALL_AGENT_PLATFORMS,
   },
@@ -298,7 +298,9 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
             <ul class="space-y-1 text-xs text-blue-700 dark:text-blue-300">
               <li class="flex items-start">
                 <span class="mr-2 mt-0.5 text-emerald-500">✓</span>
-                <span>Pulse Agent on this host reports its own telemetry to this Pulse instance.</span>
+                <span>
+                  Pulse Agent on this host reports its own telemetry to this Pulse instance.
+                </span>
               </li>
               <li class="flex items-start">
                 <span class="mr-2 mt-0.5 text-emerald-500">✓</span>
@@ -450,9 +452,10 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                     Installation commands
                   </h4>
                   <p class={`mt-0.5 text-xs text-muted ${state.requiresToken() ? 'ml-6' : ''}`}>
-                    Copy the default command for the first host first, then repeat the install on
-                    each machine where you want full node-local telemetry. Open advanced options
-                    only if this machine needs custom connection or install settings.
+                    Copy the default command for the first host first. It checks this Pulse URL and
+                    the matching agent binary before asking for administrator privileges, then
+                    installs Pulse Agent as a background service on each machine where you want full
+                    node-local telemetry.
                   </p>
                 </div>
               </div>

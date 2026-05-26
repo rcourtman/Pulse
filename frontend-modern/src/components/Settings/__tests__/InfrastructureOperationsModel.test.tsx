@@ -244,6 +244,16 @@ describe('infrastructure operations model', () => {
       'Pulse Agent is a low-overhead background service.',
     );
     expect(infrastructureInstallerSectionSource).toContain(
+      'Machines in Pulse are systems with the agent installed',
+    );
+    expect(infrastructureInstallerSectionSource).toContain(
+      'Use Availability checks for ping-only or agentless device monitoring.',
+    );
+    expect(infrastructureInstallerSectionSource).toContain('checks this Pulse URL and');
+    expect(infrastructureInstallerSectionSource).toContain(
+      'before asking for administrator privileges',
+    );
+    expect(infrastructureInstallerSectionSource).toContain(
       'For Proxmox clusters, keep the cluster API',
     );
     expect(infrastructureInstallerSectionSource).toContain('host-level');
@@ -264,6 +274,11 @@ describe('infrastructure operations model', () => {
     expect(infrastructureInstallerSectionSource).not.toContain(
       'Copy disabled until an install token is generated',
     );
+    expect(infrastructureOperationsModelSource).toContain(
+      'preflights this Pulse URL, verifies the matching agent binary is available',
+    );
+    expect(infrastructureOperationsModelSource).toContain('macOS may ask for your');
+    expect(infrastructureOperationsModelSource).toContain('admin password');
   });
 
   it('keeps first-host completion handoff on Infrastructure instead of the retired dashboard', async () => {

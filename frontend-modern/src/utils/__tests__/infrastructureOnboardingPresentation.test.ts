@@ -128,7 +128,7 @@ describe('infrastructureOnboardingPresentation', () => {
       }),
       expect.objectContaining({
         type: 'agent',
-        label: 'Standalone hosts',
+        label: 'Pulse Agent hosts',
         actionLabel: 'Install Pulse Agent',
       }),
     ]);
@@ -215,7 +215,7 @@ describe('infrastructureOnboardingPresentation', () => {
     expect(getInfrastructureEmptyStateDetail()).toContain(
       'VMware vCenter is available as a preview platform',
     );
-    expect(getInfrastructureEmptyStateDetail()).toContain('standalone hosts through Pulse Agent');
+    expect(getInfrastructureEmptyStateDetail()).toContain('Pulse Agent hosts');
     expect(getInfrastructureEmptyStateDetail()).toContain('Docker and Kubernetes are discovered');
     expect(getInfrastructureEmptyStateDetail()).not.toContain('network endpoints');
   });

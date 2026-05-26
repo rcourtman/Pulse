@@ -462,6 +462,35 @@ func TestDownloadUnifiedAgent_DevPrereleaseRejectsGitHubFallback(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "go build -o bin/pulse-agent-linux-amd64")
 }
 
+func TestDownloadUnifiedAgent_DevModeReportsRequestedLocalBuildCommand(t *testing.T) {
+	router, _ := setupUnifiedAgentRouter(t)
+	router.serverVersion = "dev"
+
+	req := httptest.NewRequest(http.MethodGet, "/api/install/agent?arch=darwin-arm64", nil)
+	w := httptest.NewRecorder()
+
+	router.handleDownloadUnifiedAgent(w, req)
+
+	require.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Body.String(), "Agent binary not found for \"darwin-arm64\" in dev mode.")
+	assert.Contains(t, w.Body.String(), "CGO_ENABLED=0 GOOS=darwin GOARCH=arm64")
+	assert.Contains(t, w.Body.String(), "go build -o bin/pulse-agent-darwin-arm64 ./cmd/pulse-agent")
+	assert.NotContains(t, w.Body.String(), "bin/pulse-agent-linux-amd64")
+}
+
+func TestUnifiedAgentLocalBuildCommandHandlesArmVariants(t *testing.T) {
+	assert.Equal(
+		t,
+		"CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -o bin/pulse-agent-linux-armv7 ./cmd/pulse-agent",
+		unifiedAgentLocalBuildCommand("linux-armv7"),
+	)
+	assert.Equal(
+		t,
+		"CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 go build -o bin/pulse-agent-linux-armv6 ./cmd/pulse-agent",
+		unifiedAgentLocalBuildCommand("linux-armv6"),
+	)
+}
+
 func TestNormalizeUnifiedAgentArch(t *testing.T) {
 	tests := []struct {
 		input    string

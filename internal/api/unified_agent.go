@@ -125,6 +125,27 @@ func normalizeUnifiedAgentArch(arch string) string {
 	}
 }
 
+func unifiedAgentLocalBuildCommand(normalized string) string {
+	goos, goarch, ok := strings.Cut(strings.TrimSpace(normalized), "-")
+	if !ok || goos == "" || goarch == "" {
+		goos = "linux"
+		goarch = "amd64"
+		normalized = "linux-amd64"
+	}
+
+	env := []string{"CGO_ENABLED=0", "GOOS=" + goos}
+	switch goarch {
+	case "armv7":
+		env = append(env, "GOARCH=arm", "GOARM=7")
+	case "armv6":
+		env = append(env, "GOARCH=arm", "GOARM=6")
+	default:
+		env = append(env, "GOARCH="+goarch)
+	}
+
+	return fmt.Sprintf("%s go build -o bin/pulse-agent-%s ./cmd/pulse-agent", strings.Join(env, " "), normalized)
+}
+
 // handleDownloadUnifiedAgent serves the pulse-agent binary
 func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet && req.Method != http.MethodHead {
@@ -237,7 +258,7 @@ func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Req
 					strings.Join(invalidCandidates, "\n  "),
 				)
 			}
-			http.Error(w, reason+"\nBuild with:\n  GOOS=linux GOARCH=amd64 go build -o bin/pulse-agent-linux-amd64 ./cmd/pulse-agent", http.StatusNotFound)
+			http.Error(w, reason+"\nBuild with:\n  "+unifiedAgentLocalBuildCommand(normalized), http.StatusNotFound)
 			return
 		}
 		r.proxyAgentBinaryFromGitHub(w, req, normalized)

@@ -448,6 +448,12 @@ recovery scope, or a storage/recovery-owned secret source.
    checksum or detached-signature vocabulary away from the canonical
    `X-Checksum-Sha256`, `X-Signature-Ed25519`, and base64-encoded
    `X-Signature-SSHSIG` contract.
+   When that adjacent unified-agent download path is missing a local dev
+   binary, its operator guidance must remain scoped to the requested
+   OS/architecture. Storage/recovery-adjacent support flows may observe that
+   error, but they must not hard-code a Linux-only rebuild command or infer
+   recovery ownership from a missing macOS, Windows, FreeBSD, or Linux agent
+   artifact.
    That same adjacent API boundary also owns pre-auth local recovery
    containment. Storage- and recovery-adjacent quick setup or break-glass
    routes may exist before auth is configured, but they must stay

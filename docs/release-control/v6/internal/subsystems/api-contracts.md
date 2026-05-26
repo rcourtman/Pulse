@@ -280,6 +280,10 @@ platform page needs source-native backup columns.
     payload phases; it does not create a second node setup API model or allow
     page-local payload ownership.
 32. `internal/api/agent_install_command_shared.go` shared with `agent-lifecycle`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
+    Frontend and backend Unix install command builders must stay on the same
+    token-file and preflight transport contract: tokens are passed to the
+    installer as ephemeral files, and host install snippets must verify the
+    target Pulse URL plus exact agent binary artifact before root escalation.
 33. `internal/api/ai_handler.go` shared with `ai-runtime`: Pulse Assistant handlers are both an AI runtime control surface and a canonical API payload contract boundary.
     Assistant session list payloads may expose only the safe
     `handoff_summary` projection needed by the browser to mark and restore a
@@ -402,6 +406,10 @@ platform page needs source-native backup columns.
 49. `internal/api/slo.go` shared with `performance-and-scalability`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
 50. `internal/api/system_settings.go` shared with `security-privacy`: the system settings telemetry and auth controls are both a security/privacy control surface and a canonical API payload contract boundary.
 51. `internal/api/unified_agent.go` shared with `agent-lifecycle`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+    Development-mode missing-binary responses must report the build command
+    for the requested normalized OS/architecture, not a hard-coded Linux
+    target, so installer preflight failures point operators at the artifact
+    they actually need.
 52. `internal/api/updates.go` shared with `deployment-installability`: update handlers are both a deployment-installability control surface and a canonical API payload contract boundary.
 The platform-connections API contract also owns inactive monitored-system
 candidate semantics end to end. `enabled=false` on TrueNAS or VMware preview,
@@ -3628,6 +3636,13 @@ parity: the rendered Linux/macOS/BSD and Windows install snippets in
 transport, insecure/plain-HTTP behavior, install-profile env/flags, and
 command-execution mode, rather than showing a stale base command that is only
 rewritten at copy time.
+For Unix-family frontend-generated install snippets, that same contract also
+owns the preflight and credential transport shape: the rendered command must
+download the shared installer into an ephemeral directory, run
+`install.sh --preflight-only` before root/sudo escalation, verify that
+`/download/pulse-agent?arch=...` is reachable with checksum metadata, and
+pass selected tokens to the installer through an ephemeral `--token-file`
+instead of a raw `--token` service argument.
 The loopback-originated install and setup payloads now also preserve the full
 configured `PublicURL` when that URL is the canonical external route, instead
 of rewriting only the host and inheriting an `http://` request-local scheme
