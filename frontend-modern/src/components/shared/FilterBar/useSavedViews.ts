@@ -6,7 +6,14 @@ export interface SavedView {
   name: string;
   query: string;
   savedAt: number;
+  version: number;
+  isDefault?: boolean;
 }
+
+// Bump when the on-wire shape of a saved view's `query` changes incompatibly
+// (e.g. a FilterDef renames its URL key or changes encoding). Reads tolerate
+// missing version by treating entries as v1.
+const CURRENT_VERSION = 1;
 
 const STORAGE_PREFIX = 'pulse:filterbar:saved-views:';
 
@@ -20,6 +27,12 @@ const isSavedView = (entry: unknown): entry is SavedView =>
   typeof (entry as SavedView).query === 'string' &&
   typeof (entry as SavedView).savedAt === 'number';
 
+const normalize = (entry: SavedView): SavedView => ({
+  ...entry,
+  version: typeof entry.version === 'number' ? entry.version : 1,
+  isDefault: entry.isDefault === true,
+});
+
 const readStored = (key: string): SavedView[] => {
   if (typeof window === 'undefined') return [];
   try {
@@ -27,7 +40,7 @@ const readStored = (key: string): SavedView[] => {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isSavedView);
+    return parsed.filter(isSavedView).map(normalize);
   } catch {
     return [];
   }
@@ -49,11 +62,17 @@ const generateId = (): string => {
   return `view-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 };
 
+export interface ApplyViewOptions {
+  replace?: boolean;
+}
+
 export interface UseSavedViewsResult {
   views: Accessor<SavedView[]>;
   saveCurrent: (name: string) => SavedView | null;
   removeView: (id: string) => void;
-  applyView: (view: SavedView) => void;
+  applyView: (view: SavedView, options?: ApplyViewOptions) => void;
+  setDefault: (id: string) => void;
+  clearDefault: () => void;
 }
 
 export function useSavedViews(key: string): UseSavedViewsResult {
@@ -61,8 +80,25 @@ export function useSavedViews(key: string): UseSavedViewsResult {
   const location = useLocation();
   const [views, setViews] = createSignal<SavedView[]>([]);
 
+  const applyView = (view: SavedView, options?: ApplyViewOptions): void => {
+    const path = `${location.pathname}${view.query ? `?${view.query}` : ''}`;
+    navigate(path, { replace: options?.replace ?? false });
+  };
+
   onMount(() => {
-    setViews(readStored(key));
+    const stored = readStored(key);
+    setViews(stored);
+    // Auto-apply default view on a fresh landing only. If the URL already
+    // carries a query the user (or a deep link) chose it explicitly and we
+    // leave it alone. Replace the history entry so the back button doesn't
+    // bounce against an empty-query state that would just re-fire the
+    // default and trap navigation.
+    if (typeof window !== 'undefined' && window.location.search === '') {
+      const fallback = stored.find((view) => view.isDefault === true);
+      if (fallback) {
+        applyView(fallback, { replace: true });
+      }
+    }
   });
 
   const saveCurrent = (name: string): SavedView | null => {
@@ -75,6 +111,7 @@ export function useSavedViews(key: string): UseSavedViewsResult {
       name: trimmed,
       query,
       savedAt: Date.now(),
+      version: CURRENT_VERSION,
     };
     const next = [...views(), view];
     setViews(next);
@@ -88,10 +125,22 @@ export function useSavedViews(key: string): UseSavedViewsResult {
     writeStored(key, next);
   };
 
-  const applyView = (view: SavedView): void => {
-    const path = `${location.pathname}${view.query ? `?${view.query}` : ''}`;
-    navigate(path, { replace: false });
+  const setDefault = (id: string): void => {
+    const next = views().map((view) => ({
+      ...view,
+      isDefault: view.id === id,
+    }));
+    setViews(next);
+    writeStored(key, next);
   };
 
-  return { views, saveCurrent, removeView, applyView };
+  const clearDefault = (): void => {
+    const next = views().map((view) =>
+      view.isDefault ? { ...view, isDefault: false } : view,
+    );
+    setViews(next);
+    writeStored(key, next);
+  };
+
+  return { views, saveCurrent, removeView, applyView, setDefault, clearDefault };
 }

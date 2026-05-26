@@ -1,6 +1,7 @@
 import { Component, For, Show, createEffect, createSignal, onCleanup } from 'solid-js';
 import BookmarkIcon from 'lucide-solid/icons/bookmark';
 import PlusIcon from 'lucide-solid/icons/plus';
+import StarIcon from 'lucide-solid/icons/star';
 import XIcon from 'lucide-solid/icons/x';
 import { filterActionButtonClass } from '@/components/shared/FilterToolbar';
 import { useSavedViews, type SavedView } from './useSavedViews';
@@ -10,7 +11,8 @@ interface SavedViewsMenuProps {
 }
 
 export const SavedViewsMenu: Component<SavedViewsMenuProps> = (props) => {
-  const { views, saveCurrent, removeView, applyView } = useSavedViews(props.storageKey);
+  const { views, saveCurrent, removeView, applyView, setDefault, clearDefault } =
+    useSavedViews(props.storageKey);
   const [open, setOpen] = createSignal(false);
   const [savePromptOpen, setSavePromptOpen] = createSignal(false);
   const [name, setName] = createSignal('');
@@ -123,6 +125,40 @@ export const SavedViewsMenu: Component<SavedViewsMenuProps> = (props) => {
                             title={view.name}
                           >
                             {view.name}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (view.isDefault === true) {
+                                clearDefault();
+                              } else {
+                                setDefault(view.id);
+                              }
+                            }}
+                            aria-label={
+                              view.isDefault === true
+                                ? `Unset "${view.name}" as default`
+                                : `Set "${view.name}" as default`
+                            }
+                            title={
+                              view.isDefault === true
+                                ? 'Default view — applied when you land on this page'
+                                : 'Set as default for this page'
+                            }
+                            class={
+                              view.isDefault === true
+                                ? 'rounded-full p-0.5 text-amber-500 opacity-100'
+                                : 'rounded-full p-0.5 text-muted opacity-0 transition-opacity hover:text-base-content group-hover:opacity-100 focus-visible:opacity-100'
+                            }
+                          >
+                            <StarIcon
+                              class={
+                                view.isDefault === true
+                                  ? 'h-3 w-3 fill-current'
+                                  : 'h-3 w-3'
+                              }
+                            />
                           </button>
                           <button
                             type="button"
