@@ -66,12 +66,14 @@ describe('agentMachineTableModel', () => {
     ).toBe(64);
   });
 
-  it('includes sensor and active SMART disk temperatures in the machine temperature title', () => {
+  it('includes agent sensor, SMART, fan, and additional readings in the temperature title', () => {
     const title = getAgentMachineTemperatureTitle(
       resource({
         agent: {
           sensors: {
             temperatureCelsius: { 'cpu.package': 61 },
+            fanRpm: { cpu_fan: 1_400 },
+            additional: { nvme0: 42 },
             smart: [
               { device: '/dev/sda', model: 'Cold Standby', temperature: 33, standby: true },
               { device: '/dev/sdb', model: 'Archive HDD', temperature: 38 },
@@ -81,9 +83,17 @@ describe('agentMachineTableModel', () => {
       }),
     );
 
-    expect(title.split('\n')).toContain('cpu.package: 61°C');
-    expect(title.split('\n')).toContain('Disk /dev/sdb Archive HDD: 38°C');
-    expect(title).not.toContain('Cold Standby');
+    expect(title.split('\n')).toEqual([
+      'Temperatures',
+      'cpu.package: 61°C',
+      'Disk Temperatures',
+      'Disk /dev/sdb Archive HDD: 38°C',
+      'Disk /dev/sda Cold Standby: standby',
+      'Fan Speeds',
+      'cpu_fan: 1400 RPM',
+      'Other Sensors',
+      'nvme0: 42°C',
+    ]);
   });
 
   it('sorts machines by SMART fallback temperature when no direct temperature is present', () => {

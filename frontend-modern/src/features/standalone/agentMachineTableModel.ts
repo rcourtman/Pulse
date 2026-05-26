@@ -114,6 +114,10 @@ type TemperatureReading = {
   value: number;
 };
 
+type SmartTemperatureReading = TemperatureReading & {
+  standby?: boolean;
+};
+
 const positiveTemperature = (value: number | undefined): number | undefined => {
   const metric = finiteMetric(value);
   return metric !== undefined && metric > 0 ? metric : undefined;
@@ -122,35 +126,57 @@ const positiveTemperature = (value: number | undefined): number | undefined => {
 const maxTemperatureReading = (readings: readonly TemperatureReading[]): number | undefined =>
   readings.length > 0 ? Math.max(...readings.map((reading) => reading.value)) : undefined;
 
-const getSensorTemperatureReadings = (machine: Resource): TemperatureReading[] =>
-  Object.entries(machine.agent?.sensors?.temperatureCelsius ?? {}).reduce<TemperatureReading[]>(
-    (readings, [label, value]) => {
-      const temperature = positiveTemperature(value);
-      if (temperature !== undefined) {
-        readings.push({ label, value: temperature });
-      }
-      return readings;
-    },
-    [],
-  );
+const getPositiveRecordReadings = (
+  values: Record<string, number> | undefined,
+): TemperatureReading[] =>
+  Object.entries(values ?? {}).reduce<TemperatureReading[]>((readings, [label, value]) => {
+    const temperature = positiveTemperature(value);
+    if (temperature !== undefined) {
+      readings.push({ label, value: temperature });
+    }
+    return readings;
+  }, []);
 
-const getSmartTemperatureReadings = (machine: Resource): TemperatureReading[] =>
-  (machine.agent?.sensors?.smart ?? []).reduce<TemperatureReading[]>((readings, disk) => {
-    if (disk.standby) return readings;
+const getSensorTemperatureReadings = (machine: Resource): TemperatureReading[] =>
+  getPositiveRecordReadings(machine.agent?.sensors?.temperatureCelsius);
+
+const getAdditionalTemperatureReadings = (machine: Resource): TemperatureReading[] =>
+  getPositiveRecordReadings(machine.agent?.sensors?.additional);
+
+const getFanReadings = (machine: Resource): TemperatureReading[] =>
+  getPositiveRecordReadings(machine.agent?.sensors?.fanRpm);
+
+const getSmartTemperatureReadings = (machine: Resource): SmartTemperatureReading[] =>
+  (machine.agent?.sensors?.smart ?? []).reduce<SmartTemperatureReading[]>((readings, disk) => {
     const temperature = positiveTemperature(disk.temperature);
-    if (temperature === undefined) return readings;
+    if (!disk.standby && temperature === undefined) return readings;
 
     const device = asTrimmedString(disk.device) ?? 'disk';
     const model = asTrimmedString(disk.model);
     readings.push({
       label: model ? `${device} ${model}` : device,
-      value: temperature,
+      value: temperature ?? 0,
+      standby: disk.standby,
     });
     return readings;
   }, []);
 
+const getActiveSmartTemperatureReadings = (machine: Resource): TemperatureReading[] =>
+  getSmartTemperatureReadings(machine).filter(
+    (reading): reading is TemperatureReading => !reading.standby && reading.value > 0,
+  );
+
 const byHighestTemperature = (left: TemperatureReading, right: TemperatureReading): number =>
   right.value - left.value || left.label.localeCompare(right.label, undefined, { numeric: true });
+
+const byLabel = (left: TemperatureReading, right: TemperatureReading): number =>
+  left.label.localeCompare(right.label, undefined, { numeric: true });
+
+const formatTemperatureLine = (reading: TemperatureReading): string =>
+  `${reading.label}: ${Math.round(reading.value)}°C`;
+
+const formatSection = (heading: string, lines: readonly string[]): string[] =>
+  lines.length > 0 ? [heading, ...lines] : [];
 
 const getMetricPercent = (metric: Resource['cpu'] | undefined): number | undefined =>
   finiteMetric(metric?.current);
@@ -196,7 +222,7 @@ export const getAgentMachineTemperatureCelsius = (machine: Resource): number | u
 
   return (
     maxTemperatureReading(getSensorTemperatureReadings(machine)) ??
-    maxTemperatureReading(getSmartTemperatureReadings(machine))
+    maxTemperatureReading(getActiveSmartTemperatureReadings(machine))
   );
 };
 
@@ -204,12 +230,30 @@ export const getAgentMachineTemperatureTitle = (machine: Resource): string => {
   const sensorReadings = getSensorTemperatureReadings(machine)
     .sort(byHighestTemperature)
     .slice(0, 6)
-    .map((reading) => `${reading.label}: ${Math.round(reading.value)}°C`);
-  const smartReadings = getSmartTemperatureReadings(machine)
+    .map(formatTemperatureLine);
+  const activeSmartReadings = getActiveSmartTemperatureReadings(machine)
     .sort(byHighestTemperature)
     .slice(0, 6)
     .map((reading) => `Disk ${reading.label}: ${Math.round(reading.value)}°C`);
-  return [...sensorReadings, ...smartReadings].join('\n');
+  const standbySmartReadings = getSmartTemperatureReadings(machine)
+    .filter((reading) => reading.standby)
+    .sort(byLabel)
+    .slice(0, 6)
+    .map((reading) => `Disk ${reading.label}: standby`);
+  const fanReadings = getFanReadings(machine)
+    .sort(byLabel)
+    .slice(0, 6)
+    .map((reading) => `${reading.label}: ${Math.round(reading.value)} RPM`);
+  const additionalReadings = getAdditionalTemperatureReadings(machine)
+    .sort(byHighestTemperature)
+    .slice(0, 6)
+    .map(formatTemperatureLine);
+  return [
+    ...formatSection('Temperatures', sensorReadings),
+    ...formatSection('Disk Temperatures', [...activeSmartReadings, ...standbySmartReadings]),
+    ...formatSection('Fan Speeds', fanReadings),
+    ...formatSection('Other Sensors', additionalReadings),
+  ].join('\n');
 };
 
 export const timestampMillisFrom = (
