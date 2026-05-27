@@ -84,10 +84,13 @@ export function useWorkloadUrlSync(options: WorkloadsWorkloadUrlSyncOptions) {
     if (options.viewMode() !== 'pod') return;
     const selected = (options.selectedKubernetesNamespace() || '').trim();
     if (!selected) return;
+    // While guests haven't loaded the options list is empty; skipping prevents
+    // the cleanup from stripping a perfectly valid URL value (e.g. one applied
+    // from a saved view) before data arrives.
+    const candidates = options.kubernetesNamespaceOptions();
+    if (candidates.length === 0) return;
     const normalized = selected.toLowerCase();
-    const exists = options
-      .kubernetesNamespaceOptions()
-      .some((value) => value.toLowerCase() === normalized);
+    const exists = candidates.some((value) => value.toLowerCase() === normalized);
     if (!exists) {
       options.setSelectedKubernetesNamespace(null);
     }
@@ -98,10 +101,10 @@ export function useWorkloadUrlSync(options: WorkloadsWorkloadUrlSyncOptions) {
     if (!isContainerWorkloadViewMode(options.viewMode())) return;
     const selected = options.containerRuntime().trim();
     if (!selected) return;
+    const candidates = options.containerRuntimeOptions();
+    if (candidates.length === 0) return;
     const normalized = selected.toLowerCase();
-    const exists = options
-      .containerRuntimeOptions()
-      .some((value) => value.toLowerCase() === normalized);
+    const exists = candidates.some((value) => value.toLowerCase() === normalized);
     if (!exists) {
       options.setContainerRuntime('');
     }
