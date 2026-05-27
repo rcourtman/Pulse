@@ -229,8 +229,12 @@ jobs:
           echo "Running install.sh --archive against the published tarball..."
           # docker exec without -t leaves stdin without a TTY, which install.sh's
           # safe_read helper detects and falls through to defaults on every prompt.
-          docker exec "${container_name}" \
-            bash -lc "cd /smoke && bash install.sh --archive /smoke/${tarball} --disable-auto-updates"
+          # PULSE_INSTALL_ALLOW_DOCKER=1 opts the smoke harness past install.sh's
+          # Docker-environment refusal — install.sh treats the test container as
+          # a normal systemd host, which is the exact contract this gate exists
+          # to validate.
+          docker exec -e PULSE_INSTALL_ALLOW_DOCKER=1 "${container_name}" \
+            bash -lc "cd /smoke && PULSE_INSTALL_ALLOW_DOCKER=1 bash install.sh --archive /smoke/${tarball} --disable-auto-updates"
 
           echo "Waiting for pulse.service to become active..."
           for i in $(seq 1 60); do

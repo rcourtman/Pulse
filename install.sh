@@ -780,6 +780,13 @@ check_docker_environment() {
        grep -q docker /proc/self/cgroup 2>/dev/null || \
        [[ -f /run/.containerenv ]] || \
        [[ "${container:-}" == "docker" ]]; then
+        # The install.sh smoke gate exercises the documented systemd install
+        # path inside a privileged systemd-in-Docker test container. That is
+        # the one legitimate case for bypassing this guard.
+        if [[ "${PULSE_INSTALL_ALLOW_DOCKER:-}" == "1" ]]; then
+            print_warn "Docker environment detected but PULSE_INSTALL_ALLOW_DOCKER=1 set; continuing."
+            return 0
+        fi
         print_error "Docker environment detected"
         echo "Please use the Docker image directly: docker run -d -p 7655:7655 $(repo_docker_image_ref latest)"
         echo "See: $(repo_docker_docs_url)"
