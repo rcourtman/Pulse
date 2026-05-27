@@ -37,7 +37,6 @@ export default function AuditLogPanel() {
   const {
     activeFilterChips,
     activeFilterCount,
-    applyFilters,
     auditLoggingEnabled,
     autoVerifyEnabled,
     autoVerifyLimit,
@@ -248,12 +247,6 @@ export default function AuditLogPanel() {
             <option value="100">100 / page</option>
             <option value="200">200 / page</option>
           </FormSelect>
-          <button
-            onClick={applyFilters}
-            class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
-          >
-            Apply
-          </button>
           <button
             onClick={clearFilters}
             class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover"

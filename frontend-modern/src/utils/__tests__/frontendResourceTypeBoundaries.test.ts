@@ -3371,7 +3371,11 @@ describe('frontend resource type boundaries', () => {
     expect(auditLogPresentationSource).toContain('export function getAuditLogLoadingState');
     expect(auditLogPresentationSource).toContain('export function getAuditLogEmptyState');
     expect(auditLogStateSource).toContain('export const useAuditLogPanelState =');
-    expect(auditLogStateSource).toContain('createLocalStorageStringSignal');
+    // Filter state lives in URL search params (live-apply + shareable); page
+    // state (offset, size, autoVerify prefs) stays in localStorage.
+    expect(auditLogStateSource).toContain("useLocation, useNavigate } from '@solidjs/router'");
+    expect(auditLogStateSource).toContain('createLocalStorageNumberSignal');
+    expect(auditLogStateSource).not.toContain('createLocalStorageStringSignal');
     expect(auditLogStateSource).toContain('const fetchAuditEvents = async (');
     expect(auditLogStateSource).toContain('const verifyAllEvents = async (');
     expect(auditLogStateSource).not.toContain('trackPaywallViewed');

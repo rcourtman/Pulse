@@ -1,8 +1,9 @@
 import { createEffect, createMemo, createSignal, onCleanup, onMount, untrack } from 'solid-js';
+import type { Accessor } from 'solid-js';
+import { useLocation, useNavigate } from '@solidjs/router';
 import {
   createLocalStorageBooleanSignal,
   createLocalStorageNumberSignal,
-  createLocalStorageStringSignal,
   STORAGE_KEYS,
 } from '@/utils/localStorage';
 import { apiFetch } from '@/utils/apiClient';
@@ -59,29 +60,64 @@ type VerifyAllOptions = {
 
 const ALLOWED_VERIFICATION_FILTERS = new Set(['all', 'needs', 'verified', 'failed']);
 const ALLOWED_SUCCESS_FILTERS = new Set(['all', 'success', 'failed']);
+const ALLOWED_EVENT_FILTERS = new Set(['', 'login', 'logout', 'config_change', 'startup']);
+const USER_FILTER_DEBOUNCE_MS = 300;
+
+const parseEventFilter = (raw: string | null | undefined): string =>
+  ALLOWED_EVENT_FILTERS.has(raw ?? '') ? (raw ?? '') : '';
+const parseSuccessFilter = (raw: string | null | undefined): string =>
+  ALLOWED_SUCCESS_FILTERS.has(raw ?? '') ? (raw ?? 'all') : 'all';
+const parseVerificationFilter = (raw: string | null | undefined): string =>
+  ALLOWED_VERIFICATION_FILTERS.has(raw ?? '') ? (raw ?? 'all') : 'all';
 
 export const useAuditLogPanelState = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [events, setEvents] = createSignal<AuditEvent[]>([]);
   const [totalEvents, setTotalEvents] = createSignal(0);
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
   const [isPersistent, setIsPersistent] = createSignal(false);
-  const [eventFilter, setEventFilter] = createLocalStorageStringSignal(
-    STORAGE_KEYS.AUDIT_EVENT_FILTER,
-    '',
-  );
-  const [userFilter, setUserFilter] = createLocalStorageStringSignal(
-    STORAGE_KEYS.AUDIT_USER_FILTER,
-    '',
-  );
-  const [successFilter, setSuccessFilter] = createLocalStorageStringSignal(
-    STORAGE_KEYS.AUDIT_SUCCESS_FILTER,
-    'all',
-  );
-  const [verificationFilter, setVerificationFilter] = createLocalStorageStringSignal(
-    STORAGE_KEYS.AUDIT_VERIFICATION_FILTER,
-    'all',
-  );
+
+  const updateSearchParam = (mutate: (params: URLSearchParams) => void): void => {
+    const params = new URLSearchParams(location.search);
+    mutate(params);
+    const query = params.toString();
+    navigate(`${location.pathname}${query ? `?${query}` : ''}`, { replace: true });
+  };
+
+  const eventFilter: Accessor<string> = () =>
+    parseEventFilter(new URLSearchParams(location.search).get('event'));
+  const setEventFilter = (value: string): void => {
+    updateSearchParam((params) => {
+      if (parseEventFilter(value) === '') params.delete('event');
+      else params.set('event', value);
+    });
+  };
+  const userFilter: Accessor<string> = () =>
+    new URLSearchParams(location.search).get('user') ?? '';
+  const setUserFilter = (value: string): void => {
+    updateSearchParam((params) => {
+      if (value === '') params.delete('user');
+      else params.set('user', value);
+    });
+  };
+  const successFilter: Accessor<string> = () =>
+    parseSuccessFilter(new URLSearchParams(location.search).get('success'));
+  const setSuccessFilter = (value: string): void => {
+    updateSearchParam((params) => {
+      if (parseSuccessFilter(value) === 'all') params.delete('success');
+      else params.set('success', value);
+    });
+  };
+  const verificationFilter: Accessor<string> = () =>
+    parseVerificationFilter(new URLSearchParams(location.search).get('verification'));
+  const setVerificationFilter = (value: string): void => {
+    updateSearchParam((params) => {
+      if (parseVerificationFilter(value) === 'all') params.delete('verification');
+      else params.set('verification', value);
+    });
+  };
   const [pageSize, setPageSize] = createLocalStorageNumberSignal(STORAGE_KEYS.AUDIT_PAGE_SIZE, 100);
   const [pageOffset, setPageOffset] = createLocalStorageNumberSignal(
     STORAGE_KEYS.AUDIT_PAGE_OFFSET,
@@ -452,7 +488,7 @@ export const useAuditLogPanelState = () => {
     setPageInput('');
   };
 
-  const applyFilters = () => {
+  const refetchFromFirstPage = () => {
     resetPaging();
     void fetchAuditEvents({ offset: 0 });
   };
@@ -463,8 +499,6 @@ export const useAuditLogPanelState = () => {
     setUserFilter('');
     setSuccessFilter('all');
     setVerificationFilter('all');
-    resetPaging();
-    void fetchAuditEvents({ offset: 0 });
     if (hadFilters) {
       showSuccess('Audit filters cleared');
     }
@@ -475,8 +509,6 @@ export const useAuditLogPanelState = () => {
     if (key === 'user') setUserFilter('');
     if (key === 'success') setSuccessFilter('all');
     if (key === 'verification') setVerificationFilter('all');
-    resetPaging();
-    void fetchAuditEvents({ offset: 0 });
   };
 
   const resetPreferences = () => {
@@ -525,6 +557,37 @@ export const useAuditLogPanelState = () => {
   onMount(() => {
     setIsMounted(true);
     void loadRuntimeCapabilities();
+
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    let mutated = false;
+    const migrate = (
+      key: keyof typeof STORAGE_KEYS,
+      paramKey: string,
+      parser: (raw: string | null) => string,
+      defaultValue: string,
+    ) => {
+      if (params.has(paramKey)) return;
+      const legacy = window.localStorage.getItem(STORAGE_KEYS[key]);
+      const parsed = parser(legacy);
+      if (parsed !== defaultValue && legacy === parsed) {
+        params.set(paramKey, parsed);
+        mutated = true;
+      }
+    };
+    migrate('AUDIT_EVENT_FILTER', 'event', parseEventFilter, '');
+    if (!params.has('user')) {
+      const legacy = window.localStorage.getItem(STORAGE_KEYS.AUDIT_USER_FILTER);
+      if (typeof legacy === 'string' && legacy !== '') {
+        params.set('user', legacy);
+        mutated = true;
+      }
+    }
+    migrate('AUDIT_SUCCESS_FILTER', 'success', parseSuccessFilter, 'all');
+    migrate('AUDIT_VERIFICATION_FILTER', 'verification', parseVerificationFilter, 'all');
+    if (mutated) {
+      navigate(`${window.location.pathname}?${params.toString()}`, { replace: true });
+    }
   });
 
   createEffect(() => {
@@ -545,23 +608,60 @@ export const useAuditLogPanelState = () => {
     });
   });
 
+  // Live-apply: server-side filters (event, success) trigger a fresh fetch from
+  // the first page immediately on change. userFilter debounces to avoid one
+  // fetch per keystroke. verificationFilter is purely client-side; only
+  // touches the local filteredEvents memo.
+  let initialEventFilterApplied = false;
   createEffect(() => {
-    const current = verificationFilter();
-    if (!ALLOWED_VERIFICATION_FILTERS.has(current)) {
-      setVerificationFilter('all');
+    const value = eventFilter();
+    if (!initialEventFilterApplied) {
+      initialEventFilterApplied = true;
+      void value;
+      return;
     }
+    if (!auditLoggingEnabled()) return;
+    refetchFromFirstPage();
   });
 
+  let initialSuccessFilterApplied = false;
   createEffect(() => {
-    const current = successFilter();
-    if (!ALLOWED_SUCCESS_FILTERS.has(current)) {
-      setSuccessFilter('all');
+    const value = successFilter();
+    if (!initialSuccessFilterApplied) {
+      initialSuccessFilterApplied = true;
+      void value;
+      return;
     }
+    if (!auditLoggingEnabled()) return;
+    refetchFromFirstPage();
+  });
+
+  let userFilterDebounceHandle: number | null = null;
+  let initialUserFilterApplied = false;
+  createEffect(() => {
+    const value = userFilter();
+    if (!initialUserFilterApplied) {
+      initialUserFilterApplied = true;
+      void value;
+      return;
+    }
+    if (!auditLoggingEnabled()) return;
+    if (userFilterDebounceHandle !== null) {
+      window.clearTimeout(userFilterDebounceHandle);
+    }
+    userFilterDebounceHandle = window.setTimeout(() => {
+      userFilterDebounceHandle = null;
+      refetchFromFirstPage();
+    }, USER_FILTER_DEBOUNCE_MS);
   });
 
   onCleanup(() => {
     setIsMounted(false);
     setCancelVerifyAll(true);
+    if (userFilterDebounceHandle !== null) {
+      window.clearTimeout(userFilterDebounceHandle);
+      userFilterDebounceHandle = null;
+    }
     for (const controller of Object.values(verifyControllers())) {
       controller.abort();
     }
@@ -570,7 +670,6 @@ export const useAuditLogPanelState = () => {
   return {
     activeFilterChips,
     activeFilterCount,
-    applyFilters,
     auditLoggingEnabled,
     autoVerifyEnabled,
     autoVerifyLimit,
