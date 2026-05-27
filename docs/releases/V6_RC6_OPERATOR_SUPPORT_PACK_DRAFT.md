@@ -16,12 +16,12 @@ _Draft only. Use this as the working support brief for the planned
   change is that the unified `Infrastructure` / `Workloads` /
   `Storage` / `Recovery` top-level pages that shipped across
   `rc.1`-`rc.5` are reverted, and the frontend is platform-shaped
-  again (Proxmox, Docker, Kubernetes, TrueNAS, vSphere, Standalone,
-  plus Alerts, Patrol, and Settings). The unified resource model and
+  again (Proxmox, Docker, Kubernetes, TrueNAS, vSphere, Machines, plus
+  Alerts, Patrol, and Settings). The unified resource model and
   `/api/resources` contract remain on the backend; the platform-shaped
   pages consume that contract and add platform-shaped presentation.
 - Beyond the IA revert, `rc.6` ships vSphere as a first-class platform,
-  the Standalone-to-Machines surface evolution with native detail UX,
+  the Hosts-to-Machines rename with native detail UX,
   TrueNAS native detail rendering, Proxmox backup recovery coverage
   and tab polish, FilterBar adoption with SavedViews, Patrol
   capacity-forecast and reliability-finding additions, the free-first
@@ -130,19 +130,19 @@ Use this cohort breakdown:
   detail drawers so platform pages share their detail surface. The
   keyboard shortcuts moved to platform keys: `g p` Proxmox, `g d`
   Docker, `g k` Kubernetes, `g n` TrueNAS, `g v` vSphere, `g s`
-  Standalone, `g a` Alerts, `g r` Patrol, `g t` Settings.
+  Machines, `g a` Alerts, `g r` Patrol, `g t` Settings.
 - vSphere is a first-class platform in `rc.6`, parallel to Proxmox,
   Docker, Kubernetes, and TrueNAS. The surface ships VMs through the
   shared workloads pipeline, network inventory, Hosts table with
   version and uptime, cluster services, VM hardware config, VMware
   Tools status, vCenter MoRef in the workload ID, snapshot trees, and
   a vSphere placement card in the workload drawer.
-- The surface previously labelled "Agents" and then "Standalone" is
-  now "Machines". The Machines table gained row identity context,
-  expansion affordance, IP / disk I/O / RAID / network / temperature
-  detail tooltips, an aggregate disk summary, SMART temperature
-  fallback, and machine discovery promoted into drawer tabs. Machines
-  is now restricted to Pulse Agent resources.
+- The Pulse Agent inventory page that v5 operators know as "Hosts"
+  is "Machines" in `rc.6`. The Machines table gained row identity
+  context, expansion affordance, IP / disk I/O / RAID / network /
+  temperature detail tooltips, an aggregate disk summary, SMART
+  temperature fallback, and machine discovery promoted into drawer
+  tabs. Machines is restricted to Pulse Agent resources.
 - TrueNAS gained native inline detail rendering across storage,
   system, service, protection, and health rows. TrueNAS health alerts
   surface on the overview and alert detail rows appear in the drawer.
@@ -261,7 +261,7 @@ maintainer approval before posting.
 5. Verify server health, version, logs, and update UI before
    upgrading agents.
 6. Walk the frontend top-level navigation: each of Proxmox, Docker,
-   Kubernetes, TrueNAS, vSphere, Standalone (Machines) loads as its
+   Kubernetes, TrueNAS, vSphere, Machines loads as its
    own page. Confirm no `/infrastructure`, `/workloads`, `/storage`,
    or `/recovery` aggregate routes remain. Confirm Command Palette
    (`Cmd/Ctrl+K`) navigates across platforms and the platform-keyed

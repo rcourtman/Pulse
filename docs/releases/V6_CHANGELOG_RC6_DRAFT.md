@@ -18,15 +18,15 @@ architecture introduced across `rc.1` through `rc.5`. The unified
 their aggregate route aliases, and the orphaned summary components,
 aggregate state hooks, and presentation utilities that fed them are
 removed. The frontend top level is platform-shaped again: Proxmox,
-Docker, Kubernetes, TrueNAS, vSphere, Standalone (Machines), plus
+Docker, Kubernetes, TrueNAS, vSphere, Machines, plus
 Alerts, Patrol, and Settings. The unified resource model and
 `/api/resources` contract are retained on the backend; the per-
 platform pages consume that contract and add platform-shaped
 presentation.
 
 Beyond the IA revert, `rc.6` carries the new vSphere first-class
-platform surface, the Standalone-to-Machines surface evolution with
-native detail UX, TrueNAS native detail rendering, Proxmox backup
+platform surface, the Hosts-to-Machines rename with native detail
+UX, TrueNAS native detail rendering, Proxmox backup
 recovery coverage and tab polish, FilterBar adoption with SavedViews,
 Patrol capacity-forecast and reliability-finding work, the free-first
 self-hosted commercial posture, and `install.sh` release-pipeline
@@ -46,7 +46,7 @@ exact code-backed release-validation range for the current candidate:
 Those commits are grouped in this changelog rather than listed one by
 one. The range carries: the frontend information architecture revert
 to platform-shaped navigation, the vSphere first-class platform
-surface, the Standalone-to-Machines rename and native detail UX, the
+surface, the Hosts-to-Machines rename and native detail UX, the
 TrueNAS native detail rendering pass, Proxmox backup recovery
 coverage and tab polish, FilterBar adoption with SavedViews wiring on
 Alerts history / audit log / embedded workloads / Storage, Patrol
@@ -70,7 +70,7 @@ The unified Infrastructure / Workloads / Storage / Recovery pages
 introduced across `rc.1`-`rc.5` are removed. The frontend top level is
 platform-shaped again:
 
-- Proxmox, Docker, Kubernetes, TrueNAS, vSphere, and Standalone
+- Proxmox, Docker, Kubernetes, TrueNAS, vSphere, and Machines
   (Machines) are each their own top-level page.
 - Alerts, Patrol, and Settings keep their own top-level pages.
 - Aggregate top-level workspace routes and legacy infrastructure
@@ -82,7 +82,7 @@ platform-shaped again:
   detail drawers so the platform pages share their detail surface.
 - Keyboard shortcuts moved to platform keys: `g p` Proxmox, `g d`
   Docker, `g k` Kubernetes, `g n` TrueNAS, `g v` vSphere, `g s`
-  Standalone, `g a` Alerts, `g r` Patrol, `g t` Settings.
+  Machines, `g a` Alerts, `g r` Patrol, `g t` Settings.
 
 The unified resource model and `/api/resources` contract are retained
 on the backend; the platform-shaped pages consume that contract and
@@ -117,11 +117,10 @@ Kubernetes, and TrueNAS:
 - Guest OS column lights up for Proxmox and vSphere workloads in
   unison.
 
-### 3. Standalone surface renamed to Machines with native detail UX
+### 3. Hosts page renamed to Machines with native detail UX
 
-The surface previously labelled "Agents" and then "Standalone" is now
-"Machines". The IA decision and landing behaviour are consolidated
-into one name and the surface is restricted to Pulse Agent resources:
+The Pulse Agent inventory page that v5 operators know as "Hosts" is
+"Machines" in `rc.6`, restricted to Pulse Agent resources:
 
 - Row identity context.
 - Row expansion affordance.

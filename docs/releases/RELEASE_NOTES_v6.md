@@ -4,7 +4,7 @@
 `v6.0.0-rc.1` and `v6.0.0-rc.2` line into the default supported v6 release.
 
 Pulse v6 keeps the platform-shaped top-level navigation existing v5 operators
-already know (Proxmox, Docker, Kubernetes, TrueNAS, vSphere, Standalone, plus
+already know (Proxmox, Docker, Kubernetes, TrueNAS, vSphere, Machines, plus
 Alerts, Patrol, and Settings), rebuilds the runtime behind it on a unified
 resource model and contract (`/api/resources`), ships first-class vSphere and
 TrueNAS support, adds the Patrol intelligence and agent-substrate surfaces,
@@ -31,16 +31,16 @@ I publish an explicit exception.
 ### Platform-shaped frontend on a unified backend
 
 The top-level navigation is platform-shaped. Each backing source has its own
-top-level page (Proxmox, Docker, Kubernetes, TrueNAS, vSphere, Standalone),
+top-level page (Proxmox, Docker, Kubernetes, TrueNAS, vSphere, Machines),
 alongside Alerts, Patrol, and Settings. Behind those pages, Pulse v6 runs on
 a unified resource model: a single canonical `Resource` type normalising data
 across the backing sources, served from `/api/resources`. The platform-shaped
 pages consume that contract and add platform-shaped presentation.
 
 vSphere is a first-class platform in v6, parallel to Proxmox, Docker,
-Kubernetes, and TrueNAS. The Standalone surface (renamed from Agents during
-the v6 line) carries Pulse Agent resources as their own top-level page, with
-native detail UX for IP, disk I/O, RAID, network, and SMART temperature.
+Kubernetes, and TrueNAS. Machines (the v5 "Hosts" page) carries Pulse
+Agent resources as their own top-level page, with native detail UX
+for IP, disk I/O, RAID, network, and SMART temperature.
 
 ### Patrol intelligence and the agent substrate
 

@@ -7,7 +7,7 @@ _This changelog describes the shipped stable `v6.0.0` release compared with
 ## What v6 changes at a high level
 
 Pulse v6 keeps the platform-shaped top-level navigation existing v5 operators
-already know (Proxmox, Docker, Kubernetes, TrueNAS, vSphere, Standalone, plus
+already know (Proxmox, Docker, Kubernetes, TrueNAS, vSphere, Machines, plus
 Alerts, Patrol, and Settings) and rebuilds the runtime behind it on a unified
 resource model. The default top-level shape is the same shape v5 had; the
 data flowing into those pages is the v6 unified `Resource` contract served
@@ -18,7 +18,7 @@ state contract changes, install and onboarding are split differently inside
 Settings, self-hosted commercial posture now revolves around core monitoring
 included for self-hosted installs plus paid convenience, history, and AI/admin
 surfaces rather than capped monitored-system volume, and there are new top-
-level pages (vSphere, Standalone, Patrol).
+level pages (vSphere, Machines, Patrol).
 
 The v6 line briefly shipped a unified `Infrastructure` / `Workloads` /
 `Storage` / `Recovery` layout across `rc.1` through `rc.5`. Operator feedback
@@ -30,7 +30,7 @@ the navigation shape you already know.
 ## Major product and workflow changes
 
 - **The top-level product layout stays platform-shaped, on a unified
-  backend.** Proxmox, Docker, Kubernetes, TrueNAS, vSphere, and Standalone
+  backend.** Proxmox, Docker, Kubernetes, TrueNAS, vSphere, and Machines
   are each their own top-level page, alongside Alerts, Patrol, and Settings.
   Behind those pages, Pulse v6 runs on a unified `Resource` contract
   (`/api/resources`) and per-platform pages consume that contract.

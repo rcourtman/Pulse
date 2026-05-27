@@ -26,7 +26,7 @@ With that signal pointing in one direction and no countervailing signal,
 I reverted the frontend information architecture in `rc.6` to
 platform-shaped top-level navigation:
 
-- Proxmox, Docker, Kubernetes, TrueNAS, vSphere, and Standalone are
+- Proxmox, Docker, Kubernetes, TrueNAS, vSphere, and Machines are
   each their own top-level page again.
 - Alerts, Patrol, and Settings keep their own top-level pages.
 - The unified resource model is still the backend contract.
@@ -39,7 +39,7 @@ shape you already know.
 The keyboard shortcuts follow the new shape:
 
 - `g p` Proxmox, `g d` Docker, `g k` Kubernetes, `g n` TrueNAS,
-  `g v` vSphere, `g s` Standalone
+  `g v` vSphere, `g s` Machines
 - `g a` Alerts, `g r` Patrol, `g t` Settings, `?` shortcuts help
 
 The unified IA pages (`/infrastructure`, `/workloads`, `/storage`,
@@ -87,16 +87,15 @@ and a vSphere placement card in the workload drawer. vSphere tables
 follow the canonical platform-table column alignment helper and the
 shared platform conventions used by Proxmox and Docker.
 
-### Standalone surface renamed to Machines, with native detail UX
+### Hosts page renamed to Machines, with native detail UX
 
-The surface previously labelled "Agents" and then "Standalone" is now
-"Machines". The rename consolidates the IA decision and the landing
-behaviour into one name. The Machines table gained row identity
-context, an expansion affordance, IP / disk I/O / RAID / network /
-temperature detail tooltips, an aggregate disk summary in machine
-details, SMART temperature fallback, machine discovery promoted into
-drawer tabs, and a richer agent telemetry view. Machines is now
-restricted to Pulse Agent resources.
+The Pulse Agent inventory page that v5 operators know as "Hosts" is
+"Machines" in `rc.6`. The Machines table gained row identity context,
+an expansion affordance, IP / disk I/O / RAID / network / temperature
+detail tooltips, an aggregate disk summary in machine details, SMART
+temperature fallback, machine discovery promoted into drawer tabs,
+and a richer agent telemetry view. Machines is restricted to Pulse
+Agent resources.
 
 ### TrueNAS native detail surfacing
 
@@ -197,7 +196,7 @@ substrate), and `.github/workflows` (install.sh smoke gate).
 ## Retest Plan
 
 1. Frontend information architecture: each of Proxmox, Docker,
-   Kubernetes, TrueNAS, vSphere, Standalone (Machines) loads as its
+   Kubernetes, TrueNAS, vSphere, Machines loads as its
    own top-level page; no `/infrastructure`, `/workloads`,
    `/storage`, or `/recovery` aggregate routes remain; Command Palette
    (`Cmd/Ctrl+K`) navigates across platforms; keyboard shortcuts
