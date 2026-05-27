@@ -215,10 +215,19 @@ describe('useAppRuntimeState', () => {
     }));
 
     ({ useAppRuntimeState } = await import('@/useAppRuntimeState'));
+
+    // Reset the freshly-imported sessionPresentationPolicy signal to its
+    // defaults so a prior test's demo-mode mutation (in this file or in a
+    // sibling that imports the same module) cannot leak into the
+    // loadOrganizations branch selection inside useAppRuntimeState.
+    const policyModule = await import('@/stores/sessionPresentationPolicy');
+    policyModule.syncSessionPresentationPolicy(null);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.clearAllMocks();
+    const policyModule = await import('@/stores/sessionPresentationPolicy');
+    policyModule.syncSessionPresentationPolicy(null);
     vi.resetModules();
   });
 
