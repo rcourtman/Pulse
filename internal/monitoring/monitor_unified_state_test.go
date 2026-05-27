@@ -241,6 +241,26 @@ func hasFrontendResourceName(resources []models.ResourceFrontend, name string) b
 	return false
 }
 
+// hasFrontendResourceNameForHostType returns true only when a docker-host or
+// proxmox-node-shaped resource carries the literal Name. Docker Swarm nodes
+// added in 89abed099 legitimately publish the swarm-node hostname (e.g.
+// "edge-apps-01") as their Name because that is how Docker Swarm identifies
+// members; the canonical legacy-label rejection rules below apply only to
+// the host-type resources that previously surfaced the lowercase-hyphenated
+// host hostname instead of the canonical DisplayName.
+func hasFrontendResourceNameForHostType(resources []models.ResourceFrontend, name string) bool {
+	for _, resource := range resources {
+		if resource.Name != name {
+			continue
+		}
+		switch resource.Type {
+		case "docker-host", "agent", "node":
+			return true
+		}
+	}
+	return false
+}
+
 func TestMonitorGetUnifiedReadStateOrSnapshotUsesStoreResourcesWithoutSnapshotFallback(t *testing.T) {
 	now := time.Date(2026, 3, 6, 12, 0, 0, 0, time.UTC)
 	store := &resourceOnlyStore{
@@ -493,10 +513,10 @@ func TestMonitorBuildBroadcastFrontendStateUsesCanonicalMockUnifiedResources(t *
 	if !hasFrontendResourceName(frontend.Resources, "truenas-main") {
 		t.Fatalf("expected mock-mode broadcast state to include TrueNAS mock resources, got %#v", frontend.Resources)
 	}
-	if hasFrontendResourceName(frontend.Resources, "pve1") {
+	if hasFrontendResourceNameForHostType(frontend.Resources, "pve1") {
 		t.Fatalf("expected mock-mode broadcast state to stop publishing legacy proxmox node labels, got %#v", frontend.Resources)
 	}
-	if hasFrontendResourceName(frontend.Resources, "edge-apps-01") {
+	if hasFrontendResourceNameForHostType(frontend.Resources, "edge-apps-01") {
 		t.Fatalf("expected mock-mode broadcast state to stop publishing legacy docker host labels, got %#v", frontend.Resources)
 	}
 	if !hasFrontendResourceName(frontend.Resources, "esxi-01.lab.local") {

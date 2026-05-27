@@ -348,6 +348,10 @@ func cloneVMwareInventoryMetrics(in *vmware.InventoryMetrics) *vmware.InventoryM
 	out.NetOutBytesPerSecond = cloneFloat64Ptr(in.NetOutBytesPerSecond)
 	out.DiskReadBytesPerSecond = cloneFloat64Ptr(in.DiskReadBytesPerSecond)
 	out.DiskWriteBytesPerSecond = cloneFloat64Ptr(in.DiskWriteBytesPerSecond)
+	out.UptimeSeconds = cloneInt64Ptr(in.UptimeSeconds)
+	out.DiskUsedBytes = cloneInt64Ptr(in.DiskUsedBytes)
+	out.DiskTotalBytes = cloneInt64Ptr(in.DiskTotalBytes)
+	out.DiskPercent = cloneFloat64Ptr(in.DiskPercent)
 	return &out
 }
 
