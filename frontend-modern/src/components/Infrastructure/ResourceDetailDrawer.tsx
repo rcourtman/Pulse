@@ -26,6 +26,7 @@ interface ResourceDetailDrawerProps {
   onClose?: () => void;
   presentation?: ResourceDetailDrawerPresentation;
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
+  initialShowAccessContext?: boolean;
   initialShowTrueNASDetails?: boolean;
 }
 
@@ -55,6 +56,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     resource: props.resource,
     presentation: presentation(),
     resolveResourceLabel: props.resolveResourceLabel,
+    initialShowAccessContext: props.initialShowAccessContext,
     initialShowTrueNASDetails: props.initialShowTrueNASDetails,
   });
   const headingId = () => `resource-detail-drawer-heading-${props.resource.id}`;
@@ -337,6 +339,7 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
       onClose={props.onClose}
       presentation={props.presentation}
       resolveResourceLabel={props.resolveResourceLabel}
+      initialShowAccessContext={props.initialShowAccessContext}
       initialShowTrueNASDetails={props.initialShowTrueNASDetails}
     />
   );

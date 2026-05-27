@@ -1008,6 +1008,7 @@ export const AgentsMachinesTable: Component<{
   );
   const drawer = createPlatformResourceDetailState({ idPrefix: 'agents-machine-drawer' });
   const [agentMetadataById, setAgentMetadataById] = createSignal<Record<string, AgentMetadata>>({});
+  const [accessTargetResourceId, setAccessTargetResourceId] = createSignal<string | null>(null);
   const visibleColumns = createMemo(
     () => columnVisibility.visibleColumns() as AgentMachineColumn[],
   );
@@ -1209,6 +1210,22 @@ export const AgentsMachinesTable: Component<{
                     const detailRowId = () => drawer.detailRowId(machine);
                     const agentMetadataId = () => agentMetadataIdFor(machine);
                     const savedWebInterfaceUrl = () => savedAgentCustomUrlFor(agentMetadataId());
+                    const clearAccessTargetIfCurrent = () => {
+                      if (accessTargetResourceId() === machine.id) setAccessTargetResourceId(null);
+                    };
+                    const toggleDetails = () => {
+                      const wasExpanded = isExpanded();
+                      drawer.toggle(machine);
+                      if (wasExpanded) clearAccessTargetIfCurrent();
+                    };
+                    const handleDetailsActivationKey: JSX.EventHandler<
+                      HTMLTableRowElement,
+                      KeyboardEvent
+                    > = (event) => {
+                      if (event.key !== 'Enter' && event.key !== ' ') return;
+                      event.preventDefault();
+                      toggleDetails();
+                    };
 
                     return (
                       <>
@@ -1217,8 +1234,8 @@ export const AgentsMachinesTable: Component<{
                           aria-controls={isExpanded() ? detailRowId() : undefined}
                           aria-expanded={isExpanded() ? 'true' : 'false'}
                           data-agents-machine-row={machine.id}
-                          onClick={() => drawer.toggle(machine)}
-                          onKeyDown={drawer.handleActivationKey(machine)}
+                          onClick={toggleDetails}
+                          onKeyDown={handleDetailsActivationKey}
                           tabIndex={0}
                         >
                           <TableCell
@@ -1393,7 +1410,8 @@ export const AgentsMachinesTable: Component<{
                                 name={name()}
                                 canConfigure={Boolean(agentMetadataId())}
                                 onConfigure={() => {
-                                  if (!isExpanded()) drawer.toggle(machine);
+                                  setAccessTargetResourceId(machine.id);
+                                  drawer.open(machine);
                                 }}
                               />
                             </TableCell>
@@ -1440,7 +1458,11 @@ export const AgentsMachinesTable: Component<{
                           open={isExpanded()}
                           detailRowId={detailRowId()}
                           colSpan={detailColspan()}
-                          onClose={() => drawer.close(machine)}
+                          initialShowAccessContext={accessTargetResourceId() === machine.id}
+                          onClose={() => {
+                            drawer.close(machine);
+                            clearAccessTargetIfCurrent();
+                          }}
                         />
                       </>
                     );

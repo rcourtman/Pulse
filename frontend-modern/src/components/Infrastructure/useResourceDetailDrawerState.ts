@@ -23,6 +23,7 @@ export interface UseResourceDetailDrawerStateOptions {
   resource: Resource;
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
   presentation?: ResourceDetailDrawerPresentation;
+  initialShowAccessContext?: boolean;
   initialShowTrueNASDetails?: boolean;
 }
 
@@ -36,7 +37,9 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
   const [copied, setCopied] = createSignal(false);
   const [showReportModal, setShowReportModal] = createSignal(false);
   const [showHistoryFilters, setShowHistoryFilters] = createSignal(false);
-  const [showAccessContext, setShowAccessContext] = createSignal(false);
+  const [showAccessContext, setShowAccessContext] = createSignal(
+    options.initialShowAccessContext === true,
+  );
   const [showInvestigationContext, setShowInvestigationContext] = createSignal(false);
   const [showDiscoveryContext, setShowDiscoveryContext] = createSignal(false);
   const [showHostDetails, setShowHostDetails] = createSignal(
@@ -70,6 +73,12 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
   createEffect(() => {
     if (!debugEnabled() && activeTab() === 'debug') {
       setActiveTab('overview');
+    }
+  });
+
+  createEffect(() => {
+    if (options.initialShowAccessContext === true) {
+      setShowAccessContext(true);
     }
   });
 

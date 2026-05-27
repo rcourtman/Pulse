@@ -6,7 +6,12 @@ import { RESOURCE_METADATA_CHANGED_EVENT } from '@/utils/resourceMetadataEvents'
 import { AgentsMachinesTable } from '../AgentsMachinesTable';
 
 vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
-  ResourceDetailDrawer: () => <div data-testid="resource-detail-drawer" />,
+  ResourceDetailDrawer: (props: { initialShowAccessContext?: boolean }) => (
+    <div
+      data-testid="resource-detail-drawer"
+      data-initial-show-access-context={String(props.initialShowAccessContext ?? false)}
+    />
+  ),
 }));
 
 vi.mock('@/api/agentMetadata', () => ({
@@ -277,6 +282,10 @@ describe('AgentsMachinesTable', () => {
       screen.getByRole('button', { name: 'Add web interface URL for Event Host' }),
     );
     expect(screen.getByTestId('resource-detail-drawer')).toBeInTheDocument();
+    expect(screen.getByTestId('resource-detail-drawer')).toHaveAttribute(
+      'data-initial-show-access-context',
+      'true',
+    );
 
     window.dispatchEvent(
       new CustomEvent(RESOURCE_METADATA_CHANGED_EVENT, {

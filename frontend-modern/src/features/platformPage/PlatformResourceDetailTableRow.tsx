@@ -11,6 +11,7 @@ export type PlatformResourceDetailState = {
   expandedResourceId: () => string | null;
   isExpanded: (resource: ResourceLike) => boolean;
   detailRowId: (resource: ResourceLike) => string;
+  open: (resource: ResourceLike) => void;
   toggle: (resource: ResourceLike) => void;
   close: (resource?: ResourceLike) => void;
   handleActivationKey: (
@@ -31,6 +32,9 @@ export function createPlatformResourceDetailState(options: {
 
   const isExpanded = (resource: ResourceLike): boolean => expandedResourceId() === resource.id;
   const detailRowId = (resource: ResourceLike): string => `${options.idPrefix}-${resource.id}`;
+  const open = (resource: ResourceLike) => {
+    setExpandedResourceId(resource.id);
+  };
   const toggle = (resource: ResourceLike) => {
     setExpandedResourceId((current) => (current === resource.id ? null : resource.id));
   };
@@ -51,6 +55,7 @@ export function createPlatformResourceDetailState(options: {
     expandedResourceId,
     isExpanded,
     detailRowId,
+    open,
     toggle,
     close,
     handleActivationKey,
@@ -70,6 +75,7 @@ export const PlatformResourceDetailTableRow: Component<{
   detailRowId: string;
   colSpan: number;
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
+  initialShowAccessContext?: boolean;
   initialShowTrueNASDetails?: boolean;
   onClose?: () => void;
 }> = (props) => {
@@ -92,6 +98,7 @@ export const PlatformResourceDetailTableRow: Component<{
               resource={props.resource}
               presentation="table-row"
               resolveResourceLabel={props.resolveResourceLabel}
+              initialShowAccessContext={props.initialShowAccessContext}
               initialShowTrueNASDetails={initialShowTrueNASDetails()}
               onClose={props.onClose}
             />

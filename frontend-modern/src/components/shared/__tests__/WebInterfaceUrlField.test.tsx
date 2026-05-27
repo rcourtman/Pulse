@@ -136,7 +136,7 @@ describe('WebInterfaceUrlField', () => {
 
     expect(
       await screen.findByText(
-        "Add a URL to quickly access this workload's web interface from Workloads.",
+        "Add a URL to quickly access this workload's web interface from Pulse.",
       ),
     ).toBeInTheDocument();
   });
