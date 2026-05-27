@@ -198,6 +198,14 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     setViewMode(value);
   };
 
+  // Saved views are scoped per platform context. Every live consumer is a
+  // platform-embedded workloads surface that locks platform scope via
+  // forcedPlatform; views never leak across platforms.
+  const savedViewsKey = createMemo<string | undefined>(() => {
+    const platform = (props.forcedPlatform ?? '').trim().toLowerCase();
+    return platform ? `workloads-${platform}` : undefined;
+  });
+
   const {
     columnVisibility,
     workloadsFilterColumnVisibility,
@@ -463,6 +471,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     platformOptions,
     reconnect,
     reconnectSurface,
+    savedViewsKey,
     search,
     selectedGuestId,
     selectedHostHint,

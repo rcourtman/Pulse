@@ -225,6 +225,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
       }}
       searchTrailing={props.searchTrailing}
       filters={buildFilters()}
+      savedViewsKey={props.savedViewsKey}
       viewOptionsTrailing={
         <>
           <Show when={props.pinnedSelectionActive?.() && props.onClearPinnedSelection}>

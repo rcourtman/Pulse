@@ -67,6 +67,7 @@ export interface WorkloadsFilterProps {
   mobileTrailing?: JSX.Element;
   forcedPlatform?: string;
   suppressTypeFilter?: boolean;
+  savedViewsKey?: string;
 }
 
 export interface CountActiveWorkloadsFiltersOptions {
