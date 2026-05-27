@@ -934,6 +934,14 @@ func cloneKubernetesCluster(src KubernetesCluster) KubernetesCluster {
 	dest.PodDisruptionBudgets = cloneKubernetesPodDisruptionBudgets(src.PodDisruptionBudgets)
 	dest.HorizontalPodAutoscalers = cloneKubernetesHorizontalPodAutoscalers(src.HorizontalPodAutoscalers)
 	dest.Events = cloneKubernetesEvents(src.Events)
+	// RBAC slices: NormalizeCollections() mutates these via index
+	// assignment (c.Roles[i] = c.Roles[i].NormalizeCollections()), so they
+	// must not be aliased to the source slice or concurrent clones will
+	// race on the shared underlying array.
+	dest.Roles = append([]KubernetesRole(nil), src.Roles...)
+	dest.ClusterRoles = append([]KubernetesClusterRole(nil), src.ClusterRoles...)
+	dest.RoleBindings = append([]KubernetesRoleBinding(nil), src.RoleBindings...)
+	dest.ClusterRoleBindings = append([]KubernetesClusterRoleBinding(nil), src.ClusterRoleBindings...)
 	dest.TokenLastUsedAt = cloneTimePtr(src.TokenLastUsedAt)
 	return dest.NormalizeCollections()
 }

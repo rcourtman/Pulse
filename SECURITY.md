@@ -92,7 +92,8 @@ docker exec pulse rm -rf /home/pulse/.ssh/id_ed25519*
 
 If you fully understand the risk and are **not** containerized (VM/bare-metal
 install), the legacy SSH flow still works. Use a dedicated monitoring user,
-restrict the key with `command="sensors -j"` and `from="<pulse-ip>"`, and
+restrict the key to the Pulse sensor wrapper with
+`command="/usr/local/sbin/pulse-sensors"` and `from="<pulse-ip>"`, and
 rotate keys regularly.
 
 #### Auditing Your Deployment
