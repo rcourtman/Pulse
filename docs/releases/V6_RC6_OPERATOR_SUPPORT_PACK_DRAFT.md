@@ -127,10 +127,7 @@ Use this cohort breakdown:
   pages, their aggregate route aliases, and the orphaned summary
   components and aggregate state hooks that fed them are removed.
   Drawer shells are unified across Workloads, Docker, K8s, and host
-  detail drawers so platform pages share their detail surface. The
-  keyboard shortcuts moved to platform keys: `g p` Proxmox, `g d`
-  Docker, `g k` Kubernetes, `g n` TrueNAS, `g v` vSphere, `g s`
-  Machines, `g a` Alerts, `g r` Patrol, `g t` Settings.
+  detail drawers so platform pages share their detail surface.
 - vSphere is a first-class platform in `rc.6`, parallel to Proxmox,
   Docker, Kubernetes, and TrueNAS. The surface ships VMs through the
   shared workloads pipeline, network inventory, Hosts table with

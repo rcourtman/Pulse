@@ -36,12 +36,6 @@ platform-shaped top-level navigation:
 In short: v5 navigation, v6 data model. Same backend, the navigation
 shape you already know.
 
-The keyboard shortcuts follow the new shape:
-
-- `g p` Proxmox, `g d` Docker, `g k` Kubernetes, `g n` TrueNAS,
-  `g v` vSphere, `g s` Machines
-- `g a` Alerts, `g r` Patrol, `g t` Settings, `?` shortcuts help
-
 The unified IA pages (`/infrastructure`, `/workloads`, `/storage`,
 `/recovery`) and their aggregate route aliases are gone. The Command
 Palette (`Cmd/Ctrl+K`) and global search (`/` to focus) still work and
@@ -196,11 +190,10 @@ substrate), and `.github/workflows` (install.sh smoke gate).
 ## Retest Plan
 
 1. Frontend information architecture: each of Proxmox, Docker,
-   Kubernetes, TrueNAS, vSphere, Machines loads as its
-   own top-level page; no `/infrastructure`, `/workloads`,
-   `/storage`, or `/recovery` aggregate routes remain; Command Palette
-   (`Cmd/Ctrl+K`) navigates across platforms; keyboard shortcuts
-   `g p / g d / g k / g n / g v / g s / g a / g r / g t` work.
+   Kubernetes, TrueNAS, vSphere, Machines loads as its own top-level
+   page; no `/infrastructure`, `/workloads`, `/storage`, or
+   `/recovery` aggregate routes remain; Command Palette
+   (`Cmd/Ctrl+K`) navigates across platforms.
 2. vSphere: VMs through workloads pipeline, network inventory, hosts
    with version and uptime, cluster services, VM hardware config,
    VMware Tools status, vCenter MoRef in workload ID column, snapshot

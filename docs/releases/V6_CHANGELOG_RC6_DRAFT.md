@@ -80,9 +80,6 @@ platform-shaped again:
   presentation utilities are deleted as part of the same pass.
 - Drawer shells are unified across Workloads, Docker, K8s, and host
   detail drawers so the platform pages share their detail surface.
-- Keyboard shortcuts moved to platform keys: `g p` Proxmox, `g d`
-  Docker, `g k` Kubernetes, `g n` TrueNAS, `g v` vSphere, `g s`
-  Machines, `g a` Alerts, `g r` Patrol, `g t` Settings.
 
 The unified resource model and `/api/resources` contract are retained
 on the backend; the platform-shaped pages consume that contract and
