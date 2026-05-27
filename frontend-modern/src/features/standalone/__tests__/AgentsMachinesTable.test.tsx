@@ -1,10 +1,18 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { AgentMetadataAPI } from '@/api/agentMetadata';
 import type { Resource } from '@/types/resource';
+import { RESOURCE_METADATA_CHANGED_EVENT } from '@/utils/resourceMetadataEvents';
 import { AgentsMachinesTable } from '../AgentsMachinesTable';
 
 vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
   ResourceDetailDrawer: () => <div data-testid="resource-detail-drawer" />,
+}));
+
+vi.mock('@/api/agentMetadata', () => ({
+  AgentMetadataAPI: {
+    getAllMetadata: vi.fn(async () => ({})),
+  },
 }));
 
 vi.mock('@/components/Workloads/EnhancedCPUBar', () => ({
@@ -62,8 +70,10 @@ const resource = (overrides: Partial<Resource>): Resource =>
   }) as Resource;
 
 const emptyIcon = <span data-testid="empty-icon" />;
+const getAllAgentMetadataMock = vi.mocked(AgentMetadataAPI.getAllMetadata);
 
 beforeEach(() => {
+  getAllAgentMetadataMock.mockResolvedValue({});
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -221,6 +231,65 @@ describe('AgentsMachinesTable', () => {
 
     expect(icon).toHaveClass('rotate-90');
     expect(screen.getByTestId('resource-detail-drawer')).toBeInTheDocument();
+  });
+
+  it('opens saved agent web interface URLs from machine rows', async () => {
+    getAllAgentMetadataMock.mockResolvedValueOnce({
+      'web-host': { id: 'web-host', customUrl: 'https://web-host.local:9443' },
+    });
+
+    render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({
+            id: 'web-host-row',
+            name: 'Web Host',
+            agent: { agentId: 'web-host' },
+          }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    const link = await screen.findByRole('link', { name: 'Open web interface for Web Host' });
+    expect(link).toHaveAttribute('href', 'https://web-host.local:9443');
+  });
+
+  it('keeps machine web links in sync when detail metadata changes', async () => {
+    render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({
+            id: 'event-host-row',
+            name: 'Event Host',
+            agent: { agentId: 'event-host' },
+          }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Add web interface URL for Event Host' }),
+    );
+    expect(screen.getByTestId('resource-detail-drawer')).toBeInTheDocument();
+
+    window.dispatchEvent(
+      new CustomEvent(RESOURCE_METADATA_CHANGED_EVENT, {
+        detail: {
+          metadataKind: 'agent',
+          metadataId: 'event-host',
+          customUrl: 'http://event-host.local:8080',
+        },
+      }),
+    );
+
+    const link = await screen.findByRole('link', { name: 'Open web interface for Event Host' });
+    expect(link).toHaveAttribute('href', 'http://event-host.local:8080');
   });
 
   it('shows structured agent network interface details from the Net I/O value', async () => {

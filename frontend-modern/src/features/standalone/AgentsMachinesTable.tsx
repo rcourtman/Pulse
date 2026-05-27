@@ -1,5 +1,18 @@
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
-import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
+import ExternalLinkIcon from 'lucide-solid/icons/external-link';
+import PlusIcon from 'lucide-solid/icons/plus';
+import {
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  type Component,
+  type JSX,
+} from 'solid-js';
+import { AgentMetadataAPI, type AgentMetadata } from '@/api/agentMetadata';
+import { toDiscoveryConfig } from '@/components/Infrastructure/resourceDetailDiscoveryModel';
 import { EnhancedCPUBar } from '@/components/Workloads/EnhancedCPUBar';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
@@ -47,6 +60,10 @@ import {
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { formatTemperature as formatTemperatureValue } from '@/utils/temperature';
+import {
+  RESOURCE_METADATA_CHANGED_EVENT,
+  type ResourceMetadataChangedDetail,
+} from '@/utils/resourceMetadataEvents';
 import { getWorkloadsGuestNetworkEmptyState } from '@/utils/workloadGuestPresentation';
 import {
   AGENT_MACHINE_COLUMNS,
@@ -678,6 +695,65 @@ const AgentMachineRaidCell: Component<{
   );
 };
 
+const AgentMachineWebLinkCell: Component<{
+  url: string;
+  name: string;
+  canConfigure: boolean;
+  onConfigure: () => void;
+}> = (props) => {
+  const url = () => asTrimmedString(props.url) ?? '';
+  const label = () => `Open web interface for ${props.name}`;
+  const configureLabel = () => `Add web interface URL for ${props.name}`;
+
+  return (
+    <div class="flex justify-center">
+      <Show
+        when={url()}
+        fallback={
+          <Show
+            when={props.canConfigure}
+            fallback={
+              <span class="inline-flex h-7 w-7 items-center justify-center text-xs text-muted">
+                —
+              </span>
+            }
+          >
+            <button
+              type="button"
+              class="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
+              title="Add web interface URL"
+              aria-label={configureLabel()}
+              onClick={(event) => {
+                event.stopPropagation();
+                props.onConfigure();
+              }}
+              onKeyDown={(event) => event.stopPropagation()}
+            >
+              <PlusIcon class="h-3.5 w-3.5 opacity-60" />
+            </button>
+          </Show>
+        }
+      >
+        {(href) => (
+          <a
+            data-agent-machine-web-link
+            href={href()}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex h-7 w-7 items-center justify-center rounded-md text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 dark:text-blue-400 dark:hover:bg-blue-950 dark:hover:text-blue-300"
+            title={href()}
+            aria-label={label()}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            <ExternalLinkIcon class="h-3.5 w-3.5" />
+          </a>
+        )}
+      </Show>
+    </div>
+  );
+};
+
 const availabilityFor = (machine: Resource): ResourceAvailabilityMeta | undefined =>
   machine.availability ??
   (machine.platformData?.availability as ResourceAvailabilityMeta | undefined);
@@ -806,6 +882,12 @@ const diskIOTitleFor = (machine: Resource): string => {
   return `Read ${formatSpeed(machine.diskIO.readRate)}\nWrite ${formatSpeed(machine.diskIO.writeRate)}`;
 };
 
+const agentMetadataIdFor = (machine: Resource): string => {
+  const config = toDiscoveryConfig(machine);
+  if (config?.metadataKind !== 'agent') return '';
+  return asTrimmedString(config.metadataId) ?? '';
+};
+
 const machineColumnWidthClass = (columnId: AgentMachineColumnId): string => {
   switch (columnId) {
     case 'machine':
@@ -826,6 +908,8 @@ const machineColumnWidthClass = (columnId: AgentMachineColumnId): string => {
       return 'hidden md:table-cell md:w-[5%]';
     case 'lastSeen':
       return 'hidden lg:table-cell lg:w-[6%]';
+    case 'web':
+      return 'hidden xl:table-cell xl:w-[4%]';
     case 'ip':
       return 'hidden xl:table-cell xl:w-[8%]';
     case 'raid':
@@ -923,10 +1007,19 @@ export const AgentsMachinesTable: Component<{
     AGENT_MACHINE_COLUMNS,
   );
   const drawer = createPlatformResourceDetailState({ idPrefix: 'agents-machine-drawer' });
+  const [agentMetadataById, setAgentMetadataById] = createSignal<Record<string, AgentMetadata>>({});
   const visibleColumns = createMemo(
     () => columnVisibility.visibleColumns() as AgentMachineColumn[],
   );
   const detailColspan = createMemo(() => visibleColumns().length);
+  const agentMetadataTargetIds = createMemo(() => {
+    const ids = new Set<string>();
+    for (const machine of props.resources) {
+      const metadataId = agentMetadataIdFor(machine);
+      if (metadataId) ids.add(metadataId);
+    }
+    return [...ids].sort();
+  });
   const sortedMachines = createMemo(() =>
     sortAgentMachines(
       tableState.filtered(),
@@ -936,11 +1029,64 @@ export const AgentsMachinesTable: Component<{
       agentVersionFor,
     ),
   );
+  const savedAgentCustomUrlFor = (metadataId: string): string =>
+    asTrimmedString(agentMetadataById()[metadataId]?.customUrl) ?? '';
   const handleSort = (key: AgentMachineSortKey) => {
     const next = getNextAgentMachineSortState(sortKey(), sortDirection(), key);
     setSortKey(next.key);
     setSortDirection(next.direction);
   };
+
+  createEffect(() => {
+    const targetIds = agentMetadataTargetIds();
+    if (targetIds.length === 0) {
+      setAgentMetadataById({});
+      return;
+    }
+
+    let cancelled = false;
+    void AgentMetadataAPI.getAllMetadata()
+      .then((metadata) => {
+        if (!cancelled) setAgentMetadataById(metadata ?? {});
+      })
+      .catch(() => {
+        if (!cancelled) setAgentMetadataById({});
+      });
+
+    onCleanup(() => {
+      cancelled = true;
+    });
+  });
+
+  createEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleMetadataChanged = (event: Event) => {
+      const detail = (event as CustomEvent<ResourceMetadataChangedDetail>).detail;
+      if (!detail || detail.metadataKind !== 'agent') return;
+
+      const metadataId = asTrimmedString(detail.metadataId);
+      if (!metadataId) return;
+
+      const customUrl = asTrimmedString(detail.customUrl) ?? '';
+      setAgentMetadataById((current) => {
+        const previous = current[metadataId] ?? { id: metadataId };
+        if (previous.customUrl === customUrl) return current;
+        return {
+          ...current,
+          [metadataId]: {
+            ...previous,
+            customUrl,
+          },
+        };
+      });
+    };
+
+    window.addEventListener(RESOURCE_METADATA_CHANGED_EVENT, handleMetadataChanged);
+    onCleanup(() => {
+      window.removeEventListener(RESOURCE_METADATA_CHANGED_EVENT, handleMetadataChanged);
+    });
+  });
 
   return (
     <Show
@@ -1061,6 +1207,8 @@ export const AgentsMachinesTable: Component<{
                     const temperatureTitle = () => getAgentMachineTemperatureTitle(machine);
                     const isExpanded = () => drawer.isExpanded(machine);
                     const detailRowId = () => drawer.detailRowId(machine);
+                    const agentMetadataId = () => agentMetadataIdFor(machine);
+                    const savedWebInterfaceUrl = () => savedAgentCustomUrlFor(agentMetadataId());
 
                     return (
                       <>
@@ -1234,6 +1382,20 @@ export const AgentsMachinesTable: Component<{
                               class={`${getPlatformTableCellClassForKind('numeric-value')} ${machineColumnWidthClass('lastSeen')} text-base-content`}
                             >
                               {lastSeenLabel()}
+                            </TableCell>
+                          </Show>
+                          <Show when={columnVisibility.isColumnVisible('web')}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('badge')} ${machineColumnWidthClass('web')} text-base-content`}
+                            >
+                              <AgentMachineWebLinkCell
+                                url={savedWebInterfaceUrl()}
+                                name={name()}
+                                canConfigure={Boolean(agentMetadataId())}
+                                onConfigure={() => {
+                                  if (!isExpanded()) drawer.toggle(machine);
+                                }}
+                              />
                             </TableCell>
                           </Show>
                           <Show when={columnVisibility.isColumnVisible('ip')}>

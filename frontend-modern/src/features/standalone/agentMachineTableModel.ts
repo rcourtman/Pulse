@@ -15,6 +15,7 @@ export type AgentMachineColumnId =
   | 'uptime'
   | 'temp'
   | 'lastSeen'
+  | 'web'
   | 'ip'
   | 'raid'
   | 'arch'
@@ -60,6 +61,12 @@ export const AGENT_MACHINE_COLUMNS: AgentMachineColumn[] = [
     label: 'Last seen',
     kind: 'numeric-value',
     sortKey: 'lastSeen',
+    toggleable: true,
+  },
+  {
+    id: 'web',
+    label: 'Web',
+    kind: 'badge',
     toggleable: true,
   },
   {

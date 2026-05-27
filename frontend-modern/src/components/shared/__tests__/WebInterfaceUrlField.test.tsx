@@ -26,6 +26,7 @@ import { AgentMetadataAPI } from '@/api/agentMetadata';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import { copyToClipboard } from '@/utils/clipboard';
 import { getDiscoveryProvenanceTitle } from '@/utils/discoveryPresentation';
+import { RESOURCE_METADATA_CHANGED_EVENT } from '@/utils/resourceMetadataEvents';
 
 describe('WebInterfaceUrlField', () => {
   afterEach(() => {
@@ -96,6 +97,38 @@ describe('WebInterfaceUrlField', () => {
         customUrl: 'https://pve1.local:8006',
       });
     });
+  });
+
+  it('broadcasts saved URL changes for same-tab metadata consumers', async () => {
+    const handler = vi.fn();
+    window.addEventListener(RESOURCE_METADATA_CHANGED_EVENT, handler);
+
+    try {
+      render(() => (
+        <WebInterfaceUrlField
+          metadataKind="agent"
+          metadataId="host-1"
+          targetLabel="agent"
+          customUrl=""
+        />
+      ));
+
+      const input = await screen.findByPlaceholderText('https://198.51.100.100:8080');
+      fireEvent.input(input, { target: { value: 'https://pve1.local:8006' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+      await waitFor(() => {
+        expect(handler).toHaveBeenCalled();
+      });
+      const event = handler.mock.calls[0][0] as CustomEvent;
+      expect(event.detail).toEqual({
+        metadataKind: 'agent',
+        metadataId: 'host-1',
+        customUrl: 'https://pve1.local:8006',
+      });
+    } finally {
+      window.removeEventListener(RESOURCE_METADATA_CHANGED_EVENT, handler);
+    }
   });
 
   it('defaults guest metadata labels to workload wording', async () => {

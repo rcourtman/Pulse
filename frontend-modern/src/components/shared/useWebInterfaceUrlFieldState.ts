@@ -2,6 +2,7 @@ import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
 import { AgentMetadataAPI } from '@/api/agentMetadata';
 import { copyToClipboard } from '@/utils/clipboard';
+import { dispatchResourceMetadataChanged } from '@/utils/resourceMetadataEvents';
 import {
   getWebInterfaceSuggestedUrlFallback,
   getWebInterfaceTargetLabel,
@@ -136,6 +137,11 @@ export function useWebInterfaceUrlFieldState(props: WebInterfaceUrlFieldProps) {
       await updateMetadataUrl(id, trimmed);
       setFetchedCustomUrl(trimmed);
       props.onCustomUrlChange?.(trimmed);
+      dispatchResourceMetadataChanged({
+        metadataKind: props.metadataKind,
+        metadataId: id,
+        customUrl: trimmed,
+      });
       setUrlSuccessMessage(trimmed ? 'URL saved.' : 'URL cleared.');
     } catch (error) {
       setUrlError(error instanceof Error ? error.message : 'Failed to save URL.');
@@ -157,6 +163,11 @@ export function useWebInterfaceUrlFieldState(props: WebInterfaceUrlFieldProps) {
       setFetchedCustomUrl('');
       setUrlValue('');
       props.onCustomUrlChange?.('');
+      dispatchResourceMetadataChanged({
+        metadataKind: props.metadataKind,
+        metadataId: id,
+        customUrl: '',
+      });
       setUrlSuccessMessage('URL removed.');
     } catch (error) {
       setUrlError(error instanceof Error ? error.message : 'Failed to remove URL.');
