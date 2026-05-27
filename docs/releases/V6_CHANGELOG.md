@@ -6,34 +6,66 @@ _This changelog describes the shipped stable `v6.0.0` release compared with
 
 ## What v6 changes at a high level
 
-Pulse v6 changes both the shape of the product and the shape of the runtime
-behind it. Pulse v5 was organized mainly around Proxmox and separate
-platform-specific views. Pulse v6 is organized around the primary operational
-surfaces: `Infrastructure`, `Workloads`, `Storage`, and `Recovery`.
+Pulse v6 keeps the platform-shaped top-level navigation existing v5 operators
+already know (Proxmox, Docker, Kubernetes, TrueNAS, vSphere, Standalone, plus
+Alerts, Patrol, and Settings) and rebuilds the runtime behind it on a unified
+resource model. The default top-level shape is the same shape v5 had; the
+data flowing into those pages is the v6 unified `Resource` contract served
+from `/api/resources`.
 
-For existing Pulse v5 operators, this is not just a visual refresh. The
-default routes change, the main live-state contract changes, install and
-onboarding are split differently, and self-hosted commercial posture now
-revolves around core monitoring included for self-hosted installs plus paid
-convenience, history, and AI/admin surfaces rather than capped monitored-system
-volume.
+For existing Pulse v5 operators, this is not just a visual refresh. The live-
+state contract changes, install and onboarding are split differently inside
+Settings, self-hosted commercial posture now revolves around core monitoring
+included for self-hosted installs plus paid convenience, history, and AI/admin
+surfaces rather than capped monitored-system volume, and there are new top-
+level pages (vSphere, Standalone, Patrol).
+
+The v6 line briefly shipped a unified `Infrastructure` / `Workloads` /
+`Storage` / `Recovery` layout across `rc.1` through `rc.5`. Operator feedback
+consistently preferred the platform-shaped navigation v5 already had, so I
+reverted the frontend information architecture in `rc.6` to platform-shaped
+pages while keeping the unified resource model on the backend. Same backend,
+the navigation shape you already know.
 
 ## Major product and workflow changes
 
-- **The top-level product layout is different.** Opening Pulse no longer drops
-  directly into a Proxmox overview. The v6 default route lands on
-  `Infrastructure`, with separate primary views for `Workloads`, `Storage`, and
-  `Recovery`.
+- **The top-level product layout stays platform-shaped, on a unified
+  backend.** Proxmox, Docker, Kubernetes, TrueNAS, vSphere, and Standalone
+  are each their own top-level page, alongside Alerts, Patrol, and Settings.
+  Behind those pages, Pulse v6 runs on a unified `Resource` contract
+  (`/api/resources`) and per-platform pages consume that contract.
 
-- **Recovery is a first-class surface.** In v5, backup-related behavior was
-  centered on backup-specific pages and route families. In v6, recovery is
-  treated as its own primary surface, and `Recovery` replaces the older
-  backup-first page model.
+- **vSphere is a first-class platform.** vSphere has a top-level page
+  parallel to Proxmox, Docker, Kubernetes, and TrueNAS, with VMs through
+  the shared workloads pipeline, network inventory, hosts with version and
+  uptime, cluster services, VM hardware config, VMware Tools status,
+  vCenter MoRef on the workload ID, snapshot trees, and a vSphere placement
+  card in the workload drawer.
 
-- **Infrastructure setup is split by ownership.** `Install on a host` is the
-  path for machines that should run the Unified Agent directly. `Platform
-  connections` is the path for API-backed systems such as Proxmox, TrueNAS,
-  and VMware.
+- **Patrol is a first-class intelligence surface.** Patrol findings carry
+  in-place verbs (Investigate, Why, Verify fix, Create rule, Mark resolved),
+  structured investigation records with operator-facing Impact and rollback,
+  and a first-class resolved-finding lifecycle. Capacity-forecast action
+  templates and a reliability finding for flapping alerts are part of the
+  shipped surface.
+
+- **An external agent substrate ships.** `/api/agent/capabilities`,
+  `/api/agent/resource-context/{id}`, `/api/agent/fleet-context`, and
+  `/api/agent/events` give external agents (Claude Desktop, Claude Code,
+  custom MCP clients, plain HTTP consumers) the same situated context
+  Patrol and Assistant have. Worked examples ship in `cmd/pulse-mcp` and
+  `cmd/agent-probe`.
+
+- **Recovery is served as a backend contract.** `/api/recovery/*` aggregates
+  PBS snapshots, ZFS snapshots, and replication tasks. The platform-shaped
+  pages consume that contract; there is no top-level Recovery page in the
+  shipped frontend.
+
+- **Infrastructure onboarding is split by ownership inside Settings.**
+  `Settings → Infrastructure → Install on a host` is the path for machines
+  that should run the Unified Agent directly. `Settings → Infrastructure →
+  Platform connections` is the path for API-backed systems such as Proxmox,
+  TrueNAS, and VMware.
 
 - **Adding infrastructure is more structured.** The shipped v6 line includes
   cluster agent deployment workflows with candidate discovery, preflights,
@@ -57,7 +89,7 @@ volume.
 
 ## What existing Pulse v5 users should re-test first
 
-1. **Navigation and bookmarks.** Re-test saved links, runbooks, screenshots, and operator habits that assumed the old Proxmox-first route structure.
+1. **Navigation and bookmarks.** The platform-shaped top-level pages (`/proxmox`, `/docker`, `/kubernetes`, `/truenas`, `/vmware`, `/standalone`) are the canonical v6 routes. The unified `/infrastructure`, `/workloads`, `/storage`, and `/recovery` routes that briefly shipped across `rc.1`-`rc.5` are retired in `rc.6` and onward; any bookmark or runbook pointing at those should move to the platform-shaped equivalent.
 
 2. **Any custom automation that reads Pulse state.** If there are scripts, dashboards, browser extensions, or internal tooling that depended on v5-style `/api/state` or websocket payloads, re-test those before anything else.
 
@@ -76,7 +108,7 @@ volume.
 
 ## Breaking or compatibility-sensitive changes
 
-- **The default route and settings structure changed.** Existing links to old primary pages should be reviewed, even where legacy redirects still exist.
+- **The settings structure changed.** Settings is reorganised in v6; existing links into specific settings sub-pages should be reviewed. The platform-shaped top-level routes match the v5 shape, so most navigation bookmarks will continue to resolve; bookmarks into the briefly-shipped unified routes (`/infrastructure`, `/workloads`, `/storage`, `/recovery`) are retired and need to move to the platform-shaped equivalents.
 
 - **The v5 live-state contract is not the v6 contract.** If custom code depends on `nodes`, `vms`, `containers`, `dockerHosts`, `hosts`, `storage`, or `backups` in `/api/state` or websocket payloads, it should be treated as migration work.
 

@@ -3,10 +3,21 @@
 `v6.0.0` is the first stable release of Pulse v6. It promotes the validated
 `v6.0.0-rc.1` and `v6.0.0-rc.2` line into the default supported v6 release.
 
-Pulse v6 reorganizes the product around `Infrastructure`, `Workloads`,
-`Storage`, and `Recovery`, keeps the governed v5-to-v6 upgrade and Unified Agent
-continuity path, and ships the corrected self-hosted commercial model that was
-validated during `rc.2`.
+Pulse v6 keeps the platform-shaped top-level navigation existing v5 operators
+already know (Proxmox, Docker, Kubernetes, TrueNAS, vSphere, Standalone, plus
+Alerts, Patrol, and Settings), rebuilds the runtime behind it on a unified
+resource model and contract (`/api/resources`), ships first-class vSphere and
+TrueNAS support, adds the Patrol intelligence and agent-substrate surfaces,
+keeps the governed v5-to-v6 upgrade and Unified Agent continuity path, and
+ships the corrected self-hosted commercial model that was validated during
+`rc.2`.
+
+The v6 line briefly shipped a unified `Infrastructure` / `Workloads` /
+`Storage` / `Recovery` top-level layout across `rc.1` through `rc.5`. Operator
+feedback consistently preferred the platform-shaped navigation v5 already had,
+so I reverted the frontend information architecture in `rc.6` to platform-
+shaped pages while keeping the unified resource model on the backend. Same
+backend, the navigation shape you already know.
 
 ## Pulse v5 Support Transition
 
@@ -17,27 +28,47 @@ I publish an explicit exception.
 
 ## What Is In v6.0.0
 
-### Unified v6 product layout
+### Platform-shaped frontend on a unified backend
 
-Pulse v6 changes the default product shape. Authenticated users now land on
-`Infrastructure`, and the primary surfaces are:
+The top-level navigation is platform-shaped. Each backing source has its own
+top-level page (Proxmox, Docker, Kubernetes, TrueNAS, vSphere, Standalone),
+alongside Alerts, Patrol, and Settings. Behind those pages, Pulse v6 runs on
+a unified resource model: a single canonical `Resource` type normalising data
+across the backing sources, served from `/api/resources`. The platform-shaped
+pages consume that contract and add platform-shaped presentation.
 
-- `Infrastructure`
-- `Workloads`
-- `Storage`
-- `Recovery`
+vSphere is a first-class platform in v6, parallel to Proxmox, Docker,
+Kubernetes, and TrueNAS. The Standalone surface (renamed from Agents during
+the v6 line) carries Pulse Agent resources as their own top-level page, with
+native detail UX for IP, disk I/O, RAID, network, and SMART temperature.
 
-Existing bookmarks, old screenshots, and operator runbooks that assumed the v5
-Proxmox-first layout should be reviewed during upgrade.
+### Patrol intelligence and the agent substrate
 
-### Recovery and infrastructure are first-class
+`Patrol` is a top-level intelligence surface with in-place verbs on findings
+(Investigate, Why, Verify fix, Create rule, Mark resolved), structured
+investigation records that carry operator-facing Impact and rollback, a first-
+class resolved-finding lifecycle, capacity-forecast action templates, and a
+reliability finding that fires when an alert starts flapping. Patrol consumes
+an HTTP alert bridge for PDM (Proxmox Datacenter Manager).
 
-`Recovery` is now a primary surface rather than a backup-only page family, and
-infrastructure onboarding is split by ownership:
+Pulse v6 also exposes a stable HTTP contract for external agents
+(`/api/agent/capabilities`, `/api/agent/resource-context/{id}`,
+`/api/agent/fleet-context`, `/api/agent/events`) so Claude Desktop, Claude
+Code, custom MCP clients, and plain HTTP consumers can drive Pulse with the
+same situated context Patrol and Assistant have. Worked examples ship in
+`cmd/pulse-mcp` (MCP adapter) and `cmd/agent-probe` (plain HTTP).
 
-- `Install on a host` for direct Unified Agent deployment
-- `Platform connections` for API-backed systems such as Proxmox, TrueNAS, and
-  VMware
+### Recovery and infrastructure onboarding
+
+Backup, snapshot, and replication state is served from `/api/recovery/*`
+(PBS snapshots, ZFS snapshots, replication tasks) and consumed by the
+platform-shaped pages that present it. Infrastructure onboarding is split by
+ownership inside Settings:
+
+- `Settings → Infrastructure → Install on a host` for direct Unified Agent
+  deployment
+- `Settings → Infrastructure → Platform connections` for API-backed systems
+  such as Proxmox, TrueNAS, and VMware
 
 ### Self-hosted packaging is corrected from the early RC posture
 
@@ -94,8 +125,12 @@ hosted product; see the MSP section of the pricing doc.
 ## Upgrade Guidance For Existing v5 Users
 
 1. Back up the current system and keep direct console access available.
-2. Re-test navigation, bookmarks, and any saved links that depended on the old
-   route structure.
+2. Re-test bookmarks and saved links. The platform-shaped top-level pages
+   (`/proxmox`, `/docker`, `/kubernetes`, `/truenas`, `/vmware`, `/standalone`)
+   are the canonical v6 routes. The unified `/infrastructure`, `/workloads`,
+   `/storage`, and `/recovery` routes that briefly shipped across `rc.1`-`rc.5`
+   are retired in `rc.6` and onward; any bookmark or runbook pointing at those
+   should move to the platform-shaped equivalent.
 3. Re-test custom automation or dashboards that depended on v5-style
    `/api/state` or websocket payloads.
 4. Re-test recovery workflows and any backup-era assumptions.
@@ -109,4 +144,3 @@ hosted product; see the MSP section of the pricing doc.
 - `docs/UPGRADE_v6.md`
 - `docs/releases/V6_CHANGELOG.md`
 - `docs/PULSE_PRO.md`
-- `docs/MIGRATION_UNIFIED_NAV.md`
