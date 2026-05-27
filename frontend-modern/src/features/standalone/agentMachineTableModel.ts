@@ -279,6 +279,36 @@ const uniqueTrimmedValues = (values: readonly string[] | undefined): string[] =>
   return result;
 };
 
+const searchableValue = (value: unknown): string | undefined => {
+  if (typeof value === 'string') return asTrimmedString(value);
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return undefined;
+};
+
+const appendSearchValue = (values: string[], value: unknown) => {
+  const normalized = searchableValue(value);
+  if (normalized) values.push(normalized);
+};
+
+const appendSearchValues = (values: string[], candidates: readonly unknown[]) => {
+  for (const candidate of candidates) appendSearchValue(values, candidate);
+};
+
+const sensorSearchValues = (machine: Resource): unknown[] => [
+  ...Object.keys(machine.agent?.sensors?.temperatureCelsius ?? {}),
+  ...Object.keys(machine.agent?.sensors?.fanRpm ?? {}),
+  ...Object.keys(machine.agent?.sensors?.additional ?? {}),
+  ...(machine.agent?.sensors?.smart ?? []).flatMap((disk) => [
+    disk.device,
+    disk.model,
+    disk.serial,
+    disk.wwn,
+    disk.type,
+    disk.health,
+    disk.standby ? 'standby' : undefined,
+  ]),
+];
+
 export const getAgentMachineNetworkInterfaceDetails = (
   machine: Resource,
 ): AgentMachineNetworkInterfaceDetail[] =>
@@ -535,6 +565,78 @@ export const getAgentMachineRaidSummary = (machine: Resource): string => {
     return `${arrays.length} ${[...states][0]}`;
   }
   return `${arrays.length} arrays`;
+};
+
+export const matchesAgentMachineSearch = (
+  machine: Resource,
+  search: string,
+  getSystemLabel: (machine: Resource) => string,
+  getAgentLabel: (machine: Resource) => string,
+): boolean => {
+  const needle = search.trim().toLowerCase();
+  if (!needle) return true;
+
+  const values: string[] = [];
+  appendSearchValues(values, [
+    machine.name,
+    machine.displayName,
+    machine.id,
+    machine.parentName,
+    machine.platformId,
+    machine.platformType,
+    machine.status,
+    machine.technology,
+    machine.identity?.hostname,
+    machine.identity?.machineId,
+    machine.canonicalIdentity?.displayName,
+    machine.canonicalIdentity?.hostname,
+    machine.canonicalIdentity?.platformId,
+    machine.canonicalIdentity?.primaryId,
+    ...(machine.canonicalIdentity?.aliases ?? []),
+    ...(machine.identity?.ips ?? []),
+    ...(machine.tags ?? []),
+    getSystemLabel(machine),
+    getAgentLabel(machine),
+    machine.agent?.agentId,
+    machine.agent?.agentVersion,
+    machine.agent?.hostname,
+    machine.agent?.platform,
+    machine.agent?.hostProfile,
+    machine.agent?.osName,
+    machine.agent?.osVersion,
+    machine.agent?.kernelVersion,
+    machine.agent?.architecture,
+    machine.agent?.uptimeSeconds,
+    machine.agent?.cpuCount,
+  ]);
+  appendSearchValues(values, getAgentMachineIpValues(machine));
+  appendSearchValues(
+    values,
+    getAgentMachineNetworkInterfaceDetails(machine).flatMap((iface) => [
+      iface.name,
+      iface.mac,
+      ...iface.addresses,
+      iface.speedMbps,
+    ]),
+  );
+  appendSearchValues(
+    values,
+    getAgentMachineDiskIODetails(machine).map((disk) => disk.device),
+  );
+  appendSearchValues(
+    values,
+    getAgentMachineRaidArrayDetails(machine).flatMap((array) => [
+      array.device,
+      array.name,
+      array.level,
+      array.state,
+      array.rebuildSpeed,
+      ...array.devices.flatMap((device) => [device.device, device.state, device.slot]),
+    ]),
+  );
+  appendSearchValues(values, [getAgentMachineRaidSummary(machine), ...sensorSearchValues(machine)]);
+
+  return values.join(' ').toLowerCase().includes(needle);
 };
 
 export const getNextAgentMachineSortState = (

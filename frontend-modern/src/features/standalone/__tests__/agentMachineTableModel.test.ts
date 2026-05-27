@@ -6,6 +6,7 @@ import {
   getAgentMachineRaidArrayDetails,
   getAgentMachineTemperatureCelsius,
   getAgentMachineTemperatureTitle,
+  matchesAgentMachineSearch,
   sortAgentMachines,
 } from '../agentMachineTableModel';
 
@@ -270,5 +271,57 @@ describe('agentMachineTableModel', () => {
     );
 
     expect(sorted.map((machine) => machine.id)).toEqual(['warm', 'cool']);
+  });
+
+  it('matches machine-native search fields beyond the generic resource identity', () => {
+    const machine = resource({
+      id: 'richard-mac-mini',
+      name: 'Richard Mac Mini',
+      identity: { hostname: 'richard-mac-mini.local', ips: ['192.168.0.98'] },
+      agent: {
+        agentVersion: '6.0.0',
+        hostname: 'richard-mac-mini.local',
+        osName: 'macOS',
+        osVersion: '15.5',
+        kernelVersion: 'Darwin 24.5.0',
+        architecture: 'arm64',
+        networkInterfaces: [
+          {
+            name: 'en0',
+            mac: '10:20:30:40:50:60',
+            addresses: ['10.0.0.98'],
+          },
+        ],
+        raid: [
+          {
+            device: '/dev/md0',
+            level: 'raid1',
+            state: 'clean',
+            totalDevices: 2,
+            activeDevices: 2,
+            workingDevices: 2,
+            failedDevices: 0,
+            spareDevices: 0,
+            devices: [{ device: '/dev/disk3', state: 'active', slot: 0 }],
+            rebuildPercent: 0,
+          },
+        ],
+      },
+    });
+    const getSystemLabel = () => 'macOS 15.5';
+    const getAgentLabel = () => '6.0.0';
+
+    expect(matchesAgentMachineSearch(machine, 'macos', getSystemLabel, getAgentLabel)).toBe(true);
+    expect(matchesAgentMachineSearch(machine, '10.0.0.98', getSystemLabel, getAgentLabel)).toBe(
+      true,
+    );
+    expect(matchesAgentMachineSearch(machine, 'arm64', getSystemLabel, getAgentLabel)).toBe(true);
+    expect(matchesAgentMachineSearch(machine, 'darwin', getSystemLabel, getAgentLabel)).toBe(true);
+    expect(matchesAgentMachineSearch(machine, '/dev/disk3', getSystemLabel, getAgentLabel)).toBe(
+      true,
+    );
+    expect(matchesAgentMachineSearch(machine, 'windows', getSystemLabel, getAgentLabel)).toBe(
+      false,
+    );
   });
 });

@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentMetadataAPI } from '@/api/agentMetadata';
 import type { Resource } from '@/types/resource';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 import { RESOURCE_METADATA_CHANGED_EVENT } from '@/utils/resourceMetadataEvents';
 import { AgentsMachinesTable } from '../AgentsMachinesTable';
 
@@ -184,6 +185,72 @@ describe('AgentsMachinesTable', () => {
     ));
 
     expect(screen.getByText('richard-mac-mini.local | 192.168.0.98')).toBeInTheDocument();
+  });
+
+  it('searches machine-native fields and exposes host-style search affordances', async () => {
+    render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({
+            id: 'mac-mini',
+            name: 'Mac Mini',
+            identity: { hostname: 'richard-mac-mini.local', ips: ['192.168.0.98'] },
+            agent: {
+              osName: 'macOS',
+              osVersion: '15.5',
+              architecture: 'arm64',
+              kernelVersion: 'Darwin 24.5.0',
+              networkInterfaces: [
+                {
+                  name: 'en0',
+                  mac: '10:20:30:40:50:60',
+                  addresses: ['10.0.0.98'],
+                },
+              ],
+            },
+          }),
+          resource({
+            id: 'windows-runner',
+            name: 'Windows Runner',
+            identity: { ips: ['192.168.0.49'] },
+            agent: {
+              osName: 'Windows',
+              osVersion: '11 Pro',
+              architecture: 'x86_64',
+              kernelVersion: '10.0.22631',
+            },
+          }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    const search = screen.getByPlaceholderText('Search machines');
+
+    await fireEvent.input(search, { target: { value: 'macos' } });
+    expect(screen.getByText('Mac Mini')).toBeInTheDocument();
+    expect(screen.queryByText('Windows Runner')).not.toBeInTheDocument();
+
+    await fireEvent.keyDown(search, { key: 'Enter' });
+    expect(window.localStorage.getItem(STORAGE_KEYS.MACHINES_SEARCH_HISTORY)).toContain('macos');
+
+    await fireEvent.input(search, { target: { value: '10.0.0.98' } });
+    expect(screen.getByText('Mac Mini')).toBeInTheDocument();
+    expect(screen.queryByText('Windows Runner')).not.toBeInTheDocument();
+
+    const historyToggle = screen.getByTitle('Show recent searches');
+    await fireEvent.click(historyToggle);
+    expect(screen.getByRole('button', { name: 'macos' })).toBeInTheDocument();
+
+    const tipsButton = screen.getByRole('button', { name: 'Search tips' });
+    await fireEvent.click(tipsButton);
+    expect(screen.getByRole('dialog', { name: 'Search tips' })).toBeInTheDocument();
+    expect(screen.getByText('arm64')).toBeInTheDocument();
+    expect(
+      screen.getByText('Hidden columns such as IP, RAID, Arch, and Kernel are still searchable.'),
+    ).toBeInTheDocument();
   });
 
   it('preserves last-seen context in the machine subtitle when that column is hidden', async () => {

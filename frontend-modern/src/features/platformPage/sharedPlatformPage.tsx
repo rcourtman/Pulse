@@ -6,7 +6,7 @@ import {
   FilterButtonGroup,
   type FilterOption as PlatformTableFilterOption,
 } from '@/components/shared/FilterButtonGroup';
-import { SearchInput } from '@/components/shared/SearchInput';
+import { SearchInput, type SearchInputProps } from '@/components/shared/SearchInput';
 import { TableCard } from '@/components/shared/TableCard';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import type { Resource, ResourceStatus } from '@/types/resource';
@@ -288,6 +288,8 @@ export function PlatformTableToolbar<T extends string | number>(props: {
   search: () => string;
   onSearchChange: (value: string) => void;
   searchPlaceholder: string;
+  searchHistory?: SearchInputProps['history'];
+  searchTips?: SearchInputProps['tips'];
   status: T;
   onStatusChange: (value: T) => void;
   statusOptions: PlatformTableFilterOption<T>[];
@@ -302,6 +304,9 @@ export function PlatformTableToolbar<T extends string | number>(props: {
           value={props.search}
           onChange={props.onSearchChange}
           placeholder={props.searchPlaceholder}
+          title={props.searchPlaceholder}
+          history={props.searchHistory}
+          tips={props.searchTips}
         />
       </div>
       <FilterButtonGroup

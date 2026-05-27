@@ -94,7 +94,7 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
               <For each={props.tips}>
                 {(tip) => (
                   <div class="flex items-start gap-2">
-                    <code class="rounded bg-surface-alt px-2 py-0.5 font-mono text-[11px] text-base-content">
+                    <code class="whitespace-nowrap rounded bg-surface-alt px-2 py-0.5 font-mono text-[11px] text-base-content">
                       {tip.code}
                     </code>
                     <span class="text-[12px] leading-snug text-muted">{tip.description}</span>

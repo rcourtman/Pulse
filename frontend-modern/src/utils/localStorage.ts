@@ -176,6 +176,9 @@ export const STORAGE_KEYS = {
   WORKLOADS_METRIC_HISTORY_RANGE: 'workloadsMetricHistoryRange',
   AGENTS_SEARCH_HISTORY: 'agentsSearchHistory',
 
+  // Machines settings
+  MACHINES_SEARCH_HISTORY: 'machinesSearchHistory',
+
   // Storage search
   STORAGE_SEARCH_HISTORY: 'storageSearchHistory',
 

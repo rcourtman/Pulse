@@ -51,6 +51,7 @@ import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import type { Disk } from '@/types/api';
 import type { Resource, ResourceAvailabilityMeta } from '@/types/resource';
 import { formatBytes, formatSpeed, normalizeDiskArray } from '@/utils/format';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   getRaidDeviceBadgeClass,
@@ -71,6 +72,7 @@ import {
   getAgentMachineDiskIODetails,
   getAgentMachineDiskIOTotal,
   getAgentMachineIpValues,
+  matchesAgentMachineSearch,
   getAgentMachineNetworkInterfaceDetails,
   getAgentMachineNetworkTotal,
   getAgentMachinePrimaryIp,
@@ -872,6 +874,29 @@ const systemLabelFor = (machine: Resource): string => {
 const agentVersionFor = (machine: Resource): string =>
   isAgentlessMachine(machine) ? 'Agentless' : asTrimmedString(machine.agent?.agentVersion) || '—';
 
+const filterAgentMachineResources = (
+  resources: Resource[],
+  search: string,
+  status: PlatformResourceStatusFilter,
+): Resource[] =>
+  filterPlatformResources(resources, '', status).filter((machine) =>
+    matchesAgentMachineSearch(machine, search, systemLabelFor, agentVersionFor),
+  );
+
+const AGENT_MACHINE_SEARCH_TIPS = {
+  popoverId: 'machines-search-help',
+  intro: 'Filter Pulse Agent machines by identity, platform, or reported inventory.',
+  tips: [
+    { code: 'mac-mini', description: 'Match hostnames and display names' },
+    { code: '192.168.0.98', description: 'Find reported IP addresses' },
+    { code: 'macos', description: 'Find operating system names or versions' },
+    { code: 'arm64', description: 'Match CPU architecture' },
+    { code: 'darwin', description: 'Find kernel or platform details' },
+  ],
+  footerHighlight: 'Tip',
+  footerText: 'Hidden columns such as IP, RAID, Arch, and Kernel are still searchable.',
+};
+
 const networkTitleFor = (machine: Resource): string => {
   if (!machine.network) return '';
   return `In ${formatSpeed(machine.network.rxBytes)}\nOut ${formatSpeed(machine.network.txBytes)}`;
@@ -998,7 +1023,7 @@ export const AgentsMachinesTable: Component<{
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as PlatformResourceStatusFilter,
-    filter: filterPlatformResources,
+    filter: filterAgentMachineResources,
   });
   const [sortKey, setSortKey] = createSignal<AgentMachineSortKey>('name');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
@@ -1107,6 +1132,11 @@ export const AgentsMachinesTable: Component<{
               search={tableState.search}
               onSearchChange={tableState.setSearch}
               searchPlaceholder="Search machines"
+              searchHistory={{
+                storageKey: STORAGE_KEYS.MACHINES_SEARCH_HISTORY,
+                emptyMessage: 'Machine searches you run will appear here.',
+              }}
+              searchTips={AGENT_MACHINE_SEARCH_TIPS}
               status={tableState.status()}
               onStatusChange={tableState.setStatus}
               statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}

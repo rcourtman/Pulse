@@ -32,9 +32,7 @@ describe('SearchTipsPopover', () => {
 
   it('toggles the popover on click by default', async () => {
     render(() => (
-      <SearchTipsPopover
-        tips={[{ code: 'name:web', description: 'Filter by name' }]}
-      />
+      <SearchTipsPopover tips={[{ code: 'name:web', description: 'Filter by name' }]} />
     ));
 
     const trigger = screen.getByRole('button', { name: 'Search tips' });
@@ -42,6 +40,7 @@ describe('SearchTipsPopover', () => {
 
     fireEvent.click(trigger);
     expect(await screen.findByRole('dialog', { name: 'Search tips' })).toBeInTheDocument();
+    expect(screen.getByText('name:web')).toHaveClass('whitespace-nowrap');
 
     fireEvent.click(trigger);
     expect(screen.queryByRole('dialog', { name: 'Search tips' })).toBeNull();
@@ -49,10 +48,7 @@ describe('SearchTipsPopover', () => {
 
   it('opens on hover when configured', async () => {
     render(() => (
-      <SearchTipsPopover
-        openOnHover
-        tips={[{ code: 'tag:web', description: 'Filter by tag' }]}
-      />
+      <SearchTipsPopover openOnHover tips={[{ code: 'tag:web', description: 'Filter by tag' }]} />
     ));
 
     const trigger = screen.getByRole('button', { name: 'Search tips' });
@@ -65,9 +61,7 @@ describe('SearchTipsPopover', () => {
 
   it('closes on Escape while open', async () => {
     render(() => (
-      <SearchTipsPopover
-        tips={[{ code: 'cpu>80', description: 'Filter by CPU threshold' }]}
-      />
+      <SearchTipsPopover tips={[{ code: 'cpu>80', description: 'Filter by CPU threshold' }]} />
     ));
 
     fireEvent.click(screen.getByRole('button', { name: 'Search tips' }));
