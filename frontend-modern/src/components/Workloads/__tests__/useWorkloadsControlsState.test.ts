@@ -1,6 +1,26 @@
 import { createRoot, createSignal } from 'solid-js';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ViewMode } from '@/types/workloads';
+
+const mockRouterPathname = '/workloads';
+const [mockRouterSearch, setMockRouterSearch] = createSignal('');
+const navigateSpy = vi.fn((path: string) => {
+  const queryIndex = path.indexOf('?');
+  setMockRouterSearch(queryIndex >= 0 ? path.slice(queryIndex) : '');
+});
+
+vi.mock('@solidjs/router', () => ({
+  useLocation: () => ({
+    get pathname() {
+      return mockRouterPathname;
+    },
+    get search() {
+      return mockRouterSearch();
+    },
+  }),
+  useNavigate: () => navigateSpy,
+}));
+
 import { useWorkloadsControlsState } from '../useWorkloadsControlsState';
 
 const setWideViewport = () => {
@@ -13,6 +33,8 @@ const setWideViewport = () => {
 describe('useWorkloadsControlsState', () => {
   beforeEach(() => {
     localStorage.clear();
+    setMockRouterSearch('');
+    navigateSpy.mockClear();
     setWideViewport();
   });
 

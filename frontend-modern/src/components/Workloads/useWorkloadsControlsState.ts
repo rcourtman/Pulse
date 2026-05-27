@@ -1,4 +1,5 @@
-import { createMemo, createSignal, type Accessor } from 'solid-js';
+import { createMemo, createSignal, onMount, type Accessor } from 'solid-js';
+import { useLocation, useNavigate } from '@solidjs/router';
 
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
@@ -50,27 +51,63 @@ interface WorkloadsControlsStateOptions {
   viewMode: Accessor<ViewMode>;
 }
 
+const parseWorkloadsStatusMode = (raw: string | null | undefined): WorkloadsStatusMode =>
+  raw === 'all' || raw === 'running' || raw === 'degraded' || raw === 'stopped'
+    ? (raw as WorkloadsStatusMode)
+    : DEFAULT_WORKLOADS_STATUS_MODE;
+
 export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions) {
+  const location = useLocation();
+  const navigate = useNavigate();
   const breakpoint = useBreakpoint();
   const workloadTableLayoutMode = createMemo(() => getWorkloadTableLayoutMode(breakpoint.width()));
   const isMobile = createMemo(() => workloadTableLayoutMode() === 'mobile');
-  const [search, setSearch] = createSignal('');
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
-  const statusModeStorageKey = (() => {
-    const scope = (options.statusModeStorageScope || '').trim();
-    return scope ? `workloadsStatusMode:${scope}` : 'workloadsStatusMode';
-  })();
 
-  const [statusMode, setStatusMode] = usePersistentSignal<WorkloadsStatusMode>(
-    statusModeStorageKey,
-    DEFAULT_WORKLOADS_STATUS_MODE,
-    {
-      deserialize: (raw) =>
-        raw === 'all' || raw === 'running' || raw === 'degraded' || raw === 'stopped'
-          ? (raw as WorkloadsStatusMode)
-          : DEFAULT_WORKLOADS_STATUS_MODE,
-    },
-  );
+  const updateSearchParam = (mutate: (params: URLSearchParams) => void): void => {
+    const params = new URLSearchParams(location.search);
+    mutate(params);
+    const query = params.toString();
+    navigate(`${location.pathname}${query ? `?${query}` : ''}`, { replace: true });
+  };
+
+  const search: Accessor<string> = () =>
+    new URLSearchParams(location.search).get('q') ?? '';
+  const setSearch = (value: string): void => {
+    updateSearchParam((params) => {
+      if (value === '') {
+        params.delete('q');
+      } else {
+        params.set('q', value);
+      }
+    });
+  };
+
+  const statusMode: Accessor<WorkloadsStatusMode> = () =>
+    parseWorkloadsStatusMode(new URLSearchParams(location.search).get('status'));
+  const setStatusMode = (value: WorkloadsStatusMode): void => {
+    updateSearchParam((params) => {
+      if (value === DEFAULT_WORKLOADS_STATUS_MODE) {
+        params.delete('status');
+      } else {
+        params.set('status', value);
+      }
+    });
+  };
+
+  onMount(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('status')) return;
+    const scope = (options.statusModeStorageScope || '').trim();
+    const legacyKey = scope ? `workloadsStatusMode:${scope}` : 'workloadsStatusMode';
+    const legacy = window.localStorage.getItem(legacyKey);
+    const parsed = parseWorkloadsStatusMode(legacy);
+    if (parsed !== DEFAULT_WORKLOADS_STATUS_MODE && legacy === parsed) {
+      params.set('status', parsed);
+      navigate(`${window.location.pathname}?${params.toString()}`, { replace: true });
+    }
+  });
 
   const [groupingMode, setGroupingMode] = usePersistentSignal<WorkloadsGroupingMode>(
     'workloadsGroupingMode',
