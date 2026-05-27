@@ -19,7 +19,8 @@ export type AgentMachineColumnId =
   | 'ip'
   | 'raid'
   | 'arch'
-  | 'kernel';
+  | 'kernel'
+  | 'actions';
 
 export type AgentMachineSortKey =
   | 'name'
@@ -100,6 +101,11 @@ export const AGENT_MACHINE_COLUMNS: AgentMachineColumn[] = [
     sortKey: 'kernel',
     toggleable: true,
     defaultHidden: true,
+  },
+  {
+    id: 'actions',
+    label: 'Actions',
+    kind: 'badge',
   },
 ];
 

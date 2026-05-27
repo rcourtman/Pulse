@@ -1,6 +1,7 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentMetadataAPI } from '@/api/agentMetadata';
+import { MonitoringAPI } from '@/api/monitoring';
 import type { Resource } from '@/types/resource';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { RESOURCE_METADATA_CHANGED_EVENT } from '@/utils/resourceMetadataEvents';
@@ -18,6 +19,22 @@ vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
 vi.mock('@/api/agentMetadata', () => ({
   AgentMetadataAPI: {
     getAllMetadata: vi.fn(async () => ({})),
+    deleteMetadata: vi.fn(async () => undefined),
+  },
+}));
+
+vi.mock('@/api/monitoring', () => ({
+  MonitoringAPI: {
+    deleteAgent: vi.fn(async () => undefined),
+  },
+}));
+
+vi.mock('@/stores/notifications', () => ({
+  notificationStore: {
+    success: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warning: vi.fn(),
   },
 }));
 
@@ -77,9 +94,13 @@ const resource = (overrides: Partial<Resource>): Resource =>
 
 const emptyIcon = <span data-testid="empty-icon" />;
 const getAllAgentMetadataMock = vi.mocked(AgentMetadataAPI.getAllMetadata);
+const deleteAgentMetadataMock = vi.mocked(AgentMetadataAPI.deleteMetadata);
+const deleteAgentMock = vi.mocked(MonitoringAPI.deleteAgent);
 
 beforeEach(() => {
   getAllAgentMetadataMock.mockResolvedValue({});
+  deleteAgentMetadataMock.mockResolvedValue(undefined);
+  deleteAgentMock.mockResolvedValue(undefined);
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -332,6 +353,48 @@ describe('AgentsMachinesTable', () => {
 
     expect(icon).toHaveClass('rotate-90');
     expect(screen.getByTestId('resource-detail-drawer')).toBeInTheDocument();
+  });
+
+  it('removes agent machines through row actions with confirmation', async () => {
+    render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({
+            id: 'removable-row',
+            name: 'Removable Machine',
+            availability: { targetKind: 'machine', protocol: 'icmp' },
+            agent: { agentVersion: '6.0.0' },
+          }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Machine actions for Removable Machine' }),
+    );
+
+    await fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Remove Removable Machine from Pulse' }),
+    );
+
+    expect(deleteAgentMock).not.toHaveBeenCalled();
+    expect(screen.getByText('Click again to confirm')).toBeInTheDocument();
+    expect(screen.getByText(/Pulse will forget this machine/)).toBeInTheDocument();
+
+    await fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Confirm remove Removable Machine from Pulse' }),
+    );
+
+    await waitFor(() => {
+      expect(deleteAgentMock).toHaveBeenCalledWith('removable-row');
+    });
+    expect(deleteAgentMetadataMock).toHaveBeenCalledWith('removable-row');
+    await waitFor(() => {
+      expect(screen.queryByText('Removable Machine')).not.toBeInTheDocument();
+    });
   });
 
   it('opens saved agent web interface URLs from machine rows', async () => {

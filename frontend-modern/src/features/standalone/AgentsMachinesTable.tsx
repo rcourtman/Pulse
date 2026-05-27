@@ -1,6 +1,9 @@
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import ExternalLinkIcon from 'lucide-solid/icons/external-link';
+import Loader2Icon from 'lucide-solid/icons/loader-2';
+import MoreHorizontalIcon from 'lucide-solid/icons/more-horizontal';
 import PlusIcon from 'lucide-solid/icons/plus';
+import Trash2Icon from 'lucide-solid/icons/trash-2';
 import {
   For,
   Show,
@@ -11,8 +14,9 @@ import {
   type Component,
   type JSX,
 } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { AgentMetadataAPI, type AgentMetadata } from '@/api/agentMetadata';
-import { toDiscoveryConfig } from '@/components/Infrastructure/resourceDetailDiscoveryModel';
+import { MonitoringAPI } from '@/api/monitoring';
 import { EnhancedCPUBar } from '@/components/Workloads/EnhancedCPUBar';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
@@ -51,8 +55,10 @@ import {
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import type { Disk } from '@/types/api';
 import type { Resource, ResourceAvailabilityMeta } from '@/types/resource';
+import { getActionableAgentIdFromResource } from '@/utils/agentResources';
 import { formatBytes, formatSpeed, normalizeDiskArray } from '@/utils/format';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import { notificationStore } from '@/stores/notifications';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   getRaidDeviceBadgeClass,
@@ -757,11 +763,132 @@ const AgentMachineWebLinkCell: Component<{
   );
 };
 
+const AgentMachineActionsCell: Component<{
+  name: string;
+  agentId: string;
+  menuOpen: boolean;
+  confirmingRemoval: boolean;
+  removing: boolean;
+  onToggleMenu: () => void;
+  onRemove: () => void;
+}> = (props) => {
+  const removeLabel = () => `Remove ${props.name} from Pulse`;
+  const confirmLabel = () => `Confirm remove ${props.name} from Pulse`;
+  const [menuPosition, setMenuPosition] = createSignal({ left: 0, top: 0 });
+  let triggerRef: HTMLButtonElement | undefined;
+  const updateMenuPosition = () => {
+    if (!triggerRef || typeof window === 'undefined') return;
+    const rect = triggerRef.getBoundingClientRect();
+    const menuWidth = 240;
+    setMenuPosition({
+      left: Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.right - menuWidth)),
+      top: rect.bottom + 4,
+    });
+  };
+
+  createEffect(() => {
+    if (!props.menuOpen || typeof window === 'undefined') return;
+    updateMenuPosition();
+    window.addEventListener('resize', updateMenuPosition);
+    window.addEventListener('scroll', updateMenuPosition, true);
+    onCleanup(() => {
+      window.removeEventListener('resize', updateMenuPosition);
+      window.removeEventListener('scroll', updateMenuPosition, true);
+    });
+  });
+
+  return (
+    <div
+      data-agent-machine-actions-root
+      class="relative flex justify-center"
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => {
+        event.stopPropagation();
+        if (event.key === 'Escape' && props.menuOpen) props.onToggleMenu();
+      }}
+    >
+      <button
+        ref={triggerRef}
+        type="button"
+        class="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
+        title="Machine actions"
+        aria-label={`Machine actions for ${props.name}`}
+        aria-haspopup="menu"
+        aria-expanded={props.menuOpen ? 'true' : 'false'}
+        onClick={(event) => {
+          event.stopPropagation();
+          updateMenuPosition();
+          props.onToggleMenu();
+        }}
+      >
+        <MoreHorizontalIcon class="h-3.5 w-3.5" />
+      </button>
+
+      <Show when={props.menuOpen}>
+        <Portal mount={document.body}>
+          <div
+            data-agent-machine-actions-root
+            data-agent-machine-actions-menu
+            role="menu"
+            class="fixed z-[9999] w-60 rounded-md border border-border bg-surface p-1 text-left shadow-lg"
+            style={{
+              left: `${menuPosition().left}px`,
+              top: `${menuPosition().top}px`,
+            }}
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              event.stopPropagation();
+              if (event.key === 'Escape' && props.menuOpen) props.onToggleMenu();
+            }}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-red-600 transition-colors hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/60 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-950"
+              aria-label={props.confirmingRemoval ? confirmLabel() : removeLabel()}
+              disabled={props.removing || !props.agentId}
+              onClick={(event) => {
+                event.stopPropagation();
+                props.onRemove();
+              }}
+            >
+              <Show
+                when={props.removing}
+                fallback={<Trash2Icon class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+              >
+                <Loader2Icon class="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden="true" />
+              </Show>
+              <span class="min-w-0 truncate">
+                {props.removing
+                  ? 'Removing...'
+                  : props.confirmingRemoval
+                    ? 'Click again to confirm'
+                    : 'Remove from Pulse'}
+              </span>
+            </button>
+
+            <Show when={props.confirmingRemoval}>
+              <p class="px-2 pb-1.5 pt-1 text-[10px] leading-snug text-muted">
+                Pulse will forget this machine. The agent stays installed until you run the
+                uninstall command.
+              </p>
+            </Show>
+          </div>
+        </Portal>
+      </Show>
+    </div>
+  );
+};
+
 const availabilityFor = (machine: Resource): ResourceAvailabilityMeta | undefined =>
   machine.availability ??
   (machine.platformData?.availability as ResourceAvailabilityMeta | undefined);
 
 const isAgentlessMachine = (machine: Resource): boolean =>
+  machine.type !== 'agent' &&
+  machine.sourceType !== 'agent' &&
+  machine.platformType !== 'agent' &&
   String(availabilityFor(machine)?.targetKind ?? '')
     .trim()
     .toLowerCase() === 'machine';
@@ -908,16 +1035,21 @@ const diskIOTitleFor = (machine: Resource): string => {
   return `Read ${formatSpeed(machine.diskIO.readRate)}\nWrite ${formatSpeed(machine.diskIO.writeRate)}`;
 };
 
-const agentMetadataIdFor = (machine: Resource): string => {
-  const config = toDiscoveryConfig(machine);
-  if (config?.metadataKind !== 'agent') return '';
-  return asTrimmedString(config.metadataId) ?? '';
+const agentIdentityIdFor = (machine: Resource): string =>
+  asTrimmedString(getActionableAgentIdFromResource(machine)) || asTrimmedString(machine.id) || '';
+
+const agentMetadataIdFor = (machine: Resource): string =>
+  isAgentlessMachine(machine) ? '' : agentIdentityIdFor(machine);
+
+const agentRemovalIdFor = (machine: Resource): string => {
+  if (isAgentlessMachine(machine)) return '';
+  return agentIdentityIdFor(machine);
 };
 
 const machineColumnWidthClass = (columnId: AgentMachineColumnId): string => {
   switch (columnId) {
     case 'machine':
-      return 'w-[34%] md:w-[16%]';
+      return 'w-[28%] md:w-[15%]';
     case 'system':
       return 'hidden md:table-cell md:w-[12%]';
     case 'agent':
@@ -925,7 +1057,7 @@ const machineColumnWidthClass = (columnId: AgentMachineColumnId): string => {
     case 'cpu':
     case 'memory':
     case 'disk':
-      return 'w-[22%] md:w-[8%]';
+      return 'w-[20%] md:w-[8%]';
     case 'network':
     case 'diskio':
       return 'hidden lg:table-cell lg:w-[9%]';
@@ -944,6 +1076,8 @@ const machineColumnWidthClass = (columnId: AgentMachineColumnId): string => {
       return 'hidden xl:table-cell xl:w-[5%]';
     case 'kernel':
       return 'hidden xl:table-cell xl:w-[10%]';
+    case 'actions':
+      return 'w-[12%] md:w-[4%]';
   }
 };
 
@@ -988,7 +1122,14 @@ const AgentMachineSortableHead: Component<{
           : undefined
       }
     >
-      <Show when={props.column.sortKey} fallback={props.column.label}>
+      <Show
+        when={props.column.sortKey}
+        fallback={
+          <span class={props.column.id === 'actions' ? 'sr-only' : 'truncate'}>
+            {props.column.label}
+          </span>
+        }
+      >
         {(sortKey) => (
           <button
             type="button"
@@ -1021,8 +1162,14 @@ export const AgentsMachinesTable: Component<{
   emptyTitle: string;
   emptyDescription: string;
 }> = (props) => {
+  const [locallyRemovedResourceIds, setLocallyRemovedResourceIds] = createSignal<
+    Record<string, boolean>
+  >({});
+  const visibleMachineResources = createMemo(() =>
+    props.resources.filter((machine) => !locallyRemovedResourceIds()[machine.id]),
+  );
   const tableState = createPlatformTableFilterState({
-    resources: () => props.resources,
+    resources: visibleMachineResources,
     initialStatus: 'all' as PlatformResourceStatusFilter,
     filter: filterAgentMachineResources,
   });
@@ -1035,13 +1182,18 @@ export const AgentsMachinesTable: Component<{
   const drawer = createPlatformResourceDetailState({ idPrefix: 'agents-machine-drawer' });
   const [agentMetadataById, setAgentMetadataById] = createSignal<Record<string, AgentMetadata>>({});
   const [accessTargetResourceId, setAccessTargetResourceId] = createSignal<string | null>(null);
+  const [actionsMenuResourceId, setActionsMenuResourceId] = createSignal<string | null>(null);
+  const [confirmingRemovalResourceId, setConfirmingRemovalResourceId] = createSignal<string | null>(
+    null,
+  );
+  const [removingResourceIds, setRemovingResourceIds] = createSignal<Record<string, boolean>>({});
   const visibleColumns = createMemo(
     () => columnVisibility.visibleColumns() as AgentMachineColumn[],
   );
   const detailColspan = createMemo(() => visibleColumns().length);
   const agentMetadataTargetIds = createMemo(() => {
     const ids = new Set<string>();
-    for (const machine of props.resources) {
+    for (const machine of visibleMachineResources()) {
       const metadataId = agentMetadataIdFor(machine);
       if (metadataId) ids.add(metadataId);
     }
@@ -1062,6 +1214,71 @@ export const AgentsMachinesTable: Component<{
     const next = getNextAgentMachineSortState(sortKey(), sortDirection(), key);
     setSortKey(next.key);
     setSortDirection(next.direction);
+  };
+  const closeActionsMenu = () => {
+    setActionsMenuResourceId(null);
+    setConfirmingRemovalResourceId(null);
+  };
+  const toggleActionsMenu = (resourceId: string) => {
+    setActionsMenuResourceId((current) => (current === resourceId ? null : resourceId));
+    setConfirmingRemovalResourceId(null);
+  };
+  const isRemovingMachine = (resourceId: string): boolean =>
+    Boolean(removingResourceIds()[resourceId]);
+  const setMachineRemoving = (resourceId: string, removing: boolean) => {
+    setRemovingResourceIds((current) => {
+      if (removing) {
+        return { ...current, [resourceId]: true };
+      }
+      const next = { ...current };
+      delete next[resourceId];
+      return next;
+    });
+  };
+  const removeAgentMetadata = async (metadataId: string) => {
+    if (!metadataId) return;
+    try {
+      await AgentMetadataAPI.deleteMetadata(metadataId);
+    } catch (_error) {
+      // The agent removal has already succeeded; stale metadata can be cleaned up later.
+    }
+
+    setAgentMetadataById((current) => {
+      if (!current[metadataId]) return current;
+      const next = { ...current };
+      delete next[metadataId];
+      return next;
+    });
+  };
+  const handleRemoveMachine = async (machine: Resource, agentId: string, name: string) => {
+    const resourceId = machine.id;
+    if (!agentId) {
+      notificationStore.error('Agent identifier unavailable.');
+      closeActionsMenu();
+      return;
+    }
+
+    if (confirmingRemovalResourceId() !== resourceId) {
+      setActionsMenuResourceId(resourceId);
+      setConfirmingRemovalResourceId(resourceId);
+      return;
+    }
+
+    setMachineRemoving(resourceId, true);
+    try {
+      await MonitoringAPI.deleteAgent(agentId);
+      await removeAgentMetadata(agentMetadataIdFor(machine));
+      setLocallyRemovedResourceIds((current) => ({ ...current, [resourceId]: true }));
+      drawer.close(machine);
+      if (accessTargetResourceId() === resourceId) setAccessTargetResourceId(null);
+      notificationStore.success(`${name} removed from Pulse`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to remove machine';
+      notificationStore.error(message);
+    } finally {
+      setMachineRemoving(resourceId, false);
+      closeActionsMenu();
+    }
   };
 
   createEffect(() => {
@@ -1115,9 +1332,31 @@ export const AgentsMachinesTable: Component<{
     });
   });
 
+  createEffect(() => {
+    if (typeof document === 'undefined' || !actionsMenuResourceId()) return;
+
+    const handleMouseDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest('[data-agent-machine-actions-root]')) {
+        return;
+      }
+      closeActionsMenu();
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeActionsMenu();
+    };
+
+    document.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('keydown', handleKeyDown);
+    onCleanup(() => {
+      document.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    });
+  });
+
   return (
     <Show
-      when={props.resources.length > 0}
+      when={visibleMachineResources().length > 0}
       fallback={
         <PlatformTableEmptyState
           icon={props.emptyIcon}
@@ -1169,7 +1408,7 @@ export const AgentsMachinesTable: Component<{
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <TableCardHeader title="Machines" />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1160px]">
+            <Table class="min-w-full table-fixed text-xs md:min-w-[1210px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
                   <For each={visibleColumns()}>
@@ -1243,6 +1482,7 @@ export const AgentsMachinesTable: Component<{
                     const isExpanded = () => drawer.isExpanded(machine);
                     const detailRowId = () => drawer.detailRowId(machine);
                     const agentMetadataId = () => agentMetadataIdFor(machine);
+                    const agentRemovalId = () => agentRemovalIdFor(machine);
                     const savedWebInterfaceUrl = () => savedAgentCustomUrlFor(agentMetadataId());
                     const clearAccessTargetIfCurrent = () => {
                       if (accessTargetResourceId() === machine.id) setAccessTargetResourceId(null);
@@ -1486,6 +1726,21 @@ export const AgentsMachinesTable: Component<{
                               </span>
                             </TableCell>
                           </Show>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('badge')} ${machineColumnWidthClass('actions')} text-base-content`}
+                          >
+                            <AgentMachineActionsCell
+                              name={name()}
+                              agentId={agentRemovalId()}
+                              menuOpen={actionsMenuResourceId() === machine.id}
+                              confirmingRemoval={confirmingRemovalResourceId() === machine.id}
+                              removing={isRemovingMachine(machine.id)}
+                              onToggleMenu={() => toggleActionsMenu(machine.id)}
+                              onRemove={() =>
+                                void handleRemoveMachine(machine, agentRemovalId(), name())
+                              }
+                            />
+                          </TableCell>
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={machine}
