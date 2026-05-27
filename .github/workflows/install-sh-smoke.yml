@@ -185,10 +185,17 @@ jobs:
 
           # jrei/systemd-debian:12 is a community systemd-in-Docker image used
           # for Ansible / Molecule testing — small, no Pulse-specific assumptions.
-          docker run -d --rm \
+          # GHA ubuntu-24.04 runners use cgroup v2 unified hierarchy; without
+          # --cgroupns=host the container gets its own cgroup namespace and
+          # systemd PID 1 exits before it can mount the cgroup tree, causing
+          # the container to disappear mid-boot. /run/lock must also be tmpfs
+          # for systemd-tmpfiles. We drop --rm so a failed boot leaves logs
+          # behind for diagnosis; the trap removes the container on exit.
+          docker run -d \
             --name "${container_name}" \
             --privileged \
-            --tmpfs /tmp --tmpfs /run \
+            --cgroupns=host \
+            --tmpfs /tmp --tmpfs /run --tmpfs /run/lock \
             -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
             -v "$(pwd)/smoke-workspace:/smoke" \
             -p 7655:7655 \
@@ -196,11 +203,19 @@ jobs:
 
           echo "Waiting for systemd to be ready inside the container..."
           for i in $(seq 1 30); do
+            if ! docker inspect -f '{{.State.Running}}' "${container_name}" 2>/dev/null | grep -q true; then
+              echo "::error::Container ${container_name} is no longer running."
+              docker inspect -f 'ExitCode={{.State.ExitCode}} Error={{.State.Error}}' "${container_name}" || true
+              docker logs "${container_name}" || true
+              exit 1
+            fi
             if docker exec "${container_name}" systemctl is-system-running --wait 2>/dev/null | grep -qE '^(running|degraded)$'; then
               break
             fi
             if [ "$i" -eq 30 ]; then
               docker logs "${container_name}" || true
+              docker exec "${container_name}" systemctl --no-pager status || true
+              docker exec "${container_name}" journalctl --no-pager --lines=120 || true
               echo "::error::systemd did not become ready inside the container"
               exit 1
             fi

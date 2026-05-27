@@ -1117,15 +1117,14 @@ jobs:
       app_version: ${{ needs.prepare.outputs.version }}
 
   # Defensive backup to promote-floating-tags.yml's workflow_run chain off
-  # publish-docker.yml. The chain works when publish-docker succeeds, but a
-  # publish-docker failure (rc.3 → rc.5 all failed at the now-removed
-  # pulse-agent push) silently left latest/major/minor tags unpromoted —
-  # customers pulling rcourtman/pulse:latest stayed on whatever the previous
-  # successful release tagged. Calling promote-floating-tags as workflow_call
-  # after validate_release_assets succeeds (which itself waits for the docker
+  # publish-docker.yml. The chain works when publish-docker succeeds, but
+  # when it fails the floating tags don't advance and customers pulling
+  # rcourtman/pulse:latest stay on whatever the previous successful release
+  # tagged. Calling promote-floating-tags as workflow_call after
+  # validate_release_assets succeeds (which itself waits for the docker
   # image to be pullable) guarantees the floating tags advance. Draft-only
-  # runs must not promote floating tags because the release is still private
-  # promotion state.
+  # runs must not promote floating tags because the release is still in
+  # private promotion state.
   promote_floating_tags:
     needs:
       - prepare

@@ -1,12 +1,15 @@
 name: Promote Floating Tags
 run-name: Promote Floating Tags ${{ inputs.tag }}
 
+# Promotes floating tags for the Pulse server image after a release. Only
+# rcourtman/pulse + ghcr.io/<owner>/pulse are promoted; the Pulse agent
+# ships as GitHub Release binaries (see publish-docker.yml line 199), not
+# as a Docker image, so there are no agent floating tags to promote.
+#
 # Triggers:
-# - workflow_run: chains off publish-docker.yml completion. Historically the
-#   primary path, but the chain only fires when publish-docker succeeds — and
-#   when publish-docker fails (rc.3 → rc.5 all failed at the now-removed
-#   pulse-agent push step), the floating tags don't promote and customers
-#   pulling rcourtman/pulse:latest are stuck on whatever the previous tag was.
+# - workflow_run: chains off publish-docker.yml completion. Historically
+#   this was the only path; it remains the default for releases that go
+#   straight through publish-docker.yml.
 # - workflow_call: called explicitly from create-release.yml after
 #   validate_release_assets succeeds. Defensive backup so a workflow_run
 #   failure doesn't silently leave latest/major/minor tags unpromoted.
@@ -172,43 +175,24 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Wait for Docker images to be available
+      - name: Wait for Pulse server image to be available
         env:
           TAG: ${{ steps.extract.outputs.tag }}
         run: |
-          echo "Waiting for Docker images with tag ${TAG} to be available..."
+          echo "Waiting for rcourtman/pulse:${TAG} to be available..."
           MAX_ATTEMPTS=30
           ATTEMPT=0
-          
-          # Wait for main pulse image
           while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
             if docker manifest inspect rcourtman/pulse:${TAG} > /dev/null 2>&1; then
               echo "Image rcourtman/pulse:${TAG} is available!"
-              break
+              exit 0
             fi
             ATTEMPT=$((ATTEMPT + 1))
             echo "Attempt $ATTEMPT/$MAX_ATTEMPTS - pulse image not yet available, waiting 10s..."
             sleep 10
           done
-          
-          if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
-            echo "Timeout waiting for pulse Docker image"
-            exit 1
-          fi
-          
-          # Also wait for unified agent image
-          ATTEMPT=0
-          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-            if docker manifest inspect rcourtman/pulse-agent:${TAG} > /dev/null 2>&1; then
-              echo "Image rcourtman/pulse-agent:${TAG} is available!"
-              exit 0
-            fi
-            ATTEMPT=$((ATTEMPT + 1))
-            echo "Attempt $ATTEMPT/$MAX_ATTEMPTS - agent image not yet available, waiting 10s..."
-            sleep 10
-          done
-          
-          echo "Timeout waiting for agent Docker image"
+
+          echo "Timeout waiting for pulse Docker image"
           exit 1
 
       - name: Promote Pulse server image tags
@@ -246,39 +230,6 @@ jobs:
               ghcr.io/${OWNER}/pulse:${TAG}
           fi
 
-      - name: Promote Pulse agent image tags
-        env:
-          TAG: ${{ steps.extract.outputs.tag }}
-          PRERELEASE: ${{ steps.extract.outputs.prerelease }}
-          OWNER: ${{ github.repository_owner }}
-        run: |
-          set -euo pipefail
-          VERSION="${TAG#v}"
-          BASE_VERSION="${VERSION%%-*}"
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
-          MINOR=${MINOR:-0}
-          MAJOR_MINOR="$MAJOR.$MINOR"
-
-          if [ "$PRERELEASE" = "true" ]; then
-            docker buildx imagetools create \
-              -t rcourtman/pulse-agent:rc \
-              rcourtman/pulse-agent:${TAG}
-            docker buildx imagetools create \
-              -t ghcr.io/${OWNER}/pulse-agent:rc \
-              ghcr.io/${OWNER}/pulse-agent:${TAG}
-          else
-            docker buildx imagetools create \
-              -t rcourtman/pulse-agent:latest \
-              -t rcourtman/pulse-agent:${MAJOR_MINOR} \
-              -t rcourtman/pulse-agent:${MAJOR} \
-              rcourtman/pulse-agent:${TAG}
-            docker buildx imagetools create \
-              -t ghcr.io/${OWNER}/pulse-agent:latest \
-              -t ghcr.io/${OWNER}/pulse-agent:${MAJOR_MINOR} \
-              -t ghcr.io/${OWNER}/pulse-agent:${MAJOR} \
-              ghcr.io/${OWNER}/pulse-agent:${TAG}
-          fi
-
       - name: Promotion summary
         env:
           TAG: ${{ steps.extract.outputs.tag }}
@@ -288,9 +239,10 @@ jobs:
           BASE_VERSION="${VERSION%%-*}"
           IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
           MAJOR_MINOR="$MAJOR.${MINOR:-0}"
-          
+
           if [ "$PRERELEASE" = "true" ]; then
-            echo "✅ Updated :rc tags to point to ${TAG} for both server and agent images."
+            echo "✅ Updated :rc tag to point to ${TAG} for the Pulse server image."
           else
-            echo "✅ Updated :latest, :${MAJOR_MINOR}, :${MAJOR} tags to point to ${TAG} for both server and agent images."
+            echo "✅ Updated :latest, :${MAJOR_MINOR}, :${MAJOR} tags to point to ${TAG} for the Pulse server image."
           fi
+          echo "Pulse Agent ships as GitHub Release binaries, not a Docker image."
