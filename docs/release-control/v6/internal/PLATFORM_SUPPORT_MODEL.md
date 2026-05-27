@@ -74,9 +74,10 @@ and support-floor obligations as a first-class platform, but it does not imply
 exclusive infrastructure ownership.
 
 The `docker` id is the canonical Docker / Podman container-runtime lens. The
-authenticated shell may label that destination as `Containers` while shared
-badges, filters, and runtime-specific management copy continue to use
-`Docker / Podman` where that is the precise capability.
+authenticated shell labels that destination as `Docker` for operator
+recognition, while shared badges, filters, and runtime-specific management
+copy continue to use `Docker / Podman` or `containers` where that is the
+precise capability.
 
 ### Runtime Variant
 

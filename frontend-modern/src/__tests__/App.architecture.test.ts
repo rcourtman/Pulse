@@ -110,7 +110,7 @@ describe('App architecture', () => {
     expect(appSource).toContain('buildPrimaryPlatformNavigationVisibility');
     expect(appLayoutSource).toContain('buildPrimaryPlatformNavigationVisibility');
     expect(appLayoutSource).toContain('primaryPlatformNavigationIsVisible');
-    expect(appLayoutSource).toContain("label: 'Containers'");
+    expect(appLayoutSource).toContain("label: 'Docker'");
     expect(appLayoutSource).toContain("'Docker / Podman runtime lens");
     expect(appLayoutSource).not.toContain("id: 'infrastructure',");
     expect(appLayoutSource).not.toContain("id: 'workloads',");

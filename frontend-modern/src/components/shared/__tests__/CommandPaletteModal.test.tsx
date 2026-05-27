@@ -97,7 +97,7 @@ describe('CommandPaletteModal', () => {
     expect(screen.getByText('Go to Machines')).toBeInTheDocument();
     expect(screen.getByText('/standalone/machines')).toBeInTheDocument();
     expect(screen.getByText('Go to Proxmox')).toBeInTheDocument();
-    expect(screen.getByText('Go to Containers')).toBeInTheDocument();
+    expect(screen.getByText('Go to Docker')).toBeInTheDocument();
     expect(screen.getByText('Go to Kubernetes Workloads')).toBeInTheDocument();
     expect(screen.getByText('/kubernetes/workloads')).toBeInTheDocument();
     expect(screen.queryByText('Go to Workloads')).not.toBeInTheDocument();
@@ -184,7 +184,7 @@ describe('CommandPaletteModal', () => {
     expect(screen.queryByText('Go to Storage')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to Recovery')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to Machines')).not.toBeInTheDocument();
-    expect(screen.queryByText('Go to Containers')).not.toBeInTheDocument();
+    expect(screen.queryByText('Go to Docker')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to Kubernetes')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to TrueNAS')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to vSphere')).not.toBeInTheDocument();

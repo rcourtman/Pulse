@@ -209,7 +209,7 @@ export function AppLayout(props: AppLayoutProps) {
   // as the bare app name.
   const tabTitleByActive: Record<NonNullable<ReturnType<typeof getActiveTabForPath>>, string> = {
     proxmox: 'Proxmox',
-    docker: 'Containers',
+    docker: 'Docker',
     kubernetes: 'Kubernetes',
     truenas: 'TrueNAS',
     vmware: 'vSphere',
@@ -343,7 +343,7 @@ export function AppLayout(props: AppLayoutProps) {
       },
       {
         id: 'docker',
-        label: 'Containers',
+        label: 'Docker',
         route: ROOT_DOCKER_PATH,
         settingsRoute: ROOT_INFRASTRUCTURE_SETTINGS_PATH,
         tooltip: 'Docker / Podman runtime lens: hosts, containers, and Swarm services',

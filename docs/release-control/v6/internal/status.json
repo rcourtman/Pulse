@@ -6945,7 +6945,7 @@
     },
     {
       "id": "platform-support-model-v1",
-      "summary": "Pulse v6 platform support is governed by one canonical model: owning platform surfaces declare primary ingestion, canonical resource projections, and support-floor surfaces; `docker` is the canonical Docker / Podman container-runtime lens and workload surface rather than an exclusive owning platform, and the shell may label that destination as Containers while shared runtime badges and management copy keep Docker / Podman wording; `kubernetes` remains a first-class orchestrator platform; runtime variants such as `podman` plus transport helpers are not top-level platforms.",
+      "summary": "Pulse v6 platform support is governed by one canonical model: owning platform surfaces declare primary ingestion, canonical resource projections, and support-floor surfaces; `docker` is the canonical Docker / Podman container-runtime lens and workload surface rather than an exclusive owning platform, and the shell labels that destination as Docker for operator recognition while shared runtime badges and management copy keep Docker / Podman or containers wording where precise; `kubernetes` remains a first-class orchestrator platform; runtime variants such as `podman` plus transport helpers are not top-level platforms.",
       "kind": "architecture",
       "decided_at": "2026-03-30",
       "subsystem_ids": [

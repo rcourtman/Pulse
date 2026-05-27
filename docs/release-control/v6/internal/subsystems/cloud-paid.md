@@ -646,8 +646,8 @@ destination instead of the retired top-level Infrastructure route; aggregate
 Workloads / Storage / Recovery pages are product workspaces, not hosted
 acquisition destinations. The Docker / Podman runtime route remains `/docker`
 for search familiarity, but the shell may label the
-destination as Containers so it reads as a runtime lens rather than an owning
-infrastructure platform.
+destination as Docker so it reads as the recognizable container runtime lens
+rather than an owning infrastructure platform.
 
 The Proxmox platform tab in the authenticated app shell is ordinary product
 navigation. It must stay separate from hosted acquisition, monitored-system

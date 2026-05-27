@@ -974,7 +974,7 @@ not a replacement status card, CTA band, or page-local nested card.
     secondary in the shell hierarchy when provider/runtime platform evidence exists:
     `PRIMARY_INFRASTRUCTURE_NAV_IDS`, desktop primary tabs, mobile primary
     priority, app-shell preload order, authenticated landing fallback, and
-    command-palette ordering must prefer Proxmox, Containers, Kubernetes,
+    command-palette ordering must prefer Proxmox, Docker, Kubernetes,
     TrueNAS, and vSphere ahead of Machines. The Machines surface may win those
     first/default positions only when the current estate has standalone Pulse
     Agent machines or agentless availability endpoints and no
@@ -2426,7 +2426,7 @@ retired or unknown routes such as `/dashboard` must not be coerced into the
 nearest platform tab just because the authenticated shell has a provider-first
 landing fallback. Shared desktop and mobile navigation must tolerate a missing
 active tab for those paths while still highlighting canonical active routes
-such as Proxmox, Containers, Kubernetes, TrueNAS, vSphere, Machines, Alerts,
+such as Proxmox, Docker, Kubernetes, TrueNAS, vSphere, Machines, Alerts,
 Patrol, and Settings.
 The recovery feature shell now also depends on the shared
 `frontend-modern/src/components/shared/Subtabs.tsx` primitive for its primary

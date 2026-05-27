@@ -7,7 +7,7 @@ Assertion: `provider-first-platform-landing-surface`
 ## Outcome
 
 Pulse v6 authenticated root and login handoff now resolves to the first visible
-provider or runtime platform in canonical shell order: Proxmox, Containers,
+provider or runtime platform in canonical shell order: Proxmox, Docker,
 Kubernetes, TrueNAS, vSphere, then Agents only when the estate is agent-only.
 
 Agents is a standalone Pulse-agent-primary machine surface. It must not become

@@ -667,7 +667,7 @@ Primary nav moved to governed platform/runtime destinations on 2026-05-16 and
 was clarified on 2026-05-25 through `frontend-modern/src/App.tsx` and
 `frontend-modern/src/AppLayout.tsx`: the top of the app may expose canonical
 platform pages (Proxmox, Kubernetes, TrueNAS, vSphere) plus the
-container-runtime lens (shown as Containers for Docker / Podman), aggregate
+Docker / Podman container-runtime lens (shown as Docker in the shell), aggregate
 platform-owned Workloads / Storage / Recovery sub-surfaces, Alerts, Patrol, and Settings.
 Provider/runtime destinations must pass the shared support-and-resource-
 evidence gate before they appear in navigation, command palette entries,
