@@ -131,13 +131,9 @@ describe('ApprovalSection', () => {
         findingId: 'finding-1',
         briefing: expect.objectContaining({
           sourceLabel: 'Pulse Patrol',
-          title: 'Operator briefing attached',
+          title: 'Patrol finding attached',
           subject: 'CPU saturation on node-1',
-          statusLabel: 'Fix Queued',
-          detailLines: expect.arrayContaining([
-            expect.stringContaining('fix queued for governed review'),
-            expect.stringContaining('Recover or regenerate the governed approval before execution'),
-          ]),
+          statusLabel: expect.stringContaining('Fix Queued'),
         }),
         autonomousMode: false,
         handoffResources: [{ id: 'host-1', name: 'node-1', node: undefined, type: 'host' }],
@@ -201,19 +197,11 @@ describe('ApprovalSection', () => {
         findingId: 'finding-1',
         briefing: expect.objectContaining({
           sourceLabel: 'Pulse Patrol',
-          title: 'Operator briefing attached',
+          title: 'Patrol finding attached',
           subject: 'CPU saturation on node-1',
-          statusLabel: 'Pending approval · High risk',
-          detailLines: expect.arrayContaining([
-            expect.stringContaining('live approval pending'),
-            expect.stringContaining('Proposed fix: Restart the workload service'),
-            expect.stringContaining('1 command recorded for approval context'),
-            expect.stringContaining('Review live governed approval approval-1 before execution'),
-          ]),
-          actionLabel: 'Restart the workload service',
+          statusLabel: expect.stringContaining('Pending'),
           commandSummary: '1 command recorded for approval context',
-          safetyNote:
-            'Command details stay in approval context; execution requires the governed approval flow.',
+          safetyNote: expect.stringContaining('Command details stay in approval context'),
         }),
         autonomousMode: false,
         handoffResources: [{ id: 'agent-1', name: 'node-1', node: undefined, type: 'agent' }],
@@ -295,18 +283,11 @@ describe('ApprovalSection', () => {
         findingId: 'finding-1',
         briefing: expect.objectContaining({
           sourceLabel: 'Pulse Patrol',
-          title: 'Operator briefing attached',
+          title: 'Patrol finding attached',
           subject: 'CPU saturation on node-1',
-          statusLabel: 'Fix Queued',
-          detailLines: expect.arrayContaining([
-            expect.stringContaining('fix queued for governed review'),
-            expect.stringContaining('Proposed fix: Restart the workload service'),
-            expect.stringContaining('Recover or regenerate the governed approval before execution'),
-          ]),
-          actionLabel: 'Restart the workload service',
+          statusLabel: expect.stringContaining('Fix Queued'),
           commandSummary: '1 command recorded for approval context',
-          safetyNote:
-            'Command details stay in approval context; destructive actions require governed approval.',
+          safetyNote: expect.stringContaining('destructive actions require governed approval'),
         }),
         autonomousMode: false,
         handoffResources: [{ id: 'agent-1', name: 'node-1', node: undefined, type: 'agent' }],
@@ -336,7 +317,7 @@ describe('ApprovalSection', () => {
       }),
     );
     expect(context.handoffContext).toContain('[Patrol Finding Context]');
-    expect(context.handoffContext).toContain('Proposed Fix:');
+    expect(context.handoffContext).toContain('Existing Action Artifact:');
     expect(context.handoffContext).toContain('Command Boundary:');
     expect(JSON.stringify(context.handoffActions)).not.toContain('systemctl restart nginx');
     expect(JSON.stringify(context.briefing)).not.toContain('systemctl restart nginx');

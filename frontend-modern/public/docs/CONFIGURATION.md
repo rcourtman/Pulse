@@ -276,6 +276,9 @@ When `allowEmbedding` is `false`, Pulse sends `X-Frame-Options: DENY` and `frame
 | `DNS_CACHE_TIMEOUT` | Cache TTL for DNS lookups | `5m` |
 | `MAX_POLL_TIMEOUT` | Maximum time per polling cycle | `3m` |
 | `PULSE_DISABLE_DOCKER_UPDATE_ACTIONS` | Hide Docker update buttons (read-only mode) | `false` |
+| `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION` | Allow Proxmox-side LXC Docker socket hinting with `pct exec` | `false` |
+| `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY` | Allow Proxmox-side minimal LXC Docker inventory collection with `pct exec`; collects Docker host/container summary, not inspect/env/mount/process data | `false` |
+| `PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS` | Optional comma-separated VMID allowlist for Proxmox-side LXC Docker inventory; empty means all running Docker-enabled LXCs are eligible when inventory is enabled | *(unset)* |
 | `PULSE_TELEMETRY` | Anonymous outbound usage telemetry ([details](PRIVACY.md)); set `false` to disable | `true` |
 
 ### Logging Overrides
@@ -480,6 +483,8 @@ On your TrueNAS system:
 | Data | Where it appears |
 |---|---|
 | System info (CPU, memory, uptime) | Infrastructure page |
+| Virtual machines | TrueNAS Overview |
+| Apps | TrueNAS Overview |
 | ZFS Pools & datasets | Storage page |
 | Physical disks | Storage page |
 | ZFS Snapshots | Recovery page |
