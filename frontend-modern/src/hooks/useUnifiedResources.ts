@@ -79,6 +79,17 @@ type APIAgentNetworkInterface = {
   speedMbps?: number;
 };
 
+type APIAgentDiskIO = {
+  device: string;
+  readBytes?: number;
+  writeBytes?: number;
+  readOps?: number;
+  writeOps?: number;
+  readTimeMs?: number;
+  writeTimeMs?: number;
+  ioTimeMs?: number;
+};
+
 type APIAgentSensorSummary = {
   temperatureCelsius?: Record<string, number>;
   fanRpm?: Record<string, number>;
@@ -217,6 +228,8 @@ type APIResource = {
       swapTotal?: number;
     };
     networkInterfaces?: APIAgentNetworkInterface[];
+    diskIO?: APIAgentDiskIO[];
+    diskIo?: APIAgentDiskIO[];
     disks?: APIAgentDiskInfo[];
     sensors?: APIAgentSensorSummary;
     raid?: APIHostRAIDArray[];

@@ -36,7 +36,7 @@ import {
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import type { Disk } from '@/types/api';
 import type { Resource, ResourceAvailabilityMeta } from '@/types/resource';
-import { formatSpeed, normalizeDiskArray } from '@/utils/format';
+import { formatBytes, formatSpeed, normalizeDiskArray } from '@/utils/format';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   getRaidDeviceBadgeClass,
@@ -50,6 +50,7 @@ import { getWorkloadsGuestNetworkEmptyState } from '@/utils/workloadGuestPresent
 import {
   AGENT_MACHINE_COLUMNS,
   getAgentMachineCpuPercent,
+  getAgentMachineDiskIODetails,
   getAgentMachineDiskIOTotal,
   getAgentMachineIpValues,
   getAgentMachineNetworkInterfaceDetails,
@@ -65,6 +66,7 @@ import {
   timestampMillisFrom,
   type AgentMachineColumn,
   type AgentMachineColumnId,
+  type AgentMachineDiskIODetail,
   type AgentMachineNetworkInterfaceDetail,
   type AgentMachineRaidArrayDetail,
   type AgentMachineSortKey,
@@ -332,6 +334,99 @@ const AgentMachineNetworkCell: Component<{
           <Show when={hiddenInterfaceCount() > 0}>
             <div class="border-t border-border pt-1 text-[9px] text-muted">
               +{hiddenInterfaceCount()} more interfaces
+            </div>
+          </Show>
+        </div>
+      </section>
+    </AgentMachineMetricTooltip>
+  );
+};
+
+const AgentMachineDiskIOCell: Component<{
+  diskIO: Resource['diskIO'] | undefined;
+  details: AgentMachineDiskIODetail[];
+  title: string;
+}> = (props) => {
+  const hasDetails = () => props.details.length > 0;
+  const shownDetails = () => props.details.slice(0, 8);
+  const hiddenDetailCount = () => Math.max(0, props.details.length - shownDetails().length);
+  const ariaLabel = () => props.title.replace(/\n/g, ', ') || 'Disk I/O throughput';
+  const hasCounterValue = (disk: AgentMachineDiskIODetail) =>
+    disk.readBytes !== undefined ||
+    disk.writeBytes !== undefined ||
+    disk.readOps !== undefined ||
+    disk.writeOps !== undefined ||
+    disk.readTimeMs !== undefined ||
+    disk.writeTimeMs !== undefined ||
+    disk.ioTimeMs !== undefined;
+
+  return (
+    <AgentMachineMetricTooltip
+      triggerDataAttribute="data-agent-machine-diskio-trigger"
+      tooltipDataAttribute="data-agent-machine-diskio-tooltip"
+      triggerClass="grid w-full grid-cols-[0.75rem_minmax(0,1fr)] grid-rows-2 items-center gap-x-1 gap-y-0.5 text-[11px] leading-tight tabular-nums"
+      tooltipClass="min-w-[230px] max-w-[360px] space-y-2"
+      enabled={hasDetails()}
+      ariaLabel={ariaLabel()}
+      title={props.title}
+      maxWidth={380}
+      trigger={
+        <>
+          <span class="inline-flex w-3 justify-center font-mono text-blue-500">R</span>
+          <span class="min-w-0 truncate">{formatSpeed(props.diskIO?.readRate ?? 0)}</span>
+          <span class="inline-flex w-3 justify-center font-mono text-amber-500">W</span>
+          <span class="min-w-0 truncate">{formatSpeed(props.diskIO?.writeRate ?? 0)}</span>
+        </>
+      }
+    >
+      <section>
+        <div class="mb-1 border-b border-border pb-1 font-semibold text-muted">Disk I/O</div>
+        <div class="mb-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-[9px]">
+          <span class="font-mono text-blue-500">Read</span>
+          <span class="min-w-0 truncate text-base-content">
+            {formatSpeed(props.diskIO?.readRate ?? 0)}
+          </span>
+          <span class="font-mono text-amber-500">Write</span>
+          <span class="min-w-0 truncate text-base-content">
+            {formatSpeed(props.diskIO?.writeRate ?? 0)}
+          </span>
+        </div>
+        <div class="max-h-[280px] space-y-1.5 overflow-y-auto pr-1">
+          <For each={shownDetails()}>
+            {(disk, index) => (
+              <div class="min-w-0" classList={{ 'border-t border-border pt-1.5': index() > 0 }}>
+                <div class="truncate font-semibold text-base-content" title={disk.device}>
+                  {disk.device}
+                </div>
+                <Show
+                  when={hasCounterValue(disk)}
+                  fallback={<div class="mt-0.5 text-[9px] text-muted">No device counters</div>}
+                >
+                  <div class="mt-1 grid grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-[9px] text-muted">
+                    <Show when={disk.readBytes !== undefined || disk.writeBytes !== undefined}>
+                      <span class="font-mono text-blue-500">R</span>
+                      <span class="min-w-0 truncate">{formatBytes(disk.readBytes ?? 0)}</span>
+                      <span class="font-mono text-amber-500">W</span>
+                      <span class="min-w-0 truncate">{formatBytes(disk.writeBytes ?? 0)}</span>
+                    </Show>
+                    <Show when={disk.readOps !== undefined || disk.writeOps !== undefined}>
+                      <span class="font-mono text-blue-500">RO</span>
+                      <span class="min-w-0 truncate">{Math.round(disk.readOps ?? 0)}</span>
+                      <span class="font-mono text-amber-500">WO</span>
+                      <span class="min-w-0 truncate">{Math.round(disk.writeOps ?? 0)}</span>
+                    </Show>
+                    <Show when={disk.ioTimeMs !== undefined}>
+                      <span class="font-mono">IO</span>
+                      <span class="min-w-0 truncate">{Math.round(disk.ioTimeMs ?? 0)} ms</span>
+                    </Show>
+                  </div>
+                </Show>
+              </div>
+            )}
+          </For>
+          <Show when={hiddenDetailCount() > 0}>
+            <div class="border-t border-border pt-1 text-[9px] text-muted">
+              +{hiddenDetailCount()} more devices
             </div>
           </Show>
         </div>
@@ -811,6 +906,7 @@ export const AgentsMachinesTable: Component<{
                     const networkTotal = () => getAgentMachineNetworkTotal(machine);
                     const networkInterfaces = () => getAgentMachineNetworkInterfaceDetails(machine);
                     const diskIOTotal = () => getAgentMachineDiskIOTotal(machine);
+                    const diskIODetails = () => getAgentMachineDiskIODetails(machine);
                     const primaryIp = () => getAgentMachinePrimaryIp(machine);
                     const ipValues = () => getAgentMachineIpValues(machine);
                     const raidArrays = () => getAgentMachineRaidArrayDetails(machine);
@@ -943,23 +1039,11 @@ export const AgentsMachinesTable: Component<{
                                 when={canRenderMetrics() && diskIOTotal() !== undefined}
                                 fallback={metricFallback()}
                               >
-                                <div
-                                  class="grid w-full grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[11px] tabular-nums"
+                                <AgentMachineDiskIOCell
+                                  diskIO={machine.diskIO}
+                                  details={diskIODetails()}
                                   title={diskIOTitleFor(machine)}
-                                >
-                                  <span class="inline-flex w-3 justify-center font-mono text-blue-500">
-                                    R
-                                  </span>
-                                  <span class="min-w-0 truncate">
-                                    {formatSpeed(machine.diskIO?.readRate ?? 0)}
-                                  </span>
-                                  <span class="inline-flex w-3 justify-center font-mono text-amber-500">
-                                    W
-                                  </span>
-                                  <span class="min-w-0 truncate">
-                                    {formatSpeed(machine.diskIO?.writeRate ?? 0)}
-                                  </span>
-                                </div>
+                                />
                               </Show>
                             </TableCell>
                           </Show>

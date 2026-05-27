@@ -1,5 +1,5 @@
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
-import type { HostRAIDArray, HostRAIDDevice } from '@/types/api';
+import type { HostDiskIO, HostRAIDArray, HostRAIDDevice } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { asTrimmedString } from '@/utils/stringUtils';
 
@@ -139,6 +139,8 @@ export type AgentMachineNetworkInterfaceDetail = {
   speedMbps?: number;
 };
 
+export type AgentMachineDiskIODetail = HostDiskIO;
+
 export type AgentMachineRaidArrayDetail = HostRAIDArray;
 
 const positiveTemperature = (value: number | undefined): number | undefined => {
@@ -251,6 +253,11 @@ const nonNegativeMetric = (value: number | undefined): number => {
   return metric !== undefined && metric > 0 ? metric : 0;
 };
 
+const nonNegativeFiniteMetric = (value: number | undefined): number | undefined => {
+  const metric = finiteMetric(value);
+  return metric !== undefined && metric >= 0 ? metric : undefined;
+};
+
 const uniqueTrimmedValues = (values: readonly string[] | undefined): string[] => {
   const seen = new Set<string>();
   const result: string[] = [];
@@ -306,6 +313,45 @@ export const getAgentMachineDiskIOTotal = (machine: Resource): number | undefine
   const write = finiteMetric(machine.diskIO?.writeRate);
   if (read === undefined && write === undefined) return undefined;
   return (read ?? 0) + (write ?? 0);
+};
+
+export const getAgentMachineDiskIODetails = (machine: Resource): AgentMachineDiskIODetail[] => {
+  const diskIO = machine.agent?.diskIO ?? machine.agent?.diskIo ?? [];
+  return diskIO.reduce<AgentMachineDiskIODetail[]>((details, disk, index) => {
+    const device = asTrimmedString(disk.device);
+    const readBytes = nonNegativeFiniteMetric(disk.readBytes);
+    const writeBytes = nonNegativeFiniteMetric(disk.writeBytes);
+    const readOps = nonNegativeFiniteMetric(disk.readOps);
+    const writeOps = nonNegativeFiniteMetric(disk.writeOps);
+    const readTimeMs = nonNegativeFiniteMetric(disk.readTimeMs);
+    const writeTimeMs = nonNegativeFiniteMetric(disk.writeTimeMs);
+    const ioTimeMs = nonNegativeFiniteMetric(disk.ioTimeMs);
+
+    if (
+      !device &&
+      readBytes === undefined &&
+      writeBytes === undefined &&
+      readOps === undefined &&
+      writeOps === undefined &&
+      readTimeMs === undefined &&
+      writeTimeMs === undefined &&
+      ioTimeMs === undefined
+    ) {
+      return details;
+    }
+
+    details.push({
+      device: device ?? `disk-${index + 1}`,
+      ...(readBytes !== undefined ? { readBytes } : {}),
+      ...(writeBytes !== undefined ? { writeBytes } : {}),
+      ...(readOps !== undefined ? { readOps } : {}),
+      ...(writeOps !== undefined ? { writeOps } : {}),
+      ...(readTimeMs !== undefined ? { readTimeMs } : {}),
+      ...(writeTimeMs !== undefined ? { writeTimeMs } : {}),
+      ...(ioTimeMs !== undefined ? { ioTimeMs } : {}),
+    });
+    return details;
+  }, []);
 };
 
 export const getAgentMachineTemperatureCelsius = (machine: Resource): number | undefined => {

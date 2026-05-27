@@ -9,6 +9,7 @@
 
 import type {
   Disk,
+  HostDiskIO,
   HostNetworkInterface,
   HostSensorSummary,
   HostRAIDArray,
@@ -534,6 +535,8 @@ export interface ResourceAgentMeta {
   loadAverage?: number[];
   memory?: Partial<Memory>;
   networkInterfaces?: HostNetworkInterface[];
+  diskIO?: HostDiskIO[];
+  diskIo?: HostDiskIO[];
   disks?: ResourceAgentDisk[];
   sensors?: HostSensorSummary;
   raid?: HostRAIDArray[];

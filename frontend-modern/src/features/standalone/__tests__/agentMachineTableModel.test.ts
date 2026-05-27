@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 import {
+  getAgentMachineDiskIODetails,
   getAgentMachineNetworkInterfaceDetails,
   getAgentMachineRaidArrayDetails,
   getAgentMachineTemperatureCelsius,
@@ -23,6 +24,46 @@ const resource = (overrides: Partial<Resource>): Resource =>
   }) as Resource;
 
 describe('agentMachineTableModel', () => {
+  it('normalizes agent disk I/O device counters for table inspection', () => {
+    const details = getAgentMachineDiskIODetails(
+      resource({
+        agent: {
+          diskIO: [
+            {
+              device: ' /dev/sda ',
+              readBytes: 1024,
+              writeBytes: 2048,
+              readOps: 10,
+              writeOps: 20,
+              ioTimeMs: 30,
+            },
+            {
+              device: '   ',
+              readBytes: 0,
+              writeBytes: -1,
+            },
+            { device: '' },
+          ],
+        },
+      }),
+    );
+
+    expect(details).toEqual([
+      {
+        device: '/dev/sda',
+        readBytes: 1024,
+        writeBytes: 2048,
+        readOps: 10,
+        writeOps: 20,
+        ioTimeMs: 30,
+      },
+      {
+        device: 'disk-2',
+        readBytes: 0,
+      },
+    ]);
+  });
+
   it('normalizes agent RAID array details for table inspection', () => {
     const details = getAgentMachineRaidArrayDetails(
       resource({

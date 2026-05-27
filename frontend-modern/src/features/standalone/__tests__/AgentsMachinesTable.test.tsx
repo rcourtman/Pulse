@@ -196,6 +196,51 @@ describe('AgentsMachinesTable', () => {
     expect(screen.getByText('1000 Mbps')).toBeInTheDocument();
   });
 
+  it('shows structured agent disk I/O details from the Disk I/O value', async () => {
+    const { container } = render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({
+            id: 'diskio-host',
+            name: 'Disk I/O Host',
+            diskIO: { readRate: 4096, writeRate: 8192 },
+            agent: {
+              diskIO: [
+                {
+                  device: '/dev/sda',
+                  readBytes: 1_048_576,
+                  writeBytes: 2_097_152,
+                  readOps: 120,
+                  writeOps: 240,
+                  ioTimeMs: 360,
+                },
+              ],
+            },
+          }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    const trigger = container.querySelector('[data-agent-machine-diskio-trigger="true"]');
+    expect(trigger).not.toBeNull();
+    if (!trigger) return;
+
+    await fireEvent.mouseEnter(trigger);
+
+    expect((await screen.findAllByText('Disk I/O')).length).toBeGreaterThan(1);
+    expect(screen.getByText('/dev/sda')).toBeInTheDocument();
+    expect(screen.getAllByText('4.00 KB/s').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('8.00 KB/s').length).toBeGreaterThan(0);
+    expect(screen.getByText('1.00 MB')).toBeInTheDocument();
+    expect(screen.getByText('2.00 MB')).toBeInTheDocument();
+    expect(screen.getByText('120')).toBeInTheDocument();
+    expect(screen.getByText('240')).toBeInTheDocument();
+    expect(screen.getByText('360 ms')).toBeInTheDocument();
+  });
+
   it('shows structured agent RAID array details from the RAID value', async () => {
     const { container } = render(() => (
       <AgentsMachinesTable
