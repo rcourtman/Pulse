@@ -16,7 +16,12 @@ For the historical shipped v6 `rc.1` packet, see:
 - `docs/releases/V6_CHANGELOG_RC1.md`
 - `docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md`
 
-For the current in-repo v6 `rc.5` draft packet, see:
+For the current in-repo v6 `rc.6` draft packet, see:
+- `docs/releases/RELEASE_NOTES_v6_RC6_DRAFT.md`
+- `docs/releases/V6_CHANGELOG_RC6_DRAFT.md`
+- `docs/releases/V6_RC6_OPERATOR_SUPPORT_PACK_DRAFT.md`
+
+For the historical in-repo v6 `rc.5` draft packet, see:
 - `docs/releases/RELEASE_NOTES_v6_RC5_DRAFT.md`
 - `docs/releases/V6_CHANGELOG_RC5_DRAFT.md`
 - `docs/releases/V6_RC5_OPERATOR_SUPPORT_PACK_DRAFT.md`

@@ -34,16 +34,14 @@ hardening.
 
 ## Commit Coverage Audit
 
-The changelog should be audited against every feature/runtime commit
-in the exact code-backed release-validation range for the current
-candidate:
+The changelog is audited against every feature/runtime commit in the
+exact code-backed release-validation range for the current candidate:
 
-- `v6.0.0-rc.5`: `<populate at packet finalisation>`
-- validation-risk commit: `<populate at packet finalisation>`
-- range: `v6.0.0-rc.5..<validation-risk-sha>`
-- expected commit count: 600+
-- expected changed scope: 1300+ files, 130000+ insertions, 65000+
-  deletions
+- `v6.0.0-rc.5`: `604a94d46e3be3687229e429aea282d3c3015fa4`
+- validation-risk commit: `df793493683737c31961dd5b770fd98d37fa15d8`
+- range: `v6.0.0-rc.5..df793493683737c31961dd5b770fd98d37fa15d8`
+- commit count: `616`
+- changed scope: `1379` files, `139185` insertions, `67870` deletions
 
 Those commits are grouped in this changelog rather than listed one by
 one. The range carries: the frontend information architecture revert
@@ -191,6 +189,14 @@ Patrol gained:
 
 A storage-growth-planner runway widget was prototyped and removed in
 the same range; it is not present in `rc.6`.
+
+### 7a. Licensing continuity from `rc.5`
+
+The licensing posture from `rc.5` carries through unchanged: Community,
+Relay, and Pro include core monitoring included by default; Relay
+remains secure remote access to the Pulse web UI, Pulse Mobile pairing for handoff,
+push notifications, and 14-day history; Pro remains Relay plus AI
+operations, automation, advanced admin features, and 90-day history.
 
 ### 8. Self-hosted commercial posture: free-first
 

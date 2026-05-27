@@ -11,6 +11,7 @@ For the current v6 prerelease packet, see:
 
 - `docs/releases/RELEASE_NOTES_v6_RC6_DRAFT.md`
 - `docs/releases/V6_CHANGELOG_RC6_DRAFT.md`
+- `docs/releases/V6_RC6_OPERATOR_SUPPORT_PACK_DRAFT.md`
 
 ## Before You Upgrade
 

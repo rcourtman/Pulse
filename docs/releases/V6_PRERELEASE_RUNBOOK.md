@@ -63,7 +63,7 @@ artifacts, or to an explicitly verified paid container image, rather than the pu
 ## Versioning Rules
 
 - v5 stable examples: `5.1.14`
-- v6 prerelease examples: `6.0.0-rc.1`, `6.0.0-rc.2`, `6.0.0-rc.3`, `6.0.0-rc.4`, `6.0.0-rc.5`
+- v6 prerelease examples: `6.0.0-rc.1`, `6.0.0-rc.2`, `6.0.0-rc.3`, `6.0.0-rc.4`, `6.0.0-rc.5`, `6.0.0-rc.6`
 - v6 GA example: `6.0.0`
 
 The workflow auto-marks `-rc.N`/`-alpha.N`/`-beta.N` as prerelease.
@@ -93,7 +93,7 @@ The workflow auto-marks `-rc.N`/`-alpha.N`/`-beta.N` as prerelease.
 1. Update version on `pulse/v6-release`:
 
 ```bash
-export RC_VERSION="6.0.0-rc.5"
+export RC_VERSION="6.0.0-rc.6"
 
 git checkout pulse/v6-release
 git pull --ff-only

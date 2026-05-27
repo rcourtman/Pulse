@@ -144,6 +144,12 @@ self-hosted Pro continuity holds with no caps, and the Pulse Pro value
 copy was aligned to the free-first posture. The Pro upsell path remains
 opt-in.
 
+The licensing posture from `rc.5` carries through unchanged: Community,
+Relay, and Pro include core monitoring included by default; Relay
+remains secure remote access to the Pulse web UI, Pulse Mobile pairing for handoff,
+push notifications, and 14-day history; Pro remains Relay plus AI
+operations, automation, advanced admin features, and 90-day history.
+
 ### Install pipeline hardening
 
 The release pipeline now ships `install.sh` as a GitHub Release asset,
@@ -172,20 +178,21 @@ are fixed.
 
 ## Validation
 
-This packet should be audited against the commit range from the
-published `v6.0.0-rc.5` tag through the validation-risk commit:
+This packet is audited against the commit range from the published
+`v6.0.0-rc.5` tag through the validation-risk commit:
 
-- `v6.0.0-rc.5`: `<populate at packet finalisation>`
-- validation-risk commit: `<populate at packet finalisation>`
-- range: `v6.0.0-rc.5..<validation-risk-sha>`
+- `v6.0.0-rc.5`: `604a94d46e3be3687229e429aea282d3c3015fa4`
+- validation-risk commit: `df793493683737c31961dd5b770fd98d37fa15d8`
+- range: `v6.0.0-rc.5..df793493683737c31961dd5b770fd98d37fa15d8`
+- commit count: `616`
+- changed scope: `1379` files, `139185` insertions, `67870` deletions
 
-Expected scope: roughly 600+ commits, with the bulk concentrated in
-`frontend-modern/src` (information architecture revert, vSphere
-surface, Machines detail UX), `internal/vmware` (new vSphere
-collector and inventory), `internal/api` (recovery and resources
-contract continuity), `internal/ai` (capacity-forecast, PDM bridge,
-verification substrate), and `.github/workflows` (install.sh smoke
-gate).
+The bulk of the range is concentrated in `frontend-modern/src`
+(information architecture revert, vSphere surface, Machines detail
+UX), `internal/vmware` (vSphere collector and inventory work),
+`internal/api` (recovery and resources contract continuity),
+`internal/ai` (capacity-forecast, PDM bridge, verification
+substrate), and `.github/workflows` (install.sh smoke gate).
 
 ## Retest Plan
 
