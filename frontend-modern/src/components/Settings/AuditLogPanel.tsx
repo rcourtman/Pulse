@@ -1,17 +1,17 @@
-import { For, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import Shield from 'lucide-solid/icons/shield';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
-import Filter from 'lucide-solid/icons/filter';
 import Info from 'lucide-solid/icons/info';
 import Play from 'lucide-solid/icons/play';
-import X from 'lucide-solid/icons/x';
 import ShieldAlert from 'lucide-solid/icons/shield-alert';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import { UpgradeLink } from '@/components/shared/UpgradeLink';
+import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components/shared/FilterBar';
 import { FormSelect } from '@/components/shared/FormSelect';
 import Toggle from '@/components/shared/Toggle';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import {
   AUDIT_REFRESH_BUTTON_CLASS,
   AUDIT_VERIFY_ALL_BUTTON_CLASS,
@@ -34,14 +34,13 @@ import { getUpgradeActionButtonClass } from '@/utils/upgradePresentation';
 import { useAuditLogPanelState } from '@/components/Settings/useAuditLogPanelState';
 
 export default function AuditLogPanel() {
+  const { isMobile } = useBreakpoint();
   const {
-    activeFilterChips,
     activeFilterCount,
     auditLoggingEnabled,
     autoVerifyEnabled,
     autoVerifyLimit,
     cancelVerification,
-    clearFilterChip,
     clearFilters,
     error,
     eventFilter,
@@ -98,6 +97,55 @@ export default function AuditLogPanel() {
   };
   const featureGateCopy = () =>
     getAuditLogFeatureGateCopy({ paidRuntimeRequired: paidRuntimeRequired() });
+
+  const auditEventOptions = (): FilterSelectOption[] => [
+    { value: '', label: AUDIT_EVENT_FILTER_ALL_LABEL },
+    { value: 'login', label: 'Login' },
+    { value: 'logout', label: 'Logout' },
+    { value: 'config_change', label: AUDIT_EVENT_CONFIG_CHANGE_LABEL },
+    { value: 'startup', label: 'Startup' },
+  ];
+  const auditSuccessOptions = (): FilterSelectOption[] => [
+    { value: 'all', label: 'All' },
+    { value: 'success', label: AUDIT_SUCCESS_FILTER_SUCCESS_ONLY_LABEL },
+    { value: 'failed', label: AUDIT_SUCCESS_FILTER_FAILED_ONLY_LABEL },
+  ];
+  const auditVerificationOptions = (): FilterSelectOption[] => [
+    { value: 'all', label: AUDIT_VERIFICATION_FILTER_ALL_LABEL },
+    { value: 'needs', label: AUDIT_VERIFICATION_FILTER_NEEDS_LABEL },
+    { value: 'verified', label: 'Verified' },
+    { value: 'failed', label: 'Failed/Error' },
+  ];
+
+  const buildAuditFilters = (): FilterDef[] => [
+    {
+      id: 'audit-event',
+      label: 'Event',
+      group: 'properties',
+      value: eventFilter,
+      setValue: setEventFilter,
+      defaultValue: '',
+      options: auditEventOptions,
+    },
+    {
+      id: 'audit-success',
+      label: 'Outcome',
+      group: 'status',
+      value: successFilter,
+      setValue: setSuccessFilter,
+      defaultValue: 'all',
+      options: auditSuccessOptions,
+    },
+    {
+      id: 'audit-verification',
+      label: 'Verification',
+      group: 'status',
+      value: verificationFilter,
+      setValue: setVerificationFilter,
+      defaultValue: 'all',
+      options: auditVerificationOptions,
+    },
+  ];
 
   return (
     <SettingsPanel
@@ -183,108 +231,35 @@ export default function AuditLogPanel() {
       </Show>
 
       <Show when={isPersistent()}>
-        <div class="flex flex-wrap gap-3 p-4 bg-surface-alt rounded-md">
-          <div class="flex items-center gap-2">
-            <Filter class="w-4 h-4 text-slate-400" />
-            <span class="text-sm font-medium text-base-content">Filters:</span>
-          </div>
-          <FormSelect
-            label="Audit event type"
-            labelClass="sr-only"
-            fieldBaseClass="contents"
-            value={eventFilter()}
-            onChange={(e) => setEventFilter(e.currentTarget.value)}
-            selectBaseClass="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-surface text-base-content"
-          >
-            <option value="">{AUDIT_EVENT_FILTER_ALL_LABEL}</option>
-            <option value="login">Login</option>
-            <option value="logout">Logout</option>
-            <option value="config_change">{AUDIT_EVENT_CONFIG_CHANGE_LABEL}</option>
-            <option value="startup">Startup</option>
-          </FormSelect>
-          <input
-            type="text"
-            placeholder="Filter by user..."
-            value={userFilter()}
-            onInput={(e) => setUserFilter(e.currentTarget.value)}
-            class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-surface text-base-content placeholder-gray-400"
-          />
-          <FormSelect
-            label="Audit outcome"
-            labelClass="sr-only"
-            fieldBaseClass="contents"
-            value={successFilter()}
-            onChange={(e) => setSuccessFilter(e.currentTarget.value)}
-            selectBaseClass="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-surface text-base-content"
-          >
-            <option value="all">All</option>
-            <option value="success">{AUDIT_SUCCESS_FILTER_SUCCESS_ONLY_LABEL}</option>
-            <option value="failed">{AUDIT_SUCCESS_FILTER_FAILED_ONLY_LABEL}</option>
-          </FormSelect>
-          <FormSelect
-            label="Audit verification status"
-            labelClass="sr-only"
-            fieldBaseClass="contents"
-            value={verificationFilter()}
-            onChange={(e) => setVerificationFilter(e.currentTarget.value)}
-            selectBaseClass="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-surface text-base-content"
-          >
-            <option value="all">{AUDIT_VERIFICATION_FILTER_ALL_LABEL}</option>
-            <option value="needs">{AUDIT_VERIFICATION_FILTER_NEEDS_LABEL}</option>
-            <option value="verified">Verified</option>
-            <option value="failed">Failed/Error</option>
-          </FormSelect>
-          <FormSelect
-            label="Audit page size"
-            labelClass="sr-only"
-            fieldBaseClass="contents"
-            value={String(pageSize())}
-            onChange={(e) => setPageSize(Number(e.currentTarget.value))}
-            selectBaseClass="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-border rounded-md bg-surface text-base-content"
-          >
-            <option value="25">25 / page</option>
-            <option value="50">50 / page</option>
-            <option value="100">100 / page</option>
-            <option value="200">200 / page</option>
-          </FormSelect>
-          <button
-            onClick={clearFilters}
-            class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover"
-          >
-            Clear{activeFilterCount() > 0 ? ` (${activeFilterCount()})` : ''}
-          </button>
-        </div>
-        <Show when={activeFilterCount() > 0}>
-          <div class="mt-2 flex flex-wrap gap-2">
-            <For each={activeFilterChips()}>
-              {(chip) => (
-                <button
-                  type="button"
-                  onClick={() => clearFilterChip(chip.key)}
-                  class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-surface-alt text-base-content hover:bg-surface-hover"
-                  title="Click to clear filter"
-                  aria-label={`Clear ${chip.label}`}
-                  onMouseEnter={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    showTooltip('Click to clear filter', rect.left + rect.width / 2, rect.top, {
-                      align: 'center',
-                      direction: 'up',
-                    });
-                  }}
-                  onMouseLeave={() => hideTooltip()}
-                  onKeyDown={(e) => {
-                    if (e.key !== 'Enter' && e.key !== ' ') return;
-                    e.preventDefault();
-                    clearFilterChip(chip.key);
-                  }}
-                >
-                  {chip.label}
-                  <X class="w-3 h-3 text-muted" />
-                </button>
-              )}
-            </For>
-          </div>
-        </Show>
+        <FilterBar
+          role="group"
+          ariaLabel="Audit log filters"
+          isMobile={isMobile}
+          search={{
+            value: userFilter,
+            setValue: setUserFilter,
+            placeholder: 'Filter by user...',
+          }}
+          filters={buildAuditFilters()}
+          savedViewsKey="audit"
+          viewOptionsTrailing={
+            <FormSelect
+              label="Audit page size"
+              labelClass="sr-only"
+              fieldBaseClass="contents"
+              value={String(pageSize())}
+              onChange={(e) => setPageSize(Number(e.currentTarget.value))}
+              selectBaseClass="min-h-9 px-2.5 py-1.5 text-xs border border-border rounded-md bg-surface text-base-content"
+            >
+              <option value="25">25 / page</option>
+              <option value="50">50 / page</option>
+              <option value="100">100 / page</option>
+              <option value="200">200 / page</option>
+            </FormSelect>
+          }
+          onClearAll={clearFilters}
+          showClearAll={() => activeFilterCount() > 0}
+        />
       </Show>
 
       {/* Verification Preferences */}
