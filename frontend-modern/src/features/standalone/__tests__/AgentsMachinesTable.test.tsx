@@ -141,13 +141,34 @@ describe('AgentsMachinesTable', () => {
     expect(screen.getByText('1.00 KB/s')).toBeInTheDocument();
     expect(screen.getByText('8.00 KB/s')).toBeInTheDocument();
 
-    expect(screen.queryByText('192.168.0.10')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sort by IP' })).not.toBeInTheDocument();
+    expect(screen.getByText('192.168.0.10')).toBeInTheDocument();
     await fireEvent.click(screen.getByTitle('Choose which columns to display'));
     await fireEvent.click(screen.getByLabelText('IP'));
     await fireEvent.click(screen.getByLabelText('RAID'));
 
-    expect(screen.getByText('192.168.0.10')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sort by IP' })).toBeInTheDocument();
+    expect(screen.getAllByText('192.168.0.10').length).toBeGreaterThan(0);
     expect(screen.getByText('1 clean')).toBeInTheDocument();
+  });
+
+  it('shows hostname and primary IP in the machine identity subtitle', () => {
+    render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({
+            id: 'mac-mini',
+            name: 'Mac Mini',
+            identity: { hostname: 'richard-mac-mini.local', ips: ['192.168.0.98'] },
+          }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    expect(screen.getByText('richard-mac-mini.local | 192.168.0.98')).toBeInTheDocument();
   });
 
   it('shows structured agent network interface details from the Net I/O value', async () => {
@@ -187,7 +208,7 @@ describe('AgentsMachinesTable', () => {
     expect(await screen.findByText('Network Interfaces')).toBeInTheDocument();
     expect(screen.getByText('en0')).toBeInTheDocument();
     expect(screen.getByText('10:20:30:40:50:60')).toBeInTheDocument();
-    expect(screen.getByText('192.168.0.20')).toBeInTheDocument();
+    expect(screen.getAllByText('192.168.0.20').length).toBeGreaterThan(0);
     expect(screen.getByText('fe80::1')).toBeInTheDocument();
     expect(screen.getByText('RX')).toBeInTheDocument();
     expect(screen.getByText('TX')).toBeInTheDocument();

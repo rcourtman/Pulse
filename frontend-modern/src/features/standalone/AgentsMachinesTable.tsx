@@ -746,6 +746,33 @@ const titleCase = (value: string): string =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
     .join(' ');
 
+const normalizedIdentityToken = (value: string | undefined): string =>
+  (value ?? '').trim().toLowerCase();
+
+const appendUniqueMachineSubtitlePart = (parts: string[], value: string | undefined) => {
+  const normalized = normalizedIdentityToken(value);
+  if (!normalized || parts.some((part) => normalizedIdentityToken(part) === normalized)) return;
+  parts.push(value?.trim() ?? '');
+};
+
+const machineIdentitySubtitleFor = (
+  name: string,
+  hostname: string | undefined,
+  primaryIp: string,
+  includePrimaryIp: boolean,
+): string => {
+  const parts: string[] = [];
+
+  if (normalizedIdentityToken(hostname) !== normalizedIdentityToken(name)) {
+    appendUniqueMachineSubtitlePart(parts, hostname);
+  }
+  if (includePrimaryIp) {
+    appendUniqueMachineSubtitlePart(parts, primaryIp);
+  }
+
+  return parts.slice(0, 2).join(' | ');
+};
+
 const systemLabelFor = (machine: Resource): string => {
   if (isAgentlessMachine(machine)) {
     const protocol = (asTrimmedString(availabilityFor(machine)?.protocol) ?? '').toUpperCase();
@@ -1004,6 +1031,13 @@ export const AgentsMachinesTable: Component<{
                     const diskIOTotal = () => getAgentMachineDiskIOTotal(machine);
                     const diskIODetails = () => getAgentMachineDiskIODetails(machine);
                     const primaryIp = () => getAgentMachinePrimaryIp(machine);
+                    const machineSubtitle = () =>
+                      machineIdentitySubtitleFor(
+                        name(),
+                        hostname(),
+                        primaryIp(),
+                        !columnVisibility.isColumnVisible('ip'),
+                      );
                     const ipValues = () => getAgentMachineIpValues(machine);
                     const raidArrays = () => getAgentMachineRaidArrayDetails(machine);
                     const raidSummary = () => getAgentMachineRaidSummary(machine);
@@ -1039,12 +1073,26 @@ export const AgentsMachinesTable: Component<{
                                 {name()}
                               </span>
                             </div>
-                            <span
-                              class="mt-0.5 block truncate pl-5 text-[9px] text-muted sm:text-[10px] md:hidden"
-                              title={hostname() || systemLabel()}
+                            <Show
+                              when={machineSubtitle()}
+                              fallback={
+                                <span
+                                  class="mt-0.5 block truncate pl-5 text-[9px] text-muted sm:text-[10px] md:hidden"
+                                  title={systemLabel()}
+                                >
+                                  {systemLabel()}
+                                </span>
+                              }
                             >
-                              {hostname() || systemLabel()}
-                            </span>
+                              {(subtitle) => (
+                                <span
+                                  class="mt-0.5 block truncate pl-5 text-[9px] text-muted sm:text-[10px]"
+                                  title={subtitle()}
+                                >
+                                  {subtitle()}
+                                </span>
+                              )}
+                            </Show>
                           </TableCell>
                           <Show when={columnVisibility.isColumnVisible('system')}>
                             <TableCell
