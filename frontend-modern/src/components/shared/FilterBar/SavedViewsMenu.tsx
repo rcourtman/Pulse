@@ -148,8 +148,8 @@ export const SavedViewsMenu: Component<SavedViewsMenuProps> = (props) => {
                             }
                             class={
                               view.isDefault === true
-                                ? 'rounded-full p-0.5 text-amber-500 opacity-100'
-                                : 'rounded-full p-0.5 text-muted opacity-0 transition-opacity hover:text-base-content group-hover:opacity-100 focus-visible:opacity-100'
+                                ? 'rounded-full p-0.5 text-amber-500'
+                                : 'rounded-full p-0.5 text-muted transition-colors hover:text-amber-500'
                             }
                           >
                             <StarIcon
