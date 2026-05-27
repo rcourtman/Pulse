@@ -756,11 +756,13 @@ const appendUniqueMachineSubtitlePart = (parts: string[], value: string | undefi
   parts.push(value?.trim() ?? '');
 };
 
-const machineIdentitySubtitleFor = (
+const machineRowSubtitleFor = (
   name: string,
   hostname: string | undefined,
   primaryIp: string,
+  lastSeen: string,
   includePrimaryIp: boolean,
+  includeLastSeen: boolean,
 ): string => {
   const parts: string[] = [];
 
@@ -769,6 +771,9 @@ const machineIdentitySubtitleFor = (
   }
   if (includePrimaryIp) {
     appendUniqueMachineSubtitlePart(parts, primaryIp);
+  }
+  if (includeLastSeen && lastSeen && lastSeen !== '—') {
+    appendUniqueMachineSubtitlePart(parts, `seen ${lastSeen}`);
   }
 
   return parts.slice(0, 2).join(' | ');
@@ -1032,12 +1037,20 @@ export const AgentsMachinesTable: Component<{
                     const diskIOTotal = () => getAgentMachineDiskIOTotal(machine);
                     const diskIODetails = () => getAgentMachineDiskIODetails(machine);
                     const primaryIp = () => getAgentMachinePrimaryIp(machine);
+                    const lastSeenLabel = () =>
+                      formatLastSeen(
+                        isAgentlessMachine(machine)
+                          ? availabilityFor(machine)?.lastChecked
+                          : machine.lastSeen,
+                      );
                     const machineSubtitle = () =>
-                      machineIdentitySubtitleFor(
+                      machineRowSubtitleFor(
                         name(),
                         hostname(),
                         primaryIp(),
+                        lastSeenLabel(),
                         !columnVisibility.isColumnVisible('ip'),
+                        !columnVisibility.isColumnVisible('lastSeen'),
                       );
                     const ipValues = () => getAgentMachineIpValues(machine);
                     const raidArrays = () => getAgentMachineRaidArrayDetails(machine);
@@ -1220,11 +1233,7 @@ export const AgentsMachinesTable: Component<{
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} ${machineColumnWidthClass('lastSeen')} text-base-content`}
                             >
-                              {formatLastSeen(
-                                isAgentlessMachine(machine)
-                                  ? availabilityFor(machine)?.lastChecked
-                                  : machine.lastSeen,
-                              )}
+                              {lastSeenLabel()}
                             </TableCell>
                           </Show>
                           <Show when={columnVisibility.isColumnVisible('ip')}>

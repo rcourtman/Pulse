@@ -171,6 +171,33 @@ describe('AgentsMachinesTable', () => {
     expect(screen.getByText('richard-mac-mini.local | 192.168.0.98')).toBeInTheDocument();
   });
 
+  it('preserves last-seen context in the machine subtitle when that column is hidden', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_700_000_600_000);
+
+    render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({
+            id: 'recent-machine',
+            name: 'Recent Machine',
+            lastSeen: 1_700_000_300_000,
+            identity: { ips: ['192.168.0.21'] },
+          }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    expect(screen.queryByText('192.168.0.21 | seen 5m')).not.toBeInTheDocument();
+
+    await fireEvent.click(screen.getByTitle('Choose which columns to display'));
+    await fireEvent.click(screen.getByLabelText('Last seen'));
+
+    expect(screen.getByText('192.168.0.21 | seen 5m')).toBeInTheDocument();
+  });
+
   it('shows a row expansion affordance for machine details', async () => {
     const { container } = render(() => (
       <AgentsMachinesTable
