@@ -606,8 +606,255 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 SSH_SENSORS_PUBLIC_KEY="%s"
-SSH_SENSORS_KEY_ENTRY="command=\"sensors -j\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $SSH_SENSORS_PUBLIC_KEY # pulse-sensors"
+PULSE_SENSORS_WRAPPER="/usr/local/sbin/pulse-sensors"
+SSH_SENSORS_KEY_ENTRY="command=\"$PULSE_SENSORS_WRAPPER\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $SSH_SENSORS_PUBLIC_KEY # pulse-sensors"
 TEMPERATURE_ENABLED=false
+
+install_pulse_sensors_wrapper() {
+    mkdir -p "$(dirname "$PULSE_SENSORS_WRAPPER")"
+    cat > "$PULSE_SENSORS_WRAPPER" <<'PULSE_SENSORS_WRAPPER_EOF'
+#!/bin/sh
+set -eu
+
+if command -v python3 >/dev/null 2>&1; then
+    python3 - <<'PY'
+import datetime
+import json
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+
+
+def run_command(args, timeout=8):
+    try:
+        return subprocess.run(
+            args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except Exception:
+        return None
+
+
+def load_sensors():
+    if shutil.which("sensors"):
+        result = run_command(["sensors", "-j"])
+        if result and result.stdout.strip():
+            try:
+                return json.loads(result.stdout)
+            except Exception:
+                pass
+
+    thermal_path = "/sys/class/thermal/thermal_zone0/temp"
+    try:
+        with open(thermal_path, "r", encoding="utf-8") as handle:
+            raw = handle.read().strip()
+        value = float(raw)
+        if value > 1000:
+            value = value / 1000
+        return {"rpitemp": {"temp1": {"temp1_input": value}}}
+    except Exception:
+        return {}
+
+
+def smartctl_path():
+    return shutil.which("smartctl")
+
+
+def smart_targets(path):
+    result = run_command([path, "--scan-open"])
+    if not result or not result.stdout.strip():
+        return []
+
+    targets = []
+    seen = set()
+    typed_by_path = set()
+    for raw_line in result.stdout.splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        try:
+            fields = shlex.split(line)
+        except ValueError:
+            fields = line.split()
+        if not fields:
+            continue
+
+        device = fields[0].strip()
+        if not device.startswith("/"):
+            continue
+
+        device_type = ""
+        for idx, field in enumerate(fields[:-1]):
+            if field == "-d":
+                device_type = fields[idx + 1].strip()
+                break
+
+        key = (device, device_type)
+        if key in seen:
+            continue
+        seen.add(key)
+        if device_type:
+            typed_by_path.add(device)
+        targets.append(key)
+
+    return [(device, dtype) for device, dtype in targets if dtype or device not in typed_by_path]
+
+
+def disk_type(data):
+    device = data.get("device") if isinstance(data.get("device"), dict) else {}
+    protocol = str(device.get("protocol") or "").lower()
+    dtype = str(device.get("type") or "").lower()
+    if "nvme" in protocol or "nvme" in dtype:
+        return "nvme"
+    if "sas" in protocol or "scsi" in protocol or "sas" in dtype:
+        return "sas"
+    if "ata" in protocol or "sata" in protocol or "sat" in dtype:
+        return "sata"
+    return dtype
+
+
+def smart_health(data):
+    status = data.get("smart_status")
+    if isinstance(status, dict) and "passed" in status:
+        return "PASSED" if status.get("passed") else "FAILED"
+    return "UNKNOWN"
+
+
+def format_wwn(data):
+    wwn = data.get("wwn")
+    if not isinstance(wwn, dict) or not wwn.get("naa"):
+        return ""
+    try:
+        naa = int(wwn.get("naa") or 0)
+        oui = int(wwn.get("oui") or 0)
+        ident = int(wwn.get("id") or 0)
+    except Exception:
+        return ""
+    return f"{naa:x}-{oui:x}-{ident:x}"
+
+
+def first_valid_temperature(candidates):
+    for value in candidates:
+        try:
+            temp = int(float(value))
+        except Exception:
+            continue
+        if 0 < temp < 150:
+            return temp
+    return 0
+
+
+def raw_attribute_temperature(data):
+    attrs = data.get("ata_smart_attributes")
+    if not isinstance(attrs, dict):
+        return 0
+    table = attrs.get("table")
+    if not isinstance(table, list):
+        return 0
+
+    for attr in table:
+        if not isinstance(attr, dict) or attr.get("id") not in (190, 194):
+            continue
+        raw = attr.get("raw") if isinstance(attr.get("raw"), dict) else {}
+        candidates = []
+        raw_string = raw.get("string")
+        if isinstance(raw_string, str):
+            match = re.search(r"(-?\d{1,3})", raw_string)
+            if match:
+                candidates.append(match.group(1))
+        if "value" in raw:
+            candidates.append(raw.get("value"))
+        temperature = first_valid_temperature(candidates)
+        if temperature > 0:
+            return temperature
+    return 0
+
+
+def smart_temperature(data):
+    temperatures = []
+    temp = data.get("temperature")
+    if isinstance(temp, dict):
+        temperatures.append(temp.get("current"))
+    nvme = data.get("nvme_smart_health_information_log")
+    if isinstance(nvme, dict):
+        temperatures.append(nvme.get("temperature"))
+    sct = data.get("ata_sct_status")
+    if isinstance(sct, dict):
+        current = sct.get("current")
+        if isinstance(current, dict):
+            temperatures.append(current.get("value"))
+
+    temperature = first_valid_temperature(temperatures)
+    if temperature > 0:
+        return temperature
+    return raw_attribute_temperature(data)
+
+
+def collect_smart():
+    path = smartctl_path()
+    if not path:
+        return []
+
+    entries = []
+    observed_at = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    for device, device_type in smart_targets(path):
+        args = [path]
+        if device_type:
+            args.extend(["-d", device_type])
+        args.extend(["-n", "standby,3", "-i", "-A", "-H", "--json=o", device])
+
+        result = run_command(args)
+        if not result or not result.stdout.strip():
+            continue
+        try:
+            data = json.loads(result.stdout)
+        except Exception:
+            continue
+
+        power_mode = str(data.get("power_mode") or "").lower()
+        entries.append({
+            "device": device,
+            "model": str(data.get("model_name") or data.get("model_family") or "").strip(),
+            "serial": str(data.get("serial_number") or "").strip(),
+            "wwn": format_wwn(data),
+            "type": disk_type(data),
+            "temperature": smart_temperature(data),
+            "health": smart_health(data),
+            "standbySkipped": "standby" in power_mode or "sleep" in power_mode,
+            "lastUpdated": observed_at,
+        })
+    return entries
+
+
+payload = {
+    "sensors": load_sensors(),
+    "smart": collect_smart(),
+}
+json.dump(payload, sys.stdout, separators=(",", ":"))
+sys.stdout.write("\n")
+PY
+    exit 0
+fi
+
+sensors_json="{}"
+if command -v sensors >/dev/null 2>&1; then
+    sensors_json="$(sensors -j 2>/dev/null || printf '{}')"
+fi
+if [ -z "$sensors_json" ]; then
+    sensors_json="{}"
+fi
+printf '{"sensors":%%s,"smart":[]}\n' "$sensors_json"
+PULSE_SENSORS_WRAPPER_EOF
+    chown root:root "$PULSE_SENSORS_WRAPPER" 2>/dev/null || true
+    chmod 755 "$PULSE_SENSORS_WRAPPER"
+}
 
 if [ -n "$SSH_SENSORS_PUBLIC_KEY" ]; then
     echo "📊 Enable Temperature Monitoring?"
@@ -615,7 +862,7 @@ if [ -n "$SSH_SENSORS_PUBLIC_KEY" ]; then
     echo "Collect CPU and drive temperatures via secure SSH connection."
     echo ""
     echo "Security:"
-    echo "  • SSH key authentication with forced command (sensors -j only)"
+    echo "  • SSH key authentication with forced command (Pulse sensor wrapper only)"
     echo "  • No shell access, port forwarding, or other SSH features"
     echo "  • Keys stored in Pulse service user's home directory"
     echo ""
@@ -641,6 +888,14 @@ if [ -n "$SSH_SENSORS_PUBLIC_KEY" ]; then
     if [[ $SSH_REPLY =~ ^[Yy]$ ]]; then
         echo "Configuring temperature monitoring..."
 
+        SENSORS_WRAPPER_OK=false
+        if install_pulse_sensors_wrapper; then
+            SENSORS_WRAPPER_OK=true
+            echo "  ✓ Pulse sensor wrapper installed"
+        else
+            echo "  ⚠️  Failed to install Pulse sensor wrapper"
+        fi
+
         # Add key to root's authorized_keys
         AUTH_KEYS="$(resolve_authorized_keys_path)"
         mkdir -p "$(dirname "$AUTH_KEYS")"
@@ -650,7 +905,7 @@ if [ -n "$SSH_SENSORS_PUBLIC_KEY" ]; then
         # Remove any old pulse keys
         SENSORS_KEY_OK=false
         TMP_AUTH_KEYS="$(mktemp /tmp/.pulse-authorized-keys.XXXXXX 2>/dev/null)" || TMP_AUTH_KEYS=""
-        if [ -n "$TMP_AUTH_KEYS" ] && [ -f "$TMP_AUTH_KEYS" ]; then
+        if [ "$SENSORS_WRAPPER_OK" = true ] && [ -n "$TMP_AUTH_KEYS" ] && [ -f "$TMP_AUTH_KEYS" ]; then
             if [ -f "$AUTH_KEYS" ]; then
                 grep -vF "# pulse-" "$AUTH_KEYS" > "$TMP_AUTH_KEYS" 2>/dev/null
                 GREP_EXIT=$?
@@ -671,10 +926,16 @@ if [ -n "$SSH_SENSORS_PUBLIC_KEY" ]; then
                 fi
             fi
         else
-            echo "  ⚠️  Failed to create temp file - cannot update authorized_keys"
+            if [ "$SENSORS_WRAPPER_OK" = true ]; then
+                echo "  ⚠️  Failed to create temp file - cannot update authorized_keys"
+            elif [ -n "$TMP_AUTH_KEYS" ]; then
+                rm -f "$TMP_AUTH_KEYS" 2>/dev/null || true
+            fi
         fi
         if [ "$SENSORS_KEY_OK" = true ]; then
-            echo "  ✓ Sensors key configured (restricted to sensors -j)"
+            echo "  ✓ Sensors key configured (restricted to Pulse sensor wrapper)"
+        else
+            echo "  ⚠️  Sensors key was not configured"
         fi
 
         # Check if this is a Raspberry Pi
@@ -733,8 +994,21 @@ if [ -n "$SSH_SENSORS_PUBLIC_KEY" ]; then
             TEMPERATURE_SETUP_SUCCESS=true
         fi
 
+        if ! command -v smartctl &> /dev/null; then
+            echo "  ✓ Installing smartmontools for disk SMART temperatures..."
+            apt-get update -qq > /dev/null 2>&1 || true
+            if apt-get install -y smartmontools > /dev/null 2>&1; then
+                echo "    ✓ smartmontools installed successfully"
+            else
+                echo "    ⚠️  Could not install smartmontools"
+                echo "    HDD/SATA/SAS disk temperatures require smartctl or the unified agent."
+            fi
+        else
+            echo "  ✓ smartmontools package verified"
+        fi
+
         echo ""
-        if [ "$TEMPERATURE_SETUP_SUCCESS" = true ]; then
+        if [ "$TEMPERATURE_SETUP_SUCCESS" = true ] && [ "$SENSORS_KEY_OK" = true ]; then
             echo "✓ Temperature monitoring enabled"
             if [ "$IS_RPI" = true ]; then
                 echo "  Using Raspberry Pi native temperature interface"
@@ -743,7 +1017,7 @@ if [ -n "$SSH_SENSORS_PUBLIC_KEY" ]; then
             TEMPERATURE_ENABLED=true
         else
             echo "⚠️  Temperature monitoring setup incomplete"
-            echo "  You can re-run this script after installing lm-sensors"
+            echo "  You can re-run this script after installing lm-sensors and smartmontools"
         fi
     else
         echo "Skipping temperature monitoring."

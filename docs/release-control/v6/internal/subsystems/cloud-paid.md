@@ -59,47 +59,36 @@ cloud-specific enforcement rules.
 36. `frontend-modern/src/App.tsx`
 37. `frontend-modern/src/AppLayout.tsx`
 38. `frontend-modern/src/useAppRuntimeState.ts`
-39. `frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx`
-40. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
-41. `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`
-42. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
-43. `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`
-44. `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`
-45. `frontend-modern/src/components/Settings/MonitoredSystemImpactPreview.tsx`
-46. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
-47. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
-48. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
-49. `frontend-modern/src/components/Settings/SelfHostedCommercialRecoverySection.tsx`
-50. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
-51. `frontend-modern/src/components/Settings/RelayPairingSection.tsx`
-52. `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
-53. `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
-54. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
-55. `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
-56. `frontend-modern/src/pages/CloudPricing.tsx`
-57. `frontend-modern/src/pages/HostedSignup.tsx`
-58. `frontend-modern/src/pages/PricingHandoff.tsx`
-59. `frontend-modern/src/utils/apiClient.ts`
-60. `frontend-modern/src/utils/cloudPlans.ts`
-61. `frontend-modern/src/utils/commercialBillingModel.ts`
-62. `frontend-modern/src/utils/licensePresentation.ts`
-63. `frontend-modern/src/utils/monitoredSystemPresentation.ts`
-64. `frontend-modern/src/utils/pricingHandoff.ts`
-65. `frontend-modern/src/utils/selfHostedPlans.ts`
-66. `frontend-modern/src/utils/upgradePresentation.ts`
-67. `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
-68. `pulse-pro:license-server/public_pricing.go`
-69. `pulse-pro:license-server/v6_checkout.go`
-70. `pulse-pro:landing-page/thanks.html`
-71. `pulse-pro:scripts/grandfathered_recurring_cutover_preview.py`
-72. `pulse-pro:scripts/validate_public_pricing_model.py`
-73. `pulse-pro:V6_LAUNCH_CHECKLIST.md`
-74. `pkg/licensing/trial_activation_public_key_override_dev.go`
-75. `pkg/licensing/trial_activation_public_key_override_release.go`
-76. `pkg/licensing/testing_helpers.go`
-77. `pkg/licensing/self_hosted_feature_catalog.go`
-78. `frontend-modern/src/utils/selfHostedFeatureCatalog.generated.ts`
-79. `pulse-pro:license-server/self_hosted_feature_catalog.generated.go`
+39. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
+40. `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`
+41. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
+42. `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`
+43. `frontend-modern/src/components/Settings/MonitoredSystemImpactPreview.tsx`
+44. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
+45. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
+46. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
+47. `frontend-modern/src/components/Settings/SelfHostedCommercialRecoverySection.tsx`
+48. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
+49. `frontend-modern/src/components/Settings/RelayPairingSection.tsx`
+50. `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
+51. `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
+52. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
+53. `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
+54. `frontend-modern/src/pages/PricingHandoff.tsx`
+55. `frontend-modern/src/utils/apiClient.ts`
+56. `frontend-modern/src/utils/cloudPlans.ts`
+57. `frontend-modern/src/utils/commercialBillingModel.ts`
+58. `frontend-modern/src/utils/licensePresentation.ts`
+59. `frontend-modern/src/utils/monitoredSystemPresentation.ts`
+60. `frontend-modern/src/utils/pricingHandoff.ts`
+61. `frontend-modern/src/utils/selfHostedPlans.ts`
+62. `frontend-modern/src/utils/upgradePresentation.ts`
+63. `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
+64. `pkg/licensing/trial_activation_public_key_override_dev.go`
+65. `pkg/licensing/trial_activation_public_key_override_release.go`
+66. `pkg/licensing/testing_helpers.go`
+67. `pkg/licensing/self_hosted_feature_catalog.go`
+68. `frontend-modern/src/utils/selfHostedFeatureCatalog.generated.ts`
 80. `internal/cloudcp/server.go`, `internal/cloudcp/authz.go`, `internal/cloudcp/commercial_identity.go`, `internal/cloudcp/security.go`
 81. `internal/cloudcp/health_monitor.go`, `internal/cloudcp/health_stuck_provisioning.go`, `internal/cloudcp/tenant_state_metrics.go`, `internal/cloudcp/ratelimit.go`
 82. `internal/cloudcp/hosted_entitlement_handlers.go`, `internal/cloudcp/url_helpers.go`
@@ -109,7 +98,6 @@ cloud-specific enforcement rules.
 86. `internal/cloudcp/handoff/handler.go`, `internal/cloudcp/handoff/handoff.go`
 87. `internal/cloudcp/stripe/grace_enforcer.go`, `internal/cloudcp/stripe/helpers.go`, `internal/cloudcp/stripe/reconciler.go`, `internal/cloudcp/stripe/webhook.go`
 88. `internal/hosted/hosted_metrics.go`, `internal/hosted/reaper.go`
-89. `pulse-pro:ops/pulse-cloud/audit/`
 
 ## Shared Boundaries
 
@@ -342,7 +330,6 @@ or other self-hosted uncapped continuity plans.
     show active historical `subscription_state=trial` entitlement state, but
     they must not turn `trial_eligible`, `trial_eligibility_reason`, or an
     expired trial marker into a default Pro CTA or banner.
-17. Add or change monitored-system ledger, disclosure, or impact-preview presentation through `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`, `frontend-modern/src/components/Settings/MonitoredSystemImpactPreview.tsx`, `frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx`, and `frontend-modern/src/utils/monitoredSystemPresentation.ts`
 18. Add or change paid relay settings and pairing presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`, `frontend-modern/src/components/Settings/RelayPairingSection.tsx`, and `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`. The retired Dashboard shell must not be restored to carry a Relay onboarding card or equivalent blanket upsell — relay discovery stays inside its owning settings surface.
     Public demo and other read-only presentation policy states must suppress
     relay setup and upsell onboarding instead of inviting pairing or commercial
@@ -354,22 +341,6 @@ or other self-hosted uncapped continuity plans.
     Relay settings and public commercial docs must also keep Remote Access
     positioned as a Relay-and-higher capability, not a Pro-only feature, so the
     Relay tier remains a tangible standalone paid product.
-19. Add or change cloud plan presentation through `frontend-modern/src/pages/CloudPricing.tsx`
-    That same presentation boundary also owns truthful customer-entry copy for
-    hosted Cloud pricing and signup. Cloud CTA labels, setup steps, and
-    returning-account wording in `frontend-modern/src/pages/HostedSignup.tsx`,
-    `frontend-modern/src/utils/cloudPlans.ts`, and adjacent public Cloud entry
-    surfaces must describe the real commercial flow as secure checkout ->
-    Pulse Account -> open workspace, not as an immediate workspace creation or
-    trial-only shortcut.
-    Public hosted Cloud trial signup must state the trial duration and
-    checkout economics before Stripe handoff: Stripe may collect a payment
-    method, but the subscription starts with the configured trial period and no
-    upfront charge, then Pulse Account opens the provisioned workspace after
-    checkout completes. The app-facing Cloud pricing and hosted-signup pages
-    must use the same shared copy contract so product, portal, and public entry
-    points do not drift on trial duration, payment-method collection, or upfront
-    charge expectations.
 20. Add contract tests where runtime and pricing need to stay aligned
 21. Add or change hosted browser org-context bootstrap through `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, `frontend-modern/src/useAppRuntimeState.ts`, and `frontend-modern/src/utils/apiClient.ts`
     That same hosted bootstrap boundary also owns the runtime-capability JSON

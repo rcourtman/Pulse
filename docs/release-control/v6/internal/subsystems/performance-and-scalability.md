@@ -24,131 +24,120 @@ regression protection.
 2. `pkg/metrics/store_query_plan_test.go`
 3. `pkg/metrics/store_slo_test.go`
 4. `pkg/metrics/store_additional_test.go`
-4. `internal/api/slo.go`
-5. `internal/api/slo_bench_test.go`
-6. `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
-7. `frontend-modern/src/components/Workloads/WorkloadsStateCards.tsx`
+5. `internal/api/slo.go`
+6. `internal/api/slo_bench_test.go`
+7. `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
 8. `frontend-modern/src/components/Workloads/workloadInventorySourceIssues.ts`
 9. `frontend-modern/src/components/Workloads/__tests__/workloadInventorySourceIssues.test.ts`
-10. `frontend-modern/src/components/Workloads/WorkloadsStatsStrip.tsx`
-9. `frontend-modern/src/components/Workloads/WorkloadsTable.tsx`
-10. `frontend-modern/src/components/Workloads/WorkloadPanel.tsx`
-11. `frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx`
-12. `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
-13. `frontend-modern/src/hooks/useWorkloads.ts`
-13. `frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts`
-14. `frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts`
-15. `frontend-modern/src/components/Workloads/useWorkloadGuestMetadataState.ts`
-16. `frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts`
-17. `frontend-modern/src/components/Workloads/useWorkloadRouteState.ts`
-18. `frontend-modern/src/components/Workloads/useWorkloadUrlSync.ts`
-19. `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`
-20. `frontend-modern/src/components/Workloads/workloadsFilterModel.ts`
-22. `frontend-modern/src/components/Workloads/ThresholdSlider.tsx`
-23. `frontend-modern/src/components/Workloads/thresholdSliderModel.ts`
-24. `frontend-modern/src/components/Workloads/useThresholdSliderState.ts`
-25. `frontend-modern/src/components/Workloads/StackedDiskBar.tsx`
-26. `frontend-modern/src/components/Workloads/stackedDiskBarModel.ts`
-27. `frontend-modern/src/components/Workloads/useStackedDiskBarState.ts`
-28. `frontend-modern/src/components/Workloads/StackedMemoryBar.tsx`
-29. `frontend-modern/src/components/Workloads/stackedMemoryBarModel.ts`
-30. `frontend-modern/src/components/Workloads/useStackedMemoryBarState.ts`
-31. `frontend-modern/src/components/Workloads/MetricBar.tsx`
-32. `frontend-modern/src/components/Workloads/metricBarModel.ts`
-32. `frontend-modern/src/components/Workloads/MetricMiniSparkline.tsx`
-33. `frontend-modern/src/components/Workloads/useMetricBarState.ts`
-34. `frontend-modern/src/components/Workloads/EnhancedCPUBar.tsx`
-35. `frontend-modern/src/components/Workloads/enhancedCpuBarModel.ts`
-36. `frontend-modern/src/components/Workloads/useEnhancedCPUBarState.ts`
-37. `frontend-modern/src/components/Workloads/DiskList.tsx`
-38. `frontend-modern/src/components/Workloads/diskListModel.ts`
-39. `frontend-modern/src/components/Workloads/useDiskListState.ts`
-40. `frontend-modern/src/components/Workloads/GuestRow.tsx`
-41. `frontend-modern/src/components/Workloads/GuestRowCells.tsx`
-42. `frontend-modern/src/components/Workloads/guestRowModel.tsx`
-43. `frontend-modern/src/components/Workloads/useGuestRowState.ts`
-44. `frontend-modern/src/components/Workloads/GuestDrawer.tsx`
-45. `frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx`
-45. `frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx`
-46. `frontend-modern/src/components/Workloads/guestDrawerModel.ts`
-47. `frontend-modern/src/components/Workloads/useGuestDrawerState.ts`
-48. `frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts`
-49. `frontend-modern/src/components/Workloads/workloadSelectors.ts`
-50. `frontend-modern/src/components/Workloads/workloadTopology.ts`
-51. `frontend-modern/src/components/Workloads/workloadSelectionModel.ts`
-52. `frontend-modern/src/components/Workloads/workloadRouteModel.ts`
-53. `frontend-modern/src/components/Workloads/workloadFilterConfigModel.ts`
-53. `frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts`
-54. `frontend-modern/src/components/Workloads/workloadRouteStateModel.ts`
-55. `frontend-modern/src/components/Workloads/workloadUrlSyncModel.ts`
-56. `frontend-modern/src/components/Workloads/useWorkloadFilterOptions.ts`
-57. `frontend-modern/src/components/Workloads/__tests__/workloadSelectionModel.test.ts`
-58. `frontend-modern/src/components/Workloads/__tests__/workloadFilterConfigModel.test.ts`
-59. `frontend-modern/src/components/Workloads/__tests__/workloadRouteModel.test.ts`
-60. `frontend-modern/src/components/Workloads/__tests__/workloadRouteStateModel.test.ts`
-61. `frontend-modern/src/components/Workloads/__tests__/workloadUrlSyncModel.test.ts`
-62. `frontend-modern/src/components/Workloads/__tests__/workloadTopology.test.ts`
-63. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
-64. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
-65. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-66. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`
-67. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
-68. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
-69. `frontend-modern/src/components/Workloads/WorkloadsSummary.tsx`
-70. `frontend-modern/src/utils/throughputPresentation.ts`
-71. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx`
-72. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx`
-73. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
-74. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
-75. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
-76. `frontend-modern/src/components/Workloads/__tests__/WorkloadsSurface.performance.contract.test.tsx`
-77. `frontend-modern/src/components/Workloads/__tests__/WorkloadsFilter.test.tsx`
-79. `frontend-modern/src/components/Workloads/__tests__/useWorkloadSelectionState.test.ts`
-80. `frontend-modern/src/components/Workloads/MetricBar.test.tsx`
-81. `frontend-modern/src/components/Workloads/__tests__/useMetricBarState.test.tsx`
-82. `frontend-modern/src/components/Workloads/__tests__/EnhancedCPUBar.test.tsx`
-83. `frontend-modern/src/components/Workloads/__tests__/useEnhancedCPUBarState.test.tsx`
-84. `frontend-modern/src/components/Workloads/ThresholdSlider.test.tsx`
-85. `frontend-modern/src/components/Workloads/__tests__/useThresholdSliderState.test.ts`
-86. `frontend-modern/src/components/Workloads/__tests__/StackedDiskBar.test.tsx`
-87. `frontend-modern/src/components/Workloads/__tests__/useStackedDiskBarState.test.tsx`
-88. `frontend-modern/src/components/Workloads/StackedMemoryBar.test.tsx`
-89. `frontend-modern/src/components/Workloads/__tests__/useStackedMemoryBarState.test.tsx`
-90. `frontend-modern/src/components/Workloads/__tests__/DiskList.test.tsx`
-91. `frontend-modern/src/components/Workloads/__tests__/GuestRow.test.tsx`
-91. `frontend-modern/src/components/Workloads/__tests__/MetricMiniSparkline.test.tsx`
-91. `frontend-modern/src/components/Workloads/__tests__/workloadMetricHistoryModel.test.ts`
-92. `frontend-modern/src/components/Workloads/GuestDrawer.test.tsx`
-93. `frontend-modern/src/components/Workloads/__tests__/useGroupedTableWindowing.test.ts`
-94. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
-95. `frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts`
-96. `frontend-modern/src/components/Workloads/__tests__/useWorkloadViewportSync.test.tsx`
-97. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
-98. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
-99. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
+10. `frontend-modern/src/components/Workloads/WorkloadsTable.tsx`
+11. `frontend-modern/src/components/Workloads/WorkloadPanel.tsx`
+12. `frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx`
+13. `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
+14. `frontend-modern/src/hooks/useWorkloads.ts`
+15. `frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts`
+16. `frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts`
+17. `frontend-modern/src/components/Workloads/useWorkloadGuestMetadataState.ts`
+18. `frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts`
+19. `frontend-modern/src/components/Workloads/useWorkloadRouteState.ts`
+20. `frontend-modern/src/components/Workloads/useWorkloadUrlSync.ts`
+21. `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`
+22. `frontend-modern/src/components/Workloads/workloadsFilterModel.ts`
+23. `frontend-modern/src/components/Workloads/ThresholdSlider.tsx`
+24. `frontend-modern/src/components/Workloads/thresholdSliderModel.ts`
+25. `frontend-modern/src/components/Workloads/useThresholdSliderState.ts`
+26. `frontend-modern/src/components/Workloads/StackedDiskBar.tsx`
+27. `frontend-modern/src/components/Workloads/stackedDiskBarModel.ts`
+28. `frontend-modern/src/components/Workloads/useStackedDiskBarState.ts`
+29. `frontend-modern/src/components/Workloads/StackedMemoryBar.tsx`
+30. `frontend-modern/src/components/Workloads/stackedMemoryBarModel.ts`
+31. `frontend-modern/src/components/Workloads/useStackedMemoryBarState.ts`
+32. `frontend-modern/src/components/Workloads/MetricBar.tsx`
+33. `frontend-modern/src/components/Workloads/metricBarModel.ts`
+34. `frontend-modern/src/components/Workloads/MetricMiniSparkline.tsx`
+35. `frontend-modern/src/components/Workloads/useMetricBarState.ts`
+36. `frontend-modern/src/components/Workloads/EnhancedCPUBar.tsx`
+37. `frontend-modern/src/components/Workloads/enhancedCpuBarModel.ts`
+38. `frontend-modern/src/components/Workloads/useEnhancedCPUBarState.ts`
+39. `frontend-modern/src/components/Workloads/DiskList.tsx`
+40. `frontend-modern/src/components/Workloads/diskListModel.ts`
+41. `frontend-modern/src/components/Workloads/useDiskListState.ts`
+42. `frontend-modern/src/components/Workloads/GuestRow.tsx`
+43. `frontend-modern/src/components/Workloads/GuestRowCells.tsx`
+44. `frontend-modern/src/components/Workloads/guestRowModel.tsx`
+45. `frontend-modern/src/components/Workloads/useGuestRowState.ts`
+46. `frontend-modern/src/components/Workloads/GuestDrawer.tsx`
+47. `frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx`
+48. `frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx`
+49. `frontend-modern/src/components/Workloads/guestDrawerModel.ts`
+50. `frontend-modern/src/components/Workloads/useGuestDrawerState.ts`
+51. `frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts`
+52. `frontend-modern/src/components/Workloads/workloadSelectors.ts`
+53. `frontend-modern/src/components/Workloads/workloadTopology.ts`
+54. `frontend-modern/src/components/Workloads/workloadSelectionModel.ts`
+55. `frontend-modern/src/components/Workloads/workloadRouteModel.ts`
+56. `frontend-modern/src/components/Workloads/workloadFilterConfigModel.ts`
+57. `frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts`
+58. `frontend-modern/src/components/Workloads/workloadRouteStateModel.ts`
+59. `frontend-modern/src/components/Workloads/workloadUrlSyncModel.ts`
+60. `frontend-modern/src/components/Workloads/useWorkloadFilterOptions.ts`
+61. `frontend-modern/src/components/Workloads/__tests__/workloadSelectionModel.test.ts`
+62. `frontend-modern/src/components/Workloads/__tests__/workloadFilterConfigModel.test.ts`
+63. `frontend-modern/src/components/Workloads/__tests__/workloadRouteModel.test.ts`
+64. `frontend-modern/src/components/Workloads/__tests__/workloadRouteStateModel.test.ts`
+65. `frontend-modern/src/components/Workloads/__tests__/workloadUrlSyncModel.test.ts`
+66. `frontend-modern/src/components/Workloads/__tests__/workloadTopology.test.ts`
+67. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
+68. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
+69. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
+70. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`
+71. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
+72. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
+73. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx`
+74. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx`
+75. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
+76. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
+77. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
+78. `frontend-modern/src/components/Workloads/__tests__/WorkloadsSurface.performance.contract.test.tsx`
+79. `frontend-modern/src/components/Workloads/__tests__/WorkloadsFilter.test.tsx`
+80. `frontend-modern/src/components/Workloads/__tests__/useWorkloadSelectionState.test.ts`
+81. `frontend-modern/src/components/Workloads/MetricBar.test.tsx`
+82. `frontend-modern/src/components/Workloads/__tests__/useMetricBarState.test.tsx`
+83. `frontend-modern/src/components/Workloads/__tests__/EnhancedCPUBar.test.tsx`
+84. `frontend-modern/src/components/Workloads/__tests__/useEnhancedCPUBarState.test.tsx`
+85. `frontend-modern/src/components/Workloads/ThresholdSlider.test.tsx`
+86. `frontend-modern/src/components/Workloads/__tests__/useThresholdSliderState.test.ts`
+87. `frontend-modern/src/components/Workloads/__tests__/StackedDiskBar.test.tsx`
+88. `frontend-modern/src/components/Workloads/__tests__/useStackedDiskBarState.test.tsx`
+89. `frontend-modern/src/components/Workloads/StackedMemoryBar.test.tsx`
+90. `frontend-modern/src/components/Workloads/__tests__/useStackedMemoryBarState.test.tsx`
+91. `frontend-modern/src/components/Workloads/__tests__/DiskList.test.tsx`
+92. `frontend-modern/src/components/Workloads/__tests__/GuestRow.test.tsx`
+93. `frontend-modern/src/components/Workloads/__tests__/MetricMiniSparkline.test.tsx`
+94. `frontend-modern/src/components/Workloads/__tests__/workloadMetricHistoryModel.test.ts`
+95. `frontend-modern/src/components/Workloads/GuestDrawer.test.tsx`
+96. `frontend-modern/src/components/Workloads/__tests__/useGroupedTableWindowing.test.ts`
+97. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
+98. `frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts`
+99. `frontend-modern/src/components/Workloads/__tests__/useWorkloadViewportSync.test.tsx`
 100. `frontend-modern/src/utils/workloadsSummaryCache.ts`
 101. `frontend-modern/src/routing/routePreload.ts`
 102. `frontend-modern/src/useAppRuntimeState.ts`
-103. `frontend-modern/src/components/Storage/StorageSummary.tsx`
-104. `frontend-modern/src/utils/storageSummaryCache.ts`
-105. `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
+103. `frontend-modern/src/utils/storageSummaryCache.ts`
+104. `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
 
 ## Shared Boundaries
 
 1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `unified-resources`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-2. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx` shared with `unified-resources`: the infrastructure summary surface is both a canonical unified-resource consumer and a fleet-scale summary chart hot-path boundary.
-3. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts` shared with `unified-resources`: infrastructure summary chart matching, focused-summary view derivation, and metric-series shaping are both a canonical unified-resource consumer surface and a fleet-scale summary chart hot-path boundary.
-4. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `unified-resources`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-5. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx` shared with `unified-resources`: the unified resource host table card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-6. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx` shared with `unified-resources`: the unified resource PBS section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-7. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx` shared with `unified-resources`: the unified resource PMG section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-8. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx` shared with `unified-resources`: the unified resource service infrastructure card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-9. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx` shared with `unified-resources`: the unified resource table is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-10. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts` shared with `unified-resources`: unified resource service row shaping and I/O emphasis are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-11. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts` shared with `unified-resources`: unified resource table state derivation, sort-cycle policy, service sorting, and responsive column layout are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-12. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts` shared with `unified-resources`: infrastructure summary chart polling, cache hydration, and summary-state orchestration are both a canonical unified-resource consumer surface and a fleet-scale summary chart hot-path boundary.
-13. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts` shared with `unified-resources`: unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-14. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts` shared with `unified-resources`: unified resource table viewport sync and selected-row reveal are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+2. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `unified-resources`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+3. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx` shared with `unified-resources`: the unified resource host table card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+4. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx` shared with `unified-resources`: the unified resource PBS section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+5. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx` shared with `unified-resources`: the unified resource PMG section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+6. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx` shared with `unified-resources`: the unified resource service infrastructure card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+7. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx` shared with `unified-resources`: the unified resource table is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+8. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts` shared with `unified-resources`: unified resource service row shaping and I/O emphasis are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+9. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts` shared with `unified-resources`: unified resource table state derivation, sort-cycle policy, service sorting, and responsive column layout are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+10. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts` shared with `unified-resources`: unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+11. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts` shared with `unified-resources`: unified resource table viewport sync and selected-row reveal are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 15. `frontend-modern/src/routing/routePreload.ts` shared with `frontend-primitives`: the app-shell route preload registry is both a canonical frontend shell boundary and an authenticated hot-path performance boundary.
 16. `frontend-modern/src/useAppRuntimeState.ts` shared with `cloud-paid`: the authenticated app runtime bootstrap is both a hosted commercial org-context boundary and a protected app-shell performance boundary.
 17. `internal/api/slo.go` shared with `api-contracts`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
@@ -377,7 +366,6 @@ regression protection.
     `prefers-reduced-motion`; hot-path Workloads components must not re-create
     independent number animation loops.
 23. Extend grouped workload row windowing, reveal-index clamping, overscan math, and per-group visible-slice derivation through `frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts`, and extend viewport event wiring through `frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts` rather than rebuilding scroll handlers, mounted-row budgets, viewport listeners, or group-slice math inside `frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts`
-24. Extend Workloads shell rendering through `frontend-modern/src/components/Workloads/WorkloadsStateCards.tsx`, `frontend-modern/src/components/Workloads/WorkloadsTable.tsx`, and `frontend-modern/src/components/Workloads/WorkloadsStatsStrip.tsx` rather than accreting loading cards, workload table markup, or stats-strip presentation back into `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
 25. Extend workload table shell ownership through `frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx` and `frontend-modern/src/components/Workloads/WorkloadPanel.tsx` rather than rebuilding sortable header markup, grouped node rows, row expansion, or guest-drawer rendering inside `frontend-modern/src/components/Workloads/WorkloadsTable.tsx`
     `WorkloadPanel` owns the mutually exclusive host/guest drawer handoff:
     clicking a grouped host row while a guest drawer is open must clear the
@@ -398,77 +386,6 @@ regression protection.
     default filter-option labels must flow through the shared all-option
     presentation helper via the workload filter config model instead of the
     hot-path shell hard-coding local `All ...` strings.
-26. Keep long-range workload chart capping time-proportional across `frontend-modern/src/components/Workloads/WorkloadsSummary.tsx`, `frontend-modern/src/api/charts.ts`, and `internal/api/router.go`: when the workload hot path caps mixed-cadence history for top cards, it must bucket by time window rather than raw point index so 7-day and 30-day workload cards stay visually even without relaxing the protected payload budget.
-    Workload summary chart caching and app-shell prewarming belong to
-    `frontend-modern/src/utils/workloadsSummaryCache.ts`, not to page-local
-    component state. `frontend-modern/src/components/Workloads/WorkloadsSummary.tsx`
-    may hydrate from that shared in-memory/local cache and refresh it, while
-    `frontend-modern/src/useAppRuntimeState.ts` may warm the same cache after
-    authenticated bootstrap without mounting the Workloads route or starting a
-    second polling loop.
-27. Keep summary hover/focus and sticky-card behavior on shared hot paths: infrastructure, workloads, and storage summary shells must reuse one page/group/entity scope model plus `frontend-modern/src/components/shared/StickySummarySection.tsx` inside the app scroll shell instead of per-page scroll listeners or per-card hover derivations, so row scrubbing highlights all cards, workload group headers, infrastructure cluster headers, and storage pool-group headers scope the summary coherently, pinned group focus remains route-backed and reversible, and the hot path does not multiply render or scroll work. Pages that keep chart summaries visible below the desktop breakpoint must use the shared desktop-sticky mode on that primitive rather than page-local viewport listeners, so wrapped chart grids do not pin most of the scroll container on narrow screens. That hot path stays row-first rather than adding fallback chrome: the on-screen row or group header is the scoped state, and any explicit reset belongs to one compact shared table-header action plus the shared `Escape` path, not to page-level scope strips, search-row widgets, or filter-bar badges. Background whitespace clearing may exist as a convenience, but the hot path must not depend on brittle dead-space hit testing as the only reversible control. The same hot path must therefore keep one page-level reset owner for filters plus pinned summary selections, and it must keep chart-backed summary-card geometry explicit and stable so hover rerenders, synchronized readouts, or idle header metadata cannot feed layout loops that grow or shrink the top cards over time. Recovery’s summary rail is not part of this interactive hot path; it may share summary-card framing, but it must remain non-interactive until a separately governed model says otherwise.
-    The input path for that hot summary contract must stay shared too:
-    `frontend-modern/src/components/shared/summaryInteractionA11y.ts` owns
-    fine-pointer preview and focus-preview continuity, while
-    `frontend-modern/src/components/shared/SummaryRowActionButton.tsx` owns
-    deliberate open/pin controls for summary-linked leaf rows and explicit row
-    chrome. Group headers may pin through the header row itself when that
-    keeps the hot path visually native, but they must not reintroduce local
-    scope/pinned pill buttons that compete with the summary shell. Workloads,
-    infrastructure, and storage do not rebuild mouse-only hover branches,
-    focusable-row toggles, or touch-hostile synthetic hover behavior inside
-    individual row renderers. The same hot path must also carry block-level
-    group feedback through one shared row-state contract: when a summary group
-    is previewed or pinned, member rows should take a restrained shared
-    preview/pinned wash via `data-summary-group-member-active` rather than
-    per-surface outlines, secondary buttons, or full-strength row fills.
-    Static grouped-row header emphasis on the same workload and infrastructure
-    tables must route through
-    `frontend-modern/src/components/shared/groupedTableRowPresentation.ts` and
-    the shared `.grouped-table-row` CSS contract in `frontend-modern/src/index.css`,
-    rather than local `bg-surface-alt` or hover-fill variants that drift between
-    pages.
-    Framed product-table cards on the same hot-path surfaces must consume the
-    frontend-primitives-owned `TableCard` wrapper and `TableCardHeader`
-    title/action band so Workloads, Infrastructure, Storage, and Recovery keep
-    one border/background/overflow frame and table-section header treatment
-    instead of introducing page-local table shells with different light/dark
-    contrast. The shared `Table` primitive owns the horizontal scroll container
-    for those hot tables; page-local nested `overflow-x-auto` wrappers are not
-    allowed because they add extra scroll and paint surfaces on the row-heavy
-    path.
-    Infrastructure table responsive behavior belongs to that same hot-path
-    owner. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-    must derive column visibility from the measured table surface width, with
-    `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
-    owning the column-priority breakpoints. It must not rely on global viewport
-    width alone, because app chrome can leave the table with tablet-sized space
-    while the window still reports a desktop breakpoint. Live resize proof must
-    show the host and service tables dropping lower-priority columns without
-    introducing horizontal overflow.
-    Dashboard workload table responsive behavior belongs to the same hot-path
-    owner. `frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts`
-    must derive workload table layout stages from live viewport width, and
-    `frontend-modern/src/components/Workloads/guestRowModel.tsx` must own the
-    responsive workload column priority and width model. `WorkloadsTable`,
-    `WorkloadTableHeader`, and `WorkloadPanel` must consume one shared
-    layout-visible column set so headers, colgroups, and rows stay aligned during
-    live resize. Workload rows keep navigation inside owned identity cells
-    rather than trailing action columns: guest custom web-interface URLs render
-    on the workload name, and
-    grouped node web-interface navigation stays on the shared node header name,
-    so responsive colgroups and rows do not carry an otherwise empty link
-    column. View-mode-specific column sets in
-    `frontend-modern/src/components/Workloads/guestRowModel.tsx` must retain
-    core monitoring metrics when narrowing scope: app-container mode keeps CPU,
-    memory, disk, and the responsive Net I/O and Disk I/O columns available,
-    while the layout priority model decides when detail-heavy I/O columns are
-    rendered. Filtering to a workload type must not silently remove capacity or
-    I/O observability that remains available in the all-workloads table. Tablet
-    and compact workload stages must normalize active column widths against the
-    currently visible column IDs, show higher-priority workload information
-    before exposing detail-heavy Net I/O and Disk I/O columns, and avoid
-    horizontal overflow at mobile, tablet, compact, and full desktop widths.
 28. Keep summary-card hover emphasis on one bounded rendering budget: when a summary row is active, shared sparkline and density-map primitives must promote the selected series and demote background series through the same active-series ID rather than layering a second page-local highlight pass, so zoom-range and hover scrubbing stay visually coherent without reintroducing multi-series overdraw on the hot summary cards. Density maps on that hot path must stay overview-first under focus: preserve the multi-entity heatmap rows, layer focused-entity detail inside the card, and avoid swapping transient hover into a separate single-series chart path.
 29. Keep public self-hosted checkout handoff endpoints on the adjacent
     commercial/router boundary, not the summary-chart hot path. When
@@ -586,12 +503,6 @@ shell clickable behind another overlay.
     canonical dock threshold, the assistant must switch to an overlay drawer so
     table filters, grouped rows, and other hot-path controls keep their
     existing layout budget instead of paying a second collapse cost.
-33. Keep hidden workload selector shells off the hot path. When an owning
-    platform page keeps `frontend-modern/src/components/shared/InfrastructureSelector.tsx`
-    mounted only for layout parity, `frontend-modern/src/components/shared/useInfrastructureSelectorState.ts`
-    must not hydrate `all-resources` or recovery rollups behind a hidden node
-    summary; selector-owned data hooks must be explicitly visibility-gated so
-    workload surfaces only pay for workload-owned transports.
 34. Keep the retired dashboard page-header path absent from the compact hot
     path. New page headers must stay pure presentation on their owning route
     and must not introduce a second data load, widen suspense ownership, or

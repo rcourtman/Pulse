@@ -5529,6 +5529,18 @@ func TestContract_SetupScriptEmbedsFailFastGuidance(t *testing.T) {
 	if strings.Contains(script, `/root/.ssh/authorized_keys.tmp`) || strings.Contains(script, `echo "$SSH_SENSORS_KEY_ENTRY" >> /root/.ssh/authorized_keys`) {
 		t.Fatalf("setup script preserved symlink-breaking authorized_keys rewrite: %s", script)
 	}
+	if !strings.Contains(script, `PULSE_SENSORS_WRAPPER="/usr/local/sbin/pulse-sensors"`) {
+		t.Fatalf("setup script missing canonical Pulse sensor wrapper path: %s", script)
+	}
+	if !strings.Contains(script, `SSH_SENSORS_KEY_ENTRY="command=\"$PULSE_SENSORS_WRAPPER\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $SSH_SENSORS_PUBLIC_KEY # pulse-sensors"`) {
+		t.Fatalf("setup script must force temperature SSH keys to the Pulse sensor wrapper: %s", script)
+	}
+	if !strings.Contains(script, `"smart": collect_smart(),`) || !strings.Contains(script, `apt-get install -y smartmontools`) {
+		t.Fatalf("setup script missing SMART temperature wrapper contract: %s", script)
+	}
+	if strings.Contains(script, `SSH_SENSORS_KEY_ENTRY="command=\"sensors -j\"`) {
+		t.Fatalf("setup script preserved stale raw sensors forced command: %s", script)
+	}
 	if strings.Contains(script, `echo "Please run this script as root"`) {
 		t.Fatalf("setup script preserved stale root-only guidance: %s", script)
 	}

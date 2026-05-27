@@ -206,7 +206,14 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 self.assertNotIn("guest-capacity continuity", support_pack)
                 self.assertNotIn("core monitoring unlimited", normalize_ws(support_pack))
 
-    def test_stable_release_packet_keeps_infrastructure_as_current_landing_surface(self) -> None:
+    def test_stable_release_packet_describes_platform_shaped_frontend_on_unified_backend(self) -> None:
+        """After the rc.6 IA revert, the stable v6 release docs must describe
+        the frontend as platform-shaped (Proxmox, Docker, Kubernetes, TrueNAS,
+        vSphere, Standalone) on a unified resource backend. Drift back to the
+        rc.1-rc.5 unified Infrastructure/Workloads/Storage/Recovery framing in
+        the stable packet would mislead operators reading the canonical v6
+        release notes.
+        """
         stable_docs = {
             "release_notes": read("docs/releases/RELEASE_NOTES_v6.md"),
             "changelog": read("docs/releases/V6_CHANGELOG.md"),
@@ -216,7 +223,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         for name, content in stable_docs.items():
             with self.subTest(name=name):
                 normalized = normalize_ws(content)
-                self.assertIn("Infrastructure", content)
+                # Anti-patterns for prior product shapes the stable packet
+                # must not describe as current truth.
                 self.assertNotIn("default route lands on `Dashboard`", normalized)
                 self.assertNotIn("around Dashboard, Infrastructure", normalized)
                 self.assertNotIn(
@@ -224,15 +232,32 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                     content,
                 )
                 self.assertNotIn("- `Dashboard`", content)
+                # Anti-patterns for the reverted unified IA so the stable
+                # packet does not silently drift back to it.
+                self.assertNotIn(
+                    "Authenticated users now land on `Infrastructure`",
+                    normalized,
+                )
+                self.assertNotIn(
+                    "default route lands on `Infrastructure`",
+                    normalized,
+                )
+                self.assertNotIn(
+                    "Infrastructure as the default landing surface",
+                    content,
+                )
 
         self.assertIn(
-            "Authenticated users now land on `Infrastructure`",
+            "platform-shaped top-level navigation",
             normalize_ws(stable_docs["release_notes"]),
         )
-        self.assertIn("default route lands on `Infrastructure`", normalize_ws(stable_docs["changelog"]))
         self.assertIn(
-            "Infrastructure as the default landing surface",
-            stable_docs["operator_support_pack"],
+            "platform-shaped",
+            normalize_ws(stable_docs["changelog"]),
+        )
+        self.assertIn(
+            "platform-shaped top-level pages",
+            normalize_ws(stable_docs["operator_support_pack"]),
         )
 
     def test_rc1_changelog_keeps_current_free_first_licensing_posture(self) -> None:

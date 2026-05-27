@@ -66,6 +66,7 @@ truth for live infrastructure data.
 42. `internal/mock/demo_scenarios.go`
 43. `internal/kubernetesagent/agent.go`
 44. `pkg/agents/kubernetes/report.go`
+45. `internal/monitoring/temperature.go`
 
 ## Shared Boundaries
 
@@ -854,6 +855,12 @@ temperatures. `internal/monitoring/monitor_polling_node_helpers.go` may skip
 SSH only once the host-agent temperature payload already has SMART disk data,
 so nodes keep their disk-temperature and SMART augmentation when the host agent
 is present but lacks SMART support.
+Legacy SSH temperature collection must also use the Pulse sensor-wrapper
+contract before falling back to raw lm-sensors output. `internal/monitoring/temperature.go`
+must request `/usr/local/sbin/pulse-sensors` when it exists, parse the wrapper
+payload as `{sensors, smart}`, preserve backward compatibility with old forced
+`sensors -j` keys, and expose SMART disk temperatures through the same
+`models.Temperature.SMART` path used by the physical-disk merge.
 That same Proxmox monitoring boundary also owns checked response parsing for
 polymorphic numeric fields. Shared client parsers such as
 `pkg/proxmox/replication.go` must use the package's checked integer conversion

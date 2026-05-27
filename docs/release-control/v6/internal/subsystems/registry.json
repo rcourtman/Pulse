@@ -82,22 +82,6 @@
       ]
     },
     {
-      "path": "frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx",
-      "rationale": "the infrastructure summary surface is both a canonical unified-resource consumer and a fleet-scale summary chart hot-path boundary",
-      "subsystems": [
-        "performance-and-scalability",
-        "unified-resources"
-      ]
-    },
-    {
-      "path": "frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts",
-      "rationale": "infrastructure summary chart matching, focused-summary view derivation, and metric-series shaping are both a canonical unified-resource consumer surface and a fleet-scale summary chart hot-path boundary",
-      "subsystems": [
-        "performance-and-scalability",
-        "unified-resources"
-      ]
-    },
-    {
       "path": "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
       "rationale": "resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
       "subsystems": [
@@ -156,14 +140,6 @@
     {
       "path": "frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts",
       "rationale": "unified resource table state derivation, sort-cycle policy, service sorting, and responsive column layout are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
-      "subsystems": [
-        "performance-and-scalability",
-        "unified-resources"
-      ]
-    },
-    {
-      "path": "frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts",
-      "rationale": "infrastructure summary chart polling, cache hydration, and summary-state orchestration are both a canonical unified-resource consumer surface and a fleet-scale summary chart hot-path boundary",
       "subsystems": [
         "performance-and-scalability",
         "unified-resources"
@@ -586,6 +562,15 @@
       ]
     },
     {
+      "path": "internal/api/setup_script_render.go",
+      "rationale": "the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection)",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts",
+        "storage-recovery"
+      ]
+    },
+    {
       "path": "internal/api/slo.go",
       "rationale": "the SLO endpoint is both an API contract surface and a protected performance hot-path boundary",
       "subsystems": [
@@ -687,14 +672,8 @@
         "cmd/pulse-agent/main.go",
         "frontend-modern/src/api/agentProfiles.ts",
         "frontend-modern/src/api/nodes.ts",
-        "frontend-modern/src/components/Infrastructure/deploy/CandidatesStep.tsx",
-        "frontend-modern/src/components/Infrastructure/deploy/ConfirmStep.tsx",
-        "frontend-modern/src/components/Infrastructure/deploy/DeployingStep.tsx",
-        "frontend-modern/src/components/Infrastructure/deploy/PreflightStep.tsx",
-        "frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx",
         "frontend-modern/src/components/Settings/agentProfileSettings.ts",
         "frontend-modern/src/components/Settings/AgentProfilesPanel.tsx",
-        "frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx",
         "frontend-modern/src/components/Settings/ConnectionEditor/AddressProbeStep.tsx",
         "frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx",
         "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx",
@@ -719,7 +698,6 @@
         "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
         "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx",
         "frontend-modern/src/components/Settings/proxmoxSettingsModel.ts",
-        "frontend-modern/src/components/Settings/SettingsSectionNav.tsx",
         "frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts",
         "frontend-modern/src/components/Settings/useConnectionRowActions.ts",
         "frontend-modern/src/components/Settings/useConnectionsLedger.ts",
@@ -736,18 +714,15 @@
         "frontend-modern/src/utils/agentInstallCommand.ts",
         "frontend-modern/src/utils/agentProfilesPresentation.ts",
         "frontend-modern/src/utils/agentProfileSuggestionPresentation.ts",
-        "frontend-modern/src/utils/clusterEndpointPresentation.ts",
-        "frontend-modern/src/utils/configuredNodeCapabilityPresentation.ts",
-        "frontend-modern/src/utils/configuredNodeStatusPresentation.ts",
         "frontend-modern/src/utils/infrastructureOnboardingPresentation.ts",
         "frontend-modern/src/utils/infrastructureSettingsPresentation.ts",
         "frontend-modern/src/utils/nodeModalPresentation.ts",
-        "frontend-modern/src/utils/proxmoxSettingsPresentation.ts",
         "frontend-modern/src/utils/unifiedAgentInventoryPresentation.ts",
         "frontend-modern/src/utils/unifiedAgentStatusPresentation.ts",
         "internal/agenttls/config.go",
         "internal/api/agent_install_command_shared.go",
         "internal/api/config_setup_handlers.go",
+        "internal/api/setup_script_render.go",
         "internal/api/unified_agent.go",
         "internal/remoteconfig/client.go",
         "scripts/install.ps1",
@@ -779,6 +754,7 @@
             "match_files": [
               "internal/api/agent_install_command_shared.go",
               "internal/api/config_setup_handlers.go",
+              "internal/api/setup_script_render.go",
               "internal/api/unified_agent.go"
             ],
             "allow_same_subsystem_tests": false,
@@ -976,30 +952,6 @@
             ]
           },
           {
-            "id": "deploy-fallback-install-surface",
-            "label": "deploy wizard surface proof",
-            "match_prefixes": [],
-            "match_files": [
-              "frontend-modern/src/components/Infrastructure/deploy/CandidatesStep.tsx",
-              "frontend-modern/src/components/Infrastructure/deploy/ConfirmStep.tsx",
-              "frontend-modern/src/components/Infrastructure/deploy/DeployingStep.tsx",
-              "frontend-modern/src/components/Infrastructure/deploy/PreflightStep.tsx",
-              "frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx"
-            ],
-            "allow_same_subsystem_tests": false,
-            "test_prefixes": [],
-            "exact_files": [
-              "frontend-modern/src/components/Infrastructure/__tests__/DeployStepComponents.test.tsx",
-              "frontend-modern/src/components/Infrastructure/deploy/__tests__/CandidatesStep.test.tsx",
-              "frontend-modern/src/components/Infrastructure/deploy/__tests__/ConfirmStep.test.tsx",
-              "frontend-modern/src/components/Infrastructure/deploy/__tests__/DeployingStep.test.tsx",
-              "frontend-modern/src/components/Infrastructure/deploy/__tests__/PreflightStep.test.tsx",
-              "frontend-modern/src/components/Infrastructure/deploy/__tests__/ResultsStep.test.tsx",
-              "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
-              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
-            ]
-          },
-          {
             "id": "unified-agent-settings-surface",
             "label": "unified agent settings lifecycle proof",
             "match_prefixes": [],
@@ -1038,7 +990,6 @@
             "label": "platform connections workspace lifecycle proof",
             "match_prefixes": [],
             "match_files": [
-              "frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx",
               "frontend-modern/src/components/Settings/ConnectionEditor/AddressProbeStep.tsx",
               "frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx",
               "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx",
@@ -1054,16 +1005,13 @@
               "frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts",
               "frontend-modern/src/components/Settings/MonitoredSystemImpactPreview.tsx",
               "frontend-modern/src/components/Settings/proxmoxSettingsModel.ts",
-              "frontend-modern/src/components/Settings/SettingsSectionNav.tsx",
               "frontend-modern/src/components/Settings/useConnectionRowActions.ts",
               "frontend-modern/src/components/Settings/useConnectionsLedger.ts",
               "frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts",
               "frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts",
               "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts",
               "frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts",
-              "frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts",
-              "frontend-modern/src/utils/clusterEndpointPresentation.ts",
-              "frontend-modern/src/utils/proxmoxSettingsPresentation.ts"
+              "frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -1073,9 +1021,7 @@
               "frontend-modern/src/components/Settings/__tests__/useTrueNASSettingsPanelState.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/useVMwareSettingsPanelState.test.tsx",
               "frontend-modern/src/components/Settings/ConnectionEditor/__tests__/ConnectionEditor.test.tsx",
-              "frontend-modern/src/utils/__tests__/clusterEndpointPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-              "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts",
               "tests/integration/tests/21-truenas-settings-platform-connections.spec.ts",
               "tests/integration/tests/22-vmware-settings-platform-connections.spec.ts"
             ]
@@ -1087,8 +1033,6 @@
             "match_files": [
               "frontend-modern/src/utils/agentCapabilityPresentation.ts",
               "frontend-modern/src/utils/agentProfileSuggestionPresentation.ts",
-              "frontend-modern/src/utils/configuredNodeCapabilityPresentation.ts",
-              "frontend-modern/src/utils/configuredNodeStatusPresentation.ts",
               "frontend-modern/src/utils/unifiedAgentInventoryPresentation.ts",
               "frontend-modern/src/utils/unifiedAgentStatusPresentation.ts"
             ],
@@ -1097,8 +1041,6 @@
             "exact_files": [
               "frontend-modern/src/utils/__tests__/agentCapabilityPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/agentProfileSuggestionPresentation.test.ts",
-              "frontend-modern/src/utils/__tests__/configuredNodeCapabilityPresentation.test.ts",
-              "frontend-modern/src/utils/__tests__/configuredNodeStatusPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/unifiedAgentInventoryPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/unifiedAgentStatusPresentation.test.ts"
             ]
@@ -1116,7 +1058,8 @@
               "frontend-modern/src/utils/__tests__/infrastructureSettingsPresentation.test.ts"
             ]
           }
-        ]
+        ],
+        "match_files": null
       }
     },
     {
@@ -1269,7 +1212,8 @@
               "scripts/release_control/ai_runtime_docs_policy_test.py"
             ]
           }
-        ]
+        ],
+        "match_files": null
       }
     },
     {
@@ -1521,7 +1465,8 @@
               "internal/alerts/update_alerts_test.go"
             ]
           }
-        ]
+        ],
+        "match_files": null
       }
     },
     {
@@ -1555,6 +1500,7 @@
         "frontend-modern/src/utils/agentInstallCommand.ts",
         "frontend-modern/src/utils/apiTokenPresentation.ts",
         "frontend-modern/src/utils/infrastructureSettingsPresentation.ts",
+        "internal/api/setup_script_render.go",
         "internal/websocket/hub.go",
         "pkg/pulsecli/actions.go",
         "pkg/pulsecli/api_client.go",
@@ -1869,7 +1815,8 @@
               "frontend-modern/src/utils/__tests__/infrastructureSettingsPresentation.test.ts"
             ]
           }
-        ]
+        ],
+        "match_files": null
       }
     },
     {
@@ -1888,12 +1835,10 @@
       "owned_files": [
         "frontend-modern/src/App.tsx",
         "frontend-modern/src/AppLayout.tsx",
-        "frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx",
         "frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx",
         "frontend-modern/src/components/Settings/BillingAdminPanel.tsx",
         "frontend-modern/src/components/Settings/CommercialBillingSections.tsx",
         "frontend-modern/src/components/Settings/MonitoredSystemImpactPreview.tsx",
-        "frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx",
         "frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx",
         "frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx",
         "frontend-modern/src/components/Settings/ProLicensePanel.tsx",
@@ -1905,8 +1850,6 @@
         "frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts",
         "frontend-modern/src/components/Settings/useProLicensePanelState.ts",
         "frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts",
-        "frontend-modern/src/pages/CloudPricing.tsx",
-        "frontend-modern/src/pages/HostedSignup.tsx",
         "frontend-modern/src/pages/PricingHandoff.tsx",
         "frontend-modern/src/pages/RuntimeHome.tsx",
         "frontend-modern/src/useAppRuntimeState.ts",
@@ -2415,8 +2358,6 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/api/__tests__/hostedSignup.test.ts",
-              "frontend-modern/src/pages/__tests__/HostedSignup.test.tsx",
               "internal/api/billing_state_handlers_test.go",
               "internal/api/contract_test.go",
               "internal/api/licensing_handlers_auto_migrate_test.go",
@@ -2460,7 +2401,6 @@
             "label": "pro license surface proof",
             "match_prefixes": [],
             "match_files": [
-              "frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx",
               "frontend-modern/src/components/Settings/ProLicensePanel.tsx",
               "frontend-modern/src/components/Settings/ProLicensePlanSection.tsx",
               "frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts",
@@ -2470,7 +2410,6 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/Settings/__tests__/MonitoredSystemLedgerPanel.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/ProLicensePanel.test.tsx"
             ]
           },
@@ -2510,7 +2449,6 @@
             "label": "commercial plan model proof",
             "match_prefixes": [],
             "match_files": [
-              "frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx",
               "frontend-modern/src/components/Settings/CommercialBillingSections.tsx",
               "frontend-modern/src/utils/cloudPlans.ts",
               "frontend-modern/src/utils/commercialBillingModel.ts",
@@ -2519,11 +2457,8 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/Commercial/__tests__/MonitoredSystemDefinitionDisclosure.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/OrganizationBillingPanel.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/ProLicensePanel.test.tsx",
-              "frontend-modern/src/pages/__tests__/CloudPricing.test.tsx",
-              "frontend-modern/src/pages/__tests__/HostedSignup.test.tsx",
               "frontend-modern/src/utils/__tests__/selfHostedPlans.test.ts"
             ]
           },
@@ -2582,17 +2517,12 @@
             "label": "pricing route and page proof",
             "match_prefixes": [],
             "match_files": [
-              "frontend-modern/src/pages/CloudPricing.tsx",
-              "frontend-modern/src/pages/HostedSignup.tsx",
               "frontend-modern/src/pages/PricingHandoff.tsx",
               "frontend-modern/src/utils/pricingHandoff.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/api/__tests__/hostedSignup.test.ts",
-              "frontend-modern/src/pages/__tests__/CloudPricing.test.tsx",
-              "frontend-modern/src/pages/__tests__/HostedSignup.test.tsx",
               "frontend-modern/src/pages/__tests__/PricingHandoff.test.tsx",
               "frontend-modern/src/utils/__tests__/pricingHandoff.test.ts"
             ]
@@ -2645,7 +2575,8 @@
               "tests/integration/tests/53-demo-mode-commercial-boundary.spec.ts"
             ]
           }
-        ]
+        ],
+        "match_files": null
       }
     },
     {
@@ -2999,7 +2930,8 @@
               "scripts/installtests/install_sh_test.go"
             ]
           }
-        ]
+        ],
+        "match_files": null
       }
     },
     {
@@ -3089,7 +3021,6 @@
         "frontend-modern/src/utils/environmentLockPresentation.ts",
         "frontend-modern/src/utils/platformSupportManifest.generated.ts",
         "frontend-modern/src/utils/platformSupportManifest.ts",
-        "frontend-modern/src/utils/problemResourcePresentation.ts",
         "frontend-modern/src/utils/reportableResourceTypes.ts",
         "frontend-modern/src/utils/reportingPresentation.ts",
         "frontend-modern/src/utils/reportingResourceTypes.ts",
@@ -3112,7 +3043,6 @@
         "allow_same_subsystem_tests": false,
         "test_prefixes": [],
         "exact_files": [
-          "frontend-modern/src/components/shared/PageControls.guardrails.test.ts",
           "frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts"
         ],
         "require_explicit_path_policy_coverage": true,
@@ -3137,7 +3067,6 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/shared/FilterToolbar.tsx",
-              "frontend-modern/src/components/shared/PageControls.tsx",
               "frontend-modern/src/components/shared/SettingsPanel.tsx",
               "frontend-modern/src/components/shared/Subtabs.tsx",
               "frontend-modern/src/components/shared/Toggle.tsx"
@@ -3146,9 +3075,7 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
-              "frontend-modern/src/components/shared/FilterToolbar.test.tsx",
-              "frontend-modern/src/components/shared/PageControls.guardrails.test.ts",
-              "frontend-modern/src/components/shared/PageControls.test.tsx"
+              "frontend-modern/src/components/shared/FilterToolbar.test.tsx"
             ]
           },
           {
@@ -3322,7 +3249,6 @@
             "match_files": [
               "frontend-modern/src/components/Toast/Toast.tsx",
               "frontend-modern/src/utils/emptyStatePresentation.ts",
-              "frontend-modern/src/utils/problemResourcePresentation.ts",
               "frontend-modern/src/utils/semanticTonePresentation.ts",
               "frontend-modern/src/utils/toast.ts",
               "frontend-modern/src/utils/typeColumnPresentation.ts"
@@ -3333,7 +3259,6 @@
               "frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts",
               "frontend-modern/src/components/Toast/__tests__/Toast.test.tsx",
               "frontend-modern/src/utils/__tests__/emptyStatePresentation.test.ts",
-              "frontend-modern/src/utils/__tests__/problemResourcePresentation.test.ts",
               "frontend-modern/src/utils/__tests__/semanticTonePresentation.test.ts",
               "frontend-modern/src/utils/__tests__/typeColumnPresentation.test.ts"
             ]
@@ -3499,7 +3424,6 @@
             "label": "search input proof",
             "match_prefixes": [],
             "match_files": [
-              "frontend-modern/src/components/shared/CollapsibleSearchInput.tsx",
               "frontend-modern/src/components/shared/SearchField.tsx",
               "frontend-modern/src/components/shared/SearchInput.tsx",
               "frontend-modern/src/components/shared/SearchInputEnhancements.tsx",
@@ -3517,17 +3441,12 @@
             "label": "data grid and summary proof",
             "match_prefixes": [],
             "match_files": [
-              "frontend-modern/src/components/shared/InfrastructureSummaryTable.tsx",
-              "frontend-modern/src/components/shared/infrastructureSummaryTableModel.ts",
-              "frontend-modern/src/components/shared/InfrastructureSummaryTableRow.tsx",
               "frontend-modern/src/components/shared/PulseDataGrid.tsx",
-              "frontend-modern/src/components/shared/Table.tsx",
-              "frontend-modern/src/components/shared/useInfrastructureSummaryTableState.ts"
+              "frontend-modern/src/components/shared/Table.tsx"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/shared/__tests__/InfrastructureSummaryTable.test.tsx",
               "frontend-modern/src/components/shared/__tests__/PulseDataGrid.test.tsx"
             ]
           },
@@ -3543,12 +3462,9 @@
             "exact_files": [
               "frontend-modern/src/components/shared/__tests__/CommandPaletteModal.test.tsx",
               "frontend-modern/src/components/shared/__tests__/ContainerUpdateBadge.test.tsx",
-              "frontend-modern/src/components/shared/__tests__/DensityMap.test.tsx",
               "frontend-modern/src/components/shared/__tests__/Dialog.test.tsx",
               "frontend-modern/src/components/shared/__tests__/HelpIcon.test.tsx",
               "frontend-modern/src/components/shared/__tests__/HistoryChart.test.tsx",
-              "frontend-modern/src/components/shared/__tests__/InfrastructureSelector.test.tsx",
-              "frontend-modern/src/components/shared/__tests__/InfrastructureSummaryTable.test.tsx",
               "frontend-modern/src/components/shared/__tests__/MobileNavBar.test.tsx",
               "frontend-modern/src/components/shared/__tests__/PulseDataGrid.test.tsx",
               "frontend-modern/src/components/shared/__tests__/SearchField.test.tsx",
@@ -3558,13 +3474,12 @@
               "frontend-modern/src/components/shared/__tests__/WebInterfaceUrlField.test.tsx",
               "frontend-modern/src/components/shared/ColumnPicker.test.tsx",
               "frontend-modern/src/components/shared/FilterToolbar.test.tsx",
-              "frontend-modern/src/components/shared/PageControls.guardrails.test.ts",
-              "frontend-modern/src/components/shared/PageControls.test.tsx",
               "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
               "frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts"
             ]
           }
-        ]
+        ],
+        "match_files": null
       }
     },
     {
@@ -3873,7 +3788,8 @@
               "internal/unifiedresources/code_standards_test.go"
             ]
           }
-        ]
+        ],
+        "match_files": null
       }
     },
     {
@@ -3922,7 +3838,8 @@
             ],
             "exact_files": []
           }
-        ]
+        ],
+        "match_files": null
       }
     },
     {
@@ -4091,7 +4008,8 @@
               "internal/api/org_validation_test.go"
             ]
           }
-        ]
+        ],
+        "match_files": null
       }
     },
     {
@@ -4272,7 +4190,8 @@
               "frontend-modern/src/utils/__tests__/patrolSummaryPresentation.test.ts"
             ]
           }
-        ]
+        ],
+        "match_files": null
       }
     },
     {
@@ -4284,8 +4203,6 @@
       ],
       "owned_files": [
         "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
-        "frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx",
-        "frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts",
         "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
         "frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx",
         "frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx",
@@ -4294,7 +4211,6 @@
         "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
         "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
         "frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts",
-        "frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts",
         "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
         "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
         "frontend-modern/src/components/Workloads/DiskList.tsx",
@@ -4343,9 +4259,6 @@
         "frontend-modern/src/components/Workloads/workloadSelectors.ts",
         "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx",
         "frontend-modern/src/components/Workloads/workloadsFilterModel.ts",
-        "frontend-modern/src/components/Workloads/WorkloadsStateCards.tsx",
-        "frontend-modern/src/components/Workloads/WorkloadsStatsStrip.tsx",
-        "frontend-modern/src/components/Workloads/WorkloadsSummary.tsx",
         "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
         "frontend-modern/src/components/Workloads/WorkloadsTable.tsx",
         "frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx",
@@ -4355,7 +4268,6 @@
         "frontend-modern/src/routing/routePreload.ts",
         "frontend-modern/src/useAppRuntimeState.ts",
         "frontend-modern/src/utils/thresholdSliderPresentation.ts",
-        "frontend-modern/src/utils/throughputPresentation.ts",
         "frontend-modern/src/utils/workloadsSummaryCache.ts",
         "internal/api/router_bench_test.go",
         "internal/api/slo.go",
@@ -4386,7 +4298,6 @@
           "frontend-modern/src/components/Workloads/MetricBar.test.tsx",
           "frontend-modern/src/components/Workloads/StackedMemoryBar.test.tsx",
           "frontend-modern/src/components/Workloads/ThresholdSlider.test.tsx",
-          "frontend-modern/src/components/Workloads/WorkloadsSummary.test.tsx",
           "frontend-modern/src/hooks/__tests__/useWorkloads.test.ts",
           "internal/api/router_bench_test.go",
           "internal/api/slo_bench_test.go",
@@ -4434,8 +4345,6 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
-              "frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx",
-              "frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts",
               "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
               "frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx",
               "frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx",
@@ -4444,7 +4353,6 @@
               "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
               "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
               "frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts",
-              "frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts",
               "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
               "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
               "frontend-modern/src/components/Workloads/DiskList.tsx",
@@ -4493,9 +4401,6 @@
               "frontend-modern/src/components/Workloads/workloadSelectors.ts",
               "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx",
               "frontend-modern/src/components/Workloads/workloadsFilterModel.ts",
-              "frontend-modern/src/components/Workloads/WorkloadsStateCards.tsx",
-              "frontend-modern/src/components/Workloads/WorkloadsStatsStrip.tsx",
-              "frontend-modern/src/components/Workloads/WorkloadsSummary.tsx",
               "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
               "frontend-modern/src/components/Workloads/WorkloadsTable.tsx",
               "frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx",
@@ -4508,7 +4413,6 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSummaryModel.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
               "frontend-modern/src/components/Workloads/__tests__/DiskList.test.tsx",
@@ -4538,23 +4442,9 @@
               "frontend-modern/src/components/Workloads/MetricBar.test.tsx",
               "frontend-modern/src/components/Workloads/StackedMemoryBar.test.tsx",
               "frontend-modern/src/components/Workloads/ThresholdSlider.test.tsx",
-              "frontend-modern/src/components/Workloads/WorkloadsSummary.test.tsx",
               "frontend-modern/src/hooks/__tests__/useWorkloads.test.ts",
               "frontend-modern/src/utils/__tests__/thresholdSliderPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/workloadsSummaryCache.test.ts"
-            ]
-          },
-          {
-            "id": "throughput-presentation-helper",
-            "label": "throughput presentation helper proof",
-            "match_prefixes": [],
-            "match_files": [
-              "frontend-modern/src/utils/throughputPresentation.ts"
-            ],
-            "allow_same_subsystem_tests": false,
-            "test_prefixes": [],
-            "exact_files": [
-              "frontend-modern/src/utils/__tests__/throughputPresentation.test.ts"
             ]
           },
           {
@@ -4570,7 +4460,8 @@
               "internal/api/slo_bench_test.go"
             ]
           }
-        ]
+        ],
+        "match_files": null
       }
     },
     {
@@ -4665,7 +4556,8 @@
               "pulse-mobile:src/relay/__tests__/proxy.test.ts"
             ]
           }
-        ]
+        ],
+        "match_files": null
       }
     },
     {
@@ -4875,7 +4767,8 @@
               "internal/api/system_settings_telemetry_test.go"
             ]
           }
-        ]
+        ],
+        "match_files": null
       }
     },
     {
@@ -4883,9 +4776,7 @@
       "lane": "L15",
       "contract": "docs/release-control/v6/internal/subsystems/storage-recovery.md",
       "owned_prefixes": [
-        "frontend-modern/src/components/Recovery/",
         "frontend-modern/src/components/Storage/",
-        "frontend-modern/src/features/recovery/",
         "frontend-modern/src/features/storageBackups/",
         "internal/recovery/"
       ],
@@ -4897,31 +4788,20 @@
         "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
         "frontend-modern/src/features/proxmox/proxmoxBackupSummaryPresentation.ts",
         "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
-        "frontend-modern/src/features/recovery/useRecoverySurfaceState.ts",
         "frontend-modern/src/hooks/useRecoveryPoints.ts",
-        "frontend-modern/src/hooks/useRecoveryPointsFacets.ts",
-        "frontend-modern/src/hooks/useRecoveryPointsSeries.ts",
-        "frontend-modern/src/hooks/useRecoveryRollups.ts",
         "frontend-modern/src/types/recovery.ts",
-        "frontend-modern/src/utils/recoveryActionPresentation.ts",
         "frontend-modern/src/utils/recoveryArtifactModePresentation.ts",
         "frontend-modern/src/utils/recoveryDatePresentation.ts",
-        "frontend-modern/src/utils/recoveryEmptyStatePresentation.ts",
-        "frontend-modern/src/utils/recoveryFilterChipPresentation.ts",
-        "frontend-modern/src/utils/recoveryIssuePresentation.ts",
         "frontend-modern/src/utils/recoveryItemTypePresentation.ts",
         "frontend-modern/src/utils/recoveryOutcomePresentation.ts",
-        "frontend-modern/src/utils/recoveryRecordPresentation.ts",
-        "frontend-modern/src/utils/recoveryStatusPresentation.ts",
-        "frontend-modern/src/utils/recoveryTablePresentation.ts",
         "frontend-modern/src/utils/recoveryTimelineChartPresentation.ts",
-        "frontend-modern/src/utils/recoveryTimelinePresentation.ts"
+        "frontend-modern/src/utils/recoveryTimelinePresentation.ts",
+        "internal/api/setup_script_render.go"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
         "test_prefixes": [],
         "exact_files": [
-          "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
           "frontend-modern/src/components/Storage/code_standards.test.ts",
           "internal/recovery/recovery_test.go"
         ],
@@ -4949,34 +4829,20 @@
           {
             "id": "recovery-product-surface",
             "label": "recovery product surface proof",
-            "match_prefixes": [
-              "frontend-modern/src/components/Recovery/"
-            ],
+            "match_prefixes": [],
             "match_files": [
-              "frontend-modern/src/features/recovery/useRecoverySurfaceState.ts",
               "frontend-modern/src/hooks/useRecoveryPoints.ts",
-              "frontend-modern/src/hooks/useRecoveryPointsFacets.ts",
-              "frontend-modern/src/hooks/useRecoveryPointsSeries.ts",
-              "frontend-modern/src/hooks/useRecoveryRollups.ts",
               "frontend-modern/src/types/recovery.ts",
-              "frontend-modern/src/utils/recoveryActionPresentation.ts",
               "frontend-modern/src/utils/recoveryArtifactModePresentation.ts",
               "frontend-modern/src/utils/recoveryDatePresentation.ts",
-              "frontend-modern/src/utils/recoveryEmptyStatePresentation.ts",
-              "frontend-modern/src/utils/recoveryFilterChipPresentation.ts",
-              "frontend-modern/src/utils/recoveryIssuePresentation.ts",
               "frontend-modern/src/utils/recoveryItemTypePresentation.ts",
               "frontend-modern/src/utils/recoveryOutcomePresentation.ts",
-              "frontend-modern/src/utils/recoveryRecordPresentation.ts",
-              "frontend-modern/src/utils/recoveryStatusPresentation.ts",
-              "frontend-modern/src/utils/recoveryTablePresentation.ts",
               "frontend-modern/src/utils/recoveryTimelineChartPresentation.ts",
               "frontend-modern/src/utils/recoveryTimelinePresentation.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "tests/integration/tests/17-recovery-layout.spec.ts"
             ]
@@ -4997,7 +4863,6 @@
               "frontend-modern/src/components/Storage/__tests__/Storage.test.tsx",
               "frontend-modern/src/components/Storage/__tests__/StorageGroupRow.test.tsx",
               "frontend-modern/src/components/Storage/__tests__/StoragePoolDetail.test.tsx",
-              "frontend-modern/src/components/Storage/__tests__/useStoragePageSummary.test.ts",
               "frontend-modern/src/components/Storage/code_standards.test.ts",
               "frontend-modern/src/features/storageBackups/__tests__/resourceStorageMapping.test.ts",
               "frontend-modern/src/features/storageBackups/__tests__/storageAdapters.test.ts",
@@ -5030,8 +4895,22 @@
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupsTable.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupSummaryPresentation.test.ts"
             ]
+          },
+          {
+            "id": "shared-setup-script-boundary",
+            "label": "shared Proxmox setup-script storage/recovery boundary proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/setup_script_render.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/contract_test.go"
+            ]
           }
-        ]
+        ],
+        "match_files": null
       }
     },
     {
@@ -5046,10 +4925,7 @@
         "frontend-modern/src/components/Discovery/useDiscoveryTabState.ts",
         "frontend-modern/src/components/Docker/SwarmServicesDrawer.tsx",
         "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
-        "frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx",
-        "frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts",
         "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx",
-        "frontend-modern/src/components/Infrastructure/resourceBadges.ts",
         "frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx",
         "frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx",
         "frontend-modern/src/components/Infrastructure/resourceDetailDiscoveryModel.ts",
@@ -5070,7 +4946,6 @@
         "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
         "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
         "frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts",
-        "frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts",
         "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
         "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts",
         "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts",
@@ -5079,10 +4954,6 @@
         "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
         "frontend-modern/src/components/Kubernetes/K8sDeploymentsDrawer.tsx",
         "frontend-modern/src/components/Kubernetes/K8sNamespacesDrawer.tsx",
-        "frontend-modern/src/components/PMG/MailGateway.tsx",
-        "frontend-modern/src/components/PMG/PMGInstanceDrawer.tsx",
-        "frontend-modern/src/components/PMG/PMGInstancePanel.tsx",
-        "frontend-modern/src/components/PMG/ServiceHealthBadge.tsx",
         "frontend-modern/src/features/docker/DockerConfigsTable.tsx",
         "frontend-modern/src/features/docker/DockerContainersTable.tsx",
         "frontend-modern/src/features/docker/DockerImagesTable.tsx",
@@ -5193,8 +5064,6 @@
               "frontend-modern/src/components/Discovery/useDiscoveryTabState.ts",
               "frontend-modern/src/components/Docker/SwarmServicesDrawer.tsx",
               "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
-              "frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx",
-              "frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts",
               "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx",
               "frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx",
               "frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx",
@@ -5216,7 +5085,6 @@
               "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
               "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
               "frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts",
-              "frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts",
               "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
               "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts",
               "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts",
@@ -5225,9 +5093,6 @@
               "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
               "frontend-modern/src/components/Kubernetes/K8sDeploymentsDrawer.tsx",
               "frontend-modern/src/components/Kubernetes/K8sNamespacesDrawer.tsx",
-              "frontend-modern/src/components/PMG/MailGateway.tsx",
-              "frontend-modern/src/components/PMG/PMGInstanceDrawer.tsx",
-              "frontend-modern/src/components/PMG/PMGInstancePanel.tsx",
               "frontend-modern/src/features/docker/DockerConfigsTable.tsx",
               "frontend-modern/src/features/docker/DockerContainersTable.tsx",
               "frontend-modern/src/features/docker/DockerImagesTable.tsx",
@@ -5263,7 +5128,6 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSelectors.test.ts",
-              "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSummaryModel.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceChangeSummary.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceCorrelationSummary.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.discovery.test.ts",
@@ -5375,8 +5239,6 @@
             "label": "resource type, badge, and service-health presentation helper proof",
             "match_prefixes": [],
             "match_files": [
-              "frontend-modern/src/components/Infrastructure/resourceBadges.ts",
-              "frontend-modern/src/components/PMG/ServiceHealthBadge.tsx",
               "frontend-modern/src/utils/canonicalResourceTypes.ts",
               "frontend-modern/src/utils/resourceBadgePresentation.ts",
               "frontend-modern/src/utils/resourceTypeCompat.ts",
@@ -5388,7 +5250,6 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/Infrastructure/__tests__/resourceBadges.test.ts",
               "frontend-modern/src/utils/__tests__/canonicalResourceTypes.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "frontend-modern/src/utils/__tests__/resourceBadgePresentation.test.ts",
@@ -5489,7 +5350,8 @@
               "internal/unifiedresources/store_test.go"
             ]
           }
-        ]
+        ],
+        "match_files": null
       }
     }
   ]

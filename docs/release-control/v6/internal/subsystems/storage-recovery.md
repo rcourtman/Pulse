@@ -30,45 +30,30 @@ state.
 1. `internal/recovery/index.go`
 2. `internal/recovery/manager/manager.go`
 3. `internal/recovery/store/store.go`
-4. `frontend-modern/src/components/Recovery/Recovery.tsx`
-5. `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`
-6. `frontend-modern/src/components/Recovery/RecoveryProtectedInventorySection.tsx`
-7. `frontend-modern/src/components/Recovery/RecoveryActivitySection.tsx`
-8. `frontend-modern/src/components/Recovery/RecoveryHistorySection.tsx`
-9. `frontend-modern/src/components/Recovery/RecoveryHistoryTable.tsx`
-10. `frontend-modern/src/components/Recovery/RecoveryHistoryItemFilter.tsx`
-11. `frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx`
-12. `frontend-modern/src/components/Recovery/useRecoveryHistorySectionState.ts`
-13. `frontend-modern/src/components/Storage/Storage.tsx`
-14. `frontend-modern/src/features/storageBackups/storageModelCore.ts`
-15. `frontend-modern/src/utils/storageSources.ts`
-16. `frontend-modern/src/hooks/useRecoveryPoints.ts`
-17. `frontend-modern/src/hooks/useRecoveryRollups.ts`
-18. `frontend-modern/src/hooks/useRecoveryPointsFacets.ts`
-19. `frontend-modern/src/hooks/useRecoveryPointsSeries.ts`
-20. `frontend-modern/src/routing/resourceLinks.ts`
-21. `frontend-modern/src/types/recovery.ts`
-22. `frontend-modern/src/utils/recoveryDatePresentation.ts`
-23. `frontend-modern/src/utils/recoveryEmptyStatePresentation.ts`
-24. `frontend-modern/src/utils/recoveryTablePresentation.ts`
-25. `frontend-modern/src/utils/recoveryTimelinePresentation.ts`
-26. `frontend-modern/src/utils/recoveryItemTypePresentation.ts`
-27. `frontend-modern/src/utils/textPresentation.ts`
-28. `frontend-modern/src/components/Storage/StorageSummary.tsx`
-29. `frontend-modern/src/utils/storageSummaryCache.ts`
-30. `frontend-modern/src/components/Storage/useStorageSummaryCharts.ts`
-31. `frontend-modern/src/features/storageBackups/storageCapacityDeltaPresentation.ts`
-32. `frontend-modern/src/features/proxmox/BackupActivityChart.tsx`
-33. `frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx`
-34. `frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx`
-35. `frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts`
-36. `frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts`
-37. `frontend-modern/src/features/proxmox/proxmoxBackupSummaryPresentation.ts`
-38. `frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx`
+4. `frontend-modern/src/components/Storage/Storage.tsx`
+5. `frontend-modern/src/features/storageBackups/storageModelCore.ts`
+6. `frontend-modern/src/utils/storageSources.ts`
+7. `frontend-modern/src/hooks/useRecoveryPoints.ts`
+8. `frontend-modern/src/routing/resourceLinks.ts`
+9. `frontend-modern/src/types/recovery.ts`
+10. `frontend-modern/src/utils/recoveryDatePresentation.ts`
+11. `frontend-modern/src/utils/recoveryTimelinePresentation.ts`
+12. `frontend-modern/src/utils/recoveryItemTypePresentation.ts`
+13. `frontend-modern/src/utils/textPresentation.ts`
+14. `frontend-modern/src/utils/storageSummaryCache.ts`
+15. `frontend-modern/src/components/Storage/useStorageSummaryCharts.ts`
+16. `frontend-modern/src/features/storageBackups/storageCapacityDeltaPresentation.ts`
+17. `frontend-modern/src/features/proxmox/BackupActivityChart.tsx`
+18. `frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx`
+19. `frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx`
+20. `frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts`
+21. `frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts`
+22. `frontend-modern/src/features/proxmox/proxmoxBackupSummaryPresentation.ts`
+23. `frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx`
 
 ## Shared Boundaries
 
-1. None.
+1. `internal/api/setup_script_render.go` shared with `agent-lifecycle`, `api-contracts`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).
 
 ## Extension Points
 
@@ -216,176 +201,6 @@ outside the storage/recovery contract and must not become restore material,
 recovery scope, or a storage/recovery-owned secret source.
 
 1. Add or change recovery-point persistence, rollups, or series derivation through `internal/recovery/`
-2. Add or change recovery page UX through `frontend-modern/src/components/Recovery/` and keep canonical route/query/filter state ownership in `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`
-   `/recovery` is no longer an authenticated top-level aggregate workspace.
-   `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, the command
-   palette, keyboard shortcuts, route preloading, and active-tab routing must
-   keep Recovery unregistered as standalone product navigation rather than as
-   hidden compatibility. `/storage` has the same retired top-level status for
-   the Storage owner surface. Storage/recovery state remains owned by the
-   reusable surfaces that platform pages embed; the app shell must not
-   duplicate that state or expose it as a separate aggregate route.
-   Recovery table surfaces must consume the frontend-primitives-owned
-   `TableCard` frame and `TableCardHeader` header band for protected-item,
-   recovery-event, and adjacent table-fallback chrome. Storage/recovery may own
-   table content, filters, columns, and rows, but it must not fork
-   border/background/overflow table shells, page-local table-title bands, or
-   lighter open-sided Recovery table frames. Recovery and storage tables must
-   use the shared `Table` scroll shell directly; if a table needs the card body
-   surface fill it may pass `wrapperClass`, but it must not nest a local
-   `overflow-x-auto` div around the shared table. Storage pools and physical
-   disks inherit the surrounding `StorageContentCard` frame and must not add
-   a nested `Card` or second scroll wrapper.
-   Recovery is event-first: recovery surfaces open on recovery events history
-   by default, and protected-item rollups are a secondary Protection coverage
-   review reached from the explicit header action or route state owned by the
-   embedding surface. Recovery must not present
-   protected rollups and recovery events as equal default sub-tabs because
-   workload backup posture already belongs on Workloads, while Recovery owns
-   concrete backup/snapshot/replication evidence. Both surfaces still opt into
-   shared saved views (`savedViewsKey="recovery-protected"` and
-   `"recovery-events"`) so operators can save and recall named filter combos
-   through the shared `SavedViewsMenu`.
-   Recovery must not restore the retired top-level RecoverySummary metric card
-   strip. Aggregate recovery counts, success/failure mix, and selected-day
-   context belong inside the Recovery activity and event-history surfaces that
-   already own the chart and table filters, rather than as a separate summary
-   helper that competes with the event-first page hierarchy.
-   Recovery event filters now compose the shared chip-based `FilterBar`
-   (`frontend-modern/src/components/shared/FilterBar/FilterBar.tsx`) with a
-   `FilterDef[]` catalog. The legacy "advanced filter popover" retired: scope,
-   method, verification, cluster, node, and namespace fold into the same chip
-   catalog as Item Type, Platform, and Status. Page-level search, column
-   visibility, and the rollup item filter live in the shared search row; the
-   chip row appears below it only when filters are active. Recovery must not
-   reintroduce a parallel `PageControls` toolbar or local no-wrap overrides
-   that bypass the FilterBar shell.
-   Compact stable recovery-event filters, such as event outcome/status, ride
-   the same chip popover affordance the rest of the catalog uses, with
-   type-ahead in the "+ Filter" menu and chip popovers, but Recovery must keep
-   route-backed event filter state and query semantics in its recovery owner
-   rather than introducing a page-local presentation state path.
-   Recovery inventory protection posture and recovery-event outcome filtering
-   must stay separate in that owner: protection coverage uses the route-backed
-   `state` query for health, stale, failed, warning, running, unknown, and
-   never-succeeded states, while recovery events use `status` for event
-   outcomes. Legacy `stale=1` input may hydrate the inventory `state=stale`
-   compatibility path, but event views and event drill-ins must drop
-   protected-inventory-only state so hidden filters cannot make valid history
-   look empty.
-   Recovery activity timeline state is also storage/recovery-owned. The
-   route-backed range, selected day, and viewport-derived mobile cadence must
-   stay in `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`
-   and the Recovery page owner, with one shared transport-query builder feeding
-   the chart window to rollups/series and the table window to points/facets.
-   The series query may append timezone offset for bucket alignment, but
-   presentation components must not rebuild a second query contract or conflate
-   the chart and table windows. The activity chart must preserve readable
-   bucket density across the governed 7, 30, 90, and 365 day ranges: seven-day
-   timelines fit the available viewport without forced horizontal overflow,
-   thirty-day timelines may widen on mobile only, and longer ranges scroll in a
-   bounded chart viewport with sparser labels so first, last, and selected-day
-   context remain visible without overlapping labels. Selecting a timeline
-   column remains route-backed and must not become component-local ephemeral
-   state. The Recovery activity bar chart must use the frontend-primitives
-   shared chart slot height and matching plot-area height so it keeps visual
-   parity with the Workloads, Storage, and Infrastructure summary charts
-   without copying page-local chart sizing.
-   A selected timeline day is an active event-history filter: table totals,
-   footer ranges, empty states, and search/date matching must describe the
-   visible filtered recovery points, not the unfiltered API page metadata.
-3. Add or change storage UX through `frontend-modern/src/components/Storage/Storage.tsx` (the canonical `StorageSurface`, embedded inside platform pages), `frontend-modern/src/components/Storage/`, `frontend-modern/src/features/storageBackups/`, the shared storage-source contract in `frontend-modern/src/utils/storageSources.ts`, and the Proxmox-native Ceph table at `frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx`. The old standalone page wrappers under the legacy frontend-modern pages directory were retired with the platform-first primary nav (2026-05-16), and the top-level aggregate Workloads / Storage / Recovery routes were unregistered on 2026-05-25; the canonical component surfaces remain alive as embedded views inside matching platform page sub-tabs. The old top-level Ceph alias is unregistered; Proxmox owns the Ceph tab.
-   The retired dashboard route must not reintroduce storage or recovery
-   widgets as compatibility panels. Storage capacity, storage health,
-   protected-item, and recovery-outcome readiness claims belong on the Storage
-   and Recovery surfaces or their shared summary components, not in a restored
-   dashboard panel cluster or Assistant brief.
-   Storage filters now compose the shared `FilterBar` shell
-   through `frontend-modern/src/components/Storage/StoragePageControls.tsx`.
-   The legacy three-layer indirection
-   (`StoragePageControls` → `StorageControls` → `StorageFilter`) and the
-   bare unlabelled Node `<select>` retired with the migration; Node, Source,
-   Status, Group by, and the disk-role / disk-group filters all enter the
-   `FilterDef[]` catalog. Low-cardinality Group by and Status filters render
-   as unlabeled inline primary controls from that catalog in the same compact
-   second-row rail as sort, charts, and reset, while Node, Source, Role, and
-   Group remain menu/chip filters because their option sets are scope- or
-   data-driven. Embedded platform storage surfaces must provide page-owned
-   filter aria labels, search placeholders, and empty-search copy for the
-   visible storage model (for example Proxmox storage, TrueNAS pools and
-   datasets, or vSphere datastores) while preserving the canonical
-   `FilterDef[]` route-state contract in `StoragePageControls`. Forced source
-   storage surfaces must derive Node facet options from nodes that match the
-   same canonical source scope, and empty filtered storage record sets must
-   render the storage empty state instead of a synthetic empty "All" group.
-   Subtabs (Pools / Physical Disks) sit above the bar as navigation, not
-   filters.
-   Storage pool table header sorting is storage/recovery-owned and must bind
-   visible pool columns to the canonical storage sort state instead of
-   introducing platform-local or table-local sort state. Header clicks must
-   update the same `sort` / `order` model as the toolbar select, expose
-   `aria-sort` on the active column, and cover displayed pool columns
-   including state, source, type, host, protection, usage, and growth. Growth
-   sorting may consume summary delta data, but non-growth sorts must not track
-   chart delta maps or re-render row order when chart data refreshes.
-   Platform-page storage and recovery section tabs
-   are still capability-gated navigation: Proxmox Storage,
-   Backups, Ceph, Replication, and adjacent recovery sections may appear only
-   when the platform page model has matching storage, backup, Ceph,
-   replication, or provider evidence. Empty capability tabs must not remain as
-   disabled placeholders on platform pages.
-   Storage summary chart visibility remains a
-   page-level display preference, but it now rides the shared
-   `FilterBar.viewOptionsTrailing` slot together with the sort key/direction
-   controls. The charts toggle must read as an explicit `Show charts` /
-   `Hide charts` pressed display action, and the off state must remove the
-   summary section fully instead of leaving a collapsed summary shell in the
-   interface. When the storage summary remains visible below the desktop
-   breakpoint, it must use the frontend-primitives-owned
-   `StickySummarySection` desktop-sticky mode so the wrapped 2x2 chart grid
-   scrolls with the page instead of pinning most of a narrow viewport.
-   Storage must not reintroduce a sticky, frontend-only growth planner or
-   runway card derived directly from rolling summary chart deltas. Capacity
-   pressure planning may return as a governed storage/recovery model only when
-   the signal is stable, backend-owned, and action-oriented enough not to churn
-   the primary monitoring surface during ordinary refreshes.
-   Ceph table shells on the storage route share the same frontend-primitives
-   table contract: `frontend-modern/src/pages/Ceph.tsx` may own Ceph-specific
-   columns and rows, but horizontal overflow and scrollbar hiding must route
-   through the shared `Table` wrapper rather than page-local scroll divs or
-   inline overflow styles.
-   Storage capacity bars may consume alert-backed disk thresholds, but storage
-   surfaces do not own threshold selection. `EnhancedStorageBar` and its model
-   must pass resolved thresholds from the alerts activation boundary into the
-   shared metric-color helper instead of carrying storage-local usage color
-   bands.
-   Storage presentation is topology-first and factual. The Storage page should
-   show each platform's main storage shape in recognizable platform terms
-   (arrays, cache pools, pools, datastores, repositories, and physical media)
-   with capacity and health facts attached to that shape; it must not collapse
-   non-Proxmox platforms into Proxmox-shaped pool rows or turn factual topology
-   into prescriptive remediation copy.
-   Storage state presentation must stay incident/risk-owned. Composite
-   posture summaries from unified resources may include dependency or protected
-   workload impact, so `frontend-modern/src/features/storageBackups/` must not
-   use `storage.postureSummary` or `pbs.postureSummary` as primary issue copy
-   for healthy resources. Dependency impact belongs to impact summaries and
-   detail context, while visible state must derive from explicit incidents,
-   storage risk summaries, or storage-risk reasons.
-   Unraid storage posture follows that same rule even when it reaches
-   infrastructure through the agent facet instead of the dedicated Storage
-   page: no-parity, parity-unavailable, disabled/missing disk, and sync/check
-   explanations must come from canonical `storage` or `agent.unraid`
-   storage-risk fields. Storage/recovery-adjacent consumers may render those
-   summaries, but they must not infer Unraid array health from generic
-   frontend status labels or from empty no-present slots.
-   Unraid storage presentation must also consume the canonical Unraid
-   topology published by unified resources. Array disks, cache/pool storage,
-   native used/free capacity, device model/transport, temperature, spin state,
-   and error counters belong in `storage`, `physical_disk`, and `agent.unraid`
-   payloads before they reach Storage. The Storage page must not attempt to
-   reconstruct Unraid pools from generic SMART-only rows or treat missing SMART
-   scans on spun-down disks as missing storage topology.
 4. Route transport changes for storage and recovery endpoints through `internal/api/` and the owning `api-contracts` proof routes
    Shared API-token transport helpers may be consumed by storage/recovery-
    adjacent flows, but `owner_user_id` remains server-authored token identity
@@ -855,13 +670,6 @@ recovery scope, or a storage/recovery-owned secret source.
     In mock mode, that same compact route must stay aggregate-only and
     sampler-prewarmed; storage and recovery must not trigger per-pool chart
     reconstruction on the first dashboard request after each mock refresh.
-35. Keep storage and recovery websocket reads on the neutral app-runtime boundary. `frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx`, `frontend-modern/src/components/Storage/useStoragePageResources.ts`, and adjacent summary/detail composition may consume live websocket state only through `frontend-modern/src/contexts/appRuntime.ts`, not by importing `frontend-modern/src/App.tsx` or rebuilding shell-local providers.
-    That same dashboard composition boundary is now a retired negative space.
-    Storage and recovery-adjacent summaries may reuse
-    `/api/charts/storage-summary` through their owning summary components, but
-    they must not restore `/api/resources/dashboard-summary`, paginated
-    `useUnifiedResources()` transport, or per-pool `/api/metrics-store/history`
-    fan-out under a dashboard hot path.
 36. Keep shared `frontend-modern/src/App.tsx` public-route ownership explicit by
     surface. Storage/recovery preview entrypoints such as
     `/preview/setup-complete` may remain public app-shell routes, but unrelated
@@ -964,14 +772,6 @@ recovery scope, or a storage/recovery-owned secret source.
     runtime as populated mock inventory, but they must not expose
     `demo_fixtures`, billing identity, or alternate entitlement semantics as
     recovery-local transport or operator-facing storage metadata.
-38. Keep storage summary fetches scope-owned on the shared summary caches.
-    `frontend-modern/src/components/Storage/StorageSummary.tsx`,
-    `frontend-modern/src/utils/storageSummaryCache.ts`,
-    and `frontend-modern/src/utils/storageSummaryTrendCache.ts` may reuse
-    cached org/range storage summaries for first paint, but they must not
-    refetch the full `/api/storage-charts` payload once per adjacent summary
-    card or invent a dashboard-only storage summary transport path outside the
-    canonical cache owners.
 39. Keep storage and recovery route framing additive and owner-neutral.
     `frontend-modern/src/components/Storage/Storage.tsx` and storage/recovery-
     adjacent route composition may use the shared `PageHeader` shell for
@@ -2737,6 +2537,12 @@ setup and removal preserve Proxmox-managed `/root/.ssh/authorized_keys`
 symlinks: adjacent storage and recovery setup flows may depend on the shared
 script renderer, but they must not replace the symlink path with a local file
 when filtering Pulse-managed `# pulse-` SSH key entries.
+That same dependency also assumes the shared PVE setup script binds
+temperature-monitoring SSH keys to `/usr/local/sbin/pulse-sensors` and emits
+SMART disk temperatures in the wrapper payload. Storage and recovery disk
+temperature surfaces may depend on that monitoring-owned SMART merge path, but
+they must not reintroduce raw `sensors -j` as the setup contract or build a
+storage-local disk-temperature collector.
 That same shared discovery dependency also assumes runtime discovery state owns
 only structured errors, while adjacent API and WebSocket payloads may derive
 the deprecated string `errors` list only as a compatibility field from those

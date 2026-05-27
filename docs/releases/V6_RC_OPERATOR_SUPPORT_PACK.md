@@ -91,9 +91,14 @@ Canonical short reply:
 
 ### Will old bookmarks and familiar v5 pages still work?
 
-Not necessarily. v6 reorganizes the product around Infrastructure, Workloads,
-Storage, and Recovery, with Infrastructure as the default landing surface. Old
-platform-era aliases and runbook links should be updated to canonical v6 routes.
+Yes for the platform-shaped top-level pages (`/proxmox`, `/docker`,
+`/kubernetes`, `/truenas`, `/vmware`, `/standalone`). v6 keeps the
+platform-shaped top-level navigation existing v5 operators already
+know, on a unified resource model backend (`/api/resources`). The v6
+line briefly shipped a unified `Infrastructure` / `Workloads` /
+`Storage` / `Recovery` layout across `rc.1`-`rc.5` that was reverted
+in `rc.6`; bookmarks into those unified routes should move to the
+platform-shaped equivalents.
 
 ## Recommended Evaluation Path
 

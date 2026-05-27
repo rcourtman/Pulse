@@ -170,6 +170,39 @@ func TestTemperatureCollector_ParseSensorsJSON_StringTemps(t *testing.T) {
 	assert.InDelta(t, 42.0, temp.NVMe[0].Temp, 0.0001)
 }
 
+func TestTemperatureCollector_ParseSensorsJSON_WrapperSMARTTemps(t *testing.T) {
+	tc := &TemperatureCollector{}
+	jsonStr := `{
+		"sensors": {
+			"coretemp-isa-0000": {
+				"Package id 0": { "temp1_input": 46.0 }
+			}
+		},
+		"smart": [
+			{
+				"device": "/dev/sda",
+				"model": "Samsung SSD 860 EVO",
+				"serial": "SATA-SERIAL-1",
+				"wwn": "5-c50-1234",
+				"type": "sata",
+				"temperature": 34,
+				"lastUpdated": "2026-05-26T18:00:00Z"
+			}
+		]
+	}`
+
+	temp, err := tc.parseSensorsJSON(jsonStr)
+	require.NoError(t, err)
+	require.NotNil(t, temp)
+	assert.True(t, temp.Available)
+	assert.True(t, temp.HasSMART)
+	require.Len(t, temp.SMART, 1)
+	assert.Equal(t, "/dev/sda", temp.SMART[0].Device)
+	assert.Equal(t, "SATA-SERIAL-1", temp.SMART[0].Serial)
+	assert.Equal(t, 34, temp.SMART[0].Temperature)
+	assert.Equal(t, "sata", temp.SMART[0].Type)
+}
+
 func TestTemperatureCollector_HelperMethods(t *testing.T) {
 	// extractCoreNumber
 	// Private methods are hard to test directly from separate package if using _test,

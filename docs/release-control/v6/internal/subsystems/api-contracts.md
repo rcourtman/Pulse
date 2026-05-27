@@ -85,6 +85,7 @@ product API routes free of maintainer commercial analytics.
 51. `internal/api/recovery_handlers.go`
 51a. `internal/api/pbs_backups.go`
 52. `internal/api/config_setup_handlers.go`
+52a. `internal/api/setup_script_render.go`
 53. `internal/api/demo_mode_commercial.go`
 54. `internal/api/demo_mode_operations.go`
 55. `internal/api/security_status_capabilities.go`
@@ -96,7 +97,6 @@ product API routes free of maintainer commercial analytics.
 60. `internal/api/connections_probe.go`
 61. `frontend-modern/src/api/connections.ts`
 62. `frontend-modern/src/utils/connectionErrorPresentation.ts`
-62. `frontend-modern/src/api/hostedSignup.ts`
 63. `internal/api/availability_handlers.go`
 64. `frontend-modern/src/api/availabilityTargets.ts`
 65. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx`
@@ -413,14 +413,15 @@ platform page needs source-native backup columns.
     before minting a `relay:mobile:access` credential. Community installs may
     receive the standard license-required response, but direct API calls must
     not bypass Relay entitlement by creating mobile runtime tokens.
-49. `internal/api/slo.go` shared with `performance-and-scalability`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
-50. `internal/api/system_settings.go` shared with `security-privacy`: the system settings telemetry and auth controls are both a security/privacy control surface and a canonical API payload contract boundary.
-51. `internal/api/unified_agent.go` shared with `agent-lifecycle`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+49. `internal/api/setup_script_render.go` shared with `agent-lifecycle`, `storage-recovery`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).
+50. `internal/api/slo.go` shared with `performance-and-scalability`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
+51. `internal/api/system_settings.go` shared with `security-privacy`: the system settings telemetry and auth controls are both a security/privacy control surface and a canonical API payload contract boundary.
+52. `internal/api/unified_agent.go` shared with `agent-lifecycle`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
     Development-mode missing-binary responses must report the build command
     for the requested normalized OS/architecture, not a hard-coded Linux
     target, so installer preflight failures point operators at the artifact
     they actually need.
-52. `internal/api/updates.go` shared with `deployment-installability`: update handlers are both a deployment-installability control surface and a canonical API payload contract boundary.
+53. `internal/api/updates.go` shared with `deployment-installability`: update handlers are both a deployment-installability control surface and a canonical API payload contract boundary.
 The platform-connections API contract also owns inactive monitored-system
 candidate semantics end to end. `enabled=false` on TrueNAS or VMware preview,
 test, add, and update payloads must serialize through the shared ledger client
@@ -3808,6 +3809,13 @@ temperature-monitoring SSH keys: the rendered shell must resolve the symlink
 target before filtering Pulse-managed `# pulse-` entries, use the resolved path
 for both install and uninstall edits, and keep this behavior pinned in
 `internal/api/contract_test.go`.
+That same rendered PVE setup-script payload must also bind the temperature SSH
+key to the Pulse-owned `/usr/local/sbin/pulse-sensors` wrapper rather than to
+raw `sensors -j`. The wrapper is the setup-script API contract for legacy SSH
+temperature collection: it must emit a bounded JSON object with `sensors` and
+`smart` members, install or verify `smartmontools` for SATA/SAS/HDD disk
+temperatures, and keep `sensors -j` only as a compatibility fallback inside
+the wrapper/runtime collector path.
 That same generated-script payload must also preserve the canonical encoded
 rerun URL contract: embedded `SETUP_SCRIPT_URL` values must carry the exact
 selected `host`, `pulse_url`, and `backup_perms` query state instead of

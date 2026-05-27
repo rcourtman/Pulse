@@ -22,6 +22,7 @@ import (
 
 const maxTemperatureCommandOutputSize = 1 << 20 // 1 MiB
 const defaultSSHCommandTimeout = 15 * time.Second
+const pulseSensorsSSHCommand = "if command -v /usr/local/sbin/pulse-sensors >/dev/null 2>&1; then /usr/local/sbin/pulse-sensors; else sensors -j 2>/dev/null || true; fi"
 
 var errTemperatureCommandOutputTooLarge = errors.New("temperature command output exceeded limit")
 
@@ -150,10 +151,11 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 		return &models.Temperature{Available: false}, nil
 	}
 
-	// Direct SSH (legacy method for non-containerized deployments)
-	// Try sensors first, fall back to Raspberry Pi method if that fails
-	// sensors exits non-zero when optional subfeatures fail; "|| true" keeps the JSON for parsing (#600)
-	output, err := tc.runSSHCommand(ctx, host, "sensors -j 2>/dev/null || true")
+	// Direct SSH (legacy method for non-containerized deployments).
+	// New setup scripts restrict the key to /usr/local/sbin/pulse-sensors, which emits
+	// the canonical {sensors, smart} payload. Older keys ignore the requested command
+	// and still force sensors -j, so keep the parser backward-compatible.
+	output, err := tc.runSSHCommand(ctx, host, pulseSensorsSSHCommand)
 	if err != nil || strings.TrimSpace(output) == "" {
 		if tc.disableLegacySSHOnAuthFailure(err, nodeName, host) {
 			return &models.Temperature{Available: false}, nil

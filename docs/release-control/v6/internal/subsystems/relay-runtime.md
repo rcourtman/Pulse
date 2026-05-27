@@ -26,10 +26,6 @@ for Pulse instance bridging.
 2. `internal/relay/protocol.go`
 3. `internal/config/persistence_relay.go`
 4. `internal/api/relay_mobile_capability.go`
-5. `pulse-mobile:src/relay/client.ts`
-6. `pulse-mobile:src/relay/protocol.ts`
-7. `pulse-mobile:src/relay/proxy.ts`
-8. `pulse-mobile:src/relay/encryption.ts`
 
 ## Shared Boundaries
 
@@ -51,7 +47,6 @@ for Pulse instance bridging.
    from the UI is allowed to persist the env-effective state to disk;
    the override is not stripped before save.
 4. Add or change the backend-owned mobile relay capability inventory and compatibility scope mapping through `internal/api/relay_mobile_capability.go`
-5. Add or change mobile relay reconnect, drain, channel, encryption, proxy, or identity behavior through `pulse-mobile:src/relay/`
 6. Keep desktop and mobile relay changes aligned with the governed server relay surfaces represented by the L7 lane evidence
 
 ## Forbidden Paths

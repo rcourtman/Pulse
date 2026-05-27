@@ -11,7 +11,6 @@
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
   "dependency_subsystem_ids": [
     "agent-lifecycle",
-    "cloud-paid",
     "storage-recovery"
   ]
 }
@@ -85,83 +84,80 @@ work extends shared components instead of creating new local variants.
 59. `frontend-modern/src/components/shared/FilterBar/index.ts`
 59a. `frontend-modern/src/components/shared/FilterBar/SavedViewsMenu.tsx`
 59b. `frontend-modern/src/components/shared/FilterBar/useSavedViews.ts`
-56. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
-57. `frontend-modern/src/features/`
-58. `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
-59. `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
-60. `frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx`
-61. `frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx`
-62. `frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx`
-63. `frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx`
-64. `frontend-modern/src/components/SetupWizard/__tests__/WelcomeStep.test.tsx`
-66. `frontend-modern/src/components/Settings/SystemLogsPanel.tsx`
-67. `frontend-modern/src/components/Settings/useSystemLogsPanelState.ts`
-68. `frontend-modern/src/utils/systemLogsPresentation.ts`
-69. `frontend-modern/src/components/Settings/__tests__/SystemLogsPanel.test.tsx`
-70. `frontend-modern/src/components/Settings/ResourcePicker.tsx`
-71. `frontend-modern/src/components/Settings/reportingResourceTypes.ts`
-72. `frontend-modern/src/utils/reportableResourceTypes.ts`
-73. `frontend-modern/src/utils/reportingResourceTypes.ts`
-74. `frontend-modern/src/utils/problemResourcePresentation.ts`
-75. `frontend-modern/src/utils/workloadEmptyStatePresentation.ts`
-76. `frontend-modern/src/utils/workloadGuestPresentation.ts`
-78. `frontend-modern/src/utils/emptyStatePresentation.ts`
-79. `frontend-modern/src/utils/semanticTonePresentation.ts`
-80. `frontend-modern/src/components/Toast/Toast.tsx`
-81. `frontend-modern/src/utils/toast.ts`
-82. `frontend-modern/src/utils/semanticTonePresentation.ts`
-83. `frontend-modern/src/utils/emptyStatePresentation.ts`
-84. `frontend-modern/src/utils/typeColumnPresentation.ts`
-85. `frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`
-86. `frontend-modern/src/components/Settings/networkSettingsModel.ts`
-87. `frontend-modern/src/components/Settings/useDiscoverySettingsState.ts`
-88. `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
-89. `frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx`
-90. `frontend-modern/src/components/Settings/availabilitySettingsModel.ts`
-91. `frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx`
-92. `frontend-modern/src/components/Settings/settingsPanelRegistryLoaders.ts`
-93. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
-94. `frontend-modern/src/components/Settings/settingsNavCatalog.ts`
-95. `frontend-modern/src/components/Settings/settingsNavVisibility.ts`
-96. `frontend-modern/src/components/Settings/settingsRouting.ts`
-97. `frontend-modern/src/components/Settings/settingsTabSaveBehavior.ts`
-98. `frontend-modern/src/components/Settings/settingsTypes.ts`
-99. `frontend-modern/src/components/Settings/useSettingsNavigation.ts`
-100. `frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx`
-101. `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx`
-102. `frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx`
-103. `frontend-modern/src/components/shared/EnvironmentLockBadge.tsx`
-104. `frontend-modern/src/utils/environmentLockPresentation.ts`
-105. `frontend-modern/src/utils/docsLinks.ts`
-106. `tests/integration/tests/20-local-doc-links.spec.ts`
-107. `frontend-modern/src/index.css`
-108. `frontend-modern/src/components/shared/summaryInteractionA11y.ts`
-109. `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`
-110. `frontend-modern/src/hooks/createNonSuspendingQuery.ts`
-111. `frontend-modern/src/components/shared/TableCardHeader.tsx`
-112. `frontend-modern/src/components/shared/SummaryTableCardHeader.tsx`
+60. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
+61. `frontend-modern/src/features/`
+62. `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
+63. `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
+64. `frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx`
+65. `frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx`
+66. `frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx`
+67. `frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx`
+68. `frontend-modern/src/components/SetupWizard/__tests__/WelcomeStep.test.tsx`
+69. `frontend-modern/src/components/Settings/SystemLogsPanel.tsx`
+70. `frontend-modern/src/components/Settings/useSystemLogsPanelState.ts`
+71. `frontend-modern/src/utils/systemLogsPresentation.ts`
+72. `frontend-modern/src/components/Settings/__tests__/SystemLogsPanel.test.tsx`
+73. `frontend-modern/src/components/Settings/ResourcePicker.tsx`
+74. `frontend-modern/src/components/Settings/reportingResourceTypes.ts`
+75. `frontend-modern/src/utils/reportableResourceTypes.ts`
+76. `frontend-modern/src/utils/reportingResourceTypes.ts`
+77. `frontend-modern/src/utils/workloadEmptyStatePresentation.ts`
+78. `frontend-modern/src/utils/workloadGuestPresentation.ts`
+79. `frontend-modern/src/utils/emptyStatePresentation.ts`
+80. `frontend-modern/src/utils/semanticTonePresentation.ts`
+81. `frontend-modern/src/components/Toast/Toast.tsx`
+82. `frontend-modern/src/utils/toast.ts`
+83. `frontend-modern/src/utils/semanticTonePresentation.ts`
+84. `frontend-modern/src/utils/emptyStatePresentation.ts`
+85. `frontend-modern/src/utils/typeColumnPresentation.ts`
+86. `frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`
+87. `frontend-modern/src/components/Settings/networkSettingsModel.ts`
+88. `frontend-modern/src/components/Settings/useDiscoverySettingsState.ts`
+89. `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
+90. `frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx`
+91. `frontend-modern/src/components/Settings/availabilitySettingsModel.ts`
+92. `frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx`
+93. `frontend-modern/src/components/Settings/settingsPanelRegistryLoaders.ts`
+94. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
+95. `frontend-modern/src/components/Settings/settingsNavCatalog.ts`
+96. `frontend-modern/src/components/Settings/settingsNavVisibility.ts`
+97. `frontend-modern/src/components/Settings/settingsRouting.ts`
+98. `frontend-modern/src/components/Settings/settingsTabSaveBehavior.ts`
+99. `frontend-modern/src/components/Settings/settingsTypes.ts`
+100. `frontend-modern/src/components/Settings/useSettingsNavigation.ts`
+101. `frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx`
+102. `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx`
+103. `frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx`
+104. `frontend-modern/src/components/shared/EnvironmentLockBadge.tsx`
+105. `frontend-modern/src/utils/environmentLockPresentation.ts`
+106. `frontend-modern/src/utils/docsLinks.ts`
+107. `tests/integration/tests/20-local-doc-links.spec.ts`
+108. `frontend-modern/src/index.css`
+109. `frontend-modern/src/components/shared/summaryInteractionA11y.ts`
+110. `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`
+111. `frontend-modern/src/hooks/createNonSuspendingQuery.ts`
+112. `frontend-modern/src/components/shared/TableCardHeader.tsx`
 113. `frontend-modern/src/components/shared/UpgradeLink.tsx`
 114. `frontend-modern/src/components/shared/useUpgradeNavigation.ts`
 115. `frontend-modern/src/utils/upgradeNavigation.ts`
 116. `frontend-modern/src/components/DemoBanner.tsx`
 117. `frontend-modern/src/components/Login.tsx`
-118. `frontend-modern/src/stores/demoMode.ts`
-119. `frontend-modern/src/stores/sessionCapabilities.ts`
-120. `frontend-modern/src/stores/sessionPresentationPolicy.ts`
-121. `frontend-modern/src/stores/licenseCommercial.ts`
-122. `frontend-modern/src/useAppRuntimeState.ts`
-123. `frontend-modern/src/routing/routePreload.ts`
-124. `frontend-modern/src/stores/aiChat.ts`
-125. `frontend-modern/scripts/header-audit.mjs`
-126. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx`
-127. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
-128. `frontend-modern/scripts/canonical-platform-audit.mjs`
-129. `frontend-modern/scripts/settings-diagnostics-boundary-audit.mjs`
-130. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
-131. `frontend-modern/src/utils/platformSupportManifest.ts`
-132. `frontend-modern/src/utils/sourcePlatformOptions.ts`
-133. `frontend-modern/src/utils/sourcePlatforms.ts`
-134. `frontend-modern/src/utils/infrastructureOnboardingPresentation.ts`
+118. `frontend-modern/src/stores/sessionCapabilities.ts`
+119. `frontend-modern/src/stores/sessionPresentationPolicy.ts`
+120. `frontend-modern/src/stores/licenseCommercial.ts`
+121. `frontend-modern/src/useAppRuntimeState.ts`
+122. `frontend-modern/src/routing/routePreload.ts`
+123. `frontend-modern/src/stores/aiChat.ts`
+124. `frontend-modern/scripts/header-audit.mjs`
+125. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx`
+126. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
+127. `frontend-modern/scripts/canonical-platform-audit.mjs`
+128. `frontend-modern/scripts/settings-diagnostics-boundary-audit.mjs`
+129. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
+130. `frontend-modern/src/utils/platformSupportManifest.ts`
+131. `frontend-modern/src/utils/sourcePlatformOptions.ts`
+132. `frontend-modern/src/utils/sourcePlatforms.ts`
+133. `frontend-modern/src/utils/infrastructureOnboardingPresentation.ts`
 
 ## Shared Boundaries
 
@@ -436,121 +432,6 @@ not a replacement status card, CTA band, or page-local nested card.
    apply controlled `value` props after options are mounted so settings panels
    such as workload discovery show the persisted option instead of falling back
    to the first option while the collapsed summary shows a different value.
-2. Route new top-level settings surfaces through the canonical settings shell
-   instead of introducing page-local framing.
-   When a new operator-facing concern is closely related to an
-   existing tab's intent, prefer adding it as a sibling
-   `SettingsPanel` inside that tab's container component over
-   minting a new top-level tab. The agent-integrations surface
-   added in slice 59 follows this pattern:
-   `frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx`
-   ships under the existing API Access tab via
-   `APIAccessPanel.tsx`'s composition, not as its own tab. This
-   keeps the tab inventory bounded, avoids touching
-   `settingsNavigationModel.ts`, the registry, the loaders, and
-   the routing tests for additive sub-surfaces, and presents
-   "tokens + what those tokens unlock" as one operator-facing
-   story.
-   Shared shells and primitives that need websocket or dark-mode context must
-   consume `frontend-modern/src/contexts/appRuntime.ts`; they must not import
-   `frontend-modern/src/App.tsx`, because `App.tsx` owns provider placement
-   while frontend primitives own reusable consumption.
-   That same shared shell boundary now also owns thin public-route handoff
-   presentation in `frontend-modern/src/App.tsx`: compatibility routes such as
-   `/pricing` may stay outside authenticated chrome, but they must remain
-   minimal handoff shells that defer destination truth to the owning subsystem
-   instead of embedding a second copy of public marketing or checkout UI inside
-   the product runtime.
-   Cloud acquisition follows that same app-shell rule: ordinary self-hosted
-   frontend primitives must not register `/cloud` or `/cloud/signup` as public
-   product-runtime routes, because Cloud signup belongs to Pulse Account and
-   the Cloud control plane rather than a local in-product trial page.
-   The former top-level `/infrastructure`, `/workloads`, `/storage`, and
-   `/recovery` operator routes never shipped as stable v6 surfaces and must
-   remain unregistered instead of being kept as compatibility redirects.
-   Workload, storage, and recovery workflows live inside the owning
-   platform/runtime pages and reusable component surfaces; they must not appear
-   in navigation, command palette, shortcut, route-preload, or active-tab
-   owners as standalone aggregate destinations. The old top-level `/ceph`
-   alias is also unregistered; Proxmox owns Ceph at `/proxmox/ceph`.
-   The same settings-shell boundary owns read-only landing posture: when the
-   session presentation policy says the operator cannot manage setup, `/settings`
-   and sidebar navigation must land on the canonical reporting/control surface
-   instead of setup-oriented install routes.
-   Route normalization must wait until that presentation policy has resolved
-   before stripping infrastructure onboarding queries such as `?add=pick`,
-   `?add=agent`, or `?add=detect`, so first-session and explicit add-flow
-   handoffs do not lose their modal target during session bootstrap.
-   When those infrastructure modal targets are preserved, the settings shell
-   must keep the owning add-flow copy intact: the detect target is an API
-   platform probe, not a generic infrastructure-source detector, and its outer
-   dialog frame should match the management-API endpoint language owned by the
-   agent-lifecycle onboarding contract.
-   That same settings-shell boundary also owns explicit organization-route
-   stability. Deep links such as `/settings/organization`,
-   `/settings/organization/access`, and adjacent organization shells must keep
-   their canonical header and page frame when the route itself is allowed,
-   even while runtime capabilities or presentation policy are still settling.
-   Shared shell filtering may hide the sidebar item until the governing state
-   resolves, but `settingsHeaderMeta.ts`, `useSettingsAccess.ts`, and the
-   canonical settings-shell tests must not bounce an allowed organization
-   route back to `Infrastructure` just because nav filtering has not yet
-   surfaced that tab.
-   That same settings-shell boundary also owns authenticated operator identity
-   propagation into organization panels.
-   `frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx`
-   must derive the effective username from the resolved security status
-   (`proxyAuthUsername`, then `ssoSessionUsername`, then `authUsername`) and
-   pass that identity into the organization overview, access, and sharing
-   panels so deep-linked organization routes do not collapse into anonymous
-   read-only shells under proxy-auth, SSO, or local-auth sessions.
-   That same shared session-presentation boundary also owns alerts read-only
-   posture: `/alerts` may continue exposing reporting tabs such as overview and
-   history, but activation controls plus configuration routes must collapse out
-   of the public-demo shell instead of advertising blocked management actions.
-   That same public-demo presentation boundary also owns Settings support
-   posture: the authenticated demo shell must not advertise `Diagnostics &
-   Health`, `Data & Reports`, or `System Logs` in the Settings navigation, and
-   the retired top-level `/operations/*` browser path must stay unregistered
-   instead of reviving a standalone Operations utility tab or route-local
-   support shell.
-   Because `Data & Reports` is the `advanced_reporting` capability surface
-   rather than a general diagnostics page, `settingsNavCatalog.ts` must hide it
-   when that feature is unavailable; ordinary self-hosted users should see
-   support diagnostics and logs without being shown a Pro-locked reporting tab,
-   while paid instances keep the canonical `/settings/support/reporting` route
-   and panel.
-   Resource Privacy/Data Handling is a route-backed trust surface, not a
-   commercial surface or default settings destination. The Settings shell must
-   keep it governed by the Security registry/header/navigation model without
-   advertising it in the normal sidebar while it remains informational only,
-   and it must avoid trial, upgrade, paid-plan, or monitoring-limit copy when
-   commercial presentation is hidden.
-   General settings runtime cards that present source-platform actions must
-   consume `frontend-modern/src/utils/systemSettingsPresentation.ts` and the
-   shared source-platform vocabulary rather than card-local product names.
-   `frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx`
-   owns the local toggle layout, but Docker and Podman update-action titles,
-   descriptions, environment variable display, and failure copy belong to
-   `systemSettingsPresentation.ts` so settings surfaces do not drift back to
-   generic container wording.
-   Shared sparkline primitives must also stay CSP-safe by construction:
-   `frontend-modern/src/components/shared/InteractiveSparkline.tsx` may use SVG
-   attributes and shared state/model helpers for cursor, axis-label, and
-   tooltip positioning, but it must not write inline `style=` attributes for
-   tick labels, tooltip placement, or per-series transitions on the public
-   shell. Axis labels must render in fixed-size SVG shells or another
-   non-scaled primitive boundary; the shared sparkline must not put axis glyphs
-   inside `preserveAspectRatio="none"` label viewBoxes that stretch text as the
-   chart resizes.
-   The same shared presentation boundary also owns reusable scroll containers:
-   `frontend-modern/src/components/shared/Table.tsx` must keep touch-scroll
-   behavior on classes and shared CSS in `frontend-modern/src/index.css`
-   instead of reintroducing inline `style=` attributes for overflow or mobile
-   scroll behavior. `frontend-modern/src/components/shared/PulseDataGrid.tsx`
-   inherits that same boundary: shared data-grid shells must route scrollbar
-   hiding and table-width sizing through shared classes plus HTML attributes,
-   not inline overflow or min-width styles.
 3. Add feature-specific presentation only when no shared primitive should own it.
    Feature surfaces under `frontend-modern/src/features/` that display
    product labels must consume the owning subsystem's presentation utilities
@@ -880,36 +761,9 @@ not a replacement status card, CTA band, or page-local nested card.
    system badge names a platform with its version, source/method context may
    still add collection labels such as Pulse Agent, but it must not repeat the
    same platform again as an unversioned source badge.
-9. Keep top-of-page summary interaction on shared primitives. Infrastructure, workloads, and storage summary cards must route sticky-shell behavior through `frontend-modern/src/components/shared/StickySummarySection.tsx` and route row-hover or focused-series rendering through shared chart primitives such as `frontend-modern/src/components/shared/InteractiveSparkline.tsx` and `frontend-modern/src/components/shared/DensityMap.tsx`, rather than page-local sticky wrappers or metric-card-specific hover logic. When a page keeps summary charts visible below the desktop breakpoint, it must use the shared `stickyDesktopOnly` mode instead of adding page-local media queries, so wrapped two-column summaries scroll as normal content and only become sticky once the large-screen layout is active. The shared summary-card contract must also own stable summary-card geometry for chart-backed cards so row hover, focus, synchronized readouts, or idle header metadata cannot ratchet the sticky summary taller across rerenders. Shared chart slot geometry belongs in `frontend-modern/src/components/shared/summaryChartLayout.ts` so `SummaryMetricCard` and governed non-summary chart sections can consume the same normal and compact chart heights instead of re-declaring page-local `h-*` sizing.
-   Storage's top-of-page summary scope is limited to the stable chart grid and
-   shared row/group focus affordances. A rolling-history capacity planner must
-   not be bolted onto the sticky summary shell as an extra frontend primitive;
-   if capacity planning returns, it needs an owner-level model that can keep
-   the summary geometry and visible card set stable across refreshes.
 10. Keep summary chart interaction identity on one shared helper. Summary surfaces that expose row-hover, group-hover, chart-hover, or route-focus-driven chart emphasis must derive page/group/entity scope through `frontend-modern/src/components/shared/summaryCardInteraction.ts` and pass that same resolved scope into card-state, sparkline, and density-map primitives, rather than letting cards read `hovered || focused` while charts listen to a different page-local ID source. Hovering one summary chart must promote that series into the shared active entity so sibling cards highlight the same object instead of keeping chart-local hover islands, and hovering or pinning a workload group header, infrastructure cluster header, or storage pool-group header must scope the matching summary cards through that same shared contract instead of forking a page-local summary filter path. Sibling cards should surface that synchronized hover as one compact header readout through the shared summary-card contract, while the chart under the pointer keeps the only floating tooltip. Recovery is explicitly outside this interaction dialect: its retired posture-card strip must not return with row/group/chart hover behavior without a separate governed product decision.
 11. Keep page summaries page-scoped when table rows enter contextual focus. Route-backed row selection may add a focused label and shared series emphasis, but infrastructure, workloads, and storage summary cards must continue to render the page-level series set instead of collapsing the summary down to the selected row or replacing the global trend view with row-local empty states.
 12. Keep contextual row focus on the shared summary primitive. Summary surfaces and same-route table drill-ins must reuse `frontend-modern/src/components/shared/contextualFocus.ts` for interactive-series filtering, focused-name lookup, active-series derivation, local scroll preservation, and deliberate inline-detail reveal instead of rebuilding page-local `Set` filters, focused-label scans, drawer-aware scroll math, or ad hoc scroll restoration in each surface.
-13. Keep summary-to-table coordination deliberate, explicit, and reversible. Shared summary hover may highlight the matching table row when it is already visible, but transient chart hover must not auto-filter tables, auto-scroll the page, or reshuffle table ordering. Pinned page/group/entity scope on workloads, infrastructure, or storage must stay row-first: the pinned row or group header is the visible scoped state, not a second strip or search-row widget. Page shells therefore must not reintroduce always-on scope banners, preview bars, page-local chips, breadcrumbs, or search/filter-row scope accessories just to explain pinned state. When the active row is off-screen, page owners must still route through `frontend-modern/src/components/shared/summaryTableFocus.ts` and surface a lightweight `Jump to row` affordance that reveals and scrolls only on explicit user action. That same shared table-focus owner now also owns reversible clearing: pinned scope may clear only from governed neutral interaction-surface space or the shared `Escape` path, with page owners binding a broader clear-surface root separately from the row-lookup table root when needed and supplying one page-level reset callback for filters plus summary-linked selections. Row cells, group headers, inline detail, summary cards, and explicit controls must not accidentally clear pinned scope, while governed table/card clear surfaces must still allow real user clicks on neutral whitespace to clear it. Deliberate row focus may reveal inline detail automatically, but that reveal must be drawer-aware: infrastructure and workload row toggles that already have the row in view must hand the current `.app-scroll-shell` position through `frontend-modern/src/utils/appShellScrollRestoration.ts` so the remounted shell in `frontend-modern/src/App.tsx` can reopen the inline detail without looking like a page refresh, and then still route through the shared reveal helper whenever the opened drawer would otherwise land below the fold. Same-route drawers must therefore scroll only enough to keep the row header plus the top of the inline detail visible, never hard-center the row just because the route state changed. The same-route state scheduler owns the lifecycle for its deferred scroll-restore timers and animation frames; page owners must clean it up on unmount instead of leaving replay work attached to a torn-down route.
-    Shared summary-linked rows and group headers must also route their preview
-    semantics through
-    `frontend-modern/src/components/shared/summaryInteractionA11y.ts`.
-    Leaf rows and any explicit row-level control chrome must route deliberate
-    pin/open ownership through
-    `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`, so
-    `aria-expanded`, `aria-controls`, `aria-pressed`, focus treatment, and
-    `Escape` preview clearing stay on the shared control instead of focusable-
-    table-row shims. Group headers are different: they may use the header row
-    itself as the deliberate pin target when that keeps the table chrome
-    native, but they must not grow separate scope/pinned pill buttons or
-    off-screen fallback strips. Workloads, infrastructure,
-    and storage must not rebuild row-as-button keyboard handling or trailing
-    one-off expand columns once the shared action primitive exists.
-    When pinned page, group, or entity scope needs a local explicit reset,
-    the only shared table-chrome owner is
-    `frontend-modern/src/components/shared/SummaryTableCardHeader.tsx`: the
-    reset action stays as one compact header-level `Clear` control with an
-    accessible `Clear selection` label, not a second page-level scope strip,
-    search-row accessory, or filter-bar badge.
 13. Keep summary-linked table row emphasis on the shared primitive contract. Workloads, infrastructure, and storage rows that mirror the active summary entity must expose that state through `data-summary-row-active` and let the shared presentation in `frontend-modern/src/index.css` render the row emphasis, rather than carrying page-local sky or blue fill classes inside each row renderer. Group-scoped preview and pin must use that same shared presentation boundary: child rows that belong to a hovered or pinned summary group should expose `data-summary-group-member-active="preview|pinned"` so the block-level emphasis stays subtle, consistent, and reversible instead of each table inventing its own outline, badge, or full-strength fill treatment. Static grouped row headers on workloads, infrastructure, storage, recovery, and future grouped tables must use `frontend-modern/src/components/shared/groupedTableRowPresentation.ts` plus the `.grouped-table-row` CSS contract in `frontend-modern/src/index.css`, rather than rebuilding local `bg-surface-alt` variants with subtly different light/dark behavior or page-local left-accent markers. That shared grouped-table primitive owns the subgroup cell padding, typography, small metadata, and badge treatment as well as the row background token, so a future adjustment to the subgroup visual language changes every grouped product table from one owner. Storage-backed reusable row presenters under `frontend-modern/src/features/storageBackups/` must also keep row height and alert accents on class/data-attribute presentation instead of runtime inline style maps, so the shared table contract stays CSP-safe on both steady-state and alert-highlighted routes.
 14. Keep retained-value data loading honest at the ownership boundary. Helpers
     that prevent a feature surface from falling through the app-level Suspense
@@ -957,12 +811,6 @@ not a replacement status card, CTA band, or page-local nested card.
     must stay on the app-shell assistant-availability fact instead of
     re-reading raw AI settings just to decide whether assistant affordances
     should render.
-17. Keep optional shared selectors honest about data ownership. Reusable
-    shells such as `frontend-modern/src/components/shared/InfrastructureSelector.tsx`
-    must gate their runtime data hooks on actual surface visibility, passing
-    explicit disabled/null inputs to shared data owners when the selector is
-    hidden instead of hydrating background summary data for chrome the page is
-    not rendering.
 18. Keep Patrol shell composition and product-first provider vocabulary on the
     shared feature-presentation boundary.
     `frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx`,

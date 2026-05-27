@@ -334,62 +334,6 @@ class SubsystemLookupTest(unittest.TestCase):
             unified_resources_match["verification_requirement"]["exact_files"],
         )
 
-    def test_lookup_paths_assigns_infrastructure_summary_model_to_shared_infrastructure_hot_path(
-        self,
-    ) -> None:
-        result = lookup_paths(
-            ["frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts"]
-        )
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"performance-and-scalability", "unified-resources"},
-        )
-
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"performance-and-scalability", "unified-resources"},
-        )
-        self.assertEqual(
-            file_entry["shared_ownership"]["subsystems"],
-            ["performance-and-scalability", "unified-resources"],
-        )
-
-        matches_by_subsystem = {
-            match["subsystem"]: match for match in file_entry["matches"]
-        }
-        performance_match = matches_by_subsystem["performance-and-scalability"]
-        self.assertEqual(
-            performance_match["contract"],
-            "docs/release-control/v6/internal/subsystems/performance-and-scalability.md",
-        )
-        self.assertEqual(performance_match["lane_context"]["lane_id"], "L10")
-        self.assertEqual(
-            performance_match["verification_requirement"]["id"],
-            "workloads-hot-path",
-        )
-        self.assertIn(
-            "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSummaryModel.test.ts",
-            performance_match["verification_requirement"]["exact_files"],
-        )
-
-        unified_resources_match = matches_by_subsystem["unified-resources"]
-        self.assertEqual(
-            unified_resources_match["contract"],
-            "docs/release-control/v6/internal/subsystems/unified-resources.md",
-        )
-        self.assertEqual(unified_resources_match["lane_context"]["lane_id"], "L13")
-        self.assertEqual(
-            unified_resources_match["verification_requirement"]["id"],
-            "resource-consumers",
-        )
-        self.assertIn(
-            "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSummaryModel.test.ts",
-            unified_resources_match["verification_requirement"]["exact_files"],
-        )
-
     def test_lookup_paths_assigns_resource_detail_drawer_discovery_model_to_unified_resources(self) -> None:
         result = lookup_paths(
             ["frontend-modern/src/components/Infrastructure/resourceDetailDiscoveryModel.ts"]
@@ -527,34 +471,6 @@ class SubsystemLookupTest(unittest.TestCase):
             "organization-billing-surface",
         )
 
-    def test_lookup_paths_assigns_pro_license_panel_to_cloud_paid(self) -> None:
-        result = lookup_paths(["frontend-modern/src/components/Settings/ProLicensePanel.tsx"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"cloud-paid"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"cloud-paid"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/cloud-paid.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L3")
-        self.assertEqual(
-            match["verification_requirement"]["id"],
-            "pro-license-surface",
-        )
-        self.assertEqual(
-            match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Settings/__tests__/MonitoredSystemLedgerPanel.test.tsx",
-                "frontend-modern/src/components/Settings/__tests__/ProLicensePanel.test.tsx",
-            ],
-        )
-
     def test_lookup_paths_assigns_pro_license_state_owner_to_cloud_paid(self) -> None:
         result = lookup_paths(["frontend-modern/src/components/Settings/useProLicensePanelState.ts"])
         self.assertEqual(result["unowned_runtime_files"], [])
@@ -575,24 +491,6 @@ class SubsystemLookupTest(unittest.TestCase):
             match["verification_requirement"]["id"],
             "pro-license-surface",
         )
-
-    def test_lookup_paths_assigns_monitored_system_ledger_panel_to_cloud_paid(self) -> None:
-        result = lookup_paths(["frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"cloud-paid"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"cloud-paid"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/cloud-paid.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L3")
-        self.assertEqual(match["verification_requirement"]["id"], "pro-license-surface")
 
     def test_lookup_paths_assigns_pricing_handoff_to_cloud_paid(self) -> None:
         result = lookup_paths(["frontend-modern/src/pages/PricingHandoff.tsx"])
@@ -630,26 +528,6 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["lane_context"]["lane_id"], "L3")
         self.assertEqual(match["verification_requirement"]["id"], "commercial-plan-models")
 
-    def test_lookup_paths_assigns_monitored_system_definition_disclosure_to_cloud_paid(self) -> None:
-        result = lookup_paths(
-            ["frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx"]
-        )
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"cloud-paid"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"cloud-paid"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/cloud-paid.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L3")
-        self.assertEqual(match["verification_requirement"]["id"], "commercial-plan-models")
-
     def test_lookup_paths_assigns_relay_settings_state_owner_to_cloud_paid(self) -> None:
         result = lookup_paths(["frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts"])
         self.assertEqual(result["unowned_runtime_files"], [])
@@ -669,31 +547,6 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             match["verification_requirement"]["id"],
             "relay-frontend-surfaces",
-        )
-
-    def test_lookup_paths_assigns_recovery_surface_to_storage_recovery(self) -> None:
-        # The legacy /recovery route shell (pages/Recovery.tsx) was retired
-        # with the platform-first migration; recovery is now exercised via
-        # the embedded surface at components/Recovery/Recovery.tsx.
-        result = lookup_paths(["frontend-modern/src/components/Recovery/Recovery.tsx"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"storage-recovery"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"storage-recovery"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/storage-recovery.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L15")
-        self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
-        self.assertEqual(
-            match["verification_requirement"]["exact_files"],
-            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
         )
 
     def test_lookup_paths_reports_retired_dashboard_page_as_unowned(self) -> None:
@@ -741,60 +594,6 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["lane_context"]["lane_id"], "L15")
         self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
 
-    def test_lookup_paths_assigns_recovery_points_facets_hook_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/hooks/useRecoveryPointsFacets.ts"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"storage-recovery"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"storage-recovery"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/storage-recovery.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L15")
-        self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
-
-    def test_lookup_paths_assigns_recovery_points_series_hook_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/hooks/useRecoveryPointsSeries.ts"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"storage-recovery"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"storage-recovery"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/storage-recovery.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L15")
-        self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
-
-    def test_lookup_paths_assigns_recovery_rollups_hook_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/hooks/useRecoveryRollups.ts"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"storage-recovery"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"storage-recovery"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/storage-recovery.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L15")
-        self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
-
     def test_lookup_paths_reports_retired_dashboard_recovery_hook_as_unowned(self) -> None:
         path = "frontend-modern/src/hooks/useDashboardRecovery.ts"
         result = lookup_paths([path])
@@ -804,24 +603,6 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(file_entry["classification"], "runtime")
         self.assertEqual(file_entry["matches"], [])
 
-    def test_lookup_paths_assigns_recovery_summary_component_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/components/Recovery/RecoverySummary.tsx"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"storage-recovery"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"storage-recovery"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/storage-recovery.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L15")
-        self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
-
     def test_lookup_paths_reports_retired_dashboard_recovery_presentation_as_unowned(self) -> None:
         path = "frontend-modern/src/utils/dashboardRecoveryPresentation.ts"
         result = lookup_paths([path])
@@ -830,44 +611,6 @@ class SubsystemLookupTest(unittest.TestCase):
         file_entry = result["files"][0]
         self.assertEqual(file_entry["classification"], "runtime")
         self.assertEqual(file_entry["matches"], [])
-
-    def test_lookup_paths_assigns_storage_panel_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/components/Storage/Storage.tsx"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"storage-recovery"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"storage-recovery"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/storage-recovery.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L15")
-        self.assertEqual(match["verification_requirement"]["id"], "storage-product-surface")
-        self.assertEqual(
-            match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx",
-                "frontend-modern/src/components/Storage/__tests__/Storage.test.tsx",
-                "frontend-modern/src/components/Storage/__tests__/StorageGroupRow.test.tsx",
-                "frontend-modern/src/components/Storage/__tests__/StoragePoolDetail.test.tsx",
-                "frontend-modern/src/components/Storage/__tests__/useStoragePageSummary.test.ts",
-                "frontend-modern/src/components/Storage/code_standards.test.ts",
-                "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
-                "frontend-modern/src/features/storageBackups/__tests__/resourceStorageMapping.test.ts",
-                "frontend-modern/src/features/storageBackups/__tests__/storageAdapters.test.ts",
-                "frontend-modern/src/features/storageBackups/__tests__/storageAlertState.test.ts",
-                "frontend-modern/src/features/storageBackups/__tests__/storageDomain.test.ts",
-                "frontend-modern/src/features/storageBackups/__tests__/storageModelCore.test.ts",
-                "frontend-modern/src/features/storageBackups/__tests__/storagePagePresentation.test.ts",
-                "frontend-modern/src/features/storageBackups/__tests__/storagePoolsTablePresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-            ],
-        )
 
     def test_lookup_paths_reports_retired_dashboard_storage_presentation_as_unowned(self) -> None:
         path = "frontend-modern/src/utils/dashboardStoragePresentation.ts"
@@ -902,72 +645,6 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["lane_context"]["lane_id"], "L15")
         self.assertEqual(match["verification_requirement"]["id"], "storage-product-surface")
 
-    def test_lookup_paths_assigns_recovery_types_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/types/recovery.ts"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"storage-recovery"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"storage-recovery"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/storage-recovery.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L15")
-        self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
-        self.assertEqual(
-            match["verification_requirement"]["exact_files"],
-            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
-        )
-
-    def test_lookup_paths_assigns_recovery_date_presentation_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/utils/recoveryDatePresentation.ts"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"storage-recovery"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"storage-recovery"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/storage-recovery.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L15")
-        self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
-        self.assertEqual(
-            match["verification_requirement"]["exact_files"],
-            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
-        )
-
-    def test_lookup_paths_assigns_recovery_status_presentation_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/utils/recoveryStatusPresentation.ts"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"storage-recovery"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"storage-recovery"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/storage-recovery.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L15")
-        self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
-        self.assertEqual(
-            match["verification_requirement"]["exact_files"],
-            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
-        )
-
     def test_lookup_paths_reports_retired_recovery_summary_presentation_as_unowned(self) -> None:
         path = "frontend-modern/src/utils/recoverySummaryPresentation.ts"
         result = lookup_paths([path])
@@ -976,226 +653,6 @@ class SubsystemLookupTest(unittest.TestCase):
         file_entry = result["files"][0]
         self.assertEqual(file_entry["classification"], "runtime")
         self.assertEqual(file_entry["matches"], [])
-
-    def test_lookup_paths_assigns_recovery_record_presentation_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/utils/recoveryRecordPresentation.ts"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"storage-recovery"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"storage-recovery"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/storage-recovery.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L15")
-        self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
-        self.assertEqual(
-            match["verification_requirement"]["exact_files"],
-            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
-        )
-
-    def test_lookup_paths_assigns_recovery_outcome_presentation_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/utils/recoveryOutcomePresentation.ts"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"storage-recovery"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"storage-recovery"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/storage-recovery.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L15")
-        self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
-        self.assertEqual(
-            match["verification_requirement"]["exact_files"],
-            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
-        )
-
-    def test_lookup_paths_assigns_recovery_action_presentation_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/utils/recoveryActionPresentation.ts"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"storage-recovery"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"storage-recovery"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/storage-recovery.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L15")
-        self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
-        self.assertEqual(
-            match["verification_requirement"]["exact_files"],
-            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
-        )
-
-    def test_lookup_paths_assigns_recovery_artifact_mode_presentation_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/utils/recoveryArtifactModePresentation.ts"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"storage-recovery"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"storage-recovery"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/storage-recovery.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L15")
-        self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
-        self.assertEqual(
-            match["verification_requirement"]["exact_files"],
-            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
-        )
-
-    def test_lookup_paths_assigns_recovery_empty_state_presentation_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/utils/recoveryEmptyStatePresentation.ts"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"storage-recovery"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"storage-recovery"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/storage-recovery.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L15")
-        self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
-        self.assertEqual(
-            match["verification_requirement"]["exact_files"],
-            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
-        )
-
-    def test_lookup_paths_assigns_recovery_filter_chip_presentation_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/utils/recoveryFilterChipPresentation.ts"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"storage-recovery"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"storage-recovery"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/storage-recovery.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L15")
-        self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
-        self.assertEqual(
-            match["verification_requirement"]["exact_files"],
-            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
-        )
-
-    def test_lookup_paths_assigns_recovery_issue_presentation_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/utils/recoveryIssuePresentation.ts"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"storage-recovery"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"storage-recovery"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/storage-recovery.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L15")
-        self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
-        self.assertEqual(
-            match["verification_requirement"]["exact_files"],
-            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
-        )
-
-    def test_lookup_paths_assigns_recovery_table_presentation_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/utils/recoveryTablePresentation.ts"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"storage-recovery"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"storage-recovery"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/storage-recovery.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L15")
-        self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
-        self.assertEqual(
-            match["verification_requirement"]["exact_files"],
-            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
-        )
-
-    def test_lookup_paths_assigns_recovery_timeline_chart_presentation_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/utils/recoveryTimelineChartPresentation.ts"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"storage-recovery"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"storage-recovery"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/storage-recovery.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L15")
-        self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
-        self.assertEqual(
-            match["verification_requirement"]["exact_files"],
-            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
-        )
-
-    def test_lookup_paths_assigns_recovery_timeline_presentation_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/utils/recoveryTimelinePresentation.ts"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"storage-recovery"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"storage-recovery"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/storage-recovery.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L15")
-        self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
-        self.assertEqual(
-            match["verification_requirement"]["exact_files"],
-            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
-        )
 
     def test_lookup_paths_assigns_api_token_manager_to_api_contracts(self) -> None:
         result = lookup_paths(["frontend-modern/src/components/Settings/APITokenManager.tsx"])
@@ -1516,43 +973,6 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
-    def test_lookup_paths_assigns_results_step_to_agent_lifecycle(self) -> None:
-        result = lookup_paths(["frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"agent-lifecycle"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"agent-lifecycle"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(
-            match["contract"],
-            "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
-        )
-        self.assertEqual(match["lane_context"]["lane_id"], "L16")
-        self.assertEqual(
-            match["verification_requirement"]["id"],
-            "deploy-fallback-install-surface",
-        )
-        self.assertEqual(
-            match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Infrastructure/__tests__/DeployStepComponents.test.tsx",
-                "frontend-modern/src/components/Infrastructure/deploy/__tests__/CandidatesStep.test.tsx",
-                "frontend-modern/src/components/Infrastructure/deploy/__tests__/ConfirmStep.test.tsx",
-                "frontend-modern/src/components/Infrastructure/deploy/__tests__/DeployingStep.test.tsx",
-                "frontend-modern/src/components/Infrastructure/deploy/__tests__/PreflightStep.test.tsx",
-                "frontend-modern/src/components/Infrastructure/deploy/__tests__/ResultsStep.test.tsx",
-                "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-            ],
-        )
-
     def test_lookup_paths_assigns_agent_profiles_panel_to_agent_lifecycle(self) -> None:
         result = lookup_paths(["frontend-modern/src/components/Settings/AgentProfilesPanel.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])
@@ -1619,70 +1039,6 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
-    def test_lookup_paths_assigns_infrastructure_workspace_model_to_agent_lifecycle(self) -> None:
-        result = lookup_paths(
-            ["frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts"]
-        )
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"agent-lifecycle"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"agent-lifecycle"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(
-            match["contract"],
-            "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
-        )
-        self.assertEqual(match["lane_context"]["lane_id"], "L16")
-        self.assertEqual(
-            match["verification_requirement"]["id"],
-            "platform-connections-workspace-surface",
-        )
-        self.assertEqual(
-            match["verification_requirement"]["exact_files"],
-            PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES,
-        )
-
-    def test_lookup_paths_assigns_infrastructure_workspace_to_agent_lifecycle(
-        self,
-    ) -> None:
-        result = lookup_paths(
-            [
-                "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx"
-            ]
-        )
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"agent-lifecycle"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"agent-lifecycle"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(
-            match["contract"],
-            "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
-        )
-        self.assertEqual(match["lane_context"]["lane_id"], "L16")
-        self.assertEqual(
-            match["verification_requirement"]["id"],
-            "platform-connections-workspace-surface",
-        )
-        self.assertEqual(
-            match["verification_requirement"]["exact_files"],
-            PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES,
-        )
-
     def test_lookup_paths_assigns_connections_table_model_to_agent_lifecycle(self) -> None:
         result = lookup_paths(
             ["frontend-modern/src/components/Settings/connectionsTableModel.ts"]
@@ -1711,31 +1067,6 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
             CONNECTIONS_LEDGER_WORKSPACE_EXACT_FILES,
-        )
-
-    def test_lookup_paths_assigns_infrastructure_settings_model_to_agent_lifecycle(self) -> None:
-        result = lookup_paths(
-            ["frontend-modern/src/components/Settings/infrastructureSettingsModel.ts"]
-        )
-        self.assertEqual(result["unowned_runtime_files"], [])
-        self.assertEqual(
-            {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"agent-lifecycle"},
-        )
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(
-            {match["subsystem"] for match in file_entry["matches"]},
-            {"agent-lifecycle"},
-        )
-        match = file_entry["matches"][0]
-        self.assertEqual(
-            match["verification_requirement"]["id"],
-            "platform-connections-workspace-surface",
-        )
-        self.assertEqual(
-            match["verification_requirement"]["exact_files"],
-            PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES,
         )
 
     def test_lookup_paths_reports_agent_install_backend_as_shared_boundary(self) -> None:
@@ -4710,63 +4041,6 @@ class SubsystemLookupTest(unittest.TestCase):
                 "internal/unifiedresources/resolved_host_set_test.go",
                 "internal/unifiedresources/snapshot_source_filter_test.go",
                 "internal/unifiedresources/store_test.go",
-            ],
-        )
-
-    def test_lookup_paths_assigns_discovery_tab_to_unified_resources(self) -> None:
-        result = lookup_paths(["frontend-modern/src/components/Discovery/DiscoveryTab.tsx"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(len(file_entry["matches"]), 1)
-
-        match = file_entry["matches"][0]
-        self.assertEqual(match["subsystem"], "unified-resources")
-        self.assertEqual(
-            match["contract"],
-            "docs/release-control/v6/internal/subsystems/unified-resources.md",
-        )
-        self.assertEqual(match["lane_context"]["lane_id"], "L13")
-        self.assertEqual(match["verification_requirement"]["id"], "resource-consumers")
-        self.assertEqual(
-            match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Infrastructure/__tests__/ResourceChangeSummary.test.tsx",
-                "frontend-modern/src/components/Infrastructure/__tests__/ResourceCorrelationSummary.test.tsx",
-                "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.discovery.test.ts",
-                "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.history.test.tsx",
-                "frontend-modern/src/components/Infrastructure/__tests__/ResourcePolicySummary.test.tsx",
-                "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
-                "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.workloads-link.test.tsx",
-                "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSelectors.test.ts",
-                "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSummaryModel.test.ts",
-                "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerIdentityModel.test.ts",
-                "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerOperationalModel.test.ts",
-                "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailMappers.test.ts",
-                "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
-                "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
-                "frontend-modern/src/features/docker/__tests__/DockerNativeTables.test.tsx",
-                "frontend-modern/src/features/docker/__tests__/DockerPageSurface.test.tsx",
-                "frontend-modern/src/features/docker/__tests__/dockerPageModel.test.ts",
-                "frontend-modern/src/features/kubernetes/__tests__/KubernetesAutoscalingTable.test.tsx",
-                "frontend-modern/src/features/kubernetes/__tests__/KubernetesClustersTable.test.tsx",
-                "frontend-modern/src/features/kubernetes/__tests__/KubernetesConfigTable.test.tsx",
-                "frontend-modern/src/features/kubernetes/__tests__/KubernetesControllersTable.test.tsx",
-                "frontend-modern/src/features/kubernetes/__tests__/KubernetesEventsTable.test.tsx",
-                "frontend-modern/src/features/kubernetes/__tests__/KubernetesNetworkingTable.test.tsx",
-                "frontend-modern/src/features/kubernetes/__tests__/KubernetesPageSurface.contract.test.tsx",
-                "frontend-modern/src/features/kubernetes/__tests__/KubernetesPodsTable.test.tsx",
-                "frontend-modern/src/features/kubernetes/__tests__/KubernetesPolicyTable.test.tsx",
-                "frontend-modern/src/features/kubernetes/__tests__/KubernetesServicesTable.test.tsx",
-                "frontend-modern/src/features/kubernetes/__tests__/KubernetesStorageTable.test.tsx",
-                "frontend-modern/src/features/kubernetes/__tests__/kubernetesPageModel.test.ts",
-                "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",
-                "frontend-modern/src/routing/__tests__/resourceLinks.test.ts",
-                "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
-                "frontend-modern/src/types/__tests__/resource.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                "internal/unifiedresources/code_standards_test.go",
             ],
         )
 

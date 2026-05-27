@@ -9,9 +9,7 @@
   "contract_file": "docs/release-control/v6/internal/subsystems/unified-resources.md",
   "status_file": "docs/release-control/v6/internal/status.json",
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
-  "dependency_subsystem_ids": [
-    "api-contracts"
-  ]
+  "dependency_subsystem_ids": []
 }
 ```
 
@@ -67,81 +65,73 @@ cross-source deduplication.
 43. `frontend-modern/src/features/docker/dockerPageModel.ts`
 44. `frontend-modern/src/components/Kubernetes/K8sDeploymentsDrawer.tsx`
 45. `frontend-modern/src/components/Kubernetes/K8sNamespacesDrawer.tsx`
-46. `frontend-modern/src/components/PMG/PMGInstanceDrawer.tsx`
-47. `frontend-modern/src/components/PMG/MailGateway.tsx`
-48. `frontend-modern/src/components/PMG/PMGInstancePanel.tsx`
-49. `frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx`
-50. `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`
-51. `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
-52. `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
-53. `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
-54. `frontend-modern/src/components/Infrastructure/resourceBadges.ts`
-55. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
-56. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
-57. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx`
-58. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx`
-59. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
-60. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
-61. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts`
-62. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerServiceModel.ts`
-63. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts`
-64. `frontend-modern/src/components/Infrastructure/resourceDetailDiscoveryModel.ts`
-65. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerOperationalModel.ts`
-66. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`
-67. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts`
-68. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
-69. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-70. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`
-71. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
-72. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
-73. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
-74. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
-75. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
-76. `frontend-modern/src/utils/agentResources.ts`
-77. `frontend-modern/src/utils/canonicalResourceTypes.ts`
-78. `frontend-modern/src/utils/resourceBadgePresentation.ts`
-79. `frontend-modern/src/utils/resourceChangePresentation.ts`
-80. `frontend-modern/src/utils/actionAuditPresentation.ts`
-81. `frontend-modern/src/utils/resourceCorrelationPresentation.ts`
-82. `frontend-modern/src/utils/resourcePlatformData.ts`
-83. `frontend-modern/src/utils/resourcePolicyPresentation.ts`
-84. `frontend-modern/src/utils/resourceStateAdapters.ts`
-85. `frontend-modern/src/utils/resourceTypeCompat.ts`
-86. `frontend-modern/src/utils/resourceTypePresentation.ts`
-87. `frontend-modern/src/utils/serviceHealthPresentation.ts`
-88. `frontend-modern/src/utils/sourceTypePresentation.ts`
-89. `frontend-modern/src/utils/workloadTypePresentation.ts`
-90. `frontend-modern/src/components/PMG/ServiceHealthBadge.tsx`
-91. `frontend-modern/src/utils/resourceIdentity.ts`
-92. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerIdentityModel.ts`
-93. `frontend-modern/src/hooks/useUnifiedResources.ts`
-94. `frontend-modern/src/types/resource.ts`
-95. `frontend-modern/src/utils/sourcePlatforms.ts`
-96. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
-97. `internal/unifiedresources/kubernetes_metric_ids.go`
-98. `internal/unifiedresources/policy_posture.go`
-99. `internal/unifiedresources/clone.go`
-100. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerPresentation.ts`
-101. `internal/unifiedresources/storage_consumers.go`
-102. `frontend-modern/src/features/standalone/standalonePageModel.ts`
-103. `frontend-modern/src/features/standalone/StandalonePageSurface.tsx`
-104. `frontend-modern/src/features/standalone/AgentsMachinesTable.tsx`
-105. `frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx`
-106. `internal/platformsupport/manifest_generated.go`
-107. `frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx`
-108. `frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx`
-109. `frontend-modern/src/features/kubernetes/kubernetesPageModel.ts`
-110. `frontend-modern/src/features/kubernetes/KubernetesClustersTable.tsx`
-111. `frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx`
-112. `frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx`
-113. `frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx`
-114. `frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx`
-115. `frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx`
-116. `frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx`
-117. `frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx`
-118. `frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx`
-119. `frontend-modern/src/features/kubernetes/KubernetesAutoscalingTable.tsx`
-120. `frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx`
+46. `frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx`
+47. `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`
+48. `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
+49. `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
+50. `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
+51. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
+52. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
+53. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx`
+54. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx`
+55. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
+56. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
+57. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts`
+58. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerServiceModel.ts`
+59. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts`
+60. `frontend-modern/src/components/Infrastructure/resourceDetailDiscoveryModel.ts`
+61. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerOperationalModel.ts`
+62. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`
+63. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts`
+64. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
+65. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
+66. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`
+67. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
+68. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
+69. `frontend-modern/src/utils/agentResources.ts`
+70. `frontend-modern/src/utils/canonicalResourceTypes.ts`
+71. `frontend-modern/src/utils/resourceBadgePresentation.ts`
+72. `frontend-modern/src/utils/resourceChangePresentation.ts`
+73. `frontend-modern/src/utils/actionAuditPresentation.ts`
+74. `frontend-modern/src/utils/resourceCorrelationPresentation.ts`
+75. `frontend-modern/src/utils/resourcePlatformData.ts`
+76. `frontend-modern/src/utils/resourcePolicyPresentation.ts`
+77. `frontend-modern/src/utils/resourceStateAdapters.ts`
+78. `frontend-modern/src/utils/resourceTypeCompat.ts`
+79. `frontend-modern/src/utils/resourceTypePresentation.ts`
+80. `frontend-modern/src/utils/serviceHealthPresentation.ts`
+81. `frontend-modern/src/utils/sourceTypePresentation.ts`
+82. `frontend-modern/src/utils/workloadTypePresentation.ts`
+83. `frontend-modern/src/utils/resourceIdentity.ts`
+84. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerIdentityModel.ts`
+85. `frontend-modern/src/hooks/useUnifiedResources.ts`
+86. `frontend-modern/src/types/resource.ts`
+87. `frontend-modern/src/utils/sourcePlatforms.ts`
+88. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
+89. `internal/unifiedresources/kubernetes_metric_ids.go`
+90. `internal/unifiedresources/policy_posture.go`
+91. `internal/unifiedresources/clone.go`
+92. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerPresentation.ts`
+93. `internal/unifiedresources/storage_consumers.go`
+94. `frontend-modern/src/features/standalone/standalonePageModel.ts`
+95. `frontend-modern/src/features/standalone/StandalonePageSurface.tsx`
+96. `frontend-modern/src/features/standalone/AgentsMachinesTable.tsx`
+97. `frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx`
+98. `internal/platformsupport/manifest_generated.go`
+99. `frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx`
+100. `frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx`
+101. `frontend-modern/src/features/kubernetes/kubernetesPageModel.ts`
+102. `frontend-modern/src/features/kubernetes/KubernetesClustersTable.tsx`
+103. `frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx`
+104. `frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx`
+105. `frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx`
+106. `frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx`
+107. `frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx`
+108. `frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx`
+109. `frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx`
+110. `frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx`
+111. `frontend-modern/src/features/kubernetes/KubernetesAutoscalingTable.tsx`
+112. `frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx`
 
 ## Shared Boundaries
 
@@ -218,19 +208,16 @@ engine storage rows must stay host-scoped with table proof hooks so browser
 proof can distinguish a populated disk-usage tab from an empty fixture.
 
 1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `performance-and-scalability`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-2. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx` shared with `performance-and-scalability`: the infrastructure summary surface is both a canonical unified-resource consumer and a fleet-scale summary chart hot-path boundary.
-3. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts` shared with `performance-and-scalability`: infrastructure summary chart matching, focused-summary view derivation, and metric-series shaping are both a canonical unified-resource consumer surface and a fleet-scale summary chart hot-path boundary.
-4. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `performance-and-scalability`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-5. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx` shared with `performance-and-scalability`: the unified resource host table card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-6. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx` shared with `performance-and-scalability`: the unified resource PBS section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-7. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx` shared with `performance-and-scalability`: the unified resource PMG section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-8. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx` shared with `performance-and-scalability`: the unified resource service infrastructure card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-9. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx` shared with `performance-and-scalability`: the unified resource table is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-10. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts` shared with `performance-and-scalability`: unified resource service row shaping and I/O emphasis are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-11. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts` shared with `performance-and-scalability`: unified resource table state derivation, sort-cycle policy, service sorting, and responsive column layout are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-12. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts` shared with `performance-and-scalability`: infrastructure summary chart polling, cache hydration, and summary-state orchestration are both a canonical unified-resource consumer surface and a fleet-scale summary chart hot-path boundary.
-13. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts` shared with `performance-and-scalability`: unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-14. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts` shared with `performance-and-scalability`: unified resource table viewport sync and selected-row reveal are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+2. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `performance-and-scalability`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+3. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx` shared with `performance-and-scalability`: the unified resource host table card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+4. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx` shared with `performance-and-scalability`: the unified resource PBS section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+5. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx` shared with `performance-and-scalability`: the unified resource PMG section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+6. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx` shared with `performance-and-scalability`: the unified resource service infrastructure card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+7. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx` shared with `performance-and-scalability`: the unified resource table is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+8. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts` shared with `performance-and-scalability`: unified resource service row shaping and I/O emphasis are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+9. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts` shared with `performance-and-scalability`: unified resource table state derivation, sort-cycle policy, service sorting, and responsive column layout are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+10. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts` shared with `performance-and-scalability`: unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+11. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts` shared with `performance-and-scalability`: unified resource table viewport sync and selected-row reveal are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 15. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `frontend-primitives`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
     It must carry the manifest `surface_kind` distinction so `docker` remains
     machine-readable as a `runtime-lens` while owning infrastructure sources
@@ -388,112 +375,6 @@ proof can distinguish a populated disk-usage tab from an empty fixture.
    tables must not render ConfigMap or Secret payload values, and metadata-only
    rows must not expose key names as if payload fields had been read.
 2. Add typed accessors and views in `internal/unifiedresources/views.go`
-3. Add source ingestion/adaptation in the adapter layer only
-   Frontend resource platform contracts in
-   `frontend-modern/src/types/resource.ts` must include platform ids that the
-   canonical source/platform adapters can emit. Agent-native storage sources
-   such as Unraid are first-class platform ids for typing, filtering, tests,
-   and storage/recovery presentation; consumers must not hide them behind
-   Proxmox-only or generic agent-only frontend unions when unified resources
-   has already published explicit platform evidence.
-   Infrastructure table platform presentation extends through
-   `frontend-modern/src/utils/resourceBadgePresentation.ts`,
-   `frontend-modern/src/components/Infrastructure/resourceBadges.ts`, and the
-   unified resource table sections. Visible infrastructure table headers,
-   filters, sort keys, and compact row badges must present the owning
-   infrastructure platform first, while full merged-source detail remains
-   available for tooltips, accessibility metadata, and routing. Agent telemetry
-   is collection-method detail when a provider/API platform is also present.
-   When the primary system identity includes a platform version, table metadata
-   must suppress an otherwise duplicate unversioned platform source badge while
-   preserving non-duplicate collection context such as Pulse Agent.
-   Infrastructure table presentation controls must describe the table mode
-   rather than a platform-specific resource concept: the grouped/flat toggle
-   uses operator-facing `Grouped` and `List` wording with a `Group by`
-   accessible group label, while Proxmox, Kubernetes, and other platform
-   clusters stay reserved for actual resource identity, filters, and detail
-   surfaces.
-   Infrastructure row drawer expansion and summary group focus are local table
-   interaction state. Inbound infrastructure deep links may hydrate `resource`
-   and `summaryGroup` into the focused resource or group, but local expansion,
-   closing, and clearing must not rewrite those params or navigate. Route sync
-   for this surface is limited to filter-owned `source` and `q` state so
-   unified-resource rows open inline without refreshing the page shell.
-   Resource detail drawers must declare their presentation context explicitly.
-   The default full presentation owns the canonical resource-change,
-   operator-override, maintenance-verification, and action-audit surfaces. The
-   `table-row` presentation is reserved for inline platform and resource table
-   expansion: it presents current-state and identity details from the local
-   resource payload, may show preloaded change data when present, and must not
-   start remote history, intelligence, or action-audit reads only to render
-   empty advanced governance panels inside a table row.
-   Cluster group headers may use a compact `Cluster` type chip when the group
-   name itself is only an estate label, but `unifiedResourceTableStateModel.ts`
-   must suppress that chip when the visible group name already ends in
-   `Cluster`, so rows do not read as duplicated labels such as `Production
-   Cluster Cluster`.
-   Infrastructure host and service table cards must consume the
-   frontend-primitives-owned `TableCard` frame and `TableCardHeader` header
-   band; unified resources owns the resource identity, rows, grouping, and
-   detail presentation, not page-local table-shell chrome. The nested
-   infrastructure tables must use the shared `Table` primitive's scroll frame
-   directly instead of reintroducing page-local `overflow-x-auto` wrappers
-   inside the canonical card shell.
-   Unified resource host metric cells may consume alert-backed agent
-   thresholds, but resource consumers must not resolve alert defaults or
-   overrides locally. Host table state exposes the alerts-owned threshold
-   resolver and row renderers pass the resolved values into metric bars while
-   preserving unified-resource ownership over identity, rows, grouping, and
-   detail presentation.
-   Docker Swarm service, Kubernetes namespace/deployment, and PMG detail
-   tables follow that same shell boundary: their platform-specific rows and
-   actions are unified-resource-owned, while horizontal overflow is owned by
-   the shared `Table` wrapper rather than drawer-local scroll divs. This
-   includes both current resource drawers and legacy PMG resource panels that
-   still consume unified-resource PMG state.
-   Realtime resource payloads are part of the same consumer contract as REST:
-   websocket broadcasts must carry canonical identity, discovery targets,
-   metrics targets, incident rollups, facet counts, and source-specific raw
-   facets such as `agent`, `storage`, `docker`, and provider API facets. Host
-   rows and drawers may present compact issue labels such as Unraid
-   no-parity posture, but those labels must derive from canonical incident or
-   storage-risk summaries already present on the resource rather than local
-   platform heuristics or generic status-only wording.
-   Agent-backed Unraid topology belongs in the canonical adapter layer, not in
-   storage-page inference. Assigned Unraid array members must produce physical
-   disk resources even when SMART telemetry is absent, Unraid cache/pool members
-   must produce agent-backed storage resources with native capacity metrics, and
-   SMART rows may enrich or merge with those resources only through normalized
-   device or serial identity. Generic SMART status must not overwrite stronger
-   Unraid health/risk, and physical-disk metric IDs must prefer stable serials
-   while normalizing device tokens such as `/dev/sdd` and `sdd [sat]` to the
-   same fallback identity.
-   Frontend canonicalization must treat top-level source facets as source
-   evidence when `platformData.sources` is absent, but it must not invent
-   provider facets from generic agent telemetry: flat agent disk payloads stay
-   under the agent source and do not become Proxmox facets without explicit
-   Proxmox source, node, or workload-shape evidence.
-   Realtime resource adapters must also apply the canonical host source-bridge
-   rule to incoming websocket snapshots: agent plus platform/API evidence for
-   the same host coalesces into one hybrid infrastructure resource, while
-   same-name agent-only records remain separate until stronger identity or
-   platform evidence exists.
-   Proxmox child resources must derive their canonical parent from the owning
-   node identity across all supported source-key shapes. Guests, storage pools,
-   and physical disks may arrive with instance-node, cluster-node, or bare-node
-   parent evidence, and both snapshot ingest and already-unified registry seed
-   paths must attach them to the same merged host resource before REST,
-   websocket, Workloads, or Infrastructure consumers render the estate.
-   This derivation must tolerate node source IDs that retain a previous cluster
-   alias while the current Proxmox metadata exposes a renamed instance or
-   cluster label; current node metadata is the fallback source of truth when
-   source-key lookup misses.
-   Platform pages that bucket Docker / Podman or Kubernetes resources must use
-   these canonical resource types and source facets directly. Page-local
-   scraping, generic type coercion, or "single table for every native object"
-   fallbacks are not a substitute for adapter-owned image, volume, network,
-   service, controller, storage, ingress, and event resource projections.
-
 Resource detail mappers now reuse the shared
 `frontend-modern/src/utils/textPresentation.ts` title-case helper for sensor
 labels so the canonical unified-resource presentation layer owns the wording.
@@ -595,7 +476,6 @@ AI-only summary payloads, or page-local heuristics.
    generic disk-count aggregate, so resource drawers and incidents do not hide
    the actual protection boundary behind a broader count phrase.
 6. Add canonical governed name-resolution or policy-aware resource lookup behavior through `internal/unifiedresources/resolve.go` and `internal/unifiedresources/resolve_context.go`
-7. Add or change resource drawer timeline/facet/action-history presentation through `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`, `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`, `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx`, `frontend-modern/src/components/Docker/SwarmServicesDrawer.tsx`, `frontend-modern/src/components/Kubernetes/K8sDeploymentsDrawer.tsx`, `frontend-modern/src/components/Kubernetes/K8sNamespacesDrawer.tsx`, `frontend-modern/src/components/PMG/PMGInstanceDrawer.tsx`, `frontend-modern/src/components/PMG/MailGateway.tsx`, `frontend-modern/src/components/PMG/PMGInstancePanel.tsx`, `frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx`, `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`, `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`, `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`, and the governed `internal/api/resources.go` facet/timeline plus `internal/api/activity_audit_handlers.go` action-audit contracts together
 8. Add or change discovery-support runtime under the resource drawer through `frontend-modern/src/components/Discovery/DiscoveryTab.tsx` for shell/presentation ownership and `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts` for fetch, websocket-progress, manual-run triggering, and notes-mutation ownership. Embedded drawers may expose the top-level run action through this shared Discovery tab, but they must still call the canonical discovery trigger state path instead of introducing drawer-local API mutations.
 9. Keep dashboard and infrastructure freshness on the canonical unified-resource
    ownership path. `frontend-modern/src/stores/websocket.ts`,
@@ -638,24 +518,6 @@ AI-only summary payloads, or page-local heuristics.
    explicit cluster identity such as Kubernetes context or platform cluster
    labels; standalone resource names must never be repurposed as synthetic
    `clusterId` values.
-10. Keep the retired dashboard overview shell absent from unified-resource
-    consumers. `frontend-modern/src/pages/Dashboard.tsx`,
-    `frontend-modern/src/hooks/useDashboardOverview.ts`, and
-    `/api/resources/dashboard-summary` must not be restored as compatibility
-    readers for KPI cards, problem-resource rows, or top-resource identity.
-    Infrastructure and Workloads must consume their owning unified-resource
-    projections directly.
-11. Keep summary consumers on the payload they were already given.
-    `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
-    may derive chart identity, storage presence, and infrastructure rollups
-    from the resource snapshot it already owns, but it must not reopen
-    `useResources()` or start a second unfiltered unified-resource fetch path
-    as a replacement dashboard summary surface.
-12. Keep shared selector hydration visibility-bound. Reusable shells such as
-    `frontend-modern/src/components/shared/useInfrastructureSelectorState.ts`
-    may consume `frontend-modern/src/hooks/useUnifiedResources.ts`, but hidden
-    selectors must pass an explicit `enabled` gate instead of booting the
-    `all-resources` transport behind a collapsed or non-rendered summary shell.
 13. Keep operator-facing resource analysis vocabulary task-first on unified-resource
     surfaces. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`,
     `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts`,

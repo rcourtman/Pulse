@@ -160,6 +160,18 @@ func TestPVEBackupPermissionWarningsPreserveTokenACLRepair(t *testing.T) {
 	}
 }
 
+func TestLegacySSHTemperatureUsesPulseSensorWrapperContract(t *testing.T) {
+	if !strings.Contains(pulseSensorsSSHCommand, "/usr/local/sbin/pulse-sensors") {
+		t.Fatalf("legacy SSH temperature command must prefer Pulse sensor wrapper, got %q", pulseSensorsSSHCommand)
+	}
+	if !strings.Contains(pulseSensorsSSHCommand, "sensors -j") {
+		t.Fatalf("legacy SSH temperature command must preserve sensors -j fallback for old forced keys, got %q", pulseSensorsSSHCommand)
+	}
+	if strings.Contains(pulseSensorsSSHCommand, "smartctl") {
+		t.Fatalf("SMART collection belongs inside the remote wrapper, not the local SSH command: %q", pulseSensorsSSHCommand)
+	}
+}
+
 func TestPBSBackupsSnapshotPreservesSourceArtifactFields(t *testing.T) {
 	state := models.NewState()
 	backupTime := time.Date(2026, 5, 25, 1, 34, 25, 0, time.UTC)

@@ -150,7 +150,7 @@ func TestHandleSetupScriptUsesCanonicalShellDownloadHeaders(t *testing.T) {
 	}
 }
 
-func TestPVESetupScriptQuotesTemperatureMonitoringAuthorizedKeyEntry(t *testing.T) {
+func TestPVESetupScriptRestrictsTemperatureMonitoringToPulseSensorWrapper(t *testing.T) {
 	tempDir := t.TempDir()
 	cfg := &config.Config{
 		DataPath:   tempDir,
@@ -173,14 +173,20 @@ func TestPVESetupScriptQuotesTemperatureMonitoringAuthorizedKeyEntry(t *testing.
 	}
 
 	script := rr.Body.String()
-	if !containsString(
-		script,
-		`SSH_SENSORS_KEY_ENTRY="command=\"sensors -j\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $SSH_SENSORS_PUBLIC_KEY # pulse-sensors"`,
-	) {
-		t.Fatalf("expected temperature monitoring key entry to escape forced-command quotes, got:\n%s", truncate(script, 900))
+	required := []string{
+		`PULSE_SENSORS_WRAPPER="/usr/local/sbin/pulse-sensors"`,
+		`install_pulse_sensors_wrapper() {`,
+		`"smart": collect_smart(),`,
+		`SSH_SENSORS_KEY_ENTRY="command=\"$PULSE_SENSORS_WRAPPER\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $SSH_SENSORS_PUBLIC_KEY # pulse-sensors"`,
 	}
-	if containsString(script, `SSH_SENSORS_KEY_ENTRY="command="sensors -j",`) {
-		t.Fatalf("unexpected unescaped temperature monitoring key entry in generated script:\n%s", truncate(script, 900))
+	for _, want := range required {
+		if !containsString(script, want) {
+			t.Fatalf("expected setup script to contain %q, got:\n%s", want, truncate(script, 1800))
+		}
+	}
+	if containsString(script, `SSH_SENSORS_KEY_ENTRY="command=\"sensors -j\"`) ||
+		containsString(script, `SSH_SENSORS_KEY_ENTRY="command="sensors -j",`) {
+		t.Fatalf("unexpected raw sensors forced-command key entry in generated script:\n%s", truncate(script, 1800))
 	}
 }
 
