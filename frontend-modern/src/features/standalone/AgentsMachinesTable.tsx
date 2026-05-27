@@ -226,15 +226,104 @@ const AgentMachineTemperatureCell: Component<{
   );
 };
 
+const AgentMachineNetworkInterfacesList: Component<{
+  interfaces: AgentMachineNetworkInterfaceDetail[];
+  maxInterfaces?: number;
+  maxAddressesPerInterface?: number;
+}> = (props) => {
+  const maxInterfaces = () => props.maxInterfaces ?? 8;
+  const maxAddressesPerInterface = () => props.maxAddressesPerInterface ?? 4;
+  const shownInterfaces = () => props.interfaces.slice(0, maxInterfaces());
+  const hiddenInterfaceCount = () =>
+    Math.max(0, props.interfaces.length - shownInterfaces().length);
+
+  return (
+    <div class="max-h-[280px] space-y-1.5 overflow-y-auto pr-1">
+      <For each={shownInterfaces()}>
+        {(iface, index) => (
+          <div class="min-w-0" classList={{ 'border-t border-border pt-1.5': index() > 0 }}>
+            <div class="flex min-w-0 items-center gap-2">
+              <span class="min-w-0 truncate font-semibold text-base-content" title={iface.name}>
+                {iface.name}
+              </span>
+              <Show when={iface.mac}>
+                {(mac) => (
+                  <span
+                    class="max-w-[150px] shrink-0 truncate font-mono text-[9px] text-muted"
+                    title={mac()}
+                  >
+                    {mac()}
+                  </span>
+                )}
+              </Show>
+            </div>
+            <Show
+              when={iface.addresses.length > 0}
+              fallback={
+                <div class="mt-0.5 text-[9px] text-muted">
+                  {getWorkloadsGuestNetworkEmptyState()}
+                </div>
+              }
+            >
+              <div class="mt-1 flex flex-wrap gap-1">
+                <For each={iface.addresses.slice(0, maxAddressesPerInterface())}>
+                  {(address) => (
+                    <span
+                      class="max-w-full truncate rounded border border-border bg-surface-alt px-1.5 py-0.5 font-mono text-[9px] text-base-content"
+                      title={address}
+                    >
+                      {address}
+                    </span>
+                  )}
+                </For>
+                <Show when={iface.addresses.length > maxAddressesPerInterface()}>
+                  <span class="rounded border border-border px-1.5 py-0.5 text-[9px] text-muted">
+                    +{iface.addresses.length - maxAddressesPerInterface()}
+                  </span>
+                </Show>
+              </div>
+            </Show>
+            <Show
+              when={
+                iface.rxBytes !== undefined ||
+                iface.txBytes !== undefined ||
+                iface.speedMbps !== undefined
+              }
+            >
+              <div class="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[9px] text-muted">
+                <Show when={iface.rxBytes !== undefined || iface.txBytes !== undefined}>
+                  <span>
+                    <span class="font-mono text-emerald-500">RX</span>{' '}
+                    {formatSpeed(iface.rxBytes ?? 0)}
+                  </span>
+                  <span>
+                    <span class="font-mono text-orange-400">TX</span>{' '}
+                    {formatSpeed(iface.txBytes ?? 0)}
+                  </span>
+                </Show>
+                <Show when={iface.speedMbps !== undefined}>
+                  <span>{iface.speedMbps} Mbps</span>
+                </Show>
+              </div>
+            </Show>
+          </div>
+        )}
+      </For>
+      <Show when={hiddenInterfaceCount() > 0}>
+        <div class="border-t border-border pt-1 text-[9px] text-muted">
+          +{hiddenInterfaceCount()} more interfaces
+        </div>
+      </Show>
+    </div>
+  );
+};
+
 const AgentMachineNetworkCell: Component<{
   network: Resource['network'] | undefined;
   interfaces: AgentMachineNetworkInterfaceDetail[];
   title: string;
 }> = (props) => {
   const hasDetails = () => props.interfaces.length > 0;
-  const shownInterfaces = () => props.interfaces.slice(0, 8);
-  const hiddenInterfaceCount = () =>
-    Math.max(0, props.interfaces.length - shownInterfaces().length);
   const ariaLabel = () => props.title.replace(/\n/g, ', ') || 'Network throughput';
 
   return (
@@ -260,84 +349,91 @@ const AgentMachineNetworkCell: Component<{
         <div class="mb-1 border-b border-border pb-1 font-semibold text-muted">
           Network Interfaces
         </div>
-        <div class="max-h-[280px] space-y-1.5 overflow-y-auto pr-1">
-          <For each={shownInterfaces()}>
-            {(iface, index) => (
-              <div class="min-w-0" classList={{ 'border-t border-border pt-1.5': index() > 0 }}>
-                <div class="flex min-w-0 items-center gap-2">
-                  <span class="min-w-0 truncate font-semibold text-base-content" title={iface.name}>
-                    {iface.name}
-                  </span>
-                  <Show when={iface.mac}>
-                    {(mac) => (
-                      <span
-                        class="max-w-[150px] shrink-0 truncate font-mono text-[9px] text-muted"
-                        title={mac()}
-                      >
-                        {mac()}
-                      </span>
-                    )}
-                  </Show>
-                </div>
-                <Show
-                  when={iface.addresses.length > 0}
-                  fallback={
-                    <div class="mt-0.5 text-[9px] text-muted">
-                      {getWorkloadsGuestNetworkEmptyState()}
-                    </div>
-                  }
-                >
-                  <div class="mt-1 flex flex-wrap gap-1">
-                    <For each={iface.addresses.slice(0, 4)}>
-                      {(address) => (
-                        <span
-                          class="max-w-full truncate rounded border border-border bg-surface-alt px-1.5 py-0.5 font-mono text-[9px] text-base-content"
-                          title={address}
-                        >
-                          {address}
-                        </span>
-                      )}
-                    </For>
-                    <Show when={iface.addresses.length > 4}>
-                      <span class="rounded border border-border px-1.5 py-0.5 text-[9px] text-muted">
-                        +{iface.addresses.length - 4}
-                      </span>
-                    </Show>
-                  </div>
-                </Show>
-                <Show
-                  when={
-                    iface.rxBytes !== undefined ||
-                    iface.txBytes !== undefined ||
-                    iface.speedMbps !== undefined
-                  }
-                >
-                  <div class="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[9px] text-muted">
-                    <Show when={iface.rxBytes !== undefined || iface.txBytes !== undefined}>
-                      <span>
-                        <span class="font-mono text-emerald-500">RX</span>{' '}
-                        {formatSpeed(iface.rxBytes ?? 0)}
-                      </span>
-                      <span>
-                        <span class="font-mono text-orange-400">TX</span>{' '}
-                        {formatSpeed(iface.txBytes ?? 0)}
-                      </span>
-                    </Show>
-                    <Show when={iface.speedMbps !== undefined}>
-                      <span>{iface.speedMbps} Mbps</span>
-                    </Show>
-                  </div>
-                </Show>
-              </div>
-            )}
-          </For>
-          <Show when={hiddenInterfaceCount() > 0}>
-            <div class="border-t border-border pt-1 text-[9px] text-muted">
-              +{hiddenInterfaceCount()} more interfaces
-            </div>
-          </Show>
-        </div>
+        <AgentMachineNetworkInterfacesList interfaces={props.interfaces} />
       </section>
+    </AgentMachineMetricTooltip>
+  );
+};
+
+const AgentMachineIpCell: Component<{
+  primaryIp: string;
+  ipValues: string[];
+  interfaces: AgentMachineNetworkInterfaceDetail[];
+}> = (props) => {
+  const hasDetails = () => props.ipValues.length > 0 || props.interfaces.length > 0;
+  const shownIps = () => props.ipValues.slice(0, 12);
+  const hiddenIpCount = () => Math.max(0, props.ipValues.length - shownIps().length);
+  const additionalIpCount = () => Math.max(0, props.ipValues.length - (props.primaryIp ? 1 : 0));
+  const title = () => props.ipValues.join('\n') || props.primaryIp || '—';
+  const ariaLabel = () =>
+    hasDetails() ? `IP details: ${props.ipValues.join(', ') || props.primaryIp}` : 'IP unavailable';
+
+  return (
+    <AgentMachineMetricTooltip
+      triggerDataAttribute="data-agent-machine-ip-trigger"
+      tooltipDataAttribute="data-agent-machine-ip-tooltip"
+      triggerClass="inline-flex max-w-full min-w-0 justify-start"
+      tooltipClass="min-w-[230px] max-w-[380px] space-y-2"
+      enabled={hasDetails()}
+      ariaLabel={ariaLabel()}
+      title={title()}
+      maxWidth={400}
+      trigger={
+        <span class="inline-flex max-w-full min-w-0 items-center gap-1.5">
+          <span
+            class="min-w-0 truncate font-mono text-[11px]"
+            classList={{
+              'text-base-content': Boolean(props.primaryIp),
+              'text-muted': !props.primaryIp,
+            }}
+          >
+            {props.primaryIp || '—'}
+          </span>
+          <Show when={additionalIpCount() > 0}>
+            <span class="shrink-0 rounded border border-border px-1 py-0.5 text-[9px] text-muted">
+              +{additionalIpCount()}
+            </span>
+          </Show>
+        </span>
+      }
+    >
+      <section>
+        <div class="mb-1 border-b border-border pb-1 font-semibold text-muted">IP Addresses</div>
+        <Show
+          when={shownIps().length > 0}
+          fallback={<div class="text-[9px] text-muted">{getWorkloadsGuestNetworkEmptyState()}</div>}
+        >
+          <div class="flex max-h-[120px] flex-wrap gap-1 overflow-y-auto pr-1">
+            <For each={shownIps()}>
+              {(address) => (
+                <span
+                  class="max-w-full truncate rounded border border-border bg-surface-alt px-1.5 py-0.5 font-mono text-[9px] text-base-content"
+                  title={address}
+                >
+                  {address}
+                </span>
+              )}
+            </For>
+            <Show when={hiddenIpCount() > 0}>
+              <span class="rounded border border-border px-1.5 py-0.5 text-[9px] text-muted">
+                +{hiddenIpCount()}
+              </span>
+            </Show>
+          </div>
+        </Show>
+      </section>
+      <Show when={props.interfaces.length > 0}>
+        <section>
+          <div class="mb-1 border-b border-border pb-1 font-semibold text-muted">
+            Network Interfaces
+          </div>
+          <AgentMachineNetworkInterfacesList
+            interfaces={props.interfaces}
+            maxInterfaces={6}
+            maxAddressesPerInterface={4}
+          />
+        </section>
+      </Show>
     </AgentMachineMetricTooltip>
   );
 };
@@ -1080,9 +1176,11 @@ export const AgentsMachinesTable: Component<{
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('text')} ${machineColumnWidthClass('ip')} text-base-content`}
                             >
-                              <span class="truncate" title={ipValues().join('\n')}>
-                                {primaryIp() || '—'}
-                              </span>
+                              <AgentMachineIpCell
+                                primaryIp={primaryIp()}
+                                ipValues={ipValues()}
+                                interfaces={networkInterfaces()}
+                              />
                             </TableCell>
                           </Show>
                           <Show when={columnVisibility.isColumnVisible('raid')}>

@@ -196,6 +196,52 @@ describe('AgentsMachinesTable', () => {
     expect(screen.getByText('1000 Mbps')).toBeInTheDocument();
   });
 
+  it('shows structured agent IP details from the IP value', async () => {
+    const { container } = render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({
+            id: 'ip-host',
+            name: 'IP Host',
+            identity: { ips: ['192.168.0.20', '10.0.0.20'] },
+            agent: {
+              networkInterfaces: [
+                {
+                  name: 'en0',
+                  mac: '10:20:30:40:50:60',
+                  addresses: ['192.168.0.20', 'fe80::1'],
+                },
+              ],
+            },
+          }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    await fireEvent.click(screen.getByTitle('Choose which columns to display'));
+    await fireEvent.click(screen.getByLabelText('IP'));
+
+    const trigger = container.querySelector('[data-agent-machine-ip-trigger="true"]');
+    expect(trigger).not.toBeNull();
+    if (!trigger) return;
+
+    expect(trigger).toHaveTextContent('192.168.0.20');
+    expect(trigger).toHaveTextContent('+2');
+
+    await fireEvent.mouseEnter(trigger);
+
+    expect(await screen.findByText('IP Addresses')).toBeInTheDocument();
+    expect(screen.getAllByText('192.168.0.20').length).toBeGreaterThan(0);
+    expect(screen.getByText('10.0.0.20')).toBeInTheDocument();
+    expect(screen.getAllByText('fe80::1').length).toBeGreaterThan(0);
+    expect(screen.getByText('Network Interfaces')).toBeInTheDocument();
+    expect(screen.getByText('en0')).toBeInTheDocument();
+    expect(screen.getByText('10:20:30:40:50:60')).toBeInTheDocument();
+  });
+
   it('shows structured agent disk I/O details from the Disk I/O value', async () => {
     const { container } = render(() => (
       <AgentsMachinesTable
