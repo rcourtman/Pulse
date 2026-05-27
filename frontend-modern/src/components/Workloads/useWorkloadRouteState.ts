@@ -1,6 +1,6 @@
-import { createSignal, type Accessor, type Setter } from 'solid-js';
+import { createSignal, onMount, type Accessor, type Setter } from 'solid-js';
+import { useNavigate } from '@solidjs/router';
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
-import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { deserializeWorkloadViewMode } from './workloadRouteModel';
 import {
   WORKLOADS_WORKLOAD_ROUTE_RESET_STATE,
@@ -9,6 +9,7 @@ import {
 } from './workloadRouteStateModel';
 import { useWorkloadFilterOptions } from './useWorkloadFilterOptions';
 import { useWorkloadUrlSync } from './useWorkloadUrlSync';
+import { WORKLOADS_QUERY_PARAMS } from '@/routing/resourceLinks';
 
 export interface WorkloadRouteStateOptions {
   allGuests: Accessor<WorkloadGuest[]>;
@@ -19,6 +20,7 @@ export interface WorkloadRouteStateOptions {
 }
 
 export function useWorkloadRouteState(options: WorkloadRouteStateOptions) {
+  const navigate = useNavigate();
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
   const [selectedPlatform, setSelectedPlatform] = createSignal<string | null>(null);
   const [selectedKubernetesContext, setSelectedKubernetesContext] = createSignal<string | null>(
@@ -28,19 +30,38 @@ export function useWorkloadRouteState(options: WorkloadRouteStateOptions) {
     null,
   );
   const [selectedHostHint, setSelectedHostHint] = createSignal<string | null>(null);
+  const [viewMode, setViewMode] = createSignal<ViewMode>('all');
+  const [containerRuntime, setContainerRuntime] = createSignal<string>('');
 
-  const [viewMode, setViewMode] = usePersistentSignal<ViewMode>('workloadsViewMode', 'all', {
-    deserialize: deserializeWorkloadViewMode,
+  onMount(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    let mutated = false;
+
+    if (!params.has(WORKLOADS_QUERY_PARAMS.type)) {
+      const legacyView = deserializeWorkloadViewMode(
+        window.localStorage.getItem('workloadsViewMode'),
+      );
+      if (legacyView !== 'all') {
+        params.set(WORKLOADS_QUERY_PARAMS.type, legacyView);
+        mutated = true;
+      }
+    }
+
+    if (!params.has(WORKLOADS_QUERY_PARAMS.runtime)) {
+      const legacyRuntime = deserializeWorkloadsContainerRuntime(
+        window.localStorage.getItem('workloadsContainerRuntime'),
+      );
+      if (legacyRuntime !== '') {
+        params.set(WORKLOADS_QUERY_PARAMS.runtime, legacyRuntime);
+        mutated = true;
+      }
+    }
+
+    if (mutated) {
+      navigate(`${window.location.pathname}?${params.toString()}`, { replace: true });
+    }
   });
-
-  const [containerRuntime, setContainerRuntime] = usePersistentSignal<string>(
-    'workloadsContainerRuntime',
-    '',
-    {
-      deserialize: deserializeWorkloadsContainerRuntime,
-      serialize: (value) => value,
-    },
-  );
   const filterViewMode = () => options.forcedViewMode ?? viewMode();
   const filterPlatformScope = () => options.forcedPlatform?.trim() || selectedPlatform();
 
