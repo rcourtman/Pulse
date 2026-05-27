@@ -1,4 +1,5 @@
 import { A } from '@solidjs/router';
+import RotateCcwIcon from 'lucide-solid/icons/rotate-ccw';
 import TriangleAlertIcon from 'lucide-solid/icons/triangle-alert';
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -252,6 +253,13 @@ export function createPlatformTableFilterState<Row, Status extends string | numb
   const filtered = createMemo(() => props.filter(props.resources(), search(), status()));
   const visible = createMemo(() => filtered().length);
   const total = createMemo(() => props.resources().length);
+  const hasActiveFilters = createMemo(
+    () => search().trim().length > 0 || status() !== props.initialStatus,
+  );
+  const resetFilters = () => {
+    setSearch('');
+    setStatus(() => props.initialStatus);
+  };
 
   return {
     search,
@@ -261,8 +269,26 @@ export function createPlatformTableFilterState<Row, Status extends string | numb
     filtered,
     visible,
     total,
+    hasActiveFilters,
+    resetFilters,
   };
 }
+
+export const PlatformTableResetFiltersButton: Component<{
+  onReset: () => void;
+  label?: string;
+}> = (props) => (
+  <button
+    type="button"
+    onClick={props.onReset}
+    class="inline-flex min-h-8 items-center justify-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
+    title={props.label ?? 'Reset filters'}
+    aria-label={props.label ?? 'Reset filters'}
+  >
+    <RotateCcwIcon class="h-3.5 w-3.5" aria-hidden="true" />
+    <span class="hidden sm:inline">{props.label ?? 'Reset filters'}</span>
+  </button>
+);
 
 // Compact operator-facing counter shown at the right of the toolbar so
 // users can read total / matching at a glance, mirroring v5's dense
@@ -296,6 +322,8 @@ export function PlatformTableToolbar<T extends string | number>(props: {
   visible: number;
   total: number;
   rowNoun: string;
+  hasActiveFilters?: boolean;
+  onResetFilters?: () => void;
 }) {
   return (
     <div class="flex flex-wrap items-center gap-2">
@@ -315,6 +343,9 @@ export function PlatformTableToolbar<T extends string | number>(props: {
         value={props.status}
         onChange={props.onStatusChange}
       />
+      <Show when={props.hasActiveFilters && props.onResetFilters}>
+        <PlatformTableResetFiltersButton onReset={props.onResetFilters!} />
+      </Show>
       <PlatformResourceCounter
         visible={props.visible}
         total={props.total}
@@ -361,6 +392,8 @@ export const PlatformResourceTable: Component<{
           visible={tableState.visible()}
           total={tableState.total()}
           rowNoun="rows"
+          hasActiveFilters={tableState.hasActiveFilters()}
+          onResetFilters={tableState.resetFilters}
         />
         <Show
           when={tableState.filtered().length > 0}
@@ -369,6 +402,7 @@ export const PlatformResourceTable: Component<{
               icon={props.emptyIcon}
               title="No rows match current filters"
               description="Adjust the search or status filter to see more rows."
+              actions={<PlatformTableResetFiltersButton onReset={tableState.resetFilters} />}
             />
           }
         >

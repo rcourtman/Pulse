@@ -129,10 +129,12 @@ describe('filterPlatformResources', () => {
 
         expect(state.total()).toBe(resources.length);
         expect(state.visible()).toBe(resources.length);
+        expect(state.hasActiveFilters()).toBe(false);
 
         state.setSearch('gpu');
         expect(state.filtered().map((r) => r.id)).toEqual(['host-with-tag']);
         expect(state.visible()).toBe(1);
+        expect(state.hasActiveFilters()).toBe(true);
 
         state.setSearch('host');
         state.setStatus('offline');
@@ -142,6 +144,12 @@ describe('filterPlatformResources', () => {
             .map((r) => r.id)
             .sort(),
         ).toEqual(['host-delta', 'host-echo']);
+
+        state.resetFilters();
+        expect(state.search()).toBe('');
+        expect(state.status()).toBe('all');
+        expect(state.visible()).toBe(resources.length);
+        expect(state.hasActiveFilters()).toBe(false);
       } finally {
         dispose();
       }

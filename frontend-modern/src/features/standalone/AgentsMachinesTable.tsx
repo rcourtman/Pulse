@@ -40,6 +40,7 @@ import {
   PLATFORM_TABLE_CARD_CLASS,
   PLATFORM_TABLE_HEADER_ROW_CLASS,
   PlatformTableEmptyState,
+  PlatformTableResetFiltersButton,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   filterPlatformResources,
@@ -1143,6 +1144,8 @@ export const AgentsMachinesTable: Component<{
               visible={tableState.visible()}
               total={tableState.total()}
               rowNoun="machines"
+              hasActiveFilters={tableState.hasActiveFilters()}
+              onResetFilters={tableState.resetFilters}
             />
           </div>
           <ColumnPicker
@@ -1160,6 +1163,7 @@ export const AgentsMachinesTable: Component<{
               icon={props.emptyIcon}
               title="No machines match current filters"
               description="Adjust the search or status filter to see more Pulse Agent machines."
+              actions={<PlatformTableResetFiltersButton onReset={tableState.resetFilters} />}
             />
           }
         >

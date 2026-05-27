@@ -253,6 +253,35 @@ describe('AgentsMachinesTable', () => {
     ).toBeInTheDocument();
   });
 
+  it('resets active filters from the Machines empty state', async () => {
+    render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({ id: 'mac-mini', name: 'Mac Mini', status: 'online' }),
+          resource({ id: 'windows-runner', name: 'Windows Runner', status: 'offline' }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    const search = screen.getByPlaceholderText('Search machines') as HTMLInputElement;
+
+    await fireEvent.input(search, { target: { value: 'does-not-exist' } });
+
+    expect(screen.getByText('No machines match current filters')).toBeInTheDocument();
+    expect(screen.queryByText('Mac Mini')).not.toBeInTheDocument();
+    expect(screen.queryByText('Windows Runner')).not.toBeInTheDocument();
+
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Reset filters' })[0]);
+
+    expect(search.value).toBe('');
+    expect(screen.queryByText('No machines match current filters')).not.toBeInTheDocument();
+    expect(screen.getByText('Mac Mini')).toBeInTheDocument();
+    expect(screen.getByText('Windows Runner')).toBeInTheDocument();
+  });
+
   it('preserves last-seen context in the machine subtitle when that column is hidden', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_700_000_600_000);
 
