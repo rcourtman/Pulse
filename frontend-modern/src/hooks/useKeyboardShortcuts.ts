@@ -9,10 +9,10 @@ import {
   buildVmwarePath,
 } from '@/routing/resourceLinks';
 import {
-  createEmptyInfrastructureNavigationVisibility,
-  filterInfrastructureNavigationShortcuts,
-  type InfrastructureNavigationVisibility,
-} from '@/features/infrastructureNavigation/infrastructureNavigationModel';
+  createEmptyPlatformNavigationVisibility,
+  filterPlatformNavigationShortcuts,
+  type PlatformNavigationVisibility,
+} from '@/features/platformNavigation/platformNavigationModel';
 import { focusActiveTypeToSearch } from '@/hooks/useTypeToSearch';
 
 type KeyboardShortcutsOptions = {
@@ -26,7 +26,7 @@ type KeyboardShortcutsOptions = {
   onCloseCommandPalette?: () => void;
   onToggleCommandPalette?: () => void;
   onFocusSearch?: () => boolean | void;
-  infrastructureVisibility?: Accessor<InfrastructureNavigationVisibility>;
+  platformVisibility?: Accessor<PlatformNavigationVisibility>;
 };
 
 const isEditableTarget = (target: EventTarget | null): boolean => {
@@ -83,9 +83,9 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
   };
 
   const getRoutes = (): Record<string, string> => {
-    const infrastructureVisibility =
-      options.infrastructureVisibility?.() ?? createEmptyInfrastructureNavigationVisibility();
-    const infrastructureRoutes = filterInfrastructureNavigationShortcuts(
+    const platformVisibility =
+      options.platformVisibility?.() ?? createEmptyPlatformNavigationVisibility();
+    const infrastructureRoutes = filterPlatformNavigationShortcuts(
       {
         proxmox: { key: 'p', route: buildProxmoxPath() },
         docker: { key: 'd', route: buildDockerPath() },
@@ -94,7 +94,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
         vmware: { key: 'v', route: buildVmwarePath() },
         standalone: { key: 's', route: buildStandalonePath() },
       },
-      infrastructureVisibility,
+      platformVisibility,
     );
     return {
       ...infrastructureRoutes,

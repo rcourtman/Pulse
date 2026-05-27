@@ -1,12 +1,12 @@
 import {
-  primaryInfrastructureNavigationIsVisible,
-  type InfrastructureNavigationVisibility,
-} from '@/features/infrastructureNavigation/infrastructureNavigationModel';
+  primaryPlatformNavigationIsVisible,
+  type PlatformNavigationVisibility,
+} from '@/features/platformNavigation/platformNavigationModel';
 
 export interface CommandPaletteModalProps {
   isOpen: boolean;
   onClose: () => void;
-  infrastructureVisibility: () => InfrastructureNavigationVisibility;
+  platformVisibility: () => PlatformNavigationVisibility;
 }
 
 export type CommandPaletteModalCommand = {
@@ -31,12 +31,12 @@ export type CommandPaletteCommandPaths = {
 
 export function buildCommandPaletteCommands(options: {
   paths: CommandPaletteCommandPaths;
-  infrastructureVisibility: InfrastructureNavigationVisibility;
+  platformVisibility: PlatformNavigationVisibility;
   navigate: (path: string) => void;
 }): CommandPaletteModalCommand[] {
   const commands: CommandPaletteModalCommand[] = [];
 
-  if (primaryInfrastructureNavigationIsVisible(options.infrastructureVisibility, 'proxmox')) {
+  if (primaryPlatformNavigationIsVisible(options.platformVisibility, 'proxmox')) {
     commands.push({
       id: 'nav-proxmox',
       label: 'Go to Proxmox',
@@ -47,7 +47,7 @@ export function buildCommandPaletteCommands(options: {
     });
   }
 
-  if (primaryInfrastructureNavigationIsVisible(options.infrastructureVisibility, 'docker')) {
+  if (primaryPlatformNavigationIsVisible(options.platformVisibility, 'docker')) {
     commands.push({
       id: 'nav-docker',
       label: 'Go to Containers',
@@ -58,7 +58,7 @@ export function buildCommandPaletteCommands(options: {
     });
   }
 
-  if (primaryInfrastructureNavigationIsVisible(options.infrastructureVisibility, 'kubernetes')) {
+  if (primaryPlatformNavigationIsVisible(options.platformVisibility, 'kubernetes')) {
     commands.push(
       {
         id: 'nav-kubernetes',
@@ -78,7 +78,7 @@ export function buildCommandPaletteCommands(options: {
     );
   }
 
-  if (primaryInfrastructureNavigationIsVisible(options.infrastructureVisibility, 'truenas')) {
+  if (primaryPlatformNavigationIsVisible(options.platformVisibility, 'truenas')) {
     commands.push({
       id: 'nav-truenas',
       label: 'Go to TrueNAS',
@@ -89,7 +89,7 @@ export function buildCommandPaletteCommands(options: {
     });
   }
 
-  if (primaryInfrastructureNavigationIsVisible(options.infrastructureVisibility, 'vmware')) {
+  if (primaryPlatformNavigationIsVisible(options.platformVisibility, 'vmware')) {
     commands.push(
       {
         id: 'nav-vmware',
@@ -109,7 +109,7 @@ export function buildCommandPaletteCommands(options: {
     );
   }
 
-  if (primaryInfrastructureNavigationIsVisible(options.infrastructureVisibility, 'standalone')) {
+  if (primaryPlatformNavigationIsVisible(options.platformVisibility, 'standalone')) {
     commands.push({
       id: 'nav-standalone',
       label: 'Go to Machines',

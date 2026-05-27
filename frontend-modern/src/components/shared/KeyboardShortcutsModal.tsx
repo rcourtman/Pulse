@@ -1,9 +1,9 @@
 import { For, createMemo } from 'solid-js';
 import { Dialog } from '@/components/shared/Dialog';
 import {
-  primaryInfrastructureNavigationIsVisible,
-  type InfrastructureNavigationVisibility,
-} from '@/features/infrastructureNavigation/infrastructureNavigationModel';
+  primaryPlatformNavigationIsVisible,
+  type PlatformNavigationVisibility,
+} from '@/features/platformNavigation/platformNavigationModel';
 
 interface ShortcutGroup {
   title: string;
@@ -13,7 +13,7 @@ interface ShortcutGroup {
 interface KeyboardShortcutsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  infrastructureVisibility: () => InfrastructureNavigationVisibility;
+  platformVisibility: () => PlatformNavigationVisibility;
 }
 
 const UNIFIED_NAV_SHORTCUTS: ShortcutGroup = {
@@ -31,7 +31,7 @@ const UNIFIED_NAV_SHORTCUTS: ShortcutGroup = {
   ],
 };
 
-const NAV_PRIMARY_SHORTCUTS: Record<string, keyof InfrastructureNavigationVisibility> = {
+const NAV_PRIMARY_SHORTCUTS: Record<string, keyof PlatformNavigationVisibility> = {
   'g then s': 'standalone',
   'g then p': 'proxmox',
   'g then d': 'docker',
@@ -52,11 +52,11 @@ const SEARCH_SHORTCUTS: ShortcutGroup = {
 
 export function KeyboardShortcutsModal(props: KeyboardShortcutsModalProps) {
   const shortcutGroups = createMemo<ShortcutGroup[]>(() => {
-    const infrastructureVisibility = props.infrastructureVisibility();
+    const platformVisibility = props.platformVisibility();
     const visibleNavigationItems = UNIFIED_NAV_SHORTCUTS.items.filter((item) => {
       const navId = NAV_PRIMARY_SHORTCUTS[item.keys];
       if (!navId) return true;
-      return primaryInfrastructureNavigationIsVisible(infrastructureVisibility, navId);
+      return primaryPlatformNavigationIsVisible(platformVisibility, navId);
     });
     return [{ ...UNIFIED_NAV_SHORTCUTS, items: visibleNavigationItems }, SEARCH_SHORTCUTS];
   });

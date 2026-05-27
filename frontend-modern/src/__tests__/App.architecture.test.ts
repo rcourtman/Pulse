@@ -106,10 +106,10 @@ describe('App architecture', () => {
     // Governed shell nav: Infrastructure, Workloads, Storage, and Recovery are
     // not standalone shell tabs; platform/runtime pages own those workflows.
     expect(appSource).toContain('getDefaultWorkspaceRoute');
-    expect(appSource).toContain('infrastructureNavigationResolved');
-    expect(appSource).toContain('buildPrimaryInfrastructureNavigationVisibility');
-    expect(appLayoutSource).toContain('buildPrimaryInfrastructureNavigationVisibility');
-    expect(appLayoutSource).toContain('primaryInfrastructureNavigationIsVisible');
+    expect(appSource).toContain('platformNavigationResolved');
+    expect(appSource).toContain('buildPrimaryPlatformNavigationVisibility');
+    expect(appLayoutSource).toContain('buildPrimaryPlatformNavigationVisibility');
+    expect(appLayoutSource).toContain('primaryPlatformNavigationIsVisible');
     expect(appLayoutSource).toContain("label: 'Containers'");
     expect(appLayoutSource).toContain("'Docker / Podman runtime lens");
     expect(appLayoutSource).not.toContain("id: 'infrastructure',");

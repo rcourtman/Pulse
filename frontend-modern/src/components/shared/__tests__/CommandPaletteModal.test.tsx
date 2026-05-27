@@ -5,7 +5,7 @@ import type { Resource } from '@/types/resource';
 import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.tsx?raw';
 import commandPaletteModelSource from '@/components/shared/commandPaletteModel.ts?raw';
 import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
-import { buildPrimaryInfrastructureNavigationVisibility } from '@/features/infrastructureNavigation/infrastructureNavigationModel';
+import { buildPrimaryPlatformNavigationVisibility } from '@/features/platformNavigation/platformNavigationModel';
 
 const navigateMock = vi.fn();
 
@@ -34,8 +34,8 @@ const makeResource = (overrides: Partial<Resource>): Resource =>
     ...overrides,
   }) as Resource;
 
-const infrastructureVisibility = () =>
-  buildPrimaryInfrastructureNavigationVisibility([
+const platformVisibility = () =>
+  buildPrimaryPlatformNavigationVisibility([
     makeResource({ id: 'agent-1', type: 'agent', platformType: 'agent' }),
     makeResource({ id: 'pve-1', type: 'agent', platformType: 'proxmox-pve' }),
     makeResource({ id: 'docker-1', type: 'docker-host', platformType: 'docker' }),
@@ -90,7 +90,7 @@ describe('CommandPaletteModal', () => {
       <CommandPaletteModal
         isOpen={true}
         onClose={vi.fn()}
-        infrastructureVisibility={infrastructureVisibility}
+        platformVisibility={platformVisibility}
       />
     ));
 
@@ -122,7 +122,7 @@ describe('CommandPaletteModal', () => {
       <CommandPaletteModal
         isOpen={true}
         onClose={onClose}
-        infrastructureVisibility={infrastructureVisibility}
+        platformVisibility={platformVisibility}
       />
     ));
 
@@ -138,7 +138,7 @@ describe('CommandPaletteModal', () => {
       <CommandPaletteModal
         isOpen={true}
         onClose={onClose}
-        infrastructureVisibility={infrastructureVisibility}
+        platformVisibility={platformVisibility}
       />
     ));
 
@@ -154,7 +154,7 @@ describe('CommandPaletteModal', () => {
       <CommandPaletteModal
         isOpen={true}
         onClose={onClose}
-        infrastructureVisibility={infrastructureVisibility}
+        platformVisibility={platformVisibility}
       />
     ));
 
@@ -171,8 +171,8 @@ describe('CommandPaletteModal', () => {
       <CommandPaletteModal
         isOpen={true}
         onClose={vi.fn()}
-        infrastructureVisibility={() =>
-          buildPrimaryInfrastructureNavigationVisibility([
+        platformVisibility={() =>
+          buildPrimaryPlatformNavigationVisibility([
             makeResource({ id: 'pve-1', type: 'agent', platformType: 'proxmox-pve' }),
           ])
         }

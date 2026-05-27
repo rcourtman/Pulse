@@ -18,11 +18,11 @@ import {
   type MobileNavBarUtilityTab as UtilityTab,
 } from '@/components/shared/MobileNavBar';
 import {
-  buildPrimaryInfrastructureNavigationVisibility,
-  primaryInfrastructureNavigationIsVisible,
-  selectFirstVisiblePrimaryInfrastructureNavigationId,
-  type PrimaryInfrastructureNavId,
-} from '@/features/infrastructureNavigation/infrastructureNavigationModel';
+  buildPrimaryPlatformNavigationVisibility,
+  primaryPlatformNavigationIsVisible,
+  selectFirstVisiblePrimaryPlatformNavigationId,
+  type PrimaryPlatformNavId,
+} from '@/features/platformNavigation/platformNavigationModel';
 import { dialogStackHasBlockingDialog } from '@/components/shared/useDialogState';
 import { OrgSwitcher } from '@/components/OrgSwitcher';
 import { PulsePatrolLogo } from '@/components/Brand/PulsePatrolLogo';
@@ -227,10 +227,10 @@ export function AppLayout(props: AppLayoutProps) {
     setKioskMode(!kioskMode());
   };
 
-  const infrastructureNavigationVisibility = createMemo(() =>
-    buildPrimaryInfrastructureNavigationVisibility(props.state().resources || []),
+  const platformNavigationVisibility = createMemo(() =>
+    buildPrimaryPlatformNavigationVisibility(props.state().resources || []),
   );
-  const primaryInfrastructureRouteById: Record<PrimaryInfrastructureNavId, string> = {
+  const primaryInfrastructureRouteById: Record<PrimaryPlatformNavId, string> = {
     proxmox: ROOT_PROXMOX_PATH,
     docker: ROOT_DOCKER_PATH,
     kubernetes: ROOT_KUBERNETES_PATH,
@@ -239,8 +239,8 @@ export function AppLayout(props: AppLayoutProps) {
     standalone: ROOT_STANDALONE_PATH,
   };
   const primaryWorkspacePath = createMemo(() => {
-    const navId = selectFirstVisiblePrimaryInfrastructureNavigationId(
-      infrastructureNavigationVisibility(),
+    const navId = selectFirstVisiblePrimaryPlatformNavigationId(
+      platformNavigationVisibility(),
     );
     return navId ? primaryInfrastructureRouteById[navId] : ROOT_ALERTS_PATH;
   });
@@ -326,9 +326,9 @@ export function AppLayout(props: AppLayoutProps) {
   // appears when the support manifest says the surface is supported and the
   // current resource snapshot proves that surface is actually present.
   const primaryTabs = createMemo<PrimaryTab[]>(() => {
-    const visible = infrastructureNavigationVisibility();
+    const visible = platformNavigationVisibility();
     const isVisible = (id: PrimaryTab['id']) =>
-      primaryInfrastructureNavigationIsVisible(visible, id as PrimaryInfrastructureNavId);
+      primaryPlatformNavigationIsVisible(visible, id as PrimaryPlatformNavId);
     const allPrimaryTabs: PrimaryTab[] = [
       {
         id: 'proxmox',

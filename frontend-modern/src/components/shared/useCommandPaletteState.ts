@@ -34,7 +34,7 @@ export function useCommandPaletteState(props: CommandPaletteModalProps) {
         vmwarePath: buildVmwarePath(),
         vmwareNetworksPath: buildVmwarePath('networks'),
       },
-      infrastructureVisibility: props.infrastructureVisibility(),
+      platformVisibility: props.platformVisibility(),
       navigate,
     }),
   );
