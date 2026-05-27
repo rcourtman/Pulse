@@ -296,11 +296,13 @@ func TestAgentlessAvailabilityTargetKindStaysCanonical(t *testing.T) {
 			"export type AvailabilityTargetKind = 'machine' | 'service' | 'device';",
 			"targetKind?: AvailabilityTargetKind;",
 		},
-		filepath.Join("..", "..", "frontend-modern", "src", "features", "standalone", "standalonePageModel.ts"): {
-			"resource.availability?.targetKind",
-			"resource.platformData?.availability as { targetKind?: string }",
-			"availabilityTargetKindFor(resource) === 'machine'",
-		},
+		// standalonePageModel.ts no longer references targetKind: commit
+		// 1e16cf34f intentionally narrowed the Machines surface to Pulse
+		// Agent resources only, so agentless availability targets are no
+		// longer classified by kind for the Machines list. The server
+		// contract (config/availability.go, monitoring/availability_poller.go,
+		// types.go, frontend-modern/src/api/availabilityTargets.ts) still
+		// preserves targetKind for any future UI that wants to consume it.
 	}
 
 	for path, snippets := range requiredSnippets {

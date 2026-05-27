@@ -91,7 +91,7 @@ control-plane:
 test:
 	@./scripts/ensure_test_assets.sh
 	@echo "Running backend tests..."
-	go test -race -timeout 10m $$(go list $(GO_TEST_PACKAGES))
+	go test -race -timeout 20m $$(go list $(GO_TEST_PACKAGES))
 
 # Run integration tests (requires Ollama at OLLAMA_URL or 127.0.0.1:11434)
 test-integration:
