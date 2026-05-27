@@ -171,6 +171,31 @@ describe('AgentsMachinesTable', () => {
     expect(screen.getByText('richard-mac-mini.local | 192.168.0.98')).toBeInTheDocument();
   });
 
+  it('shows a row expansion affordance for machine details', async () => {
+    const { container } = render(() => (
+      <AgentsMachinesTable
+        resources={[resource({ id: 'expandable-machine', name: 'Expandable Machine' })]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    const icon = container.querySelector('[data-agent-machine-expand-icon]');
+    expect(icon).not.toBeNull();
+    expect(icon).not.toHaveClass('rotate-90');
+    expect(screen.queryByTestId('resource-detail-drawer')).not.toBeInTheDocument();
+
+    const row = container.querySelector('[data-agents-machine-row="expandable-machine"]');
+    expect(row).not.toBeNull();
+    if (!row || !icon) return;
+
+    await fireEvent.click(row);
+
+    expect(icon).toHaveClass('rotate-90');
+    expect(screen.getByTestId('resource-detail-drawer')).toBeInTheDocument();
+  });
+
   it('shows structured agent network interface details from the Net I/O value', async () => {
     const { container } = render(() => (
       <AgentsMachinesTable

@@ -1,3 +1,4 @@
+import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import { EnhancedCPUBar } from '@/components/Workloads/EnhancedCPUBar';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
@@ -1063,6 +1064,12 @@ export const AgentsMachinesTable: Component<{
                             class={`${getPlatformTableCellClassForKind('name')} ${machineColumnWidthClass('machine')}`}
                           >
                             <div class="flex min-w-0 items-center gap-2">
+                              <ChevronRightIcon
+                                data-agent-machine-expand-icon
+                                class="h-3.5 w-3.5 shrink-0 text-muted transition-transform duration-150"
+                                classList={{ 'rotate-90': isExpanded() }}
+                                aria-hidden="true"
+                              />
                               <StatusDot
                                 size="sm"
                                 variant={indicator().variant}
@@ -1077,7 +1084,7 @@ export const AgentsMachinesTable: Component<{
                               when={machineSubtitle()}
                               fallback={
                                 <span
-                                  class="mt-0.5 block truncate pl-5 text-[9px] text-muted sm:text-[10px] md:hidden"
+                                  class="mt-0.5 block truncate pl-10 text-[9px] text-muted sm:text-[10px] md:hidden"
                                   title={systemLabel()}
                                 >
                                   {systemLabel()}
@@ -1086,7 +1093,7 @@ export const AgentsMachinesTable: Component<{
                             >
                               {(subtitle) => (
                                 <span
-                                  class="mt-0.5 block truncate pl-5 text-[9px] text-muted sm:text-[10px]"
+                                  class="mt-0.5 block truncate pl-10 text-[9px] text-muted sm:text-[10px]"
                                   title={subtitle()}
                                 >
                                   {subtitle()}
