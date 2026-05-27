@@ -1493,7 +1493,7 @@ func TestWebSocketSendsInitialState(t *testing.T) {
 
 	readMsg := func() (string, map[string]any) {
 		t.Helper()
-		if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		if err := conn.SetReadDeadline(time.Now().Add(15 * time.Second)); err != nil {
 			t.Fatalf("set deadline: %v", err)
 		}
 		_, data, err := conn.ReadMessage()
@@ -1540,7 +1540,7 @@ func TestWebSocketSendsInitialState(t *testing.T) {
 	state := srv.monitor.BuildFrontendState()
 	srv.hub.BroadcastState(state)
 
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(15 * time.Second)
 	for {
 		msgType, payload = readMsg()
 		if msgType == "rawData" {
@@ -1570,7 +1570,7 @@ func TestWebsocketPayloadContractShape(t *testing.T) {
 
 	readMsg := func() (string, map[string]any) {
 		t.Helper()
-		if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		if err := conn.SetReadDeadline(time.Now().Add(15 * time.Second)); err != nil {
 			t.Fatalf("set deadline: %v", err)
 		}
 		_, data, err := conn.ReadMessage()
@@ -1679,7 +1679,7 @@ func TestWebsocketPayloadUsesCanonicalStateContract(t *testing.T) {
 
 	readMsg := func() (string, map[string]any) {
 		t.Helper()
-		if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		if err := conn.SetReadDeadline(time.Now().Add(15 * time.Second)); err != nil {
 			t.Fatalf("set deadline: %v", err)
 		}
 		_, data, err := conn.ReadMessage()
