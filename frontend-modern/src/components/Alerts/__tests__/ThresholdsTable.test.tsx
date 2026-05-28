@@ -396,7 +396,7 @@ describe('ThresholdsTable navigation and redirection', () => {
     render(() => <ThresholdsTable {...(baseProps() as any)} agents={[host]} />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('resource-table-Systems')).toBeInTheDocument();
+      expect(screen.getByTestId('resource-table-Machines')).toBeInTheDocument();
     });
   });
 
@@ -409,10 +409,10 @@ describe('ThresholdsTable navigation and redirection', () => {
     if (proxmoxTab) fireEvent.click(proxmoxTab);
     expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/proxmox');
 
-    const systemsTab = screen
+    const machinesTab = screen
       .getAllByRole('button')
-      .find((el) => el.textContent?.includes('Systems'));
-    if (systemsTab) fireEvent.click(systemsTab);
+      .find((el) => el.textContent?.includes('Machines'));
+    if (machinesTab) fireEvent.click(machinesTab);
     expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/systems');
 
     const vmwareTab = screen
@@ -438,10 +438,10 @@ describe('ThresholdsTable Resource Rendering', () => {
     render(() => <ThresholdsTable {...(baseProps() as any)} agents={[host]} />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('resource-table-Systems')).toBeInTheDocument();
+      expect(screen.getByTestId('resource-table-Machines')).toBeInTheDocument();
     });
 
-    expect(screen.getByTestId('resource-count-Systems')).toHaveTextContent('1');
+    expect(screen.getByTestId('resource-count-Machines')).toHaveTextContent('1');
     expect(screen.getByTestId('resource-name-h1')).toHaveTextContent('Host 1');
   });
 
@@ -468,7 +468,7 @@ describe('ThresholdsTable Resource Rendering', () => {
     render(() => <ThresholdsTable {...(baseProps() as any)} agents={[host]} />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('resource-table-Systems')).toBeInTheDocument();
+      expect(screen.getByTestId('resource-table-Machines')).toBeInTheDocument();
     });
 
     expect(screen.getByTestId('resource-name-h2')).toHaveTextContent('Secret Host');

@@ -32,7 +32,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         { value: 'kubernetes', label: 'Kubernetes', icon: getPlatformIcon('kubernetes') },
         { value: 'truenas', label: 'TrueNAS', icon: getPlatformIcon('truenas') },
         { value: 'vmware', label: 'vSphere', icon: getPlatformIcon('vmware') },
-        { value: 'systems', label: 'Systems', icon: getPlatformIcon('systems') },
+        { value: 'systems', label: 'Machines', icon: getPlatformIcon('systems') },
       ],
     },
     {

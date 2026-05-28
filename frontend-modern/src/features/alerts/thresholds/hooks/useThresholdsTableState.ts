@@ -492,14 +492,14 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
         },
         {
           key: 'agents',
-          label: 'Systems',
+          label: 'Machines',
           overrides: countOverrides(agentsWithOverrides()),
           tab: 'systems',
           total: props.agents?.length ?? 0,
         },
         {
           key: 'agentDisks',
-          label: 'System Disks',
+          label: 'Machine Disks',
           overrides: countOverrides(agentDisksWithOverrides()),
           tab: 'systems',
           total: agentDisksWithOverrides().length,

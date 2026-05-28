@@ -13,10 +13,10 @@ export const STORAGE_THRESHOLDS_FILTER_EMPTY_STATE = 'No storage devices match t
 export const PMG_THRESHOLDS_EMPTY_STATE =
   `No mail gateways configured yet. Add a Proxmox Mail Gateway connection in ${getInfrastructureSettingsLocationLabel()} to manage thresholds.`;
 export const PMG_THRESHOLDS_FILTER_EMPTY_STATE = 'No mail gateways match the current filters.';
-export const AGENT_THRESHOLDS_FILTER_EMPTY_STATE = 'No systems match the current filters.';
+export const AGENT_THRESHOLDS_FILTER_EMPTY_STATE = 'No machines match the current filters.';
 export const AGENT_DISKS_EMPTY_STATE =
-  'No system disks found. Systems with mounted filesystems will appear here.';
-export const AGENT_DISKS_FILTER_EMPTY_STATE = 'No system disks match the current filters.';
+  'No machine disks found. Machines with mounted filesystems will appear here.';
+export const AGENT_DISKS_FILTER_EMPTY_STATE = 'No machine disks match the current filters.';
 export const CONTAINER_RUNTIMES_FILTER_EMPTY_STATE =
   'No container runtimes match the current filters.';
 export const CONTAINERS_FILTER_EMPTY_STATE = 'No containers match the current filters.';
@@ -71,8 +71,8 @@ export const ALERT_THRESHOLDS_SECTION_TITLE_BACKUPS = 'Recovery';
 export const ALERT_THRESHOLDS_SECTION_TITLE_SNAPSHOTS = 'Snapshot Age';
 export const ALERT_THRESHOLDS_SECTION_TITLE_STORAGE = 'Storage Devices';
 export const ALERT_THRESHOLDS_SECTION_TITLE_PMG = 'Mail Gateway Thresholds';
-export const ALERT_THRESHOLDS_SECTION_TITLE_AGENTS = 'Systems';
-export const ALERT_THRESHOLDS_SECTION_TITLE_AGENT_DISKS = 'System Disks';
+export const ALERT_THRESHOLDS_SECTION_TITLE_AGENTS = 'Machines';
+export const ALERT_THRESHOLDS_SECTION_TITLE_AGENT_DISKS = 'Machine Disks';
 export const ALERT_THRESHOLDS_SECTION_TITLE_DOCKER_HOSTS = 'Container Runtimes';
 export const ALERT_THRESHOLDS_SECTION_TITLE_DOCKER_CONTAINERS = 'Containers';
 
