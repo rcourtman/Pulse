@@ -54,7 +54,7 @@ func TestResolveChannel(t *testing.T) {
 }
 
 func TestValidateApplyTargetVersion(t *testing.T) {
-	target, err := validateApplyTargetVersion("stable", "https://github.com/rcourtman/Pulse/releases/download/v6.0.0/pulse-v6.0.0-linux-amd64.tar.gz")
+	target, err := ValidateApplyTargetVersion("stable", "https://github.com/rcourtman/Pulse/releases/download/v6.0.0/pulse-v6.0.0-linux-amd64.tar.gz")
 	if err != nil {
 		t.Fatalf("stable release should be accepted, got %v", err)
 	}
@@ -62,19 +62,19 @@ func TestValidateApplyTargetVersion(t *testing.T) {
 		t.Fatalf("unexpected target version %q", target)
 	}
 
-	if _, err := validateApplyTargetVersion("stable", "https://github.com/rcourtman/Pulse/releases/download/v6.0.0-rc.1/pulse-v6.0.0-rc.1-linux-amd64.tar.gz"); err == nil {
+	if _, err := ValidateApplyTargetVersion("stable", "https://github.com/rcourtman/Pulse/releases/download/v6.0.0-rc.1/pulse-v6.0.0-rc.1-linux-amd64.tar.gz"); err == nil {
 		t.Fatal("expected stable channel to reject prerelease target")
 	}
 
-	if _, err := validateApplyTargetVersion("rc", "https://github.com/rcourtman/Pulse/releases/download/v6.0.0-rc.1/pulse-v6.0.0-rc.1-linux-amd64.tar.gz"); err != nil {
+	if _, err := ValidateApplyTargetVersion("rc", "https://github.com/rcourtman/Pulse/releases/download/v6.0.0-rc.1/pulse-v6.0.0-rc.1-linux-amd64.tar.gz"); err != nil {
 		t.Fatalf("rc channel should accept prerelease target, got %v", err)
 	}
 
-	if _, err := validateApplyTargetVersion("stable", "https://github.com/rcourtman/Pulse/releases/download/latest/install.sh"); err == nil {
+	if _, err := ValidateApplyTargetVersion("stable", "https://github.com/rcourtman/Pulse/releases/download/latest/install.sh"); err == nil {
 		t.Fatal("expected invalid download URL to be rejected")
 	}
 
-	target, err = validateApplyTargetVersion("stable", "https://github.com/rcourtman/Pulse/releases/download/v6.0.0/pulse-linux-amd64.tar.gz?download=1#v9.9.9")
+	target, err = ValidateApplyTargetVersion("stable", "https://github.com/rcourtman/Pulse/releases/download/v6.0.0/pulse-linux-amd64.tar.gz?download=1#v9.9.9")
 	if err != nil {
 		t.Fatalf("version should be inferred from URL path, got %v", err)
 	}

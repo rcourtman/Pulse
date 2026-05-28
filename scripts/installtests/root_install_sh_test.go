@@ -190,6 +190,70 @@ func TestRootInstallScriptUpdateDiskHeadroomAcceptsSeparateFilesystems(t *testin
 	}
 }
 
+func TestRootInstallScriptV5ToV6PreflightWarnsWhenAgentScopeMissing(t *testing.T) {
+	configDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(configDir, "api_tokens.json"), []byte(`[{"id":"tok-1","name":"admin","hash":"hash","scopes":["settings:read"]}]`), 0600); err != nil {
+		t.Fatalf("write api_tokens.json: %v", err)
+	}
+
+	script := `
+		set -euo pipefail
+		print_error() { echo "ERROR: $*"; }
+		print_info() { echo "INFO: $*"; }
+		print_warn() { echo "WARN: $*"; }
+		print_success() { echo "SUCCESS: $*"; }
+		UPGRADE_PREFLIGHT_RAN=false
+		SKIP_UPGRADE_PREFLIGHT=false
+` + extractRootInstallShellFunction(t, "version_major") + `
+` + extractRootInstallShellFunction(t, "is_pre_v6_to_v6_upgrade") + `
+` + extractRootInstallShellFunction(t, "inspect_api_tokens_for_upgrade") + `
+` + extractRootInstallShellFunction(t, "run_upgrade_readiness_preflight") + `
+		run_upgrade_readiness_preflight v5.1.23 v6.0.0
+	`
+
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Env = append(os.Environ(), "CONFIG_DIR="+configDir)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "No agent reporting token scope was found") {
+		t.Fatalf("expected missing-scope warning, got:\n%s", out)
+	}
+}
+
+func TestRootInstallScriptV5ToV6PreflightAcceptsLegacyHostAgentScope(t *testing.T) {
+	configDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(configDir, "api_tokens.json"), []byte(`[{"id":"tok-1","name":"agent","hash":"hash","scopes":["host-agent:report"]}]`), 0600); err != nil {
+		t.Fatalf("write api_tokens.json: %v", err)
+	}
+
+	script := `
+		set -euo pipefail
+		print_error() { echo "ERROR: $*"; }
+		print_info() { echo "INFO: $*"; }
+		print_warn() { echo "WARN: $*"; }
+		print_success() { echo "SUCCESS: $*"; }
+		UPGRADE_PREFLIGHT_RAN=false
+		SKIP_UPGRADE_PREFLIGHT=false
+` + extractRootInstallShellFunction(t, "version_major") + `
+` + extractRootInstallShellFunction(t, "is_pre_v6_to_v6_upgrade") + `
+` + extractRootInstallShellFunction(t, "inspect_api_tokens_for_upgrade") + `
+` + extractRootInstallShellFunction(t, "run_upgrade_readiness_preflight") + `
+		run_upgrade_readiness_preflight v5.1.23 v6.0.0
+	`
+
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Env = append(os.Environ(), "CONFIG_DIR="+configDir)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "Agent reporting token scope is present") {
+		t.Fatalf("expected success output, got:\n%s", out)
+	}
+}
+
 func TestRootInstallScriptAutoRegisterUsesSecureContractShape(t *testing.T) {
 	content, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
 	if err != nil {

@@ -189,7 +189,9 @@ platform page needs source-native backup columns.
 9. `frontend-modern/src/api/updates.ts` shared with `deployment-installability`: the updates frontend client is both a deployment-installability control surface and a canonical API payload contract boundary.
    It must preserve `/api/updates/plan.readiness` payloads as backend-owned
    API state so settings UI can render `ready`, `attention`, and `blocked`
-   update checks without rebuilding upgrade state locally.
+   update checks without rebuilding upgrade state locally. The frontend may
+   disable blocked installs, but the backend apply route remains authoritative
+   and must reject a recomputed `blocked` readiness verdict.
 10. `frontend-modern/src/components/Settings/APITokenManager.tsx` shared with `security-privacy`: the API token settings surface is both a security/privacy control surface and a canonical API payload contract boundary.
     The API token inventory table may own credential and usage cells, but it
     must inherit embedded table framing from `frontend-primitives`
@@ -428,7 +430,10 @@ platform page needs source-native backup columns.
     Update-plan responses own the structured readiness verdict for server
     updater capability, rollback support, agent continuity, and agent reporting
     token scope. That verdict is part of the update-plan API contract, not a
-    settings-only migration registry.
+    settings-only migration registry. `POST /api/updates/apply` must derive
+    the requested target version through the shared update-target validation
+    path, recompute readiness from live backend state, and reject `blocked`
+    verdicts before update execution starts.
 The platform-connections API contract also owns inactive monitored-system
 candidate semantics end to end. `enabled=false` on TrueNAS or VMware preview,
 test, add, and update payloads must serialize through the shared ledger client
@@ -3666,7 +3671,9 @@ The same update-plan contract now carries an optional `readiness` verdict.
 Backend handlers own the `ready` / `attention` / `blocked` status vocabulary
 and per-check payload shape, while frontend clients must preserve that payload
 unchanged so settings surfaces can disable automatic install on blocked checks
-without inventing a parallel migration state model.
+without inventing a parallel migration state model. The UI disablement is only
+presentation: backend apply handlers must still enforce `blocked` readiness
+server-side.
 Those same install-command payloads now also carry a non-TLS continuity
 contract: when Pulse returns a plain `http://` base URL for a generated agent
 install command, the command must include `--insecure` so the installed agent

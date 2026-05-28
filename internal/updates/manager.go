@@ -535,7 +535,7 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 	m.updateStatus("downloading", 10, "Downloading update...")
 
 	channel := m.resolveChannel(req.Channel, currentInfo)
-	targetVersion, validationErr := validateApplyTargetVersion(channel, req.DownloadURL)
+	targetVersion, validationErr := ValidateApplyTargetVersion(channel, req.DownloadURL)
 	if validationErr != nil {
 		return validationErr
 	}
@@ -1072,7 +1072,9 @@ func inferVersionFromDownloadURL(downloadURL string) string {
 	return ""
 }
 
-func validateApplyTargetVersion(channel string, downloadURL string) (string, error) {
+// ValidateApplyTargetVersion extracts and validates the target release from an
+// update download URL using the same channel rules enforced by the updater.
+func ValidateApplyTargetVersion(channel string, downloadURL string) (string, error) {
 	targetVersion := inferVersionFromDownloadURL(downloadURL)
 	if targetVersion == "" {
 		return "", fmt.Errorf("invalid download URL")

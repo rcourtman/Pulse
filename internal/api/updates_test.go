@@ -266,6 +266,64 @@ func TestHandleApplyUpdate_StableRejectsPrereleaseTarget(t *testing.T) {
 	}
 }
 
+func TestHandleApplyUpdate_BlocksWhenReadinessBlocked(t *testing.T) {
+	setMockModeForTest(t, true)
+
+	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+	applyCalled := false
+	mockManager := &MockUpdateManager{
+		ApplyUpdateFunc: func(ctx context.Context, req updates.ApplyUpdateRequest) error {
+			applyCalled = true
+			return nil
+		},
+	}
+
+	h := NewUpdateHandlers(mockManager, nil)
+	h.now = func() time.Time { return now }
+	h.SetUpdateReadinessSources(
+		func(context.Context) *config.Config {
+			return &config.Config{}
+		},
+		func(context.Context) []models.Host {
+			return []models.Host{{
+				ID:           "host-1",
+				Hostname:     "host-1",
+				LastSeen:     now.Add(-30 * time.Second),
+				AgentVersion: "5.1.23",
+				IsLegacy:     true,
+			}}
+		},
+	)
+	h.registry.Register("mock", &mockUpdater{
+		prepareFunc: func(ctx context.Context, req updates.UpdateRequest) (*updates.UpdatePlan, error) {
+			if req.Version != "v6.0.0" {
+				t.Fatalf("PrepareUpdate version = %q, want v6.0.0", req.Version)
+			}
+			return &updates.UpdatePlan{
+				CanAutoUpdate:   true,
+				RollbackSupport: true,
+				Instructions:    []string{"install"},
+			}, nil
+		},
+	})
+
+	w := httptest.NewRecorder()
+	body := `{"downloadUrl":"https://github.com/rcourtman/Pulse/releases/download/v6.0.0/pulse-v6.0.0-linux-amd64.tar.gz"}`
+	r := httptest.NewRequest(http.MethodPost, "/updates/apply?channel=stable", strings.NewReader(body))
+
+	h.HandleApplyUpdate(w, r)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("Expected status %d, got %d: %s", http.StatusConflict, w.Code, w.Body.String())
+	}
+	if applyCalled {
+		t.Fatal("ApplyUpdate should not be called when readiness is blocked")
+	}
+	if !strings.Contains(w.Body.String(), "Resolve 1 blocked upgrade check") {
+		t.Fatalf("expected readiness summary, got %q", w.Body.String())
+	}
+}
+
 func TestHandleUpdateStatus_Fresh(t *testing.T) {
 	mockManager := &MockUpdateManager{
 		GetStatusFunc: func() updates.UpdateStatus {

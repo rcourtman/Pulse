@@ -1339,7 +1339,7 @@ func TestSetupUpdateCommandHonorsRCChannelAndCustomPaths(t *testing.T) {
 	if !strings.Contains(got, `helper_args=()`) || !strings.Contains(got, `helper_args=("$@")`) {
 		t.Fatalf("update helper missing passthrough helper args:\n%s", got)
 	}
-	if !strings.Contains(got, `-h|--help|--uninstall|--version|--rc|--pre|--stable|--source|--from-source|--branch|--archive|--archive=*)`) {
+	if !strings.Contains(got, `-h|--help|--uninstall|--version|--rc|--pre|--stable|--source|--from-source|--branch|--archive|--archive=*|--skip-upgrade-preflight)`) {
 		t.Fatalf("update helper missing auto-selector guard for explicit flags:\n%s", got)
 	}
 	if !strings.Contains(got, `extra_args+=("${helper_args[@]}")`) {

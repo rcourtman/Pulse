@@ -146,13 +146,17 @@ reverse.
 
 Server update planning is part of the same lifecycle contract. The System
 Updates plan must surface a structured upgrade-readiness verdict before an
-operator installs a v6 update: server update path, registered agent continuity,
-and agent reporting token scope must be derived from the existing updater,
-connections ledger, and API token state rather than from docs-only guidance or
-a parallel migration registry. v5 or legacy agents that are still reporting
-must be treated as compatible with the v6 reporting boundary, while stale
-agents, missing reported versions, missing agent reporting scope, or expired
-agent tokens must be called out before the update starts.
+operator installs a v6 update, and the backend apply route must enforce a
+`blocked` verdict before starting the updater: server update path, registered
+agent continuity, and agent reporting token scope must be derived from the
+existing updater, connections ledger, and API token state rather than from
+docs-only guidance or a parallel migration registry. v5 or legacy agents that
+are still reporting must be treated as compatible with the v6 reporting
+boundary, while stale agents, missing reported versions, missing agent
+reporting scope, or expired agent tokens must be called out before the update
+starts. Root `install.sh` v5-to-v6 upgrades must also inspect local token
+metadata before binary replacement and warn when the shell path cannot prove
+agent-token continuity.
 
 Agent lifecycle and fleet-operation surfaces may consume
 `POST /api/actions/plan` for resource capability planning, but the action plan

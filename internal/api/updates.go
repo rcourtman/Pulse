@@ -152,6 +152,37 @@ func (h *UpdateHandlers) HandleApplyUpdate(w http.ResponseWriter, r *http.Reques
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	if h.hasUpdateReadinessSources() {
+		targetVersion, err := updates.ValidateApplyTargetVersion(channel, req.DownloadURL)
+		if err != nil {
+			statusCode, msg := classifyApplyUpdateStartError(err)
+			log.Warn().Err(err).Str("download_url", req.DownloadURL).Str("channel", channel).Msg("Update request rejected")
+			http.Error(w, msg, statusCode)
+			return
+		}
+
+		plan, statusCode, msg, err := h.prepareUpdatePlan(r.Context(), targetVersion, channel)
+		if err != nil {
+			if statusCode >= http.StatusInternalServerError {
+				log.Error().Err(err).Str("version", targetVersion).Str("channel", channel).Msg("Failed to prepare update readiness before apply")
+			} else {
+				log.Warn().Err(err).Str("version", targetVersion).Str("channel", channel).Msg("Update readiness request rejected")
+			}
+			http.Error(w, msg, statusCode)
+			return
+		}
+		if plan.Readiness != nil && plan.Readiness.Status == updateReadinessBlocked {
+			log.Warn().
+				Str("version", targetVersion).
+				Str("channel", channel).
+				Str("summary", plan.Readiness.Summary).
+				Msg("Update request blocked by readiness checks")
+			http.Error(w, plan.Readiness.Summary, http.StatusConflict)
+			return
+		}
+	}
+
 	applyReq := updates.ApplyUpdateRequest{
 		DownloadURL:  req.DownloadURL,
 		Channel:      channel,
@@ -370,13 +401,6 @@ func (h *UpdateHandlers) HandleGetUpdatePlan(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Get current version info to determine deployment type
-	versionInfo, err := updates.GetCurrentVersion()
-	if err != nil {
-		http.Error(w, "Failed to get version info", http.StatusInternalServerError)
-		return
-	}
-
 	// Get version from query
 	version := r.URL.Query().Get("version")
 	if version == "" {
@@ -389,36 +413,45 @@ func (h *UpdateHandlers) HandleGetUpdatePlan(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Get updater for deployment type. Some valid deployments intentionally do
-	// not support unattended updates; return a manual plan instead of surfacing
-	// a transport error to the UI.
-	updater, err := h.registry.Get(versionInfo.DeploymentType)
+	plan, statusCode, msg, err := h.prepareUpdatePlan(r.Context(), version, channel)
 	if err != nil {
-		if plan, ok := fallbackManualUpdatePlan(versionInfo.DeploymentType, version); ok {
-			w.Header().Set("Content-Type", "application/json")
-			normalizedPlan := h.attachUpdateReadiness(r.Context(), version, plan.NormalizeCollections())
-			json.NewEncoder(w).Encode(normalizedPlan)
-			return
+		if statusCode >= http.StatusInternalServerError {
+			log.Error().Err(err).Str("version", version).Str("channel", channel).Msg("Failed to prepare update plan")
 		}
-
-		http.Error(w, "No updater for deployment type", http.StatusNotFound)
-		return
-	}
-
-	// Prepare update plan
-	plan, err := updater.PrepareUpdate(r.Context(), updates.UpdateRequest{
-		Version: version,
-		Channel: channel,
-	})
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to prepare update plan")
-		http.Error(w, "Failed to prepare update plan", http.StatusInternalServerError)
+		http.Error(w, msg, statusCode)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	normalizedPlan := h.attachUpdateReadiness(r.Context(), version, plan.NormalizeCollections())
-	json.NewEncoder(w).Encode(normalizedPlan)
+	json.NewEncoder(w).Encode(plan)
+}
+
+func (h *UpdateHandlers) prepareUpdatePlan(ctx context.Context, version string, channel string) (updates.UpdatePlan, int, string, error) {
+	versionInfo, err := updates.GetCurrentVersion()
+	if err != nil {
+		return updates.UpdatePlan{}, http.StatusInternalServerError, "Failed to get version info", err
+	}
+
+	updater, err := h.registry.Get(versionInfo.DeploymentType)
+	if err != nil {
+		if plan, ok := fallbackManualUpdatePlan(versionInfo.DeploymentType, version); ok {
+			normalizedPlan := h.attachUpdateReadiness(ctx, version, plan.NormalizeCollections())
+			return normalizedPlan, 0, "", nil
+		}
+
+		return updates.UpdatePlan{}, http.StatusNotFound, "No updater for deployment type", err
+	}
+
+	plan, err := updater.PrepareUpdate(ctx, updates.UpdateRequest{
+		Version: version,
+		Channel: channel,
+	})
+	if err != nil {
+		return updates.UpdatePlan{}, http.StatusInternalServerError, "Failed to prepare update plan", err
+	}
+
+	normalizedPlan := h.attachUpdateReadiness(ctx, version, plan.NormalizeCollections())
+	return normalizedPlan, 0, "", nil
 }
 
 func (h *UpdateHandlers) attachUpdateReadiness(ctx context.Context, version string, plan updates.UpdatePlan) updates.UpdatePlan {
@@ -437,6 +470,10 @@ func (h *UpdateHandlers) attachUpdateReadiness(ctx context.Context, version stri
 		now:           now,
 	})
 	return plan.NormalizeCollections()
+}
+
+func (h *UpdateHandlers) hasUpdateReadinessSources() bool {
+	return h != nil && h.getConfig != nil && h.getHostsSnapshot != nil
 }
 
 func fallbackManualUpdatePlan(deploymentType string, version string) (*updates.UpdatePlan, bool) {

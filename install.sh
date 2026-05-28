@@ -97,6 +97,8 @@ ENABLE_AUTO_UPDATES=false
 AUTO_UPDATE_CHOICE_EXPLICIT=false
 FORCE_VERSION=""
 FORCE_CHANNEL=""
+SKIP_UPGRADE_PREFLIGHT="${PULSE_SKIP_UPGRADE_PREFLIGHT:-false}"
+UPGRADE_PREFLIGHT_RAN=false
 ARCHIVE_OVERRIDE="${PULSE_ARCHIVE_PATH:-}"
 SOURCE_BRANCH="main"
 CURRENT_INSTALL_CTID=""
@@ -2470,6 +2472,161 @@ compare_versions() {
     return 0  # versions are equal
 }
 
+version_major() {
+    local version="${1:-}"
+    version="${version#v}"
+    version="${version%%-*}"
+
+    local major="${version%%.*}"
+    if [[ ! "$major" =~ ^[0-9]+$ ]]; then
+        return 1
+    fi
+
+    printf '%s\n' "$major"
+}
+
+is_pre_v6_to_v6_upgrade() {
+    local current_version="${1:-}"
+    local target_version="${2:-}"
+    local current_major=""
+    local target_major=""
+
+    current_major=$(version_major "$current_version" 2>/dev/null || true)
+    target_major=$(version_major "$target_version" 2>/dev/null || true)
+
+    if [[ -z "$current_major" || -z "$target_major" ]]; then
+        return 1
+    fi
+
+    [[ "$current_major" -lt 6 && "$target_major" -ge 6 ]]
+}
+
+inspect_api_tokens_for_upgrade() {
+    local token_file="$1"
+
+    if ! command -v python3 >/dev/null 2>&1; then
+        return 1
+    fi
+
+    python3 - "$token_file" <<'PY'
+import datetime
+import json
+import sys
+
+path = sys.argv[1]
+try:
+    with open(path, "r", encoding="utf-8") as handle:
+        tokens = json.load(handle)
+except Exception:
+    print("invalid\t0\t0\t0\t0")
+    sys.exit(0)
+
+if not isinstance(tokens, list):
+    print("invalid\t0\t0\t0\t0")
+    sys.exit(0)
+
+now = datetime.datetime.now(datetime.timezone.utc)
+agent_scoped = 0
+expired = 0
+expiring = 0
+for token in tokens:
+    if not isinstance(token, dict):
+        continue
+    scopes = token.get("scopes")
+    if not scopes:
+        scopes = ["*"]
+    if not isinstance(scopes, list):
+        scopes = [str(scopes)]
+    normalized = {str(scope).strip() for scope in scopes}
+    if not ({"*", "agent:report", "host-agent:report"} & normalized):
+        continue
+    agent_scoped += 1
+    expires_at = token.get("expiresAt") or token.get("expires_at")
+    if not expires_at:
+        continue
+    try:
+        raw = str(expires_at).strip()
+        parsed = datetime.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=datetime.timezone.utc)
+    except Exception:
+        continue
+    if parsed <= now:
+        expired += 1
+    elif parsed - now <= datetime.timedelta(days=14):
+        expiring += 1
+
+print(f"ok\t{len(tokens)}\t{agent_scoped}\t{expired}\t{expiring}")
+PY
+}
+
+run_upgrade_readiness_preflight() {
+    local current_version="${1:-}"
+    local target_version="${2:-}"
+    local token_file="$CONFIG_DIR/api_tokens.json"
+
+    if ! is_pre_v6_to_v6_upgrade "$current_version" "$target_version"; then
+        return 0
+    fi
+
+    if [[ "$UPGRADE_PREFLIGHT_RAN" == "true" ]]; then
+        return 0
+    fi
+    UPGRADE_PREFLIGHT_RAN=true
+
+    if [[ "$SKIP_UPGRADE_PREFLIGHT" == "true" ]]; then
+        print_warn "Skipping Pulse v5 to v6 upgrade preflight because PULSE_SKIP_UPGRADE_PREFLIGHT=true or --skip-upgrade-preflight was set"
+        return 0
+    fi
+
+    echo
+    print_info "Running Pulse v5 to v6 upgrade preflight..."
+
+    if [[ -e "$token_file" && ! -r "$token_file" ]]; then
+        print_error "Cannot read API token inventory at $token_file"
+        print_info "Fix file permissions before upgrading so Pulse can preserve agent credentials."
+        return 1
+    fi
+
+    if [[ ! -f "$token_file" ]]; then
+        print_warn "No API token inventory found at $token_file"
+        print_info "If this instance has v5 host agents, refresh or reinstall their agent token after the server starts on v6."
+        return 0
+    fi
+
+    local report=""
+    local status=""
+    local total_tokens=0
+    local agent_tokens=0
+    local expired_tokens=0
+    local expiring_tokens=0
+
+    report=$(inspect_api_tokens_for_upgrade "$token_file" 2>/dev/null || true)
+    IFS=$'\t' read -r status total_tokens agent_tokens expired_tokens expiring_tokens <<<"$report"
+
+    if [[ "$status" == "ok" ]]; then
+        if [[ "$agent_tokens" -gt 0 && "$expired_tokens" -lt "$agent_tokens" ]]; then
+            print_success "Agent reporting token scope is present for v6 compatibility"
+            if [[ "$expired_tokens" -gt 0 || "$expiring_tokens" -gt 0 ]]; then
+                print_warn "$expired_tokens agent reporting token(s) are expired and $expiring_tokens expire within 14 days"
+            fi
+        elif [[ "$agent_tokens" -gt 0 ]]; then
+            print_warn "All agent reporting tokens in api_tokens.json are expired"
+            print_info "Existing agents may need a refreshed install token after the upgrade."
+        else
+            print_warn "No agent reporting token scope was found in api_tokens.json"
+            print_info "Existing v5 host agents need a token with agent:report or host-agent:report to reconnect through v6 compatibility routes."
+        fi
+    elif grep -Eq '"(agent:report|host-agent:report|\\*)"' "$token_file" 2>/dev/null; then
+        print_warn "API token inventory could not be parsed, but an agent reporting scope string is present"
+    else
+        print_warn "API token inventory could not be parsed and no agent reporting scope string was found"
+    fi
+
+    print_info "The in-app updater performs the live registered-agent readiness check before applying v6 updates."
+    return 0
+}
+
 
 check_existing_installation() {
     CURRENT_VERSION=""  # Make it global so we can use it later
@@ -3052,6 +3209,10 @@ download_pulse() {
             expected_release="$LATEST_RELEASE"
         fi
 
+        if ! run_upgrade_readiness_preflight "$CURRENT_VERSION" "$expected_release"; then
+            exit 1
+        fi
+
         # Detect and stop existing service after the archive is available but before replacing the binary.
         EXISTING_SERVICE=$(detect_service_name)
         if timeout 5 systemctl is-active --quiet "$EXISTING_SERVICE" 2>/dev/null; then
@@ -3503,7 +3664,7 @@ auto_selector_allowed=true
 if [[ \${#helper_args[@]} -gt 0 ]]; then
     for helper_arg in "\${helper_args[@]}"; do
         case "\$helper_arg" in
-            -h|--help|--uninstall|--version|--rc|--pre|--stable|--source|--from-source|--branch|--archive|--archive=*)
+            -h|--help|--uninstall|--version|--rc|--pre|--stable|--source|--from-source|--branch|--archive|--archive=*|--skip-upgrade-preflight)
                 auto_selector_allowed=false
                 break
                 ;;
@@ -4100,6 +4261,10 @@ main() {
             
             # Detect the actual service name before trying to stop it
             SERVICE_NAME=$(detect_service_name)
+
+            if ! run_upgrade_readiness_preflight "$CURRENT_VERSION" "$LATEST_RELEASE"; then
+                exit 1
+            fi
             
             backup_existing
             systemctl stop $SERVICE_NAME || true
@@ -4295,6 +4460,10 @@ main() {
                             ENABLE_AUTO_UPDATES=true
                         fi
                     fi
+                fi
+
+                if ! run_upgrade_readiness_preflight "$CURRENT_VERSION" "$LATEST_RELEASE"; then
+                    exit 1
                 fi
                 
                 backup_existing
@@ -4646,6 +4815,10 @@ while [[ $# -gt 0 ]]; do
             AUTO_UPDATE_CHOICE_EXPLICIT=true
             shift
             ;;
+        --skip-upgrade-preflight)
+            SKIP_UPGRADE_PREFLIGHT=true
+            shift
+            ;;
         --source|--from-source|--branch)
             BUILD_FROM_SOURCE=true
             # Optional: specify branch
@@ -4669,6 +4842,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --source [BRANCH]  Build and install from source (default: main)"
             echo "  --enable-auto-updates   Enable automatic stable updates (via systemd timer)"
             echo "  --disable-auto-updates  Explicitly keep automatic updates disabled"
+            echo "  --skip-upgrade-preflight Skip v5 to v6 compatibility preflight"
             echo ""
             echo "Management options:"
             echo "  --reset            Reset Pulse to fresh configuration"
