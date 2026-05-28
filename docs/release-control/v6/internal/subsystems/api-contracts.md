@@ -1653,6 +1653,12 @@ critical-only default) and a non-nil `patrol_alert_trigger_types` allowlist
 the handler rejects any `patrol_alert_trigger_min_severity` other than `warning`
 or `critical` with `400`, and lowercases, trims, drops blanks, and de-duplicates
 the types allowlist before persistence so the stored shape is canonical.
+Renaming the operator-facing "Alert-Triggered Analysis" toggle to "Container
+Update Risk" in `PatrolIntelligenceHeader.tsx` is presentation-only and carries
+no wire delta: the persisted settings keys stay `alert_triggered_analysis`,
+`patrol_alert_triggers_enabled`, and `patrol_alert_trigger_min_severity`. The
+operator label and the API field name are deliberately decoupled, so new copy
+must not rename the transport fields to chase the display string.
 The shared metrics-history API also treats `metric=temperature` as a canonical
 agent/node chart metric for Proxmox node drawers. `resourceType=agent` may serve
 the current host-agent CPU package temperature as a live fallback when persisted

@@ -464,6 +464,20 @@ selector reads `patrol_alert_trigger_min_severity` from the settings response,
 defaulting to critical-only, and must keep using the shared AI settings shape
 rather than forking a patrol-local form.
 
+That same configuration panel disambiguates the two alert-driven AI toggles by
+scope rather than by near-identical names. The genuinely general path is
+Alert-Triggered Patrols, which runs a focused Patrol investigation of the
+alert's own issue. The Pro-gated `AlertTriggeredAnalysis` toggle now presents as
+"Container Update Risk" with copy scoped to container-update alerts, because the
+enterprise `AlertTriggeredAnalyzer` only assesses `docker-container-update`
+alerts and returns nil for every other alert type. The panel is ordered
+explanatory box first, then Alert-Triggered Patrols plus its severity selector,
+then Anomaly-Triggered Patrols, then Container Update Risk plus its locked
+upgrade note, then Autonomous critical remediation. New copy must keep the
+container-update toggle scoped to its real Docker-update-risk capability instead
+of drifting back to a generically named "Alert-Triggered Analysis" control that
+collides with Patrol's own alert investigation.
+
 The route file `frontend-modern/src/pages/AIIntelligence.tsx` is now also a
 thin shell that delegates to the feature-owned
 `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx`, so Patrol

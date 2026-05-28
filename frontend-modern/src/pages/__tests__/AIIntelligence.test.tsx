@@ -704,7 +704,7 @@ describe('AIIntelligence entitlement gating', () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByText('Alert-triggered analysis is not enabled on this plan.'),
+      screen.getByText('Container update risk analysis is not enabled on this plan.'),
     ).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Upgrade to Pro' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Upgrade' })).not.toBeInTheDocument();
@@ -799,7 +799,7 @@ describe('AIIntelligence entitlement gating', () => {
 
     expect(screen.getByRole('button', { name: 'Investigate' })).not.toBeDisabled();
     expect(screen.getByRole('button', { name: 'Remediate' })).not.toBeDisabled();
-    expect(screen.getByRole('checkbox', { name: 'Alert-Triggered Analysis' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Container Update Risk' })).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Alert-Triggered Patrols' })).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Anomaly-Triggered Patrols' })).toBeInTheDocument();
     expect(

@@ -331,36 +331,6 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                   </div>
 
                   <div class="space-y-4 pt-4 border-t border-border-subtle">
-                    <div class="flex items-start justify-between gap-3">
-                      <div class="flex-1">
-                        <span
-                          id={fieldIds.alertTriggeredAnalysis}
-                          class="text-sm font-medium text-base-content"
-                        >
-                          Alert-Triggered Analysis
-                        </span>
-                        <p class="text-[11px] text-muted mt-0.5 leading-tight">
-                          Analyze infrastructure automatically when critical alerts fire.
-                        </p>
-                      </div>
-                      <Toggle
-                        checked={state.alertTriggeredAnalysis()}
-                        onChange={(e) =>
-                          state.handleAlertTriggeredAnalysisChange(e.currentTarget.checked)
-                        }
-                        disabled={state.isUpdatingSettings() || state.alertAnalysisLocked()}
-                        ariaLabelledBy={fieldIds.alertTriggeredAnalysis}
-                      />
-                    </div>
-
-                    <Show
-                      when={!presentationPolicyHidesUpgradePrompts() && state.alertAnalysisLocked()}
-                    >
-                      <div class="-my-1 pl-1 text-[11px]">
-                        Alert-triggered analysis is not enabled on this plan.
-                      </div>
-                    </Show>
-
                     <div class="rounded-md border border-border-subtle bg-surface-alt/60 px-3 py-2.5">
                       <p class="text-[11px] font-medium text-base-content">
                         {state.patrolInterval() === 0
@@ -384,7 +354,8 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                           Alert-Triggered Patrols
                         </span>
                         <p class="text-[11px] text-muted mt-0.5 leading-tight">
-                          Run scoped Patrol checks when alerts fire or clear.
+                          Run a focused Patrol investigation of the alert's issue when it fires or
+                          clears.
                         </p>
                       </div>
                       <Toggle
@@ -441,6 +412,36 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                         ariaLabelledBy={fieldIds.patrolAnomalyTriggers}
                       />
                     </div>
+
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="flex-1">
+                        <span
+                          id={fieldIds.alertTriggeredAnalysis}
+                          class="text-sm font-medium text-base-content"
+                        >
+                          Container Update Risk
+                        </span>
+                        <p class="text-[11px] text-muted mt-0.5 leading-tight">
+                          Assess upgrade risk with AI when a container-update alert fires.
+                        </p>
+                      </div>
+                      <Toggle
+                        checked={state.alertTriggeredAnalysis()}
+                        onChange={(e) =>
+                          state.handleAlertTriggeredAnalysisChange(e.currentTarget.checked)
+                        }
+                        disabled={state.isUpdatingSettings() || state.alertAnalysisLocked()}
+                        ariaLabelledBy={fieldIds.alertTriggeredAnalysis}
+                      />
+                    </div>
+
+                    <Show
+                      when={!presentationPolicyHidesUpgradePrompts() && state.alertAnalysisLocked()}
+                    >
+                      <div class="-my-1 pl-1 text-[11px]">
+                        Container update risk analysis is not enabled on this plan.
+                      </div>
+                    </Show>
 
                     <div class="flex items-start justify-between gap-3">
                       <div class="flex-1">

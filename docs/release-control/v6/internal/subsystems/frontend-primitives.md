@@ -1453,6 +1453,14 @@ primitive (label-for/id wiring, `selectBaseClass` styling hook) rather than a
 hand-rolled `<select>`, so its labeling and disabled-state affordances stay
 consistent with the rest of the AI settings surface.
 
+The Patrol configuration toggles in the same surface bind each `Toggle`
+primitive's accessible name through `ariaLabelledBy` pointing at the row's
+heading span, so renaming a control's visible label (for example
+"Alert-Triggered Analysis" to "Container Update Risk") updates the accessible
+name automatically without a parallel `aria-label` string. New Patrol toggle
+copy must keep using the shared `Toggle` `ariaLabelledBy` wiring rather than
+hard-coding a divergent accessible name.
+
 Kubernetes RBAC inventory (Roles, ClusterRoles, RoleBindings,
 ClusterRoleBindings) is part of the existing Kubernetes platform-page
 Configuration tab, not a new sidebar entry or top-level route, and the
