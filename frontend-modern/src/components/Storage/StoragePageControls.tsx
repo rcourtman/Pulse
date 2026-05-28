@@ -1,5 +1,8 @@
 import { Component, JSX, Show, createMemo } from 'solid-js';
+import DatabaseIcon from 'lucide-solid/icons/database';
+import HardDriveIcon from 'lucide-solid/icons/hard-drive';
 import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';
+import { Subtabs } from '@/components/shared/Subtabs';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import {
@@ -38,6 +41,7 @@ type StoragePageControlsProps = {
   kioskMode: () => boolean;
   view: () => StorageView;
   setView: (value: StorageView) => void;
+  showViewTabs?: boolean;
   search: () => string;
   setSearch: (value: string) => void;
   filterAriaLabel?: string;
@@ -131,6 +135,27 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
       props.setSortDirection(getDefaultStorageSortDirection(nextSortKey));
     }
   };
+
+  const storageViewTabs = [
+    {
+      value: 'pools',
+      label: (
+        <span class="inline-flex items-center gap-1.5">
+          <DatabaseIcon aria-hidden="true" class="h-3.5 w-3.5" />
+          Storage
+        </span>
+      ),
+    },
+    {
+      value: 'disks',
+      label: (
+        <span class="inline-flex items-center gap-1.5">
+          <HardDriveIcon aria-hidden="true" class="h-3.5 w-3.5" />
+          Physical Disks
+        </span>
+      ),
+    },
+  ];
 
   const buildFilters = (): FilterDef[] => {
     const filters: FilterDef[] = [];
@@ -268,6 +293,14 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
   return (
     <Show when={!props.kioskMode()}>
       <div class="flex flex-col gap-2">
+        <Show when={props.showViewTabs !== false}>
+          <Subtabs
+            value={props.view()}
+            onChange={(value) => props.setView(value as StorageView)}
+            tabs={storageViewTabs}
+            ariaLabel="Storage view"
+          />
+        </Show>
         <FilterBar
           role="group"
           ariaLabel={props.filterAriaLabel ?? 'Storage filters'}

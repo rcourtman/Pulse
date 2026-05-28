@@ -1283,20 +1283,20 @@ describe('Storage', () => {
 
     render(() => <Storage forcedSourceFilter="proxmox-pve" />);
 
-    const viewOptions = screen.getByRole('group', { name: 'Storage table view' });
-    expect(within(viewOptions).getByRole('button', { name: 'Storage' })).toHaveAttribute(
-      'aria-pressed',
+    const viewTabs = screen.getByRole('tablist', { name: 'Storage view' });
+    expect(within(viewTabs).getByRole('tab', { name: 'Storage' })).toHaveAttribute(
+      'aria-selected',
       'true',
     );
     expect(screen.queryByTestId('storage-summary')).not.toBeInTheDocument();
 
-    fireEvent.click(within(viewOptions).getByRole('button', { name: 'Physical Disks' }));
+    fireEvent.click(within(viewTabs).getByRole('tab', { name: 'Physical Disks' }));
 
     await waitFor(() => {
       expect(screen.getByTestId('disk-list')).toHaveTextContent('disk-view:all:');
     });
-    expect(within(viewOptions).getByRole('button', { name: 'Physical Disks' })).toHaveAttribute(
-      'aria-pressed',
+    expect(within(viewTabs).getByRole('tab', { name: 'Physical Disks' })).toHaveAttribute(
+      'aria-selected',
       'true',
     );
   });

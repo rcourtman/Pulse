@@ -1,7 +1,6 @@
 import { Component, createEffect } from 'solid-js';
 import StorageContentCard from '@/components/Storage/StorageContentCard';
 import StoragePageControls from '@/components/Storage/StoragePageControls';
-import { StorageViewSegmentedControl } from '@/components/Storage/StorageViewSegmentedControl';
 import { DEFAULT_STORAGE_SELECTED_NODE_ID } from './storagePageState';
 import { useStoragePageModel } from './useStoragePageModel';
 
@@ -116,6 +115,7 @@ const Storage: Component<StorageProps> = (props) => {
             savedViewsKey={savedViewsKey}
             view={view}
             setView={setView}
+            showViewTabs={!props.forcedView}
             search={search}
             setSearch={setSearch}
             filterAriaLabel={props.filterAriaLabel}
@@ -186,11 +186,6 @@ const Storage: Component<StorageProps> = (props) => {
           setHoveredStorageResourceId={setHoveredStorageResourceId}
           selectedDiskId={selectedDiskId}
           setSelectedDiskId={setSelectedDiskId}
-          actions={
-            !props.forcedView && !kioskMode() ? (
-              <StorageViewSegmentedControl value={view()} onChange={setView} />
-            ) : undefined
-          }
         />
       </div>
     </div>

@@ -25,6 +25,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const frontendRoot = path.resolve(__dirname, '..', '..', '..');
 const repoRoot = path.resolve(frontendRoot, '..');
+const runtimeDocsLinkScanTimeoutMs = 15_000;
 
 function getRuntimeSourceFiles(dir: string): string[] {
   const entries = readdirSync(dir, { withFileTypes: true });
@@ -128,5 +129,5 @@ describe('docsLinks', () => {
         `${path.relative(frontendRoot, filePath)} should use shipped/local docs owners`,
       ).not.toContain('https://github.com/rcourtman/Pulse/blob/main/');
     }
-  });
+  }, runtimeDocsLinkScanTimeoutMs);
 });

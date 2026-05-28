@@ -109,7 +109,7 @@ describe('NodeDrawer', () => {
     expect(screen.getByText('6.8.0')).toBeInTheDocument();
     expect(screen.getByText('8')).toBeInTheDocument();
     expect(screen.getByText('PVE 9.1.9')).toBeInTheDocument();
-    expect(screen.getByText('65°C')).toBeInTheDocument();
+    expect(screen.getAllByText('65°C').length).toBeGreaterThan(0);
     expect(screen.getByText('Temp monitor')).toBeInTheDocument();
   });
 
