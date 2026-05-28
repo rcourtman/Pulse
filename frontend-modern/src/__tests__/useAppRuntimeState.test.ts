@@ -247,11 +247,11 @@ describe('useAppRuntimeState', () => {
     isMultiTenantEnabledMock.mockReturnValue(false);
     const { hookState, dispose } = mountHook();
 
-    await flushAsync();
-    await flushAsync();
+    await waitFor(() => {
+      expect(setOrgIDMock).toHaveBeenCalledWith('default');
+    });
 
     expect(orgsListMock).not.toHaveBeenCalled();
-    expect(setOrgIDMock).toHaveBeenCalledWith('default');
     expect(hookState.organizations()).toEqual([
       { id: 'default', displayName: 'Default Organization' },
     ]);
@@ -270,10 +270,10 @@ describe('useAppRuntimeState', () => {
     getOrgIDMock.mockReturnValue('acme');
     const { hookState, dispose } = mountHook();
 
-    await flushAsync();
-    await flushAsync();
+    await waitFor(() => {
+      expect(orgsListMock).toHaveBeenCalledOnce();
+    });
 
-    expect(orgsListMock).toHaveBeenCalledOnce();
     expect(setOrgIDMock).toHaveBeenCalledWith('acme');
     expect(hookState.organizations()).toEqual([{ id: 'acme', displayName: 'Acme' }]);
     expect(hookState.activeOrgID()).toBe('acme');
@@ -421,10 +421,9 @@ describe('useAppRuntimeState', () => {
 
     const { dispose } = mountHook();
 
-    await flushAsync();
-    await flushAsync();
-
-    expect(loadCommercialPostureMock).toHaveBeenCalledOnce();
+    await waitFor(() => {
+      expect(loadCommercialPostureMock).toHaveBeenCalledOnce();
+    });
 
     dispose();
   });
