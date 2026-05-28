@@ -22,6 +22,43 @@ export const FACTORY_PBS_DEFAULTS = {
   memory: 85,
 };
 
+export const FACTORY_KUBERNETES_DEFAULTS = {
+  cpu: 80,
+  memory: 85,
+  disk: 90,
+  diskRead: -1,
+  diskWrite: -1,
+  networkIn: -1,
+  networkOut: -1,
+};
+
+export const FACTORY_TRUENAS_DEFAULTS = {
+  cpu: 80,
+  memory: 85,
+  disk: 85,
+  usage: 85,
+  temperature: 80,
+  diskRead: -1,
+  diskWrite: -1,
+  networkIn: -1,
+  networkOut: -1,
+};
+
+export const FACTORY_TRUENAS_DISK_DEFAULTS = {
+  temperature: 55,
+};
+
+export const FACTORY_VMWARE_DEFAULTS = {
+  cpu: 80,
+  memory: 85,
+  disk: 90,
+  usage: 85,
+  diskRead: -1,
+  diskWrite: -1,
+  networkIn: -1,
+  networkOut: -1,
+};
+
 export const FACTORY_AGENT_DEFAULTS = {
   cpu: 80,
   memory: 85,

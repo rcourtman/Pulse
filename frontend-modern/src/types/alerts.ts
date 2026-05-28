@@ -15,6 +15,7 @@ export interface AlertThresholds {
   networkOut?: HysteresisThreshold;
   temperature?: HysteresisThreshold;
   diskTemperature?: HysteresisThreshold;
+  usage?: HysteresisThreshold;
   disableConnectivity?: boolean; // Disable connectivity/powered-off alerts
   poweredOffSeverity?: 'warning' | 'critical';
   // Allow indexing with string
@@ -131,6 +132,10 @@ export interface AlertConfig {
   guestTagBlacklist?: string[];
   pmgDefaults?: PMGThresholdDefaults;
   pbsDefaults?: AlertThresholds;
+  kubernetesDefaults?: AlertThresholds;
+  truenasDefaults?: AlertThresholds;
+  truenasDiskDefaults?: AlertThresholds;
+  vmwareDefaults?: AlertThresholds;
   snapshotDefaults?: SnapshotAlertConfig;
   backupDefaults?: BackupAlertConfig;
   customRules?: CustomAlertRule[];
@@ -144,6 +149,19 @@ export interface AlertConfig {
     storage?: number;
     pbs?: number;
     agent?: number;
+    'k8s-cluster'?: number;
+    'k8s-node'?: number;
+    'k8s-deployment'?: number;
+    'k8s-namespace'?: number;
+    pod?: number;
+    'truenas-system'?: number;
+    'truenas-pool'?: number;
+    'truenas-dataset'?: number;
+    'truenas-disk'?: number;
+    'vmware-host'?: number;
+    'vmware-vm'?: number;
+    'vmware-datastore'?: number;
+    'vmware-network'?: number;
   };
   metricTimeThresholds?: Record<string, Record<string, number>>;
   aggregation?: {
@@ -217,6 +235,9 @@ export interface AlertConfig {
   disableAllDockerHosts?: boolean;
   disableAllDockerContainers?: boolean;
   disableAllDockerServices?: boolean;
+  disableAllKubernetes?: boolean;
+  disableAllTrueNAS?: boolean;
+  disableAllVMware?: boolean;
   disableAllNodesOffline?: boolean;
   disableAllGuestsOffline?: boolean;
   disableAllPBSOffline?: boolean;

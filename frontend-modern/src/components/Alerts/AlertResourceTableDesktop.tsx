@@ -17,6 +17,10 @@ import {
   getGroupedTableRowCellClass,
   getGroupedTableRowClass,
 } from '@/components/shared/groupedTableRowPresentation';
+import {
+  getPlatformTableCellClassForKind,
+  getPlatformTableHeadClassForKind,
+} from '@/features/platformPage/sharedPlatformPage';
 import { AlertResourceTableRow } from './AlertResourceTableRow';
 import { AlertResourceGroupHeader } from './AlertResourceGroupHeader';
 import {
@@ -31,6 +35,7 @@ import {
   getAlertResourceTableNoResultsState,
 } from '@/utils/alertResourceTablePresentation';
 import {
+  getAlertResourceColumnKind,
   getAlertResourceColumnHeaderTooltip,
   getAlertResourceEnabledDefault,
   getAlertResourceMetricBounds,
@@ -115,7 +120,9 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
         <TableHeader>
           <TableRow class="text-muted">
             <Show when={props.table.onBulkEdit}>
-              <TableHead class="text-center w-10 px-2 border-r border-border">
+              <TableHead
+                class={`${getPlatformTableHeadClassForKind('badge')} w-10 border-r border-border`}
+              >
                 <input
                   type="checkbox"
                   checked={props.allSelected()}
@@ -130,12 +137,16 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                 />
               </TableHead>
             </Show>
-            <TableHead class="text-center w-16">Alerts</TableHead>
-            <TableHead class="text-left w-1/4">Resource</TableHead>
+            <TableHead class={`${getPlatformTableHeadClassForKind('badge')} w-16`}>
+              Alerts
+            </TableHead>
+            <TableHead class={`${getPlatformTableHeadClassForKind('name')} w-1/4`}>
+              Resource
+            </TableHead>
             <For each={props.table.columns}>
               {(column) => (
                 <TableHead
-                  class="text-center whitespace-normal break-words"
+                  class={`${getPlatformTableHeadClassForKind(getAlertResourceColumnKind(column))} whitespace-normal break-words`}
                   title={getAlertResourceColumnHeaderTooltip(column)}
                 >
                   {column}
@@ -143,11 +154,14 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
               )}
             </For>
             <Show when={props.table.showOfflineAlertsColumn}>
-              <TableHead class="text-center" title={OFFLINE_ALERTS_TOOLTIP}>
+              <TableHead
+                class={getPlatformTableHeadClassForKind('badge')}
+                title={OFFLINE_ALERTS_TOOLTIP}
+              >
                 Offline Alerts
               </TableHead>
             </Show>
-            <TableHead class="text-center">Actions</TableHead>
+            <TableHead class={getPlatformTableHeadClassForKind('badge')}>Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody class="divide-y divide-border">
@@ -162,12 +176,18 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
               class={`bg-surface-alt ${props.table.globalDisableFlag?.() ? 'opacity-40' : ''}`}
             >
               <Show when={props.table.onBulkEdit}>
-                <TableCell class="p-1 px-2 border-r border-border" />
+                <TableCell
+                  class={`${getPlatformTableCellClassForKind('badge')} border-r border-border`}
+                />
               </Show>
-              <TableCell class="p-1 px-2 text-center align-middle">
+              <TableCell class={`${getPlatformTableCellClassForKind('badge')} align-middle`}>
                 <Show
                   when={props.table.onToggleGlobalDisable}
-                  fallback={<span class="text-sm text-slate-400" aria-hidden="true">-</span>}
+                  fallback={
+                    <span class="text-sm text-slate-400" aria-hidden="true">
+                      -
+                    </span>
+                  }
                 >
                   <div class="flex items-center justify-center">
                     <TogglePrimitive
@@ -184,7 +204,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                   </div>
                 </Show>
               </TableCell>
-              <TableCell class="p-1 px-2">
+              <TableCell class={getPlatformTableCellClassForKind('name')}>
                 <div class="flex items-center gap-2">
                   <span class="text-sm font-semibold text-base-content">Global Defaults</span>
                   <Show when={props.hasCustomGlobalDefaults()}>
@@ -202,7 +222,9 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                   const isOff = () => value() === -1;
 
                   return (
-                    <TableCell class="p-1 px-2 text-center align-middle">
+                    <TableCell
+                      class={`${getPlatformTableCellClassForKind(getAlertResourceColumnKind(column))} align-middle`}
+                    >
                       <div class="relative flex justify-center w-full">
                         <input
                           type="number"
@@ -249,13 +271,17 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                 }}
               </For>
               <Show when={props.table.showOfflineAlertsColumn}>
-                <TableCell class="p-1 px-2 text-center align-middle">
+                <TableCell class={`${getPlatformTableCellClassForKind('badge')} align-middle`}>
                   <Show
                     when={props.table.onSetGlobalOfflineState}
                     fallback={
                       <Show
                         when={props.table.onToggleGlobalDisableOffline}
-                        fallback={<span class="text-sm text-slate-400" aria-hidden="true">-</span>}
+                        fallback={
+                          <span class="text-sm text-slate-400" aria-hidden="true">
+                            -
+                          </span>
+                        }
                       >
                         {(() => {
                           const defaultDisabled = props.table.globalDisableOfflineFlag?.() ?? false;
@@ -280,8 +306,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                   >
                     {(() => {
                       const disabledGlobally = props.table.globalDisableFlag?.() ?? false;
-                      const defaultDisabled =
-                        props.table.globalDisableOfflineFlag?.() ?? false;
+                      const defaultDisabled = props.table.globalDisableOfflineFlag?.() ?? false;
                       const defaultSeverity = props.table.globalOfflineSeverity ?? 'warning';
                       const state: OfflineState = defaultDisabled
                         ? 'off'
@@ -298,7 +323,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                   </Show>
                 </TableCell>
               </Show>
-              <TableCell class="p-1 px-2 text-center align-middle">
+              <TableCell class={`${getPlatformTableCellClassForKind('badge')} align-middle`}>
                 <div class="flex items-center justify-center gap-1">
                   <Show
                     when={
@@ -355,7 +380,9 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                     </button>
                   </Show>
                   <Show when={!props.table.showDelayColumn && !props.hasCustomGlobalDefaults()}>
-                    <span class="text-sm text-slate-400" aria-hidden="true">-</span>
+                    <span class="text-sm text-slate-400" aria-hidden="true">
+                      -
+                    </span>
                   </Show>
                 </div>
               </TableCell>
@@ -372,12 +399,16 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
               class={`bg-surface-alt ${props.table.globalDisableFlag?.() ? 'opacity-40' : ''}`}
             >
               <Show when={props.table.onBulkEdit}>
-                <TableCell class="p-1 px-2 border-r border-border" />
+                <TableCell
+                  class={`${getPlatformTableCellClassForKind('badge')} border-r border-border`}
+                />
               </Show>
-              <TableCell class="p-1 px-2 text-center align-middle">
-                <span class="text-sm" aria-hidden="true">-</span>
+              <TableCell class={`${getPlatformTableCellClassForKind('badge')} align-middle`}>
+                <span class="text-sm" aria-hidden="true">
+                  -
+                </span>
               </TableCell>
-              <TableCell class="p-1 px-2 align-middle">
+              <TableCell class={`${getPlatformTableCellClassForKind('name')} align-middle`}>
                 <span class="text-xs font-semibold uppercase tracking-wide text-muted inline-flex items-center gap-1">
                   {getAlertResourceTableAlertDelayLabel()}
                   <HelpIcon contentId="alerts.thresholds.delay" size="xs" />
@@ -393,7 +424,9 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                   );
 
                   return (
-                    <TableCell class="p-1 px-2 text-center align-middle">
+                    <TableCell
+                      class={`${getPlatformTableCellClassForKind(getAlertResourceColumnKind(column))} align-middle`}
+                    >
                       <div class="relative flex justify-center w-full">
                         <input
                           type="number"
@@ -428,12 +461,16 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                 }}
               </For>
               <Show when={props.table.showOfflineAlertsColumn}>
-                <TableCell class="p-1 px-2 text-center align-middle">
-                  <span class="text-sm" aria-hidden="true">-</span>
+                <TableCell class={`${getPlatformTableCellClassForKind('badge')} align-middle`}>
+                  <span class="text-sm" aria-hidden="true">
+                    -
+                  </span>
                 </TableCell>
               </Show>
-              <TableCell class="p-1 px-2 text-center align-middle">
-                <span class="text-sm" aria-hidden="true">-</span>
+              <TableCell class={`${getPlatformTableCellClassForKind('badge')} align-middle`}>
+                <span class="text-sm" aria-hidden="true">
+                  -
+                </span>
               </TableCell>
             </TableRow>
           </Show>
@@ -446,10 +483,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
               {([nodeName, resources]) => (
                 <>
                   <TableRow class={getGroupedTableRowClass()}>
-                    <TableCell
-                      colspan={totalColumnCount()}
-                      class={getGroupedTableRowCellClass()}
-                    >
+                    <TableCell colspan={totalColumnCount()} class={getGroupedTableRowCellClass()}>
                       <AlertResourceGroupHeader
                         groupKey={nodeName}
                         meta={props.table.groupHeaderMeta?.[nodeName]}
@@ -485,9 +519,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                         setActiveMetricInput={props.setActiveMetricInput}
                         showBulkSelection={Boolean(props.table.onBulkEdit)}
                         selected={props.selectedIds().has(resource.id)}
-                        onToggleSelection={(checked) =>
-                          props.toggleSelection(resource.id, checked)
-                        }
+                        onToggleSelection={(checked) => props.toggleSelection(resource.id, checked)}
                       />
                     )}
                   </For>
@@ -528,9 +560,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                       setActiveMetricInput={props.setActiveMetricInput}
                       showBulkSelection={Boolean(props.table.onBulkEdit)}
                       selected={props.selectedIds().has(resource.id)}
-                      onToggleSelection={(checked) =>
-                        props.toggleSelection(resource.id, checked)
-                      }
+                      onToggleSelection={(checked) => props.toggleSelection(resource.id, checked)}
                     />
                   )}
                 </For>
@@ -539,7 +569,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
               <TableRow>
                 <TableCell
                   colspan={totalColumnCount()}
-                  class="px-4 py-8 text-center text-sm text-muted"
+                  class={`${getPlatformTableCellClassForKind('badge')} px-4 py-8 text-sm text-muted`}
                 >
                   {getAlertResourceTableNoResultsState(props.table.title)}
                 </TableCell>
@@ -548,7 +578,10 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
           </Show>
           <Show when={props.hasRows() === false}>
             <TableRow>
-              <TableCell colspan={totalColumnCount()} class="px-4 py-6 text-sm text-center text-muted">
+              <TableCell
+                colspan={totalColumnCount()}
+                class={`${getPlatformTableCellClassForKind('badge')} px-4 py-6 text-sm text-muted`}
+              >
                 {getAlertResourceTableEmptyState(props.table.emptyMessage)}
               </TableCell>
             </TableRow>

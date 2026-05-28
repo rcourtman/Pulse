@@ -10,6 +10,12 @@ import {
   METRIC_THRESHOLDS,
   type MetricType,
 } from '@/utils/metricThresholds';
+import {
+  FACTORY_KUBERNETES_DEFAULTS,
+  FACTORY_TRUENAS_DEFAULTS,
+  FACTORY_TRUENAS_DISK_DEFAULTS,
+  FACTORY_VMWARE_DEFAULTS,
+} from '@/utils/alertThresholdDefaults';
 import type { AlertConfig } from '@/types/alerts';
 
 describe('metricThresholds', () => {
@@ -235,6 +241,36 @@ describe('metricThresholds', () => {
       expect(resolveMetricDisplayThresholds(config, 'storage', 'usage')).toEqual({
         warning: 86,
         critical: 92,
+      });
+    });
+
+    it('keeps Kubernetes, TrueNAS, and vSphere factory defaults explicit for alert configuration', () => {
+      expect(FACTORY_KUBERNETES_DEFAULTS).toEqual({
+        cpu: 80,
+        memory: 85,
+        disk: 90,
+        diskRead: -1,
+        diskWrite: -1,
+        networkIn: -1,
+        networkOut: -1,
+      });
+      expect(FACTORY_TRUENAS_DEFAULTS).toMatchObject({
+        cpu: 80,
+        memory: 85,
+        disk: 85,
+        usage: 85,
+        temperature: 80,
+      });
+      expect(FACTORY_TRUENAS_DISK_DEFAULTS).toEqual({ temperature: 55 });
+      expect(FACTORY_VMWARE_DEFAULTS).toEqual({
+        cpu: 80,
+        memory: 85,
+        disk: 90,
+        usage: 85,
+        diskRead: -1,
+        diskWrite: -1,
+        networkIn: -1,
+        networkOut: -1,
       });
     });
   });

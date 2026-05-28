@@ -705,3 +705,98 @@ func TestReevaluateActiveAlertsUsesPBSResourceTypeMetadata(t *testing.T) {
 		t.Fatalf("expected PBS metric alert to resolve when PBS memory threshold is disabled")
 	}
 }
+
+func TestReevaluateActiveAlertsUsesKubernetesResourceTypeMetadata(t *testing.T) {
+	m := newTestManager(t)
+
+	resourceID := "k8s:prod/ns:default/pod:api-7d9f"
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.KubernetesDefaults = ThresholdConfig{
+		CPU: &HysteresisThreshold{Trigger: 0, Clear: 0},
+	}
+	state, alert := testNewCanonicalAlert(resourceID, canonicalMetricSpecID(resourceID, "cpu"), string(alertspecs.AlertSpecKindMetricThreshold), "cpu")
+	alert.Value = 88
+	alert.Threshold = 80
+	alert.ResourceName = "api-7d9f"
+	alert.Node = "worker-1"
+	alert.Instance = "prod"
+	alert.Metadata = map[string]interface{}{
+		"resourceType": "Kubernetes Pod",
+	}
+	m.setActiveAlertNoLock(state, alert)
+	m.reevaluateActiveAlertsLocked()
+	m.mu.Unlock()
+
+	m.mu.RLock()
+	_, exists := m.activeAlerts[state]
+	m.mu.RUnlock()
+
+	if exists {
+		t.Fatalf("expected Kubernetes metric alert to resolve when Kubernetes CPU threshold is disabled")
+	}
+}
+
+func TestReevaluateActiveAlertsUsesTrueNASResourceTypeMetadata(t *testing.T) {
+	m := newTestManager(t)
+
+	resourceID := "storage:truenas-main/pool:tank"
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.StorageDefault = HysteresisThreshold{Trigger: 95, Clear: 90}
+	m.config.TrueNASDefaults = ThresholdConfig{
+		Usage: &HysteresisThreshold{Trigger: 0, Clear: 0},
+	}
+	state, alert := testNewCanonicalAlert(resourceID, canonicalMetricSpecID(resourceID, "usage"), string(alertspecs.AlertSpecKindMetricThreshold), "usage")
+	alert.Value = 90
+	alert.Threshold = 85
+	alert.ResourceName = "tank"
+	alert.Node = "truenas-main"
+	alert.Instance = "TrueNAS"
+	alert.Metadata = map[string]interface{}{
+		"resourceType": "TrueNAS Pool",
+	}
+	m.setActiveAlertNoLock(state, alert)
+	m.reevaluateActiveAlertsLocked()
+	m.mu.Unlock()
+
+	m.mu.RLock()
+	_, exists := m.activeAlerts[state]
+	m.mu.RUnlock()
+
+	if exists {
+		t.Fatalf("expected TrueNAS metric alert to resolve when TrueNAS usage threshold is disabled")
+	}
+}
+
+func TestReevaluateActiveAlertsUsesVMwareResourceTypeMetadata(t *testing.T) {
+	m := newTestManager(t)
+
+	resourceID := "vmware:vc-1:datastore:datastore-301"
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.StorageDefault = HysteresisThreshold{Trigger: 95, Clear: 90}
+	m.config.VMwareDefaults = ThresholdConfig{
+		Usage: &HysteresisThreshold{Trigger: 0, Clear: 0},
+	}
+	state, alert := testNewCanonicalAlert(resourceID, canonicalMetricSpecID(resourceID, "usage"), string(alertspecs.AlertSpecKindMetricThreshold), "usage")
+	alert.Value = 90
+	alert.Threshold = 85
+	alert.ResourceName = "nvme-primary"
+	alert.Node = "Lab Datacenter"
+	alert.Instance = "Lab vCenter"
+	alert.Metadata = map[string]interface{}{
+		"resourceType": "vSphere Datastore",
+	}
+	m.setActiveAlertNoLock(state, alert)
+	m.reevaluateActiveAlertsLocked()
+	m.mu.Unlock()
+
+	m.mu.RLock()
+	_, exists := m.activeAlerts[state]
+	m.mu.RUnlock()
+
+	if exists {
+		t.Fatalf("expected vSphere metric alert to resolve when vSphere usage threshold is disabled")
+	}
+}

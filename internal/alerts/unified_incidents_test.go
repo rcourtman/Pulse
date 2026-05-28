@@ -909,6 +909,48 @@ func TestSyncUnifiedResourceIncidentsRespectsDisableAllStorage(t *testing.T) {
 	assertAlertMissing(t, m, alertID)
 }
 
+func TestSyncUnifiedResourceIncidentsSupportsVMwareNetworkIncidentsAndGlobalDisable(t *testing.T) {
+	m := newTestManager(t)
+	cfg := unifiedEvalBaseConfig()
+	configureUnifiedEvalManager(t, m, cfg)
+
+	resource := unifiedresources.Resource{
+		ID:      "vmware:vc-1:network:network-401",
+		Type:    unifiedresources.ResourceTypeNetwork,
+		Name:    "VM Network",
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceVMware},
+		VMware: &unifiedresources.VMwareData{
+			ConnectionName: "Lab vCenter",
+			DatacenterName: "Lab Datacenter",
+			EntityType:     "network",
+		},
+		Incidents: []unifiedresources.ResourceIncident{{
+			Provider: "vmware",
+			NativeID: "alarm-401",
+			Code:     "vmware_alarm_state",
+			Severity: storagehealth.RiskWarning,
+			Summary:  "vSphere network has an active alarm",
+		}},
+	}
+
+	m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{resource})
+
+	alertID := "unified-incident-vmware-vc-1-network-network-401-vmware-alarm-401-vmware-alarm-state"
+	assertAlertPresent(t, m, alertID)
+
+	cfg.DisableAllVMware = true
+	m.UpdateConfig(cfg)
+	m.mu.Lock()
+	m.config.TimeThresholds = map[string]int{}
+	m.config.MetricTimeThresholds = nil
+	m.config.SuppressionWindow = 0
+	m.config.MinimumDelta = 0
+	m.mu.Unlock()
+	m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{resource})
+
+	assertAlertMissing(t, m, alertID)
+}
+
 func TestDeriveCanonicalIdentityDoesNotMutateLegacyAlert(t *testing.T) {
 	alert := &Alert{
 		ID:      "node-offline-pve-a",

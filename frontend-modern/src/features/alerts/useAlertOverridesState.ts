@@ -114,6 +114,7 @@ export function useAlertOverridesState(props: AlertOverridesStateProps) {
       containerRuntimeResources: containerRuntimeResources(),
       getChildren: props.children,
       pbsInstanceById: pbsInstanceById(),
+      allResources: props.allResources(),
     });
 
     const currentOverrides = overrides();
@@ -128,8 +129,7 @@ export function useAlertOverridesState(props: AlertOverridesStateProps) {
           Boolean(newOverride.disabled) !== Boolean(existing.disabled) ||
           (newOverride.poweredOffSeverity ?? null) !== (existing.poweredOffSeverity ?? null) ||
           JSON.stringify(newOverride.backup ?? null) !== JSON.stringify(existing.backup ?? null) ||
-          JSON.stringify(newOverride.snapshot ?? null) !==
-            JSON.stringify(existing.snapshot ?? null)
+          JSON.stringify(newOverride.snapshot ?? null) !== JSON.stringify(existing.snapshot ?? null)
         );
       });
 

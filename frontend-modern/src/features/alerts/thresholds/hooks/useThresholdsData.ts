@@ -3,6 +3,7 @@ import { useThresholdsDockerData } from './useThresholdsDockerData';
 import { useThresholdsGuestData } from './useThresholdsGuestData';
 import { useThresholdsHostData } from './useThresholdsHostData';
 import { useThresholdsInfrastructureData } from './useThresholdsInfrastructureData';
+import { useThresholdsPlatformData } from './useThresholdsPlatformData';
 
 export function useThresholdsData(
   props: ThresholdsTableProps,
@@ -14,11 +15,13 @@ export function useThresholdsData(
   const dockerData = useThresholdsDockerData(inputs);
   const guestData = useThresholdsGuestData(inputs);
   const infrastructureData = useThresholdsInfrastructureData(inputs);
+  const platformData = useThresholdsPlatformData(inputs);
 
   return {
     ...hostData,
     ...dockerData,
     ...guestData,
     ...infrastructureData,
+    ...platformData,
   };
 }

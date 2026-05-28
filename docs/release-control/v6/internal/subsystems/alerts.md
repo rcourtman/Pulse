@@ -84,6 +84,12 @@ operator-facing alert routing behavior for live runtime alerts.
 62. `frontend-modern/src/components/Alerts/IncidentAssistantHandoffButton.tsx`
 63. `frontend-modern/src/components/Alerts/incidentAssistantHandoffModel.ts`
 64. `internal/alerts/storage_override_identity.go`
+65. `internal/alerts/unified_eval.go`
+66. `frontend-modern/src/components/Alerts/ThresholdsTable.tsx`
+67. `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsData.ts`
+68. `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsPlatformData.ts`
+69. `frontend-modern/src/utils/alertTargetTypes.ts`
+70. `frontend-modern/src/types/alerts.ts`
 
 ## Shared Boundaries
 
@@ -127,6 +133,12 @@ operator-facing alert routing behavior for live runtime alerts.
    handoffs must not add suggested prompt chips or route-owned remediation
    instructions; the configured model owns investigation and next-step
    reasoning after it receives the context.
+9. Add or change alert target resource types through
+   `internal/alerts/specs/types.go`, `internal/alerts/config/identity.go`,
+   `internal/alerts/unified_eval.go`, and
+   `frontend-modern/src/utils/alertTargetTypes.ts`. Supported target types
+   must share the unified evaluator, the canonical threshold/override identity
+   chain, and the standard notification delivery path.
 
 ## Forbidden Paths
 
@@ -167,6 +179,22 @@ alert feature gating from the shared entitlements layer, not from a per-surface
 Canonical alert identity and evaluation are the live runtime model. Remaining
 legacy references should exist only in explicit migration or negative test
 boundaries.
+All v6 platform alert targets must enter runtime threshold evaluation through
+`UnifiedResourceInput` and `internal/alerts/unified_eval.go`: Proxmox guests/
+nodes/storage, Docker hosts/containers/services, Kubernetes clusters/nodes/
+namespaces/deployments/pods, TrueNAS systems/pools/datasets/disks, VMware
+vSphere hosts/VMs/datastores/networks, PBS, PMG, and standalone host agents.
+Adding a platform-local evaluator branch for these resource families is
+forbidden.
+Per-platform defaults, per-resource overrides, global disables, active-alert
+reevaluation, history persistence, and notification delivery must use the same
+alert configuration shape rather than a platform-specific sidecar.
+The browser thresholds surface is also platform-shaped: Proxmox, Docker,
+Kubernetes, TrueNAS, vSphere, PBS, PMG, and Systems. It must use the shared
+FilterBar chip and "+ Filter" pattern for resource filtering, and alert tables
+must use the canonical platform table column-kind alignment helpers from
+`frontend-modern/src/features/platformPage/` rather than hard-coded table
+alignment classes.
 Guest metric canonical state remains resource-backed and therefore node-scoped
 for Proxmox guests, so node moves must not strand active alert state on the
 previous resource ID. When a guest metric alert survives a node move, alerts
@@ -625,19 +653,25 @@ shell composition for search/help/nav plus bulk-edit dialog flow, while the
 tab render owners live in
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxTab.tsx`,
 `frontend-modern/src/components/Alerts/ThresholdsTablePMGTab.tsx`,
-`frontend-modern/src/components/Alerts/ThresholdsTableAgentsTab.tsx`, and
-`frontend-modern/src/components/Alerts/ThresholdsTableDockerTab.tsx`. New
+`frontend-modern/src/components/Alerts/ThresholdsTableAgentsTab.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTableDockerTab.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTableKubernetesTab.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTableTrueNASTab.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTableVMwareTab.tsx`, and
+`frontend-modern/src/components/Alerts/ThresholdsTablePBSTab.tsx`. New
 threshold row grouping, override-ID compatibility, resource normalization,
 thresholds-table controller logic, or per-tab runtime should land in those
 feature hooks and tab owners rather than being rebuilt inside the shell.
-The shell-owned thresholds sub-routes are now the neutral user-facing paths
-`/alerts/thresholds/infrastructure`, `/alerts/thresholds/systems`,
-`/alerts/thresholds/mail-gateway`, and `/alerts/thresholds/containers`.
-Legacy `/alerts/thresholds/proxmox` and `/alerts/thresholds/agents` links
-must redirect to the neutral infrastructure and systems routes so API-backed
-platforms like TrueNAS do not remain stranded behind provider-specific deep
-links.
-Within the infrastructure tab, render-heavy ownership now further routes through
+The shell-owned thresholds sub-routes are platform-shaped user-facing paths:
+`/alerts/thresholds/proxmox`, `/alerts/thresholds/docker`,
+`/alerts/thresholds/kubernetes`, `/alerts/thresholds/truenas`,
+`/alerts/thresholds/vmware`, `/alerts/thresholds/pbs`,
+`/alerts/thresholds/pmg`, and `/alerts/thresholds/systems`. Legacy neutral
+links like `/alerts/thresholds/infrastructure`,
+`/alerts/thresholds/containers`, and `/alerts/thresholds/mail-gateway` must
+redirect to the matching platform-shaped route. Legacy
+`/alerts/thresholds/agents` links must continue to resolve to Systems.
+Within the Proxmox tab, render-heavy ownership now further routes through
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxNodesSection.tsx`,
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxPBSSection.tsx`,
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxGuestsSection.tsx`,
@@ -668,15 +702,18 @@ links into infrastructure, workloads, storage, and recovery. Pulse does not
 promise a TrueNAS-only alert workflow or provider-specific alert management
 surface beyond the shared alerts product.
 At the current locked VMware floor, alert support must mean the same shared
-alert surfaces can evaluate, show, and drill into vSphere alarm and health
-signals on canonical `agent`, `vm`, and `storage` resources, with related
-event/task context routed through the shared incident and resource links.
-Pulse must not grow a VMware-only alert shell, alarm editor, or direct alarm-
-control surface in phase 1.
+alert surfaces can evaluate, show, and drill into vSphere alarm, health, and
+threshold signals on canonical `agent`, `vm`, `storage`, and `network`
+resources, with related event/task context routed through the shared incident
+and resource links. This is the alerts support floor for admitted vSphere
+resources; it does not by itself promote the broader VMware platform readiness
+state beyond the separately governed platform-admission floor. Pulse must not
+grow a VMware-only alert shell, alarm editor, or direct alarm-control surface
+in phase 1.
 That same VMware alert rule now also includes the topology boundary. Alarm
 context that originates on a datacenter, cluster, folder, or resource pool may
 inform a shared incident, but it must still resolve onto canonical `agent`,
-`vm`, or `storage` investigation paths rather than creating synthetic
+`vm`, `storage`, or `network` investigation paths rather than creating synthetic
 top-level VMware incident resources. If that attachment cannot be done
 honestly for a given signal, the signal should remain supporting context
 instead of inflating the support claim.

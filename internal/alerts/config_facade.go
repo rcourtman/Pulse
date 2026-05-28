@@ -78,8 +78,13 @@ func normalizeSnapshotDefaults(config *AlertConfig) { alertconfig.NormalizeSnaps
 func normalizeBackupDefaults(config *AlertConfig)   { alertconfig.NormalizeBackupDefaults(config) }
 func normalizeNodeDefaults(config *AlertConfig)     { alertconfig.NormalizeNodeDefaults(config) }
 func normalizeAgentDefaults(config *AlertConfig)    { alertconfig.NormalizeAgentDefaults(config) }
-func normalizeGeneralSettings(config *AlertConfig)  { alertconfig.NormalizeGeneralSettings(config) }
-func normalizeTimeThresholds(config *AlertConfig)   { alertconfig.NormalizeTimeThresholds(config) }
+func normalizeKubernetesDefaults(config *AlertConfig) {
+	alertconfig.NormalizeKubernetesDefaults(config)
+}
+func normalizeTrueNASDefaults(config *AlertConfig) { alertconfig.NormalizeTrueNASDefaults(config) }
+func normalizeVMwareDefaults(config *AlertConfig)  { alertconfig.NormalizeVMwareDefaults(config) }
+func normalizeGeneralSettings(config *AlertConfig) { alertconfig.NormalizeGeneralSettings(config) }
+func normalizeTimeThresholds(config *AlertConfig)  { alertconfig.NormalizeTimeThresholds(config) }
 
 func validateHysteresisThresholds(config *AlertConfig) {
 	alertconfig.ValidateHysteresisThresholds(config)

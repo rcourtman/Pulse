@@ -54,11 +54,24 @@ interface ThresholdsSummaryItem {
     | 'dockerContainers'
     | 'dockerHosts'
     | 'guests'
+    | 'kubernetesClusters'
+    | 'kubernetesDeployments'
+    | 'kubernetesNamespaces'
+    | 'kubernetesNodes'
+    | 'kubernetesPods'
     | 'nodes'
     | 'pbs'
     | 'pmg'
     | 'snapshots'
-    | 'storage';
+    | 'storage'
+    | 'trueNASDatasets'
+    | 'trueNASDisks'
+    | 'trueNASPools'
+    | 'trueNASSystems'
+    | 'vmwareDatastores'
+    | 'vmwareHosts'
+    | 'vmwareNetworks'
+    | 'vmwareVMs';
   label: string;
   overrides: number;
   tab: ThresholdsActiveTab;
@@ -90,6 +103,7 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
   };
 
   const [searchTerm, setSearchTerm] = createSignal('');
+  const [overrideFilter, setOverrideFilter] = createSignal('all');
   const [editingId, setEditingId] = createSignal<string | null>(null);
   const [editingThresholds, setEditingThresholds] = createSignal<
     Record<string, number | undefined>
@@ -98,7 +112,7 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
   const [bulkEditIds, setBulkEditIds] = createSignal<string[]>([]);
   const [bulkEditColumns, setBulkEditColumns] = createSignal<string[]>([]);
   const [isBulkEditDialogOpen, setIsBulkEditDialogOpen] = createSignal(false);
-  const [activeTab, setActiveTab] = createSignal<ThresholdsActiveTab>('infrastructure');
+  const [activeTab, setActiveTab] = createSignal<ThresholdsActiveTab>('proxmox');
   const [dockerIgnoredInput, setDockerIgnoredInput] = createSignal(
     props.dockerIgnoredPrefixes().join('\n'),
   );
@@ -132,10 +146,17 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
 
   const getActiveTabFromRoute = (): ThresholdsActiveTab => {
     const path = location.pathname;
-    if (path.includes('/thresholds/containers')) return 'docker';
-    if (path.includes('/thresholds/systems') || path.includes('/thresholds/agents')) return 'systems';
-    if (path.includes('/thresholds/mail-gateway')) return 'pmg';
-    return 'infrastructure';
+    if (path.includes('/thresholds/containers') || path.includes('/thresholds/docker'))
+      return 'docker';
+    if (path.includes('/thresholds/kubernetes')) return 'kubernetes';
+    if (path.includes('/thresholds/truenas')) return 'truenas';
+    if (path.includes('/thresholds/vmware') || path.includes('/thresholds/vsphere'))
+      return 'vmware';
+    if (path.includes('/thresholds/pbs')) return 'pbs';
+    if (path.includes('/thresholds/systems') || path.includes('/thresholds/agents'))
+      return 'systems';
+    if (path.includes('/thresholds/mail-gateway') || path.includes('/thresholds/pmg')) return 'pmg';
+    return 'proxmox';
   };
 
   createEffect(() => {
@@ -147,12 +168,22 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
 
   createEffect(() => {
     if (location.pathname === '/alerts/thresholds') {
-      navigate('/alerts/thresholds/infrastructure', { replace: true });
+      navigate('/alerts/thresholds/proxmox', { replace: true });
       return;
     }
 
-    if (location.pathname === '/alerts/thresholds/proxmox') {
-      navigate('/alerts/thresholds/infrastructure', { replace: true });
+    if (location.pathname === '/alerts/thresholds/infrastructure') {
+      navigate('/alerts/thresholds/proxmox', { replace: true });
+      return;
+    }
+
+    if (location.pathname === '/alerts/thresholds/containers') {
+      navigate('/alerts/thresholds/docker', { replace: true });
+      return;
+    }
+
+    if (location.pathname === '/alerts/thresholds/mail-gateway') {
+      navigate('/alerts/thresholds/pmg', { replace: true });
       return;
     }
 
@@ -163,9 +194,13 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
 
   const handleTabClick = (tab: ThresholdsActiveTab) => {
     const tabRoutes: Record<ThresholdsActiveTab, string> = {
-      infrastructure: '/alerts/thresholds/infrastructure',
-      docker: '/alerts/thresholds/containers',
-      pmg: '/alerts/thresholds/mail-gateway',
+      proxmox: '/alerts/thresholds/proxmox',
+      docker: '/alerts/thresholds/docker',
+      kubernetes: '/alerts/thresholds/kubernetes',
+      truenas: '/alerts/thresholds/truenas',
+      vmware: '/alerts/thresholds/vmware',
+      pbs: '/alerts/thresholds/pbs',
+      pmg: '/alerts/thresholds/pmg',
       systems: '/alerts/thresholds/systems',
     };
     navigate(tabRoutes[tab]);
@@ -194,25 +229,120 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
   };
 
   const {
-    nodesWithOverrides,
-    agentsWithOverrides,
-    agentDisksWithOverrides,
-    agentDisksGroupedByAgent,
+    nodesWithOverrides: rawNodesWithOverrides,
+    agentsWithOverrides: rawAgentsWithOverrides,
+    agentDisksWithOverrides: rawAgentDisksWithOverrides,
+    agentDisksGroupedByAgent: rawAgentDisksGroupedByAgent,
     agentGroupHeaderMeta,
-    dockerHostsWithOverrides,
-    dockerContainersGroupedByHost,
-    dockerContainersFlat,
+    dockerHostsWithOverrides: rawDockerHostsWithOverrides,
+    dockerContainersGroupedByHost: rawDockerContainersGroupedByHost,
+    dockerContainersFlat: rawDockerContainersFlat,
     totalDockerContainers,
     dockerHostGroupMeta,
-    guestsGroupedByNode,
-    guestsFlat,
+    guestsGroupedByNode: rawGuestsGroupedByNode,
+    guestsFlat: rawGuestsFlat,
     guestGroupHeaderMeta,
-    pbsServersWithOverrides,
+    kubernetesClustersWithOverrides: rawKubernetesClustersWithOverrides = () => [],
+    kubernetesDeploymentsWithOverrides: rawKubernetesDeploymentsWithOverrides = () => [],
+    kubernetesNamespacesWithOverrides: rawKubernetesNamespacesWithOverrides = () => [],
+    kubernetesNodesWithOverrides: rawKubernetesNodesWithOverrides = () => [],
+    kubernetesPodsWithOverrides: rawKubernetesPodsWithOverrides = () => [],
+    pbsServersWithOverrides: rawPbsServersWithOverrides,
     pmgGlobalDefaults,
-    pmgServersWithOverrides,
-    storageWithOverrides,
-    storageGroupedByNode,
+    pmgServersWithOverrides: rawPmgServersWithOverrides,
+    storageWithOverrides: rawStorageWithOverrides,
+    storageGroupedByNode: rawStorageGroupedByNode,
+    trueNASDatasetsWithOverrides: rawTrueNASDatasetsWithOverrides = () => [],
+    trueNASDisksWithOverrides: rawTrueNASDisksWithOverrides = () => [],
+    trueNASPoolsWithOverrides: rawTrueNASPoolsWithOverrides = () => [],
+    trueNASSystemsWithOverrides: rawTrueNASSystemsWithOverrides = () => [],
+    vmwareDatastoresWithOverrides: rawVmwareDatastoresWithOverrides = () => [],
+    vmwareHostsWithOverrides: rawVmwareHostsWithOverrides = () => [],
+    vmwareNetworksWithOverrides: rawVmwareNetworksWithOverrides = () => [],
+    vmwareVMsWithOverrides: rawVmwareVMsWithOverrides = () => [],
   } = useThresholdsData(props, editingId, searchTerm);
+
+  const resourceMatchesOverrideFilter = (resource: TableResource): boolean => {
+    const filter = overrideFilter();
+    if (filter === 'custom') {
+      return Boolean(
+        resource.hasOverride || resource.disableConnectivity || resource.poweredOffSeverity,
+      );
+    }
+    if (filter === 'disabled') {
+      return Boolean(resource.disabled || resource.disableConnectivity);
+    }
+    return true;
+  };
+
+  const filterResources = (resources: TableResource[]): TableResource[] =>
+    resources.filter(resourceMatchesOverrideFilter);
+
+  const filterGroupedResources = (
+    groups: Record<string, TableResource[]>,
+  ): Record<string, TableResource[]> => {
+    const filtered: Record<string, TableResource[]> = {};
+    Object.entries(groups).forEach(([groupKey, resources]) => {
+      const visibleResources = filterResources(resources);
+      if (visibleResources.length > 0) {
+        filtered[groupKey] = visibleResources;
+      }
+    });
+    return filtered;
+  };
+
+  const nodesWithOverrides = createMemo(() => filterResources(rawNodesWithOverrides()));
+  const agentsWithOverrides = createMemo(() => filterResources(rawAgentsWithOverrides()));
+  const agentDisksWithOverrides = createMemo(() => filterResources(rawAgentDisksWithOverrides()));
+  const agentDisksGroupedByAgent = createMemo(() =>
+    filterGroupedResources(rawAgentDisksGroupedByAgent()),
+  );
+  const dockerHostsWithOverrides = createMemo(() => filterResources(rawDockerHostsWithOverrides()));
+  const dockerContainersGroupedByHost = createMemo(() =>
+    filterGroupedResources(rawDockerContainersGroupedByHost()),
+  );
+  const dockerContainersFlat = createMemo(() => filterResources(rawDockerContainersFlat()));
+  const guestsGroupedByNode = createMemo(() => filterGroupedResources(rawGuestsGroupedByNode()));
+  const guestsFlat = createMemo(() => filterResources(rawGuestsFlat()));
+  const kubernetesClustersWithOverrides = createMemo(() =>
+    filterResources(rawKubernetesClustersWithOverrides()),
+  );
+  const kubernetesDeploymentsWithOverrides = createMemo(() =>
+    filterResources(rawKubernetesDeploymentsWithOverrides()),
+  );
+  const kubernetesNamespacesWithOverrides = createMemo(() =>
+    filterResources(rawKubernetesNamespacesWithOverrides()),
+  );
+  const kubernetesNodesWithOverrides = createMemo(() =>
+    filterResources(rawKubernetesNodesWithOverrides()),
+  );
+  const kubernetesPodsWithOverrides = createMemo(() =>
+    filterResources(rawKubernetesPodsWithOverrides()),
+  );
+  const pbsServersWithOverrides = createMemo(() => filterResources(rawPbsServersWithOverrides()));
+  const pmgServersWithOverrides = createMemo(() => filterResources(rawPmgServersWithOverrides()));
+  const storageWithOverrides = createMemo(() => filterResources(rawStorageWithOverrides()));
+  const storageGroupedByNode = createMemo(() => filterGroupedResources(rawStorageGroupedByNode()));
+  const trueNASDatasetsWithOverrides = createMemo(() =>
+    filterResources(rawTrueNASDatasetsWithOverrides()),
+  );
+  const trueNASDisksWithOverrides = createMemo(() =>
+    filterResources(rawTrueNASDisksWithOverrides()),
+  );
+  const trueNASPoolsWithOverrides = createMemo(() =>
+    filterResources(rawTrueNASPoolsWithOverrides()),
+  );
+  const trueNASSystemsWithOverrides = createMemo(() =>
+    filterResources(rawTrueNASSystemsWithOverrides()),
+  );
+  const vmwareDatastoresWithOverrides = createMemo(() =>
+    filterResources(rawVmwareDatastoresWithOverrides()),
+  );
+  const vmwareHostsWithOverrides = createMemo(() => filterResources(rawVmwareHostsWithOverrides()));
+  const vmwareNetworksWithOverrides = createMemo(() =>
+    filterResources(rawVmwareNetworksWithOverrides()),
+  );
+  const vmwareVMsWithOverrides = createMemo(() => filterResources(rawVmwareVMsWithOverrides()));
 
   const {
     backupDefaultsRecord,
@@ -299,7 +429,7 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
           key: 'nodes',
           label: 'Virtualization Hosts',
           overrides: countOverrides(nodesWithOverrides()),
-          tab: 'infrastructure',
+          tab: 'proxmox',
           total: props.nodes?.length ?? 0,
         },
         {
@@ -327,28 +457,28 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
           key: 'storage',
           label: 'Storage',
           overrides: countOverrides(storageWithOverrides()),
-          tab: 'infrastructure',
+          tab: 'proxmox',
           total: props.storage?.length ?? 0,
         },
         {
           key: 'backups',
           label: 'Recovery',
           overrides: backupOverridesCount(),
-          tab: 'infrastructure',
+          tab: 'proxmox',
           total: 1,
         },
         {
           key: 'snapshots',
           label: 'Snapshot Age',
           overrides: snapshotOverridesCount(),
-          tab: 'infrastructure',
+          tab: 'proxmox',
           total: 1,
         },
         {
           key: 'pbs',
           label: 'PBS Servers',
           overrides: countOverrides(pbsServersWithOverrides()),
-          tab: 'infrastructure',
+          tab: 'pbs',
           total: props.pbsInstances?.length ?? 0,
         },
         {
@@ -369,8 +499,99 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
           key: 'guests',
           label: 'VMs & Containers',
           overrides: countOverrides(guestsFlat()),
-          tab: 'infrastructure',
+          tab: 'proxmox',
           total: props.allGuests?.()?.length ?? 0,
+        },
+        {
+          key: 'kubernetesClusters',
+          label: 'Kubernetes Clusters',
+          overrides: countOverrides(kubernetesClustersWithOverrides()),
+          tab: 'kubernetes',
+          total: kubernetesClustersWithOverrides().length,
+        },
+        {
+          key: 'kubernetesNodes',
+          label: 'Kubernetes Nodes',
+          overrides: countOverrides(kubernetesNodesWithOverrides()),
+          tab: 'kubernetes',
+          total: kubernetesNodesWithOverrides().length,
+        },
+        {
+          key: 'kubernetesNamespaces',
+          label: 'Namespaces',
+          overrides: countOverrides(kubernetesNamespacesWithOverrides()),
+          tab: 'kubernetes',
+          total: kubernetesNamespacesWithOverrides().length,
+        },
+        {
+          key: 'kubernetesDeployments',
+          label: 'Deployments',
+          overrides: countOverrides(kubernetesDeploymentsWithOverrides()),
+          tab: 'kubernetes',
+          total: kubernetesDeploymentsWithOverrides().length,
+        },
+        {
+          key: 'kubernetesPods',
+          label: 'Pods',
+          overrides: countOverrides(kubernetesPodsWithOverrides()),
+          tab: 'kubernetes',
+          total: kubernetesPodsWithOverrides().length,
+        },
+        {
+          key: 'trueNASSystems',
+          label: 'TrueNAS Systems',
+          overrides: countOverrides(trueNASSystemsWithOverrides()),
+          tab: 'truenas',
+          total: trueNASSystemsWithOverrides().length,
+        },
+        {
+          key: 'trueNASPools',
+          label: 'Pools',
+          overrides: countOverrides(trueNASPoolsWithOverrides()),
+          tab: 'truenas',
+          total: trueNASPoolsWithOverrides().length,
+        },
+        {
+          key: 'trueNASDatasets',
+          label: 'Datasets',
+          overrides: countOverrides(trueNASDatasetsWithOverrides()),
+          tab: 'truenas',
+          total: trueNASDatasetsWithOverrides().length,
+        },
+        {
+          key: 'trueNASDisks',
+          label: 'Disks',
+          overrides: countOverrides(trueNASDisksWithOverrides()),
+          tab: 'truenas',
+          total: trueNASDisksWithOverrides().length,
+        },
+        {
+          key: 'vmwareHosts',
+          label: 'vSphere Hosts',
+          overrides: countOverrides(vmwareHostsWithOverrides()),
+          tab: 'vmware',
+          total: vmwareHostsWithOverrides().length,
+        },
+        {
+          key: 'vmwareVMs',
+          label: 'vSphere VMs',
+          overrides: countOverrides(vmwareVMsWithOverrides()),
+          tab: 'vmware',
+          total: vmwareVMsWithOverrides().length,
+        },
+        {
+          key: 'vmwareDatastores',
+          label: 'Datastores',
+          overrides: countOverrides(vmwareDatastoresWithOverrides()),
+          tab: 'vmware',
+          total: vmwareDatastoresWithOverrides().length,
+        },
+        {
+          key: 'vmwareNetworks',
+          label: 'Networks',
+          overrides: countOverrides(vmwareNetworksWithOverrides()),
+          tab: 'vmware',
+          total: vmwareNetworksWithOverrides().length,
         },
       ];
 
@@ -420,6 +641,19 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
       pbsServersWithOverrides,
       pmgServersWithOverrides,
       storageWithOverrides,
+      kubernetesClustersWithOverrides,
+      kubernetesNodesWithOverrides,
+      kubernetesNamespacesWithOverrides,
+      kubernetesDeploymentsWithOverrides,
+      kubernetesPodsWithOverrides,
+      trueNASSystemsWithOverrides,
+      trueNASPoolsWithOverrides,
+      trueNASDatasetsWithOverrides,
+      trueNASDisksWithOverrides,
+      vmwareHostsWithOverrides,
+      vmwareVMsWithOverrides,
+      vmwareDatastoresWithOverrides,
+      vmwareNetworksWithOverrides,
     },
     editingThresholds,
     editingNote,
@@ -441,6 +675,19 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
         dockerContainersFlat,
         pbsServersWithOverrides,
         storageWithOverrides,
+        kubernetesClustersWithOverrides,
+        kubernetesNodesWithOverrides,
+        kubernetesNamespacesWithOverrides,
+        kubernetesDeploymentsWithOverrides,
+        kubernetesPodsWithOverrides,
+        trueNASSystemsWithOverrides,
+        trueNASPoolsWithOverrides,
+        trueNASDatasetsWithOverrides,
+        trueNASDisksWithOverrides,
+        vmwareHostsWithOverrides,
+        vmwareVMsWithOverrides,
+        vmwareDatastoresWithOverrides,
+        vmwareNetworksWithOverrides,
       },
       removeOverride,
     });
@@ -459,7 +706,25 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
   };
 
   const updateMetricDelay = (
-    typeKey: 'guest' | 'node' | 'storage' | 'pbs' | 'agent',
+    typeKey:
+      | 'guest'
+      | 'node'
+      | 'storage'
+      | 'pbs'
+      | 'agent'
+      | 'k8s-cluster'
+      | 'k8s-node'
+      | 'k8s-deployment'
+      | 'k8s-namespace'
+      | 'pod'
+      | 'truenas-system'
+      | 'truenas-pool'
+      | 'truenas-dataset'
+      | 'truenas-disk'
+      | 'vmware-host'
+      | 'vmware-vm'
+      | 'vmware-datastore'
+      | 'vmware-network',
     metricKey: string,
     value: number | null,
   ) => {
@@ -554,6 +819,11 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
     hasDockerSpecificControls,
     isBulkEditDialogOpen,
     isCollapsed,
+    kubernetesClustersWithOverrides,
+    kubernetesDeploymentsWithOverrides,
+    kubernetesNamespacesWithOverrides,
+    kubernetesNodesWithOverrides,
+    kubernetesPodsWithOverrides,
     nodesWithOverrides,
     NODE_THRESHOLDS_FILTER_EMPTY_STATE,
     pbsServersWithOverrides,
@@ -565,6 +835,7 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
     pmgServersWithOverrides,
     registerSection,
     removeOverride,
+    overrideFilter,
     saveEdit,
     searchTerm,
     sectionTitles,
@@ -580,6 +851,7 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
     setEditingThresholds,
     setHasUnsavedChanges: props.setHasUnsavedChanges,
     setIsBulkEditDialogOpen,
+    setOverrideFilter,
     setOfflineState,
     setPMGGlobalDefaults,
     SNAPSHOT_THRESHOLDS_EMPTY_STATE,
@@ -593,6 +865,14 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
     STORAGE_THRESHOLDS_EMPTY_STATE,
     STORAGE_THRESHOLDS_FILTER_EMPTY_STATE,
     summaryItems,
+    trueNASDatasetsWithOverrides,
+    trueNASDisksWithOverrides,
+    trueNASPoolsWithOverrides,
+    trueNASSystemsWithOverrides,
+    vmwareDatastoresWithOverrides,
+    vmwareHostsWithOverrides,
+    vmwareNetworksWithOverrides,
+    vmwareVMsWithOverrides,
     toggleBackup,
     toggleDisabled,
     toggleNodeConnectivity,

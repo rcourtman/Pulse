@@ -10,18 +10,17 @@ import {
   FACTORY_DOCKER_STATE_DISABLE_CONNECTIVITY,
   FACTORY_DOCKER_STATE_SEVERITY,
   FACTORY_GUEST_DEFAULTS,
+  FACTORY_KUBERNETES_DEFAULTS,
   FACTORY_NODE_DEFAULTS,
   FACTORY_PBS_DEFAULTS,
   FACTORY_SNAPSHOT_DEFAULTS,
   FACTORY_STORAGE_DEFAULT,
+  FACTORY_TRUENAS_DEFAULTS,
+  FACTORY_TRUENAS_DISK_DEFAULTS,
+  FACTORY_VMWARE_DEFAULTS,
   type AlertsConfigurationSnapshot,
 } from './alertsConfigurationModel';
-import type {
-  CooldownConfig,
-  EscalationConfig,
-  GroupingConfig,
-  QuietHoursConfig,
-} from './types';
+import type { CooldownConfig, EscalationConfig, GroupingConfig, QuietHoursConfig } from './types';
 
 interface UseAlertsConfigurationSnapshotStateProps {
   setHasUnsavedChanges: (value: boolean) => void;
@@ -60,6 +59,18 @@ export function useAlertsConfigurationSnapshotState(
   );
   const [pbsDefaults, setPBSDefaults] = createSignal<Record<string, number | undefined>>(
     defaultSnapshot.pbsDefaults,
+  );
+  const [kubernetesDefaults, setKubernetesDefaults] = createSignal<
+    Record<string, number | undefined>
+  >(defaultSnapshot.kubernetesDefaults);
+  const [trueNASDefaults, setTrueNASDefaults] = createSignal<Record<string, number | undefined>>(
+    defaultSnapshot.trueNASDefaults,
+  );
+  const [trueNASDiskDefaults, setTrueNASDiskDefaults] = createSignal<
+    Record<string, number | undefined>
+  >(defaultSnapshot.trueNASDiskDefaults);
+  const [vmwareDefaults, setVMwareDefaults] = createSignal<Record<string, number | undefined>>(
+    defaultSnapshot.vmwareDefaults,
   );
   const [agentDefaults, setAgentDefaults] = createSignal<Record<string, number | undefined>>(
     defaultSnapshot.agentDefaults,
@@ -110,6 +121,11 @@ export function useAlertsConfigurationSnapshotState(
   const [disableAllDockerContainers, setDisableAllDockerContainers] = createSignal(
     defaultSnapshot.disableAllDockerContainers,
   );
+  const [disableAllKubernetes, setDisableAllKubernetes] = createSignal(
+    defaultSnapshot.disableAllKubernetes,
+  );
+  const [disableAllTrueNAS, setDisableAllTrueNAS] = createSignal(defaultSnapshot.disableAllTrueNAS);
+  const [disableAllVMware, setDisableAllVMware] = createSignal(defaultSnapshot.disableAllVMware);
   const [disableAllNodesOffline, setDisableAllNodesOffline] = createSignal(
     defaultSnapshot.disableAllNodesOffline,
   );
@@ -147,6 +163,10 @@ export function useAlertsConfigurationSnapshotState(
     setGuestPoweredOffSeverity(snapshot.guestPoweredOffSeverity);
     setNodeDefaults({ ...snapshot.nodeDefaults });
     setPBSDefaults({ ...snapshot.pbsDefaults });
+    setKubernetesDefaults({ ...snapshot.kubernetesDefaults });
+    setTrueNASDefaults({ ...snapshot.trueNASDefaults });
+    setTrueNASDiskDefaults({ ...snapshot.trueNASDiskDefaults });
+    setVMwareDefaults({ ...snapshot.vmwareDefaults });
     setAgentDefaults({ ...snapshot.agentDefaults });
     setDockerDefaults({ ...snapshot.dockerDefaults });
     setDockerDisableConnectivity(snapshot.dockerDisableConnectivity);
@@ -173,6 +193,9 @@ export function useAlertsConfigurationSnapshotState(
     setDisableAllDockerHosts(snapshot.disableAllDockerHosts);
     setDisableAllDockerServices(snapshot.disableAllDockerServices);
     setDisableAllDockerContainers(snapshot.disableAllDockerContainers);
+    setDisableAllKubernetes(snapshot.disableAllKubernetes);
+    setDisableAllTrueNAS(snapshot.disableAllTrueNAS);
+    setDisableAllVMware(snapshot.disableAllVMware);
     setDisableAllNodesOffline(snapshot.disableAllNodesOffline);
     setDisableAllGuestsOffline(snapshot.disableAllGuestsOffline);
     setDisableAllAgentsOffline(snapshot.disableAllAgentsOffline);
@@ -199,6 +222,10 @@ export function useAlertsConfigurationSnapshotState(
     guestPoweredOffSeverity: guestPoweredOffSeverity(),
     nodeDefaults: { ...nodeDefaults() },
     pbsDefaults: { ...pbsDefaults() },
+    kubernetesDefaults: { ...kubernetesDefaults() },
+    trueNASDefaults: { ...trueNASDefaults() },
+    trueNASDiskDefaults: { ...trueNASDiskDefaults() },
+    vmwareDefaults: { ...vmwareDefaults() },
     agentDefaults: { ...agentDefaults() },
     dockerDefaults: { ...dockerDefaults() },
     dockerDisableConnectivity: dockerDisableConnectivity(),
@@ -225,6 +252,9 @@ export function useAlertsConfigurationSnapshotState(
     disableAllDockerHosts: disableAllDockerHosts(),
     disableAllDockerServices: disableAllDockerServices(),
     disableAllDockerContainers: disableAllDockerContainers(),
+    disableAllKubernetes: disableAllKubernetes(),
+    disableAllTrueNAS: disableAllTrueNAS(),
+    disableAllVMware: disableAllVMware(),
     disableAllNodesOffline: disableAllNodesOffline(),
     disableAllGuestsOffline: disableAllGuestsOffline(),
     disableAllAgentsOffline: disableAllAgentsOffline(),
@@ -247,6 +277,22 @@ export function useAlertsConfigurationSnapshotState(
   };
   const resetPBSDefaults = () => {
     setPBSDefaults({ ...FACTORY_PBS_DEFAULTS });
+    markUnsaved();
+  };
+  const resetKubernetesDefaults = () => {
+    setKubernetesDefaults({ ...FACTORY_KUBERNETES_DEFAULTS });
+    markUnsaved();
+  };
+  const resetTrueNASDefaults = () => {
+    setTrueNASDefaults({ ...FACTORY_TRUENAS_DEFAULTS });
+    markUnsaved();
+  };
+  const resetTrueNASDiskDefaults = () => {
+    setTrueNASDiskDefaults({ ...FACTORY_TRUENAS_DISK_DEFAULTS });
+    markUnsaved();
+  };
+  const resetVMwareDefaults = () => {
+    setVMwareDefaults({ ...FACTORY_VMWARE_DEFAULTS });
     markUnsaved();
   };
   const resetAgentDefaults = () => {
@@ -297,6 +343,14 @@ export function useAlertsConfigurationSnapshotState(
     setNodeDefaults,
     pbsDefaults,
     setPBSDefaults,
+    kubernetesDefaults,
+    setKubernetesDefaults,
+    trueNASDefaults,
+    setTrueNASDefaults,
+    trueNASDiskDefaults,
+    setTrueNASDiskDefaults,
+    vmwareDefaults,
+    setVMwareDefaults,
     agentDefaults,
     setAgentDefaults,
     dockerDefaults,
@@ -343,6 +397,12 @@ export function useAlertsConfigurationSnapshotState(
     setDisableAllDockerServices,
     disableAllDockerContainers,
     setDisableAllDockerContainers,
+    disableAllKubernetes,
+    setDisableAllKubernetes,
+    disableAllTrueNAS,
+    setDisableAllTrueNAS,
+    disableAllVMware,
+    setDisableAllVMware,
     disableAllNodesOffline,
     setDisableAllNodesOffline,
     disableAllGuestsOffline,
@@ -360,6 +420,10 @@ export function useAlertsConfigurationSnapshotState(
     resetGuestDefaults,
     resetNodeDefaults,
     resetPBSDefaults,
+    resetKubernetesDefaults,
+    resetTrueNASDefaults,
+    resetTrueNASDiskDefaults,
+    resetVMwareDefaults,
     resetAgentDefaults,
     resetDockerDefaults,
     resetDockerIgnoredPrefixes,
@@ -369,6 +433,10 @@ export function useAlertsConfigurationSnapshotState(
     factoryGuestDefaults: FACTORY_GUEST_DEFAULTS,
     factoryNodeDefaults: FACTORY_NODE_DEFAULTS,
     factoryPBSDefaults: FACTORY_PBS_DEFAULTS,
+    factoryKubernetesDefaults: FACTORY_KUBERNETES_DEFAULTS,
+    factoryTrueNASDefaults: FACTORY_TRUENAS_DEFAULTS,
+    factoryTrueNASDiskDefaults: FACTORY_TRUENAS_DISK_DEFAULTS,
+    factoryVMwareDefaults: FACTORY_VMWARE_DEFAULTS,
     factoryAgentDefaults: FACTORY_AGENT_DEFAULTS,
     factoryDockerDefaults: FACTORY_DOCKER_DEFAULTS,
     factoryStorageDefault: FACTORY_STORAGE_DEFAULT,

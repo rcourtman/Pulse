@@ -11,10 +11,14 @@ import {
   FACTORY_DOCKER_STATE_DISABLE_CONNECTIVITY,
   FACTORY_DOCKER_STATE_SEVERITY,
   FACTORY_GUEST_DEFAULTS,
+  FACTORY_KUBERNETES_DEFAULTS,
   FACTORY_NODE_DEFAULTS,
   FACTORY_PBS_DEFAULTS,
   FACTORY_SNAPSHOT_DEFAULTS,
   FACTORY_STORAGE_DEFAULT,
+  FACTORY_TRUENAS_DEFAULTS,
+  FACTORY_TRUENAS_DISK_DEFAULTS,
+  FACTORY_VMWARE_DEFAULTS,
 } from '@/utils/alertThresholdDefaults';
 
 import {
@@ -45,10 +49,14 @@ export {
   FACTORY_DOCKER_STATE_DISABLE_CONNECTIVITY,
   FACTORY_DOCKER_STATE_SEVERITY,
   FACTORY_GUEST_DEFAULTS,
+  FACTORY_KUBERNETES_DEFAULTS,
   FACTORY_NODE_DEFAULTS,
   FACTORY_PBS_DEFAULTS,
   FACTORY_SNAPSHOT_DEFAULTS,
   FACTORY_STORAGE_DEFAULT,
+  FACTORY_TRUENAS_DEFAULTS,
+  FACTORY_TRUENAS_DISK_DEFAULTS,
+  FACTORY_VMWARE_DEFAULTS,
 } from '@/utils/alertThresholdDefaults';
 
 export interface AlertsConfigurationSnapshot {
@@ -62,6 +70,10 @@ export interface AlertsConfigurationSnapshot {
   guestPoweredOffSeverity: 'warning' | 'critical';
   nodeDefaults: Record<string, number | undefined>;
   pbsDefaults: Record<string, number | undefined>;
+  kubernetesDefaults: Record<string, number | undefined>;
+  trueNASDefaults: Record<string, number | undefined>;
+  trueNASDiskDefaults: Record<string, number | undefined>;
+  vmwareDefaults: Record<string, number | undefined>;
   agentDefaults: Record<string, number | undefined>;
   dockerDefaults: typeof FACTORY_DOCKER_DEFAULTS;
   dockerDisableConnectivity: boolean;
@@ -78,6 +90,19 @@ export interface AlertsConfigurationSnapshot {
     storage: number;
     pbs: number;
     agent: number;
+    'k8s-cluster': number;
+    'k8s-node': number;
+    'k8s-deployment': number;
+    'k8s-namespace': number;
+    pod: number;
+    'truenas-system': number;
+    'truenas-pool': number;
+    'truenas-dataset': number;
+    'truenas-disk': number;
+    'vmware-host': number;
+    'vmware-vm': number;
+    'vmware-datastore': number;
+    'vmware-network': number;
   };
   metricTimeThresholds: Record<string, Record<string, number>>;
   snapshotDefaults: SnapshotAlertConfig;
@@ -108,6 +133,9 @@ export interface AlertsConfigurationSnapshot {
   disableAllDockerHosts: boolean;
   disableAllDockerServices: boolean;
   disableAllDockerContainers: boolean;
+  disableAllKubernetes: boolean;
+  disableAllTrueNAS: boolean;
+  disableAllVMware: boolean;
   disableAllNodesOffline: boolean;
   disableAllGuestsOffline: boolean;
   disableAllAgentsOffline: boolean;
@@ -183,6 +211,10 @@ export function createDefaultAlertsConfigurationSnapshot(): AlertsConfigurationS
     guestPoweredOffSeverity: 'warning',
     nodeDefaults: { ...FACTORY_NODE_DEFAULTS },
     pbsDefaults: { ...FACTORY_PBS_DEFAULTS },
+    kubernetesDefaults: { ...FACTORY_KUBERNETES_DEFAULTS },
+    trueNASDefaults: { ...FACTORY_TRUENAS_DEFAULTS },
+    trueNASDiskDefaults: { ...FACTORY_TRUENAS_DISK_DEFAULTS },
+    vmwareDefaults: { ...FACTORY_VMWARE_DEFAULTS },
     agentDefaults: { ...FACTORY_AGENT_DEFAULTS },
     dockerDefaults: { ...FACTORY_DOCKER_DEFAULTS },
     dockerDisableConnectivity: FACTORY_DOCKER_STATE_DISABLE_CONNECTIVITY,
@@ -199,6 +231,19 @@ export function createDefaultAlertsConfigurationSnapshot(): AlertsConfigurationS
       storage: DEFAULT_DELAY_SECONDS,
       pbs: DEFAULT_DELAY_SECONDS,
       agent: DEFAULT_DELAY_SECONDS,
+      'k8s-cluster': DEFAULT_DELAY_SECONDS,
+      'k8s-node': DEFAULT_DELAY_SECONDS,
+      'k8s-deployment': DEFAULT_DELAY_SECONDS,
+      'k8s-namespace': DEFAULT_DELAY_SECONDS,
+      pod: DEFAULT_DELAY_SECONDS,
+      'truenas-system': DEFAULT_DELAY_SECONDS,
+      'truenas-pool': DEFAULT_DELAY_SECONDS,
+      'truenas-dataset': DEFAULT_DELAY_SECONDS,
+      'truenas-disk': DEFAULT_DELAY_SECONDS,
+      'vmware-host': DEFAULT_DELAY_SECONDS,
+      'vmware-vm': DEFAULT_DELAY_SECONDS,
+      'vmware-datastore': DEFAULT_DELAY_SECONDS,
+      'vmware-network': DEFAULT_DELAY_SECONDS,
     },
     metricTimeThresholds: {},
     snapshotDefaults: { ...FACTORY_SNAPSHOT_DEFAULTS },
@@ -229,6 +274,9 @@ export function createDefaultAlertsConfigurationSnapshot(): AlertsConfigurationS
     disableAllDockerHosts: false,
     disableAllDockerServices: false,
     disableAllDockerContainers: false,
+    disableAllKubernetes: false,
+    disableAllTrueNAS: false,
+    disableAllVMware: false,
     disableAllNodesOffline: false,
     disableAllGuestsOffline: false,
     disableAllAgentsOffline: false,
@@ -273,6 +321,69 @@ export function readAlertsConfigurationSnapshot(config: AlertConfig): AlertsConf
     snapshot.pbsDefaults = {
       cpu: getTriggerValue(config.pbsDefaults.cpu) ?? FACTORY_PBS_DEFAULTS.cpu,
       memory: getTriggerValue(config.pbsDefaults.memory) ?? FACTORY_PBS_DEFAULTS.memory,
+    };
+  }
+
+  if (config.kubernetesDefaults) {
+    snapshot.kubernetesDefaults = {
+      cpu: getTriggerValue(config.kubernetesDefaults.cpu) ?? FACTORY_KUBERNETES_DEFAULTS.cpu,
+      memory:
+        getTriggerValue(config.kubernetesDefaults.memory) ?? FACTORY_KUBERNETES_DEFAULTS.memory,
+      disk: getTriggerValue(config.kubernetesDefaults.disk) ?? FACTORY_KUBERNETES_DEFAULTS.disk,
+      diskRead:
+        getTriggerValue(config.kubernetesDefaults.diskRead) ?? FACTORY_KUBERNETES_DEFAULTS.diskRead,
+      diskWrite:
+        getTriggerValue(config.kubernetesDefaults.diskWrite) ??
+        FACTORY_KUBERNETES_DEFAULTS.diskWrite,
+      networkIn:
+        getTriggerValue(config.kubernetesDefaults.networkIn) ??
+        FACTORY_KUBERNETES_DEFAULTS.networkIn,
+      networkOut:
+        getTriggerValue(config.kubernetesDefaults.networkOut) ??
+        FACTORY_KUBERNETES_DEFAULTS.networkOut,
+    };
+  }
+
+  if (config.truenasDefaults) {
+    snapshot.trueNASDefaults = {
+      cpu: getTriggerValue(config.truenasDefaults.cpu) ?? FACTORY_TRUENAS_DEFAULTS.cpu,
+      memory: getTriggerValue(config.truenasDefaults.memory) ?? FACTORY_TRUENAS_DEFAULTS.memory,
+      disk: getTriggerValue(config.truenasDefaults.disk) ?? FACTORY_TRUENAS_DEFAULTS.disk,
+      usage: getTriggerValue(config.truenasDefaults.usage) ?? FACTORY_TRUENAS_DEFAULTS.usage,
+      temperature:
+        getTriggerValue(config.truenasDefaults.temperature) ?? FACTORY_TRUENAS_DEFAULTS.temperature,
+      diskRead:
+        getTriggerValue(config.truenasDefaults.diskRead) ?? FACTORY_TRUENAS_DEFAULTS.diskRead,
+      diskWrite:
+        getTriggerValue(config.truenasDefaults.diskWrite) ?? FACTORY_TRUENAS_DEFAULTS.diskWrite,
+      networkIn:
+        getTriggerValue(config.truenasDefaults.networkIn) ?? FACTORY_TRUENAS_DEFAULTS.networkIn,
+      networkOut:
+        getTriggerValue(config.truenasDefaults.networkOut) ?? FACTORY_TRUENAS_DEFAULTS.networkOut,
+    };
+  }
+
+  if (config.truenasDiskDefaults) {
+    snapshot.trueNASDiskDefaults = {
+      temperature:
+        getTriggerValue(config.truenasDiskDefaults.temperature) ??
+        FACTORY_TRUENAS_DISK_DEFAULTS.temperature,
+    };
+  }
+
+  if (config.vmwareDefaults) {
+    snapshot.vmwareDefaults = {
+      cpu: getTriggerValue(config.vmwareDefaults.cpu) ?? FACTORY_VMWARE_DEFAULTS.cpu,
+      memory: getTriggerValue(config.vmwareDefaults.memory) ?? FACTORY_VMWARE_DEFAULTS.memory,
+      disk: getTriggerValue(config.vmwareDefaults.disk) ?? FACTORY_VMWARE_DEFAULTS.disk,
+      usage: getTriggerValue(config.vmwareDefaults.usage) ?? FACTORY_VMWARE_DEFAULTS.usage,
+      diskRead: getTriggerValue(config.vmwareDefaults.diskRead) ?? FACTORY_VMWARE_DEFAULTS.diskRead,
+      diskWrite:
+        getTriggerValue(config.vmwareDefaults.diskWrite) ?? FACTORY_VMWARE_DEFAULTS.diskWrite,
+      networkIn:
+        getTriggerValue(config.vmwareDefaults.networkIn) ?? FACTORY_VMWARE_DEFAULTS.networkIn,
+      networkOut:
+        getTriggerValue(config.vmwareDefaults.networkOut) ?? FACTORY_VMWARE_DEFAULTS.networkOut,
     };
   }
 
@@ -332,6 +443,19 @@ export function readAlertsConfigurationSnapshot(config: AlertConfig): AlertsConf
       storage: config.timeThresholds.storage ?? DEFAULT_DELAY_SECONDS,
       pbs: config.timeThresholds.pbs ?? DEFAULT_DELAY_SECONDS,
       agent: config.timeThresholds.agent ?? DEFAULT_DELAY_SECONDS,
+      'k8s-cluster': config.timeThresholds['k8s-cluster'] ?? DEFAULT_DELAY_SECONDS,
+      'k8s-node': config.timeThresholds['k8s-node'] ?? DEFAULT_DELAY_SECONDS,
+      'k8s-deployment': config.timeThresholds['k8s-deployment'] ?? DEFAULT_DELAY_SECONDS,
+      'k8s-namespace': config.timeThresholds['k8s-namespace'] ?? DEFAULT_DELAY_SECONDS,
+      pod: config.timeThresholds.pod ?? DEFAULT_DELAY_SECONDS,
+      'truenas-system': config.timeThresholds['truenas-system'] ?? DEFAULT_DELAY_SECONDS,
+      'truenas-pool': config.timeThresholds['truenas-pool'] ?? DEFAULT_DELAY_SECONDS,
+      'truenas-dataset': config.timeThresholds['truenas-dataset'] ?? DEFAULT_DELAY_SECONDS,
+      'truenas-disk': config.timeThresholds['truenas-disk'] ?? DEFAULT_DELAY_SECONDS,
+      'vmware-host': config.timeThresholds['vmware-host'] ?? DEFAULT_DELAY_SECONDS,
+      'vmware-vm': config.timeThresholds['vmware-vm'] ?? DEFAULT_DELAY_SECONDS,
+      'vmware-datastore': config.timeThresholds['vmware-datastore'] ?? DEFAULT_DELAY_SECONDS,
+      'vmware-network': config.timeThresholds['vmware-network'] ?? DEFAULT_DELAY_SECONDS,
     };
   }
   if (config.metricTimeThresholds) {
@@ -403,6 +527,9 @@ export function readAlertsConfigurationSnapshot(config: AlertConfig): AlertsConf
   snapshot.disableAllDockerHosts = config.disableAllDockerHosts ?? false;
   snapshot.disableAllDockerServices = config.disableAllDockerServices ?? false;
   snapshot.disableAllDockerContainers = config.disableAllDockerContainers ?? false;
+  snapshot.disableAllKubernetes = config.disableAllKubernetes ?? false;
+  snapshot.disableAllTrueNAS = config.disableAllTrueNAS ?? false;
+  snapshot.disableAllVMware = config.disableAllVMware ?? false;
   snapshot.disableAllNodesOffline = config.disableAllNodesOffline ?? false;
   snapshot.disableAllGuestsOffline = config.disableAllGuestsOffline ?? false;
   snapshot.disableAllAgentsOffline = config.disableAllAgentsOffline ?? false;
@@ -536,6 +663,9 @@ export function buildAlertsConfigurationPayload({
       disableAllDockerHosts: snapshot.disableAllDockerHosts,
       disableAllDockerContainers: snapshot.disableAllDockerContainers,
       disableAllDockerServices: snapshot.disableAllDockerServices,
+      disableAllKubernetes: snapshot.disableAllKubernetes,
+      disableAllTrueNAS: snapshot.disableAllTrueNAS,
+      disableAllVMware: snapshot.disableAllVMware,
       disableAllNodesOffline: snapshot.disableAllNodesOffline,
       disableAllGuestsOffline: snapshot.disableAllGuestsOffline,
       disableAllPBSOffline: snapshot.disableAllPBSOffline,
@@ -568,6 +698,39 @@ export function buildAlertsConfigurationPayload({
       pbsDefaults: {
         cpu: createHysteresisThreshold(snapshot.pbsDefaults.cpu),
         memory: createHysteresisThreshold(snapshot.pbsDefaults.memory),
+      },
+      kubernetesDefaults: {
+        cpu: createHysteresisThreshold(snapshot.kubernetesDefaults.cpu),
+        memory: createHysteresisThreshold(snapshot.kubernetesDefaults.memory),
+        disk: createHysteresisThreshold(snapshot.kubernetesDefaults.disk),
+        diskRead: createHysteresisThreshold(snapshot.kubernetesDefaults.diskRead),
+        diskWrite: createHysteresisThreshold(snapshot.kubernetesDefaults.diskWrite),
+        networkIn: createHysteresisThreshold(snapshot.kubernetesDefaults.networkIn),
+        networkOut: createHysteresisThreshold(snapshot.kubernetesDefaults.networkOut),
+      },
+      truenasDefaults: {
+        cpu: createHysteresisThreshold(snapshot.trueNASDefaults.cpu),
+        memory: createHysteresisThreshold(snapshot.trueNASDefaults.memory),
+        disk: createHysteresisThreshold(snapshot.trueNASDefaults.disk),
+        usage: createHysteresisThreshold(snapshot.trueNASDefaults.usage),
+        temperature: createHysteresisThreshold(snapshot.trueNASDefaults.temperature),
+        diskRead: createHysteresisThreshold(snapshot.trueNASDefaults.diskRead),
+        diskWrite: createHysteresisThreshold(snapshot.trueNASDefaults.diskWrite),
+        networkIn: createHysteresisThreshold(snapshot.trueNASDefaults.networkIn),
+        networkOut: createHysteresisThreshold(snapshot.trueNASDefaults.networkOut),
+      },
+      truenasDiskDefaults: {
+        temperature: createHysteresisThreshold(snapshot.trueNASDiskDefaults.temperature),
+      },
+      vmwareDefaults: {
+        cpu: createHysteresisThreshold(snapshot.vmwareDefaults.cpu),
+        memory: createHysteresisThreshold(snapshot.vmwareDefaults.memory),
+        disk: createHysteresisThreshold(snapshot.vmwareDefaults.disk),
+        usage: createHysteresisThreshold(snapshot.vmwareDefaults.usage),
+        diskRead: createHysteresisThreshold(snapshot.vmwareDefaults.diskRead),
+        diskWrite: createHysteresisThreshold(snapshot.vmwareDefaults.diskWrite),
+        networkIn: createHysteresisThreshold(snapshot.vmwareDefaults.networkIn),
+        networkOut: createHysteresisThreshold(snapshot.vmwareDefaults.networkOut),
       },
       dockerDefaults: {
         cpu: createHysteresisThreshold(snapshot.dockerDefaults.cpu),

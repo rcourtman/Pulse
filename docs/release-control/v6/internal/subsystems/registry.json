@@ -1228,6 +1228,7 @@
       "owned_files": [
         "frontend-modern/src/pages/Alerts.tsx",
         "frontend-modern/src/stores/alertsActivation.ts",
+        "frontend-modern/src/types/alerts.ts",
         "frontend-modern/src/utils/alertActivationPresentation.ts",
         "frontend-modern/src/utils/alertAdministrationPresentation.ts",
         "frontend-modern/src/utils/alertBulkEditPresentation.ts",
@@ -1243,6 +1244,7 @@
         "frontend-modern/src/utils/alertSchedulePresentation.ts",
         "frontend-modern/src/utils/alertSeverityPresentation.ts",
         "frontend-modern/src/utils/alertTabsPresentation.ts",
+        "frontend-modern/src/utils/alertTargetTypes.ts",
         "frontend-modern/src/utils/alertThresholdDefaults.ts",
         "frontend-modern/src/utils/alertThresholdsPresentation.ts",
         "frontend-modern/src/utils/alertThresholdsSectionPresentation.ts",
@@ -1303,6 +1305,7 @@
             ],
             "match_files": [
               "frontend-modern/src/pages/Alerts.tsx",
+              "frontend-modern/src/types/alerts.ts",
               "frontend-modern/src/utils/alertOverviewPresentation.ts"
             ],
             "allow_same_subsystem_tests": false,
@@ -1325,7 +1328,21 @@
               "frontend-modern/src/features/alerts/thresholds/__tests__/helpers.test.ts",
               "frontend-modern/src/features/alerts/thresholds/hooks/__tests__/useThresholdsTableState.test.tsx",
               "frontend-modern/src/pages/__tests__/Alerts.helpers.test.ts",
-              "frontend-modern/src/utils/__tests__/alertOverviewPresentation.test.ts"
+              "frontend-modern/src/utils/__tests__/alertOverviewPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/alertTargetTypes.test.ts"
+            ]
+          },
+          {
+            "id": "alert-target-type-resolution",
+            "label": "alert target type resolver proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/alertTargetTypes.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/alertTargetTypes.test.ts"
             ]
           },
           {

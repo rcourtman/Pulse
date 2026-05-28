@@ -213,6 +213,7 @@ interface BuildProjectedOverridesArgs {
   containerRuntimeResources: Resource[];
   getChildren: (resourceId: string) => Resource[];
   pbsInstanceById: Map<string, PBSInstance>;
+  allResources?: Resource[];
 }
 
 export const buildProjectedOverrides = ({
@@ -225,6 +226,7 @@ export const buildProjectedOverrides = ({
   containerRuntimeResources,
   getChildren,
   pbsInstanceById,
+  allResources = [],
 }: BuildProjectedOverridesArgs): Override[] => {
   const overridesList: Override[] = [];
   const overrideIndexByID = new Map<string, number>();
@@ -236,6 +238,10 @@ export const buildProjectedOverrides = ({
   const agentMap = new Map<string, Resource>();
   const guestMap = new Map<string, Resource>();
   const storageMap = new Map<string, Resource>();
+  const alertPlatformMap = new Map<
+    string,
+    { resource: Resource; type: Override['type']; resourceType: string }
+  >();
 
   const upsertProjectedOverride = (override: Override) => {
     const existingIndex = overrideIndexByID.get(override.id);
@@ -246,6 +252,96 @@ export const buildProjectedOverrides = ({
     overrideIndexByID.set(override.id, overridesList.length);
     overridesList.push(override);
   };
+
+  const alertResourceIdCandidates = (resource: Resource): string[] =>
+    uniqueIds(
+      resource.id,
+      resource.metricsTarget?.resourceId,
+      resource.discoveryTarget?.resourceId,
+      resource.platformId,
+    );
+
+  const isTrueNASResource = (resource: Resource): boolean =>
+    isTrueNASSystemResource(resource) ||
+    resource.platformType === 'truenas' ||
+    resource.sources?.includes('truenas') ||
+    resource.storage?.platform === 'truenas';
+
+  const isVMwareResource = (resource: Resource): boolean =>
+    resource.platformType === 'vmware-vsphere' ||
+    resource.sources?.includes('vmware') ||
+    Boolean(resource.vmware) ||
+    resource.storage?.platform === 'vmware-vsphere';
+
+  allResources.forEach((resource) => {
+    let type: Override['type'] | undefined;
+    let resourceType = '';
+    switch (resource.type) {
+      case 'k8s-cluster':
+        type = 'kubernetesCluster';
+        resourceType = 'Kubernetes Cluster';
+        break;
+      case 'k8s-node':
+        type = 'kubernetesNode';
+        resourceType = 'Kubernetes Node';
+        break;
+      case 'k8s-namespace':
+        type = 'kubernetesNamespace';
+        resourceType = 'Kubernetes Namespace';
+        break;
+      case 'k8s-deployment':
+        type = 'kubernetesDeployment';
+        resourceType = 'Kubernetes Deployment';
+        break;
+      case 'pod':
+        type = 'kubernetesPod';
+        resourceType = 'Kubernetes Pod';
+        break;
+      case 'agent':
+        if (isTrueNASResource(resource)) {
+          type = 'truenasSystem';
+          resourceType = 'TrueNAS System';
+        } else if (isVMwareResource(resource)) {
+          type = 'vmwareHost';
+          resourceType = 'vSphere Host';
+        }
+        break;
+      case 'vm':
+        if (isVMwareResource(resource)) {
+          type = 'vmwareVm';
+          resourceType = 'vSphere VM';
+        }
+        break;
+      case 'physical_disk':
+        if (isTrueNASResource(resource)) {
+          type = 'truenasDisk';
+          resourceType = 'TrueNAS Disk';
+        }
+        break;
+      case 'storage':
+      case 'pool':
+      case 'dataset':
+        if (isTrueNASResource(resource)) {
+          const topology = resource.storage?.topology || resource.type;
+          type = topology === 'dataset' ? 'truenasDataset' : 'truenasPool';
+          resourceType = topology === 'dataset' ? 'TrueNAS Dataset' : 'TrueNAS Pool';
+        } else if (isVMwareResource(resource)) {
+          type = 'vmwareDatastore';
+          resourceType = 'vSphere Datastore';
+        }
+        break;
+      case 'network':
+        if (isVMwareResource(resource)) {
+          type = 'vmwareNetwork';
+          resourceType = 'vSphere Network';
+        }
+        break;
+    }
+    if (!type) return;
+    alertResourceIdCandidates(resource).forEach((id) => {
+      alertPlatformMap.set(id, { resource, type, resourceType });
+    });
+  });
 
   const storageCoords = (resource: Resource): { node: string; instance: string } => {
     const data = platformData(resource);
@@ -310,6 +406,35 @@ export const buildProjectedOverrides = ({
   });
 
   Object.entries(rawConfig).forEach(([key, thresholds]) => {
+    const alertPlatformResource = alertPlatformMap.get(key);
+    if (alertPlatformResource) {
+      const { resource, type, resourceType } = alertPlatformResource;
+      upsertProjectedOverride({
+        id: key,
+        name: getAlertResourceDisplayLabel(resource),
+        type,
+        resourceType,
+        node:
+          resource.parentName ||
+          resource.kubernetes?.nodeName ||
+          resource.truenas?.hostname ||
+          resource.vmware?.runtimeHostName ||
+          resource.vmware?.clusterName ||
+          resource.vmware?.datacenterName ||
+          resource.vmware?.vcenterHost,
+        instance:
+          resource.kubernetes?.clusterName ||
+          resource.kubernetes?.namespace ||
+          (resource.truenas ? 'TrueNAS' : undefined) ||
+          resource.vmware?.connectionName ||
+          resource.vmware?.vcenterHost ||
+          (resource.vmware ? 'vSphere' : undefined),
+        disabled: thresholds.disabled || false,
+        thresholds: extractTriggerValues(thresholds),
+      });
+      return;
+    }
+
     const dockerHost = dockerHostMap.get(key);
     if (dockerHost) {
       upsertProjectedOverride({

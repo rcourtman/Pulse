@@ -230,6 +230,10 @@ type AlertConfig struct {
 	GuestTagBlacklist              []string                       `json:"guestTagBlacklist,omitempty"`
 	PMGDefaults                    PMGThresholdConfig             `json:"pmgDefaults"`
 	PBSDefaults                    ThresholdConfig                `json:"pbsDefaults"`
+	KubernetesDefaults             ThresholdConfig                `json:"kubernetesDefaults"`
+	TrueNASDefaults                ThresholdConfig                `json:"truenasDefaults"`
+	TrueNASDiskDefaults            ThresholdConfig                `json:"truenasDiskDefaults"`
+	VMwareDefaults                 ThresholdConfig                `json:"vmwareDefaults"`
 	SnapshotDefaults               SnapshotAlertConfig            `json:"snapshotDefaults"`
 	BackupDefaults                 BackupAlertConfig              `json:"backupDefaults"`
 	Overrides                      map[string]ThresholdConfig     `json:"overrides"` // keyed by resource ID
@@ -244,6 +248,9 @@ type AlertConfig struct {
 	DisableAllDockerHosts          bool                           `json:"disableAllDockerHosts"`        // Disable all alerts for Docker hosts
 	DisableAllDockerContainers     bool                           `json:"disableAllDockerContainers"`   // Disable all alerts for Docker containers
 	DisableAllDockerServices       bool                           `json:"disableAllDockerServices"`     // Disable all alerts for Docker services
+	DisableAllKubernetes           bool                           `json:"disableAllKubernetes"`         // Disable all alerts for Kubernetes resources
+	DisableAllTrueNAS              bool                           `json:"disableAllTrueNAS"`            // Disable all alerts for TrueNAS resources
+	DisableAllVMware               bool                           `json:"disableAllVMware"`             // Disable all alerts for VMware vSphere resources
 	DisableAllNodesOffline         bool                           `json:"disableAllNodesOffline"`       // Disable node offline/connectivity alerts globally
 	DisableAllGuestsOffline        bool                           `json:"disableAllGuestsOffline"`      // Disable guest powered-off alerts globally
 	DisableAllAgentsOffline        bool                           `json:"disableAllAgentsOffline"`      // Disable agent offline alerts globally

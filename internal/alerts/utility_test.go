@@ -1453,16 +1453,71 @@ func TestCanonicalResourceTypeKeys(t *testing.T) {
 		{name: "pbs canonical + node fallback", resourceType: "pbs", want: []string{"pbs", "node"}},
 		{name: "pmg canonical + node fallback", resourceType: "pmg", want: []string{"pmg", "node"}},
 		{
-			name:         "k8s cluster canonical + guest fallback",
+			name:         "k8s cluster canonical + node fallback",
 			resourceType: "k8s-cluster",
-			want:         []string{"k8s-cluster", "guest"},
+			want:         []string{"k8s-cluster", "node"},
 		},
 		{
 			name:         "k8s node canonical + node fallback",
 			resourceType: "k8s-node",
 			want:         []string{"k8s-node", "node"},
 		},
+		{
+			name:         "k8s deployment canonical + guest fallback",
+			resourceType: "k8s-deployment",
+			want:         []string{"k8s-deployment", "guest"},
+		},
+		{
+			name:         "k8s namespace canonical",
+			resourceType: "k8s-namespace",
+			want:         []string{"k8s-namespace"},
+		},
+		{
+			name:         "kubernetes display alias maps to pod",
+			resourceType: "Kubernetes Pod",
+			want:         []string{"pod", "guest"},
+		},
 		{name: "pod canonical + guest fallback", resourceType: "pod", want: []string{"pod", "guest"}},
+		{
+			name:         "truenas system canonical + agent fallback",
+			resourceType: "truenas-system",
+			want:         []string{"truenas-system", "agent", "node"},
+		},
+		{
+			name:         "truenas pool canonical + storage fallback",
+			resourceType: "truenas-pool",
+			want:         []string{"truenas-pool", "storage"},
+		},
+		{
+			name:         "truenas dataset display alias",
+			resourceType: "TrueNAS Dataset",
+			want:         []string{"truenas-dataset", "storage"},
+		},
+		{
+			name:         "truenas disk canonical + disk/storage fallback",
+			resourceType: "truenas-disk",
+			want:         []string{"truenas-disk", "physical_disk", "disk", "storage"},
+		},
+		{
+			name:         "vSphere host canonical + agent fallback",
+			resourceType: "vSphere Host",
+			want:         []string{"vmware-host", "agent", "node"},
+		},
+		{
+			name:         "VMware VM canonical + guest fallback",
+			resourceType: "VMware VM",
+			want:         []string{"vmware-vm", "vm", "guest"},
+		},
+		{
+			name:         "vSphere datastore canonical + storage fallback",
+			resourceType: "vSphere Datastore",
+			want:         []string{"vmware-datastore", "storage"},
+		},
+		{
+			name:         "VMware network canonical + network fallback",
+			resourceType: "VMware Network",
+			want:         []string{"vmware-network", "network"},
+		},
 		{name: "storage canonical", resourceType: "storage", want: []string{"storage"}},
 		{name: "disk canonical + storage fallback", resourceType: "disk", want: []string{"disk", "storage"}},
 		{

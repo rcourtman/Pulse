@@ -260,6 +260,26 @@ func TestAlertStateSyncDoesNotLogNormalResolvedStateAtInfo(t *testing.T) {
 	}
 }
 
+func TestUnifiedResourceAlertSyncEvaluatesMetricsBeforeIncidents(t *testing.T) {
+	data, err := os.ReadFile("monitor_alert_sync.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor_alert_sync.go: %v", err)
+	}
+	source := string(data)
+
+	metricIndex := strings.Index(source, "CheckUnifiedResourceMetrics(resources)")
+	incidentIndex := strings.Index(source, "SyncUnifiedResourceIncidents(resources)")
+	if metricIndex < 0 {
+		t.Fatalf("monitor alert sync must run unified resource metric evaluation")
+	}
+	if incidentIndex < 0 {
+		t.Fatalf("monitor alert sync must preserve unified resource incident sync")
+	}
+	if metricIndex > incidentIndex {
+		t.Fatalf("unified resource metric evaluation must run before incident sync")
+	}
+}
+
 func TestStateBroadcastTreatsTypedNilHubAsAbsent(t *testing.T) {
 	data, err := os.ReadFile("monitor.go")
 	if err != nil {

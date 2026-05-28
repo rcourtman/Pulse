@@ -14,6 +14,19 @@ export type OverrideType =
   | 'storage'
   | 'pbs'
   | 'pmg'
+  | 'kubernetesCluster'
+  | 'kubernetesNode'
+  | 'kubernetesNamespace'
+  | 'kubernetesDeployment'
+  | 'kubernetesPod'
+  | 'truenasSystem'
+  | 'truenasPool'
+  | 'truenasDataset'
+  | 'truenasDisk'
+  | 'vmwareHost'
+  | 'vmwareVm'
+  | 'vmwareDatastore'
+  | 'vmwareNetwork'
   | 'dockerHost'
   | 'dockerContainer';
 
@@ -89,6 +102,10 @@ export interface ThresholdsTableProps {
   setGuestPoweredOffSeverity: (value: 'warning' | 'critical') => void;
   nodeDefaults: SimpleThresholds;
   pbsDefaults?: SimpleThresholds;
+  kubernetesDefaults?: SimpleThresholds;
+  trueNASDefaults?: SimpleThresholds;
+  trueNASDiskDefaults?: SimpleThresholds;
+  vmwareDefaults?: SimpleThresholds;
   agentDefaults: SimpleThresholds;
   setNodeDefaults: (
     value:
@@ -96,6 +113,26 @@ export interface ThresholdsTableProps {
       | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
   ) => void;
   setPBSDefaults?: (
+    value:
+      | Record<string, number | undefined>
+      | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
+  ) => void;
+  setKubernetesDefaults?: (
+    value:
+      | Record<string, number | undefined>
+      | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
+  ) => void;
+  setTrueNASDefaults?: (
+    value:
+      | Record<string, number | undefined>
+      | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
+  ) => void;
+  setTrueNASDiskDefaults?: (
+    value:
+      | Record<string, number | undefined>
+      | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
+  ) => void;
+  setVMwareDefaults?: (
     value:
       | Record<string, number | undefined>
       | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
@@ -168,6 +205,10 @@ export interface ThresholdsTableProps {
   resetGuestDefaults?: () => void;
   resetNodeDefaults?: () => void;
   resetPBSDefaults?: () => void;
+  resetKubernetesDefaults?: () => void;
+  resetTrueNASDefaults?: () => void;
+  resetTrueNASDiskDefaults?: () => void;
+  resetVMwareDefaults?: () => void;
   resetAgentDefaults?: () => void;
   resetDockerDefaults?: () => void;
   resetDockerIgnoredPrefixes?: () => void;
@@ -175,6 +216,10 @@ export interface ThresholdsTableProps {
   factoryGuestDefaults?: Record<string, number | undefined>;
   factoryNodeDefaults?: Record<string, number | undefined>;
   factoryPBSDefaults?: Record<string, number | undefined>;
+  factoryKubernetesDefaults?: Record<string, number | undefined>;
+  factoryTrueNASDefaults?: Record<string, number | undefined>;
+  factoryTrueNASDiskDefaults?: Record<string, number | undefined>;
+  factoryVMwareDefaults?: Record<string, number | undefined>;
   factoryAgentDefaults?: Record<string, number | undefined>;
   factoryDockerDefaults?: Record<string, number | undefined>;
   factoryStorageDefault?: number;
@@ -184,6 +229,19 @@ export interface ThresholdsTableProps {
     storage: number;
     pbs: number;
     agent: number;
+    'k8s-cluster': number;
+    'k8s-node': number;
+    'k8s-deployment': number;
+    'k8s-namespace': number;
+    pod: number;
+    'truenas-system': number;
+    'truenas-pool': number;
+    'truenas-dataset': number;
+    'truenas-disk': number;
+    'vmware-host': number;
+    'vmware-vm': number;
+    'vmware-datastore': number;
+    'vmware-network': number;
   };
   metricTimeThresholds: () => Record<string, Record<string, number>>;
   setMetricTimeThresholds: (
@@ -225,6 +283,12 @@ export interface ThresholdsTableProps {
   setDisableAllDockerServices: (value: boolean) => void;
   disableAllDockerContainers: () => boolean;
   setDisableAllDockerContainers: (value: boolean) => void;
+  disableAllKubernetes: () => boolean;
+  setDisableAllKubernetes: (value: boolean) => void;
+  disableAllTrueNAS: () => boolean;
+  setDisableAllTrueNAS: (value: boolean) => void;
+  disableAllVMware: () => boolean;
+  setDisableAllVMware: (value: boolean) => void;
   // Global disable offline alerts flags
   disableAllNodesOffline: () => boolean;
   setDisableAllNodesOffline: (value: boolean) => void;

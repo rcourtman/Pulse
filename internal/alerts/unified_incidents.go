@@ -48,6 +48,9 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 	m.mu.RLock()
 	enabled := m.config.Enabled
 	disableAllStorage := m.config.DisableAllStorage
+	disableAllKubernetes := m.config.DisableAllKubernetes
+	disableAllTrueNAS := m.config.DisableAllTrueNAS
+	disableAllVMware := m.config.DisableAllVMware
 	overrides := m.config.Overrides
 	m.mu.RUnlock()
 
@@ -65,7 +68,18 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 			if !resourceSupportsUnifiedIncidentAlerts(resource) {
 				continue
 			}
-			if disableAllStorage {
+			if alertType, ok := unifiedAlertResourceType(resource); ok {
+				if disableAllKubernetes && isUnifiedKubernetesAlertType(alertType) {
+					continue
+				}
+				if disableAllTrueNAS && isUnifiedTrueNASAlertType(alertType) {
+					continue
+				}
+				if disableAllVMware && isUnifiedVMwareAlertType(alertType) {
+					continue
+				}
+			}
+			if disableAllStorage && (resource.Type == unifiedresources.ResourceTypeStorage || resource.Type == unifiedresources.ResourceTypePhysicalDisk) {
 				continue
 			}
 			if override, exists := overrides[spec.ResourceID]; exists && override.Disabled {
@@ -232,6 +246,14 @@ func resourceSupportsUnifiedIncidentAlerts(resource unifiedresources.Resource) b
 		return len(resource.Incidents) > 0
 	case unifiedresources.ResourceTypePBS:
 		return len(resource.Incidents) > 0
+	case unifiedresources.ResourceTypeNetwork:
+		return len(resource.Incidents) > 0
+	case unifiedresources.ResourceTypeK8sCluster,
+		unifiedresources.ResourceTypeK8sNode,
+		unifiedresources.ResourceTypeK8sNamespace,
+		unifiedresources.ResourceTypeK8sDeployment,
+		unifiedresources.ResourceTypePod:
+		return len(resource.Incidents) > 0
 	case unifiedresources.ResourceTypeNetworkEndpoint:
 		return len(resource.Incidents) > 0
 	default:
@@ -312,6 +334,20 @@ func unifiedIncidentNode(resource unifiedresources.Resource) string {
 	if resource.Canonical != nil && strings.TrimSpace(resource.Canonical.Hostname) != "" {
 		return strings.TrimSpace(resource.Canonical.Hostname)
 	}
+	if resource.VMware != nil {
+		if strings.TrimSpace(resource.VMware.RuntimeHostName) != "" {
+			return strings.TrimSpace(resource.VMware.RuntimeHostName)
+		}
+		if strings.TrimSpace(resource.VMware.ClusterName) != "" {
+			return strings.TrimSpace(resource.VMware.ClusterName)
+		}
+		if strings.TrimSpace(resource.VMware.DatacenterName) != "" {
+			return strings.TrimSpace(resource.VMware.DatacenterName)
+		}
+		if strings.TrimSpace(resource.VMware.VCenterHost) != "" {
+			return strings.TrimSpace(resource.VMware.VCenterHost)
+		}
+	}
 	return unifiedIncidentResourceName(resource)
 }
 
@@ -325,7 +361,13 @@ func unifiedIncidentInstance(resource unifiedresources.Resource) string {
 	case resource.PBS != nil:
 		return "PBS"
 	case resource.VMware != nil:
-		return "VMware"
+		if strings.TrimSpace(resource.VMware.ConnectionName) != "" {
+			return strings.TrimSpace(resource.VMware.ConnectionName)
+		}
+		if strings.TrimSpace(resource.VMware.VCenterHost) != "" {
+			return strings.TrimSpace(resource.VMware.VCenterHost)
+		}
+		return "vSphere"
 	case resource.Availability != nil:
 		return "Availability"
 	case resource.Storage != nil && strings.TrimSpace(resource.Storage.Platform) != "":

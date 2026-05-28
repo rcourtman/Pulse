@@ -32,6 +32,9 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	alertconfig.NormalizeBackupDefaults(&config)
 	alertconfig.NormalizeNodeDefaults(&config)
 	alertconfig.NormalizeAgentDefaults(&config)
+	alertconfig.NormalizeKubernetesDefaults(&config)
+	alertconfig.NormalizeTrueNASDefaults(&config)
+	alertconfig.NormalizeVMwareDefaults(&config)
 	alertconfig.NormalizeGeneralSettings(&config)
 	alertconfig.NormalizeTimeThresholds(&config)
 
@@ -229,6 +232,42 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 			m.clearAlertNoLock(alertID)
 		}
 	}
+
+	if m.config.DisableAllKubernetes || m.config.DisableAllTrueNAS || m.config.DisableAllVMware {
+		var platformAlerts []string
+		for storageKey, alert := range m.activeAlerts {
+			primaryType := alertPrimaryResourceType(alert)
+			if primaryType == "" {
+				continue
+			}
+			switch {
+			case m.config.DisableAllKubernetes && isUnifiedKubernetesAlertType(primaryType):
+				platformAlerts = append(platformAlerts, effectiveAlertID(alert, storageKey))
+			case m.config.DisableAllTrueNAS && isUnifiedTrueNASAlertType(primaryType):
+				platformAlerts = append(platformAlerts, effectiveAlertID(alert, storageKey))
+			case m.config.DisableAllVMware && isUnifiedVMwareAlertType(primaryType):
+				platformAlerts = append(platformAlerts, effectiveAlertID(alert, storageKey))
+			}
+		}
+		for _, alertID := range platformAlerts {
+			m.clearAlertNoLock(alertID)
+		}
+	}
+}
+
+func alertPrimaryResourceType(alert *Alert) string {
+	if alert == nil || alert.Metadata == nil {
+		return ""
+	}
+	metaType, ok := alert.Metadata["resourceType"].(string)
+	if !ok {
+		return ""
+	}
+	keys := CanonicalResourceTypeKeys(metaType)
+	if len(keys) == 0 {
+		return ""
+	}
+	return keys[0]
 }
 
 // reevaluateActiveAlertsLocked re-evaluates all active alerts against the current configuration.
@@ -269,6 +308,11 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				resourceTypeMeta = alertconfig.CanonicalAlertResourceType(metaType)
 			}
 		}
+		resourceTypeKeys := CanonicalResourceTypeKeys(resourceTypeMeta)
+		primaryResourceType := ""
+		if len(resourceTypeKeys) > 0 {
+			primaryResourceType = resourceTypeKeys[0]
+		}
 
 		if alert.Type == "queue-depth" || alert.Type == "queue-deferred" || alert.Type == "queue-hold" || alert.Type == "message-age" {
 			if m.config.DisableAllPMG {
@@ -277,14 +321,29 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			}
 		}
 
+		handledModernPlatformType := false
+		if isUnifiedModernPlatformAlertType(primaryResourceType) {
+			handledModernPlatformType = true
+			if m.unifiedPlatformAlertsDisabledNoLock(primaryResourceType) {
+				alertsToResolve = append(alertsToResolve, alertID)
+				continue
+			}
+			thresholds := m.resolveResourceThresholds(primaryResourceType, resourceID)
+			if thresholds.Disabled {
+				alertsToResolve = append(alertsToResolve, alertID)
+				continue
+			}
+			threshold = getThresholdForMetric(thresholds, metricType)
+		}
+
 		isAgentResource := false
-		for _, key := range CanonicalResourceTypeKeys(resourceTypeMeta) {
+		for _, key := range resourceTypeKeys {
 			if key == "agent" {
 				isAgentResource = true
 				break
 			}
 		}
-		if isAgentResource {
+		if !handledModernPlatformType && isAgentResource {
 			if m.config.DisableAllAgents {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
@@ -347,7 +406,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			threshold = getThresholdForMetric(thresholds, metricType)
 		}
 
-		if threshold == nil && !strings.Contains(resourceID, ":") && (alert.Instance == "Node" || alert.Instance == alert.Node) {
+		if threshold == nil && !handledModernPlatformType && !strings.Contains(resourceID, ":") && (alert.Instance == "Node" || alert.Instance == alert.Node) {
 			if m.config.DisableAllNodes {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
@@ -358,7 +417,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				continue
 			}
 			threshold = getThresholdForMetric(thresholds, metricType)
-		} else if threshold == nil && (alert.Instance == "Storage" || strings.Contains(alert.ResourceID, ":storage/")) {
+		} else if threshold == nil && !handledModernPlatformType && (alert.Instance == "Storage" || strings.Contains(alert.ResourceID, ":storage/")) {
 			if m.config.DisableAllStorage {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
@@ -369,7 +428,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				continue
 			}
 			threshold = getThresholdForMetric(thresholds, metricType)
-		} else if threshold == nil && (resourceTypeMeta == "pbs" || alert.Instance == "PBS") {
+		} else if threshold == nil && !handledModernPlatformType && (resourceTypeMeta == "pbs" || alert.Instance == "PBS") {
 			if m.config.DisableAllPBS {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
@@ -382,7 +441,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			threshold = getThresholdForMetric(thresholds, metricType)
 		}
 
-		if threshold == nil {
+		if threshold == nil && !handledModernPlatformType {
 			if m.config.DisableAllGuests {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue

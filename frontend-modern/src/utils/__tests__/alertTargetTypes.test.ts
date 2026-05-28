@@ -10,12 +10,15 @@ describe('alertTargetTypes', () => {
     it('canonicalizes supported aliases used for alert investigation targets', () => {
       expect(canonicalizeAlertTargetType('host')).toBe('agent');
       expect(canonicalizeAlertTargetType('docker-service')).toBe('app-container');
+      expect(canonicalizeAlertTargetType('kubernetes')).toBe('k8s-cluster');
+      expect(canonicalizeAlertTargetType('Kubernetes Namespace')).toBe('k8s-namespace');
+      expect(canonicalizeAlertTargetType('TrueNAS Dataset')).toBe('truenas-dataset');
+      expect(canonicalizeAlertTargetType('TrueNAS Disk')).toBe('physical_disk');
+      expect(canonicalizeAlertTargetType('vSphere Host')).toBe('vmware-host');
+      expect(canonicalizeAlertTargetType('VMware Virtual Machine')).toBe('vmware-vm');
+      expect(canonicalizeAlertTargetType('vSphere Datastore')).toBe('vmware-datastore');
+      expect(canonicalizeAlertTargetType('VMware Network')).toBe('vmware-network');
       expect(canonicalizeAlertTargetType('lxc')).toBeUndefined();
-    });
-
-    it('intentionally leaves k8s generic aliases unresolved at this layer', () => {
-      expect(canonicalizeAlertTargetType('k8s')).toBeUndefined();
-      expect(canonicalizeAlertTargetType('kubernetes')).toBeUndefined();
     });
   });
 
@@ -26,6 +29,16 @@ describe('alertTargetTypes', () => {
       expect(inferAlertTargetTypeFromResourceId('docker:abc')).toBe('app-container');
       expect(inferAlertTargetTypeFromResourceId('node:host1')).toBe('agent');
       expect(inferAlertTargetTypeFromResourceId('pod:ns/name')).toBe('pod');
+      expect(inferAlertTargetTypeFromResourceId('k8s:cluster-1:deployment:api')).toBe(
+        'k8s-deployment',
+      );
+      expect(inferAlertTargetTypeFromResourceId('truenas-dataset:tank/media')).toBe(
+        'truenas-dataset',
+      );
+      expect(inferAlertTargetTypeFromResourceId('vmware:vc-1:host:host-101')).toBe('vmware-host');
+      expect(inferAlertTargetTypeFromResourceId('vmware:vc-1:datastore:datastore-301')).toBe(
+        'vmware-datastore',
+      );
     });
   });
 
@@ -61,6 +74,22 @@ describe('alertTargetTypes', () => {
           resourceId: 'pbs:main',
         }),
       ).toBe('pbs');
+
+      expect(
+        resolveAlertTargetType({
+          alertType: 'custom_alert',
+          metadataResourceType: 'TrueNAS Disk',
+          resourceId: 'disk:sdb',
+        }),
+      ).toBe('physical_disk');
+
+      expect(
+        resolveAlertTargetType({
+          alertType: 'custom_alert',
+          metadataResourceType: 'vSphere VM',
+          resourceId: 'vmware:vc-1:vm:vm-201',
+        }),
+      ).toBe('vmware-vm');
 
       expect(resolveAlertTargetType({ alertType: 'custom_alert' })).toBe('agent');
     });

@@ -72,6 +72,7 @@ truth for live infrastructure data.
 48. `internal/truenas/provider.go`
 49. `internal/models/ceph_cluster_identity.go`
 50. `internal/truenas/types.go`
+51. `internal/monitoring/monitor_alert_sync.go`
 
 ## Shared Boundaries
 
@@ -240,6 +241,12 @@ truth for live infrastructure data.
     fields locally. Monitoring must preserve those objects as native cluster
     inventory instead of flattening them into pods, deployments, or generic
     networking, storage, configuration, or controller rows.
+19. Add or change unified-resource alert synchronization through
+    `internal/monitoring/monitor_alert_sync.go` and the alerts subsystem
+    contract together. Monitoring may pass the current unified-resource snapshot
+    into the alert manager, but threshold selection, override identity, active
+    alert state, and notification delivery remain alerts-owned. The monitoring
+    sync bridge must not introduce per-platform evaluator branches.
 
 ## Forbidden Paths
 

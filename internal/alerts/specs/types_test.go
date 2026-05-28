@@ -31,6 +31,64 @@ func TestResourceAlertSpecValidateAcceptsSupportedKinds(t *testing.T) {
 			},
 		},
 		{
+			name: "kubernetes pod metric threshold",
+			spec: ResourceAlertSpec{
+				ID:           "k8s-prod-default-api-cpu-high",
+				ResourceID:   "k8s:prod/ns:default/pod:api-7d9f",
+				ResourceType: unifiedresources.ResourceTypePod,
+				Kind:         AlertSpecKindMetricThreshold,
+				Severity:     AlertSeverityWarning,
+				MetricThreshold: &MetricThresholdSpec{
+					Metric:    "cpu",
+					Direction: ThresholdDirectionAbove,
+					Trigger:   80,
+				},
+			},
+		},
+		{
+			name: "kubernetes namespace provider incident",
+			spec: ResourceAlertSpec{
+				ID:           "k8s-prod-default-incident",
+				ResourceID:   "k8s:prod/ns:default",
+				ResourceType: unifiedresources.ResourceTypeK8sNamespace,
+				Kind:         AlertSpecKindProviderIncident,
+				Severity:     AlertSeverityWarning,
+				ProviderIncident: &ProviderIncidentSpec{
+					Provider: "kubernetes",
+					Codes:    []string{"namespace_quota_pressure"},
+				},
+			},
+		},
+		{
+			name: "truenas physical disk metric threshold",
+			spec: ResourceAlertSpec{
+				ID:           "truenas-main-ada0-temperature-high",
+				ResourceID:   "physical-disk:truenas-main/ada0",
+				ResourceType: unifiedresources.ResourceTypePhysicalDisk,
+				Kind:         AlertSpecKindMetricThreshold,
+				Severity:     AlertSeverityWarning,
+				MetricThreshold: &MetricThresholdSpec{
+					Metric:    "temperature",
+					Direction: ThresholdDirectionAbove,
+					Trigger:   55,
+				},
+			},
+		},
+		{
+			name: "vmware network provider incident",
+			spec: ResourceAlertSpec{
+				ID:           "vmware-vc1-network-alarm",
+				ResourceID:   "vmware:vc-1:network:network-401",
+				ResourceType: unifiedresources.ResourceTypeNetwork,
+				Kind:         AlertSpecKindProviderIncident,
+				Severity:     AlertSeverityWarning,
+				ProviderIncident: &ProviderIncidentSpec{
+					Provider: "vmware",
+					Codes:    []string{"vmware_alarm_state"},
+				},
+			},
+		},
+		{
 			name: "severity threshold",
 			spec: ResourceAlertSpec{
 				ID:           "pmg-01-queue-total",

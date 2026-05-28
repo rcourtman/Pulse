@@ -1,4 +1,5 @@
 import type { Resource as UnifiedResource, ResourcePolicy } from '@/types/resource';
+import type { PlatformTableColumnKind } from '@/features/platformPage/columnAlignment';
 import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 
 const COLUMN_TOOLTIP_LOOKUP: Record<string, string> = {
@@ -218,6 +219,14 @@ export function getAlertResourceColumnHeaderTooltip(column: string): string | un
   return COLUMN_TOOLTIP_LOOKUP[column] ?? COLUMN_TOOLTIP_LOOKUP[normalized];
 }
 
+export function getAlertResourceColumnKind(column: string): PlatformTableColumnKind {
+  const metric = normalizeAlertResourceMetricKey(column);
+  if (metric === 'backup' || metric === 'snapshot') {
+    return 'badge';
+  }
+  return 'numeric-value';
+}
+
 export function alertResourceSupportsMetric(
   resourceType: string | undefined,
   metric: string,
@@ -234,6 +243,53 @@ export function alertResourceSupportsMetric(
   }
   if (resourceType === 'storage') {
     return metric === 'usage';
+  }
+  if (resourceType === 'kubernetesNamespace') {
+    return false;
+  }
+  if (
+    resourceType === 'kubernetesCluster' ||
+    resourceType === 'kubernetesDeployment' ||
+    resourceType === 'kubernetesPod'
+  ) {
+    return ['cpu', 'memory', 'disk', 'diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(
+      metric,
+    );
+  }
+  if (resourceType === 'kubernetesNode') {
+    return ['cpu', 'memory', 'disk'].includes(metric);
+  }
+  if (resourceType === 'truenasSystem') {
+    return [
+      'cpu',
+      'memory',
+      'disk',
+      'diskRead',
+      'diskWrite',
+      'networkIn',
+      'networkOut',
+      'temperature',
+    ].includes(metric);
+  }
+  if (resourceType === 'truenasPool' || resourceType === 'truenasDataset') {
+    return metric === 'usage';
+  }
+  if (resourceType === 'truenasDisk') {
+    return metric === 'temperature';
+  }
+  if (resourceType === 'vmwareHost') {
+    return ['cpu', 'memory', 'diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(metric);
+  }
+  if (resourceType === 'vmwareVm') {
+    return ['cpu', 'memory', 'disk', 'diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(
+      metric,
+    );
+  }
+  if (resourceType === 'vmwareDatastore') {
+    return metric === 'usage';
+  }
+  if (resourceType === 'vmwareNetwork') {
+    return false;
   }
   if (resourceType === 'dockerContainer') {
     return [
@@ -267,7 +323,8 @@ export function getAlertResourceMetricDisplayValue(
   editingThresholds?: AlertResourceThresholdMap,
   isEditing = false,
 ): number {
-  const extract = (source: Record<string, unknown> | undefined) => parseAlertMetricNumber(source?.[metric]);
+  const extract = (source: Record<string, unknown> | undefined) =>
+    parseAlertMetricNumber(source?.[metric]);
   const defaults = resource.defaults as Record<string, unknown> | undefined;
 
   if (isEditing) {

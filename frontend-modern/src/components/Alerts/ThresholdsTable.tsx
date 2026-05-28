@@ -1,34 +1,91 @@
 import { Show } from 'solid-js';
-import { SearchInput } from '@/components/shared/SearchInput';
 import Server from 'lucide-solid/icons/server';
 import Mail from 'lucide-solid/icons/mail';
 import Users from 'lucide-solid/icons/users';
 import Boxes from 'lucide-solid/icons/boxes';
+import Cpu from 'lucide-solid/icons/cpu';
+import Database from 'lucide-solid/icons/database';
+import HardDrive from 'lucide-solid/icons/hard-drive';
+import Network from 'lucide-solid/icons/network';
+import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { BulkEditDialog } from './BulkEditDialog';
 import { ThresholdsTableAgentsTab } from './ThresholdsTableAgentsTab';
 import { ThresholdsTableDockerTab } from './ThresholdsTableDockerTab';
+import { ThresholdsTableKubernetesTab } from './ThresholdsTableKubernetesTab';
+import { ThresholdsTablePBSTab } from './ThresholdsTablePBSTab';
 import { ThresholdsTablePMGTab } from './ThresholdsTablePMGTab';
 import { ThresholdsTableProxmoxTab } from './ThresholdsTableProxmoxTab';
+import { ThresholdsTableTrueNASTab } from './ThresholdsTableTrueNASTab';
+import { ThresholdsTableVMwareTab } from './ThresholdsTableVMwareTab';
 import type { ThresholdsTableProps } from '@/features/alerts/thresholds/types';
+import type { ThresholdsActiveTab } from '@/features/alerts/thresholds/tableTypes';
 import { useThresholdsTableState } from '@/features/alerts/thresholds/hooks/useThresholdsTableState';
 
 export function ThresholdsTable(props: ThresholdsTableProps) {
   const state = useThresholdsTableState(props);
+  const { isMobile } = useBreakpoint();
+
+  const filters = (): FilterDef[] => [
+    {
+      id: 'alerts-platform',
+      label: 'Platform',
+      group: 'scope',
+      inline: true,
+      value: state.activeTab,
+      setValue: (value) => state.handleTabClick(value as ThresholdsActiveTab),
+      defaultValue: 'proxmox',
+      options: () => [
+        { value: 'proxmox', label: 'Proxmox', icon: Server },
+        { value: 'docker', label: 'Docker', icon: Boxes },
+        { value: 'kubernetes', label: 'Kubernetes', icon: Network },
+        { value: 'truenas', label: 'TrueNAS', icon: HardDrive },
+        { value: 'vmware', label: 'vSphere', icon: Cpu },
+        { value: 'pbs', label: 'PBS', icon: Database },
+        { value: 'pmg', label: 'PMG', icon: Mail },
+        { value: 'systems', label: 'Systems', icon: Users },
+      ],
+    },
+    {
+      id: 'alerts-overrides',
+      label: 'Overrides',
+      group: 'properties',
+      value: state.overrideFilter,
+      setValue: state.setOverrideFilter,
+      defaultValue: 'all',
+      options: () => [
+        { value: 'all', label: 'All resources' },
+        { value: 'custom', label: 'Custom only' },
+        { value: 'disabled', label: 'Disabled only' },
+      ],
+    },
+  ];
 
   return (
     <div class="space-y-4">
-      <div class="relative">
-        <SearchInput
-          value={state.searchTerm}
-          onChange={state.setSearchTerm}
-          placeholder={state.getAlertThresholdsSearchPlaceholder()}
-          class="w-full"
-          onBeforeAutoFocus={() => Boolean(state.editingId())}
-          focusOnShortcut
-          clearOnEscape
-          shortcutHint="Ctrl+F"
-        />
-      </div>
+      <FilterBar
+        role="group"
+        ariaLabel="Alert threshold filters"
+        isMobile={isMobile}
+        search={{
+          value: state.searchTerm,
+          setValue: state.setSearchTerm,
+          placeholder: state.getAlertThresholdsSearchPlaceholder(),
+          clearOnEscape: true,
+          onBeforeAutoFocus: () => Boolean(state.editingId()),
+        }}
+        filters={filters()}
+        showClearAll={() =>
+          state.searchTerm().trim().length > 0 ||
+          state.overrideFilter() !== 'all' ||
+          state.activeTab() !== 'proxmox'
+        }
+        onClearAll={() => {
+          state.setSearchTerm('');
+          state.setOverrideFilter('all');
+          state.handleTabClick('proxmox');
+        }}
+      />
 
       <Show when={!state.helpBannerDismissed()}>
         <div class="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900 p-3 relative group">
@@ -83,45 +140,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         </div>
       </Show>
 
-      <div class="border-b border-border">
-        <nav class="-mb-px flex gap-4 sm:gap-6" aria-label="Tabs">
-          <button
-            type="button"
-            onClick={() => state.handleTabClick('infrastructure')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${state.activeTab() === 'infrastructure' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300'}`}
-          >
-            <Server class="w-4 h-4" />
-            <span>Infrastructure</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => state.handleTabClick('pmg')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${state.activeTab() === 'pmg' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300'}`}
-          >
-            <Mail class="w-4 h-4" />
-            <span class="hidden sm:inline">Mail Gateway</span>
-            <span class="sm:hidden">Mail</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => state.handleTabClick('systems')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${state.activeTab() === 'systems' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300'}`}
-          >
-            <Users class="w-4 h-4" />
-            <span>Systems</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => state.handleTabClick('docker')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${state.activeTab() === 'docker' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300'}`}
-          >
-            <Boxes class="w-4 h-4" />
-            <span>Containers</span>
-          </button>
-        </nav>
-      </div>
-
-      <Show when={state.activeTab() === 'infrastructure'}>
+      <Show when={state.activeTab() === 'proxmox'}>
         <div class="flex justify-end gap-2">
           <button
             type="button"
@@ -142,8 +161,28 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       </Show>
 
       <div class="space-y-6">
-        <Show when={state.activeTab() === 'infrastructure'}>
+        <Show when={state.activeTab() === 'proxmox'}>
           <ThresholdsTableProxmoxTab state={state} tableProps={props} />
+        </Show>
+
+        <Show when={state.activeTab() === 'docker'}>
+          <ThresholdsTableDockerTab state={state} tableProps={props} />
+        </Show>
+
+        <Show when={state.activeTab() === 'kubernetes'}>
+          <ThresholdsTableKubernetesTab state={state} tableProps={props} />
+        </Show>
+
+        <Show when={state.activeTab() === 'truenas'}>
+          <ThresholdsTableTrueNASTab state={state} tableProps={props} />
+        </Show>
+
+        <Show when={state.activeTab() === 'vmware'}>
+          <ThresholdsTableVMwareTab state={state} tableProps={props} />
+        </Show>
+
+        <Show when={state.activeTab() === 'pbs'}>
+          <ThresholdsTablePBSTab state={state} tableProps={props} />
         </Show>
 
         <Show when={state.activeTab() === 'pmg'}>
@@ -152,10 +191,6 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
 
         <Show when={state.activeTab() === 'systems'}>
           <ThresholdsTableAgentsTab state={state} tableProps={props} />
-        </Show>
-
-        <Show when={state.activeTab() === 'docker'}>
-          <ThresholdsTableDockerTab state={state} tableProps={props} />
         </Show>
       </div>
 

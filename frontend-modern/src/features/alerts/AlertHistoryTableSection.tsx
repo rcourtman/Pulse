@@ -2,6 +2,7 @@ import { For, Show } from 'solid-js';
 
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/shared/Table';
 import { TableCard } from '@/components/shared/TableCard';
+import { getPlatformTableHeadClassForKind } from '@/features/platformPage/sharedPlatformPage';
 import {
   getAlertHistoryEmptyState,
   getAlertHistoryLoadingState,
@@ -34,34 +35,54 @@ export function AlertHistoryTableSection(props: AlertHistoryTableSectionProps) {
             <Table class="w-full text-[11px] sm:text-sm">
               <TableHeader>
                 <TableRow class="border-b border-border bg-surface-hover text-muted">
-                  <TableHead class="p-1 px-1 text-left text-[10px] font-medium uppercase tracking-wider sm:p-1.5 sm:px-2 sm:text-xs">
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
+                  >
                     Timestamp
                   </TableHead>
-                  <TableHead class="p-1 px-1 text-center text-[10px] font-medium uppercase tracking-wider sm:p-1.5 sm:px-2 sm:text-xs">
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('badge')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
+                  >
                     Source
                   </TableHead>
-                  <TableHead class="p-1 px-1 text-left text-[10px] font-medium uppercase tracking-wider sm:p-1.5 sm:px-2 sm:text-xs">
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('name')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
+                  >
                     Resource
                   </TableHead>
-                  <TableHead class="p-1 px-1 text-left text-[10px] font-medium uppercase tracking-wider sm:p-1.5 sm:px-2 sm:text-xs">
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('badge')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
+                  >
                     {getTypeColumnLabel()}
                   </TableHead>
-                  <TableHead class="p-1 px-1 text-center text-[10px] font-medium uppercase tracking-wider sm:p-1.5 sm:px-2 sm:text-xs">
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('badge')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
+                  >
                     Severity
                   </TableHead>
-                  <TableHead class="p-1 px-1 text-left text-[10px] font-medium uppercase tracking-wider sm:p-1.5 sm:px-2 sm:text-xs">
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
+                  >
                     Message
                   </TableHead>
-                  <TableHead class="hidden p-1 px-1 text-center text-[10px] font-medium uppercase tracking-wider lg:table-cell sm:p-1.5 sm:px-2 sm:text-xs">
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden text-[10px] font-medium uppercase tracking-wider lg:table-cell sm:text-xs`}
+                  >
                     Duration
                   </TableHead>
-                  <TableHead class="hidden p-1 px-1 text-center text-[10px] font-medium uppercase tracking-wider lg:table-cell sm:p-1.5 sm:px-2 sm:text-xs">
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('badge')} hidden text-[10px] font-medium uppercase tracking-wider lg:table-cell sm:text-xs`}
+                  >
                     Status
                   </TableHead>
-                  <TableHead class="hidden p-1 px-1 text-left text-[10px] font-medium uppercase tracking-wider lg:table-cell sm:p-1.5 sm:px-2 sm:text-xs">
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden text-[10px] font-medium uppercase tracking-wider lg:table-cell sm:text-xs`}
+                  >
                     Node
                   </TableHead>
-                  <TableHead class="p-1 px-1 text-center text-[10px] font-medium uppercase tracking-wider sm:p-1.5 sm:px-2 sm:text-xs">
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('badge')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
+                  >
                     Actions
                   </TableHead>
                 </TableRow>

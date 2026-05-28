@@ -287,6 +287,66 @@ func NormalizeAgentDefaults(config *AlertConfig) {
 	NormalizeDiskTempByType(config)
 }
 
+func normalizeThresholdPointer(
+	current *HysteresisThreshold,
+	defaultTrigger float64,
+	defaultClear float64,
+	metricName string,
+) *HysteresisThreshold {
+	if current == nil || current.Trigger < 0 {
+		return &HysteresisThreshold{Trigger: defaultTrigger, Clear: defaultClear}
+	}
+	normalized := *current
+	if normalized.Trigger == 0 {
+		normalized.Clear = 0
+		return &normalized
+	}
+	if normalized.Clear <= 0 {
+		normalized.Clear = normalized.Trigger - 5
+		if normalized.Clear < 0 {
+			normalized.Clear = 0
+		}
+	}
+	EnsureValidHysteresis(&normalized, metricName)
+	return &normalized
+}
+
+func NormalizeKubernetesDefaults(config *AlertConfig) {
+	config.KubernetesDefaults.CPU = normalizeThresholdPointer(config.KubernetesDefaults.CPU, 80, 75, "kubernetes.cpu")
+	config.KubernetesDefaults.Memory = normalizeThresholdPointer(config.KubernetesDefaults.Memory, 85, 80, "kubernetes.memory")
+	config.KubernetesDefaults.Disk = normalizeThresholdPointer(config.KubernetesDefaults.Disk, 90, 85, "kubernetes.disk")
+
+	config.KubernetesDefaults.DiskRead = normalizeThresholdPointer(config.KubernetesDefaults.DiskRead, 0, 0, "kubernetes.diskRead")
+	config.KubernetesDefaults.DiskWrite = normalizeThresholdPointer(config.KubernetesDefaults.DiskWrite, 0, 0, "kubernetes.diskWrite")
+	config.KubernetesDefaults.NetworkIn = normalizeThresholdPointer(config.KubernetesDefaults.NetworkIn, 0, 0, "kubernetes.networkIn")
+	config.KubernetesDefaults.NetworkOut = normalizeThresholdPointer(config.KubernetesDefaults.NetworkOut, 0, 0, "kubernetes.networkOut")
+}
+
+func NormalizeTrueNASDefaults(config *AlertConfig) {
+	config.TrueNASDefaults.CPU = normalizeThresholdPointer(config.TrueNASDefaults.CPU, 80, 75, "truenas.cpu")
+	config.TrueNASDefaults.Memory = normalizeThresholdPointer(config.TrueNASDefaults.Memory, 85, 80, "truenas.memory")
+	config.TrueNASDefaults.Disk = normalizeThresholdPointer(config.TrueNASDefaults.Disk, 85, 80, "truenas.disk")
+	config.TrueNASDefaults.Usage = normalizeThresholdPointer(config.TrueNASDefaults.Usage, 85, 80, "truenas.usage")
+	config.TrueNASDefaults.Temperature = normalizeThresholdPointer(config.TrueNASDefaults.Temperature, 80, 75, "truenas.temperature")
+	config.TrueNASDefaults.DiskRead = normalizeThresholdPointer(config.TrueNASDefaults.DiskRead, 0, 0, "truenas.diskRead")
+	config.TrueNASDefaults.DiskWrite = normalizeThresholdPointer(config.TrueNASDefaults.DiskWrite, 0, 0, "truenas.diskWrite")
+	config.TrueNASDefaults.NetworkIn = normalizeThresholdPointer(config.TrueNASDefaults.NetworkIn, 0, 0, "truenas.networkIn")
+	config.TrueNASDefaults.NetworkOut = normalizeThresholdPointer(config.TrueNASDefaults.NetworkOut, 0, 0, "truenas.networkOut")
+
+	config.TrueNASDiskDefaults.Temperature = normalizeThresholdPointer(config.TrueNASDiskDefaults.Temperature, 55, 50, "truenas.disk.temperature")
+}
+
+func NormalizeVMwareDefaults(config *AlertConfig) {
+	config.VMwareDefaults.CPU = normalizeThresholdPointer(config.VMwareDefaults.CPU, 80, 75, "vmware.cpu")
+	config.VMwareDefaults.Memory = normalizeThresholdPointer(config.VMwareDefaults.Memory, 85, 80, "vmware.memory")
+	config.VMwareDefaults.Disk = normalizeThresholdPointer(config.VMwareDefaults.Disk, 90, 85, "vmware.disk")
+	config.VMwareDefaults.Usage = normalizeThresholdPointer(config.VMwareDefaults.Usage, 85, 80, "vmware.usage")
+	config.VMwareDefaults.DiskRead = normalizeThresholdPointer(config.VMwareDefaults.DiskRead, 0, 0, "vmware.diskRead")
+	config.VMwareDefaults.DiskWrite = normalizeThresholdPointer(config.VMwareDefaults.DiskWrite, 0, 0, "vmware.diskWrite")
+	config.VMwareDefaults.NetworkIn = normalizeThresholdPointer(config.VMwareDefaults.NetworkIn, 0, 0, "vmware.networkIn")
+	config.VMwareDefaults.NetworkOut = normalizeThresholdPointer(config.VMwareDefaults.NetworkOut, 0, 0, "vmware.networkOut")
+}
+
 // diskFillByTypeDefaults returns the canonical per-type fill-% defaults.
 // Keys are lowercase hardware type strings.
 func diskFillByTypeDefaults() map[string]HysteresisThreshold {
@@ -434,6 +494,19 @@ func NormalizeTimeThresholds(config *AlertConfig) {
 	ensureDelay("storage")
 	ensureDelay("pbs")
 	ensureDelay("agent")
+	ensureDelay("k8s-cluster")
+	ensureDelay("k8s-node")
+	ensureDelay("k8s-deployment")
+	ensureDelay("k8s-namespace")
+	ensureDelay("pod")
+	ensureDelay("truenas-system")
+	ensureDelay("truenas-pool")
+	ensureDelay("truenas-dataset")
+	ensureDelay("truenas-disk")
+	ensureDelay("vmware-host")
+	ensureDelay("vmware-vm")
+	ensureDelay("vmware-datastore")
+	ensureDelay("vmware-network")
 	if delay, ok := config.TimeThresholds["all"]; ok && delay < 0 {
 		config.TimeThresholds["all"] = defaultDelaySeconds
 	}
@@ -447,6 +520,19 @@ func ValidateHysteresisThresholds(config *AlertConfig) {
 	EnsureValidHysteresis(config.NodeDefaults.Memory, "node.memory")
 	EnsureValidHysteresis(config.NodeDefaults.Temperature, "node.temperature")
 	EnsureValidHysteresis(&config.StorageDefault, "storage")
+	EnsureValidHysteresis(config.KubernetesDefaults.CPU, "kubernetes.cpu")
+	EnsureValidHysteresis(config.KubernetesDefaults.Memory, "kubernetes.memory")
+	EnsureValidHysteresis(config.KubernetesDefaults.Disk, "kubernetes.disk")
+	EnsureValidHysteresis(config.TrueNASDefaults.CPU, "truenas.cpu")
+	EnsureValidHysteresis(config.TrueNASDefaults.Memory, "truenas.memory")
+	EnsureValidHysteresis(config.TrueNASDefaults.Disk, "truenas.disk")
+	EnsureValidHysteresis(config.TrueNASDefaults.Usage, "truenas.usage")
+	EnsureValidHysteresis(config.TrueNASDefaults.Temperature, "truenas.temperature")
+	EnsureValidHysteresis(config.TrueNASDiskDefaults.Temperature, "truenas.disk.temperature")
+	EnsureValidHysteresis(config.VMwareDefaults.CPU, "vmware.cpu")
+	EnsureValidHysteresis(config.VMwareDefaults.Memory, "vmware.memory")
+	EnsureValidHysteresis(config.VMwareDefaults.Disk, "vmware.disk")
+	EnsureValidHysteresis(config.VMwareDefaults.Usage, "vmware.usage")
 }
 
 func ValidateQuietHoursTimezone(config *AlertConfig) {

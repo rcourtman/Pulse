@@ -161,6 +161,13 @@ work extends shared components instead of creating new local variants.
 
 ## Shared Boundaries
 
+Alert thresholds consume the shared FilterBar primitive and route state, while
+the alerts subsystem owns the resource data and platform-specific threshold
+tabs. The thresholds platform IA is platform-shaped: Proxmox, Docker,
+Kubernetes, TrueNAS, vSphere, PBS, PMG, and Systems. Frontend primitives own
+the chip, reset, "+ Filter", and route-backed shell pattern; alerts must not
+replace that with page-local search/tab chrome or legacy neutral buckets.
+
 The System Updates install guide is a shared settings primitive, not a
 deployment-lane-only panel. `UpdateInstallGuide` must render the canonical
 update-plan readiness verdict inline with the update action, and a blocked
@@ -341,6 +348,10 @@ filter chip or an explicit page-owned advanced selector. Platform-owned filter
 selectors must also exclude facet options from other platform scopes, even when
 the underlying shared surface is mounted from the same Workloads or Storage
 component.
+Alert configuration tables follow the same primitive boundary: the alerts
+owner supplies platform-specific threshold groups and filter catalog values,
+while the shared FilterBar owns the chip, reset, and "+ Filter" interaction
+shape so thresholds do not reintroduce page-local search/tab chrome.
 Platform sub-routes that add native provider inventory must stay on the shared
 platform page and table primitives. The vSphere Networks surface routes through
 `/vmware/networks`, the shared platform tab model, the command palette
@@ -2946,17 +2957,23 @@ is now explicitly a shell consumer rather than the data or controller owner,
 and the tab render owners live in
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxTab.tsx`,
 `frontend-modern/src/components/Alerts/ThresholdsTablePMGTab.tsx`,
-`frontend-modern/src/components/Alerts/ThresholdsTableAgentsTab.tsx`, and
-`frontend-modern/src/components/Alerts/ThresholdsTableDockerTab.tsx`.
+`frontend-modern/src/components/Alerts/ThresholdsTableAgentsTab.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTableDockerTab.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTableKubernetesTab.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTableTrueNASTab.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTableVMwareTab.tsx`, and
+`frontend-modern/src/components/Alerts/ThresholdsTablePBSTab.tsx`.
 `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts`
-owns the neutral thresholds sub-route contract:
-`/alerts/thresholds/infrastructure`, `/alerts/thresholds/systems`,
-`/alerts/thresholds/mail-gateway`, and `/alerts/thresholds/containers`.
-Legacy `/alerts/thresholds/proxmox` and `/alerts/thresholds/agents` links
-must redirect to the neutral infrastructure and systems routes so API-backed
-platforms such as TrueNAS stay on canonical page language rather than
-provider-specific aliases.
-The infrastructure tab is itself now a shell that composes
+owns the platform-shaped thresholds sub-route contract:
+`/alerts/thresholds/proxmox`, `/alerts/thresholds/docker`,
+`/alerts/thresholds/kubernetes`, `/alerts/thresholds/truenas`,
+`/alerts/thresholds/vmware`, `/alerts/thresholds/pbs`,
+`/alerts/thresholds/pmg`, and `/alerts/thresholds/systems`. Legacy neutral
+links such as `/alerts/thresholds/infrastructure`,
+`/alerts/thresholds/containers`, and `/alerts/thresholds/mail-gateway` must
+redirect to the matching platform-shaped route; legacy
+`/alerts/thresholds/agents` links must continue to resolve to Systems.
+The Proxmox tab is itself now a shell that composes
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxNodesSection.tsx`,
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxPBSSection.tsx`,
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxGuestsSection.tsx`,

@@ -291,13 +291,9 @@ describe('ResourceTable', () => {
       );
       expect(alertResourceTableDesktopSource).toContain('AlertResourceTableRow');
       expect(alertResourceTableDesktopSource).toContain('AlertResourceGroupHeader');
-      expect(alertResourceTableMobileSource).toContain(
-        'export function AlertResourceTableMobile',
-      );
+      expect(alertResourceTableMobileSource).toContain('export function AlertResourceTableMobile');
       expect(alertResourceTableMobileSource).toContain('AlertResourceGroupHeader');
-      expect(alertResourceGroupHeaderSource).toContain(
-        'export function AlertResourceGroupHeader',
-      );
+      expect(alertResourceGroupHeaderSource).toContain('export function AlertResourceGroupHeader');
       expect(alertResourceTableRowSource).toContain('export function AlertResourceTableRow');
       expect(alertResourceTableRowSource).toContain('alertResourceSupportsMetric');
       expect(alertResourceTableStateSource).toContain('export function useAlertResourceTableState');
@@ -316,6 +312,10 @@ describe('ResourceTable', () => {
       expect(normalizeAlertResourceMetricKey('CPU %')).toBe('cpu');
       expect(alertResourceSupportsMetric('agent', 'networkIn')).toBe(false);
       expect(alertResourceSupportsMetric('pbs', 'disk')).toBe(false);
+      expect(alertResourceSupportsMetric('vmwareHost', 'networkIn')).toBe(true);
+      expect(alertResourceSupportsMetric('vmwareHost', 'disk')).toBe(false);
+      expect(alertResourceSupportsMetric('vmwareDatastore', 'usage')).toBe(true);
+      expect(alertResourceSupportsMetric('vmwareNetwork', 'cpu')).toBe(false);
       expect(
         getAlertResourceMetricDisplayValue(
           makeResource({
@@ -531,15 +531,11 @@ describe('ResourceTable', () => {
       expect(disabledOff).toBeTruthy();
 
       // formatMetricValue should NOT be called for disabled metrics (they show "Off" directly)
-      const cpuCalls = formatMetricValue.mock.calls.filter(
-        ([metric]) => metric === 'cpu',
-      );
+      const cpuCalls = formatMetricValue.mock.calls.filter(([metric]) => metric === 'cpu');
       expect(cpuCalls.length).toBe(0);
 
       // Memory (85) should still be formatted normally
-      const memoryCalls = formatMetricValue.mock.calls.filter(
-        ([metric]) => metric === 'memory',
-      );
+      const memoryCalls = formatMetricValue.mock.calls.filter(([metric]) => metric === 'memory');
       expect(memoryCalls.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -954,9 +950,7 @@ describe('ResourceTable', () => {
       render(() => <ResourceTable {...props} />);
 
       // Storage only supports 'usage' — cpu and memory should NOT be formatted
-      const usageCalls = formatMetricValue.mock.calls.filter(
-        (args) => args[0] === 'usage',
-      );
+      const usageCalls = formatMetricValue.mock.calls.filter((args) => args[0] === 'usage');
       expect(usageCalls.length).toBeGreaterThanOrEqual(1);
 
       const cpuCalls = formatMetricValue.mock.calls.filter((args) => args[0] === 'cpu');

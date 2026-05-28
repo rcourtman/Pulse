@@ -7,7 +7,7 @@ import { normalizeDockerIgnoredInput } from '@/features/alerts/thresholds/helper
 import type { PMGThresholdDefaults, SnapshotAlertConfig, BackupAlertConfig } from '@/types/alerts';
 import type { Agent, Alert } from '@/types/api';
 
-const [getPathname, setPathname] = createSignal('/alerts/thresholds/containers');
+const [getPathname, setPathname] = createSignal('/alerts/thresholds/docker');
 const mockNavigate = vi.fn();
 
 vi.mock('@solidjs/router', () => ({
@@ -93,7 +93,7 @@ afterEach(() => {
 });
 
 beforeEach(() => {
-  setPathname('/alerts/thresholds/containers');
+  setPathname('/alerts/thresholds/docker');
   vi.clearAllMocks();
 });
 
@@ -139,6 +139,7 @@ const baseProps = () => ({
   storage: [],
   containerRuntimes: [],
   dockerHosts: [],
+  allResources: [],
   pbsInstances: [],
   pmgInstances: [],
   pmgThresholds: () => DEFAULT_PMG_THRESHOLDS,
@@ -151,6 +152,43 @@ const baseProps = () => ({
   setGuestPoweredOffSeverity: vi.fn(),
   nodeDefaults: {},
   setNodeDefaults: vi.fn(),
+  pbsDefaults: { cpu: 80, memory: 85 },
+  setPBSDefaults: vi.fn(),
+  kubernetesDefaults: {
+    cpu: 80,
+    memory: 85,
+    disk: 90,
+    diskRead: -1,
+    diskWrite: -1,
+    networkIn: -1,
+    networkOut: -1,
+  },
+  setKubernetesDefaults: vi.fn(),
+  trueNASDefaults: {
+    cpu: 80,
+    memory: 85,
+    disk: 85,
+    usage: 85,
+    temperature: 80,
+    diskRead: -1,
+    diskWrite: -1,
+    networkIn: -1,
+    networkOut: -1,
+  },
+  setTrueNASDefaults: vi.fn(),
+  trueNASDiskDefaults: { temperature: 55 },
+  setTrueNASDiskDefaults: vi.fn(),
+  vmwareDefaults: {
+    cpu: 80,
+    memory: 85,
+    disk: 90,
+    usage: 85,
+    diskRead: -1,
+    diskWrite: -1,
+    networkIn: -1,
+    networkOut: -1,
+  },
+  setVMwareDefaults: vi.fn(),
   agentDefaults: { cpu: 80, memory: 85, disk: 90 },
   setAgentDefaults: vi.fn(),
   dockerDefaults: DEFAULT_DOCKER_DEFAULTS,
@@ -163,12 +201,49 @@ const baseProps = () => ({
   setStorageDefault: vi.fn(),
   resetGuestDefaults: vi.fn(),
   resetNodeDefaults: vi.fn(),
+  resetPBSDefaults: vi.fn(),
+  resetKubernetesDefaults: vi.fn(),
+  resetTrueNASDefaults: vi.fn(),
+  resetTrueNASDiskDefaults: vi.fn(),
+  resetVMwareDefaults: vi.fn(),
   resetAgentDefaults: vi.fn(),
   resetDockerDefaults: vi.fn(),
   resetDockerIgnoredPrefixes: vi.fn(),
   resetStorageDefault: vi.fn(),
   factoryGuestDefaults: {},
   factoryNodeDefaults: {},
+  factoryPBSDefaults: { cpu: 80, memory: 85 },
+  factoryKubernetesDefaults: {
+    cpu: 80,
+    memory: 85,
+    disk: 90,
+    diskRead: -1,
+    diskWrite: -1,
+    networkIn: -1,
+    networkOut: -1,
+  },
+  factoryTrueNASDefaults: {
+    cpu: 80,
+    memory: 85,
+    disk: 85,
+    usage: 85,
+    temperature: 80,
+    diskRead: -1,
+    diskWrite: -1,
+    networkIn: -1,
+    networkOut: -1,
+  },
+  factoryTrueNASDiskDefaults: { temperature: 55 },
+  factoryVMwareDefaults: {
+    cpu: 80,
+    memory: 85,
+    disk: 90,
+    usage: 85,
+    diskRead: -1,
+    diskWrite: -1,
+    networkIn: -1,
+    networkOut: -1,
+  },
   factoryAgentDefaults: { cpu: 80, memory: 85, disk: 90 },
   factoryDockerDefaults: DEFAULT_DOCKER_DEFAULTS,
   factoryStorageDefault: 85,
@@ -192,7 +267,26 @@ const baseProps = () => ({
     criticalSizeGiB: 0,
   } as SnapshotAlertConfig,
   resetSnapshotDefaults: vi.fn(),
-  timeThresholds: () => ({ guest: 5, node: 5, storage: 5, pbs: 5, agent: 5 }),
+  timeThresholds: () => ({
+    guest: 5,
+    node: 5,
+    storage: 5,
+    pbs: 5,
+    agent: 5,
+    'k8s-cluster': 5,
+    'k8s-node': 5,
+    'k8s-deployment': 5,
+    'k8s-namespace': 5,
+    pod: 5,
+    'truenas-system': 5,
+    'truenas-pool': 5,
+    'truenas-dataset': 5,
+    'truenas-disk': 5,
+    'vmware-host': 5,
+    'vmware-vm': 5,
+    'vmware-datastore': 5,
+    'vmware-network': 5,
+  }),
   metricTimeThresholds: () => ({}),
   setMetricTimeThresholds: vi.fn(),
   activeAlerts: {},
@@ -215,6 +309,12 @@ const baseProps = () => ({
   setDisableAllDockerServices: vi.fn(),
   disableAllDockerContainers: () => false,
   setDisableAllDockerContainers: vi.fn(),
+  disableAllKubernetes: () => false,
+  setDisableAllKubernetes: vi.fn(),
+  disableAllTrueNAS: () => false,
+  setDisableAllTrueNAS: vi.fn(),
+  disableAllVMware: () => false,
+  setDisableAllVMware: vi.fn(),
   disableAllNodesOffline: () => false,
   setDisableAllNodesOffline: vi.fn(),
   disableAllGuestsOffline: () => false,
@@ -259,18 +359,18 @@ describe('ThresholdsTable basics', () => {
 });
 
 describe('ThresholdsTable navigation and redirection', () => {
-  it('redirects from base path to infrastructure', () => {
+  it('redirects from base path to Proxmox', () => {
     setPathname('/alerts/thresholds');
     render(() => <ThresholdsTable {...(baseProps() as any)} />);
-    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/infrastructure', {
+    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/proxmox', {
       replace: true,
     });
   });
 
-  it('redirects legacy thresholds sub-routes onto canonical infrastructure and systems paths', () => {
-    setPathname('/alerts/thresholds/proxmox');
+  it('redirects legacy thresholds sub-routes onto canonical platform paths', () => {
+    setPathname('/alerts/thresholds/infrastructure');
     render(() => <ThresholdsTable {...(baseProps() as any)} />);
-    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/infrastructure', {
+    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/proxmox', {
       replace: true,
     });
 
@@ -303,11 +403,11 @@ describe('ThresholdsTable navigation and redirection', () => {
   it('navigates to correct route when tabs are clicked', () => {
     render(() => <ThresholdsTable {...(baseProps() as any)} />);
 
-    const infrastructureTab = screen
+    const proxmoxTab = screen
       .getAllByRole('button')
-      .find((el) => el.textContent?.includes('Infrastructure'));
-    if (infrastructureTab) fireEvent.click(infrastructureTab);
-    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/infrastructure');
+      .find((el) => el.textContent?.includes('Proxmox'));
+    if (proxmoxTab) fireEvent.click(proxmoxTab);
+    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/proxmox');
 
     const systemsTab = screen
       .getAllByRole('button')
@@ -315,11 +415,15 @@ describe('ThresholdsTable navigation and redirection', () => {
     if (systemsTab) fireEvent.click(systemsTab);
     expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/systems');
 
-    const mailTab = screen
-      .getAllByRole('button')
-      .find((el) => el.textContent?.includes('Mail Gateway'));
+    const mailTab = screen.getAllByRole('button').find((el) => el.textContent?.includes('PMG'));
     if (mailTab) fireEvent.click(mailTab);
-    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/mail-gateway');
+    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/pmg');
+
+    const vmwareTab = screen
+      .getAllByRole('button')
+      .find((el) => el.textContent?.includes('vSphere'));
+    if (vmwareTab) fireEvent.click(vmwareTab);
+    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/vmware');
   });
 });
 
@@ -400,9 +504,7 @@ describe('ThresholdsTable Resource Rendering', () => {
     });
 
     expect(screen.getByTestId('group-header-0')).toHaveTextContent('TrueNAS Main');
-    expect(
-      screen.getByTestId('resource-row-agent:truenas-main/disk:mnt-tank'),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId('resource-row-agent:truenas-main/disk:mnt-tank')).toBeInTheDocument();
   });
 
   it('renders infrastructure hosts and guests correctly', async () => {
@@ -523,7 +625,9 @@ describe('ThresholdsTable Resource Rendering', () => {
     });
 
     expect(screen.getByTestId('resource-name-storage1')).toHaveTextContent('Secret Datastore');
-    expect(screen.getByTestId('resource-name-storage1')).not.toHaveTextContent('redacted by policy');
+    expect(screen.getByTestId('resource-name-storage1')).not.toHaveTextContent(
+      'redacted by policy',
+    );
   });
 
   it('renders policy-redacted docker containers with their raw display name in operator-local UI', async () => {
@@ -567,7 +671,9 @@ describe('ThresholdsTable Resource Rendering', () => {
     ));
 
     await waitFor(() => {
-      expect(screen.getByTestId('resource-name-docker:docker-host-1/container-governed')).toBeTruthy();
+      expect(
+        screen.getByTestId('resource-name-docker:docker-host-1/container-governed'),
+      ).toBeTruthy();
     });
 
     expect(
@@ -617,9 +723,9 @@ describe('ThresholdsTable Resource Rendering', () => {
     });
 
     expect(screen.getByTestId('resource-name-truenas-resource')).toHaveTextContent('TrueNAS');
-    expect(screen.getByTestId('resource-name-docker:truenas-resource/ix-nextcloud')).toHaveTextContent(
-      'Nextcloud',
-    );
+    expect(
+      screen.getByTestId('resource-name-docker:truenas-resource/ix-nextcloud'),
+    ).toHaveTextContent('Nextcloud');
     expect(screen.queryByText('Ignored container prefixes')).not.toBeInTheDocument();
     expect(screen.queryByText('Swarm service alerts')).not.toBeInTheDocument();
   });
@@ -658,6 +764,106 @@ describe('ThresholdsTable Resource Rendering', () => {
     expect(
       screen.getByTestId('resource-node-agent:agent-governed/disk:var-lib'),
     ).not.toHaveTextContent('redacted by policy');
+  });
+
+  it('renders vSphere alert targets from canonical VMware resources', async () => {
+    setPathname('/alerts/thresholds/vmware');
+    const resources = [
+      {
+        id: 'vmware:vc-1:host:host-101',
+        type: 'agent',
+        name: 'esxi-01.lab.local',
+        displayName: 'ESXi 01',
+        platformId: 'vc-1',
+        platformType: 'vmware-vsphere',
+        sourceType: 'api',
+        sources: ['vmware'],
+        status: 'online',
+        lastSeen: 123,
+        vmware: {
+          connectionName: 'Lab vCenter',
+          clusterName: 'Prod Compute',
+          managedObjectId: 'host-101',
+          entityType: 'host',
+        },
+      },
+      {
+        id: 'vmware:vc-1:vm:vm-201',
+        type: 'vm',
+        name: 'app-01',
+        displayName: 'App 01',
+        platformId: 'vc-1',
+        platformType: 'vmware-vsphere',
+        sourceType: 'api',
+        sources: ['vmware'],
+        status: 'online',
+        lastSeen: 123,
+        parentName: 'esxi-01.lab.local',
+        vmware: {
+          connectionName: 'Lab vCenter',
+          runtimeHostName: 'esxi-01.lab.local',
+          managedObjectId: 'vm-201',
+          entityType: 'vm',
+        },
+      },
+      {
+        id: 'vmware:vc-1:datastore:datastore-301',
+        type: 'storage',
+        name: 'nvme-primary',
+        displayName: 'nvme-primary',
+        platformId: 'vc-1',
+        platformType: 'vmware-vsphere',
+        sourceType: 'api',
+        sources: ['vmware'],
+        status: 'online',
+        lastSeen: 123,
+        storage: { platform: 'vmware-vsphere', topology: 'datastore' },
+        vmware: {
+          connectionName: 'Lab vCenter',
+          datacenterName: 'Lab Datacenter',
+          managedObjectId: 'datastore-301',
+          entityType: 'datastore',
+        },
+      },
+      {
+        id: 'vmware:vc-1:network:network-401',
+        type: 'network',
+        name: 'VM Network',
+        displayName: 'VM Network',
+        platformId: 'vc-1',
+        platformType: 'vmware-vsphere',
+        sourceType: 'api',
+        sources: ['vmware'],
+        status: 'online',
+        lastSeen: 123,
+        vmware: {
+          connectionName: 'Lab vCenter',
+          datacenterName: 'Lab Datacenter',
+          managedObjectId: 'network-401',
+          entityType: 'network',
+        },
+      },
+    ] as any[];
+
+    render(() => <ThresholdsTable {...(baseProps() as any)} allResources={resources} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('section-Hosts')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('section-Virtual Machines')).toBeInTheDocument();
+    expect(screen.getByTestId('section-Datastores')).toBeInTheDocument();
+    expect(screen.getByTestId('section-Networks')).toBeInTheDocument();
+    expect(screen.getByTestId('resource-name-vmware:vc-1:host:host-101')).toHaveTextContent(
+      'ESXi 01',
+    );
+    expect(screen.getByTestId('resource-name-vmware:vc-1:vm:vm-201')).toHaveTextContent('App 01');
+    expect(
+      screen.getByTestId('resource-name-vmware:vc-1:datastore:datastore-301'),
+    ).toHaveTextContent('nvme-primary');
+    expect(screen.getByTestId('resource-name-vmware:vc-1:network:network-401')).toHaveTextContent(
+      'VM Network',
+    );
   });
 });
 
@@ -863,7 +1069,7 @@ describe('ThresholdsTable V6 ID compatibility', () => {
   });
 
   it('removes PBS offline alerts using legacy compatibility IDs when disabled', async () => {
-    setPathname('/alerts/thresholds/infrastructure');
+    setPathname('/alerts/thresholds/pbs');
     const removeAlerts = vi.fn();
     const pbs = {
       id: 'pbs-main',

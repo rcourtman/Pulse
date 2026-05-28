@@ -33,6 +33,39 @@ func unifiedEvalBaseConfig() AlertConfig {
 			CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
 			Memory: &HysteresisThreshold{Trigger: 85, Clear: 80},
 		},
+		KubernetesDefaults: ThresholdConfig{
+			CPU:        &HysteresisThreshold{Trigger: 80, Clear: 75},
+			Memory:     &HysteresisThreshold{Trigger: 85, Clear: 80},
+			Disk:       &HysteresisThreshold{Trigger: 90, Clear: 85},
+			DiskRead:   &HysteresisThreshold{Trigger: 0, Clear: 0},
+			DiskWrite:  &HysteresisThreshold{Trigger: 0, Clear: 0},
+			NetworkIn:  &HysteresisThreshold{Trigger: 0, Clear: 0},
+			NetworkOut: &HysteresisThreshold{Trigger: 0, Clear: 0},
+		},
+		TrueNASDefaults: ThresholdConfig{
+			CPU:         &HysteresisThreshold{Trigger: 80, Clear: 75},
+			Memory:      &HysteresisThreshold{Trigger: 85, Clear: 80},
+			Disk:        &HysteresisThreshold{Trigger: 85, Clear: 80},
+			Usage:       &HysteresisThreshold{Trigger: 85, Clear: 80},
+			Temperature: &HysteresisThreshold{Trigger: 80, Clear: 75},
+			DiskRead:    &HysteresisThreshold{Trigger: 0, Clear: 0},
+			DiskWrite:   &HysteresisThreshold{Trigger: 0, Clear: 0},
+			NetworkIn:   &HysteresisThreshold{Trigger: 0, Clear: 0},
+			NetworkOut:  &HysteresisThreshold{Trigger: 0, Clear: 0},
+		},
+		TrueNASDiskDefaults: ThresholdConfig{
+			Temperature: &HysteresisThreshold{Trigger: 55, Clear: 50},
+		},
+		VMwareDefaults: ThresholdConfig{
+			CPU:        &HysteresisThreshold{Trigger: 80, Clear: 75},
+			Memory:     &HysteresisThreshold{Trigger: 85, Clear: 80},
+			Disk:       &HysteresisThreshold{Trigger: 90, Clear: 85},
+			Usage:      &HysteresisThreshold{Trigger: 85, Clear: 80},
+			DiskRead:   &HysteresisThreshold{Trigger: 0, Clear: 0},
+			DiskWrite:  &HysteresisThreshold{Trigger: 0, Clear: 0},
+			NetworkIn:  &HysteresisThreshold{Trigger: 0, Clear: 0},
+			NetworkOut: &HysteresisThreshold{Trigger: 0, Clear: 0},
+		},
 		StorageDefault: HysteresisThreshold{Trigger: 85, Clear: 80},
 		Overrides:      map[string]ThresholdConfig{},
 
@@ -171,6 +204,411 @@ func TestCheckUnifiedResourceMajorFamilies(t *testing.T) {
 			assertAlertPresent(t, m, tt.alertID)
 		})
 	}
+}
+
+func TestCheckUnifiedResourceSupportsKubernetesTrueNASAndVMwareMetricTargets(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	tests := []struct {
+		name             string
+		alertID          string
+		input            *UnifiedResourceInput
+		wantResourceType string
+	}{
+		{
+			name:    "Kubernetes cluster CPU",
+			alertID: canonicalMetricStateID("k8s:prod", "cpu"),
+			input: &UnifiedResourceInput{
+				ID:   "k8s:prod",
+				Type: "k8s-cluster",
+				Name: "prod",
+				CPU:  &UnifiedResourceMetric{Percent: 88},
+			},
+			wantResourceType: "Kubernetes Cluster",
+		},
+		{
+			name:    "Kubernetes node memory",
+			alertID: canonicalMetricStateID("k8s:prod/node:worker-1", "memory"),
+			input: &UnifiedResourceInput{
+				ID:     "k8s:prod/node:worker-1",
+				Type:   "k8s-node",
+				Name:   "worker-1",
+				Node:   "worker-1",
+				Memory: &UnifiedResourceMetric{Percent: 90},
+			},
+			wantResourceType: "Kubernetes Node",
+		},
+		{
+			name:    "Kubernetes deployment CPU",
+			alertID: canonicalMetricStateID("k8s:prod/ns:default/deployment:api", "cpu"),
+			input: &UnifiedResourceInput{
+				ID:       "k8s:prod/ns:default/deployment:api",
+				Type:     "k8s-deployment",
+				Name:     "api",
+				Node:     "prod",
+				Instance: "prod",
+				CPU:      &UnifiedResourceMetric{Percent: 83},
+			},
+			wantResourceType: "Kubernetes Deployment",
+		},
+		{
+			name:    "Kubernetes pod disk",
+			alertID: canonicalMetricStateID("k8s:prod/ns:default/pod:api-7d9f", "disk"),
+			input: &UnifiedResourceInput{
+				ID:       "k8s:prod/ns:default/pod:api-7d9f",
+				Type:     "pod",
+				Name:     "api-7d9f",
+				Node:     "worker-1",
+				Instance: "prod",
+				Disk:     &UnifiedResourceMetric{Percent: 93},
+			},
+			wantResourceType: "Kubernetes Pod",
+		},
+		{
+			name:    "TrueNAS system temperature",
+			alertID: canonicalMetricStateID("agent:truenas-main", "temperature"),
+			input: &UnifiedResourceInput{
+				ID:          "agent:truenas-main",
+				Type:        "truenas-system",
+				Name:        "truenas-main",
+				Node:        "truenas-main",
+				Temperature: &UnifiedResourceMetric{Value: 82, Percent: 82},
+			},
+			wantResourceType: "TrueNAS System",
+		},
+		{
+			name:    "TrueNAS pool usage",
+			alertID: canonicalMetricStateID("storage:truenas-main/pool:tank", "usage"),
+			input: &UnifiedResourceInput{
+				ID:       "storage:truenas-main/pool:tank",
+				Type:     "truenas-pool",
+				Name:     "tank",
+				Node:     "truenas-main",
+				Instance: "TrueNAS",
+				Disk:     &UnifiedResourceMetric{Percent: 89},
+			},
+			wantResourceType: "TrueNAS Pool",
+		},
+		{
+			name:    "TrueNAS dataset usage",
+			alertID: canonicalMetricStateID("storage:truenas-main/dataset:tank/apps", "usage"),
+			input: &UnifiedResourceInput{
+				ID:       "storage:truenas-main/dataset:tank/apps",
+				Type:     "truenas-dataset",
+				Name:     "tank/apps",
+				Node:     "truenas-main",
+				Instance: "TrueNAS",
+				Disk:     &UnifiedResourceMetric{Percent: 91},
+			},
+			wantResourceType: "TrueNAS Dataset",
+		},
+		{
+			name:    "TrueNAS disk temperature",
+			alertID: canonicalMetricStateID("physical-disk:truenas-main/ada0", "temperature"),
+			input: &UnifiedResourceInput{
+				ID:          "physical-disk:truenas-main/ada0",
+				Type:        "truenas-disk",
+				Name:        "ada0",
+				Node:        "truenas-main",
+				Instance:    "TrueNAS",
+				Temperature: &UnifiedResourceMetric{Value: 58, Percent: 58},
+			},
+			wantResourceType: "TrueNAS Disk",
+		},
+		{
+			name:    "vSphere host CPU",
+			alertID: canonicalMetricStateID("vmware:vc-1:host:host-101", "cpu"),
+			input: &UnifiedResourceInput{
+				ID:       "vmware:vc-1:host:host-101",
+				Type:     "vmware-host",
+				Name:     "esxi-01.lab.local",
+				Node:     "Prod Compute",
+				Instance: "Lab vCenter",
+				CPU:      &UnifiedResourceMetric{Percent: 88},
+			},
+			wantResourceType: "vSphere Host",
+		},
+		{
+			name:    "vSphere VM disk",
+			alertID: canonicalMetricStateID("vmware:vc-1:vm:vm-201", "disk"),
+			input: &UnifiedResourceInput{
+				ID:       "vmware:vc-1:vm:vm-201",
+				Type:     "vmware-vm",
+				Name:     "app-01",
+				Node:     "esxi-01.lab.local",
+				Instance: "Lab vCenter",
+				Disk:     &UnifiedResourceMetric{Percent: 94},
+			},
+			wantResourceType: "vSphere VM",
+		},
+		{
+			name:    "vSphere datastore usage",
+			alertID: canonicalMetricStateID("vmware:vc-1:datastore:datastore-301", "usage"),
+			input: &UnifiedResourceInput{
+				ID:       "vmware:vc-1:datastore:datastore-301",
+				Type:     "vmware-datastore",
+				Name:     "nvme-primary",
+				Node:     "Lab Datacenter",
+				Instance: "Lab vCenter",
+				Disk:     &UnifiedResourceMetric{Percent: 89},
+			},
+			wantResourceType: "vSphere Datastore",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m.ClearActiveAlerts()
+			m.CheckUnifiedResource(tt.input)
+
+			alert := activeAlert(t, m, tt.alertID)
+			if got := alert.Metadata["resourceType"]; got != tt.wantResourceType {
+				t.Fatalf("resourceType metadata = %v, want %s", got, tt.wantResourceType)
+			}
+		})
+	}
+}
+
+func TestCheckUnifiedResourceUsesKubernetesTrueNASAndVMwareOverrides(t *testing.T) {
+	m := newTestManager(t)
+	cfg := unifiedEvalBaseConfig()
+	cfg.KubernetesDefaults.CPU = &HysteresisThreshold{Trigger: 95, Clear: 90}
+	cfg.TrueNASDefaults.Usage = &HysteresisThreshold{Trigger: 95, Clear: 90}
+	cfg.VMwareDefaults.CPU = &HysteresisThreshold{Trigger: 95, Clear: 90}
+	cfg.Overrides["k8s:prod/ns:default/pod:api-7d9f"] = ThresholdConfig{
+		CPU: &HysteresisThreshold{Trigger: 60, Clear: 55},
+	}
+	cfg.Overrides["storage:truenas-main/pool:tank"] = ThresholdConfig{
+		Usage: &HysteresisThreshold{Trigger: 60, Clear: 55},
+	}
+	cfg.Overrides["vmware:vc-1:host:host-101"] = ThresholdConfig{
+		CPU: &HysteresisThreshold{Trigger: 60, Clear: 55},
+	}
+	configureUnifiedEvalManager(t, m, cfg)
+
+	m.CheckUnifiedResource(&UnifiedResourceInput{
+		ID:   "k8s:prod/ns:default/pod:api-7d9f",
+		Type: "pod",
+		Name: "api-7d9f",
+		CPU:  &UnifiedResourceMetric{Percent: 65},
+	})
+	m.CheckUnifiedResource(&UnifiedResourceInput{
+		ID:   "storage:truenas-main/pool:tank",
+		Type: "truenas-pool",
+		Name: "tank",
+		Disk: &UnifiedResourceMetric{Percent: 65},
+	})
+	m.CheckUnifiedResource(&UnifiedResourceInput{
+		ID:   "vmware:vc-1:host:host-101",
+		Type: "vmware-host",
+		Name: "esxi-01.lab.local",
+		CPU:  &UnifiedResourceMetric{Percent: 65},
+	})
+
+	k8sAlert := activeAlert(t, m, canonicalMetricStateID("k8s:prod/ns:default/pod:api-7d9f", "cpu"))
+	if k8sAlert.Threshold != 60 {
+		t.Fatalf("kubernetes override threshold = %v, want 60", k8sAlert.Threshold)
+	}
+	truenasAlert := activeAlert(t, m, canonicalMetricStateID("storage:truenas-main/pool:tank", "usage"))
+	if truenasAlert.Threshold != 60 {
+		t.Fatalf("truenas override threshold = %v, want 60", truenasAlert.Threshold)
+	}
+	vmwareAlert := activeAlert(t, m, canonicalMetricStateID("vmware:vc-1:host:host-101", "cpu"))
+	if vmwareAlert.Threshold != 60 {
+		t.Fatalf("vmware override threshold = %v, want 60", vmwareAlert.Threshold)
+	}
+}
+
+func TestUnifiedResourceInputFromKubernetesTrueNASAndVMwareResources(t *testing.T) {
+	pod := unifiedresources.Resource{
+		ID:         " k8s:prod/ns:default/pod:api-7d9f ",
+		Type:       unifiedresources.ResourceTypePod,
+		Name:       "api-7d9f",
+		ParentName: "worker-1",
+		Sources:    []unifiedresources.DataSource{unifiedresources.SourceK8s},
+		Kubernetes: &unifiedresources.K8sData{
+			ClusterName: "prod",
+			NodeName:    "worker-1",
+			Namespace:   "default",
+		},
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU:    &unifiedresources.MetricValue{Percent: 82},
+			Memory: &unifiedresources.MetricValue{Percent: 64},
+		},
+	}
+	podInput, ok := UnifiedResourceInputFromResource(pod)
+	if !ok {
+		t.Fatalf("expected Kubernetes pod resource to become unified alert input")
+	}
+	if podInput.Type != "pod" || podInput.ID != "k8s:prod/ns:default/pod:api-7d9f" || podInput.Node != "worker-1" || podInput.Instance != "prod" {
+		t.Fatalf("unexpected pod input: %+v", podInput)
+	}
+	if podInput.CPU == nil || podInput.CPU.Percent != 82 {
+		t.Fatalf("unexpected pod CPU metric: %+v", podInput.CPU)
+	}
+
+	pool := unifiedresources.Resource{
+		ID:         "storage:truenas-main/pool:tank",
+		Type:       unifiedresources.ResourceTypeStorage,
+		Name:       "tank",
+		ParentName: "truenas-main",
+		Sources:    []unifiedresources.DataSource{unifiedresources.SourceTrueNAS},
+		Storage: &unifiedresources.StorageMeta{
+			Platform: string(unifiedresources.SourceTrueNAS),
+			Topology: "pool",
+		},
+		Metrics: &unifiedresources.ResourceMetrics{
+			Disk: &unifiedresources.MetricValue{Percent: 89},
+		},
+	}
+	poolInput, ok := UnifiedResourceInputFromResource(pool)
+	if !ok {
+		t.Fatalf("expected TrueNAS pool resource to become unified alert input")
+	}
+	if poolInput.Type != "truenas-pool" || poolInput.ID != "storage:truenas-main/pool:tank" || poolInput.Node != "truenas-main" || poolInput.Instance != "TrueNAS" {
+		t.Fatalf("unexpected pool input: %+v", poolInput)
+	}
+	if poolInput.Disk == nil || poolInput.Disk.Percent != 89 {
+		t.Fatalf("unexpected pool disk metric: %+v", poolInput.Disk)
+	}
+
+	temp := 58.0
+	disk := unifiedresources.Resource{
+		ID:          "physical-disk:truenas-main/ada0",
+		Type:        unifiedresources.ResourceTypePhysicalDisk,
+		Name:        "ada0",
+		ParentName:  "truenas-main",
+		Sources:     []unifiedresources.DataSource{unifiedresources.SourceTrueNAS},
+		Temperature: &temp,
+	}
+	diskInput, ok := UnifiedResourceInputFromResource(disk)
+	if !ok {
+		t.Fatalf("expected TrueNAS disk resource to become unified alert input")
+	}
+	if diskInput.Type != "truenas-disk" || diskInput.Temperature == nil || diskInput.Temperature.Value != 58 {
+		t.Fatalf("unexpected disk input: %+v", diskInput)
+	}
+
+	vmwareHost := unifiedresources.Resource{
+		ID:      " vmware:vc-1:host:host-101 ",
+		Type:    unifiedresources.ResourceTypeAgent,
+		Name:    "esxi-01.lab.local",
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceVMware},
+		VMware: &unifiedresources.VMwareData{
+			ConnectionName: "Lab vCenter",
+			ClusterName:    "Prod Compute",
+			VCenterHost:    "vcenter.lab.local",
+		},
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU: &unifiedresources.MetricValue{Percent: 82},
+		},
+	}
+	hostInput, ok := UnifiedResourceInputFromResource(vmwareHost)
+	if !ok {
+		t.Fatalf("expected VMware host resource to become unified alert input")
+	}
+	if hostInput.Type != "vmware-host" || hostInput.ID != "vmware:vc-1:host:host-101" || hostInput.Node != "Prod Compute" || hostInput.Instance != "Lab vCenter" {
+		t.Fatalf("unexpected VMware host input: %+v", hostInput)
+	}
+
+	vmwareVM := unifiedresources.Resource{
+		ID:         "vmware:vc-1:vm:vm-201",
+		Type:       unifiedresources.ResourceTypeVM,
+		Name:       "app-01",
+		ParentName: "esxi-01.lab.local",
+		Sources:    []unifiedresources.DataSource{unifiedresources.SourceVMware},
+		VMware: &unifiedresources.VMwareData{
+			ConnectionName:  "Lab vCenter",
+			RuntimeHostName: "esxi-01.lab.local",
+		},
+		Metrics: &unifiedresources.ResourceMetrics{
+			Disk: &unifiedresources.MetricValue{Percent: 94},
+		},
+	}
+	vmInput, ok := UnifiedResourceInputFromResource(vmwareVM)
+	if !ok {
+		t.Fatalf("expected VMware VM resource to become unified alert input")
+	}
+	if vmInput.Type != "vmware-vm" || vmInput.Node != "esxi-01.lab.local" || vmInput.Instance != "Lab vCenter" || vmInput.Disk == nil || vmInput.Disk.Percent != 94 {
+		t.Fatalf("unexpected VMware VM input: %+v", vmInput)
+	}
+
+	vmwareDatastore := unifiedresources.Resource{
+		ID:      "vmware:vc-1:datastore:datastore-301",
+		Type:    unifiedresources.ResourceTypeStorage,
+		Name:    "nvme-primary",
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceVMware},
+		Storage: &unifiedresources.StorageMeta{
+			Platform: "vmware-vsphere",
+			Topology: "datastore",
+		},
+		VMware: &unifiedresources.VMwareData{
+			ConnectionName: "Lab vCenter",
+			DatacenterName: "Lab Datacenter",
+		},
+		Metrics: &unifiedresources.ResourceMetrics{
+			Disk: &unifiedresources.MetricValue{Percent: 89},
+		},
+	}
+	datastoreInput, ok := UnifiedResourceInputFromResource(vmwareDatastore)
+	if !ok {
+		t.Fatalf("expected VMware datastore resource to become unified alert input")
+	}
+	if datastoreInput.Type != "vmware-datastore" || datastoreInput.Node != "Lab Datacenter" || datastoreInput.Instance != "Lab vCenter" {
+		t.Fatalf("unexpected VMware datastore input: %+v", datastoreInput)
+	}
+
+	vmwareNetwork := unifiedresources.Resource{
+		ID:      "vmware:vc-1:network:network-401",
+		Type:    unifiedresources.ResourceTypeNetwork,
+		Name:    "VM Network",
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceVMware},
+		VMware: &unifiedresources.VMwareData{
+			ConnectionName: "Lab vCenter",
+			DatacenterName: "Lab Datacenter",
+			EntityType:     "network",
+		},
+	}
+	networkInput, ok := UnifiedResourceInputFromResource(vmwareNetwork)
+	if !ok {
+		t.Fatalf("expected VMware network resource to become unified alert input")
+	}
+	if networkInput.Type != "vmware-network" || networkInput.Node != "Lab Datacenter" || networkInput.Instance != "Lab vCenter" {
+		t.Fatalf("unexpected VMware network input: %+v", networkInput)
+	}
+}
+
+func TestCheckUnifiedResourceHonorsKubernetesTrueNASAndVMwareGlobalDisables(t *testing.T) {
+	m := newTestManager(t)
+	cfg := unifiedEvalBaseConfig()
+	cfg.DisableAllKubernetes = true
+	cfg.DisableAllTrueNAS = true
+	cfg.DisableAllVMware = true
+	configureUnifiedEvalManager(t, m, cfg)
+
+	m.CheckUnifiedResource(&UnifiedResourceInput{
+		ID:   "k8s:prod",
+		Type: "k8s-cluster",
+		Name: "prod",
+		CPU:  &UnifiedResourceMetric{Percent: 90},
+	})
+	m.CheckUnifiedResource(&UnifiedResourceInput{
+		ID:   "storage:truenas-main/pool:tank",
+		Type: "truenas-pool",
+		Name: "tank",
+		Disk: &UnifiedResourceMetric{Percent: 90},
+	})
+	m.CheckUnifiedResource(&UnifiedResourceInput{
+		ID:   "vmware:vc-1:host:host-101",
+		Type: "vmware-host",
+		Name: "esxi-01.lab.local",
+		CPU:  &UnifiedResourceMetric{Percent: 90},
+	})
+
+	assertAlertMissing(t, m, canonicalMetricStateID("k8s:prod", "cpu"))
+	assertAlertMissing(t, m, canonicalMetricStateID("storage:truenas-main/pool:tank", "usage"))
+	assertAlertMissing(t, m, canonicalMetricStateID("vmware:vc-1:host:host-101", "cpu"))
 }
 
 func TestCheckUnifiedResourceRejectsLegacyGuestTypeAlias(t *testing.T) {

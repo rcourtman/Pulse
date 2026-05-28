@@ -93,6 +93,7 @@ func (m *Monitor) syncUnifiedResourceAlertsToState(resources []unifiedresources.
 		return
 	}
 
+	m.alertManager.CheckUnifiedResourceMetrics(resources)
 	m.alertManager.SyncUnifiedResourceIncidents(resources)
 	m.syncAlertsToState()
 }

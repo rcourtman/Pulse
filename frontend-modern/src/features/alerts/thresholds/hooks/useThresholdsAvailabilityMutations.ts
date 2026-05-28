@@ -28,6 +28,19 @@ interface ThresholdsAvailabilityMutationResources {
   dockerContainersFlat: () => TableResource[];
   pbsServersWithOverrides: () => TableResource[];
   storageWithOverrides: () => TableResource[];
+  kubernetesClustersWithOverrides?: () => TableResource[];
+  kubernetesNodesWithOverrides?: () => TableResource[];
+  kubernetesNamespacesWithOverrides?: () => TableResource[];
+  kubernetesDeploymentsWithOverrides?: () => TableResource[];
+  kubernetesPodsWithOverrides?: () => TableResource[];
+  trueNASSystemsWithOverrides?: () => TableResource[];
+  trueNASPoolsWithOverrides?: () => TableResource[];
+  trueNASDatasetsWithOverrides?: () => TableResource[];
+  trueNASDisksWithOverrides?: () => TableResource[];
+  vmwareHostsWithOverrides?: () => TableResource[];
+  vmwareVMsWithOverrides?: () => TableResource[];
+  vmwareDatastoresWithOverrides?: () => TableResource[];
+  vmwareNetworksWithOverrides?: () => TableResource[];
 }
 
 interface ThresholdsAvailabilityMutationProps {
@@ -42,6 +55,8 @@ export function useThresholdsAvailabilityMutations({
   removeOverride,
 }: ThresholdsAvailabilityMutationProps) {
   const guestLikeResources = () => [...resources.guestsFlat(), ...resources.dockerContainersFlat()];
+  const optionalResources = (accessor?: () => TableResource[]): TableResource[] =>
+    accessor?.() ?? [];
 
   const clearDockerHostConnectivityAlerts = (resourceId: string) => {
     if (!props.removeAlerts) return;
@@ -60,6 +75,19 @@ export function useThresholdsAvailabilityMutations({
       ...resources.pbsServersWithOverrides(),
       ...resources.agentsWithOverrides(),
       ...resources.agentDisksWithOverrides(),
+      ...optionalResources(resources.kubernetesClustersWithOverrides),
+      ...optionalResources(resources.kubernetesNodesWithOverrides),
+      ...optionalResources(resources.kubernetesNamespacesWithOverrides),
+      ...optionalResources(resources.kubernetesDeploymentsWithOverrides),
+      ...optionalResources(resources.kubernetesPodsWithOverrides),
+      ...optionalResources(resources.trueNASSystemsWithOverrides),
+      ...optionalResources(resources.trueNASPoolsWithOverrides),
+      ...optionalResources(resources.trueNASDatasetsWithOverrides),
+      ...optionalResources(resources.trueNASDisksWithOverrides),
+      ...optionalResources(resources.vmwareHostsWithOverrides),
+      ...optionalResources(resources.vmwareVMsWithOverrides),
+      ...optionalResources(resources.vmwareDatastoresWithOverrides),
+      ...optionalResources(resources.vmwareNetworksWithOverrides),
     ].find((entry) => entry.id === resourceId);
 
     if (
@@ -69,7 +97,20 @@ export function useThresholdsAvailabilityMutations({
         resource.type !== 'pbs' &&
         resource.type !== 'dockerContainer' &&
         resource.type !== 'agent' &&
-        resource.type !== 'agentDisk')
+        resource.type !== 'agentDisk' &&
+        resource.type !== 'kubernetesCluster' &&
+        resource.type !== 'kubernetesNode' &&
+        resource.type !== 'kubernetesNamespace' &&
+        resource.type !== 'kubernetesDeployment' &&
+        resource.type !== 'kubernetesPod' &&
+        resource.type !== 'truenasSystem' &&
+        resource.type !== 'truenasPool' &&
+        resource.type !== 'truenasDataset' &&
+        resource.type !== 'truenasDisk' &&
+        resource.type !== 'vmwareHost' &&
+        resource.type !== 'vmwareVm' &&
+        resource.type !== 'vmwareDatastore' &&
+        resource.type !== 'vmwareNetwork')
     ) {
       return;
     }

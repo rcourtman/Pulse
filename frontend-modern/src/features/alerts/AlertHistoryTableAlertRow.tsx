@@ -3,6 +3,7 @@ import { Show } from 'solid-js';
 import { IncidentTimelinePanel } from '@/components/Alerts/IncidentTimelinePanel';
 import { InvestigateAlertButton } from '@/components/Alerts/InvestigateAlertButton';
 import { TableCell, TableRow } from '@/components/shared/Table';
+import { getPlatformTableCellClassForKind } from '@/features/platformPage/sharedPlatformPage';
 import {
   getAlertHistoryResourceTypeBadgeClass,
   getAlertHistorySourcePresentation,
@@ -32,61 +33,65 @@ export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps)
       <TableRow
         class={`border-b border-border hover:bg-surface-hover ${historyStatusPresentation().rowClassName}`}
       >
-        <TableCell class="p-1 px-1 font-mono whitespace-nowrap text-muted sm:p-1.5 sm:px-2">
+        <TableCell
+          class={`${getPlatformTableCellClassForKind('text')} font-mono whitespace-nowrap text-muted`}
+        >
           {new Date(props.alert.startTime).toLocaleTimeString('en-US', {
             hour: '2-digit',
             minute: '2-digit',
           })}
         </TableCell>
 
-        <TableCell class="p-1 px-1 text-center sm:p-1.5 sm:px-2">
+        <TableCell class={getPlatformTableCellClassForKind('badge')}>
           <span class={sourcePresentation().className}>{sourcePresentation().label}</span>
         </TableCell>
 
         <TableCell
-          class="max-w-[150px] truncate p-1 px-1 font-medium text-base-content sm:p-1.5 sm:px-2"
+          class={`${getPlatformTableCellClassForKind('name')} max-w-[150px] truncate font-medium text-base-content`}
           title={props.alert.resourceName}
         >
           {props.alert.resourceName}
         </TableCell>
 
-        <TableCell class="p-1 px-1 sm:p-1.5 sm:px-2">
+        <TableCell class={getPlatformTableCellClassForKind('badge')}>
           <span class={getAlertHistoryResourceTypeBadgeClass(props.alert.resourceType)}>
             {props.alert.resourceType}
           </span>
         </TableCell>
 
-        <TableCell class="p-1 px-1 text-center sm:p-1.5 sm:px-2">
+        <TableCell class={getPlatformTableCellClassForKind('badge')}>
           <span class={getAlertIncidentLevelBadgeClass(props.alert.severity)}>
             {props.alert.severity}
           </span>
         </TableCell>
 
         <TableCell
-          class="max-w-[300px] truncate p-1 px-1 text-base-content sm:p-1.5 sm:px-2"
+          class={`${getPlatformTableCellClassForKind('text')} max-w-[300px] truncate text-base-content`}
           title={props.alert.description}
         >
           {props.alert.description}
         </TableCell>
 
-        <TableCell class="hidden p-1 px-1 text-center text-muted lg:table-cell sm:p-1.5 sm:px-2">
+        <TableCell
+          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-muted lg:table-cell`}
+        >
           {props.alert.duration}
         </TableCell>
 
-        <TableCell class="hidden p-1 px-1 text-center lg:table-cell sm:p-1.5 sm:px-2">
+        <TableCell class={`${getPlatformTableCellClassForKind('badge')} hidden lg:table-cell`}>
           <span class={historyStatusPresentation().className}>
             {historyStatusPresentation().label}
           </span>
         </TableCell>
 
         <TableCell
-          class="hidden truncate p-1 px-1 text-muted lg:table-cell sm:p-1.5 sm:px-2"
+          class={`${getPlatformTableCellClassForKind('text')} hidden truncate text-muted lg:table-cell`}
           title={props.alert.nodeDisplayName || props.alert.node || ''}
         >
           {props.alert.nodeDisplayName || props.alert.node || '—'}
         </TableCell>
 
-        <TableCell class="p-1 px-1 text-center sm:p-1.5 sm:px-2">
+        <TableCell class={getPlatformTableCellClassForKind('badge')}>
           <div class="flex items-center justify-center gap-1">
             <Show when={props.alert.source === 'alert'}>
               <button

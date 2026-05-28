@@ -1,6 +1,8 @@
 package alerts
 
 import (
+	"strings"
+
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
@@ -19,6 +21,11 @@ import (
 //	PBS:               pbs.ID              e.g. "pbs-1"
 //	PMG:               pmg.ID              e.g. "pmg-1"
 //	Docker Container:  "docker:{hostID}/{containerID}"
+//	Kubernetes:        canonical unified resource ID for cluster/node/namespace/deployment/pod
+//	TrueNAS System:    canonical unified agent resource ID
+//	TrueNAS Storage:   canonical unified storage resource ID for pool/dataset
+//	TrueNAS Disk:      canonical unified physical_disk resource ID
+//	VMware vSphere:    canonical unified resource ID for host/vm/datastore/network
 //
 // For guests, CheckUnifiedResource expects the same canonical resource ID the
 // monitoring pipeline already uses. It does not translate IDs.
@@ -31,18 +38,19 @@ type UnifiedResourceMetric struct {
 // UnifiedResourceInput is the data needed to evaluate alerts for a unified resource.
 // This avoids importing unifiedresources (which would cause an import cycle).
 type UnifiedResourceInput struct {
-	ID         string
-	Type       string // lowercase: "vm", "system-container", "app-container", "agent", "pbs", "storage", "pmg"
-	Name       string
-	Node       string
-	Instance   string
-	CPU        *UnifiedResourceMetric
-	Memory     *UnifiedResourceMetric
-	Disk       *UnifiedResourceMetric
-	DiskRead   *UnifiedResourceMetric
-	DiskWrite  *UnifiedResourceMetric
-	NetworkIn  *UnifiedResourceMetric
-	NetworkOut *UnifiedResourceMetric
+	ID          string
+	Type        string // lowercase: "vm", "system-container", "app-container", "agent", "pbs", "storage", "pmg"
+	Name        string
+	Node        string
+	Instance    string
+	CPU         *UnifiedResourceMetric
+	Memory      *UnifiedResourceMetric
+	Disk        *UnifiedResourceMetric
+	DiskRead    *UnifiedResourceMetric
+	DiskWrite   *UnifiedResourceMetric
+	NetworkIn   *UnifiedResourceMetric
+	NetworkOut  *UnifiedResourceMetric
+	Temperature *UnifiedResourceMetric
 }
 
 type unifiedMetricCandidate struct {
@@ -70,6 +78,32 @@ func unifiedAlertType(typeKey string) string {
 		return "Storage"
 	case "pmg":
 		return "PMG"
+	case "k8s-cluster":
+		return "Kubernetes Cluster"
+	case "k8s-node":
+		return "Kubernetes Node"
+	case "k8s-deployment":
+		return "Kubernetes Deployment"
+	case "k8s-namespace":
+		return "Kubernetes Namespace"
+	case "pod":
+		return "Kubernetes Pod"
+	case "truenas-system":
+		return "TrueNAS System"
+	case "truenas-pool":
+		return "TrueNAS Pool"
+	case "truenas-dataset":
+		return "TrueNAS Dataset"
+	case "truenas-disk":
+		return "TrueNAS Disk"
+	case "vmware-host":
+		return "vSphere Host"
+	case "vmware-vm":
+		return "vSphere VM"
+	case "vmware-datastore":
+		return "vSphere Datastore"
+	case "vmware-network":
+		return "vSphere Network"
 	default:
 		return typeKey
 	}
@@ -80,6 +114,59 @@ func isUnifiedGuestType(typeKey string) bool {
 	switch typeKey {
 	case "vm", "system-container", "app-container":
 		return true
+	default:
+		return false
+	}
+}
+
+func supportsUnifiedIOMetrics(typeKey string) bool {
+	switch typeKey {
+	case "vm", "system-container", "app-container", "k8s-cluster", "k8s-deployment", "pod", "truenas-system", "vmware-host", "vmware-vm":
+		return true
+	default:
+		return false
+	}
+}
+
+func isUnifiedKubernetesAlertType(typeKey string) bool {
+	switch typeKey {
+	case "k8s-cluster", "k8s-node", "k8s-deployment", "k8s-namespace", "pod":
+		return true
+	default:
+		return false
+	}
+}
+
+func isUnifiedTrueNASAlertType(typeKey string) bool {
+	switch typeKey {
+	case "truenas-system", "truenas-pool", "truenas-dataset", "truenas-disk":
+		return true
+	default:
+		return false
+	}
+}
+
+func isUnifiedVMwareAlertType(typeKey string) bool {
+	switch typeKey {
+	case "vmware-host", "vmware-vm", "vmware-datastore", "vmware-network":
+		return true
+	default:
+		return false
+	}
+}
+
+func isUnifiedModernPlatformAlertType(typeKey string) bool {
+	return isUnifiedKubernetesAlertType(typeKey) || isUnifiedTrueNASAlertType(typeKey) || isUnifiedVMwareAlertType(typeKey)
+}
+
+func (m *Manager) unifiedPlatformAlertsDisabledNoLock(typeKey string) bool {
+	switch {
+	case isUnifiedKubernetesAlertType(typeKey):
+		return m.config.DisableAllKubernetes
+	case isUnifiedTrueNASAlertType(typeKey):
+		return m.config.DisableAllTrueNAS
+	case isUnifiedVMwareAlertType(typeKey):
+		return m.config.DisableAllVMware
 	default:
 		return false
 	}
@@ -98,6 +185,24 @@ func (m *Manager) defaultThresholdsForResourceType(typeKey string) ThresholdConf
 		return cloneThresholdConfig(m.config.PBSDefaults)
 	case "storage":
 		return ThresholdConfig{Usage: cloneThreshold(&m.config.StorageDefault)}
+	case "k8s-cluster", "k8s-node", "k8s-deployment", "pod":
+		return cloneThresholdConfig(m.config.KubernetesDefaults)
+	case "k8s-namespace":
+		return ThresholdConfig{}
+	case "truenas-system":
+		return cloneThresholdConfig(m.config.TrueNASDefaults)
+	case "truenas-pool", "truenas-dataset":
+		defaults := cloneThresholdConfig(m.config.TrueNASDefaults)
+		return ThresholdConfig{Usage: cloneThreshold(defaults.Usage)}
+	case "truenas-disk":
+		return cloneThresholdConfig(m.config.TrueNASDiskDefaults)
+	case "vmware-host", "vmware-vm":
+		return cloneThresholdConfig(m.config.VMwareDefaults)
+	case "vmware-datastore":
+		defaults := cloneThresholdConfig(m.config.VMwareDefaults)
+		return ThresholdConfig{Usage: cloneThreshold(defaults.Usage)}
+	case "vmware-network":
+		return ThresholdConfig{}
 	default:
 		return ThresholdConfig{}
 	}
@@ -181,18 +286,29 @@ func buildUnifiedMetricCandidates(input *UnifiedResourceInput, thresholds Thresh
 	appendCandidate("memory", input.Memory, input.MemoryValue(), thresholds.Memory)
 	appendCandidate("disk", input.Disk, input.DiskValue(), thresholds.Disk)
 
-	if isUnifiedGuestType(input.Type) {
+	if supportsUnifiedIOMetrics(input.Type) {
 		appendCandidate("diskRead", input.DiskRead, input.DiskReadValue(), thresholds.DiskRead)
 		appendCandidate("diskWrite", input.DiskWrite, input.DiskWriteValue(), thresholds.DiskWrite)
 		appendCandidate("networkIn", input.NetworkIn, input.NetworkInValue(), thresholds.NetworkIn)
 		appendCandidate("networkOut", input.NetworkOut, input.NetworkOutValue(), thresholds.NetworkOut)
 	}
 
-	if input.Type == "storage" && input.Disk != nil {
+	if unifiedStorageUsageResourceType(input.Type) && input.Disk != nil {
 		appendCandidate("usage", input.Disk, input.DiskValue(), thresholds.Usage)
 	}
 
+	appendCandidate("temperature", input.Temperature, input.TemperatureValue(), thresholds.Temperature)
+
 	return candidates
+}
+
+func unifiedStorageUsageResourceType(typeKey string) bool {
+	switch typeKey {
+	case "storage", "truenas-pool", "truenas-dataset", "vmware-datastore":
+		return true
+	default:
+		return false
+	}
 }
 
 func buildCanonicalMetricSpec(resourceID, title string, resourceType unifiedresources.ResourceType, metricType string, threshold *HysteresisThreshold) (alertspecs.ResourceAlertSpec, error) {
@@ -249,9 +365,236 @@ func unifiedMetricResourceType(typeKey string) (unifiedresources.ResourceType, b
 		return unifiedresources.ResourceTypeStorage, true
 	case "pmg":
 		return unifiedresources.ResourceTypePMG, true
+	case "k8s-cluster":
+		return unifiedresources.ResourceTypeK8sCluster, true
+	case "k8s-node":
+		return unifiedresources.ResourceTypeK8sNode, true
+	case "k8s-deployment":
+		return unifiedresources.ResourceTypeK8sDeployment, true
+	case "k8s-namespace":
+		return unifiedresources.ResourceTypeK8sNamespace, true
+	case "pod":
+		return unifiedresources.ResourceTypePod, true
+	case "truenas-system":
+		return unifiedresources.ResourceTypeAgent, true
+	case "truenas-pool", "truenas-dataset":
+		return unifiedresources.ResourceTypeStorage, true
+	case "truenas-disk":
+		return unifiedresources.ResourceTypePhysicalDisk, true
+	case "vmware-host":
+		return unifiedresources.ResourceTypeAgent, true
+	case "vmware-vm":
+		return unifiedresources.ResourceTypeVM, true
+	case "vmware-datastore":
+		return unifiedresources.ResourceTypeStorage, true
+	case "vmware-network":
+		return unifiedresources.ResourceTypeNetwork, true
 	default:
 		return "", false
 	}
+}
+
+func (m *Manager) CheckUnifiedResourceMetrics(resources []unifiedresources.Resource) {
+	if m == nil {
+		return
+	}
+	for _, resource := range resources {
+		input, ok := UnifiedResourceInputFromResource(resource)
+		if !ok {
+			continue
+		}
+		m.CheckUnifiedResource(input)
+	}
+}
+
+func UnifiedResourceInputFromResource(resource unifiedresources.Resource) (*UnifiedResourceInput, bool) {
+	typeKey, ok := unifiedAlertResourceType(resource)
+	if !ok {
+		return nil, false
+	}
+	resourceID := unifiedresources.CanonicalResourceID(resource.ID)
+	if strings.TrimSpace(resourceID) == "" {
+		return nil, false
+	}
+
+	input := &UnifiedResourceInput{
+		ID:       resourceID,
+		Type:     typeKey,
+		Name:     unifiedResourceAlertName(resource),
+		Node:     unifiedResourceAlertNode(resource),
+		Instance: unifiedResourceAlertInstance(resource, typeKey),
+	}
+
+	if metrics := resource.Metrics; metrics != nil {
+		input.CPU = unifiedResourceMetric(metrics.CPU)
+		input.Memory = unifiedResourceMetric(metrics.Memory)
+		input.Disk = unifiedResourceMetric(metrics.Disk)
+		input.DiskRead = unifiedResourceMetric(metrics.DiskRead)
+		input.DiskWrite = unifiedResourceMetric(metrics.DiskWrite)
+		input.NetworkIn = unifiedResourceMetric(metrics.NetIn)
+		input.NetworkOut = unifiedResourceMetric(metrics.NetOut)
+	}
+	if resource.Temperature != nil {
+		input.Temperature = &UnifiedResourceMetric{Value: *resource.Temperature, Percent: *resource.Temperature}
+	} else if resource.PhysicalDisk != nil && resource.PhysicalDisk.Temperature > 0 {
+		value := float64(resource.PhysicalDisk.Temperature)
+		input.Temperature = &UnifiedResourceMetric{Value: value, Percent: value}
+	}
+
+	return input, true
+}
+
+func unifiedAlertResourceType(resource unifiedresources.Resource) (string, bool) {
+	resourceType := unifiedresources.CanonicalResourceType(resource.Type)
+	switch resourceType {
+	case unifiedresources.ResourceTypeK8sCluster,
+		unifiedresources.ResourceTypeK8sNode,
+		unifiedresources.ResourceTypeK8sDeployment,
+		unifiedresources.ResourceTypeK8sNamespace,
+		unifiedresources.ResourceTypePod:
+		return string(resourceType), true
+	case unifiedresources.ResourceTypeAgent:
+		if resource.TrueNAS != nil || resourceHasSource(resource, unifiedresources.SourceTrueNAS) {
+			return "truenas-system", true
+		}
+		if resource.VMware != nil || resourceHasSource(resource, unifiedresources.SourceVMware) {
+			return "vmware-host", true
+		}
+	case unifiedresources.ResourceTypeVM:
+		if resource.VMware != nil || resourceHasSource(resource, unifiedresources.SourceVMware) {
+			return "vmware-vm", true
+		}
+	case unifiedresources.ResourceTypeStorage:
+		if isTrueNASStorageResource(resource) {
+			switch strings.ToLower(strings.TrimSpace(resource.Storage.Topology)) {
+			case "dataset":
+				return "truenas-dataset", true
+			default:
+				return "truenas-pool", true
+			}
+		}
+		if isVMwareDatastoreResource(resource) {
+			return "vmware-datastore", true
+		}
+	case unifiedresources.ResourceTypePhysicalDisk:
+		if resourceHasSource(resource, unifiedresources.SourceTrueNAS) || resource.TrueNAS != nil {
+			return "truenas-disk", true
+		}
+	case unifiedresources.ResourceTypeNetwork:
+		if resource.VMware != nil || resourceHasSource(resource, unifiedresources.SourceVMware) {
+			return "vmware-network", true
+		}
+	}
+	return "", false
+}
+
+func isTrueNASStorageResource(resource unifiedresources.Resource) bool {
+	if resource.TrueNAS != nil || resourceHasSource(resource, unifiedresources.SourceTrueNAS) {
+		return true
+	}
+	if resource.Storage == nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(resource.Storage.Platform), string(unifiedresources.SourceTrueNAS))
+}
+
+func isVMwareDatastoreResource(resource unifiedresources.Resource) bool {
+	if resource.VMware != nil || resourceHasSource(resource, unifiedresources.SourceVMware) {
+		return true
+	}
+	if resource.Storage == nil {
+		return false
+	}
+	platform := strings.TrimSpace(resource.Storage.Platform)
+	return strings.EqualFold(platform, "vmware-vsphere") || strings.EqualFold(platform, string(unifiedresources.SourceVMware))
+}
+
+func resourceHasSource(resource unifiedresources.Resource, source unifiedresources.DataSource) bool {
+	for _, candidate := range resource.Sources {
+		if candidate == source {
+			return true
+		}
+	}
+	if _, ok := resource.SourceStatus[source]; ok {
+		return true
+	}
+	return false
+}
+
+func unifiedResourceMetric(metric *unifiedresources.MetricValue) *UnifiedResourceMetric {
+	if metric == nil {
+		return nil
+	}
+	return &UnifiedResourceMetric{Value: metric.Value, Percent: metric.Percent}
+}
+
+func unifiedResourceAlertName(resource unifiedresources.Resource) string {
+	if resource.Canonical != nil && strings.TrimSpace(resource.Canonical.DisplayName) != "" {
+		return strings.TrimSpace(resource.Canonical.DisplayName)
+	}
+	if strings.TrimSpace(resource.Name) != "" {
+		return strings.TrimSpace(resource.Name)
+	}
+	return strings.TrimSpace(resource.ID)
+}
+
+func unifiedResourceAlertNode(resource unifiedresources.Resource) string {
+	if strings.TrimSpace(resource.ParentName) != "" {
+		return strings.TrimSpace(resource.ParentName)
+	}
+	if resource.Canonical != nil && strings.TrimSpace(resource.Canonical.Hostname) != "" {
+		return strings.TrimSpace(resource.Canonical.Hostname)
+	}
+	if resource.Kubernetes != nil {
+		if strings.TrimSpace(resource.Kubernetes.NodeName) != "" {
+			return strings.TrimSpace(resource.Kubernetes.NodeName)
+		}
+		if strings.TrimSpace(resource.Kubernetes.ClusterName) != "" {
+			return strings.TrimSpace(resource.Kubernetes.ClusterName)
+		}
+	}
+	if resource.TrueNAS != nil && strings.TrimSpace(resource.TrueNAS.Hostname) != "" {
+		return strings.TrimSpace(resource.TrueNAS.Hostname)
+	}
+	if resource.VMware != nil {
+		if strings.TrimSpace(resource.VMware.RuntimeHostName) != "" {
+			return strings.TrimSpace(resource.VMware.RuntimeHostName)
+		}
+		if strings.TrimSpace(resource.VMware.ClusterName) != "" {
+			return strings.TrimSpace(resource.VMware.ClusterName)
+		}
+		if strings.TrimSpace(resource.VMware.DatacenterName) != "" {
+			return strings.TrimSpace(resource.VMware.DatacenterName)
+		}
+		if strings.TrimSpace(resource.VMware.VCenterHost) != "" {
+			return strings.TrimSpace(resource.VMware.VCenterHost)
+		}
+	}
+	return unifiedResourceAlertName(resource)
+}
+
+func unifiedResourceAlertInstance(resource unifiedresources.Resource, typeKey string) string {
+	if resource.Kubernetes != nil {
+		if strings.TrimSpace(resource.Kubernetes.ClusterName) != "" {
+			return strings.TrimSpace(resource.Kubernetes.ClusterName)
+		}
+		return "Kubernetes"
+	}
+	if strings.HasPrefix(typeKey, "truenas-") {
+		return "TrueNAS"
+	}
+	if strings.HasPrefix(typeKey, "vmware-") {
+		if resource.VMware != nil {
+			if strings.TrimSpace(resource.VMware.ConnectionName) != "" {
+				return strings.TrimSpace(resource.VMware.ConnectionName)
+			}
+			if strings.TrimSpace(resource.VMware.VCenterHost) != "" {
+				return strings.TrimSpace(resource.VMware.VCenterHost)
+			}
+		}
+		return "vSphere"
+	}
+	return ""
 }
 
 func mergeMetricOptions(base *metricOptions, extra map[string]interface{}) *metricOptions {
@@ -329,6 +672,13 @@ func (i *UnifiedResourceInput) NetworkOutValue() float64 {
 	return i.NetworkOut.Value
 }
 
+func (i *UnifiedResourceInput) TemperatureValue() float64 {
+	if i == nil || i.Temperature == nil {
+		return 0
+	}
+	return i.Temperature.Value
+}
+
 // CheckUnifiedResource evaluates threshold-based metric alerts for a unified resource.
 // It resolves thresholds (defaults + overrides) and calls checkMetric for each
 // available metric. Discrete event alerts (offline, RAID, backup age, etc.)
@@ -340,6 +690,10 @@ func (m *Manager) CheckUnifiedResource(input *UnifiedResourceInput) {
 
 	m.mu.RLock()
 	if !m.config.Enabled {
+		m.mu.RUnlock()
+		return
+	}
+	if m.unifiedPlatformAlertsDisabledNoLock(input.Type) {
 		m.mu.RUnlock()
 		return
 	}

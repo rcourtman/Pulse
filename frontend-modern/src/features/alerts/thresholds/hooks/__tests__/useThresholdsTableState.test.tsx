@@ -192,6 +192,9 @@ describe('useThresholdsTableState', () => {
     expect(localStorage.getItem('pulse-thresholds-help-dismissed')).toBe('true');
 
     captured!.handleTabClick('docker');
-    expect(navigateSpy).toHaveBeenCalledWith('/alerts/thresholds/containers');
+    expect(navigateSpy).toHaveBeenCalledWith('/alerts/thresholds/docker');
+
+    captured!.handleTabClick('vmware');
+    expect(navigateSpy).toHaveBeenCalledWith('/alerts/thresholds/vmware');
   });
 });

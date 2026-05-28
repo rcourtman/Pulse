@@ -5,6 +5,7 @@ import { TogglePrimitive } from '@/components/shared/Toggle';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { ThresholdSlider } from '@/components/Workloads/ThresholdSlider';
 import { TableCell, TableRow } from '@/components/shared/Table';
+import { getPlatformTableCellClassForKind } from '@/features/platformPage/sharedPlatformPage';
 import {
   getAlertResourceTableCustomBadgeLabel,
   getAlertResourceTableEditMetricTitle,
@@ -18,6 +19,7 @@ import {
 import {
   ALERT_RESOURCE_TABLE_SLIDER_METRICS,
   alertResourceSupportsMetric,
+  getAlertResourceColumnKind,
   getAlertResourceLabel,
   getAlertResourceMetricBounds,
   getAlertResourceMetricDisplayValue,
@@ -69,7 +71,8 @@ interface AlertResourceTableRowProps {
 
 export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
   const isEditing = () => props.editingId() === props.resource.id;
-  const thresholds = () => (isEditing() ? props.editingThresholds() : (props.resource.thresholds ?? {}));
+  const thresholds = () =>
+    isEditing() ? props.editingThresholds() : (props.resource.thresholds ?? {});
   const resourceLabel = () => getAlertResourceLabel(props.resource);
   const displayValue = (metric: string) =>
     getAlertResourceMetricDisplayValue(
@@ -78,8 +81,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
       props.editingThresholds(),
       isEditing(),
     );
-  const isOverridden = (metric: string) =>
-    isAlertResourceMetricOverridden(props.resource, metric);
+  const isOverridden = (metric: string) => isAlertResourceMetricOverridden(props.resource, metric);
 
   const getThresholds = (): AlertResourceThresholdMap => thresholds();
 
@@ -196,7 +198,9 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
       class={`transition-colors ${props.resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''} ${props.resource.hasOverride ? 'bg-sky-50/50 hover:bg-sky-50/80 dark:bg-sky-900/20 dark:hover:bg-sky-900/30 border-l-[3px] border-l-sky-400 dark:border-l-sky-500' : 'hover:bg-surface-hover'}`}
     >
       <Show when={props.showBulkSelection}>
-        <TableCell class="p-1 px-2 text-center align-middle border-r border-border">
+        <TableCell
+          class={`${getPlatformTableCellClassForKind('badge')} align-middle border-r border-border`}
+        >
           <input
             type="checkbox"
             checked={props.selected}
@@ -207,7 +211,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
         </TableCell>
       </Show>
 
-      <TableCell class="p-1 px-2 text-center align-middle">
+      <TableCell class={`${getPlatformTableCellClassForKind('badge')} align-middle`}>
         <Show when={props.onToggleDisabled}>
           {(() => {
             const globallyDisabled = props.globalDisableFlag?.() ?? false;
@@ -239,7 +243,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
         </Show>
       </TableCell>
 
-      <TableCell class="p-1 px-2">
+      <TableCell class={getPlatformTableCellClassForKind('name')}>
         <div class="flex items-center gap-2 min-w-0">
           <Show
             when={props.resource.type === 'agent'}
@@ -334,10 +338,14 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
             const titlePrefix = metric === 'backup' ? 'Backup' : 'Snapshot';
 
             return (
-              <TableCell class="p-1 px-2 text-center align-middle">
+              <TableCell class={`${getPlatformTableCellClassForKind('badge')} align-middle`}>
                 <Show
                   when={onToggle}
-                  fallback={<span class="text-sm text-slate-400" aria-hidden="true">-</span>}
+                  fallback={
+                    <span class="text-sm text-slate-400" aria-hidden="true">
+                      -
+                    </span>
+                  }
                 >
                   <div class="flex items-center justify-center">
                     <StatusBadge
@@ -357,10 +365,16 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
           };
 
           return (
-            <TableCell class="p-1 px-2 text-center align-middle">
+            <TableCell
+              class={`${getPlatformTableCellClassForKind(getAlertResourceColumnKind(column))} align-middle`}
+            >
               <Show
                 when={alertResourceSupportsMetric(props.resource.type, metric)}
-                fallback={<span class="text-sm text-muted" aria-hidden="true">-</span>}
+                fallback={
+                  <span class="text-sm text-muted" aria-hidden="true">
+                    -
+                  </span>
+                }
               >
                 <Show
                   when={isEditing()}
@@ -410,10 +424,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                             return Math.round(editingVal);
                           }
                           const currentDisplayValue = displayValue(metric);
-                          if (
-                            typeof currentDisplayValue === 'number' &&
-                            currentDisplayValue >= 0
-                          ) {
+                          if (typeof currentDisplayValue === 'number' && currentDisplayValue >= 0) {
                             return Math.round(currentDisplayValue);
                           }
                           return defaultSliderValue();
@@ -422,10 +433,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                         return (
                           <div class="w-36">
                             <ThresholdSlider
-                              value={Math.max(
-                                sliderMin,
-                                Math.min(sliderMax, currentSliderValue()),
-                              )}
+                              value={Math.max(sliderMin, Math.min(sliderMax, currentSliderValue()))}
                               onChange={(val) => {
                                 props.setEditingThresholds({
                                   ...props.editingThresholds(),
@@ -498,7 +506,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
       </For>
 
       <Show when={props.showOfflineAlertsColumn}>
-        <TableCell class="p-1 px-2 text-center align-middle">
+        <TableCell class={`${getPlatformTableCellClassForKind('badge')} align-middle`}>
           {(() => {
             const disabledGlobally = props.globalDisableFlag?.() ?? false;
             const supportsTriState =
@@ -528,7 +536,11 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
             }
 
             if (!props.onToggleNodeConnectivity) {
-              return <span class="text-sm text-slate-400" aria-hidden="true">-</span>;
+              return (
+                <span class="text-sm text-slate-400" aria-hidden="true">
+                  -
+                </span>
+              );
             }
 
             const globalOfflineDisabled = props.globalDisableOfflineFlag?.() ?? false;
@@ -539,17 +551,15 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                 if (disabledGlobally) return;
                 props.onToggleNodeConnectivity?.(props.resource.id);
               },
-              titleEnabled:
-                'Offline alerts enabled. Click to disable for this resource.',
-              titleDisabled:
-                'Offline alerts disabled. Click to enable for this resource.',
+              titleEnabled: 'Offline alerts enabled. Click to disable for this resource.',
+              titleDisabled: 'Offline alerts disabled. Click to enable for this resource.',
               titleWhenDisabled: 'Offline alerts controlled globally',
             });
           })()}
         </TableCell>
       </Show>
 
-      <TableCell class="p-1 px-2">
+      <TableCell class={getPlatformTableCellClassForKind('badge')}>
         <div class="flex items-center justify-center gap-1">
           <Show
             when={!isEditing()}
@@ -581,7 +591,14 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                   props.resource.disableConnectivity);
 
               return (
-                <Show when={showEdit || showRevert} fallback={<span class="text-xs text-muted" aria-hidden="true">—</span>}>
+                <Show
+                  when={showEdit || showRevert}
+                  fallback={
+                    <span class="text-xs text-muted" aria-hidden="true">
+                      —
+                    </span>
+                  }
+                >
                   <Show when={showEdit}>
                     <button
                       type="button"

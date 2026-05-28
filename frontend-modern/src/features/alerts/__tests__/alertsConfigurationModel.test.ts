@@ -22,6 +22,8 @@ describe('alertsConfigurationModel', () => {
     );
     expect(snapshot.storageDefault).toBe(FACTORY_STORAGE_DEFAULT);
     expect(snapshot.timeThresholds.guest).toBe(5);
+    expect(snapshot.timeThresholds['vmware-host']).toBe(5);
+    expect(snapshot.vmwareDefaults.usage).toBe(85);
     expect(snapshot.scheduleCooldown.enabled).toBe(true);
     expect(snapshot.backupDefaults.ignoreVMIDs).toEqual([]);
   });
@@ -49,6 +51,10 @@ describe('alertsConfigurationModel', () => {
         criticalDays: 10,
         ignoreVMIDs: [' 101 ', '101', ''],
       },
+      vmwareDefaults: {
+        cpu: { trigger: 83, clear: 78 },
+        usage: { trigger: 91, clear: 86 },
+      },
       snapshotDefaults: {
         enabled: true,
         warningDays: 25,
@@ -74,6 +80,8 @@ describe('alertsConfigurationModel', () => {
     expect(snapshot.dockerDefaults.serviceWarnGapPercent).toBe(40);
     expect(snapshot.dockerDefaults.serviceCriticalGapPercent).toBe(40);
     expect(snapshot.backupDefaults.warningDays).toBe(10);
+    expect(snapshot.vmwareDefaults.cpu).toBe(83);
+    expect(snapshot.vmwareDefaults.usage).toBe(91);
     expect(snapshot.backupDefaults.criticalDays).toBe(10);
     expect(snapshot.backupDefaults.ignoreVMIDs).toEqual(['101']);
     expect(snapshot.snapshotDefaults.warningDays).toBe(5);
@@ -133,6 +141,8 @@ describe('alertsConfigurationModel', () => {
     expect(result.dockerValidationError).toBeUndefined();
     expect(result.alertConfig).toBeDefined();
     expect(result.alertConfig?.guestDefaults.cpu).toEqual({ trigger: 92, clear: 87 });
+    expect(result.alertConfig?.vmwareDefaults?.cpu).toEqual({ trigger: 80, clear: 75 });
+    expect(result.alertConfig?.vmwareDefaults?.usage).toEqual({ trigger: 85, clear: 80 });
     expect(result.alertConfig?.dockerIgnoredContainerPrefixes).toEqual(['web']);
     expect(result.alertConfig?.guestTagWhitelist).toEqual(['prod']);
     expect(result.alertConfig?.metricTimeThresholds).toEqual({ guest: { cpu: 17 } });

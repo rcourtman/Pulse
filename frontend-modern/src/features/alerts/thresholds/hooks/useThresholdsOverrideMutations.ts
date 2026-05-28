@@ -37,6 +37,19 @@ interface ThresholdsOverrideMutationResources {
   pbsServersWithOverrides: Accessor<TableResource[]>;
   pmgServersWithOverrides: Accessor<TableResource[]>;
   storageWithOverrides: Accessor<TableResource[]>;
+  kubernetesClustersWithOverrides?: Accessor<TableResource[]>;
+  kubernetesNodesWithOverrides?: Accessor<TableResource[]>;
+  kubernetesNamespacesWithOverrides?: Accessor<TableResource[]>;
+  kubernetesDeploymentsWithOverrides?: Accessor<TableResource[]>;
+  kubernetesPodsWithOverrides?: Accessor<TableResource[]>;
+  trueNASSystemsWithOverrides?: Accessor<TableResource[]>;
+  trueNASPoolsWithOverrides?: Accessor<TableResource[]>;
+  trueNASDatasetsWithOverrides?: Accessor<TableResource[]>;
+  trueNASDisksWithOverrides?: Accessor<TableResource[]>;
+  vmwareHostsWithOverrides?: Accessor<TableResource[]>;
+  vmwareVMsWithOverrides?: Accessor<TableResource[]>;
+  vmwareDatastoresWithOverrides?: Accessor<TableResource[]>;
+  vmwareNetworksWithOverrides?: Accessor<TableResource[]>;
 }
 
 interface ThresholdsOverrideMutationProps {
@@ -64,6 +77,9 @@ export function useThresholdsOverrideMutations({
   updateBackupDefaults,
   updateSnapshotDefaults,
 }: ThresholdsOverrideMutationProps) {
+  const optionalResources = (accessor?: Accessor<TableResource[]>): TableResource[] =>
+    accessor?.() ?? [];
+
   const proxmoxResources = () => [
     ...resources.nodesWithOverrides(),
     ...resources.agentsWithOverrides(),
@@ -72,6 +88,19 @@ export function useThresholdsOverrideMutations({
     ...resources.pbsServersWithOverrides(),
     ...resources.pmgServersWithOverrides(),
     ...resources.storageWithOverrides(),
+    ...optionalResources(resources.kubernetesClustersWithOverrides),
+    ...optionalResources(resources.kubernetesNodesWithOverrides),
+    ...optionalResources(resources.kubernetesNamespacesWithOverrides),
+    ...optionalResources(resources.kubernetesDeploymentsWithOverrides),
+    ...optionalResources(resources.kubernetesPodsWithOverrides),
+    ...optionalResources(resources.trueNASSystemsWithOverrides),
+    ...optionalResources(resources.trueNASPoolsWithOverrides),
+    ...optionalResources(resources.trueNASDatasetsWithOverrides),
+    ...optionalResources(resources.trueNASDisksWithOverrides),
+    ...optionalResources(resources.vmwareHostsWithOverrides),
+    ...optionalResources(resources.vmwareVMsWithOverrides),
+    ...optionalResources(resources.vmwareDatastoresWithOverrides),
+    ...optionalResources(resources.vmwareNetworksWithOverrides),
   ];
 
   const guestLikeResources = () => [...resources.guestsFlat(), ...resources.dockerContainersFlat()];
