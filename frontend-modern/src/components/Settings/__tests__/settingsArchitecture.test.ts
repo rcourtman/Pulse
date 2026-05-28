@@ -30,6 +30,7 @@ import rbacFeatureGateSectionSource from '../RBACFeatureGateSection.tsx?raw';
 import recoverySettingsPanelSource from '../RecoverySettingsPanel.tsx?raw';
 import systemLogsPanelSource from '../SystemLogsPanel.tsx?raw';
 import updatesSettingsPanelSource from '../UpdatesSettingsPanel.tsx?raw';
+import updateInstallGuideSource from '../UpdateInstallGuide.tsx?raw';
 import agentProfilesPanelSource from '../AgentProfilesPanel.tsx?raw';
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
 import infrastructureInstallerSectionSource from '../InfrastructureInstallerSection.tsx?raw';
@@ -594,6 +595,13 @@ describe('settings architecture guardrails', () => {
     );
     expect(aiSettingsStateSource).toContain('notificationStore.warning(patrolReadinessMessage);');
     expect(aiSettingsStateSource).toContain('getAISettingsSaveProviderFailureMessage(');
+  });
+
+  it('keeps update readiness checks on the shared install guide boundary', () => {
+    expect(updateInstallGuideSource).toContain('UpdateReadinessPanel');
+    expect(updateInstallGuideSource).toContain("props.updatePlan?.readiness?.status === 'blocked'");
+    expect(updateInstallGuideSource).toContain('Install blocked');
+    expect(updateInstallGuideSource).toContain('disabled={props.isInstalling || readinessBlocked()}');
   });
 
   it('keeps infrastructure on a source-manager landing with route-backed dialogs', () => {

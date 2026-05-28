@@ -177,6 +177,10 @@ regression protection.
    process version once, but they must not add per-request release lookups,
    filesystem walks, or other heavy work just to compute whether an attached
    agent is current.
+   Update-readiness planning follows the same bounded-router rule. The router
+   may wire cached config and monitor host snapshots into the updates handler,
+   but it must not add release lookups, broad persistence scans, or live agent
+   probes to protected request setup before `/api/updates/plan` owns the work.
    Proxmox-side LXC Docker collector wiring in `internal/api/router.go` follows
    the same startup-only router rule: env opt-in may configure monitoring-owned
    checker/collector callbacks, but normal protected request setup must not run

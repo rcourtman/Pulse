@@ -503,6 +503,11 @@ That same trust boundary also governs API token scope identity: legacy
 migration boundaries, where they must be rewritten immediately into canonical
 `agent:*` scopes. Live token records and runtime scope checks may not keep the
 legacy scope names as an active second contract.
+Update-readiness checks may inspect loaded API token metadata to determine
+whether agent reporting scope exists or has expired, but they must not expose
+raw token values, token hashes, or owner metadata in the update plan payload.
+Legacy `host-agent:*` continuity must be reported only after the loaded token
+record has normalized to canonical `agent:*` scope.
 That same token-scope boundary also owns audit-log least privilege: audit
 event, verification, summary, export, and unified action/export audit reads
 must require the dedicated `audit:read` scope instead of inheriting broader

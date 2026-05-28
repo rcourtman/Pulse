@@ -15,13 +15,32 @@ type UpdateRequest struct {
 
 // UpdatePlan contains information about how an update will be performed
 type UpdatePlan struct {
-	CanAutoUpdate   bool     `json:"canAutoUpdate"`
-	Instructions    []string `json:"instructions"`
-	Prerequisites   []string `json:"prerequisites"`
-	EstimatedTime   string   `json:"estimatedTime,omitempty"`
-	RequiresRoot    bool     `json:"requiresRoot"`
-	RollbackSupport bool     `json:"rollbackSupport"`
-	DownloadURL     string   `json:"downloadUrl,omitempty"`
+	CanAutoUpdate   bool             `json:"canAutoUpdate"`
+	Instructions    []string         `json:"instructions"`
+	Prerequisites   []string         `json:"prerequisites"`
+	EstimatedTime   string           `json:"estimatedTime,omitempty"`
+	RequiresRoot    bool             `json:"requiresRoot"`
+	RollbackSupport bool             `json:"rollbackSupport"`
+	DownloadURL     string           `json:"downloadUrl,omitempty"`
+	Readiness       *UpdateReadiness `json:"readiness,omitempty"`
+}
+
+// UpdateReadiness is the operator-facing preflight summary attached to an
+// update plan. It is advisory unless a check is explicitly "blocked".
+type UpdateReadiness struct {
+	Status  string                 `json:"status"`
+	Summary string                 `json:"summary"`
+	Checks  []UpdateReadinessCheck `json:"checks"`
+}
+
+// UpdateReadinessCheck is one concrete compatibility or continuity check for
+// the requested server update.
+type UpdateReadinessCheck struct {
+	ID      string   `json:"id"`
+	Status  string   `json:"status"`
+	Title   string   `json:"title"`
+	Summary string   `json:"summary"`
+	Details []string `json:"details,omitempty"`
 }
 
 func EmptyUpdatePlan() UpdatePlan {
@@ -34,6 +53,9 @@ func (p UpdatePlan) NormalizeCollections() UpdatePlan {
 	}
 	if p.Prerequisites == nil {
 		p.Prerequisites = []string{}
+	}
+	if p.Readiness != nil && p.Readiness.Checks == nil {
+		p.Readiness.Checks = []UpdateReadinessCheck{}
 	}
 	return p
 }

@@ -16,6 +16,7 @@ For the current v6 prerelease packet, see:
 ## Before You Upgrade
 
 - Create an encrypted config backup: **Settings → System → Recovery → Create Backup** (older versions labeled this **Backups**)
+- Open **Settings → System → Updates** and review the upgrade checks on the update plan. Pulse checks the server update path, current agent continuity, and agent reporting token scope before you install.
 - Confirm you can access the host/container console (for rollback and bootstrap token retrieval)
 - If you have any external integrations or scripts: review the **API Changes** section below
 

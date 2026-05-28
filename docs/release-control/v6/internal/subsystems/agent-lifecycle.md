@@ -144,6 +144,16 @@ reverse.
     wrapper.
 24. `scripts/install.sh` shared with `deployment-installability`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
 
+Server update planning is part of the same lifecycle contract. The System
+Updates plan must surface a structured upgrade-readiness verdict before an
+operator installs a v6 update: server update path, registered agent continuity,
+and agent reporting token scope must be derived from the existing updater,
+connections ledger, and API token state rather than from docs-only guidance or
+a parallel migration registry. v5 or legacy agents that are still reporting
+must be treated as compatible with the v6 reporting boundary, while stale
+agents, missing reported versions, missing agent reporting scope, or expired
+agent tokens must be called out before the update starts.
+
 Agent lifecycle and fleet-operation surfaces may consume
 `POST /api/actions/plan` for resource capability planning, but the action plan
 contract remains API-owned through `internal/api/actions.go` and

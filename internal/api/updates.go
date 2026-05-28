@@ -13,6 +13,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mockmode"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rs/zerolog/log"
 )
@@ -26,6 +27,9 @@ type UpdateHandlers struct {
 	registry         *updates.UpdaterRegistry
 	statusRateLimits map[string]time.Time // IP -> last request time
 	statusMu         sync.RWMutex
+	getConfig        func(context.Context) *config.Config
+	getHostsSnapshot func(context.Context) []models.Host
+	now              func() time.Time
 }
 
 // UpdateManager defines the interface for update management operations
@@ -66,12 +70,26 @@ func NewUpdateHandlersWithContext(manager UpdateManager, history *updates.Update
 		history:          history,
 		registry:         registry,
 		statusRateLimits: make(map[string]time.Time),
+		now:              time.Now,
 	}
 
 	// Start periodic cleanup of rate limit map
 	go h.cleanupRateLimits(cleanupCtx)
 
 	return h
+}
+
+// SetUpdateReadinessSources wires runtime state used to attach an upgrade
+// readiness verdict to update plans. Nil callbacks leave plans unchanged.
+func (h *UpdateHandlers) SetUpdateReadinessSources(
+	getConfig func(context.Context) *config.Config,
+	getHostsSnapshot func(context.Context) []models.Host,
+) {
+	if h == nil {
+		return
+	}
+	h.getConfig = getConfig
+	h.getHostsSnapshot = getHostsSnapshot
 }
 
 // HandleCheckUpdates handles update check requests
@@ -378,7 +396,7 @@ func (h *UpdateHandlers) HandleGetUpdatePlan(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		if plan, ok := fallbackManualUpdatePlan(versionInfo.DeploymentType, version); ok {
 			w.Header().Set("Content-Type", "application/json")
-			normalizedPlan := plan.NormalizeCollections()
+			normalizedPlan := h.attachUpdateReadiness(r.Context(), version, plan.NormalizeCollections())
 			json.NewEncoder(w).Encode(normalizedPlan)
 			return
 		}
@@ -399,8 +417,26 @@ func (h *UpdateHandlers) HandleGetUpdatePlan(w http.ResponseWriter, r *http.Requ
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	normalizedPlan := plan.NormalizeCollections()
+	normalizedPlan := h.attachUpdateReadiness(r.Context(), version, plan.NormalizeCollections())
 	json.NewEncoder(w).Encode(normalizedPlan)
+}
+
+func (h *UpdateHandlers) attachUpdateReadiness(ctx context.Context, version string, plan updates.UpdatePlan) updates.UpdatePlan {
+	if h == nil || h.getConfig == nil || h.getHostsSnapshot == nil {
+		return plan
+	}
+	now := time.Now()
+	if h.now != nil {
+		now = h.now()
+	}
+	plan.Readiness = buildUpdateReadiness(updateReadinessInputs{
+		cfg:           h.getConfig(ctx),
+		hosts:         h.getHostsSnapshot(ctx),
+		targetVersion: version,
+		plan:          plan,
+		now:           now,
+	})
+	return plan.NormalizeCollections()
 }
 
 func fallbackManualUpdatePlan(deploymentType string, version string) (*updates.UpdatePlan, bool) {

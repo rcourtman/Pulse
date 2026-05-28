@@ -465,6 +465,15 @@ func (r *Router) setupRoutes() {
 	r.vmwarePoller = monitoring.NewVMwarePoller(r.multiTenant, 0)
 	r.vmwarePoller.Start(r.lifecycleCtx)
 	updateHandlers := NewUpdateHandlersWithContext(r.updateManager, r.updateHistory, r.lifecycleCtx)
+	updateHandlers.SetUpdateReadinessSources(
+		r.configHandlers.getConfig,
+		func(context.Context) []models.Host {
+			if r.monitor == nil {
+				return nil
+			}
+			return r.monitor.HostsSnapshot()
+		},
+	)
 	r.dockerAgentHandlers = NewDockerAgentHandlers(r.mtMonitor, r.monitor, r.wsHub, r.config)
 	r.kubernetesAgentHandlers = NewKubernetesAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
 	r.unifiedAgentHandlers = NewUnifiedAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)

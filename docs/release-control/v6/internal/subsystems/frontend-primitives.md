@@ -161,6 +161,12 @@ work extends shared components instead of creating new local variants.
 
 ## Shared Boundaries
 
+The System Updates install guide is a shared settings primitive, not a
+deployment-lane-only panel. `UpdateInstallGuide` must render the canonical
+update-plan readiness verdict inline with the update action, and a blocked
+readiness status must make automatic install visibly unavailable until the
+blocking check is resolved.
+
 Platform page subnavigation is a shared frontend primitive. Docker / Podman
 and Kubernetes platform pages may add native API-backed sections, but the tabs
 must use `PlatformSectionTabs`, canonical table alignment helpers, and shared

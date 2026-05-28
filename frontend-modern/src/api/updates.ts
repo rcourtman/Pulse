@@ -32,6 +32,23 @@ export interface VersionInfo {
   deploymentType?: string;
 }
 
+export type UpdateReadinessStatus = 'ready' | 'attention' | 'blocked';
+export type UpdateReadinessCheckStatus = 'pass' | 'warning' | 'blocked';
+
+export interface UpdateReadinessCheck {
+  id: string;
+  status: UpdateReadinessCheckStatus;
+  title: string;
+  summary: string;
+  details?: string[];
+}
+
+export interface UpdateReadiness {
+  status: UpdateReadinessStatus;
+  summary: string;
+  checks: UpdateReadinessCheck[];
+}
+
 export interface UpdatePlan {
   canAutoUpdate: boolean;
   instructions?: string[];
@@ -40,6 +57,7 @@ export interface UpdatePlan {
   requiresRoot: boolean;
   rollbackSupport: boolean;
   downloadUrl?: string;
+  readiness?: UpdateReadiness;
 }
 
 const requireNonEmpty = (value: string, fieldName: string): string => {

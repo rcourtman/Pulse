@@ -199,6 +199,22 @@ func TestUpdatePlan_UsesCanonicalEmptyCollections(t *testing.T) {
 	}
 }
 
+func TestUpdatePlan_NormalizeCollectionsInitializesReadinessChecks(t *testing.T) {
+	plan := UpdatePlan{
+		Readiness: &UpdateReadiness{
+			Status:  "ready",
+			Summary: "Upgrade checks passed.",
+		},
+	}.NormalizeCollections()
+
+	if plan.Readiness == nil {
+		t.Fatal("expected readiness to remain attached")
+	}
+	if plan.Readiness.Checks == nil {
+		t.Fatal("expected readiness checks to normalize to an empty slice")
+	}
+}
+
 func TestUpdateProgress_Fields(t *testing.T) {
 	progress := UpdateProgress{
 		Stage:      "downloading",

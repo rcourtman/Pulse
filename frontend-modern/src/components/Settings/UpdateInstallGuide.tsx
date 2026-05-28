@@ -1,6 +1,15 @@
 import { Component, For, Show } from 'solid-js';
 import Download from 'lucide-solid/icons/download';
-import type { UpdateInfo, UpdatePlan, VersionInfo } from '@/api/updates';
+import AlertTriangle from 'lucide-solid/icons/alert-triangle';
+import CheckCircle from 'lucide-solid/icons/check-circle';
+import CircleAlert from 'lucide-solid/icons/circle-alert';
+import type {
+  UpdateInfo,
+  UpdatePlan,
+  UpdateReadiness,
+  UpdateReadinessCheck,
+  VersionInfo,
+} from '@/api/updates';
 import { CopyCommandBlock } from '@/components/Settings/CopyCommandBlock';
 import {
   buildIdleDockerComposeCommand,
@@ -53,6 +62,71 @@ function InstallStep(props: { step: UpdateInstallStep; index: number }) {
   );
 }
 
+function readinessTone(status: UpdateReadiness['status']) {
+  switch (status) {
+    case 'blocked':
+      return 'border-red-200 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100';
+    case 'attention':
+      return 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100';
+    default:
+      return 'border-green-200 bg-green-50 text-green-900 dark:border-green-800 dark:bg-green-950/40 dark:text-green-100';
+  }
+}
+
+function readinessCheckTone(status: UpdateReadinessCheck['status']) {
+  switch (status) {
+    case 'blocked':
+      return 'text-red-700 dark:text-red-300';
+    case 'warning':
+      return 'text-amber-700 dark:text-amber-300';
+    default:
+      return 'text-green-700 dark:text-green-300';
+  }
+}
+
+function ReadinessCheckIcon(props: { status: UpdateReadinessCheck['status'] }) {
+  if (props.status === 'blocked') {
+    return <CircleAlert class="h-4 w-4" />;
+  }
+  if (props.status === 'warning') {
+    return <AlertTriangle class="h-4 w-4" />;
+  }
+  return <CheckCircle class="h-4 w-4" />;
+}
+
+function UpdateReadinessPanel(props: { readiness: UpdateReadiness }) {
+  return (
+    <section class={`rounded-md border p-4 ${readinessTone(props.readiness.status)}`}>
+      <div class="flex flex-col gap-1">
+        <p class="text-sm font-semibold">Upgrade checks</p>
+        <p class="text-xs opacity-90">{props.readiness.summary}</p>
+      </div>
+      <div class="mt-3 divide-y divide-black/10 dark:divide-white/10">
+        <For each={props.readiness.checks}>
+          {(check) => (
+            <div class="py-3 first:pt-0 last:pb-0">
+              <div class={`flex items-start gap-2 ${readinessCheckTone(check.status)}`}>
+                <span class="mt-0.5 flex-shrink-0">
+                  <ReadinessCheckIcon status={check.status} />
+                </span>
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-medium">{check.title}</p>
+                  <p class="mt-0.5 text-xs opacity-90">{check.summary}</p>
+                  <Show when={check.details?.length}>
+                    <ul class="mt-2 list-disc space-y-1 pl-4 text-xs opacity-85">
+                      <For each={check.details ?? []}>{(detail) => <li>{detail}</li>}</For>
+                    </ul>
+                  </Show>
+                </div>
+              </div>
+            </div>
+          )}
+        </For>
+      </div>
+    </section>
+  );
+}
+
 export const UpdateInstallGuide: Component<UpdateInstallGuideProps> = (props) => {
   const guide = () =>
     buildUpdateInstallGuide(
@@ -62,6 +136,11 @@ export const UpdateInstallGuide: Component<UpdateInstallGuideProps> = (props) =>
       props.dockerImageTag,
       props.systemdDownloadCommand,
     );
+  const readinessBlocked = () => props.updatePlan?.readiness?.status === 'blocked';
+  const introText = () =>
+    readinessBlocked()
+      ? 'Resolve blocked upgrade checks before installing. Manual steps are listed for reference:'
+      : guide()!.introText;
 
   return (
     <>
@@ -142,20 +221,30 @@ export const UpdateInstallGuide: Component<UpdateInstallGuideProps> = (props) =>
                 <button
                   type="button"
                   onClick={props.onInstallUpdate}
-                  disabled={props.isInstalling}
+                  disabled={props.isInstalling || readinessBlocked()}
                   class={`flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all sm:w-auto ${
                     props.isInstalling
                       ? 'cursor-not-allowed bg-green-400 text-white dark:bg-green-600'
+                      : readinessBlocked()
+                        ? 'cursor-not-allowed bg-red-200 text-red-800 dark:bg-red-900 dark:text-red-200'
                       : 'bg-green-600 text-white hover:bg-green-700'
                   }`}
                 >
                   <Show
                     when={props.isInstalling}
                     fallback={
-                      <>
-                        <Download class="h-4 w-4" />
-                        Install Update
-                      </>
+                      <Show
+                        when={readinessBlocked()}
+                        fallback={
+                          <>
+                            <Download class="h-4 w-4" />
+                            Install Update
+                          </>
+                        }
+                      >
+                        <CircleAlert class="h-4 w-4" />
+                        Install blocked
+                      </Show>
                     }
                   >
                     <div class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
@@ -167,7 +256,11 @@ export const UpdateInstallGuide: Component<UpdateInstallGuideProps> = (props) =>
           </div>
 
           <div class="space-y-4 p-5">
-            <div class="mb-3 text-sm text-green-700 dark:text-green-300">{guide()!.introText}</div>
+            <Show when={props.updatePlan?.readiness}>
+              {(readiness) => <UpdateReadinessPanel readiness={readiness()} />}
+            </Show>
+
+            <div class="mb-3 text-sm text-green-700 dark:text-green-300">{introText()}</div>
 
             <For each={guide()!.steps}>
               {(step, index) => <InstallStep step={step} index={index() + 1} />}

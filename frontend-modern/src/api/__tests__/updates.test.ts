@@ -53,6 +53,29 @@ describe('UpdatesAPI', () => {
     );
   });
 
+  it('preserves update-plan readiness payloads from the backend', async () => {
+    const response = {
+      canAutoUpdate: true,
+      requiresRoot: true,
+      rollbackSupport: true,
+      readiness: {
+        status: 'blocked',
+        summary: 'Resolve 1 blocked upgrade check before installing this update.',
+        checks: [
+          {
+            id: 'agent-token-scopes',
+            status: 'blocked',
+            title: 'Agent token scopes',
+            summary: 'Registered agents exist, but no loaded API token grants agent reporting scope.',
+          },
+        ],
+      },
+    };
+    apiFetchJSONMock.mockResolvedValueOnce(response as any);
+
+    await expect(UpdatesAPI.getUpdatePlan('v6.0.0')).resolves.toEqual(response);
+  });
+
   it('rejects blank update-plan version before making a request', async () => {
     await expect(UpdatesAPI.getUpdatePlan('   ', 'stable')).rejects.toThrow('Version is required');
     expect(apiFetchJSONMock).not.toHaveBeenCalled();

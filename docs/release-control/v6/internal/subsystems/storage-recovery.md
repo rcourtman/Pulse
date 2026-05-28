@@ -211,6 +211,11 @@ recovery scope, or a storage/recovery-owned secret source.
 
 1. Add or change recovery-point persistence, rollups, or series derivation through `internal/recovery/`
 4. Route transport changes for storage and recovery endpoints through `internal/api/` and the owning `api-contracts` proof routes
+   Update-plan readiness payloads are adjacent shared API context only. Storage
+   and recovery surfaces may observe the resulting update state if a future
+   settings flow links to recovery preparation, but they must not reinterpret
+   agent-token or server-update readiness checks as backup freshness, restore
+   capability, or storage-provider health.
    Shared API-token transport helpers may be consumed by storage/recovery-
    adjacent flows, but `owner_user_id` remains server-authored token identity
    metadata; storage/recovery extensions must not pass metadata that authors

@@ -187,6 +187,9 @@ platform page needs source-native backup columns.
 7. `frontend-modern/src/api/rbac.ts` shared with `organization-settings`: the RBAC frontend client is both an organization settings control surface and a canonical API payload contract boundary.
 8. `frontend-modern/src/api/security.ts` shared with `security-privacy`: the security frontend client is both a security/privacy control surface and a canonical API payload contract boundary.
 9. `frontend-modern/src/api/updates.ts` shared with `deployment-installability`: the updates frontend client is both a deployment-installability control surface and a canonical API payload contract boundary.
+   It must preserve `/api/updates/plan.readiness` payloads as backend-owned
+   API state so settings UI can render `ready`, `attention`, and `blocked`
+   update checks without rebuilding upgrade state locally.
 10. `frontend-modern/src/components/Settings/APITokenManager.tsx` shared with `security-privacy`: the API token settings surface is both a security/privacy control surface and a canonical API payload contract boundary.
     The API token inventory table may own credential and usage cells, but it
     must inherit embedded table framing from `frontend-primitives`
@@ -422,6 +425,10 @@ platform page needs source-native backup columns.
     target, so installer preflight failures point operators at the artifact
     they actually need.
 53. `internal/api/updates.go` shared with `deployment-installability`: update handlers are both a deployment-installability control surface and a canonical API payload contract boundary.
+    Update-plan responses own the structured readiness verdict for server
+    updater capability, rollback support, agent continuity, and agent reporting
+    token scope. That verdict is part of the update-plan API contract, not a
+    settings-only migration registry.
 The platform-connections API contract also owns inactive monitored-system
 candidate semantics end to end. `enabled=false` on TrueNAS or VMware preview,
 test, add, and update payloads must serialize through the shared ledger client
@@ -3655,6 +3662,11 @@ transport error on supported non-auto-update deployments: `manual`,
 plan payload instead of `404 No updater for deployment type`, so first-session
 and settings surfaces do not treat valid deployment modes as broken update
 transport.
+The same update-plan contract now carries an optional `readiness` verdict.
+Backend handlers own the `ready` / `attention` / `blocked` status vocabulary
+and per-check payload shape, while frontend clients must preserve that payload
+unchanged so settings surfaces can disable automatic install on blocked checks
+without inventing a parallel migration state model.
 Those same install-command payloads now also carry a non-TLS continuity
 contract: when Pulse returns a plain `http://` base URL for a generated agent
 install command, the command must include `--insecure` so the installed agent

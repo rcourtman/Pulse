@@ -175,6 +175,12 @@ server-side update execution surfaces.
    enrollment runtime tokens while keeping deploy binding metadata limited to
    deploy facts such as cluster, job, target, source agent, and expected node.
 4. Add or change server update transport through `internal/api/updates.go` and `frontend-modern/src/api/updates.ts`
+   Server update planning must attach the canonical upgrade-readiness verdict
+   to `/api/updates/plan` responses before an operator starts a v6 update.
+   The verdict belongs to the update plan, not to a separate migration wizard:
+   it must combine updater capability, rollback availability, registered agent
+   continuity, and agent reporting token scope so v5-to-v6 continuity problems
+   are visible before relaunch.
 5. Add or change local dev-runtime orchestration, managed ownership, browser-runtime proof wiring, frontend/backend coherence diagnostics, canonical developer entry wrappers, deterministic dev auth seeding, dependency manifest floors, frontend build chunking, or dev-runtime helper control surfaces through `scripts/hot-dev.sh`, `scripts/hot-dev-bg.sh`, `scripts/lib/hot-dev-runtime.sh`, `scripts/lib/hot-dev-auth.sh`, `scripts/dev-deploy-agent.sh`, `Makefile`, `package.json`, `package-lock.json`, `frontend-modern/package.json`, `frontend-modern/package-lock.json`, `frontend-modern/vite.config.ts`, `go.mod`, `go.sum`, `scripts/dev-check.sh`, `scripts/toggle-mock.sh`, `scripts/clean-mock-alerts.sh`, `scripts/dev-launchd-setup.sh`, `scripts/dev-launchd-wrapper.sh`, `scripts/run_demo_public_browser_smoke.sh`, `scripts/demo_public_browser_smoke.cjs`, `scripts/com.pulse.hot-dev.plist.template`, `tests/integration/scripts/managed-dev-runtime.mjs`, `tests/integration/playwright.config.ts`, `tests/integration/tests/helpers.ts`, `tests/integration/tests/runtime-defaults.ts`, `tests/integration/README.md`, and `tests/integration/QUICK_START.md`
    First-run browser helpers are part of that dev-runtime proof boundary. They
    must preserve the setup-created API token in the shared runtime state, prefer

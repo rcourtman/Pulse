@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 )
 
@@ -579,6 +581,65 @@ func TestHandleGetUpdatePlan(t *testing.T) {
 	}
 	if plan.Prerequisites == nil {
 		t.Fatal("expected prerequisites to normalize to an empty slice")
+	}
+}
+
+func TestHandleGetUpdatePlan_IncludesUpgradeReadiness(t *testing.T) {
+	setMockModeForTest(t, true)
+
+	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+	rawToken := "abcdef1234567890abcdef1234567890"
+	record, err := config.NewAPITokenRecord(rawToken, "agent", []string{config.ScopeAgentReport})
+	if err != nil {
+		t.Fatalf("NewAPITokenRecord: %v", err)
+	}
+
+	h := NewUpdateHandlers(nil, nil)
+	h.now = func() time.Time { return now }
+	h.SetUpdateReadinessSources(
+		func(context.Context) *config.Config {
+			return &config.Config{APITokens: []config.APITokenRecord{*record}}
+		},
+		func(context.Context) []models.Host {
+			return []models.Host{{
+				ID:           "host-1",
+				Hostname:     "host-1",
+				LastSeen:     now.Add(-30 * time.Second),
+				AgentVersion: "5.1.23",
+				IsLegacy:     true,
+			}}
+		},
+	)
+	h.registry.Register("mock", &mockUpdater{
+		prepareFunc: func(ctx context.Context, req updates.UpdateRequest) (*updates.UpdatePlan, error) {
+			return &updates.UpdatePlan{
+				CanAutoUpdate:   true,
+				RollbackSupport: true,
+				Instructions:    []string{"install"},
+			}, nil
+		},
+	})
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/updates/plan?version=v6.0.0", nil)
+	h.HandleGetUpdatePlan(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var plan updates.UpdatePlan
+	if err := json.NewDecoder(w.Body).Decode(&plan); err != nil {
+		t.Fatalf("decode plan: %v", err)
+	}
+	if plan.Readiness == nil {
+		t.Fatal("expected readiness on update plan")
+	}
+	if plan.Readiness.Status != "ready" {
+		t.Fatalf("readiness status = %q, want ready: %#v", plan.Readiness.Status, plan.Readiness)
+	}
+	if len(plan.Readiness.Checks) != 3 {
+		t.Fatalf("readiness checks = %d, want 3", len(plan.Readiness.Checks))
 	}
 }
 
