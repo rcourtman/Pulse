@@ -73,6 +73,11 @@ export interface WorkloadsSurfaceProps {
   // removes the redundant Platform chip from the filter row since the
   // platform is already fixed by the owning page.
   suppressPlatformFilter?: boolean;
+  // When a platform page renders its own shared WorkloadsFilter above the
+  // embedded surface (so one toolbar drives both the page's top table and
+  // this surface), set `suppressFilterToolbar` so the surface skips its
+  // internal filter row and avoids a duplicate.
+  suppressFilterToolbar?: boolean;
   statusModeStorageScope?: string;
   // Platform pages that render their own hosts table above the embedded
   // workloads surface (e.g. Proxmox overview) own the per-host CPU / Memory

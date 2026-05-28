@@ -230,6 +230,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
       <Show when={showSharedFilterToolbar()}>
         <div data-summary-clear-ignore>
           <WorkloadsFilter
+            savedViewsKey={workloadsState.savedViewsKey()}
             search={workloadsState.search}
             setSearch={workloadsState.setSearch}
             viewMode={workloadsState.viewMode}
@@ -247,7 +248,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
             statusOptions={PROXMOX_WORKLOAD_STATUS_OPTIONS}
             columnVisibility={workloadsState.workloadsFilterColumnVisibility()}
             containerRuntimeFilter={workloadsState.containerRuntimeFilterConfig()}
-            hostFilter={undefined}
+            hostFilter={workloadsState.hostFilterConfig()}
             namespaceFilter={undefined}
             platformFilter={undefined}
             metricDisplayMode={workloadsState.workloadMetricDisplayMode}
@@ -282,6 +283,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
         forcedPlatform={PROXMOX_PLATFORM_FILTER}
         compactGroupHeaders
         groupNodeDrawerMode="disabled"
+        suppressFilterToolbar
         emptyStateTitle="No Proxmox workloads"
         emptyStateDescription="Proxmox VMs and LXCs appear here when inventory is available."
       />

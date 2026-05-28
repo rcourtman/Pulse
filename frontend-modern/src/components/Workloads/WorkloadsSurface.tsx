@@ -49,6 +49,7 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
       <div class="space-y-3" data-testid="workloads-interaction-surface">
         <Show
           when={
+            !props.suppressFilterToolbar &&
             !state.kioskMode() &&
             state.surfaceConnected() &&
             state.surfaceInitialDataReceived() &&

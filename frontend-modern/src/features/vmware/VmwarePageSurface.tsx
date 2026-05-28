@@ -265,6 +265,7 @@ function VmwareOverview(props: VmwareOverviewProps) {
       <Show when={showSharedFilterToolbar()}>
         <div data-summary-clear-ignore>
           <WorkloadsFilter
+            savedViewsKey={workloadsState.savedViewsKey()}
             search={workloadsState.search}
             setSearch={workloadsState.setSearch}
             viewMode={workloadsState.viewMode}
@@ -283,7 +284,7 @@ function VmwareOverview(props: VmwareOverviewProps) {
             suppressTypeFilter
             columnVisibility={workloadsState.workloadsFilterColumnVisibility()}
             containerRuntimeFilter={workloadsState.containerRuntimeFilterConfig()}
-            hostFilter={undefined}
+            hostFilter={workloadsState.hostFilterConfig()}
             namespaceFilter={undefined}
             platformFilter={undefined}
             metricDisplayMode={workloadsState.workloadMetricDisplayMode}
@@ -310,6 +311,7 @@ function VmwareOverview(props: VmwareOverviewProps) {
         forcedViewMode="vm"
         compactGroupHeaders
         groupNodeDrawerMode="disabled"
+        suppressFilterToolbar
         emptyStateTitle="No vSphere VMs"
         emptyStateDescription="Virtual machines appear here once the vCenter connection enumerates them."
       />
