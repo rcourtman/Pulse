@@ -2334,3 +2334,83 @@ func TestApplyHostReport_FallbackIdentifier(t *testing.T) {
 		t.Errorf("expected hostname 'fallback-host', got %q", host.Hostname)
 	}
 }
+
+// Regression for #1341: when Ceph is reported by a Pulse host-agent (not the
+// Proxmox API), the agent-sourced cluster used to land in state but the
+// pool alert evaluation only ran in the Proxmox-API polling path. Per-pool
+// overrides keyed against the agent-prefixed pool ID (e.g.
+// `agent:hostname-ceph-pool-name`) were silently dormant. Verify the
+// agent path now fires checkCephPoolStorage so overrides match.
+func TestApplyHostReportFiresCephPoolAlertsForAgentSourcedCluster(t *testing.T) {
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	overrideTrigger := alerts.HysteresisThreshold{Trigger: 50, Clear: 45}
+	cfg := monitor.alertManager.GetConfig()
+	cfg.MinimumDelta = 0
+	if cfg.TimeThresholds == nil {
+		cfg.TimeThresholds = make(map[string]int)
+	}
+	cfg.TimeThresholds["storage"] = 0
+	cfg.StorageDefault = alerts.HysteresisThreshold{Trigger: 95, Clear: 90}
+	cfg.Overrides = map[string]alerts.ThresholdConfig{
+		"agent:pve5-ceph-pool-data_replication": {Usage: &overrideTrigger},
+	}
+	monitor.alertManager.UpdateConfig(cfg)
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-ceph",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:       "pve5-host",
+			Hostname: "pve5",
+			Platform: "linux",
+		},
+		Timestamp: time.Now().UTC(),
+		Ceph: &agentshost.CephCluster{
+			FSID:   "ceph-fsid-1341",
+			Health: agentshost.CephHealth{Status: "HEALTH_OK"},
+			Pools: []agentshost.CephPool{
+				{
+					ID:             2,
+					Name:           "data_replication",
+					BytesUsed:      611,
+					BytesAvailable: 389,
+					PercentUsed:    61.1,
+				},
+			},
+		},
+	}
+
+	if _, err := monitor.ApplyHostReport(report, nil); err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+
+	active := monitor.alertManager.GetActiveAlerts()
+	found := false
+	for _, alert := range active {
+		if alert.ResourceID == "agent:pve5-ceph-pool-data_replication" && alert.Type == "usage" {
+			found = true
+			if alert.Threshold != 50 {
+				t.Fatalf("Ceph pool alert fired but threshold = %.1f, want 50 (override)", alert.Threshold)
+			}
+			break
+		}
+	}
+	if !found {
+		ids := make([]string, 0, len(active))
+		for _, a := range active {
+			ids = append(ids, a.ID)
+		}
+		t.Fatalf("expected agent-sourced Ceph pool alert to fire under override at 61.1%% usage; got %d active alerts: %v", len(active), ids)
+	}
+}
