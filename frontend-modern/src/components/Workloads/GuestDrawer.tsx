@@ -1,6 +1,7 @@
 import { Component, Show, Suspense, createMemo } from 'solid-js';
 import { DiscoveryTab } from '../Discovery/DiscoveryTab';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
+import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { getGuestDrawerHistoryFallbackMetrics, type GuestDrawerProps } from './guestDrawerModel';
 import { useGuestDrawerState } from './useGuestDrawerState';
@@ -52,58 +53,26 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
         statusVariant={headerIndicator().variant}
         statusLabel={headerIndicator().label}
       />
-      {/* Tabs */}
-      <div class="mb-1 flex items-center justify-between gap-3 border-b border-border px-1">
-        <div class="flex items-center gap-6">
-          <button
-            type="button"
-            onClick={() => switchTab('overview')}
-            class={`pb-2 text-sm font-medium transition-colors relative ${
-              activeTab() === 'overview' ? 'text-blue-600 dark:text-blue-400' : ' hover:text-muted'
-            }`}
-          >
-            Overview
-            {activeTab() === 'overview' && (
-              <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full" />
-            )}
-          </button>
-          {hasHistorySupport() && (
-            <button
-              type="button"
-              onClick={() => switchTab('history')}
-              class={`pb-2 text-sm font-medium transition-colors relative ${
-                activeTab() === 'history' ? 'text-blue-600 dark:text-blue-400' : ' hover:text-muted'
-              }`}
-            >
-              History
-              {activeTab() === 'history' && (
-                <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full" />
-              )}
-            </button>
-          )}
-          {hasDiscoverySupport() && (
-            <button
-              type="button"
-              onClick={() => switchTab('discovery')}
-              class={`pb-2 text-sm font-medium transition-colors relative ${
-                activeTab() === 'discovery'
-                  ? 'text-blue-600 dark:text-blue-400'
-                  : ' hover:text-muted'
-              }`}
-            >
-              Discovery
-              {activeTab() === 'discovery' && (
-                <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full" />
-              )}
-            </button>
-          )}
-        </div>
-        <Show when={hasHistorySupport() && activeTab() === 'history'}>
-          <div class="pb-1">
+      <Subtabs
+        class="mb-1"
+        ariaLabel="Guest drawer sections"
+        value={activeTab()}
+        onChange={(value) => switchTab(value as Parameters<typeof switchTab>[0])}
+        tabs={[
+          { value: 'overview', label: 'Overview' },
+          ...(hasHistorySupport()
+            ? [{ value: 'history', label: 'History' } satisfies SubtabOption]
+            : []),
+          ...(hasDiscoverySupport()
+            ? [{ value: 'discovery', label: 'Discovery' } satisfies SubtabOption]
+            : []),
+        ]}
+        trailing={
+          <Show when={hasHistorySupport() && activeTab() === 'history'}>
             <GuestDrawerHistoryRangeSelect range={historyRange()} onRangeChange={setHistoryRange} />
-          </div>
-        </Show>
-      </div>
+          </Show>
+        }
+      />
 
       {/* Use CSS hidden instead of Show to avoid mount/unmount which causes scroll jumps.
                  overflow-anchor: none prevents browser scroll anchoring from jumping when display toggles. */}

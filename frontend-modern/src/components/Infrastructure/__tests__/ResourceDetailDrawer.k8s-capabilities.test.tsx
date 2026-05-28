@@ -102,7 +102,7 @@ describe('ResourceDetailDrawer kubernetes capabilities', () => {
   it('uses the canonical Kubernetes cluster name for drawer fetch keys', async () => {
     render(() => <ResourceDetailDrawer resource={buildKubernetesResource()} />);
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Namespaces' }));
+    await fireEvent.click(screen.getByRole('tab', { name: 'Namespaces' }));
     await waitFor(() => {
       expect(screen.getByTestId('k8s-namespaces-drawer')).toHaveAttribute(
         'data-cluster',
@@ -110,7 +110,7 @@ describe('ResourceDetailDrawer kubernetes capabilities', () => {
       );
     });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Deployments' }));
+    await fireEvent.click(screen.getByRole('tab', { name: 'Deployments' }));
     await waitFor(() => {
       expect(screen.getByTestId('k8s-deployments-drawer')).toHaveAttribute(
         'data-cluster',

@@ -2,6 +2,7 @@ import { Show, For, Suspense } from 'solid-js';
 import type { Component } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { Subtabs } from '@/components/shared/Subtabs';
 import { ReportMergeModal } from './ReportMergeModal';
 import { ProxmoxMailGatewayDrawer } from '@/features/proxmox/ProxmoxMailGatewayDrawer';
 import { K8sDeploymentsDrawer } from '@/components/Kubernetes/K8sDeploymentsDrawer';
@@ -120,25 +121,13 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         </Show>
       </div>
 
-      <div class="flex items-center gap-6 border-b border-border px-1 mb-1">
-        <For each={drawer.tabs()}>
-          {(tab) => (
-            <button
-              onClick={() => drawer.setActiveTab(tab.id)}
-              class={`pb-2 text-sm font-medium transition-colors relative ${
-                drawer.activeTab() === tab.id
-                  ? 'text-blue-600 dark:text-blue-400'
-                  : ' hover:text-muted'
-              }`}
-            >
-              {tab.label}
-              <Show when={drawer.activeTab() === tab.id}>
-                <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full" />
-              </Show>
-            </button>
-          )}
-        </For>
-      </div>
+      <Subtabs
+        class="mb-1"
+        ariaLabel="Resource detail sections"
+        value={drawer.activeTab()}
+        onChange={(value) => drawer.setActiveTab(value as Parameters<typeof drawer.setActiveTab>[0])}
+        tabs={drawer.tabs().map((tab) => ({ value: tab.id, label: tab.label }))}
+      />
 
       <div
         class={drawer.activeTab() === 'overview' ? '' : 'hidden'}

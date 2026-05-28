@@ -121,8 +121,8 @@ describe('DockerHostsTable', () => {
     expect(screen.getByTestId('docker-host-drawer')).toBeInTheDocument();
     expect(window.location.pathname).toBe('/docker/overview');
     expect(window.location.search).toBe('');
-    expect(screen.getByRole('button', { name: 'Overview' })).toHaveAttribute('type', 'button');
-    expect(screen.getByRole('button', { name: 'History' })).toHaveAttribute('type', 'button');
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('type', 'button');
+    expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('type', 'button');
   });
 
   it('identifies the host system separately from the container runtime', () => {

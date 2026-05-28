@@ -90,7 +90,7 @@ describe('ResourceDetailDrawer machine metrics history', () => {
       />
     ));
 
-    await fireEvent.click(screen.getByRole('button', { name: 'History' }));
+    await fireEvent.click(screen.getByRole('tab', { name: 'History' }));
 
     const history = screen.getByTestId('machine-history');
     expect(history).toHaveAttribute('data-resource-type', 'agent');
@@ -112,7 +112,7 @@ describe('ResourceDetailDrawer machine metrics history', () => {
       />
     ));
 
-    expect(screen.queryByRole('button', { name: 'History' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'History' })).not.toBeInTheDocument();
   });
 
   it('adds a first-class discovery tab for Pulse Agent machines', async () => {
@@ -131,9 +131,9 @@ describe('ResourceDetailDrawer machine metrics history', () => {
       />
     ));
 
-    expect(screen.getByRole('button', { name: 'Discovery' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Discovery' })).toBeInTheDocument();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Discovery' }));
+    await fireEvent.click(screen.getByRole('tab', { name: 'Discovery' }));
 
     const discovery = screen.getByTestId('machine-discovery');
     expect(discovery).toHaveAttribute('data-resource-type', 'agent');

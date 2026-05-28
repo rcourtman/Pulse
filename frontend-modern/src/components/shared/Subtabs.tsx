@@ -13,10 +13,18 @@ interface SubtabsProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 'onChang
   ariaLabel: string;
   listClass?: string;
   tabClass?: string;
+  /**
+   * Optional content rendered on the right side of the same border-b row as the
+   * tablist (e.g. a contextual range select on a drawer's History tab). When
+   * absent, the shell renders only the tablist — preserving the original
+   * single-row layout for existing callers.
+   */
+  trailing?: JSX.Element;
 }
 
 export const subtabsShellClass = 'border-b border-border';
 export const subtabsListClass = 'flex flex-wrap items-center gap-6';
+export const subtabsTrailingRowClass = 'flex flex-wrap items-center justify-between gap-3';
 export const subtabButtonClass =
   'inline-flex min-h-10 items-center border-b-2 px-1 py-2 text-sm font-medium transition-colors';
 export const subtabButtonActiveClass = 'border-blue-600 text-base-content';
@@ -30,36 +38,48 @@ export const Subtabs: Component<SubtabsProps> = (props) => {
     'class',
     'listClass',
     'tabClass',
+    'trailing',
   ]);
+
+  const tablist = () => (
+    <div
+      role="tablist"
+      aria-label={local.ariaLabel}
+      class={`${subtabsListClass} ${local.listClass ?? ''}`.trim()}
+    >
+      <For each={local.tabs}>
+        {(tab) => {
+          const selected = () => local.value === tab.value;
+          return (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={selected()}
+              tabIndex={selected() ? 0 : -1}
+              disabled={tab.disabled}
+              onClick={() => local.onChange(tab.value)}
+              class={`${subtabButtonClass} ${
+                selected() ? subtabButtonActiveClass : subtabButtonInactiveClass
+              } ${local.tabClass ?? ''}`.trim()}
+            >
+              {tab.label}
+            </button>
+          );
+        }}
+      </For>
+    </div>
+  );
 
   return (
     <div {...divProps} class={`${subtabsShellClass} ${local.class ?? ''}`.trim()}>
-      <div
-        role="tablist"
-        aria-label={local.ariaLabel}
-        class={`${subtabsListClass} ${local.listClass ?? ''}`.trim()}
-      >
-        <For each={local.tabs}>
-          {(tab) => {
-            const selected = () => local.value === tab.value;
-            return (
-              <button
-                type="button"
-                role="tab"
-                aria-selected={selected()}
-                tabIndex={selected() ? 0 : -1}
-                disabled={tab.disabled}
-                onClick={() => local.onChange(tab.value)}
-                class={`${subtabButtonClass} ${
-                  selected() ? subtabButtonActiveClass : subtabButtonInactiveClass
-                } ${local.tabClass ?? ''}`.trim()}
-              >
-                {tab.label}
-              </button>
-            );
-          }}
-        </For>
-      </div>
+      {local.trailing ? (
+        <div class={subtabsTrailingRowClass}>
+          {tablist()}
+          {local.trailing}
+        </div>
+      ) : (
+        tablist()
+      )}
     </div>
   );
 };

@@ -3,6 +3,7 @@ import { Show, Suspense, createMemo, createSignal, type Component } from 'solid-
 import type { HistoryTimeRange } from '@/api/charts';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
+import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { GuestDrawerHistory, GuestDrawerHistoryRangeSelect } from '@/components/Workloads/GuestDrawerHistory';
 import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from '@/components/Workloads/guestDrawerModel';
@@ -50,55 +51,24 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
         statusLabel={headerIndicator().label}
       />
 
-      <div class="mb-1 flex items-center justify-between gap-3 border-b border-border px-1">
-        <div class="flex items-center gap-6">
-          <button
-            type="button"
-            onClick={() => setActiveTab('overview')}
-            class={`pb-2 text-sm font-medium transition-colors relative ${
-              activeTab() === 'overview' ? 'text-blue-600 dark:text-blue-400' : ' hover:text-muted'
-            }`}
-          >
-            Overview
-            {activeTab() === 'overview' && (
-              <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full" />
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('history')}
-            class={`pb-2 text-sm font-medium transition-colors relative ${
-              activeTab() === 'history' ? 'text-blue-600 dark:text-blue-400' : ' hover:text-muted'
-            }`}
-          >
-            History
-            {activeTab() === 'history' && (
-              <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full" />
-            )}
-          </button>
-          <Show when={discoveryConfig()}>
-            <button
-              type="button"
-              onClick={() => setActiveTab('discovery')}
-              class={`pb-2 text-sm font-medium transition-colors relative ${
-                activeTab() === 'discovery'
-                  ? 'text-blue-600 dark:text-blue-400'
-                  : ' hover:text-muted'
-              }`}
-            >
-              Discovery
-              {activeTab() === 'discovery' && (
-                <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full" />
-              )}
-            </button>
-          </Show>
-        </div>
-        <Show when={activeTab() === 'history'}>
-          <div class="pb-1">
+      <Subtabs
+        class="mb-1"
+        ariaLabel="Docker host drawer sections"
+        value={activeTab()}
+        onChange={(value) => setActiveTab(value as DockerHostDrawerTab)}
+        tabs={[
+          { value: 'overview', label: 'Overview' },
+          { value: 'history', label: 'History' },
+          ...(discoveryConfig()
+            ? [{ value: 'discovery', label: 'Discovery' } satisfies SubtabOption]
+            : []),
+        ]}
+        trailing={
+          <Show when={activeTab() === 'history'}>
             <GuestDrawerHistoryRangeSelect range={historyRange()} onRangeChange={setHistoryRange} />
-          </div>
-        </Show>
-      </div>
+          </Show>
+        }
+      />
 
       <Show when={activeTab() === 'overview'}>
         <DockerHostDrawerOverview host={props.host} />
