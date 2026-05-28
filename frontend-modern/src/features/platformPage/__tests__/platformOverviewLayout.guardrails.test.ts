@@ -314,6 +314,26 @@ describe('platform overview layout guardrails', () => {
     }
   });
 
+  it('keeps platform overview pages from rendering a duplicate WorkloadsFilter', () => {
+    // Proxmox and vSphere overview pages render their own page-level
+    // WorkloadsFilter above the embedded WorkloadsSurface so a single
+    // toolbar drives both the page's top table and the workloads table.
+    // If the embedded surface also renders its own filter the page ends
+    // up with two stacked toolbars wired to the same state (RC6 bug).
+    const surfacesWithSharedToolbar: Array<[string, string]> = [
+      ['ProxmoxPageSurface', proxmoxPageSurfaceSource],
+      ['VmwarePageSurface', vmwarePageSurfaceSource],
+    ];
+    for (const [name, source] of surfacesWithSharedToolbar) {
+      const filterCount = (source.match(/<WorkloadsFilter\b/g) ?? []).length;
+      expect(filterCount, `${name} should render exactly one <WorkloadsFilter>`).toBe(1);
+      expect(
+        /<WorkloadsSurface\b[^>]*?suppressFilterToolbar/s.test(source),
+        `${name} should pass suppressFilterToolbar to <WorkloadsSurface>`,
+      ).toBe(true);
+    }
+  });
+
   it('keeps mobile host tables focused on useful operational columns', () => {
     // Assertions use the canonical kind-based helpers
     // (getPlatformTableHeadClassForKind('<kind>')) so the platform overview
