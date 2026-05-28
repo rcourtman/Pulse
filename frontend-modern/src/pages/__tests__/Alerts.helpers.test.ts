@@ -48,7 +48,7 @@ import thresholdsTableDockerHostsSectionSource from '@/components/Alerts/Thresho
 import thresholdsTableDockerIgnoredPrefixesSectionSource from '@/components/Alerts/ThresholdsTableDockerIgnoredPrefixesSection.tsx?raw';
 import thresholdsTableDockerServiceGapSectionSource from '@/components/Alerts/ThresholdsTableDockerServiceGapSection.tsx?raw';
 import thresholdsTableDockerTabSource from '@/components/Alerts/ThresholdsTableDockerTab.tsx?raw';
-import thresholdsTablePMGTabSource from '@/components/Alerts/ThresholdsTablePMGTab.tsx?raw';
+import thresholdsTableProxmoxPMGSectionSource from '@/components/Alerts/ThresholdsTableProxmoxPMGSection.tsx?raw';
 import thresholdsTableProxmoxBackupsSectionSource from '@/components/Alerts/ThresholdsTableProxmoxBackupsSection.tsx?raw';
 import thresholdsTableProxmoxGuestFilteringSectionSource from '@/components/Alerts/ThresholdsTableProxmoxGuestFilteringSection.tsx?raw';
 import thresholdsTableProxmoxGuestsSectionSource from '@/components/Alerts/ThresholdsTableProxmoxGuestsSection.tsx?raw';
@@ -615,9 +615,8 @@ describe('tab path helpers', () => {
     expect(thresholdsTableSource).toContain(
       "import { ThresholdsTableProxmoxTab } from './ThresholdsTableProxmoxTab';",
     );
-    expect(thresholdsTableSource).toContain(
-      "import { ThresholdsTablePMGTab } from './ThresholdsTablePMGTab';",
-    );
+    expect(thresholdsTableSource).not.toContain('ThresholdsTablePMGTab');
+    expect(thresholdsTableSource).not.toContain('ThresholdsTablePBSTab');
     expect(thresholdsTableSource).toContain(
       "import { ThresholdsTableAgentsTab } from './ThresholdsTableAgentsTab';",
     );
@@ -638,6 +637,7 @@ describe('tab path helpers', () => {
     expect(thresholdsTableProxmoxTabSource).toContain('ThresholdsTableProxmoxBackupsSection');
     expect(thresholdsTableProxmoxTabSource).toContain('ThresholdsTableProxmoxSnapshotsSection');
     expect(thresholdsTableProxmoxTabSource).toContain('ThresholdsTableProxmoxStorageSection');
+    expect(thresholdsTableProxmoxTabSource).toContain('ThresholdsTableProxmoxPMGSection');
     expect(thresholdsTableProxmoxTabSource).not.toContain('backupOrphanedPresentation');
     expect(thresholdsTableProxmoxTabSource).not.toContain('sectionTitles.guestFiltering');
     expect(thresholdsTableSectionPropsSource).toContain(
@@ -665,8 +665,10 @@ describe('tab path helpers', () => {
     expect(thresholdsTableProxmoxStorageSectionSource).toContain(
       'export function ThresholdsTableProxmoxStorageSection',
     );
-    expect(thresholdsTablePMGTabSource).toContain('export function ThresholdsTablePMGTab');
-    expect(thresholdsTablePMGTabSource).toContain('pmgGlobalDefaults()');
+    expect(thresholdsTableProxmoxPMGSectionSource).toContain(
+      'export function ThresholdsTableProxmoxPMGSection',
+    );
+    expect(thresholdsTableProxmoxPMGSectionSource).toContain('pmgGlobalDefaults()');
     expect(thresholdsTableAgentsTabSource).toContain('export function ThresholdsTableAgentsTab');
     expect(thresholdsTableAgentsTabSource).toContain('ThresholdsTableAgentsResourcesSection');
     expect(thresholdsTableAgentsTabSource).toContain('ThresholdsTableAgentDisksSection');

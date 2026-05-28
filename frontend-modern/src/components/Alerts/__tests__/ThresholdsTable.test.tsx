@@ -415,10 +415,6 @@ describe('ThresholdsTable navigation and redirection', () => {
     if (systemsTab) fireEvent.click(systemsTab);
     expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/systems');
 
-    const mailTab = screen.getAllByRole('button').find((el) => el.textContent?.includes('PMG'));
-    if (mailTab) fireEvent.click(mailTab);
-    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/pmg');
-
     const vmwareTab = screen
       .getAllByRole('button')
       .find((el) => el.textContent?.includes('vSphere'));

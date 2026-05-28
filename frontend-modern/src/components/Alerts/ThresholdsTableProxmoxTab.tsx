@@ -2,6 +2,8 @@ import { ThresholdsTableProxmoxBackupsSection } from './ThresholdsTableProxmoxBa
 import { ThresholdsTableProxmoxGuestFilteringSection } from './ThresholdsTableProxmoxGuestFilteringSection';
 import { ThresholdsTableProxmoxGuestsSection } from './ThresholdsTableProxmoxGuestsSection';
 import { ThresholdsTableProxmoxNodesSection } from './ThresholdsTableProxmoxNodesSection';
+import { ThresholdsTableProxmoxPBSSection } from './ThresholdsTableProxmoxPBSSection';
+import { ThresholdsTableProxmoxPMGSection } from './ThresholdsTableProxmoxPMGSection';
 import { ThresholdsTableProxmoxSnapshotsSection } from './ThresholdsTableProxmoxSnapshotsSection';
 import { ThresholdsTableProxmoxStorageSection } from './ThresholdsTableProxmoxStorageSection';
 import type { ThresholdsTableSectionProps } from '@/features/alerts/thresholds/thresholdsTableSectionProps';
@@ -15,6 +17,8 @@ export function ThresholdsTableProxmoxTab(props: ThresholdsTableSectionProps) {
       <ThresholdsTableProxmoxBackupsSection {...props} />
       <ThresholdsTableProxmoxSnapshotsSection {...props} />
       <ThresholdsTableProxmoxStorageSection {...props} />
+      <ThresholdsTableProxmoxPBSSection {...props} />
+      <ThresholdsTableProxmoxPMGSection {...props} />
     </>
   );
 }

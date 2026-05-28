@@ -21,7 +21,7 @@ export function ThresholdsTableProxmoxPBSSection(props: ThresholdsTableSectionPr
         isGloballyDisabled={tableProps.disableAllPBS()}
         emptyMessage={state.PBS_THRESHOLDS_EMPTY_STATE}
       >
-        <div ref={state.registerSection('pbs')} class="scroll-mt-24">
+        <div id="threshold-section-pbs" ref={state.registerSection('pbs')} class="scroll-mt-24">
           <ResourceTable
             title=""
             resources={state.pbsServersWithOverrides()}

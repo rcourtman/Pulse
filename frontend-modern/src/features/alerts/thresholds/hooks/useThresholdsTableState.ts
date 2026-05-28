@@ -89,7 +89,8 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
   const dockerServicePresentation = getAlertThresholdsDockerServicePresentation();
   const dockerIgnoredPrefixesPresentation = getAlertThresholdsDockerIgnoredPrefixesPresentation();
 
-  const { isCollapsed, toggleSection, expandAll, collapseAll } = useCollapsedSections();
+  const { isCollapsed, toggleSection, setCollapsed, expandAll, collapseAll } =
+    useCollapsedSections();
 
   const [helpBannerDismissed, setHelpBannerDismissed] = createSignal(
     typeof window !== 'undefined' && localStorage.getItem(HELP_BANNER_KEY) === 'true',
@@ -152,10 +153,11 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
     if (path.includes('/thresholds/truenas')) return 'truenas';
     if (path.includes('/thresholds/vmware') || path.includes('/thresholds/vsphere'))
       return 'vmware';
-    if (path.includes('/thresholds/pbs')) return 'pbs';
     if (path.includes('/thresholds/systems') || path.includes('/thresholds/agents'))
       return 'systems';
-    if (path.includes('/thresholds/mail-gateway') || path.includes('/thresholds/pmg')) return 'pmg';
+    // PBS and PMG are Proxmox sections, not peer tabs. Legacy section
+    // deep-links resolve to the Proxmox tab (the redirect effect rewrites
+    // them to `/proxmox#pbs` / `/proxmox#pmg` so the section scrolls into view).
     return 'proxmox';
   };
 
@@ -182,8 +184,16 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
       return;
     }
 
-    if (location.pathname === '/alerts/thresholds/mail-gateway') {
-      navigate('/alerts/thresholds/pmg', { replace: true });
+    if (
+      location.pathname === '/alerts/thresholds/mail-gateway' ||
+      location.pathname === '/alerts/thresholds/pmg'
+    ) {
+      navigate('/alerts/thresholds/proxmox#pmg', { replace: true });
+      return;
+    }
+
+    if (location.pathname === '/alerts/thresholds/pbs') {
+      navigate('/alerts/thresholds/proxmox#pbs', { replace: true });
       return;
     }
 
@@ -199,8 +209,6 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
       kubernetes: '/alerts/thresholds/kubernetes',
       truenas: '/alerts/thresholds/truenas',
       vmware: '/alerts/thresholds/vmware',
-      pbs: '/alerts/thresholds/pbs',
-      pmg: '/alerts/thresholds/pmg',
       systems: '/alerts/thresholds/systems',
     };
     navigate(tabRoutes[tab]);
@@ -344,6 +352,44 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
   );
   const vmwareVMsWithOverrides = createMemo(() => filterResources(rawVmwareVMsWithOverrides()));
 
+  // Deep-links to a Proxmox sub-section (PBS / PMG) arrive as `#pbs` / `#pmg`.
+  // Expand the target section and scroll it into view. The section's anchor only
+  // mounts once its table rows resolve, so the effect keys off the registered
+  // section element (set by the section's `ref`): it re-runs the moment the
+  // anchor mounts, whether the data was warm at navigation or arrived later. We
+  // scroll the element directly rather than via requestAnimationFrame, which is
+  // suspended while the tab is hidden.
+  const [sectionElements, setSectionElements] = createSignal<Record<string, HTMLElement | null>>(
+    {},
+  );
+  const SECTION_HASH_IDS = new Set(['pbs', 'pmg']);
+  const [lastSectionHashScrolled, setLastSectionHashScrolled] = createSignal<string | null>(null);
+
+  createEffect(() => {
+    const hash = location.hash ?? '';
+    const sectionId = hash.startsWith('#') ? hash.slice(1) : '';
+    const target = sectionElements()[sectionId];
+
+    if (activeTab() !== 'proxmox' || !SECTION_HASH_IDS.has(sectionId)) {
+      if (!SECTION_HASH_IDS.has(sectionId)) {
+        setLastSectionHashScrolled(null);
+      }
+      return;
+    }
+
+    if (hash === lastSectionHashScrolled()) {
+      return;
+    }
+
+    setCollapsed(sectionId, false);
+
+    if (!target) {
+      return;
+    }
+    target.scrollIntoView({ block: 'start' });
+    setLastSectionHashScrolled(hash);
+  });
+
   const {
     backupDefaultsRecord,
     backupFactoryConfig,
@@ -362,8 +408,13 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
       (resource) => resource.hasOverride || resource.disabled || resource.disableConnectivity,
     ).length ?? 0;
 
-  const registerSection = (_key: string) => (_element: HTMLDivElement | null) => {
-    /* no-op placeholder for future scroll restoration */
+  const registerSection = (key: string) => (element: HTMLDivElement | null) => {
+    setSectionElements((prev) => {
+      if (prev[key] === element) {
+        return prev;
+      }
+      return { ...prev, [key]: element };
+    });
   };
 
   const updateSnapshotDefaults = (
@@ -478,14 +529,14 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
           key: 'pbs',
           label: 'PBS Servers',
           overrides: countOverrides(pbsServersWithOverrides()),
-          tab: 'pbs',
+          tab: 'proxmox',
           total: props.pbsInstances?.length ?? 0,
         },
         {
           key: 'pmg',
           label: 'Mail Gateways',
           overrides: countOverrides(pmgServersWithOverrides()),
-          tab: 'pmg',
+          tab: 'proxmox',
           total: props.pmgInstances?.length ?? 0,
         },
         {

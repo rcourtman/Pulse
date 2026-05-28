@@ -6,8 +6,6 @@ import { BulkEditDialog } from './BulkEditDialog';
 import { ThresholdsTableAgentsTab } from './ThresholdsTableAgentsTab';
 import { ThresholdsTableDockerTab } from './ThresholdsTableDockerTab';
 import { ThresholdsTableKubernetesTab } from './ThresholdsTableKubernetesTab';
-import { ThresholdsTablePBSTab } from './ThresholdsTablePBSTab';
-import { ThresholdsTablePMGTab } from './ThresholdsTablePMGTab';
 import { ThresholdsTableProxmoxTab } from './ThresholdsTableProxmoxTab';
 import { ThresholdsTableTrueNASTab } from './ThresholdsTableTrueNASTab';
 import { ThresholdsTableVMwareTab } from './ThresholdsTableVMwareTab';
@@ -34,8 +32,6 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         { value: 'kubernetes', label: 'Kubernetes', icon: getPlatformIcon('kubernetes') },
         { value: 'truenas', label: 'TrueNAS', icon: getPlatformIcon('truenas') },
         { value: 'vmware', label: 'vSphere', icon: getPlatformIcon('vmware') },
-        { value: 'pbs', label: 'PBS', icon: getPlatformIcon('pbs') },
-        { value: 'pmg', label: 'PMG', icon: getPlatformIcon('pmg') },
         { value: 'systems', label: 'Systems', icon: getPlatformIcon('systems') },
       ],
     },
@@ -172,14 +168,6 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
 
         <Show when={state.activeTab() === 'vmware'}>
           <ThresholdsTableVMwareTab state={state} tableProps={props} />
-        </Show>
-
-        <Show when={state.activeTab() === 'pbs'}>
-          <ThresholdsTablePBSTab state={state} tableProps={props} />
-        </Show>
-
-        <Show when={state.activeTab() === 'pmg'}>
-          <ThresholdsTablePMGTab state={state} tableProps={props} />
         </Show>
 
         <Show when={state.activeTab() === 'systems'}>

@@ -8,8 +8,6 @@ export type ThresholdsActiveTab =
   | 'kubernetes'
   | 'truenas'
   | 'vmware'
-  | 'pbs'
-  | 'pmg'
   | 'systems';
 
 export interface Resource {
