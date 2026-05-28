@@ -177,7 +177,7 @@ EOF
       key_line_count="$(grep -c "^PULSE_AUDIT_SIGNING_KEY=" "${RUNTIME_ENV_PATH}")"
       key_value="$(grep "^PULSE_AUDIT_SIGNING_KEY=" "${RUNTIME_ENV_PATH}" | cut -d= -f2- | tr -d "\\047")"
       key_file_value="$(cat "${DATA_DIR}/.audit-signing.key")"
-      mode="$(stat -f "%Lp" "${DATA_DIR}/.audit-signing.key" 2>/dev/null || stat -c "%a" "${DATA_DIR}/.audit-signing.key")"
+      mode="$(stat -c "%a" "${DATA_DIR}/.audit-signing.key" 2>/dev/null || stat -f "%Lp" "${DATA_DIR}/.audit-signing.key")"
       hot_dev_sync_audit_signing_env_file "${RUNTIME_ENV_PATH}" "${DATA_DIR}"
       key_line_count_after="$(grep -c "^PULSE_AUDIT_SIGNING_KEY=" "${RUNTIME_ENV_PATH}")"
       printf "key_line_count=%s\n" "${key_line_count}"

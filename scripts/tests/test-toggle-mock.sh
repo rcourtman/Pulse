@@ -221,7 +221,7 @@ EOF
 
   assert_contains "ensure_mock_env_file migrates legacy mock mode" "${env_contents}" "PULSE_MOCK_MODE=true"
   assert_contains "ensure_mock_env_file migrates legacy node count" "${env_contents}" "PULSE_MOCK_NODES=9"
-  assert_contains "ensure_mock_env_file still seeds missing defaults" "${env_contents}" "PULSE_MOCK_VMS_PER_NODE=3"
+  assert_contains "ensure_mock_env_file still seeds missing defaults" "${env_contents}" "PULSE_MOCK_VMS_PER_NODE=6"
 }
 
 test_set_mock_mode_does_not_recreate_legacy_sidecars() {

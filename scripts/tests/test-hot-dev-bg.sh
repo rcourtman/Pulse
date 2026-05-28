@@ -726,7 +726,7 @@ test_hot_dev_auth_helper_seeds_deterministic_bootstrap_token() {
       rm -f "${DATA_DIR}/.bootstrap_token"
       hot_dev_sync_bootstrap_token_file "${DATA_DIR}"
       third="$(cat "${DATA_DIR}/.bootstrap_token")"
-      mode="$(stat -f "%Lp" "${DATA_DIR}/.bootstrap_token" 2>/dev/null || stat -c "%a" "${DATA_DIR}/.bootstrap_token")"
+      mode="$(stat -c "%a" "${DATA_DIR}/.bootstrap_token" 2>/dev/null || stat -f "%Lp" "${DATA_DIR}/.bootstrap_token")"
       printf "first=%s\n" "${first}"
       printf "second=%s\n" "${second}"
       printf "explicit=%s\n" "${explicit}"

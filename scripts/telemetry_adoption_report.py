@@ -473,13 +473,13 @@ def format_text(summary: dict[str, Any], repo: str, since_days: int) -> str:
         else:
             lines.append("  - none")
         lines.append("- aggregate adoption counts:")
-        adoption_counts = [entry for entry in window_summary["adoption_counts"] if entry["total"] > 0]
+        adoption_counts = [entry for entry in window_summary.get("adoption_counts", []) if entry["total"] > 0]
         if adoption_counts:
             lines.extend(f"  - {entry['label']}: {entry['total']}" for entry in adoption_counts)
         else:
             lines.append("  - none")
         lines.append("- feature-enabled installs:")
-        feature_counts = [entry for entry in window_summary["feature_enabled_installs"] if entry["installs"] > 0]
+        feature_counts = [entry for entry in window_summary.get("feature_enabled_installs", []) if entry["installs"] > 0]
         if feature_counts:
             lines.extend(f"  - {entry['label']}: {entry['installs']}" for entry in feature_counts)
         else:
