@@ -707,7 +707,8 @@ func convertAgentCephToGlobalCluster(ceph *agentshost.CephCluster, hostname, hos
 
 	cluster := models.CephCluster{
 		ID:             clusterID,
-		Instance:       "agent:" + hostname,
+		Instance:       hostname,
+		Source:         models.CephClusterSourceHostAgent,
 		Name:           hostname + " Ceph",
 		FSID:           ceph.FSID,
 		Health:         strings.TrimPrefix(ceph.Health.Status, "HEALTH_"),

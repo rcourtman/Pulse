@@ -288,6 +288,30 @@ func TestReevaluateActiveAlertsUsesSharedStorageOverrideResolution(t *testing.T)
 	}
 }
 
+func TestStorageThresholdResolutionUsesAliasIDs(t *testing.T) {
+	m := newTestManager(t)
+
+	m.mu.Lock()
+	m.config.StorageDefault = HysteresisThreshold{Trigger: 95, Clear: 90}
+	m.config.Overrides = map[string]ThresholdConfig{
+		"agent:pve5-ceph-pool-data_replication": {
+			Usage: &HysteresisThreshold{Trigger: 50, Clear: 45},
+		},
+	}
+	thresholds := m.resolveStorageThresholdsNoLock(models.Storage{
+		ID:       "pve5-ceph-pool-data_replication",
+		AliasIDs: []string{"agent:pve5-ceph-pool-data_replication"},
+	})
+	m.mu.Unlock()
+
+	if thresholds.Usage == nil {
+		t.Fatalf("expected usage threshold to be resolved")
+	}
+	if thresholds.Usage.Trigger != 50 || thresholds.Usage.Clear != 45 {
+		t.Fatalf("usage threshold = %#v, want alias override trigger 50 clear 45", thresholds.Usage)
+	}
+}
+
 func TestCheckStorageOfflineUsesSharedThresholdResolution(t *testing.T) {
 	m := newTestManager(t)
 	storage := models.Storage{

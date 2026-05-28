@@ -19,47 +19,60 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 		m.mu.RUnlock()
 		return
 	}
+	resourceIDs := storageAlertResourceIDs(storage)
 	if m.config.DisableAllStorage {
 		m.mu.RUnlock()
 		// Clear any existing storage alerts when all storage alerts are disabled
 		m.mu.Lock()
-		usageAlertID := canonicalMetricStateID(storage.ID, "usage")
-		if m.clearActiveAlertIfPresentNoLock(usageAlertID) {
-			log.Info().
-				Str("alertID", usageAlertID).
-				Str("storage", storage.Name).
-				Msg("Cleared usage alert - all storage alerts disabled")
-		}
-		offlineAlertID := canonicalConnectivityStateID(storage.ID)
-		if m.clearActiveAlertIfPresentNoLock(offlineAlertID) {
-			log.Info().
-				Str("alertID", offlineAlertID).
-				Str("storage", storage.Name).
-				Msg("Cleared offline alert - all storage alerts disabled")
+		for _, resourceID := range resourceIDs {
+			usageAlertID := canonicalMetricStateID(resourceID, "usage")
+			if m.clearActiveAlertIfPresentNoLock(usageAlertID) {
+				log.Info().
+					Str("alertID", usageAlertID).
+					Str("storage", storage.Name).
+					Msg("Cleared usage alert - all storage alerts disabled")
+			}
+			offlineAlertID := canonicalConnectivityStateID(resourceID)
+			if m.clearActiveAlertIfPresentNoLock(offlineAlertID) {
+				log.Info().
+					Str("alertID", offlineAlertID).
+					Str("storage", storage.Name).
+					Msg("Cleared offline alert - all storage alerts disabled")
+			}
 		}
 		m.mu.Unlock()
 		return
 	}
 
-	thresholds := m.resolveResourceThresholds("storage", storage.ID)
+	thresholds := m.resolveStorageThresholdsNoLock(storage)
 	m.mu.RUnlock()
 
 	if thresholds.Disabled {
 		m.mu.Lock()
-		delete(m.offlineConfirmations, storage.ID)
+		for _, resourceID := range resourceIDs {
+			delete(m.offlineConfirmations, resourceID)
+		}
 		m.mu.Unlock()
-		m.clearAlert(canonicalMetricStateID(storage.ID, "usage"))
-		m.clearAlert(canonicalConnectivityStateID(storage.ID))
+		for _, resourceID := range resourceIDs {
+			m.clearAlert(canonicalMetricStateID(resourceID, "usage"))
+			m.clearAlert(canonicalConnectivityStateID(resourceID))
+		}
 		return
 	}
+
+	m.clearStorageAliasAlerts(storage)
 
 	// Check if storage is truly offline/unavailable (not just inactive from other nodes)
 	// Note: In a cluster, local storage from other nodes shows as inactive which is normal
 	if thresholds.DisableConnectivity {
 		m.mu.Lock()
-		delete(m.offlineConfirmations, storage.ID)
+		for _, resourceID := range resourceIDs {
+			delete(m.offlineConfirmations, resourceID)
+		}
 		m.mu.Unlock()
-		m.clearAlert(canonicalConnectivityStateID(storage.ID))
+		for _, resourceID := range resourceIDs {
+			m.clearAlert(canonicalConnectivityStateID(resourceID))
+		}
 	} else if storage.Status == "offline" || storage.Status == "unavailable" {
 		m.checkStorageOffline(storage)
 	} else {
@@ -94,6 +107,16 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 	// Check ZFS pool status if this is ZFS storage
 	if storage.ZFSPool != nil {
 		m.checkZFSPoolHealth(storage)
+	}
+}
+
+func (m *Manager) clearStorageAliasAlerts(storage models.Storage) {
+	for i, resourceID := range storageAlertResourceIDs(storage) {
+		if i == 0 {
+			continue
+		}
+		m.clearAlert(canonicalMetricStateID(resourceID, "usage"))
+		m.clearAlert(canonicalConnectivityStateID(resourceID))
 	}
 }
 
@@ -256,7 +279,9 @@ func (m *Manager) checkStorageOffline(storage models.Storage) {
 	delete(m.offlineRecoveryConfirmations, canonicalConnectivityStateID(storage.ID))
 	m.mu.Unlock()
 
-	thresholds := m.resolveResourceThresholds("storage", storage.ID)
+	m.mu.RLock()
+	thresholds := m.resolveStorageThresholdsNoLock(storage)
+	m.mu.RUnlock()
 	spec, err := buildCanonicalConnectivitySpec(storage.ID, storage.Name, unifiedresources.ResourceTypeStorage, AlertLevelWarning, 2, thresholds.Disabled || thresholds.DisableConnectivity)
 	if err != nil {
 		log.Warn().

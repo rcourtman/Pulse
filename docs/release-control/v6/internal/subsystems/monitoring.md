@@ -70,7 +70,8 @@ truth for live infrastructure data.
 46. `internal/truenas/client.go`
 47. `internal/truenas/disk_health.go`
 48. `internal/truenas/provider.go`
-49. `internal/truenas/types.go`
+49. `internal/models/ceph_cluster_identity.go`
+50. `internal/truenas/types.go`
 
 ## Shared Boundaries
 
@@ -664,6 +665,13 @@ exposes pools, monitoring must project each pool through the shared
 `models.CephPoolStorage` helper, write storage history under that pool storage
 id, and evaluate alerts through `CheckStorage` so per-pool thresholds, active
 alerts, and charts all use the same storage series identity.
+Ceph cluster identity is FSID-owned across discovery sources. Proxmox API Ceph
+reports are canonical when available, host-agent Ceph reports are the fallback
+or supplemental source, and state reconciliation must collapse reports for the
+same FSID into one cluster while preserving source aliases for existing pool
+thresholds. Host-agent Ceph pool storage ids must not carry `agent:` as their
+canonical identity; that prefix remains only an alert/threshold alias for
+previously persisted overrides.
 That same chart boundary also owns provider-backed workload bridging.
 Workload-chart consumers may query VM and system-container history through the
 resolved unified-resource metrics target, but the emitted series identity must

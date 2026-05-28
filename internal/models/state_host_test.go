@@ -617,6 +617,95 @@ func TestUpdateCephClustersForInstance(t *testing.T) {
 	}
 }
 
+func TestCephClusterStatePrefersProxmoxAPIByFSID(t *testing.T) {
+	state := NewState()
+
+	state.UpsertCephCluster(CephCluster{
+		ID:       "fsid-123",
+		Instance: "pve5",
+		Source:   CephClusterSourceHostAgent,
+		Name:     "pve5 Ceph",
+		FSID:     "fsid-123",
+		Pools: []CephPool{{
+			ID:             2,
+			Name:           "data_replication",
+			StoredBytes:    70,
+			AvailableBytes: 30,
+			PercentUsed:    70,
+		}},
+	})
+
+	stored := state.UpdateCephClustersForInstance("prod", []CephCluster{{
+		ID:       "prod-fsid-123",
+		Instance: "prod",
+		Source:   CephClusterSourceProxmoxAPI,
+		Name:     "Ceph",
+		FSID:     "fsid-123",
+		Health:   "HEALTH_OK",
+	}})
+
+	snapshot := state.GetSnapshot()
+	if len(snapshot.CephClusters) != 1 {
+		t.Fatalf("expected API and agent reports for same FSID to reconcile to one cluster, got %#v", snapshot.CephClusters)
+	}
+	cluster := snapshot.CephClusters[0]
+	if cluster.Source != CephClusterSourceProxmoxAPI || cluster.Instance != "prod" || cluster.ID != "prod-fsid-123" {
+		t.Fatalf("expected Proxmox API cluster to be canonical, got %+v", cluster)
+	}
+	if !containsString(cluster.InstanceAliases, "pve5") {
+		t.Fatalf("expected agent instance alias to be preserved, got %#v", cluster.InstanceAliases)
+	}
+	if len(cluster.Pools) != 1 || cluster.Pools[0].Name != "data_replication" {
+		t.Fatalf("expected agent pool data to supplement API status-only cluster, got %#v", cluster.Pools)
+	}
+	if len(stored) != 1 || stored[0].Instance != "prod" || !containsString(stored[0].InstanceAliases, "pve5") {
+		t.Fatalf("stored clusters did not return reconciled canonical cluster: %#v", stored)
+	}
+}
+
+func TestUpsertCephClusterKeepsProxmoxAPIWhenAgentRefreshArrives(t *testing.T) {
+	state := NewState()
+
+	state.UpdateCephClustersForInstance("prod", []CephCluster{{
+		ID:       "prod-fsid-123",
+		Instance: "prod",
+		Source:   CephClusterSourceProxmoxAPI,
+		Name:     "Ceph",
+		FSID:     "fsid-123",
+		Health:   "HEALTH_OK",
+		Pools: []CephPool{{
+			ID:             2,
+			Name:           "data_replication",
+			StoredBytes:    60,
+			AvailableBytes: 40,
+			PercentUsed:    60,
+		}},
+	}})
+
+	stored := state.UpsertCephCluster(CephCluster{
+		ID:       "fsid-123",
+		Instance: "pve5",
+		Source:   CephClusterSourceHostAgent,
+		Name:     "pve5 Ceph",
+		FSID:     "fsid-123",
+	})
+
+	snapshot := state.GetSnapshot()
+	if len(snapshot.CephClusters) != 1 {
+		t.Fatalf("expected agent refresh to merge with API cluster, got %#v", snapshot.CephClusters)
+	}
+	cluster := snapshot.CephClusters[0]
+	if cluster.Source != CephClusterSourceProxmoxAPI || cluster.Instance != "prod" {
+		t.Fatalf("expected API cluster to remain canonical, got %+v", cluster)
+	}
+	if !containsString(cluster.InstanceAliases, "pve5") {
+		t.Fatalf("expected agent instance alias to be preserved, got %#v", cluster.InstanceAliases)
+	}
+	if stored.Source != CephClusterSourceProxmoxAPI || stored.Instance != "prod" {
+		t.Fatalf("expected upsert to return canonical API cluster, got %+v", stored)
+	}
+}
+
 func TestUpdateBackupTasksForInstance(t *testing.T) {
 	state := NewState()
 

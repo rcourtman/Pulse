@@ -2048,6 +2048,7 @@ type Storage struct {
 	Instance  string   `json:"instance"`
 	Nodes     []string `json:"nodes,omitempty"`
 	NodeIDs   []string `json:"nodeIds,omitempty"`
+	AliasIDs  []string `json:"aliasIds,omitempty"`
 	NodeCount int      `json:"nodeCount,omitempty"`
 	Type      string   `json:"type"`
 	Status    string   `json:"status"`
@@ -2076,6 +2077,33 @@ func CephPoolStorageID(instanceName, poolName string) string {
 	return fmt.Sprintf("%s-ceph-pool-%s", instance, name)
 }
 
+func CephPoolStorageAliasIDs(instanceName, poolName string, instanceAliases ...string) []string {
+	canonicalID := CephPoolStorageID(instanceName, poolName)
+	aliases := make([]string, 0, len(instanceAliases)+2)
+	for _, instance := range append([]string{instanceName}, instanceAliases...) {
+		instance = strings.TrimSpace(instance)
+		if instance == "" {
+			continue
+		}
+		candidates := []string{instance}
+		if strings.HasPrefix(instance, "agent:") {
+			if unprefixed := strings.TrimSpace(strings.TrimPrefix(instance, "agent:")); unprefixed != "" {
+				candidates = append(candidates, unprefixed)
+			}
+		} else {
+			candidates = append(candidates, "agent:"+instance)
+		}
+		for _, candidate := range candidates {
+			aliasID := CephPoolStorageID(candidate, poolName)
+			if aliasID == canonicalID || containsString(aliases, aliasID) {
+				continue
+			}
+			aliases = append(aliases, aliasID)
+		}
+	}
+	return aliases
+}
+
 func StorageFromCephPool(cluster CephCluster, pool CephPool) Storage {
 	name := strings.TrimSpace(pool.Name)
 	if name == "" {
@@ -2102,6 +2130,7 @@ func StorageFromCephPool(cluster CephCluster, pool CephPool) Storage {
 		Name:     name,
 		Node:     "cluster",
 		Instance: cluster.Instance,
+		AliasIDs: CephPoolStorageAliasIDs(cluster.Instance, name, cluster.InstanceAliases...),
 		Type:     "ceph",
 		Status:   status,
 		Pool:     name,
@@ -2173,28 +2202,33 @@ type ZFSDevice struct {
 
 // CephCluster represents the health and capacity information for a Ceph cluster
 type CephCluster struct {
-	ID             string              `json:"id"`
-	Instance       string              `json:"instance"`
-	Name           string              `json:"name"`
-	FSID           string              `json:"fsid,omitempty"`
-	Health         string              `json:"health"`
-	HealthMessage  string              `json:"healthMessage,omitempty"`
-	TotalBytes     int64               `json:"totalBytes"`
-	UsedBytes      int64               `json:"usedBytes"`
-	AvailableBytes int64               `json:"availableBytes"`
-	UsagePercent   float64             `json:"usagePercent"`
-	NumMons        int                 `json:"numMons"`
-	NumMgrs        int                 `json:"numMgrs"`
-	NumOSDs        int                 `json:"numOsds"`
-	NumOSDsUp      int                 `json:"numOsdsUp"`
-	NumOSDsIn      int                 `json:"numOsdsIn"`
-	NumPGs         int                 `json:"numPGs"`
-	Pools          []CephPool          `json:"pools,omitempty"`
-	Services       []CephServiceStatus `json:"services,omitempty"`
-	LastUpdated    time.Time           `json:"lastUpdated"`
+	ID              string              `json:"id"`
+	Instance        string              `json:"instance"`
+	InstanceAliases []string            `json:"instanceAliases,omitempty"`
+	Source          string              `json:"source,omitempty"`
+	Name            string              `json:"name"`
+	FSID            string              `json:"fsid,omitempty"`
+	Health          string              `json:"health"`
+	HealthMessage   string              `json:"healthMessage,omitempty"`
+	TotalBytes      int64               `json:"totalBytes"`
+	UsedBytes       int64               `json:"usedBytes"`
+	AvailableBytes  int64               `json:"availableBytes"`
+	UsagePercent    float64             `json:"usagePercent"`
+	NumMons         int                 `json:"numMons"`
+	NumMgrs         int                 `json:"numMgrs"`
+	NumOSDs         int                 `json:"numOsds"`
+	NumOSDsUp       int                 `json:"numOsdsUp"`
+	NumOSDsIn       int                 `json:"numOsdsIn"`
+	NumPGs          int                 `json:"numPGs"`
+	Pools           []CephPool          `json:"pools,omitempty"`
+	Services        []CephServiceStatus `json:"services,omitempty"`
+	LastUpdated     time.Time           `json:"lastUpdated"`
 }
 
 func (c CephCluster) NormalizeCollections() CephCluster {
+	if c.InstanceAliases == nil {
+		c.InstanceAliases = []string{}
+	}
 	if c.Pools == nil {
 		c.Pools = []CephPool{}
 	}
@@ -4438,31 +4472,18 @@ func (s *State) UnlinkHostAgent(hostID string) bool {
 }
 
 // UpsertCephCluster inserts or updates a Ceph cluster in the state.
-// Uses ID (typically the FSID) for matching.
-func (s *State) UpsertCephCluster(cluster CephCluster) {
+// FSID identifies the physical Ceph cluster across API and host-agent reports.
+func (s *State) UpsertCephCluster(cluster CephCluster) CephCluster {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	cluster = cloneCephCluster(cluster)
-
-	updated := false
-	for i, existing := range s.CephClusters {
-		if existing.ID == cluster.ID {
-			s.CephClusters[i] = cluster
-			updated = true
-			break
-		}
-	}
-
-	if !updated {
-		s.CephClusters = append(s.CephClusters, cluster)
-	}
-
-	sort.Slice(s.CephClusters, func(i, j int) bool {
-		return s.CephClusters[i].Name < s.CephClusters[j].Name
-	})
+	cluster = normalizeCephClusterForState(cloneCephCluster(cluster), "")
+	var stored CephCluster
+	s.CephClusters, stored = upsertCephClusterInSlice(s.CephClusters, cluster)
+	sortCephClustersForState(s.CephClusters)
 
 	s.LastUpdate = time.Now()
+	return cloneCephCluster(stored)
 }
 
 // SetHostStatus updates the status of a host if present.
@@ -4596,37 +4617,36 @@ func (s *State) UpdateStorageForInstance(instanceName string, storage []Storage)
 	s.LastUpdate = time.Now()
 }
 
-// UpdateCephClustersForInstance updates Ceph cluster information for a specific instance
-func (s *State) UpdateCephClustersForInstance(instanceName string, clusters []CephCluster) {
+// UpdateCephClustersForInstance updates Proxmox-API Ceph cluster information for a specific instance.
+func (s *State) UpdateCephClustersForInstance(instanceName string, clusters []CephCluster) []CephCluster {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Preserve clusters from other instances
 	filtered := make([]CephCluster, 0, len(s.CephClusters))
 	for _, cluster := range s.CephClusters {
-		if cluster.Instance != instanceName {
-			filtered = append(filtered, cluster)
+		cluster = normalizeCephClusterForState(cluster, "")
+		if cluster.Instance == instanceName && normalizeCephClusterSource(cluster.Source, cluster.Instance, "") == CephClusterSourceProxmoxAPI {
+			continue
 		}
+		filtered = append(filtered, cluster)
 	}
 
-	// Add updated clusters (if any) for this instance
-	if len(clusters) > 0 {
-		filtered = append(filtered, cloneCephClusters(clusters)...)
+	stored := make([]CephCluster, 0, len(clusters))
+	for _, cluster := range clusters {
+		cluster = cloneCephCluster(cluster)
+		if strings.TrimSpace(cluster.Instance) == "" {
+			cluster.Instance = instanceName
+		}
+		cluster = normalizeCephClusterForState(cluster, CephClusterSourceProxmoxAPI)
+		var reconciled CephCluster
+		filtered, reconciled = upsertCephClusterInSlice(filtered, cluster)
+		stored = append(stored, reconciled)
 	}
 
-	// Sort for stable ordering in UI
-	sort.Slice(filtered, func(i, j int) bool {
-		if filtered[i].Instance == filtered[j].Instance {
-			if filtered[i].Name == filtered[j].Name {
-				return filtered[i].ID < filtered[j].ID
-			}
-			return filtered[i].Name < filtered[j].Name
-		}
-		return filtered[i].Instance < filtered[j].Instance
-	})
-
+	sortCephClustersForState(filtered)
 	s.CephClusters = filtered
 	s.LastUpdate = time.Now()
+	return cloneCephClusters(stored)
 }
 
 // UpdatePBSInstances updates the PBS instances in the state

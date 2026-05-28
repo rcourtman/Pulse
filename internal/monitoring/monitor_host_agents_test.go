@@ -2335,12 +2335,11 @@ func TestApplyHostReport_FallbackIdentifier(t *testing.T) {
 	}
 }
 
-// Regression for #1341: when Ceph is reported by a Pulse host-agent (not the
-// Proxmox API), the agent-sourced cluster used to land in state but the
-// pool alert evaluation only ran in the Proxmox-API polling path. Per-pool
-// overrides keyed against the agent-prefixed pool ID (e.g.
-// `agent:hostname-ceph-pool-name`) were silently dormant. Verify the
-// agent path now fires checkCephPoolStorage so overrides match.
+// Regression for #1341: when Ceph is reported by a Pulse host-agent, pool
+// alert evaluation must run even when there is no Proxmox API Ceph source.
+// Existing per-pool overrides keyed against the older agent-prefixed pool ID
+// still have to resolve after the pool's canonical ID drops the agent routing
+// prefix.
 func TestApplyHostReportFiresCephPoolAlertsForAgentSourcedCluster(t *testing.T) {
 	monitor := &Monitor{
 		state:             models.NewState(),
@@ -2398,7 +2397,7 @@ func TestApplyHostReportFiresCephPoolAlertsForAgentSourcedCluster(t *testing.T) 
 	active := monitor.alertManager.GetActiveAlerts()
 	found := false
 	for _, alert := range active {
-		if alert.ResourceID == "agent:pve5-ceph-pool-data_replication" && alert.Type == "usage" {
+		if alert.ResourceID == "pve5-ceph-pool-data_replication" && alert.Type == "usage" {
 			found = true
 			if alert.Threshold != 50 {
 				t.Fatalf("Ceph pool alert fired but threshold = %.1f, want 50 (override)", alert.Threshold)
@@ -2411,6 +2410,100 @@ func TestApplyHostReportFiresCephPoolAlertsForAgentSourcedCluster(t *testing.T) 
 		for _, a := range active {
 			ids = append(ids, a.ID)
 		}
-		t.Fatalf("expected agent-sourced Ceph pool alert to fire under override at 61.1%% usage; got %d active alerts: %v", len(active), ids)
+		t.Fatalf("expected agent-sourced Ceph pool alert to fire under legacy override at 61.1%% usage; got %d active alerts: %v", len(active), ids)
 	}
+}
+
+func TestApplyHostReportMergesAgentCephWithProxmoxAPICluster(t *testing.T) {
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	overrideTrigger := alerts.HysteresisThreshold{Trigger: 50, Clear: 45}
+	cfg := monitor.alertManager.GetConfig()
+	cfg.MinimumDelta = 0
+	if cfg.TimeThresholds == nil {
+		cfg.TimeThresholds = make(map[string]int)
+	}
+	cfg.TimeThresholds["storage"] = 0
+	cfg.StorageDefault = alerts.HysteresisThreshold{Trigger: 95, Clear: 90}
+	cfg.Overrides = map[string]alerts.ThresholdConfig{
+		"agent:pve5-ceph-pool-data_replication": {Usage: &overrideTrigger},
+	}
+	monitor.alertManager.UpdateConfig(cfg)
+
+	monitor.state.UpdateCephClustersForInstance("prod", []models.CephCluster{{
+		ID:       "prod-ceph-fsid-1341",
+		Instance: "prod",
+		Source:   models.CephClusterSourceProxmoxAPI,
+		Name:     "Ceph",
+		FSID:     "ceph-fsid-1341",
+		Health:   "HEALTH_OK",
+	}})
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-ceph",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:       "pve5-host",
+			Hostname: "pve5",
+			Platform: "linux",
+		},
+		Timestamp: time.Now().UTC(),
+		Ceph: &agentshost.CephCluster{
+			FSID:   "ceph-fsid-1341",
+			Health: agentshost.CephHealth{Status: "HEALTH_OK"},
+			Pools: []agentshost.CephPool{
+				{
+					ID:             2,
+					Name:           "data_replication",
+					BytesUsed:      611,
+					BytesAvailable: 389,
+					PercentUsed:    61.1,
+				},
+			},
+		},
+	}
+
+	if _, err := monitor.ApplyHostReport(report, nil); err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+
+	snapshot := monitor.state.GetSnapshot()
+	if len(snapshot.CephClusters) != 1 {
+		t.Fatalf("expected API and agent Ceph reports to reconcile to one cluster, got %#v", snapshot.CephClusters)
+	}
+	cluster := snapshot.CephClusters[0]
+	if cluster.Source != models.CephClusterSourceProxmoxAPI || cluster.Instance != "prod" {
+		t.Fatalf("expected API cluster to remain canonical, got %+v", cluster)
+	}
+	foundAlias := false
+	for _, alias := range cluster.InstanceAliases {
+		if alias == "pve5" {
+			foundAlias = true
+			break
+		}
+	}
+	if !foundAlias {
+		t.Fatalf("expected agent hostname to be preserved as an alias, got %#v", cluster.InstanceAliases)
+	}
+
+	active := monitor.alertManager.GetActiveAlerts()
+	for _, alert := range active {
+		if alert.ResourceID == "prod-ceph-pool-data_replication" && alert.Type == "usage" {
+			if alert.Threshold != 50 {
+				t.Fatalf("Ceph pool alert threshold = %.1f, want legacy agent override 50", alert.Threshold)
+			}
+			return
+		}
+	}
+	t.Fatalf("expected canonical API Ceph pool alert using legacy agent override, got active alerts: %#v", active)
 }

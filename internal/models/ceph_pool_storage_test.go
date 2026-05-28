@@ -21,6 +21,9 @@ func TestStorageFromCephPool(t *testing.T) {
 	if storage.ID != "Main-ceph-pool-data_replication" {
 		t.Fatalf("ID = %q, want Main-ceph-pool-data_replication", storage.ID)
 	}
+	if len(storage.AliasIDs) != 1 || storage.AliasIDs[0] != "agent:Main-ceph-pool-data_replication" {
+		t.Fatalf("AliasIDs = %#v, want agent-prefixed Ceph pool alias", storage.AliasIDs)
+	}
 	if storage.Name != "data_replication" || storage.Pool != "data_replication" {
 		t.Fatalf("name/pool = %q/%q, want data_replication", storage.Name, storage.Pool)
 	}

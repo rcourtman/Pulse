@@ -59,8 +59,10 @@ func (m *Monitor) pollCephCluster(ctx context.Context, instanceName string, clie
 		cluster.ID = instanceName
 	}
 
-	m.state.UpdateCephClustersForInstance(instanceName, []models.CephCluster{cluster})
-	m.checkCephPoolStorage(cluster)
+	storedClusters := m.state.UpdateCephClustersForInstance(instanceName, []models.CephCluster{cluster})
+	for _, storedCluster := range storedClusters {
+		m.checkCephPoolStorage(storedCluster)
+	}
 }
 
 func (m *Monitor) checkCephPoolStorage(cluster models.CephCluster) {
@@ -161,6 +163,7 @@ func buildCephClusterModel(instanceName string, status *proxmox.CephStatus, df *
 	cluster := models.CephCluster{
 		ID:             clusterID,
 		Instance:       instanceName,
+		Source:         models.CephClusterSourceProxmoxAPI,
 		Name:           "Ceph",
 		FSID:           status.FSID,
 		Health:         status.Health.Status,

@@ -599,6 +599,60 @@ func TestStateUpsertCephCluster(t *testing.T) {
 	}
 }
 
+func TestStateUpsertCephClusterMergesSourcesByFSID(t *testing.T) {
+	state := &State{}
+
+	state.UpsertCephCluster(CephCluster{
+		ID:       "ceph-fsid-1",
+		Instance: "pve5",
+		Source:   CephClusterSourceHostAgent,
+		Name:     "pve5 Ceph",
+		FSID:     "ceph-fsid-1",
+		Pools: []CephPool{{
+			Name:        "data_replication",
+			PercentUsed: 61.1,
+		}},
+	})
+	stored := state.UpsertCephCluster(CephCluster{
+		ID:       "ceph-fsid-1",
+		Instance: "pve-api",
+		Source:   CephClusterSourceProxmoxAPI,
+		Name:     "Ceph",
+		FSID:     "ceph-fsid-1",
+		Pools: []CephPool{{
+			Name:        "data_replication",
+			PercentUsed: 61.1,
+		}},
+	})
+
+	if stored.Instance != "pve-api" {
+		t.Fatalf("stored instance = %q, want API instance pve-api", stored.Instance)
+	}
+	if stored.Source != CephClusterSourceProxmoxAPI {
+		t.Fatalf("stored source = %q, want %q", stored.Source, CephClusterSourceProxmoxAPI)
+	}
+	if !containsString(stored.InstanceAliases, "pve5") {
+		t.Fatalf("stored aliases = %#v, want host-agent instance pve5", stored.InstanceAliases)
+	}
+
+	snapshot := state.GetSnapshot()
+	if len(snapshot.CephClusters) != 1 {
+		t.Fatalf("CephClusters = %#v, want one merged physical cluster", snapshot.CephClusters)
+	}
+
+	storage := StorageFromCephPool(snapshot.CephClusters[0], snapshot.CephClusters[0].Pools[0])
+	wantAliases := []string{
+		CephPoolStorageID("pve5", "data_replication"),
+		CephPoolStorageID("agent:pve5", "data_replication"),
+		CephPoolStorageID("agent:pve-api", "data_replication"),
+	}
+	for _, want := range wantAliases {
+		if !containsString(storage.AliasIDs, want) {
+			t.Fatalf("storage aliases = %#v, want %q", storage.AliasIDs, want)
+		}
+	}
+}
+
 func TestStateSetHostCommandsEnabled(t *testing.T) {
 	state := &State{
 		Hosts: []Host{{ID: "h1", CommandsEnabled: false}},

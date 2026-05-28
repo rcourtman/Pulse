@@ -205,6 +205,27 @@ func TestCheckUnifiedResourceOverrideLowerThresholdCreatesAlert(t *testing.T) {
 	assertAlertPresent(t, m, canonicalMetricStateID("vm-override", "cpu"))
 }
 
+func TestResolveResourceThresholdsUsesCephStorageSourceAlias(t *testing.T) {
+	m := newTestManager(t)
+
+	m.mu.Lock()
+	m.config.StorageDefault = HysteresisThreshold{Trigger: 95, Clear: 90}
+	m.config.Overrides = map[string]ThresholdConfig{
+		"agent:pve5-ceph-pool-data_replication": {
+			Usage: &HysteresisThreshold{Trigger: 50, Clear: 45},
+		},
+	}
+	thresholds := m.resolveResourceThresholds("storage", "pve5-ceph-pool-data_replication")
+	m.mu.Unlock()
+
+	if thresholds.Usage == nil {
+		t.Fatalf("expected storage usage threshold")
+	}
+	if thresholds.Usage.Trigger != 50 || thresholds.Usage.Clear != 45 {
+		t.Fatalf("usage threshold = %#v, want legacy agent alias override trigger 50 clear 45", thresholds.Usage)
+	}
+}
+
 func TestCheckUnifiedResourceNilInputNoPanic(t *testing.T) {
 	m := newTestManager(t)
 	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())

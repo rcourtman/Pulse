@@ -128,6 +128,9 @@ func (m *Manager) resolveResourceThresholds(typeKey, resourceID string) Threshol
 	if isGuestThresholdResourceType(typeKey) {
 		return m.resolveGuestThresholdOverride(m.defaultThresholdsForResourceType(typeKey), nil, resourceID)
 	}
+	if typeKey == "storage" {
+		return m.resolveStorageThresholdOverride(m.defaultThresholdsForResourceType(typeKey), resourceID, nil)
+	}
 	return m.resolveThresholdOverride(m.defaultThresholdsForResourceType(typeKey), resourceID)
 }
 

@@ -961,6 +961,7 @@ func cloneStorage(src Storage) Storage {
 	dest := src
 	dest.Nodes = append([]string(nil), src.Nodes...)
 	dest.NodeIDs = append([]string(nil), src.NodeIDs...)
+	dest.AliasIDs = append([]string(nil), src.AliasIDs...)
 	dest.ZFSPool = cloneZFSPool(src.ZFSPool)
 	return dest.NormalizeCollections()
 }
@@ -988,6 +989,7 @@ func cloneStorages(src []Storage) []Storage {
 
 func cloneCephCluster(src CephCluster) CephCluster {
 	dest := src
+	dest.InstanceAliases = append([]string(nil), src.InstanceAliases...)
 	dest.Pools = append([]CephPool(nil), src.Pools...)
 	dest.Services = append([]CephServiceStatus(nil), src.Services...)
 	return dest.NormalizeCollections()

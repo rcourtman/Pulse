@@ -2015,13 +2015,14 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	// If host reports Ceph data, also update the global CephClusters state
 	if report.Ceph != nil {
 		cephCluster := convertAgentCephToGlobalCluster(report.Ceph, hostname, identifier, timestamp)
-		m.state.UpsertCephCluster(cephCluster)
+		storedCephCluster := m.state.UpsertCephCluster(cephCluster)
 		log.Debug().
 			Str("hostId", identifier).
 			Str("hostname", hostname).
-			Str("fsid", cephCluster.FSID).
-			Str("health", cephCluster.Health).
-			Int("osds", cephCluster.NumOSDs).
+			Str("fsid", storedCephCluster.FSID).
+			Str("source", storedCephCluster.Source).
+			Str("health", storedCephCluster.Health).
+			Int("osds", storedCephCluster.NumOSDs).
 			Msg("Updated Ceph cluster from host agent")
 
 		// #1341: the agent-reported Ceph cluster used to land in state but
@@ -2030,7 +2031,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		// agent-prefixed pool IDs (e.g. agent:hostname-ceph-pool-foo) were
 		// silently dormant. Run the alert check here so agent-sourced pools
 		// actually fire.
-		m.checkCephPoolStorage(cephCluster)
+		m.checkCephPoolStorage(storedCephCluster)
 	}
 
 	if m.alertManager != nil {

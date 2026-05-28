@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
@@ -507,8 +508,11 @@ func TestConvertAgentCephToGlobalCluster_BasicFields(t *testing.T) {
 	if result.NumOSDs != 6 || result.NumOSDsUp != 6 {
 		t.Error("OSD counts not copied")
 	}
-	if result.Instance != "agent:server1" {
-		t.Errorf("expected 'agent:server1', got %q", result.Instance)
+	if result.Instance != "server1" {
+		t.Errorf("expected 'server1', got %q", result.Instance)
+	}
+	if result.Source != models.CephClusterSourceHostAgent {
+		t.Errorf("expected host-agent source, got %q", result.Source)
 	}
 }
 

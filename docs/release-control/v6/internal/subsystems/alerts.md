@@ -83,6 +83,7 @@ operator-facing alert routing behavior for live runtime alerts.
 61. `frontend-modern/src/components/Alerts/alertAssistantHandoffModel.ts`
 62. `frontend-modern/src/components/Alerts/IncidentAssistantHandoffButton.tsx`
 63. `frontend-modern/src/components/Alerts/incidentAssistantHandoffModel.ts`
+64. `internal/alerts/storage_override_identity.go`
 
 ## Shared Boundaries
 
@@ -204,6 +205,11 @@ incidents. ZFS device alert labels must preserve raw device names such as
 `/dev/sda4`, but must not join pool and device labels with a raw slash because
 device paths can already begin with `/`; browser alert surfaces consume the
 runtime `resourceName` as authored rather than patching storage labels locally.
+Ceph pool storage threshold resolution is also source-alias aware. Storage
+alerts must evaluate the normalized pool storage id while accepting legacy
+`agent:<host>-ceph-pool-<name>` override keys as aliases, so operators do not
+lose saved thresholds when the same physical Ceph pool moves between
+host-agent-only fallback and Proxmox API canonical discovery.
 
 Browser metric severity colors are also alert-backed. Workloads,
 Infrastructure, and Storage may pass resolved display thresholds into their
