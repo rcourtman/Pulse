@@ -638,6 +638,98 @@ func TestPollStorageWithNodesOptimizedChecksCephPoolAlerts(t *testing.T) {
 	}
 }
 
+// Regression for #1341: a per-pool Ceph threshold override (lower than the
+// storage default) must fire when the pool's usage exceeds the override
+// trigger. The reporter set a 50% threshold on a Ceph pool sitting at ~61%
+// and never received an alert.
+func TestPollStorageWithNodesOptimizedAppliesCephPoolOverride(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	monitor := &Monitor{
+		state:          &models.State{},
+		metricsHistory: NewMetricsHistory(16, time.Hour),
+		alertManager:   alerts.NewManager(),
+	}
+	t.Cleanup(func() {
+		monitor.alertManager.Stop()
+	})
+
+	overrideTrigger := alerts.HysteresisThreshold{Trigger: 50, Clear: 45}
+	cfg := monitor.alertManager.GetConfig()
+	cfg.MinimumDelta = 0
+	if cfg.TimeThresholds == nil {
+		cfg.TimeThresholds = make(map[string]int)
+	}
+	cfg.TimeThresholds["storage"] = 0
+	// Default high enough that only the override could fire.
+	cfg.StorageDefault = alerts.HysteresisThreshold{Trigger: 95, Clear: 90}
+	cfg.Overrides = map[string]alerts.ThresholdConfig{
+		"inst1-ceph-pool-data_replication": {Usage: &overrideTrigger},
+	}
+	monitor.alertManager.UpdateConfig(cfg)
+
+	cephStorage := proxmox.Storage{
+		Storage: "ceph-shared",
+		Type:    "rbd",
+		Content: "images,rootdir",
+		Nodes:   "pve1,pve2",
+		Pool:    "ceph-pool",
+	}
+
+	client := &fakeStorageClient{
+		allStorage: []proxmox.Storage{cephStorage},
+		storageByNode: map[string][]proxmox.Storage{
+			"pve1": {},
+			"pve2": {},
+		},
+		cephStatus: &proxmox.CephStatus{
+			FSID: "ceph-fsid",
+			PGMap: proxmox.CephPGMap{
+				BytesTotal: 5000,
+				BytesUsed:  3050,
+				BytesAvail: 1950,
+			},
+		},
+		cephDF: &proxmox.CephDF{
+			Data: proxmox.CephDFData{
+				Pools: []proxmox.CephDFPool{
+					{
+						ID:   2,
+						Name: "data_replication",
+						Stats: proxmox.CephDFPoolStat{
+							BytesUsed:   611,
+							MaxAvail:    389,
+							PercentUsed: 61.1,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	nodes := []proxmox.Node{
+		{Node: "pve1", Status: "online"},
+		{Node: "pve2", Status: "online"},
+	}
+
+	monitor.pollStorageWithNodes(context.Background(), "inst1", client, nodes)
+
+	active := monitor.alertManager.GetActiveAlerts()
+	found := false
+	for _, alert := range active {
+		if alert.ID == "inst1-ceph-pool-data_replication-usage" {
+			found = true
+			if alert.Threshold != 50 {
+				t.Fatalf("Ceph pool alert fired but threshold = %.1f, want 50 (override)", alert.Threshold)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected Ceph pool usage alert to fire from per-pool 50%% override at 61.1%% usage; got %d active alerts", len(active))
+	}
+}
+
 func TestPollStorageWithNodesOptimizedClearsStaleStorageAlertsWhenIdentityChanges(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 
