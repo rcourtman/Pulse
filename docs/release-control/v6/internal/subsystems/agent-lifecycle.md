@@ -231,6 +231,13 @@ The setup guide must also present the source strategy at action time: API
 Inventory is the recommended least-privilege API path, Host Telemetry Agent is
 the optional full-host-telemetry root-agent path, and Manual Token Setup is an
 advanced manual API-token escape hatch.
+For existing Proxmox API sources, that same setup guide must expose the
+non-destructive Audit/Repair rerun path before asking operators to rotate
+credentials. Audit/Repair is the first lifecycle response to suspected setup
+drift: it checks the Pulse-managed user, current token presence/expiry,
+expected ACLs, and older Pulse-managed tokens without replacing the stored API
+secret. Full Install/Configure remains the explicit token-rotation path when
+the Proxmox-side token value is gone or no longer matches Pulse.
 
 That shared monitored-system impact preview boundary also owns the disabled
 platform-connection lifecycle state. Once a TrueNAS or VMware setup form marks

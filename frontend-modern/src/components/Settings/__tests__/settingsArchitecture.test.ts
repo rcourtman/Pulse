@@ -777,6 +777,9 @@ describe('settings architecture guardrails', () => {
     expect(nodeModalSetupGuideSectionSource).toContain('API inventory');
     expect(nodeModalSetupGuideSectionSource).toContain('Manual API token');
     expect(nodeModalSetupGuideSectionSource).toContain('Recommended least-privilege path');
+    expect(nodeModalSetupGuideSectionSource).toContain('Existing source repair');
+    expect(nodeModalSetupGuideSectionSource).toContain('Audit/Repair');
+    expect(nodeModalSetupGuideSectionSource).toContain('without rotating the current API token');
     expect(nodeModalStatusFooterSource).toContain('guidedSetupOnlyMode');
     expect(nodeModalStateSource).toContain('data.setupMode !==');
 

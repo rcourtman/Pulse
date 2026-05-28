@@ -7,15 +7,16 @@ import (
 )
 
 type setupScriptRenderContext struct {
-	ServerName       string
-	PulseURL         string
-	ServerHost       string
-	SetupToken       string
-	TokenName        string
-	TokenMatchPrefix string
-	StoragePerms     string
-	SensorsPublicKey string
-	Artifact         setupScriptInstallArtifact
+	ServerName         string
+	PulseURL           string
+	ServerHost         string
+	SetupToken         string
+	TokenName          string
+	TokenMatchPrefix   string
+	StoragePerms       string
+	StorageRepairPerms string
+	SensorsPublicKey   string
+	Artifact           setupScriptInstallArtifact
 }
 
 func deriveSetupScriptServerName(serverHost string) string {
@@ -55,6 +56,7 @@ HOST_URL="$SERVER_HOST"
 PULSE_SETUP_TOKEN="${PULSE_SETUP_TOKEN:-%s}"
 SETUP_TOKEN_INVALID=false
 TOKEN_NAME="%s"
+TOKEN_MATCH_PREFIX="%s"
 PULSE_TOKEN_ID="pulse-monitor@pve!${TOKEN_NAME}"
 SETUP_SCRIPT_URL="%s"
 PULSE_BOOTSTRAP_COMMAND_WITH_ENV=%s
@@ -178,6 +180,215 @@ case "$ENVIRONMENT" in
         ;;
 esac
 
+trim_field() {
+    sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+pulse_pve_user_exists() {
+    pveum user list 2>/dev/null | grep -F "pulse-monitor@pve" >/dev/null 2>&1
+}
+
+pulse_pve_matching_tokens() {
+    local user_id="$1"
+    pveum user token list "$user_id" 2>/dev/null |
+        awk -F'│' 'NR>3 {print $2}' |
+        trim_field |
+        grep -E "^${TOKEN_MATCH_PREFIX}(-[0-9]+)?$" || true
+}
+
+pulse_pve_token_exists() {
+    pulse_pve_matching_tokens pulse-monitor@pve | grep -Fx "$TOKEN_NAME" >/dev/null 2>&1
+}
+
+pulse_pve_token_expire_label() {
+    local expire
+    expire=$(pveum user token list pulse-monitor@pve 2>/dev/null |
+        awk -F'│' -v token="$TOKEN_NAME" '
+            NR>3 {
+                name=$2
+                exp=$3
+                gsub(/^[ \t]+|[ \t]+$/, "", name)
+                gsub(/^[ \t]+|[ \t]+$/, "", exp)
+                if (name == token) {
+                    print exp
+                    exit
+                }
+            }')
+    if [ -z "$expire" ]; then
+        echo "unknown"
+    else
+        echo "$expire"
+    fi
+}
+
+pulse_pve_acl_has() {
+    local acl_path="$1"
+    local subject="$2"
+    local role="$3"
+    if pveum acl list 2>/dev/null |
+        awk -F'│' -v acl_path="$acl_path" -v subject="$subject" -v role="$role" '
+            NR>3 {
+                path_field=$2
+                subject_field=$3
+                role_field=$4
+                gsub(/^[ \t]+|[ \t]+$/, "", path_field)
+                gsub(/^[ \t]+|[ \t]+$/, "", subject_field)
+                gsub(/^[ \t]+|[ \t]+$/, "", role_field)
+                if (path_field == acl_path && subject_field == subject && role_field == role) {
+                    found=1
+                }
+            }
+            END { exit found ? 0 : 1 }'; then
+        return 0
+    fi
+
+    pveum acl list 2>/dev/null | grep -F "$acl_path" | grep -F "$subject" | grep -F "$role" >/dev/null 2>&1
+}
+
+print_pve_acl_status() {
+    local acl_path="$1"
+    local subject="$2"
+    local role="$3"
+    local label="$4"
+    if pulse_pve_acl_has "$acl_path" "$subject" "$role"; then
+        echo "  ✓ $label"
+    else
+        echo "  ⚠ Missing: $label"
+    fi
+}
+
+configure_pve_pulse_monitor_role() {
+    local apply_token_acl="$1"
+    local HAS_VM_MONITOR=false
+    local HAS_VM_GUEST_AGENT_AUDIT=false
+    local HAS_SYS_AUDIT=false
+    local PVE_VERSION=""
+    local EXTRA_PRIVS=()
+
+    if pveum role list 2>/dev/null | grep -q "VM.Monitor" ||
+       pveum role add TestMonitor -privs VM.Monitor 2>/dev/null; then
+        HAS_VM_MONITOR=true
+        pveum role delete TestMonitor 2>/dev/null || true
+    fi
+
+    if pveum role list 2>/dev/null | grep -q "VM.GuestAgent.Audit"; then
+        HAS_VM_GUEST_AGENT_AUDIT=true
+    elif pveum role add TestGuestAgentAudit -privs VM.GuestAgent.Audit 2>/dev/null; then
+        HAS_VM_GUEST_AGENT_AUDIT=true
+        pveum role delete TestGuestAgentAudit 2>/dev/null || true
+    fi
+
+    if pveum role list 2>/dev/null | grep -q "Sys.Audit"; then
+        HAS_SYS_AUDIT=true
+    elif pveum role add TestSysAudit -privs Sys.Audit 2>/dev/null; then
+        HAS_SYS_AUDIT=true
+        pveum role delete TestSysAudit 2>/dev/null || true
+    fi
+
+    if command -v pveversion >/dev/null 2>&1; then
+        PVE_VERSION=$(pveversion --verbose 2>/dev/null | grep "pve-manager" | awk -F'/' '{print $2}' | cut -d'.' -f1)
+    fi
+
+    if [ "$HAS_SYS_AUDIT" = true ]; then
+        EXTRA_PRIVS+=("Sys.Audit")
+    fi
+
+    if [ "$HAS_VM_MONITOR" = true ]; then
+        EXTRA_PRIVS+=("VM.Monitor")
+    elif [ "$HAS_VM_GUEST_AGENT_AUDIT" = true ]; then
+        EXTRA_PRIVS+=("VM.GuestAgent.Audit")
+    fi
+
+    if [ ${#EXTRA_PRIVS[@]} -gt 0 ]; then
+        local PRIV_STRING
+        PRIV_STRING="$(IFS=,; echo "${EXTRA_PRIVS[*]}")"
+
+        if pveum role modify PulseMonitor -privs "$PRIV_STRING" 2>/dev/null || pveum role add PulseMonitor -privs "$PRIV_STRING" 2>/dev/null; then
+            pveum aclmod / -user pulse-monitor@pve -role PulseMonitor
+            if [ "$apply_token_acl" = true ]; then
+                pveum aclmod / -token "$PULSE_TOKEN_ID" -role PulseMonitor
+            fi
+            echo "  • Applied privileges: $PRIV_STRING"
+        else
+            echo "  • Failed to configure PulseMonitor role with: $PRIV_STRING"
+            echo "    Assign these privileges manually if Pulse reports permission errors."
+        fi
+    else
+        echo "  • No additional privileges detected. Pulse may show limited VM metrics."
+        if [ -n "$PVE_VERSION" ]; then
+            echo "    Detected PVE major version: $PVE_VERSION"
+        fi
+    fi
+}
+
+run_pve_setup_doctor() {
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Pulse Proxmox Setup Doctor"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "Checking Pulse-managed Proxmox user, token, ACLs, and legacy token drift."
+    echo "This mode does not rotate the API token."
+    echo ""
+
+    local token_exists=false
+    if pulse_pve_user_exists; then
+        echo "  ✓ Monitoring user exists: pulse-monitor@pve"
+    else
+        echo "  ⚠ Missing monitoring user: pulse-monitor@pve"
+        echo "    Creating monitoring user..."
+        pveum user add pulse-monitor@pve --comment "Pulse monitoring service" 2>/dev/null || true
+    fi
+
+    if pulse_pve_token_exists; then
+        token_exists=true
+        echo "  ✓ Current token exists: $PULSE_TOKEN_ID"
+        echo "    Expire: $(pulse_pve_token_expire_label)"
+    else
+        echo "  ⚠ Current token was not found: $PULSE_TOKEN_ID"
+        echo "    Choose Install/Configure to rotate the token and re-register Pulse with the new value."
+    fi
+
+    local old_tokens_pve old_tokens_pam old_count_pve old_count_pam
+    old_tokens_pve=$(pulse_pve_matching_tokens pulse-monitor@pve)
+    old_tokens_pam=$(pulse_pve_matching_tokens pulse-monitor@pam)
+    old_count_pve=$(echo "$old_tokens_pve" | grep -c "pulse" || true)
+    old_count_pam=$(echo "$old_tokens_pam" | grep -c "pulse" || true)
+    echo ""
+    echo "Pulse-managed token inventory:"
+    if [ "$old_count_pve" -eq 0 ] && [ "$old_count_pam" -eq 0 ]; then
+        echo "  ✓ No matching Pulse-managed tokens found for this Pulse server scope."
+    else
+        [ -n "$old_tokens_pve" ] && echo "$old_tokens_pve" | sed 's/^/  • pulse-monitor@pve!/g'
+        [ -n "$old_tokens_pam" ] && echo "$old_tokens_pam" | sed 's/^/  • pulse-monitor@pam!/g'
+        echo "  The current token is expected. Timestamp-suffixed entries are older Pulse-managed tokens."
+        echo "  ACL rows for both the user and current token are also expected."
+    fi
+
+    echo ""
+    echo "Permission audit:"
+    print_pve_acl_status "/" "pulse-monitor@pve" "PVEAuditor" "User has PVEAuditor at /"
+    if [ "$token_exists" = true ]; then
+        print_pve_acl_status "/" "$PULSE_TOKEN_ID" "PVEAuditor" "Token has PVEAuditor at /"
+        print_pve_acl_status "/" "$PULSE_TOKEN_ID" "PulseMonitor" "Token has PulseMonitor at /"
+    fi
+    print_pve_acl_status "/" "pulse-monitor@pve" "PulseMonitor" "User has PulseMonitor at /"
+
+    echo ""
+    echo "Reapplying safe Pulse-managed permissions..."
+    pveum aclmod / -user pulse-monitor@pve -role PVEAuditor
+    if [ "$token_exists" = true ]; then
+        pveum aclmod / -token "$PULSE_TOKEN_ID" -role PVEAuditor
+    fi%s
+    configure_pve_pulse_monitor_role "$token_exists"
+
+    echo ""
+    echo "Setup doctor complete."
+    echo "If Pulse still shows 401 after this, the stored token value in Pulse no longer matches Proxmox."
+    echo "Choose Install/Configure to rotate the token and let Pulse re-register it."
+    echo ""
+    exit 0
+}
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Main Menu
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -185,33 +396,42 @@ echo ""
 echo "What would you like to do?"
 echo ""
 echo "  [1] Install/Configure - Set up Pulse monitoring"
-echo "  [2] Remove All        - Uninstall everything Pulse has configured"
-echo "  [3] Cancel            - Exit without changes"
+echo "  [2] Audit/Repair      - Check and repair Pulse-managed Proxmox setup"
+echo "  [3] Remove All        - Uninstall everything Pulse has configured"
+echo "  [4] Cancel            - Exit without changes"
 echo ""
-echo -n "Your choice [1/2/3]: "
+echo -n "Your choice [1/2/3/4]: "
 
-MAIN_ACTION=""
+MAIN_ACTION="${PULSE_SETUP_ACTION:-}"
 if [ -t 0 ]; then
-    read -n 1 -r MAIN_ACTION
+    if [ -z "$MAIN_ACTION" ]; then
+        read -n 1 -r MAIN_ACTION
+    fi
 else
-    if read -n 1 -r MAIN_ACTION </dev/tty 2>/dev/null; then
-        :
-    else
-        echo "(No terminal available - defaulting to Install)"
-        MAIN_ACTION="1"
+    if [ -z "$MAIN_ACTION" ]; then
+        if read -n 1 -r MAIN_ACTION </dev/tty 2>/dev/null; then
+            :
+        else
+            echo "(No terminal available - defaulting to Install)"
+            MAIN_ACTION="1"
+        fi
     fi
 fi
 echo ""
 echo ""
 
 # Handle Cancel
-if [[ $MAIN_ACTION =~ ^[3Cc]$ ]]; then
+if [[ $MAIN_ACTION =~ ^(4|[Cc]|cancel)$ ]]; then
     echo "Cancelled. No changes made."
     exit 0
 fi
 
+if [[ $MAIN_ACTION =~ ^(2|[Aa]|audit|repair)$ ]]; then
+    run_pve_setup_doctor
+fi
+
 # Handle Remove All
-if [[ $MAIN_ACTION =~ ^[2Rr]$ ]]; then
+if [[ $MAIN_ACTION =~ ^(3|[Rr]|remove)$ ]]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "🗑️  Complete Removal"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -333,12 +553,9 @@ fi
 echo "Proceeding with installation..."
 echo ""
 
-# Match canonical Pulse-managed token names for this Pulse server scope.
-TOKEN_MATCH_PREFIX="%s"
-
 # Check for old Pulse tokens from the same Pulse server and offer to clean them up
-OLD_TOKENS_PVE=$(pveum user token list pulse-monitor@pve 2>/dev/null | awk -F'│' 'NR>3 {print $2}' | sed 's/^ *//;s/ *$//' | grep -E "^${TOKEN_MATCH_PREFIX}(-[0-9]+)?$" || true)
-OLD_TOKENS_PAM=$(pveum user token list pulse-monitor@pam 2>/dev/null | awk -F'│' 'NR>3 {print $2}' | sed 's/^ *//;s/ *$//' | grep -E "^${TOKEN_MATCH_PREFIX}(-[0-9]+)?$" || true)
+OLD_TOKENS_PVE=$(pulse_pve_matching_tokens pulse-monitor@pve)
+OLD_TOKENS_PAM=$(pulse_pve_matching_tokens pulse-monitor@pam)
 if [ ! -z "$OLD_TOKENS_PVE" ] || [ ! -z "$OLD_TOKENS_PAM" ]; then
     echo "Checking for existing Pulse monitoring tokens from this Pulse server..."
     TOKEN_COUNT_PVE=$(echo "$OLD_TOKENS_PVE" | grep -c "pulse" || true)
@@ -471,7 +688,7 @@ TOKEN_OUTPUT=""
 TOKEN_VALUE=""
 TOKEN_CREATED=false
 TOKEN_READY=false
-if pveum user token list pulse-monitor@pve 2>/dev/null | awk 'NR>3 {print $2}' | grep -Fx "$TOKEN_NAME" >/dev/null 2>&1; then
+if pulse_pve_token_exists; then
     TOKEN_EXISTED=true
     echo "Existing token '$TOKEN_NAME' found. Rotating in place..."
     if ! pveum user token remove pulse-monitor@pve "$TOKEN_NAME" >/dev/null 2>&1; then
@@ -522,76 +739,7 @@ if [ "$TOKEN_CREATED" = true ]; then
     pveum aclmod / -token "$PULSE_TOKEN_ID" -role PVEAuditor
 fi%s
 
-# Detect Proxmox version and apply appropriate permissions
-# Method 1: Try to check if VM.Monitor exists (reliable for PVE 8 and below)
-HAS_VM_MONITOR=false
-if pveum role list 2>/dev/null | grep -q "VM.Monitor" || 
-   pveum role add TestMonitor -privs VM.Monitor 2>/dev/null; then
-    HAS_VM_MONITOR=true
-    pveum role delete TestMonitor 2>/dev/null || true
-fi
-
-# Detect availability of newer guest agent privileges (PVE 9+)
-HAS_VM_GUEST_AGENT_AUDIT=false
-if pveum role list 2>/dev/null | grep -q "VM.GuestAgent.Audit"; then
-    HAS_VM_GUEST_AGENT_AUDIT=true
-else
-    if pveum role add TestGuestAgentAudit -privs VM.GuestAgent.Audit 2>/dev/null; then
-        HAS_VM_GUEST_AGENT_AUDIT=true
-        pveum role delete TestGuestAgentAudit 2>/dev/null || true
-    fi
-fi
-
-# Detect availability of Sys.Audit (needed for Ceph metrics)
-HAS_SYS_AUDIT=false
-if pveum role list 2>/dev/null | grep -q "Sys.Audit"; then
-    HAS_SYS_AUDIT=true
-else
-    if pveum role add TestSysAudit -privs Sys.Audit 2>/dev/null; then
-        HAS_SYS_AUDIT=true
-        pveum role delete TestSysAudit 2>/dev/null || true
-    fi
-fi
-
-# Method 2: Try to detect PVE version directly
-PVE_VERSION=""
-if command -v pveversion >/dev/null 2>&1; then
-    # Extract major version (e.g., "9" from "pve-manager/9.0.5/...")
-    PVE_VERSION=$(pveversion --verbose 2>/dev/null | grep "pve-manager" | awk -F'/' '{print $2}' | cut -d'.' -f1)
-fi
-
-EXTRA_PRIVS=()
-
-if [ "$HAS_SYS_AUDIT" = true ]; then
-    EXTRA_PRIVS+=("Sys.Audit")
-fi
-
-if [ "$HAS_VM_MONITOR" = true ]; then
-    # PVE 8 or below - VM.Monitor exists
-    EXTRA_PRIVS+=("VM.Monitor")
-elif [ "$HAS_VM_GUEST_AGENT_AUDIT" = true ]; then
-    # PVE 9+ - VM.Monitor removed, prefer VM.GuestAgent.Audit for guest data
-    EXTRA_PRIVS+=("VM.GuestAgent.Audit")
-fi
-
-if [ ${#EXTRA_PRIVS[@]} -gt 0 ]; then
-    # Join as comma-separated list (pveum expects comma-separated privilege names).
-    PRIV_STRING="$(IFS=,; echo "${EXTRA_PRIVS[*]}")"
-
-    # Prefer modify (non-destructive) in case PulseMonitor already exists.
-    if pveum role modify PulseMonitor -privs "$PRIV_STRING" 2>/dev/null || pveum role add PulseMonitor -privs "$PRIV_STRING" 2>/dev/null; then
-        pveum aclmod / -user pulse-monitor@pve -role PulseMonitor
-        if [ "$TOKEN_CREATED" = true ]; then
-            pveum aclmod / -token "$PULSE_TOKEN_ID" -role PulseMonitor
-        fi
-        echo "  • Applied privileges: $PRIV_STRING"
-    else
-        echo "  • Failed to configure PulseMonitor role with: $PRIV_STRING"
-        echo "    Assign these privileges manually if Pulse reports permission errors."
-    fi
-else
-    echo "  • No additional privileges detected. Pulse may show limited VM metrics."
-fi
+configure_pve_pulse_monitor_role "$TOKEN_CREATED"
 
 if [ "$TOKEN_READY" = true ]; then
     attempt_auto_registration
@@ -1071,8 +1219,8 @@ if [ "$AUTO_REG_SUCCESS" != true ] && [ "$SETUP_TOKEN_INVALID" != true ]; then
     fi
 fi
 `, ctx.ServerName, time.Now().Format("2006-01-02 15:04:05"),
-		ctx.PulseURL, ctx.ServerHost, ctx.SetupToken, ctx.TokenName, ctx.Artifact.URL, posixShellQuote(ctx.Artifact.CommandWithEnv),
-		ctx.TokenMatchPrefix,
+		ctx.PulseURL, ctx.ServerHost, ctx.SetupToken, ctx.TokenName, ctx.TokenMatchPrefix, ctx.Artifact.URL, posixShellQuote(ctx.Artifact.CommandWithEnv),
+		ctx.StorageRepairPerms,
 		ctx.StoragePerms,
 		ctx.SensorsPublicKey)
 }

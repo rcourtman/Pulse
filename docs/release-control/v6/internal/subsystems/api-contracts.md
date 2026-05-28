@@ -1605,6 +1605,12 @@ the canonical monitored-system blocked payload.
 
 ## Current State
 
+Proxmox setup bootstrap now includes a non-destructive Audit/Repair path in the
+generated PVE script and existing-source setup guide. That path audits token
+presence, token expiry, Pulse-managed token drift, and expected ACLs, then
+reapplies safe permissions without replacing the stored API token; full
+Install/Configure remains the explicit rotation and re-registration path.
+
 VMware vSphere phase-1 inventory now reaches the product through shared API
 contracts rather than provider-local read routes. `/api/vmware/connections`
 owns saved vCenter connection health and observed counts, while canonical
@@ -3768,6 +3774,12 @@ the returned `url`, `downloadURL`, `scriptFileName`, `commandWithEnv`,
 `tokenHint`, and `expires` until that artifact expires or the operator changes
 the endpoint, instead of rebuilding a second download request from lane-local
 form state or retaining the raw setup token inside frontend cache state.
+For existing Proxmox API sources, that same setup surface must present the
+rendered setup script's Audit/Repair action as the non-destructive repair path.
+The frontend may tell operators to rerun the same canonical command and choose
+Audit/Repair, but it must not imply the current API token is rotated during
+repair. Install/Configure remains the explicit rotation and re-registration
+path when the token value itself needs to be replaced.
 That same bootstrap artifact contract must also stay coherent in public-facing
 guidance: `docs/API.md` and operator setup guides may not describe
 `/api/setup-script-url` as if it only returned a token plus bare URL, and they
@@ -3865,6 +3877,16 @@ That same payload must also use exact token-name matching for rerun rotation
 detection, rather than broad substring checks over token-list output, so the
 canonical managed token contract does not collide with unrelated partial-name
 matches.
+That same PVE setup-script payload must provide an Audit/Repair menu action and
+non-interactive `PULSE_SETUP_ACTION` selector that audit and reapply
+Pulse-managed setup without rotating the API token. The repair path may create
+the missing `pulse-monitor@pve` user, report the current token's Expire value,
+inventory matching Pulse-managed tokens under the `pve` and legacy `pam`
+realms, and reapply safe user/token ACLs, including the optional storage grant
+when requested. If the current token is absent or Pulse still receives 401
+after repair, the generated script must direct the operator to
+Install/Configure for explicit token rotation and re-registration instead of
+silently minting a replacement token from repair mode.
 That same payload must also keep PBS token-copy guidance truthful: the
 one-time token banner may only be emitted from the successful token-create
 branch, not before the creation result is known.

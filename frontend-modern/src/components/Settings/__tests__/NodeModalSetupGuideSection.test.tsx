@@ -5,7 +5,10 @@ import type { NodeModalNodeType, NodeModalSetupMode } from '@/utils/nodeModalPre
 import type { NodeModalState } from '../useNodeModalState';
 import { NodeModalSetupGuideSection } from '../NodeModalSetupGuideSection';
 
-const renderSetupGuide = (nodeType: NodeModalNodeType = 'pve') => {
+const renderSetupGuide = (
+  nodeType: NodeModalNodeType = 'pve',
+  options: { isEditingExistingNode?: boolean } = {},
+) => {
   const Harness = () => {
     const [setupMode, setSetupMode] = createSignal<NodeModalSetupMode>('auto');
     const updateField = vi.fn((field: string, value: string | boolean | number) => {
@@ -23,6 +26,7 @@ const renderSetupGuide = (nodeType: NodeModalNodeType = 'pve') => {
       downloadProxmoxSetupScript: vi.fn(),
       formData: () => ({ setupMode: setupMode(), host: '' }),
       isAdvancedSetupMode: () => setupMode() === 'manual',
+      isEditingExistingNode: () => Boolean(options.isEditingExistingNode),
       loadingAgentCommand: () => false,
       quickSetupExpiry: () => null,
       quickSetupExpiryLabel: () => '',
@@ -70,6 +74,15 @@ describe('NodeModalSetupGuideSection', () => {
     expect(screen.getByText('Manual API token')).toBeInTheDocument();
     expect(screen.getByText(/Advanced manual token setup/i)).toBeInTheDocument();
     expect(screen.getByText(/Advanced escape hatch: use this only when/i)).toBeInTheDocument();
+  });
+
+  it('surfaces non-destructive repair guidance for existing Proxmox API sources', () => {
+    renderSetupGuide('pve', { isEditingExistingNode: true });
+
+    expect(screen.getByText('Existing source repair:')).toBeInTheDocument();
+    expect(screen.getByText(/choose Audit\/Repair/i)).toBeInTheDocument();
+    expect(screen.getByText(/without rotating the current API token/i)).toBeInTheDocument();
+    expect(screen.getByText(/Choose Install\/Configure only when/i)).toBeInTheDocument();
   });
 
   it('applies the same API-first strategy language to PBS', () => {

@@ -136,24 +136,31 @@ func (h *ConfigHandlers) handleSetupScript(w http.ResponseWriter, r *http.Reques
 	sshKeys := h.getOrGenerateSSHKeys()
 
 	storagePerms := ""
+	storageRepairPerms := ""
 	if backupPerms {
 		storagePerms = `
 pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin
 if [ "$TOKEN_CREATED" = true ]; then
     pveum aclmod /storage -token "$PULSE_TOKEN_ID" -role PVEDatastoreAdmin
 fi`
+		storageRepairPerms = `
+    pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin
+    if pulse_pve_token_exists; then
+        pveum aclmod /storage -token "$PULSE_TOKEN_ID" -role PVEDatastoreAdmin
+    fi`
 	}
 
 	script := renderSetupScript(serverType, setupScriptRenderContext{
-		ServerName:       serverName,
-		PulseURL:         pulseURL,
-		ServerHost:       serverHost,
-		SetupToken:       setupToken,
-		TokenName:        tokenName,
-		TokenMatchPrefix: tokenMatchPrefix,
-		StoragePerms:     storagePerms,
-		SensorsPublicKey: sshKeys.SensorsPublicKey,
-		Artifact:         artifact,
+		ServerName:         serverName,
+		PulseURL:           pulseURL,
+		ServerHost:         serverHost,
+		SetupToken:         setupToken,
+		TokenName:          tokenName,
+		TokenMatchPrefix:   tokenMatchPrefix,
+		StoragePerms:       storagePerms,
+		StorageRepairPerms: storageRepairPerms,
+		SensorsPublicKey:   sshKeys.SensorsPublicKey,
+		Artifact:           artifact,
 	})
 
 	// Serve setup scripts as canonical shell-script downloads instead of generic text.

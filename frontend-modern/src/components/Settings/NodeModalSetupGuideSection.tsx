@@ -175,12 +175,12 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                     <Show
                       when={state.agentInstallCommand().length > 0}
                       fallback={
-                        <code class="text-blue-400">
+                        <code class="text-muted">
                           Click the copy button to generate the install command
                         </code>
                       }
                     >
-                      <code class="block text-blue-100 whitespace-pre-wrap break-words">
+                      <code class="block text-base-content whitespace-pre-wrap break-words">
                         {state.agentInstallCommand()}
                       </code>
                     </Show>
@@ -205,6 +205,16 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       agent-driven operations.
                     </p>
                   </div>
+                  <Show when={state.isEditingExistingNode()}>
+                    <div class="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-950/30">
+                      <p class="text-xs text-blue-800 dark:text-blue-200">
+                        <strong>Existing source repair:</strong> rerun this command and choose
+                        Audit/Repair to recheck the Pulse-managed user, token expiry, ACLs, and old
+                        tokens without rotating the current API token. Choose Install/Configure only
+                        when the token value needs to be replaced.
+                      </p>
+                    </div>
+                  </Show>
                   <p class="text-blue-800 dark:text-blue-200">
                     Just copy and run this one command on your Proxmox VE server:
                   </p>
@@ -238,14 +248,14 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       <Show
                         when={state.quickSetupPreviewCommand().length > 0}
                         fallback={
-                          <code class="text-blue-400">
+                          <code class="text-muted">
                             {state.formData().host
                               ? 'Click the copy button to generate the setup command'
                               : 'Please enter the Endpoint URL above first'}
                           </code>
                         }
                       >
-                        <code class="block text-blue-100 whitespace-pre-wrap break-words">
+                        <code class="block text-base-content whitespace-pre-wrap break-words">
                           {state.quickSetupPreviewCommand()}
                         </code>
                       </Show>
@@ -608,7 +618,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                         </svg>
                       </Show>
                     </button>
-                    <code class="text-green-400 whitespace-pre-wrap break-all pr-10">
+                    <code class="block text-base-content whitespace-pre-wrap break-all pr-10">
                       {state.agentInstallCommand() ||
                         'Click the copy button to generate and copy the install command'}
                     </code>
@@ -668,14 +678,14 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       <Show
                         when={state.quickSetupPreviewCommand().length > 0}
                         fallback={
-                          <code class="text-blue-400">
+                          <code class="text-muted">
                             {state.formData().host
                               ? 'Click the copy button to generate the setup command'
                               : 'Please enter the Endpoint URL above first'}
                           </code>
                         }
                       >
-                        <code class="block text-blue-100 whitespace-pre-wrap break-words">
+                        <code class="block text-base-content whitespace-pre-wrap break-words">
                           {state.quickSetupPreviewCommand()}
                         </code>
                       </Show>

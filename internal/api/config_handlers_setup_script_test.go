@@ -441,6 +441,47 @@ func TestPVESetupScript_RemovesDiscoveredOldTokensFromBothUsers(t *testing.T) {
 	}
 }
 
+func TestPVESetupScript_IncludesNonDestructiveSetupDoctor(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handlers := newTestConfigHandlers(t, cfg)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/setup-script?type=pve&host=http://sentinel-host:8006&pulse_url=http://sentinel-url:7656&backup_perms=true",
+		nil,
+	)
+	rr := httptest.NewRecorder()
+
+	handlers.HandleSetupScript(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d (%s)", rr.Code, rr.Body.String())
+	}
+
+	script := rr.Body.String()
+	required := []string{
+		`echo "  [2] Audit/Repair      - Check and repair Pulse-managed Proxmox setup"`,
+		`MAIN_ACTION="${PULSE_SETUP_ACTION:-}"`,
+		`run_pve_setup_doctor() {`,
+		`echo "This mode does not rotate the API token."`,
+		`echo "    Expire: $(pulse_pve_token_expire_label)"`,
+		`pveum aclmod / -user pulse-monitor@pve -role PVEAuditor`,
+		`if pulse_pve_token_exists; then`,
+		`pveum aclmod /storage -token "$PULSE_TOKEN_ID" -role PVEDatastoreAdmin`,
+		`configure_pve_pulse_monitor_role "$token_exists"`,
+		`Choose Install/Configure to rotate the token and let Pulse re-register it.`,
+	}
+	for _, snippet := range required {
+		if !containsString(script, snippet) {
+			t.Fatalf("expected setup doctor snippet %q, got: %s", snippet, truncate(script, 2200))
+		}
+	}
+}
+
 func TestPVESetupScript_RemovesMatchingPulseConnectionBeforeLocalCleanup(t *testing.T) {
 	tempDir := t.TempDir()
 	cfg := &config.Config{
@@ -559,7 +600,9 @@ func TestSetupScripts_UseExactTokenMatchForRotationDetection(t *testing.T) {
 		t.Fatalf("expected 200 OK for PVE, got %d (%s)", pveRR.Code, pveRR.Body.String())
 	}
 	pveScript := pveRR.Body.String()
-	if !containsString(pveScript, `awk 'NR>3 {print $2}' | grep -Fx "$TOKEN_NAME" >/dev/null 2>&1`) {
+	if !containsString(pveScript, `pulse_pve_token_exists() {`) ||
+		!containsString(pveScript, `grep -Fx "$TOKEN_NAME" >/dev/null 2>&1`) ||
+		!containsString(pveScript, `if pulse_pve_token_exists; then`) {
 		t.Fatalf("expected PVE token rotation detection to use exact token-name matching, got: %s", truncate(pveScript, 900))
 	}
 	if containsString(pveScript, `grep -q "$TOKEN_NAME"`) {

@@ -5512,7 +5512,9 @@ func TestContract_SetupScriptEmbedsFailFastGuidance(t *testing.T) {
 	if !strings.Contains(script, `grep -E "^${TOKEN_MATCH_PREFIX}(-[0-9]+)?$"`) {
 		t.Fatalf("setup script missing canonical cleanup token discovery matcher: %s", script)
 	}
-	if !strings.Contains(script, `awk 'NR>3 {print $2}' | grep -Fx "$TOKEN_NAME" >/dev/null 2>&1`) {
+	if !strings.Contains(script, `pulse_pve_token_exists() {`) ||
+		!strings.Contains(script, `grep -Fx "$TOKEN_NAME" >/dev/null 2>&1`) ||
+		!strings.Contains(script, `if pulse_pve_token_exists; then`) {
 		t.Fatalf("setup script missing exact PVE token rotation detection: %s", script)
 	}
 	if strings.Contains(script, `PULSE_IP_PATTERN=`) {

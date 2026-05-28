@@ -69,6 +69,10 @@ auto-registration changes that affect backup visibility permissions are
 storage/recovery-adjacent: optional PVE `/storage` grants must remain effective
 for privilege-separated tokens by assigning the same `PVEDatastoreAdmin` role to
 both the service user and the concrete token id.
+The generated Proxmox Audit/Repair path is storage/recovery-adjacent for the
+same reason: when backup visibility was requested, repair must reapply the
+optional `/storage` grant to the service user and to the current concrete token
+id if that token still exists, without rotating credentials from repair mode.
 PBS generated setup-script auto-registration is storage/recovery-adjacent
 because the registration result determines whether PBS backup evidence can flow
 without manual follow-up. The rendered script must post auto-registration to the
