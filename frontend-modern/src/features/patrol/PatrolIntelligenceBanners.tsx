@@ -1,6 +1,7 @@
 import { Show } from 'solid-js';
 import ShieldAlertIcon from 'lucide-solid/icons/shield-alert';
 import SettingsIcon from 'lucide-solid/icons/settings';
+import { AnimatedNumber } from '@/components/shared/AnimatedNumber';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { formatRelativeTime } from '@/utils/format';
 import { getAIProviderDisplayName } from '@/utils/aiProviderPresentation';
@@ -38,7 +39,11 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
             </Show>
             <Show when={state.patrolStream.tokens() > 0}>
               <span class="text-blue-500 dark:text-blue-400 text-xs ml-auto">
-                {state.patrolStream.tokens().toLocaleString()} tokens
+                <AnimatedNumber
+                  value={state.patrolStream.tokens()}
+                  format={(value) => Math.round(value).toLocaleString()}
+                />{' '}
+                tokens
               </span>
             </Show>
           </div>
