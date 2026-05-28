@@ -266,6 +266,18 @@ describe('settings architecture guardrails', () => {
     );
   });
 
+  it('keeps telemetry disclosure aligned with the security privacy contract', () => {
+    expect(generalSettingsPanelSource).toContain('aggregate self-hosted adoption');
+    expect(generalSettingsPanelSource).toContain('counts, and coarse feature flags');
+    expect(generalSettingsPanelSource).toContain(
+      'identifiers, prompts, chat messages, or personal information are sent.',
+    );
+    expect(generalSettingsPanelSource).toContain('Telemetry payload preview');
+    expect(generalSettingsPanelSource).toContain('Reset ID');
+    expect(generalSettingsPanelSource).not.toContain('license_tier');
+    expect(generalSettingsPanelSource).not.toContain('api_tokens');
+  });
+
   it('keeps panel-owned gated settings routes separate from sidebar visibility', () => {
     expect(settingsNavVisibilitySource).toContain('const PANEL_OWNED_FEATURE_GATE_TABS');
     expect(settingsNavVisibilitySource).toContain('shouldBlockSettingsRouteItem');

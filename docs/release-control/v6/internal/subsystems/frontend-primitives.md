@@ -235,6 +235,11 @@ columns.
 2. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` shared with `security-privacy`: the data-handling settings surface is both a security/privacy trust surface and a canonical settings-shell presentation boundary.
 3. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` shared with `security-privacy`: the data-handling settings model is both a security/privacy posture projection and a canonical settings-shell presentation boundary.
 4. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx` shared with `security-privacy`: the general settings privacy panel is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+   The panel owns compact settings-shell framing for anonymous telemetry, but
+   its vocabulary must stay aligned with `security-privacy`: aggregate
+   self-hosted adoption counts and coarse feature flags may be named, while
+   hostnames, credentials, infrastructure identifiers, prompts, chat messages,
+   and personal information must stay explicitly excluded.
 5. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` shared with `security-privacy`: the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
 6. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `security-privacy`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
 7. `frontend-modern/src/routing/routePreload.ts` shared with `performance-and-scalability`: the app-shell route preload registry is both a canonical frontend shell boundary and an authenticated hot-path performance boundary.
@@ -3279,6 +3284,12 @@ That shared shell boundary now also covers version-matched docs-link framing:
 customer-facing privacy disclosures in shared settings surfaces must route
 through `frontend-modern/src/utils/docsLinks.ts` rather than panel-local
 external URLs.
+That same shared-shell framing also covers the concise telemetry summary in
+General settings. The shell may present the privacy contract in compact product
+copy, but the vocabulary for anonymous outbound telemetry must stay aligned
+with `security-privacy`: aggregate self-hosted adoption counts and coarse
+feature flags are allowed, while hostnames, credentials, infrastructure
+identifiers, prompts, chat messages, and personal information are not.
 That same docs-link boundary also governs local legal docs surfaced from the
 settings shell: shared settings surfaces such as
 `AIRuntimeControlsSection.tsx` must route Terms-of-Service links through the

@@ -459,13 +459,33 @@ func Run(ctx context.Context, version string) error {
 			snap.PMGInstances = counts.PMGInstances
 			snap.VMs = counts.VMs
 			snap.Containers = counts.Containers
+			snap.AgentHosts = counts.AgentHosts
 			snap.DockerHosts = counts.DockerHosts
+			snap.DockerContainers = counts.DockerContainers
 			snap.KubernetesClusters = counts.KubernetesClusters
+			snap.KubernetesNodes = counts.KubernetesNodes
+			snap.KubernetesPods = counts.KubernetesPods
+			snap.KubernetesDeployments = counts.KubernetesDeployments
+			snap.StoragePools = counts.StoragePools
+			snap.PhysicalDisks = counts.PhysicalDisks
+			snap.CephClusters = counts.CephClusters
+			snap.NetworkShares = counts.NetworkShares
+			snap.TrueNASSystems = counts.TrueNASSystems
+			snap.TrueNASVMs = counts.TrueNASVMs
+			snap.TrueNASApps = counts.TrueNASApps
+			snap.VMwareHosts = counts.VMwareHosts
+			snap.VMwareVMs = counts.VMwareVMs
+			snap.VMwareDatastores = counts.VMwareDatastores
+			snap.AvailabilityTargets = counts.AvailabilityTargets
 			snap.ActiveAlerts = counts.ActiveAlerts
+			snap.DiscoveryEnabled = currentCfg.DiscoveryEnabled
 
 			// Feature flags from persisted config (using pre-created persistence).
 			if aiCfg, err := telemetryPersistence.LoadAIConfig(); err == nil && aiCfg != nil {
 				snap.AIEnabled = aiCfg.Enabled
+				snap.PatrolEnabled = aiCfg.IsPatrolEnabled()
+				snap.DiscoveryEnabled = snap.DiscoveryEnabled || aiCfg.IsDiscoveryEnabled()
+				snap.AIActionsEnabled = aiCfg.IsControlEnabled()
 			}
 			if relayCfg, err := telemetryPersistence.LoadRelayConfig(); err == nil {
 				snap.RelayEnabled = relayCfg.Enabled
@@ -474,6 +494,24 @@ func Run(ctx context.Context, version string) error {
 			// SSO/OIDC status.
 			if ssoCfg, err := telemetryPersistence.LoadSSOConfig(); err == nil && ssoCfg != nil {
 				snap.SSOEnabled = ssoCfg.HasEnabledProviders()
+			}
+			if emailCfg, err := telemetryPersistence.LoadEmailConfig(); err == nil && emailCfg != nil && emailCfg.Enabled {
+				snap.NotificationsEnabled = true
+			}
+			if !snap.NotificationsEnabled {
+				if appriseCfg, err := telemetryPersistence.LoadAppriseConfig(); err == nil && appriseCfg != nil && appriseCfg.Enabled {
+					snap.NotificationsEnabled = true
+				}
+			}
+			if !snap.NotificationsEnabled {
+				if webhooks, err := telemetryPersistence.LoadWebhooks(); err == nil {
+					for _, webhook := range webhooks {
+						if webhook.Enabled {
+							snap.NotificationsEnabled = true
+							break
+						}
+					}
+				}
 			}
 
 			// Coarse commercial posture only; telemetry does not send exact tiers.

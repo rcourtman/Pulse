@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rs/zerolog/log"
 )
@@ -15,14 +16,30 @@ import (
 // InstallSnapshotCounts holds install-wide resource and alert counts aggregated
 // across tenant monitors.
 type InstallSnapshotCounts struct {
-	PVENodes           int
-	PBSInstances       int
-	PMGInstances       int
-	VMs                int
-	Containers         int
-	DockerHosts        int
-	KubernetesClusters int
-	ActiveAlerts       int
+	PVENodes              int
+	PBSInstances          int
+	PMGInstances          int
+	VMs                   int
+	Containers            int
+	AgentHosts            int
+	DockerHosts           int
+	DockerContainers      int
+	KubernetesClusters    int
+	KubernetesNodes       int
+	KubernetesPods        int
+	KubernetesDeployments int
+	StoragePools          int
+	PhysicalDisks         int
+	CephClusters          int
+	NetworkShares         int
+	TrueNASSystems        int
+	TrueNASVMs            int
+	TrueNASApps           int
+	VMwareHosts           int
+	VMwareVMs             int
+	VMwareDatastores      int
+	AvailabilityTargets   int
+	ActiveAlerts          int
 }
 
 // ReloadableMonitor wraps a Monitor with reload capability
@@ -254,10 +271,60 @@ func accumulateInstallSnapshotCounts(counts *InstallSnapshotCounts, monitor *Mon
 		counts.PMGInstances += len(readState.PMGInstances())
 		counts.VMs += len(readState.VMs())
 		counts.Containers += len(readState.Containers())
+		counts.AgentHosts += len(readState.Hosts())
 		counts.DockerHosts += len(readState.DockerHosts())
+		counts.DockerContainers += len(readState.DockerContainers())
 		counts.KubernetesClusters += len(readState.K8sClusters())
+		counts.KubernetesNodes += len(readState.K8sNodes())
+		counts.KubernetesPods += len(readState.Pods())
+		counts.KubernetesDeployments += len(readState.K8sDeployments())
+		counts.StoragePools += len(readState.StoragePools())
+		counts.PhysicalDisks += len(readState.PhysicalDisks())
 	}
+	resources, _ := monitor.UnifiedResourceSnapshot()
+	accumulateInstallSnapshotUnifiedResourceCounts(counts, resources)
 	counts.ActiveAlerts += len(monitor.ActiveAlertsSnapshot())
+}
+
+func accumulateInstallSnapshotUnifiedResourceCounts(counts *InstallSnapshotCounts, resources []unifiedresources.Resource) {
+	if counts == nil {
+		return
+	}
+	for _, resource := range resources {
+		resourceType := unifiedresources.CanonicalResourceType(resource.Type)
+		switch resourceType {
+		case unifiedresources.ResourceTypeCeph:
+			counts.CephClusters++
+		case unifiedresources.ResourceTypeNetworkShare:
+			counts.NetworkShares++
+		}
+
+		if resource.Availability != nil && resource.Availability.Enabled {
+			counts.AvailabilityTargets++
+		}
+
+		if resource.TrueNAS != nil {
+			switch resourceType {
+			case unifiedresources.ResourceTypeAgent:
+				counts.TrueNASSystems++
+			case unifiedresources.ResourceTypeVM:
+				counts.TrueNASVMs++
+			case unifiedresources.ResourceTypeAppContainer:
+				counts.TrueNASApps++
+			}
+		}
+
+		if resource.VMware != nil {
+			switch resourceType {
+			case unifiedresources.ResourceTypeAgent:
+				counts.VMwareHosts++
+			case unifiedresources.ResourceTypeVM:
+				counts.VMwareVMs++
+			case unifiedresources.ResourceTypeStorage:
+				counts.VMwareDatastores++
+			}
+		}
+	}
 }
 
 // Stop stops the monitor

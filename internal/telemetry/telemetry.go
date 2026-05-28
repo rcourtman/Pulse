@@ -15,10 +15,13 @@
 // Scale (counts only, no names):
 //   - Number of PVE nodes, PBS instances, PMG instances
 //   - Number of VMs, LXC containers
-//   - Number of Docker hosts and Kubernetes clusters
+//   - Number of Pulse Agent hosts, Docker hosts/containers, and Kubernetes clusters/nodes/pods/deployments
+//   - Number of storage resources, physical disks, Ceph clusters, and network shares
+//   - Number of TrueNAS systems/VMs/apps, VMware hosts/VMs/datastores, and availability targets
 //
 // Feature usage (booleans and counts, no content):
 //   - Whether AI features are enabled
+//   - Whether Patrol, discovery, notifications, or AI action capability are enabled
 //   - Number of active alerts
 //   - Whether relay/remote access is enabled
 //   - Whether SSO/OIDC is configured
@@ -110,42 +113,82 @@ type Ping struct {
 	Event              string `json:"event"`                        // "startup" or "heartbeat"
 
 	// Scale (counts only — no names, IPs, or identifiers)
-	PVENodes           int `json:"pve_nodes"`
-	PBSInstances       int `json:"pbs_instances"`
-	PMGInstances       int `json:"pmg_instances"`
-	VMs                int `json:"vms"`
-	Containers         int `json:"containers"`
-	DockerHosts        int `json:"docker_hosts"`
-	KubernetesClusters int `json:"kubernetes_clusters"`
+	PVENodes              int `json:"pve_nodes"`
+	PBSInstances          int `json:"pbs_instances"`
+	PMGInstances          int `json:"pmg_instances"`
+	VMs                   int `json:"vms"`
+	Containers            int `json:"containers"`
+	AgentHosts            int `json:"agent_hosts"`
+	DockerHosts           int `json:"docker_hosts"`
+	DockerContainers      int `json:"docker_containers"`
+	KubernetesClusters    int `json:"kubernetes_clusters"`
+	KubernetesNodes       int `json:"kubernetes_nodes"`
+	KubernetesPods        int `json:"kubernetes_pods"`
+	KubernetesDeployments int `json:"kubernetes_deployments"`
+	StoragePools          int `json:"storage_pools"`
+	PhysicalDisks         int `json:"physical_disks"`
+	CephClusters          int `json:"ceph_clusters"`
+	NetworkShares         int `json:"network_shares"`
+	TrueNASSystems        int `json:"truenas_systems"`
+	TrueNASVMs            int `json:"truenas_vms"`
+	TrueNASApps           int `json:"truenas_apps"`
+	VMwareHosts           int `json:"vmware_hosts"`
+	VMwareVMs             int `json:"vmware_vms"`
+	VMwareDatastores      int `json:"vmware_datastores"`
+	AvailabilityTargets   int `json:"availability_targets"`
 
 	// Feature usage (booleans and counts — no content)
-	AIEnabled    bool `json:"ai_enabled"`
-	ActiveAlerts int  `json:"active_alerts"`
-	RelayEnabled bool `json:"relay_enabled"`
-	SSOEnabled   bool `json:"sso_enabled"`
-	MultiTenant  bool `json:"multi_tenant"`
-	PaidLicense  bool `json:"paid_license"`
-	HasAPITokens bool `json:"has_api_tokens"`
+	AIEnabled            bool `json:"ai_enabled"`
+	PatrolEnabled        bool `json:"patrol_enabled"`
+	DiscoveryEnabled     bool `json:"discovery_enabled"`
+	NotificationsEnabled bool `json:"notifications_enabled"`
+	AIActionsEnabled     bool `json:"ai_actions_enabled"`
+	ActiveAlerts         int  `json:"active_alerts"`
+	RelayEnabled         bool `json:"relay_enabled"`
+	SSOEnabled           bool `json:"sso_enabled"`
+	MultiTenant          bool `json:"multi_tenant"`
+	PaidLicense          bool `json:"paid_license"`
+	HasAPITokens         bool `json:"has_api_tokens"`
 }
 
 // Snapshot holds the dynamic state gathered at ping time.
 // The telemetry package calls a user-provided SnapshotFunc to populate this,
 // keeping the package decoupled from monitor/config internals.
 type Snapshot struct {
-	PVENodes           int
-	PBSInstances       int
-	PMGInstances       int
-	VMs                int
-	Containers         int
-	DockerHosts        int
-	KubernetesClusters int
-	AIEnabled          bool
-	ActiveAlerts       int
-	RelayEnabled       bool
-	SSOEnabled         bool
-	MultiTenant        bool
-	PaidLicense        bool
-	HasAPITokens       bool
+	PVENodes              int
+	PBSInstances          int
+	PMGInstances          int
+	VMs                   int
+	Containers            int
+	AgentHosts            int
+	DockerHosts           int
+	DockerContainers      int
+	KubernetesClusters    int
+	KubernetesNodes       int
+	KubernetesPods        int
+	KubernetesDeployments int
+	StoragePools          int
+	PhysicalDisks         int
+	CephClusters          int
+	NetworkShares         int
+	TrueNASSystems        int
+	TrueNASVMs            int
+	TrueNASApps           int
+	VMwareHosts           int
+	VMwareVMs             int
+	VMwareDatastores      int
+	AvailabilityTargets   int
+	AIEnabled             bool
+	PatrolEnabled         bool
+	DiscoveryEnabled      bool
+	NotificationsEnabled  bool
+	AIActionsEnabled      bool
+	ActiveAlerts          int
+	RelayEnabled          bool
+	SSOEnabled            bool
+	MultiTenant           bool
+	PaidLicense           bool
+	HasAPITokens          bool
 }
 
 // SnapshotFunc returns the current state snapshot for telemetry.
@@ -322,9 +365,29 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.PMGInstances = s.PMGInstances
 	ping.VMs = s.VMs
 	ping.Containers = s.Containers
+	ping.AgentHosts = s.AgentHosts
 	ping.DockerHosts = s.DockerHosts
+	ping.DockerContainers = s.DockerContainers
 	ping.KubernetesClusters = s.KubernetesClusters
+	ping.KubernetesNodes = s.KubernetesNodes
+	ping.KubernetesPods = s.KubernetesPods
+	ping.KubernetesDeployments = s.KubernetesDeployments
+	ping.StoragePools = s.StoragePools
+	ping.PhysicalDisks = s.PhysicalDisks
+	ping.CephClusters = s.CephClusters
+	ping.NetworkShares = s.NetworkShares
+	ping.TrueNASSystems = s.TrueNASSystems
+	ping.TrueNASVMs = s.TrueNASVMs
+	ping.TrueNASApps = s.TrueNASApps
+	ping.VMwareHosts = s.VMwareHosts
+	ping.VMwareVMs = s.VMwareVMs
+	ping.VMwareDatastores = s.VMwareDatastores
+	ping.AvailabilityTargets = s.AvailabilityTargets
 	ping.AIEnabled = s.AIEnabled
+	ping.PatrolEnabled = s.PatrolEnabled
+	ping.DiscoveryEnabled = s.DiscoveryEnabled
+	ping.NotificationsEnabled = s.NotificationsEnabled
+	ping.AIActionsEnabled = s.AIActionsEnabled
 	ping.ActiveAlerts = s.ActiveAlerts
 	ping.RelayEnabled = s.RelayEnabled
 	ping.SSOEnabled = s.SSOEnabled

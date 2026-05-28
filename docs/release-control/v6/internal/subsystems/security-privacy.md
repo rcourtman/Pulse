@@ -362,6 +362,13 @@ server-side telemetry rows may preserve the canonical normalized version
 identity plus those same coarse booleans, but they must not retain legacy
 exact commercial tier or exact API-token count fields as first-class analytics
 dimensions just because older clients once sent them.
+That same anonymous telemetry floor now also permits only privacy-safe
+aggregate self-hosted adoption counters: counts of monitored platforms,
+workloads, storage resources, physical disks, Ceph clusters, network shares,
+TrueNAS and VMware resource categories, availability targets, and active
+alerts. Those counts may describe scale and feature adoption, but they must not
+include hostnames, resource IDs, infrastructure identifiers, credentials,
+prompts, chat messages, or personal information.
 That same anonymous telemetry contract also treats `install_id` as a rotating
 pseudonymous identifier, not a lifetime install handle. The runtime may keep a
 local rotating UUID so startup and heartbeat pings can still represent an

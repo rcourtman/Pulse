@@ -28,6 +28,44 @@ DEFAULT_LATEST_INSTALL_WINDOWS = (
     ("72h", timedelta(hours=72)),
     ("7d", timedelta(days=7)),
 )
+ADOPTION_COUNT_FIELDS = (
+    ("pve_nodes", "PVE nodes"),
+    ("pbs_instances", "PBS instances"),
+    ("pmg_instances", "PMG instances"),
+    ("vms", "VMs"),
+    ("containers", "LXC containers"),
+    ("agent_hosts", "Agent hosts"),
+    ("docker_hosts", "Docker hosts"),
+    ("docker_containers", "Docker containers"),
+    ("kubernetes_clusters", "Kubernetes clusters"),
+    ("kubernetes_nodes", "Kubernetes nodes"),
+    ("kubernetes_pods", "Kubernetes pods"),
+    ("kubernetes_deployments", "Kubernetes deployments"),
+    ("storage_pools", "Storage pools"),
+    ("physical_disks", "Physical disks"),
+    ("ceph_clusters", "Ceph clusters"),
+    ("network_shares", "Network shares"),
+    ("truenas_systems", "TrueNAS systems"),
+    ("truenas_vms", "TrueNAS VMs"),
+    ("truenas_apps", "TrueNAS apps"),
+    ("vmware_hosts", "VMware hosts"),
+    ("vmware_vms", "VMware VMs"),
+    ("vmware_datastores", "VMware datastores"),
+    ("availability_targets", "Availability targets"),
+    ("active_alerts", "Active alerts"),
+)
+FEATURE_BOOL_FIELDS = (
+    ("ai_enabled", "AI enabled"),
+    ("patrol_enabled", "Patrol enabled"),
+    ("discovery_enabled", "Discovery enabled"),
+    ("notifications_enabled", "Notifications enabled"),
+    ("ai_actions_enabled", "AI actions enabled"),
+    ("relay_enabled", "Relay enabled"),
+    ("sso_enabled", "SSO enabled"),
+    ("multi_tenant", "Multi-tenant"),
+    ("paid_license", "Paid license"),
+    ("has_api_tokens", "Has API tokens"),
+)
 GIT_DESCRIBE_RE = re.compile(
     r"^(?P<base>\d+\.\d+\.\d+(?:-[0-9A-Za-z\.-]+)?)-(?P<count>\d+)-g(?P<sha>[0-9a-fA-F]+)(?P<dirty>-dirty)?$"
 )
@@ -128,6 +166,16 @@ def parse_optional_bool(value: Any) -> bool | None:
     if normalized in {"0", "false", "f", "no", "n"}:
         return False
     return None
+
+
+def parse_optional_nonnegative_int(value: Any) -> int:
+    if value is None:
+        return 0
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return max(parsed, 0)
 
 
 def classify_row_version(row: dict[str, Any], published_versions: set[str]) -> ClassifiedVersion:
@@ -321,6 +369,8 @@ def summarize_latest_install_windows(
         published_split: Counter[str] = Counter()
         non_release_split: Counter[str] = Counter()
         platform_split: Counter[str] = Counter()
+        adoption_counts: Counter[str] = Counter()
+        feature_counts: Counter[str] = Counter()
 
         for row in latest_by_install.values():
             received_at = parse_received_at(str(row["received_at"]))
@@ -332,6 +382,11 @@ def summarize_latest_install_windows(
             platform_split[platform] += 1
             target = published_split if identity.is_published_release else non_release_split
             target[identity.version] += 1
+            for key, _ in ADOPTION_COUNT_FIELDS:
+                adoption_counts[key] += parse_optional_nonnegative_int(row.get(key))
+            for key, _ in FEATURE_BOOL_FIELDS:
+                if parse_optional_bool(row.get(key)):
+                    feature_counts[key] += 1
 
         summary[label] = {
             "active_installs": sum(version_split.values()),
@@ -339,6 +394,14 @@ def summarize_latest_install_windows(
             "published_versions": counter_entries(published_split, "version"),
             "non_release_versions": counter_entries(non_release_split, "version"),
             "platforms": counter_entries(platform_split, "platform"),
+            "adoption_counts": [
+                {"field": key, "label": label, "total": adoption_counts[key]}
+                for key, label in ADOPTION_COUNT_FIELDS
+            ],
+            "feature_enabled_installs": [
+                {"field": key, "label": label, "installs": feature_counts[key]}
+                for key, label in FEATURE_BOOL_FIELDS
+            ],
         }
 
     return summary
@@ -407,6 +470,18 @@ def format_text(summary: dict[str, Any], repo: str, since_days: int) -> str:
         lines.append("- platforms:")
         if window_summary["platforms"]:
             lines.extend(f"  - {entry['platform']}: {entry['installs']}" for entry in window_summary["platforms"])
+        else:
+            lines.append("  - none")
+        lines.append("- aggregate adoption counts:")
+        adoption_counts = [entry for entry in window_summary["adoption_counts"] if entry["total"] > 0]
+        if adoption_counts:
+            lines.extend(f"  - {entry['label']}: {entry['total']}" for entry in adoption_counts)
+        else:
+            lines.append("  - none")
+        lines.append("- feature-enabled installs:")
+        feature_counts = [entry for entry in window_summary["feature_enabled_installs"] if entry["installs"] > 0]
+        if feature_counts:
+            lines.extend(f"  - {entry['label']}: {entry['installs']}" for entry in feature_counts)
         else:
             lines.append("  - none")
     return "\n".join(lines)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -137,6 +138,32 @@ func TestReloadableMonitorAggregateInstallSnapshotCountsIncludesProvisionedTenan
 	assert.Equal(t, 2, counts.DockerHosts)
 	assert.Equal(t, 2, counts.KubernetesClusters)
 	assert.Equal(t, 6, counts.ActiveAlerts)
+}
+
+func TestAccumulateInstallSnapshotUnifiedResourceCountsUsesCoarseV6AdoptionSignals(t *testing.T) {
+	counts := InstallSnapshotCounts{}
+	accumulateInstallSnapshotUnifiedResourceCounts(&counts, []unifiedresources.Resource{
+		{Type: unifiedresources.ResourceTypeAgent, TrueNAS: &unifiedresources.TrueNASData{}},
+		{Type: unifiedresources.ResourceTypeVM, TrueNAS: &unifiedresources.TrueNASData{}},
+		{Type: unifiedresources.ResourceTypeAppContainer, TrueNAS: &unifiedresources.TrueNASData{}},
+		{Type: unifiedresources.ResourceTypeAgent, VMware: &unifiedresources.VMwareData{}},
+		{Type: unifiedresources.ResourceTypeVM, VMware: &unifiedresources.VMwareData{}},
+		{Type: unifiedresources.ResourceTypeStorage, VMware: &unifiedresources.VMwareData{}},
+		{Type: unifiedresources.ResourceTypeCeph},
+		{Type: unifiedresources.ResourceTypeNetworkShare},
+		{Type: unifiedresources.ResourceTypeNetworkEndpoint, Availability: &unifiedresources.AvailabilityData{Enabled: true}},
+		{Type: unifiedresources.ResourceTypeNetworkEndpoint, Availability: &unifiedresources.AvailabilityData{Enabled: false}},
+	})
+
+	assert.Equal(t, 1, counts.TrueNASSystems)
+	assert.Equal(t, 1, counts.TrueNASVMs)
+	assert.Equal(t, 1, counts.TrueNASApps)
+	assert.Equal(t, 1, counts.VMwareHosts)
+	assert.Equal(t, 1, counts.VMwareVMs)
+	assert.Equal(t, 1, counts.VMwareDatastores)
+	assert.Equal(t, 1, counts.CephClusters)
+	assert.Equal(t, 1, counts.NetworkShares)
+	assert.Equal(t, 1, counts.AvailabilityTargets)
 }
 
 func testTelemetryMonitor(

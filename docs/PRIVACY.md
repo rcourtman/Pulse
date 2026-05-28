@@ -16,7 +16,7 @@ third-party analytics, support diagnostics, or ordinary Settings surfaces.
 
 Pulse includes anonymous outbound telemetry that is **enabled by default**. It sends a lightweight ping on startup and once every 24 hours to help me understand how many active installations exist, which releases are actually deployed, and which features are in use.
 
-No hostnames, credentials, IP addresses, or personally identifiable information is ever sent. See the full field list below.
+No hostnames, credentials, infrastructure identifiers, IP addresses, prompts, chat messages, or personally identifiable information is ever sent. See the full field list below.
 
 #### How to disable
 
@@ -51,9 +51,29 @@ Every field is listed below with the reason it exists — nothing else leaves yo
 | PMG instances | `0` | Understand Proxmox Mail Gateway adoption in aggregate |
 | VMs | `25` | Understand approximate infrastructure scale in aggregate |
 | Containers | `12` | Understand approximate LXC usage in aggregate |
+| Agent hosts | `4` | Understand Pulse Agent adoption for node-local telemetry in aggregate |
 | Docker hosts | `2` | Understand Docker monitoring adoption in aggregate |
+| Docker containers | `18` | Understand Docker / Podman workload scale in aggregate |
 | Kubernetes clusters | `0` | Understand Kubernetes monitoring adoption in aggregate |
+| Kubernetes nodes | `3` | Understand Kubernetes node scale in aggregate |
+| Kubernetes pods | `42` | Understand Kubernetes workload scale in aggregate |
+| Kubernetes deployments | `8` | Understand Kubernetes deployment adoption in aggregate |
+| Storage pools | `6` | Understand storage monitoring adoption in aggregate |
+| Physical disks | `24` | Understand disk-health monitoring adoption in aggregate |
+| Ceph clusters | `1` | Understand Ceph monitoring adoption in aggregate |
+| Network shares | `5` | Understand NAS/share monitoring adoption in aggregate |
+| TrueNAS systems | `1` | Understand TrueNAS integration adoption in aggregate |
+| TrueNAS VMs | `2` | Understand TrueNAS VM visibility adoption in aggregate |
+| TrueNAS apps | `7` | Understand TrueNAS app visibility adoption in aggregate |
+| VMware hosts | `3` | Understand VMware vSphere host monitoring adoption in aggregate |
+| VMware VMs | `35` | Understand VMware vSphere VM monitoring adoption in aggregate |
+| VMware datastores | `4` | Understand VMware datastore visibility adoption in aggregate |
+| Availability targets | `9` | Understand agentless availability-check adoption in aggregate |
 | AI enabled | `true`/`false` | See whether AI features are actually used before expanding or removing them |
+| Patrol enabled | `true`/`false` | See whether proactive AI health patrol is used |
+| Discovery enabled | `true`/`false` | See whether network or AI-assisted discovery is used |
+| Notifications enabled | `true`/`false` | See whether alert notification delivery is configured |
+| AI actions enabled | `true`/`false` | See whether AI control tools are enabled without sending action history or command content |
 | Active alerts | `4` | Understand how noisy or quiet installations are in aggregate |
 | Relay enabled | `true`/`false` | See whether remote-access features are being used |
 | SSO enabled | `true`/`false` | See whether single-sign-on support is being used |

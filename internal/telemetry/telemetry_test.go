@@ -152,13 +152,26 @@ func TestApplySnapshot(t *testing.T) {
 
 	snap := func() Snapshot {
 		return Snapshot{
-			PVENodes:     3,
-			VMs:          10,
-			Containers:   5,
-			AIEnabled:    true,
-			ActiveAlerts: 2,
-			PaidLicense:  true,
-			HasAPITokens: true,
+			PVENodes:             3,
+			VMs:                  10,
+			Containers:           5,
+			AgentHosts:           2,
+			DockerContainers:     12,
+			KubernetesPods:       18,
+			StoragePools:         4,
+			PhysicalDisks:        9,
+			TrueNASSystems:       1,
+			TrueNASApps:          3,
+			VMwareHosts:          2,
+			AvailabilityTargets:  6,
+			AIEnabled:            true,
+			PatrolEnabled:        true,
+			DiscoveryEnabled:     true,
+			NotificationsEnabled: true,
+			AIActionsEnabled:     true,
+			ActiveAlerts:         2,
+			PaidLicense:          true,
+			HasAPITokens:         true,
 		}
 	}
 
@@ -173,8 +186,20 @@ func TestApplySnapshot(t *testing.T) {
 	if ping.VMs != 10 {
 		t.Fatalf("VMs = %d, want 10", ping.VMs)
 	}
+	if ping.AgentHosts != 2 || ping.DockerContainers != 12 || ping.KubernetesPods != 18 {
+		t.Fatalf("expanded workload counts not applied: %#v", ping)
+	}
+	if ping.StoragePools != 4 || ping.PhysicalDisks != 9 {
+		t.Fatalf("expanded storage counts not applied: %#v", ping)
+	}
+	if ping.TrueNASSystems != 1 || ping.TrueNASApps != 3 || ping.VMwareHosts != 2 || ping.AvailabilityTargets != 6 {
+		t.Fatalf("expanded platform counts not applied: %#v", ping)
+	}
 	if !ping.AIEnabled {
 		t.Fatal("AIEnabled should be true")
+	}
+	if !ping.PatrolEnabled || !ping.DiscoveryEnabled || !ping.NotificationsEnabled || !ping.AIActionsEnabled {
+		t.Fatalf("expanded feature flags not applied: %#v", ping)
 	}
 	if !ping.PaidLicense {
 		t.Fatal("PaidLicense should be true")

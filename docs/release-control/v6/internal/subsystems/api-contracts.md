@@ -2024,6 +2024,12 @@ normalized version identity fields (`version`, `version_raw`, `version_channel`,
 `version_build`, `version_is_development`, and
 `version_is_published_release`) instead of leaving browser callers to infer
 published-release truth from raw build strings.
+That same preview contract now includes the complete anonymous telemetry
+payload shape, including aggregate self-hosted adoption counters for monitored
+platforms, workloads, storage, and availability targets plus coarse feature
+booleans. Browser callers may display or copy the exact payload, but they must
+not derive hostnames, infrastructure identifiers, prompt/chat content, license
+tiers, or API-token counts from it.
 That same browser-transport contract now tolerates sparse preview
 payloads without changing the runtime truth. Patrol transport may omit
 `finding_ids`, and infrastructure removal previews may stage optimistic rows

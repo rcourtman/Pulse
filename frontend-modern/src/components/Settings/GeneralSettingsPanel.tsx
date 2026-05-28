@@ -186,9 +186,11 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               </div>
               <p class="text-xs text-muted leading-relaxed">
                 Help improve Pulse by sharing anonymous outbound usage data: a rotating install ID,
-                normalized release identity, platform, resource counts, and feature flags. No
-                hostnames, credentials, or personal information are sent. Telemetry rows are
-                retained for up to 90 days, and IP addresses are not stored in telemetry rows.{' '}
+                normalized release identity, runtime platform, aggregate self-hosted adoption
+                counts, and coarse feature flags. No hostnames, credentials, infrastructure
+                identifiers, prompts, chat messages, or personal information are sent. Telemetry
+                rows are retained for up to 90 days, and IP addresses are not stored in telemetry
+                rows.{' '}
                 <a
                   href={PRIVACY_DOC_URL}
                   target="_blank"

@@ -514,6 +514,31 @@ func TestMonitoredSystemUsageReadinessGuardrailsRemainCanonical(t *testing.T) {
 	}
 }
 
+func TestInstallTelemetrySnapshotCountsStayOnMonitoringBoundary(t *testing.T) {
+	data, err := os.ReadFile("reload.go")
+	if err != nil {
+		t.Fatalf("failed to read reload.go: %v", err)
+	}
+	source := string(data)
+
+	for _, snippet := range []string{
+		"AgentHosts            int",
+		"DockerContainers      int",
+		"KubernetesPods        int",
+		"TrueNASSystems        int",
+		"VMwareDatastores      int",
+		"AvailabilityTargets   int",
+		"resources, _ := monitor.UnifiedResourceSnapshot()",
+		"accumulateInstallSnapshotUnifiedResourceCounts(counts, resources)",
+		"case unifiedresources.ResourceTypeNetworkShare:",
+		"resource.Availability != nil && resource.Availability.Enabled",
+	} {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("reload.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestMonitoredSystemUsageStaysInventoryOnly(t *testing.T) {
 	data, err := os.ReadFile("monitored_system_usage.go")
 	if err != nil {
