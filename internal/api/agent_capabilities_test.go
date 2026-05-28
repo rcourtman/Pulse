@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -100,6 +101,7 @@ func TestAgentCapabilitiesManifest_CategoriesAreClosed(t *testing.T) {
 	// two categories an agent might miss).
 	allowed := map[string]bool{
 		"context":        true,
+		"provisioning":   true,
 		"operator-state": true,
 		"finding":        true,
 		"action":         true,
@@ -107,6 +109,78 @@ func TestAgentCapabilitiesManifest_CategoriesAreClosed(t *testing.T) {
 	for _, cap := range agentCapabilitiesManifest.Capabilities {
 		if !allowed[cap.Category] {
 			t.Errorf("capability %q has unknown category %q — extend the allowlist deliberately", cap.Name, cap.Category)
+		}
+	}
+}
+
+func TestAgentCapabilitiesManifest_DeclaresNodeProvisioningSurface(t *testing.T) {
+	byName := map[string]AgentCapability{}
+	for _, cap := range agentCapabilitiesManifest.Capabilities {
+		byName[cap.Name] = cap
+	}
+
+	required := map[string]struct {
+		method string
+		path   string
+		scope  string
+	}{
+		"list_nodes":                      {http.MethodGet, "/api/config/nodes", "settings:read"},
+		"add_node":                        {http.MethodPost, "/api/config/nodes", "settings:write"},
+		"update_node":                     {http.MethodPut, "/api/config/nodes/{nodeId}", "settings:write"},
+		"remove_node":                     {http.MethodDelete, "/api/config/nodes/{nodeId}", "settings:write"},
+		"test_node_credentials":           {http.MethodPost, "/api/config/nodes/test-config", "settings:write"},
+		"test_node_connection":            {http.MethodPost, "/api/config/nodes/{nodeId}/test", "settings:write"},
+		"refresh_node_cluster_membership": {http.MethodPost, "/api/config/nodes/{nodeId}/refresh-cluster", "settings:write"},
+		"discover_lan":                    {http.MethodPost, "/api/discover", "settings:write"},
+	}
+
+	for name, want := range required {
+		cap, ok := byName[name]
+		if !ok {
+			t.Fatalf("manifest missing node provisioning capability %q", name)
+		}
+		if cap.Category != "provisioning" {
+			t.Errorf("%s category = %q, want provisioning", name, cap.Category)
+		}
+		if cap.Method != want.method || cap.Path != want.path || cap.Scope != want.scope {
+			t.Errorf("%s method/path/scope = %s %s %s, want %s %s %s",
+				name, cap.Method, cap.Path, cap.Scope, want.method, want.path, want.scope)
+		}
+	}
+
+	for _, name := range []string{"add_node", "update_node", "test_node_credentials", "discover_lan"} {
+		cap := byName[name]
+		if cap.InputSchema == nil {
+			t.Fatalf("%s must publish an inputSchema so agent clients get typed onboarding arguments", name)
+		}
+		raw, err := json.Marshal(cap.InputSchema)
+		if err != nil {
+			t.Fatalf("%s inputSchema marshal: %v", name, err)
+		}
+		text := string(raw)
+		for _, fragment := range []string{`"type":"object"`, `"additionalProperties":false`} {
+			if !strings.Contains(text, fragment) {
+				t.Errorf("%s inputSchema missing %s: %s", name, fragment, text)
+			}
+		}
+	}
+
+	addSchema, _ := json.Marshal(byName["add_node"].InputSchema)
+	for _, fragment := range []string{`"enum":["pve","pbs","pmg"]`, `"required":["type","name","host"]`, `"tokenValue"`} {
+		if !strings.Contains(string(addSchema), fragment) {
+			t.Errorf("add_node inputSchema missing %s: %s", fragment, string(addSchema))
+		}
+	}
+
+	updateSchema, _ := json.Marshal(byName["update_node"].InputSchema)
+	if !strings.Contains(string(updateSchema), `"nodeId"`) {
+		t.Errorf("update_node inputSchema must include nodeId path argument: %s", string(updateSchema))
+	}
+
+	discoverSchema, _ := json.Marshal(byName["discover_lan"].InputSchema)
+	for _, fragment := range []string{`"subnet"`, `"use_cache"`} {
+		if !strings.Contains(string(discoverSchema), fragment) {
+			t.Errorf("discover_lan inputSchema missing %s: %s", fragment, string(discoverSchema))
 		}
 	}
 }

@@ -3583,6 +3583,80 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "RA32",
+      "summary": "Pulse v6 must be agent-operable for infrastructure onboarding at the canonical API contract layer, not only through UI automation or an MCP-only shim: agents can discover LAN candidates, list configured sources, validate proposed credentials, add/update/remove/test/refresh Proxmox VE, Proxmox Backup Server, and Proxmox Mail Gateway sources through typed manifest schemas, and source reads must keep credential secrets redacted.",
+      "kind": "trust-gate",
+      "blocking_level": "repo-ready",
+      "proof_type": "automated",
+      "lane_ids": [
+        "L6",
+        "L16",
+        "L20"
+      ],
+      "subsystem_ids": [
+        "api-contracts"
+      ],
+      "release_gate_ids": [],
+      "proof_commands": [
+        {
+          "id": "agent-provisioning-capability-contract",
+          "run": [
+            "go",
+            "test",
+            "./internal/api",
+            "-run",
+            "TestHandleAgentCapabilitiesManifest|TestAgentCapabilitiesManifest|TestAgentSubstrate_NodeProvisioningCapabilitiesRouteThroughHTTPBoundary"
+          ]
+        },
+        {
+          "id": "mcp-manifest-schema-projection",
+          "run": [
+            "go",
+            "test",
+            "./cmd/pulse-mcp"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "cmd/pulse-mcp/main.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "cmd/pulse-mcp/main_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "cmd/pulse-mcp/README.md",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/agent_capabilities.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/agent_capabilities_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/agent_substrate_e2e_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {
@@ -5125,17 +5199,31 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Action governance now has a first-class governed floor: tool capability declarations, approval-backed action plans, plan-level preflight and dry-run posture, fail-closed action-audit normalization, bounded lifecycle events, API-visible action audit preflight, and a resource-scoped action-history surface are owned by the shared AI, API, security, Patrol, and unified-resource contracts. Broader enterprise policy execution, richer dry-run providers, multi-actor approvals, and deeper safe-execution contracts remain a named post-RC hardening track.",
+        "summary": "Action governance now has a first-class governed floor: tool capability declarations include typed agent-operable infrastructure onboarding over the canonical node lifecycle and LAN-discovery APIs, approval-backed action plans, plan-level preflight and dry-run posture, fail-closed action-audit normalization, bounded lifecycle events, API-visible action audit preflight, and a resource-scoped action-history surface are owned by the shared AI, API, security, Patrol, and unified-resource contracts. Broader enterprise policy execution, richer dry-run providers, multi-actor approvals, full onboarding import-plan approvals, and deeper safe-execution contracts remain named post-RC hardening tracks.",
         "tracking": [
           {
             "kind": "lane-followup",
             "id": "action-governance-auditability-post-rc-hardening"
+          },
+          {
+            "kind": "lane-followup",
+            "id": "agent-operable-onboarding-import-planning"
           }
         ]
       },
       "blockers": [],
       "subsystems": [],
       "evidence": [
+        {
+          "repo": "pulse",
+          "path": "cmd/pulse-mcp/main.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "cmd/pulse-mcp/main_test.go",
+          "kind": "file"
+        },
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/action-audit-resource-history-surface-2026-04-29.md",
@@ -5224,6 +5312,21 @@
         {
           "repo": "pulse",
           "path": "internal/ai/tools/action_audit.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/agent_capabilities.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/agent_capabilities_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/agent_substrate_e2e_test.go",
           "kind": "file"
         },
         {
@@ -6612,6 +6715,17 @@
       "recorded_at": "2026-04-25",
       "lane_ids": [
         "L19"
+      ],
+      "subsystem_ids": []
+    },
+    {
+      "id": "agent-operable-onboarding-import-planning",
+      "summary": "Track the remaining agent-operable onboarding hardening beyond the current typed node lifecycle and LAN-discovery manifest floor: candidate import plans, credential-grant handoffs, dry-run diffs, human approval before applying multi-source imports, and richer discovery-to-provisioning verification.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-05-28",
+      "lane_ids": [
+        "L20"
       ],
       "subsystem_ids": []
     }

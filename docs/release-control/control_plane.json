@@ -63,7 +63,7 @@
       "profile_id": "v6",
       "kind": "feature",
       "status": "active",
-      "summary": "Promote proactive Pulse Intelligence, policy-aware data governance, resource-change intelligence, action-governance, fleet-governance, and agent-ready operations contract proof only after the monitoring-first RC target is satisfied and the broader surfaced product case is proven; Patrol is the detection and investigation engine, Assistant is the contextual explanation, approval, and governed action surface, and agent-ready proof is API/CLI-first with MCP only as an adapter over canonical contracts.",
+      "summary": "Promote proactive Pulse Intelligence, policy-aware data governance, resource-change intelligence, action-governance, fleet-governance, agent-operable infrastructure onboarding, and agent-ready operations contract proof only after the monitoring-first RC target is satisfied and the broader surfaced product case is proven; Patrol is the detection and investigation engine, Assistant is the contextual explanation, approval, and governed action surface, and agent-ready proof is API/CLI-first with MCP only as an adapter over canonical contracts.",
       "completion_rule": "manual",
       "proof_scope": "none"
     }

@@ -198,6 +198,33 @@ this writing, the published capabilities are:
   (`not_an_issue`, `expected_behavior`, `will_fix_later`).
 - `resolve_finding` manually marks a finding resolved.
 
+**Actions (governed plan/approval/execute):**
+
+- `plan_action` validates an action request, records the plan, and
+  returns approval policy, blast radius, plan hash, and preflight
+  summary.
+- `decide_action` records an approval or rejection for a planned
+  action.
+- `execute_action` executes a previously planned and approved action
+  and returns the persisted audit result.
+
+**Provisioning (infrastructure onboarding):**
+
+- `discover_lan` scans a subnet, or returns cached scan results, to
+  find candidate infrastructure hosts before import.
+- `list_nodes` returns configured Pulse infrastructure sources with
+  credential secret values redacted.
+- `add_node` adds a Proxmox VE, Proxmox Backup Server, or Proxmox Mail
+  Gateway source.
+- `update_node` updates a configured source without changing omitted
+  fields.
+- `remove_node` removes a configured source.
+- `test_node_credentials` validates proposed source credentials without
+  saving them.
+- `test_node_connection` validates a saved source by id.
+- `refresh_node_cluster_membership` re-detects Proxmox VE cluster
+  endpoint metadata for an existing source.
+
 Run `tools/list` from your MCP client to see the live set.
 
 ## Stable error envelope

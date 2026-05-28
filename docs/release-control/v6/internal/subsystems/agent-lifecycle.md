@@ -182,6 +182,16 @@ API, but they must not widen install tokens, agent profiles, or command grants
 because a Discovery record exists. Mock-mode Discovery records are demo
 payloads for the same API contract and must not become a lifecycle-local
 fixture or an implicit permission to run commands.
+Agent-facing provisioning capabilities declared by
+`/api/agent/capabilities` are also API-owned projections over the canonical
+node lifecycle and discovery APIs. Lifecycle and infrastructure onboarding
+surfaces may use `discover_lan`, `list_nodes`, `add_node`, `update_node`,
+`remove_node`, `test_node_credentials`, `test_node_connection`, and
+`refresh_node_cluster_membership` to orchestrate source onboarding, but those
+tools must preserve settings-scope auth, typed manifest schemas, and redacted
+source reads. The manifest does not turn discovered hosts into command-agent
+authority, install-token scope, fleet-command grants, or permission to bypass
+human approval for multi-source imports.
 Native provider resource types exposed through shared `internal/api/` resource
 handlers are the same kind of read-only context for lifecycle surfaces. A
 TrueNAS `network-share` resource may appear in resource pickers, connection

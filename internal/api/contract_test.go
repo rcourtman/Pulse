@@ -14290,6 +14290,47 @@ func TestContract_AgentCapabilitiesManifestVersionIsPinned(t *testing.T) {
 	}
 }
 
+// TestContract_AgentCapabilitiesManifestDeclaresProvisioningSurface pins the
+// node-lifecycle onboarding surface in the public agent manifest. This is the
+// backend API payload proof required when the hand-authored manifest starts
+// projecting /api/config/nodes and /api/discover to external agents.
+func TestContract_AgentCapabilitiesManifestDeclaresProvisioningSurface(t *testing.T) {
+	source, err := os.ReadFile("agent_capabilities.go")
+	if err != nil {
+		t.Fatalf("read agent_capabilities.go: %v", err)
+	}
+	src := string(source)
+
+	required := []string{
+		`"provisioning"`,
+		`"list_nodes"`,
+		`Path:          "/api/config/nodes"`,
+		`Scope:         "settings:read"`,
+		`"add_node"`,
+		`InputSchema:      addNodeInputSchema()`,
+		`"update_node"`,
+		`InputSchema:      updateNodeInputSchema()`,
+		`"remove_node"`,
+		`InputSchema:   nodeIDInputSchema()`,
+		`"test_node_credentials"`,
+		`Path:             "/api/config/nodes/test-config"`,
+		`"test_node_connection"`,
+		`Path:          "/api/config/nodes/{nodeId}/test"`,
+		`"refresh_node_cluster_membership"`,
+		`Path:          "/api/config/nodes/{nodeId}/refresh-cluster"`,
+		`"discover_lan"`,
+		`Path:             "/api/discover"`,
+		`InputSchema:      discoverLANInputSchema()`,
+		`"tokenValue"`,
+		`"additionalProperties": false`,
+	}
+	for _, fragment := range required {
+		if !strings.Contains(src, fragment) {
+			t.Errorf("agent capabilities manifest must declare provisioning contract fragment %s", fragment)
+		}
+	}
+}
+
 // TestContract_AgentResourceContextEndpointSurfacesStableShape pins
 // the agent-paradigm substrate contract: the bundled endpoint must
 // return arrays (never null) for activeFindings and recentActions so

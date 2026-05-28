@@ -27,9 +27,12 @@ type AgentCapability struct {
 	Description string `json:"description"`
 
 	// Category groups capabilities for agent UIs. Stable values:
-	// "context" (read-only situated reads), "operator-state"
-	// (per-resource intent writes), "finding" (per-finding lifecycle
-	// actions). Agents can filter the manifest by category.
+	// "context" (read-only situated reads), "provisioning"
+	// (infrastructure onboarding and source lifecycle),
+	// "operator-state" (per-resource intent writes), "finding"
+	// (per-finding lifecycle actions), and "action" (governed
+	// plan/decision/execute operations). Agents can filter the
+	// manifest by category.
 	Category string `json:"category"`
 
 	// Method + Path describe the canonical REST surface. Path
@@ -62,6 +65,11 @@ type AgentCapability struct {
 	// request body shape for non-GET capabilities so agents can
 	// validate before sending.
 	RequestBodyShape string `json:"requestBodyShape,omitempty"`
+
+	// InputSchema is an optional JSON Schema for agent-facing tool
+	// arguments. It is hand-authored for capabilities where prose
+	// body hints are not enough for reliable model use.
+	InputSchema map[string]any `json:"inputSchema,omitempty"`
 }
 
 // AgentCapabilitiesManifest is the discovery document for Pulse's
@@ -79,6 +87,161 @@ type AgentCapabilitiesManifest struct {
 	// Capabilities is the canonical list. Order is stable across
 	// requests so agents can diff snapshots cheaply.
 	Capabilities []AgentCapability `json:"capabilities"`
+}
+
+func agentObjectInputSchema(required []string, properties map[string]any) map[string]any {
+	schema := map[string]any{
+		"type":                 "object",
+		"properties":           properties,
+		"additionalProperties": false,
+	}
+	if len(required) > 0 {
+		schema["required"] = required
+	}
+	return schema
+}
+
+func nodeIDInputSchema() map[string]any {
+	return agentObjectInputSchema([]string{"nodeId"}, map[string]any{
+		"nodeId": map[string]any{
+			"type":        "string",
+			"description": "Configured node id from list_nodes, such as pve:lab or pve-0.",
+		},
+	})
+}
+
+func discoverLANInputSchema() map[string]any {
+	return agentObjectInputSchema(nil, map[string]any{
+		"subnet": map[string]any{
+			"type":        "string",
+			"description": "CIDR to scan, such as 192.168.1.0/24, or auto to let Pulse choose the local subnet.",
+			"default":     "auto",
+		},
+		"use_cache": map[string]any{
+			"type":        "boolean",
+			"description": "Return cached discovery results when available instead of starting a new scan.",
+			"default":     false,
+		},
+	})
+}
+
+func addNodeInputSchema() map[string]any {
+	schema := agentObjectInputSchema([]string{"type", "name", "host"}, nodeConfigInputProperties(false))
+	schema["oneOf"] = []map[string]any{
+		{"required": []string{"user", "password"}},
+		{"required": []string{"tokenName", "tokenValue"}},
+	}
+	return schema
+}
+
+func testNodeCredentialsInputSchema() map[string]any {
+	schema := agentObjectInputSchema([]string{"type", "host"}, nodeConfigInputProperties(false))
+	schema["oneOf"] = []map[string]any{
+		{"required": []string{"user", "password"}},
+		{"required": []string{"tokenName", "tokenValue"}},
+	}
+	return schema
+}
+
+func updateNodeInputSchema() map[string]any {
+	properties := nodeConfigInputProperties(true)
+	return agentObjectInputSchema([]string{"nodeId"}, properties)
+}
+
+func nodeConfigInputProperties(includeNodeID bool) map[string]any {
+	properties := map[string]any{
+		"type": map[string]any{
+			"type":        "string",
+			"enum":        []string{"pve", "pbs", "pmg"},
+			"description": "Infrastructure source type: pve, pbs, or pmg.",
+		},
+		"name": map[string]any{
+			"type":        "string",
+			"description": "Human-readable source name to show in Pulse.",
+		},
+		"host": map[string]any{
+			"type":        "string",
+			"description": "Source endpoint URL or host, including scheme and port when needed.",
+		},
+		"guestURL": map[string]any{
+			"type":        "string",
+			"description": "Optional guest-accessible URL for navigation.",
+		},
+		"user": map[string]any{
+			"type":        "string",
+			"description": "Username for password authentication, or the token owner when needed by the platform.",
+		},
+		"password": map[string]any{
+			"type":        "string",
+			"description": "Password used only for setup or password-backed monitoring.",
+		},
+		"tokenName": map[string]any{
+			"type":        "string",
+			"description": "API token id or name, such as root@pam!pulse-monitor.",
+		},
+		"tokenValue": map[string]any{
+			"type":        "string",
+			"description": "API token secret value. Pulse stores this as a credential and never returns it from list_nodes.",
+		},
+		"fingerprint": map[string]any{
+			"type":        "string",
+			"description": "Optional TLS certificate fingerprint for pinned self-signed endpoints.",
+		},
+		"verifySSL": map[string]any{
+			"type":        "boolean",
+			"description": "Whether Pulse should require normal TLS certificate validation.",
+		},
+		"monitorVMs":                   platformBool("PVE", "virtual machines"),
+		"monitorContainers":            platformBool("PVE", "containers"),
+		"monitorStorage":               platformBool("PVE", "storage"),
+		"monitorBackups":               platformBool("PVE or PBS", "backups"),
+		"monitorPhysicalDisks":         platformBool("PVE", "physical disks"),
+		"physicalDiskPollingMinutes":   integerOption("PVE physical disk polling interval in minutes. Use 0 or omit for the default."),
+		"temperatureMonitoringEnabled": platformBool("All source types", "temperature monitoring"),
+		"monitorDatastores":            platformBool("PBS", "datastores"),
+		"monitorSyncJobs":              platformBool("PBS", "sync jobs"),
+		"monitorVerifyJobs":            platformBool("PBS", "verify jobs"),
+		"monitorPruneJobs":             platformBool("PBS", "prune jobs"),
+		"monitorGarbageJobs":           platformBool("PBS", "garbage collection jobs"),
+		"monitorMailStats":             platformBool("PMG", "mail statistics"),
+		"monitorQueues":                platformBool("PMG", "mail queues"),
+		"monitorQuarantine":            platformBool("PMG", "quarantine"),
+		"monitorDomainStats":           platformBool("PMG", "domain statistics"),
+		"enabled":                      platformBool("All source types", "collection from this source"),
+		"excludeDatastores":            stringArrayOption("PBS datastore names to exclude from monitoring."),
+	}
+	if includeNodeID {
+		properties["nodeId"] = map[string]any{
+			"type":        "string",
+			"description": "Configured node id from list_nodes, such as pve:lab or pve-0.",
+		}
+	}
+	return properties
+}
+
+func platformBool(platform, subject string) map[string]any {
+	return map[string]any{
+		"type":        "boolean",
+		"description": platform + " option for " + subject + ".",
+	}
+}
+
+func integerOption(description string) map[string]any {
+	return map[string]any{
+		"type":        "integer",
+		"minimum":     0,
+		"description": description,
+	}
+}
+
+func stringArrayOption(description string) map[string]any {
+	return map[string]any{
+		"type":        "array",
+		"description": description,
+		"items": map[string]any{
+			"type": "string",
+		},
+	}
 }
 
 // agentCapabilitiesManifest is the v1 declaration of Pulse's
@@ -109,6 +272,89 @@ var agentCapabilitiesManifest = AgentCapabilitiesManifest{
 			Path:          "/api/agent/fleet-context",
 			Scope:         "monitoring:read",
 			ResponseShape: "AgentFleetContext",
+		},
+		{
+			Name:          "list_nodes",
+			Description:   "List configured infrastructure sources that Pulse can monitor or manage. Credential secret values are redacted; use the returned id with update_node, remove_node, test_node_connection, or refresh_node_cluster_membership.",
+			Category:      "provisioning",
+			Method:        http.MethodGet,
+			Path:          "/api/config/nodes",
+			Scope:         "settings:read",
+			ResponseShape: "NodeResponse[]",
+		},
+		{
+			Name:             "add_node",
+			Description:      "Add a Proxmox VE, Proxmox Backup Server, or Proxmox Mail Gateway source to Pulse after credentials have been collected, generated, or approved.",
+			Category:         "provisioning",
+			Method:           http.MethodPost,
+			Path:             "/api/config/nodes",
+			Scope:            "settings:write",
+			RequestBodyShape: "NodeConfigRequest",
+			ResponseShape:    "{ status: \"success\" }",
+			InputSchema:      addNodeInputSchema(),
+		},
+		{
+			Name:             "update_node",
+			Description:      "Update a configured infrastructure source. Omitted fields preserve the current value; tokenValue or password only changes when supplied.",
+			Category:         "provisioning",
+			Method:           http.MethodPut,
+			Path:             "/api/config/nodes/{nodeId}",
+			Scope:            "settings:write",
+			RequestBodyShape: "NodeConfigRequest",
+			ResponseShape:    "{ status: \"success\" }",
+			InputSchema:      updateNodeInputSchema(),
+		},
+		{
+			Name:          "remove_node",
+			Description:   "Remove a configured infrastructure source from Pulse by node id.",
+			Category:      "provisioning",
+			Method:        http.MethodDelete,
+			Path:          "/api/config/nodes/{nodeId}",
+			Scope:         "settings:write",
+			ResponseShape: "{ status: \"success\" }",
+			InputSchema:   nodeIDInputSchema(),
+		},
+		{
+			Name:             "test_node_credentials",
+			Description:      "Validate proposed source credentials and connection details without saving them to Pulse.",
+			Category:         "provisioning",
+			Method:           http.MethodPost,
+			Path:             "/api/config/nodes/test-config",
+			Scope:            "settings:write",
+			RequestBodyShape: "NodeConfigRequest",
+			ResponseShape:    "{ status: \"success\"|\"error\", message: string }",
+			InputSchema:      testNodeCredentialsInputSchema(),
+		},
+		{
+			Name:          "test_node_connection",
+			Description:   "Validate the saved connection for an existing configured infrastructure source.",
+			Category:      "provisioning",
+			Method:        http.MethodPost,
+			Path:          "/api/config/nodes/{nodeId}/test",
+			Scope:         "settings:write",
+			ResponseShape: "{ status: \"success\"|\"error\", message: string }",
+			InputSchema:   nodeIDInputSchema(),
+		},
+		{
+			Name:          "refresh_node_cluster_membership",
+			Description:   "Re-detect Proxmox VE cluster membership and endpoint metadata for a configured source.",
+			Category:      "provisioning",
+			Method:        http.MethodPost,
+			Path:          "/api/config/nodes/{nodeId}/refresh-cluster",
+			Scope:         "settings:write",
+			ResponseShape: "ClusterRefreshResponse",
+			InputSchema:   nodeIDInputSchema(),
+		},
+		{
+			Name:             "discover_lan",
+			Description:      "Scan a subnet, or return cached scan results, to find candidate infrastructure hosts before deciding which sources to add to Pulse.",
+			Category:         "provisioning",
+			Method:           http.MethodPost,
+			Path:             "/api/discover",
+			Scope:            "settings:write",
+			RequestBodyShape: "{ subnet?: string, use_cache?: boolean }",
+			ResponseShape:    "ManualDiscoveryResult",
+			InputSchema:      discoverLANInputSchema(),
 		},
 		{
 			Name:          "get_operator_state",

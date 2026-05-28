@@ -88,6 +88,36 @@ func TestBuildInputSchema_NonGetCapabilitiesAcceptBody(t *testing.T) {
 	}
 }
 
+func TestBuildInputSchema_UsesManifestProvidedSchema(t *testing.T) {
+	rawSchema := json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"type": { "enum": ["pve", "pbs", "pmg"] },
+			"host": { "type": "string" }
+		},
+		"required": ["type", "host"],
+		"additionalProperties": false
+	}`)
+	cap := agentCapability{
+		Name:        "add_node",
+		Path:        "/api/config/nodes",
+		Method:      http.MethodPost,
+		InputSchema: rawSchema,
+	}
+
+	got := buildInputSchema(cap)
+	var schema map[string]any
+	if err := json.Unmarshal(got, &schema); err != nil {
+		t.Fatalf("unmarshal schema: %v", err)
+	}
+	if schema["additionalProperties"] != false {
+		t.Errorf("manifest-provided schema must be preserved; got %v", schema)
+	}
+	if _, hasBody := schema["properties"].(map[string]any)["body"]; hasBody {
+		t.Errorf("manifest-provided schema should not be wrapped in body: %s", string(got))
+	}
+}
+
 func TestSubstitutePathParams_FillsAllPlaceholders(t *testing.T) {
 	got, err := substitutePathParams(
 		"/api/agent/resource-context/{resourceId}",

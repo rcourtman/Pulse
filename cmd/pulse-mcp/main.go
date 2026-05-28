@@ -75,15 +75,16 @@ import (
 // agentCapability mirrors Pulse's manifest wire shape — defined
 // inline so the adapter depends on nothing in the pulse module.
 type agentCapability struct {
-	Name             string   `json:"name"`
-	Description      string   `json:"description"`
-	Category         string   `json:"category"`
-	Method           string   `json:"method"`
-	Path             string   `json:"path"`
-	Scope            string   `json:"scope"`
-	ResponseShape    string   `json:"responseShape,omitempty"`
-	ErrorCodes       []string `json:"errorCodes,omitempty"`
-	RequestBodyShape string   `json:"requestBodyShape,omitempty"`
+	Name             string          `json:"name"`
+	Description      string          `json:"description"`
+	Category         string          `json:"category"`
+	Method           string          `json:"method"`
+	Path             string          `json:"path"`
+	Scope            string          `json:"scope"`
+	ResponseShape    string          `json:"responseShape,omitempty"`
+	ErrorCodes       []string        `json:"errorCodes,omitempty"`
+	RequestBodyShape string          `json:"requestBodyShape,omitempty"`
+	InputSchema      json.RawMessage `json:"inputSchema,omitempty"`
 }
 
 type agentCapabilitiesManifest struct {
@@ -418,6 +419,10 @@ func (s *mcpServer) writeJSON(out io.Writer, v any) {
 // MCP just needs enough shape so the agent knows which fields to
 // pass.
 func buildInputSchema(cap agentCapability) json.RawMessage {
+	if len(cap.InputSchema) > 0 {
+		return cap.InputSchema
+	}
+
 	properties := map[string]any{}
 	required := []string{}
 	for _, m := range pathPlaceholderRE.FindAllStringSubmatch(cap.Path, -1) {

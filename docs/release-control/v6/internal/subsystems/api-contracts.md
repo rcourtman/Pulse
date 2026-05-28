@@ -1738,15 +1738,16 @@ without parsing human messages.
 `/api/agent/capabilities` is the discovery document for Pulse's
 agent surface. The manifest declares each agent-consumable
 capability with stable name (snake_case agent identifier),
-description, category (`context` / `operator-state` / `finding`),
-HTTP method + path, required auth scope, response shape name, and
-the closed set of stable error codes the response may carry. Agents
-fetch this once at startup to learn what's available; the
-`cmd/pulse-mcp` adapter reads the manifest to register MCP tools,
-and any future adapter (HTTP-API SDK, Claude-Code custom toolkit,
-etc.) reads the same manifest the same way — manifest-driven
-projection is the substrate's deliberate single source of truth
-for "what can an agent do here?". The manifest
+description, category (`context` / `provisioning` /
+`operator-state` / `finding` / `action`), HTTP method + path,
+required auth scope, response shape name, optional JSON Schema
+`inputSchema`, and the closed set of stable error codes the
+response may carry. Agents fetch this once at startup to learn
+what's available; the `cmd/pulse-mcp` adapter reads the manifest
+to register MCP tools, and any future adapter (HTTP-API SDK,
+Claude-Code custom toolkit, etc.) reads the same manifest the
+same way: manifest-driven projection is the substrate's deliberate
+single source of truth for "what can an agent do here?". The manifest
 itself is unauthenticated and cacheable (`Cache-Control: public,
 max-age=300`) — declared in the router's `publicPaths` list so
 the global auth middleware does not gate it; the underlying
@@ -1759,6 +1760,18 @@ manifest is hand-authored rather than auto-generated so contract
 decisions (which capabilities are agent-stable, what the stable
 error codes are, what category each belongs to) cannot drift
 behind code changes.
+
+Infrastructure onboarding is part of that same manifest contract,
+not an MCP-only shim. The provisioning category projects the
+canonical `/api/config/nodes` node lifecycle and `/api/discover`
+LAN-discovery routes as `list_nodes`, `add_node`, `update_node`,
+`remove_node`, `test_node_credentials`, `test_node_connection`,
+`refresh_node_cluster_membership`, and `discover_lan`. Those
+capabilities must carry typed schemas for path/body arguments and
+must preserve the underlying settings scopes. Listing configured
+sources returns redacted credential state only; token or password
+secret values may be accepted on write/test requests but must not
+come back through `list_nodes` or any manifest metadata.
 
 The agent surface uses one error-envelope shape across every
 endpoint — `{"error": "<stable_code>", "message": "<human>",
@@ -1822,11 +1835,13 @@ substrate as MCP tools so Claude Desktop, Claude Code, and other
 MCP-speaking clients can drive Pulse natively. The adapter is
 the test for whether the substrate's contracts were really cheap
 to project: each MCP tool is one entry in the hand-authored
-manifest, and the input schema is auto-derived from the path
-placeholders and method (path `{name}` segments become required
-string properties; non-GET/DELETE tools accept a `body` object).
-Adding a capability to the manifest automatically extends the MCP
-tool surface without changes in the adapter. `subscribe_events` is
+manifest. When the manifest supplies an `inputSchema`, MCP must
+use it verbatim; otherwise the adapter falls back to deriving a
+minimal schema from path placeholders and method (path `{name}`
+segments become required string properties; non-GET/DELETE tools
+accept a `body` object). Adding a capability to the manifest
+automatically extends the MCP tool surface without changes in the
+adapter. `subscribe_events` is
 intentionally excluded — SSE streaming doesn't fit the
 request/response tool shape; agents that need real-time push
 consume the SSE stream directly. The adapter speaks JSON-RPC 2.0

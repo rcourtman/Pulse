@@ -1117,6 +1117,14 @@ The agent capabilities manifest at `/api/agent/capabilities` is
 read-only and stateless — no persistence is involved. The manifest
 is hand-authored in `internal/api/agent_capabilities.go`; storage
 flows are not affected.
+When that manifest exposes provisioning tools over `/api/discover`
+and `/api/config/nodes`, storage and recovery may observe the resulting
+configured sources and backup evidence only after the canonical node
+lifecycle writes complete. Discovery candidates, credential test
+payloads, token or password secrets, and add/update/remove source
+commands remain API/agent-lifecycle onboarding concerns, not recovery
+state, backup ownership, restore entitlement, or storage-local
+credential material.
 
 The action governance loop endpoints (`/api/actions/plan`,
 `/api/actions/{id}/decision`, `/api/actions/{id}/execute`) joined

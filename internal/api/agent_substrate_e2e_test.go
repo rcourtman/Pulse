@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 )
 
 // TestAgentSubstrate_DiscoveryToTriageToDepthFlowsThroughHTTPBoundary is
@@ -213,6 +214,104 @@ func TestAgentSubstrate_DiscoveryToTriageToDepthFlowsThroughHTTPBoundary(t *test
 	// rather than 404 — the path is registered, just gated.
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("subscribe_events unauth: status = %d, want 401 (path must be registered, just gated); body = %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAgentSubstrate_NodeProvisioningCapabilitiesRouteThroughHTTPBoundary(t *testing.T) {
+	readToken := "agent-provisioning-read.12345678"
+	writeToken := "agent-provisioning-write.12345678"
+	cfg := newTestConfigWithTokens(t,
+		newTokenRecord(t, readToken, []string{config.ScopeSettingsRead}, nil),
+		newTokenRecord(t, writeToken, []string{config.ScopeSettingsWrite}, nil),
+	)
+	monitor, err := monitoring.New(cfg)
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+	defer monitor.Stop()
+	router := NewRouter(cfg, monitor, nil, nil, func() error { return nil }, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/capabilities", nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("capabilities GET: status = %d", rec.Code)
+	}
+	var manifest AgentCapabilitiesManifest
+	if err := json.NewDecoder(rec.Body).Decode(&manifest); err != nil {
+		t.Fatalf("decode manifest: %v", err)
+	}
+	byName := map[string]AgentCapability{}
+	for _, c := range manifest.Capabilities {
+		byName[c.Name] = c
+	}
+
+	listCap := byName["list_nodes"]
+	addCap := byName["add_node"]
+	for name, cap := range map[string]AgentCapability{
+		"list_nodes": listCap,
+		"add_node":   addCap,
+	} {
+		if cap.Name == "" {
+			t.Fatalf("manifest missing %q capability", name)
+		}
+		if cap.Category != "provisioning" {
+			t.Fatalf("%s category = %q, want provisioning", name, cap.Category)
+		}
+	}
+	if listCap.Method != http.MethodGet || listCap.Scope != config.ScopeSettingsRead {
+		t.Fatalf("list_nodes method/scope = %s/%s, want GET/%s", listCap.Method, listCap.Scope, config.ScopeSettingsRead)
+	}
+	if addCap.Method != http.MethodPost || addCap.Scope != config.ScopeSettingsWrite || addCap.InputSchema == nil {
+		t.Fatalf("add_node method/scope/inputSchema = %s/%s/%v, want POST/%s/non-nil",
+			addCap.Method, addCap.Scope, addCap.InputSchema, config.ScopeSettingsWrite)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, listCap.Path, nil)
+	req.Header.Set("X-API-Token", readToken)
+	rec = httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list_nodes auth: status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if strings.TrimSpace(rec.Body.String()) != "[]" {
+		t.Fatalf("new test config should start with no nodes, got %s", rec.Body.String())
+	}
+
+	addBody := strings.NewReader(`{
+		"type": "pve",
+		"name": "test-agent-node",
+		"host": "http://192.168.77.50:8006",
+		"tokenName": "root@pam!pulse-agent-test",
+		"tokenValue": "secret-value",
+		"monitorVMs": true,
+		"monitorContainers": true
+	}`)
+	req = httptest.NewRequest(http.MethodPost, addCap.Path, addBody)
+	req.Header.Set("X-API-Token", writeToken)
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("add_node auth: status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"status":"success"`) {
+		t.Fatalf("add_node response should be the existing success envelope, got %s", rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, listCap.Path, nil)
+	req.Header.Set("X-API-Token", readToken)
+	rec = httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list_nodes after add: status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	listBody := rec.Body.String()
+	if !strings.Contains(listBody, `"name":"test-agent-node"`) || !strings.Contains(listBody, `"hasToken":true`) {
+		t.Fatalf("list_nodes should expose redacted configured source identity, got %s", listBody)
+	}
+	if strings.Contains(listBody, "secret-value") || strings.Contains(listBody, "tokenValue") {
+		t.Fatalf("list_nodes must not leak stored token values, got %s", listBody)
 	}
 }
 
