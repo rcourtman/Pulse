@@ -67,6 +67,10 @@ truth for live infrastructure data.
 43. `internal/kubernetesagent/agent.go`
 44. `pkg/agents/kubernetes/report.go`
 45. `internal/monitoring/temperature.go`
+46. `internal/truenas/client.go`
+47. `internal/truenas/disk_health.go`
+48. `internal/truenas/provider.go`
+49. `internal/truenas/types.go`
 
 ## Shared Boundaries
 
@@ -1055,6 +1059,13 @@ projection. When TrueNAS raises disk-local SMART alerts such as
 into the canonical physical-disk risk payload instead of leaving SMART failure
 state trapped in incident/status-only decorations that storage consumers do
 not read.
+The same boundary owns TrueNAS `smart_status` normalization. `internal/truenas/client.go`
+must parse REST and RPC SMART status separately from native disk state, and
+`internal/truenas/disk_health.go` plus `internal/truenas/provider.go` must map
+null, empty, missing, unknown, or unavailable SMART telemetry to canonical
+`UNKNOWN` health with no replacement-required risk. Explicit SMART failure and
+native failure states such as `FAULTED`, `FAILED`, `OFFLINE`, `REMOVED`, and
+`UNAVAIL` must continue to produce canonical disk-health risk.
 That same boundary now also owns recent aggregate TrueNAS disk temperature
 history. `internal/truenas/client.go` must ingest `disk.temperature_agg`, and
 `internal/truenas/provider.go` must project the returned min/avg/max readings

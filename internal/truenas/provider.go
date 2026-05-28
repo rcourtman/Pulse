@@ -1156,7 +1156,7 @@ func assessDisk(disk Disk) storagehealth.Assessment {
 		Wearout:     -1,
 	})
 
-	stateUpper := strings.ToUpper(strings.TrimSpace(disk.Status))
+	stateUpper := normalizedDiskStatus(disk)
 	stateAssessment := storagehealth.Assessment{Level: storagehealth.RiskHealthy}
 	switch stateUpper {
 	case "DEGRADED":
@@ -1168,7 +1168,7 @@ func assessDisk(disk Disk) storagehealth.Assessment {
 				Summary:  fmt.Sprintf("TrueNAS disk %s is DEGRADED", strings.TrimSpace(disk.Name)),
 			}},
 		}
-	case "FAULTED", "OFFLINE", "REMOVED", "UNAVAIL":
+	case "FAULTED", "FAILED", "OFFLINE", "REMOVED", "UNAVAIL":
 		stateAssessment = storagehealth.Assessment{
 			Level: storagehealth.RiskCritical,
 			Reasons: []storagehealth.Reason{{
@@ -1935,12 +1935,12 @@ func dockerNetworksFromTrueNASApp(app App) []unifiedresources.DockerNetworkMeta 
 }
 
 func statusFromDisk(disk Disk) unifiedresources.ResourceStatus {
-	switch strings.ToUpper(strings.TrimSpace(disk.Status)) {
-	case "ONLINE":
+	switch normalizedDiskStatus(disk) {
+	case "ONLINE", "OK", "PASSED", "HEALTHY":
 		return unifiedresources.StatusOnline
 	case "DEGRADED":
 		return unifiedresources.StatusWarning
-	case "FAULTED", "OFFLINE", "REMOVED", "UNAVAIL":
+	case "FAULTED", "FAILED", "OFFLINE", "REMOVED", "UNAVAIL":
 		return unifiedresources.StatusOffline
 	default:
 		return unifiedresources.StatusUnknown
@@ -1948,23 +1948,44 @@ func statusFromDisk(disk Disk) unifiedresources.ResourceStatus {
 }
 
 func healthFromDisk(disk Disk) string {
-	switch strings.ToUpper(strings.TrimSpace(disk.Status)) {
-	case "ONLINE":
+	if health, ok := explicitDiskHealth(disk); ok {
+		return health
+	}
+	switch normalizedDiskStatus(disk) {
+	case "ONLINE", "OK", "PASSED", "HEALTHY":
 		return "PASSED"
 	case "DEGRADED":
 		return "DEGRADED"
-	default:
+	case "FAULTED", "FAILED", "OFFLINE", "REMOVED", "UNAVAIL":
 		return "FAILED"
+	default:
+		// TrueNAS can omit disk health/status when SMART data is unavailable.
+		// Missing or provider-unknown telemetry is not a disk failure signal.
+		return "UNKNOWN"
 	}
 }
 
 func healthForAssessment(disk Disk) string {
-	switch strings.ToUpper(strings.TrimSpace(disk.Status)) {
+	if health, ok := explicitDiskHealth(disk); ok {
+		return health
+	}
+	switch normalizedDiskStatus(disk) {
 	case "DEGRADED":
 		return ""
 	default:
 		return healthFromDisk(disk)
 	}
+}
+
+func normalizedDiskStatus(disk Disk) string {
+	return strings.ToUpper(strings.TrimSpace(disk.Status))
+}
+
+func explicitDiskHealth(disk Disk) (string, bool) {
+	if !disk.HealthStatusPresent && strings.TrimSpace(disk.Health) == "" {
+		return "", false
+	}
+	return normalizeExplicitDiskHealth(disk.Health), true
 }
 
 func rpmFromDisk(disk Disk) int {

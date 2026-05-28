@@ -887,6 +887,167 @@ func TestRecordsElevateOnlineDiskWhenTemperatureCritical(t *testing.T) {
 	}
 }
 
+func TestRecordsProjectUnavailableDiskTelemetryAsUnknownWithoutRisk(t *testing.T) {
+	for _, status := range []string{"", "UNKNOWN", "UNAVAILABLE", "N/A", "SMART unavailable"} {
+		t.Run(status, func(t *testing.T) {
+			record := truenasDiskRecordForStatus(t, status)
+			if record.Resource.Status != unifiedresources.StatusUnknown {
+				t.Fatalf("status %q projected resource status %q, want %q", status, record.Resource.Status, unifiedresources.StatusUnknown)
+			}
+			if record.Resource.PhysicalDisk == nil {
+				t.Fatal("expected physical disk metadata")
+			}
+			if record.Resource.PhysicalDisk.Health != "UNKNOWN" {
+				t.Fatalf("status %q projected health %q, want UNKNOWN", status, record.Resource.PhysicalDisk.Health)
+			}
+			if record.Resource.PhysicalDisk.Risk != nil {
+				t.Fatalf("status %q should not project replacement risk, got %+v", status, record.Resource.PhysicalDisk.Risk)
+			}
+			if len(record.Resource.Incidents) != 0 {
+				t.Fatalf("status %q should not project incidents, got %+v", status, record.Resource.Incidents)
+			}
+		})
+	}
+}
+
+func TestRecordsProjectExplicitUnavailableSMARTAsUnknownWithoutRisk(t *testing.T) {
+	record := truenasDiskRecordForDisk(t, Disk{
+		ID:                  "disk-sda",
+		Name:                "sda",
+		Pool:                "tank",
+		Status:              "ONLINE",
+		Health:              "UNAVAILABLE",
+		HealthStatusPresent: true,
+		Model:               "Generic SATA",
+		Serial:              "SER-SDA",
+		SizeBytes:           1_000_000,
+		Transport:           "sata",
+		Rotational:          true,
+		Temperature:         34,
+	})
+	if record.Resource.Status != unifiedresources.StatusUnknown {
+		t.Fatalf("projected resource status %q, want %q", record.Resource.Status, unifiedresources.StatusUnknown)
+	}
+	if record.Resource.PhysicalDisk == nil {
+		t.Fatal("expected physical disk metadata")
+	}
+	if record.Resource.PhysicalDisk.Health != "UNKNOWN" {
+		t.Fatalf("projected health %q, want UNKNOWN", record.Resource.PhysicalDisk.Health)
+	}
+	if record.Resource.PhysicalDisk.Risk != nil {
+		t.Fatalf("unavailable SMART should not project replacement risk, got %+v", record.Resource.PhysicalDisk.Risk)
+	}
+	if len(record.Resource.Incidents) != 0 {
+		t.Fatalf("unavailable SMART should not project incidents, got %+v", record.Resource.Incidents)
+	}
+}
+
+func TestRecordsProjectExplicitFailedSMARTAsReplacementRisk(t *testing.T) {
+	record := truenasDiskRecordForDisk(t, Disk{
+		ID:                  "disk-sda",
+		Name:                "sda",
+		Pool:                "tank",
+		Status:              "ONLINE",
+		Health:              "FAILED",
+		HealthStatusPresent: true,
+		Model:               "Generic SATA",
+		Serial:              "SER-SDA",
+		SizeBytes:           1_000_000,
+		Transport:           "sata",
+		Rotational:          true,
+		Temperature:         34,
+	})
+	if record.Resource.Status != unifiedresources.StatusWarning {
+		t.Fatalf("projected resource status %q, want %q", record.Resource.Status, unifiedresources.StatusWarning)
+	}
+	if record.Resource.PhysicalDisk == nil {
+		t.Fatal("expected physical disk metadata")
+	}
+	if record.Resource.PhysicalDisk.Health != "FAILED" {
+		t.Fatalf("projected health %q, want FAILED", record.Resource.PhysicalDisk.Health)
+	}
+	if record.Resource.PhysicalDisk.Risk == nil {
+		t.Fatal("explicit failed SMART should project replacement risk")
+	}
+	if !containsRiskReason(record.Resource.PhysicalDisk.Risk.Reasons, "health_status") {
+		t.Fatalf("missing health_status risk, got %+v", record.Resource.PhysicalDisk.Risk.Reasons)
+	}
+}
+
+func TestRecordsPreservePassedDegradedAndFailedDiskProjection(t *testing.T) {
+	tests := []struct {
+		name           string
+		status         string
+		wantHealth     string
+		wantStatus     unifiedresources.ResourceStatus
+		wantRiskLevel  storagehealth.RiskLevel
+		wantRiskReason string
+		wantRiskNil    bool
+	}{
+		{
+			name:        "passed",
+			status:      "ONLINE",
+			wantHealth:  "PASSED",
+			wantStatus:  unifiedresources.StatusOnline,
+			wantRiskNil: true,
+		},
+		{
+			name:           "degraded",
+			status:         "DEGRADED",
+			wantHealth:     "DEGRADED",
+			wantStatus:     unifiedresources.StatusWarning,
+			wantRiskLevel:  storagehealth.RiskWarning,
+			wantRiskReason: "truenas_disk_state",
+		},
+		{
+			name:           "failed",
+			status:         "FAILED",
+			wantHealth:     "FAILED",
+			wantStatus:     unifiedresources.StatusWarning,
+			wantRiskLevel:  storagehealth.RiskCritical,
+			wantRiskReason: "truenas_disk_state",
+		},
+		{
+			name:           "faulted",
+			status:         "FAULTED",
+			wantHealth:     "FAILED",
+			wantStatus:     unifiedresources.StatusWarning,
+			wantRiskLevel:  storagehealth.RiskCritical,
+			wantRiskReason: "truenas_disk_state",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			record := truenasDiskRecordForStatus(t, tt.status)
+			if record.Resource.Status != tt.wantStatus {
+				t.Fatalf("status %q projected resource status %q, want %q", tt.status, record.Resource.Status, tt.wantStatus)
+			}
+			if record.Resource.PhysicalDisk == nil {
+				t.Fatal("expected physical disk metadata")
+			}
+			if record.Resource.PhysicalDisk.Health != tt.wantHealth {
+				t.Fatalf("status %q projected health %q, want %q", tt.status, record.Resource.PhysicalDisk.Health, tt.wantHealth)
+			}
+			if tt.wantRiskNil {
+				if record.Resource.PhysicalDisk.Risk != nil {
+					t.Fatalf("status %q should not project risk, got %+v", tt.status, record.Resource.PhysicalDisk.Risk)
+				}
+				return
+			}
+			if record.Resource.PhysicalDisk.Risk == nil {
+				t.Fatalf("status %q should project risk", tt.status)
+			}
+			if record.Resource.PhysicalDisk.Risk.Level != tt.wantRiskLevel {
+				t.Fatalf("status %q projected risk level %q, want %q", tt.status, record.Resource.PhysicalDisk.Risk.Level, tt.wantRiskLevel)
+			}
+			if !containsRiskReason(record.Resource.PhysicalDisk.Risk.Reasons, tt.wantRiskReason) {
+				t.Fatalf("status %q missing risk reason %q, got %+v", tt.status, tt.wantRiskReason, record.Resource.PhysicalDisk.Risk.Reasons)
+			}
+		})
+	}
+}
+
 func TestRecordsProjectDiskTemperatureAggregatesIntoCanonicalMetadata(t *testing.T) {
 	previous := IsFeatureEnabled()
 	SetFeatureEnabled(true)
@@ -918,6 +1079,43 @@ func TestRecordsProjectDiskTemperatureAggregatesIntoCanonicalMetadata(t *testing
 	}
 
 	t.Fatal("expected sda physical disk record")
+}
+
+func truenasDiskRecordForStatus(t *testing.T, status string) unifiedresources.IngestRecord {
+	t.Helper()
+
+	return truenasDiskRecordForDisk(t, Disk{
+		ID:          "disk-sda",
+		Name:        "sda",
+		Pool:        "tank",
+		Status:      status,
+		Model:       "Generic SATA",
+		Serial:      "SER-SDA",
+		SizeBytes:   1_000_000,
+		Transport:   "sata",
+		Rotational:  true,
+		Temperature: 34,
+	})
+}
+
+func truenasDiskRecordForDisk(t *testing.T, disk Disk) unifiedresources.IngestRecord {
+	t.Helper()
+
+	records := FixtureRecords(FixtureSnapshot{
+		CollectedAt: time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC),
+		System: SystemInfo{
+			Hostname: "truenas-test",
+			Healthy:  true,
+		},
+		Disks: []Disk{disk},
+	})
+	for _, record := range records {
+		if record.Resource.Type == unifiedresources.ResourceTypePhysicalDisk {
+			return record
+		}
+	}
+	t.Fatal("expected physical disk record")
+	return unifiedresources.IngestRecord{}
 }
 
 func TestProviderPhysicalDiskTemperatureHistoryUsesCanonicalMetricIDs(t *testing.T) {

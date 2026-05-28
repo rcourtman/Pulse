@@ -66,6 +66,8 @@ type Disk struct {
 	Name                 string
 	Pool                 string
 	Status               string
+	Health               string
+	HealthStatusPresent  bool
 	Model                string
 	Serial               string
 	SizeBytes            int64

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -55,6 +56,122 @@ func TestStatusFromDatasetStates(t *testing.T) {
 			got := statusFromDataset(tt.dataset)
 			if got != tt.want {
 				t.Fatalf("statusFromDataset(%+v) = %q, want %q", tt.dataset, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDiskHealthMappingDistinguishesUnavailableTelemetryFromFailure(t *testing.T) {
+	tests := []struct {
+		name       string
+		status     string
+		health     string
+		hasHealth  bool
+		wantHealth string
+		wantStatus unifiedresources.ResourceStatus
+		wantLevel  storagehealth.RiskLevel
+	}{
+		{
+			name:       "online passed",
+			status:     "ONLINE",
+			wantHealth: "PASSED",
+			wantStatus: unifiedresources.StatusOnline,
+			wantLevel:  storagehealth.RiskHealthy,
+		},
+		{
+			name:       "online explicit smart unavailable",
+			status:     "ONLINE",
+			health:     "UNAVAILABLE",
+			hasHealth:  true,
+			wantHealth: "UNKNOWN",
+			wantStatus: unifiedresources.StatusOnline,
+			wantLevel:  storagehealth.RiskHealthy,
+		},
+		{
+			name:       "online explicit smart failed",
+			status:     "ONLINE",
+			health:     "FAILED",
+			hasHealth:  true,
+			wantHealth: "FAILED",
+			wantStatus: unifiedresources.StatusOnline,
+			wantLevel:  storagehealth.RiskCritical,
+		},
+		{
+			name:       "degraded warning",
+			status:     "DEGRADED",
+			wantHealth: "DEGRADED",
+			wantStatus: unifiedresources.StatusWarning,
+			wantLevel:  storagehealth.RiskWarning,
+		},
+		{
+			name:       "failed state",
+			status:     "FAILED",
+			wantHealth: "FAILED",
+			wantStatus: unifiedresources.StatusOffline,
+			wantLevel:  storagehealth.RiskCritical,
+		},
+		{
+			name:       "faulted state",
+			status:     "FAULTED",
+			wantHealth: "FAILED",
+			wantStatus: unifiedresources.StatusOffline,
+			wantLevel:  storagehealth.RiskCritical,
+		},
+		{
+			name:       "zfs unavailable state",
+			status:     "UNAVAIL",
+			wantHealth: "FAILED",
+			wantStatus: unifiedresources.StatusOffline,
+			wantLevel:  storagehealth.RiskCritical,
+		},
+		{
+			name:       "null status decoded as empty",
+			status:     "",
+			wantHealth: "UNKNOWN",
+			wantStatus: unifiedresources.StatusUnknown,
+			wantLevel:  storagehealth.RiskHealthy,
+		},
+		{
+			name:       "unknown status",
+			status:     "UNKNOWN",
+			wantHealth: "UNKNOWN",
+			wantStatus: unifiedresources.StatusUnknown,
+			wantLevel:  storagehealth.RiskHealthy,
+		},
+		{
+			name:       "smart unavailable",
+			status:     "UNAVAILABLE",
+			wantHealth: "UNKNOWN",
+			wantStatus: unifiedresources.StatusUnknown,
+			wantLevel:  storagehealth.RiskHealthy,
+		},
+		{
+			name:       "not available",
+			status:     "N/A",
+			wantHealth: "UNKNOWN",
+			wantStatus: unifiedresources.StatusUnknown,
+			wantLevel:  storagehealth.RiskHealthy,
+		},
+		{
+			name:       "provider-specific unavailable text",
+			status:     "SMART unavailable",
+			wantHealth: "UNKNOWN",
+			wantStatus: unifiedresources.StatusUnknown,
+			wantLevel:  storagehealth.RiskHealthy,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			disk := Disk{Name: "sda", Status: tt.status, Health: tt.health, HealthStatusPresent: tt.hasHealth, Model: "Generic SATA"}
+			if got := healthFromDisk(disk); got != tt.wantHealth {
+				t.Fatalf("healthFromDisk(%q) = %q, want %q", tt.status, got, tt.wantHealth)
+			}
+			if got := statusFromDisk(disk); got != tt.wantStatus {
+				t.Fatalf("statusFromDisk(%q) = %q, want %q", tt.status, got, tt.wantStatus)
+			}
+			if got := assessDisk(disk).Level; got != tt.wantLevel {
+				t.Fatalf("assessDisk(%q).Level = %q, want %q", tt.status, got, tt.wantLevel)
 			}
 		})
 	}

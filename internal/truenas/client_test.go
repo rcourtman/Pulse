@@ -412,7 +412,9 @@ func TestGetDisksUsesNativeDiskQueryShape(t *testing.T) {
 			if !ok || len(params) != 2 {
 				t.Fatalf("expected disk.query filters/options params, got %#v", request.Params)
 			}
-			writeRPCResult(t, conn, request.ID, defaultRoutePayloadMaps(t, "/api/v2.0/disk")[:1])
+			payload := defaultRoutePayloadMaps(t, "/api/v2.0/disk")
+			payload[0]["smart_status"] = "FAILED"
+			writeRPCResult(t, conn, request.ID, payload[:1])
 		case 2:
 			if request.Method != "disk.temperature_agg" {
 				t.Fatalf("expected disk.temperature_agg, got %q", request.Method)
@@ -439,8 +441,56 @@ func TestGetDisksUsesNativeDiskQueryShape(t *testing.T) {
 	if len(disks) != 1 {
 		t.Fatalf("expected 1 disk, got %d", len(disks))
 	}
-	if disks[0].Name != "sda" || disks[0].Temperature != 34 || disks[0].TemperatureAggregate.MaxCelsius != 38 {
+	if disks[0].Name != "sda" || disks[0].Temperature != 34 || disks[0].TemperatureAggregate.MaxCelsius != 38 || disks[0].Health != "FAILED" || !disks[0].HealthStatusPresent {
 		t.Fatalf("unexpected native disk mapping: %+v", disks[0])
+	}
+}
+
+func TestGetDisksParsesRESTSmartStatus(t *testing.T) {
+	server := newMockServer(t, map[string]apiResponse{
+		"/api/v2.0/disk": {
+			body: `[
+				{"identifier":"{disk-1}","name":"sda","serial":"SER-A","size":1000000,"model":"Seagate","type":"HDD","pool":"tank","bus":"SATA","rotationrate":7200,"status":"ONLINE","smart_status":null},
+				{"identifier":"{disk-2}","name":"sdb","serial":"SER-B","size":1000000,"model":"Seagate","type":"HDD","pool":"tank","bus":"SATA","rotationrate":7200,"status":"ONLINE","smart_status":""},
+				{"identifier":"{disk-3}","name":"sdc","serial":"SER-C","size":1000000,"model":"Seagate","type":"HDD","pool":"tank","bus":"SATA","rotationrate":7200,"status":"ONLINE","smart_status":"FAILED"},
+				{"identifier":"{disk-4}","name":"sdd","serial":"SER-D","size":1000000,"model":"Seagate","type":"HDD","pool":"tank","bus":"SATA","rotationrate":7200,"status":"ONLINE"}
+			]`,
+		},
+		"/api/v2.0/disk/temperatures": {
+			body: `{}`,
+		},
+	}, nil)
+	t.Cleanup(server.Close)
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "api-key"})
+	disks, err := client.GetDisks(context.Background())
+	if err != nil {
+		t.Fatalf("GetDisks() error = %v", err)
+	}
+	byName := make(map[string]Disk, len(disks))
+	for _, disk := range disks {
+		byName[disk.Name] = disk
+	}
+	tests := []struct {
+		name        string
+		wantHealth  string
+		wantPresent bool
+	}{
+		{name: "sda", wantHealth: "UNKNOWN", wantPresent: true},
+		{name: "sdb", wantHealth: "UNKNOWN", wantPresent: true},
+		{name: "sdc", wantHealth: "FAILED", wantPresent: true},
+		{name: "sdd", wantHealth: "", wantPresent: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			disk, ok := byName[tt.name]
+			if !ok {
+				t.Fatalf("missing disk %q in %+v", tt.name, disks)
+			}
+			if disk.Health != tt.wantHealth || disk.HealthStatusPresent != tt.wantPresent {
+				t.Fatalf("disk %s health=(%q,%v), want (%q,%v)", tt.name, disk.Health, disk.HealthStatusPresent, tt.wantHealth, tt.wantPresent)
+			}
+		})
 	}
 }
 

@@ -448,12 +448,15 @@ func (c *Client) getDisksREST(ctx context.Context) ([]Disk, error) {
 		if diskID == "" {
 			diskID = strings.TrimSpace(item.Name)
 		}
+		health, healthPresent := diskSMARTHealthFromRaw(item.SmartStatus)
 
 		disks = append(disks, Disk{
 			ID:                   diskID,
 			Name:                 strings.TrimSpace(item.Name),
 			Pool:                 strings.TrimSpace(item.Pool),
 			Status:               strings.TrimSpace(item.Status),
+			Health:               health,
+			HealthStatusPresent:  healthPresent,
 			Model:                strings.TrimSpace(item.Model),
 			Serial:               strings.TrimSpace(item.Serial),
 			SizeBytes:            item.Size,
@@ -497,11 +500,14 @@ func (c *Client) disksFromMaps(ctx context.Context, response []map[string]any) (
 			diskID = strings.TrimSpace(readStringAny(item, "name", "devname"))
 		}
 		name := strings.TrimSpace(readStringAny(item, "name", "devname"))
+		health, healthPresent := diskSMARTHealthFromMap(item)
 		disk := Disk{
 			ID:                   diskID,
 			Name:                 name,
 			Pool:                 strings.TrimSpace(readStringAny(item, "pool", "pool_name", "poolName")),
 			Status:               strings.TrimSpace(readStringAny(item, "status")),
+			Health:               health,
+			HealthStatusPresent:  healthPresent,
 			Model:                strings.TrimSpace(readStringAny(item, "model")),
 			Serial:               strings.TrimSpace(readStringAny(item, "serial")),
 			SizeBytes:            readInt64Any(item, "size", "size_bytes", "sizeBytes"),
@@ -3699,16 +3705,17 @@ type datasetResponse struct {
 }
 
 type diskResponse struct {
-	Identifier   string `json:"identifier"`
-	Name         string `json:"name"`
-	Serial       string `json:"serial"`
-	Size         int64  `json:"size"`
-	Model        string `json:"model"`
-	Type         string `json:"type"`
-	Pool         string `json:"pool"`
-	Bus          string `json:"bus"`
-	Status       string `json:"status"`
-	RotationRate int    `json:"rotationrate"`
+	Identifier   string          `json:"identifier"`
+	Name         string          `json:"name"`
+	Serial       string          `json:"serial"`
+	Size         int64           `json:"size"`
+	Model        string          `json:"model"`
+	Type         string          `json:"type"`
+	Pool         string          `json:"pool"`
+	Bus          string          `json:"bus"`
+	Status       string          `json:"status"`
+	SmartStatus  json.RawMessage `json:"smart_status"`
+	RotationRate int             `json:"rotationrate"`
 }
 
 type alertResponse struct {

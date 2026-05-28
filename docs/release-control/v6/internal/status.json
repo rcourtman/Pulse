@@ -6020,6 +6020,12 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-truenas-smart-unavailable-2026-05-28.md",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-v5-129-delta-2026-05-01.md",
           "kind": "file",
           "evidence_tier": "managed-runtime-exercise"

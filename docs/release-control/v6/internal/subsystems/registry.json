@@ -3560,6 +3560,7 @@
             "match_prefixes": [],
             "match_files": [
               "internal/truenas/client.go",
+              "internal/truenas/disk_health.go",
               "internal/truenas/fixtures.go",
               "internal/truenas/provider.go",
               "internal/truenas/types.go"
