@@ -1749,6 +1749,36 @@ func TestContract_VMwareConnectionListCarriesObservedSummary(t *testing.T) {
 	}
 }
 
+type mixedCadenceMetricSample struct {
+	timestamp    time.Time
+	percentValue float64
+	rateValue    float64
+}
+
+func mixedCadenceLongRangeMetricSamples(now time.Time) []mixedCadenceMetricSample {
+	windowStart := now.Add(-7 * 24 * time.Hour)
+	samples := make([]mixedCadenceMetricSample, 0, 120)
+	appendRange := func(start, end time.Time, step time.Duration, percentValue, rateValue float64) {
+		for ts := start; ts.Before(end); ts = ts.Add(step) {
+			samples = append(samples, mixedCadenceMetricSample{
+				timestamp:    ts,
+				percentValue: percentValue,
+				rateValue:    rateValue,
+			})
+		}
+	}
+
+	appendRange(windowStart, now.Add(-24*time.Hour), 3*time.Hour, 20, 50)
+	appendRange(now.Add(-24*time.Hour), now.Add(-2*time.Hour), 30*time.Minute, 40, 75)
+	appendRange(now.Add(-2*time.Hour), now, 5*time.Minute, 60, 100)
+	samples = append(samples, mixedCadenceMetricSample{
+		timestamp:    now,
+		percentValue: 75,
+		rateValue:    125,
+	})
+	return samples
+}
+
 func TestContract_InfrastructureChartsNormalizeLongRangeMixedCadence(t *testing.T) {
 	store := newTestMetricsStore(t)
 	monitor, state, _ := newTestMonitor(t)
@@ -1766,8 +1796,8 @@ func TestContract_InfrastructureChartsNormalizeLongRangeMixedCadence(t *testing.
 	syncTestResourceStore(t, monitor, state)
 
 	now := time.Now().UTC().Add(-10 * time.Minute).Truncate(time.Minute)
-	windowStart := now.Add(-7 * 24 * time.Hour)
-	seed := make([]metrics.WriteMetric, 0, 1200)
+	samples := mixedCadenceLongRangeMetricSamples(now)
+	seed := make([]metrics.WriteMetric, 0, len(samples)*3)
 	appendMetric := func(ts time.Time, value float64) {
 		for _, metricType := range []string{"cpu", "memory", "disk"} {
 			seed = append(seed, metrics.WriteMetric{
@@ -1780,16 +1810,9 @@ func TestContract_InfrastructureChartsNormalizeLongRangeMixedCadence(t *testing.
 			})
 		}
 	}
-	for ts := windowStart; ts.Before(now.Add(-24 * time.Hour)); ts = ts.Add(65 * time.Minute) {
-		appendMetric(ts, 20)
+	for _, sample := range samples {
+		appendMetric(sample.timestamp, sample.percentValue)
 	}
-	for ts := now.Add(-24 * time.Hour); ts.Before(now.Add(-2 * time.Hour)); ts = ts.Add(2 * time.Minute) {
-		appendMetric(ts, 40)
-	}
-	for ts := now.Add(-2 * time.Hour); ts.Before(now); ts = ts.Add(time.Minute) {
-		appendMetric(ts, 60)
-	}
-	appendMetric(now, 75)
 	store.WriteBatchSync(seed)
 
 	router := &Router{monitor: monitor}
@@ -2018,8 +2041,8 @@ func TestContract_WorkloadChartsCapLongRangeMixedCadenceByTime(t *testing.T) {
 	}
 
 	now := time.Now().UTC().Add(-10 * time.Minute).Truncate(time.Minute)
-	windowStart := now.Add(-7 * 24 * time.Hour)
-	seed := make([]metrics.WriteMetric, 0, 2000)
+	samples := mixedCadenceLongRangeMetricSamples(now)
+	seed := make([]metrics.WriteMetric, 0, len(samples)*7)
 	appendMetric := func(ts time.Time, percentValue, rateValue float64) {
 		for _, metricType := range []string{"cpu", "memory", "disk"} {
 			seed = append(seed, metrics.WriteMetric{
@@ -2042,16 +2065,9 @@ func TestContract_WorkloadChartsCapLongRangeMixedCadenceByTime(t *testing.T) {
 			})
 		}
 	}
-	for ts := windowStart; ts.Before(now.Add(-24 * time.Hour)); ts = ts.Add(65 * time.Minute) {
-		appendMetric(ts, 20, 50)
+	for _, sample := range samples {
+		appendMetric(sample.timestamp, sample.percentValue, sample.rateValue)
 	}
-	for ts := now.Add(-24 * time.Hour); ts.Before(now.Add(-2 * time.Hour)); ts = ts.Add(2 * time.Minute) {
-		appendMetric(ts, 40, 75)
-	}
-	for ts := now.Add(-2 * time.Hour); ts.Before(now); ts = ts.Add(time.Minute) {
-		appendMetric(ts, 60, 100)
-	}
-	appendMetric(now, 75, 125)
 	store.WriteBatchSync(seed)
 
 	router := &Router{monitor: monitor}
@@ -2231,8 +2247,8 @@ func TestContract_WorkloadsSummaryChartsNormalizeLongRangeMixedCadence(t *testin
 	}
 
 	now := time.Now().UTC().Add(-10 * time.Minute).Truncate(time.Minute)
-	windowStart := now.Add(-7 * 24 * time.Hour)
-	seed := make([]metrics.WriteMetric, 0, 1500)
+	samples := mixedCadenceLongRangeMetricSamples(now)
+	seed := make([]metrics.WriteMetric, 0, len(samples)*5)
 	appendMetric := func(ts time.Time, percentValue, rateValue float64) {
 		for _, metricType := range []string{"cpu", "memory", "disk"} {
 			seed = append(seed, metrics.WriteMetric{
@@ -2255,16 +2271,9 @@ func TestContract_WorkloadsSummaryChartsNormalizeLongRangeMixedCadence(t *testin
 			})
 		}
 	}
-	for ts := windowStart; ts.Before(now.Add(-24 * time.Hour)); ts = ts.Add(65 * time.Minute) {
-		appendMetric(ts, 20, 50)
+	for _, sample := range samples {
+		appendMetric(sample.timestamp, sample.percentValue, sample.rateValue)
 	}
-	for ts := now.Add(-24 * time.Hour); ts.Before(now.Add(-2 * time.Hour)); ts = ts.Add(2 * time.Minute) {
-		appendMetric(ts, 40, 75)
-	}
-	for ts := now.Add(-2 * time.Hour); ts.Before(now); ts = ts.Add(time.Minute) {
-		appendMetric(ts, 60, 100)
-	}
-	appendMetric(now, 75, 125)
 	store.WriteBatchSync(seed)
 
 	router := &Router{monitor: monitor}
