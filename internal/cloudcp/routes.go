@@ -151,6 +151,13 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 		mux.Handle("/signup/complete", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandleSignupComplete)))
 		mux.Handle("/cloud/signup/complete", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandleSignupComplete)))
 		mux.Handle("/api/public/signup", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandlePublicSignup)))
+
+		// Pulse Cloud for MSPs self-serve signup. Registered under the same
+		// public-signup gate; stays inert (renders an unavailable state) until
+		// an MSP tier price ID is configured in CP env.
+		mux.Handle("/cloud/msp/signup", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandleMSPSignupPage)))
+		mux.Handle("/cloud/msp/signup/complete", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandleMSPSignupComplete)))
+		mux.Handle("/api/public/msp/signup", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandleMSPPublicSignup)))
 	}
 
 	// Admin API (key-authenticated)

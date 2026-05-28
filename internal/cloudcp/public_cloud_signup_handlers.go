@@ -377,6 +377,34 @@ func (h *PublicCloudSignupHandlers) HandleSignupComplete(w http.ResponseWriter, 
 }
 
 func (h *PublicCloudSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r *http.Request) {
+	h.servePublicSignupCheckout(w, r,
+		"Invalid plan tier. Must be one of: starter, power, max",
+		"public cloud signup API checkout creation failed",
+		fmt.Sprintf("Checkout session created. Continue in Stripe to start your %d-day Pulse Cloud trial and provision your workspace.", publicCloudTrialDays),
+		func(tierRaw string) (bool, bool, func(email, orgName string) (string, error)) {
+			tier, ok := parseCloudTier(tierRaw)
+			if !ok {
+				return false, false, nil
+			}
+			_, available := h.priceIDForTier(tier)
+			return true, available, func(email, orgName string) (string, error) {
+				return h.createCheckout(email, orgName, tier)
+			}
+		},
+	)
+}
+
+// servePublicSignupCheckout runs the shared method/decode/validate/checkout
+// skeleton for the public Cloud and MSP signup JSON endpoints. resolve supplies
+// the per-path tier parsing, price availability, and checkout creation.
+func (h *PublicCloudSignupHandlers) servePublicSignupCheckout(
+	w http.ResponseWriter,
+	r *http.Request,
+	invalidTierMessage string,
+	checkoutLogMsg string,
+	successMessage string,
+	resolve func(tierRaw string) (tierValid bool, available bool, create func(email, orgName string) (string, error)),
+) {
 	if r.Method != http.MethodPost {
 		writePublicSignupError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
@@ -389,37 +417,37 @@ func (h *PublicCloudSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r 
 		return
 	}
 
-	req.Email = strings.TrimSpace(req.Email)
-	req.OrgName = strings.TrimSpace(req.OrgName)
+	email := strings.TrimSpace(req.Email)
+	orgName := strings.TrimSpace(req.OrgName)
 
-	tier, tierOK := parseCloudTier(req.Tier)
-	if !tierOK {
-		writePublicSignupError(w, http.StatusBadRequest, "invalid_tier", "Invalid plan tier. Must be one of: starter, power, max")
+	tierValid, available, create := resolve(req.Tier)
+	if !tierValid {
+		writePublicSignupError(w, http.StatusBadRequest, "invalid_tier", invalidTierMessage)
 		return
 	}
-	if !isValidCloudSignupEmail(req.Email) {
+	if !isValidCloudSignupEmail(email) {
 		writePublicSignupError(w, http.StatusBadRequest, "invalid_email", "Invalid email format")
 		return
 	}
-	if !isValidCloudSignupOrgName(req.OrgName) {
+	if !isValidCloudSignupOrgName(orgName) {
 		writePublicSignupError(w, http.StatusBadRequest, "invalid_org_name", "Invalid organization name")
 		return
 	}
-	if _, avail := h.priceIDForTier(tier); !avail {
+	if !available {
 		writePublicSignupError(w, http.StatusBadRequest, "tier_unavailable", "The selected plan tier is not currently available")
 		return
 	}
 
-	checkoutURL, err := h.createCheckout(req.Email, req.OrgName, tier)
+	checkoutURL, err := create(email, orgName)
 	if err != nil {
-		log.Warn().Err(err).Str("email", req.Email).Msg("public cloud signup API checkout creation failed")
+		log.Warn().Err(err).Str("email", email).Msg(checkoutLogMsg)
 		writePublicSignupError(w, http.StatusBadGateway, "checkout_failed", "Unable to create checkout session")
 		return
 	}
 
 	writePublicSignupJSON(w, http.StatusCreated, map[string]any{
 		"checkout_url": checkoutURL,
-		"message":      fmt.Sprintf("Checkout session created. Continue in Stripe to start your %d-day Pulse Cloud trial and provision your workspace.", publicCloudTrialDays),
+		"message":      successMessage,
 	})
 }
 
@@ -501,9 +529,6 @@ func (h *PublicCloudSignupHandlers) createCheckout(email, orgName string, tier c
 	if h.cfg == nil {
 		return "", fmt.Errorf("control plane config is missing")
 	}
-	if strings.TrimSpace(h.cfg.StripeAPIKey) == "" {
-		return "", fmt.Errorf("stripe api key not configured")
-	}
 	priceID, ok := h.priceIDForTier(tier)
 	if !ok || priceID == "" {
 		return "", fmt.Errorf("price id not configured for tier %q", tier)
@@ -512,7 +537,6 @@ func (h *PublicCloudSignupHandlers) createCheckout(email, orgName string, tier c
 		return "", err
 	}
 
-	stripe.Key = strings.TrimSpace(h.cfg.StripeAPIKey)
 	successURL := buildCPURL(h.cfg.BaseURL, canonicalPublicCloudSignupPath+"/complete", nil)
 	cancelURL := buildCPURL(h.cfg.BaseURL, canonicalPublicCloudSignupPath, url.Values{
 		"cancelled": {"1"},
@@ -520,6 +544,25 @@ func (h *PublicCloudSignupHandlers) createCheckout(email, orgName string, tier c
 		"org_name":  {orgName},
 		"tier":      {string(tier)},
 	})
+	return h.createTrialCheckoutSession(email, priceID, successURL, cancelURL, h.buildCheckoutMetadata(priceID, orgName))
+}
+
+// createTrialCheckoutSession builds a subscription-mode Stripe Checkout session
+// for a single recurring price with the standard public-signup trial, and
+// returns the redirect URL. Shared by the individual Cloud and MSP signup paths;
+// callers own price resolution, success/cancel URLs, and metadata.
+func (h *PublicCloudSignupHandlers) createTrialCheckoutSession(email, priceID, successURL, cancelURL string, metadata map[string]string) (string, error) {
+	if h.cfg == nil {
+		return "", fmt.Errorf("control plane config is missing")
+	}
+	if strings.TrimSpace(h.cfg.StripeAPIKey) == "" {
+		return "", fmt.Errorf("stripe api key not configured")
+	}
+	if strings.TrimSpace(priceID) == "" {
+		return "", fmt.Errorf("price id not configured")
+	}
+
+	stripe.Key = strings.TrimSpace(h.cfg.StripeAPIKey)
 	params := &stripe.CheckoutSessionParams{
 		Mode:                    stripe.String(string(stripe.CheckoutSessionModeSubscription)),
 		SuccessURL:              stripe.String(successURL),
@@ -535,7 +578,7 @@ func (h *PublicCloudSignupHandlers) createCheckout(email, orgName string, tier c
 		SubscriptionData: &stripe.CheckoutSessionSubscriptionDataParams{
 			TrialPeriodDays: stripe.Int64(publicCloudTrialDays),
 		},
-		Metadata: h.buildCheckoutMetadata(priceID, orgName),
+		Metadata: metadata,
 	}
 	session, err := h.createCheckoutSession(params)
 	if err != nil {

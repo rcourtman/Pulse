@@ -98,6 +98,7 @@ cloud-specific enforcement rules.
 86. `internal/cloudcp/handoff/handler.go`, `internal/cloudcp/handoff/handoff.go`
 87. `internal/cloudcp/stripe/grace_enforcer.go`, `internal/cloudcp/stripe/helpers.go`, `internal/cloudcp/stripe/reconciler.go`, `internal/cloudcp/stripe/webhook.go`
 88. `internal/hosted/hosted_metrics.go`, `internal/hosted/reaper.go`
+89. `internal/cloudcp/public_msp_signup_handlers.go`
 
 ## Shared Boundaries
 
@@ -230,6 +231,16 @@ or other self-hosted uncapped continuity plans.
    tenant-runtime capacity/log retention configuration, or checkout gating
    through `internal/cloudcp/config.go` and
    `internal/cloudcp/public_cloud_signup_handlers.go`
+   Public MSP self-serve signup is the operator-account front door for the same
+   boundary and lives in `internal/cloudcp/public_msp_signup_handlers.go`. Its
+   per-tier price configuration (`CP_MSP_STARTER_PRICE_ID`,
+   `CP_MSP_GROWTH_PRICE_ID`, `CP_MSP_SCALE_PRICE_ID`) is validated in
+   `internal/cloudcp/config.go` against the canonical `msp_starter`,
+   `msp_growth`, and `msp_scale` plan versions, and the MSP signup routes stay
+   gated behind the same `PublicCloudSignupEnabled` flag as the individual
+   cloud signup front door. Checkout metadata produced by the MSP front door
+   must mark `account_kind=msp` so provisioning seeds an operator workspace
+   rather than an individual tenant.
 6. Add or change the hosted account portal API, Pulse Account access/auth/session handling, task-first browser shell, maintained portal frontend/bundle, or account-scoped workspace/access/billing handoff through `internal/cloudcp/account/audit.go`, `internal/cloudcp/account/handlers.go`, `internal/cloudcp/auth/handlers.go`, `internal/cloudcp/auth/session.go`, `internal/cloudcp/portal/`, and `internal/cloudcp/routes.go`
    That same customer-entry boundary owns the canonical hosted Cloud handoff:
    public Cloud entry, secure checkout return, and returning-customer sign-in
@@ -685,6 +696,19 @@ prices. The Cloud control-plane webhook uses that derivation as an admission
 boundary: hosted Cloud/MSP checkout events may provision tenants, while
 self-hosted landing purchases are acknowledged and ignored rather than
 creating hosted containers or Stripe account mappings.
+
+The hosted MSP offering now has a public self-serve front door alongside the
+individual cloud signup page. `internal/cloudcp/public_msp_signup_handlers.go`
+serves `/cloud/msp/signup`, `/cloud/msp/signup/complete`, and
+`/api/public/msp/signup`, all gated behind the same `PublicCloudSignupEnabled`
+flag as `/cloud/signup`, so the MSP front door stays dark until an operator
+explicitly enables public signup. Each MSP tier (starter, growth, scale) is
+served only when its Stripe price is configured (`CP_MSP_STARTER_PRICE_ID`,
+`CP_MSP_GROWTH_PRICE_ID`, `CP_MSP_SCALE_PRICE_ID`); the signup page renders an
+explicit "not open for self-serve signup yet" notice when no MSP tier price is
+configured rather than offering an unbacked checkout. Checkout sessions started
+from this front door carry `account_kind=msp` and `signup_source=public_msp_signup`
+metadata so the provisioner seeds an isolated operator workspace.
 
 Cloud paid readiness is materially behind architecture work. The main concern is
 contract coherence between pricing, entitlements, and runtime enforcement.

@@ -239,6 +239,52 @@ func TestRegisterRoutes_PublicCloudSignupRoutes(t *testing.T) {
 	}
 }
 
+func TestRegisterRoutes_PublicMSPSignupRoutes(t *testing.T) {
+	dir := t.TempDir()
+	reg, err := registry.NewTenantRegistry(dir)
+	if err != nil {
+		t.Fatalf("NewTenantRegistry: %v", err)
+	}
+	t.Cleanup(func() { _ = reg.Close() })
+
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, &Deps{
+		Config: &CPConfig{
+			DataDir:                  dir,
+			AdminKey:                 "test-admin-key",
+			BaseURL:                  "https://cloud.example.com",
+			StripeWebhookSecret:      "whsec_test",
+			PublicCloudSignupEnabled: true,
+		},
+		Registry: reg,
+		Version:  "test",
+	})
+
+	mspPageReq := httptest.NewRequest(http.MethodGet, "/cloud/msp/signup", nil)
+	mspPageRec := httptest.NewRecorder()
+	mux.ServeHTTP(mspPageRec, mspPageReq)
+	if mspPageRec.Code != http.StatusOK {
+		t.Fatalf("GET /cloud/msp/signup status=%d, want %d", mspPageRec.Code, http.StatusOK)
+	}
+	if !strings.Contains(mspPageRec.Body.String(), "Pulse Cloud for MSPs") {
+		t.Fatalf("expected public MSP signup page body")
+	}
+
+	mspCompleteReq := httptest.NewRequest(http.MethodGet, "/cloud/msp/signup/complete", nil)
+	mspCompleteRec := httptest.NewRecorder()
+	mux.ServeHTTP(mspCompleteRec, mspCompleteReq)
+	if mspCompleteRec.Code != http.StatusOK {
+		t.Fatalf("GET /cloud/msp/signup/complete status=%d, want %d", mspCompleteRec.Code, http.StatusOK)
+	}
+
+	mspAPIGetReq := httptest.NewRequest(http.MethodGet, "/api/public/msp/signup", nil)
+	mspAPIGetRec := httptest.NewRecorder()
+	mux.ServeHTTP(mspAPIGetRec, mspAPIGetReq)
+	if mspAPIGetRec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("GET /api/public/msp/signup status=%d, want %d", mspAPIGetRec.Code, http.StatusMethodNotAllowed)
+	}
+}
+
 func TestRegisterRoutes_PublicCloudSignupRoutesDisabledByDefault(t *testing.T) {
 	dir := t.TempDir()
 	reg, err := registry.NewTenantRegistry(dir)
@@ -267,6 +313,9 @@ func TestRegisterRoutes_PublicCloudSignupRoutesDisabledByDefault(t *testing.T) {
 		{method: http.MethodGet, path: "/cloud/signup"},
 		{method: http.MethodGet, path: "/signup/complete"},
 		{method: http.MethodPost, path: "/api/public/signup"},
+		{method: http.MethodGet, path: "/cloud/msp/signup"},
+		{method: http.MethodGet, path: "/cloud/msp/signup/complete"},
+		{method: http.MethodPost, path: "/api/public/msp/signup"},
 	} {
 		req := httptest.NewRequest(tc.method, tc.path, nil)
 		rec := httptest.NewRecorder()

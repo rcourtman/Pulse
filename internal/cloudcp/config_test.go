@@ -386,6 +386,48 @@ func TestLoadConfig_AcceptsCanonicalCloudSignupPriceIDs(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_AcceptsCanonicalMSPSignupPriceIDs(t *testing.T) {
+	setRequiredCPEnv(t)
+	setTrialSigningEnv(t)
+	t.Setenv("CP_ENV", "production")
+	t.Setenv("STRIPE_API_KEY", "sk_live_123")
+	t.Setenv("CP_MSP_STARTER_PRICE_ID", "price_1T5kgTBrHBocJIGHjOs15LI2")
+	t.Setenv("CP_MSP_GROWTH_PRICE_ID", "price_1T5kgVBrHBocJIGHulNsCTb1")
+	t.Setenv("CP_MSP_SCALE_PRICE_ID", "price_1T5kgWBrHBocJIGHo40iFeRd")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.CloudMSPStarterPriceID != "price_1T5kgTBrHBocJIGHjOs15LI2" {
+		t.Fatalf("CloudMSPStarterPriceID=%q want canonical msp_starter price", cfg.CloudMSPStarterPriceID)
+	}
+	if cfg.CloudMSPGrowthPriceID != "price_1T5kgVBrHBocJIGHulNsCTb1" {
+		t.Fatalf("CloudMSPGrowthPriceID=%q want canonical msp_growth price", cfg.CloudMSPGrowthPriceID)
+	}
+	if cfg.CloudMSPScalePriceID != "price_1T5kgWBrHBocJIGHo40iFeRd" {
+		t.Fatalf("CloudMSPScalePriceID=%q want canonical msp_scale price", cfg.CloudMSPScalePriceID)
+	}
+}
+
+func TestLoadConfig_RejectsNonMSPStarterPriceIDInProductionCatalog(t *testing.T) {
+	setRequiredCPEnv(t)
+	setTrialSigningEnv(t)
+	t.Setenv("CP_ENV", "production")
+	t.Setenv("STRIPE_API_KEY", "sk_live_123")
+	// A canonical cloud_power price is a valid Stripe price but maps to the
+	// wrong plan version for the MSP Starter slot, so config must fail closed.
+	t.Setenv("CP_MSP_STARTER_PRICE_ID", "price_1T5kg2BrHBocJIGHmkoF0zXY")
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatal("expected error for non-msp_starter CP_MSP_STARTER_PRICE_ID")
+	}
+	if !strings.Contains(err.Error(), "CP_MSP_STARTER_PRICE_ID must map to the canonical msp_starter Stripe price") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestLoadConfig_AllowsMissingTrialSignupPriceWhenPublicCloudSignupDisabled(t *testing.T) {
 	setRequiredCPEnv(t)
 	setTrialSigningEnv(t)

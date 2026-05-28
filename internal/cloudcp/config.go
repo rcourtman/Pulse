@@ -55,6 +55,9 @@ type CPConfig struct {
 	TrialSignupPriceID                string // Cloud Starter (default tier) price ID
 	CloudPowerPriceID                 string // Cloud Power tier price ID (optional)
 	CloudMaxPriceID                   string // Cloud Max tier price ID (optional)
+	CloudMSPStarterPriceID            string // MSP Starter tier price ID (optional)
+	CloudMSPGrowthPriceID             string // MSP Growth tier price ID (optional)
+	CloudMSPScalePriceID              string // MSP Scale tier price ID (optional)
 	LicenseServerURL                  string
 	LicenseAdminToken                 string
 	TrialActivationPrivateKey         string
@@ -183,6 +186,9 @@ func LoadConfig() (*CPConfig, error) {
 		TrialSignupPriceID:                strings.TrimSpace(os.Getenv("CP_TRIAL_SIGNUP_PRICE_ID")),
 		CloudPowerPriceID:                 strings.TrimSpace(os.Getenv("CP_CLOUD_POWER_PRICE_ID")),
 		CloudMaxPriceID:                   strings.TrimSpace(os.Getenv("CP_CLOUD_MAX_PRICE_ID")),
+		CloudMSPStarterPriceID:            strings.TrimSpace(os.Getenv("CP_MSP_STARTER_PRICE_ID")),
+		CloudMSPGrowthPriceID:             strings.TrimSpace(os.Getenv("CP_MSP_GROWTH_PRICE_ID")),
+		CloudMSPScalePriceID:              strings.TrimSpace(os.Getenv("CP_MSP_SCALE_PRICE_ID")),
 		LicenseServerURL:                  envOrDefault("PULSE_LICENSE_SERVER_URL", "https://license.pulserelay.pro"),
 		LicenseAdminToken:                 strings.TrimSpace(os.Getenv("PULSE_LICENSE_ADMIN_TOKEN")),
 		TrialActivationPrivateKey:         strings.TrimSpace(os.Getenv("CP_TRIAL_ACTIVATION_PRIVATE_KEY")),
@@ -321,6 +327,15 @@ func (c *CPConfig) validate() error {
 		return err
 	}
 	if err := validateCloudStripePriceID(c.Environment, c.StripeAPIKey, "CP_CLOUD_MAX_PRICE_ID", c.CloudMaxPriceID, "cloud_max"); err != nil {
+		return err
+	}
+	if err := validateCloudStripePriceID(c.Environment, c.StripeAPIKey, "CP_MSP_STARTER_PRICE_ID", c.CloudMSPStarterPriceID, "msp_starter"); err != nil {
+		return err
+	}
+	if err := validateCloudStripePriceID(c.Environment, c.StripeAPIKey, "CP_MSP_GROWTH_PRICE_ID", c.CloudMSPGrowthPriceID, "msp_growth"); err != nil {
+		return err
+	}
+	if err := validateCloudStripePriceID(c.Environment, c.StripeAPIKey, "CP_MSP_SCALE_PRICE_ID", c.CloudMSPScalePriceID, "msp_scale"); err != nil {
 		return err
 	}
 	if strings.TrimSpace(c.LicenseServerURL) == "" && strings.TrimSpace(c.LicenseAdminToken) != "" {
