@@ -1,13 +1,11 @@
 import { Component, JSX, Show, createMemo } from 'solid-js';
 import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';
-import { Subtabs } from '@/components/shared/Subtabs';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import {
   DEFAULT_PHYSICAL_DISK_FACET_FILTER,
   type PhysicalDiskFilterOption,
 } from '@/features/storageBackups/diskPresentation';
-import { STORAGE_VIEW_OPTIONS } from '@/features/storageBackups/storagePagePresentation';
 import {
   getNextStorageSortDirection,
   getStorageSortDirectionIconClass,
@@ -81,25 +79,8 @@ type StoragePageControlsProps = {
   savedViewsKey?: string;
 };
 
-const VIEW_TABS = STORAGE_VIEW_OPTIONS as { value: string; label: string }[];
 const storageStatusDot = (className: string) => (
   <span class={`h-2 w-2 rounded-full ${className}`} />
-);
-
-type StorageViewSwitcherProps = {
-  view: () => StorageView;
-  setView: (value: StorageView) => void;
-  class?: string;
-};
-
-export const StorageViewSwitcher: Component<StorageViewSwitcherProps> = (props) => (
-  <Subtabs
-    class={props.class}
-    value={props.view()}
-    onChange={(value) => props.setView(value as StorageView)}
-    ariaLabel="Storage view"
-    tabs={VIEW_TABS}
-  />
 );
 
 export const StoragePageControls: Component<StoragePageControlsProps> = (props) => {
@@ -287,8 +268,6 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
   return (
     <Show when={!props.kioskMode()}>
       <div class="flex flex-col gap-2">
-        <StorageViewSwitcher view={props.view} setView={props.setView} />
-
         <FilterBar
           role="group"
           ariaLabel={props.filterAriaLabel ?? 'Storage filters'}

@@ -1453,8 +1453,6 @@ describe('frontend resource type boundaries', () => {
     expect(storageFilterStateSource).toContain('PHYSICAL_DISK_ALL_GROUPS_FILTER_LABEL');
     expect(storagePageSource).toContain('StorageContentCard');
     expect(storagePageControlsSource).toContain('FilterBar');
-    expect(storagePageControlsSource).toContain('Subtabs');
-    expect(storagePageControlsSource).toContain('STORAGE_VIEW_OPTIONS');
     expect(storagePageControlsSource).toContain('hasActiveStorageFilters');
     expect(storagePageControlsSource).toContain('DEFAULT_STORAGE_SORT_OPTIONS');
     expect(storagePageControlsSource).toContain('getNextStorageSortDirection');
@@ -1463,6 +1461,12 @@ describe('frontend resource type boundaries', () => {
     expect(storagePageControlsSource).not.toContain('StorageControls');
     expect(storagePageControlsSource).not.toContain('useStoragePageControlsModel');
     expect(storagePageControlsSource).not.toContain('focus:ring-blue-500');
+    // StoragePageControls used to render a Subtabs strip for "Storage /
+    // Physical Disks" alongside the segmented control inside the
+    // StorageContentCard header, producing two switches bound to the same
+    // view state. The view switch lives only on the table card now.
+    expect(storagePageControlsSource).not.toContain('Subtabs');
+    expect(storagePageControlsSource).not.toContain('StorageViewSwitcher');
     expect(storageFilterPresentationSource).toContain('export const getStorageSortDirectionTitle');
     expect(storageFilterPresentationSource).toContain(
       'export const getStorageSortDirectionIconClass',
