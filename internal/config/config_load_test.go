@@ -85,6 +85,43 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	assert.Equal(t, "admin", cfg.AuthUser)
 }
 
+func TestLoad_AgentIngestPortDefaultsDisabled(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	os.Unsetenv("PULSE_AGENT_INGEST_PORT")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	assert.Equal(t, 0, cfg.AgentIngestPort)
+}
+
+func TestLoad_AgentIngestPortEnvOverride(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	t.Setenv("PULSE_AGENT_INGEST_PORT", "7656")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	assert.Equal(t, 7656, cfg.AgentIngestPort)
+}
+
+func TestLoad_AgentIngestPortInvalidValueIgnored(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	t.Setenv("PULSE_AGENT_INGEST_PORT", "not-a-port")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	assert.Equal(t, 0, cfg.AgentIngestPort)
+}
+
+func TestLoad_AgentIngestPortRejectsFrontendPortCollision(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	t.Setenv("FRONTEND_PORT", "7655")
+	t.Setenv("PULSE_AGENT_INGEST_PORT", "7655")
+
+	_, err := Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "agent ingest port")
+}
+
 func TestLoad_ProxmoxGuestDockerDetectionEnvOptIn(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 

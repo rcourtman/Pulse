@@ -737,3 +737,16 @@ That same live auth-env reload boundary also owns watcher lifecycle cleanup:
 its fsnotify or polling goroutine can still read debounce or callback state.
 Stopping the watcher is the synchronization point that lets tests and runtime
 teardown restore auth/config state without racing a background reload.
+That same server-bind config boundary now also owns optional agent-ingest
+network isolation. `internal/config/config.go` may accept
+`PULSE_AGENT_INGEST_PORT` as a dedicated listener for agent report and
+management traffic so operators can place `/api/agents/*` on its own network or
+firewall boundary, but the option must fail closed at validation: the agent
+ingest port stays disabled at `0`, must be a valid `1`-`65535` port, and must
+differ from both the frontend port and any HTTP redirect port. When that
+listener is active the runtime must serve only the `/api/agents/*` surface on
+it and must never expose the web UI or the rest of the REST API through that
+port, so a port reachable from an untrusted agent network cannot widen into the
+operator console. Enabling the dedicated port is additive: the main listener
+keeps serving agent ingest too, so the default single-port deployment and
+existing agents are unaffected.

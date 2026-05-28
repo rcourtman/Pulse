@@ -182,6 +182,20 @@ func Run(ctx context.Context, version string) error {
 	}
 	defer mainListener.Close()
 
+	// Optional dedicated agent-ingest listener. When PULSE_AGENT_INGEST_PORT is
+	// set, agent report/management traffic (/api/agents/*) is also served on this
+	// separate port so operators can expose it on its own network/firewall
+	// boundary without exposing the web UI or the rest of the REST API there.
+	var agentListener net.Listener
+	if cfg.AgentIngestPort > 0 {
+		agentAddr := fmt.Sprintf("%s:%d", cfg.BindAddress, cfg.AgentIngestPort)
+		agentListener, err = net.Listen("tcp", agentAddr)
+		if err != nil {
+			return fmt.Errorf("failed to bind agent ingest server on %s: %w", agentAddr, err)
+		}
+		defer agentListener.Close()
+	}
+
 	// Multi-tenant persistence is the canonical way to resolve the base data directory.
 	// It uses cfg.DataPath, which already includes PULSE_DATA_DIR overrides.
 	mtPersistence := config.NewMultiTenantPersistence(cfg.DataPath)
@@ -566,6 +580,22 @@ func Run(ctx context.Context, version string) error {
 		},
 	}
 
+	// When a dedicated agent-ingest listener is configured, serve only the
+	// /api/agents/* surface on it so that port never exposes the web UI or the
+	// rest of the REST API.
+	var agentSrv *http.Server
+	if agentListener != nil {
+		agentSrv = &http.Server{
+			Handler:           agentIngestHandler(router.Handler()),
+			ReadHeaderTimeout: 15 * time.Second,
+			WriteTimeout:      0, // Disabled to support SSE/streaming
+			IdleTimeout:       120 * time.Second,
+			TLSConfig: &tls.Config{
+				MinVersion: tls.VersionTLS12,
+			},
+		}
+	}
+
 	// Start config watcher for .env file changes
 	configWatcher, err := config.NewConfigWatcher(cfg)
 	if err != nil {
@@ -652,7 +682,7 @@ func Run(ctx context.Context, version string) error {
 	}
 
 	// Start server
-	serverErr := make(chan error, 1)
+	serverErr := make(chan error, 2)
 	go func() {
 		var err error
 		if cfg.HTTPSEnabled && cfg.TLSCertFile != "" && cfg.TLSKeyFile != "" {
@@ -677,6 +707,30 @@ func Run(ctx context.Context, version string) error {
 			serverErr <- err
 		}
 	}()
+
+	if agentSrv != nil {
+		go func() {
+			var err error
+			if cfg.HTTPSEnabled && cfg.TLSCertFile != "" && cfg.TLSKeyFile != "" {
+				log.Info().
+					Str("host", cfg.BindAddress).
+					Int("port", cfg.AgentIngestPort).
+					Str("protocol", "HTTPS").
+					Msg("Agent ingest server listening")
+				err = agentSrv.ServeTLS(agentListener, cfg.TLSCertFile, cfg.TLSKeyFile)
+			} else {
+				log.Info().
+					Str("host", cfg.BindAddress).
+					Int("port", cfg.AgentIngestPort).
+					Str("protocol", "HTTP").
+					Msg("Agent ingest server listening")
+				err = agentSrv.Serve(agentListener)
+			}
+			if err != nil && err != http.ErrServerClosed {
+				serverErr <- err
+			}
+		}()
+	}
 
 	// Setup signal handlers
 	sigChan := make(chan os.Signal, 1)
@@ -729,6 +783,11 @@ shutdown:
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error().Err(err).Msg("Server shutdown error")
 	}
+	if agentSrv != nil {
+		if err := agentSrv.Shutdown(shutdownCtx); err != nil {
+			log.Error().Err(err).Msg("Agent ingest server shutdown error")
+		}
+	}
 
 	// Stop license grant refresh loops
 	router.StopGrantRefresh()
@@ -761,6 +820,20 @@ shutdown:
 	}
 	log.Info().Msg("Server stopped")
 	return runErr
+}
+
+// agentIngestHandler restricts a handler to the agent-ingest surface
+// (/api/agents/*). It backs the optional dedicated agent-ingest listener so
+// that port serves only agent report/management endpoints and never the web UI
+// or the rest of the REST API. Every other path returns 404.
+func agentIngestHandler(inner http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/api/agents/") {
+			http.NotFound(w, r)
+			return
+		}
+		inner.ServeHTTP(w, r)
+	})
 }
 
 // startMetricsServer starts the Prometheus /metrics endpoint. When metricsToken

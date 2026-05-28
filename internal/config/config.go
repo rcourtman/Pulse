@@ -141,9 +141,10 @@ type Config struct {
 	FrontendPort    int `envconfig:"FRONTEND_PORT" default:"7655"`
 	ConfigPath      string
 	DataPath        string
-	AppRoot         string `json:"-"`                                       // Root directory of the application (where binary lives)
-	PublicURL       string `envconfig:"PULSE_PUBLIC_URL" default:""`        // Full URL to access Pulse (e.g., http://198.51.100.100:7655)
-	AgentConnectURL string `envconfig:"PULSE_AGENT_CONNECT_URL" default:""` // Dedicated direct connect URL for agents (e.g. http://192.0.2.5:7655)
+	AppRoot         string `json:"-"`                                        // Root directory of the application (where binary lives)
+	PublicURL       string `envconfig:"PULSE_PUBLIC_URL" default:""`         // Full URL to access Pulse (e.g., http://198.51.100.100:7655)
+	AgentConnectURL string `envconfig:"PULSE_AGENT_CONNECT_URL" default:""`  // Dedicated direct connect URL for agents (e.g. http://192.0.2.5:7655)
+	AgentIngestPort int    `envconfig:"PULSE_AGENT_INGEST_PORT" default:"0"` // When >0, additionally serve agent ingest (/api/agents/*) on this dedicated port so it can be network-isolated from the UI/API. 0 = disabled (single-port, default).
 
 	// Proxmox VE connections
 	PVEInstances []PVEInstance
@@ -1314,6 +1315,16 @@ func load(initLogging bool) (*Config, error) {
 		}
 	}
 
+	if agentIngestPort := utils.GetenvTrim("PULSE_AGENT_INGEST_PORT"); agentIngestPort != "" {
+		if p, err := parsePortOverride("PULSE_AGENT_INGEST_PORT", agentIngestPort); err == nil {
+			cfg.AgentIngestPort = p
+			cfg.EnvOverrides["PULSE_AGENT_INGEST_PORT"] = true
+			log.Info().Int("port", p).Msg("Serving agent ingest on dedicated port from PULSE_AGENT_INGEST_PORT env var")
+		} else {
+			log.Warn().Str("value", agentIngestPort).Msg("Ignoring invalid PULSE_AGENT_INGEST_PORT from environment")
+		}
+	}
+
 	// Detect deprecated DISABLE_AUTH flag and strip it from the runtime env so downstream
 	// components behave as if it were never set.
 	if disableAuthEnv := os.Getenv("DISABLE_AUTH"); disableAuthEnv != "" {
@@ -1681,6 +1692,17 @@ func (c *Config) Validate() error {
 		}
 		if c.HTTPRedirectPort == c.FrontendPort {
 			return fmt.Errorf("HTTP redirect port (%d) must differ from frontend port", c.HTTPRedirectPort)
+		}
+	}
+	if c.AgentIngestPort != 0 {
+		if c.AgentIngestPort < 1 || c.AgentIngestPort > 65535 {
+			return fmt.Errorf("invalid agent ingest port: %d (must be between 1 and 65535)", c.AgentIngestPort)
+		}
+		if c.AgentIngestPort == c.FrontendPort {
+			return fmt.Errorf("agent ingest port (%d) must differ from frontend port", c.AgentIngestPort)
+		}
+		if c.HTTPRedirectPort != 0 && c.AgentIngestPort == c.HTTPRedirectPort {
+			return fmt.Errorf("agent ingest port (%d) must differ from HTTP redirect port", c.AgentIngestPort)
 		}
 	}
 

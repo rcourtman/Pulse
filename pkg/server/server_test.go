@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +17,47 @@ import (
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
+
+func TestAgentIngestHandler(t *testing.T) {
+	var innerCalled bool
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		innerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+	h := agentIngestHandler(inner)
+
+	cases := []struct {
+		path      string
+		wantInner bool
+		wantCode  int
+	}{
+		{"/api/agents/agent/report", true, http.StatusOK},
+		{"/api/agents/docker/report", true, http.StatusOK},
+		{"/api/agents/kubernetes/report", true, http.StatusOK},
+		{"/api/agents/agent/lookup", true, http.StatusOK},
+		{"/api/agents/agent/config", true, http.StatusOK},
+		// Everything outside the agent-ingest surface must be rejected so the
+		// dedicated port never exposes the web UI or the rest of the REST API.
+		{"/", false, http.StatusNotFound},
+		{"/index.html", false, http.StatusNotFound},
+		{"/api/health", false, http.StatusNotFound},
+		{"/api/state", false, http.StatusNotFound},
+		{"/api/security/status", false, http.StatusNotFound},
+		{"/api/agents", false, http.StatusNotFound},
+	}
+	for _, tc := range cases {
+		innerCalled = false
+		req := httptest.NewRequest(http.MethodPost, tc.path, nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if innerCalled != tc.wantInner {
+			t.Errorf("path %q: innerCalled=%v, want %v", tc.path, innerCalled, tc.wantInner)
+		}
+		if rec.Code != tc.wantCode {
+			t.Errorf("path %q: status=%d, want %d", tc.path, rec.Code, tc.wantCode)
+		}
+	}
+}
 
 func TestBusinessHooks(t *testing.T) {
 	called := false
