@@ -81,10 +81,18 @@ export interface DockerAgentDiagnostic {
   notes?: string[];
 }
 
+export interface AlertsOverrideDiagnostic {
+  key: string;
+  disabled?: boolean;
+  disableConnectivity?: boolean;
+  thresholds?: Record<string, number>;
+}
+
 export interface AlertsDiagnostic {
   missingCooldown: boolean;
   missingGroupingWindow: boolean;
   notes?: string[];
+  overrides?: AlertsOverrideDiagnostic[];
 }
 
 export interface MetricsStoreDiagnostic {
@@ -235,6 +243,16 @@ export function sanitizeDiagnosticsData(raw: DiagnosticsData): DiagnosticsData {
 
   if (data.aiChat?.url) {
     data.aiChat.url = '[REDACTED]';
+  }
+
+  if (data.alerts && Array.isArray(data.alerts.overrides)) {
+    data.alerts = {
+      ...data.alerts,
+      overrides: data.alerts.overrides.map((override, index) => ({
+        ...override,
+        key: `override-${index + 1}`,
+      })),
+    };
   }
 
   if (Array.isArray(data.errors)) {

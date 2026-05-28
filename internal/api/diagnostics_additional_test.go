@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	alertconfig "github.com/rcourtman/pulse-go-rewrite/internal/alerts/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
@@ -470,6 +471,70 @@ func TestBuildAlertsDiagnostic_LegacySettings(t *testing.T) {
 	if len(diag.Notes) == 0 {
 		t.Fatalf("expected notes to be populated")
 	}
+}
+
+// Triage cases like #1341 hinge on whether a persisted override key matches
+// the runtime resource ID. Surface override keys + thresholds in the
+// diagnostics export so we don't have to ask users to cat the alerts config.
+func TestBuildAlertsDiagnostic_OverridesEmittedForTriage(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	monitor := newMonitorForDiagnostics(t, cfg)
+
+	manager := monitor.GetAlertManager()
+	alertCfg := manager.GetConfig()
+	alertCfg.Schedule.Cooldown = 600
+	alertCfg.Schedule.Grouping.Window = 30
+
+	usage := alertconfig.HysteresisThreshold{Trigger: 50, Clear: 45}
+	cpu := alertconfig.HysteresisThreshold{Trigger: 75, Clear: 70}
+	alertCfg.Overrides = map[string]alertconfig.ThresholdConfig{
+		"pve5-ceph-pool-data_replication": {Usage: &usage},
+		"pve5-101":                        {CPU: &cpu, Disabled: true},
+	}
+	manager.UpdateConfig(alertCfg)
+
+	diag := buildAlertsDiagnostic(monitor)
+	if diag == nil {
+		t.Fatalf("expected diagnostics")
+	}
+	if len(diag.Overrides) != 2 {
+		t.Fatalf("override count = %d, want 2", len(diag.Overrides))
+	}
+
+	byKey := map[string]AlertsOverrideDiagnostic{}
+	for _, o := range diag.Overrides {
+		byKey[o.Key] = o
+	}
+
+	ceph, ok := byKey["pve5-ceph-pool-data_replication"]
+	if !ok {
+		t.Fatalf("expected ceph pool override key in diagnostics, got keys %v", keysOfOverrideDiag(byKey))
+	}
+	if got := ceph.Thresholds["usage"]; got != 50 {
+		t.Fatalf("ceph usage threshold = %.1f, want 50", got)
+	}
+	if ceph.Disabled {
+		t.Fatalf("ceph override should not be disabled")
+	}
+
+	guest, ok := byKey["pve5-101"]
+	if !ok {
+		t.Fatalf("expected guest override key in diagnostics, got keys %v", keysOfOverrideDiag(byKey))
+	}
+	if got := guest.Thresholds["cpu"]; got != 75 {
+		t.Fatalf("guest cpu threshold = %.1f, want 75", got)
+	}
+	if !guest.Disabled {
+		t.Fatalf("guest override Disabled flag lost in summary")
+	}
+}
+
+func keysOfOverrideDiag(m map[string]AlertsOverrideDiagnostic) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
 }
 
 func TestBuildDiscoveryDiagnostic_ConfigOnly(t *testing.T) {

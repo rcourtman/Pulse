@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	alertconfig "github.com/rcourtman/pulse-go-rewrite/internal/alerts/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -680,9 +681,20 @@ func (a DockerAgentAttention) NormalizeCollections() DockerAgentAttention {
 
 // AlertsDiagnostic summarises alert configuration migration state.
 type AlertsDiagnostic struct {
-	MissingCooldown       bool     `json:"missingCooldown"`
-	MissingGroupingWindow bool     `json:"missingGroupingWindow"`
-	Notes                 []string `json:"notes"`
+	MissingCooldown       bool                       `json:"missingCooldown"`
+	MissingGroupingWindow bool                       `json:"missingGroupingWindow"`
+	Notes                 []string                   `json:"notes"`
+	Overrides             []AlertsOverrideDiagnostic `json:"overrides,omitempty"`
+}
+
+// AlertsOverrideDiagnostic captures one threshold override entry so support
+// triage can verify the persisted key matches the runtime resource ID
+// without asking users to cat their alerts config from inside the container.
+type AlertsOverrideDiagnostic struct {
+	Key                 string             `json:"key"`
+	Disabled            bool               `json:"disabled,omitempty"`
+	DisableConnectivity bool               `json:"disableConnectivity,omitempty"`
+	Thresholds          map[string]float64 `json:"thresholds,omitempty"`
 }
 
 func (d AlertsDiagnostic) NormalizeCollections() AlertsDiagnostic {
@@ -1321,7 +1333,47 @@ func buildAlertsDiagnostic(m *monitoring.Monitor) *AlertsDiagnostic {
 		appendNote("Alert grouping window is disabled. Configure a grouping window to bundle related alerts.")
 	}
 
+	overrideKeys := make([]string, 0, len(config.Overrides))
+	for key := range config.Overrides {
+		overrideKeys = append(overrideKeys, key)
+	}
+	sort.Strings(overrideKeys)
+	for _, key := range overrideKeys {
+		diag.Overrides = append(diag.Overrides, summarizeAlertOverride(key, config.Overrides[key]))
+	}
+
 	return diag
+}
+
+func summarizeAlertOverride(key string, th alertconfig.ThresholdConfig) AlertsOverrideDiagnostic {
+	out := AlertsOverrideDiagnostic{
+		Key:                 key,
+		Disabled:            th.Disabled,
+		DisableConnectivity: th.DisableConnectivity,
+	}
+
+	thresholds := map[string]float64{}
+	addThreshold := func(name string, t *alertconfig.HysteresisThreshold) {
+		if t == nil {
+			return
+		}
+		thresholds[name] = t.Trigger
+	}
+	addThreshold("cpu", th.CPU)
+	addThreshold("memory", th.Memory)
+	addThreshold("disk", th.Disk)
+	addThreshold("diskRead", th.DiskRead)
+	addThreshold("diskWrite", th.DiskWrite)
+	addThreshold("networkIn", th.NetworkIn)
+	addThreshold("networkOut", th.NetworkOut)
+	addThreshold("usage", th.Usage)
+	addThreshold("temperature", th.Temperature)
+	addThreshold("diskTemperature", th.DiskTemperature)
+
+	if len(thresholds) > 0 {
+		out.Thresholds = thresholds
+	}
+	return out
 }
 
 func fingerprintPublicKey(pub string) (string, error) {

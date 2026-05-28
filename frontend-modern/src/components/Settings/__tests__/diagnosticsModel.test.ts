@@ -99,6 +99,21 @@ const createDiagnosticsData = (): DiagnosticsData =>
       platforms: [{ key: 'truenas', catalog_selected: 2, credentials_opened: 1 }],
       notes: ['Some probed addresses did not match a supported API-backed platform.'],
     },
+    alerts: {
+      missingCooldown: false,
+      missingGroupingWindow: false,
+      overrides: [
+        {
+          key: 'pve5-ceph-pool-data_replication',
+          thresholds: { usage: 50 },
+        },
+        {
+          key: 'pve5-101',
+          disabled: true,
+          thresholds: { cpu: 75 },
+        },
+      ],
+    },
     errors: ['probe failed for 10.0.0.10 after timeout'],
   }) as DiagnosticsData;
 
@@ -140,6 +155,10 @@ describe('diagnosticsModel', () => {
       }),
     );
     expect(sanitized.errors).toEqual(['probe failed for [REDACTED_IP] after timeout']);
+    expect(sanitized.alerts?.overrides).toEqual([
+      expect.objectContaining({ key: 'override-1', thresholds: { usage: 50 } }),
+      expect.objectContaining({ key: 'override-2', disabled: true, thresholds: { cpu: 75 } }),
+    ]);
     expect(sanitized).not.toHaveProperty('commercialFunnel');
     expect(sanitized).not.toHaveProperty('infrastructureOnboarding');
   });
