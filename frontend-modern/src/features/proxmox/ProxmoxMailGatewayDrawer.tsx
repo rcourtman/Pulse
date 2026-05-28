@@ -1,6 +1,7 @@
 import { For, Show, createMemo, createResource, type Component } from 'solid-js';
 import XIcon from 'lucide-solid/icons/x';
 import { Card } from '@/components/shared/Card';
+import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { StatusDot } from '@/components/shared/StatusDot';
 import {
   Table,
@@ -301,15 +302,19 @@ export const ProxmoxMailGatewayDrawer: Component<{
     ];
   });
 
+  const headingId = () => `proxmox-mail-gateway-drawer-heading-${id()}`;
+
   return (
-    <div class="space-y-4">
+    <section class="space-y-3" aria-labelledby={headingId()}>
       <header class="flex items-start justify-between gap-3">
         <div class="min-w-0 space-y-1">
-          <div class="flex items-center gap-2 min-w-0">
-            <StatusDot size="md" variant={health().variant} title={health().label} ariaHidden />
-            <h3 class="truncate text-sm font-semibold text-base-content">{name()}</h3>
-            <span class="shrink-0 text-[10px] font-mono text-muted">{version()}</span>
-          </div>
+          <DrawerSubjectHeading
+            headingId={headingId()}
+            title={name()}
+            statusVariant={health().variant}
+            statusLabel={health().label}
+            trailing={<span class="shrink-0 text-[10px] font-mono text-muted">{version()}</span>}
+          />
           <Show when={hostname()}>
             <div class="font-mono text-[10px] text-muted break-all">{hostname()}</div>
           </Show>
@@ -640,7 +645,7 @@ export const ProxmoxMailGatewayDrawer: Component<{
           </Show>
         </Show>
       </Show>
-    </div>
+    </section>
   );
 };
 

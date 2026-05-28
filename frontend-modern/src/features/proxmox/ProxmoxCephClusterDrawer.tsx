@@ -1,6 +1,7 @@
 import { For, Show, type Component } from 'solid-js';
 import XIcon from 'lucide-solid/icons/x';
 import { Card } from '@/components/shared/Card';
+import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { StatusDot } from '@/components/shared/StatusDot';
 import {
@@ -106,20 +107,23 @@ export const ProxmoxCephClusterDrawer: Component<{
   const usedCapacity = () => props.cluster.disk?.used ?? 0;
   const usagePercent = () => props.cluster.disk?.current ?? 0;
   const fsid = () => asTrimmedString(meta()?.fsid) || '—';
+  const headingId = () => `proxmox-ceph-cluster-drawer-heading-${props.cluster.id}`;
 
   return (
-    <div class="space-y-4">
+    <section class="space-y-3" aria-labelledby={headingId()}>
       <header class="flex items-start justify-between gap-3">
         <div class="min-w-0 space-y-1">
-          <div class="flex items-center gap-2 min-w-0">
-            <StatusDot size="md" variant={health().variant} title={health().label} ariaHidden />
-            <h3 class="truncate text-sm font-semibold text-base-content">
-              {asTrimmedString(props.cluster.name) || props.cluster.id}
-            </h3>
-            <span class="shrink-0 text-[10px] font-mono text-muted">
-              {meta()?.healthStatus ?? ''}
-            </span>
-          </div>
+          <DrawerSubjectHeading
+            headingId={headingId()}
+            title={asTrimmedString(props.cluster.name) || props.cluster.id}
+            statusVariant={health().variant}
+            statusLabel={health().label}
+            trailing={
+              <span class="shrink-0 text-[10px] font-mono text-muted">
+                {meta()?.healthStatus ?? ''}
+              </span>
+            }
+          />
           <div class="font-mono text-[10px] text-muted">
             FSID <span class="break-all">{fsid()}</span>
           </div>
@@ -286,7 +290,7 @@ export const ProxmoxCephClusterDrawer: Component<{
           </For>
         </div>
       </Show>
-    </div>
+    </section>
   );
 };
 
