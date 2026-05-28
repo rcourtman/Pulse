@@ -24,6 +24,12 @@ export interface AuditLogFeatureGateCopyOptions {
   paidRuntimeRequired?: boolean;
 }
 
+type AuditLogFetchErrorLike = {
+  code?: string;
+  message?: string;
+  status?: number;
+};
+
 export const AUDIT_TOOLBAR_BUTTON_CLASS =
   'flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50';
 export const AUDIT_REFRESH_BUTTON_CLASS = `${AUDIT_TOOLBAR_BUTTON_CLASS} text-base-content`;
@@ -97,6 +103,26 @@ export function getAuditLogLoadingState() {
   return {
     text: 'Loading audit events…',
   } as const;
+}
+
+export function getAuditLogFetchErrorMessage(error: unknown): string {
+  const errorLike = error as AuditLogFetchErrorLike;
+  if (errorLike?.code === 'audit_store_busy') {
+    return 'Audit log storage is busy. Wait a moment, then refresh the audit log.';
+  }
+  if (errorLike?.code === 'audit_store_unavailable') {
+    return 'Audit log storage is unavailable. Check the server logs for audit database initialization or disk errors, then refresh the audit log.';
+  }
+  if (errorLike?.code === 'query_failed') {
+    return 'Audit events could not be loaded. Check the server logs for the audit query failure, then refresh the audit log.';
+  }
+  if (
+    errorLike?.status === 500 ||
+    /failed to fetch audit events:\s*internal server error/i.test(errorLike?.message ?? '')
+  ) {
+    return 'Audit events could not be loaded because the server returned an internal error. Check the server logs, then refresh the audit log.';
+  }
+  return error instanceof Error ? error.message : 'Unknown error';
 }
 
 export function getAuditLogFeatureGateCopy(options: AuditLogFeatureGateCopyOptions = {}) {

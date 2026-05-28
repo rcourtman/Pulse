@@ -2,6 +2,7 @@ package audit
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -11,7 +12,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
-	_ "modernc.org/sqlite"
+	sqlite "modernc.org/sqlite"
 )
 
 // SQLiteLoggerConfig configures the SQLite audit logger.
@@ -38,6 +39,97 @@ type SQLiteLogger struct {
 var retentionStartupCleanupDelay = 5 * time.Minute
 var retentionStartupCleanup = func(l *SQLiteLogger) {
 	l.cleanupOldEvents()
+}
+
+const (
+	sqliteCodeBusy              = 5
+	sqliteCodeLocked            = 6
+	sqliteCodeReadonly          = 8
+	sqliteCodeIOErr             = 10
+	sqliteCodeCorrupt           = 11
+	sqliteCodeCantOpen          = 14
+	sqliteCodeNotADB            = 26
+	sqliteCodeBusyRecovery      = sqliteCodeBusy | (1 << 8)
+	sqliteCodeBusySnapshot      = sqliteCodeBusy | (2 << 8)
+	sqliteCodeBusyTimeout       = sqliteCodeBusy | (3 << 8)
+	sqliteCodeLockedSharedCache = sqliteCodeLocked | (1 << 8)
+	sqliteCodeLockedVTab        = sqliteCodeLocked | (2 << 8)
+)
+
+var auditSQLiteRetryDelays = []time.Duration{25 * time.Millisecond, 75 * time.Millisecond}
+var auditSQLiteRetrySleep = time.Sleep
+
+// IsStoreBusyError reports whether an audit store error is a transient SQLite lock.
+func IsStoreBusyError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var sqliteErr *sqlite.Error
+	if errors.As(err, &sqliteErr) {
+		switch sqliteErr.Code() {
+		case sqliteCodeBusy,
+			sqliteCodeLocked,
+			sqliteCodeBusyRecovery,
+			sqliteCodeBusySnapshot,
+			sqliteCodeBusyTimeout,
+			sqliteCodeLockedSharedCache,
+			sqliteCodeLockedVTab:
+			return true
+		}
+	}
+
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "sqlite_busy") ||
+		strings.Contains(message, "sqlite_locked") ||
+		strings.Contains(message, "database is locked") ||
+		strings.Contains(message, "database table is locked")
+}
+
+// IsStoreUnavailableError reports whether an audit store error means the
+// backing database is missing, corrupt, unreadable, or not initialized.
+func IsStoreUnavailableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if IsStoreBusyError(err) {
+		return false
+	}
+
+	var sqliteErr *sqlite.Error
+	if errors.As(err, &sqliteErr) {
+		switch sqliteErr.Code() {
+		case sqliteCodeReadonly, sqliteCodeIOErr, sqliteCodeCorrupt, sqliteCodeCantOpen, sqliteCodeNotADB:
+			return true
+		}
+	}
+
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "database disk image is malformed") ||
+		strings.Contains(message, "file is not a database") ||
+		strings.Contains(message, "unable to open database file") ||
+		strings.Contains(message, "attempt to write a readonly database") ||
+		strings.Contains(message, "no such table: audit_events") ||
+		strings.Contains(message, "no such table: schema_version")
+}
+
+func withSQLiteRetry(operation string, run func() error) error {
+	var err error
+	for attempt := 0; ; attempt++ {
+		err = run()
+		if err == nil || !IsStoreBusyError(err) || attempt >= len(auditSQLiteRetryDelays) {
+			return err
+		}
+
+		delay := auditSQLiteRetryDelays[attempt]
+		log.Warn().
+			Err(err).
+			Str("operation", operation).
+			Int("attempt", attempt+1).
+			Dur("retryIn", delay).
+			Msg("Audit SQLite store busy; retrying")
+		auditSQLiteRetrySleep(delay)
+	}
 }
 
 // NewSQLiteLogger creates a new SQLite-backed audit logger.
@@ -122,6 +214,11 @@ func NewSQLiteLogger(cfg SQLiteLoggerConfig) (*SQLiteLogger, error) {
 	return l, nil
 }
 
+// IsPersistentAuditLogger reports that SQLite provides queryable audit storage.
+func (l *SQLiteLogger) IsPersistentAuditLogger() bool {
+	return l != nil
+}
+
 // initSchema creates the database tables and runs migrations.
 func (l *SQLiteLogger) initSchema() error {
 	schema := `
@@ -154,22 +251,26 @@ func (l *SQLiteLogger) initSchema() error {
 	);
 	`
 
-	_, err := l.db.Exec(schema)
+	var err error
+	err = withSQLiteRetry("init_schema", func() error {
+		_, err = l.db.Exec(schema)
+		return err
+	})
 	if err != nil {
 		return fmt.Errorf("failed to create schema: %w", err)
 	}
 
 	// Record schema version
-	_, err = l.db.Exec(`INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (1, ?)`,
-		time.Now().Unix())
+	err = withSQLiteRetry("record_schema_version", func() error {
+		_, err = l.db.Exec(`INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (1, ?)`,
+			time.Now().Unix())
+		return err
+	})
 	return err
 }
 
 // Log records an audit event with HMAC signature.
 func (l *SQLiteLogger) Log(event Event) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
 	// Sign the event
 	event.Signature = l.signer.Sign(event)
 
@@ -179,19 +280,26 @@ func (l *SQLiteLogger) Log(event Event) error {
 		success = 1
 	}
 
-	_, err := l.db.Exec(`
-		INSERT INTO audit_events (id, timestamp, event_type, user, ip, path, success, details, signature)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		event.ID,
-		event.Timestamp.Unix(),
-		event.EventType,
-		event.User,
-		event.IP,
-		event.Path,
-		success,
-		event.Details,
-		event.Signature,
-	)
+	var err error
+	err = withSQLiteRetry("insert_audit_event", func() error {
+		l.mu.Lock()
+		defer l.mu.Unlock()
+
+		_, err = l.db.Exec(`
+			INSERT INTO audit_events (id, timestamp, event_type, user, ip, path, success, details, signature)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			event.ID,
+			event.Timestamp.Unix(),
+			event.EventType,
+			event.User,
+			event.IP,
+			event.Path,
+			success,
+			event.Details,
+			event.Signature,
+		)
+		return err
+	})
 
 	if err != nil {
 		return fmt.Errorf("failed to insert audit event: %w", err)
@@ -223,9 +331,25 @@ func (l *SQLiteLogger) Log(event Event) error {
 
 // Query retrieves audit events matching the filter.
 func (l *SQLiteLogger) Query(filter QueryFilter) ([]Event, error) {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
+	var events []Event
+	err := withSQLiteRetry("query_audit_events", func() error {
+		l.mu.RLock()
+		defer l.mu.RUnlock()
 
+		result, err := l.queryLocked(filter)
+		if err != nil {
+			return err
+		}
+		events = result
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return events, nil
+}
+
+func (l *SQLiteLogger) queryLocked(filter QueryFilter) ([]Event, error) {
 	query := "SELECT id, timestamp, event_type, user, ip, path, success, details, signature FROM audit_events WHERE 1=1"
 	args := []interface{}{}
 
@@ -307,9 +431,25 @@ func (l *SQLiteLogger) Query(filter QueryFilter) ([]Event, error) {
 
 // Count returns the number of events matching the filter.
 func (l *SQLiteLogger) Count(filter QueryFilter) (int, error) {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
+	var count int
+	err := withSQLiteRetry("count_audit_events", func() error {
+		l.mu.RLock()
+		defer l.mu.RUnlock()
 
+		result, err := l.countLocked(filter)
+		if err != nil {
+			return err
+		}
+		count = result
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (l *SQLiteLogger) countLocked(filter QueryFilter) (int, error) {
 	query := "SELECT COUNT(*) FROM audit_events WHERE 1=1"
 	args := []interface{}{}
 
@@ -361,15 +501,19 @@ func (l *SQLiteLogger) GetWebhookURLs() []string {
 
 // UpdateWebhookURLs updates the webhook configuration.
 func (l *SQLiteLogger) UpdateWebhookURLs(urls []string) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
 	// Save to config table
 	value := strings.Join(urls, ",")
-	_, err := l.db.Exec(`
-		INSERT INTO audit_config (key, value, updated_at) VALUES ('webhook_urls', ?, ?)
-		ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-		value, time.Now().Unix())
+	var err error
+	err = withSQLiteRetry("update_webhook_urls", func() error {
+		l.mu.Lock()
+		defer l.mu.Unlock()
+
+		_, err = l.db.Exec(`
+			INSERT INTO audit_config (key, value, updated_at) VALUES ('webhook_urls', ?, ?)
+			ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+			value, time.Now().Unix())
+		return err
+	})
 	if err != nil {
 		return fmt.Errorf("failed to save webhook URLs: %w", err)
 	}

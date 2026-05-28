@@ -60,10 +60,13 @@ controls as normal product settings.
 32. `internal/cloudcp/auth/magiclink.go`
 33. `internal/cloudcp/auth/magiclink_store.go`
 34. `pkg/tlsutil/fingerprint.go`
-35. `scripts/telemetry_adoption_report.py`
-36. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx`
-37. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
-38. `internal/api/agent_exec_token_binding.go`
+35. `pkg/audit/audit.go`
+36. `pkg/audit/async_logger.go`
+37. `pkg/audit/sqlite_logger.go`
+38. `scripts/telemetry_adoption_report.py`
+39. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx`
+40. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
+41. `internal/api/agent_exec_token_binding.go`
 
 ## Shared Boundaries
 
@@ -296,6 +299,14 @@ failure. If `runtime-capabilities` blocks `audit_logging` with
 active Pro license needs the private Pulse Pro runtime, but they must not
 expose license keys, billing identity, or plan-upgrade copy as part of that
 security/privacy feature gate.
+Audit-log storage availability is also a security/privacy trust boundary.
+The `pkg/audit/` runtime package owns persistent audit-store classification:
+transient SQLite busy/locked conditions must be retried and surfaced as
+structured `audit_store_busy`, while missing, corrupt, readonly, or
+uninitialized audit stores must surface as `audit_store_unavailable`. The
+Audit Log settings surface may translate those stable API codes into recovery
+copy, but it must not show raw internal server errors or collapse audit-store
+state into a generic frontend failure.
 That shared token-management boundary now also includes
 `frontend-modern/src/utils/apiTokenPresentation.ts`, so API-token load,
 generate, and revoke errors stay on one governed customer-facing wording path

@@ -12,6 +12,7 @@ import {
   AUDIT_VERIFICATION_FILTER_NEEDS_LABEL,
   getAuditEventStatusPresentation,
   getAuditEventTypeBadgeClass,
+  getAuditLogFetchErrorMessage,
   getAuditLogFeatureGateCopy,
   getAuditVerificationBadgePresentation,
 } from '@/utils/auditLogPresentation';
@@ -53,6 +54,19 @@ describe('auditLogPresentation', () => {
       title: 'Pulse Pro runtime required',
       body: expect.stringContaining('private Pulse Pro runtime'),
     });
+  });
+
+  it('maps structured audit fetch errors to operator-facing copy', () => {
+    expect(getAuditLogFetchErrorMessage({ code: 'audit_store_busy' })).toContain('storage is busy');
+    expect(getAuditLogFetchErrorMessage({ code: 'audit_store_unavailable' })).toContain(
+      'storage is unavailable',
+    );
+    expect(getAuditLogFetchErrorMessage({ code: 'query_failed' })).toContain('audit query failure');
+    expect(
+      getAuditLogFetchErrorMessage(
+        new Error('Failed to fetch audit events: Internal Server Error'),
+      ),
+    ).toContain('internal error');
   });
 
   it('exposes canonical audit action button classes', () => {

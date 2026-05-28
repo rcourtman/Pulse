@@ -1,6 +1,8 @@
 package audit
 
 import (
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -40,6 +42,71 @@ func TestNewSQLiteLoggerDefaultRetention(t *testing.T) {
 
 	if logger.GetRetentionDays() != 90 {
 		t.Errorf("Expected default retention days 90, got %d", logger.GetRetentionDays())
+	}
+}
+
+func TestIsPersistentLoggerUnwrapsAsyncConsoleBackend(t *testing.T) {
+	console := NewConsoleLogger()
+	if IsPersistentLogger(console) {
+		t.Fatal("console logger must not be persistent")
+	}
+
+	asyncConsole := NewAsyncLogger(console, AsyncLoggerConfig{BufferSize: 1})
+	defer asyncConsole.Close()
+	if IsPersistentLogger(asyncConsole) {
+		t.Fatal("async console logger must not be persistent")
+	}
+}
+
+func TestAuditSQLiteStoreErrorClassification(t *testing.T) {
+	if !IsStoreBusyError(fmt.Errorf("query failed: %w", errors.New("database is locked (5) (SQLITE_BUSY)"))) {
+		t.Fatal("expected SQLITE_BUSY error to be classified as store busy")
+	}
+	if IsStoreBusyError(errors.New("no such table: audit_events")) {
+		t.Fatal("missing audit table must not be classified as transient busy")
+	}
+	if !IsStoreUnavailableError(errors.New("no such table: audit_events")) {
+		t.Fatal("missing audit table must be classified as store unavailable")
+	}
+	if !IsStoreUnavailableError(errors.New("database disk image is malformed")) {
+		t.Fatal("corrupt audit database must be classified as store unavailable")
+	}
+}
+
+func TestWithSQLiteRetryRetriesTransientBusyErrors(t *testing.T) {
+	previousSleep := auditSQLiteRetrySleep
+	auditSQLiteRetrySleep = func(time.Duration) {}
+	t.Cleanup(func() {
+		auditSQLiteRetrySleep = previousSleep
+	})
+
+	attempts := 0
+	err := withSQLiteRetry("test_retry", func() error {
+		attempts++
+		if attempts < 3 {
+			return errors.New("database is locked (5) (SQLITE_BUSY)")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("expected retry to recover, got %v", err)
+	}
+	if attempts != 3 {
+		t.Fatalf("attempts = %d, want 3", attempts)
+	}
+}
+
+func TestWithSQLiteRetryDoesNotRetryPermanentErrors(t *testing.T) {
+	attempts := 0
+	err := withSQLiteRetry("test_no_retry", func() error {
+		attempts++
+		return errors.New("no such table: audit_events")
+	})
+	if err == nil {
+		t.Fatal("expected permanent error")
+	}
+	if attempts != 1 {
+		t.Fatalf("attempts = %d, want 1", attempts)
 	}
 }
 

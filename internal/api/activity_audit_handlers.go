@@ -23,6 +23,9 @@ var validAuditEventID = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 var resolveWebhookIPs = net.DefaultResolver.LookupIPAddr
 
 const maxUnifiedAuditLimit = 1000
+const defaultAuditEventListLimit = 100
+const maxAuditEventListLimit = 1000
+const auditStoreBusyRetryAfterSeconds = 2
 
 // AuditHandlers provides HTTP handlers for audit log endpoints.
 type AuditHandlers struct {
@@ -58,6 +61,11 @@ func (h *AuditHandlers) HandleListAuditEvents(w http.ResponseWriter, r *http.Req
 
 	orgID := GetOrgID(r.Context())
 	logger := getLoggerForOrg(orgID)
+	if !isPersistentLogger(logger) {
+		log.Error().Str("org_id", orgID).Msg("audit list: persistent audit logger unavailable")
+		writeAuditStoreUnavailableResponse(w)
+		return
+	}
 
 	query := r.URL.Query()
 
@@ -66,13 +74,11 @@ func (h *AuditHandlers) HandleListAuditEvents(w http.ResponseWriter, r *http.Req
 		User:      query.Get("user"),
 	}
 
-	// Parse limit
+	filter.Limit = defaultAuditEventListLimit
 	if limitStr := query.Get("limit"); limitStr != "" {
 		if limit, err := strconv.Atoi(limitStr); err == nil && limit > 0 {
-			filter.Limit = limit
+			filter.Limit = min(limit, maxAuditEventListLimit)
 		}
-	} else {
-		filter.Limit = 100 // Default limit
 	}
 
 	// Parse offset
@@ -106,7 +112,7 @@ func (h *AuditHandlers) HandleListAuditEvents(w http.ResponseWriter, r *http.Req
 	events, err := logger.Query(filter)
 	if err != nil {
 		log.Error().Err(err).Str("org_id", orgID).Msg("audit list: query failed")
-		writeErrorResponse(w, http.StatusInternalServerError, "query_failed", "Failed to query audit events", nil)
+		writeAuditReadErrorResponse(w, err, "Failed to query audit events")
 		return
 	}
 
@@ -117,16 +123,14 @@ func (h *AuditHandlers) HandleListAuditEvents(w http.ResponseWriter, r *http.Req
 	totalCount, err := logger.Count(countFilter)
 	if err != nil {
 		log.Error().Err(err).Str("org_id", orgID).Msg("audit list: count failed")
-		writeErrorResponse(w, http.StatusInternalServerError, "query_failed", "Failed to count audit events", nil)
+		writeAuditReadErrorResponse(w, err, "Failed to count audit events")
 		return
 	}
 
-	// For OSS (ConsoleLogger), events will be empty
-	// Return a response indicating the feature status
 	response := map[string]interface{}{
 		"events":            events,
 		"total":             totalCount,
-		"persistentLogging": len(events) > 0 || isPersistentLogger(logger),
+		"persistentLogging": true,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -178,7 +182,8 @@ func (h *AuditHandlers) HandleVerifyAuditEvent(w http.ResponseWriter, r *http.Re
 		Limit: 1,
 	})
 	if err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "query_failed", "Failed to query audit event", nil)
+		log.Error().Err(err).Str("org_id", orgID).Str("audit_id", eventID).Msg("audit verify: query failed")
+		writeAuditReadErrorResponse(w, err, "Failed to query audit event")
 		return
 	}
 	if len(events) == 0 {
@@ -353,8 +358,26 @@ func isPrivateOrReservedIP(ip net.IP) bool {
 
 // isPersistentLogger checks if we're using a persistent audit logger (enterprise).
 func isPersistentLogger(logger audit.Logger) bool {
-	_, isConsole := logger.(*audit.ConsoleLogger)
-	return !isConsole
+	return audit.IsPersistentLogger(logger)
+}
+
+func writeAuditReadErrorResponse(w http.ResponseWriter, err error, fallbackMessage string) {
+	if audit.IsStoreBusyError(err) {
+		w.Header().Set("Retry-After", strconv.Itoa(auditStoreBusyRetryAfterSeconds))
+		writeErrorResponse(w, http.StatusServiceUnavailable, "audit_store_busy",
+			"Audit log storage is temporarily busy. Try again shortly.", nil)
+		return
+	}
+	if audit.IsStoreUnavailableError(err) {
+		writeAuditStoreUnavailableResponse(w)
+		return
+	}
+	writeErrorResponse(w, http.StatusInternalServerError, "query_failed", fallbackMessage, nil)
+}
+
+func writeAuditStoreUnavailableResponse(w http.ResponseWriter) {
+	writeErrorResponse(w, http.StatusServiceUnavailable, "audit_store_unavailable",
+		"Audit log storage is unavailable. Check server logs for audit database initialization or disk errors.", nil)
 }
 
 // HandleExportAuditEvents handles GET /api/audit/export

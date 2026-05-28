@@ -81,6 +81,14 @@ func (l *AsyncLogger) UpdateWebhookURLs(urls []string) error {
 	return l.backend.UpdateWebhookURLs(urls)
 }
 
+// IsPersistentAuditLogger reports whether the wrapped backend is queryable storage.
+func (l *AsyncLogger) IsPersistentAuditLogger() bool {
+	if l == nil {
+		return false
+	}
+	return IsPersistentLogger(l.backend)
+}
+
 // Close drains queued events, stops the worker, and closes the backend logger.
 func (l *AsyncLogger) Close() error {
 	if l == nil {

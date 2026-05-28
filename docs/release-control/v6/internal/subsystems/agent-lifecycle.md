@@ -1566,6 +1566,10 @@ peer infrastructure roots.
 Those unified audit list endpoints also clamp oversized `limit` requests to
 the governed maximum, so audit history stays bounded even when callers ask
 for arbitrarily large pages.
+The adjacent enterprise audit-log read path now also preserves structured
+store-failure codes (`audit_store_busy`, `audit_store_unavailable`) instead of
+generic 500s; lifecycle surfaces may share that API layer, but they do not own
+or reinterpret audit-store health.
 That same shared `internal/api/` dependency also now assumes hosted runtime
 websocket upgrades trust the cloud proxy only through explicit tenant
 `PULSE_TRUSTED_PROXY_CIDRS` wiring, so first-session handoff and agent-facing

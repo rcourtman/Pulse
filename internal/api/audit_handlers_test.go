@@ -28,6 +28,8 @@ type testAuditLogger struct {
 	queryErr     error
 	updateErr    error
 	countErr     error
+	lastQuery    audit.QueryFilter
+	lastCount    audit.QueryFilter
 }
 
 func (l *testAuditLogger) Log(event audit.Event) error {
@@ -36,6 +38,7 @@ func (l *testAuditLogger) Log(event audit.Event) error {
 }
 
 func (l *testAuditLogger) Query(filter audit.QueryFilter) ([]audit.Event, error) {
+	l.lastQuery = filter
 	if l.queryErr != nil {
 		return nil, l.queryErr
 	}
@@ -51,14 +54,11 @@ func (l *testAuditLogger) Query(filter audit.QueryFilter) ([]audit.Event, error)
 }
 
 func (l *testAuditLogger) Count(filter audit.QueryFilter) (int, error) {
+	l.lastCount = filter
 	if l.countErr != nil {
 		return 0, l.countErr
 	}
-	events, err := l.Query(filter)
-	if err != nil {
-		return 0, err
-	}
-	return len(events), nil
+	return len(l.events), nil
 }
 
 func (l *testAuditLogger) Close() error {
@@ -525,6 +525,45 @@ func TestHandleListAuditEvents_Filters(t *testing.T) {
 	}
 }
 
+func TestHandleListAuditEvents_PaginationDefaults(t *testing.T) {
+	logger := &testAuditLogger{
+		events: []audit.Event{{ID: "1", EventType: "login", Success: true}},
+	}
+	setAuditLogger(t, logger)
+	handler := NewAuditHandlers()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/audit?limit=0&offset=-4", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleListAuditEvents(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if logger.lastQuery.Limit != defaultAuditEventListLimit {
+		t.Fatalf("limit = %d, want default %d", logger.lastQuery.Limit, defaultAuditEventListLimit)
+	}
+	if logger.lastQuery.Offset != 0 {
+		t.Fatalf("offset = %d, want 0", logger.lastQuery.Offset)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/audit?limit=5000&offset=10", nil)
+	rec = httptest.NewRecorder()
+	handler.HandleListAuditEvents(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if logger.lastQuery.Limit != maxAuditEventListLimit {
+		t.Fatalf("limit = %d, want max %d", logger.lastQuery.Limit, maxAuditEventListLimit)
+	}
+	if logger.lastQuery.Offset != 10 {
+		t.Fatalf("offset = %d, want 10", logger.lastQuery.Offset)
+	}
+	if logger.lastCount.Limit != 0 || logger.lastCount.Offset != 0 {
+		t.Fatalf("count filter must clear pagination, got limit=%d offset=%d", logger.lastCount.Limit, logger.lastCount.Offset)
+	}
+}
+
 func TestHandleListAuditEvents_QueryError(t *testing.T) {
 	setAuditLogger(t, &testAuditLogger{
 		queryErr: fmt.Errorf("db error"),
@@ -548,6 +587,80 @@ func TestHandleListAuditEvents_QueryError(t *testing.T) {
 	handler.HandleListAuditEvents(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("expected count error status %d, got %d", http.StatusInternalServerError, rec.Code)
+	}
+}
+
+func TestHandleListAuditEvents_StoreBusyError(t *testing.T) {
+	setAuditLogger(t, &testAuditLogger{
+		queryErr: fmt.Errorf("database is locked (5) (SQLITE_BUSY)"),
+	})
+	handler := NewAuditHandlers()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/audit", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleListAuditEvents(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
+	}
+	if rec.Header().Get("Retry-After") == "" {
+		t.Fatal("expected Retry-After header")
+	}
+
+	var resp APIError
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if resp.Code != "audit_store_busy" {
+		t.Fatalf("code = %q, want audit_store_busy", resp.Code)
+	}
+}
+
+func TestHandleListAuditEvents_StoreUnavailableError(t *testing.T) {
+	setAuditLogger(t, &testAuditLogger{
+		queryErr: fmt.Errorf("no such table: audit_events"),
+	})
+	handler := NewAuditHandlers()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/audit", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleListAuditEvents(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
+	}
+
+	var resp APIError
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if resp.Code != "audit_store_unavailable" {
+		t.Fatalf("code = %q, want audit_store_unavailable", resp.Code)
+	}
+}
+
+func TestHandleListAuditEvents_NonPersistentLoggerUnavailable(t *testing.T) {
+	asyncLogger := audit.NewAsyncLogger(audit.NewConsoleLogger(), audit.AsyncLoggerConfig{BufferSize: 1})
+	t.Cleanup(func() {
+		_ = asyncLogger.Close()
+	})
+	setAuditLogger(t, asyncLogger)
+	handler := NewAuditHandlers()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/audit", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleListAuditEvents(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
+	}
+
+	var resp APIError
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if resp.Code != "audit_store_unavailable" {
+		t.Fatalf("code = %q, want audit_store_unavailable", resp.Code)
 	}
 }
 func TestHandleExportAuditEvents(t *testing.T) {

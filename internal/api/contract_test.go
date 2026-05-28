@@ -45,6 +45,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	authpkg "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/cloudauth"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
@@ -13325,6 +13326,69 @@ func TestContract_UnifiedAuditLimitCapsOversizedRequests(t *testing.T) {
 	}
 	if got := parseAuditLimit("250", 100); got != 250 {
 		t.Fatalf("parseAuditLimit normal request = %d, want 250", got)
+	}
+}
+
+func TestContract_AuditStoreReadErrorsUseStructuredAPIErrorCodes(t *testing.T) {
+	cases := []struct {
+		name           string
+		err            error
+		wantStatus     int
+		wantCode       string
+		wantRetryAfter bool
+	}{
+		{
+			name:           "busy",
+			err:            fmt.Errorf("failed to query audit events: %w", fmt.Errorf("database is locked (5) (SQLITE_BUSY)")),
+			wantStatus:     http.StatusServiceUnavailable,
+			wantCode:       "audit_store_busy",
+			wantRetryAfter: true,
+		},
+		{
+			name:       "unavailable",
+			err:        fmt.Errorf("failed to query audit events: %w", fmt.Errorf("no such table: audit_events")),
+			wantStatus: http.StatusServiceUnavailable,
+			wantCode:   "audit_store_unavailable",
+		},
+		{
+			name:       "query_failed",
+			err:        fmt.Errorf("failed to query audit events: %w", fmt.Errorf("unexpected query failure")),
+			wantStatus: http.StatusInternalServerError,
+			wantCode:   "query_failed",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.wantCode == "audit_store_busy" && !audit.IsStoreBusyError(tc.err) {
+				t.Fatal("busy fixture must satisfy audit store busy classification")
+			}
+			if tc.wantCode == "audit_store_unavailable" && !audit.IsStoreUnavailableError(tc.err) {
+				t.Fatal("unavailable fixture must satisfy audit store unavailable classification")
+			}
+
+			rec := httptest.NewRecorder()
+			writeAuditReadErrorResponse(rec, tc.err, "Failed to query audit events")
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d", rec.Code, tc.wantStatus)
+			}
+			if got := rec.Header().Get("Retry-After"); tc.wantRetryAfter && got == "" {
+				t.Fatal("busy audit-store errors must include Retry-After")
+			} else if !tc.wantRetryAfter && got != "" {
+				t.Fatalf("Retry-After = %q, want empty", got)
+			}
+
+			var payload APIError
+			if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+				t.Fatalf("decode APIError: %v", err)
+			}
+			if payload.Code != tc.wantCode {
+				t.Fatalf("code = %q, want %q", payload.Code, tc.wantCode)
+			}
+			if payload.StatusCode != tc.wantStatus {
+				t.Fatalf("status_code = %d, want %d", payload.StatusCode, tc.wantStatus)
+			}
+		})
 	}
 }
 

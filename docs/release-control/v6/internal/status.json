@@ -5942,6 +5942,12 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-audit-log-store-resilience-2026-05-28.md",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-authorized-keys-symlink-2026-05-01.md",
           "kind": "file",
           "evidence_tier": "managed-runtime-exercise"

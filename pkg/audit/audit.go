@@ -65,6 +65,22 @@ type Logger interface {
 	Close() error
 }
 
+type persistentAuditLogger interface {
+	IsPersistentAuditLogger() bool
+}
+
+// IsPersistentLogger reports whether a logger provides queryable audit storage.
+func IsPersistentLogger(logger Logger) bool {
+	if logger == nil {
+		return false
+	}
+	if persistent, ok := logger.(persistentAuditLogger); ok {
+		return persistent.IsPersistentAuditLogger()
+	}
+	_, isConsole := logger.(*ConsoleLogger)
+	return !isConsole
+}
+
 // Global logger instance with thread-safe access
 var (
 	globalLogger Logger
@@ -157,6 +173,11 @@ type ConsoleLogger struct{}
 // NewConsoleLogger creates a new console-based audit logger.
 func NewConsoleLogger() *ConsoleLogger {
 	return &ConsoleLogger{}
+}
+
+// IsPersistentAuditLogger reports that console logging is not queryable storage.
+func (c *ConsoleLogger) IsPersistentAuditLogger() bool {
+	return false
 }
 
 // Log writes an audit event to zerolog.

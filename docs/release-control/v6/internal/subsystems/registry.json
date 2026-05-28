@@ -4565,7 +4565,9 @@
       "id": "security-privacy",
       "lane": "L14",
       "contract": "docs/release-control/v6/internal/subsystems/security-privacy.md",
-      "owned_prefixes": [],
+      "owned_prefixes": [
+        "pkg/audit/"
+      ],
       "owned_files": [
         "docs/PRIVACY.md",
         "frontend-modern/src/api/security.ts",
@@ -4598,6 +4600,9 @@
         "internal/crypto/crypto.go",
         "internal/securityutil/secure_storage_dir.go",
         "internal/telemetry/telemetry.go",
+        "pkg/audit/async_logger.go",
+        "pkg/audit/audit.go",
+        "pkg/audit/sqlite_logger.go",
         "pkg/tlsutil/fingerprint.go",
         "scripts/telemetry_adoption_report.py",
         "SECURITY.md"
@@ -4709,6 +4714,28 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/utils/__tests__/apiTokenPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "audit-log-runtime-store",
+            "label": "audit log runtime store proof",
+            "match_prefixes": [
+              "pkg/audit/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": true,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/audit_handlers_test.go",
+              "pkg/audit/audit_test.go",
+              "pkg/audit/export_test.go",
+              "pkg/audit/signer_test.go",
+              "pkg/audit/sqlite_factory_test.go",
+              "pkg/audit/sqlite_logger_queryplan_test.go",
+              "pkg/audit/sqlite_logger_test.go",
+              "pkg/audit/tenant_logger_manager_test.go",
+              "pkg/audit/webhook_delivery_test.go",
+              "pkg/audit/webhook_validation_test.go"
             ]
           },
           {

@@ -445,6 +445,16 @@ describe('settings architecture guardrails', () => {
     );
   });
 
+  it('keeps audit-log fetch errors and page-size normalization on shared owners', () => {
+    expect(auditLogStateSource).toContain('apiErrorFromResponse');
+    expect(auditLogStateSource).toContain('getAuditLogFetchErrorMessage');
+    expect(auditLogStateSource).toContain('normalizeAuditPageSize');
+    expect(auditLogStateSource).toContain('ALLOWED_AUDIT_PAGE_SIZES');
+    expect(auditLogPresentationSource).toContain("code === 'audit_store_busy'");
+    expect(auditLogPresentationSource).toContain("code === 'audit_store_unavailable'");
+    expect(auditLogPresentationSource).toContain("code === 'query_failed'");
+  });
+
   it('keeps API token Docker and Podman copy on shared presentation helpers', () => {
     expect(apiAccessPanelSource).toContain('API_TOKEN_ACCESS_PANEL_DESCRIPTION');
     expect(apiTokenManagerModelSource).toContain('API_TOKEN_DOCKER_REPORT_PRESET_DESCRIPTION');

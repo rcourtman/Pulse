@@ -2345,6 +2345,11 @@ When the shared runtime-capabilities store reports `paid_runtime_required` for
 and the panel must render paid-runtime-required copy with the private Pulse Pro
 download action. The runtime mismatch is not a plan upsell and must not be
 hidden by ordinary missing-feature navigation filtering.
+Audit-log fetch failures must preserve the structured backend error object
+through `apiErrorFromResponse` and render customer-facing copy from
+`frontend-modern/src/utils/auditLogPresentation.ts`; the settings shell may
+own refresh and pagination state, but it must not show raw `Internal Server
+Error` strings or unbounded page sizes as local hook behavior.
 That shared filter-option primitive is also the canonical owner for default
 `All <scope>` option wording wherever a product surface exposes filter selects
 or segmented filter choices. Workloads filters, storage source

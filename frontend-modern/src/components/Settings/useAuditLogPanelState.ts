@@ -6,13 +6,14 @@ import {
   createLocalStorageNumberSignal,
   STORAGE_KEYS,
 } from '@/utils/localStorage';
-import { apiFetch } from '@/utils/apiClient';
+import { apiErrorFromResponse, apiFetch } from '@/utils/apiClient';
 import { showSuccess, showToast, showWarning } from '@/utils/toast';
 import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { getRuntimeCapabilityBlock, loadRuntimeCapabilities } from '@/stores/license';
 import { resolveUpgradeDestination } from '@/utils/upgradeNavigation';
+import { getAuditLogFetchErrorMessage } from '@/utils/auditLogPresentation';
 
 export interface AuditEvent {
   id: string;
@@ -62,6 +63,8 @@ const ALLOWED_VERIFICATION_FILTERS = new Set(['all', 'needs', 'verified', 'faile
 const ALLOWED_SUCCESS_FILTERS = new Set(['all', 'success', 'failed']);
 const ALLOWED_EVENT_FILTERS = new Set(['', 'login', 'logout', 'config_change', 'startup']);
 const USER_FILTER_DEBOUNCE_MS = 300;
+const DEFAULT_AUDIT_PAGE_SIZE = 100;
+const ALLOWED_AUDIT_PAGE_SIZES = new Set([25, 50, 100, 200]);
 
 const parseEventFilter = (raw: string | null | undefined): string =>
   ALLOWED_EVENT_FILTERS.has(raw ?? '') ? (raw ?? '') : '';
@@ -69,6 +72,8 @@ const parseSuccessFilter = (raw: string | null | undefined): string =>
   ALLOWED_SUCCESS_FILTERS.has(raw ?? '') ? (raw ?? 'all') : 'all';
 const parseVerificationFilter = (raw: string | null | undefined): string =>
   ALLOWED_VERIFICATION_FILTERS.has(raw ?? '') ? (raw ?? 'all') : 'all';
+const normalizeAuditPageSize = (value: number): number =>
+  ALLOWED_AUDIT_PAGE_SIZES.has(value) ? value : DEFAULT_AUDIT_PAGE_SIZE;
 
 export const useAuditLogPanelState = () => {
   const location = useLocation();
@@ -94,8 +99,7 @@ export const useAuditLogPanelState = () => {
       else params.set('event', value);
     });
   };
-  const userFilter: Accessor<string> = () =>
-    new URLSearchParams(location.search).get('user') ?? '';
+  const userFilter: Accessor<string> = () => new URLSearchParams(location.search).get('user') ?? '';
   const setUserFilter = (value: string): void => {
     updateSearchParam((params) => {
       if (value === '') params.delete('user');
@@ -118,7 +122,14 @@ export const useAuditLogPanelState = () => {
       else params.set('verification', value);
     });
   };
-  const [pageSize, setPageSize] = createLocalStorageNumberSignal(STORAGE_KEYS.AUDIT_PAGE_SIZE, 100);
+  const [storedPageSize, setStoredPageSize] = createLocalStorageNumberSignal(
+    STORAGE_KEYS.AUDIT_PAGE_SIZE,
+    DEFAULT_AUDIT_PAGE_SIZE,
+  );
+  const pageSize = () => normalizeAuditPageSize(storedPageSize());
+  const setPageSize = (value: number): void => {
+    setStoredPageSize(normalizeAuditPageSize(value));
+  };
   const [pageOffset, setPageOffset] = createLocalStorageNumberSignal(
     STORAGE_KEYS.AUDIT_PAGE_OFFSET,
     0,
@@ -202,7 +213,10 @@ export const useAuditLogPanelState = () => {
         return;
       }
       if (!response.ok) {
-        throw new Error(`Failed to fetch audit events: ${response.statusText}`);
+        throw await apiErrorFromResponse(
+          response,
+          `Failed to fetch audit events: ${response.statusText}`,
+        );
       }
 
       const data: AuditResponse = await response.json();
@@ -228,7 +242,7 @@ export const useAuditLogPanelState = () => {
         }, 0);
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
+      const message = getAuditLogFetchErrorMessage(err);
       if (typeof message === 'string' && /feature not included in license/i.test(message)) {
         setEvents([]);
         setTotalEvents(0);

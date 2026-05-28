@@ -1847,6 +1847,11 @@ changes.
 Those unified audit list endpoints also clamp oversized `limit` requests to
 the governed maximum, so adjacent recovery and storage workflows do not turn
 bounded history reads into unbounded collection scans.
+The adjacent enterprise audit-log read path now also preserves structured
+store-failure codes (`audit_store_busy`, `audit_store_unavailable`) instead of
+generic 500s. Storage and recovery surfaces may coexist with that API layer,
+but they must not reinterpret audit-store health as backup, restore, or
+recovery-state evidence.
 The same shared API runtime now also exposes dedicated
 `/api/resources/{id}/timeline` reads plus the bundled
 `/api/resources/{id}/facets` surface, but storage and recovery must continue

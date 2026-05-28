@@ -557,6 +557,13 @@ the canonical monitored-system blocked payload.
    resource API JSON, and exercised with backend contract tests plus the
    canonical `useUnifiedResources` frontend hook proof whenever it changes.
 5. Route unified-resource action, lifecycle, and export audit reads through `internal/api/activity_audit_handlers.go`, `internal/api/router_routes_licensing.go`, and `internal/api/contract_test.go` together so the control-plane execution trail stays on a governed API contract instead of a store-only shape
+   Enterprise audit-log reads are part of that same API boundary. Audit list
+   and verification handlers must preserve structured storage failure
+   semantics from `pkg/audit`: transient store pressure returns `503`
+   `audit_store_busy` with `Retry-After`, unavailable or corrupt audit storage
+   returns `503` `audit_store_unavailable`, and unrelated query failures remain
+   `query_failed`. List pagination must stay bounded so audit history reads
+   cannot become unbounded table scans through API parameters.
    Plan-only unified action planning is part of that same API-first action
    contract: `POST /api/actions/plan` must route through
    `internal/api/actions.go`, `internal/actionplanner/planner.go`, and
