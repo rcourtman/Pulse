@@ -2,7 +2,7 @@ import { Show, Suspense, createMemo, createSignal, type Component } from 'solid-
 
 import type { HistoryTimeRange } from '@/api/charts';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
-import { StatusDot } from '@/components/shared/StatusDot';
+import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import type { Disk, Node } from '@/types/api';
 import { getDiscoveryLoadingState } from '@/utils/discoveryPresentation';
 import { getNodeDisplayName } from '@/utils/nodes';
@@ -44,21 +44,12 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
 
   return (
     <section class="space-y-3" aria-labelledby={headingId()} data-testid="node-drawer">
-      <div class="flex items-center gap-2 min-w-0">
-        <StatusDot
-          size="sm"
-          variant={headerIndicator().variant}
-          title={headerIndicator().label}
-          ariaLabel={headerIndicator().label}
-        />
-        <h2
-          id={headingId()}
-          class="text-sm font-semibold text-base-content truncate m-0"
-          title={displayName()}
-        >
-          {displayName()}
-        </h2>
-      </div>
+      <DrawerSubjectHeading
+        headingId={headingId()}
+        title={displayName()}
+        statusVariant={headerIndicator().variant}
+        statusLabel={headerIndicator().label}
+      />
 
       <div class="mb-1 flex items-center justify-between gap-3 border-b border-border px-1">
         <div class="flex items-center gap-6">

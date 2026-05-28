@@ -106,7 +106,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             type="button"
             onClick={() => props.onClose?.()}
             class="rounded-md p-1 hover:bg-surface-hover hover:text-base-content"
-            aria-label="Close"
+            aria-label="Close resource drawer"
           >
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path

@@ -3,7 +3,7 @@ import { For, Show, createMemo, createResource, createSignal } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { Card } from '@/components/shared/Card';
-import { SearchField } from '@/components/shared/SearchField';
+import { SearchInput } from '@/components/shared/SearchInput';
 import {
   Table,
   TableHeader,
@@ -105,13 +105,16 @@ export const K8sNamespacesDrawer: Component<{
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
-            <SearchField
-              value={search()}
-              onChange={setSearch}
-              placeholder={drawerPresentation.searchPlaceholder}
-              class="w-[12rem]"
-              inputClass="py-1 text-xs font-medium shadow-sm"
-            />
+            <div class="w-[12rem]">
+              <SearchInput
+                value={search}
+                onChange={setSearch}
+                placeholder={drawerPresentation.searchPlaceholder}
+                inputClass="py-1 text-xs font-medium shadow-sm"
+                typeToSearch
+                clearOnEscape
+              />
+            </div>
             <button
               type="button"
               onClick={() => openPods(null)}

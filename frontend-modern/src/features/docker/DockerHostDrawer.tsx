@@ -2,7 +2,7 @@ import { Show, Suspense, createMemo, createSignal, type Component } from 'solid-
 
 import type { HistoryTimeRange } from '@/api/charts';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
-import { StatusDot } from '@/components/shared/StatusDot';
+import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { GuestDrawerHistory, GuestDrawerHistoryRangeSelect } from '@/components/Workloads/GuestDrawerHistory';
 import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from '@/components/Workloads/guestDrawerModel';
@@ -43,21 +43,12 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
       aria-labelledby={headingId()}
       data-testid="docker-host-drawer"
     >
-      <div class="flex items-center gap-2 min-w-0">
-        <StatusDot
-          size="sm"
-          variant={headerIndicator().variant}
-          title={headerIndicator().label}
-          ariaLabel={headerIndicator().label}
-        />
-        <h2
-          id={headingId()}
-          class="text-sm font-semibold text-base-content truncate m-0"
-          title={displayName()}
-        >
-          {displayName()}
-        </h2>
-      </div>
+      <DrawerSubjectHeading
+        headingId={headingId()}
+        title={displayName()}
+        statusVariant={headerIndicator().variant}
+        statusLabel={headerIndicator().label}
+      />
 
       <div class="mb-1 flex items-center justify-between gap-3 border-b border-border px-1">
         <div class="flex items-center gap-6">
