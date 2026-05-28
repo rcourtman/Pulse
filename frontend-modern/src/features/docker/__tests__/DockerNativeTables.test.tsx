@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { Resource } from '@/types/resource';
@@ -128,9 +128,9 @@ describe('Docker native tables', () => {
       />
     ));
 
-    const rows = Array.from(
-      document.querySelectorAll('[data-docker-container-row]'),
-    ).map((row) => row.getAttribute('data-docker-container-row'));
+    const rows = Array.from(document.querySelectorAll('[data-docker-container-row]')).map((row) =>
+      row.getAttribute('data-docker-container-row'),
+    );
     // Two danger rows tied -> name-sorted; then warning; then success.
     expect(rows).toEqual(['dead', 'exited', 'restart', 'happy']);
     expect(screen.getByTitle('Dead')).toHaveClass('bg-red-500');
@@ -204,6 +204,52 @@ describe('Docker native tables', () => {
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('2026-05-24T13:00:00Z')).toBeInTheDocument();
     expect(screen.getByText('/var/lib/docker/volumes/app-data/_data')).toBeInTheDocument();
+  });
+
+  it('keeps Docker volume tables filterable when rendered standalone', () => {
+    render(() => (
+      <DockerVolumesTable
+        resources={[
+          makeResource({
+            id: 'volume-app',
+            type: 'docker-volume',
+            name: 'app-data',
+            status: 'online',
+            docker: { driver: 'local' },
+          }),
+          makeResource({
+            id: 'volume-cache',
+            type: 'docker-volume',
+            name: 'cache-data',
+            status: 'offline',
+            docker: { driver: 'local' },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No volumes"
+        emptyDescription="No volumes"
+      />
+    ));
+
+    expect(document.querySelectorAll('[data-docker-volume-row]')).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Offline' }));
+
+    expect(screen.getByText('1 of 2 volumes')).toBeInTheDocument();
+    expect(document.querySelector('[data-docker-volume-row="volume-cache"]')).not.toBeNull();
+    expect(document.querySelector('[data-docker-volume-row="volume-app"]')).toBeNull();
+
+    const search = screen.getByPlaceholderText('Search volumes');
+    fireEvent.input(search, { target: { value: 'app' } });
+
+    expect(screen.getByText('0 of 2 volumes')).toBeInTheDocument();
+    expect(screen.getByText('No volumes match current filters')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
+
+    expect(search).toHaveValue('');
+    expect(screen.getByText('2 volumes')).toBeInTheDocument();
+    expect(document.querySelectorAll('[data-docker-volume-row]')).toHaveLength(2);
   });
 
   it('renders Docker network API fields', () => {
@@ -366,12 +412,62 @@ describe('Docker native tables', () => {
     expect(screen.getByText('Containers')).toBeInTheDocument();
     expect(screen.getByText('Volumes')).toBeInTheDocument();
     expect(screen.getByText('Build Cache')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Search storage usage')).toBeInTheDocument();
     expect(screen.getByText('edge-01')).toBeInTheDocument();
     expect(screen.getByText('2.00 GB')).toBeInTheDocument();
     expect(screen.getByText('6 total, 4 active, 512 MB reclaimable')).toBeInTheDocument();
     expect(screen.getByText('5.00 GB')).toBeInTheDocument();
     expect(screen.getByText('4 total, 1 active, 4.00 GB reclaimable')).toBeInTheDocument();
     expect(document.querySelector('[data-docker-storage-row="host-1"]')).not.toBeNull();
+  });
+
+  it('keeps Docker engine storage usage tables filterable when rendered standalone', () => {
+    const storageUsage = {
+      totalCount: 1,
+      activeCount: 1,
+      totalSizeBytes: 1024,
+      reclaimableBytes: 0,
+    };
+
+    render(() => (
+      <DockerStorageUsageTable
+        hosts={[
+          makeResource({
+            id: 'host-edge',
+            type: 'agent',
+            name: 'edge-01',
+            status: 'online',
+            docker: { imagesUsage: storageUsage },
+          }),
+          makeResource({
+            id: 'host-archive',
+            type: 'agent',
+            name: 'archive-01',
+            status: 'offline',
+            docker: { imagesUsage: storageUsage },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No storage"
+        emptyDescription="No storage"
+      />
+    ));
+
+    expect(document.querySelectorAll('[data-docker-storage-row]')).toHaveLength(2);
+
+    const search = screen.getByPlaceholderText('Search storage usage');
+    fireEvent.input(search, { target: { value: 'archive' } });
+
+    expect(search).toHaveValue('archive');
+    expect(screen.getByText('1 of 2 hosts')).toBeInTheDocument();
+    expect(document.querySelector('[data-docker-storage-row="host-archive"]')).not.toBeNull();
+    expect(document.querySelector('[data-docker-storage-row="host-edge"]')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
+
+    expect(search).toHaveValue('');
+    expect(screen.getByText('2 hosts')).toBeInTheDocument();
+    expect(document.querySelectorAll('[data-docker-storage-row]')).toHaveLength(2);
   });
 
   it('renders Docker Swarm task API fields', () => {

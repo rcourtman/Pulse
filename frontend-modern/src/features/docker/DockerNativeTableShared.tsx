@@ -6,6 +6,7 @@ import { getSimpleStatusIndicator, type StatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { getPlatformTableCellClassForKind } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
+import type { DockerResourceStatusFilter } from './dockerPageModel';
 
 export type DockerNativeTableProps = {
   resources: Resource[];
@@ -14,6 +15,8 @@ export type DockerNativeTableProps = {
   emptyDescription: string;
   title?: string;
   showToolbar?: boolean;
+  externalSearch?: () => string;
+  externalStatus?: () => DockerResourceStatusFilter;
 };
 
 export const dockerTextValue = (value: string | undefined): string => asTrimmedString(value) || '—';

@@ -1,12 +1,14 @@
 import { useLocation } from '@solidjs/router';
 import ContainerIcon from 'lucide-solid/icons/container';
-import { Show, createMemo } from 'solid-js';
+import { Show, createMemo, createSignal } from 'solid-js';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
+  PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformErrorState,
   PlatformSectionTabs,
   PlatformTableEmptyState,
   PlatformTableLoadingState,
+  PlatformTableToolbar,
 } from '@/features/platformPage/sharedPlatformPage';
 import { DockerAlertsTable } from './DockerAlertsTable';
 import { DockerConfigsTable } from './DockerConfigsTable';
@@ -22,12 +24,14 @@ import { DockerTasksTable } from './DockerTasksTable';
 import { DockerVolumesTable } from './DockerVolumesTable';
 import {
   buildDockerPageModel,
+  filterDockerResources,
   getDockerPageTabSpecs,
   hasDockerEngineStorageUsage,
   hasDockerSwarmInventory,
   resolveDockerPageTabId,
   type DockerPageModel,
   type DockerPageTabId,
+  type DockerResourceStatusFilter,
 } from './dockerPageModel';
 
 const DOCKER_RESOURCE_QUERY =
@@ -137,9 +141,21 @@ export default DockerPageSurface;
 
 function DockerStorage(props: { model: DockerPageModel }) {
   const hasEngineUsage = createMemo(() => props.model.hosts.some(hasDockerEngineStorageUsage));
-  const hasStorageInventory = createMemo(
-    () => hasEngineUsage() || props.model.volumes.length > 0,
+  const hasStorageInventory = createMemo(() => hasEngineUsage() || props.model.volumes.length > 0);
+  const [search, setSearch] = createSignal('');
+  const [status, setStatus] = createSignal<DockerResourceStatusFilter>('all');
+  const storageHosts = createMemo(() => props.model.hosts.filter(hasDockerEngineStorageUsage));
+  const totalRows = createMemo(() => storageHosts().length + props.model.volumes.length);
+  const visibleRows = createMemo(
+    () =>
+      filterDockerResources(storageHosts(), search(), status()).length +
+      filterDockerResources(props.model.volumes, search(), status()).length,
   );
+  const hasActiveFilters = createMemo(() => search().trim().length > 0 || status() !== 'all');
+  const resetFilters = () => {
+    setSearch('');
+    setStatus('all');
+  };
 
   return (
     <Show
@@ -153,6 +169,19 @@ function DockerStorage(props: { model: DockerPageModel }) {
       }
     >
       <div class="space-y-4">
+        <PlatformTableToolbar
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search storage usage and volumes"
+          status={status()}
+          onStatusChange={setStatus}
+          statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
+          visible={visibleRows()}
+          total={totalRows()}
+          rowNoun="rows"
+          hasActiveFilters={hasActiveFilters()}
+          onResetFilters={resetFilters}
+        />
         <Show when={hasEngineUsage()}>
           <DockerStorageUsageTable
             hosts={props.model.hosts}
@@ -160,6 +189,9 @@ function DockerStorage(props: { model: DockerPageModel }) {
             emptyIcon={dockerIcon()}
             emptyTitle="No Docker or Podman storage usage"
             emptyDescription="Engine disk-usage snapshots appear here when a Docker or Podman host reports them."
+            showToolbar={false}
+            externalSearch={search}
+            externalStatus={status}
           />
         </Show>
         <Show when={props.model.volumes.length > 0}>
@@ -168,6 +200,9 @@ function DockerStorage(props: { model: DockerPageModel }) {
             emptyIcon={dockerIcon()}
             emptyTitle="No volumes"
             emptyDescription="Volumes appear here when the container runtime reports volume inventory."
+            showToolbar={false}
+            externalSearch={search}
+            externalStatus={status}
           />
         </Show>
       </div>

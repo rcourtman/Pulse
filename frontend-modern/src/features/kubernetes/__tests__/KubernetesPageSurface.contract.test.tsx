@@ -48,6 +48,7 @@ vi.mock('@solidjs/router', async () => {
 });
 
 vi.mock('@/features/platformPage/sharedPlatformPage', () => ({
+  PLATFORM_HEALTH_FILTER_OPTIONS: [],
   PlatformErrorState: () => <div data-testid="platform-error-state" />,
   PlatformSectionTabs: (props: {
     active: string;
@@ -61,6 +62,7 @@ vi.mock('@/features/platformPage/sharedPlatformPage', () => ({
   ),
   PlatformTableEmptyState: () => <div data-testid="platform-table-empty-state" />,
   PlatformTableLoadingState: () => <div data-testid="platform-table-loading-state" />,
+  PlatformTableToolbar: () => <div data-testid="platform-table-toolbar" />,
 }));
 
 vi.mock('../KubernetesAlertsTable', () => ({

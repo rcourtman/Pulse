@@ -247,9 +247,33 @@ export function createPlatformTableFilterState<Row, Status extends string | numb
   resources: () => Row[];
   initialStatus: Status;
   filter: (resources: Row[], search: string, status: Status) => Row[];
+  // When a page owns a shared toolbar that drives several stacked tables,
+  // pass these accessors so each table reads from the shared state instead
+  // of its own internal signals. Pass the setters too if the table state
+  // itself is allowed to render or reset a controlled toolbar.
+  externalSearch?: () => string;
+  externalStatus?: () => Status;
+  onExternalSearchChange?: (value: string) => void;
+  onExternalStatusChange?: (value: Status) => void;
 }) {
-  const [search, setSearch] = createSignal('');
-  const [status, setStatus] = createSignal<Status>(props.initialStatus);
+  const [internalSearch, setInternalSearch] = createSignal('');
+  const [internalStatus, setInternalStatus] = createSignal<Status>(props.initialStatus);
+  const search = () => props.externalSearch?.() ?? internalSearch();
+  const status = () => props.externalStatus?.() ?? internalStatus();
+  const setSearch = (value: string) => {
+    if (props.onExternalSearchChange) {
+      props.onExternalSearchChange(value);
+      return;
+    }
+    setInternalSearch(value);
+  };
+  const setStatus = (value: Status) => {
+    if (props.onExternalStatusChange) {
+      props.onExternalStatusChange(value);
+      return;
+    }
+    setInternalStatus(() => value);
+  };
   const filtered = createMemo(() => props.filter(props.resources(), search(), status()));
   const visible = createMemo(() => filtered().length);
   const total = createMemo(() => props.resources().length);
@@ -258,7 +282,7 @@ export function createPlatformTableFilterState<Row, Status extends string | numb
   );
   const resetFilters = () => {
     setSearch('');
-    setStatus(() => props.initialStatus);
+    setStatus(props.initialStatus);
   };
 
   return {

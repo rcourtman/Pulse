@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Resource } from '@/types/resource';
@@ -29,12 +29,38 @@ const mocks = vi.hoisted(() => ({
       </div>
     ),
   ),
-  DockerStorageUsageTable: vi.fn((props: { hosts: Resource[] }) => (
-    <div data-testid="docker-storage-usage-table" data-host-count={props.hosts.length} />
-  )),
-  DockerVolumesTable: vi.fn((props: { resources: Resource[] }) => (
-    <div data-testid="docker-volumes-table" data-resource-count={props.resources.length} />
-  )),
+  DockerStorageUsageTable: vi.fn(
+    (props: {
+      hosts: Resource[];
+      showToolbar?: boolean;
+      externalSearch?: () => string;
+      externalStatus?: () => string;
+    }) => (
+      <div
+        data-testid="docker-storage-usage-table"
+        data-host-count={props.hosts.length}
+        data-show-toolbar={String(props.showToolbar)}
+        data-external-search={props.externalSearch?.() ?? ''}
+        data-external-status={props.externalStatus?.() ?? ''}
+      />
+    ),
+  ),
+  DockerVolumesTable: vi.fn(
+    (props: {
+      resources: Resource[];
+      showToolbar?: boolean;
+      externalSearch?: () => string;
+      externalStatus?: () => string;
+    }) => (
+      <div
+        data-testid="docker-volumes-table"
+        data-resource-count={props.resources.length}
+        data-show-toolbar={String(props.showToolbar)}
+        data-external-search={props.externalSearch?.() ?? ''}
+        data-external-status={props.externalStatus?.() ?? ''}
+      />
+    ),
+  ),
 }));
 
 vi.mock('@/hooks/useUnifiedResources', () => ({
@@ -176,14 +202,8 @@ describe('DockerPageSurface', () => {
         query: expect.stringContaining('docker-config'),
       }),
     );
-    expect(screen.getByTestId('docker-hosts-table')).toHaveAttribute(
-      'data-resource-count',
-      '1',
-    );
-    expect(screen.getByTestId('docker-hosts-table')).toHaveAttribute(
-      'data-show-toolbar',
-      'false',
-    );
+    expect(screen.getByTestId('docker-hosts-table')).toHaveAttribute('data-resource-count', '1');
+    expect(screen.getByTestId('docker-hosts-table')).toHaveAttribute('data-show-toolbar', 'false');
     expect(screen.getByTestId('docker-section-tabs')).toHaveAttribute(
       'data-tabs',
       'overview,containers,images,storage,networks',
@@ -239,10 +259,7 @@ describe('DockerPageSurface', () => {
     render(() => <DockerPageSurface />);
 
     expect(screen.getByTestId('docker-section-tabs')).toHaveAttribute('data-active', 'overview');
-    expect(screen.getByTestId('docker-hosts-table')).toHaveAttribute(
-      'data-resource-count',
-      '1',
-    );
+    expect(screen.getByTestId('docker-hosts-table')).toHaveAttribute('data-resource-count', '1');
   });
 
   it('renders only volume storage inventory when engine storage usage is absent', () => {
@@ -288,6 +305,101 @@ describe('DockerPageSurface', () => {
     );
     expect(screen.queryByTestId('docker-volumes-table')).toBeNull();
     expect(screen.queryByTestId('platform-table-empty-state')).toBeNull();
+  });
+
+  it('uses one Storage toolbar to filter engine storage usage and volumes together', () => {
+    mocks.pathname = '/docker/storage';
+    mocks.useUnifiedResources.mockReturnValue({
+      error: () => null,
+      loading: () => false,
+      refetch: vi.fn(),
+      resources: () => [
+        makeDockerHost({
+          id: 'agent:docker-storage',
+          name: 'engine-alpha',
+          docker: {
+            runtime: 'docker',
+            imagesUsage: {
+              totalCount: 2,
+              totalSizeBytes: 2048,
+            },
+          } as NonNullable<Resource['docker']>,
+        }),
+        makeDockerVolume({
+          id: 'docker-volume:docker-01:checkout-data',
+          name: 'checkout-data',
+          displayName: 'checkout-data',
+          status: 'offline',
+          docker: {
+            runtime: 'docker',
+            driver: 'local',
+            mountpoint: '/var/lib/docker/volumes/checkout-data/_data',
+          } as NonNullable<Resource['docker']>,
+        }),
+      ],
+    });
+
+    render(() => <DockerPageSurface />);
+
+    const search = screen.getByPlaceholderText('Search storage usage and volumes');
+    expect(screen.queryByPlaceholderText('Search storage usage')).toBeNull();
+    expect(screen.queryByPlaceholderText('Search volumes')).toBeNull();
+    expect(screen.getByText('2 rows')).toBeInTheDocument();
+
+    expect(screen.getByTestId('docker-storage-usage-table')).toHaveAttribute(
+      'data-show-toolbar',
+      'false',
+    );
+    expect(screen.getByTestId('docker-volumes-table')).toHaveAttribute(
+      'data-show-toolbar',
+      'false',
+    );
+    expect(screen.getByTestId('docker-storage-usage-table')).toHaveAttribute(
+      'data-external-status',
+      'all',
+    );
+    expect(screen.getByTestId('docker-volumes-table')).toHaveAttribute(
+      'data-external-status',
+      'all',
+    );
+
+    fireEvent.input(search, { target: { value: 'checkout' } });
+
+    expect(search).toHaveValue('checkout');
+    expect(screen.getByText('1 of 2 rows')).toBeInTheDocument();
+    expect(screen.getByTestId('docker-storage-usage-table')).toHaveAttribute(
+      'data-external-search',
+      'checkout',
+    );
+    expect(screen.getByTestId('docker-volumes-table')).toHaveAttribute(
+      'data-external-search',
+      'checkout',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Offline' }));
+
+    expect(screen.getByText('1 of 2 rows')).toBeInTheDocument();
+    expect(screen.getByTestId('docker-storage-usage-table')).toHaveAttribute(
+      'data-external-status',
+      'offline',
+    );
+    expect(screen.getByTestId('docker-volumes-table')).toHaveAttribute(
+      'data-external-status',
+      'offline',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
+
+    expect(search).toHaveValue('');
+    expect(screen.getByText('2 rows')).toBeInTheDocument();
+    expect(screen.getByTestId('docker-storage-usage-table')).toHaveAttribute(
+      'data-external-status',
+      'all',
+    );
+    expect(screen.getByTestId('docker-volumes-table')).toHaveAttribute(
+      'data-external-status',
+      'all',
+    );
   });
 
   it('uses one Storage tab empty state when no storage inventory exists', () => {

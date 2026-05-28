@@ -54,12 +54,17 @@ export const DockerStorageUsageTable: Component<{
   emptyIcon: JSX.Element;
   emptyTitle: string;
   emptyDescription: string;
+  showToolbar?: boolean;
+  externalSearch?: () => string;
+  externalStatus?: () => DockerResourceStatusFilter;
 }> = (props) => {
   const storageHosts = () => props.hosts.filter(hasDockerEngineStorageUsage);
   const tableState = createPlatformTableFilterState({
     resources: storageHosts,
     initialStatus: 'all' as DockerResourceStatusFilter,
     filter: filterDockerResources,
+    externalSearch: props.externalSearch,
+    externalStatus: props.externalStatus,
   });
   const hasFilteredSourceRows = () => (props.sourceCount ?? props.hosts.length) > 0;
 
@@ -79,17 +84,21 @@ export const DockerStorageUsageTable: Component<{
       }
     >
       <div class="space-y-3">
-        <PlatformTableToolbar
-          search={tableState.search}
-          onSearchChange={tableState.setSearch}
-          searchPlaceholder="Search storage usage"
-          status={tableState.status()}
-          onStatusChange={tableState.setStatus}
-          statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
-          visible={tableState.visible()}
-          total={tableState.total()}
-          rowNoun="hosts"
-        />
+        <Show when={props.showToolbar !== false}>
+          <PlatformTableToolbar
+            search={tableState.search}
+            onSearchChange={tableState.setSearch}
+            searchPlaceholder="Search storage usage"
+            status={tableState.status()}
+            onStatusChange={tableState.setStatus}
+            statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
+            visible={tableState.visible()}
+            total={tableState.total()}
+            rowNoun="hosts"
+            hasActiveFilters={tableState.hasActiveFilters()}
+            onResetFilters={tableState.resetFilters}
+          />
+        </Show>
 
         <Show
           when={tableState.filtered().length > 0}

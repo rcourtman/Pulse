@@ -1,12 +1,14 @@
 import { useLocation } from '@solidjs/router';
 import ShipWheelIcon from 'lucide-solid/icons/ship-wheel';
-import { Show, createMemo, type Accessor } from 'solid-js';
+import { Show, createMemo, createSignal, type Accessor } from 'solid-js';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
+  PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformErrorState,
   PlatformSectionTabs,
   PlatformTableEmptyState,
   PlatformTableLoadingState,
+  PlatformTableToolbar,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
 import { KubernetesAlertsTable } from './KubernetesAlertsTable';
@@ -25,9 +27,11 @@ import { KubernetesStorageTable } from './KubernetesStorageTable';
 import {
   KUBERNETES_TAB_SPECS,
   buildKubernetesPageModel,
+  filterKubernetesResources,
   resolveKubernetesPageTabId,
   type KubernetesPageModel,
   type KubernetesPageTabId,
+  type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
 
 // Include `agent` rows so K8s nodes that the backend registry merged onto
@@ -145,9 +149,52 @@ const getKubernetesControllerResources = (model: KubernetesPageModel): Resource[
   ...model.cronJobs,
 ];
 
+type SharedToolbarState = {
+  search: Accessor<string>;
+  setSearch: (value: string) => void;
+  status: Accessor<KubernetesResourceStatusFilter>;
+  setStatus: (value: KubernetesResourceStatusFilter) => void;
+  hasActiveFilters: Accessor<boolean>;
+  resetFilters: () => void;
+};
+
+function createKubernetesSharedToolbar(): SharedToolbarState {
+  const [search, setSearch] = createSignal('');
+  const [status, setStatus] = createSignal<KubernetesResourceStatusFilter>('all');
+  const hasActiveFilters = createMemo(() => search().trim().length > 0 || status() !== 'all');
+  const resetFilters = () => {
+    setSearch('');
+    setStatus('all');
+  };
+  return { search, setSearch, status, setStatus, hasActiveFilters, resetFilters };
+}
+
+function countKubernetesVisible(
+  sections: ReadonlyArray<Resource[]>,
+  search: string,
+  status: KubernetesResourceStatusFilter,
+): number {
+  let visible = 0;
+  for (const section of sections) {
+    visible += filterKubernetesResources(section, search, status).length;
+  }
+  return visible;
+}
+
 function KubernetesWorkloads(props: { model: KubernetesPageModel; controllers: Resource[] }) {
   const hasWorkloadInventory = createMemo(
     () => props.model.workloads.length > 0 || props.model.autoscaling.length > 0,
+  );
+  const toolbar = createKubernetesSharedToolbar();
+  const sections = createMemo<Resource[][]>(() => [
+    props.model.deployments,
+    props.model.pods,
+    props.controllers,
+    props.model.autoscaling,
+  ]);
+  const totalRows = createMemo(() => sections().reduce((sum, rows) => sum + rows.length, 0));
+  const visibleRows = createMemo(() =>
+    countKubernetesVisible(sections(), toolbar.search(), toolbar.status()),
   );
 
   return (
@@ -162,12 +209,28 @@ function KubernetesWorkloads(props: { model: KubernetesPageModel; controllers: R
       }
     >
       <div class="space-y-4">
+        <PlatformTableToolbar
+          search={toolbar.search}
+          onSearchChange={toolbar.setSearch}
+          searchPlaceholder="Search workload inventory"
+          status={toolbar.status()}
+          onStatusChange={toolbar.setStatus}
+          statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
+          visible={visibleRows()}
+          total={totalRows()}
+          rowNoun="rows"
+          hasActiveFilters={toolbar.hasActiveFilters()}
+          onResetFilters={toolbar.resetFilters}
+        />
         <Show when={props.model.deployments.length > 0}>
           <KubernetesDeploymentsTable
             resources={props.model.deployments}
             emptyIcon={k8sIcon()}
             emptyTitle="No deployments reported"
             emptyDescription="Deployments appear here once the agent can read Deployment resources."
+            showToolbar={false}
+            externalSearch={toolbar.search}
+            externalStatus={toolbar.status}
           />
         </Show>
         <Show when={props.model.pods.length > 0}>
@@ -176,6 +239,9 @@ function KubernetesWorkloads(props: { model: KubernetesPageModel; controllers: R
             emptyIcon={k8sIcon()}
             emptyTitle="No pods reported"
             emptyDescription="Pods appear here once the agent can read Pod resources."
+            showToolbar={false}
+            externalSearch={toolbar.search}
+            externalStatus={toolbar.status}
           />
         </Show>
         <Show when={props.controllers.length > 0}>
@@ -184,6 +250,9 @@ function KubernetesWorkloads(props: { model: KubernetesPageModel; controllers: R
             emptyIcon={k8sIcon()}
             emptyTitle="No workload controllers reported"
             emptyDescription="ReplicaSets, StatefulSets, DaemonSets, Jobs, and CronJobs appear here when the agent reports them."
+            showToolbar={false}
+            externalSearch={toolbar.search}
+            externalStatus={toolbar.status}
           />
         </Show>
         <Show when={props.model.autoscaling.length > 0}>
@@ -192,6 +261,9 @@ function KubernetesWorkloads(props: { model: KubernetesPageModel; controllers: R
             emptyIcon={k8sIcon()}
             emptyTitle="No autoscaling resources reported"
             emptyDescription="HorizontalPodAutoscalers appear here once the agent can read autoscaling inventory."
+            showToolbar={false}
+            externalSearch={toolbar.search}
+            externalStatus={toolbar.status}
           />
         </Show>
       </div>
@@ -202,6 +274,15 @@ function KubernetesWorkloads(props: { model: KubernetesPageModel; controllers: R
 function KubernetesServices(props: { model: KubernetesPageModel }) {
   const hasServiceInventory = createMemo(
     () => props.model.services.length > 0 || props.model.serviceNetworking.length > 0,
+  );
+  const toolbar = createKubernetesSharedToolbar();
+  const sections = createMemo<Resource[][]>(() => [
+    props.model.services,
+    props.model.serviceNetworking,
+  ]);
+  const totalRows = createMemo(() => sections().reduce((sum, rows) => sum + rows.length, 0));
+  const visibleRows = createMemo(() =>
+    countKubernetesVisible(sections(), toolbar.search(), toolbar.status()),
   );
 
   return (
@@ -216,12 +297,28 @@ function KubernetesServices(props: { model: KubernetesPageModel }) {
       }
     >
       <div class="space-y-4">
+        <PlatformTableToolbar
+          search={toolbar.search}
+          onSearchChange={toolbar.setSearch}
+          searchPlaceholder="Search services and networking"
+          status={toolbar.status()}
+          onStatusChange={toolbar.setStatus}
+          statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
+          visible={visibleRows()}
+          total={totalRows()}
+          rowNoun="rows"
+          hasActiveFilters={toolbar.hasActiveFilters()}
+          onResetFilters={toolbar.resetFilters}
+        />
         <Show when={props.model.services.length > 0}>
           <KubernetesServicesTable
             resources={props.model.services}
             emptyIcon={k8sIcon()}
             emptyTitle="No services reported"
             emptyDescription="Services appear here once the agent can read Service resources."
+            showToolbar={false}
+            externalSearch={toolbar.search}
+            externalStatus={toolbar.status}
           />
         </Show>
         <Show when={props.model.serviceNetworking.length > 0}>
@@ -230,6 +327,9 @@ function KubernetesServices(props: { model: KubernetesPageModel }) {
             emptyIcon={k8sIcon()}
             emptyTitle="No ingress or endpoint resources reported"
             emptyDescription="Ingresses and endpoint slices appear here once the agent can read networking inventory."
+            showToolbar={false}
+            externalSearch={toolbar.search}
+            externalStatus={toolbar.status}
           />
         </Show>
       </div>
@@ -240,6 +340,12 @@ function KubernetesServices(props: { model: KubernetesPageModel }) {
 function KubernetesConfiguration(props: { model: KubernetesPageModel }) {
   const hasConfigurationInventory = createMemo(
     () => props.model.config.length > 0 || props.model.policy.length > 0,
+  );
+  const toolbar = createKubernetesSharedToolbar();
+  const sections = createMemo<Resource[][]>(() => [props.model.config, props.model.policy]);
+  const totalRows = createMemo(() => sections().reduce((sum, rows) => sum + rows.length, 0));
+  const visibleRows = createMemo(() =>
+    countKubernetesVisible(sections(), toolbar.search(), toolbar.status()),
   );
 
   return (
@@ -254,12 +360,28 @@ function KubernetesConfiguration(props: { model: KubernetesPageModel }) {
       }
     >
       <div class="space-y-4">
+        <PlatformTableToolbar
+          search={toolbar.search}
+          onSearchChange={toolbar.setSearch}
+          searchPlaceholder="Search configuration and policy"
+          status={toolbar.status()}
+          onStatusChange={toolbar.setStatus}
+          statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
+          visible={visibleRows()}
+          total={totalRows()}
+          rowNoun="rows"
+          hasActiveFilters={toolbar.hasActiveFilters()}
+          onResetFilters={toolbar.resetFilters}
+        />
         <Show when={props.model.config.length > 0}>
           <KubernetesConfigTable
             resources={props.model.config}
             emptyIcon={k8sIcon()}
             emptyTitle="No config resources reported"
             emptyDescription="Namespaces, ConfigMaps, Secrets, and ServiceAccounts appear here once the agent can read cluster configuration inventory."
+            showToolbar={false}
+            externalSearch={toolbar.search}
+            externalStatus={toolbar.status}
           />
         </Show>
         <Show when={props.model.policy.length > 0}>
@@ -268,6 +390,9 @@ function KubernetesConfiguration(props: { model: KubernetesPageModel }) {
             emptyIcon={k8sIcon()}
             emptyTitle="No policy resources reported"
             emptyDescription="NetworkPolicies, PodDisruptionBudgets, ResourceQuotas, and LimitRanges appear here once the agent can read policy inventory."
+            showToolbar={false}
+            externalSearch={toolbar.search}
+            externalStatus={toolbar.status}
           />
         </Show>
       </div>

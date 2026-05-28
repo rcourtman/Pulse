@@ -40,6 +40,8 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
     resources: () => props.resources,
     initialStatus: 'all' as DockerResourceStatusFilter,
     filter: filterDockerResources,
+    externalSearch: props.externalSearch,
+    externalStatus: props.externalStatus,
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'docker-volume-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
@@ -67,6 +69,8 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
             visible={tableState.visible()}
             total={tableState.total()}
             rowNoun="volumes"
+            hasActiveFilters={tableState.hasActiveFilters()}
+            onResetFilters={tableState.resetFilters}
           />
         </Show>
 

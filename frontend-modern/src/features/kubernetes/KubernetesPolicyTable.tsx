@@ -214,11 +214,15 @@ export const KubernetesPolicyTable: Component<{
   emptyDescription: string;
   title?: string;
   showToolbar?: boolean;
+  externalSearch?: () => string;
+  externalStatus?: () => KubernetesResourceStatusFilter;
 }> = (props) => {
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as KubernetesResourceStatusFilter,
     filter: filterKubernetesResources,
+    externalSearch: props.externalSearch,
+    externalStatus: props.externalStatus,
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-policy-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import {
   createPlatformTableFilterState,
@@ -148,6 +148,41 @@ describe('filterPlatformResources', () => {
         state.resetFilters();
         expect(state.search()).toBe('');
         expect(state.status()).toBe('all');
+        expect(state.visible()).toBe(resources.length);
+        expect(state.hasActiveFilters()).toBe(false);
+      } finally {
+        dispose();
+      }
+    });
+  });
+
+  it('supports page-owned filter state for stacked table toolbars', () => {
+    createRoot((dispose) => {
+      try {
+        const [search, setSearch] = createSignal('');
+        const [status, setStatus] = createSignal<PlatformResourceStatusFilter>('all');
+        const state = createPlatformTableFilterState({
+          resources: () => resources,
+          initialStatus: 'all' as PlatformResourceStatusFilter,
+          filter: filterPlatformResources,
+          externalSearch: search,
+          externalStatus: status,
+          onExternalSearchChange: setSearch,
+          onExternalStatusChange: setStatus,
+        });
+
+        state.setSearch('gpu');
+        expect(search()).toBe('gpu');
+        expect(state.filtered().map((r) => r.id)).toEqual(['host-with-tag']);
+
+        state.setStatus('online');
+        expect(status()).toBe('online');
+        expect(state.visible()).toBe(1);
+        expect(state.hasActiveFilters()).toBe(true);
+
+        state.resetFilters();
+        expect(search()).toBe('');
+        expect(status()).toBe('all');
         expect(state.visible()).toBe(resources.length);
         expect(state.hasActiveFilters()).toBe(false);
       } finally {

@@ -60,11 +60,15 @@ export const KubernetesDeploymentsTable: Component<{
   emptyDescription: string;
   title?: string;
   showToolbar?: boolean;
+  externalSearch?: () => string;
+  externalStatus?: () => KubernetesResourceStatusFilter;
 }> = (props) => {
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as KubernetesResourceStatusFilter,
     filter: filterKubernetesResources,
+    externalSearch: props.externalSearch,
+    externalStatus: props.externalStatus,
   });
   const sortedRows = createMemo(() =>
     [...tableState.filtered()].sort(compareKubernetesDeployments),
