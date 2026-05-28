@@ -73,6 +73,14 @@ type AIConfig struct {
 	PatrolAlertTriggersEnabled   bool `json:"patrol_alert_triggers_enabled"`
 	PatrolAnomalyTriggersEnabled bool `json:"patrol_anomaly_triggers_enabled"`
 
+	// Fine-grained control over which firing alerts trigger a scoped patrol.
+	// PatrolAlertTriggerMinSeverity is the minimum alert level that warrants an
+	// investigation ("warning" accepts warning+critical; "critical" accepts only
+	// critical; empty = "critical"). PatrolAlertTriggerTypes optionally restricts
+	// triggering to specific alert types (cpu, memory, disk, ...); empty = all types.
+	PatrolAlertTriggerMinSeverity string   `json:"patrol_alert_trigger_min_severity,omitempty"`
+	PatrolAlertTriggerTypes       []string `json:"patrol_alert_trigger_types,omitempty"`
+
 	// Request timeout - how long to wait for AI responses (default: 300s / 5 min)
 	// Increase this for slow hardware running local models (e.g., Ollama on low-power devices)
 	RequestTimeoutSeconds int `json:"request_timeout_seconds,omitempty"`
@@ -210,7 +218,80 @@ func NewDefaultAIConfig() *AIConfig {
 		PatrolEventTriggersEnabled:   true,
 		PatrolAlertTriggersEnabled:   true,
 		PatrolAnomalyTriggersEnabled: true,
+		// Default to critical-only so alert-triggered investigations stay
+		// token-conservative out of the box. Operators can opt warnings in.
+		PatrolAlertTriggerMinSeverity: AlertTriggerSeverityCritical,
 	}
+}
+
+// Alert-trigger minimum-severity sentinels.
+const (
+	AlertTriggerSeverityWarning  = "warning"
+	AlertTriggerSeverityCritical = "critical"
+)
+
+// GetPatrolAlertTriggerMinSeverity returns the configured minimum alert level
+// that warrants a scoped investigation patrol, normalizing the empty default to
+// critical-only.
+func (c *AIConfig) GetPatrolAlertTriggerMinSeverity() string {
+	if c == nil {
+		return AlertTriggerSeverityCritical
+	}
+	min := strings.ToLower(strings.TrimSpace(c.PatrolAlertTriggerMinSeverity))
+	switch min {
+	case AlertTriggerSeverityWarning, AlertTriggerSeverityCritical:
+		return min
+	default:
+		return AlertTriggerSeverityCritical
+	}
+}
+
+// AlertTriggersInvestigation reports whether a firing alert of the given type
+// and level should trigger a scoped investigation patrol, per the operator's
+// alert-trigger policy. It enforces the master enable, the minimum-severity
+// floor, and the optional alert-type allowlist.
+func (c *AIConfig) AlertTriggersInvestigation(alertType, level string) bool {
+	if c == nil || !c.PatrolAlertTriggersEnabled {
+		return false
+	}
+	if !alertLevelMeetsMinimum(level, c.PatrolAlertTriggerMinSeverity) {
+		return false
+	}
+	if len(c.PatrolAlertTriggerTypes) > 0 && !alertTypeAllowed(alertType, c.PatrolAlertTriggerTypes) {
+		return false
+	}
+	return true
+}
+
+// alertLevelMeetsMinimum ranks warning < critical. An empty minimum defaults to
+// critical-only. An unknown alert level is treated as critical so it is never
+// silently dropped.
+func alertLevelMeetsMinimum(level, minimum string) bool {
+	rank := func(s string) int {
+		switch strings.ToLower(strings.TrimSpace(s)) {
+		case AlertTriggerSeverityWarning:
+			return 1
+		case AlertTriggerSeverityCritical:
+			return 2
+		default:
+			return 2
+		}
+	}
+	min := strings.ToLower(strings.TrimSpace(minimum))
+	if min == "" {
+		min = AlertTriggerSeverityCritical
+	}
+	return rank(level) >= rank(min)
+}
+
+func alertTypeAllowed(alertType string, allowed []string) bool {
+	at := strings.ToLower(strings.TrimSpace(alertType))
+	for _, a := range allowed {
+		if strings.ToLower(strings.TrimSpace(a)) == at {
+			return true
+		}
+	}
+	return false
 }
 
 // NormalizeOllamaKeepAlive validates the value Pulse sends as Ollama's

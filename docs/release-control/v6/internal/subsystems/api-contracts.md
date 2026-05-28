@@ -1645,6 +1645,14 @@ Proxmox host rows with workload I/O columns. These fields are a read-model
 extension over existing resource telemetry; they must remain optional until the
 backend transport contract explicitly guarantees them for every node source,
 and consumers must tolerate absence without inventing a second API shape.
+The AI settings contract (`internal/api/ai_handlers.go`) now carries the
+per-rule alert-trigger policy for scoped patrols. The response always projects
+`patrol_alert_trigger_min_severity` (`warning` | `critical`, normalized from the
+critical-only default) and a non-nil `patrol_alert_trigger_types` allowlist
+(empty = all types). The update request accepts both as optional pointer fields;
+the handler rejects any `patrol_alert_trigger_min_severity` other than `warning`
+or `critical` with `400`, and lowercases, trims, drops blanks, and de-duplicates
+the types allowlist before persistence so the stored shape is canonical.
 The shared metrics-history API also treats `metric=temperature` as a canonical
 agent/node chart metric for Proxmox node drawers. `resourceType=agent` may serve
 the current host-agent CPU package temperature as a live fallback when persisted

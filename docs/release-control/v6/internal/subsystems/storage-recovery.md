@@ -1061,6 +1061,13 @@ is shared inventory context for storage/recovery handoffs only; Pod phase,
 container readiness, owner, image, and restart fields do not become protection
 state or recovery-local workload taxonomy.
 
+The alert payload the router-wired alert bridge (`internal/api/router.go`,
+`internal/api/ai_handlers.go`) now carries into a scoped patrol — metric type,
+value, threshold, resource identifier, level, and message — is read-only
+investigation context for that single run. It must not be persisted as
+protection state, recovery-local workload taxonomy, or a backup/recovery
+artifact; storage and recovery state stays owned by their canonical surfaces.
+
 The Storage and Recovery cross-jump builders
 (`buildStorageHrefForResource`, `buildRecoveryHrefForResource`) were deleted
 from `frontend-modern/src/routing/resourceLinks.ts` on 2026-05-16 alongside

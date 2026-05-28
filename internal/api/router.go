@@ -2206,45 +2206,66 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, orgID, da
 					Str("org_id", orgID).
 					Msg("Pulse dev background AI disabled; alert bridge patrol trigger not wired")
 			} else if patrol != nil {
-				alertBridge.SetPatrolTrigger(func(resourceID, resourceType, reason, alertType string) {
+				alertBridge.SetPatrolTrigger(func(event unified.PatrolTriggerEvent) {
 					scope := ai.PatrolScope{
-						ResourceIDs:   []string{resourceID},
-						ResourceTypes: []string{resourceType},
-						Depth:         ai.PatrolDepthQuick,
-						Context:       "Alert bridge: " + reason,
-						Priority:      50,
+						ResourceIDs:     []string{event.ResourceID},
+						ResourceTypes:   []string{event.ResourceType},
+						Depth:           ai.PatrolDepthQuick,
+						Context:         "Alert bridge: " + event.Reason,
+						Priority:        50,
+						AlertIdentifier: event.AlertIdentifier,
 					}
-					switch reason {
+					if event.AlertType != "" {
+						scope.AlertContext = &ai.PatrolAlertContext{
+							AlertType: event.AlertType,
+							Level:     event.AlertLevel,
+							Value:     event.Value,
+							Threshold: event.Threshold,
+							Message:   event.Message,
+						}
+					}
+					switch event.Reason {
 					case "alert_fired":
+						// Per-rule policy: only investigate alerts the operator opted
+						// in (minimum severity + optional alert-type allowlist).
+						if aiCfg := aiService.GetAIConfig(); aiCfg != nil &&
+							!aiCfg.AlertTriggersInvestigation(event.AlertType, event.AlertLevel) {
+							log.Debug().
+								Str("resource_id", event.ResourceID).
+								Str("alert_type", event.AlertType).
+								Str("level", event.AlertLevel).
+								Msg("Alert bridge: alert-triggered patrol skipped by trigger policy")
+							return
+						}
 						scope.Reason = ai.TriggerReasonAlertFired
 						scope.Priority = 80
-						if alertType != "" {
-							scope.Context = "Alert: " + alertType
+						if event.AlertType != "" {
+							scope.Context = fmt.Sprintf("Alert: %s = %.1f (threshold %.1f)", event.AlertType, event.Value, event.Threshold)
 						}
 					case "alert_cleared":
 						scope.Reason = ai.TriggerReasonAlertCleared
 						scope.Priority = 40
-						if alertType != "" {
-							scope.Context = "Alert cleared: " + alertType
+						if event.AlertType != "" {
+							scope.Context = "Alert cleared: " + event.AlertType
 						}
 					default:
 						scope.Reason = ai.TriggerReasonManual
 					}
 
 					log.Debug().
-						Str("resource_id", resourceID).
-						Str("reason", reason).
+						Str("resource_id", event.ResourceID).
+						Str("reason", event.Reason).
 						Msg("Alert bridge: Triggering mini-patrol")
 					if triggerManager := r.aiSettingsHandler.GetTriggerManagerForOrg(orgID); triggerManager != nil {
 						if triggerManager.TriggerPatrol(scope) {
 							log.Debug().
-								Str("resource_id", resourceID).
-								Str("reason", reason).
+								Str("resource_id", event.ResourceID).
+								Str("reason", event.Reason).
 								Msg("Alert bridge: Queued patrol via trigger manager")
 						} else {
 							log.Warn().
-								Str("resource_id", resourceID).
-								Str("reason", reason).
+								Str("resource_id", event.ResourceID).
+								Str("reason", event.Reason).
 								Msg("Alert bridge: Patrol trigger rejected by trigger manager")
 						}
 						return

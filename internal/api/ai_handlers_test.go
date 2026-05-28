@@ -592,6 +592,57 @@ func TestAISettingsHandler_UpdateSettingsRejectsInvalidOllamaKeepAlive(t *testin
 	require.Contains(t, rec.Body.String(), "ollama_keep_alive")
 }
 
+func TestAISettingsHandler_UpdateSettings_PatrolAlertTriggerPolicy(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	body, err := json.Marshal(AISettingsUpdateRequest{
+		PatrolAlertTriggerMinSeverity: ptr("warning"),
+		PatrolAlertTriggerTypes:       ptr([]string{"CPU", " cpu ", "memory", ""}),
+	})
+	require.NoError(t, err)
+
+	req := newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleUpdateAISettings(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var resp AISettingsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, "warning", resp.PatrolAlertTriggerMinSeverity)
+	require.Equal(t, []string{"cpu", "memory"}, resp.PatrolAlertTriggerTypes)
+
+	saved, err := persistence.LoadAIConfig()
+	require.NoError(t, err)
+	require.Equal(t, "warning", saved.PatrolAlertTriggerMinSeverity)
+	require.Equal(t, []string{"cpu", "memory"}, saved.PatrolAlertTriggerTypes)
+}
+
+func TestAISettingsHandler_UpdateSettingsRejectsInvalidPatrolAlertTriggerMinSeverity(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	body, err := json.Marshal(AISettingsUpdateRequest{
+		PatrolAlertTriggerMinSeverity: ptr("emergency"),
+	})
+	require.NoError(t, err)
+
+	req := newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleUpdateAISettings(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+	require.Contains(t, rec.Body.String(), "patrol_alert_trigger_min_severity")
+}
+
 func TestAISettingsHandler_GetAIService_TenantPatrolUsesCanonicalProviders(t *testing.T) {
 	tmp := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(tmp)

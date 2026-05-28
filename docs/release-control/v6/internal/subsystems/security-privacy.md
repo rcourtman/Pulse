@@ -199,6 +199,12 @@ controls as normal product settings.
 This subsystem now gives `L14` an explicit governed home for privacy guidance
 and telemetry disclosures instead of leaving those trust surfaces as lane-level
 evidence with no subsystem ownership.
+The per-rule patrol alert-trigger policy is operator-authored input validated at
+the API boundary before it reaches persisted AI config: the settings handler
+(`internal/api/ai_handlers.go`) rejects any minimum-severity value other than
+`warning` or `critical` and canonicalizes the alert-type allowlist (lowercase,
+trim, drop blanks, de-duplicate) so untrusted request bodies cannot widen the
+alert-driven investigation surface beyond the validated shape.
 That same governed home now also owns the single customer-facing "usage data"
 vocabulary for anonymous outbound telemetry. Local commercial activation and
 license-recovery runtime records must stay out of ordinary Settings, support

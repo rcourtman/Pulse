@@ -809,6 +809,59 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByRole('link', { name: 'Upgrade' })).not.toBeInTheDocument();
   });
 
+  it('persists the alert-trigger severity floor from the Patrol configuration panel', async () => {
+    hasFeatureMock.mockReturnValue(true);
+    licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
+    getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ license_required: false }));
+    apiFetchJSONMock.mockImplementation(async (path: string) => {
+      if (path === '/api/settings/ai') {
+        return {
+          ...defaultAISettings,
+          patrol_alert_triggers_enabled: true,
+          patrol_alert_trigger_min_severity: 'critical',
+        };
+      }
+      if (path === '/api/settings/ai/update') {
+        return {
+          ...defaultAISettings,
+          patrol_alert_triggers_enabled: true,
+          patrol_alert_trigger_min_severity: 'warning',
+        };
+      }
+      return {};
+    });
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Configure Patrol' }));
+
+    const select = (await screen.findByLabelText(
+      'Investigate alerts at or above',
+    )) as HTMLSelectElement;
+    expect(select.value).toBe('critical');
+    expect(Array.from(select.options).map((option) => option.value)).toEqual([
+      'critical',
+      'warning',
+    ]);
+
+    fireEvent.change(select, { target: { value: 'warning' } });
+
+    await waitFor(() => {
+      expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/settings/ai/update', {
+        patrol_alert_trigger_min_severity: 'warning',
+      });
+    });
+    await waitFor(() => {
+      expect(
+        (screen.getByLabelText('Investigate alerts at or above') as HTMLSelectElement).value,
+      ).toBe('warning');
+    });
+  });
+
   it('renders the canonical intelligence summary card with recent changes', async () => {
     hasFeatureMock.mockReturnValue(true);
     licenseStatusMock.mockReturnValue({ subscription_state: 'active' });

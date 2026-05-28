@@ -168,6 +168,9 @@ export function usePatrolIntelligenceState() {
   const [isTriggeringPatrol, setIsTriggeringPatrol] = createSignal(false);
   const [alertTriggeredAnalysis, setAlertTriggeredAnalysis] = createSignal<boolean>(false);
   const [patrolAlertTriggers, setPatrolAlertTriggers] = createSignal<boolean>(true);
+  const [patrolAlertTriggerMinSeverity, setPatrolAlertTriggerMinSeverity] = createSignal<
+    'warning' | 'critical'
+  >('critical');
   const [patrolAnomalyTriggers, setPatrolAnomalyTriggers] = createSignal<boolean>(true);
   const [selectedRun, setSelectedRun] = createSignal<PatrolRunRecord | null>(null);
   const [patrolModelSelectElement, setPatrolModelSelectElement] = createSignal<HTMLSelectElement>();
@@ -287,6 +290,9 @@ export function usePatrolIntelligenceState() {
     setAlertTriggeredAnalysis(!alertAnalysisLocked() && data?.alert_triggered_analysis !== false);
     const legacyEventTriggersEnabled = data?.patrol_event_triggers_enabled !== false;
     setPatrolAlertTriggers(data?.patrol_alert_triggers_enabled ?? legacyEventTriggersEnabled);
+    setPatrolAlertTriggerMinSeverity(
+      data?.patrol_alert_trigger_min_severity === 'warning' ? 'warning' : 'critical',
+    );
     setPatrolAnomalyTriggers(data?.patrol_anomaly_triggers_enabled ?? legacyEventTriggersEnabled);
   };
 
@@ -468,6 +474,32 @@ export function usePatrolIntelligenceState() {
       setPatrolAlertTriggers(previous);
       notificationStore.error(
         patrolErrorMessage(err, 'Failed to update alert-triggered Patrol setting'),
+      );
+    } finally {
+      setIsUpdatingSettings(false);
+    }
+  }
+
+  async function handlePatrolAlertTriggerMinSeverityChange(severity: 'warning' | 'critical') {
+    if (isUpdatingSettings()) return;
+    setIsUpdatingSettings(true);
+    setAdvancedSettingsError(null);
+    const previous = patrolAlertTriggerMinSeverity();
+    setPatrolAlertTriggerMinSeverity(severity);
+    try {
+      const updated = await AIAPI.updateSettings({
+        patrol_alert_trigger_min_severity: severity,
+      });
+      syncAIRuntimeSettings(updated);
+      surfaceSavedPatrolReadinessIssue(
+        updated,
+        'Patrol trigger setting was saved, but Patrol is not ready to run.',
+      );
+    } catch (err) {
+      console.error('Failed to update alert-trigger severity threshold:', err);
+      setPatrolAlertTriggerMinSeverity(previous);
+      notificationStore.error(
+        patrolErrorMessage(err, 'Failed to update alert-trigger severity threshold'),
       );
     } finally {
       setIsUpdatingSettings(false);
@@ -949,6 +981,7 @@ export function usePatrolIntelligenceState() {
     handleIntervalChange,
     handleModelChange,
     handlePatrolAlertTriggersChange,
+    handlePatrolAlertTriggerMinSeverityChange,
     handlePatrolAnomalyTriggersChange,
     handleRunPatrol,
     handleTogglePatrol,
@@ -967,6 +1000,7 @@ export function usePatrolIntelligenceState() {
     openAdvancedSettingsErrorInAssistant,
     patrolEnabledLocal,
     patrolAlertTriggers,
+    patrolAlertTriggerMinSeverity,
     patrolAnomalyTriggers,
     patrolInterval,
     patrolModel,

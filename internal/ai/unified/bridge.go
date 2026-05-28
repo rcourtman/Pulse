@@ -42,8 +42,23 @@ type AlertProvider interface {
 	SetResolvedCallback(cb func(alertID string))
 }
 
+// PatrolTriggerEvent carries the firing (or resolving) alert's specifics so a
+// scoped patrol can investigate the actual issue (the metric, the value, the
+// threshold that was crossed) instead of re-checking the resource generically.
+type PatrolTriggerEvent struct {
+	ResourceID      string
+	ResourceType    string
+	Reason          string // "alert_fired" | "alert_cleared"
+	AlertType       string // cpu, memory, disk, etc.
+	AlertIdentifier string
+	AlertLevel      string // warning | critical
+	Value           float64
+	Threshold       float64
+	Message         string
+}
+
 // PatrolTriggerFunc is called to trigger a mini-patrol for a resource
-type PatrolTriggerFunc func(resourceID, resourceType, reason, alertType string)
+type PatrolTriggerFunc func(event PatrolTriggerEvent)
 
 // AIEnhancementFunc is called to request AI enhancement of a finding
 type AIEnhancementFunc func(findingID string) error
@@ -200,7 +215,17 @@ func (b *AlertBridge) handleNewAlert(alert AlertAdapter) {
 
 		// Trigger mini-patrol for the resource
 		if triggerPatrol && patrolFn != nil {
-			go patrolFn(finding.ResourceID, finding.ResourceType, "alert_fired", finding.AlertType)
+			go patrolFn(PatrolTriggerEvent{
+				ResourceID:      finding.ResourceID,
+				ResourceType:    finding.ResourceType,
+				Reason:          "alert_fired",
+				AlertType:       finding.AlertType,
+				AlertIdentifier: alert.GetAlertIdentifier(),
+				AlertLevel:      alert.GetAlertLevel(),
+				Value:           alert.GetValue(),
+				Threshold:       alert.GetThreshold(),
+				Message:         alert.GetMessage(),
+			})
 		}
 
 		// Schedule AI enhancement
@@ -236,7 +261,16 @@ func (b *AlertBridge) handleAlertResolved(alertID string) {
 
 		// Trigger verification patrol
 		if triggerPatrol && patrolFn != nil && finding != nil {
-			go patrolFn(finding.ResourceID, finding.ResourceType, "alert_cleared", finding.AlertType)
+			go patrolFn(PatrolTriggerEvent{
+				ResourceID:      finding.ResourceID,
+				ResourceType:    finding.ResourceType,
+				Reason:          "alert_cleared",
+				AlertType:       finding.AlertType,
+				AlertIdentifier: finding.AlertIdentifier,
+				Value:           finding.Value,
+				Threshold:       finding.Threshold,
+				Message:         finding.Description,
+			})
 		}
 	}
 }

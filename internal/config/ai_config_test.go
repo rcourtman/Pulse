@@ -949,6 +949,115 @@ func TestAIConfig_PatrolEventTriggerSettings(t *testing.T) {
 	})
 }
 
+func TestAIConfig_GetPatrolAlertTriggerMinSeverity(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  *AIConfig
+		want string
+	}{
+		{name: "nil receiver defaults to critical", cfg: nil, want: AlertTriggerSeverityCritical},
+		{name: "empty defaults to critical", cfg: &AIConfig{}, want: AlertTriggerSeverityCritical},
+		{name: "warning preserved", cfg: &AIConfig{PatrolAlertTriggerMinSeverity: AlertTriggerSeverityWarning}, want: AlertTriggerSeverityWarning},
+		{name: "critical preserved", cfg: &AIConfig{PatrolAlertTriggerMinSeverity: AlertTriggerSeverityCritical}, want: AlertTriggerSeverityCritical},
+		{name: "mixed case normalized", cfg: &AIConfig{PatrolAlertTriggerMinSeverity: " Warning "}, want: AlertTriggerSeverityWarning},
+		{name: "unknown defaults to critical", cfg: &AIConfig{PatrolAlertTriggerMinSeverity: "bogus"}, want: AlertTriggerSeverityCritical},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.cfg.GetPatrolAlertTriggerMinSeverity(); got != tt.want {
+				t.Fatalf("GetPatrolAlertTriggerMinSeverity() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAIConfig_AlertTriggersInvestigation(t *testing.T) {
+	tests := []struct {
+		name        string
+		cfg         *AIConfig
+		alertType   string
+		level       string
+		wantTrigger bool
+	}{
+		{
+			name:        "nil receiver never triggers",
+			cfg:         nil,
+			level:       AlertTriggerSeverityCritical,
+			wantTrigger: false,
+		},
+		{
+			name:        "master toggle off never triggers",
+			cfg:         &AIConfig{PatrolAlertTriggersEnabled: false, PatrolAlertTriggerMinSeverity: AlertTriggerSeverityWarning},
+			level:       AlertTriggerSeverityCritical,
+			wantTrigger: false,
+		},
+		{
+			name:        "critical floor rejects warning",
+			cfg:         &AIConfig{PatrolAlertTriggersEnabled: true, PatrolAlertTriggerMinSeverity: AlertTriggerSeverityCritical},
+			level:       AlertTriggerSeverityWarning,
+			wantTrigger: false,
+		},
+		{
+			name:        "critical floor accepts critical",
+			cfg:         &AIConfig{PatrolAlertTriggersEnabled: true, PatrolAlertTriggerMinSeverity: AlertTriggerSeverityCritical},
+			level:       AlertTriggerSeverityCritical,
+			wantTrigger: true,
+		},
+		{
+			name:        "empty floor defaults to critical-only",
+			cfg:         &AIConfig{PatrolAlertTriggersEnabled: true},
+			level:       AlertTriggerSeverityWarning,
+			wantTrigger: false,
+		},
+		{
+			name:        "warning floor accepts warning",
+			cfg:         &AIConfig{PatrolAlertTriggersEnabled: true, PatrolAlertTriggerMinSeverity: AlertTriggerSeverityWarning},
+			level:       AlertTriggerSeverityWarning,
+			wantTrigger: true,
+		},
+		{
+			name:        "warning floor accepts critical",
+			cfg:         &AIConfig{PatrolAlertTriggersEnabled: true, PatrolAlertTriggerMinSeverity: AlertTriggerSeverityWarning},
+			level:       AlertTriggerSeverityCritical,
+			wantTrigger: true,
+		},
+		{
+			name:        "unknown level treated as critical",
+			cfg:         &AIConfig{PatrolAlertTriggersEnabled: true, PatrolAlertTriggerMinSeverity: AlertTriggerSeverityCritical},
+			level:       "",
+			wantTrigger: true,
+		},
+		{
+			name:        "allowlist admits matching type",
+			cfg:         &AIConfig{PatrolAlertTriggersEnabled: true, PatrolAlertTriggerMinSeverity: AlertTriggerSeverityCritical, PatrolAlertTriggerTypes: []string{"cpu"}},
+			alertType:   "CPU",
+			level:       AlertTriggerSeverityCritical,
+			wantTrigger: true,
+		},
+		{
+			name:        "allowlist rejects unlisted type",
+			cfg:         &AIConfig{PatrolAlertTriggersEnabled: true, PatrolAlertTriggerMinSeverity: AlertTriggerSeverityCritical, PatrolAlertTriggerTypes: []string{"cpu"}},
+			alertType:   "memory",
+			level:       AlertTriggerSeverityCritical,
+			wantTrigger: false,
+		},
+		{
+			name:        "empty allowlist admits any type",
+			cfg:         &AIConfig{PatrolAlertTriggersEnabled: true, PatrolAlertTriggerMinSeverity: AlertTriggerSeverityCritical, PatrolAlertTriggerTypes: []string{}},
+			alertType:   "disk",
+			level:       AlertTriggerSeverityCritical,
+			wantTrigger: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.cfg.AlertTriggersInvestigation(tt.alertType, tt.level); got != tt.wantTrigger {
+				t.Fatalf("AlertTriggersInvestigation(%q, %q) = %v, want %v", tt.alertType, tt.level, got, tt.wantTrigger)
+			}
+		})
+	}
+}
+
 func TestAIConfig_GetRequestTimeout(t *testing.T) {
 	tests := []struct {
 		name     string

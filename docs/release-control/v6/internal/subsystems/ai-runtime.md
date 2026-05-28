@@ -698,6 +698,21 @@ default estate surface. The user-facing Machines label is an app-shell
 presentation label for the existing `standalone` route/id and must not create a
 separate AI handoff or prompt namespace.
 
+Alert-triggered scoped patrols now investigate the specific breach rather than
+running a broad health check. The alert bridge (`internal/ai/unified/bridge.go`,
+`internal/ai/unified/setup.go`) carries the firing alert's real payload — type,
+level, value, threshold, resource identifier, and message — into
+`PatrolScope.AlertContext`, and `internal/ai/patrol_ai.go` /
+`internal/ai/patrol_triggers.go` frame the `alert_fired` run around that breach
+instead of suppressing threshold context. Whether an alert triggers a patrol at
+all is the operator's per-rule policy: `AIConfig.AlertTriggersInvestigation`
+(`internal/config/ai.go`) enforces the master enable, a minimum-severity floor
+(`patrol_alert_trigger_min_severity`, default critical-only), and an optional
+alert-type allowlist (`patrol_alert_trigger_types`, empty = all types). The
+router-side bridge wiring consults that policy and skips queuing the scoped
+patrol when the alert does not qualify; an unknown alert level is treated as
+critical so it is never silently dropped.
+
 The route-backed Proxmox platform tab is app-shell navigation only. Adding the
 tab through `frontend-modern/src/App.tsx` and
 `frontend-modern/src/AppLayout.tsx` must not fork Assistant or Patrol shell

@@ -619,6 +619,14 @@ the canonical Workloads hot-path budget is preserved. Standalone
 WorkloadsSurface callers (no override props) keep the original
 persistent-signal-backed behavior.
 
+The alert-bridge patrol-trigger callback wired in `internal/api/router.go` now
+short-circuits before queuing a scoped patrol when a firing alert does not meet
+the operator's per-rule trigger policy (minimum-severity floor plus optional
+alert-type allowlist, critical-only by default). This bounds alert-driven
+patrol fan-out: in a noisy-warning estate the default policy keeps the LLM-backed
+investigation path from being invoked once per warning, so the patrol queue and
+provider spend stay proportional to the alerts the operator actually opted into.
+
 The embedded WorkloadsSurface exposes a `compactGroupHeaders` prop on
 `frontend-modern/src/components/Workloads/useWorkloadsState.ts` that
 platform pages owning their own hosts table (Proxmox overview today) set

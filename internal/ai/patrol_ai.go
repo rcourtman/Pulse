@@ -3289,7 +3289,19 @@ func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap pat
 	sb.WriteString(fmt.Sprintf("- Guest Memory warning: %.0f%%\n", thresholds.GuestMemWarning))
 	sb.WriteString(fmt.Sprintf("- Guest Disk warning: %.0f%%, critical: %.0f%%\n", thresholds.GuestDiskWarn, thresholds.GuestDiskCrit))
 	sb.WriteString(fmt.Sprintf("- Storage warning: %.0f%%, critical: %.0f%%\n", thresholds.StorageWarning, thresholds.StorageCritical))
-	sb.WriteString("Note: The real-time alerting system monitors these thresholds continuously. Do NOT report findings for threshold breaches — focus on trends, capacity planning, and issues alerts cannot detect.\n\n")
+	if scope != nil && scope.Reason == TriggerReasonAlertFired && scope.AlertContext != nil {
+		ac := scope.AlertContext
+		level := ac.Level
+		if level == "" {
+			level = "threshold"
+		}
+		sb.WriteString(fmt.Sprintf("Note: A live %s alert just fired on the scoped resource: %s = %.1f (threshold %.1f). "+
+			"Investigate the root cause of THIS breach specifically: what changed, whether it is transient or sustained, the blast radius on dependent workloads, and the concrete remediation. "+
+			"Reporting a finding for this breach is expected. It is the reason this patrol was triggered.\n\n",
+			level, ac.AlertType, ac.Value, ac.Threshold))
+	} else {
+		sb.WriteString("Note: The real-time alerting system monitors these thresholds continuously. Do NOT report findings for threshold breaches. Focus on trends, capacity planning, and issues alerts cannot detect.\n\n")
+	}
 
 	scopedResources := patrolRuntimeKnownResources(snap)
 	stateHasScopedResources := len(scopedResources) > 0

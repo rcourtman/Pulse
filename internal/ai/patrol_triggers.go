@@ -57,6 +57,10 @@ type PatrolScope struct {
 	Priority int
 	// AlertIdentifier is the canonical ID of the alert that triggered this patrol (if applicable)
 	AlertIdentifier string
+	// AlertContext carries the firing alert's specifics (metric, value, threshold)
+	// so an alert-triggered patrol can investigate the actual breach instead of
+	// re-checking the resource generically. Nil for non-alert triggers.
+	AlertContext *PatrolAlertContext
 	// FindingID is the ID of the finding that triggered this patrol (if applicable)
 	FindingID string
 	// NoStream skips streaming updates (phase, content, subscriber notifications).
@@ -66,6 +70,16 @@ type PatrolScope struct {
 	RetryCount int
 	// RetryAfter prevents processing before this time (for backoff on re-queued patrols)
 	RetryAfter time.Time
+}
+
+// PatrolAlertContext describes the alert that triggered a scoped patrol, so the
+// patrol prompt can focus the investigation on the specific breach.
+type PatrolAlertContext struct {
+	AlertType string  // cpu, memory, disk, etc.
+	Level     string  // warning | critical
+	Value     float64 // observed metric value at fire time
+	Threshold float64 // threshold that was crossed
+	Message   string  // human-readable alert message
 }
 
 // PatrolDepth controls how thorough a patrol run should be

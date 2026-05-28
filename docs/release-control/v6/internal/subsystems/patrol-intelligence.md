@@ -453,6 +453,17 @@ surface for Patrol intelligence. This contract now owns that orchestration and
 presentation boundary while leaving shared transport and payload-shape
 ownership in the governed AI runtime and API contract surfaces.
 
+The Patrol configuration panel (`PatrolIntelligenceHeader.tsx`,
+`usePatrolIntelligenceState.ts`) exposes the per-rule alert-trigger policy
+directly under the Alert-Triggered Patrols toggle. A minimum-severity selector
+("Investigate alerts at or above": Critical only / Warning and critical) renders
+only while alert triggers are enabled and persists through
+`AIAPI.updateSettings({ patrol_alert_trigger_min_severity })` with optimistic
+state and revert-on-error, mirroring the existing trigger-toggle handlers. The
+selector reads `patrol_alert_trigger_min_severity` from the settings response,
+defaulting to critical-only, and must keep using the shared AI settings shape
+rather than forking a patrol-local form.
+
 The route file `frontend-modern/src/pages/AIIntelligence.tsx` is now also a
 thin shell that delegates to the feature-owned
 `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx`, so Patrol

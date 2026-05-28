@@ -42,7 +42,7 @@ type SetupResult struct {
 //	result, err := unified.Setup(unified.SetupConfig{
 //	    DataDir:              dataPath,
 //	    AlertManager:         alertManager,
-//	    PatrolTriggerFunc:    func(resourceID, resourceType, reason, alertType string) { patrol.Trigger(resourceID, reason) },
+//	    PatrolTriggerFunc:    func(event unified.PatrolTriggerEvent) { patrol.Trigger(event.ResourceID, event.Reason) },
 //	    AutoEnhance:          true,
 //	    TriggerPatrolOnAlert: true,
 //	})

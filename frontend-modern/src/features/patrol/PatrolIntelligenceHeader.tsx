@@ -46,6 +46,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
   const fieldIds = {
     alertTriggeredAnalysis: `${fieldIdPrefix}-alert-triggered-analysis`,
     patrolAlertTriggers: `${fieldIdPrefix}-alert-triggered-patrols`,
+    patrolAlertTriggerMinSeverity: `${fieldIdPrefix}-alert-trigger-min-severity`,
     patrolAnomalyTriggers: `${fieldIdPrefix}-anomaly-triggered-patrols`,
     autonomousCriticalRemediation: `${fieldIdPrefix}-autonomous-critical-remediation`,
   };
@@ -395,6 +396,28 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                         ariaLabelledBy={fieldIds.patrolAlertTriggers}
                       />
                     </div>
+
+                    <Show when={state.patrolAlertTriggers()}>
+                      <div class="pl-3 border-l-2 border-border ml-0.5">
+                        <FormSelect
+                          label="Investigate alerts at or above"
+                          labelClass="text-[11px] font-semibold uppercase tracking-wider text-muted"
+                          fieldClass="space-y-1"
+                          value={state.patrolAlertTriggerMinSeverity()}
+                          onChange={(e) =>
+                            state.handlePatrolAlertTriggerMinSeverityChange(
+                              e.currentTarget.value === 'warning' ? 'warning' : 'critical',
+                            )
+                          }
+                          disabled={state.isUpdatingSettings() || !state.patrolEnabledLocal()}
+                          id={fieldIds.patrolAlertTriggerMinSeverity}
+                          selectBaseClass="w-full text-sm bg-base border border-border rounded-md py-1.5 pl-3 pr-8 text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                        >
+                          <option value="critical">Critical only</option>
+                          <option value="warning">Warning and critical</option>
+                        </FormSelect>
+                      </div>
+                    </Show>
 
                     <div class="flex items-start justify-between gap-3">
                       <div class="flex-1">

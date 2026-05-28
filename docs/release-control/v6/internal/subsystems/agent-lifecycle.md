@@ -1102,6 +1102,14 @@ the same lock-against-remediation flag that the action broker
 enforces downstream — no possible drift between "what Patrol
 proposes" and "what the broker accepts."
 
+The same router wiring owns the alert-bridge patrol-trigger callback. It now
+receives the full alert payload as a struct and consults the operator's
+per-rule trigger policy before queuing a scoped patrol: an `alert_fired` event
+that fails `AIConfig.AlertTriggersInvestigation` (below the minimum-severity
+floor or outside the alert-type allowlist) is logged and dropped without
+entering the trigger manager, so alert-driven investigation lifecycle stays
+bounded to the alerts the operator opted into.
+
 `/api/agent/events` is the SSE stream agents subscribe to for
 real-time notifications: `finding.created` when a new finding is
 raised, `approval.pending` when a remediation request enters

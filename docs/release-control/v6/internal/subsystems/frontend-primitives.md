@@ -1447,6 +1447,12 @@ provider-specific controls from `aiSettingsModel.ts` `extraFields`, including
 Ollama `keep_alive`, so Assistant and Patrol keep one settings shape across
 labeling, help affordances, helper copy, and persistence binding.
 
+The Patrol alert-trigger severity selector under
+`frontend-modern/src/features/patrol/` is built on the shared `FormSelect`
+primitive (label-for/id wiring, `selectBaseClass` styling hook) rather than a
+hand-rolled `<select>`, so its labeling and disabled-state affordances stay
+consistent with the rest of the AI settings surface.
+
 Kubernetes RBAC inventory (Roles, ClusterRoles, RoleBindings,
 ClusterRoleBindings) is part of the existing Kubernetes platform-page
 Configuration tab, not a new sidebar entry or top-level route, and the

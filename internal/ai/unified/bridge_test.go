@@ -76,8 +76,8 @@ func TestAlertBridge_HandleNewAlertAndEnhance(t *testing.T) {
 	bridge.running = true
 
 	patrolCh := make(chan string, 1)
-	bridge.SetPatrolTrigger(func(resourceID, resourceType, reason, alertType string) {
-		patrolCh <- reason
+	bridge.SetPatrolTrigger(func(event PatrolTriggerEvent) {
+		patrolCh <- event.Reason
 	})
 
 	enhanceCh := make(chan string, 1)
@@ -124,8 +124,8 @@ func TestAlertBridge_HandleAlertResolved(t *testing.T) {
 	bridge.running = true
 
 	patrolCh := make(chan string, 1)
-	bridge.SetPatrolTrigger(func(resourceID, resourceType, reason, alertType string) {
-		patrolCh <- reason
+	bridge.SetPatrolTrigger(func(event PatrolTriggerEvent) {
+		patrolCh <- event.Reason
 	})
 
 	alert := &SimpleAlertAdapter{
