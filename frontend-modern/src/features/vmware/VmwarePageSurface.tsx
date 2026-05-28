@@ -1,6 +1,6 @@
 import { useLocation } from '@solidjs/router';
-import CpuIcon from 'lucide-solid/icons/cpu';
 import { Show, createMemo, createResource, type Accessor } from 'solid-js';
+import { getPlatformIcon } from '@/features/platformPage/platformIcon';
 import { ResourceAPI } from '@/api/resources';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
@@ -61,7 +61,8 @@ const VMWARE_WORKLOAD_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
   { value: 'stopped', label: 'Powered off' },
 ];
 
-const vmwareIcon = () => <CpuIcon class="h-6 w-6 text-slate-400" />;
+const VmwareIcon = getPlatformIcon('vmware');
+const vmwareIcon = () => <VmwareIcon class="h-6 w-6 text-slate-400" />;
 
 export function VmwarePageSurface() {
   const location = useLocation();

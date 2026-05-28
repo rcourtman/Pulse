@@ -1,6 +1,6 @@
 import { useLocation } from '@solidjs/router';
-import ContainerIcon from 'lucide-solid/icons/container';
 import { Show, createMemo, createSignal } from 'solid-js';
+import { getPlatformIcon } from '@/features/platformPage/platformIcon';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
@@ -37,7 +37,8 @@ import {
 const DOCKER_RESOURCE_QUERY =
   'type=agent,docker-host,app-container,docker-service,docker-image,docker-volume,docker-network,docker-task,docker-swarm-node,docker-secret,docker-config';
 
-const dockerIcon = () => <ContainerIcon class="h-6 w-6 text-slate-400" />;
+const DockerIcon = getPlatformIcon('docker');
+const dockerIcon = () => <DockerIcon class="h-6 w-6 text-slate-400" />;
 
 export function DockerPageSurface() {
   const location = useLocation();

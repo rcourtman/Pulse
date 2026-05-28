@@ -14,7 +14,7 @@ import {
   isWorkloadTableMetricHistoryRange,
   type WorkloadTableMetricHistoryRange,
 } from '@/components/Workloads/workloadMetricHistoryModel';
-import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
+import { getPlatformIcon } from '@/features/platformPage/platformIcon';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { resourceMatchesSearch } from '@/utils/resourceSearchMatch';
@@ -58,6 +58,7 @@ const PROXMOX_WORKLOAD_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
   { value: 'stopped', label: 'Stopped' },
 ];
 
+const ProxmoxIcon = getPlatformIcon('proxmox');
 const proxmoxIcon = () => <ProxmoxIcon class="h-6 w-6 text-slate-400" />;
 
 export function ProxmoxPageSurface() {

@@ -6,12 +6,7 @@ import SettingsIcon from 'lucide-solid/icons/settings';
 import Maximize2Icon from 'lucide-solid/icons/maximize-2';
 import Minimize2Icon from 'lucide-solid/icons/minimize-2';
 import SparklesIcon from 'lucide-solid/icons/sparkles';
-import ContainerIcon from 'lucide-solid/icons/container';
-import ServerIcon from 'lucide-solid/icons/server';
-import ShipWheelIcon from 'lucide-solid/icons/ship-wheel';
-import DatabaseIcon from 'lucide-solid/icons/database';
-import CpuIcon from 'lucide-solid/icons/cpu';
-import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
+import { getPlatformIcon } from '@/features/platformPage/platformIcon';
 import {
   MobileNavBar,
   type MobileNavBarPrimaryTab as PrimaryTab,
@@ -338,7 +333,7 @@ export function AppLayout(props: AppLayoutProps) {
         tooltip: 'Proxmox VE, Backup Server, Mail Gateway, storage, backups, and guests',
         enabled: isVisible('proxmox'),
         live: isVisible('proxmox'),
-        icon: ProxmoxIcon,
+        icon: getPlatformIcon('proxmox'),
         alwaysShow: false,
       },
       {
@@ -349,7 +344,7 @@ export function AppLayout(props: AppLayoutProps) {
         tooltip: 'Docker / Podman runtime lens: hosts, containers, and Swarm services',
         enabled: isVisible('docker'),
         live: isVisible('docker'),
-        icon: ContainerIcon,
+        icon: getPlatformIcon('docker'),
         alwaysShow: false,
       },
       {
@@ -360,7 +355,7 @@ export function AppLayout(props: AppLayoutProps) {
         tooltip: 'Kubernetes clusters, nodes, pods, deployments, and services',
         enabled: isVisible('kubernetes'),
         live: isVisible('kubernetes'),
-        icon: ShipWheelIcon,
+        icon: getPlatformIcon('kubernetes'),
         alwaysShow: false,
       },
       {
@@ -371,7 +366,7 @@ export function AppLayout(props: AppLayoutProps) {
         tooltip: 'TrueNAS hosts, storage, and apps',
         enabled: isVisible('truenas'),
         live: isVisible('truenas'),
-        icon: DatabaseIcon,
+        icon: getPlatformIcon('truenas'),
         alwaysShow: false,
       },
       {
@@ -382,7 +377,7 @@ export function AppLayout(props: AppLayoutProps) {
         tooltip: 'VMware vSphere hosts, virtual machines, datastores, and networks',
         enabled: isVisible('vmware'),
         live: isVisible('vmware'),
-        icon: CpuIcon,
+        icon: getPlatformIcon('vmware'),
         alwaysShow: false,
       },
       {
@@ -393,7 +388,7 @@ export function AppLayout(props: AppLayoutProps) {
         tooltip: 'Pulse Agent machines, agentless computers, and availability checks',
         enabled: isVisible('standalone'),
         live: isVisible('standalone'),
-        icon: ServerIcon,
+        icon: getPlatformIcon('standalone'),
         alwaysShow: false,
       },
     ];

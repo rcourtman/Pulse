@@ -259,7 +259,7 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain('return `${count} ${tab.label}`;');
     expect(appLayoutSource).toContain('const primaryTabs = createMemo<PrimaryTab[]>(() =>');
     expect(appLayoutSource).toContain("id: 'proxmox',");
-    expect(appLayoutSource).toContain('icon: ProxmoxIcon,');
+    expect(appLayoutSource).toContain("icon: getPlatformIcon('proxmox'),");
     expect(appLayoutSource).toContain('const Icon = tab.icon;');
     expect(appLayoutSource).toContain('const Icon = tab.icon;');
     expect(appLayoutSource).toContain('aria-label={tab.label}');

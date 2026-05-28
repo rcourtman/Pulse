@@ -1,6 +1,6 @@
 import { useLocation } from '@solidjs/router';
-import DatabaseIcon from 'lucide-solid/icons/database';
 import { Show, createMemo, type Accessor } from 'solid-js';
+import { getPlatformIcon } from '@/features/platformPage/platformIcon';
 import { useRecoveryPoints } from '@/hooks/useRecoveryPoints';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
@@ -36,7 +36,8 @@ const TRUENAS_RESOURCE_QUERY =
 const TRUENAS_PLATFORM_FILTER = 'truenas';
 const VALID_TABS = new Set<TrueNASPageTabId>(TRUENAS_TAB_SPECS.map((tab) => tab.id));
 
-const truenasIcon = () => <DatabaseIcon class="h-6 w-6 text-slate-400" />;
+const TrueNASIcon = getPlatformIcon('truenas');
+const truenasIcon = () => <TrueNASIcon class="h-6 w-6 text-slate-400" />;
 
 export function TrueNASPageSurface() {
   const location = useLocation();

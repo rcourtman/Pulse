@@ -1,12 +1,5 @@
 import { Show } from 'solid-js';
-import Server from 'lucide-solid/icons/server';
-import Mail from 'lucide-solid/icons/mail';
-import Users from 'lucide-solid/icons/users';
-import Boxes from 'lucide-solid/icons/boxes';
-import Cpu from 'lucide-solid/icons/cpu';
-import Database from 'lucide-solid/icons/database';
-import HardDrive from 'lucide-solid/icons/hard-drive';
-import Network from 'lucide-solid/icons/network';
+import { getPlatformIcon } from '@/features/platformPage/platformIcon';
 import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { BulkEditDialog } from './BulkEditDialog';
@@ -36,14 +29,14 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       setValue: (value) => state.handleTabClick(value as ThresholdsActiveTab),
       defaultValue: 'proxmox',
       options: () => [
-        { value: 'proxmox', label: 'Proxmox', icon: Server },
-        { value: 'docker', label: 'Docker', icon: Boxes },
-        { value: 'kubernetes', label: 'Kubernetes', icon: Network },
-        { value: 'truenas', label: 'TrueNAS', icon: HardDrive },
-        { value: 'vmware', label: 'vSphere', icon: Cpu },
-        { value: 'pbs', label: 'PBS', icon: Database },
-        { value: 'pmg', label: 'PMG', icon: Mail },
-        { value: 'systems', label: 'Systems', icon: Users },
+        { value: 'proxmox', label: 'Proxmox', icon: getPlatformIcon('proxmox') },
+        { value: 'docker', label: 'Docker', icon: getPlatformIcon('docker') },
+        { value: 'kubernetes', label: 'Kubernetes', icon: getPlatformIcon('kubernetes') },
+        { value: 'truenas', label: 'TrueNAS', icon: getPlatformIcon('truenas') },
+        { value: 'vmware', label: 'vSphere', icon: getPlatformIcon('vmware') },
+        { value: 'pbs', label: 'PBS', icon: getPlatformIcon('pbs') },
+        { value: 'pmg', label: 'PMG', icon: getPlatformIcon('pmg') },
+        { value: 'systems', label: 'Systems', icon: getPlatformIcon('systems') },
       ],
     },
     {
