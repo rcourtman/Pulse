@@ -74,3 +74,61 @@ Pro, legacy Pro+, and Cloud support dedicated audit webhooks for security event 
 
 ### Security
 Audit webhooks are dispatched asynchronously. The payload includes a `signature` field which can be verified using the per-instance HMAC key stored (encrypted) at `.audit-signing.key` in the Pulse data directory. There is no `PULSE_AUDIT_SIGNING_KEY` override.
+
+## 🏢 Multi-tenant / MSP and PSA integration
+
+In multi-tenant mode (Pulse Cloud, or self-hosted with `PULSE_MULTI_TENANT_ENABLED=true` and a multi-tenant license) alerts and notification destinations are isolated **per organization**. Every alert and webhook request resolves an organization and operates only on that org's own alert state and webhook config, so one client's destinations and templates never leak into another's.
+
+The organization for a request is resolved in this order:
+
+1. `X-Pulse-Org-ID: <orgID>` header (the way API clients and PSA middleware should target a specific tenant).
+2. `pulse_org_id` session cookie (browser sessions).
+3. An org-bound API token (a token scoped to a single org needs no header).
+4. Fallback: the `default` org.
+
+Suspended or pending-deletion organizations return `403`, and an unknown org ID returns `400`.
+
+### Wiring tenant alerts into ConnectWise / a PSA
+
+There are two integration models. Most MSPs use the push model so tickets open and close automatically.
+
+**Push (recommended): one outbound webhook per tenant org.** Create a **Generic** webhook for each client org and point it at your PSA's inbound endpoint (ConnectWise inbound webhook, an email connector, or a middleware that opens service tickets). Shape the JSON with a [custom template](#-custom-templates) so it matches your PSA's expected schema — every template variable listed above is available. Pulse fires on both `alert` and `resolved` events (`{{.Event}}` is `"alert"` or `"resolved"`), so the PSA can open a ticket on alert and auto-resolve it on recovery. Add PSA authentication as a custom header (e.g. `Authorization: Bearer ...`).
+
+Configure it from the UI (**Alerts → Notification Destinations → Add Webhook**) per org, or programmatically with an org-bound admin token:
+
+```http
+POST /api/notifications/webhooks
+X-Pulse-Org-ID: acme-corp
+Authorization: Bearer <token with settings:write>
+Content-Type: application/json
+
+{
+  "name": "ConnectWise (Acme)",
+  "url": "https://psa.example.com/inbound/pulse",
+  "method": "POST",
+  "service": "generic",
+  "enabled": true,
+  "headers": { "Authorization": "Bearer <psa-token>" },
+  "template": "{\"summary\":\"{{.Level}}: {{.ResourceName}} {{.Message | jsonString}}\",\"event\":\"{{.Event}}\",\"alertId\":\"{{.ID}}\"}"
+}
+```
+
+The exact ticket fields differ by PSA (ConnectWise, Autotask, Halo, and others each expect their own inbound shape), so map the template to your platform's contract. The `alertId` round-trips through `{{.ID}}`, which lets the PSA correlate the later `resolved` event to the ticket it opened.
+
+**Pull (poll): org-scoped read API.** Issue a `monitoring:read` token bound to each client org and poll that org's alerts. Send `X-Pulse-Org-ID` (or rely on the org-bound token) so you get only that tenant's data:
+
+- `GET /api/alerts/active` — currently firing alerts for the org.
+- `GET /api/alerts/history` — historical alerts for the org.
+
+To acknowledge or clear from the PSA side, use a `monitoring:write` token: `POST /api/alerts/acknowledge` and `POST /api/alerts/clear`.
+
+### Scope and targeting summary
+
+| Action | Endpoint | Scope |
+|--------|----------|-------|
+| Create / update / delete per-org webhook | `POST` / `PUT` / `DELETE /api/notifications/webhooks` | `settings:write` (admin) |
+| List per-org webhooks | `GET /api/notifications/webhooks` | `settings:read` (admin) |
+| Read active / historical alerts | `GET /api/alerts/active`, `GET /api/alerts/history` | `monitoring:read` |
+| Acknowledge / clear alerts | `POST /api/alerts/acknowledge`, `POST /api/alerts/clear` | `monitoring:write` |
+
+Target a tenant with the `X-Pulse-Org-ID: <orgID>` header or an org-bound API token. See [API.md](API.md) for the full endpoint and token reference.
