@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -165,6 +166,43 @@ func TestUpdateAlertConfig(t *testing.T) {
 
 	assert.Equal(t, 200, w.Code)
 	assert.False(t, notificationMgr.IsEnabled())
+}
+
+// Regression for #1341: persistence failures used to be silently swallowed
+// (logged but reported as "saved successfully"), so a user setting a 50%
+// per-pool override would see the value stick in memory and revert on
+// reload, with no clue why. Surface the error so the frontend can show a
+// real save-failed signal.
+func TestUpdateAlertConfig_PersistenceFailureSurfacesAsError(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockManager := new(MockAlertManager)
+	mockPersist := new(MockConfigPersistence)
+	notificationMgr := notifications.NewNotificationManager("")
+	defer notificationMgr.Stop()
+
+	mockMonitor.On("GetAlertManager").Return(mockManager)
+	mockMonitor.On("GetConfigPersistence").Return(mockPersist)
+	mockMonitor.On("GetNotificationManager").Return(notificationMgr)
+
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	cfg := alerts.AlertConfig{Enabled: true, ActivationState: alerts.ActivationPending}
+	mockManager.On("UpdateConfig", testifymock.Anything).Return()
+	mockManager.On("GetConfig").Return(cfg)
+	mockPersist.On("SaveAlertConfig", testifymock.Anything).Return(errors.New("permission denied"))
+
+	body, _ := json.Marshal(cfg)
+	req := httptest.NewRequest("POST", "/api/alerts/config", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+
+	h.UpdateAlertConfig(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500 on persistence failure", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "permission denied") {
+		t.Fatalf("response body should expose persistence error, got %q", w.Body.String())
+	}
 }
 
 func TestActivateAlerts_EnablesNotificationManager(t *testing.T) {

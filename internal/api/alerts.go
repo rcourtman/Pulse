@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -199,10 +200,15 @@ func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request
 	)
 	notificationMgr.SetNotifyOnResolve(updatedConfig.Schedule.NotifyOnResolve)
 
-	// Save to persistent storage
+	// Save to persistent storage. Failure here used to be swallowed (logged
+	// and reported "success"), which led to the in-memory state diverging
+	// from what was actually persisted. On the next restart or config
+	// reload, the override silently vanished. Surface the error so the
+	// client can show a real save-failed signal.
 	if err := h.getMonitor(r.Context()).GetConfigPersistence().SaveAlertConfig(updatedConfig); err != nil {
-		// Log error but don't fail the request
 		log.Error().Err(err).Msg("Failed to save alert configuration")
+		http.Error(w, fmt.Sprintf("Failed to save alert configuration: %v", err), http.StatusInternalServerError)
+		return
 	}
 
 	if err := utils.WriteJSONResponse(w, map[string]interface{}{
