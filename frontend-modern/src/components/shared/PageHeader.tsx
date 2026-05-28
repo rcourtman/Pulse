@@ -5,6 +5,8 @@ type PageHeaderProps = {
   id?: string;
   title: JSX.Element;
   description?: JSX.Element;
+  descriptionVisibility?: 'desktop' | 'always';
+  updateDocumentTitle?: boolean;
   titleMeta?: JSX.Element;
   actions?: JSX.Element;
   class?: string;
@@ -17,6 +19,8 @@ export function PageHeader(props: PageHeaderProps) {
     'id',
     'title',
     'description',
+    'descriptionVisibility',
+    'updateDocumentTitle',
     'titleMeta',
     'actions',
     'class',
@@ -33,10 +37,19 @@ export function PageHeader(props: PageHeaderProps) {
   // AppLayout. Non-string titles (rich JSX) fall back to whatever
   // AppLayout already set.
   createEffect(() => {
-    if (typeof local.title === 'string' && local.title.trim()) {
+    if (
+      local.updateDocumentTitle !== false &&
+      typeof local.title === 'string' &&
+      local.title.trim()
+    ) {
       document.title = `${local.title.trim()} · Pulse`;
     }
   });
+
+  const descriptionClass = () =>
+    local.descriptionVisibility === 'always'
+      ? `mt-1 text-sm font-medium text-muted ${local.descriptionClass ?? ''}`.trim()
+      : `mt-1 hidden text-sm font-medium text-muted sm:block ${local.descriptionClass ?? ''}`.trim();
 
   return (
     <Show when={!kioskMode()}>
@@ -55,11 +68,7 @@ export function PageHeader(props: PageHeaderProps) {
             <Show when={local.titleMeta}>{local.titleMeta}</Show>
           </div>
           <Show when={local.description}>
-            <p
-              class={`mt-1 hidden text-sm font-medium text-muted sm:block ${local.descriptionClass ?? ''}`.trim()}
-            >
-              {local.description}
-            </p>
+            <p class={descriptionClass()}>{local.description}</p>
           </Show>
         </div>
         <Show when={local.actions}>
