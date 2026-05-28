@@ -70,37 +70,44 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
         }
       />
 
-      <Show when={activeTab() === 'overview'}>
+      {/* Use CSS hidden instead of Show to avoid mount/unmount which causes scroll jumps.
+          overflow-anchor: none prevents browser scroll anchoring from jumping when display toggles. */}
+      <div class={activeTab() === 'overview' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
         <DockerHostDrawerOverview host={props.host} />
-      </Show>
+      </div>
 
-      <Show when={activeTab() === 'history'}>
+      <div class={activeTab() === 'history' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
         <GuestDrawerHistory
           fallbackMetrics={fallbackMetrics()}
           groups={DOCKER_HOST_DRAWER_HISTORY_GROUPS}
           range={historyRange()}
           target={historyTarget()}
         />
-      </Show>
+      </div>
 
-      <Show when={activeTab() === 'discovery' && discoveryConfig()}>
+      <Show when={discoveryConfig()}>
         {(config) => (
-          <Suspense
-            fallback={
-              <div class="flex items-center justify-center py-8">
-                <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-                <span class="ml-2 text-sm text-muted">{getDiscoveryLoadingState().text}</span>
-              </div>
-            }
+          <div
+            class={activeTab() === 'discovery' ? '' : 'hidden'}
+            style={{ 'overflow-anchor': 'none' }}
           >
-            <DiscoveryTab
-              resourceType={config().resourceType}
-              agentId={config().agentId}
-              resourceId={config().resourceId}
-              hostname={config().hostname}
-              showManualRunAction
-            />
-          </Suspense>
+            <Suspense
+              fallback={
+                <div class="flex items-center justify-center py-8">
+                  <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
+                  <span class="ml-2 text-sm text-muted">{getDiscoveryLoadingState().text}</span>
+                </div>
+              }
+            >
+              <DiscoveryTab
+                resourceType={config().resourceType}
+                agentId={config().agentId}
+                resourceId={config().resourceId}
+                hostname={config().hostname}
+                showManualRunAction
+              />
+            </Suspense>
+          </div>
         )}
       </Show>
     </section>

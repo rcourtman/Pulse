@@ -71,21 +71,26 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
         }
       />
 
-      <Show when={activeTab() === 'overview'}>
+      {/* Use CSS hidden instead of Show to avoid mount/unmount which causes scroll jumps.
+          overflow-anchor: none prevents browser scroll anchoring from jumping when display toggles. */}
+      <div class={activeTab() === 'overview' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
         <NodeDrawerOverview node={props.node} disks={props.disks} />
-      </Show>
+      </div>
 
-      <Show when={activeTab() === 'history'}>
+      <div class={activeTab() === 'history' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
         <GuestDrawerHistory
           fallbackMetrics={fallbackMetrics()}
           groups={NODE_DRAWER_HISTORY_GROUPS}
           range={historyRange()}
           target={historyTarget()}
         />
-      </Show>
+      </div>
 
-      <Show when={activeTab() === 'discovery' && props.discoveryTarget?.agentId}>
-        {(agentId) => (
+      {props.discoveryTarget?.agentId && (
+        <div
+          class={activeTab() === 'discovery' ? '' : 'hidden'}
+          style={{ 'overflow-anchor': 'none' }}
+        >
           <Suspense
             fallback={
               <div class="flex items-center justify-center py-8">
@@ -96,14 +101,14 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
           >
             <DiscoveryTab
               resourceType="agent"
-              agentId={agentId()}
-              resourceId={agentId()}
+              agentId={props.discoveryTarget.agentId}
+              resourceId={props.discoveryTarget.agentId}
               hostname={props.discoveryTarget?.hostname || displayName()}
               showManualRunAction
             />
           </Suspense>
-        )}
-      </Show>
+        </div>
+      )}
     </section>
   );
 };
