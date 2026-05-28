@@ -3,8 +3,12 @@ import { For, Show, createMemo, createResource, createSignal, createEffect } fro
 import { useNavigate } from '@solidjs/router';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { Card } from '@/components/shared/Card';
-import { LabeledFilterSelect } from '@/components/shared/FilterToolbar';
-import { SearchField } from '@/components/shared/SearchField';
+import {
+  filterGroupClass,
+  filterLabelClass,
+  filterSelectClass,
+} from '@/components/shared/FilterToolbar';
+import { SearchInput } from '@/components/shared/SearchInput';
 import { StatusDot } from '@/components/shared/StatusDot';
 import {
   Table,
@@ -186,25 +190,33 @@ export const K8sDeploymentsDrawer: Component<{
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
-            <SearchField
-              value={search()}
-              onChange={setSearch}
-              placeholder={drawerPresentation.searchPlaceholder}
-              class="w-[12rem]"
-              inputClass="py-1 text-xs font-medium shadow-sm"
-            />
+            <div class="w-[12rem]">
+              <SearchInput
+                value={search}
+                onChange={setSearch}
+                placeholder={drawerPresentation.searchPlaceholder}
+                inputClass="py-1 text-xs font-medium shadow-sm"
+                typeToSearch
+                clearOnEscape
+              />
+            </div>
 
             <Show when={namespaceOptions().length > 0}>
-              <LabeledFilterSelect
-                id="k8s-deployments-namespace"
-                label={drawerPresentation.namespaceFilterLabel}
-                value={namespace()}
-                onChange={(e) => setNamespace(e.currentTarget.value)}
-                selectClass="min-w-[10rem]"
-              >
-                <option value="">{drawerPresentation.allNamespacesLabel}</option>
-                <For each={namespaceOptions()}>{(ns) => <option value={ns}>{ns}</option>}</For>
-              </LabeledFilterSelect>
+              <div class={filterGroupClass}>
+                <label for="k8s-deployments-namespace" class={filterLabelClass}>
+                  {drawerPresentation.namespaceFilterLabel}
+                </label>
+                <select
+                  id="k8s-deployments-namespace"
+                  class={`${filterSelectClass} min-w-[10rem]`}
+                  value={namespace()}
+                  aria-label={drawerPresentation.namespaceFilterLabel}
+                  onChange={(e) => setNamespace(e.currentTarget.value)}
+                >
+                  <option value="">{drawerPresentation.allNamespacesLabel}</option>
+                  <For each={namespaceOptions()}>{(ns) => <option value={ns}>{ns}</option>}</For>
+                </select>
+              </div>
             </Show>
 
             <button

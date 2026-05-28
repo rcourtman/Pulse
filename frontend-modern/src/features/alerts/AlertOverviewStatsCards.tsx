@@ -1,9 +1,17 @@
 import { Card } from '@/components/shared/Card';
+import { StatusDot } from '@/components/shared/StatusDot';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableRow,
+} from '@/components/shared/Table';
 import {
   ALERT_OVERVIEW_ACKNOWLEDGED_LABEL,
   ALERT_OVERVIEW_LAST_24_HOURS_LABEL,
   ALERT_OVERVIEW_WORKLOAD_OVERRIDES_LABEL,
 } from '@/utils/alertOverviewPresentation';
+import type { StatusIndicatorVariant } from '@/utils/status';
 
 import type { AlertOverviewState } from './useAlertOverviewState';
 
@@ -11,89 +19,68 @@ interface AlertOverviewStatsCardsProps {
   state: AlertOverviewState;
 }
 
+const dotCellClass = 'w-6 pl-3 pr-0';
+const labelCellClass = 'text-base-content';
+const valueCellClass = 'pr-3 text-right font-semibold tabular-nums text-base-content';
+
+const VARIANT_ACTIVE: Record<'triggered' | 'acknowledged', StatusIndicatorVariant> = {
+  triggered: 'warning',
+  acknowledged: 'success',
+};
+
+const variantForCount = (
+  count: number,
+  active: StatusIndicatorVariant,
+): StatusIndicatorVariant => (count > 0 ? active : 'muted');
+
 export function AlertOverviewStatsCards(props: AlertOverviewStatsCardsProps) {
   return (
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
-      <Card padding="sm" class="sm:p-4">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-[10px] sm:text-sm text-muted uppercase tracking-wider sm:normal-case">
-              {ALERT_OVERVIEW_ACKNOWLEDGED_LABEL}
-            </p>
-            <p class="text-lg sm:text-2xl font-semibold text-yellow-600 dark:text-yellow-400">
-              {props.state.alertStats().acknowledged}
-            </p>
-          </div>
-          <div class="w-8 h-8 sm:w-10 sm:h-10 bg-yellow-100 dark:bg-yellow-900 rounded-full flex items-center justify-center">
-            <svg
-              width="16"
-              height="16"
-              class="sm:w-5 sm:h-5 text-yellow-600 dark:text-yellow-400"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path d="M9 11L12 14L22 4"></path>
-              <path d="M21 12V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V5C3 3.89543 3 3 5 3H16"></path>
-            </svg>
-          </div>
-        </div>
-      </Card>
-
-      <Card padding="sm" class="sm:p-4">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-[10px] sm:text-sm text-muted uppercase tracking-wider sm:normal-case">
-              {ALERT_OVERVIEW_LAST_24_HOURS_LABEL}
-            </p>
-            <p class="text-lg sm:text-2xl font-semibold text-base-content">
+    <Card padding="none" tone="card" class="overflow-hidden">
+      <Table class="min-w-full text-xs">
+        <TableBody>
+          <TableRow>
+            <TableCell class={dotCellClass}>
+              <StatusDot
+                variant={variantForCount(
+                  props.state.alertStats().total24h,
+                  VARIANT_ACTIVE.triggered,
+                )}
+                size="sm"
+                ariaHidden
+              />
+            </TableCell>
+            <TableCell class={labelCellClass}>{ALERT_OVERVIEW_LAST_24_HOURS_LABEL}</TableCell>
+            <TableCell class={valueCellClass} data-testid="alert-overview-stat-value">
               {props.state.alertStats().total24h}
-            </p>
-          </div>
-          <div class="w-8 h-8 sm:w-10 sm:h-10 bg-surface-hover rounded-full flex items-center justify-center">
-            <svg
-              width="16"
-              height="16"
-              class="sm:w-5 sm:h-5 text-muted"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <circle cx="12" cy="12" r="10"></circle>
-              <polyline points="12 6 12 12 16 14"></polyline>
-            </svg>
-          </div>
-        </div>
-      </Card>
-
-      <Card padding="sm" class="sm:p-4">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-[10px] sm:text-sm text-muted uppercase tracking-wider sm:normal-case">
-              {ALERT_OVERVIEW_WORKLOAD_OVERRIDES_LABEL}
-            </p>
-            <p class="text-lg sm:text-2xl font-semibold text-blue-600 dark:text-blue-400">
+            </TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell class={dotCellClass}>
+              <StatusDot
+                variant={variantForCount(
+                  props.state.alertStats().acknowledged,
+                  VARIANT_ACTIVE.acknowledged,
+                )}
+                size="sm"
+                ariaHidden
+              />
+            </TableCell>
+            <TableCell class={labelCellClass}>{ALERT_OVERVIEW_ACKNOWLEDGED_LABEL}</TableCell>
+            <TableCell class={valueCellClass} data-testid="alert-overview-stat-value">
+              {props.state.alertStats().acknowledged}
+            </TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell class={dotCellClass}>
+              <StatusDot variant="muted" size="sm" ariaHidden />
+            </TableCell>
+            <TableCell class={labelCellClass}>{ALERT_OVERVIEW_WORKLOAD_OVERRIDES_LABEL}</TableCell>
+            <TableCell class={valueCellClass} data-testid="alert-overview-stat-value">
               {props.state.alertStats().overrides}
-            </p>
-          </div>
-          <div class="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
-            <svg
-              width="16"
-              height="16"
-              class="sm:w-5 sm:h-5 text-blue-600 dark:text-blue-400"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
-              <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-            </svg>
-          </div>
-        </div>
-      </Card>
-    </div>
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    </Card>
   );
 }

@@ -53,12 +53,16 @@ describe('PricingHandoff', () => {
     );
   });
 
-  it('keeps the pricing handoff on the shared page-header shell', () => {
-    expect(pricingHandoffSource).toContain(
+  it('bypasses PageHeader so the manual-redirect link stays visible on mobile', () => {
+    // PageHeader hides its description below sm: with `hidden sm:block`, and
+    // mutates document.title in a createEffect. Both behaviors are wrong for
+    // this transient redirect splash — the description IS the recovery path
+    // when the auto-redirect fails, so it must render at every breakpoint.
+    expect(pricingHandoffSource).not.toContain(
       "import { PageHeader } from '@/components/shared/PageHeader';",
     );
-    expect(pricingHandoffSource).toContain('<PageHeader');
-    expect(pricingHandoffSource).not.toContain('<h1');
+    expect(pricingHandoffSource).not.toContain('<PageHeader');
+    expect(pricingHandoffSource).toContain('<h1');
   });
 
   // The earlier 'retired monitored-system pricing handoffs' case has been

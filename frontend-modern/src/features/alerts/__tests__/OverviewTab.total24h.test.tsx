@@ -76,7 +76,7 @@ describe('OverviewTab Last 24 Hours stat', () => {
     render(() => <OverviewTab {...defaultProps({ activeAlerts })} />);
 
     const label = screen.getByText('Triggered (24h)');
-    const statValue = label.parentElement?.querySelector('.text-lg, .text-2xl, [class*="text-lg"]');
+    const statValue = label.closest('tr')?.querySelector('[data-testid="alert-overview-stat-value"]');
     expect(statValue?.textContent).toBe('1');
   });
 
@@ -92,7 +92,7 @@ describe('OverviewTab Last 24 Hours stat', () => {
     render(() => <OverviewTab {...defaultProps({ activeAlerts })} />);
 
     const label = screen.getByText('Triggered (24h)');
-    const statValue = label.parentElement?.querySelector('.text-lg, .text-2xl, [class*="text-lg"]');
+    const statValue = label.closest('tr')?.querySelector('[data-testid="alert-overview-stat-value"]');
     expect(statValue?.textContent).toBe('0');
   });
 
@@ -109,7 +109,7 @@ describe('OverviewTab Last 24 Hours stat', () => {
     render(() => <OverviewTab {...defaultProps({ activeAlerts })} />);
 
     const label = screen.getByText('Triggered (24h)');
-    const statValue = label.parentElement?.querySelector('.text-lg, .text-2xl, [class*="text-lg"]');
+    const statValue = label.closest('tr')?.querySelector('[data-testid="alert-overview-stat-value"]');
     expect(statValue?.textContent).toBe('3');
   });
 
@@ -123,7 +123,7 @@ describe('OverviewTab Last 24 Hours stat', () => {
     render(() => <OverviewTab {...defaultProps({ activeAlerts })} />);
 
     const label = screen.getByText('Triggered (24h)');
-    const statValue = label.parentElement?.querySelector('.text-lg, .text-2xl, [class*="text-lg"]');
+    const statValue = label.closest('tr')?.querySelector('[data-testid="alert-overview-stat-value"]');
     expect(statValue?.textContent).toBe('0');
   });
 
@@ -138,7 +138,7 @@ describe('OverviewTab Last 24 Hours stat', () => {
     render(() => <OverviewTab {...defaultProps({ activeAlerts })} />);
 
     const label = screen.getByText('Triggered (24h)');
-    const statValue = label.parentElement?.querySelector('.text-lg, .text-2xl, [class*="text-lg"]');
+    const statValue = label.closest('tr')?.querySelector('[data-testid="alert-overview-stat-value"]');
     expect(statValue?.textContent).toBe('1');
 
     // Advance time by 2 minutes — alert is now 24h 1m old, outside the window
