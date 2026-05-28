@@ -5199,11 +5199,15 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Action governance now has a first-class governed floor: tool capability declarations include typed agent-operable infrastructure onboarding over the canonical node lifecycle and LAN-discovery APIs, approval-backed action plans, plan-level preflight and dry-run posture, fail-closed action-audit normalization, bounded lifecycle events, API-visible action audit preflight, and a resource-scoped action-history surface are owned by the shared AI, API, security, Patrol, and unified-resource contracts. Broader enterprise policy execution, richer dry-run providers, multi-actor approvals, full onboarding import-plan approvals, and deeper safe-execution contracts remain named post-RC hardening tracks.",
+        "summary": "Action governance now has a first-class governed floor: tool capability declarations include typed agent-operable infrastructure onboarding over the canonical node lifecycle and LAN-discovery APIs, approval-backed action plans, plan-level preflight and dry-run posture, fail-closed action-audit normalization, bounded lifecycle events, API-visible action audit preflight, and a resource-scoped action-history surface are owned by the shared AI, API, security, Patrol, and unified-resource contracts. Broader enterprise policy execution, richer dry-run providers, multi-actor approvals, full onboarding import-plan approvals, continuous discovery-to-finding reconciliation, and deeper safe-execution contracts remain named post-RC hardening tracks.",
         "tracking": [
           {
             "kind": "lane-followup",
             "id": "action-governance-auditability-post-rc-hardening"
+          },
+          {
+            "kind": "lane-followup",
+            "id": "agent-native-continuous-discovery-findings"
           },
           {
             "kind": "lane-followup",
@@ -6715,6 +6719,17 @@
       "recorded_at": "2026-04-25",
       "lane_ids": [
         "L19"
+      ],
+      "subsystem_ids": []
+    },
+    {
+      "id": "agent-native-continuous-discovery-findings",
+      "summary": "Track the agent-native reconciliation loop beyond one-shot LAN discovery: continuous discovery should surface newly detected, unconfigured infrastructure candidates as durable findings that agents can investigate, plan, approve, and resolve by validating credentials and adding the source through the canonical provisioning capabilities.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-05-28",
+      "lane_ids": [
+        "L20"
       ],
       "subsystem_ids": []
     },
