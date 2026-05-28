@@ -5,6 +5,7 @@ import settingsPageShellSource from '../SettingsPageShell.tsx?raw';
 import aiSettingsDialogsSource from '../AISettingsDialogs.tsx?raw';
 import aiChatMaintenanceSectionSource from '../AIChatMaintenanceSection.tsx?raw';
 import aiModelSelectionSectionSource from '../AIModelSelectionSection.tsx?raw';
+import aiProviderConfigurationSectionSource from '../AIProviderConfigurationSection.tsx?raw';
 import aiRuntimeControlsSectionSource from '../AIRuntimeControlsSection.tsx?raw';
 import aiSettingsModelSource from '../aiSettingsModel.ts?raw';
 import generalSettingsPanelSource from '../GeneralSettingsPanel.tsx?raw';
@@ -300,6 +301,18 @@ describe('settings architecture guardrails', () => {
     expect(aiSettingsStateSource).toContain('recommendation: result.recommendation');
     expect(aiSettingsStateSource).toContain('providerHealth[erroredCandidate].message');
     expect(aiSettingsStateSource).not.toContain('OpenRouter returned 401');
+  });
+
+  it('keeps Assistant and Patrol provider-specific fields model-driven', () => {
+    expect(aiSettingsModelSource).toContain('extraFields: [');
+    expect(aiSettingsModelSource).toContain("inputField: 'ollamaKeepAlive'");
+    expect(aiSettingsModelSource).toContain("helpContentId: 'ai.ollama.keepAlive'");
+    expect(aiProviderConfigurationSectionSource).toContain('<For each={config.extraFields || []}>');
+    expect(aiProviderConfigurationSectionSource).toContain(
+      'aria-label={`${getAIProviderDisplayName(config.provider)} ${extraField.label}`}',
+    );
+    expect(aiProviderConfigurationSectionSource).not.toContain('<Show when={config.extraField}>');
+    expect(aiProviderConfigurationSectionSource).not.toContain('extraField()');
   });
 
   it('keeps Patrol tool-call preflight wired through the canonical settings state', () => {

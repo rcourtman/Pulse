@@ -54,6 +54,13 @@ func TestCreateOIDCSession(t *testing.T) {
 	if session.OIDCAccessTokenExp.IsZero() {
 		t.Error("AccessTokenExp should not be zero")
 	}
+
+	if session.OIDCAccessTokenIssuedAt.IsZero() {
+		t.Error("AccessTokenIssuedAt should not be zero")
+	}
+	if !session.OIDCAccessTokenIssuedAt.Before(session.OIDCAccessTokenExp) {
+		t.Error("AccessTokenIssuedAt should be before AccessTokenExp")
+	}
 }
 
 func TestUpdateOIDCTokens(t *testing.T) {
@@ -77,6 +84,7 @@ func TestUpdateOIDCTokens(t *testing.T) {
 	store.CreateOIDCSession(token, 24*time.Hour, "TestAgent", "127.0.0.1", "testuser", oidcInfo)
 
 	// Update the tokens (simulating a refresh)
+	beforeRefresh := time.Now()
 	newExpiry := time.Now().Add(2 * time.Hour)
 	store.UpdateOIDCTokens(token, "new-refresh-token", newExpiry)
 
@@ -92,6 +100,10 @@ func TestUpdateOIDCTokens(t *testing.T) {
 
 	if !session.OIDCAccessTokenExp.After(originalExpiry) {
 		t.Error("AccessTokenExp should be updated to new expiry")
+	}
+
+	if session.OIDCAccessTokenIssuedAt.Before(beforeRefresh) {
+		t.Error("AccessTokenIssuedAt should update when tokens refresh")
 	}
 }
 

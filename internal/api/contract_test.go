@@ -1265,6 +1265,7 @@ func TestContract_AISettingsUpdateProviderResolutionJSONSnapshot(t *testing.T) {
 		"ollama_configured":true,
 		"ollama_base_url":%q,
 		"ollama_password_set":false,
+		"ollama_keep_alive":"30s",
 		"configured_providers":["ollama"],
 		"control_level":"read_only",
 		"protected_guests":[],
@@ -1406,12 +1407,13 @@ func TestContract_AISettingsBYOKOverrideDoesNotExposeQuickstartInventoryJSONSnap
 		"ollama_configured":false,
 		"ollama_base_url":"http://localhost:11434",
 		"ollama_password_set":false,
-			"configured_providers":["openai"],
-			"control_level":"read_only",
-			"protected_guests":[],
-			"discovery_enabled":false,
-			"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
-		}`
+		"ollama_keep_alive":"30s",
+		"configured_providers":["openai"],
+		"control_level":"read_only",
+		"protected_guests":[],
+		"discovery_enabled":false,
+		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
+	}`
 
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)
 }
@@ -3408,6 +3410,7 @@ func TestContract_HostedAISettingsDoesNotAutoBootstrapQuickstartJSONSnapshot(t *
 		"ollama_configured":false,
 		"ollama_base_url":"http://localhost:11434",
 		"ollama_password_set":false,
+		"ollama_keep_alive":"30s",
 		"configured_providers":[],
 		"control_level":"read_only",
 		"protected_guests":[],
@@ -3468,6 +3471,7 @@ func TestContract_AISettingsRetiredQuickstartAliasJSONSnapshot(t *testing.T) {
 		"ollama_configured":false,
 		"ollama_base_url":"http://localhost:11434",
 		"ollama_password_set":false,
+		"ollama_keep_alive":"30s",
 		"configured_providers":[],
 		"control_level":"read_only",
 		"protected_guests":[],
@@ -3533,12 +3537,13 @@ func TestContract_AISettingsOllamaAuthJSONSnapshot(t *testing.T) {
 		"ollama_base_url":"http://ollama.example:11434",
 		"ollama_username":"unai",
 		"ollama_password_set":true,
-			"configured_providers":["ollama"],
-			"control_level":"read_only",
-			"protected_guests":[],
-			"discovery_enabled":false,
-			"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
-		}`
+		"ollama_keep_alive":"30s",
+		"configured_providers":["ollama"],
+		"control_level":"read_only",
+		"protected_guests":[],
+		"discovery_enabled":false,
+		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
+	}`
 
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)
 }
@@ -4027,6 +4032,7 @@ func TestContract_HostedTenantAISettingsDoesNotAutoBootstrapQuickstartJSONSnapsh
 		"ollama_configured":false,
 		"ollama_base_url":"http://localhost:11434",
 		"ollama_password_set":false,
+		"ollama_keep_alive":"30s",
 		"configured_providers":[],
 		"control_level":"read_only",
 		"protected_guests":[],

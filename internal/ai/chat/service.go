@@ -2076,7 +2076,7 @@ func (s *Service) createProviderForModel(modelStr string) (providers.StreamingPr
 		return providers.NewGeminiClient(s.cfg.GeminiAPIKey, modelName, "", timeout), nil
 	case "ollama":
 		baseURL := s.cfg.GetBaseURLForProvider(config.AIProviderOllama)
-		return providers.NewOllamaClient(modelName, baseURL, s.cfg.OllamaUsername, s.cfg.OllamaPassword, timeout)
+		return providers.NewOllamaClientWithKeepAlive(modelName, baseURL, s.cfg.OllamaUsername, s.cfg.OllamaPassword, s.cfg.GetOllamaKeepAlive(), timeout)
 	case config.AIProviderQuickstart:
 		return nil, fmt.Errorf("quickstart provider is retired; configure a provider API key or Ollama")
 	default:

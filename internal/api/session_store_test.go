@@ -204,6 +204,38 @@ func TestSessionStore_CreateRecoverySession_PersistsRecoveryBypass(t *testing.T)
 	}
 }
 
+func TestSessionStore_CreateOIDCSession_PersistsAccessTokenIssuedAt(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	issuedAt := time.Unix(1_700_000_000, 0).UTC()
+	expiresAt := issuedAt.Add(5 * time.Minute)
+	token := "oidc-issued-at-token"
+
+	store := NewSessionStore(tmpDir)
+	store.CreateOIDCSession(token, time.Hour, "TestAgent", "127.0.0.1", "testuser", &OIDCTokenInfo{
+		RefreshToken:   "refresh-token",
+		AccessTokenExp: expiresAt,
+		IssuedAt:       issuedAt,
+		Issuer:         "https://issuer.example",
+		ClientID:       "client-id",
+	})
+	store.Shutdown()
+
+	reloaded := NewSessionStore(tmpDir)
+	defer reloaded.Shutdown()
+
+	session := reloaded.GetSession(token)
+	if session == nil {
+		t.Fatal("expected reloaded OIDC session to exist")
+	}
+	if !session.OIDCAccessTokenIssuedAt.Equal(issuedAt) {
+		t.Fatalf("OIDCAccessTokenIssuedAt = %s, want %s", session.OIDCAccessTokenIssuedAt, issuedAt)
+	}
+	if !session.OIDCAccessTokenExp.Equal(expiresAt) {
+		t.Fatalf("OIDCAccessTokenExp = %s, want %s", session.OIDCAccessTokenExp, expiresAt)
+	}
+}
+
 func TestSessionStore_ValidateSession_NonExistent(t *testing.T) {
 	store := &SessionStore{
 		sessions: make(map[string]*SessionData),

@@ -290,6 +290,12 @@ This subsystem now sits under the dedicated core monitoring runtime lane so
 discovery, metrics-history correctness, and platform-specific runtime coverage
 can be governed as first-class product work instead of staying diluted inside
 architecture coherence.
+Standalone host-agent identity continuity is part of that monitoring runtime
+contract. `internal/monitoring/monitor_agents.go` must resolve short/FQDN
+hostname aliases through the shared unified-resource equivalence rule when it
+binds tokens, matches reports, and removes ignored agents, so reconnects and
+reloads keep the same canonical host without weakening token uniqueness across
+different machines.
 That same monitoring boundary now owns agentless availability targets as a
 first-class provider, not as a settings-only helper. Saved availability targets
 load from the config persistence boundary, schedule through

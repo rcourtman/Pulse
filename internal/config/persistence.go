@@ -1957,6 +1957,11 @@ func (c *ConfigPersistence) SaveAIConfig(settings AIConfig) error {
 
 	settings.NormalizePatrolEventTriggerSettings()
 	settings.NormalizeQuickstartModelAliases()
+	ollamaKeepAlive, err := NormalizeOllamaKeepAlive(settings.OllamaKeepAlive)
+	if err != nil {
+		return fmt.Errorf("invalid Ollama keep-alive setting: %w", err)
+	}
+	settings.OllamaKeepAlive = ollamaKeepAlive
 
 	if err := c.EnsureConfigDir(); err != nil {
 		return fmt.Errorf("prepare config directory for ai config: %w", err)

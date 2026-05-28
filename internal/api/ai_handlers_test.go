@@ -423,11 +423,12 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 	// Update settings to enable AI via Ollama.
 	{
 		body, _ := json.Marshal(AISettingsUpdateRequest{
-			Enabled:        ptr(true),
-			Model:          ptr("ollama:llama3"),
-			OllamaBaseURL:  ptr("http://localhost:11434"),
-			OllamaUsername: ptr("unai"),
-			OllamaPassword: ptr("secret"),
+			Enabled:         ptr(true),
+			Model:           ptr("ollama:llama3"),
+			OllamaBaseURL:   ptr("http://localhost:11434"),
+			OllamaUsername:  ptr("unai"),
+			OllamaPassword:  ptr("secret"),
+			OllamaKeepAlive: ptr("24h"),
 		})
 		req := newLoopbackRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
 		rec := httptest.NewRecorder()
@@ -449,6 +450,9 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 		}
 		if resp.OllamaUsername != "unai" || !resp.OllamaPasswordSet {
 			t.Fatalf("expected ollama auth state in response, got %+v", resp)
+		}
+		if resp.OllamaKeepAlive != "24h" {
+			t.Fatalf("expected ollama keep alive in response, got %+v", resp)
 		}
 		responseBody := rec.Body.String()
 		if !strings.Contains(responseBody, `"available_models":[]`) ||
@@ -477,6 +481,9 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 		}
 		if resp.OllamaUsername != "unai" || !resp.OllamaPasswordSet {
 			t.Fatalf("expected persisted ollama auth state, got %+v", resp)
+		}
+		if resp.OllamaKeepAlive != "24h" {
+			t.Fatalf("expected persisted ollama keep alive, got %+v", resp)
 		}
 		responseBody := rec.Body.String()
 		if !strings.Contains(responseBody, `"available_models":[]`) ||
@@ -516,6 +523,73 @@ func TestAISettingsHandler_GetSettingsClampsPaidControlsToEntitlements(t *testin
 	require.Equal(t, config.ControlLevelControlled, resp.ControlLevel)
 	require.False(t, resp.PatrolAutoFix)
 	require.False(t, resp.AlertTriggeredAnalysis)
+}
+
+func TestAISettingsHandler_UpdateSettings_OllamaKeepAlive(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	body, err := json.Marshal(AISettingsUpdateRequest{
+		Enabled:         ptr(true),
+		Model:           ptr("ollama:llama3"),
+		OllamaBaseURL:   ptr("http://127.0.0.1:11434"),
+		OllamaKeepAlive: ptr(""),
+	})
+	require.NoError(t, err)
+
+	req := newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleUpdateAISettings(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var resp AISettingsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Empty(t, resp.OllamaKeepAlive)
+
+	saved, err := persistence.LoadAIConfig()
+	require.NoError(t, err)
+	require.Empty(t, saved.OllamaKeepAlive)
+
+	body, err = json.Marshal(AISettingsUpdateRequest{
+		OllamaKeepAlive: ptr("24h"),
+	})
+	require.NoError(t, err)
+	req = newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(body))
+	rec = httptest.NewRecorder()
+	handler.HandleUpdateAISettings(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, "24h", resp.OllamaKeepAlive)
+
+	saved, err = persistence.LoadAIConfig()
+	require.NoError(t, err)
+	require.Equal(t, "24h", saved.OllamaKeepAlive)
+}
+
+func TestAISettingsHandler_UpdateSettingsRejectsInvalidOllamaKeepAlive(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	body, err := json.Marshal(AISettingsUpdateRequest{
+		OllamaKeepAlive: ptr("forever"),
+	})
+	require.NoError(t, err)
+
+	req := newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleUpdateAISettings(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+	require.Contains(t, rec.Body.String(), "ollama_keep_alive")
 }
 
 func TestAISettingsHandler_GetAIService_TenantPatrolUsesCanonicalProviders(t *testing.T) {

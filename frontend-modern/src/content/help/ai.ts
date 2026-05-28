@@ -47,7 +47,17 @@ export const aiHelpContent: HelpContent[] = [
       '- Alert investigation assistance\n\n' +
       'You can configure multiple providers and Pulse will use the primary provider ' +
       'with fallback to others if unavailable.',
-    related: ['ai.openai.baseUrl', 'ai.ollama.baseUrl'],
+    related: ['ai.openai.baseUrl', 'ai.ollama.baseUrl', 'ai.ollama.keepAlive'],
     addedInVersion: 'v4.0.0',
+  },
+  {
+    id: 'ai.ollama.keepAlive',
+    title: 'Ollama Keep Alive',
+    description:
+      'Controls the keep_alive value Pulse sends with Ollama chat requests.\n\n' +
+      'Use a duration such as 30s, 5m, or 24h. Use 0 to unload immediately after a request, or -1 to keep the model loaded indefinitely. Leave the field blank to omit keep_alive so the Ollama server default applies.',
+    examples: ['30s (Pulse default)', '24h (keep warm for a day)', 'blank (server default)'],
+    related: ['ai.ollama.baseUrl'],
+    addedInVersion: 'v6.0.0',
   },
 ];

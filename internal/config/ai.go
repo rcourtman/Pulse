@@ -1,6 +1,9 @@
 package config
 
 import (
+	"fmt"
+	"math"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -40,6 +43,7 @@ type AIConfig struct {
 	OllamaBaseURL    string `json:"ollama_base_url,omitempty"`    // Ollama server URL (default: http://localhost:11434)
 	OllamaUsername   string `json:"ollama_username,omitempty"`    // Optional Basic Auth username for Ollama
 	OllamaPassword   string `json:"ollama_password,omitempty"`    // Optional Basic Auth password for Ollama
+	OllamaKeepAlive  string `json:"ollama_keep_alive"`            // Ollama keep_alive value; empty uses the server default
 	OpenAIBaseURL    string `json:"openai_base_url,omitempty"`    // Custom OpenAI-compatible base URL (optional)
 
 	// OAuth fields for Claude Pro/Max subscription authentication
@@ -140,6 +144,7 @@ const (
 	// Pulse-hosted model aliases from pre-GA config.
 	DefaultAIModelQuickstart = "pulse-hosted"
 	DefaultOllamaBaseURL     = "http://localhost:11434"
+	DefaultOllamaKeepAlive   = "30s"
 	DefaultOpenRouterBaseURL = "https://openrouter.ai/api/v1/chat/completions"
 	DefaultDeepSeekBaseURL   = "https://api.deepseek.com/chat/completions"
 	DefaultGeminiBaseURL     = "https://generativelanguage.googleapis.com/v1beta"
@@ -188,6 +193,9 @@ func NewDefaultAIConfig() *AIConfig {
 		Enabled:    false,
 		Model:      "",
 		AuthMethod: AuthMethodAPIKey,
+		// Pulse keeps the v6 cost-control default explicit. Operators can
+		// clear this value to let the Ollama server's own default apply.
+		OllamaKeepAlive: DefaultOllamaKeepAlive,
 		// Patrol defaults - enabled when AI is enabled
 		// Default to 6 hour intervals (much more token-efficient than 15 min)
 		PatrolEnabled:         true,
@@ -203,6 +211,36 @@ func NewDefaultAIConfig() *AIConfig {
 		PatrolAlertTriggersEnabled:   true,
 		PatrolAnomalyTriggersEnabled: true,
 	}
+}
+
+// NormalizeOllamaKeepAlive validates the value Pulse sends as Ollama's
+// keep_alive request option. Empty is intentional and means "omit keep_alive"
+// so the Ollama server default applies.
+func NormalizeOllamaKeepAlive(value string) (string, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "", nil
+	}
+	if numeric, err := strconv.ParseFloat(trimmed, 64); err == nil {
+		if math.IsInf(numeric, 0) || math.IsNaN(numeric) {
+			return "", fmt.Errorf("must be a finite duration or second count")
+		}
+		return trimmed, nil
+	}
+	if _, err := time.ParseDuration(trimmed); err == nil {
+		return trimmed, nil
+	}
+	return "", fmt.Errorf("must be a duration such as 30s, 5m, or 24h; seconds such as 3600; -1 to keep loaded; 0 to unload; or empty to use the Ollama server default")
+}
+
+// GetOllamaKeepAlive returns the configured keep_alive value. A nil config
+// keeps the Pulse default; an explicitly empty config value is preserved so
+// callers can omit keep_alive and defer to the Ollama server.
+func (c *AIConfig) GetOllamaKeepAlive() string {
+	if c == nil {
+		return DefaultOllamaKeepAlive
+	}
+	return strings.TrimSpace(c.OllamaKeepAlive)
 }
 
 // IsConfigured returns true if the AI config has enough info to make API calls

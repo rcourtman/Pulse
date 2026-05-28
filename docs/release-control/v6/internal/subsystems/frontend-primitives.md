@@ -1424,6 +1424,12 @@ not a replacement status card, CTA band, or page-local nested card.
 
 ## Current State
 
+AI settings provider fields are a governed frontend primitive, not a
+provider-local form fork. The shared provider configuration section must render
+provider-specific controls from `aiSettingsModel.ts` `extraFields`, including
+Ollama `keep_alive`, so Assistant and Patrol keep one settings shape across
+labeling, help affordances, helper copy, and persistence binding.
+
 Kubernetes RBAC inventory (Roles, ClusterRoles, RoleBindings,
 ClusterRoleBindings) is part of the existing Kubernetes platform-page
 Configuration tab, not a new sidebar entry or top-level route, and the
@@ -3130,6 +3136,11 @@ maintenance routes through `AIChatMaintenanceSection.tsx`, and readiness plus
 save/test actions route through `AISettingsStatusAndActions.tsx`. Future AI
 settings work must extend those section owners instead of re-inlining large
 runtime subsections into the shell.
+Provider-specific settings fields inside
+`AIProviderConfigurationSection.tsx` must remain model-driven through
+`aiSettingsModel.ts` `extraFields`, including Ollama `keep_alive`, so the
+shared provider panel owns framing, labels, help affordances, helper copy, and
+form binding instead of adding provider-local bespoke controls.
 That same AI settings boundary now also owns
 `frontend-modern/src/utils/aiSettingsPresentation.ts`, so shared loading,
 empty, OAuth, action/error, shell-description, and workload-discovery copy

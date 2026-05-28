@@ -1107,8 +1107,17 @@ func TestPBSSetupScript_FailsClosedOnAutoRegisterSuccessDetection(t *testing.T) 
 	if !containsString(script, `curl -fsS -X POST "$PULSE_URL/api/auto-register"`) {
 		t.Fatalf("expected fail-fast PBS auto-register transport in setup script, got: %s", truncate(script, 900))
 	}
-	if !containsString(script, `"source": "script"`) {
+	if !containsString(script, `"source":"script"`) {
 		t.Fatalf("expected PBS setup script to use canonical /api/auto-register source marker, got: %s", truncate(script, 900))
+	}
+	if !containsString(script, `PULSE_URL="http://pulse.local:7656"`) {
+		t.Fatalf("expected PBS auto-registration to target the Pulse base URL, got: %s", truncate(script, 1200))
+	}
+	if containsString(script, `PULSE_URL="http://pulse.local:7656/api/setup-script?`) {
+		t.Fatalf("expected PBS auto-registration URL not to reuse the setup-script download URL, got: %s", truncate(script, 1200))
+	}
+	if containsString(script, `"source": "script",`) || containsString(script, `"source":"script",`) {
+		t.Fatalf("expected PBS auto-register JSON not to preserve a trailing comma after source, got: %s", truncate(script, 1200))
 	}
 	if !containsString(script, `REGISTER_RC=$?`) {
 		t.Fatalf("expected explicit PBS auto-register curl exit-code handling in setup script, got: %s", truncate(script, 900))

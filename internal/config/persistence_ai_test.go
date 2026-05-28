@@ -165,6 +165,39 @@ func TestPersistence_AIConfig(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestPersistence_AIConfig_OllamaKeepAliveDefaultsAndExplicitServerDefault(t *testing.T) {
+	t.Run("missing field loads pulse default", func(t *testing.T) {
+		tempDir := t.TempDir()
+		p := NewConfigPersistence(tempDir)
+
+		legacy := map[string]interface{}{
+			"enabled":         true,
+			"model":           "ollama:llama3",
+			"ollama_base_url": "http://127.0.0.1:11434",
+		}
+		data, err := json.Marshal(legacy)
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(filepath.Join(tempDir, "ai.enc"), data, 0o600))
+
+		loaded, err := p.LoadAIConfig()
+		require.NoError(t, err)
+		require.Equal(t, DefaultOllamaKeepAlive, loaded.OllamaKeepAlive)
+	})
+
+	t.Run("empty field survives reload as server default", func(t *testing.T) {
+		tempDir := t.TempDir()
+		p := NewConfigPersistence(tempDir)
+
+		cfg := NewDefaultAIConfig()
+		cfg.OllamaKeepAlive = ""
+		require.NoError(t, p.SaveAIConfig(*cfg))
+
+		loaded, err := p.LoadAIConfig()
+		require.NoError(t, err)
+		require.Empty(t, loaded.OllamaKeepAlive)
+	})
+}
+
 func TestPersistence_HasAIConfig(t *testing.T) {
 	tempDir := t.TempDir()
 	p := NewConfigPersistence(tempDir)

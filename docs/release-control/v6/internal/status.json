@@ -6002,6 +6002,12 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-late-issue-integration-2026-05-28.md",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-metric-threshold-coloring-2026-05-01.md",
           "kind": "file",
           "evidence_tier": "managed-runtime-exercise"

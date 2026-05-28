@@ -657,6 +657,62 @@ func TestApplyHostReportReusesPersistedContinuityAcrossRestart(t *testing.T) {
 	}
 }
 
+func TestApplyHostReportReusesTokenBindingAcrossShortFQDNAfterReload(t *testing.T) {
+	t.Helper()
+
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	now := time.Now().UTC()
+	token := &config.APITokenRecord{ID: "token-host-continuity", Name: "Host Token"}
+	monitor.state.UpsertHost(models.Host{
+		ID:              "host-v5",
+		Hostname:        "docker-lxc.lab",
+		DisplayName:     "docker-lxc",
+		TokenID:         token.ID,
+		Status:          "online",
+		AgentVersion:    "5.1.30",
+		IntervalSeconds: 30,
+		LastSeen:        now.Add(-time.Minute),
+	})
+	monitor.hostTokenBindings[token.ID+":docker-lxc.lab"] = "host-v5"
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			Version:         "6.0.0-rc.4",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			Hostname: "docker-lxc",
+			Platform: "linux",
+			OSName:   "debian",
+		},
+		Timestamp: now,
+	}
+
+	host, err := monitor.ApplyHostReport(report, token)
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	if host.ID != "host-v5" {
+		t.Fatalf("expected equivalent hostname token binding to preserve host ID host-v5, got %q", host.ID)
+	}
+
+	snapshot := monitor.state.GetSnapshot()
+	if got := len(snapshot.Hosts); got != 1 {
+		t.Fatalf("expected host report to update existing host instead of creating duplicate, got %d hosts", got)
+	}
+	if got := monitor.hostTokenBindings[token.ID+":docker-lxc"]; got != "host-v5" {
+		t.Fatalf("expected current hostname alias to bind to host-v5, got %q", got)
+	}
+}
+
 func TestApplyHostReportDisambiguatesCollidingIdentifiersAcrossTokens(t *testing.T) {
 	t.Helper()
 
@@ -759,6 +815,7 @@ func TestRemoveHostAgentUnbindsToken(t *testing.T) {
 		TokenID:  tokenID,
 	})
 	monitor.hostTokenBindings[tokenID+":remove.me"] = hostID
+	monitor.hostTokenBindings[tokenID+":remove.me.local"] = hostID
 	monitor.hostTokenBindings[tokenID] = hostID
 
 	if _, err := monitor.RemoveHostAgent(hostID); err != nil {
@@ -770,6 +827,9 @@ func TestRemoveHostAgentUnbindsToken(t *testing.T) {
 	}
 	if _, exists := monitor.hostTokenBindings[tokenID]; exists {
 		t.Fatalf("expected legacy token binding to be cleared after host removal")
+	}
+	if _, exists := monitor.hostTokenBindings[tokenID+":remove.me.local"]; exists {
+		t.Fatalf("expected equivalent hostname token binding to be cleared after host removal")
 	}
 }
 

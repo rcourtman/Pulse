@@ -1258,26 +1258,13 @@ else
             echo ""
             
             # Construct registration request with setup token
-            REGISTER_JSON=$(cat <<EOF
-{
-  "type": "pbs",
-  "host": "$HOST_URL",
-  "serverName": "$SERVER_HOSTNAME",
-  "tokenId": "$PULSE_TOKEN_ID",
-  "tokenValue": "$TOKEN_VALUE",
-  "authToken": "$PULSE_SETUP_TOKEN",
-  "source": "script",
-}
-EOF
-)
-            # Remove newlines from JSON
-            REGISTER_JSON=$(echo "$REGISTER_JSON" | tr -d '\n')
+            REGISTER_JSON='{"type":"pbs","host":"'"$HOST_URL"'","serverName":"'"$SERVER_HOSTNAME"'","tokenId":"'"$PULSE_TOKEN_ID"'","tokenValue":"'"$TOKEN_VALUE"'","authToken":"'"$PULSE_SETUP_TOKEN"'","source":"script"}'
             
             # Send registration with setup token
             REGISTER_ATTEMPTED=true
-            REGISTER_RESPONSE=$(curl -fsS -X POST "$PULSE_URL/api/auto-register" \
+            REGISTER_RESPONSE=$(echo "$REGISTER_JSON" | curl -fsS -X POST "$PULSE_URL/api/auto-register" \
                 -H "Content-Type: application/json" \
-                -d "$REGISTER_JSON" 2>&1)
+                -d @- 2>&1)
             REGISTER_RC=$?
         else
             echo "⚠️  Auto-registration skipped: no setup token provided"
@@ -1362,5 +1349,5 @@ if [ "$AUTO_REG_SUCCESS" != true ] && [ "$SETUP_TOKEN_INVALID" != true ]; then
     fi
 fi
 `, ctx.ServerName, time.Now().Format("2006-01-02 15:04:05"), ctx.TokenMatchPrefix,
-		ctx.TokenName, ctx.ServerHost, ctx.SetupToken, ctx.Artifact.URL)
+		ctx.TokenName, ctx.ServerHost, ctx.SetupToken, ctx.PulseURL)
 }

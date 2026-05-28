@@ -34,6 +34,12 @@ var (
 
 const privilegedBrowserSessionMaxAge = 5 * time.Minute
 
+const (
+	oidcMaxRefreshLead      = 5 * time.Minute
+	oidcFallbackRefreshLead = time.Minute
+	oidcRefreshLifetimePart = 5
+)
+
 type authRequirementFailure struct {
 	Status  int
 	Code    string
@@ -691,9 +697,8 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 				Msg("Rejected recovery session outside direct loopback binding")
 		} else if ValidateAndExtendSession(cookie.Value) {
 			username := GetSessionUsername(cookie.Value)
-			if session != nil && session.OIDCRefreshToken != "" && hasEnabledSSOProvidersForAuth(cfg) {
-				// Check if access token is expired or about to expire (5 min buffer)
-				if time.Now().Add(5 * time.Minute).After(session.OIDCAccessTokenExp) {
+			if session != nil && hasEnabledSSOProvidersForAuth(cfg) {
+				if shouldRefreshOIDCSessionToken(time.Now(), session) {
 					go refreshOIDCSessionTokens(cfg, cookie.Value, session)
 				}
 			}
@@ -1388,6 +1393,42 @@ func adminBypassEnabled() bool {
 		}
 	})
 	return adminBypassState.enabled
+}
+
+func oidcRefreshLead(session *SessionData) time.Duration {
+	if session == nil || session.OIDCAccessTokenExp.IsZero() {
+		return 0
+	}
+
+	issuedAt := session.OIDCAccessTokenIssuedAt
+	if issuedAt.IsZero() || !session.OIDCAccessTokenExp.After(issuedAt) {
+		return oidcFallbackRefreshLead
+	}
+
+	lifetime := session.OIDCAccessTokenExp.Sub(issuedAt)
+	lead := lifetime / oidcRefreshLifetimePart
+	if lead > oidcMaxRefreshLead {
+		return oidcMaxRefreshLead
+	}
+	return lead
+}
+
+func shouldRefreshOIDCSessionToken(now time.Time, session *SessionData) bool {
+	if session == nil || session.OIDCRefreshToken == "" || session.OIDCTokenRefreshing {
+		return false
+	}
+	if session.OIDCAccessTokenExp.IsZero() {
+		return false
+	}
+	if !now.Before(session.OIDCAccessTokenExp) {
+		return true
+	}
+
+	lead := oidcRefreshLead(session)
+	if lead <= 0 {
+		return false
+	}
+	return !now.Add(lead).Before(session.OIDCAccessTokenExp)
 }
 
 // oidcRefreshMutex prevents concurrent refresh attempts for the same session

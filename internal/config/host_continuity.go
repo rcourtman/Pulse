@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -214,7 +215,7 @@ func (s *HostContinuityStore) Match(
 		if matchedByAlias {
 			continue
 		}
-		if hostname == "" || !strings.EqualFold(entry.Hostname, hostname) {
+		if !hostContinuityHostnameMatches(entry.Hostname, hostname) {
 			continue
 		}
 		if tokenID != "" && (entry.TokenID == "" || entry.TokenID != tokenID) {
@@ -227,6 +228,15 @@ func (s *HostContinuityStore) Match(
 	}
 
 	return best, matched
+}
+
+func hostContinuityHostnameMatches(left, right string) bool {
+	left = strings.TrimSpace(left)
+	right = strings.TrimSpace(right)
+	if left == "" || right == "" {
+		return false
+	}
+	return strings.EqualFold(left, right) || unifiedresources.HostnamesEquivalent(left, right)
 }
 
 func uniqueTrimmedStrings(values ...string) []string {

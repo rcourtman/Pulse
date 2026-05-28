@@ -1506,6 +1506,11 @@ the canonical monitored-system blocked payload.
     backend contract must keep provider test routes bound to the selected
     provider's configured model instead of whichever other provider currently
     owns the default `model` field.
+    The Ollama provider payload also owns `ollama_keep_alive` as the canonical
+    request keep-alive field: GET and update responses must expose the
+    normalized configured value, update requests must reject malformed values,
+    an empty string means omit Ollama `keep_alive`, and stored provider secrets
+    remain masked independently of that runtime option.
     Discovery scheduling is part of that same AI settings payload contract:
     settings saves from `frontend-modern/src/components/Settings/useAISettingsState.ts`
     must send `discovery_enabled` and `discovery_interval_hours` together as
@@ -3879,6 +3884,10 @@ That same payload contract must also fail closed on auto-register transport:
 the generated script must use fail-fast `curl -fsS` request transport and only
 evaluate the response payload after a successful curl exit status, rather than
 parsing ambiguous stderr or HTTP-failure output as a valid registration body.
+For PBS setup scripts, the generated auto-register POST URL must be the
+canonical Pulse base URL plus `/api/auto-register`. The script may not append
+that path to the setup-script download artifact URL, because the artifact URL is
+only for fetching the script and is not the API root.
 That same setup-script payload must also preserve the canonical auth guidance:
 authentication failures in the generated script text must reference the active
 Pulse setup-token flow, not stale API-token setup instructions, because the
@@ -4374,6 +4383,11 @@ from or saved to encrypted-at-rest session payloads, and the runtime must drop
 them whenever session-store crypto is unavailable or the stored ciphertext is
 not canonically decryptable instead of preserving plaintext-at-rest session
 state.
+OIDC access-token issued-at metadata is part of the same session persistence
+contract. Short-lived access tokens must persist `oidc_access_token_issued_at`
+beside `oidc_access_token_exp` so refresh scheduling can use a relative
+lifetime window after restart instead of treating every five-minute token as
+immediately refreshable.
 Hosted signup handler payload flow now also follows an explicit shared
 boundary: `internal/api/public_signup_handlers.go` owns request/response and
 magic-link payload semantics, while `internal/hosted/provisioner.go` owns the

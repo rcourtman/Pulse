@@ -52,7 +52,7 @@ const AI_SETTINGS_PROVIDER_PAYLOAD_FIELDS: Record<AIProvider, string[]> = {
   openrouter: ['openrouter_api_key'],
   deepseek: ['deepseek_api_key'],
   gemini: ['gemini_api_key'],
-  ollama: ['ollama_base_url'],
+  ollama: ['ollama_base_url', 'ollama_keep_alive'],
 };
 
 const compactUnique = (values: Array<string | undefined>): string[] => {
@@ -302,6 +302,7 @@ export const useAISettingsState = () => {
     deepseekApiKey: '',
     geminiApiKey: '',
     ollamaBaseUrl: 'http://localhost:11434',
+    ollamaKeepAlive: '30s',
     openaiBaseUrl: '',
     costBudgetUSD30d: '',
     requestTimeoutSeconds: 300,
@@ -376,6 +377,7 @@ export const useAISettingsState = () => {
         deepseekApiKey: '',
         geminiApiKey: '',
         ollamaBaseUrl: 'http://localhost:11434',
+        ollamaKeepAlive: '30s',
         openaiBaseUrl: '',
         costBudgetUSD30d: '',
         requestTimeoutSeconds: 300,
@@ -404,6 +406,7 @@ export const useAISettingsState = () => {
       deepseekApiKey: '',
       geminiApiKey: '',
       ollamaBaseUrl: data.ollama_base_url || 'http://localhost:11434',
+      ollamaKeepAlive: data.ollama_keep_alive ?? '30s',
       openaiBaseUrl: data.openai_base_url || '',
       costBudgetUSD30d:
         typeof data.cost_budget_usd_30d === 'number' && data.cost_budget_usd_30d > 0
@@ -721,7 +724,13 @@ export const useAISettingsState = () => {
         error,
         payload,
         providerHealth,
-        models: [form.model, form.chatModel, form.patrolModel, form.discoveryModel, form.autoFixModel],
+        models: [
+          form.model,
+          form.chatModel,
+          form.patrolModel,
+          form.discoveryModel,
+          form.autoFixModel,
+        ],
       });
       notificationStore.error(
         getAISettingsSaveProviderFailureMessage(
@@ -897,6 +906,9 @@ export const useAISettingsState = () => {
       ) {
         payload.ollama_base_url = form.ollamaBaseUrl.trim();
       }
+      if (form.ollamaKeepAlive.trim() !== (settings()?.ollama_keep_alive ?? '30s')) {
+        payload.ollama_keep_alive = form.ollamaKeepAlive.trim();
+      }
       if (form.openaiBaseUrl !== (settings()?.openai_base_url || '')) {
         payload.openai_base_url = form.openaiBaseUrl.trim();
       }
@@ -954,7 +966,13 @@ export const useAISettingsState = () => {
         error,
         payload,
         providerHealth,
-        models: [selectedModel, form.chatModel, form.patrolModel, form.discoveryModel, form.autoFixModel],
+        models: [
+          selectedModel,
+          form.chatModel,
+          form.patrolModel,
+          form.discoveryModel,
+          form.autoFixModel,
+        ],
       });
       notificationStore.error(
         getAISettingsSaveProviderFailureMessage(

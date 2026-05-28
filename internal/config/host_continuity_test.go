@@ -41,6 +41,16 @@ func TestHostContinuityStoreRoundTripAndMatch(t *testing.T) {
 		t.Fatalf("matched host ID = %q, want %q", entry.HostID, "host-1")
 	}
 
+	if entry, ok := reloaded.Match("", "", "", "host-1", "token-1", now.Add(-time.Minute)); !ok {
+		t.Fatal("expected match by equivalent short hostname and token")
+	} else if entry.HostID != "host-1" {
+		t.Fatalf("matched host ID = %q, want %q", entry.HostID, "host-1")
+	}
+
+	if _, ok := reloaded.Match("", "", "", "host-1.example", "token-1", now.Add(-time.Minute)); ok {
+		t.Fatal("expected distinct fully-qualified hostnames not to match")
+	}
+
 	if _, ok := reloaded.Match("", "", "", "host-1.local", "token-2", now.Add(-time.Minute)); ok {
 		t.Fatal("expected token mismatch not to match")
 	}

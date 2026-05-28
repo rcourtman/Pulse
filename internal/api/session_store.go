@@ -40,11 +40,12 @@ type sessionPersisted struct {
 	IP               string        `json:"ip,omitempty"`
 	OriginalDuration time.Duration `json:"original_duration,omitempty"`
 	// OIDC token fields for refresh token support
-	OIDCRefreshToken    string    `json:"oidc_refresh_token,omitempty"`
-	OIDCAccessTokenExp  time.Time `json:"oidc_access_token_exp,omitempty"`
-	OIDCIssuer          string    `json:"oidc_issuer,omitempty"`
-	OIDCClientID        string    `json:"oidc_client_id,omitempty"`
-	OIDCTokenRefreshing bool      `json:"-"` // transient, not persisted
+	OIDCRefreshToken        string    `json:"oidc_refresh_token,omitempty"`
+	OIDCAccessTokenExp      time.Time `json:"oidc_access_token_exp,omitempty"`
+	OIDCAccessTokenIssuedAt time.Time `json:"oidc_access_token_issued_at,omitempty"`
+	OIDCIssuer              string    `json:"oidc_issuer,omitempty"`
+	OIDCClientID            string    `json:"oidc_client_id,omitempty"`
+	OIDCTokenRefreshing     bool      `json:"-"` // transient, not persisted
 	// SAML session fields for Single Logout (SLO) support
 	SAMLProviderID   string `json:"saml_provider_id,omitempty"`
 	SAMLNameID       string `json:"saml_name_id,omitempty"`
@@ -61,11 +62,12 @@ type SessionData struct {
 	IP               string        `json:"ip,omitempty"`
 	OriginalDuration time.Duration `json:"original_duration,omitempty"` // Track original duration for sliding expiration
 	// OIDC token fields for refresh token support
-	OIDCRefreshToken    string    `json:"oidc_refresh_token,omitempty"`    // Encrypted at rest
-	OIDCAccessTokenExp  time.Time `json:"oidc_access_token_exp,omitempty"` // When the access token expires
-	OIDCIssuer          string    `json:"oidc_issuer,omitempty"`           // IdP issuer URL
-	OIDCClientID        string    `json:"oidc_client_id,omitempty"`        // OIDC client ID
-	OIDCTokenRefreshing bool      `json:"-"`                               // Prevents concurrent refresh attempts
+	OIDCRefreshToken        string    `json:"oidc_refresh_token,omitempty"`          // Encrypted at rest
+	OIDCAccessTokenExp      time.Time `json:"oidc_access_token_exp,omitempty"`       // When the access token expires
+	OIDCAccessTokenIssuedAt time.Time `json:"oidc_access_token_issued_at,omitempty"` // When this access token was received
+	OIDCIssuer              string    `json:"oidc_issuer,omitempty"`                 // IdP issuer URL
+	OIDCClientID            string    `json:"oidc_client_id,omitempty"`              // OIDC client ID
+	OIDCTokenRefreshing     bool      `json:"-"`                                     // Prevents concurrent refresh attempts
 	// SAML session fields for Single Logout (SLO) support
 	SAMLProviderID   string `json:"saml_provider_id,omitempty"`   // SAML IdP provider ID
 	SAMLNameID       string `json:"saml_name_id,omitempty"`       // SAML NameID from assertion
@@ -100,20 +102,21 @@ func (s *SessionStore) loadHashedSessions(persisted []sessionPersisted, now time
 		}
 
 		s.sessions[entry.Key] = &SessionData{
-			Username:           entry.Username,
-			RecoveryBypass:     entry.RecoveryBypass,
-			ExpiresAt:          entry.ExpiresAt,
-			CreatedAt:          entry.CreatedAt,
-			UserAgent:          entry.UserAgent,
-			IP:                 entry.IP,
-			OriginalDuration:   entry.OriginalDuration,
-			OIDCRefreshToken:   refreshToken,
-			OIDCAccessTokenExp: entry.OIDCAccessTokenExp,
-			OIDCIssuer:         entry.OIDCIssuer,
-			OIDCClientID:       entry.OIDCClientID,
-			SAMLProviderID:     entry.SAMLProviderID,
-			SAMLNameID:         entry.SAMLNameID,
-			SAMLSessionIndex:   entry.SAMLSessionIndex,
+			Username:                entry.Username,
+			RecoveryBypass:          entry.RecoveryBypass,
+			ExpiresAt:               entry.ExpiresAt,
+			CreatedAt:               entry.CreatedAt,
+			UserAgent:               entry.UserAgent,
+			IP:                      entry.IP,
+			OriginalDuration:        entry.OriginalDuration,
+			OIDCRefreshToken:        refreshToken,
+			OIDCAccessTokenExp:      entry.OIDCAccessTokenExp,
+			OIDCAccessTokenIssuedAt: entry.OIDCAccessTokenIssuedAt,
+			OIDCIssuer:              entry.OIDCIssuer,
+			OIDCClientID:            entry.OIDCClientID,
+			SAMLProviderID:          entry.SAMLProviderID,
+			SAMLNameID:              entry.SAMLNameID,
+			SAMLSessionIndex:        entry.SAMLSessionIndex,
 		}
 		loaded++
 	}
@@ -247,6 +250,7 @@ func (s *SessionStore) CreateRecoverySession(token string, duration time.Duratio
 type OIDCTokenInfo struct {
 	RefreshToken   string
 	AccessTokenExp time.Time
+	IssuedAt       time.Time
 	Issuer         string
 	ClientID       string
 }
@@ -256,20 +260,26 @@ func (s *SessionStore) CreateOIDCSession(token string, duration time.Duration, u
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	now := time.Now()
 	key := sessionHash(token)
 	session := &SessionData{
 		Username:         username,
 		RecoveryBypass:   false,
-		ExpiresAt:        time.Now().Add(duration),
-		CreatedAt:        time.Now(),
+		ExpiresAt:        now.Add(duration),
+		CreatedAt:        now,
 		UserAgent:        userAgent,
 		IP:               ip,
 		OriginalDuration: duration,
 	}
 
 	if oidc != nil {
+		issuedAt := oidc.IssuedAt
+		if issuedAt.IsZero() {
+			issuedAt = now
+		}
 		session.OIDCRefreshToken = oidc.RefreshToken
 		session.OIDCAccessTokenExp = oidc.AccessTokenExp
+		session.OIDCAccessTokenIssuedAt = issuedAt
 		session.OIDCIssuer = oidc.Issuer
 		session.OIDCClientID = oidc.ClientID
 	}
@@ -352,6 +362,7 @@ func (s *SessionStore) UpdateOIDCTokens(token string, refreshToken string, acces
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	now := time.Now()
 	key := sessionHash(token)
 	session, exists := s.sessions[key]
 	if !exists {
@@ -360,11 +371,12 @@ func (s *SessionStore) UpdateOIDCTokens(token string, refreshToken string, acces
 
 	session.OIDCRefreshToken = refreshToken
 	session.OIDCAccessTokenExp = accessTokenExp
+	session.OIDCAccessTokenIssuedAt = now
 	session.OIDCTokenRefreshing = false
 
 	// Also extend the session expiry since the token is still valid
 	if session.OriginalDuration > 0 {
-		session.ExpiresAt = time.Now().Add(session.OriginalDuration)
+		session.ExpiresAt = now.Add(session.OriginalDuration)
 	}
 
 	// Save immediately after token refresh
@@ -486,21 +498,22 @@ func (s *SessionStore) saveUnsafe() {
 		}
 
 		persisted = append(persisted, sessionPersisted{
-			Key:                key,
-			Username:           session.Username,
-			RecoveryBypass:     session.RecoveryBypass,
-			ExpiresAt:          session.ExpiresAt,
-			CreatedAt:          session.CreatedAt,
-			UserAgent:          session.UserAgent,
-			IP:                 session.IP,
-			OriginalDuration:   session.OriginalDuration,
-			OIDCRefreshToken:   refreshToken,
-			OIDCAccessTokenExp: session.OIDCAccessTokenExp,
-			OIDCIssuer:         session.OIDCIssuer,
-			OIDCClientID:       session.OIDCClientID,
-			SAMLProviderID:     session.SAMLProviderID,
-			SAMLNameID:         session.SAMLNameID,
-			SAMLSessionIndex:   session.SAMLSessionIndex,
+			Key:                     key,
+			Username:                session.Username,
+			RecoveryBypass:          session.RecoveryBypass,
+			ExpiresAt:               session.ExpiresAt,
+			CreatedAt:               session.CreatedAt,
+			UserAgent:               session.UserAgent,
+			IP:                      session.IP,
+			OriginalDuration:        session.OriginalDuration,
+			OIDCRefreshToken:        refreshToken,
+			OIDCAccessTokenExp:      session.OIDCAccessTokenExp,
+			OIDCAccessTokenIssuedAt: session.OIDCAccessTokenIssuedAt,
+			OIDCIssuer:              session.OIDCIssuer,
+			OIDCClientID:            session.OIDCClientID,
+			SAMLProviderID:          session.SAMLProviderID,
+			SAMLNameID:              session.SAMLNameID,
+			SAMLSessionIndex:        session.SAMLSessionIndex,
 		})
 	}
 

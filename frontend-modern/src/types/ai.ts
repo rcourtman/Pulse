@@ -59,6 +59,7 @@ export interface AISettings {
   gemini_configured: boolean; // true if Gemini API key is set
   ollama_configured: boolean; // true (always available for attempt)
   ollama_base_url: string; // Ollama server URL
+  ollama_keep_alive: string; // Ollama keep_alive value; empty uses the server default
   openai_base_url?: string; // Custom OpenAI base URL
   configured_providers: AIProvider[]; // List of providers with credentials
 
@@ -124,6 +125,7 @@ export interface AISettingsUpdateRequest {
   deepseek_api_key?: string; // Set DeepSeek API key
   gemini_api_key?: string; // Set Gemini API key
   ollama_base_url?: string; // Set Ollama server URL
+  ollama_keep_alive?: string; // Set Ollama keep_alive; empty uses the server default
   openai_base_url?: string; // Set custom OpenAI base URL
   // Clear flags for removing credentials
   clear_anthropic_key?: boolean; // Clear Anthropic API key

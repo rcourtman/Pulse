@@ -83,6 +83,67 @@ describe('useConnectionsLedger', () => {
     ]);
   });
 
+  it('presents successful TrueNAS runtime state as verified activity', async () => {
+    const lastSeen = '2026-05-28T12:00:00Z';
+    const connections: Connection[] = [
+      {
+        id: 'truenas:tn1',
+        type: 'truenas',
+        name: 'tower',
+        address: 'https://truenas.local:443',
+        state: 'active',
+        stateReason: '',
+        enabled: true,
+        surfaces: ['datasets', 'pools', 'replication'],
+        scope: { datasets: true, pools: true, replication: true },
+        lastSeen,
+        lastError: null,
+        source: 'manual',
+        fleet: {
+          enrollmentState: 'configured',
+          livenessState: 'active',
+          versionDrift: 'not-applicable',
+          adapterHealth: 'healthy',
+          configRollout: 'configured',
+          credentialStatus: 'verified',
+          updateStatus: 'not-applicable',
+          remoteControl: 'not-applicable',
+          configDrift: { status: 'current' },
+          rollout: { status: 'current' },
+          credentialHealth: { status: 'verified', kind: 'api-key', lastVerifiedAt: lastSeen },
+          commandPolicy: { status: 'not-applicable' },
+        },
+        capabilities: { supportsPause: true, supportsScope: true, supportsTest: true },
+      },
+    ];
+    const systems: ConnectionSystem[] = [
+      {
+        id: 'truenas:tn1',
+        type: 'truenas',
+        components: [{ connectionId: 'truenas:tn1', type: 'truenas', role: 'primary' }],
+      },
+    ];
+    vi.spyOn(ConnectionsAPI, 'list').mockResolvedValue({ connections, systems });
+
+    const { result } = renderHook(() => useConnectionsLedger());
+
+    await waitFor(() => expect(result.rows()).toHaveLength(1));
+    expect(result.rows()[0]).toMatchObject({
+      id: 'truenas:tn1',
+      ownerType: 'truenas',
+      name: 'tower',
+      source: 'api',
+      statusLabel: 'Active',
+      coverageLabels: ['Datasets', 'Pools', 'Replication'],
+    });
+    expect(result.rows()[0].lastActivityText).not.toBe('No activity yet');
+    expect(result.rows()[0].lastActivityText).not.toBe('Unknown');
+    expect(result.rows()[0].problem).toBeUndefined();
+    expect(result.rows()[0].fleetHighlights.map((signal) => signal.label)).not.toContain(
+      'Credentials unknown',
+    );
+  });
+
   it('reuses large stable row models across equivalent ledger refreshes', async () => {
     const connections: Connection[] = Array.from({ length: 120 }, (_, index) => ({
       id: `agent:stable-${index}`,
@@ -352,7 +413,8 @@ describe('useConnectionsLedger', () => {
             desired: 'disabled',
             applied: 'enabled',
             enforcement: 'drifted',
-            reason: 'agent still reports command execution enabled while desired policy disables it',
+            reason:
+              'agent still reports command execution enabled while desired policy disables it',
           },
         },
         capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
@@ -505,7 +567,8 @@ describe('useConnectionsLedger', () => {
           remoteControl: 'disabled',
           configDrift: {
             status: 'pending',
-            reason: 'Pulse has not received a comparable applied agent configuration fingerprint yet',
+            reason:
+              'Pulse has not received a comparable applied agent configuration fingerprint yet',
           },
           rollout: {
             status: 'pending',
@@ -545,7 +608,8 @@ describe('useConnectionsLedger', () => {
           remoteControl: 'disabled',
           configDrift: {
             status: 'pending',
-            reason: 'Pulse has not received a comparable applied agent configuration fingerprint yet',
+            reason:
+              'Pulse has not received a comparable applied agent configuration fingerprint yet',
           },
           rollout: {
             status: 'pending',

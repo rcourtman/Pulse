@@ -55,7 +55,12 @@ runtime cost control, and shared AI transport surfaces.
 ## Extension Points
 
 1. Add or change chat runtime, Patrol orchestration, findings generation, or remediation behavior through `internal/ai/`
-2. Add or change canonical AI provider config, provider-scoped model selection, or runtime auth/base-URL defaults through `internal/config/ai.go`
+2. Add or change canonical AI provider config, provider-scoped model selection, or runtime auth/base-URL defaults through `internal/config/ai.go`.
+   Ollama request keep-alive is a provider runtime option owned by this path:
+   `internal/config/ai.go` stores the value, `/api/settings/ai` exposes it,
+   and `internal/ai/providers/ollama.go` is the only layer that turns it into
+   the Ollama `keep_alive` request field. An empty configured value means
+   Pulse omits `keep_alive` so the Ollama server default applies.
 3. Add or change Pulse Assistant request flow through `internal/api/ai_handler.go`, `frontend-modern/src/api/ai.ts`, and `frontend-modern/src/api/aiChat.ts`
 4. Add or change Patrol, alert-analysis, or remediation transport through `internal/api/ai_handlers.go`, `internal/api/ai_intelligence_handlers.go`, and `frontend-modern/src/api/patrol.ts`
    Provider preflight diagnostics returned from `internal/api/ai_handlers.go`

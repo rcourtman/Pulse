@@ -100,6 +100,7 @@ const baseSettings = (): AISettingsType => ({
   gemini_configured: false,
   ollama_configured: false,
   ollama_base_url: 'http://localhost:11434',
+  ollama_keep_alive: '30s',
   configured_providers: [],
 });
 
@@ -631,6 +632,53 @@ describe('AISettings OpenRouter flow', () => {
     await waitFor(() => {
       expect(testProviderMock).toHaveBeenCalledTimes(1);
       expect(testProviderMock).toHaveBeenCalledWith('openrouter');
+    });
+  });
+});
+
+describe('AISettings Ollama provider options', () => {
+  beforeEach(() => {
+    resetAllMocks();
+    setupDefaultMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('saves Ollama keep alive through the provider settings panel', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      configured: true,
+      model: 'ollama:llama3',
+      ollama_configured: true,
+      configured_providers: ['ollama'],
+      ollama_keep_alive: '30s',
+    });
+    updateSettingsMock.mockImplementation(async (payload: Record<string, unknown>) => ({
+      ...baseSettings(),
+      configured: true,
+      model: 'ollama:llama3',
+      ollama_configured: true,
+      configured_providers: ['ollama'],
+      ollama_base_url: 'http://localhost:11434',
+      ollama_keep_alive: (payload.ollama_keep_alive as string) ?? '30s',
+    }));
+
+    renderComponent();
+
+    fireEvent.input(await screen.findByLabelText('Ollama Keep Alive'), {
+      target: { value: '24h' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => {
+      expect(updateSettingsMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'ollama:llama3',
+          ollama_keep_alive: '24h',
+        }),
+      );
     });
   });
 });

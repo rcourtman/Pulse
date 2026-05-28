@@ -158,30 +158,6 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
                 </button>
                 <Show when={expanded()}>
                   <div class="px-3 py-3 bg-surface-alt border-t border-border space-y-2">
-                    <Show when={config.extraField}>
-                      {(extraField) => (
-                        <div class="space-y-1">
-                          <label class="text-xs text-muted inline-flex items-center gap-1">
-                            {extraField().label}
-                            <Show when={extraField().helpContentId}>
-                              <HelpIcon contentId={extraField().helpContentId!} size="xs" />
-                            </Show>
-                          </label>
-                          <input
-                            type="url"
-                            value={props.form[extraField().inputField]}
-                            onInput={(event) =>
-                              props.setForm(extraField().inputField, event.currentTarget.value)
-                            }
-                            placeholder={extraField().placeholder}
-                            aria-label={`${getAIProviderDisplayName(config.provider)} ${extraField().label}`}
-                            class={controlClass()}
-                            disabled={props.saving()}
-                          />
-                        </div>
-                      )}
-                    </Show>
-
                     <Show when={config.provider === 'ollama'}>
                       <label class="text-xs text-muted inline-flex items-center gap-1">
                         Server URL
@@ -205,6 +181,33 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
                       class={controlClass()}
                       disabled={props.saving()}
                     />
+
+                    <For each={config.extraFields || []}>
+                      {(extraField) => (
+                        <div class="space-y-1">
+                          <label class="text-xs text-muted inline-flex items-center gap-1">
+                            {extraField.label}
+                            <Show when={extraField.helpContentId}>
+                              <HelpIcon contentId={extraField.helpContentId!} size="xs" />
+                            </Show>
+                          </label>
+                          <input
+                            type={extraField.type || 'text'}
+                            value={props.form[extraField.inputField]}
+                            onInput={(event) =>
+                              props.setForm(extraField.inputField, event.currentTarget.value)
+                            }
+                            placeholder={extraField.placeholder}
+                            aria-label={`${getAIProviderDisplayName(config.provider)} ${extraField.label}`}
+                            class={controlClass()}
+                            disabled={props.saving()}
+                          />
+                          <Show when={extraField.helperText}>
+                            <p class="text-xs text-muted">{extraField.helperText}</p>
+                          </Show>
+                        </div>
+                      )}
+                    </For>
 
                     <Show when={config.helperText}>
                       <p class="text-xs text-muted">{config.helperText}</p>

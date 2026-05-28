@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 )
 
@@ -27,6 +29,7 @@ type OllamaClient struct {
 	baseURL      string
 	username     string
 	password     string
+	keepAlive    string
 	client       *http.Client // For non-streaming requests (has overall timeout)
 	streamClient *http.Client // For streaming requests (no overall timeout — relies on context)
 }
@@ -34,9 +37,20 @@ type OllamaClient struct {
 // NewOllamaClient creates a new Ollama API client
 // timeout is optional - pass 0 to use the default 5 minute timeout
 func NewOllamaClient(model, baseURL, username, password string, timeout time.Duration) (*OllamaClient, error) {
+	return NewOllamaClientWithKeepAlive(model, baseURL, username, password, config.DefaultOllamaKeepAlive, timeout)
+}
+
+// NewOllamaClientWithKeepAlive creates a new Ollama API client with an
+// explicit keep_alive request value. Pass an empty keepAlive string to omit
+// keep_alive from requests and let the Ollama server default apply.
+func NewOllamaClientWithKeepAlive(model, baseURL, username, password, keepAlive string, timeout time.Duration) (*OllamaClient, error) {
 	normalizedBaseURL, err := normalizeOllamaBaseURL(baseURL)
 	if err != nil {
 		return nil, err
+	}
+	normalizedKeepAlive, err := config.NormalizeOllamaKeepAlive(keepAlive)
+	if err != nil {
+		return nil, fmt.Errorf("normalize Ollama keep_alive: %w", err)
 	}
 	if timeout <= 0 {
 		timeout = 300 * time.Second // Default 5 minutes
@@ -46,6 +60,7 @@ func NewOllamaClient(model, baseURL, username, password string, timeout time.Dur
 		baseURL:      normalizedBaseURL,
 		username:     username,
 		password:     password,
+		keepAlive:    normalizedKeepAlive,
 		client:       newOllamaHTTPClient(timeout, false),
 		streamClient: newOllamaHTTPClient(timeout, true),
 	}, nil
@@ -113,15 +128,19 @@ type ollamaRequest struct {
 	// (#1425). Pulse passes a short value so the model unloads shortly
 	// after a Patrol burst or one-shot analysis ends. Accepts duration
 	// strings like "30s", "5m", or "0" for immediate unload.
-	KeepAlive string `json:"keep_alive,omitempty"`
+	KeepAlive any `json:"keep_alive,omitempty"`
 }
 
-// ollamaKeepAlive is the duration Pulse asks Ollama to keep the model loaded
-// after a request completes. 30s is short enough that the model unloads
-// soon after a Patrol/alert-analysis burst ends, while still long enough
-// to span the small gaps between sequential calls in a single analysis
-// session so the model isn't reloaded mid-burst.
-const ollamaKeepAlive = "30s"
+func ollamaKeepAliveRequestValue(value string) any {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	if seconds, err := strconv.ParseFloat(value, 64); err == nil {
+		return seconds
+	}
+	return value
+}
 
 type ollamaMessage struct {
 	Role      string           `json:"role"`
@@ -231,7 +250,7 @@ func (c *OllamaClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		Model:     model,
 		Messages:  messages,
 		Stream:    false, // Non-streaming for now
-		KeepAlive: ollamaKeepAlive,
+		KeepAlive: ollamaKeepAliveRequestValue(c.keepAlive),
 	}
 
 	// Convert tools to Ollama format
@@ -401,7 +420,7 @@ func (c *OllamaClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		Model:     model,
 		Messages:  messages,
 		Stream:    true, // Enable streaming
-		KeepAlive: ollamaKeepAlive,
+		KeepAlive: ollamaKeepAliveRequestValue(c.keepAlive),
 	}
 
 	// Handle tools with tool_choice support (same as non-streaming)

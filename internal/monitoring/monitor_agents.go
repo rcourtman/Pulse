@@ -177,14 +177,21 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 		}
 
 		if hostname != "" {
-			key := fmt.Sprintf("%s:%s", tokenID, hostname)
-			if _, exists := m.hostTokenBindings[key]; exists {
+			key := hostTokenBindingKey(tokenID, hostname)
+			delete(m.hostTokenBindings, key)
+		}
+
+		prefix := tokenID + ":"
+		for key, boundID := range m.hostTokenBindings {
+			if !strings.HasPrefix(key, prefix) {
+				continue
+			}
+			if strings.TrimSpace(boundID) == hostID {
 				delete(m.hostTokenBindings, key)
 			}
 		}
 
 		if tokenRemoved != nil {
-			prefix := tokenID + ":"
 			for key := range m.hostTokenBindings {
 				if strings.HasPrefix(key, prefix) {
 					delete(m.hostTokenBindings, key)
@@ -289,7 +296,7 @@ func (m *Monitor) lookupRemovedHostAgent(identifier, hostname string) (time.Time
 		if strings.TrimSpace(entry.ID) == identifier {
 			return entry.RemovedAt, true
 		}
-		if strings.TrimSpace(entry.Hostname) == hostname {
+		if hostAgentHostnamesMatch(entry.Hostname, hostname) {
 			return entry.RemovedAt, true
 		}
 	}
@@ -735,6 +742,51 @@ func (m *Monitor) hostContinuitySince(now time.Time) time.Time {
 	return now.Add(-hostContinuityRetention)
 }
 
+func hostTokenBindingKey(tokenID, hostname string) string {
+	tokenID = strings.TrimSpace(tokenID)
+	hostname = strings.TrimSpace(hostname)
+	if tokenID == "" || hostname == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s:%s", tokenID, hostname)
+}
+
+func lookupHostTokenBinding(bindings map[string]string, tokenID, hostname string) string {
+	if len(bindings) == 0 {
+		return ""
+	}
+
+	bindingKey := hostTokenBindingKey(tokenID, hostname)
+	if bindingKey == "" {
+		return ""
+	}
+	if boundID := strings.TrimSpace(bindings[bindingKey]); boundID != "" {
+		return boundID
+	}
+
+	prefix := strings.TrimSpace(tokenID) + ":"
+	for key, boundID := range bindings {
+		boundID = strings.TrimSpace(boundID)
+		if boundID == "" || !strings.HasPrefix(key, prefix) {
+			continue
+		}
+		boundHostname := strings.TrimSpace(strings.TrimPrefix(key, prefix))
+		if hostAgentHostnamesMatch(boundHostname, hostname) {
+			return boundID
+		}
+	}
+	return ""
+}
+
+func hostAgentHostnamesMatch(left, right string) bool {
+	left = strings.TrimSpace(left)
+	right = strings.TrimSpace(right)
+	if left == "" || right == "" {
+		return false
+	}
+	return strings.EqualFold(left, right) || unifiedresources.HostnamesEquivalent(left, right)
+}
+
 func (m *Monitor) matchPersistedHostContinuity(
 	report agentshost.Report,
 	tokenRecord *config.APITokenRecord,
@@ -909,7 +961,7 @@ func (m *Monitor) RebuildTokenBindings() {
 		if hostname == "" || agentID == "" {
 			continue
 		}
-		newHostBindings[fmt.Sprintf("%s:%s", tokenID, hostname)] = agentID
+		newHostBindings[hostTokenBindingKey(tokenID, hostname)] = agentID
 	}
 
 	// Log what changed
@@ -1613,13 +1665,16 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	identifier := baseIdentifier
 	if tokenRecord != nil && strings.TrimSpace(tokenRecord.ID) != "" {
 		tokenID := strings.TrimSpace(tokenRecord.ID)
-		bindingKey := fmt.Sprintf("%s:%s", tokenID, hostname)
+		bindingKey := hostTokenBindingKey(tokenID, hostname)
 
 		m.mu.Lock()
 		if m.hostTokenBindings == nil {
 			m.hostTokenBindings = make(map[string]string)
 		}
-		boundID := strings.TrimSpace(m.hostTokenBindings[bindingKey])
+		boundID := lookupHostTokenBinding(m.hostTokenBindings, tokenID, hostname)
+		if boundID != "" {
+			m.hostTokenBindings[bindingKey] = boundID
+		}
 		m.mu.Unlock()
 
 		// If we already have a binding for this token+hostname, use it to keep host IDs stable
@@ -1632,7 +1687,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 				if candidate == nil || candidate.AgentID() != bindingID {
 					continue
 				}
-				if strings.TrimSpace(candidate.Hostname()) == hostname && strings.TrimSpace(candidate.TokenID()) == tokenID {
+				if hostAgentHostnamesMatch(candidate.Hostname(), hostname) && strings.TrimSpace(candidate.TokenID()) == tokenID {
 					break
 				}
 
@@ -1655,7 +1710,8 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			if m.hostTokenBindings == nil {
 				m.hostTokenBindings = make(map[string]string)
 			}
-			if existing := strings.TrimSpace(m.hostTokenBindings[bindingKey]); existing != "" {
+			if existing := lookupHostTokenBinding(m.hostTokenBindings, tokenID, hostname); existing != "" {
+				m.hostTokenBindings[bindingKey] = existing
 				identifier = existing
 			} else {
 				m.hostTokenBindings[bindingKey] = bindingID

@@ -23,6 +23,7 @@ const settingsWithReadiness = (patrolReadiness: PatrolReadiness): AISettings => 
   gemini_configured: false,
   ollama_configured: true,
   ollama_base_url: 'http://127.0.0.1:11434',
+  ollama_keep_alive: '30s',
   configured_providers: ['ollama'],
   patrol_readiness: patrolReadiness,
 });

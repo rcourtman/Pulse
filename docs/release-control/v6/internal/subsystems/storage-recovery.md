@@ -69,6 +69,11 @@ auto-registration changes that affect backup visibility permissions are
 storage/recovery-adjacent: optional PVE `/storage` grants must remain effective
 for privilege-separated tokens by assigning the same `PVEDatastoreAdmin` role to
 both the service user and the concrete token id.
+PBS generated setup-script auto-registration is storage/recovery-adjacent
+because the registration result determines whether PBS backup evidence can flow
+without manual follow-up. The rendered script must post auto-registration to the
+canonical Pulse base URL plus `/api/auto-register`; it must not derive the POST
+target from the setup-script artifact download URL.
 
 Proxmox platform backup surfaces may embed source-specific backup evidence, but
 the source of truth must stay explicit. PBS source-detail tables on the Proxmox

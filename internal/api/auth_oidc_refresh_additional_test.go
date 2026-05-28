@@ -244,6 +244,49 @@ func TestRefreshOIDCSessionTokens_OIDCDisabledDoesNotInvalidate(t *testing.T) {
 	}
 }
 
+func TestShouldRefreshOIDCSessionToken_DoesNotRefreshFreshFiveMinuteToken(t *testing.T) {
+	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+
+	session := &SessionData{
+		OIDCRefreshToken:        "refresh",
+		OIDCAccessTokenIssuedAt: now,
+		OIDCAccessTokenExp:      now.Add(5 * time.Minute),
+	}
+	if shouldRefreshOIDCSessionToken(now, session) {
+		t.Fatal("fresh 300-second access token should not refresh immediately")
+	}
+
+	legacySession := &SessionData{
+		OIDCRefreshToken:   "refresh",
+		OIDCAccessTokenExp: now.Add(5 * time.Minute),
+	}
+	if shouldRefreshOIDCSessionToken(now, legacySession) {
+		t.Fatal("fresh 300-second access token without issued-at metadata should not refresh immediately")
+	}
+}
+
+func TestShouldRefreshOIDCSessionToken_RefreshesNearExpiryAndExpiredToken(t *testing.T) {
+	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+
+	nearExpiry := &SessionData{
+		OIDCRefreshToken:        "refresh",
+		OIDCAccessTokenIssuedAt: now,
+		OIDCAccessTokenExp:      now.Add(5 * time.Minute),
+	}
+	if !shouldRefreshOIDCSessionToken(now.Add(4*time.Minute), nearExpiry) {
+		t.Fatal("300-second access token should refresh inside its final relative refresh window")
+	}
+
+	expired := &SessionData{
+		OIDCRefreshToken:        "refresh",
+		OIDCAccessTokenIssuedAt: now.Add(-5 * time.Minute),
+		OIDCAccessTokenExp:      now.Add(-time.Second),
+	}
+	if !shouldRefreshOIDCSessionToken(now, expired) {
+		t.Fatal("expired access token should refresh")
+	}
+}
+
 func TestBuildSSOAuthSnapshotNormalizesEmptyProviders(t *testing.T) {
 	snapshot := buildSSOAuthSnapshot(nil)
 	if snapshot.OIDCProviders == nil {

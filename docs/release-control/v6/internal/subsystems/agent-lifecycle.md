@@ -127,6 +127,11 @@ reverse.
 19. `internal/api/agent_install_command_shared.go` shared with `api-contracts`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
 20. `internal/api/config_setup_handlers.go` shared with `api-contracts`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
 21. `internal/api/setup_script_render.go` shared with `api-contracts`, `storage-recovery`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).
+    PBS setup-script auto-registration remains lifecycle-owned bootstrap
+    transport: rendered scripts must post registration payloads to the canonical
+    Pulse base URL plus `/api/auto-register`, not to the script download
+    artifact URL, so install-time registration keeps one API root regardless of
+    whether the script came from `/api/setup-script` or `/api/setup-script-url`.
 22. `internal/api/unified_agent.go` shared with `api-contracts`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
 23. `scripts/install.ps1` shared with `deployment-installability`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
     The Windows installer must support a non-mutating download preflight that

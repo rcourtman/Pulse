@@ -81,7 +81,7 @@ func NewForProvider(cfg *config.AIConfig, provider, model string) (Provider, err
 
 	case config.AIProviderOllama:
 		baseURL := cfg.GetBaseURLForProvider(config.AIProviderOllama)
-		return NewOllamaClient(model, baseURL, cfg.OllamaUsername, cfg.OllamaPassword, timeout)
+		return NewOllamaClientWithKeepAlive(model, baseURL, cfg.OllamaUsername, cfg.OllamaPassword, cfg.GetOllamaKeepAlive(), timeout)
 
 	case config.AIProviderGemini:
 		apiKey := cfg.GetAPIKeyForProvider(config.AIProviderGemini)

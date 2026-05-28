@@ -15,6 +15,7 @@ export type AIProviderCredentialsFormState = {
   deepseekApiKey: string;
   geminiApiKey: string;
   ollamaBaseUrl: string;
+  ollamaKeepAlive: string;
   openaiBaseUrl: string;
 };
 
@@ -30,12 +31,14 @@ export type AIProviderConfig = {
   actionLinkHref: string;
   actionLinkSuffix?: string;
   helperText?: string;
-  extraField?: {
+  extraFields?: Array<{
     label: string;
     helpContentId?: string;
-    inputField: 'openaiBaseUrl';
+    inputField: keyof AIProviderCredentialsFormState;
     placeholder: string;
-  };
+    type?: 'url' | 'text';
+    helperText?: string;
+  }>;
   clearTitle: string;
 };
 
@@ -95,12 +98,15 @@ export const AI_PROVIDER_CONFIGS: AIProviderConfig[] = [
     actionLinkLabel: 'Get API key →',
     actionLinkHref: 'https://platform.openai.com/api-keys',
     clearTitle: 'Clear API key',
-    extraField: {
-      label: 'Custom Base URL',
-      helpContentId: 'ai.openai.baseUrl',
-      inputField: 'openaiBaseUrl',
-      placeholder: 'https://api.together.xyz/v1 (optional)',
-    },
+    extraFields: [
+      {
+        label: 'Custom Base URL',
+        helpContentId: 'ai.openai.baseUrl',
+        inputField: 'openaiBaseUrl',
+        placeholder: 'https://api.together.xyz/v1 (optional)',
+        type: 'url',
+      },
+    ],
   },
   {
     provider: 'openrouter',
@@ -149,6 +155,16 @@ export const AI_PROVIDER_CONFIGS: AIProviderConfig[] = [
     actionLinkLabel: 'Learn about Ollama →',
     actionLinkHref: 'https://ollama.ai',
     actionLinkSuffix: ' · Free & local',
+    extraFields: [
+      {
+        label: 'Keep Alive',
+        helpContentId: 'ai.ollama.keepAlive',
+        inputField: 'ollamaKeepAlive',
+        placeholder: '30s, 5m, 24h, 0, or blank',
+        type: 'text',
+        helperText: 'Clear to use the Ollama server default.',
+      },
+    ],
     clearTitle: 'Clear Ollama URL',
   },
 ];
