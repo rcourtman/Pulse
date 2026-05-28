@@ -3659,6 +3659,17 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			Str("health", cephCluster.Health).
 			Int("osds", cephCluster.NumOSDs).
 			Msg("Updated Ceph cluster from host agent")
+
+		// #1341: the agent-reported Ceph cluster used to land in state but
+		// never get evaluated for pool alerts. Only the Proxmox-API polling
+		// path ran cephPoolAlertStorageTargets, so overrides set against
+		// agent-prefixed pool IDs (e.g. agent:hostname-ceph-pool-foo) were
+		// dormant. Run the alert check here so agent-sourced pools fire.
+		if m.alertManager != nil {
+			for _, storage := range cephPoolAlertStorageTargets(cephCluster) {
+				m.alertManager.CheckStorage(storage)
+			}
+		}
 	}
 
 	if m.alertManager != nil {
