@@ -8,17 +8,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // createTestAIHandler creates a test AI handler with minimal setup
 func createTestAIHandler(t *testing.T) *AISettingsHandler {
 	t.Helper()
-	tmp := t.TempDir()
-	cfg := &config.Config{DataPath: tmp}
-	persistence := config.NewConfigPersistence(tmp)
-	return newTestAISettingsHandler(cfg, persistence, nil)
+	return &AISettingsHandler{
+		defaultAIService: ai.NewService(nil, nil),
+		aiServices:       make(map[string]*ai.Service),
+	}
 }
 
 // TestHandleGetPatterns tests the patterns endpoint
