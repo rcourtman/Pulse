@@ -376,12 +376,25 @@ type DockerAgentAttention struct {
 
 // AlertsDiagnostic summarises alert configuration migration state.
 type AlertsDiagnostic struct {
-	LegacyThresholdsDetected bool     `json:"legacyThresholdsDetected"`
-	LegacyThresholdSources   []string `json:"legacyThresholdSources,omitempty"`
-	LegacyScheduleSettings   []string `json:"legacyScheduleSettings,omitempty"`
-	MissingCooldown          bool     `json:"missingCooldown"`
-	MissingGroupingWindow    bool     `json:"missingGroupingWindow"`
-	Notes                    []string `json:"notes,omitempty"`
+	LegacyThresholdsDetected bool                        `json:"legacyThresholdsDetected"`
+	LegacyThresholdSources   []string                    `json:"legacyThresholdSources,omitempty"`
+	LegacyScheduleSettings   []string                    `json:"legacyScheduleSettings,omitempty"`
+	MissingCooldown          bool                        `json:"missingCooldown"`
+	MissingGroupingWindow    bool                        `json:"missingGroupingWindow"`
+	Notes                    []string                    `json:"notes,omitempty"`
+	Overrides                []AlertsOverrideDiagnostic  `json:"overrides,omitempty"`
+}
+
+// AlertsOverrideDiagnostic captures one threshold override entry so support
+// triage can verify that the persisted key matches the runtime resource ID
+// (e.g. that a Ceph pool override under `pve5-ceph-pool-data_replication` is
+// actually keyed the same way the alert manager looks it up).
+type AlertsOverrideDiagnostic struct {
+	Key                 string             `json:"key"`
+	Disabled            bool               `json:"disabled,omitempty"`
+	DisableConnectivity bool               `json:"disableConnectivity,omitempty"`
+	Thresholds          map[string]float64 `json:"thresholds,omitempty"`
+	LegacyThresholds    bool               `json:"legacyThresholds,omitempty"`
 }
 
 // AIChatDiagnostic reports on the AI chat service status.
@@ -1049,13 +1062,22 @@ func buildAlertsDiagnostic(m *monitoring.Monitor) *AlertsDiagnostic {
 		legacySources = append(legacySources, "node-defaults")
 	}
 
+	overrideKeys := make([]string, 0, len(config.Overrides))
+	for key := range config.Overrides {
+		overrideKeys = append(overrideKeys, key)
+	}
+	sort.Strings(overrideKeys)
+
 	overrideIndex := 0
-	for _, override := range config.Overrides {
+	for _, key := range overrideKeys {
+		override := config.Overrides[key]
 		overrideIndex++
-		if hasLegacyThresholds(override) {
+		isLegacy := hasLegacyThresholds(override)
+		if isLegacy {
 			diag.LegacyThresholdsDetected = true
 			legacySources = append(legacySources, fmt.Sprintf("override-%d", overrideIndex))
 		}
+		diag.Overrides = append(diag.Overrides, summarizeOverride(key, override, isLegacy))
 	}
 
 	for idx, rule := range config.CustomRules {
@@ -1154,6 +1176,38 @@ func hasLegacyThresholds(th alerts.ThresholdConfig) bool {
 		th.DiskWriteLegacy != nil ||
 		th.NetworkInLegacy != nil ||
 		th.NetworkOutLegacy != nil
+}
+
+func summarizeOverride(key string, th alerts.ThresholdConfig, legacy bool) AlertsOverrideDiagnostic {
+	out := AlertsOverrideDiagnostic{
+		Key:                 key,
+		Disabled:            th.Disabled,
+		DisableConnectivity: th.DisableConnectivity,
+		LegacyThresholds:    legacy,
+	}
+
+	thresholds := map[string]float64{}
+	addThreshold := func(name string, t *alerts.HysteresisThreshold) {
+		if t == nil {
+			return
+		}
+		thresholds[name] = t.Trigger
+	}
+	addThreshold("cpu", th.CPU)
+	addThreshold("memory", th.Memory)
+	addThreshold("disk", th.Disk)
+	addThreshold("diskRead", th.DiskRead)
+	addThreshold("diskWrite", th.DiskWrite)
+	addThreshold("networkIn", th.NetworkIn)
+	addThreshold("networkOut", th.NetworkOut)
+	addThreshold("usage", th.Usage)
+	addThreshold("temperature", th.Temperature)
+	addThreshold("diskTemperature", th.DiskTemperature)
+
+	if len(thresholds) > 0 {
+		out.Thresholds = thresholds
+	}
+	return out
 }
 
 func preferredDockerHostName(host models.DockerHost) string {

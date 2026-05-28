@@ -345,6 +345,18 @@ export const DiagnosticsPanel: Component = () => {
             data.aiChat.url = '[REDACTED]';
         }
 
+        // Redact alert override keys: they encode instance names that may
+        // themselves be hostnames or IPs (some users name instances after
+        // their Proxmox URL). Thresholds and disabled flags stay visible so
+        // the override shape is still triageable.
+        const alertsAny = data.alerts as Record<string, unknown> | undefined;
+        if (alertsAny && Array.isArray(alertsAny.overrides)) {
+            alertsAny.overrides = alertsAny.overrides.map((o: Record<string, unknown>, i: number) => ({
+                ...o,
+                key: `override-${i + 1}`,
+            }));
+        }
+
         // Redact IPs in error messages
         data.errors = errors.map(redactString);
 
