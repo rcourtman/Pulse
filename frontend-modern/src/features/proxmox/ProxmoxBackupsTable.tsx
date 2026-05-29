@@ -92,7 +92,6 @@ import {
   cmpBool,
   cmpNumber,
   cmpString,
-  formatDuration,
   formatDurationFromSeconds,
   guestLabel,
   pbsRepositoryLabel,
@@ -125,6 +124,7 @@ import {
 } from './proxmoxBackupsTableShared';
 import { ProxmoxBackupsCoverageStrip } from './ProxmoxBackupsCoverageStrip';
 import { ProxmoxRecoverableTable } from './ProxmoxRecoverableTable';
+import { ProxmoxTasksTable } from './ProxmoxTasksTable';
 
 // Proxmox backups are intentionally organized around operator questions, not
 // storage-source mechanics:
@@ -2548,201 +2548,19 @@ export const ProxmoxBackupsTable: Component<{
           </Show>
 
           <Show when={tab() === 'tasks'}>
-            <Show
-              when={filteredTasks().length > 0}
-              fallback={
-                <Card padding="lg">
-                  <EmptyState
-                    icon={props.emptyIcon}
-                    title={
-                      tasks().length === 0
-                        ? tabSpecFor('tasks').emptyTitle
-                        : 'No tasks match current filters'
-                    }
-                    description={
-                      tasks().length === 0
-                        ? tabSpecFor('tasks').emptyDescription
-                        : 'Adjust the search or status filter to see more tasks.'
-                    }
-                  />
-                </Card>
-              }
-            >
-              <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-                <Table class="min-w-[1000px] text-xs">
-                  <TableHeader>
-                    <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                      <SortableHead
-                        label="Status"
-                        sortKey="status"
-                        currentSort={taskSortKey}
-                        direction={taskSortDirection}
-                        onSort={handleTaskSort}
-                        align="left"
-                        headClass={getPlatformTableHeadClassForKind('text')}
-                      />
-                      <SortableHead
-                        label="Guest"
-                        sortKey="guest"
-                        currentSort={taskSortKey}
-                        direction={taskSortDirection}
-                        onSort={handleTaskSort}
-                        align="left"
-                        headClass={getPlatformTableHeadClassForKind('text')}
-                      />
-                      <SortableHead
-                        label="Node"
-                        sortKey="node"
-                        currentSort={taskSortKey}
-                        direction={taskSortDirection}
-                        onSort={handleTaskSort}
-                        align="left"
-                        headClass={getPlatformTableHeadClassForKind('text')}
-                      />
-                      <SortableHead
-                        label="Started"
-                        sortKey="started"
-                        currentSort={taskSortKey}
-                        direction={taskSortDirection}
-                        onSort={handleTaskSort}
-                        align="right"
-                        headClass={getPlatformTableHeadClassForKind('numeric-value')}
-                      />
-                      <SortableHead
-                        label="Duration"
-                        sortKey="duration"
-                        currentSort={taskSortKey}
-                        direction={taskSortDirection}
-                        onSort={handleTaskSort}
-                        align="center"
-                        headClass={getPlatformTableHeadClassForKind('metric-bar')}
-                      />
-                      <Show when={showTaskSizeColumn()}>
-                        <SortableHead
-                          label="Size"
-                          sortKey="size"
-                          currentSort={taskSortKey}
-                          direction={taskSortDirection}
-                          onSort={handleTaskSort}
-                          align="right"
-                          headClass={getPlatformTableHeadClassForKind('numeric-value')}
-                        />
-                      </Show>
-                      <Show when={showTaskErrorColumn()}>
-                        <TableHead class={getPlatformTableHeadClassForKind('text')}>
-                          Error
-                        </TableHead>
-                      </Show>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
-                    <For each={filteredTasks()}>
-                      {(task) => {
-                        const classify = classifyTaskStatus(task.status);
-                        const durationSec = taskDurationSeconds(task);
-                        // Anchor the bar so the median sits at ~50%.
-                        const durationBarPct = () => {
-                          const baseline = taskDurationBaselineSeconds();
-                          if (!durationSec || baseline <= 0) return 0;
-                          return (durationSec / (baseline * 2)) * 100;
-                        };
-                        // Canonical Pulse metric tones (60% alpha) — same palette
-                        // Storage and Ceph row bars use via getMetricColorClass.
-                        // Cap at `warning` (soft yellow) rather than going to red
-                        // for the worst case: a slow backup task is a perf
-                        // outlier, not a failure. Failure is already conveyed by
-                        // the Status column. Two tiers — normal / slow — keeps
-                        // the column calm instead of screaming red on every
-                        // long-running VM backup.
-                        const durationToneClass = () => {
-                          const baseline = taskDurationBaselineSeconds();
-                          if (!durationSec || baseline <= 0)
-                            return 'bg-slate-500/30 dark:bg-slate-500/30';
-                          const ratio = durationSec / baseline;
-                          if (ratio >= 1.5) return 'bg-metric-warning-bg dark:bg-metric-warning-bg';
-                          return 'bg-metric-normal-bg dark:bg-metric-normal-bg';
-                        };
-                        return (
-                          <TableRow class="hover:bg-surface-hover">
-                            <TableCell class={getPlatformTableCellClassForKind('text')}>
-                              <div class="flex items-center gap-2">
-                                <StatusDot
-                                  size="sm"
-                                  variant={classify.variant}
-                                  title={classify.label}
-                                  ariaHidden
-                                />
-                                <span class={`text-[11px] font-medium ${classify.toneClass}`}>
-                                  {classify.label}
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                            >
-                              {guestLabel(task.type, task.vmid)}
-                            </TableCell>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
-                            >
-                              {task.node || '—'}
-                            </TableCell>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                            >
-                              {formatRelativeTime(task.startTime, { compact: true })}
-                            </TableCell>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('metric-bar')} text-base-content`}
-                            >
-                              <RowMetricBar
-                                valuePct={
-                                  taskDurationBaselineSeconds() > 0 && durationSec
-                                    ? durationBarPct()
-                                    : 0
-                                }
-                                fillClass={durationToneClass()}
-                                label={formatDuration(task.startTime, task.endTime)}
-                                tooltip={`Duration ${formatDuration(task.startTime, task.endTime)} (median ${formatDurationFromSeconds(taskDurationBaselineSeconds())})`}
-                              />
-                            </TableCell>
-                            <Show when={showTaskSizeColumn()}>
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
-                              >
-                                <Show
-                                  when={task.size && task.size > 0}
-                                  fallback={<span class="text-muted">—</span>}
-                                >
-                                  {formatBytes(task.size ?? 0)}
-                                </Show>
-                              </TableCell>
-                            </Show>
-                            <Show when={showTaskErrorColumn()}>
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                              >
-                                <Show
-                                  when={!!task.error?.trim()}
-                                  fallback={<span class="text-muted">—</span>}
-                                >
-                                  <span
-                                    class="inline-block max-w-[18rem] truncate text-red-600 dark:text-red-300"
-                                    title={task.error}
-                                  >
-                                    {task.error}
-                                  </span>
-                                </Show>
-                              </TableCell>
-                            </Show>
-                          </TableRow>
-                        );
-                      }}
-                    </For>
-                  </TableBody>
-                </Table>
-              </TableCard>
-            </Show>
+            <ProxmoxTasksTable
+              tasks={filteredTasks()}
+              hasAnyTasks={tasks().length > 0}
+              emptyIcon={props.emptyIcon}
+              emptyTitle={tabSpecFor('tasks').emptyTitle}
+              emptyDescription={tabSpecFor('tasks').emptyDescription}
+              sortKey={taskSortKey}
+              sortDirection={taskSortDirection}
+              onSort={handleTaskSort}
+              showSizeColumn={showTaskSizeColumn()}
+              showErrorColumn={showTaskErrorColumn()}
+              durationBaselineSeconds={taskDurationBaselineSeconds()}
+            />
           </Show>
         </div>
       </Show>
