@@ -26,6 +26,7 @@ import {
   connectionAgentVersionPresentation,
   infrastructureSourcePresentation,
   surfaceLabel,
+  type InfrastructureSystemMemberRow,
   type InfrastructureSystemRow,
 } from './connectionsTableModel';
 import type { DiscoveredServer, DiscoveryScanStatus } from './infrastructureSettingsModel';
@@ -72,7 +73,18 @@ const workspaceSecondaryButtonClass =
   'inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60';
 const discoveryRowClass =
   'border-b border-border-subtle bg-blue-50/30 hover:bg-blue-50/40 dark:bg-blue-950/10 dark:hover:bg-blue-950/20';
-const wrappedFieldClass = 'whitespace-normal break-words leading-4';
+// The system column shows just the name on a single line. The OS / version
+// (standalone) or cluster identity (cluster) descriptor that used to sit on a
+// second line moves into the name's hover title, so every row stays one line
+// like the platform overview tables. Discovery rows already fold version into
+// the name title the same way.
+const rowSystemTitle = (row: InfrastructureSystemRow): string => {
+  const detail = row.isCluster ? row.subtitle : row.identitySubtitle;
+  return detail ? `${row.name} · ${detail}` : row.name;
+};
+
+const memberSystemTitle = (member: InfrastructureSystemMemberRow): string =>
+  member.subtitle ? `${member.name} · ${member.subtitle}` : member.name;
 // The connected-systems table sets `min-w-[820px]`; switch to the card
 // layout whenever the measured container can't fit that, otherwise the
 // table renders but overflows horizontally inside the settings panel.
@@ -660,13 +672,19 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
           <Table class="w-full min-w-[820px] table-fixed text-sm">
             <TableHeader class="bg-surface-alt/60">
               <TableRow>
-                <TableHead class="w-[36%] py-1.5 pl-3 pr-3 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[34%]">
+                <TableHead class="w-[20%] py-1.5 pl-3 pr-3 text-left text-[11px] font-medium text-muted whitespace-nowrap">
                   System
                 </TableHead>
-                <TableHead class="w-[32%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[34%]">
+                <TableHead class="w-[10%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
+                  Method
+                </TableHead>
+                <TableHead class="w-[16%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
+                  Host
+                </TableHead>
+                <TableHead class="w-[16%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
                   Coverage
                 </TableHead>
-                <TableHead class="w-[24%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[22%]">
+                <TableHead class="w-[22%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
                   Status
                 </TableHead>
                 <Show when={actionColumnVisible()}>
@@ -702,7 +720,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                               when={actionColumnVisible()}
                               fallback={
                                 <TableRow class={groupRowClass()}>
-                                  <TableCell colspan={3} class={getGroupedTableRowCellClass()}>
+                                  <TableCell colspan={5} class={getGroupedTableRowCellClass()}>
                                     <div class="flex min-w-0 items-center gap-2">
                                       <span>{group.label}</span>
                                     </div>
@@ -711,7 +729,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                               }
                             >
                               <TableRow class={groupRowClass()}>
-                                <TableCell colspan={4} class={getGroupedTableRowCellClass()}>
+                                <TableCell colspan={6} class={getGroupedTableRowCellClass()}>
                                   <div class="flex items-center justify-between gap-2 whitespace-nowrap">
                                     <span>{group.label}</span>
                                     <Show
@@ -745,27 +763,20 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                         row.isCluster ? 'bg-surface-alt/40' : ''
                                       }`}
                                     >
-                                      <TableCell class="py-1 pl-3 pr-3 align-top">
+                                      <TableCell class="py-1.5 pl-3 pr-3 align-middle">
                                         <div
-                                          class={`text-[13px] ${
+                                          class={`truncate text-[13px] ${
                                             row.isCluster
                                               ? 'font-medium text-base-content'
                                               : 'text-base-content/80'
-                                          } ${wrappedFieldClass}`}
-                                          title={row.name}
+                                          }`}
+                                          title={rowSystemTitle(row)}
                                         >
                                           {row.name}
                                         </div>
-                                        <Show when={row.isCluster && row.subtitle}>
-                                          <div class="mt-0.5 text-[11px] text-muted">
-                                            {row.subtitle}
-                                          </div>
-                                        </Show>
-                                        <Show when={!row.isCluster && row.identitySubtitle}>
-                                          <div class="mt-0.5 text-[11px] text-muted">
-                                            {row.identitySubtitle}
-                                          </div>
-                                        </Show>
+                                      </TableCell>
+
+                                      <TableCell class="px-3 py-1.5 align-middle">
                                         {(() => {
                                           const presentation = infrastructureSourcePresentation(
                                             row.source,
@@ -773,27 +784,35 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                           const title =
                                             agentMethodTitleFor(row) ?? presentation.title;
                                           return (
-                                            <div class="mt-1 flex min-w-0 items-center gap-1.5">
-                                              <span
-                                                class={`${presentation.badgeClassName} flex-shrink-0 whitespace-nowrap`}
-                                                title={title}
-                                              >
-                                                {presentation.label}
-                                              </span>
-                                              <Show when={row.host}>
-                                                <span
-                                                  class="min-w-0 truncate text-[11px] text-muted"
-                                                  title={row.host}
-                                                >
-                                                  {row.host}
-                                                </span>
-                                              </Show>
-                                            </div>
+                                            <span
+                                              class={`${presentation.badgeClassName} whitespace-nowrap`}
+                                              title={title}
+                                            >
+                                              {presentation.label}
+                                            </span>
                                           );
                                         })()}
                                       </TableCell>
 
-                                      <TableCell class="px-3 py-1 align-top">
+                                      <TableCell class="px-3 py-1.5 align-middle">
+                                        <Show
+                                          when={row.host}
+                                          fallback={
+                                            <span class="text-xs text-muted" aria-hidden="true">
+                                              —
+                                            </span>
+                                          }
+                                        >
+                                          <div
+                                            class="truncate text-[12px] text-muted"
+                                            title={row.host}
+                                          >
+                                            {row.host}
+                                          </div>
+                                        </Show>
+                                      </TableCell>
+
+                                      <TableCell class="px-3 py-1.5 align-middle">
                                         <Show
                                           when={row.coverageLabels.length > 0}
                                           fallback={
@@ -803,7 +822,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                           }
                                         >
                                           <div
-                                            class="whitespace-normal break-words text-[12px] leading-4 text-muted"
+                                            class="truncate text-[12px] text-muted"
                                             title={row.coverageLabels.join(', ')}
                                           >
                                             {row.coverageLabels.join(', ')}
@@ -811,8 +830,8 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                         </Show>
                                       </TableCell>
 
-                                      <TableCell class="px-3 py-1 align-top">
-                                        <div class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                                      <TableCell class="px-3 py-1.5 align-middle">
+                                        <div class="flex items-center gap-1.5 overflow-hidden whitespace-nowrap">
                                           <span
                                             class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${row.statusClassName}`}
                                           >
@@ -822,11 +841,11 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                             <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-amber-800 dark:bg-amber-900 dark:text-amber-200">
                                               {row.agentUpdateCount === 1
                                                 ? 'Agent update'
-                                                : `${row.agentUpdateCount} agent updates`}
+                                                : `${row.agentUpdateCount} updates`}
                                             </span>
                                           </Show>
                                           <span
-                                            class="whitespace-nowrap text-[12px] text-muted/90"
+                                            class="truncate text-[12px] text-muted/90"
                                             title={
                                               row.isCluster
                                                 ? 'Oldest activity across cluster API and member agents'
@@ -836,38 +855,26 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                             {row.lastActivityText}
                                           </span>
                                         </div>
-                                        <Show when={row.problem}>
-                                          {(problem) => (
-                                            <div
-                                              class={`mt-1 text-[11px] italic ${
-                                                problem().tone === 'critical'
-                                                  ? 'text-rose-700 dark:text-rose-300'
-                                                  : 'text-amber-700 dark:text-amber-300'
-                                              }`}
-                                              title={problem().detail}
-                                            >
-                                              {problem().label}
-                                            </div>
-                                          )}
-                                        </Show>
                                       </TableCell>
 
                                       <Show when={actionColumnVisible()}>
-                                        <TableCell class="px-3 py-1 align-top text-right">
+                                        <TableCell class="px-3 py-1.5 align-middle text-right">
                                           <Show
                                             when={rowInteractive(row)}
                                             fallback={
                                               <span class="text-xs text-muted">Read only</span>
                                             }
                                           >
-                                            <div class="flex flex-col items-end gap-1">
+                                            <div class="flex items-center justify-end gap-1">
                                               {/* Row-level install-agent shortcut, scoped to
                                                   Proxmox VE: the agent adds node-local
                                                   telemetry (temps, SMART, host identity)
                                                   that the PVE API doesn't expose. PBS and
                                                   other API-only sources are fully covered
                                                   without an agent, so we don't nudge for
-                                                  one there. */}
+                                                  one there. Rendered icon-only so the row
+                                                  stays a single line; the full guided flow
+                                                  lives behind Manage. */}
                                               <Show
                                                 when={
                                                   row.ownerType === 'pve' &&
@@ -881,11 +888,11 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                 <button
                                                   type="button"
                                                   onClick={handleInstallAgentShortcut}
-                                                  class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/30"
+                                                  class="inline-flex items-center justify-center rounded p-1 text-blue-700 transition-colors hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/30"
+                                                  aria-label="Install Pulse Agent on this system"
                                                   title="Install Pulse Agent on this system to add node-local telemetry (temperatures, SMART, host identity)."
                                                 >
-                                                  <Plus class="h-3 w-3" />
-                                                  Install agent
+                                                  <Plus class="h-3.5 w-3.5" />
                                                 </button>
                                               </Show>
                                               <button
@@ -901,18 +908,34 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                       </Show>
                                     </TableRow>
 
-                                    <Show when={row.lastErrorMessage}>
+                                    <Show when={row.problem || row.lastErrorMessage}>
                                       <TableRow class="border-b border-border-subtle">
                                         <TableCell
-                                          colspan={actionColumnVisible() ? 4 : 3}
+                                          colspan={actionColumnVisible() ? 6 : 5}
                                           class="bg-surface px-3 pb-1.5 pt-0"
                                         >
-                                          <div
-                                            role="alert"
-                                            class="rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
-                                          >
-                                            {row.lastErrorMessage}
-                                          </div>
+                                          <Show when={row.problem}>
+                                            {(problem) => (
+                                              <div
+                                                class={`text-[11px] italic ${
+                                                  problem().tone === 'critical'
+                                                    ? 'text-rose-700 dark:text-rose-300'
+                                                    : 'text-amber-700 dark:text-amber-300'
+                                                }`}
+                                                title={problem().detail}
+                                              >
+                                                {problem().label}
+                                              </div>
+                                            )}
+                                          </Show>
+                                          <Show when={row.lastErrorMessage}>
+                                            <div
+                                              role="alert"
+                                              class="mt-1 rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
+                                            >
+                                              {row.lastErrorMessage}
+                                            </div>
+                                          </Show>
                                         </TableCell>
                                       </TableRow>
                                     </Show>
@@ -926,99 +949,118 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                             memberMethodTitleFor(row, memberIndex()) ??
                                             memberPresentation.title;
                                           return (
-                                            <TableRow class="border-b border-border-subtle bg-surface-alt/30">
-                                              <TableCell class="py-1 pl-3 pr-3 align-top">
-                                                <div class="flex min-w-0 items-start gap-2 pl-4">
-                                                  <span class="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-border" />
-                                                  <div class="min-w-0">
+                                            <>
+                                              <TableRow class="border-b border-border-subtle bg-surface-alt/30">
+                                                <TableCell class="py-1.5 pl-3 pr-3 align-middle">
+                                                  <div class="flex min-w-0 items-center gap-2 pl-4">
+                                                    <span class="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-border" />
                                                     <div
-                                                      class={`text-[13px] text-base-content/85 ${wrappedFieldClass}`}
-                                                      title={member.name}
+                                                      class="truncate text-[13px] text-base-content/85"
+                                                      title={memberSystemTitle(member)}
                                                     >
                                                       {member.name}
                                                     </div>
-                                                    <div class="mt-0.5 text-[11px] text-muted">
-                                                      {member.subtitle}
-                                                    </div>
-                                                    <div class="mt-1 flex min-w-0 items-center gap-1.5">
-                                                      <span
-                                                        class={`${memberPresentation.badgeClassName} flex-shrink-0 whitespace-nowrap`}
-                                                        title={memberSourceTitle}
-                                                      >
-                                                        {memberPresentation.label}
-                                                      </span>
-                                                      <Show when={member.host}>
-                                                        <span
-                                                          class="min-w-0 truncate text-[11px] text-muted"
-                                                          title={member.host}
-                                                        >
-                                                          {member.host}
-                                                        </span>
-                                                      </Show>
-                                                    </div>
                                                   </div>
-                                                </div>
-                                              </TableCell>
+                                                </TableCell>
 
-                                              <TableCell class="px-3 py-1 align-top">
-                                                <Show
-                                                  when={member.coverageLabels.length > 0}
-                                                  fallback={
+                                                <TableCell class="px-3 py-1.5 align-middle">
+                                                  <span
+                                                    class={`${memberPresentation.badgeClassName} whitespace-nowrap`}
+                                                    title={memberSourceTitle}
+                                                  >
+                                                    {memberPresentation.label}
+                                                  </span>
+                                                </TableCell>
+
+                                                <TableCell class="px-3 py-1.5 align-middle">
+                                                  <Show
+                                                    when={member.host}
+                                                    fallback={
+                                                      <span
+                                                        class="text-xs text-muted"
+                                                        aria-hidden="true"
+                                                      >
+                                                        —
+                                                      </span>
+                                                    }
+                                                  >
+                                                    <div
+                                                      class="truncate text-[12px] text-muted"
+                                                      title={member.host}
+                                                    >
+                                                      {member.host}
+                                                    </div>
+                                                  </Show>
+                                                </TableCell>
+
+                                                <TableCell class="px-3 py-1.5 align-middle">
+                                                  <Show
+                                                    when={member.coverageLabels.length > 0}
+                                                    fallback={
+                                                      <span
+                                                        class="text-xs text-muted"
+                                                        aria-hidden="true"
+                                                      >
+                                                        —
+                                                      </span>
+                                                    }
+                                                  >
+                                                    <div
+                                                      class="truncate text-[12px] text-muted"
+                                                      title={member.coverageLabels.join(', ')}
+                                                    >
+                                                      {member.coverageLabels.join(', ')}
+                                                    </div>
+                                                  </Show>
+                                                </TableCell>
+
+                                                <TableCell class="px-3 py-1.5 align-middle">
+                                                  <div class="flex items-center gap-1.5 overflow-hidden whitespace-nowrap">
+                                                    <span
+                                                      class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${member.statusClassName}`}
+                                                    >
+                                                      {member.statusLabel}
+                                                    </span>
+                                                    <span class="truncate text-[12px] text-muted/90">
+                                                      {member.lastActivityText}
+                                                    </span>
+                                                  </div>
+                                                </TableCell>
+
+                                                <Show when={actionColumnVisible()}>
+                                                  <TableCell class="px-3 py-1.5 align-middle text-right">
                                                     <span
                                                       class="text-xs text-muted"
                                                       aria-hidden="true"
                                                     >
                                                       —
                                                     </span>
-                                                  }
-                                                >
-                                                  <div
-                                                    class="whitespace-normal break-words text-[12px] leading-4 text-muted"
-                                                    title={member.coverageLabels.join(', ')}
-                                                  >
-                                                    {member.coverageLabels.join(', ')}
-                                                  </div>
+                                                  </TableCell>
                                                 </Show>
-                                              </TableCell>
+                                              </TableRow>
 
-                                              <TableCell class="px-3 py-1 align-top">
-                                                <div class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-                                                  <span
-                                                    class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${member.statusClassName}`}
-                                                  >
-                                                    {member.statusLabel}
-                                                  </span>
-                                                  <span class="whitespace-nowrap text-[12px] text-muted/90">
-                                                    {member.lastActivityText}
-                                                  </span>
-                                                </div>
-                                                <Show when={member.problem}>
-                                                  {(problem) => (
-                                                    <div
-                                                      class={`mt-1 text-[11px] italic ${
-                                                        problem().tone === 'critical'
-                                                          ? 'text-rose-700 dark:text-rose-300'
-                                                          : 'text-amber-700 dark:text-amber-300'
-                                                      }`}
-                                                      title={problem().detail}
+                                              <Show when={member.problem}>
+                                                {(problem) => (
+                                                  <TableRow class="border-b border-border-subtle bg-surface-alt/30">
+                                                    <TableCell
+                                                      colspan={actionColumnVisible() ? 6 : 5}
+                                                      class="pb-1.5 pl-9 pr-3 pt-0"
                                                     >
-                                                      {problem().label}
-                                                    </div>
-                                                  )}
-                                                </Show>
-                                              </TableCell>
-
-                                              <Show when={actionColumnVisible()}>
-                                                <TableCell class="px-3 py-1 align-top text-right">
-                                                  <span
-                                                    class="text-xs text-muted"
-                                                    aria-hidden="true"
-                                                  >
-                                                    —
-                                                  </span>
-                                                </TableCell>
+                                                      <div
+                                                        class={`text-[11px] italic ${
+                                                          problem().tone === 'critical'
+                                                            ? 'text-rose-700 dark:text-rose-300'
+                                                            : 'text-amber-700 dark:text-amber-300'
+                                                        }`}
+                                                        title={problem().detail}
+                                                      >
+                                                        {problem().label}
+                                                      </div>
+                                                    </TableCell>
+                                                  </TableRow>
+                                                )}
                                               </Show>
-                                            </TableRow>
+                                            </>
                                           );
                                         }}
                                       </For>
@@ -1033,16 +1075,16 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                 {(server) => {
                                   return (
                                     <TableRow class={discoveryRowClass}>
-                                      <TableCell class="py-1 pl-3 pr-3 align-top">
+                                      <TableCell class="py-1.5 pl-3 pr-3 align-middle">
                                         <div
-                                          class={`text-[13px] text-base-content/85 ${wrappedFieldClass}`}
+                                          class="truncate text-[13px] text-base-content/85"
                                           title={`${discoveredServerName(server)}${server.version ? ` · ${server.version}` : ''}`}
                                         >
                                           {discoveredServerName(server)}
                                         </div>
                                       </TableCell>
 
-                                      <TableCell class="px-3 py-1 align-top">
+                                      <TableCell class="px-3 py-1.5 align-middle">
                                         <span
                                           class="inline-flex items-center rounded-full border border-dashed border-border bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-muted whitespace-nowrap"
                                           title="Discovery candidate — review to attach a source"
@@ -1051,7 +1093,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                         </span>
                                       </TableCell>
 
-                                      <TableCell class="px-3 py-1 align-top">
+                                      <TableCell class="px-3 py-1.5 align-middle">
                                         <div
                                           class="truncate whitespace-nowrap text-[12px] text-muted"
                                           title={discoveredServerEndpoint(server)}
@@ -1060,28 +1102,28 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                         </div>
                                       </TableCell>
 
-                                      <TableCell class="px-3 py-1 align-top">
+                                      <TableCell class="px-3 py-1.5 align-middle">
                                         <div
-                                          class="whitespace-normal break-words text-[12px] leading-4 text-muted"
+                                          class="truncate whitespace-nowrap text-[12px] text-muted"
                                           title={discoveredCoverageText(server)}
                                         >
                                           {discoveredCoverageText(server)}
                                         </div>
                                       </TableCell>
 
-                                      <TableCell class="px-3 py-1 align-top">
-                                        <div class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                                      <TableCell class="px-3 py-1.5 align-middle">
+                                        <div class="flex items-center gap-1.5 overflow-hidden whitespace-nowrap">
                                           <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
                                             Discovered
                                           </span>
-                                          <span class="whitespace-nowrap text-[12px] text-muted/90">
+                                          <span class="truncate text-[12px] text-muted/90">
                                             {lastDiscoveryResultText() ?? 'Waiting for scan'}
                                           </span>
                                         </div>
                                       </TableCell>
 
                                       <Show when={actionColumnVisible()}>
-                                        <TableCell class="px-3 py-1 align-top text-right">
+                                        <TableCell class="px-3 py-1.5 align-middle text-right">
                                           <Show
                                             when={props.onReviewDiscoveredSource}
                                             fallback={
@@ -1116,7 +1158,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
               <Show when={!hasAnyConfigured() && !hasAnyDiscovered()}>
                 <TableRow>
                   <TableCell
-                    colspan={actionColumnVisible() ? 4 : 3}
+                    colspan={actionColumnVisible() ? 6 : 5}
                     class="px-4 py-8 text-center text-sm text-muted"
                   >
                     {emptyStateContent()}
