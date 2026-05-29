@@ -65,7 +65,6 @@ import {
   buildArchiveCoverageSummary,
   buildSnapshotCoverageSummary,
   buildTaskOutcomeSummary,
-  classifyArchiveRowAge,
   classifySnapshotRowAge,
   computeMedianTaskDurationSeconds,
   getBackupAgeBucketPresentation,
@@ -116,12 +115,12 @@ import {
   PBS_STATUS_FILTERS,
   RECOVERABLE_FILTERS,
   RecoverySourceSummary,
-  RowMetricBar,
   SNAPSHOT_FILTERS,
   SortableHead,
   TASK_STATUS_FILTERS,
   artifactStateLabel,
 } from './proxmoxBackupsTableShared';
+import { ProxmoxArchivesTable } from './ProxmoxArchivesTable';
 import { ProxmoxBackupsCoverageStrip } from './ProxmoxBackupsCoverageStrip';
 import { ProxmoxPbsTable } from './ProxmoxPbsTable';
 import { ProxmoxRecoverableTable } from './ProxmoxRecoverableTable';
@@ -2129,217 +2128,19 @@ export const ProxmoxBackupsTable: Component<{
           </Show>
 
           <Show when={tab() === 'sources' && sourceDetailTab() === 'archives'}>
-            <Show
-              when={filteredArchives().length > 0}
-              fallback={
-                <Card padding="lg">
-                  <EmptyState
-                    icon={props.emptyIcon}
-                    title={
-                      archives().length === 0
-                        ? sourceDetailSpecFor('archives').emptyTitle
-                        : 'No archives match current filters'
-                    }
-                    description={
-                      archives().length === 0
-                        ? sourceDetailSpecFor('archives').emptyDescription
-                        : 'Adjust the search or status filter to see more archives.'
-                    }
-                  />
-                </Card>
-              }
-            >
-              <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-                <Table class="min-w-[1050px] text-xs">
-                  <TableHeader>
-                    <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                      <SortableHead
-                        label="Volume"
-                        sortKey="volume"
-                        currentSort={archiveSortKey}
-                        direction={archiveSortDirection}
-                        onSort={handleArchiveSort}
-                        align="left"
-                        headClass={getPlatformTableHeadClassForKind('name')}
-                      />
-                      <SortableHead
-                        label="Guest"
-                        sortKey="guest"
-                        currentSort={archiveSortKey}
-                        direction={archiveSortDirection}
-                        onSort={handleArchiveSort}
-                        align="left"
-                        headClass={getPlatformTableHeadClassForKind('text')}
-                      />
-                      <SortableHead
-                        label="Storage"
-                        sortKey="storage"
-                        currentSort={archiveSortKey}
-                        direction={archiveSortDirection}
-                        onSort={handleArchiveSort}
-                        align="left"
-                        headClass={getPlatformTableHeadClassForKind('text')}
-                      />
-                      <SortableHead
-                        label="Node"
-                        sortKey="node"
-                        currentSort={archiveSortKey}
-                        direction={archiveSortDirection}
-                        onSort={handleArchiveSort}
-                        align="left"
-                        headClass={getPlatformTableHeadClassForKind('text')}
-                      />
-                      <SortableHead
-                        label="Format"
-                        sortKey="format"
-                        currentSort={archiveSortKey}
-                        direction={archiveSortDirection}
-                        onSort={handleArchiveSort}
-                        align="left"
-                        headClass={getPlatformTableHeadClassForKind('text')}
-                      />
-                      <SortableHead
-                        label="Created"
-                        sortKey="created"
-                        currentSort={archiveSortKey}
-                        direction={archiveSortDirection}
-                        onSort={handleArchiveSort}
-                        align="right"
-                        headClass={getPlatformTableHeadClassForKind('numeric-value')}
-                      />
-                      <SortableHead
-                        label="Size"
-                        sortKey="size"
-                        currentSort={archiveSortKey}
-                        direction={archiveSortDirection}
-                        onSort={handleArchiveSort}
-                        align="center"
-                        headClass={getPlatformTableHeadClassForKind('metric-bar')}
-                      />
-                      <Show when={showArchivePBSColumns()}>
-                        <SortableHead
-                          label="Protection"
-                          sortKey="protected"
-                          currentSort={archiveSortKey}
-                          direction={archiveSortDirection}
-                          onSort={handleArchiveSort}
-                          align="left"
-                          headClass={getPlatformTableHeadClassForKind('text')}
-                        />
-                        <SortableHead
-                          label="Verified"
-                          sortKey="verified"
-                          currentSort={archiveSortKey}
-                          direction={archiveSortDirection}
-                          onSort={handleArchiveSort}
-                          align="left"
-                          headClass={getPlatformTableHeadClassForKind('text')}
-                        />
-                      </Show>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
-                    <For each={filteredArchives()}>
-                      {(arc) => (
-                        <TableRow class="hover:bg-surface-hover">
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('name')} text-base-content font-mono text-[11px]`}
-                          >
-                            <span class="inline-block max-w-[18rem] truncate" title={arc.volid}>
-                              {arc.volid}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            {guestLabel(arc.type, arc.vmid)}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            {arc.storage || '—'}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
-                          >
-                            {arc.node || '—'}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content uppercase text-[10px]`}
-                          >
-                            {arc.format || '—'}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
-                            <div class="flex items-center justify-end gap-2">
-                              {(() => {
-                                const age = classifyArchiveRowAge(arc.time, nowMs());
-                                return (
-                                  <span
-                                    class={`h-1.5 w-1.5 shrink-0 rounded-full ${age.swatchClass}`}
-                                    aria-hidden="true"
-                                    title={`Coverage: ${age.label}`}
-                                  />
-                                );
-                              })()}
-                              <span>{formatRelativeTime(arc.time, { compact: true })}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('metric-bar')} text-base-content`}
-                          >
-                            <RowMetricBar
-                              valuePct={
-                                archiveSizeMaxBytes() > 0
-                                  ? (arc.size / archiveSizeMaxBytes()) * 100
-                                  : 0
-                              }
-                              fillClass="bg-blue-500/40 dark:bg-blue-500/40"
-                              label={formatBytes(arc.size)}
-                              tooltip={`${formatBytes(arc.size)} (relative to largest file in view)`}
-                            />
-                          </TableCell>
-                          <Show when={showArchivePBSColumns()}>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                            >
-                              <Show
-                                when={arc.protected}
-                                fallback={<span class="text-muted">Unprotected</span>}
-                              >
-                                <span class="inline-flex items-center rounded-sm bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-200">
-                                  Protected
-                                </span>
-                              </Show>
-                            </TableCell>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                            >
-                              <Show
-                                when={arc.verified}
-                                fallback={
-                                  <Show
-                                    when={arc.isPBS}
-                                    fallback={<span class="text-muted">n/a</span>}
-                                  >
-                                    <span class="text-muted">Pending</span>
-                                  </Show>
-                                }
-                              >
-                                <span class="inline-flex items-center rounded-sm bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
-                                  Verified
-                                </span>
-                              </Show>
-                            </TableCell>
-                          </Show>
-                        </TableRow>
-                      )}
-                    </For>
-                  </TableBody>
-                </Table>
-              </TableCard>
-            </Show>
+            <ProxmoxArchivesTable
+              archives={filteredArchives()}
+              hasAnyArchives={archives().length > 0}
+              emptyIcon={props.emptyIcon}
+              emptyTitle={sourceDetailSpecFor('archives').emptyTitle}
+              emptyDescription={sourceDetailSpecFor('archives').emptyDescription}
+              sortKey={archiveSortKey}
+              sortDirection={archiveSortDirection}
+              onSort={handleArchiveSort}
+              showPBSColumns={showArchivePBSColumns()}
+              sizeMaxBytes={archiveSizeMaxBytes()}
+              nowMs={nowMs()}
+            />
           </Show>
 
           <Show when={tab() === 'tasks'}>
