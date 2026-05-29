@@ -123,6 +123,7 @@ import {
   artifactStateLabel,
 } from './proxmoxBackupsTableShared';
 import { ProxmoxBackupsCoverageStrip } from './ProxmoxBackupsCoverageStrip';
+import { ProxmoxPbsTable } from './ProxmoxPbsTable';
 import { ProxmoxRecoverableTable } from './ProxmoxRecoverableTable';
 import { ProxmoxTasksTable } from './ProxmoxTasksTable';
 
@@ -1854,226 +1855,20 @@ export const ProxmoxBackupsTable: Component<{
           </Show>
 
           <Show when={tab() === 'sources' && sourceDetailTab() === 'pbs'}>
-            <Show
-              when={!pbsBackups.error}
-              fallback={
-                <Card padding="lg">
-                  <EmptyState
-                    icon={props.emptyIcon}
-                    title="Could not load PBS artifacts"
-                    description={
-                      (pbsBackups.error as Error | undefined)?.message ?? 'Refresh to retry.'
-                    }
-                    actions={
-                      <button
-                        type="button"
-                        onClick={() => void refetchPBS()}
-                        class="inline-flex min-h-10 items-center rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-surface-hover"
-                      >
-                        Refresh
-                      </button>
-                    }
-                  />
-                </Card>
-              }
-            >
-              <Show
-                when={pbsBackups() !== undefined}
-                fallback={
-                  <Card padding="lg">
-                    <EmptyState
-                      icon={props.emptyIcon}
-                      title="Loading PBS artifacts"
-                      description="Reading deduplicated backup snapshots from Proxmox Backup Server."
-                    />
-                  </Card>
-                }
-              >
-                <Show
-                  when={filteredPBSBackups().length > 0}
-                  fallback={
-                    <Card padding="lg">
-                      <EmptyState
-                        icon={props.emptyIcon}
-                        title={
-                          pbsArtifacts().length === 0
-                            ? sourceDetailSpecFor('pbs').emptyTitle
-                            : 'No PBS artifacts match current filters'
-                        }
-                        description={
-                          pbsArtifacts().length === 0
-                            ? sourceDetailSpecFor('pbs').emptyDescription
-                            : 'Adjust the search or status filter to see more PBS artifacts.'
-                        }
-                      />
-                    </Card>
-                  }
-                >
-                  <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-                    <Table class="min-w-[1050px] text-xs">
-                      <TableHeader>
-                        <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                          <SortableHead
-                            label="Workload"
-                            sortKey="workload"
-                            currentSort={pbsSortKey}
-                            direction={pbsSortDirection}
-                            onSort={handlePBSSort}
-                            align="left"
-                            headClass={getPlatformTableHeadClassForKind('name')}
-                          />
-                          <SortableHead
-                            label="Repository"
-                            sortKey="repository"
-                            currentSort={pbsSortKey}
-                            direction={pbsSortDirection}
-                            onSort={handlePBSSort}
-                            align="left"
-                            headClass={getPlatformTableHeadClassForKind('text')}
-                          />
-                          <SortableHead
-                            label="Created"
-                            sortKey="created"
-                            currentSort={pbsSortKey}
-                            direction={pbsSortDirection}
-                            onSort={handlePBSSort}
-                            align="right"
-                            headClass={getPlatformTableHeadClassForKind('numeric-value')}
-                          />
-                          <SortableHead
-                            label="Size"
-                            sortKey="size"
-                            currentSort={pbsSortKey}
-                            direction={pbsSortDirection}
-                            onSort={handlePBSSort}
-                            align="center"
-                            headClass={getPlatformTableHeadClassForKind('metric-bar')}
-                          />
-                          <SortableHead
-                            label="Verified"
-                            sortKey="verified"
-                            currentSort={pbsSortKey}
-                            direction={pbsSortDirection}
-                            onSort={handlePBSSort}
-                            align="left"
-                            headClass={getPlatformTableHeadClassForKind('text')}
-                          />
-                          <SortableHead
-                            label="Protection"
-                            sortKey="protected"
-                            currentSort={pbsSortKey}
-                            direction={pbsSortDirection}
-                            onSort={handlePBSSort}
-                            align="left"
-                            headClass={getPlatformTableHeadClassForKind('text')}
-                          />
-                          <TableHead class={getPlatformTableHeadClassForKind('text')}>
-                            Files
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
-                        <For each={filteredPBSBackups()}>
-                          {(backup) => (
-                            <TableRow class="hover:bg-surface-hover">
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
-                              >
-                                <div class="min-w-0">
-                                  <div class="font-semibold">{pbsWorkloadLabel(backup)}</div>
-                                  <div class="font-mono text-[10px] uppercase text-muted">
-                                    {backup.backupType || 'backup'}
-                                  </div>
-                                </div>
-                              </TableCell>
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                              >
-                                <div class="min-w-0">
-                                  <div class="font-mono text-[11px]">
-                                    {pbsRepositoryLabel(backup)}
-                                  </div>
-                                  <div
-                                    class="truncate text-[10px] text-muted"
-                                    title={backup.instance}
-                                  >
-                                    {backup.instance || '—'}
-                                  </div>
-                                </div>
-                              </TableCell>
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                              >
-                                <Show
-                                  when={pbsTimestampMs(backup) !== undefined}
-                                  fallback={<span class="text-muted">—</span>}
-                                >
-                                  {formatRelativeTime(backup.backupTime, { compact: true })}
-                                </Show>
-                              </TableCell>
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('metric-bar')} text-base-content`}
-                              >
-                                <RowMetricBar
-                                  valuePct={
-                                    pbsSizeMaxBytes() > 0
-                                      ? (backup.size / pbsSizeMaxBytes()) * 100
-                                      : 0
-                                  }
-                                  fillClass="bg-blue-500/40 dark:bg-blue-500/40"
-                                  label={formatBytes(backup.size)}
-                                  tooltip={`${formatBytes(backup.size)} (relative to largest PBS artifact in view)`}
-                                />
-                              </TableCell>
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                              >
-                                <Show
-                                  when={backup.verified}
-                                  fallback={
-                                    <span class="text-amber-600 dark:text-amber-300">
-                                      Unverified
-                                    </span>
-                                  }
-                                >
-                                  <span class="inline-flex items-center rounded-sm bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
-                                    Verified
-                                  </span>
-                                </Show>
-                              </TableCell>
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                              >
-                                <Show
-                                  when={backup.protected}
-                                  fallback={<span class="text-muted">Unprotected</span>}
-                                >
-                                  <span class="inline-flex items-center rounded-sm bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
-                                    Protected
-                                  </span>
-                                </Show>
-                              </TableCell>
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                              >
-                                <span
-                                  class="inline-block max-w-[16rem] truncate"
-                                  title={(backup.files ?? []).join(', ')}
-                                >
-                                  {(backup.files ?? []).length > 0
-                                    ? `${backup.files.length} files`
-                                    : '—'}
-                                </span>
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </For>
-                      </TableBody>
-                    </Table>
-                  </TableCard>
-                </Show>
-              </Show>
-            </Show>
+            <ProxmoxPbsTable
+              backups={filteredPBSBackups()}
+              hasAnyArtifacts={pbsArtifacts().length > 0}
+              errorMessage={(pbsBackups.error as Error | undefined)?.message}
+              isLoading={pbsBackups() === undefined}
+              onRefresh={() => void refetchPBS()}
+              emptyIcon={props.emptyIcon}
+              emptyTitle={sourceDetailSpecFor('pbs').emptyTitle}
+              emptyDescription={sourceDetailSpecFor('pbs').emptyDescription}
+              sortKey={pbsSortKey}
+              sortDirection={pbsSortDirection}
+              onSort={handlePBSSort}
+              sizeMaxBytes={pbsSizeMaxBytes()}
+            />
           </Show>
 
           <Show when={tab() === 'sources' && sourceDetailTab() === 'snapshots'}>
