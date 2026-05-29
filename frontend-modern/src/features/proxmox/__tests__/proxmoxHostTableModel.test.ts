@@ -47,10 +47,16 @@ describe('proxmoxHostTableModel', () => {
       'cts',
       'cluster',
     ]);
-    expect(getProxmoxHostTableMinWidthClass('compact')).toBe('min-w-[1240px]');
-    expect(getProxmoxHostTableMinWidthClass('wide')).toBe('min-w-[1240px]');
     expect(getProxmoxHostColumnWidthStyle('cluster', 'compact', compactIds)).toEqual({
       width: '10.989%',
     });
+  });
+
+  it('fits the container on compact and reserves the fixed floor only on wide', () => {
+    // The compact band (900-1440px) covers most laptops. Forcing a 1240px floor
+    // there pushed the rightmost column behind a horizontal scroll, so compact
+    // now fits its container; only wide keeps the fixed-width floor.
+    expect(getProxmoxHostTableMinWidthClass('compact')).toBe('min-w-full');
+    expect(getProxmoxHostTableMinWidthClass('wide')).toBe('min-w-[1240px]');
   });
 });

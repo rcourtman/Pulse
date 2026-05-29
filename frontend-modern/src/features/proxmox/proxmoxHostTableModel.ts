@@ -124,7 +124,13 @@ export const getProxmoxHostColumnWidthStyle = (
   return { width: formatPercentage(width) };
 };
 
+// Only the `wide` layout (>= 1440px viewport) reserves a fixed 1240px floor so
+// the metric bars hit their canonical 140px width. The `compact` band spans
+// 900-1440px, which covers most laptops; forcing 1240px there pushed the
+// rightmost column (Cluster) behind a horizontal scroll that is easy to miss.
+// Because the table is `table-fixed` with percentage column widths, `min-w-full`
+// fits the container exactly and the bars scale down gracefully instead.
 export const getProxmoxHostTableMinWidthClass = (
   layoutMode: WorkloadTableLayoutMode,
 ): 'min-w-full' | 'min-w-[1240px]' =>
-  layoutMode === 'mobile' || layoutMode === 'tablet' ? 'min-w-full' : 'min-w-[1240px]';
+  layoutMode === 'wide' ? 'min-w-[1240px]' : 'min-w-full';
