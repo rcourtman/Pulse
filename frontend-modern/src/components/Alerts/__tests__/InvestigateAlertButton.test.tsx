@@ -428,7 +428,13 @@ describe('InvestigateAlertButton', () => {
       expect(context.targetType).toBe('pod');
     });
 
-    it('ignores legacy metadata.resourceType aliases and falls back safely', async () => {
+    it('canonicalizes metadata.resourceType k8s alias to the k8s-cluster target', async () => {
+      // metadata.resourceType is a trusted, canonicalized resolution layer
+      // (explicit type → metadata type → resource ID → agent). Commit
+      // 05abf0721 ("Add Kubernetes, TrueNAS, and vSphere alert targets")
+      // replaced the old "bare k8s/kubernetes → undefined" guard with a real
+      // alias table, so a bare 'k8s' now resolves to the cluster-level target.
+      // See src/utils/__tests__/alertTargetTypes.test.ts for the unit contract.
       const alert = makeAlert({
         resourceId: 'resource-xyz',
         metadata: { resourceType: 'k8s' },
@@ -437,7 +443,7 @@ describe('InvestigateAlertButton', () => {
       await fireEvent.click(screen.getByRole('button'));
 
       const context = openedContext();
-      expect(context.targetType).toBe('agent');
+      expect(context.targetType).toBe('k8s-cluster');
     });
 
     it('normalizes metadata.resourceType host alias to agent', async () => {
