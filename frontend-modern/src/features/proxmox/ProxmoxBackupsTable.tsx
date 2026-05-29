@@ -245,6 +245,29 @@ export const ProxmoxBackupsTable: Component<{
     const selected = nodeFilter();
     return !selected || node === selected;
   };
+  // Type scope filter. The backups data mixes vocabularies (recovery model and
+  // PBS backupType use vm/ct/host; raw PVE tasks/archives/snapshots use
+  // qemu/lxc), so normalize each shape's type to a canonical vm/ct/host before
+  // comparing. Applies to every tab, PBS included (via backupType).
+  const [typeFilter, setTypeFilter] = createSignal('');
+  const canonicalGuestType = (raw: string | undefined): string => {
+    const t = (raw ?? '').toLowerCase();
+    if (t === 'vm' || t === 'qemu') return 'vm';
+    if (t === 'ct' || t === 'lxc') return 'ct';
+    if (t === 'host') return 'host';
+    return 'other';
+  };
+  const typeMatches = (raw: string | undefined): boolean => {
+    const selected = typeFilter();
+    return !selected || canonicalGuestType(raw) === selected;
+  };
+  // VM / Container / Host, applied via canonicalGuestType across every tab.
+  const typeFilterOptions: FilterSelectOption[] = [
+    { value: '', label: 'All types' },
+    { value: 'vm', label: 'VMs' },
+    { value: 'ct', label: 'Containers' },
+    { value: 'host', label: 'Hosts' },
+  ];
   const [chartRange, setChartRange] = createSignal<BackupActivityRangeDays>(30);
   const [selectedDateKey, setSelectedDateKey] = createSignal<string | null>(null);
   const [recoverableMetricMode, setRecoverableMetricMode] =
@@ -535,6 +558,7 @@ export const ProxmoxBackupsTable: Component<{
     const filter = pbsFilter();
     const dateKey = selectedDateKey();
     const list = pbsArtifacts().filter((backup) => {
+      if (!typeMatches(backup.backupType)) return false;
       if (filter === 'protected' && !backup.protected) return false;
       if (filter === 'verified' && !backup.verified) return false;
       if (filter === 'unverified' && backup.verified) return false;
@@ -639,6 +663,7 @@ export const ProxmoxBackupsTable: Component<{
     const rows: SnapshotGuestRow[] = [];
     for (const row of byGuest.values()) {
       if (!nodeMatches(row.node)) continue;
+      if (!typeMatches(row.type)) continue;
       const matchesByIdentity = searchedByGuestIdentity(row);
       const snapshotsMatching = term
         ? row.snapshots.filter((snap) => snapshotMatchesSearch(snap, term))
@@ -701,6 +726,7 @@ export const ProxmoxBackupsTable: Component<{
     const dateKey = selectedDateKey();
     const list = archives().filter((arc) => {
       if (!nodeMatches(arc.node)) return false;
+      if (!typeMatches(arc.type)) return false;
       if (filter === 'protected' && !arc.protected) return false;
       if (filter === 'verified' && !arc.verified) return false;
       if (filter === 'unverified' && arc.verified) return false;
@@ -748,6 +774,7 @@ export const ProxmoxBackupsTable: Component<{
     const dateKey = selectedDateKey();
     const list = tasks().filter((task) => {
       if (!nodeMatches(task.node)) return false;
+      if (!typeMatches(task.type)) return false;
       const classify = classifyTaskStatus(task.status);
       if (filter === 'ok' && classify.variant !== 'success') return false;
       if (filter === 'failed' && classify.variant !== 'danger') return false;
@@ -794,6 +821,7 @@ export const ProxmoxBackupsTable: Component<{
     const dateKey = selectedDateKey();
     const list = recoveryModel().coverageRows.filter((row) => {
       if (!nodeMatches(row.workload.node)) return false;
+      if (!typeMatches(row.workload.type)) return false;
       if (filter === 'attention' && !isCoverageAttention(row.posture)) return false;
       if (filter === 'current' && row.posture !== 'current') return false;
       if (filter === 'uncovered' && row.posture !== 'uncovered') return false;
@@ -838,6 +866,7 @@ export const ProxmoxBackupsTable: Component<{
     const dateKey = selectedDateKey();
     const list = recoveryModel().recoverableArtifacts.filter((artifact) => {
       if (!nodeMatches(artifact.workload.node)) return false;
+      if (!typeMatches(artifact.workload.type)) return false;
       if (
         (filter === 'pbs' || filter === 'archive' || filter === 'snapshot') &&
         artifact.sourceKind !== filter
@@ -1019,6 +1048,15 @@ export const ProxmoxBackupsTable: Component<{
         defaultValue: '',
       });
     }
+    filters.push({
+      id: 'type',
+      label: 'Type',
+      group: 'scope',
+      options: () => typeFilterOptions,
+      value: typeFilter,
+      setValue: setTypeFilter,
+      defaultValue: '',
+    });
 
     if (t === 'coverage') {
       filters.push(
