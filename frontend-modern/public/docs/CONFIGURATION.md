@@ -198,7 +198,8 @@ Environment variables take precedence over `system.json`.
 
 | Variable | Description | Default |
 | ---------- | ------------- | --------- |
-| `FRONTEND_PORT` | Public listening port | `7655` |
+| `FRONTEND_PORT` | Public listening port (web UI, API, and agent ingest) | `7655` |
+| `PULSE_AGENT_INGEST_PORT` | Optional dedicated port that serves **only** agent ingest (`/api/agents/*`), network-isolated from the web UI and the rest of the API. `0` = disabled (single port). See [Split-Port Agent Ingest](#split-port-agent-ingest-network-isolation). | `0` |
 | `LOG_LEVEL` | Log verbosity (see below) | `info` |
 | `LOG_FORMAT` | Log output format (`auto`, `json`, `console`) | `auto` |
 | `LOG_FILE` | Log file path (enables file logging) | *(unset)* |
@@ -242,6 +243,31 @@ Environment variables take precedence over `system.json`.
 | `PULSE_TRUSTED_PROXY_CIDRS` | Comma-separated IPs/CIDRs trusted to supply `X-Forwarded-For`/`X-Real-IP` | *(unset)* |
 | `PULSE_TRUSTED_NETWORKS` | Comma-separated CIDRs treated as trusted local networks (does not bypass auth) | *(unset)* |
 | `ALLOW_UNPROTECTED_EXPORT` | Allow unauthenticated config export on public networks when no auth is configured (use with caution) | `false` |
+
+### Split-Port Agent Ingest (Network Isolation)
+
+By default Pulse serves the web UI, the REST API, and agent check-in together on `FRONTEND_PORT`. For deployments that expose Pulse to monitored hosts across an untrusted network (for example, a managed service provider whose clients' Proxmox nodes reach a central Pulse server over the internet), you can move agent check-in onto its own dedicated port and keep the web UI and management API on a separate, firewalled port.
+
+Set `PULSE_AGENT_INGEST_PORT` to a port other than `FRONTEND_PORT`:
+
+```bash
+PULSE_AGENT_INGEST_PORT=7656
+```
+
+When enabled:
+
+- The dedicated port serves **only** the agent-ingest routes (`/api/agents/*`). Every other path, including the web UI, login, and the management API, returns `404`. A host that can reach the agent port cannot pivot to the management interface.
+- The main `FRONTEND_PORT` listener is unchanged and still serves everything (including agent ingest), so existing single-port installs keep working. The dedicated listener is purely additive.
+- The value is validated at startup: it must be between 1 and 65535 and must differ from `FRONTEND_PORT` and the HTTP redirect port. An invalid value is rejected.
+
+Expose only `PULSE_AGENT_INGEST_PORT` to your monitored hosts and keep `FRONTEND_PORT` on a private network or behind your firewall/VPN. Point agents at the dedicated port by setting `PULSE_AGENT_CONNECT_URL` to that port's public address, so generated agent install commands send check-ins there:
+
+```bash
+PULSE_AGENT_INGEST_PORT=7656
+PULSE_AGENT_CONNECT_URL=https://agents.example.com:7656
+```
+
+Agents then post telemetry to `https://agents.example.com:7656/api/agents/agent/report`, while the web UI and management API remain reachable only on the private `FRONTEND_PORT` listener.
 
 ### Iframe Embedding (system.json)
 
