@@ -16,8 +16,8 @@ import ServerIcon from 'lucide-solid/icons/server';
 import ShieldCheckIcon from 'lucide-solid/icons/shield-check';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { FilterButtonGroup } from '@/components/shared/FilterButtonGroup';
-import { SearchInput } from '@/components/shared/SearchInput';
+import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { apiFetch } from '@/utils/apiClient';
 import { formatBytes } from '@/utils/format';
 import {
@@ -224,6 +224,7 @@ export const ProxmoxBackupsTable: Component<{
 }> = (props) => {
   const [backups, { refetch }] = createResource<PVEBackupsPayload>(fetchPVEBackups);
   const [pbsBackups, { refetch: refetchPBS }] = createResource<PBSBackupsPayload>(fetchPBSBackups);
+  const { isMobile } = useBreakpoint();
   const [tab, setTab] = createSignal<BackupTabId>('coverage');
   const [sourceDetailTab, setSourceDetailTab] = createSignal<SourceDetailTabId>('pbs');
   const [search, setSearch] = createSignal('');
@@ -961,6 +962,64 @@ export const ProxmoxBackupsTable: Component<{
 
   const visibleSnapshotGuestCount = createMemo(() => filteredSnapshotGuests().length);
 
+  // Per-view status facet expressed as a shared FilterBar FilterDef. Inline so
+  // it renders as a segmented control next to the search, matching the
+  // overview/workloads/storage pages. Node/type scope filters land in
+  // follow-on commits.
+  const buildBackupsFilters = (): FilterDef[] => {
+    const statusFilter = (
+      id: string,
+      label: string,
+      options: FilterDef['options'],
+      value: FilterDef['value'],
+      setValue: FilterDef['setValue'],
+    ): FilterDef => ({ id, label, group: 'status', inline: true, options, value, setValue, defaultValue: 'all' });
+
+    if (tab() === 'coverage') {
+      return [
+        statusFilter('posture', 'Posture', () => COVERAGE_FILTERS, coverageFilter, (v) =>
+          setCoverageFilter(v as CoverageFilterValue),
+        ),
+      ];
+    }
+    if (tab() === 'recoverable') {
+      return [
+        statusFilter('source', 'Source', () => RECOVERABLE_FILTERS, recoverableFilter, (v) =>
+          setRecoverableFilter(v as RecoverableFilterValue),
+        ),
+      ];
+    }
+    if (tab() === 'tasks') {
+      return [
+        statusFilter('task-status', 'Status', () => TASK_STATUS_FILTERS, taskFilter, (v) =>
+          setTaskFilter(v as 'all' | 'ok' | 'failed' | 'running'),
+        ),
+      ];
+    }
+    if (tab() === 'sources' && sourceDetailTab() === 'pbs') {
+      return [
+        statusFilter('pbs-status', 'Status', () => PBS_STATUS_FILTERS, pbsFilter, (v) =>
+          setPBSFilter(v as 'all' | 'protected' | 'verified' | 'unverified'),
+        ),
+      ];
+    }
+    if (tab() === 'sources' && sourceDetailTab() === 'snapshots') {
+      return [
+        statusFilter('snapshot', 'Snapshots', () => SNAPSHOT_FILTERS, snapshotFilter, (v) =>
+          setSnapshotFilter(v as SnapshotFilterValue),
+        ),
+      ];
+    }
+    if (tab() === 'sources' && sourceDetailTab() === 'archives' && showArchivePBSColumns()) {
+      return [
+        statusFilter('archive-status', 'Status', () => ARCHIVE_STATUS_FILTERS, archiveFilter, (v) =>
+          setArchiveFilter(v as 'all' | 'protected' | 'verified' | 'unverified'),
+        ),
+      ];
+    }
+    return [];
+  };
+
   return (
     <Show
       when={!backups.error}
@@ -1347,119 +1406,61 @@ export const ProxmoxBackupsTable: Component<{
             </Show>
           </Show>
 
-          <div class="flex flex-wrap items-center gap-2">
-            <div class="min-w-[200px] flex-1 sm:max-w-xs">
-              <SearchInput
-                value={search}
-                onChange={setSearch}
-                placeholder={
-                  tab() === 'coverage'
-                    ? 'Search workload coverage or restore evidence'
-                    : tab() === 'recoverable'
-                      ? 'Search restore points, workloads, sources'
-                      : tab() === 'sources'
-                        ? sourceDetailTab() === 'pbs'
-                          ? 'Search PBS artifacts, namespaces, guests'
-                          : sourceDetailTab() === 'snapshots'
-                            ? 'Search snapshots, guests, nodes'
-                            : 'Search backup files, storages, nodes'
-                        : 'Search tasks, nodes, errors'
-                }
-              />
-            </div>
-            <Show when={tab() === 'coverage'}>
-              <FilterButtonGroup
-                variant="compact"
-                options={COVERAGE_FILTERS}
-                value={coverageFilter()}
-                onChange={setCoverageFilter}
-              />
-            </Show>
-            <Show when={tab() === 'recoverable'}>
-              <FilterButtonGroup
-                variant="compact"
-                options={RECOVERABLE_FILTERS}
-                value={recoverableFilter()}
-                onChange={setRecoverableFilter}
-              />
-            </Show>
-            <Show when={tab() === 'sources' && sourceDetailTab() === 'pbs'}>
-              <FilterButtonGroup
-                variant="compact"
-                options={PBS_STATUS_FILTERS}
-                value={pbsFilter()}
-                onChange={setPBSFilter}
-              />
-            </Show>
-            <Show when={tab() === 'sources' && sourceDetailTab() === 'snapshots'}>
-              <FilterButtonGroup
-                variant="compact"
-                options={SNAPSHOT_FILTERS}
-                value={snapshotFilter()}
-                onChange={setSnapshotFilter}
-              />
-            </Show>
-            <Show
-              when={
-                tab() === 'sources' && sourceDetailTab() === 'archives' && showArchivePBSColumns()
-              }
-            >
-              <FilterButtonGroup
-                variant="compact"
-                options={ARCHIVE_STATUS_FILTERS}
-                value={archiveFilter()}
-                onChange={setArchiveFilter}
-              />
-            </Show>
-            <Show when={tab() === 'tasks'}>
-              <FilterButtonGroup
-                variant="compact"
-                options={TASK_STATUS_FILTERS}
-                value={taskFilter()}
-                onChange={setTaskFilter}
-              />
-            </Show>
-            <Show when={selectedDateKey() !== null}>
-              <button
-                type="button"
-                onClick={() => setSelectedDateKey(null)}
-                class="inline-flex items-center gap-1 rounded-full border border-blue-300 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/50"
-                aria-label="Clear date filter"
-              >
-                <span class="uppercase tracking-wide text-[9px] text-blue-600 dark:text-blue-300">
-                  Date
-                </span>
-                <span class="font-mono tabular-nums">
-                  {getRecoveryFilterDateLabel(selectedDateKey()!)}
-                </span>
-                <span aria-hidden="true">×</span>
-              </button>
-            </Show>
-            <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
-              <Show
-                when={tab() === 'sources' && sourceDetailTab() === 'snapshots'}
-                fallback={
-                  <Show
-                    when={visibleForTab() !== totalForTab()}
-                    fallback={
-                      <>
-                        {totalForTab()} {activeTabNoun()}
-                      </>
-                    }
-                  >
-                    {visibleForTab()} of {totalForTab()} {activeTabNoun()}
-                  </Show>
-                }
-              >
-                <Show
-                  when={visibleSnapshotGuestCount() !== snapshotCoverage().totalGuests}
-                  fallback={<>{snapshotCoverage().totalGuests} guests</>}
+          <FilterBar
+            role="group"
+            ariaLabel="Backups filters"
+            isMobile={isMobile}
+            search={{
+              value: search,
+              setValue: setSearch,
+              placeholder: 'Search backups by workload, node, source, or status',
+            }}
+            filters={buildBackupsFilters()}
+            searchTrailing={
+              <Show when={selectedDateKey() !== null}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDateKey(null)}
+                  class="inline-flex items-center gap-1 rounded-full border border-blue-300 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/50"
+                  aria-label="Clear date filter"
                 >
-                  {visibleSnapshotGuestCount()} of {snapshotCoverage().totalGuests} guests
-                </Show>
+                  <span class="uppercase tracking-wide text-[9px] text-blue-600 dark:text-blue-300">
+                    Date
+                  </span>
+                  <span class="font-mono tabular-nums">
+                    {getRecoveryFilterDateLabel(selectedDateKey()!)}
+                  </span>
+                  <span aria-hidden="true">×</span>
+                </button>
               </Show>
-            </span>
-          </div>
+            }
+            viewOptionsTrailing={
+              <span class="whitespace-nowrap text-xs font-medium text-muted">
+                <Show
+                  when={tab() === 'sources' && sourceDetailTab() === 'snapshots'}
+                  fallback={
+                    <Show
+                      when={visibleForTab() !== totalForTab()}
+                      fallback={
+                        <>
+                          {totalForTab()} {activeTabNoun()}
+                        </>
+                      }
+                    >
+                      {visibleForTab()} of {totalForTab()} {activeTabNoun()}
+                    </Show>
+                  }
+                >
+                  <Show
+                    when={visibleSnapshotGuestCount() !== snapshotCoverage().totalGuests}
+                    fallback={<>{snapshotCoverage().totalGuests} guests</>}
+                  >
+                    {visibleSnapshotGuestCount()} of {snapshotCoverage().totalGuests} guests
+                  </Show>
+                </Show>
+              </span>
+            }
+          />
 
           <Show when={tab() === 'coverage'}>
             <ProxmoxCoverageTable
