@@ -564,3 +564,52 @@ func TestOperatorInstallDocsAvoidUnverifiedBootstrapAndFloatingImageTags(t *test
 		}
 	}
 }
+
+// TestRootInstallDeployAgentScriptsDeploysSignatureSidecars guards the fix for
+// the rc.6 "Install on Linux" agent-wizard regression (issue #1470). The
+// running server serves /opt/pulse/scripts/install.sh at its /install.sh
+// endpoint, but for published releases the handler only serves that local copy
+// when its .sig and .sshsig sidecars are present next to it; otherwise it
+// proxies the top-level GitHub install.sh asset, which is the SERVER installer
+// (not the agent installer) and rejects the wizard's --url/--token-file flags.
+// The Docker image deploys these sidecars; deploy_agent_scripts must too.
+func TestRootInstallDeployAgentScriptsDeploysSignatureSidecars(t *testing.T) {
+	extractDir := t.TempDir()
+	installDir := t.TempDir()
+
+	scriptsSrc := filepath.Join(extractDir, "scripts")
+	if err := os.MkdirAll(scriptsSrc, 0o755); err != nil {
+		t.Fatalf("mkdir scripts: %v", err)
+	}
+	for _, name := range []string{
+		"install.sh", "install.sh.sig", "install.sh.sshsig",
+		"install.ps1", "install.ps1.sig", "install.ps1.sshsig",
+	} {
+		if err := os.WriteFile(filepath.Join(scriptsSrc, name), []byte("payload-"+name), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+
+	script := `
+		set -euo pipefail
+		print_warn() { :; }
+		print_success() { :; }
+		chown() { :; }
+		INSTALL_DIR="` + installDir + `"
+` + extractRootInstallShellFunction(t, "deploy_agent_scripts") + `
+		deploy_agent_scripts "` + extractDir + `"
+	`
+
+	if out, err := exec.Command("bash", "-c", script).CombinedOutput(); err != nil {
+		t.Fatalf("deploy_agent_scripts failed: %v\n%s", err, out)
+	}
+
+	for _, name := range []string{
+		"install.sh", "install.sh.sig", "install.sh.sshsig",
+		"install.ps1", "install.ps1.sig", "install.ps1.sshsig",
+	} {
+		if _, err := os.Stat(filepath.Join(installDir, "scripts", name)); err != nil {
+			t.Fatalf("deploy_agent_scripts did not deploy %s next to the served script: %v", name, err)
+		}
+	}
+}

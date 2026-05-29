@@ -3365,6 +3365,23 @@ deploy_agent_scripts() {
             cp "$extract_dir/scripts/$script" "$INSTALL_DIR/scripts/$script"
             chmod 755 "$INSTALL_DIR/scripts/$script"
             chown pulse:pulse "$INSTALL_DIR/scripts/$script"
+            # Deploy the detached release signatures next to the script. The
+            # running server serves these local copies at /install.sh and
+            # /install.ps1 (the "Install on Linux/Windows" agent wizard), and for
+            # published releases the handler only serves the local file when its
+            # .sig and .sshsig sidecars are present. Without them it falls back to
+            # proxying the top-level GitHub install.sh asset, which is the SERVER
+            # installer, not the agent installer, so the wizard's --url/--token-file
+            # command is rejected with "Unknown option". The Docker image deploys
+            # these same sidecars (see Dockerfile); LXC/systemd installs must match.
+            local sidecar
+            for sidecar in "${script}.sig" "${script}.sshsig"; do
+                if [[ -f "$extract_dir/scripts/$sidecar" ]]; then
+                    cp "$extract_dir/scripts/$sidecar" "$INSTALL_DIR/scripts/$sidecar"
+                    chmod 644 "$INSTALL_DIR/scripts/$sidecar"
+                    chown pulse:pulse "$INSTALL_DIR/scripts/$sidecar"
+                fi
+            done
             deployed=$((deployed + 1))
         fi
     done
