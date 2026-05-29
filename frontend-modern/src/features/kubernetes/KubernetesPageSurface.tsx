@@ -1,5 +1,6 @@
-import { useLocation } from '@solidjs/router';
+import { useLocation, useSearchParams } from '@solidjs/router';
 import { Show, createMemo, createSignal, type Accessor } from 'solid-js';
+import type { FilterDef } from '@/components/shared/FilterBar';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
@@ -194,9 +195,66 @@ function KubernetesWorkloads(props: { model: KubernetesPageModel; controllers: R
     props.model.autoscaling,
   ]);
   const totalRows = createMemo(() => sections().reduce((sum, rows) => sum + rows.length, 0));
+
+  // Namespace scope filter for the whole Workloads tab, URL-backed so it is
+  // shareable and captured by saved views. It scopes every workload table
+  // (deployments / pods / controllers / autoscaling) at once and only appears
+  // when more than one namespace is present. The status + search facets stay on
+  // the shared toolbar; namespace pre-filters the resources each table renders.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const namespaceFilter = () =>
+    typeof searchParams.namespace === 'string' ? searchParams.namespace : '';
+  const setNamespaceFilter = (value: string) => setSearchParams({ namespace: value || null });
+  const namespaceOf = (resource: Resource) => (resource.kubernetes?.namespace ?? '').trim();
+  const matchesNamespace = (resource: Resource) => {
+    const namespace = namespaceFilter();
+    return !namespace || namespaceOf(resource) === namespace;
+  };
+  const namespaceOptions = createMemo(() => {
+    const seen = new Set<string>();
+    for (const section of sections()) {
+      for (const resource of section) {
+        const namespace = namespaceOf(resource);
+        if (namespace) seen.add(namespace);
+      }
+    }
+    return [...seen].sort((a, b) => a.localeCompare(b));
+  });
+  const scopedDeployments = createMemo(() => props.model.deployments.filter(matchesNamespace));
+  const scopedPods = createMemo(() => props.model.pods.filter(matchesNamespace));
+  const scopedControllers = createMemo(() => props.controllers.filter(matchesNamespace));
+  const scopedAutoscaling = createMemo(() => props.model.autoscaling.filter(matchesNamespace));
+  const scopedSections = createMemo<Resource[][]>(() => [
+    scopedDeployments(),
+    scopedPods(),
+    scopedControllers(),
+    scopedAutoscaling(),
+  ]);
+  const scopeFilters = createMemo<FilterDef[]>(() => {
+    if (namespaceOptions().length <= 1) return [];
+    return [
+      {
+        id: 'namespace',
+        label: 'Namespace',
+        group: 'scope',
+        options: () => [
+          { value: '', label: 'All namespaces' },
+          ...namespaceOptions().map((namespace) => ({ value: namespace, label: namespace })),
+        ],
+        value: namespaceFilter,
+        setValue: setNamespaceFilter,
+        defaultValue: '',
+      },
+    ];
+  });
   const visibleRows = createMemo(() =>
-    countKubernetesVisible(sections(), toolbar.search(), toolbar.status()),
+    countKubernetesVisible(scopedSections(), toolbar.search(), toolbar.status()),
   );
+  const hasActiveFilters = () => toolbar.hasActiveFilters() || namespaceFilter() !== '';
+  const resetFilters = () => {
+    toolbar.resetFilters();
+    setNamespaceFilter('');
+  };
 
   return (
     <Show
@@ -217,15 +275,17 @@ function KubernetesWorkloads(props: { model: KubernetesPageModel; controllers: R
           status={toolbar.status()}
           onStatusChange={toolbar.setStatus}
           statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
+          filters={scopeFilters()}
+          savedViewsKey="kubernetes-workloads"
           visible={visibleRows()}
           total={totalRows()}
           rowNoun="rows"
-          hasActiveFilters={toolbar.hasActiveFilters()}
-          onResetFilters={toolbar.resetFilters}
+          hasActiveFilters={hasActiveFilters()}
+          onResetFilters={resetFilters}
         />
-        <Show when={props.model.deployments.length > 0}>
+        <Show when={scopedDeployments().length > 0}>
           <KubernetesDeploymentsTable
-            resources={props.model.deployments}
+            resources={scopedDeployments()}
             emptyIcon={k8sIcon()}
             emptyTitle="No deployments reported"
             emptyDescription="Deployments appear here once the agent can read Deployment resources."
@@ -234,9 +294,9 @@ function KubernetesWorkloads(props: { model: KubernetesPageModel; controllers: R
             externalStatus={toolbar.status}
           />
         </Show>
-        <Show when={props.model.pods.length > 0}>
+        <Show when={scopedPods().length > 0}>
           <KubernetesPodsTable
-            resources={props.model.pods}
+            resources={scopedPods()}
             emptyIcon={k8sIcon()}
             emptyTitle="No pods reported"
             emptyDescription="Pods appear here once the agent can read Pod resources."
@@ -245,9 +305,9 @@ function KubernetesWorkloads(props: { model: KubernetesPageModel; controllers: R
             externalStatus={toolbar.status}
           />
         </Show>
-        <Show when={props.controllers.length > 0}>
+        <Show when={scopedControllers().length > 0}>
           <KubernetesControllersTable
-            resources={props.controllers}
+            resources={scopedControllers()}
             emptyIcon={k8sIcon()}
             emptyTitle="No workload controllers reported"
             emptyDescription="ReplicaSets, StatefulSets, DaemonSets, Jobs, and CronJobs appear here when the agent reports them."
@@ -256,9 +316,9 @@ function KubernetesWorkloads(props: { model: KubernetesPageModel; controllers: R
             externalStatus={toolbar.status}
           />
         </Show>
-        <Show when={props.model.autoscaling.length > 0}>
+        <Show when={scopedAutoscaling().length > 0}>
           <KubernetesAutoscalingTable
-            resources={props.model.autoscaling}
+            resources={scopedAutoscaling()}
             emptyIcon={k8sIcon()}
             emptyTitle="No autoscaling resources reported"
             emptyDescription="HorizontalPodAutoscalers appear here once the agent can read autoscaling inventory."
