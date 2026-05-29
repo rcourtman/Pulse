@@ -86,6 +86,34 @@ import {
   type RecoverableArtifact,
   type WorkloadCoverageRow,
 } from './proxmoxBackupRecoveryModel';
+import {
+  ARCHIVE_SORT_DEFAULT_DIRECTION,
+  COVERAGE_SORT_DEFAULT_DIRECTION,
+  PBS_SORT_DEFAULT_DIRECTION,
+  RECOVERABLE_SORT_DEFAULT_DIRECTION,
+  SNAPSHOT_SORT_DEFAULT_DIRECTION,
+  TASK_SORT_DEFAULT_DIRECTION,
+  classifyTaskStatus,
+  cmpBool,
+  cmpNumber,
+  cmpString,
+  formatDuration,
+  formatDurationFromSeconds,
+  guestLabel,
+  pbsRepositoryLabel,
+  pbsWorkloadLabel,
+  type ArchiveSortKey,
+  type BackupTabId,
+  type CoverageFilterValue,
+  type CoverageSortKey,
+  type PBSSortKey,
+  type RecoverableFilterValue,
+  type RecoverableSortKey,
+  type SnapshotFilterValue,
+  type SnapshotSortKey,
+  type SourceDetailTabId,
+  type TaskSortKey,
+} from './proxmoxBackupsTableModel';
 import { ProxmoxBackupsCoverageStrip } from './ProxmoxBackupsCoverageStrip';
 
 // Proxmox backups are intentionally organized around operator questions, not
@@ -95,9 +123,6 @@ import { ProxmoxBackupsCoverageStrip } from './ProxmoxBackupsCoverageStrip';
 //   - Source details keeps PBS/PVE evidence available without making those
 //     implementation-specific tables equal-weight primary destinations.
 //   - Job history shows whether backup jobs are actually running successfully.
-
-type BackupTabId = 'coverage' | 'recoverable' | 'sources' | 'tasks';
-type SourceDetailTabId = 'pbs' | 'snapshots' | 'archives';
 
 interface BackupTabSpec {
   id: BackupTabId;
@@ -181,66 +206,6 @@ function sourceDetailSpecFor(id: SourceDetailTabId): SourceDetailTabSpec {
 // Replication colours the per-row status word to match its dot (emerald
 // text for Healthy, red for Failed, etc.). Mirror that here so the
 // Recent tasks STATUS column reads the same way — dot + same-tone word.
-function classifyTaskStatus(status: string): {
-  variant: StatusIndicatorVariant;
-  label: string;
-  toneClass: string;
-} {
-  const normalized = (status ?? '').toLowerCase();
-  if (normalized === 'ok' || normalized === 'success' || normalized === 'completed') {
-    return {
-      variant: 'success',
-      label: 'OK',
-      toneClass: 'text-emerald-600 dark:text-emerald-300',
-    };
-  }
-  if (normalized === 'running') {
-    return {
-      variant: 'warning',
-      label: 'Running',
-      toneClass: 'text-amber-600 dark:text-amber-300',
-    };
-  }
-  if (normalized === 'failed' || normalized === 'error') {
-    return { variant: 'danger', label: 'Failed', toneClass: 'text-red-600 dark:text-red-300' };
-  }
-  if (!normalized) return { variant: 'muted', label: '—', toneClass: 'text-muted' };
-  return { variant: 'muted', label: status, toneClass: 'text-muted' };
-}
-
-function guestLabel(type: string | undefined, vmid: number): string {
-  const t = (type ?? '').toLowerCase();
-  const kind = t === 'ct' ? 'CT' : t === 'vm' ? 'VM' : t.toUpperCase() || 'Guest';
-  return `${kind} ${vmid}`;
-}
-
-function pbsWorkloadLabel(backup: PBSBackup): string {
-  const t = (backup.backupType ?? '').toLowerCase();
-  if (t === 'ct') return `CT ${backup.vmid}`;
-  if (t === 'vm') return `VM ${backup.vmid}`;
-  if (t === 'host') return backup.vmid ? `Host ${backup.vmid}` : 'Host';
-  const kind = backup.backupType?.trim().toUpperCase() || 'Backup';
-  return backup.vmid ? `${kind} ${backup.vmid}` : kind;
-}
-
-function pbsRepositoryLabel(backup: PBSBackup): string {
-  const namespace = backup.namespace?.trim() || '(root)';
-  return `${backup.datastore || '—'} / ${namespace}`;
-}
-
-function formatDuration(start: string | undefined, end: string | undefined): string {
-  if (!start || !end) return '—';
-  const startMs = new Date(start).getTime();
-  const endMs = new Date(end).getTime();
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return '—';
-  const seconds = Math.round((endMs - startMs) / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  return `${h}h ${m}m`;
-}
-
 async function fetchPVEBackups(): Promise<PVEBackupsPayload> {
   const response = await apiFetch('/api/backups/pve');
   if (!response.ok) {
@@ -288,16 +253,12 @@ const TASK_STATUS_FILTERS: FilterOption<'all' | 'ok' | 'failed' | 'running'>[] =
   { value: 'running', label: 'Running', tone: 'info', leading: statusDot('bg-blue-500') },
 ];
 
-type CoverageFilterValue = 'all' | 'attention' | 'current' | 'uncovered';
-
 const COVERAGE_FILTERS: FilterOption<CoverageFilterValue>[] = [
   { value: 'all', label: 'All' },
   { value: 'attention', label: 'Attention', tone: 'warning', leading: statusDot('bg-amber-500') },
   { value: 'current', label: 'Current', tone: 'success', leading: statusDot('bg-emerald-500') },
   { value: 'uncovered', label: 'Uncovered', tone: 'danger', leading: statusDot('bg-red-500') },
 ];
-
-type RecoverableFilterValue = 'all' | 'pbs' | 'archive' | 'snapshot' | 'verified' | 'unverified';
 
 const RECOVERABLE_FILTERS: FilterOption<RecoverableFilterValue>[] = [
   { value: 'all', label: 'All' },
@@ -307,8 +268,6 @@ const RECOVERABLE_FILTERS: FilterOption<RecoverableFilterValue>[] = [
   { value: 'verified', label: 'Verified', tone: 'success', leading: statusDot('bg-emerald-500') },
   { value: 'unverified', label: 'Unverified', tone: 'warning', leading: statusDot('bg-amber-500') },
 ];
-
-type SnapshotFilterValue = 'all' | 'recent' | 'stale' | 'with-ram';
 
 const SNAPSHOT_FILTERS: FilterOption<SnapshotFilterValue>[] = [
   { value: 'all', label: 'All' },
@@ -331,16 +290,6 @@ const SNAPSHOT_FILTERS: FilterOption<SnapshotFilterValue>[] = [
     leading: statusDot('bg-violet-500'),
   },
 ];
-
-function formatDurationFromSeconds(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds <= 0) return '—';
-  const rounded = Math.round(seconds);
-  if (rounded < 60) return `${rounded}s`;
-  if (rounded < 3600) return `${Math.floor(rounded / 60)}m ${rounded % 60}s`;
-  const h = Math.floor(rounded / 3600);
-  const m = Math.floor((rounded % 3600) / 60);
-  return `${h}h ${m}m`;
-}
 
 // Canonical row metric bar — same shape as Storage's usage bar, Ceph's
 // pool usage bar, and Workloads' MetricBar: a full-cell-width
@@ -514,116 +463,6 @@ function SortableHead<K extends string>(props: {
 // to the end regardless of direction — flipping a "—" row to the top of a
 // desc sort is never what the user wants (e.g. a running task with no
 // finished duration should not headline a "slowest tasks" view).
-function cmpString(
-  a: string | undefined,
-  b: string | undefined,
-  direction: 'asc' | 'desc',
-): number {
-  const av = (a ?? '').toLowerCase();
-  const bv = (b ?? '').toLowerCase();
-  if (!av && !bv) return 0;
-  if (!av) return 1;
-  if (!bv) return -1;
-  const cmp = av === bv ? 0 : av < bv ? -1 : 1;
-  return direction === 'asc' ? cmp : -cmp;
-}
-
-function cmpNumber(
-  a: number | undefined,
-  b: number | undefined,
-  direction: 'asc' | 'desc',
-): number {
-  const av = typeof a === 'number' && Number.isFinite(a) ? a : undefined;
-  const bv = typeof b === 'number' && Number.isFinite(b) ? b : undefined;
-  if (av === undefined && bv === undefined) return 0;
-  if (av === undefined) return 1;
-  if (bv === undefined) return -1;
-  const cmp = av - bv;
-  return direction === 'asc' ? cmp : -cmp;
-}
-
-function cmpBool(a: boolean, b: boolean, direction: 'asc' | 'desc'): number {
-  const cmp = (a ? 1 : 0) - (b ? 1 : 0);
-  return direction === 'asc' ? cmp : -cmp;
-}
-
-// Per-tab sort key types and their default directions. Numeric / timestamp
-// columns default to `desc` (biggest / newest first) since that's the
-// sysadmin-default question on a backup page. String columns default to
-// `asc` (A→Z). Boolean columns default to `desc` so "true" sorts first.
-
-type CoverageSortKey = 'posture' | 'workload' | 'latest' | 'pbs' | 'archive' | 'snapshot' | 'task';
-const COVERAGE_SORT_DEFAULT_DIRECTION: Record<CoverageSortKey, 'asc' | 'desc'> = {
-  posture: 'asc',
-  workload: 'asc',
-  latest: 'desc',
-  pbs: 'desc',
-  archive: 'desc',
-  snapshot: 'desc',
-  task: 'desc',
-};
-
-type RecoverableSortKey = 'workload' | 'source' | 'location' | 'created' | 'size' | 'state';
-const RECOVERABLE_SORT_DEFAULT_DIRECTION: Record<RecoverableSortKey, 'asc' | 'desc'> = {
-  workload: 'asc',
-  source: 'asc',
-  location: 'asc',
-  created: 'desc',
-  size: 'desc',
-  state: 'asc',
-};
-
-type PBSSortKey = 'workload' | 'repository' | 'created' | 'size' | 'protected' | 'verified';
-const PBS_SORT_DEFAULT_DIRECTION: Record<PBSSortKey, 'asc' | 'desc'> = {
-  workload: 'asc',
-  repository: 'asc',
-  created: 'desc',
-  size: 'desc',
-  protected: 'desc',
-  verified: 'desc',
-};
-
-type SnapshotSortKey = 'guest' | 'node' | 'latest' | 'count' | 'size';
-const SNAPSHOT_SORT_DEFAULT_DIRECTION: Record<SnapshotSortKey, 'asc' | 'desc'> = {
-  guest: 'asc',
-  node: 'asc',
-  latest: 'desc',
-  count: 'desc',
-  size: 'desc',
-};
-
-type ArchiveSortKey =
-  | 'volume'
-  | 'guest'
-  | 'storage'
-  | 'node'
-  | 'format'
-  | 'created'
-  | 'size'
-  | 'protected'
-  | 'verified';
-const ARCHIVE_SORT_DEFAULT_DIRECTION: Record<ArchiveSortKey, 'asc' | 'desc'> = {
-  volume: 'asc',
-  guest: 'asc',
-  storage: 'asc',
-  node: 'asc',
-  format: 'asc',
-  created: 'desc',
-  size: 'desc',
-  protected: 'desc',
-  verified: 'desc',
-};
-
-type TaskSortKey = 'status' | 'guest' | 'node' | 'started' | 'duration' | 'size';
-const TASK_SORT_DEFAULT_DIRECTION: Record<TaskSortKey, 'asc' | 'desc'> = {
-  status: 'asc',
-  guest: 'asc',
-  node: 'asc',
-  started: 'desc',
-  duration: 'desc',
-  size: 'desc',
-};
-
 export const ProxmoxBackupsTable: Component<{
   emptyIcon: JSX.Element;
   hasPBS?: boolean;
