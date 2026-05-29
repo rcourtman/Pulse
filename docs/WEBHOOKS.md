@@ -77,7 +77,7 @@ Audit webhooks are dispatched asynchronously. The payload includes a `signature`
 
 ## 🏢 Multi-tenant / MSP and PSA integration
 
-In multi-tenant mode (Pulse Cloud, or self-hosted with `PULSE_MULTI_TENANT_ENABLED=true` and a multi-tenant license) alerts and notification destinations are isolated **per organization**. Every alert and webhook request resolves an organization and operates only on that org's own alert state and webhook config, so one client's destinations and templates never leak into another's.
+In multi-tenant mode (Pulse Cloud, or self-hosted with `PULSE_MULTI_TENANT_ENABLED=true` and an Enterprise license with the `multi_tenant` capability) alerts and notification destinations are isolated **per organization**. Every alert and webhook request resolves an organization and operates only on that org's own alert state and webhook config, so one client's destinations and templates never leak into another's.
 
 The organization for a request is resolved in this order:
 

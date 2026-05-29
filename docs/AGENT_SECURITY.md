@@ -149,3 +149,4 @@ Unified agent (`pulse-agent`):
 
 - **Token Authentication**: All agent-to-server communication requires a valid API token.
 - **TLS**: Encrypted by default (unless specifically disabled).
+- **Network Isolation (optional)**: Agent check-in can be served on a dedicated, separately firewalled port that exposes only the agent-ingest routes (`/api/agents/*`), so a host that can reach the agent endpoint over an untrusted network cannot pivot to the web UI or management API. See [Split-Port Agent Ingest](CONFIGURATION.md#split-port-agent-ingest-network-isolation).
