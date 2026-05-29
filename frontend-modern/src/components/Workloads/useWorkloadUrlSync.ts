@@ -28,17 +28,24 @@ export interface WorkloadsWorkloadUrlSyncOptions {
   selectedPlatform: Accessor<string | null>;
   selectedKubernetesContext: Accessor<string | null>;
   selectedKubernetesNamespace: Accessor<string | null>;
+  selectedCluster: Accessor<string | null>;
+  clusterOptions: Accessor<string[]>;
   selectedNode: Accessor<string | null>;
   setContainerRuntime: Setter<string>;
   setSelectedHostHint: Setter<string | null>;
   setSelectedPlatform: Setter<string | null>;
   setSelectedKubernetesContext: Setter<string | null>;
   setSelectedKubernetesNamespace: Setter<string | null>;
+  setSelectedCluster: Setter<string | null>;
   setSelectedNode: Setter<string | null>;
   setShowFilters: Setter<boolean>;
   setViewMode: Setter<ViewMode>;
   showFilters: Accessor<boolean>;
   viewMode: Accessor<ViewMode>;
+  // Forced ?? raw view mode. The cluster facet keys off this because vSphere
+  // forces vm view while leaving the raw viewMode signal at 'all', and the
+  // facet must persist/validate against what is actually displayed.
+  effectiveViewMode: Accessor<ViewMode>;
   workloadNodeOptions: Accessor<WorkloadNodeOption[]>;
 }
 
@@ -56,6 +63,7 @@ export function useWorkloadUrlSync(options: WorkloadsWorkloadUrlSyncOptions) {
   const [handledRuntimeParam, setHandledRuntimeParam] = createSignal('');
   const [handledContextParam, setHandledContextParam] = createSignal('');
   const [handledNamespaceParam, setHandledNamespaceParam] = createSignal('');
+  const [handledClusterParam, setHandledClusterParam] = createSignal('');
   const [handledAgentParam, setHandledAgentParam] = createSignal('');
   const [handledPlatformParam, setHandledPlatformParam] = createSignal('');
 
@@ -98,6 +106,23 @@ export function useWorkloadUrlSync(options: WorkloadsWorkloadUrlSyncOptions) {
 
   createEffect(() => {
     if (!isWorkloadsRoute()) return;
+    if (options.effectiveViewMode() !== 'vm') return;
+    const selected = (options.selectedCluster() || '').trim();
+    if (!selected) return;
+    // While guests haven't loaded the options list is empty; skipping prevents
+    // the cleanup from stripping a perfectly valid URL value (e.g. one applied
+    // from a saved view) before data arrives.
+    const candidates = options.clusterOptions();
+    if (candidates.length === 0) return;
+    const normalized = selected.toLowerCase();
+    const exists = candidates.some((value) => value.toLowerCase() === normalized);
+    if (!exists) {
+      options.setSelectedCluster(null);
+    }
+  });
+
+  createEffect(() => {
+    if (!isWorkloadsRoute()) return;
     if (!isContainerWorkloadViewMode(options.viewMode())) return;
     const selected = options.containerRuntime().trim();
     if (!selected) return;
@@ -126,6 +151,13 @@ export function useWorkloadUrlSync(options: WorkloadsWorkloadUrlSyncOptions) {
     }
     if (options.selectedKubernetesNamespace() !== null) {
       options.setSelectedKubernetesNamespace(null);
+    }
+  });
+
+  createEffect(() => {
+    if (!isWorkloadsRoute()) return;
+    if (options.effectiveViewMode() !== 'vm' && options.selectedCluster() !== null) {
+      options.setSelectedCluster(null);
     }
   });
 
@@ -231,6 +263,27 @@ export function useWorkloadUrlSync(options: WorkloadsWorkloadUrlSyncOptions) {
 
   createEffect(() => {
     if (!isWorkloadsRoute()) return;
+    const normalized = workloadUrlParams().cluster;
+    if (normalized === handledClusterParam()) return;
+
+    if (normalized) {
+      if (options.effectiveViewMode() !== 'vm') {
+        options.setViewMode('vm');
+      }
+      options.setSelectedCluster(normalized);
+      if (!options.showFilters()) {
+        options.setShowFilters(true);
+      }
+      setHandledClusterParam(normalized);
+      return;
+    }
+
+    options.setSelectedCluster(null);
+    setHandledClusterParam('');
+  });
+
+  createEffect(() => {
+    if (!isWorkloadsRoute()) return;
     const normalized = workloadUrlParams().agent;
     if (normalized === handledAgentParam()) return;
 
@@ -280,6 +333,7 @@ export function useWorkloadUrlSync(options: WorkloadsWorkloadUrlSyncOptions) {
     const urlRuntime = parsed.runtime;
     const urlContext = parsed.context;
     const urlNamespace = parsed.namespace;
+    const urlCluster = parsed.cluster;
     const urlAgent = parsed.agent;
     const urlPlatform = parsed.platform;
     const urlResource = parsed.resource;
@@ -289,6 +343,7 @@ export function useWorkloadUrlSync(options: WorkloadsWorkloadUrlSyncOptions) {
     if (handledRuntimeParam() !== urlRuntime) return;
     if (handledContextParam() !== urlContext) return;
     if (handledNamespaceParam() !== urlNamespace) return;
+    if (handledClusterParam() !== urlCluster) return;
     if (handledAgentParam() !== urlAgent) return;
     if (urlResource) return;
 
@@ -296,9 +351,11 @@ export function useWorkloadUrlSync(options: WorkloadsWorkloadUrlSyncOptions) {
       currentPathname: location.pathname,
       currentSearch: location.search,
       viewMode: options.viewMode(),
+      effectiveViewMode: options.effectiveViewMode(),
       containerRuntime: options.containerRuntime(),
       selectedKubernetesContext: options.selectedKubernetesContext(),
       selectedKubernetesNamespace: options.selectedKubernetesNamespace(),
+      selectedCluster: options.selectedCluster(),
       selectedNode: options.selectedNode(),
       selectedHostHint: options.selectedHostHint(),
       selectedPlatform: options.selectedPlatform(),

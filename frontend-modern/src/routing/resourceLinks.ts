@@ -9,6 +9,7 @@ export const WORKLOADS_QUERY_PARAMS = {
   runtime: 'runtime',
   context: 'context',
   namespace: 'namespace',
+  cluster: 'cluster',
   // Canonical v6 agent filter query param.
   agent: 'agent',
   resource: 'resource',
@@ -91,6 +92,7 @@ type WorkloadsLinkOptions = {
   runtime?: string | null;
   context?: string | null;
   namespace?: string | null;
+  cluster?: string | null;
   agent?: string | null;
   resource?: string | null;
   summaryGroup?: string | null;
@@ -140,6 +142,7 @@ export const parseWorkloadsLinkSearch = (search: string) => {
     runtime: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.runtime)),
     context: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.context)),
     namespace: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.namespace)),
+    cluster: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.cluster)),
     agent: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.agent)),
     resource: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.resource)),
     summaryGroup: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.summaryGroup)),
@@ -158,6 +161,7 @@ export const buildWorkloadsRouteSearch = (options: WorkloadsLinkOptions = {}): s
   const runtime = normalizeQueryValue(options.runtime);
   const context = normalizeQueryValue(options.context);
   const namespace = normalizeQueryValue(options.namespace);
+  const cluster = normalizeQueryValue(options.cluster);
   const agent = normalizeQueryValue(options.agent);
   const resource = normalizeQueryValue(options.resource);
   const summaryGroup = normalizeQueryValue(options.summaryGroup);
@@ -166,6 +170,7 @@ export const buildWorkloadsRouteSearch = (options: WorkloadsLinkOptions = {}): s
   if (runtime) params.set(WORKLOADS_QUERY_PARAMS.runtime, runtime);
   if (context) params.set(WORKLOADS_QUERY_PARAMS.context, context);
   if (namespace) params.set(WORKLOADS_QUERY_PARAMS.namespace, namespace);
+  if (cluster) params.set(WORKLOADS_QUERY_PARAMS.cluster, cluster);
   if (agent) params.set(WORKLOADS_QUERY_PARAMS.agent, agent);
   if (resource) params.set(WORKLOADS_QUERY_PARAMS.resource, resource);
   if (summaryGroup) params.set(WORKLOADS_QUERY_PARAMS.summaryGroup, summaryGroup);

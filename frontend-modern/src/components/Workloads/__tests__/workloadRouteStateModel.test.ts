@@ -21,6 +21,7 @@ describe('workloadRouteStateModel', () => {
       selectedPlatform: null,
       selectedKubernetesContext: null,
       selectedKubernetesNamespace: null,
+      selectedCluster: null,
       containerRuntime: '',
       viewMode: 'all',
     });

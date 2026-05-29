@@ -109,6 +109,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
       hostFilterValue: props.hostFilter?.value,
       platformFilterValue: props.platformFilter?.value,
       namespaceFilterValue: props.namespaceFilter?.value,
+      clusterFilterValue: props.clusterFilter?.value,
       containerRuntimeFilterValue: props.containerRuntimeFilter?.value,
     }),
   );
@@ -124,6 +125,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
     props.hostFilter?.onChange('');
     props.platformFilter?.onChange('');
     props.namespaceFilter?.onChange('');
+    props.clusterFilter?.onChange('');
     props.containerRuntimeFilter?.onChange('');
   };
 
@@ -190,6 +192,19 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
         setValue: namespaceFilter.onChange,
         defaultValue: '',
         options: () => namespaceFilter.options,
+      });
+    }
+
+    const clusterFilter = props.clusterFilter;
+    if (clusterFilter) {
+      filters.push({
+        id: clusterFilter.id ?? 'workloads-cluster',
+        label: clusterFilter.label ?? 'Cluster',
+        group: 'scope',
+        value: () => clusterFilter.value,
+        setValue: clusterFilter.onChange,
+        defaultValue: '',
+        options: () => clusterFilter.options,
       });
     }
 

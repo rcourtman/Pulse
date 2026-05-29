@@ -7,6 +7,7 @@ export const WORKLOADS_WORKLOAD_ROUTE_RESET_STATE = {
   selectedPlatform: null,
   selectedKubernetesContext: null,
   selectedKubernetesNamespace: null,
+  selectedCluster: null,
   containerRuntime: '',
   viewMode: 'all',
 } as const;

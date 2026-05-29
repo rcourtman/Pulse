@@ -19,6 +19,7 @@ describe('workloadUrlSyncModel', () => {
       runtime: 'containerd',
       context: 'prod',
       namespace: 'default',
+      cluster: '',
       agent: 'node-a',
       resource: 'guest-1',
       summaryGroup: '',
@@ -33,6 +34,7 @@ describe('workloadUrlSyncModel', () => {
         runtime: '',
         context: '',
         namespace: '',
+        cluster: '',
         agent: '',
         resource: '',
       }),
@@ -44,6 +46,7 @@ describe('workloadUrlSyncModel', () => {
         runtime: '',
         context: 'prod',
         namespace: '',
+        cluster: '',
         agent: '',
         resource: '',
       }),
@@ -58,6 +61,7 @@ describe('workloadUrlSyncModel', () => {
         runtime: 'containerd',
         context: '',
         namespace: '',
+        cluster: '',
         agent: '',
         resource: '',
       }),
@@ -74,6 +78,7 @@ describe('workloadUrlSyncModel', () => {
         runtime: 'containerd',
         context: 'prod',
         namespace: '',
+        cluster: '',
         agent: '',
         resource: '',
       }),
@@ -90,10 +95,12 @@ describe('workloadUrlSyncModel', () => {
         currentPathname: '/proxmox/overview',
         currentSearch: '?resource=guest-1&type=vm&agent=node-a',
         viewMode: 'pod',
+        effectiveViewMode: 'pod',
         containerRuntime: 'docker',
         selectedPlatform: 'kubernetes',
         selectedKubernetesContext: 'prod',
         selectedKubernetesNamespace: 'default',
+        selectedCluster: null,
         selectedNode: 'cluster-a-node-a',
         selectedHostHint: null,
       }),
@@ -106,13 +113,51 @@ describe('workloadUrlSyncModel', () => {
         currentPathname: '/kubernetes/workloads',
         currentSearch: '?type=pod&context=prod&namespace=default',
         viewMode: 'pod',
+        effectiveViewMode: 'pod',
         containerRuntime: '',
         selectedPlatform: null,
         selectedKubernetesContext: 'prod',
         selectedKubernetesNamespace: 'default',
+        selectedCluster: null,
         selectedNode: null,
         selectedHostHint: null,
       }),
     ).toBeNull();
+  });
+
+  it('serializes the cluster param off the effective view mode (vSphere forces vm while raw stays all)', () => {
+    // vSphere: raw viewMode stays 'all' (forcedViewMode drives the filter), so
+    // the cluster param must key off effectiveViewMode to persist to the URL.
+    expect(
+      resolveWorkloadsManagedWorkloadsNavigateTarget({
+        currentPathname: '/vmware',
+        currentSearch: '',
+        viewMode: 'all',
+        effectiveViewMode: 'vm',
+        containerRuntime: '',
+        selectedPlatform: null,
+        selectedKubernetesContext: null,
+        selectedKubernetesNamespace: null,
+        selectedCluster: 'Production Cluster',
+        selectedNode: null,
+        selectedHostHint: null,
+      }),
+    ).toBe('/vmware?cluster=Production+Cluster');
+
+    // Cluster is not serialized when the effective view mode is not vm.
+    const nonVm = resolveWorkloadsManagedWorkloadsNavigateTarget({
+      currentPathname: '/kubernetes/workloads',
+      currentSearch: '?type=pod',
+      viewMode: 'pod',
+      effectiveViewMode: 'pod',
+      containerRuntime: '',
+      selectedPlatform: null,
+      selectedKubernetesContext: null,
+      selectedKubernetesNamespace: null,
+      selectedCluster: 'Production Cluster',
+      selectedNode: null,
+      selectedHostHint: null,
+    });
+    expect(nonVm === null || !nonVm.includes('cluster')).toBe(true);
   });
 });

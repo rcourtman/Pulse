@@ -13,6 +13,7 @@ export interface WorkloadsWorkloadUrlParams {
   runtime: string;
   context: string;
   namespace: string;
+  cluster: string;
   agent: string;
   resource: string;
 }
@@ -31,8 +32,12 @@ interface WorkloadsManagedWorkloadsNavigateTargetOptions {
   selectedPlatform: string | null;
   selectedKubernetesContext: string | null;
   selectedKubernetesNamespace: string | null;
+  selectedCluster: string | null;
   selectedNode: string | null;
   viewMode: ViewMode;
+  // vSphere forces vm view while the raw viewMode stays 'all', so the cluster
+  // param is keyed off the effective view mode (forced ?? raw), not viewMode.
+  effectiveViewMode: ViewMode;
 }
 
 export const parseWorkloadsWorkloadUrlParams = (search: string): WorkloadsWorkloadUrlParams =>
@@ -89,8 +94,10 @@ export const resolveWorkloadsManagedWorkloadsNavigateTarget = ({
   selectedPlatform,
   selectedKubernetesContext,
   selectedKubernetesNamespace,
+  selectedCluster,
   selectedNode,
   viewMode,
+  effectiveViewMode,
 }: WorkloadsManagedWorkloadsNavigateTargetOptions): string | null => {
   const currentParams = new URLSearchParams(currentSearch);
   const nextParams = new URLSearchParams(currentSearch);
@@ -99,6 +106,7 @@ export const resolveWorkloadsManagedWorkloadsNavigateTarget = ({
   const nextRuntime = isContainerWorkloadViewMode(viewMode) ? containerRuntime.trim() : '';
   const nextContext = viewMode === 'pod' ? (selectedKubernetesContext ?? '') : '';
   const nextNamespace = viewMode === 'pod' ? (selectedKubernetesNamespace ?? '') : '';
+  const nextCluster = effectiveViewMode === 'vm' ? (selectedCluster ?? '') : '';
   const nextAgent = viewMode === 'pod' ? '' : (selectedNode ?? selectedHostHint ?? '');
 
   const managedSearch = buildWorkloadsRouteSearch({
@@ -107,6 +115,7 @@ export const resolveWorkloadsManagedWorkloadsNavigateTarget = ({
     runtime: nextRuntime || null,
     context: nextContext || null,
     namespace: nextNamespace || null,
+    cluster: nextCluster || null,
     agent: nextAgent || null,
   });
   nextParams.delete(WORKLOADS_QUERY_PARAMS.type);
@@ -114,6 +123,7 @@ export const resolveWorkloadsManagedWorkloadsNavigateTarget = ({
   nextParams.delete(WORKLOADS_QUERY_PARAMS.runtime);
   nextParams.delete(WORKLOADS_QUERY_PARAMS.context);
   nextParams.delete(WORKLOADS_QUERY_PARAMS.namespace);
+  nextParams.delete(WORKLOADS_QUERY_PARAMS.cluster);
   nextParams.delete(WORKLOADS_QUERY_PARAMS.agent);
   new URLSearchParams(managedSearch).forEach((value, key) => {
     nextParams.set(key, value);

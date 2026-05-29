@@ -29,6 +29,7 @@ export function useWorkloadRouteState(options: WorkloadRouteStateOptions) {
   const [selectedKubernetesNamespace, setSelectedKubernetesNamespace] = createSignal<string | null>(
     null,
   );
+  const [selectedCluster, setSelectedCluster] = createSignal<string | null>(null);
   const [selectedHostHint, setSelectedHostHint] = createSignal<string | null>(null);
   const [viewMode, setViewMode] = createSignal<ViewMode>('all');
   const [containerRuntime, setContainerRuntime] = createSignal<string>('');
@@ -87,6 +88,7 @@ export function useWorkloadRouteState(options: WorkloadRouteStateOptions) {
     setSelectedKubernetesNamespace(
       WORKLOADS_WORKLOAD_ROUTE_RESET_STATE.selectedKubernetesNamespace,
     );
+    setSelectedCluster(WORKLOADS_WORKLOAD_ROUTE_RESET_STATE.selectedCluster);
     setContainerRuntime(WORKLOADS_WORKLOAD_ROUTE_RESET_STATE.containerRuntime);
     setViewMode(WORKLOADS_WORKLOAD_ROUTE_RESET_STATE.viewMode);
   };
@@ -96,6 +98,9 @@ export function useWorkloadRouteState(options: WorkloadRouteStateOptions) {
     containerRuntimeOptions: () => filterOptions.containerRuntimeOptions(),
     routeStateEnabled: () => true,
     kubernetesNamespaceOptions: () => filterOptions.kubernetesNamespaceOptions(),
+    selectedCluster,
+    setSelectedCluster,
+    clusterOptions: () => filterOptions.clusterOptions(),
     selectedHostHint,
     selectedKubernetesContext,
     selectedKubernetesNamespace,
@@ -111,6 +116,7 @@ export function useWorkloadRouteState(options: WorkloadRouteStateOptions) {
     setViewMode,
     showFilters: options.showFilters,
     viewMode,
+    effectiveViewMode: filterViewMode,
     workloadNodeOptions: () => filterOptions.workloadNodeOptions(),
   });
 
@@ -125,14 +131,18 @@ export function useWorkloadRouteState(options: WorkloadRouteStateOptions) {
     selectedNode,
     selectedKubernetesContext,
     selectedKubernetesNamespace,
+    selectedCluster,
     setContainerRuntime,
     setSelectedPlatform,
     setSelectedKubernetesContext,
     handleNodeSelect,
     setSelectedKubernetesNamespace,
+    setSelectedCluster,
   });
 
   const {
+    clusterFilterConfig,
+    clusterOptions,
     containerRuntimeFilterConfig,
     containerRuntimeOptions,
     hostFilterConfig,
@@ -145,6 +155,8 @@ export function useWorkloadRouteState(options: WorkloadRouteStateOptions) {
   } = filterOptions;
 
   return {
+    clusterFilterConfig,
+    clusterOptions,
     containerRuntime,
     containerRuntimeFilterConfig,
     containerRuntimeOptions,
@@ -157,12 +169,14 @@ export function useWorkloadRouteState(options: WorkloadRouteStateOptions) {
     platformFilterConfig,
     platformOptions,
     resetWorkloadRouteFilters,
+    selectedCluster,
     selectedHostHint,
     selectedKubernetesContext,
     selectedKubernetesNamespace,
     selectedNode,
     selectedPlatform,
     setContainerRuntime,
+    setSelectedCluster,
     setSelectedNode,
     setSelectedPlatform,
     setSelectedKubernetesContext,

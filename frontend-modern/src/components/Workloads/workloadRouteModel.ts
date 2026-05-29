@@ -94,6 +94,16 @@ export const buildWorkloadsKubernetesNamespaceOptions = (
   return Array.from(namespaces).sort((a, b) => a.localeCompare(b));
 };
 
+export const buildWorkloadsVmwareClusterOptions = (guests: WorkloadGuest[]): string[] => {
+  const set = new Set<string>();
+  for (const guest of guests) {
+    if (resolveWorkloadType(guest) !== 'vm') continue;
+    const cluster = (guest.clusterName || '').trim();
+    if (cluster) set.add(cluster);
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b));
+};
+
 export const buildWorkloadsContainerRuntimeOptions = (guests: WorkloadGuest[]): string[] => {
   const runtimes = new Set<string>();
   for (const guest of guests) {

@@ -9,6 +9,7 @@ import {
   buildWorkloadsKubernetesContextOptions,
   buildWorkloadsPlatformOptions,
   buildWorkloadsKubernetesNamespaceOptions,
+  buildWorkloadsVmwareClusterOptions,
   buildWorkloadNodeOptions,
 } from './workloadRouteModel';
 import {
@@ -16,6 +17,7 @@ import {
   buildWorkloadsHostFilterConfig,
   buildWorkloadsPlatformFilterConfig,
   buildWorkloadsNamespaceFilterConfig,
+  buildWorkloadsClusterFilterConfig,
 } from './workloadFilterConfigModel';
 
 interface WorkloadsWorkloadFilterOptionsOptions {
@@ -29,11 +31,13 @@ interface WorkloadsWorkloadFilterOptionsOptions {
   selectedNode: Accessor<string | null>;
   selectedKubernetesContext: Accessor<string | null>;
   selectedKubernetesNamespace: Accessor<string | null>;
+  selectedCluster: Accessor<string | null>;
   setContainerRuntime: (value: string) => void;
   setSelectedPlatform: (value: string | null) => void;
   setSelectedKubernetesContext: (value: string | null) => void;
   handleNodeSelect: (nodeId: string | null, nodeType: 'pve' | 'pbs' | 'pmg' | null) => void;
   setSelectedKubernetesNamespace: (value: string | null) => void;
+  setSelectedCluster: (value: string | null) => void;
 }
 
 export function useWorkloadFilterOptions(options: WorkloadsWorkloadFilterOptionsOptions) {
@@ -58,6 +62,10 @@ export function useWorkloadFilterOptions(options: WorkloadsWorkloadFilterOptions
       platformScopedGuests(),
       options.selectedKubernetesContext(),
     ),
+  );
+
+  const clusterOptions = createMemo(() =>
+    buildWorkloadsVmwareClusterOptions(platformScopedGuests()),
   );
 
   const containerRuntimeOptions = createMemo(() =>
@@ -114,7 +122,20 @@ export function useWorkloadFilterOptions(options: WorkloadsWorkloadFilterOptions
     }),
   );
 
+  const clusterFilterConfig = createMemo<WorkloadsToolbarFilterConfig | undefined>(() =>
+    buildWorkloadsClusterFilterConfig({
+      isWorkloadsRoute: options.isWorkloadsRoute(),
+      allowEmbeddedScopeFilters: options.allowEmbeddedScopeFilters(),
+      viewMode: options.viewMode(),
+      selectedCluster: options.selectedCluster(),
+      clusterOptions: clusterOptions(),
+      onChange: (value) => options.setSelectedCluster(value || null),
+    }),
+  );
+
   return {
+    clusterFilterConfig,
+    clusterOptions,
     containerRuntimeFilterConfig,
     containerRuntimeOptions,
     hostFilterConfig,

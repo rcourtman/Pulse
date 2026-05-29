@@ -32,6 +32,7 @@ export interface FilterWorkloadsParams {
   selectedPlatform?: string | null;
   selectedKubernetesContext: string | null;
   selectedKubernetesNamespace?: string | null;
+  selectedCluster?: string | null;
   containerRuntime?: string | null;
 }
 
@@ -91,6 +92,7 @@ export const filterWorkloads = ({
   selectedPlatform,
   selectedKubernetesContext,
   selectedKubernetesNamespace,
+  selectedCluster,
   containerRuntime,
 }: FilterWorkloadsParams): WorkloadGuest[] => {
   let guests = allGuests;
@@ -123,6 +125,11 @@ export const filterWorkloads = ({
       if (resolveWorkloadType(g) !== 'pod') return false;
       return (g.namespace || '').trim() === k8sNamespace;
     });
+  }
+
+  const vmCluster = (selectedCluster || '').trim();
+  if (vmCluster && viewMode === 'vm') {
+    guests = guests.filter((g) => (g.clusterName || '').trim() === vmCluster);
   }
 
   if (viewMode !== 'all') {

@@ -12,6 +12,7 @@ export const WORKLOADS_CONTAINER_RUNTIME_ALL_OPTION_LABEL = getAllFilterOptionLa
 export const WORKLOADS_PLATFORM_ALL_OPTION_LABEL = getAllFilterOptionLabel('platforms');
 export const WORKLOADS_NODE_ALL_OPTION_LABEL = getAllFilterOptionLabel('nodes');
 export const WORKLOADS_NAMESPACE_ALL_OPTION_LABEL = getAllFilterOptionLabel('namespaces');
+export const WORKLOADS_CLUSTER_ALL_OPTION_LABEL = getAllFilterOptionLabel('clusters');
 export const WORKLOAD_TYPE_OPTIONS: Array<{ value: ViewMode; label: string }> = [
   { value: 'all', label: 'All' },
   { value: 'vm', label: 'VMs' },
@@ -184,6 +185,39 @@ export const buildWorkloadsNamespaceFilterConfig = ({
     options: [
       { value: '', label: WORKLOADS_NAMESPACE_ALL_OPTION_LABEL },
       ...namespaceOptions.map((value) => ({ value, label: value })),
+    ],
+    onChange,
+  };
+};
+
+interface WorkloadsClusterFilterConfigOptions {
+  isWorkloadsRoute: boolean;
+  allowEmbeddedScopeFilters?: boolean;
+  viewMode: ViewMode;
+  selectedCluster: string | null;
+  clusterOptions: string[];
+  onChange: (value: string) => void;
+}
+
+export const buildWorkloadsClusterFilterConfig = ({
+  isWorkloadsRoute,
+  allowEmbeddedScopeFilters,
+  viewMode,
+  selectedCluster,
+  clusterOptions,
+  onChange,
+}: WorkloadsClusterFilterConfigOptions): WorkloadsToolbarFilterConfig | undefined => {
+  if (!isWorkloadsRoute && !allowEmbeddedScopeFilters) return undefined;
+  if (viewMode !== 'vm') return undefined;
+  if (clusterOptions.length === 0) return undefined;
+
+  return {
+    id: 'workloads-vmware-cluster-filter',
+    label: 'Cluster',
+    value: selectedCluster ?? '',
+    options: [
+      { value: '', label: WORKLOADS_CLUSTER_ALL_OPTION_LABEL },
+      ...clusterOptions.map((value) => ({ value, label: value })),
     ],
     onChange,
   };

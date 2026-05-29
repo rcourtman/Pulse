@@ -166,6 +166,8 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   );
 
   const {
+    clusterFilterConfig,
+    clusterOptions,
     containerRuntime,
     containerRuntimeFilterConfig,
     handleNodeSelect,
@@ -177,12 +179,14 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     platformFilterConfig,
     platformOptions,
     resetWorkloadRouteFilters,
+    selectedCluster,
     selectedHostHint,
     selectedPlatform,
     selectedKubernetesContext,
     selectedKubernetesNamespace,
     selectedNode,
     setContainerRuntime,
+    setSelectedCluster,
     setSelectedPlatform,
     setSelectedKubernetesContext,
     setSelectedKubernetesNamespace,
@@ -356,6 +360,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
       selectedPlatform: props.forcedPlatform?.trim() || selectedPlatform(),
       selectedKubernetesContext: selectedKubernetesContext(),
       selectedKubernetesNamespace: selectedKubernetesNamespace(),
+      selectedCluster: selectedCluster(),
       containerRuntime: containerRuntime().trim() || null,
     };
     return filterWorkloads(params);
@@ -434,6 +439,8 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     activeSummaryWorkloadId,
     clearPinnedSummaryScope,
     bottomSpacerHeight,
+    clusterFilterConfig,
+    clusterOptions,
     columnVisibility,
     connected,
     containerRuntime,
@@ -478,6 +485,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     reconnectSurface,
     savedViewsKey,
     search,
+    selectedCluster,
     selectedGuestId,
     selectedHostHint,
     selectedPlatform,
@@ -491,6 +499,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     setHoveredWorkloadGroupScope,
     setHoveredWorkloadId,
     setSearch,
+    setSelectedCluster,
     setSelectedGuestId,
     setSelectedPlatform,
     setSelectedKubernetesContext,

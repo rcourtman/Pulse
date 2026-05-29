@@ -287,6 +287,7 @@ function VmwareOverview(props: VmwareOverviewProps) {
             containerRuntimeFilter={workloadsState.containerRuntimeFilterConfig()}
             hostFilter={workloadsState.hostFilterConfig()}
             namespaceFilter={undefined}
+            clusterFilter={workloadsState.clusterFilterConfig()}
             platformFilter={undefined}
             metricDisplayMode={workloadsState.workloadMetricDisplayMode}
             setMetricDisplayMode={workloadsState.setWorkloadMetricDisplayMode}

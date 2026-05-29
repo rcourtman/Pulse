@@ -53,6 +53,7 @@ export interface WorkloadsFilterProps {
   hostFilter?: WorkloadsToolbarFilterConfig;
   platformFilter?: WorkloadsToolbarFilterConfig;
   namespaceFilter?: WorkloadsToolbarFilterConfig;
+  clusterFilter?: WorkloadsToolbarFilterConfig;
   containerRuntimeFilter?: WorkloadsToolbarFilterConfig;
   chartsCollapsed?: () => boolean;
   onChartsToggle?: () => void;
@@ -77,6 +78,7 @@ export interface CountActiveWorkloadsFiltersOptions {
   hostFilterValue?: string;
   platformFilterValue?: string;
   namespaceFilterValue?: string;
+  clusterFilterValue?: string;
   containerRuntimeFilterValue?: string;
 }
 
@@ -100,6 +102,7 @@ export const countActiveWorkloadsFilters = (
   if ((options.hostFilterValue ?? '') !== '') count++;
   if ((options.platformFilterValue ?? '') !== '') count++;
   if ((options.namespaceFilterValue ?? '') !== '') count++;
+  if ((options.clusterFilterValue ?? '') !== '') count++;
   if ((options.containerRuntimeFilterValue ?? '') !== '') count++;
 
   return count;

@@ -70,6 +70,7 @@ describe('useWorkloadFilterOptions', () => {
     const [selectedKubernetesNamespace, setSelectedKubernetesNamespace] = createSignal<
       string | null
     >(null);
+    const [selectedCluster, setSelectedCluster] = createSignal<string | null>(null);
     const [selectedNode] = createSignal<string | null>(null);
     const [platformScope, setPlatformScope] = createSignal('docker');
 
@@ -85,11 +86,13 @@ describe('useWorkloadFilterOptions', () => {
         selectedNode,
         selectedKubernetesContext,
         selectedKubernetesNamespace,
+        selectedCluster,
         setContainerRuntime,
         setSelectedPlatform,
         setSelectedKubernetesContext,
         handleNodeSelect: vi.fn(),
         setSelectedKubernetesNamespace,
+        setSelectedCluster,
       }),
     );
 
