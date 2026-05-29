@@ -1891,6 +1891,93 @@ func TestResourceRegistry_IngestSnapshotMergesAgentAndProxmoxPhysicalDisksByIden
 	}
 }
 
+// Regression for issue #1483: a legacy host agent reports an NVMe disk keyed by
+// its controller ("nvme0 [nvme]") with no size, while the Proxmox disks/list poll
+// reports the canonical namespace ("/dev/nvme0n1") with the real capacity. The
+// merge must keep the authoritative Proxmox devPath and size, and only enrich
+// with the agent's SMART temperature.
+func TestResourceRegistry_AgentDiskDoesNotClobberProxmoxDevPath(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 5, 29, 12, 0, 0, 0, time.UTC)
+	const nvmeSize = int64(2000398934016)
+
+	rr.IngestSnapshot(models.StateSnapshot{
+		PhysicalDisks: []models.PhysicalDisk{
+			{
+				ID:          "pve-disk-1",
+				Node:        "pve",
+				Instance:    "pve",
+				DevPath:     "/dev/nvme0n1",
+				Model:       "KINGSTON SNV3S2000G",
+				Serial:      "SERIAL-NVME-0",
+				Type:        "nvme",
+				Size:        nvmeSize,
+				Health:      "PASSED",
+				LastChecked: now,
+			},
+		},
+		Hosts: []models.Host{
+			{
+				ID:       "host-pve",
+				Hostname: "pve",
+				Status:   "online",
+				LastSeen: now,
+				Sensors: models.HostSensorSummary{
+					SMART: []models.HostDiskSMART{
+						{
+							Device:      "nvme0 [nvme]", // legacy controller label, no size
+							Model:       "KINGSTON SNV3S2000G",
+							Serial:      "SERIAL-NVME-0",
+							Type:        "nvme",
+							Temperature: 37,
+							Health:      "PASSED",
+						},
+					},
+				},
+			},
+		},
+	})
+
+	disks := rr.ListByType(ResourceTypePhysicalDisk)
+	if len(disks) != 1 {
+		t.Fatalf("expected 1 merged physical disk resource, got %d", len(disks))
+	}
+	disk := disks[0]
+	if disk.PhysicalDisk == nil {
+		t.Fatal("expected physical disk metadata")
+	}
+	if disk.PhysicalDisk.DevPath != "/dev/nvme0n1" {
+		t.Fatalf("devPath = %q, want canonical /dev/nvme0n1 (agent label must not clobber)", disk.PhysicalDisk.DevPath)
+	}
+	if disk.PhysicalDisk.SizeBytes != nvmeSize {
+		t.Fatalf("sizeBytes = %d, want authoritative Proxmox capacity %d", disk.PhysicalDisk.SizeBytes, nvmeSize)
+	}
+	if disk.PhysicalDisk.Temperature != 37 {
+		t.Fatalf("temperature = %d, want enriched agent SMART value 37", disk.PhysicalDisk.Temperature)
+	}
+}
+
+func TestShouldReplacePhysicalDiskDevPath(t *testing.T) {
+	cases := []struct {
+		name     string
+		existing string
+		incoming string
+		want     bool
+	}{
+		{"canonical not downgraded by scan label", "/dev/nvme0n1", "nvme0 [nvme]", false},
+		{"canonical not downgraded by bare token", "/dev/nvme0n1", "nvme0n1", false},
+		{"scan label upgraded to canonical", "nvme0 [nvme]", "/dev/nvme0n1", true},
+		{"empty existing always replaced", "", "nvme0 [nvme]", true},
+		{"empty incoming never replaces", "/dev/nvme0n1", "", false},
+		{"both canonical last writer wins", "/dev/sda", "/dev/sdb", true},
+	}
+	for _, tc := range cases {
+		if got := shouldReplacePhysicalDiskDevPath(tc.existing, tc.incoming); got != tc.want {
+			t.Errorf("%s: shouldReplacePhysicalDiskDevPath(%q, %q) = %v, want %v", tc.name, tc.existing, tc.incoming, got, tc.want)
+		}
+	}
+}
+
 func TestResourceRegistry_IngestSnapshotPropagatesUnraidDiskRole(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)

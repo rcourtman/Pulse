@@ -662,6 +662,59 @@ func TestResourceFromHostSMARTDiskNormalizesLegacyUnraidKiBSize(t *testing.T) {
 	}
 }
 
+func TestResourceFromHostSMARTDiskPrefersReportedSize(t *testing.T) {
+	const diskBytes = int64(2000398934016)
+	host := models.Host{
+		ID:       "pve-host",
+		Hostname: "pve",
+		LastSeen: time.Now().UTC(),
+		// A filesystem-usage entry whose Total is NOT the whole-disk size. The
+		// adapter must not pick this up over the agent-reported capacity.
+		Disks: []models.Disk{
+			{Device: "/dev/nvme0n1p2", Mountpoint: "/", Total: 100_000_000_000},
+		},
+		Sensors: models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{
+				{Device: "nvme0n1", Serial: "50026B72FB69", Type: "nvme", Health: "PASSED", SizeBytes: diskBytes},
+			},
+		},
+	}
+
+	resource, _ := resourceFromHostSMARTDisk(host, host.Sensors.SMART[0])
+	if resource.PhysicalDisk == nil {
+		t.Fatal("expected physical disk metadata")
+	}
+	if resource.PhysicalDisk.SizeBytes != diskBytes {
+		t.Fatalf("sizeBytes = %d, want reported capacity %d", resource.PhysicalDisk.SizeBytes, diskBytes)
+	}
+}
+
+func TestResourceFromHostSMARTDiskFallsBackToFilesystemSize(t *testing.T) {
+	const fsBytes = int64(240057409536)
+	host := models.Host{
+		ID:       "pve-host",
+		Hostname: "pve",
+		LastSeen: time.Now().UTC(),
+		Disks: []models.Disk{
+			{Device: "/dev/sda", Mountpoint: "/data", Total: fsBytes},
+		},
+		Sensors: models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{
+				// Legacy agent with no SizeBytes: fall back to the filesystem match.
+				{Device: "sda", Serial: "INTEL-1", Type: "sata", Health: "PASSED"},
+			},
+		},
+	}
+
+	resource, _ := resourceFromHostSMARTDisk(host, host.Sensors.SMART[0])
+	if resource.PhysicalDisk == nil {
+		t.Fatal("expected physical disk metadata")
+	}
+	if resource.PhysicalDisk.SizeBytes != fsBytes {
+		t.Fatalf("sizeBytes = %d, want filesystem fallback %d", resource.PhysicalDisk.SizeBytes, fsBytes)
+	}
+}
+
 func TestResourceFromKubernetesDeployment_PopulatesMetricsUnderMockMode(t *testing.T) {
 	mockruntime.SetEnabled(true)
 	t.Cleanup(func() { mockruntime.SetEnabled(false) })

@@ -563,6 +563,7 @@ func convertAgentSMARTToModels(smart []agentshost.DiskSMART) []models.HostDiskSM
 			Serial:      disk.Serial,
 			WWN:         disk.WWN,
 			Type:        disk.Type,
+			SizeBytes:   disk.SizeBytes,
 			Temperature: disk.Temperature,
 			Health:      disk.Health,
 			Standby:     disk.Standby,

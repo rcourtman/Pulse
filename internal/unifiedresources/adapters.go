@@ -624,10 +624,16 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 		}
 	}
 
-	sizeBytes := int64(0)
+	// The agent reports the authoritative disk capacity (from /sys/block); the
+	// filesystem-usage match is only a last-resort fallback for older agents that
+	// predate the SizeBytes field. matchedDisk.Total is a filesystem size, not a
+	// whole-disk size, so it is never preferred over a real capacity.
+	sizeBytes := disk.SizeBytes
 	used := ""
 	if matchedDisk != nil {
-		sizeBytes = matchedDisk.Total
+		if sizeBytes <= 0 {
+			sizeBytes = matchedDisk.Total
+		}
 		used = strings.TrimSpace(matchedDisk.Mountpoint)
 	}
 	unraidDisk := matchUnraidDisk(host.Unraid, disk)

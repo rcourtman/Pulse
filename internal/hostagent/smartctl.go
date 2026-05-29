@@ -42,14 +42,15 @@ var (
 
 // DiskSMART represents S.M.A.R.T. data for a single disk.
 type DiskSMART struct {
-	Device      string           `json:"device"`            // Device path (e.g., /dev/sda)
-	Model       string           `json:"model,omitempty"`   // Disk model
-	Serial      string           `json:"serial,omitempty"`  // Serial number
-	WWN         string           `json:"wwn,omitempty"`     // World Wide Name
-	Type        string           `json:"type,omitempty"`    // Transport type: sata, sas, nvme
-	Temperature int              `json:"temperature"`       // Temperature in Celsius
-	Health      string           `json:"health,omitempty"`  // PASSED, FAILED, UNKNOWN
-	Standby     bool             `json:"standby,omitempty"` // True if disk was in standby
+	Device      string           `json:"device"`              // Block device name (e.g., sda, nvme0n1)
+	Model       string           `json:"model,omitempty"`     // Disk model
+	Serial      string           `json:"serial,omitempty"`    // Serial number
+	WWN         string           `json:"wwn,omitempty"`       // World Wide Name
+	Type        string           `json:"type,omitempty"`      // Transport type: sata, sas, nvme
+	SizeBytes   int64            `json:"sizeBytes,omitempty"` // Capacity in bytes (0 when unknown)
+	Temperature int              `json:"temperature"`         // Temperature in Celsius
+	Health      string           `json:"health,omitempty"`    // PASSED, FAILED, UNKNOWN
+	Standby     bool             `json:"standby,omitempty"`   // True if disk was in standby
 	Attributes  *SMARTAttributes `json:"attributes,omitempty"`
 	LastUpdated time.Time        `json:"lastUpdated"` // When this reading was taken
 }
@@ -157,7 +158,11 @@ type smartctlJSON struct {
 		OUI uint64 `json:"oui"`
 		ID  uint64 `json:"id"`
 	} `json:"wwn"`
-	SmartStatus *struct {
+	UserCapacity struct {
+		Bytes int64 `json:"bytes"`
+	} `json:"user_capacity"`
+	NVMeTotalCapacity int64 `json:"nvme_total_capacity"`
+	SmartStatus       *struct {
 		Passed bool `json:"passed"`
 	} `json:"smart_status,omitempty"`
 	Temperature struct {
@@ -250,6 +255,7 @@ func CollectSMARTLocal(ctx context.Context, diskExclude []string) ([]DiskSMART, 
 			continue
 		}
 		if smart != nil {
+			refineLinuxBlockDeviceIdentity(smart, target)
 			results = append(results, *smart)
 		}
 	}
@@ -710,6 +716,123 @@ func isFreeBSDDiskDeviceName(name string) bool {
 	return false
 }
 
+// refineLinuxBlockDeviceIdentity rewrites a freshly collected SMART reading so
+// that its device identity and size reflect the underlying block device rather
+// than the smartctl scan target. smartctl --scan-open reports NVMe disks by their
+// controller char device (/dev/nvme0), but the stable, user-visible identity is
+// the namespace block device (/dev/nvme0n1) — the same name Proxmox's disks/list
+// and /sys/block expose. It also backfills the capacity from /sys/block, the
+// authoritative size source, so the agent no longer depends on a fragile
+// filesystem-usage match on the server side.
+func refineLinuxBlockDeviceIdentity(smart *DiskSMART, target smartctlTarget) {
+	if smart == nil || runtimeGOOS != "linux" {
+		return
+	}
+	// Disks addressed behind a multiplexing controller (megaraid,7; cciss,1;
+	// areca,1/1; ...) all share a single /dev path, so the smartctl scan label is
+	// the only thing that disambiguates them and /sys/block describes the array,
+	// not the member. Leave those as-is and trust the smartctl-reported capacity.
+	if isMultiplexedDeviceType(target.DeviceType) {
+		return
+	}
+	block := canonicalBlockDeviceForScanPath(target.Path)
+	if block == "" {
+		return
+	}
+	smart.Device = block
+	if size := blockDeviceSizeBytes(block); size > 0 {
+		smart.SizeBytes = size
+	}
+}
+
+// isMultiplexedDeviceType reports whether a smartctl -d type addresses a member
+// disk behind a controller (e.g. "megaraid,7"), as opposed to a directly
+// attached device ("", "sat", "nvme", "scsi", "sat,auto").
+func isMultiplexedDeviceType(deviceType string) bool {
+	idx := strings.IndexByte(deviceType, ',')
+	if idx < 0 || idx+1 >= len(deviceType) {
+		return false
+	}
+	next := deviceType[idx+1]
+	return next >= '0' && next <= '9'
+}
+
+// canonicalBlockDeviceForScanPath maps a smartctl scan target to its canonical
+// /sys/block device name. NVMe controllers (nvmeN) resolve to their first
+// namespace (nvmeNnM); every other device keeps its basename.
+func canonicalBlockDeviceForScanPath(scanPath string) string {
+	name := filepath.Base(strings.TrimSpace(scanPath))
+	if name == "" || name == "." || name == string(filepath.Separator) {
+		return ""
+	}
+	if isNVMeControllerName(name) {
+		if ns := firstNVMeNamespace(name); ns != "" {
+			return ns
+		}
+	}
+	return name
+}
+
+// isNVMeControllerName reports whether name is an NVMe controller char device
+// (e.g. "nvme0") rather than a namespace block device (e.g. "nvme0n1").
+func isNVMeControllerName(name string) bool {
+	return hasNumericSuffix(name, "nvme")
+}
+
+// firstNVMeNamespace returns the lowest-numbered namespace block device for an
+// NVMe controller (e.g. "nvme0" -> "nvme0n1"), or "" when none is found.
+func firstNVMeNamespace(controller string) string {
+	entries, err := readDir("/sys/block")
+	if err != nil {
+		return ""
+	}
+	prefix := controller + "n"
+	best := ""
+	for _, entry := range entries {
+		name := strings.TrimSpace(entry.Name())
+		if !strings.HasPrefix(name, prefix) {
+			continue
+		}
+		// Require a pure namespace (nvme0n1), not a partition (nvme0n1p1).
+		if suffix := name[len(prefix):]; suffix == "" || !isAllDigits(suffix) {
+			continue
+		}
+		if best == "" || name < best {
+			best = name
+		}
+	}
+	return best
+}
+
+// blockDeviceSizeBytes reads /sys/block/<name>/size, which the kernel always
+// reports in 512-byte sectors regardless of the physical block size.
+func blockDeviceSizeBytes(name string) int64 {
+	if name == "" {
+		return 0
+	}
+	data, err := smartctlReadFile(filepath.Join("/sys/block", name, "size"))
+	if err != nil {
+		return 0
+	}
+	sectors, err := strconv.ParseInt(strings.TrimSpace(string(data)), 10, 64)
+	if err != nil || sectors <= 0 {
+		return 0
+	}
+	return sectors * 512
+}
+
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 func hasNumericSuffix(name, prefix string) bool {
 	if !strings.HasPrefix(name, prefix) || len(name) == len(prefix) {
 		return false
@@ -1000,6 +1123,15 @@ func parseSMARTOutput(output []byte, target smartctlTarget) (*DiskSMART, error) 
 
 	if smartData.WWN.NAA != 0 {
 		result.WWN = formatWWN(smartData.WWN.NAA, smartData.WWN.OUI, smartData.WWN.ID)
+	}
+
+	// Capacity straight from the device smartctl just queried. On Linux this is
+	// refined to the authoritative /sys/block value in CollectSMARTLocal; here it
+	// is the cross-platform fallback so non-Linux hosts still report a size.
+	if smartData.NVMeTotalCapacity > 0 {
+		result.SizeBytes = smartData.NVMeTotalCapacity
+	} else if smartData.UserCapacity.Bytes > 0 {
+		result.SizeBytes = smartData.UserCapacity.Bytes
 	}
 
 	if smartData.Temperature.Current > 0 {

@@ -2353,7 +2353,7 @@ func mergePhysicalDiskData(existing *PhysicalDiskMeta, incoming *PhysicalDiskMet
 	}
 
 	merged := *existing
-	if incoming.DevPath != "" {
+	if shouldReplacePhysicalDiskDevPath(merged.DevPath, incoming.DevPath) {
 		merged.DevPath = incoming.DevPath
 	}
 	if incoming.Model != "" {
@@ -2421,6 +2421,37 @@ func mergePhysicalDiskData(existing *PhysicalDiskMeta, incoming *PhysicalDiskMet
 	)
 
 	return &merged
+}
+
+// shouldReplacePhysicalDiskDevPath decides whether an incoming devPath should
+// overwrite the existing one when two sources describe the same disk. A canonical
+// /dev/<device> path (as produced by the Proxmox disks/list poll) must never be
+// downgraded to a non-canonical scan label such as the host agent's
+// "nvme0 [nvme]" controller display name. When both are equally canonical the
+// incoming value wins, preserving the previous last-writer behaviour.
+func shouldReplacePhysicalDiskDevPath(existing, incoming string) bool {
+	incoming = strings.TrimSpace(incoming)
+	if incoming == "" {
+		return false
+	}
+	existing = strings.TrimSpace(existing)
+	if existing == "" {
+		return true
+	}
+	if isCanonicalDevPath(existing) && !isCanonicalDevPath(incoming) {
+		return false
+	}
+	return true
+}
+
+// isCanonicalDevPath reports whether devPath is a clean /dev/<device> path with
+// no whitespace or scan-type suffix (e.g. "/dev/nvme0n1", not "nvme0 [nvme]").
+func isCanonicalDevPath(devPath string) bool {
+	devPath = strings.TrimSpace(devPath)
+	if !strings.HasPrefix(devPath, "/dev/") {
+		return false
+	}
+	return !strings.ContainsAny(devPath, " \t[")
 }
 
 func shouldReplacePhysicalDiskHealth(existing, incoming string) bool {

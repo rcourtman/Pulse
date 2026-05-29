@@ -121,15 +121,16 @@ type Sensors struct {
 
 // DiskSMART represents S.M.A.R.T. data for a single disk.
 type DiskSMART struct {
-	Device      string           `json:"device"`            // Device path (e.g., sda)
-	Model       string           `json:"model,omitempty"`   // Disk model
-	Serial      string           `json:"serial,omitempty"`  // Serial number
-	WWN         string           `json:"wwn,omitempty"`     // World Wide Name
-	Type        string           `json:"type,omitempty"`    // Transport type: sata, sas, nvme
-	Temperature int              `json:"temperature"`       // Temperature in Celsius
-	Health      string           `json:"health,omitempty"`  // PASSED, FAILED, UNKNOWN
-	Standby     bool             `json:"standby,omitempty"` // True if disk was in standby
-	Pool        string           `json:"pool,omitempty"`    // ZFS pool this disk belongs to (empty if not a ZFS member)
+	Device      string           `json:"device"`              // Block device name (e.g., sda, nvme0n1)
+	Model       string           `json:"model,omitempty"`     // Disk model
+	Serial      string           `json:"serial,omitempty"`    // Serial number
+	WWN         string           `json:"wwn,omitempty"`       // World Wide Name
+	Type        string           `json:"type,omitempty"`      // Transport type: sata, sas, nvme
+	SizeBytes   int64            `json:"sizeBytes,omitempty"` // Capacity in bytes (0 when unknown)
+	Temperature int              `json:"temperature"`         // Temperature in Celsius
+	Health      string           `json:"health,omitempty"`    // PASSED, FAILED, UNKNOWN
+	Standby     bool             `json:"standby,omitempty"`   // True if disk was in standby
+	Pool        string           `json:"pool,omitempty"`      // ZFS pool this disk belongs to (empty if not a ZFS member)
 	Attributes  *SMARTAttributes `json:"attributes,omitempty"`
 }
 
