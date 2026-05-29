@@ -1,4 +1,4 @@
-import type { PBSBackup } from '@/types/api';
+import type { GuestSnapshot, PBSBackup } from '@/types/api';
 import type { StatusIndicatorVariant } from '@/utils/status';
 
 // Pure model logic for ProxmoxBackupsTable: tab identifiers, per-tab sort-key
@@ -19,6 +19,26 @@ export type RecoverableFilterValue =
   | 'verified'
   | 'unverified';
 export type SnapshotFilterValue = 'all' | 'recent' | 'stale' | 'with-ram';
+
+// One guest's aggregated snapshot inventory, the row shape for the Snapshots
+// source-detail table (which expands to list the guest's individual snapshots).
+export interface SnapshotGuestRow {
+  key: string;
+  type: string;
+  vmid: number;
+  instance: string;
+  node: string;
+  snapshots: GuestSnapshot[]; // newest first
+  count: number;
+  withRamCount: number;
+  newestMs: number | undefined;
+  totalBytes: number;
+  // Filter discriminator aligned with the snapshot coverage strip: any
+  // newest-snapshot age > 30d is treated as stale (covers strip's stale
+  // 30–90d and ancient >90d segments). Row-dot colours are derived
+  // independently from classifySnapshotRowAge in the JSX.
+  isStale: boolean;
+}
 
 export function classifyTaskStatus(status: string): {
   variant: StatusIndicatorVariant;

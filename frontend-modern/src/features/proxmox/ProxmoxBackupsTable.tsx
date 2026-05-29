@@ -26,7 +26,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from '@/components/shared/Table';
@@ -65,7 +64,6 @@ import {
   buildArchiveCoverageSummary,
   buildSnapshotCoverageSummary,
   buildTaskOutcomeSummary,
-  classifySnapshotRowAge,
   computeMedianTaskDurationSeconds,
   getBackupAgeBucketPresentation,
   guestKey,
@@ -103,6 +101,7 @@ import {
   type RecoverableFilterValue,
   type RecoverableSortKey,
   type SnapshotFilterValue,
+  type SnapshotGuestRow,
   type SnapshotSortKey,
   type SourceDetailTabId,
   type TaskSortKey,
@@ -124,6 +123,7 @@ import { ProxmoxArchivesTable } from './ProxmoxArchivesTable';
 import { ProxmoxBackupsCoverageStrip } from './ProxmoxBackupsCoverageStrip';
 import { ProxmoxPbsTable } from './ProxmoxPbsTable';
 import { ProxmoxRecoverableTable } from './ProxmoxRecoverableTable';
+import { ProxmoxSnapshotsTable } from './ProxmoxSnapshotsTable';
 import { ProxmoxTasksTable } from './ProxmoxTasksTable';
 
 // Proxmox backups are intentionally organized around operator questions, not
@@ -599,24 +599,6 @@ export const ProxmoxBackupsTable: Component<{
       return snapshotMatchesSearch(snap, term);
     });
   });
-
-  interface SnapshotGuestRow {
-    key: string;
-    type: string;
-    vmid: number;
-    instance: string;
-    node: string;
-    snapshots: GuestSnapshot[]; // newest first
-    count: number;
-    withRamCount: number;
-    newestMs: number | undefined;
-    totalBytes: number;
-    // Filter discriminator aligned with the snapshot coverage strip: any
-    // newest-snapshot age > 30d is treated as stale (covers strip's stale
-    // 30–90d and ancient >90d segments). Row-dot colours are derived
-    // independently from classifySnapshotRowAge in the JSX.
-    isStale: boolean;
-  }
 
   const filteredSnapshotGuests = createMemo<SnapshotGuestRow[]>(() => {
     const term = search().trim().toLowerCase();
@@ -1871,260 +1853,22 @@ export const ProxmoxBackupsTable: Component<{
           </Show>
 
           <Show when={tab() === 'sources' && sourceDetailTab() === 'snapshots'}>
-            <Show
-              when={filteredSnapshotGuests().length > 0}
-              fallback={
-                <Card padding="lg">
-                  <EmptyState
-                    icon={props.emptyIcon}
-                    title={
-                      snapshots().length === 0
-                        ? sourceDetailSpecFor('snapshots').emptyTitle
-                        : 'No snapshots match current filters'
-                    }
-                    description={
-                      snapshots().length === 0
-                        ? sourceDetailSpecFor('snapshots').emptyDescription
-                        : 'Adjust the search or filters to see more snapshots.'
-                    }
-                  />
-                </Card>
-              }
-            >
-              <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-                <Table class="min-w-[900px] text-xs">
-                  <TableHeader>
-                    <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                      <SortableHead
-                        label="Guest"
-                        sortKey="guest"
-                        currentSort={snapshotSortKey}
-                        direction={snapshotSortDirection}
-                        onSort={handleSnapshotSort}
-                        align="left"
-                        headClass={getPlatformTableHeadClassForKind('name')}
-                      />
-                      <SortableHead
-                        label="Node"
-                        sortKey="node"
-                        currentSort={snapshotSortKey}
-                        direction={snapshotSortDirection}
-                        onSort={handleSnapshotSort}
-                        align="left"
-                        headClass={getPlatformTableHeadClassForKind('text')}
-                      />
-                      <SortableHead
-                        label="Latest"
-                        sortKey="latest"
-                        currentSort={snapshotSortKey}
-                        direction={snapshotSortDirection}
-                        onSort={handleSnapshotSort}
-                        align="right"
-                        headClass={getPlatformTableHeadClassForKind('numeric-value')}
-                      />
-                      <SortableHead
-                        label="Snapshots"
-                        sortKey="count"
-                        currentSort={snapshotSortKey}
-                        direction={snapshotSortDirection}
-                        onSort={handleSnapshotSort}
-                        align="right"
-                        headClass={getPlatformTableHeadClassForKind('numeric-value')}
-                      />
-                      <Show when={showSnapshotSizeColumn()}>
-                        <SortableHead
-                          label="Total size"
-                          sortKey="size"
-                          currentSort={snapshotSortKey}
-                          direction={snapshotSortDirection}
-                          onSort={handleSnapshotSort}
-                          align="right"
-                          headClass={getPlatformTableHeadClassForKind('numeric-value')}
-                        />
-                      </Show>
-                      <Show when={showSnapshotRAMColumn()}>
-                        <TableHead class={getPlatformTableHeadClassForKind('text')}>RAM</TableHead>
-                      </Show>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
-                    <For each={filteredSnapshotGuests()}>
-                      {(row) => {
-                        const isExpanded = () => expandedGuests().has(row.key);
-                        const rowAge = classifySnapshotRowAge(row.newestMs, nowMs());
-                        return (
-                          <>
-                            <TableRow
-                              class="cursor-pointer hover:bg-surface-hover"
-                              onClick={() => toggleGuestExpansion(row.key)}
-                            >
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
-                              >
-                                <div class="flex items-center gap-2">
-                                  <ChevronRightIcon
-                                    class={`h-3.5 w-3.5 shrink-0 text-muted transition-transform ${
-                                      isExpanded() ? 'rotate-90' : ''
-                                    }`}
-                                    aria-hidden="true"
-                                  />
-                                  <span class="font-semibold">
-                                    {guestLabel(row.type, row.vmid)}
-                                  </span>
-                                </div>
-                              </TableCell>
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
-                              >
-                                {row.node || '—'}
-                              </TableCell>
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                              >
-                                <Show
-                                  when={row.newestMs !== undefined}
-                                  fallback={<span class="text-muted">—</span>}
-                                >
-                                  <div class="flex items-center justify-end gap-2">
-                                    <span
-                                      class={`h-1.5 w-1.5 shrink-0 rounded-full ${rowAge.swatchClass}`}
-                                      aria-hidden="true"
-                                      title={`Newest snapshot: ${rowAge.label}`}
-                                    />
-                                    <span>
-                                      {formatRelativeTime(row.newestMs, { compact: true })}
-                                    </span>
-                                  </div>
-                                </Show>
-                              </TableCell>
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
-                              >
-                                {row.count}
-                              </TableCell>
-                              <Show when={showSnapshotSizeColumn()}>
-                                <TableCell
-                                  class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
-                                >
-                                  <Show
-                                    when={row.totalBytes > 0}
-                                    fallback={<span class="text-muted">—</span>}
-                                  >
-                                    {formatBytes(row.totalBytes)}
-                                  </Show>
-                                </TableCell>
-                              </Show>
-                              <Show when={showSnapshotRAMColumn()}>
-                                <TableCell
-                                  class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                                >
-                                  <Show
-                                    when={row.withRamCount > 0}
-                                    fallback={<span class="text-muted">—</span>}
-                                  >
-                                    <span class="inline-flex items-center rounded-sm bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-900/40 dark:text-violet-200">
-                                      {row.withRamCount} with RAM
-                                    </span>
-                                  </Show>
-                                </TableCell>
-                              </Show>
-                            </TableRow>
-                            <Show when={isExpanded()}>
-                              <TableRow class="bg-surface-alt/40">
-                                <TableCell class="px-2 py-2" colspan={snapshotColumnCount()}>
-                                  <div class="overflow-hidden">
-                                    <table class="w-full text-[11px]">
-                                      <thead>
-                                        <tr class="bg-surface-alt text-muted">
-                                          <th class="px-2 py-0.5 text-left font-medium">Name</th>
-                                          <th class="px-2 py-0.5 text-left font-medium">Parent</th>
-                                          <th class="px-2 py-0.5 text-right font-medium">
-                                            Captured
-                                          </th>
-                                          <Show when={showSnapshotSizeColumn()}>
-                                            <th class="px-2 py-0.5 text-right font-medium">Size</th>
-                                          </Show>
-                                          <Show when={showSnapshotRAMColumn()}>
-                                            <th class="px-2 py-0.5 text-left font-medium">RAM</th>
-                                          </Show>
-                                        </tr>
-                                      </thead>
-                                      <tbody class="divide-y divide-border-subtle">
-                                        <For each={row.snapshots}>
-                                          {(snap) => {
-                                            const age = classifySnapshotRowAge(snap.time, nowMs());
-                                            return (
-                                              <tr class="hover:bg-surface-hover">
-                                                <td class="px-2 py-1">
-                                                  <div class="flex items-center gap-2">
-                                                    <span
-                                                      class={`h-1.5 w-1.5 shrink-0 rounded-full ${age.swatchClass}`}
-                                                      aria-hidden="true"
-                                                      title={`Age: ${age.label}`}
-                                                    />
-                                                    <div class="min-w-0">
-                                                      <div class="font-medium text-base-content">
-                                                        {snap.name || '—'}
-                                                      </div>
-                                                      <Show when={!!snap.description?.trim()}>
-                                                        <div
-                                                          class="truncate max-w-[24rem] text-[10px] text-muted"
-                                                          title={snap.description}
-                                                        >
-                                                          {snap.description}
-                                                        </div>
-                                                      </Show>
-                                                    </div>
-                                                  </div>
-                                                </td>
-                                                <td class="px-2 py-1 font-mono text-[10px] text-muted">
-                                                  {snap.parent?.trim() || '—'}
-                                                </td>
-                                                <td class="px-2 py-1 text-right text-base-content">
-                                                  {formatRelativeTime(snap.time, {
-                                                    compact: true,
-                                                  })}
-                                                </td>
-                                                <Show when={showSnapshotSizeColumn()}>
-                                                  <td class="px-2 py-1 text-right tabular-nums text-base-content">
-                                                    <Show
-                                                      when={snap.sizeBytes && snap.sizeBytes > 0}
-                                                      fallback={<span class="text-muted">—</span>}
-                                                    >
-                                                      {formatBytes(snap.sizeBytes ?? 0)}
-                                                    </Show>
-                                                  </td>
-                                                </Show>
-                                                <Show when={showSnapshotRAMColumn()}>
-                                                  <td class="px-2 py-1">
-                                                    <Show
-                                                      when={snap.vmstate}
-                                                      fallback={<span class="text-muted">—</span>}
-                                                    >
-                                                      <span class="inline-flex items-center rounded-sm bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-900/40 dark:text-violet-200">
-                                                        with RAM
-                                                      </span>
-                                                    </Show>
-                                                  </td>
-                                                </Show>
-                                              </tr>
-                                            );
-                                          }}
-                                        </For>
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            </Show>
-                          </>
-                        );
-                      }}
-                    </For>
-                  </TableBody>
-                </Table>
-              </TableCard>
-            </Show>
+            <ProxmoxSnapshotsTable
+              guests={filteredSnapshotGuests()}
+              hasAnySnapshots={snapshots().length > 0}
+              emptyIcon={props.emptyIcon}
+              emptyTitle={sourceDetailSpecFor('snapshots').emptyTitle}
+              emptyDescription={sourceDetailSpecFor('snapshots').emptyDescription}
+              sortKey={snapshotSortKey}
+              sortDirection={snapshotSortDirection}
+              onSort={handleSnapshotSort}
+              showSizeColumn={showSnapshotSizeColumn()}
+              showRAMColumn={showSnapshotRAMColumn()}
+              columnCount={snapshotColumnCount()}
+              expandedKeys={expandedGuests()}
+              onToggleExpand={toggleGuestExpansion}
+              nowMs={nowMs()}
+            />
           </Show>
 
           <Show when={tab() === 'sources' && sourceDetailTab() === 'archives'}>
