@@ -159,3 +159,58 @@ func TestResolveGuestStatusMemoryUsesGuestAgentMeminfoFallback(t *testing.T) {
 		t.Fatalf("expected guest agent meminfo fallback to be queried once, got %d calls", client.memCalls)
 	}
 }
+
+func TestResolveGuestStatusMemoryPrefersGuestAgentMeminfoForSaturatedStatus(t *testing.T) {
+	t.Parallel()
+
+	const giB = uint64(1024 * 1024 * 1024)
+
+	mon := &Monitor{
+		vmRRDMemCache:   make(map[string]rrdMemCacheEntry),
+		vmAgentMemCache: make(map[string]agentMemCacheEntry),
+	}
+	client := &guestMemoryAgentTestClient{
+		stubPVEClient: &stubPVEClient{},
+		vmRRDPoints:   []proxmox.GuestRRDPoint{{MemAvailable: floatPtr(float64(512 * 1024 * 1024))}},
+		memAvailable:  4 * giB,
+	}
+	raw := &VMMemoryRaw{}
+
+	memTotal, memUsed, source := mon.resolveGuestStatusMemory(
+		context.Background(),
+		client,
+		"cluster-a",
+		"linux-vm",
+		"pve2",
+		164,
+		"cluster-a:pve2:164",
+		&proxmox.VMStatus{
+			Agent:  proxmox.VMAgentField{Value: 1},
+			MaxMem: 16 * giB,
+			Mem:    16*giB + 512*1024*1024,
+		},
+		nil,
+		16*giB,
+		"cluster-resources",
+		raw,
+	)
+
+	if memTotal != 16*giB {
+		t.Fatalf("memTotal = %d, want %d", memTotal, uint64(16*giB))
+	}
+	if memUsed != 12*giB {
+		t.Fatalf("memUsed = %d, want %d", memUsed, uint64(12*giB))
+	}
+	if source != "guest-agent-meminfo" {
+		t.Fatalf("source = %q, want guest-agent-meminfo", source)
+	}
+	if raw.GuestAgentMemAvailable != 4*giB {
+		t.Fatalf("raw.GuestAgentMemAvailable = %d, want %d", raw.GuestAgentMemAvailable, uint64(4*giB))
+	}
+	if client.memCalls != 1 {
+		t.Fatalf("expected guest agent meminfo to be queried once, got %d calls", client.memCalls)
+	}
+	if client.rrdCalls != 0 {
+		t.Fatalf("expected saturated guest-agent memory path to skip RRD, got %d RRD calls", client.rrdCalls)
+	}
+}

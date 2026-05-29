@@ -168,8 +168,57 @@ func selectGuestLowTrustUsedMemory(memTotal uint64, status *proxmox.VMStatus) (u
 	return 0, ""
 }
 
+func shouldPreferGuestAgentMemAvailable(status *proxmox.VMStatus, memTotal uint64) bool {
+	if status == nil || !status.Agent.IsAvailable() || status.Mem == 0 {
+		return false
+	}
+	if guestStatusFreeMem(status) > 0 {
+		return false
+	}
+
+	effectiveTotal := memTotal
+	if status.MaxMem > 0 {
+		effectiveTotal = status.MaxMem
+	}
+	if effectiveTotal == 0 {
+		return false
+	}
+	if status.Mem >= effectiveTotal {
+		return true
+	}
+
+	return effectiveTotal-status.Mem <= guestStatusMemoryMismatchTolerance
+}
+
 func guestMemoryFallbackReason(source string) string {
 	return MemorySourceFallbackReason(source)
+}
+
+func (m *Monitor) tryGuestAgentMemAvailable(
+	ctx context.Context,
+	client PVEClientInterface,
+	instanceName string,
+	guestName string,
+	node string,
+	vmid int,
+	memTotal uint64,
+	guestRaw *VMMemoryRaw,
+) (uint64, bool) {
+	agentAvailable, agentErr := m.getVMAgentMemAvailable(ctx, client, instanceName, node, vmid)
+	if agentErr != nil || agentAvailable == 0 {
+		return 0, false
+	}
+	if guestRaw != nil {
+		guestRaw.GuestAgentMemAvailable = agentAvailable
+	}
+	log.Debug().
+		Str("vm", guestName).
+		Str("node", node).
+		Int("vmid", vmid).
+		Uint64("total", memTotal).
+		Uint64("available", agentAvailable).
+		Msg("QEMU memory: using guest agent /proc/meminfo fallback (excludes reclaimable cache)")
+	return agentAvailable, true
 }
 
 func (m *Monitor) resolveGuestStatusMemory(
@@ -203,6 +252,9 @@ func (m *Monitor) resolveGuestStatusMemory(
 			guestRaw.BalloonInfoActual = status.BalloonInfo.Actual
 		}
 	}
+	if status.MaxMem > 0 {
+		memTotal = status.MaxMem
+	}
 
 	memAvailable := uint64(0)
 	if status.MemInfo != nil {
@@ -216,6 +268,15 @@ func (m *Monitor) resolveGuestStatusMemory(
 				Uint64("available", memAvailable).
 				Uint64("availableFromUsed", guestRaw.MemInfoTotalMinusUsed).
 				Msg("QEMU memory: deriving guest available from total-used gap when cache fields are missing")
+		}
+	}
+
+	triedGuestAgentMemAvailable := false
+	if memAvailable == 0 && shouldPreferGuestAgentMemAvailable(status, memTotal) {
+		triedGuestAgentMemAvailable = true
+		if agentAvailable, ok := m.tryGuestAgentMemAvailable(ctx, client, instanceName, guestName, node, vmid, memTotal, guestRaw); ok {
+			memAvailable = agentAvailable
+			memorySource = "guest-agent-meminfo"
 		}
 	}
 
@@ -243,20 +304,10 @@ func (m *Monitor) resolveGuestStatusMemory(
 		}
 	}
 
-	if memAvailable == 0 && status.Agent.IsAvailable() {
-		if agentAvailable, agentErr := m.getVMAgentMemAvailable(ctx, client, instanceName, node, vmid); agentErr == nil && agentAvailable > 0 {
+	if memAvailable == 0 && status.Agent.IsAvailable() && !triedGuestAgentMemAvailable {
+		if agentAvailable, ok := m.tryGuestAgentMemAvailable(ctx, client, instanceName, guestName, node, vmid, memTotal, guestRaw); ok {
 			memAvailable = agentAvailable
 			memorySource = "guest-agent-meminfo"
-			if guestRaw != nil {
-				guestRaw.GuestAgentMemAvailable = memAvailable
-			}
-			log.Debug().
-				Str("vm", guestName).
-				Str("node", node).
-				Int("vmid", vmid).
-				Uint64("total", memTotal).
-				Uint64("available", memAvailable).
-				Msg("QEMU memory: using guest agent /proc/meminfo fallback (excludes reclaimable cache)")
 		}
 	}
 
@@ -284,10 +335,6 @@ func (m *Monitor) resolveGuestStatusMemory(
 					Msg("QEMU memory: using linked Pulse host agent memory (excludes page cache)")
 			}
 		}
-	}
-
-	if status.MaxMem > 0 {
-		memTotal = status.MaxMem
 	}
 
 	memUsed := uint64(0)

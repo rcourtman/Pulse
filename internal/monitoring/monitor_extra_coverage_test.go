@@ -1580,6 +1580,59 @@ func TestBuildVMFromClusterResource_PrefersLinkedHostAgentDiskInventoryOverGuest
 	}
 }
 
+func TestSummarizeVMFSInfoCountsIssue1319WindowsVolumes(t *testing.T) {
+	monitor := &Monitor{}
+	fsInfo := []proxmox.VMFileSystem{
+		{
+			Mountpoint: "System Reserved",
+			Type:       "FAT32",
+			Disk:       `\\.\PhysicalDrive0`,
+		},
+		{
+			Mountpoint: "F:\\",
+			Type:       "NTFS",
+			TotalBytes: 3298516004864,
+			UsedBytes:  2671768784896,
+			Disk:       `\\.\PhysicalDrive2`,
+		},
+		{
+			Mountpoint: "E:\\",
+			Type:       "NTFS",
+			TotalBytes: 9565733122048,
+			UsedBytes:  8126376873984,
+			Disk:       `\\.\PhysicalDrive1`,
+		},
+		{
+			Mountpoint: "C:\\",
+			Type:       "NTFS",
+			TotalBytes: 267789529088,
+			UsedBytes:  195096502272,
+			Disk:       `\\.\PhysicalDrive0`,
+		},
+		{
+			Mountpoint: "System Reserved",
+			Type:       "NTFS",
+			Disk:       `\\.\PhysicalDrive0`,
+		},
+	}
+
+	summary := monitor.summarizeVMFSInfo("cluster-a", proxmox.ClusterResource{Name: "win-vm", VMID: 116}, fsInfo)
+
+	const wantTotal = uint64(3298516004864 + 9565733122048 + 267789529088)
+	const wantUsed = uint64(2671768784896 + 8126376873984 + 195096502272)
+	if summary.totalBytes != wantTotal || summary.usedBytes != wantUsed {
+		t.Fatalf("summary bytes = total %d used %d, want total %d used %d", summary.totalBytes, summary.usedBytes, wantTotal, wantUsed)
+	}
+	if len(summary.individualDisks) != 3 {
+		t.Fatalf("expected 3 usable Windows volumes, got %+v", summary.individualDisks)
+	}
+	for _, disk := range summary.individualDisks {
+		if strings.Contains(disk.Mountpoint, "System Reserved") {
+			t.Fatalf("expected System Reserved volumes to be skipped, got %+v", summary.individualDisks)
+		}
+	}
+}
+
 func TestBuildVMFromClusterResource_MarksDiskUnknownWhenGuestFilesystemDataIsUnavailable(t *testing.T) {
 	monitor := &Monitor{
 		rateTracker:          NewRateTracker(),

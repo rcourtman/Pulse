@@ -1254,6 +1254,13 @@ shared guest metadata cache must keep VM network and identity metadata alive
 long enough to survive short Proxmox status failures, while incomplete
 guest-agent metadata stays on a short retry cadence instead of freezing
 partial VM summary data for minutes.
+When Proxmox reports saturated VM memory without `meminfo` or `freemem` but
+the QEMU guest agent is queryable, the monitoring memory selector must prefer
+the guest's own `/proc/meminfo` `MemAvailable` signal before lower-trust
+Proxmox RRD or status fallbacks. Guest-agent filesystem payloads from Windows
+volume GUID mounts remain part of the same canonical VM disk metric path and
+must not be dropped just because system-reserved partitions share a physical
+disk with usable volumes.
 That same monitoring boundary now also owns physical-disk I/O history as a
 first-class canonical metric stream. `internal/monitoring/monitor_agents.go`
 must project host per-device I/O counters onto the same SMART-resolved disk

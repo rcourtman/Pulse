@@ -659,10 +659,13 @@ func TestProxmoxGuestMemoryFallbackUsesInstanceScopedCachesAndAgentMeminfo(t *te
 			"ttl = vmAgentMemNegativeTTL",
 		},
 		"guest_memory_sources.go": {
+			"func shouldPreferGuestAgentMemAvailable(status *proxmox.VMStatus, memTotal uint64) bool {",
+			"func (m *Monitor) tryGuestAgentMemAvailable(",
+			"if memAvailable == 0 && shouldPreferGuestAgentMemAvailable(status, memTotal) {",
 			"if rrdAvailable, rrdErr := m.getVMRRDMetrics(ctx, client, instanceName, node, vmid); rrdErr == nil && rrdAvailable > 0 {",
-			"if agentAvailable, agentErr := m.getVMAgentMemAvailable(ctx, client, instanceName, node, vmid); agentErr == nil && agentAvailable > 0 {",
+			"if agentAvailable, ok := m.tryGuestAgentMemAvailable(ctx, client, instanceName, guestName, node, vmid, memTotal, guestRaw); ok {",
 			`memorySource = "guest-agent-meminfo"`,
-			"guestRaw.GuestAgentMemAvailable = memAvailable",
+			"guestRaw.GuestAgentMemAvailable = agentAvailable",
 		},
 		"monitor.go": {
 			"func (m *Monitor) getVMRRDMetrics(ctx context.Context, client PVEClientInterface, instanceName, node string, vmid int) (uint64, error) {",

@@ -12,11 +12,14 @@ import (
 
 type vmMemoryTrustStubClient struct {
 	*stubPVEClient
-	vms          []proxmox.VM
-	containers   []proxmox.Container
-	vmStatus     *proxmox.VMStatus
-	vmRRDPoints  []proxmox.GuestRRDPoint
-	lxcRRDPoints []proxmox.GuestRRDPoint
+	vms                 []proxmox.VM
+	containers          []proxmox.Container
+	vmStatus            *proxmox.VMStatus
+	vmRRDPoints         []proxmox.GuestRRDPoint
+	lxcRRDPoints        []proxmox.GuestRRDPoint
+	vmAgentMemAvailable uint64
+	vmRRDCalls          int
+	vmAgentMemCalls     int
 }
 
 func (s *vmMemoryTrustStubClient) GetVMs(ctx context.Context, node string) ([]proxmox.VM, error) {
@@ -32,11 +35,17 @@ func (s *vmMemoryTrustStubClient) GetVMStatus(ctx context.Context, node string, 
 }
 
 func (s *vmMemoryTrustStubClient) GetVMRRDData(ctx context.Context, node string, vmid int, timeframe, cf string, ds []string) ([]proxmox.GuestRRDPoint, error) {
+	s.vmRRDCalls++
 	return s.vmRRDPoints, nil
 }
 
 func (s *vmMemoryTrustStubClient) GetLXCRRDData(ctx context.Context, node string, vmid int, timeframe, cf string, ds []string) ([]proxmox.GuestRRDPoint, error) {
 	return s.lxcRRDPoints, nil
+}
+
+func (s *vmMemoryTrustStubClient) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
+	s.vmAgentMemCalls++
+	return s.vmAgentMemAvailable, nil
 }
 
 func TestPollPVENodeMemoryTrustCharacterization(t *testing.T) {
@@ -380,6 +389,61 @@ func TestHandleClusterVMResourceMemoryTrustCharacterization(t *testing.T) {
 				t.Fatalf("snapshot.Raw.MemInfoTotalMinusUsed = %d, want %d", snap.Raw.MemInfoTotalMinusUsed, tt.wantGap)
 			}
 		})
+	}
+}
+
+func TestHandleClusterVMResourcePrefersGuestAgentMemAvailableForSaturatedIssue1319Status(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	const gib = uint64(1024 * 1024 * 1024)
+
+	mon := newTestPVEMonitor("test")
+	defer mon.alertManager.Stop()
+	defer mon.notificationMgr.Stop()
+
+	client := &vmMemoryTrustStubClient{
+		stubPVEClient: &stubPVEClient{},
+		vmStatus: &proxmox.VMStatus{
+			Status: "running",
+			MaxMem: 16 * gib,
+			Mem:    16*gib + 512*1024*1024,
+			Agent:  proxmox.VMAgentField{Value: 1},
+		},
+		vmRRDPoints:         []proxmox.GuestRRDPoint{{MemAvailable: floatPtr(float64(512 * 1024 * 1024))}},
+		vmAgentMemAvailable: 4 * gib,
+	}
+	res := proxmox.ClusterResource{
+		ID:     "qemu/164",
+		Type:   "qemu",
+		Node:   "pve2",
+		Name:   "linux-vm",
+		Status: "running",
+		VMID:   164,
+		MaxMem: 16 * gib,
+		Mem:    16*gib + 512*1024*1024,
+		MaxCPU: 4,
+	}
+
+	vm, ok := mon.handleClusterVMResource(context.Background(), "cluster-a", res, makeGuestID("cluster-a", "pve2", 164), client, nil, nil)
+	if !ok {
+		t.Fatal("handleClusterVMResource() returned ok=false")
+	}
+	if got := uint64(vm.Memory.Used); got != 12*gib {
+		t.Fatalf("vm.Memory.Used = %d, want %d", got, uint64(12*gib))
+	}
+
+	snap := mon.guestSnapshots[makeGuestSnapshotKey("cluster-a", "qemu", "pve2", 164)]
+	if snap.MemorySource != "guest-agent-meminfo" {
+		t.Fatalf("snapshot.MemorySource = %q, want guest-agent-meminfo", snap.MemorySource)
+	}
+	if snap.Raw.GuestAgentMemAvailable != 4*gib {
+		t.Fatalf("snapshot.Raw.GuestAgentMemAvailable = %d, want %d", snap.Raw.GuestAgentMemAvailable, uint64(4*gib))
+	}
+	if client.vmAgentMemCalls != 1 {
+		t.Fatalf("expected guest agent meminfo to be queried once, got %d calls", client.vmAgentMemCalls)
+	}
+	if client.vmRRDCalls != 0 {
+		t.Fatalf("expected saturated guest-agent memory path to skip RRD, got %d RRD calls", client.vmRRDCalls)
 	}
 }
 
