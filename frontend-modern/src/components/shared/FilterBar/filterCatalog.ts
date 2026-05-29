@@ -1,5 +1,6 @@
 import type { Accessor, JSX } from 'solid-js';
 import type { FilterButtonGroupOptionTone } from '@/components/shared/filterButtonGroupModel';
+import type { SearchTipsConfig } from '@/components/shared/useSearchInputEnhancements';
 
 export interface FilterSelectOption {
   value: string;
@@ -38,6 +39,7 @@ export interface FilterBarSearch {
   placeholder: string;
   historyKey?: string;
   emptyMessage?: string;
+  tips?: SearchTipsConfig;
   clearOnEscape?: boolean;
   onBeforeAutoFocus?: () => boolean;
 }

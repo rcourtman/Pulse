@@ -3,12 +3,11 @@ import RotateCcwIcon from 'lucide-solid/icons/rotate-ccw';
 import TriangleAlertIcon from 'lucide-solid/icons/triangle-alert';
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import { EmptyState } from '@/components/shared/EmptyState';
-import {
-  FilterButtonGroup,
-  type FilterOption as PlatformTableFilterOption,
-} from '@/components/shared/FilterButtonGroup';
-import { SearchInput, type SearchInputProps } from '@/components/shared/SearchInput';
+import { type FilterOption as PlatformTableFilterOption } from '@/components/shared/FilterButtonGroup';
+import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';
+import { type SearchInputProps } from '@/components/shared/SearchInput';
 import { TableCard } from '@/components/shared/TableCard';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import type { Resource, ResourceStatus } from '@/types/resource';
 import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
@@ -349,33 +348,63 @@ export function PlatformTableToolbar<T extends string | number>(props: {
   hasActiveFilters?: boolean;
   onResetFilters?: () => void;
 }) {
+  const { isMobile } = useBreakpoint();
+
+  // Migrated onto the shared FilterBar so every platform table inherits the
+  // same combinable-filter UX (chip rail, saved-view scaffolding, mobile
+  // collapse) instead of a bespoke search + segmented-status row. The public
+  // prop surface is unchanged: search passes straight through and the single
+  // status facet is modelled as an inline segmented control. Tables that want
+  // additional scope filters or saved views opt in via the FilterBar directly.
+  const filters: FilterDef[] = [
+    {
+      id: 'status',
+      label: 'Status',
+      group: 'status',
+      inline: true,
+      options: () =>
+        props.statusOptions.map((option) => ({
+          value: String(option.value),
+          label: option.label,
+          ariaLabel: option.ariaLabel,
+          title: option.title,
+          compactLabel: option.compactLabel,
+          leading: option.leading,
+          visualLabel: option.visualLabel,
+          icon: option.icon,
+          tone: option.tone,
+        })),
+      value: () => String(props.status),
+      setValue: (value) => {
+        const match = props.statusOptions.find((option) => String(option.value) === value);
+        if (match) props.onStatusChange(match.value);
+      },
+      defaultValue: String(props.statusOptions[0]?.value ?? 'all'),
+    },
+  ];
+
   return (
-    <div class="flex flex-wrap items-center gap-2">
-      <div class="min-w-[200px] flex-1 sm:max-w-xs">
-        <SearchInput
-          value={props.search}
-          onChange={props.onSearchChange}
-          placeholder={props.searchPlaceholder}
-          title={props.searchPlaceholder}
-          history={props.searchHistory}
-          tips={props.searchTips}
+    <FilterBar
+      isMobile={isMobile}
+      search={{
+        value: props.search,
+        setValue: props.onSearchChange,
+        placeholder: props.searchPlaceholder,
+        historyKey: props.searchHistory?.storageKey,
+        emptyMessage: props.searchHistory?.emptyMessage,
+        tips: props.searchTips,
+      }}
+      filters={filters}
+      viewOptionsTrailing={
+        <PlatformResourceCounter
+          visible={props.visible}
+          total={props.total}
+          rowNoun={props.rowNoun}
         />
-      </div>
-      <FilterButtonGroup
-        variant="compact"
-        options={props.statusOptions}
-        value={props.status}
-        onChange={props.onStatusChange}
-      />
-      <Show when={props.hasActiveFilters && props.onResetFilters}>
-        <PlatformTableResetFiltersButton onReset={props.onResetFilters!} />
-      </Show>
-      <PlatformResourceCounter
-        visible={props.visible}
-        total={props.total}
-        rowNoun={props.rowNoun}
-      />
-    </div>
+      }
+      showClearAll={() => Boolean(props.hasActiveFilters && props.onResetFilters)}
+      onClearAll={props.onResetFilters}
+    />
   );
 }
 

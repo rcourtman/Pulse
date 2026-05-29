@@ -388,7 +388,7 @@ describe('DockerPageSurface', () => {
       'offline',
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear all' }));
 
     expect(search).toHaveValue('');
     expect(screen.getByText('2 rows')).toBeInTheDocument();

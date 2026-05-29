@@ -115,6 +115,7 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
               clearOnEscape={props.search.clearOnEscape}
               onBeforeAutoFocus={props.search.onBeforeAutoFocus}
               history={searchHistory()}
+              tips={props.search.tips}
             />
           </div>
           {props.searchTrailing}

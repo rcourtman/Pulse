@@ -245,7 +245,7 @@ describe('Docker native tables', () => {
     expect(screen.getByText('0 of 2 volumes')).toBeInTheDocument();
     expect(screen.getByText('No volumes match current filters')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear all' }));
 
     expect(search).toHaveValue('');
     expect(screen.getByText('2 volumes')).toBeInTheDocument();
@@ -463,7 +463,7 @@ describe('Docker native tables', () => {
     expect(document.querySelector('[data-docker-storage-row="host-archive"]')).not.toBeNull();
     expect(document.querySelector('[data-docker-storage-row="host-edge"]')).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear all' }));
 
     expect(search).toHaveValue('');
     expect(screen.getByText('2 hosts')).toBeInTheDocument();
