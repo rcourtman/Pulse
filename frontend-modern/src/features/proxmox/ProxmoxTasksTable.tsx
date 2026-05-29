@@ -49,6 +49,22 @@ export function ProxmoxTasksTable(props: {
   showErrorColumn: boolean;
   durationBaselineSeconds: number;
 }) {
+  // table-fixed + weighted colgroup so columns share the row width instead of
+  // dumping all the slack into the last column (the Error column ballooned to
+  // ~440px of blank when no rows had errors). Weights are relative; each
+  // visible column resolves to weight / total, matching the platform tables.
+  const visibleColumns = () => [
+    { id: 'status', weight: 11 },
+    { id: 'guest', weight: 13 },
+    { id: 'node', weight: 12 },
+    { id: 'started', weight: 13 },
+    { id: 'duration', weight: 21 },
+    ...(props.showSizeColumn ? [{ id: 'size', weight: 12 }] : []),
+    ...(props.showErrorColumn ? [{ id: 'error', weight: 18 }] : []),
+  ];
+  const totalColumnWeight = () =>
+    visibleColumns().reduce((sum, column) => sum + column.weight, 0);
+
   return (
     <Show
       when={props.tasks.length > 0}
@@ -67,7 +83,14 @@ export function ProxmoxTasksTable(props: {
       }
     >
       <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-        <Table class="min-w-[1000px] text-xs">
+        <Table class="min-w-[1000px] table-fixed text-xs">
+          <colgroup>
+            <For each={visibleColumns()}>
+              {(column) => (
+                <col style={{ width: `${(column.weight / totalColumnWeight()) * 100}%` }} />
+              )}
+            </For>
+          </colgroup>
           <TableHeader>
             <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
               <SortableHead

@@ -66,7 +66,19 @@ export function ProxmoxRecoverableTable(props: {
       }
     >
       <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-        <Table class="min-w-[1150px] text-xs">
+        <Table class="min-w-[1150px] table-fixed text-xs">
+          {/* table-fixed + colgroup so columns share the row width rather than
+              dumping all the slack into the trailing Details column on wide
+              viewports. */}
+          <colgroup>
+            <col style={{ width: '17%' }} />
+            <col style={{ width: '9%' }} />
+            <col style={{ width: '18%' }} />
+            <col style={{ width: '11%' }} />
+            <col style={{ width: '13%' }} />
+            <col style={{ width: '10%' }} />
+            <col style={{ width: '22%' }} />
+          </colgroup>
           <TableHeader>
             <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
               <SortableHead
