@@ -8,7 +8,7 @@ import { formatBytes, formatUptime } from '@/utils/format';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 
 import { DiskList } from './DiskList';
-import { isGuestDrawerVM } from './guestDrawerModel';
+import { getGuestDrawerMemoryRows, isGuestDrawerVM } from './guestDrawerModel';
 
 import type { GuestDrawerProps } from './guestDrawerModel';
 
@@ -23,7 +23,6 @@ interface GuestDrawerOverviewProps {
   hasNetworkInterfaces: boolean;
   hasOsInfo: boolean;
   ipAddresses: string[];
-  memoryExtraLines?: string[];
   networkInterfaces: NonNullable<GuestDrawerProps['guest']['networkInterfaces']>;
   normalizedTags: string[];
   onCustomUrlChange?: GuestDrawerProps['onCustomUrlChange'];
@@ -255,13 +254,22 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
           </div>
         </Show>
 
-        <Show when={props.memoryExtraLines && props.memoryExtraLines.length > 0}>
+        <Show when={getGuestDrawerMemoryRows(props.guest).length > 0}>
           <div class="rounded border border-border bg-surface p-3 shadow-sm">
             <h3 class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
               Memory
             </h3>
-            <div class="space-y-1 text-[11px] text-muted">
-              <For each={props.memoryExtraLines}>{(line) => <div>{line}</div>}</For>
+            <div class="space-y-1.5 text-[11px]">
+              <For each={getGuestDrawerMemoryRows(props.guest)}>
+                {(row) => (
+                  <div class="flex items-center justify-between gap-2 min-w-0">
+                    <span class="shrink-0 text-muted">{row.label}</span>
+                    <span class="truncate text-right font-medium text-base-content" title={row.value}>
+                      {row.value}
+                    </span>
+                  </div>
+                )}
+              </For>
             </div>
           </div>
         </Show>

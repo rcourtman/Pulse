@@ -29,7 +29,6 @@ import {
   getGuestDrawerBackupPresentation,
   GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
   getGuestDrawerHistoryTarget,
-  getGuestDrawerMemoryExtraLines,
   getGuestDrawerNetworkInterfaces,
   hasGuestDrawerFilesystemDetails,
   hasGuestDrawerOsInfo,
@@ -78,7 +77,6 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
   const agentTitle = createMemo(() => getGuestDrawerAgentTitle(props.guest));
   const hasAgentInfo = createMemo(() => agentLabel().length > 0);
   const ipAddresses = createMemo(() => props.guest.ipAddresses || []);
-  const memoryExtraLines = createMemo(() => getGuestDrawerMemoryExtraLines(props.guest));
   const hasFilesystemDetails = createMemo(() => hasGuestDrawerFilesystemDetails(props.guest));
   const networkInterfaces = createMemo(() => getGuestDrawerNetworkInterfaces(props.guest));
   const hasNetworkInterfaces = createMemo(() => networkInterfaces().length > 0);
@@ -158,7 +156,6 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
     historyTarget,
     historyRange,
     ipAddresses,
-    memoryExtraLines,
     networkInterfaces,
     normalizedTags,
     osName,

@@ -31,7 +31,6 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     historyTarget,
     ipAddresses,
     guestOsSummary,
-    memoryExtraLines,
     networkInterfaces,
     normalizedTags,
     setHistoryRange,
@@ -88,7 +87,6 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
           hasNetworkInterfaces={hasNetworkInterfaces()}
           hasOsInfo={hasOsInfo()}
           ipAddresses={ipAddresses()}
-          memoryExtraLines={memoryExtraLines()}
           networkInterfaces={networkInterfaces()}
           normalizedTags={normalizedTags()}
           onCustomUrlChange={props.onCustomUrlChange}

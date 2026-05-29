@@ -6,7 +6,7 @@ import type {
 } from '@/api/charts';
 
 import { formatHistoryChartTooltipValue } from '@/components/shared/historyChartModel';
-import { formatBytes } from '@/utils/format';
+import { formatBytes, formatPercent } from '@/utils/format';
 import { getCanonicalWorkloadId, resolveWorkloadType } from '@/utils/workloads';
 
 type Guest = WorkloadGuest;
@@ -280,19 +280,44 @@ export const getGuestDrawerAgentTitle = (guest: Guest): string => {
   return isGuestDrawerVM(guest) ? `QEMU guest agent ${version}` : version;
 };
 
-export const getGuestDrawerMemoryExtraLines = (guest: Guest): string[] | undefined => {
-  if (!guest.memory) return undefined;
+export interface GuestDrawerMemoryRow {
+  label: string;
+  value: string;
+}
 
-  const lines: string[] = [];
-  const total = guest.memory.total ?? 0;
-  if (guest.memory.balloon && guest.memory.balloon > 0 && guest.memory.balloon !== total) {
-    lines.push(`Balloon: ${formatBytes(guest.memory.balloon)}`);
+// Memory rows for the guest drawer Overview card. Leads with the primary
+// RAM usage (Usage / Total / Free) so the "Memory" card lives up to its title
+// and matches the node drawer's memory card, then appends balloon/swap when
+// present. The collapsed row only shows the RAM gauge; the drawer is where the
+// breakdown belongs.
+export const getGuestDrawerMemoryRows = (guest: Guest): GuestDrawerMemoryRow[] => {
+  const memory = guest.memory;
+  if (!memory) return [];
+
+  const rows: GuestDrawerMemoryRow[] = [];
+  const total = memory.total ?? 0;
+  const used = memory.used ?? 0;
+
+  if (total > 0) {
+    rows.push({ label: 'Usage', value: `${formatPercent((used / total) * 100)} · ${formatBytes(used)}` });
+    rows.push({ label: 'Total', value: formatBytes(total) });
+    if (typeof memory.free === 'number') {
+      rows.push({ label: 'Free', value: formatBytes(memory.free) });
+    }
   }
-  if (guest.memory.swapTotal && guest.memory.swapTotal > 0) {
-    const swapUsed = guest.memory.swapUsed ?? 0;
-    lines.push(`Swap: ${formatBytes(swapUsed)} / ${formatBytes(guest.memory.swapTotal)}`);
+
+  if (memory.balloon && memory.balloon > 0 && memory.balloon !== total) {
+    rows.push({ label: 'Balloon', value: formatBytes(memory.balloon) });
   }
-  return lines.length > 0 ? lines : undefined;
+
+  if (memory.swapTotal && memory.swapTotal > 0) {
+    rows.push({
+      label: 'Swap',
+      value: `${formatBytes(memory.swapUsed ?? 0)} / ${formatBytes(memory.swapTotal)}`,
+    });
+  }
+
+  return rows;
 };
 
 export const hasGuestDrawerFilesystemDetails = (guest: Guest): boolean =>
