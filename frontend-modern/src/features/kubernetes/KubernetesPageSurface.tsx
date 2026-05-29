@@ -183,28 +183,24 @@ function countKubernetesVisible(
   return visible;
 }
 
-function KubernetesWorkloads(props: { model: KubernetesPageModel; controllers: Resource[] }) {
-  const hasWorkloadInventory = createMemo(
-    () => props.model.workloads.length > 0 || props.model.autoscaling.length > 0,
-  );
-  const toolbar = createKubernetesSharedToolbar();
-  const sections = createMemo<Resource[][]>(() => [
-    props.model.deployments,
-    props.model.pods,
-    props.controllers,
-    props.model.autoscaling,
-  ]);
-  const totalRows = createMemo(() => sections().reduce((sum, rows) => sum + rows.length, 0));
+type KubernetesNamespaceScope = {
+  scopedSections: Accessor<Resource[][]>;
+  scopeFilters: Accessor<FilterDef[]>;
+  hasActiveNamespace: Accessor<boolean>;
+  clearNamespace: () => void;
+};
 
-  // Namespace scope filter for the whole Workloads tab, URL-backed so it is
-  // shareable and captured by saved views. It scopes every workload table
-  // (deployments / pods / controllers / autoscaling) at once and only appears
-  // when more than one namespace is present. The status + search facets stay on
-  // the shared toolbar; namespace pre-filters the resources each table renders.
+// Namespace scope for a shared-toolbar Kubernetes tab. Namespace is the primary
+// scoping axis and the shared toolbar drives several stacked tables at once, so
+// the facet pre-filters every section's resources rather than living on any one
+// table. URL-backed so it is shareable and captured by saved views; the facet
+// only appears when more than one namespace is present.
+function createKubernetesNamespaceScope(
+  sections: Accessor<Resource[][]>,
+): KubernetesNamespaceScope {
   const [searchParams, setSearchParams] = useSearchParams();
   const namespaceFilter = () =>
     typeof searchParams.namespace === 'string' ? searchParams.namespace : '';
-  const setNamespaceFilter = (value: string) => setSearchParams({ namespace: value || null });
   const namespaceOf = (resource: Resource) => (resource.kubernetes?.namespace ?? '').trim();
   const matchesNamespace = (resource: Resource) => {
     const namespace = namespaceFilter();
@@ -220,16 +216,9 @@ function KubernetesWorkloads(props: { model: KubernetesPageModel; controllers: R
     }
     return [...seen].sort((a, b) => a.localeCompare(b));
   });
-  const scopedDeployments = createMemo(() => props.model.deployments.filter(matchesNamespace));
-  const scopedPods = createMemo(() => props.model.pods.filter(matchesNamespace));
-  const scopedControllers = createMemo(() => props.controllers.filter(matchesNamespace));
-  const scopedAutoscaling = createMemo(() => props.model.autoscaling.filter(matchesNamespace));
-  const scopedSections = createMemo<Resource[][]>(() => [
-    scopedDeployments(),
-    scopedPods(),
-    scopedControllers(),
-    scopedAutoscaling(),
-  ]);
+  const scopedSections = createMemo<Resource[][]>(() =>
+    sections().map((rows) => rows.filter(matchesNamespace)),
+  );
   const scopeFilters = createMemo<FilterDef[]>(() => {
     if (namespaceOptions().length <= 1) return [];
     return [
@@ -242,18 +231,47 @@ function KubernetesWorkloads(props: { model: KubernetesPageModel; controllers: R
           ...namespaceOptions().map((namespace) => ({ value: namespace, label: namespace })),
         ],
         value: namespaceFilter,
-        setValue: setNamespaceFilter,
+        setValue: (value: string) => setSearchParams({ namespace: value || null }),
         defaultValue: '',
       },
     ];
   });
-  const visibleRows = createMemo(() =>
-    countKubernetesVisible(scopedSections(), toolbar.search(), toolbar.status()),
+  return {
+    scopedSections,
+    scopeFilters,
+    hasActiveNamespace: () => namespaceFilter() !== '',
+    clearNamespace: () => setSearchParams({ namespace: null }),
+  };
+}
+
+function KubernetesWorkloads(props: { model: KubernetesPageModel; controllers: Resource[] }) {
+  const hasWorkloadInventory = createMemo(
+    () => props.model.workloads.length > 0 || props.model.autoscaling.length > 0,
   );
-  const hasActiveFilters = () => toolbar.hasActiveFilters() || namespaceFilter() !== '';
+  const toolbar = createKubernetesSharedToolbar();
+  const sections = createMemo<Resource[][]>(() => [
+    props.model.deployments,
+    props.model.pods,
+    props.controllers,
+    props.model.autoscaling,
+  ]);
+  const totalRows = createMemo(() => sections().reduce((sum, rows) => sum + rows.length, 0));
+
+  // Namespace scope applies across every workload section at once (see the
+  // shared helper). Section order here defines the scoped accessors below.
+  const scope = createKubernetesNamespaceScope(sections);
+  const scopedDeployments = () => scope.scopedSections()[0];
+  const scopedPods = () => scope.scopedSections()[1];
+  const scopedControllers = () => scope.scopedSections()[2];
+  const scopedAutoscaling = () => scope.scopedSections()[3];
+  const scopeFilters = scope.scopeFilters;
+  const visibleRows = createMemo(() =>
+    countKubernetesVisible(scope.scopedSections(), toolbar.search(), toolbar.status()),
+  );
+  const hasActiveFilters = () => toolbar.hasActiveFilters() || scope.hasActiveNamespace();
   const resetFilters = () => {
     toolbar.resetFilters();
-    setNamespaceFilter('');
+    scope.clearNamespace();
   };
 
   return (
@@ -342,9 +360,17 @@ function KubernetesServices(props: { model: KubernetesPageModel }) {
     props.model.serviceNetworking,
   ]);
   const totalRows = createMemo(() => sections().reduce((sum, rows) => sum + rows.length, 0));
+  const scope = createKubernetesNamespaceScope(sections);
+  const scopedServices = () => scope.scopedSections()[0];
+  const scopedNetworking = () => scope.scopedSections()[1];
   const visibleRows = createMemo(() =>
-    countKubernetesVisible(sections(), toolbar.search(), toolbar.status()),
+    countKubernetesVisible(scope.scopedSections(), toolbar.search(), toolbar.status()),
   );
+  const hasActiveFilters = () => toolbar.hasActiveFilters() || scope.hasActiveNamespace();
+  const resetFilters = () => {
+    toolbar.resetFilters();
+    scope.clearNamespace();
+  };
 
   return (
     <Show
@@ -365,15 +391,17 @@ function KubernetesServices(props: { model: KubernetesPageModel }) {
           status={toolbar.status()}
           onStatusChange={toolbar.setStatus}
           statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
+          filters={scope.scopeFilters()}
+          savedViewsKey="kubernetes-services"
           visible={visibleRows()}
           total={totalRows()}
           rowNoun="rows"
-          hasActiveFilters={toolbar.hasActiveFilters()}
-          onResetFilters={toolbar.resetFilters}
+          hasActiveFilters={hasActiveFilters()}
+          onResetFilters={resetFilters}
         />
-        <Show when={props.model.services.length > 0}>
+        <Show when={scopedServices().length > 0}>
           <KubernetesServicesTable
-            resources={props.model.services}
+            resources={scopedServices()}
             emptyIcon={k8sIcon()}
             emptyTitle="No services reported"
             emptyDescription="Services appear here once the agent can read Service resources."
@@ -382,9 +410,9 @@ function KubernetesServices(props: { model: KubernetesPageModel }) {
             externalStatus={toolbar.status}
           />
         </Show>
-        <Show when={props.model.serviceNetworking.length > 0}>
+        <Show when={scopedNetworking().length > 0}>
           <KubernetesNetworkingTable
-            resources={props.model.serviceNetworking}
+            resources={scopedNetworking()}
             emptyIcon={k8sIcon()}
             emptyTitle="No ingress or endpoint resources reported"
             emptyDescription="Ingresses and endpoint slices appear here once the agent can read networking inventory."
@@ -405,9 +433,17 @@ function KubernetesConfiguration(props: { model: KubernetesPageModel }) {
   const toolbar = createKubernetesSharedToolbar();
   const sections = createMemo<Resource[][]>(() => [props.model.config, props.model.policy]);
   const totalRows = createMemo(() => sections().reduce((sum, rows) => sum + rows.length, 0));
+  const scope = createKubernetesNamespaceScope(sections);
+  const scopedConfig = () => scope.scopedSections()[0];
+  const scopedPolicy = () => scope.scopedSections()[1];
   const visibleRows = createMemo(() =>
-    countKubernetesVisible(sections(), toolbar.search(), toolbar.status()),
+    countKubernetesVisible(scope.scopedSections(), toolbar.search(), toolbar.status()),
   );
+  const hasActiveFilters = () => toolbar.hasActiveFilters() || scope.hasActiveNamespace();
+  const resetFilters = () => {
+    toolbar.resetFilters();
+    scope.clearNamespace();
+  };
 
   return (
     <Show
@@ -428,15 +464,17 @@ function KubernetesConfiguration(props: { model: KubernetesPageModel }) {
           status={toolbar.status()}
           onStatusChange={toolbar.setStatus}
           statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
+          filters={scope.scopeFilters()}
+          savedViewsKey="kubernetes-config"
           visible={visibleRows()}
           total={totalRows()}
           rowNoun="rows"
-          hasActiveFilters={toolbar.hasActiveFilters()}
-          onResetFilters={toolbar.resetFilters}
+          hasActiveFilters={hasActiveFilters()}
+          onResetFilters={resetFilters}
         />
-        <Show when={props.model.config.length > 0}>
+        <Show when={scopedConfig().length > 0}>
           <KubernetesConfigTable
-            resources={props.model.config}
+            resources={scopedConfig()}
             emptyIcon={k8sIcon()}
             emptyTitle="No config resources reported"
             emptyDescription="Namespaces, ConfigMaps, Secrets, and ServiceAccounts appear here once the agent can read cluster configuration inventory."
@@ -445,9 +483,9 @@ function KubernetesConfiguration(props: { model: KubernetesPageModel }) {
             externalStatus={toolbar.status}
           />
         </Show>
-        <Show when={props.model.policy.length > 0}>
+        <Show when={scopedPolicy().length > 0}>
           <KubernetesPolicyTable
-            resources={props.model.policy}
+            resources={scopedPolicy()}
             emptyIcon={k8sIcon()}
             emptyTitle="No policy resources reported"
             emptyDescription="NetworkPolicies, PodDisruptionBudgets, ResourceQuotas, and LimitRanges appear here once the agent can read policy inventory."
