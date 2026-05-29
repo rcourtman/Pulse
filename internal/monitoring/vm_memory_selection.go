@@ -1,9 +1,11 @@
 package monitoring
 
 import (
+	"context"
 	"math"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"github.com/rs/zerolog/log"
 )
 
 const vmMemInfoGapTolerance uint64 = 16 * 1024 * 1024            // 16 MiB
@@ -131,4 +133,35 @@ func selectVMLowTrustUsedMemory(memTotal uint64, status *proxmox.VMStatus) vmLow
 	}
 
 	return vmLowTrustUsedSelection{}
+}
+
+func (m *Monitor) tryVMAgentMemAvailable(
+	ctx context.Context,
+	client PVEClientInterface,
+	instanceName string,
+	node string,
+	vmName string,
+	vmid int,
+	memTotal uint64,
+	guestRaw *VMMemoryRaw,
+) (uint64, bool) {
+	agentAvailable, agentErr := m.getVMAgentMemAvailable(ctx, client, instanceName, node, vmid)
+	if agentErr != nil || agentAvailable == 0 {
+		return 0, false
+	}
+
+	if guestRaw != nil {
+		guestRaw.GuestAgentMemAvailable = agentAvailable
+		guestRaw.MemInfoAvailable = agentAvailable
+	}
+
+	log.Debug().
+		Str("vm", vmName).
+		Str("node", node).
+		Int("vmid", vmid).
+		Uint64("total", memTotal).
+		Uint64("available", agentAvailable).
+		Msg("QEMU memory: using guest agent /proc/meminfo (excludes reclaimable cache)")
+
+	return agentAvailable, true
 }

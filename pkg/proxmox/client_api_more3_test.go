@@ -169,6 +169,78 @@ func TestClientVMFSInfoParsingWindowsVolumeGUIDMountpointFallback(t *testing.T) 
 	}
 }
 
+func TestClientVMFSInfoParsingIssue1319WindowsVolumePayload(t *testing.T) {
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/nodes/pve7/qemu/116/agent/get-fsinfo":
+			writeJSON(t, w, map[string]interface{}{
+				"data": map[string]interface{}{
+					"result": []map[string]interface{}{
+						{
+							"disk":       []map[string]interface{}{{"dev": `\\.\PhysicalDrive0`, "serial": "QM00005"}},
+							"mountpoint": "System Reserved",
+							"name":       `\\?\Volume{cd7c4fae-8d0e-4f80-846b-f7121e12c38d}\`,
+							"type":       "FAT32",
+						},
+						{
+							"disk":        []map[string]interface{}{{"dev": `\\.\PhysicalDrive2`, "serial": "QM00009"}},
+							"mountpoint":  `F:\`,
+							"name":        `\\?\Volume{80ab7d1d-af7b-48fa-86d7-d37aef6ed2ad}\`,
+							"total-bytes": 3298516004864,
+							"type":        "NTFS",
+							"used-bytes":  2671768784896,
+						},
+						{
+							"disk":        []map[string]interface{}{{"dev": `\\.\PhysicalDrive1`, "serial": "QM00007"}},
+							"mountpoint":  `E:\`,
+							"name":        `\\?\Volume{5743c199-8613-4953-94a2-574d75a27bfc}\`,
+							"total-bytes": 9565733122048,
+							"type":        "NTFS",
+							"used-bytes":  8126376873984,
+						},
+						{
+							"disk":        []map[string]interface{}{{"dev": `\\.\PhysicalDrive0`, "serial": "QM00005"}},
+							"mountpoint":  `C:\`,
+							"name":        `\\?\Volume{c65410ae-abf1-4829-8d8e-81d4b7581949}\`,
+							"total-bytes": 267789529088,
+							"type":        "NTFS",
+							"used-bytes":  195096502272,
+						},
+						{
+							"disk":       []map[string]interface{}{{"dev": `\\.\PhysicalDrive0`, "serial": "QM00005"}},
+							"mountpoint": "System Reserved",
+							"name":       `\\?\Volume{f1b9529f-ff6e-434b-a53a-81687141c733}\`,
+							"type":       "NTFS",
+						},
+					},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	})
+
+	ctx := context.Background()
+	filesystems, err := client.GetVMFSInfo(ctx, "pve7", 116)
+	if err != nil {
+		t.Fatalf("GetVMFSInfo error: %v", err)
+	}
+	if len(filesystems) != 5 {
+		t.Fatalf("expected 5 filesystem records, got %d", len(filesystems))
+	}
+
+	want := map[string]string{
+		`C:\`: `\\.\PhysicalDrive0`,
+		`E:\`: `\\.\PhysicalDrive1`,
+		`F:\`: `\\.\PhysicalDrive2`,
+	}
+	for _, fs := range filesystems {
+		if disk, ok := want[fs.Mountpoint]; ok && fs.Disk != disk {
+			t.Fatalf("filesystem %q Disk = %q, want %q", fs.Mountpoint, fs.Disk, disk)
+		}
+	}
+}
+
 func TestClientVMFSInfoObjectResult(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

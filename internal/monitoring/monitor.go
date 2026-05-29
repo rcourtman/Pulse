@@ -7790,17 +7790,9 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 			// Refs: #1270
 			if guestAgentAvailable && memAvailable == 0 {
 				m.runGuestAgentVMWork(ctx, instanceName, res.Node, res.Name, res.VMID, func(agentCtx context.Context) {
-					if agentAvail, agentErr := m.getVMAgentMemAvailable(agentCtx, client, instanceName, res.Node, res.VMID); agentErr == nil && agentAvail > 0 {
-						memAvailable = agentAvail
+					if agentAvailable, ok := m.tryVMAgentMemAvailable(agentCtx, client, instanceName, res.Node, res.Name, res.VMID, memTotal, &guestRaw); ok {
+						memAvailable = agentAvailable
 						memorySource = "guest-agent-meminfo"
-						guestRaw.MemInfoAvailable = memAvailable
-						log.Debug().
-							Str("vm", res.Name).
-							Str("node", res.Node).
-							Int("vmid", res.VMID).
-							Uint64("total", memTotal).
-							Uint64("available", memAvailable).
-							Msg("QEMU memory: using guest agent /proc/meminfo (excludes reclaimable cache)")
 					}
 				})
 			}

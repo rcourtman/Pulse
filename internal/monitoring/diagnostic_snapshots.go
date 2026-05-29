@@ -45,27 +45,28 @@ type NodeMemorySnapshot struct {
 
 // VMMemoryRaw captures both the listing and detailed status memory fields for a VM/CT.
 type VMMemoryRaw struct {
-	ListingMem            uint64 `json:"listingMem"`
-	ListingMaxMem         uint64 `json:"listingMaxmem"`
-	StatusMem             uint64 `json:"statusMem,omitempty"`
-	StatusFreeMem         uint64 `json:"statusFreemem,omitempty"`
-	StatusMaxMem          uint64 `json:"statusMaxmem,omitempty"`
-	RRDAvailable          uint64 `json:"rrdAvailable,omitempty"`
-	RRDUsed               uint64 `json:"rrdUsed,omitempty"`
-	Balloon               uint64 `json:"balloon,omitempty"`
-	BalloonMin            uint64 `json:"balloonMin,omitempty"`
-	MemInfoUsed           uint64 `json:"meminfoUsed,omitempty"`
-	MemInfoFree           uint64 `json:"meminfoFree,omitempty"`
-	MemInfoTotal          uint64 `json:"meminfoTotal,omitempty"`
-	MemInfoAvailable      uint64 `json:"meminfoAvailable,omitempty"`
-	MemInfoBuffers        uint64 `json:"meminfoBuffers,omitempty"`
-	MemInfoCached         uint64 `json:"meminfoCached,omitempty"`
-	MemInfoShared         uint64 `json:"meminfoShared,omitempty"`
-	MemInfoTotalMinusUsed uint64 `json:"meminfoTotalMinusUsed,omitempty"`
-	Agent                 int    `json:"agent,omitempty"`
-	DerivedFromBall       bool   `json:"derivedFromBalloon,omitempty"`
-	HostAgentTotal        uint64 `json:"hostAgentTotal,omitempty"`
-	HostAgentUsed         uint64 `json:"hostAgentUsed,omitempty"`
+	ListingMem             uint64 `json:"listingMem"`
+	ListingMaxMem          uint64 `json:"listingMaxmem"`
+	StatusMem              uint64 `json:"statusMem,omitempty"`
+	StatusFreeMem          uint64 `json:"statusFreemem,omitempty"`
+	StatusMaxMem           uint64 `json:"statusMaxmem,omitempty"`
+	GuestAgentMemAvailable uint64 `json:"guestAgentMemAvailable,omitempty"`
+	RRDAvailable           uint64 `json:"rrdAvailable,omitempty"`
+	RRDUsed                uint64 `json:"rrdUsed,omitempty"`
+	Balloon                uint64 `json:"balloon,omitempty"`
+	BalloonMin             uint64 `json:"balloonMin,omitempty"`
+	MemInfoUsed            uint64 `json:"meminfoUsed,omitempty"`
+	MemInfoFree            uint64 `json:"meminfoFree,omitempty"`
+	MemInfoTotal           uint64 `json:"meminfoTotal,omitempty"`
+	MemInfoAvailable       uint64 `json:"meminfoAvailable,omitempty"`
+	MemInfoBuffers         uint64 `json:"meminfoBuffers,omitempty"`
+	MemInfoCached          uint64 `json:"meminfoCached,omitempty"`
+	MemInfoShared          uint64 `json:"meminfoShared,omitempty"`
+	MemInfoTotalMinusUsed  uint64 `json:"meminfoTotalMinusUsed,omitempty"`
+	Agent                  int    `json:"agent,omitempty"`
+	DerivedFromBall        bool   `json:"derivedFromBalloon,omitempty"`
+	HostAgentTotal         uint64 `json:"hostAgentTotal,omitempty"`
+	HostAgentUsed          uint64 `json:"hostAgentUsed,omitempty"`
 }
 
 // GuestMemorySnapshot records the memory calculation for a guest (VM/LXC).

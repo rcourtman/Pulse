@@ -45,6 +45,18 @@ type healthyGuestLowTrustMemoryClusterClient struct {
 type windowsDriveClusterClient struct {
 	stubPVEClient
 	resources []proxmox.ClusterResource
+	status    *proxmox.VMStatus
+	fsInfo    []proxmox.VMFileSystem
+}
+
+type issue1319SaturatedMemoryClusterClient struct {
+	stubPVEClient
+	resources    []proxmox.ClusterResource
+	status       *proxmox.VMStatus
+	memAvailable uint64
+	rrdPoints    []proxmox.GuestRRDPoint
+	memCalls     int
+	rrdCalls     int
 }
 
 func (c *slowGuestAgentClusterClient) GetClusterResources(ctx context.Context, resourceType string) ([]proxmox.ClusterResource, error) {
@@ -235,6 +247,9 @@ func (c *windowsDriveClusterClient) GetClusterResources(ctx context.Context, res
 }
 
 func (c *windowsDriveClusterClient) GetVMStatus(ctx context.Context, node string, vmid int) (*proxmox.VMStatus, error) {
+	if c.status != nil {
+		return c.status, nil
+	}
 	return &proxmox.VMStatus{
 		Status: "running",
 		MaxMem: 8 * 1024,
@@ -244,6 +259,9 @@ func (c *windowsDriveClusterClient) GetVMStatus(ctx context.Context, node string
 }
 
 func (c *windowsDriveClusterClient) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]proxmox.VMFileSystem, error) {
+	if c.fsInfo != nil {
+		return c.fsInfo, nil
+	}
 	return []proxmox.VMFileSystem{
 		{
 			Mountpoint: "C:",
@@ -260,6 +278,24 @@ func (c *windowsDriveClusterClient) GetVMFSInfo(ctx context.Context, node string
 			Disk:       "system-reserved",
 		},
 	}, nil
+}
+
+func (c *issue1319SaturatedMemoryClusterClient) GetClusterResources(ctx context.Context, resourceType string) ([]proxmox.ClusterResource, error) {
+	return c.resources, nil
+}
+
+func (c *issue1319SaturatedMemoryClusterClient) GetVMStatus(ctx context.Context, node string, vmid int) (*proxmox.VMStatus, error) {
+	return c.status, nil
+}
+
+func (c *issue1319SaturatedMemoryClusterClient) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
+	c.memCalls++
+	return c.memAvailable, nil
+}
+
+func (c *issue1319SaturatedMemoryClusterClient) GetVMRRDData(ctx context.Context, node string, vmid int, timeframe, cf string, ds []string) ([]proxmox.GuestRRDPoint, error) {
+	c.rrdCalls++
+	return c.rrdPoints, nil
 }
 
 func TestGuestAgentFSInfoBudgetHonorsConfiguredTimeouts(t *testing.T) {
@@ -925,6 +961,142 @@ func TestPollVMsAndContainersEfficientKeepsNormalizedWindowsDriveRoots(t *testin
 	}
 	if vm.Disk.Usage <= 0 {
 		t.Fatalf("expected Windows guest disk usage to be populated, got %.2f", vm.Disk.Usage)
+	}
+}
+
+func TestPollVMsAndContainersEfficientUsesGuestAgentMemAvailableForIssue1319SaturatedStatus(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	guestAvailable := uint64(4008068 * 1024)
+	total := uint64(17179869184)
+
+	client := &issue1319SaturatedMemoryClusterClient{
+		resources: []proxmox.ClusterResource{{
+			Type:   "qemu",
+			Node:   "pve2",
+			VMID:   164,
+			Name:   "OC-SECURE-004",
+			Status: "running",
+			MaxMem: total,
+			Mem:    17231028224,
+			MaxCPU: 4,
+		}},
+		status: &proxmox.VMStatus{
+			Status: "running",
+			MaxMem: total,
+			Mem:    17231028224,
+			Agent:  proxmox.VMAgentField{Value: 1},
+		},
+		memAvailable: guestAvailable,
+		rrdPoints:    []proxmox.GuestRRDPoint{{MemAvailable: floatPtr(float64(512 * 1024 * 1024))}},
+	}
+
+	mon := newTestPVEMonitor("pve1")
+	defer mon.alertManager.Stop()
+	defer mon.notificationMgr.Stop()
+
+	mon.rateTracker = NewRateTracker()
+	mon.guestMetadataCache = make(map[string]guestMetadataCacheEntry)
+	mon.guestMetadataLimiter = make(map[string]time.Time)
+	mon.vmRRDMemCache = make(map[string]rrdMemCacheEntry)
+	mon.vmAgentMemCache = make(map[string]agentMemCacheEntry)
+	mon.guestAgentWorkSlots = make(chan struct{}, 2)
+
+	if ok := mon.pollVMsAndContainersEfficient(context.Background(), "pve1", "", false, client, map[string]string{"pve2": "online"}); !ok {
+		t.Fatal("pollVMsAndContainersEfficient() returned false")
+	}
+
+	state := mon.state.GetSnapshot()
+	if len(state.VMs) != 1 {
+		t.Fatalf("expected 1 VM, got %d", len(state.VMs))
+	}
+
+	vm := state.VMs[0]
+	if vm.MemorySource != "guest-agent-meminfo" {
+		t.Fatalf("MemorySource = %q, want guest-agent-meminfo", vm.MemorySource)
+	}
+	if got, want := uint64(vm.Memory.Used), total-guestAvailable; got != want {
+		t.Fatalf("vm.Memory.Used = %d, want %d", got, want)
+	}
+	if client.memCalls != 1 {
+		t.Fatalf("expected guest-agent meminfo to be queried once, got %d", client.memCalls)
+	}
+	if client.rrdCalls != 0 {
+		t.Fatalf("expected guest-agent meminfo to prevent RRD fallback, got %d RRD calls", client.rrdCalls)
+	}
+
+	snapshot := mon.guestSnapshots[makeGuestSnapshotKey("pve1", "qemu", "pve2", 164)]
+	if snapshot.Raw.GuestAgentMemAvailable != guestAvailable {
+		t.Fatalf("snapshot.Raw.GuestAgentMemAvailable = %d, want %d", snapshot.Raw.GuestAgentMemAvailable, guestAvailable)
+	}
+}
+
+func TestPollVMsAndContainersEfficientCountsIssue1319WindowsVolumePayload(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	client := &windowsDriveClusterClient{
+		resources: []proxmox.ClusterResource{{
+			Type:    "qemu",
+			Node:    "pve7",
+			VMID:    116,
+			Name:    "win116",
+			Status:  "running",
+			MaxMem:  8 * 1024,
+			Mem:     4 * 1024,
+			Disk:    0,
+			MaxDisk: 100 * 1024 * 1024 * 1024,
+			MaxCPU:  4,
+		}},
+		fsInfo: []proxmox.VMFileSystem{
+			{Mountpoint: "System Reserved", Type: "FAT32", Disk: `\\.\PhysicalDrive0`},
+			{Mountpoint: `F:\`, Type: "NTFS", TotalBytes: 3298516004864, UsedBytes: 2671768784896, Disk: `\\.\PhysicalDrive2`},
+			{Mountpoint: `E:\`, Type: "NTFS", TotalBytes: 9565733122048, UsedBytes: 8126376873984, Disk: `\\.\PhysicalDrive1`},
+			{Mountpoint: `C:\`, Type: "NTFS", TotalBytes: 267789529088, UsedBytes: 195096502272, Disk: `\\.\PhysicalDrive0`},
+			{Mountpoint: "System Reserved", Type: "NTFS", Disk: `\\.\PhysicalDrive0`},
+		},
+	}
+
+	mon := newTestPVEMonitor("pve1")
+	defer mon.alertManager.Stop()
+	defer mon.notificationMgr.Stop()
+
+	mon.rateTracker = NewRateTracker()
+	mon.guestMetadataCache = make(map[string]guestMetadataCacheEntry)
+	mon.guestMetadataLimiter = make(map[string]time.Time)
+	mon.vmRRDMemCache = make(map[string]rrdMemCacheEntry)
+	mon.vmAgentMemCache = make(map[string]agentMemCacheEntry)
+	mon.guestAgentWorkSlots = make(chan struct{}, 2)
+
+	if ok := mon.pollVMsAndContainersEfficient(context.Background(), "pve1", "", false, client, map[string]string{"pve7": "online"}); !ok {
+		t.Fatal("pollVMsAndContainersEfficient() returned false")
+	}
+
+	state := mon.state.GetSnapshot()
+	if len(state.VMs) != 1 {
+		t.Fatalf("expected 1 VM, got %d", len(state.VMs))
+	}
+
+	vm := state.VMs[0]
+	if vm.DiskStatusReason != "" {
+		t.Fatalf("expected empty disk status reason, got %q", vm.DiskStatusReason)
+	}
+	if len(vm.Disks) != 3 {
+		t.Fatalf("expected 3 usable Windows volumes, got %#v", vm.Disks)
+	}
+	wantTotal := int64(3298516004864 + 9565733122048 + 267789529088)
+	wantUsed := int64(2671768784896 + 8126376873984 + 195096502272)
+	if vm.Disk.Total != wantTotal || vm.Disk.Used != wantUsed {
+		t.Fatalf("unexpected aggregate disk totals: got total=%d used=%d want total=%d used=%d", vm.Disk.Total, vm.Disk.Used, wantTotal, wantUsed)
+	}
+
+	mountpoints := map[string]bool{}
+	for _, disk := range vm.Disks {
+		mountpoints[disk.Mountpoint] = true
+	}
+	for _, mountpoint := range []string{`C:\`, `E:\`, `F:\`} {
+		if !mountpoints[mountpoint] {
+			t.Fatalf("expected mountpoint %q in usable Windows disks, got %#v", mountpoint, vm.Disks)
+		}
 	}
 }
 
