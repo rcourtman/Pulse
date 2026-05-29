@@ -8,6 +8,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableHead,
   TableHeader,
   TableRow,
 } from '@/components/shared/Table';
@@ -30,7 +31,6 @@ import type { CoverageSortKey } from './proxmoxBackupsTableModel';
 import {
   ArtifactSourceBadge,
   ArtifactStateBadge,
-  RecoverySourceSummary,
   SortableHead,
   artifactStateLabel,
 } from './proxmoxBackupsTableShared';
@@ -82,13 +82,14 @@ export function ProxmoxCoverageTable(props: {
       <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
         <Table class="min-w-[1200px] table-fixed text-xs">
           <colgroup>
-            <col style={{ width: '18%' }} />
+            <col style={{ width: '20%' }} />
+            <col style={{ width: '11%' }} />
             <col style={{ width: '12%' }} />
-            <col style={{ width: '14%' }} />
             <col style={{ width: '13%' }} />
-            <col style={{ width: '13%' }} />
-            <col style={{ width: '13%' }} />
-            <col style={{ width: '17%' }} />
+            <col style={{ width: '11%' }} />
+            <col style={{ width: '11%' }} />
+            <col style={{ width: '11%' }} />
+            <col style={{ width: '11%' }} />
           </colgroup>
           <TableHeader>
             <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
@@ -101,6 +102,7 @@ export function ProxmoxCoverageTable(props: {
                 align="left"
                 headClass={getPlatformTableHeadClassForKind('name')}
               />
+              <TableHead class={getPlatformTableHeadClassForKind('text')}>Node</TableHead>
               <SortableHead
                 label="Posture"
                 sortKey="posture"
@@ -186,17 +188,13 @@ export function ProxmoxCoverageTable(props: {
                               aria-hidden="true"
                             />
                           </button>
-                          <div class="min-w-0">
-                            <div class="font-semibold">{row.workload.label}</div>
-                            <div class="truncate font-mono text-[10px] uppercase text-muted">
-                              {row.workload.typeLabel} {row.workload.vmid}
-                              <Show when={row.workload.node}>
-                                {' · '}
-                                {row.workload.node}
-                              </Show>
-                            </div>
-                          </div>
+                          <span class="truncate font-semibold">{row.workload.label}</span>
                         </div>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content truncate font-mono text-[11px]`}
+                      >
+                        {row.workload.node || '—'}
                       </TableCell>
                       <TableCell class={getPlatformTableCellClassForKind('text')}>
                         <div class="flex items-center gap-2">
@@ -206,7 +204,7 @@ export function ProxmoxCoverageTable(props: {
                             title={getWorkloadRecoveryPostureLabel(row.posture)}
                             ariaHidden
                           />
-                          <span class="text-[11px] font-medium text-base-content">
+                          <span class="truncate text-[11px] font-medium text-base-content">
                             {getWorkloadRecoveryPostureLabel(row.posture)}
                           </span>
                         </div>
@@ -218,44 +216,35 @@ export function ProxmoxCoverageTable(props: {
                           when={row.latestRecovery}
                           fallback={<span class="text-muted">No restore point</span>}
                         >
-                          {(artifact) => (
-                            <div class="min-w-0 text-right">
-                              <div>
-                                {formatRelativeTime(artifact().createdAt, { compact: true })}
-                              </div>
-                              <div class="truncate text-[10px] text-muted">
-                                {artifact().sourceLabel}
-                              </div>
-                            </div>
-                          )}
+                          {(artifact) => formatRelativeTime(artifact().createdAt, { compact: true })}
                         </Show>
                       </TableCell>
                       <TableCell
                         class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                       >
-                        <RecoverySourceSummary
-                          artifact={row.latestPBS}
-                          count={row.pbsCount}
-                          emptyLabel="No PBS"
-                        />
+                        <Show when={row.latestPBS} fallback={<span class="text-muted">No PBS</span>}>
+                          {(artifact) => formatRelativeTime(artifact().createdAt, { compact: true })}
+                        </Show>
                       </TableCell>
                       <TableCell
                         class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                       >
-                        <RecoverySourceSummary
-                          artifact={row.latestArchive}
-                          count={row.archiveCount}
-                          emptyLabel="No archive"
-                        />
+                        <Show
+                          when={row.latestArchive}
+                          fallback={<span class="text-muted">No archive</span>}
+                        >
+                          {(artifact) => formatRelativeTime(artifact().createdAt, { compact: true })}
+                        </Show>
                       </TableCell>
                       <TableCell
                         class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                       >
-                        <RecoverySourceSummary
-                          artifact={row.latestSnapshot}
-                          count={row.snapshotCount}
-                          emptyLabel="No snapshot"
-                        />
+                        <Show
+                          when={row.latestSnapshot}
+                          fallback={<span class="text-muted">No snapshot</span>}
+                        >
+                          {(artifact) => formatRelativeTime(artifact().createdAt, { compact: true })}
+                        </Show>
                       </TableCell>
                       <TableCell
                         class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
@@ -265,25 +254,20 @@ export function ProxmoxCoverageTable(props: {
                           fallback={<span class="text-muted">No recent task</span>}
                         >
                           {(task) => (
-                            <div class="min-w-0">
-                              <div class="flex items-center gap-2">
-                                <StatusDot
-                                  size="sm"
-                                  variant={
-                                    task().label === 'Failed'
-                                      ? 'danger'
-                                      : task().label === 'OK'
-                                        ? 'success'
-                                        : 'warning'
-                                  }
-                                  title={task().label}
-                                  ariaHidden
-                                />
-                                <span>{task().label}</span>
-                              </div>
-                              <div class="truncate text-[10px] text-muted">
-                                {formatRelativeTime(task().startedAt, { compact: true })}
-                              </div>
+                            <div class="flex items-center gap-2">
+                              <StatusDot
+                                size="sm"
+                                variant={
+                                  task().label === 'Failed'
+                                    ? 'danger'
+                                    : task().label === 'OK'
+                                      ? 'success'
+                                      : 'warning'
+                                }
+                                title={task().label}
+                                ariaHidden
+                              />
+                              <span class="truncate">{task().label}</span>
                             </div>
                           )}
                         </Show>
@@ -291,7 +275,7 @@ export function ProxmoxCoverageTable(props: {
                     </TableRow>
                     <Show when={isExpanded()}>
                       <TableRow class="bg-surface-alt/40">
-                        <TableCell class="px-3 py-2" colspan={7}>
+                        <TableCell class="px-3 py-2" colspan={8}>
                           <Show
                             when={evidence().length > 0}
                             fallback={

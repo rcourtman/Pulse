@@ -125,11 +125,13 @@ describe('ProxmoxBackupsTable', () => {
     ));
 
     expect(await screen.findByText('pbs-docker (CT 112)')).toBeInTheDocument();
-    expect(screen.getByText('main / minipc')).toBeInTheDocument();
     expect(screen.getAllByText('Current').length).toBeGreaterThan(0);
 
     await fireEvent.click(screen.getByRole('button', { name: /source details/i }));
     await fireEvent.click(screen.getByRole('button', { name: /pbs artifacts/i }));
+    // The PBS repository (datastore / namespace) shows in the PBS artifacts
+    // table; the coverage tab keeps per-source location in the row expansion.
+    expect(screen.getByText('main / minipc')).toBeInTheDocument();
     expect(screen.getByText('2 files')).toBeInTheDocument();
     expect(screen.getAllByText('Verified').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Protected').length).toBeGreaterThan(0);

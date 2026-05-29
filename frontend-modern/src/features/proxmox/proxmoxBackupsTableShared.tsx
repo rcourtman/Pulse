@@ -5,7 +5,6 @@ import ArrowUpDownIcon from 'lucide-solid/icons/arrow-up-down';
 import { type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { TableHead } from '@/components/shared/Table';
-import { formatRelativeTime } from '@/utils/format';
 
 import type { RecoverableArtifact } from './proxmoxBackupRecoveryModel';
 import type {
@@ -115,29 +114,6 @@ export function RowMetricBar(props: {
         }
       />
     </div>
-  );
-}
-
-export function RecoverySourceSummary(props: {
-  artifact?: RecoverableArtifact;
-  count: number;
-  emptyLabel: string;
-}) {
-  return (
-    <Show when={props.artifact} fallback={<span class="text-muted">{props.emptyLabel}</span>}>
-      {(artifact) => (
-        <div class="min-w-0">
-          <div class="text-base-content">
-            {formatRelativeTime(artifact().createdAt, { compact: true })}
-          </div>
-          <div class="truncate text-[10px] text-muted" title={artifact().location}>
-            {props.count === 1
-              ? artifact().location
-              : `${props.count} total · ${artifact().location}`}
-          </div>
-        </div>
-      )}
-    </Show>
   );
 }
 
