@@ -1,0 +1,382 @@
+import { For, Show, type Accessor, type JSX } from 'solid-js';
+import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
+
+import { Card } from '@/components/shared/Card';
+import { EmptyState } from '@/components/shared/EmptyState';
+import { StatusDot } from '@/components/shared/StatusDot';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableRow,
+} from '@/components/shared/Table';
+import { TableCard } from '@/components/shared/TableCard';
+import { formatBytes, formatRelativeTime } from '@/utils/format';
+import {
+  PLATFORM_TABLE_BODY_CLASS,
+  PLATFORM_TABLE_CARD_CLASS,
+  PLATFORM_TABLE_HEADER_ROW_CLASS,
+  getPlatformTableCellClassForKind,
+  getPlatformTableHeadClassForKind,
+} from '@/features/platformPage/sharedPlatformPage';
+import type { StatusIndicatorVariant } from '@/utils/status';
+
+import {
+  getWorkloadRecoveryPostureLabel,
+  type WorkloadCoverageRow,
+} from './proxmoxBackupRecoveryModel';
+import type { CoverageSortKey } from './proxmoxBackupsTableModel';
+import {
+  ArtifactSourceBadge,
+  ArtifactStateBadge,
+  RecoverySourceSummary,
+  SortableHead,
+  artifactStateLabel,
+} from './proxmoxBackupsTableShared';
+
+const coveragePostureVariant = (
+  posture: WorkloadCoverageRow['posture'],
+): StatusIndicatorVariant => {
+  if (posture === 'current') return 'success';
+  if (posture === 'uncovered' || posture === 'failed' || posture === 'stale') return 'danger';
+  return 'warning';
+};
+
+// "Workload coverage" table: one row per workload answering "does this have a
+// backup?" across PBS / archive / snapshot, each expanding to its restore
+// evidence. Presentational — the parent owns the filtered+sorted memo, shared
+// filters, and the expansion set. table-fixed + a colgroup keeps the columns
+// from ballooning; the inner evidence table stays content-sized.
+export function ProxmoxCoverageTable(props: {
+  rows: WorkloadCoverageRow[];
+  hasAnyRows: boolean;
+  emptyIcon: JSX.Element;
+  emptyTitle: string;
+  emptyDescription: string;
+  sortKey: Accessor<CoverageSortKey>;
+  sortDirection: Accessor<'asc' | 'desc'>;
+  onSort: (key: CoverageSortKey) => void;
+  expandedKeys: ReadonlySet<string>;
+  onToggleExpand: (key: string) => void;
+}) {
+  return (
+    <Show
+      when={props.rows.length > 0}
+      fallback={
+        <Card padding="lg">
+          <EmptyState
+            icon={props.emptyIcon}
+            title={
+              !props.hasAnyRows ? props.emptyTitle : 'No workload coverage rows match current filters'
+            }
+            description={
+              !props.hasAnyRows
+                ? props.emptyDescription
+                : 'Adjust the search, posture filter, or selected day to see more workloads.'
+            }
+          />
+        </Card>
+      }
+    >
+      <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
+        <Table class="min-w-[1200px] table-fixed text-xs">
+          <colgroup>
+            <col style={{ width: '18%' }} />
+            <col style={{ width: '12%' }} />
+            <col style={{ width: '14%' }} />
+            <col style={{ width: '13%' }} />
+            <col style={{ width: '13%' }} />
+            <col style={{ width: '13%' }} />
+            <col style={{ width: '17%' }} />
+          </colgroup>
+          <TableHeader>
+            <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+              <SortableHead
+                label="Workload"
+                sortKey="workload"
+                currentSort={props.sortKey}
+                direction={props.sortDirection}
+                onSort={props.onSort}
+                align="left"
+                headClass={getPlatformTableHeadClassForKind('name')}
+              />
+              <SortableHead
+                label="Posture"
+                sortKey="posture"
+                currentSort={props.sortKey}
+                direction={props.sortDirection}
+                onSort={props.onSort}
+                align="left"
+                headClass={getPlatformTableHeadClassForKind('text')}
+              />
+              <SortableHead
+                label="Latest restore"
+                sortKey="latest"
+                currentSort={props.sortKey}
+                direction={props.sortDirection}
+                onSort={props.onSort}
+                align="right"
+                headClass={getPlatformTableHeadClassForKind('numeric-value')}
+              />
+              <SortableHead
+                label="PBS"
+                sortKey="pbs"
+                currentSort={props.sortKey}
+                direction={props.sortDirection}
+                onSort={props.onSort}
+                align="left"
+                headClass={getPlatformTableHeadClassForKind('text')}
+              />
+              <SortableHead
+                label="Archive"
+                sortKey="archive"
+                currentSort={props.sortKey}
+                direction={props.sortDirection}
+                onSort={props.onSort}
+                align="left"
+                headClass={getPlatformTableHeadClassForKind('text')}
+              />
+              <SortableHead
+                label="Snapshot"
+                sortKey="snapshot"
+                currentSort={props.sortKey}
+                direction={props.sortDirection}
+                onSort={props.onSort}
+                align="left"
+                headClass={getPlatformTableHeadClassForKind('text')}
+              />
+              <SortableHead
+                label="Latest task"
+                sortKey="task"
+                currentSort={props.sortKey}
+                direction={props.sortDirection}
+                onSort={props.onSort}
+                align="left"
+                headClass={getPlatformTableHeadClassForKind('text')}
+              />
+            </TableRow>
+          </TableHeader>
+          <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+            <For each={props.rows}>
+              {(row) => {
+                const isExpanded = () => props.expandedKeys.has(row.key);
+                const evidence = () =>
+                  [...row.artifacts]
+                    .sort((left, right) => (right.createdMs ?? 0) - (left.createdMs ?? 0))
+                    .slice(0, 8);
+                return (
+                  <>
+                    <TableRow class="hover:bg-surface-hover">
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
+                      >
+                        <div class="flex min-w-0 items-center gap-2">
+                          <button
+                            type="button"
+                            class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                            onClick={() => props.onToggleExpand(row.key)}
+                            aria-label={`${isExpanded() ? 'Hide' : 'Show'} restore evidence for ${row.workload.label}`}
+                            aria-expanded={isExpanded()}
+                          >
+                            <ChevronRightIcon
+                              class={`h-3.5 w-3.5 transition-transform ${
+                                isExpanded() ? 'rotate-90' : ''
+                              }`}
+                              aria-hidden="true"
+                            />
+                          </button>
+                          <div class="min-w-0">
+                            <div class="font-semibold">{row.workload.label}</div>
+                            <div class="truncate font-mono text-[10px] uppercase text-muted">
+                              {row.workload.typeLabel} {row.workload.vmid}
+                              <Show when={row.workload.node}>
+                                {' · '}
+                                {row.workload.node}
+                              </Show>
+                            </div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell class={getPlatformTableCellClassForKind('text')}>
+                        <div class="flex items-center gap-2">
+                          <StatusDot
+                            size="sm"
+                            variant={coveragePostureVariant(row.posture)}
+                            title={getWorkloadRecoveryPostureLabel(row.posture)}
+                            ariaHidden
+                          />
+                          <span class="text-[11px] font-medium text-base-content">
+                            {getWorkloadRecoveryPostureLabel(row.posture)}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                      >
+                        <Show
+                          when={row.latestRecovery}
+                          fallback={<span class="text-muted">No restore point</span>}
+                        >
+                          {(artifact) => (
+                            <div class="min-w-0 text-right">
+                              <div>
+                                {formatRelativeTime(artifact().createdAt, { compact: true })}
+                              </div>
+                              <div class="truncate text-[10px] text-muted">
+                                {artifact().sourceLabel}
+                              </div>
+                            </div>
+                          )}
+                        </Show>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                      >
+                        <RecoverySourceSummary
+                          artifact={row.latestPBS}
+                          count={row.pbsCount}
+                          emptyLabel="No PBS"
+                        />
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                      >
+                        <RecoverySourceSummary
+                          artifact={row.latestArchive}
+                          count={row.archiveCount}
+                          emptyLabel="No archive"
+                        />
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                      >
+                        <RecoverySourceSummary
+                          artifact={row.latestSnapshot}
+                          count={row.snapshotCount}
+                          emptyLabel="No snapshot"
+                        />
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                      >
+                        <Show
+                          when={row.latestTask}
+                          fallback={<span class="text-muted">No recent task</span>}
+                        >
+                          {(task) => (
+                            <div class="min-w-0">
+                              <div class="flex items-center gap-2">
+                                <StatusDot
+                                  size="sm"
+                                  variant={
+                                    task().label === 'Failed'
+                                      ? 'danger'
+                                      : task().label === 'OK'
+                                        ? 'success'
+                                        : 'warning'
+                                  }
+                                  title={task().label}
+                                  ariaHidden
+                                />
+                                <span>{task().label}</span>
+                              </div>
+                              <div class="truncate text-[10px] text-muted">
+                                {formatRelativeTime(task().startedAt, { compact: true })}
+                              </div>
+                            </div>
+                          )}
+                        </Show>
+                      </TableCell>
+                    </TableRow>
+                    <Show when={isExpanded()}>
+                      <TableRow class="bg-surface-alt/40">
+                        <TableCell class="px-3 py-2" colspan={7}>
+                          <Show
+                            when={evidence().length > 0}
+                            fallback={
+                              <div class="text-xs text-muted">
+                                No restore evidence has been discovered for this workload.
+                              </div>
+                            }
+                          >
+                            <div class="overflow-hidden">
+                              <div class="mb-1 flex items-center justify-between gap-2 text-[11px]">
+                                <span class="font-medium text-base-content">Restore evidence</span>
+                                <Show when={row.artifacts.length > evidence().length}>
+                                  <span class="text-muted">
+                                    Showing {evidence().length} of {row.artifacts.length}
+                                  </span>
+                                </Show>
+                              </div>
+                              <table class="w-full text-[11px]">
+                                <thead>
+                                  <tr class="bg-surface-alt text-muted">
+                                    <th class="px-2 py-0.5 text-left font-medium">Source</th>
+                                    <th class="px-2 py-0.5 text-left font-medium">Location</th>
+                                    <th class="px-2 py-0.5 text-right font-medium">Created</th>
+                                    <th class="px-2 py-0.5 text-right font-medium">Size</th>
+                                    <th class="px-2 py-0.5 text-left font-medium">State</th>
+                                    <th class="px-2 py-0.5 text-left font-medium">Details</th>
+                                  </tr>
+                                </thead>
+                                <tbody class="divide-y divide-border-subtle">
+                                  <For each={evidence()}>
+                                    {(artifact) => (
+                                      <tr class="hover:bg-surface-hover">
+                                        <td class="px-2 py-1">
+                                          <ArtifactSourceBadge artifact={artifact} />
+                                        </td>
+                                        <td class="px-2 py-1 text-base-content">
+                                          <span
+                                            class="inline-block max-w-[18rem] truncate"
+                                            title={artifact.location}
+                                          >
+                                            {artifact.location}
+                                          </span>
+                                        </td>
+                                        <td class="px-2 py-1 text-right text-base-content">
+                                          {formatRelativeTime(artifact.createdAt, { compact: true })}
+                                        </td>
+                                        <td class="px-2 py-1 text-right tabular-nums text-base-content">
+                                          <Show
+                                            when={artifact.size && artifact.size > 0}
+                                            fallback={<span class="text-muted">No size</span>}
+                                          >
+                                            {formatBytes(artifact.size ?? 0)}
+                                          </Show>
+                                        </td>
+                                        <td class="px-2 py-1">
+                                          <ArtifactStateBadge
+                                            artifact={artifact}
+                                            label={artifactStateLabel(artifact)}
+                                          />
+                                        </td>
+                                        <td class="px-2 py-1 text-base-content">
+                                          <span
+                                            class="inline-block max-w-[24rem] truncate"
+                                            title={artifact.detail}
+                                          >
+                                            {artifact.detail || '—'}
+                                          </span>
+                                        </td>
+                                      </tr>
+                                    )}
+                                  </For>
+                                </tbody>
+                              </table>
+                            </div>
+                          </Show>
+                        </TableCell>
+                      </TableRow>
+                    </Show>
+                  </>
+                );
+              }}
+            </For>
+          </TableBody>
+        </Table>
+      </TableCard>
+    </Show>
+  );
+}
