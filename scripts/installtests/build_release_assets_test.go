@@ -317,6 +317,10 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 		`http_header_value "X-Checksum-Sha256"`,
 		`http_header_value "X-Signature-Ed25519"`,
 		`http_header_value "X-Signature-SSHSIG"`,
+		`url="http://127.0.0.1:${HOST_PORT}/${script_name}"`,
+		`^# Pulse Unified Agent Installer`,
+		`--token-file`,
+		`TokenFile`,
 		`Install script endpoints returned required signature headers`,
 		`Download endpoints returned binaries with checksum and signature headers for all platforms/architectures`,
 		`Offline self-heal: download endpoint works with checksum and signature headers without outbound network`,
@@ -373,6 +377,9 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 		if !strings.Contains(localValidator, needle) {
 			t.Fatalf("validate-release.sh missing signed sidecar validation: %s", needle)
 		}
+	}
+	if strings.Contains(localValidator, `url="http://127.0.0.1:${HOST_PORT}/download/${script_name}"`) {
+		t.Fatal("validate-release.sh must smoke-test /install.sh and /install.ps1, not non-existent /download/install.* routes")
 	}
 
 	publishedValidatorBytes, err := os.ReadFile(repoFile("scripts", "validate-published-release.sh"))

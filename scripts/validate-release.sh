@@ -270,7 +270,7 @@ if [ "$SKIP_DOCKER" = false ]; then
     )
 
     for script_name in install.sh install.ps1; do
-        url="http://127.0.0.1:${HOST_PORT}/download/${script_name}"
+        url="http://127.0.0.1:${HOST_PORT}/${script_name}"
         tmp_file=$(mktemp)
         tmp_headers=$(mktemp)
         if ! curl -fsS -D "$tmp_headers" -o "$tmp_file" "$url"; then
@@ -282,6 +282,28 @@ if [ "$SKIP_DOCKER" = false ]; then
             error "Downloaded empty ${script_name}"
             exit 1
         fi
+        case "$script_name" in
+            install.sh)
+                if ! grep -q '^# Pulse Unified Agent Installer' "$tmp_file"; then
+                    error "${script_name} endpoint did not return the unified agent installer"
+                    exit 1
+                fi
+                if ! grep -q -- '--token-file' "$tmp_file"; then
+                    error "${script_name} endpoint is missing agent installer token-file support"
+                    exit 1
+                fi
+                ;;
+            install.ps1)
+                if ! grep -q '^# Pulse Unified Agent Installer (Windows)' "$tmp_file"; then
+                    error "${script_name} endpoint did not return the unified agent installer"
+                    exit 1
+                fi
+                if ! grep -q 'TokenFile' "$tmp_file"; then
+                    error "${script_name} endpoint is missing agent installer token-file support"
+                    exit 1
+                fi
+                ;;
+        esac
         validate_download_script_headers "$tmp_headers" "${script_name}"
         rm -f "$tmp_file" "$tmp_headers"
     done
