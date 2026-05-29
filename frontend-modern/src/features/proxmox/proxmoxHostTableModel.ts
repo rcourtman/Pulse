@@ -55,8 +55,8 @@ const HOST_COLUMN_DESKTOP_WIDTHS: Record<ProxmoxHostTableColumnId, number> = {
   memory: 13,
   disk: 13,
   temp: 5,
-  vms: 4,
-  cts: 4,
+  vms: 5,
+  cts: 5,
   cluster: 10,
 };
 
