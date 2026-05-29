@@ -16,6 +16,7 @@ import ServerIcon from 'lucide-solid/icons/server';
 import ShieldCheckIcon from 'lucide-solid/icons/shield-check';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { useSearchParams } from '@solidjs/router';
 import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components/shared/FilterBar';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { apiFetch } from '@/utils/apiClient';
@@ -225,6 +226,11 @@ export const ProxmoxBackupsTable: Component<{
   const [backups, { refetch }] = createResource<PVEBackupsPayload>(fetchPVEBackups);
   const [pbsBackups, { refetch: refetchPBS }] = createResource<PBSBackupsPayload>(fetchPBSBackups);
   const { isMobile } = useBreakpoint();
+  // The structured scope filters (node, type) live in the URL so views are
+  // shareable, survive reload, and can be captured by FilterBar saved views
+  // (which persist the URL query string). Search, status facets, and the chart
+  // day stay ephemeral signals.
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = createSignal<BackupTabId>('coverage');
   const [sourceDetailTab, setSourceDetailTab] = createSignal<SourceDetailTabId>('pbs');
   const [search, setSearch] = createSignal('');
@@ -240,7 +246,8 @@ export const ProxmoxBackupsTable: Component<{
   const [snapshotFilter, setSnapshotFilter] = createSignal<SnapshotFilterValue>('all');
   // Cross-tab scope filter: an empty value means "all nodes". Applied as a
   // predicate in each tab's filter memo (PBS artifacts carry no node).
-  const [nodeFilter, setNodeFilter] = createSignal('');
+  const nodeFilter = (): string => (typeof searchParams.node === 'string' ? searchParams.node : '');
+  const setNodeFilter = (value: string): void => setSearchParams({ node: value || null });
   const nodeMatches = (node: string | undefined): boolean => {
     const selected = nodeFilter();
     return !selected || node === selected;
@@ -249,7 +256,8 @@ export const ProxmoxBackupsTable: Component<{
   // PBS backupType use vm/ct/host; raw PVE tasks/archives/snapshots use
   // qemu/lxc), so normalize each shape's type to a canonical vm/ct/host before
   // comparing. Applies to every tab, PBS included (via backupType).
-  const [typeFilter, setTypeFilter] = createSignal('');
+  const typeFilter = (): string => (typeof searchParams.type === 'string' ? searchParams.type : '');
+  const setTypeFilter = (value: string): void => setSearchParams({ type: value || null });
   const canonicalGuestType = (raw: string | undefined): string => {
     const t = (raw ?? '').toLowerCase();
     if (t === 'vm' || t === 'qemu') return 'vm';
@@ -1495,6 +1503,7 @@ export const ProxmoxBackupsTable: Component<{
               placeholder: 'Search backups by workload, node, source, or status',
             }}
             filters={buildBackupsFilters()}
+            savedViewsKey="proxmox-backups"
             searchTrailing={
               <Show when={selectedDateKey() !== null}>
                 <button

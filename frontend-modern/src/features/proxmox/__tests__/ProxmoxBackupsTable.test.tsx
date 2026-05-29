@@ -1,8 +1,19 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { Route, Router } from '@solidjs/router';
+import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ProxmoxBackupsTable } from '../ProxmoxBackupsTable';
 import type { Resource } from '@/types/resource';
+
+// ProxmoxBackupsTable reads URL search params (node/type scope filters), so it
+// must render inside a Router context.
+const renderInRouter = (component: () => JSX.Element) =>
+  render(() => (
+    <Router>
+      <Route path="/" component={component} />
+    </Router>
+  ));
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
 
@@ -120,7 +131,7 @@ describe('ProxmoxBackupsTable', () => {
   it('shows PBS artifacts from the PBS backup endpoint when PBS is present', async () => {
     mockBackupAPIs();
 
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxBackupsTable emptyIcon={<span />} hasPBS workloads={[workloadResource]} />
     ));
 
@@ -142,7 +153,7 @@ describe('ProxmoxBackupsTable', () => {
   it('omits PVE columns when the source cannot populate them', async () => {
     mockBackupAPIs();
 
-    render(() => <ProxmoxBackupsTable emptyIcon={<span />} hasPBS={false} />);
+    renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} hasPBS={false} />);
 
     await fireEvent.click(await screen.findByRole('button', { name: /source details/i }));
     await fireEvent.click(screen.getByRole('button', { name: 'Snapshots 1' }));
@@ -166,7 +177,7 @@ describe('ProxmoxBackupsTable', () => {
   it('keeps restore points searchable while moving raw sources behind source details', async () => {
     mockBackupAPIs();
 
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxBackupsTable emptyIcon={<span />} hasPBS workloads={[workloadResource]} />
     ));
 
@@ -189,7 +200,7 @@ describe('ProxmoxBackupsTable', () => {
   it('expands coverage rows to show inline restore evidence', async () => {
     mockBackupAPIs();
 
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxBackupsTable emptyIcon={<span />} hasPBS workloads={[workloadResource]} />
     ));
 
