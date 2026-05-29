@@ -16,7 +16,7 @@ import ServerIcon from 'lucide-solid/icons/server';
 import ShieldCheckIcon from 'lucide-solid/icons/shield-check';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';
+import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components/shared/FilterBar';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { apiFetch } from '@/utils/apiClient';
 import { formatBytes } from '@/utils/format';
@@ -238,6 +238,13 @@ export const ProxmoxBackupsTable: Component<{
   >('all');
   const [taskFilter, setTaskFilter] = createSignal<'all' | 'ok' | 'failed' | 'running'>('all');
   const [snapshotFilter, setSnapshotFilter] = createSignal<SnapshotFilterValue>('all');
+  // Cross-tab scope filter: an empty value means "all nodes". Applied as a
+  // predicate in each tab's filter memo (PBS artifacts carry no node).
+  const [nodeFilter, setNodeFilter] = createSignal('');
+  const nodeMatches = (node: string | undefined): boolean => {
+    const selected = nodeFilter();
+    return !selected || node === selected;
+  };
   const [chartRange, setChartRange] = createSignal<BackupActivityRangeDays>(30);
   const [selectedDateKey, setSelectedDateKey] = createSignal<string | null>(null);
   const [recoverableMetricMode, setRecoverableMetricMode] =
@@ -631,6 +638,7 @@ export const ProxmoxBackupsTable: Component<{
     };
     const rows: SnapshotGuestRow[] = [];
     for (const row of byGuest.values()) {
+      if (!nodeMatches(row.node)) continue;
       const matchesByIdentity = searchedByGuestIdentity(row);
       const snapshotsMatching = term
         ? row.snapshots.filter((snap) => snapshotMatchesSearch(snap, term))
@@ -692,6 +700,7 @@ export const ProxmoxBackupsTable: Component<{
     const filter = archiveFilter();
     const dateKey = selectedDateKey();
     const list = archives().filter((arc) => {
+      if (!nodeMatches(arc.node)) return false;
       if (filter === 'protected' && !arc.protected) return false;
       if (filter === 'verified' && !arc.verified) return false;
       if (filter === 'unverified' && arc.verified) return false;
@@ -738,6 +747,7 @@ export const ProxmoxBackupsTable: Component<{
     const filter = taskFilter();
     const dateKey = selectedDateKey();
     const list = tasks().filter((task) => {
+      if (!nodeMatches(task.node)) return false;
       const classify = classifyTaskStatus(task.status);
       if (filter === 'ok' && classify.variant !== 'success') return false;
       if (filter === 'failed' && classify.variant !== 'danger') return false;
@@ -783,6 +793,7 @@ export const ProxmoxBackupsTable: Component<{
     const filter = coverageFilter();
     const dateKey = selectedDateKey();
     const list = recoveryModel().coverageRows.filter((row) => {
+      if (!nodeMatches(row.workload.node)) return false;
       if (filter === 'attention' && !isCoverageAttention(row.posture)) return false;
       if (filter === 'current' && row.posture !== 'current') return false;
       if (filter === 'uncovered' && row.posture !== 'uncovered') return false;
@@ -826,6 +837,7 @@ export const ProxmoxBackupsTable: Component<{
     const filter = recoverableFilter();
     const dateKey = selectedDateKey();
     const list = recoveryModel().recoverableArtifacts.filter((artifact) => {
+      if (!nodeMatches(artifact.workload.node)) return false;
       if (
         (filter === 'pbs' || filter === 'archive' || filter === 'snapshot') &&
         artifact.sourceKind !== filter
@@ -962,10 +974,26 @@ export const ProxmoxBackupsTable: Component<{
 
   const visibleSnapshotGuestCount = createMemo(() => filteredSnapshotGuests().length);
 
-  // Per-view status facet expressed as a shared FilterBar FilterDef. Inline so
-  // it renders as a segmented control next to the search, matching the
-  // overview/workloads/storage pages. Node/type scope filters land in
-  // follow-on commits.
+  // Node options for the scope filter: the distinct nodes across the workload
+  // set, "All nodes" first. Used by every node-bearing view (not PBS, whose
+  // artifacts live on the backup server and carry no node). The Node filter is
+  // non-inline, so it appears in the FilterBar "+ Filter" menu.
+  const nodeOptions = createMemo<FilterSelectOption[]>(() => {
+    const nodes = new Set<string>();
+    for (const row of recoveryModel().coverageRows) {
+      const node = row.workload.node?.trim();
+      if (node) nodes.add(node);
+    }
+    return [
+      { value: '', label: 'All nodes' },
+      ...[...nodes].sort((a, b) => a.localeCompare(b)).map((node) => ({ value: node, label: node })),
+    ];
+  });
+
+  // FilterBar catalog for the active view: a Node scope filter (in the
+  // "+ Filter" menu) on every node-bearing view, plus the view's status facet
+  // as an inline segmented control. Matches the overview/workloads/storage
+  // pages. Type and source/property filters land in follow-on commits.
   const buildBackupsFilters = (): FilterDef[] => {
     const statusFilter = (
       id: string,
@@ -975,49 +1003,62 @@ export const ProxmoxBackupsTable: Component<{
       setValue: FilterDef['setValue'],
     ): FilterDef => ({ id, label, group: 'status', inline: true, options, value, setValue, defaultValue: 'all' });
 
-    if (tab() === 'coverage') {
-      return [
+    const filters: FilterDef[] = [];
+    const t = tab();
+    const sd = sourceDetailTab();
+    const isPbs = t === 'sources' && sd === 'pbs';
+
+    if (!isPbs) {
+      filters.push({
+        id: 'node',
+        label: 'Node',
+        group: 'scope',
+        options: nodeOptions,
+        value: nodeFilter,
+        setValue: setNodeFilter,
+        defaultValue: '',
+      });
+    }
+
+    if (t === 'coverage') {
+      filters.push(
         statusFilter('posture', 'Posture', () => COVERAGE_FILTERS, coverageFilter, (v) =>
           setCoverageFilter(v as CoverageFilterValue),
         ),
-      ];
-    }
-    if (tab() === 'recoverable') {
-      return [
+      );
+    } else if (t === 'recoverable') {
+      filters.push(
         statusFilter('source', 'Source', () => RECOVERABLE_FILTERS, recoverableFilter, (v) =>
           setRecoverableFilter(v as RecoverableFilterValue),
         ),
-      ];
-    }
-    if (tab() === 'tasks') {
-      return [
+      );
+    } else if (t === 'tasks') {
+      filters.push(
         statusFilter('task-status', 'Status', () => TASK_STATUS_FILTERS, taskFilter, (v) =>
           setTaskFilter(v as 'all' | 'ok' | 'failed' | 'running'),
         ),
-      ];
-    }
-    if (tab() === 'sources' && sourceDetailTab() === 'pbs') {
-      return [
+      );
+    } else if (isPbs) {
+      filters.push(
         statusFilter('pbs-status', 'Status', () => PBS_STATUS_FILTERS, pbsFilter, (v) =>
           setPBSFilter(v as 'all' | 'protected' | 'verified' | 'unverified'),
         ),
-      ];
-    }
-    if (tab() === 'sources' && sourceDetailTab() === 'snapshots') {
-      return [
+      );
+    } else if (t === 'sources' && sd === 'snapshots') {
+      filters.push(
         statusFilter('snapshot', 'Snapshots', () => SNAPSHOT_FILTERS, snapshotFilter, (v) =>
           setSnapshotFilter(v as SnapshotFilterValue),
         ),
-      ];
-    }
-    if (tab() === 'sources' && sourceDetailTab() === 'archives' && showArchivePBSColumns()) {
-      return [
+      );
+    } else if (t === 'sources' && sd === 'archives' && showArchivePBSColumns()) {
+      filters.push(
         statusFilter('archive-status', 'Status', () => ARCHIVE_STATUS_FILTERS, archiveFilter, (v) =>
           setArchiveFilter(v as 'all' | 'protected' | 'verified' | 'unverified'),
         ),
-      ];
+      );
     }
-    return [];
+
+    return filters;
   };
 
   return (
