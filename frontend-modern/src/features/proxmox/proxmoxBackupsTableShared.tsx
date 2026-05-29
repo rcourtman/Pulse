@@ -141,6 +141,16 @@ export function RecoverySourceSummary(props: {
   );
 }
 
+// Short state label for a recoverable artifact, paired with ArtifactStateBadge
+// for colour. Snapshot and protected take precedence over verification state.
+export function artifactStateLabel(artifact: RecoverableArtifact): string {
+  if (artifact.sourceKind === 'snapshot') return 'Snapshot';
+  if (artifact.protected) return 'Protected';
+  if (artifact.verified === true) return 'Verified';
+  if (artifact.verified === false) return 'Unverified';
+  return 'Archive';
+}
+
 export function ArtifactStateBadge(props: { artifact: RecoverableArtifact; label: string }) {
   if (props.artifact.sourceKind === 'snapshot') {
     return (

@@ -121,8 +121,10 @@ import {
   SNAPSHOT_FILTERS,
   SortableHead,
   TASK_STATUS_FILTERS,
+  artifactStateLabel,
 } from './proxmoxBackupsTableShared';
 import { ProxmoxBackupsCoverageStrip } from './ProxmoxBackupsCoverageStrip';
+import { ProxmoxRecoverableTable } from './ProxmoxRecoverableTable';
 
 // Proxmox backups are intentionally organized around operator questions, not
 // storage-source mechanics:
@@ -513,14 +515,6 @@ export const ProxmoxBackupsTable: Component<{
       },
     ),
   );
-
-  const artifactStateLabel = (artifact: RecoverableArtifact): string => {
-    if (artifact.sourceKind === 'snapshot') return 'Snapshot';
-    if (artifact.protected) return 'Protected';
-    if (artifact.verified === true) return 'Verified';
-    if (artifact.verified === false) return 'Unverified';
-    return 'Archive';
-  };
 
   const coveragePostureVariant = (
     posture: WorkloadCoverageRow['posture'],
@@ -1846,167 +1840,17 @@ export const ProxmoxBackupsTable: Component<{
           </Show>
 
           <Show when={tab() === 'recoverable'}>
-            <Show
-              when={filteredRecoverableArtifacts().length > 0}
-              fallback={
-                <Card padding="lg">
-                  <EmptyState
-                    icon={props.emptyIcon}
-                    title={
-                      recoveryModel().recoverableArtifacts.length === 0
-                        ? tabSpecFor('recoverable').emptyTitle
-                        : 'No recoverable artifacts match current filters'
-                    }
-                    description={
-                      recoveryModel().recoverableArtifacts.length === 0
-                        ? tabSpecFor('recoverable').emptyDescription
-                        : 'Adjust the search, source filter, or selected day to see more artifacts.'
-                    }
-                  />
-                </Card>
-              }
-            >
-              <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-                <Table class="min-w-[1150px] text-xs">
-                  <TableHeader>
-                    <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                      <SortableHead
-                        label="Workload"
-                        sortKey="workload"
-                        currentSort={recoverableSortKey}
-                        direction={recoverableSortDirection}
-                        onSort={handleRecoverableSort}
-                        align="left"
-                        headClass={getPlatformTableHeadClassForKind('name')}
-                      />
-                      <SortableHead
-                        label="Source"
-                        sortKey="source"
-                        currentSort={recoverableSortKey}
-                        direction={recoverableSortDirection}
-                        onSort={handleRecoverableSort}
-                        align="left"
-                        headClass={getPlatformTableHeadClassForKind('text')}
-                      />
-                      <SortableHead
-                        label="Location"
-                        sortKey="location"
-                        currentSort={recoverableSortKey}
-                        direction={recoverableSortDirection}
-                        onSort={handleRecoverableSort}
-                        align="left"
-                        headClass={getPlatformTableHeadClassForKind('text')}
-                      />
-                      <SortableHead
-                        label="Created"
-                        sortKey="created"
-                        currentSort={recoverableSortKey}
-                        direction={recoverableSortDirection}
-                        onSort={handleRecoverableSort}
-                        align="right"
-                        headClass={getPlatformTableHeadClassForKind('numeric-value')}
-                      />
-                      <SortableHead
-                        label="Size"
-                        sortKey="size"
-                        currentSort={recoverableSortKey}
-                        direction={recoverableSortDirection}
-                        onSort={handleRecoverableSort}
-                        align="center"
-                        headClass={getPlatformTableHeadClassForKind('metric-bar')}
-                      />
-                      <SortableHead
-                        label="State"
-                        sortKey="state"
-                        currentSort={recoverableSortKey}
-                        direction={recoverableSortDirection}
-                        onSort={handleRecoverableSort}
-                        align="left"
-                        headClass={getPlatformTableHeadClassForKind('text')}
-                      />
-                      <TableHead class={getPlatformTableHeadClassForKind('text')}>
-                        Details
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
-                    <For each={filteredRecoverableArtifacts()}>
-                      {(artifact) => (
-                        <TableRow class="hover:bg-surface-hover">
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
-                          >
-                            <div class="min-w-0">
-                              <div class="font-semibold">{artifact.workload.label}</div>
-                              <div class="font-mono text-[10px] uppercase text-muted">
-                                {artifact.workload.typeLabel} {artifact.workload.vmid}
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            <ArtifactSourceBadge artifact={artifact} />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            <span
-                              class="inline-block max-w-[16rem] truncate"
-                              title={artifact.location}
-                            >
-                              {artifact.location}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
-                            {formatRelativeTime(artifact.createdAt, { compact: true })}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('metric-bar')} text-base-content`}
-                          >
-                            <Show
-                              when={artifact.size && artifact.size > 0}
-                              fallback={<span class="text-muted">No size</span>}
-                            >
-                              <RowMetricBar
-                                valuePct={
-                                  recoverableSizeMaxBytes() > 0 && artifact.size
-                                    ? (artifact.size / recoverableSizeMaxBytes()) * 100
-                                    : 0
-                                }
-                                fillClass="bg-blue-500/40 dark:bg-blue-500/40"
-                                label={formatBytes(artifact.size ?? 0)}
-                                tooltip={`${formatBytes(artifact.size ?? 0)} (relative to largest artifact in view)`}
-                              />
-                            </Show>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            <ArtifactStateBadge
-                              artifact={artifact}
-                              label={artifactStateLabel(artifact)}
-                            />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            <span
-                              class="inline-block max-w-[20rem] truncate"
-                              title={artifact.detail}
-                            >
-                              {artifact.detail || '—'}
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </For>
-                  </TableBody>
-                </Table>
-              </TableCard>
-            </Show>
+            <ProxmoxRecoverableTable
+              artifacts={filteredRecoverableArtifacts()}
+              hasAnyArtifacts={recoveryModel().recoverableArtifacts.length > 0}
+              emptyIcon={props.emptyIcon}
+              emptyTitle={tabSpecFor('recoverable').emptyTitle}
+              emptyDescription={tabSpecFor('recoverable').emptyDescription}
+              sortKey={recoverableSortKey}
+              sortDirection={recoverableSortDirection}
+              onSort={handleRecoverableSort}
+              sizeMaxBytes={recoverableSizeMaxBytes()}
+            />
           </Show>
 
           <Show when={tab() === 'sources' && sourceDetailTab() === 'pbs'}>
