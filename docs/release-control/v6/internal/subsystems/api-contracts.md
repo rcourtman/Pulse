@@ -672,7 +672,7 @@ the canonical monitored-system blocked payload.
    host-agent row for the same machine must leave the API boundary as one
    hybrid `agent` resource with merged source facets, not as duplicate rows
    that disappear only after REST reconciliation.
-8. Route unified-agent installer and binary download headers through `internal/api/unified_agent.go` and `internal/api/contract_test.go` together. Unified-agent BINARY downloads must keep the canonical `X-Checksum-Sha256` plus `X-Signature-Ed25519` contract for updater clients whether the binary is served locally or proxied from the matching GitHub release, instead of leaving callers to infer trust from source location alone. The served install-script endpoints (GET /install.sh and /install.ps1) are governed differently: they must always serve the locally bundled AGENT installer and must never substitute the top-level GitHub install.sh release asset, which is the SERVER installer and rejects the agent wizard's --url / --token-file (issue #1470). They attach the base64-encoded `X-Signature-SSHSIG` header when the local detached signatures are present (or when a genuinely-absent local script is proxied from the matching release), but a present-but-unsigned local agent installer is served WITHOUT the header rather than proxying a signed-but-wrong server installer; the agent install path (curl piped into bash) does not verify these headers, so correctness of the served script outranks signature presence on that endpoint.
+8. Route unified-agent installer and binary download headers through `internal/api/unified_agent.go` and `internal/api/contract_test.go` together. Unified-agent BINARY downloads must keep the canonical `X-Checksum-Sha256` plus `X-Signature-Ed25519` contract for updater clients whether the binary is served locally or proxied from the matching GitHub release, instead of leaving callers to infer trust from source location alone. The served install-script endpoints (GET /install.sh and /install.ps1) are governed differently and have NO GitHub fallback at all: they serve the locally bundled AGENT installer or fail closed with 503. The agent installer is a per-build artifact bundled into every release tarball and Docker image, not a release asset, so the endpoint must never fetch the top-level GitHub install.sh release asset (the SERVER installer, which rejects the agent wizard's --url / --token-file, issue #1470). It attaches the base64-encoded `X-Signature-SSHSIG` header when the local detached signatures are present and omits it when they are not; a present-but-unsigned local agent installer is still served, because the agent install path (curl piped into bash) does not verify these headers, so correctness of the served script outranks signature presence.
 9. Route canonical AI intelligence summary and resource-intelligence reads through `frontend-modern/src/api/ai.ts`, `frontend-modern/src/stores/aiIntelligence.ts`, `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts`, `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`, `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx`, the Patrol-owned section files under `frontend-modern/src/features/patrol/`, `frontend-modern/src/pages/AIIntelligence.tsx`, `internal/api/ai_handlers.go`, and `internal/api/contract_test.go` together so the summary card, store normalization owner, runtime hook, feature shell, section owners, route shell, and backend payload stay aligned on one governed surface, including the canonical recent-changes slice
    while keeping the learning counters backend-only coverage, so the summary page keeps Patrol health and findings primary and renders timeline, correlation, and policy-posture data as secondary investigation context rather than as a separate headline product metric
    and the Patrol findings empty-state behavior, so `0 active findings` only renders as a healthy frontend conclusion when the same governed AI summary contract still reports healthy overall health; degraded or not-fully-verified health predictions must flow through to the Patrol findings surface instead of being replaced by page-local "looks healthy" copy
@@ -1573,14 +1573,16 @@ the canonical monitored-system blocked payload.
     normalize the browser back to `/settings/infrastructure`, but first-run
     callers must not fall back to the retired `/settings/infrastructure/install`
     or `/settings/infrastructure/platforms` deep links.
-27. Keep shared install-script fallback transport pinned to published release
-    lineage. `internal/api/unified_agent.go` and
+27. Keep the shared agent-download fallback transport pinned to published
+    release lineage. The served install-script endpoints (/install.sh,
+    /install.ps1) have no GitHub fallback at all (see item 8); they serve the
+    locally bundled agent installer or fail closed. The remaining GitHub fallback
+    is the agent-BINARY download proxy: `internal/api/unified_agent.go` and
     `internal/api/contract_test.go` must only map stable tags or explicit RC
-    prerelease tags without build metadata to GitHub install-script release
-    assets; dev prereleases such as `v6.0.0-dev`, git-described
-    `+git...` builds, and other unpublished prerelease identifiers must fail
-    closed on that API boundary instead of generating fake release URLs from
-    a local runtime version string.
+    prerelease tags without build metadata to GitHub release assets; dev
+    prereleases such as `v6.0.0-dev`, git-described `+git...` builds, and other
+    unpublished prerelease identifiers must fail closed on that API boundary
+    instead of generating fake release URLs from a local runtime version string.
 28. Keep local trial-start transport retired from self-hosted v6 GA runtime
     paths. `POST /api/license/trial/start` must not be registered as an ordinary
     in-app acquisition endpoint; browser API clients, route inventory, demo

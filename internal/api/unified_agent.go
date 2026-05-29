@@ -44,16 +44,21 @@ func githubReleaseAssetURL(tag, assetName string) string {
 }
 
 func (r *Router) handleDownloadUnifiedInstallScript(w http.ResponseWriter, req *http.Request) {
-	handleDownloadInstallScriptCommon(w, req, r.serverVersion, "/opt/pulse/scripts/install.sh", filepath.Join(r.projectRoot, "scripts", "install.sh"), "install.sh", "text/x-shellscript", r.proxyInstallScriptFromGitHub)
+	handleDownloadInstallScriptCommon(w, req, r.serverVersion, "/opt/pulse/scripts/install.sh", filepath.Join(r.projectRoot, "scripts", "install.sh"), "install.sh", "text/x-shellscript")
 }
 
 func (r *Router) handleDownloadUnifiedInstallScriptPS(w http.ResponseWriter, req *http.Request) {
-	handleDownloadInstallScriptCommon(w, req, r.serverVersion, "/opt/pulse/scripts/install.ps1", filepath.Join(r.projectRoot, "scripts", "install.ps1"), "install.ps1", "text/plain", r.proxyInstallScriptFromGitHub)
+	handleDownloadInstallScriptCommon(w, req, r.serverVersion, "/opt/pulse/scripts/install.ps1", filepath.Join(r.projectRoot, "scripts", "install.ps1"), "install.ps1", "text/plain")
 }
 
-type proxyFunc func(http.ResponseWriter, *http.Request, string)
-
-func handleDownloadInstallScriptCommon(w http.ResponseWriter, req *http.Request, serverVersion, prodPath, fallbackPath, scriptName, contentType string, fallbackProxy proxyFunc) {
+// handleDownloadInstallScriptCommon serves the locally bundled AGENT installer
+// (install.sh / install.ps1). It deliberately has no GitHub fallback: the agent
+// installer is a per-build artifact bundled into every release tarball and Docker
+// image, NOT a release asset. The top-level GitHub install.sh asset is the SERVER
+// installer, so proxying it here would hand the agent wizard a script that rejects
+// --url/--token-file (issue #1470). If the local script is genuinely missing the
+// install is broken; fail closed rather than serving a wrong-identity script.
+func handleDownloadInstallScriptCommon(w http.ResponseWriter, req *http.Request, serverVersion, prodPath, fallbackPath, scriptName, contentType string) {
 	if req.Method != http.MethodGet && req.Method != http.MethodHead {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -67,8 +72,8 @@ func handleDownloadInstallScriptCommon(w http.ResponseWriter, req *http.Request,
 	if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
 		scriptPath = fallbackPath
 		if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
-			log.Info().Msgf("Local %s not found, proxying from GitHub releases", scriptName)
-			fallbackProxy(w, req, scriptName)
+			log.Error().Str("script", scriptName).Msg("Bundled install script not found; the Pulse install is incomplete")
+			http.Error(w, "Install script unavailable: the bundled agent installer is missing from this Pulse install", http.StatusServiceUnavailable)
 			return
 		}
 	}
@@ -423,7 +428,6 @@ func (r *Router) proxyAgentBinaryFromGitHub(w http.ResponseWriter, req *http.Req
 }
 
 const maxAgentBinarySize = 100 * 1024 * 1024
-const maxInstallScriptSize = 512 * 1024
 
 func readBinaryWithChecksum(body io.Reader) ([]byte, string, error) {
 	limitedReader := io.LimitReader(body, maxAgentBinarySize+1)
@@ -654,98 +658,10 @@ func (r *Router) releaseAssetURL(assetName string) (string, error) {
 	return githubReleaseAssetURL(tag, assetName), nil
 }
 
-func (r *Router) installScriptReleaseAssetURL(scriptName string) (string, error) {
-	return r.releaseAssetURL(scriptName)
-}
-
 func (r *Router) agentBinaryReleaseAssetURL(normalized string) (string, error) {
 	binaryName := "pulse-agent-" + normalized
 	if strings.HasPrefix(normalized, "windows-") {
 		binaryName += ".exe"
 	}
 	return r.releaseAssetURL(binaryName)
-}
-
-// proxyInstallScriptFromGitHub fetches an install script from the exact GitHub
-// release asset that matches the running server version. This is used as a
-// fallback when scripts aren't available locally (for example in LXC updates).
-func (r *Router) proxyInstallScriptFromGitHub(w http.ResponseWriter, req *http.Request, scriptName string) {
-	githubURL, err := r.installScriptReleaseAssetURL(scriptName)
-	if err != nil {
-		log.Error().Err(err).Str("server_version", strings.TrimSpace(r.serverVersion)).Str("script", scriptName).Msg("Install script fallback unavailable for current server build")
-		http.Error(w, "Install script unavailable for current server build", http.StatusServiceUnavailable)
-		return
-	}
-
-	client := r.installScriptClient
-	if client == nil {
-		client = &http.Client{
-			Timeout: 30 * time.Second,
-		}
-	}
-
-	proxyReq, err := http.NewRequestWithContext(req.Context(), req.Method, githubURL, nil)
-	if err != nil {
-		log.Error().Err(err).Str("url", githubURL).Msg("Failed to create install script fallback request")
-		http.Error(w, "Failed to fetch install script", http.StatusInternalServerError)
-		return
-	}
-
-	resp, err := client.Do(proxyReq)
-	if err != nil {
-		log.Error().Err(err).Str("url", githubURL).Msg("Failed to fetch install script from GitHub")
-		http.Error(w, "Failed to fetch install script", http.StatusServiceUnavailable)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		log.Error().Int("status", resp.StatusCode).Str("url", githubURL).Msg("GitHub returned non-200 status for install script")
-		http.Error(w, "Install script not found", http.StatusNotFound)
-		return
-	}
-
-	signatureContent, sigErr := fetchReleaseAssetContent(req.Context(), client, githubURL+".sig", 16*1024)
-	if sigErr != nil {
-		log.Error().Err(sigErr).Str("url", githubURL+".sig").Msg("Failed to fetch install script signature from GitHub")
-		http.Error(w, "Failed to fetch install script signature", http.StatusServiceUnavailable)
-		return
-	}
-	sshSignatureContent, sshSigErr := fetchReleaseAssetContent(req.Context(), client, githubURL+".sshsig", 64*1024)
-	if sshSigErr != nil {
-		log.Error().Err(sshSigErr).Str("url", githubURL+".sshsig").Msg("Failed to fetch install script SSH signature from GitHub")
-		http.Error(w, "Failed to fetch install script SSH signature", http.StatusServiceUnavailable)
-		return
-	}
-
-	// Read the script content with a hard cap so a bad upstream response cannot
-	// exhaust memory while the server is proxying release assets.
-	content, err := io.ReadAll(io.LimitReader(resp.Body, maxInstallScriptSize+1))
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to read install script from GitHub")
-		http.Error(w, "Failed to read install script", http.StatusInternalServerError)
-		return
-	}
-	if len(content) > maxInstallScriptSize {
-		log.Error().Int("size", len(content)).Str("url", githubURL).Msg("Install script from GitHub exceeded size limit")
-		http.Error(w, "Install script exceeds size limit", http.StatusServiceUnavailable)
-		return
-	}
-
-	// Determine content type based on script extension
-	contentType := "text/x-shellscript"
-	if strings.HasSuffix(scriptName, ".ps1") {
-		contentType = "text/plain"
-	}
-
-	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Content-Disposition", "inline; filename=\""+scriptName+"\"")
-	w.Header().Set("X-Served-From", "github-fallback")
-	w.Header().Set(signatureHeaderName, strings.TrimSpace(string(signatureContent)))
-	w.Header().Set(sshSignatureHeaderName, encodeSSHSignatureForHeader(sshSignatureContent))
-	if req.Method == http.MethodHead {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-	w.Write(content)
 }

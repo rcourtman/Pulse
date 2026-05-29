@@ -174,11 +174,12 @@ server-side update execution surfaces.
    above, is the SERVER installer and rejects the "Install on Linux" wizard's
    `--url` / `--token-file` with "Unknown option"). Two layers enforce this and
    both must hold: (a) `internal/api/unified_agent.go::handleDownloadInstallScriptCommon`
-   serves the locally bundled agent installer and must not fall back to proxying
-   the GitHub `install.sh` asset when the local copy is present but its detached
-   signatures are missing (nothing on the `curl ... | bash` agent path verifies
-   those headers, so an unsigned-but-correct local script beats a signed-but-wrong
-   proxied one); and (b) a server install should still deploy the script's
+   serves the locally bundled agent installer and has no GitHub fallback at all —
+   it must never proxy the GitHub `install.sh` asset; a present-but-unsigned local
+   agent installer is served as-is (nothing on the `curl ... | bash` agent path
+   verifies the signature headers, so an unsigned-but-correct local script beats a
+   signed-but-wrong proxied one) and a genuinely-missing local script fails closed
+   with 503; and (b) a server install should still deploy the script's
    `.sig` / `.sshsig` sidecars next to it (`/opt/pulse/scripts/install.sh.sig`,
    `.sshsig`) so the served script carries signatures. The Docker image deploys
    these sidecars (`Dockerfile`); `install.sh`'s `deploy_agent_scripts` must

@@ -8476,52 +8476,6 @@ func TestContract_HostedSubscriptionRequiredErrorJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)
 }
 
-func TestContract_InstallScriptReleaseAssetURL(t *testing.T) {
-	router := &Router{serverVersion: "v6.0.0-rc.1"}
-
-	got, err := router.installScriptReleaseAssetURL("install.sh")
-	if err != nil {
-		t.Fatalf("install script release asset URL: %v", err)
-	}
-
-	const want = "https://github.com/rcourtman/Pulse/releases/download/v6.0.0-rc.1/install.sh"
-	if got != want {
-		t.Fatalf("install script release asset URL = %q, want %q", got, want)
-	}
-}
-
-func TestContract_InstallScriptReleaseAssetURLUsesConfiguredRepo(t *testing.T) {
-	t.Setenv("PULSE_GITHUB_REPO", "example/pulse-fork")
-
-	router := &Router{serverVersion: "v6.0.0-rc.1"}
-
-	got, err := router.installScriptReleaseAssetURL("install.sh")
-	if err != nil {
-		t.Fatalf("install script release asset URL: %v", err)
-	}
-
-	const want = "https://github.com/example/pulse-fork/releases/download/v6.0.0-rc.1/install.sh"
-	if got != want {
-		t.Fatalf("install script release asset URL = %q, want %q", got, want)
-	}
-}
-
-func TestContract_InstallScriptReleaseAssetURLRejectsUnreleasedBuild(t *testing.T) {
-	router := &Router{serverVersion: "dev"}
-
-	if _, err := router.installScriptReleaseAssetURL("install.sh"); err == nil {
-		t.Fatalf("expected development build to reject release asset lookup")
-	}
-}
-
-func TestContract_InstallScriptReleaseAssetURLRejectsDevPrereleaseBuild(t *testing.T) {
-	router := &Router{serverVersion: "v6.0.0-dev"}
-
-	if _, err := router.installScriptReleaseAssetURL("install.sh"); err == nil {
-		t.Fatalf("expected dev prerelease build to reject release asset lookup")
-	}
-}
-
 func TestContract_AgentBinaryReleaseAssetURL(t *testing.T) {
 	router := &Router{serverVersion: "v6.0.0-rc.1"}
 

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -104,134 +103,49 @@ func TestDownloadUnifiedInstallScriptPS_MethodNotAllowed(t *testing.T) {
 	}
 }
 
-func TestDownloadUnifiedInstallScript_ProxyFallback(t *testing.T) {
+func TestDownloadUnifiedInstallScript_NoLocalScriptFailsClosed(t *testing.T) {
 	router, _ := setupUnifiedAgentRouter(t)
-	router.serverVersion = "v6.0.0-rc.1"
-	expectedURL := "https://github.com/rcourtman/Pulse/releases/download/v6.0.0-rc.1/install.sh"
-	payload := "#!/bin/bash\necho hi"
-	router.installScriptClient = newTestInstallScriptClientSequence(t, []expectedHTTPExchange{
-		{Method: http.MethodGet, URL: expectedURL, Status: http.StatusOK, Body: payload},
-		{Method: http.MethodGet, URL: expectedURL + ".sig", Status: http.StatusOK, Body: "signed-install-script"},
-		{Method: http.MethodGet, URL: expectedURL + ".sshsig", Status: http.StatusOK, Body: "signed-install-script-ssh"},
-	})
+	router.serverVersion = "v6.0.0-rc.6"
+	// No agent installer is bundled. The endpoint must fail closed and must never
+	// proxy the GitHub install.sh release asset (the SERVER installer). Any outbound
+	// HTTP call from this endpoint is a regression of the issue #1470 root fix.
+	router.installScriptClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		t.Errorf("install-script endpoint must not make outbound calls; got %s %s", req.Method, req.URL)
+		return nil, fmt.Errorf("unexpected outbound call")
+	})}
 
 	req := httptest.NewRequest(http.MethodGet, "/install.sh", nil)
 	w := httptest.NewRecorder()
 
 	router.handleDownloadUnifiedInstallScript(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
 	}
-	if got := w.Header().Get("X-Served-From"); got != "github-fallback" {
-		t.Fatalf("unexpected X-Served-From header: %q", got)
-	}
-	if got := w.Header().Get("Content-Type"); got != "text/x-shellscript" {
-		t.Fatalf("unexpected Content-Type: %q", got)
-	}
-	if got := w.Header().Get(signatureHeaderName); got != "signed-install-script" {
-		t.Fatalf("unexpected signature header: %q", got)
-	}
-	if got := w.Header().Get(sshSignatureHeaderName); got != encodedTestSSHSignature("signed-install-script-ssh") {
-		t.Fatalf("unexpected SSH signature header: %q", got)
-	}
-	if !strings.Contains(w.Header().Get("Content-Disposition"), "install.sh") {
-		t.Fatalf("missing Content-Disposition filename")
-	}
-	if strings.TrimSpace(w.Body.String()) != payload {
-		t.Fatalf("unexpected response body")
+	if got := w.Header().Get("X-Served-From"); got != "" {
+		t.Fatalf("endpoint must not proxy; X-Served-From = %q", got)
 	}
 }
 
-func TestDownloadUnifiedInstallScript_ProxyFallbackUsesConfiguredRepo(t *testing.T) {
-	t.Setenv("PULSE_GITHUB_REPO", "example/pulse-fork")
-
+func TestDownloadUnifiedInstallScriptPS_NoLocalScriptFailsClosed(t *testing.T) {
 	router, _ := setupUnifiedAgentRouter(t)
-	router.serverVersion = "v6.0.0-rc.1"
-	expectedURL := "https://github.com/example/pulse-fork/releases/download/v6.0.0-rc.1/install.sh"
-	payload := "#!/bin/bash\necho hi"
-	router.installScriptClient = newTestInstallScriptClientSequence(t, []expectedHTTPExchange{
-		{Method: http.MethodGet, URL: expectedURL, Status: http.StatusOK, Body: payload},
-		{Method: http.MethodGet, URL: expectedURL + ".sig", Status: http.StatusOK, Body: "signed-install-script"},
-		{Method: http.MethodGet, URL: expectedURL + ".sshsig", Status: http.StatusOK, Body: "signed-install-script-ssh"},
-	})
-
-	req := httptest.NewRequest(http.MethodGet, "/install.sh", nil)
-	w := httptest.NewRecorder()
-
-	router.handleDownloadUnifiedInstallScript(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-}
-
-func TestDownloadUnifiedInstallScriptPS_ProxyFallback(t *testing.T) {
-	router, _ := setupUnifiedAgentRouter(t)
-	router.serverVersion = "6.0.0"
-	expectedURL := "https://github.com/rcourtman/Pulse/releases/download/v6.0.0/install.ps1"
-	payload := "Write-Host 'hi'"
-	router.installScriptClient = newTestInstallScriptClientSequence(t, []expectedHTTPExchange{
-		{Method: http.MethodGet, URL: expectedURL, Status: http.StatusOK, Body: payload},
-		{Method: http.MethodGet, URL: expectedURL + ".sig", Status: http.StatusOK, Body: "signed-install-script"},
-		{Method: http.MethodGet, URL: expectedURL + ".sshsig", Status: http.StatusOK, Body: "signed-install-script-ssh"},
-	})
+	router.serverVersion = "v6.0.0"
+	router.installScriptClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		t.Errorf("install-script endpoint must not make outbound calls; got %s %s", req.Method, req.URL)
+		return nil, fmt.Errorf("unexpected outbound call")
+	})}
 
 	req := httptest.NewRequest(http.MethodGet, "/install.ps1", nil)
 	w := httptest.NewRecorder()
 
 	router.handleDownloadUnifiedInstallScriptPS(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-	if got := w.Header().Get("Content-Type"); got != "text/plain" {
-		t.Fatalf("unexpected Content-Type: %q", got)
-	}
-	if !strings.Contains(w.Header().Get("Content-Disposition"), "install.ps1") {
-		t.Fatalf("missing Content-Disposition filename")
-	}
-}
-
-func TestProxyInstallScriptFromGitHub_NonOK(t *testing.T) {
-	router := &Router{
-		serverVersion:       "v6.0.0-rc.1",
-		installScriptClient: newTestInstallScriptClient(t, http.MethodGet, "", http.StatusNotFound, "", nil),
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/install.sh", nil)
-	w := httptest.NewRecorder()
-
-	router.proxyInstallScriptFromGitHub(w, req, "install.sh")
-
-	if w.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d", w.Code)
-	}
-	if !strings.Contains(w.Body.String(), "Install script not found") {
-		t.Fatalf("expected not found message")
-	}
-}
-
-func TestProxyInstallScriptFromGitHub_Error(t *testing.T) {
-	router := &Router{
-		serverVersion:       "v6.0.0-rc.1",
-		installScriptClient: newTestInstallScriptClient(t, http.MethodGet, "", 0, "", errors.New("boom")),
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/install.sh", nil)
-	w := httptest.NewRecorder()
-
-	router.proxyInstallScriptFromGitHub(w, req, "install.sh")
-
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d", w.Code)
 	}
-	if !strings.Contains(w.Body.String(), "Failed to fetch install script") {
-		t.Fatalf("expected fetch failure message")
-	}
 }
 
-func TestDownloadUnifiedInstallScript_ProxyFallbackRejectsDevelopmentBuild(t *testing.T) {
+func TestDownloadUnifiedInstallScript_NoLocalScriptFailsClosedForDevBuild(t *testing.T) {
 	router, _ := setupUnifiedAgentRouter(t)
 	router.serverVersion = "dev"
 
@@ -243,54 +157,19 @@ func TestDownloadUnifiedInstallScript_ProxyFallbackRejectsDevelopmentBuild(t *te
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d", w.Code)
 	}
-	if !strings.Contains(w.Body.String(), "Install script unavailable for current server build") {
-		t.Fatalf("unexpected response body: %q", w.Body.String())
-	}
 }
 
-func TestDownloadUnifiedInstallScript_ProxyFallbackRejectsDevPrereleaseBuild(t *testing.T) {
+func TestDownloadUnifiedInstallScript_NoLocalScriptFailsClosedHEAD(t *testing.T) {
 	router, _ := setupUnifiedAgentRouter(t)
-	router.serverVersion = "v6.0.0-dev"
-
-	req := httptest.NewRequest(http.MethodGet, "/install.sh", nil)
-	w := httptest.NewRecorder()
-
-	router.handleDownloadUnifiedInstallScript(w, req)
-
-	if w.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503, got %d", w.Code)
-	}
-	if !strings.Contains(w.Body.String(), "Install script unavailable for current server build") {
-		t.Fatalf("unexpected response body: %q", w.Body.String())
-	}
-}
-
-func TestDownloadUnifiedInstallScript_ProxyFallbackPreservesHEAD(t *testing.T) {
-	router, _ := setupUnifiedAgentRouter(t)
-	router.serverVersion = "v6.0.0-rc.1"
-	expectedURL := "https://github.com/rcourtman/Pulse/releases/download/v6.0.0-rc.1/install.sh"
-	router.installScriptClient = newTestInstallScriptClientSequence(t, []expectedHTTPExchange{
-		{Method: http.MethodHead, URL: expectedURL, Status: http.StatusOK, Body: ""},
-		{Method: http.MethodGet, URL: expectedURL + ".sig", Status: http.StatusOK, Body: "signed-install-script"},
-		{Method: http.MethodGet, URL: expectedURL + ".sshsig", Status: http.StatusOK, Body: "signed-install-script-ssh"},
-	})
+	router.serverVersion = "v6.0.0-rc.6"
 
 	req := httptest.NewRequest(http.MethodHead, "/install.sh", nil)
 	w := httptest.NewRecorder()
 
 	router.handleDownloadUnifiedInstallScript(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-	if w.Body.Len() != 0 {
-		t.Fatalf("expected empty HEAD response body")
-	}
-	if got := w.Header().Get(signatureHeaderName); got != "signed-install-script" {
-		t.Fatalf("unexpected signature header: %q", got)
-	}
-	if got := w.Header().Get(sshSignatureHeaderName); got != encodedTestSSHSignature("signed-install-script-ssh") {
-		t.Fatalf("unexpected SSH signature header: %q", got)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
 	}
 }
 
