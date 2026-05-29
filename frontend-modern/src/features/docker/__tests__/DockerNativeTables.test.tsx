@@ -1,4 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { Route, Router } from '@solidjs/router';
+import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { Resource } from '@/types/resource';
@@ -31,13 +33,22 @@ const makeResource = ({
   ...overrides,
 });
 
+// DockerContainersTable URL-backs its host scope filter (useSearchParams), so
+// it must render inside a Router context.
+const renderInRouter = (component: () => JSX.Element) =>
+  render(() => (
+    <Router>
+      <Route path="/" component={component} />
+    </Router>
+  ));
+
 afterEach(() => {
   cleanup();
 });
 
 describe('Docker native tables', () => {
   it('renders Docker container API fields', () => {
-    render(() => (
+    renderInRouter(() => (
       <DockerContainersTable
         resources={[
           makeResource({
@@ -97,7 +108,7 @@ describe('Docker native tables', () => {
   });
 
   it('renders container rows with status mapped from containerState + health + exitCode, attention rows first', () => {
-    render(() => (
+    renderInRouter(() => (
       <DockerContainersTable
         resources={[
           makeResource({

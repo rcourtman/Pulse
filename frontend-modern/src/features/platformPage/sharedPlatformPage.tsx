@@ -347,6 +347,13 @@ export function PlatformTableToolbar<T extends string | number>(props: {
   rowNoun: string;
   hasActiveFilters?: boolean;
   onResetFilters?: () => void;
+  // Optional scope filters (host / node / namespace / pool ...) appended after
+  // the status facet, plus an optional saved-views storage key. Tables opt into
+  // richer combinable filtering without bypassing the shared toolbar; the
+  // status facet stays the inline segmented control and scope filters render as
+  // chips behind "+ Filter".
+  filters?: FilterDef[];
+  savedViewsKey?: string;
 }) {
   const { isMobile } = useBreakpoint();
 
@@ -356,7 +363,7 @@ export function PlatformTableToolbar<T extends string | number>(props: {
   // prop surface is unchanged: search passes straight through and the single
   // status facet is modelled as an inline segmented control. Tables that want
   // additional scope filters or saved views opt in via the FilterBar directly.
-  const filters: FilterDef[] = [
+  const allFilters: FilterDef[] = [
     {
       id: 'status',
       label: 'Status',
@@ -381,6 +388,7 @@ export function PlatformTableToolbar<T extends string | number>(props: {
       },
       defaultValue: String(props.statusOptions[0]?.value ?? 'all'),
     },
+    ...(props.filters ?? []),
   ];
 
   return (
@@ -394,7 +402,8 @@ export function PlatformTableToolbar<T extends string | number>(props: {
         emptyMessage: props.searchHistory?.emptyMessage,
         tips: props.searchTips,
       }}
-      filters={filters}
+      filters={allFilters}
+      savedViewsKey={props.savedViewsKey}
       viewOptionsTrailing={
         <PlatformResourceCounter
           visible={props.visible}

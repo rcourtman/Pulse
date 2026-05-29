@@ -1,4 +1,6 @@
 import { For, Show, createMemo, type Component } from 'solid-js';
+import { useSearchParams } from '@solidjs/router';
+import type { FilterDef } from '@/components/shared/FilterBar';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import {
@@ -134,7 +136,50 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
     initialStatus: 'all' as DockerResourceStatusFilter,
     filter: filterDockerResources,
   });
-  const sortedRows = createMemo(() => [...tableState.filtered()].sort(compareDockerContainers));
+
+  // Host scope filter, URL-backed so it is shareable and captured by saved
+  // views. Distinct hosts are derived from the current resource set; the facet
+  // only appears once more than one host is present (a single-host fleet has
+  // nothing to scope by).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const hostFilter = () => (typeof searchParams.host === 'string' ? searchParams.host : '');
+  const setHostFilter = (value: string) => setSearchParams({ host: value || null });
+  const hostOptions = createMemo(() => {
+    const seen = new Set<string>();
+    for (const resource of props.resources) {
+      const host = dockerHostName(resource);
+      if (host && host !== '—') seen.add(host);
+    }
+    return [...seen].sort((a, b) => a.localeCompare(b));
+  });
+  const scopeFilters = createMemo<FilterDef[]>(() => {
+    if (hostOptions().length <= 1) return [];
+    return [
+      {
+        id: 'host',
+        label: 'Host',
+        group: 'scope',
+        options: () => [
+          { value: '', label: 'All hosts' },
+          ...hostOptions().map((host) => ({ value: host, label: host })),
+        ],
+        value: hostFilter,
+        setValue: setHostFilter,
+        defaultValue: '',
+      },
+    ];
+  });
+  const scopedRows = createMemo(() => {
+    const host = hostFilter();
+    const base = tableState.filtered();
+    return host ? base.filter((resource) => dockerHostName(resource) === host) : base;
+  });
+  const hasActiveFilters = () => tableState.hasActiveFilters() || hostFilter() !== '';
+  const resetFilters = () => {
+    tableState.resetFilters();
+    setHostFilter('');
+  };
+  const sortedRows = createMemo(() => [...scopedRows()].sort(compareDockerContainers));
   const drawer = createPlatformResourceDetailState({ idPrefix: 'docker-container-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
 
@@ -158,19 +203,23 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
             statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
-            visible={tableState.visible()}
+            filters={scopeFilters()}
+            savedViewsKey="docker-containers"
+            visible={scopedRows().length}
             total={tableState.total()}
             rowNoun="containers"
+            hasActiveFilters={hasActiveFilters()}
+            onResetFilters={resetFilters}
           />
         </Show>
 
         <Show
-          when={tableState.filtered().length > 0}
+          when={scopedRows().length > 0}
           fallback={
             <PlatformTableEmptyState
               icon={props.emptyIcon}
               title="No containers match current filters"
-              description="Adjust the search or status filter to see more Docker containers."
+              description="Adjust the search, status, or host filter to see more Docker containers."
             />
           }
         >

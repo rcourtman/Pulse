@@ -183,7 +183,11 @@ describe('platform overview layout guardrails', () => {
       expect(source).toContain('PLATFORM_HEALTH_FILTER_OPTIONS');
       expect(source).not.toContain("from '@/components/shared/SearchInput'");
       expect(source).not.toContain("from '@/components/shared/FilterButtonGroup'");
-      expect(source).not.toContain('const [search');
+      // Forbid a bespoke search signal (`const [search, setSearch] = createSignal`)
+      // — tables must read search from createPlatformTableFilterState. The comma
+      // keeps URL-backed scope state (`const [searchParams, ...] = useSearchParams`)
+      // out of the net, since that is shared-FilterBar plumbing, not a rogue box.
+      expect(source).not.toContain('const [search, ');
     }
   });
 
