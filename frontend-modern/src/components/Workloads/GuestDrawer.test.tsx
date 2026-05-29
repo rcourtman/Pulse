@@ -542,7 +542,7 @@ describe('GuestDrawer', () => {
       expect(screen.getByText(/Swap/)).toBeInTheDocument();
     });
 
-    it('hides Memory card when no balloon and no swap', () => {
+    it('keeps the Memory card showing primary RAM usage even without balloon or swap', () => {
       const memory: Memory = {
         total: 4294967296,
         used: 2147483648,
@@ -550,8 +550,12 @@ describe('GuestDrawer', () => {
         usage: 0.5,
       };
       render(() => <GuestDrawer guest={makeGuest({ memory })} onClose={vi.fn()} />);
-      const memoryHeaders = screen.queryAllByText('Memory');
-      expect(memoryHeaders).toHaveLength(0);
+      // The Memory card now always surfaces primary RAM usage (Usage / Total /
+      // Free) to match the node drawer's memory card; balloon and swap remain
+      // optional rows. See commit "show RAM usage in guest drawer Memory card".
+      expect(screen.getByText('Memory')).toBeInTheDocument();
+      expect(screen.queryByText(/Balloon/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Swap/)).not.toBeInTheDocument();
     });
 
     it('hides balloon when it equals total', () => {
