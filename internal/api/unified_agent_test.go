@@ -67,6 +67,35 @@ func TestDownloadInstallScript_Local(t *testing.T) {
 	assert.Equal(t, "text/x-shellscript", w.Header().Get("Content-Type"))
 }
 
+// TestDownloadInstallScript_PublishedReleaseUnsignedLocalServesAgentInstaller
+// pins the issue #1470 closure: when the local agent installer is present on a
+// published-release server but its .sig/.sshsig sidecars are not, the endpoint
+// must serve the LOCAL agent installer, never proxy the GitHub install.sh asset
+// (which is the SERVER installer). This is the state every pre-fix LXC/systemd
+// install is in until it redeploys the sidecars.
+func TestDownloadInstallScript_PublishedReleaseUnsignedLocalServesAgentInstaller(t *testing.T) {
+	router, tempDir := setupUnifiedAgentRouter(t)
+	router.serverVersion = "v6.0.0-rc.6"
+	// A client that fails any outbound call, so a regression that re-introduces
+	// the GitHub proxy fallback surfaces as a test failure rather than silently
+	// serving the server installer.
+	router.installScriptClient = newTestInstallScriptClient(t, http.MethodGet, "", 0, "", errors.New("proxy must not be used"))
+
+	scriptContent := "#!/usr/bin/env bash\n# Pulse Unified Agent Installer\necho 'agent'"
+	scriptPath := filepath.Join(tempDir, "scripts", "install.sh")
+	require.NoError(t, os.WriteFile(scriptPath, []byte(scriptContent), 0644))
+	// Note: no .sig / .sshsig sidecars written.
+
+	req := httptest.NewRequest(http.MethodGet, "/install.sh", nil)
+	w := httptest.NewRecorder()
+
+	router.handleDownloadUnifiedInstallScript(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, scriptContent, w.Body.String())
+	assert.NotEqual(t, "github-fallback", w.Header().Get("X-Served-From"))
+}
+
 func TestDownloadInstallScriptPS_Local(t *testing.T) {
 	router, tempDir := setupUnifiedAgentRouter(t)
 

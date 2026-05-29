@@ -929,9 +929,14 @@ recovery scope, or a storage/recovery-owned secret source.
     treated as published GitHub release assets; only stable or explicit RC
     tags may back the shared installer fallback that those adjacent surfaces
     inherit. Published release-tagged local assets on that shared boundary
-    must also preserve their detached `.sig` sidecars so recovery- and
+    should also preserve their detached `.sig` sidecars so recovery- and
     storage-adjacent flows do not silently downgrade installer or agent
     download trust back to unsigned local files during upgrade or repair.
+    When the served install-script local copy is nonetheless present without its
+    sidecars, that shared boundary serves the local AGENT installer rather than
+    proxying the top-level GitHub `install.sh` SERVER installer: a correct but
+    unsigned local script beats a signed-but-wrong proxied one on the unverified
+    `curl ... | bash` agent path (issue #1470).
 15. Keep storage summary chart identity and sticky-shell behavior on the
     shared storage path. Pool rows, disk rows, storage summary cards, and
     storage detail charts must all address history through the canonical

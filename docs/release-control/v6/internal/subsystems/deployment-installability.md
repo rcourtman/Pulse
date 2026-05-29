@@ -169,17 +169,22 @@ server-side update execution surfaces.
    handle `--version)` in its argument parser, contains the agent installer
    banner string, or does not print the server installer's version-pinning
    help line when invoked with `--help`.
-   Because the served `/install.sh` endpoint hands out the AGENT installer, a
-   server install must also deploy the script's `.sig` / `.sshsig` sidecars next
-   to it (`/opt/pulse/scripts/install.sh.sig`, `.sshsig`). For published-release
-   versions `internal/api/unified_agent.go::handleDownloadInstallScriptCommon`
-   only serves the local copy when both sidecars are present; otherwise it
-   proxies the top-level GitHub `install.sh` asset, which (per the rule above) is
-   the SERVER installer, so the "Install on Linux" agent wizard's
-   `--url` / `--token-file` command is rejected with "Unknown option". The
-   Docker image deploys these sidecars (`Dockerfile`); `install.sh`'s
-   `deploy_agent_scripts` must deploy them for LXC / systemd installs too. This
-   parity gap shipped as the rc.6 agent-wizard regression (issue #1470).
+   The served `/install.sh` endpoint must only ever hand out the AGENT installer,
+   never the top-level GitHub `install.sh` release asset (which, per the rule
+   above, is the SERVER installer and rejects the "Install on Linux" wizard's
+   `--url` / `--token-file` with "Unknown option"). Two layers enforce this and
+   both must hold: (a) `internal/api/unified_agent.go::handleDownloadInstallScriptCommon`
+   serves the locally bundled agent installer and must not fall back to proxying
+   the GitHub `install.sh` asset when the local copy is present but its detached
+   signatures are missing (nothing on the `curl ... | bash` agent path verifies
+   those headers, so an unsigned-but-correct local script beats a signed-but-wrong
+   proxied one); and (b) a server install should still deploy the script's
+   `.sig` / `.sshsig` sidecars next to it (`/opt/pulse/scripts/install.sh.sig`,
+   `.sshsig`) so the served script carries signatures. The Docker image deploys
+   these sidecars (`Dockerfile`); `install.sh`'s `deploy_agent_scripts` must
+   deploy them for LXC / systemd installs too. The original gap (sidecars never
+   deployed on LXC, so the endpoint proxied the SERVER installer) shipped as the
+   rc.6 agent-wizard regression (issue #1470).
    Deployment bootstrap token behavior remains a deployment-installability
    trust boundary even when the handler is API-owned. `internal/api/deploy_handlers.go`
    must preserve server-derived `owner_user_id` lineage on bootstrap tokens and

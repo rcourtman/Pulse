@@ -76,9 +76,15 @@ func handleDownloadInstallScriptCommon(w http.ResponseWriter, req *http.Request,
 	signature, sigErr := readReleaseAssetSignature(scriptPath)
 	sshSignature, sshSigErr := readReleaseAssetSSHSignature(scriptPath)
 	if (sigErr != nil || sshSigErr != nil) && isPublishedReleaseAssetVersion(serverVersion) {
-		log.Warn().Err(errors.Join(sigErr, sshSigErr)).Str("path", scriptPath).Msg("Signed install script unavailable locally, proxying from GitHub releases")
-		fallbackProxy(w, req, scriptName)
-		return
+		// The local agent installer is present but its detached signatures are not
+		// (e.g. an install from before the installer deployed the sidecars). Serve
+		// the local AGENT installer anyway; do NOT proxy the GitHub install.sh
+		// release asset, which is the SERVER installer (rejects the wizard's
+		// --url/--token-file). The served /install.sh endpoint must only ever hand
+		// out the agent installer. Nothing on the agent install path verifies these
+		// headers (the wizard is `curl ... | bash`), so omitting them is safe; new
+		// installs ship the sidecars and are served signed. See issue #1470.
+		log.Warn().Err(errors.Join(sigErr, sshSigErr)).Str("path", scriptPath).Msg("Serving local install script without release signatures; sidecars not deployed")
 	}
 
 	w.Header().Set("Content-Type", contentType)

@@ -720,13 +720,17 @@ profile and assignment columns, but embedded table framing must route through
     the omitted `usage` or `total` series as missing lifecycle telemetry or
     enrollment-state evidence.
     Dashboard storage trend consumers on that shared router boundary must now reuse the single `/api/storage-charts` summary response instead of fanning out per-pool `/api/metrics-store/history` reads, and lifecycle surfaces still must treat that batched storage summary transport as presentation context only rather than install, enrollment, or freshness truth.
-14. Keep lifecycle installer fallback pinned to published release lineage only.
-    When `internal/api/unified_agent.go` has to proxy `/install.sh` or
-    `/install.ps1` from GitHub, the shared lifecycle path may only treat stable
-    tags and explicit RC prerelease tags as release assets. Working-line dev
-    prereleases and build-metadata versions must fail closed so first-host
-    install, repair, and fleet continuity do not depend on unpublished or
-    branch-local installer URLs.
+14. Keep lifecycle installer fallback pinned to published release lineage only,
+    and reserved for a genuinely-absent local script. The GitHub proxy in
+    `internal/api/unified_agent.go` for `/install.sh` / `/install.ps1` runs only
+    when no local installer is bundled at all; a present-but-unsigned local agent
+    installer is served locally so first-host install, repair, and fleet
+    continuity never receive the top-level GitHub `install.sh` SERVER installer in
+    place of the bundled AGENT installer (issue #1470). When the proxy does run,
+    the shared lifecycle path may only treat stable tags and explicit RC
+    prerelease tags as release assets. Working-line dev prereleases and
+    build-metadata versions must fail closed so install/repair do not depend on
+    unpublished or branch-local installer URLs.
 15. Keep self-hosted purchase handoff state on the adjacent commercial/auth
     boundary. When shared `internal/api/router.go`,
     `internal/api/router_routes_cloud.go`, `internal/api/licensing_handlers.go`,
