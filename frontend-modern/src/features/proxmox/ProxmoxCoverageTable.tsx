@@ -82,14 +82,15 @@ export function ProxmoxCoverageTable(props: {
       <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
         <Table class="min-w-[1200px] table-fixed text-xs">
           <colgroup>
-            <col style={{ width: '20%' }} />
+            <col style={{ width: '17%' }} />
+            <col style={{ width: '7%' }} />
             <col style={{ width: '11%' }} />
-            <col style={{ width: '12%' }} />
+            <col style={{ width: '11%' }} />
             <col style={{ width: '13%' }} />
             <col style={{ width: '11%' }} />
             <col style={{ width: '11%' }} />
-            <col style={{ width: '11%' }} />
-            <col style={{ width: '11%' }} />
+            <col style={{ width: '9%' }} />
+            <col style={{ width: '10%' }} />
           </colgroup>
           <TableHeader>
             <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
@@ -102,6 +103,7 @@ export function ProxmoxCoverageTable(props: {
                 align="left"
                 headClass={getPlatformTableHeadClassForKind('name')}
               />
+              <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>VMID</TableHead>
               <TableHead class={getPlatformTableHeadClassForKind('text')}>Node</TableHead>
               <SortableHead
                 label="Posture"
@@ -188,8 +190,15 @@ export function ProxmoxCoverageTable(props: {
                               aria-hidden="true"
                             />
                           </button>
-                          <span class="truncate font-semibold">{row.workload.label}</span>
+                          <span class="truncate font-semibold">
+                            {row.workload.name || row.workload.label}
+                          </span>
                         </div>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('numeric-value')} text-muted font-mono text-[11px] tabular-nums`}
+                      >
+                        {row.workload.vmid || '—'}
                       </TableCell>
                       <TableCell
                         class={`${getPlatformTableCellClassForKind('text')} text-base-content truncate font-mono text-[11px]`}
@@ -275,7 +284,7 @@ export function ProxmoxCoverageTable(props: {
                     </TableRow>
                     <Show when={isExpanded()}>
                       <TableRow class="bg-surface-alt/40">
-                        <TableCell class="px-3 py-2" colspan={8}>
+                        <TableCell class="px-3 py-2" colspan={9}>
                           <Show
                             when={evidence().length > 0}
                             fallback={

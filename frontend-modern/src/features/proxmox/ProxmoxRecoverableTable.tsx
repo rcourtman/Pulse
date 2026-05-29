@@ -72,12 +72,13 @@ export function ProxmoxRecoverableTable(props: {
               dumping all the slack into the trailing Details column on wide
               viewports. */}
           <colgroup>
+            <col style={{ width: '15%' }} />
+            <col style={{ width: '7%' }} />
+            <col style={{ width: '8%' }} />
             <col style={{ width: '17%' }} />
-            <col style={{ width: '9%' }} />
-            <col style={{ width: '18%' }} />
-            <col style={{ width: '11%' }} />
-            <col style={{ width: '13%' }} />
             <col style={{ width: '10%' }} />
+            <col style={{ width: '12%' }} />
+            <col style={{ width: '9%' }} />
             <col style={{ width: '22%' }} />
           </colgroup>
           <TableHeader>
@@ -91,6 +92,7 @@ export function ProxmoxRecoverableTable(props: {
                 align="left"
                 headClass={getPlatformTableHeadClassForKind('name')}
               />
+              <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>VMID</TableHead>
               <SortableHead
                 label="Source"
                 sortKey="source"
@@ -147,8 +149,15 @@ export function ProxmoxRecoverableTable(props: {
                     class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
                   >
                     <div class="min-w-0">
-                      <div class="truncate font-semibold">{artifact.workload.label}</div>
+                      <div class="truncate font-semibold">
+                        {artifact.workload.name || artifact.workload.label}
+                      </div>
                     </div>
+                  </TableCell>
+                  <TableCell
+                    class={`${getPlatformTableCellClassForKind('numeric-value')} text-muted font-mono text-[11px] tabular-nums`}
+                  >
+                    {artifact.workload.vmid || '—'}
                   </TableCell>
                   <TableCell
                     class={`${getPlatformTableCellClassForKind('text')} text-base-content`}

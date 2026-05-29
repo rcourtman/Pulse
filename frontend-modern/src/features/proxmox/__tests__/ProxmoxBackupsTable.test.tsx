@@ -124,7 +124,7 @@ describe('ProxmoxBackupsTable', () => {
       <ProxmoxBackupsTable emptyIcon={<span />} hasPBS workloads={[workloadResource]} />
     ));
 
-    expect(await screen.findByText('pbs-docker (CT 112)')).toBeInTheDocument();
+    expect(await screen.findByText('pbs-docker')).toBeInTheDocument();
     expect(screen.getAllByText('Current').length).toBeGreaterThan(0);
 
     await fireEvent.click(screen.getByRole('button', { name: /source details/i }));
@@ -170,7 +170,7 @@ describe('ProxmoxBackupsTable', () => {
       <ProxmoxBackupsTable emptyIcon={<span />} hasPBS workloads={[workloadResource]} />
     ));
 
-    expect(await screen.findByText('pbs-docker (CT 112)')).toBeInTheDocument();
+    expect(await screen.findByText('pbs-docker')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /pbs artifacts/i })).not.toBeInTheDocument();
 
     await fireEvent.click(await screen.findByRole('button', { name: /restore points/i }));
@@ -179,7 +179,7 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.getAllByText('PBS').length).toBeGreaterThan(0);
     expect(screen.getByText('PVE archive')).toBeInTheDocument();
     expect(screen.getAllByText('Snapshot').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('pbs-docker (CT 112)').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('pbs-docker').length).toBeGreaterThan(0);
 
     await fireEvent.click(screen.getByRole('button', { name: /source details/i }));
     await fireEvent.click(screen.getByRole('button', { name: 'Snapshots 1' }));
@@ -193,7 +193,7 @@ describe('ProxmoxBackupsTable', () => {
       <ProxmoxBackupsTable emptyIcon={<span />} hasPBS workloads={[workloadResource]} />
     ));
 
-    await screen.findByText('pbs-docker (CT 112)');
+    await screen.findByText('pbs-docker');
 
     await fireEvent.click(
       screen.getByRole('button', { name: /show restore evidence for pbs-docker/i }),
