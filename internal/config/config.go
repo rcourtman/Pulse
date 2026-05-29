@@ -105,6 +105,7 @@ type Config struct {
 	BackupPollingInterval           time.Duration `envconfig:"BACKUP_POLLING_INTERVAL"`
 	EnableBackupPolling             bool          `envconfig:"ENABLE_BACKUP_POLLING" default:"true"`
 	TemperatureMonitoringEnabled    bool          `json:"temperatureMonitoringEnabled"`
+	RBACEnforcementEnabled          bool          `json:"rbacEnforcementEnabled"` // Enforce role-based access (Pro feature, default off; see PULSE_RBAC_ENFORCEMENT escape hatch)
 	WebhookBatchDelay               time.Duration `envconfig:"WEBHOOK_BATCH_DELAY" default:"10s"`
 	AdaptivePollingEnabled          bool          `envconfig:"ADAPTIVE_POLLING_ENABLED" default:"false"`
 	AdaptivePollingBaseInterval     time.Duration `envconfig:"ADAPTIVE_POLLING_BASE_INTERVAL" default:"10s"`
@@ -741,6 +742,7 @@ func Load() (*Config, error) {
 			}
 			cfg.Discovery = NormalizeDiscoveryConfig(CloneDiscoveryConfig(systemSettings.DiscoveryConfig))
 			cfg.TemperatureMonitoringEnabled = systemSettings.TemperatureMonitoringEnabled
+			cfg.RBACEnforcementEnabled = systemSettings.RBACEnforcementEnabled
 			// Load DNS cache timeout
 			if systemSettings.DNSCacheTimeout > 0 {
 				cfg.DNSCacheTimeout = time.Duration(systemSettings.DNSCacheTimeout) * time.Second

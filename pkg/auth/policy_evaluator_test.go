@@ -335,6 +335,18 @@ func TestRBACAuthorizer(t *testing.T) {
 	})
 }
 
+func TestMatchesActionWildcard(t *testing.T) {
+	if !MatchesAction("*", ActionDelete) {
+		t.Fatal("expected wildcard action to match delete")
+	}
+	if !MatchesAction(ActionAdmin, ActionWrite) {
+		t.Fatal("expected admin action to match write")
+	}
+	if MatchesAction(ActionRead, ActionWrite) {
+		t.Fatal("expected read action not to match write")
+	}
+}
+
 func TestMatchesResource(t *testing.T) {
 	tests := []struct {
 		pattern  string

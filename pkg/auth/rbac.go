@@ -189,9 +189,9 @@ func MatchesResource(pattern, resource string) bool {
 }
 
 // MatchesAction checks if a permission's action matches a requested action.
-// "admin" action matches any action.
+// "admin" and "*" actions match any action.
 func MatchesAction(permAction, requestedAction string) bool {
-	if permAction == "admin" {
+	if permAction == "*" || permAction == ActionAdmin {
 		return true
 	}
 	return permAction == requestedAction

@@ -35,6 +35,7 @@ export interface SystemConfig {
   backupPollingInterval?: number; // Backup polling interval in seconds (0 = default cadence)
   backupPollingEnabled?: boolean; // Enable backup polling of PVE/PBS data
   temperatureMonitoringEnabled?: boolean; // Collect CPU/NVMe temperatures via SSH
+  rbacEnforcementEnabled?: boolean; // Enforce role-based access control (Pro feature, default off)
   sshPort?: number; // SSH port for temperature monitoring (default: 22)
   allowedOrigins?: string; // CORS allowed origins
   frontendPort?: number; // Frontend UI port (default: 7655)

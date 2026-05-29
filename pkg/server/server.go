@@ -103,6 +103,12 @@ func Run(ctx context.Context, version string) error {
 	} else {
 		auth.SetManager(rbacManager)
 		log.Info().Msg("RBAC manager initialized")
+
+		// Register the gated RBAC authorizer before the API router is built (the
+		// router captures the global authorizer once at construction). Enforcement
+		// stays off unless the operator opts in AND the license grants RBAC, so
+		// this is a no-op for community and un-opted-in deployments.
+		api.InstallRBACEnforcement(cfg, rbacManager)
 	}
 
 	// Run multi-tenant data migration only when the feature is explicitly enabled.

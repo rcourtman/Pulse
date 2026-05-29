@@ -743,12 +743,7 @@ func RequirePermission(cfg *config.Config, authorizer auth.Authorizer, action, r
 			}
 		}
 
-		// Extract user from header (set by CheckAuth) and inject into context
-		username := w.Header().Get("X-Authenticated-User")
-		ctx := r.Context()
-		if username != "" {
-			ctx = internalauth.WithUser(ctx, username)
-		}
+		ctx, username := authenticatedContextForAuthorization(w, r)
 
 		// Check permission via authorizer
 		allowed, err := authorizer.Authorize(ctx, action, resource)
@@ -803,6 +798,47 @@ func RequireScope(scope string, handler http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+func authenticatedContextForAuthorization(w http.ResponseWriter, r *http.Request) (context.Context, string) {
+	ctx := r.Context()
+	username := internalauth.GetUser(ctx)
+	if username != "" {
+		return ctx, username
+	}
+
+	// Defensive compatibility for auth paths that set only the response header.
+	// The router's auth context middleware should normally attach identity to
+	// the request context before authorization runs.
+	if headerUser := w.Header().Get("X-Authenticated-User"); headerUser != "" {
+		log.Warn().
+			Str("user", headerUser).
+			Str("path", r.URL.Path).
+			Msg("Authenticated user found only in response header; upstream auth path should attach request context")
+		ctx = internalauth.WithUser(ctx, headerUser)
+		return ctx, headerUser
+	}
+
+	if authMethod := w.Header().Get("X-Auth-Method"); authMethod == "none" {
+		ctx = internalauth.WithUser(ctx, "anonymous")
+		return ctx, "anonymous"
+	}
+
+	return ctx, ""
+}
+
+func respondForbiddenRBAC(w http.ResponseWriter, action string, resource string) {
+	if w == nil {
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusForbidden)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"error":    "forbidden",
+		"message":  "You do not have permission to perform this action",
+		"action":   action,
+		"resource": resource,
+	})
+}
+
 func respondMissingScope(w http.ResponseWriter, scope string) {
 	if w == nil {
 		return
@@ -823,10 +859,48 @@ func ensureScope(w http.ResponseWriter, r *http.Request, scope string) bool {
 		return true
 	}
 	record := getAPITokenRecordFromRequest(r)
-	if record == nil || record.HasScope(scope) {
+	if record != nil {
+		if record.HasScope(scope) {
+			return true
+		}
+		respondMissingScope(w, scope)
+		return false
+	}
+
+	action, resource := rbacPermissionForScope(scope)
+	ctx, username := authenticatedContextForAuthorization(w, r)
+	allowed, err := auth.GetAuthorizer().Authorize(ctx, action, resource)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("user", username).
+			Str("scope", scope).
+			Str("action", action).
+			Str("resource", resource).
+			Msg("RBAC scope authorization failed due to system error")
+		if strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(r.Header.Get("Accept"), "application/json") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(`{"error":"internal_error","message":"Failed to verify permissions"}`))
+		} else {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+		return false
+	}
+	if allowed {
 		return true
 	}
-	respondMissingScope(w, scope)
+
+	log.Warn().
+		Str("user", username).
+		Str("ip", r.RemoteAddr).
+		Str("path", r.URL.Path).
+		Str("scope", scope).
+		Str("action", action).
+		Str("resource", resource).
+		Msg("Forbidden access attempt (RBAC scope)")
+
+	respondForbiddenRBAC(w, action, resource)
 	return false
 }
 

@@ -1,6 +1,8 @@
 import { Component, createSignal, onMount, Show, For } from 'solid-js';
 import { Card } from '@/components/shared/Card';
+import { Toggle } from '@/components/shared/Toggle';
 import { RBACAPI } from '@/api/rbac';
+import { SettingsAPI } from '@/api/settings';
 import type { Role, Permission } from '@/types/rbac';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
@@ -13,7 +15,7 @@ import BadgeCheck from 'lucide-solid/icons/badge-check';
 import X from 'lucide-solid/icons/x';
 
 const ACTIONS = ['read', 'write', 'delete', 'admin', '*'];
-const RESOURCES = ['settings', 'audit_logs', 'nodes', 'users', 'license', '*'];
+const RESOURCES = ['settings', 'audit_logs', 'nodes', 'users', 'license', 'ai', 'discovery', '*'];
 
 export const RolesPanel: Component = () => {
     const [roles, setRoles] = createSignal<Role[]>([]);
@@ -21,6 +23,11 @@ export const RolesPanel: Component = () => {
     const [showModal, setShowModal] = createSignal(false);
     const [editingRole, setEditingRole] = createSignal<Role | null>(null);
     const [saving, setSaving] = createSignal(false);
+
+    // RBAC enforcement toggle state
+    const [enforcementEnabled, setEnforcementEnabled] = createSignal(false);
+    const [enforcementLoaded, setEnforcementLoaded] = createSignal(false);
+    const [enforcementSaving, setEnforcementSaving] = createSignal(false);
 
     // Form state
     const [formId, setFormId] = createSignal('');
@@ -41,9 +48,41 @@ export const RolesPanel: Component = () => {
         }
     };
 
+    const loadEnforcement = async () => {
+        try {
+            const settings = await SettingsAPI.getSystemSettings();
+            setEnforcementEnabled(Boolean(settings.rbacEnforcementEnabled));
+        } catch (err) {
+            logger.error('Failed to load RBAC enforcement setting', err);
+        } finally {
+            setEnforcementLoaded(true);
+        }
+    };
+
+    const handleToggleEnforcement = async () => {
+        if (enforcementSaving()) return;
+        const next = !enforcementEnabled();
+        setEnforcementSaving(true);
+        try {
+            await SettingsAPI.updateSystemSettings({ rbacEnforcementEnabled: next });
+            setEnforcementEnabled(next);
+            notificationStore.success(
+                next
+                    ? 'RBAC enforcement enabled. Users are now restricted to their assigned roles.'
+                    : 'RBAC enforcement disabled. All authenticated users have full access.',
+            );
+        } catch (err) {
+            logger.error('Failed to update RBAC enforcement setting', err);
+            notificationStore.error('Failed to update RBAC enforcement setting');
+        } finally {
+            setEnforcementSaving(false);
+        }
+    };
+
     onMount(() => {
         loadLicenseStatus();
         loadRoles();
+        loadEnforcement();
     });
 
     const handleCreate = () => {
@@ -165,6 +204,28 @@ export const RolesPanel: Component = () => {
                                 Upgrade to Pro
                             </a>
                         </div>
+                    </div>
+                </Show>
+
+                <Show when={licenseLoaded() && hasFeature('rbac') && enforcementLoaded()}>
+                    <div class="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl space-y-3">
+                        <Toggle
+                            checked={enforcementEnabled()}
+                            disabled={enforcementSaving()}
+                            onToggle={handleToggleEnforcement}
+                            label={
+                                <span class="font-medium text-gray-900 dark:text-gray-100">
+                                    Enforce role-based access
+                                </span>
+                            }
+                            description="When off, every authenticated user has full access and the roles below are not applied."
+                        />
+                        <p class="text-xs text-amber-700 dark:text-amber-300">
+                            Warning: if you sign in with SSO and do not have a local admin account, map at
+                            least one SSO group to a full-access role before enabling, or you may lock
+                            yourself out. To recover, set <code>PULSE_RBAC_ENFORCEMENT=false</code> and
+                            restart Pulse.
+                        </p>
                     </div>
                 </Show>
 

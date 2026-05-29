@@ -1169,6 +1169,7 @@ type SystemSettings struct {
 	AllowEmbedding               bool            `json:"allowEmbedding"`                // Allow iframe embedding
 	AllowedEmbedOrigins          string          `json:"allowedEmbedOrigins,omitempty"` // Comma-separated list of allowed origins for embedding
 	TemperatureMonitoringEnabled bool            `json:"temperatureMonitoringEnabled"`
+	RBACEnforcementEnabled       bool            `json:"rbacEnforcementEnabled"`               // Enforce role-based access control (Pro feature, default off)
 	DNSCacheTimeout              int             `json:"dnsCacheTimeout,omitempty"`            // DNS cache timeout in seconds (0 = default 5 minutes)
 	SSHPort                      int             `json:"sshPort,omitempty"`                    // Default SSH port for temperature monitoring (0 = use 22)
 	WebhookAllowedPrivateCIDRs   string          `json:"webhookAllowedPrivateCIDRs,omitempty"` // Comma-separated list of private CIDR ranges allowed for webhooks (e.g., "192.168.1.0/24,10.0.0.0/8")

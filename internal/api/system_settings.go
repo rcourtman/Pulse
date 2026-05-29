@@ -249,6 +249,12 @@ func validateSystemSettings(_ *config.SystemSettings, rawRequest map[string]inte
 		}
 	}
 
+	if val, ok := rawRequest["rbacEnforcementEnabled"]; ok {
+		if _, ok := val.(bool); !ok {
+			return fmt.Errorf("rbacEnforcementEnabled must be a boolean")
+		}
+	}
+
 	// Validate auto-update check interval (min 1 hour, max 7 days)
 	if val, ok := rawRequest["autoUpdateCheckInterval"]; ok {
 		if interval, ok := val.(float64); ok {
@@ -437,6 +443,7 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 		settings.BackupPollingEnabled = &enabled
 		settings.DiscoveryConfig = config.CloneDiscoveryConfig(h.config.Discovery)
 		settings.TemperatureMonitoringEnabled = h.config.TemperatureMonitoringEnabled
+		settings.RBACEnforcementEnabled = h.config.RBACEnforcementEnabled
 		// Expose Docker update actions setting (respects env override)
 		settings.DisableDockerUpdateActions = h.config.DisableDockerUpdateActions
 		// Expose public URL so the frontend can display it when env-overridden
@@ -652,6 +659,10 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if _, ok := rawRequest["disableDockerUpdateActions"]; ok {
 		settings.DisableDockerUpdateActions = updates.DisableDockerUpdateActions
 		h.config.DisableDockerUpdateActions = settings.DisableDockerUpdateActions
+	}
+	if _, ok := rawRequest["rbacEnforcementEnabled"]; ok {
+		settings.RBACEnforcementEnabled = updates.RBACEnforcementEnabled
+		h.config.RBACEnforcementEnabled = settings.RBACEnforcementEnabled
 	}
 	if _, ok := rawRequest["fullWidthMode"]; ok {
 		settings.FullWidthMode = updates.FullWidthMode
