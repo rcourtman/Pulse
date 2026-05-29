@@ -90,6 +90,10 @@ export function formatDurationFromSeconds(seconds: number): string {
   return `${h}h ${m}m`;
 }
 
+// Case-insensitive string comparator. Undefined / empty values ALWAYS sort
+// to the end regardless of direction — flipping a "—" row to the top of a
+// desc sort is never what the user wants (e.g. a running task with no
+// finished duration should not headline a "slowest tasks" view).
 export function cmpString(
   a: string | undefined,
   b: string | undefined,
