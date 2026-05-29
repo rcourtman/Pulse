@@ -1011,6 +1011,24 @@ export const ProxmoxBackupsTable: Component<{
 
   const visibleSnapshotGuestCount = createMemo(() => filteredSnapshotGuests().length);
 
+  // Coverage source columns auto-hide when no workload anywhere has that data
+  // (computed over the full set, not the filtered view, so columns don't
+  // flicker as filters change). A PBS-only fleet drops Archive + Snapshot.
+  const coverageHasPbs = createMemo(() =>
+    recoveryModel().coverageRows.some((row) => Boolean(row.latestPBS) || row.pbsCount > 0),
+  );
+  const coverageHasArchive = createMemo(() =>
+    recoveryModel().coverageRows.some((row) => Boolean(row.latestArchive) || row.archiveCount > 0),
+  );
+  const coverageHasSnapshot = createMemo(() =>
+    recoveryModel().coverageRows.some(
+      (row) => Boolean(row.latestSnapshot) || row.snapshotCount > 0,
+    ),
+  );
+  const coverageHasTask = createMemo(() =>
+    recoveryModel().coverageRows.some((row) => Boolean(row.latestTask)),
+  );
+
   // Node options for the scope filter: the distinct nodes across the workload
   // set, "All nodes" first. Used by every node-bearing view (not PBS, whose
   // artifacts live on the backup server and carry no node). The Node filter is
@@ -1562,6 +1580,10 @@ export const ProxmoxBackupsTable: Component<{
               onSort={handleCoverageSort}
               expandedKeys={expandedCoverageRows()}
               onToggleExpand={toggleCoverageExpansion}
+              showPbsColumn={coverageHasPbs()}
+              showArchiveColumn={coverageHasArchive()}
+              showSnapshotColumn={coverageHasSnapshot()}
+              showTaskColumn={coverageHasTask()}
             />
           </Show>
 

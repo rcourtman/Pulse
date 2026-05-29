@@ -59,7 +59,30 @@ export function ProxmoxCoverageTable(props: {
   onSort: (key: CoverageSortKey) => void;
   expandedKeys: ReadonlySet<string>;
   onToggleExpand: (key: string) => void;
+  // Source columns auto-hide when no workload anywhere has that data (e.g. a
+  // PBS-only fleet drops the Archive and Snapshot columns), matching how the
+  // source-detail tables already drop their conditional columns.
+  showPbsColumn: boolean;
+  showArchiveColumn: boolean;
+  showSnapshotColumn: boolean;
+  showTaskColumn: boolean;
 }) {
+  // Weighted column set; the conditional source/task columns drop out when
+  // empty fleet-wide, and table-fixed re-normalizes the rest.
+  const visibleColumns = () => [
+    { id: 'workload', weight: 17 },
+    { id: 'vmid', weight: 7 },
+    { id: 'node', weight: 11 },
+    { id: 'posture', weight: 11 },
+    { id: 'latest', weight: 13 },
+    ...(props.showPbsColumn ? [{ id: 'pbs', weight: 11 }] : []),
+    ...(props.showArchiveColumn ? [{ id: 'archive', weight: 11 }] : []),
+    ...(props.showSnapshotColumn ? [{ id: 'snapshot', weight: 11 }] : []),
+    ...(props.showTaskColumn ? [{ id: 'task', weight: 11 }] : []),
+  ];
+  const totalColumnWeight = () => visibleColumns().reduce((sum, c) => sum + c.weight, 0);
+  const columnCount = () => visibleColumns().length;
+
   return (
     <Show
       when={props.rows.length > 0}
@@ -82,15 +105,11 @@ export function ProxmoxCoverageTable(props: {
       <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
         <Table class="min-w-[1200px] table-fixed text-xs">
           <colgroup>
-            <col style={{ width: '17%' }} />
-            <col style={{ width: '7%' }} />
-            <col style={{ width: '11%' }} />
-            <col style={{ width: '11%' }} />
-            <col style={{ width: '13%' }} />
-            <col style={{ width: '11%' }} />
-            <col style={{ width: '11%' }} />
-            <col style={{ width: '9%' }} />
-            <col style={{ width: '10%' }} />
+            <For each={visibleColumns()}>
+              {(column) => (
+                <col style={{ width: `${(column.weight / totalColumnWeight()) * 100}%` }} />
+              )}
+            </For>
           </colgroup>
           <TableHeader>
             <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
@@ -123,42 +142,50 @@ export function ProxmoxCoverageTable(props: {
                 align="right"
                 headClass={getPlatformTableHeadClassForKind('numeric-value')}
               />
-              <SortableHead
-                label="PBS"
-                sortKey="pbs"
-                currentSort={props.sortKey}
-                direction={props.sortDirection}
-                onSort={props.onSort}
-                align="left"
-                headClass={getPlatformTableHeadClassForKind('text')}
-              />
-              <SortableHead
-                label="Archive"
-                sortKey="archive"
-                currentSort={props.sortKey}
-                direction={props.sortDirection}
-                onSort={props.onSort}
-                align="left"
-                headClass={getPlatformTableHeadClassForKind('text')}
-              />
-              <SortableHead
-                label="Snapshot"
-                sortKey="snapshot"
-                currentSort={props.sortKey}
-                direction={props.sortDirection}
-                onSort={props.onSort}
-                align="left"
-                headClass={getPlatformTableHeadClassForKind('text')}
-              />
-              <SortableHead
-                label="Latest task"
-                sortKey="task"
-                currentSort={props.sortKey}
-                direction={props.sortDirection}
-                onSort={props.onSort}
-                align="left"
-                headClass={getPlatformTableHeadClassForKind('text')}
-              />
+              <Show when={props.showPbsColumn}>
+                <SortableHead
+                  label="PBS"
+                  sortKey="pbs"
+                  currentSort={props.sortKey}
+                  direction={props.sortDirection}
+                  onSort={props.onSort}
+                  align="left"
+                  headClass={getPlatformTableHeadClassForKind('text')}
+                />
+              </Show>
+              <Show when={props.showArchiveColumn}>
+                <SortableHead
+                  label="Archive"
+                  sortKey="archive"
+                  currentSort={props.sortKey}
+                  direction={props.sortDirection}
+                  onSort={props.onSort}
+                  align="left"
+                  headClass={getPlatformTableHeadClassForKind('text')}
+                />
+              </Show>
+              <Show when={props.showSnapshotColumn}>
+                <SortableHead
+                  label="Snapshot"
+                  sortKey="snapshot"
+                  currentSort={props.sortKey}
+                  direction={props.sortDirection}
+                  onSort={props.onSort}
+                  align="left"
+                  headClass={getPlatformTableHeadClassForKind('text')}
+                />
+              </Show>
+              <Show when={props.showTaskColumn}>
+                <SortableHead
+                  label="Latest task"
+                  sortKey="task"
+                  currentSort={props.sortKey}
+                  direction={props.sortDirection}
+                  onSort={props.onSort}
+                  align="left"
+                  headClass={getPlatformTableHeadClassForKind('text')}
+                />
+              </Show>
             </TableRow>
           </TableHeader>
           <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
@@ -228,63 +255,80 @@ export function ProxmoxCoverageTable(props: {
                           {(artifact) => formatRelativeTime(artifact().createdAt, { compact: true })}
                         </Show>
                       </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                      >
-                        <Show when={row.latestPBS} fallback={<span class="text-muted">No PBS</span>}>
-                          {(artifact) => formatRelativeTime(artifact().createdAt, { compact: true })}
-                        </Show>
-                      </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                      >
-                        <Show
-                          when={row.latestArchive}
-                          fallback={<span class="text-muted">No archive</span>}
+                      <Show when={props.showPbsColumn}>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                         >
-                          {(artifact) => formatRelativeTime(artifact().createdAt, { compact: true })}
-                        </Show>
-                      </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                      >
-                        <Show
-                          when={row.latestSnapshot}
-                          fallback={<span class="text-muted">No snapshot</span>}
+                          <Show
+                            when={row.latestPBS}
+                            fallback={<span class="text-muted">No PBS</span>}
+                          >
+                            {(artifact) =>
+                              formatRelativeTime(artifact().createdAt, { compact: true })
+                            }
+                          </Show>
+                        </TableCell>
+                      </Show>
+                      <Show when={props.showArchiveColumn}>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                         >
-                          {(artifact) => formatRelativeTime(artifact().createdAt, { compact: true })}
-                        </Show>
-                      </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                      >
-                        <Show
-                          when={row.latestTask}
-                          fallback={<span class="text-muted">No recent task</span>}
+                          <Show
+                            when={row.latestArchive}
+                            fallback={<span class="text-muted">No archive</span>}
+                          >
+                            {(artifact) =>
+                              formatRelativeTime(artifact().createdAt, { compact: true })
+                            }
+                          </Show>
+                        </TableCell>
+                      </Show>
+                      <Show when={props.showSnapshotColumn}>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                         >
-                          {(task) => (
-                            <div class="flex items-center gap-2">
-                              <StatusDot
-                                size="sm"
-                                variant={
-                                  task().label === 'Failed'
-                                    ? 'danger'
-                                    : task().label === 'OK'
-                                      ? 'success'
-                                      : 'warning'
-                                }
-                                title={task().label}
-                                ariaHidden
-                              />
-                              <span class="truncate">{task().label}</span>
-                            </div>
-                          )}
-                        </Show>
-                      </TableCell>
+                          <Show
+                            when={row.latestSnapshot}
+                            fallback={<span class="text-muted">No snapshot</span>}
+                          >
+                            {(artifact) =>
+                              formatRelativeTime(artifact().createdAt, { compact: true })
+                            }
+                          </Show>
+                        </TableCell>
+                      </Show>
+                      <Show when={props.showTaskColumn}>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                        >
+                          <Show
+                            when={row.latestTask}
+                            fallback={<span class="text-muted">No recent task</span>}
+                          >
+                            {(task) => (
+                              <div class="flex items-center gap-2">
+                                <StatusDot
+                                  size="sm"
+                                  variant={
+                                    task().label === 'Failed'
+                                      ? 'danger'
+                                      : task().label === 'OK'
+                                        ? 'success'
+                                        : 'warning'
+                                  }
+                                  title={task().label}
+                                  ariaHidden
+                                />
+                                <span class="truncate">{task().label}</span>
+                              </div>
+                            )}
+                          </Show>
+                        </TableCell>
+                      </Show>
                     </TableRow>
                     <Show when={isExpanded()}>
                       <TableRow class="bg-surface-alt/40">
-                        <TableCell class="px-3 py-2" colspan={9}>
+                        <TableCell class="px-3 py-2" colspan={columnCount()}>
                           <Show
                             when={evidence().length > 0}
                             fallback={
