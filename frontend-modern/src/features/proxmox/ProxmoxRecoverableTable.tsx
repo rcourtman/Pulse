@@ -33,6 +33,7 @@ import {
 // "Restore points" table: every recoverable artifact (PBS / archive / snapshot)
 // across sources in one flat, sortable list. Presentational only — the parent
 // owns the filtered + sorted memo and the shared search / day / source filters.
+// Single-line rows: the workload identity (type/vmid) is already in the label.
 export function ProxmoxRecoverableTable(props: {
   artifacts: RecoverableArtifact[];
   hasAnyArtifacts: boolean;
@@ -146,10 +147,7 @@ export function ProxmoxRecoverableTable(props: {
                     class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
                   >
                     <div class="min-w-0">
-                      <div class="font-semibold">{artifact.workload.label}</div>
-                      <div class="font-mono text-[10px] uppercase text-muted">
-                        {artifact.workload.typeLabel} {artifact.workload.vmid}
-                      </div>
+                      <div class="truncate font-semibold">{artifact.workload.label}</div>
                     </div>
                   </TableCell>
                   <TableCell

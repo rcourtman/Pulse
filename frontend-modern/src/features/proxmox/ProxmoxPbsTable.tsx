@@ -101,13 +101,14 @@ export function ProxmoxPbsTable(props: {
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <Table class="min-w-[1050px] table-fixed text-xs">
               <colgroup>
-                <col style={{ width: '16%' }} />
-                <col style={{ width: '20%' }} />
-                <col style={{ width: '12%' }} />
-                <col style={{ width: '16%' }} />
-                <col style={{ width: '11%' }} />
-                <col style={{ width: '12%' }} />
+                <col style={{ width: '15%' }} />
+                <col style={{ width: '17%' }} />
                 <col style={{ width: '13%' }} />
+                <col style={{ width: '11%' }} />
+                <col style={{ width: '15%' }} />
+                <col style={{ width: '10%' }} />
+                <col style={{ width: '11%' }} />
+                <col style={{ width: '8%' }} />
               </colgroup>
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
@@ -129,6 +130,7 @@ export function ProxmoxPbsTable(props: {
                     align="left"
                     headClass={getPlatformTableHeadClassForKind('text')}
                   />
+                  <TableHead class={getPlatformTableHeadClassForKind('text')}>Instance</TableHead>
                   <SortableHead
                     label="Created"
                     sortKey="created"
@@ -173,24 +175,21 @@ export function ProxmoxPbsTable(props: {
                   {(backup) => (
                     <TableRow class="hover:bg-surface-hover">
                       <TableCell
-                        class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
+                        class={`${getPlatformTableCellClassForKind('name')} text-base-content truncate font-semibold`}
                       >
-                        <div class="min-w-0">
-                          <div class="font-semibold">{pbsWorkloadLabel(backup)}</div>
-                          <div class="font-mono text-[10px] uppercase text-muted">
-                            {backup.backupType || 'backup'}
-                          </div>
-                        </div>
+                        {pbsWorkloadLabel(backup)}
                       </TableCell>
                       <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content truncate font-mono text-[11px]`}
+                        title={pbsRepositoryLabel(backup)}
                       >
-                        <div class="min-w-0">
-                          <div class="font-mono text-[11px]">{pbsRepositoryLabel(backup)}</div>
-                          <div class="truncate text-[10px] text-muted" title={backup.instance}>
-                            {backup.instance || '—'}
-                          </div>
-                        </div>
+                        {pbsRepositoryLabel(backup)}
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content truncate font-mono text-[11px]`}
+                        title={backup.instance}
+                      >
+                        {backup.instance || '—'}
                       </TableCell>
                       <TableCell
                         class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
