@@ -23,7 +23,6 @@ import {
 import { InfrastructureSourceManager } from './InfrastructureSourceManager';
 import { InfrastructureSourcePicker } from './InfrastructureSourcePicker';
 import {
-  connectionAgentEndpointDisplay,
   connectionAgentIdentitySummary,
   connectionAgentVersionPresentation,
   connectionLastActivityText,
@@ -361,13 +360,11 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   );
 
   const renderAgentConnectionDetails = (connection: Connection) => {
-    const pausePending = () => rowActions.pendingAction(connection.id) === 'pause';
     const removePending = () => rowActions.pendingAction(connection.id) === 'remove';
     const removeConfirming = () => rowActions.confirmingRemove(connection.id);
     const error = () => rowActions.actionError(connection.id);
     const versionPresentation = () => connectionAgentVersionPresentation(connection);
     const identitySummary = () => connectionAgentIdentitySummary(connection);
-    const endpointDisplay = () => connectionAgentEndpointDisplay(connection);
     const infoCard = (label: string, value: string) => (
       <div class="rounded-lg border border-border bg-surface-alt px-3 py-3">
         <div class="text-[11px] font-medium uppercase tracking-wide text-muted">{label}</div>
@@ -378,25 +375,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     return (
       <div class="space-y-6 p-4">
         <section class="rounded-xl border border-border bg-surface p-4">
-          <div class="flex flex-wrap items-start justify-between gap-4">
-            <div class="space-y-1">
-              <div class="text-[11px] font-medium uppercase tracking-wide text-muted">
-                Pulse Agent
-              </div>
-              <div class="text-lg font-semibold text-base-content">{connection.name}</div>
-              <Show when={identitySummary()}>
-                {(summary) => <div class="text-sm text-muted">{summary()}</div>}
-              </Show>
-              <Show when={endpointDisplay()}>
-                {(endpoint) => <div class="break-words text-sm text-muted">{endpoint()}</div>}
-              </Show>
-            </div>
-            <span class="inline-flex items-center rounded-full border border-border bg-surface-alt px-2.5 py-1 text-xs font-medium text-base-content">
-              {connection.enabled ? 'Enabled' : 'Paused'}
-            </span>
-          </div>
-
-          <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {infoCard('Connection state', connection.state)}
             {infoCard('Last seen', connection.lastSeen ? connection.lastSeen : 'No activity yet')}
             <Show when={versionPresentation()}>
@@ -459,7 +438,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                 <div class="text-[11px] font-medium uppercase tracking-wide text-muted">
                   Linux / macOS / FreeBSD
                 </div>
-                <div class="mt-1 break-all font-mono text-[11px] text-base-content">
+                <div class="mt-1 line-clamp-3 break-all font-mono text-[11px] text-base-content">
                   {agentUninstallCommands().linux}
                 </div>
                 <button
@@ -475,7 +454,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                 <div class="text-[11px] font-medium uppercase tracking-wide text-muted">
                   Windows PowerShell
                 </div>
-                <div class="mt-1 break-all font-mono text-[11px] text-base-content">
+                <div class="mt-1 line-clamp-3 break-all font-mono text-[11px] text-base-content">
                   {agentUninstallCommands().windows}
                 </div>
                 <button
@@ -511,22 +490,8 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <button
             type="button"
-            onClick={() => void rowActions.togglePause(connection)}
-            disabled={pausePending() || removePending()}
-            class={buttonClass}
-          >
-            {pausePending()
-              ? connection.enabled
-                ? 'Pausing…'
-                : 'Resuming…'
-              : connection.enabled
-                ? 'Pause connection'
-                : 'Resume connection'}
-          </button>
-          <button
-            type="button"
             onClick={() => void rowActions.requestRemove(connection)}
-            disabled={pausePending() || removePending()}
+            disabled={removePending()}
             class={
               removeConfirming()
                 ? 'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md bg-rose-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60'
