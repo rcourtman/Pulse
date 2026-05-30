@@ -745,8 +745,18 @@ show_status() {
     echo "Mock Data Mode Control for Pulse"
     echo ""
     local status_data_dir="$DEV_DATA_DIR"
-    if [[ "${PULSE_MOCK_MODE:-false}" == "true" ]] && use_isolated_mock_data_dir; then
-        status_data_dir="$MOCK_DATA_DIR"
+    if [[ "${PULSE_MOCK_MODE:-false}" == "true" ]]; then
+        # hot-dev runtimes isolate mock data into MOCK_DATA_DIR unconditionally
+        # (see scripts/hot-dev.sh); the standalone runtime only isolates when
+        # PULSE_TOGGLE_ISOLATE_MOCK_DATA is set.
+        case "${runtime_mode}" in
+            managed-hot-dev | hot-dev | systemd-hot-dev)
+                status_data_dir="$MOCK_DATA_DIR"
+                ;;
+            *)
+                use_isolated_mock_data_dir && status_data_dir="$MOCK_DATA_DIR"
+                ;;
+        esac
     fi
     if [[ "${PULSE_MOCK_MODE:-false}" == "true" ]]; then
         echo -e "${GREEN}Mock Mode: ENABLED${NC}"

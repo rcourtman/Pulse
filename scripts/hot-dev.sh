@@ -356,18 +356,38 @@ PULSE_AUTH_PASS="$(hot_dev_resolve_auth_pass)"
 export FRONTEND_PORT PULSE_DEV_API_PORT PORT PULSE_DEV ALLOW_ADMIN_BYPASS PULSE_AUTH_USER PULSE_AUTH_PASS LOG_LEVEL PULSE_DEV_DISABLE_BACKGROUND_AI
 
 # Data Directory Setup
-# Keep one persistent data directory in both mock and real modes so real
-# metrics history continues to accumulate while mock UI mode is active.
+# Mock and real mode use SEPARATE data directories so switching between them
+# (scripts/toggle-mock.sh on|off) is clean in both directions: mock data never
+# leaks into the real connection ledger, and real connections/alerts never show
+# up under mock. The canonical PULSE_MOCK_MODE flag is persisted to
+# tmp/dev-config/.env by toggle-mock, so read it before choosing the directory.
 if [[ -n ${PULSE_DATA_DIR:-} ]]; then
     log_info "Using preconfigured data directory: ${PULSE_DATA_DIR}"
 elif [[ ${HOT_DEV_USE_PROD_DATA:-false} == "true" ]]; then
     export PULSE_DATA_DIR=/etc/pulse
     log_info "HOT_DEV_USE_PROD_DATA=true – using production data directory: ${PULSE_DATA_DIR}"
 else
-    DEV_CONFIG_DIR="${ROOT_DIR}/tmp/dev-config"
-    mkdir -p "$DEV_CONFIG_DIR"
-    export PULSE_DATA_DIR="${DEV_CONFIG_DIR}"
-    log_info "Using dev config directory: ${PULSE_DATA_DIR}"
+    # Read the canonical mock flag from tmp/dev-config/.env, which toggle-mock
+    # writes authoritatively on every switch. A stale PULSE_MOCK_MODE exported
+    # into the environment (e.g. inherited by the hot-dev supervisor from a prior
+    # mock run) must NOT win here, or real mode would keep reading the mock dir.
+    HOT_DEV_MOCK_FLAG=""
+    if [[ -f "${ROOT_DIR}/tmp/dev-config/.env" ]]; then
+        HOT_DEV_MOCK_FLAG="$(grep -E '^[[:space:]]*PULSE_MOCK_MODE=' "${ROOT_DIR}/tmp/dev-config/.env" | tail -1 | cut -d= -f2 | tr -dc 'a-z')"
+    fi
+    if [[ -z "${HOT_DEV_MOCK_FLAG}" ]]; then
+        HOT_DEV_MOCK_FLAG="${PULSE_MOCK_MODE:-}"
+    fi
+    if [[ "${HOT_DEV_MOCK_FLAG}" == "true" ]]; then
+        export PULSE_DATA_DIR="${ROOT_DIR}/tmp/mock-data"
+        mkdir -p "$PULSE_DATA_DIR"
+        log_info "Mock mode: using isolated mock data directory: ${PULSE_DATA_DIR}"
+    else
+        DEV_CONFIG_DIR="${ROOT_DIR}/tmp/dev-config"
+        mkdir -p "$DEV_CONFIG_DIR"
+        export PULSE_DATA_DIR="${DEV_CONFIG_DIR}"
+        log_info "Using dev config directory: ${PULSE_DATA_DIR}"
+    fi
 fi
 
 sync_runtime_auth_env_overrides
@@ -380,7 +400,7 @@ if [[ "${PULSE_DATA_DIR}" == "${ROOT_DIR}/tmp/dev-config" ]] && [[ ${PULSE_MOCK_
 fi
 
 if [[ ${PULSE_MOCK_MODE:-false} == "true" ]]; then
-    log_info "Mock mode enabled: retaining shared data directory (${PULSE_DATA_DIR}) to preserve real history"
+    log_info "Mock mode enabled (isolated data directory: ${PULSE_DATA_DIR})"
     TOTAL_GUESTS=$((${PULSE_MOCK_NODES:-3} * (${PULSE_MOCK_VMS_PER_NODE:-3} + ${PULSE_MOCK_LXCS_PER_NODE:-3})))
     echo "Mock mode ENABLED with ${PULSE_MOCK_NODES:-3} nodes (${TOTAL_GUESTS} total guests)"
 fi
