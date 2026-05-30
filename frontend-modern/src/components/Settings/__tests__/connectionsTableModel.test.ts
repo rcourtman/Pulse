@@ -213,6 +213,66 @@ describe('visibleFleetGovernanceSignals', () => {
   });
 });
 
+describe('fleetGovernanceSignalsForConnection connection-type gating', () => {
+  it('omits agent-fleet governance signals for pull-based API sources', () => {
+    const signals = fleetGovernanceSignalsForConnection(
+      connectionFixture({
+        id: 'pbs:pbs-docker',
+        type: 'pbs',
+        name: 'pbs-docker',
+        state: 'unreachable',
+        source: 'manual',
+        fleet: {
+          enrollmentState: 'configured',
+          livenessState: 'unreachable',
+          versionDrift: 'unknown',
+          adapterHealth: 'blocked',
+          configRollout: 'unknown',
+          credentialStatus: 'unknown',
+          updateStatus: 'unknown',
+          remoteControl: 'not-applicable',
+          rollout: { status: 'blocked', reason: 'blocked by the current connection state' },
+        },
+      }),
+    );
+    const keys = signals.map((signal) => signal.key);
+    // The backend echoed a blocked rollout, but an API source has no agent, so
+    // none of the agent-binary / managed-config governance signals must surface
+    // (this is what produced the misleading "Rollout blocked" problem line).
+    expect(signals.map((signal) => signal.label)).not.toContain('Rollout blocked');
+    expect(keys).not.toContain('rollout');
+    expect(keys).not.toContain('config-drift');
+    expect(keys).not.toContain('version');
+    expect(keys).not.toContain('updates');
+    expect(keys).not.toContain('command-policy');
+    // Source-agnostic signals still apply to API sources.
+    expect(keys).toContain('enrollment');
+    expect(keys).toContain('liveness');
+    expect(keys).toContain('credential-health');
+  });
+
+  it('keeps agent-fleet governance signals for agent connections', () => {
+    const keys = fleetGovernanceSignalsForConnection(
+      connectionFixture({
+        fleet: {
+          enrollmentState: 'enrolled',
+          livenessState: 'active',
+          versionDrift: 'behind',
+          adapterHealth: 'healthy',
+          configRollout: 'reported',
+          credentialStatus: 'verified',
+          updateStatus: 'update-available',
+          remoteControl: 'disabled',
+          rollout: { status: 'blocked', reason: 'staged rollout halted' },
+        },
+      }),
+    ).map((signal) => signal.key);
+    expect(keys).toContain('rollout');
+    expect(keys).toContain('version');
+    expect(keys).toContain('command-policy');
+  });
+});
+
 describe('connectionAgentIdentitySummary', () => {
   const withAgentIdentity = (
     agentIdentity: Partial<ConnectionAgentIdentity> | undefined,

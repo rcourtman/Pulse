@@ -490,13 +490,15 @@ describe('useConnectionsLedger', () => {
       'Rollout pending',
       'Version behind',
     ]);
+    // Pull-based API sources (PVE/PBS/etc.) have no Pulse Agent, so agent-fleet
+    // governance (rollout/config/version/command-policy) must not surface on
+    // them. Only source-agnostic posture like credential health applies; an
+    // invalid PVE token still reads "Credentials invalid", and a paused PVE
+    // connection surfaces no fleet highlight at all.
     expect(byID.get('pve:invalid')?.fleetHighlights.map((signal) => signal.label)).toEqual([
       'Credentials invalid',
-      'Rollout blocked',
     ]);
-    expect(byID.get('pve:paused')?.fleetHighlights.map((signal) => signal.label)).toEqual([
-      'Rollout paused',
-    ]);
+    expect(byID.get('pve:paused')?.fleetHighlights.map((signal) => signal.label)).toEqual([]);
     expect(
       byID.get('agent:remote-disabled')?.fleetHighlights.map((signal) => signal.label),
     ).toEqual([]);

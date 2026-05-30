@@ -762,9 +762,7 @@ const commandPolicySignal = (state: ConnectionFleetCommandPolicy): FleetGovernan
 // reporting. Derived directly from connection state — not laundered
 // through the fleet-signal pipeline — so the row builder owns the user
 // story for "API works, agent doesn't" without a synthesized chip hack.
-export const agentAttachmentProblem = (
-  agent: Connection,
-): InfrastructureRowProblem | undefined => {
+export const agentAttachmentProblem = (agent: Connection): InfrastructureRowProblem | undefined => {
   switch (agent.state) {
     case 'stale': {
       const ago = lastActivityTextFromLastSeen(agent.lastSeen);
@@ -800,21 +798,45 @@ export const agentAttachmentProblem = (
   }
 };
 
+// Connections that run a Pulse Agent / collector binary. Agent-binary and
+// managed-config governance (version drift, config drift, staged rollout,
+// binary updates, remote command policy) only describes these — a pull-based
+// API source (PVE, PBS, PMG, vSphere, TrueNAS, availability probe) has no
+// agent, so the backend's echoed rollout/config state must not be surfaced as
+// the row's problem. Without this gate an unreachable PBS reads "Rollout
+// blocked" instead of plainly reflecting that it is unreachable.
+const AGENT_FLEET_CONNECTION_TYPES: ReadonlySet<ConnectionType> = new Set([
+  'agent',
+  'docker',
+  'kubernetes',
+]);
+
+const connectionRunsAgentFleet = (connection: Connection): boolean =>
+  AGENT_FLEET_CONNECTION_TYPES.has(connection.type);
+
 export const fleetGovernanceSignalsForConnection = (
   connection: Connection,
 ): FleetGovernanceSignal[] => {
   const fleet = fleetGovernanceForConnection(connection);
-  return [
+  const runsAgentFleet = connectionRunsAgentFleet(connection);
+  const signals: FleetGovernanceSignal[] = [
     enrollmentSignal(fleet.enrollmentState, connection),
     livenessSignal(fleet.livenessState),
     credentialHealthSignal(credentialHealthFromFleet(fleet)),
-    configDriftSignal(configDriftFromFleet(fleet)),
-    rolloutSignal(rolloutFromFleet(fleet)),
-    versionSignal(fleet.versionDrift),
-    updateSignal(fleet.updateStatus),
-    adapterSignal(fleet.adapterHealth),
-    commandPolicySignal(commandPolicyFromFleet(fleet)),
   ];
+  if (runsAgentFleet) {
+    signals.push(
+      configDriftSignal(configDriftFromFleet(fleet)),
+      rolloutSignal(rolloutFromFleet(fleet)),
+      versionSignal(fleet.versionDrift),
+      updateSignal(fleet.updateStatus),
+    );
+  }
+  signals.push(adapterSignal(fleet.adapterHealth));
+  if (runsAgentFleet) {
+    signals.push(commandPolicySignal(commandPolicyFromFleet(fleet)));
+  }
+  return signals;
 };
 
 export const visibleFleetGovernanceSignals = (

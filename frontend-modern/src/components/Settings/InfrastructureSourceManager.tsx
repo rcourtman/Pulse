@@ -889,7 +889,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                   type="button"
                                                   onClick={handleInstallAgentShortcut}
                                                   class="inline-flex items-center justify-center rounded p-1 text-blue-700 transition-colors hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/30"
-                                                  aria-label="Install Pulse Agent on this system"
+                                                  aria-label="Install agent"
                                                   title="Install Pulse Agent on this system to add node-local telemetry (temperatures, SMART, host identity)."
                                                 >
                                                   <Plus class="h-3.5 w-3.5" />

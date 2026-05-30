@@ -800,7 +800,10 @@ describe('InfrastructureWorkspace', () => {
     await waitFor(() => expect(screen.getByText('Unraid')).toBeInTheDocument());
     expect(screen.queryByText('Pulse Agent hosts')).toBeNull();
     expect(screen.getByText('Tower')).toBeInTheDocument();
-    expect(screen.getByText('Unraid 7.1.0')).toBeInTheDocument();
+    // The OS/identity descriptor now rides in the system name's tooltip so the
+    // table row stays single-line; the agent detail drawer still shows it as
+    // visible text (asserted below).
+    expect(screen.getByTitle('Tower · Unraid 7.1.0')).toBeInTheDocument();
     expect(screen.getByText('192.168.0.10')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /^Add Unraid$/i }));
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=unraid', {
@@ -996,9 +999,11 @@ describe('InfrastructureWorkspace', () => {
     expect(within(readiness).getByText('Needs attention').nextElementSibling).toHaveTextContent(
       '0 systems',
     );
-    expect(screen.getByText('Cluster · 2 nodes')).toBeInTheDocument();
+    // Cluster and member descriptors moved into the system name's tooltip to
+    // keep table rows single-line.
+    expect(screen.getByTitle('homelab · Cluster · 2 nodes')).toBeInTheDocument();
     expect(screen.queryByText('Fleet OK')).toBeNull();
-    expect(screen.getByText('Primary node')).toBeInTheDocument();
+    expect(screen.getByTitle('delly · Primary node')).toBeInTheDocument();
     expect(screen.getAllByText('Agent').length).toBeGreaterThan(0);
     expect(screen.getByText('delly')).toBeInTheDocument();
     expect(screen.getByText('minipc')).toBeInTheDocument();
