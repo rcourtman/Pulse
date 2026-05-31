@@ -63,6 +63,11 @@ export interface WorkloadCoverageRow {
   snapshotCount: number;
   posture: WorkloadRecoveryPosture;
   postureRank: number;
+  // True when this row exists only because a backup/task referenced a VMID with
+  // no matching live inventory guest — i.e. an orphaned backup for a guest that
+  // no longer exists. Live guests carry a `resource:` key; orphans carry a
+  // `backup:` key and have no real name (label falls back to "CT <vmid>").
+  isOrphaned: boolean;
 }
 
 export interface ProxmoxBackupRecoveryModel {
@@ -93,7 +98,7 @@ interface WorkloadCandidate extends WorkloadReference {
   instanceKey?: string;
 }
 
-type WorkloadRowDraft = Omit<WorkloadCoverageRow, 'posture' | 'postureRank'>;
+type WorkloadRowDraft = Omit<WorkloadCoverageRow, 'posture' | 'postureRank' | 'isOrphaned'>;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CURRENT_RECOVERY_MS = 7 * DAY_MS;
@@ -503,7 +508,12 @@ export function buildProxmoxBackupRecoveryModel(
 
   const coverageRows = Array.from(rows.values()).map((row) => {
     const posture = buildPosture(row, input.nowMs);
-    return { ...row, posture: posture.posture, postureRank: posture.rank };
+    return {
+      ...row,
+      posture: posture.posture,
+      postureRank: posture.rank,
+      isOrphaned: !row.key.startsWith('resource:'),
+    };
   });
 
   coverageRows.sort((left, right) => {

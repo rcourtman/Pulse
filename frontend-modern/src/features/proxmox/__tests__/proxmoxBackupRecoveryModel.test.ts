@@ -145,6 +145,34 @@ describe('proxmoxBackupRecoveryModel', () => {
     expect(model.coverageSummary.uncovered).toBe(1);
   });
 
+  it('flags backups whose guest is absent from inventory as orphaned, live guests as not', () => {
+    const model = buildProxmoxBackupRecoveryModel({
+      // Only VMID 112 exists in inventory; the PBS backup for 999 does not.
+      workloads: [workload({})],
+      pbsBackups: [
+        pbsBackup(),
+        pbsBackup({
+          id: 'pbs-main/main/minipc/ct/999/2026-05-25T01:34:25Z',
+          vmid: '999',
+        }),
+      ],
+      archives: [],
+      snapshots: [],
+      tasks: [],
+      nowMs: Date.parse('2026-05-26T08:00:00Z'),
+    });
+
+    const live = model.coverageRows.find((row) => row.workload.vmid === '112');
+    const orphan = model.coverageRows.find((row) => row.workload.vmid === '999');
+
+    expect(live?.isOrphaned).toBe(false);
+    expect(live?.workload.name).toBe('pbs-docker');
+    expect(orphan?.isOrphaned).toBe(true);
+    // Orphans have no live guest to name them; label falls back to "CT <vmid>".
+    expect(orphan?.workload.name).toBeUndefined();
+    expect(orphan?.workload.label).toBe('CT 999');
+  });
+
   it('does not create phantom workload rows from aggregate vzdump jobs', () => {
     const model = buildProxmoxBackupRecoveryModel({
       workloads: [],

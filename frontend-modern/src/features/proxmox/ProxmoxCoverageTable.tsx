@@ -43,6 +43,23 @@ const coveragePostureVariant = (
   return 'warning';
 };
 
+// Colour marks the exception, not the baseline: healthy rows keep neutral text
+// (the green dot already signals "fine"), while attention/danger words take an
+// amber/red tone so a mixed fleet is scannable at a glance. Matches the
+// datastore-usage tones on the Backup servers table and the status-word colour
+// pattern in the Replication table.
+const statusWordToneClass = (variant: StatusIndicatorVariant): string => {
+  if (variant === 'danger') return 'text-red-600 dark:text-red-300';
+  if (variant === 'warning') return 'text-amber-600 dark:text-amber-300';
+  return 'text-base-content';
+};
+
+const taskWordVariant = (label: string): StatusIndicatorVariant => {
+  if (label === 'Failed') return 'danger';
+  if (label === 'OK') return 'success';
+  return 'warning';
+};
+
 // "Workload coverage" table: one row per workload answering "does this have a
 // backup?" across PBS / archive / snapshot, each expanding to its restore
 // evidence. Presentational — the parent owns the filtered+sorted memo, shared
@@ -240,7 +257,11 @@ export function ProxmoxCoverageTable(props: {
                             title={getWorkloadRecoveryPostureLabel(row.posture)}
                             ariaHidden
                           />
-                          <span class="truncate text-[11px] font-medium text-base-content">
+                          <span
+                            class={`truncate text-[11px] font-medium ${statusWordToneClass(
+                              coveragePostureVariant(row.posture),
+                            )}`}
+                          >
                             {getWorkloadRecoveryPostureLabel(row.posture)}
                           </span>
                         </div>
@@ -319,7 +340,13 @@ export function ProxmoxCoverageTable(props: {
                                   title={task().label}
                                   ariaHidden
                                 />
-                                <span class="truncate">{task().label}</span>
+                                <span
+                                  class={`truncate ${statusWordToneClass(
+                                    taskWordVariant(task().label),
+                                  )}`}
+                                >
+                                  {task().label}
+                                </span>
                               </div>
                             )}
                           </Show>

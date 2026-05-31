@@ -372,12 +372,26 @@ export interface ResourceStorageMeta {
   numMissing?: number;
 }
 
+// A PBS datastore as reported on the live pbs resource payload. Distinct from
+// api.ts `PBSDatastore` (backups-endpoint shape, uses `usage`/`free`): this is
+// the resource-model shape the WebSocket sends, keyed `usagePercent`/`available`.
+export interface ResourcePBSDatastore {
+  name: string;
+  total: number;
+  used: number;
+  available?: number;
+  usagePercent?: number;
+  status?: string;
+  deduplicationFactor?: number;
+}
+
 export interface ResourcePBSMeta {
   instanceId?: string;
   hostname?: string;
   version?: string;
   uptimeSeconds?: number;
   datastoreCount?: number;
+  datastores?: ResourcePBSDatastore[];
   backupJobCount?: number;
   syncJobCount?: number;
   verifyJobCount?: number;

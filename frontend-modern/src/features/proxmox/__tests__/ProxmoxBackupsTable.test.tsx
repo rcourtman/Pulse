@@ -128,80 +128,43 @@ afterEach(() => {
 });
 
 describe('ProxmoxBackupsTable', () => {
-  it('shows PBS artifacts from the PBS backup endpoint when PBS is present', async () => {
+  it('renders one coverage row per workload with restore posture', async () => {
     mockBackupAPIs();
 
     renderInRouter(() => (
-      <ProxmoxBackupsTable emptyIcon={<span />} hasPBS workloads={[workloadResource]} />
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
     ));
 
     expect(await screen.findByText('pbs-docker')).toBeInTheDocument();
+    // The workload has a recent restore point, so its posture reads "Current".
     expect(screen.getAllByText('Current').length).toBeGreaterThan(0);
-
-    await fireEvent.click(screen.getByRole('button', { name: /source details/i }));
-    await fireEvent.click(screen.getByRole('button', { name: /pbs artifacts/i }));
-    // The PBS repository (datastore / namespace) shows in the PBS artifacts
-    // table; the coverage tab keeps per-source location in the row expansion.
-    expect(screen.getByText('main / minipc')).toBeInTheDocument();
-    expect(screen.getByText('2 files')).toBeInTheDocument();
-    expect(screen.getAllByText('Verified').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Protected').length).toBeGreaterThan(0);
     expect(apiFetchMock).toHaveBeenCalledWith('/api/backups/pbs');
     expect(apiFetchMock).toHaveBeenCalledWith('/api/backups/pve');
   });
 
-  it('omits PVE columns when the source cannot populate them', async () => {
-    mockBackupAPIs();
-
-    renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} hasPBS={false} />);
-
-    await fireEvent.click(await screen.findByRole('button', { name: /source details/i }));
-    await fireEvent.click(screen.getByRole('button', { name: 'Snapshots 1' }));
-    expect(await screen.findByText('CT 112')).toBeInTheDocument();
-    expect(screen.queryByRole('columnheader', { name: /total size/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('columnheader', { name: /^ram$/i })).not.toBeInTheDocument();
-
-    await fireEvent.click(screen.getByRole('button', { name: /backup files/i }));
-    expect(
-      screen.getByText('local:backup/vzdump-lxc-112-2026_05_25-02_00_00.tar.zst'),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole('columnheader', { name: /protection/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('columnheader', { name: /verified/i })).not.toBeInTheDocument();
-
-    await fireEvent.click(screen.getByRole('button', { name: /job history/i }));
-    expect(screen.getAllByText('OK').length).toBeGreaterThan(0);
-    expect(screen.queryByRole('columnheader', { name: /^size$/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('columnheader', { name: /error/i })).not.toBeInTheDocument();
-  });
-
-  it('keeps restore points searchable while moving raw sources behind source details', async () => {
+  it('collapses the surface to a single table — no inner source/job/restore tabs', async () => {
     mockBackupAPIs();
 
     renderInRouter(() => (
-      <ProxmoxBackupsTable emptyIcon={<span />} hasPBS workloads={[workloadResource]} />
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
     ));
 
-    expect(await screen.findByText('pbs-docker')).toBeInTheDocument();
+    await screen.findByText('pbs-docker');
+
+    // The old four-tab + sub-tab tree is gone; the surface is the coverage
+    // table alone.
+    expect(screen.queryByRole('button', { name: /workload coverage/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /restore points/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /source details/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /job history/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /pbs artifacts/i })).not.toBeInTheDocument();
-
-    await fireEvent.click(await screen.findByRole('button', { name: /restore points/i }));
-
-    expect(screen.getByRole('columnheader', { name: /source/i })).toBeInTheDocument();
-    expect(screen.getAllByText('PBS').length).toBeGreaterThan(0);
-    expect(screen.getByText('PVE archive')).toBeInTheDocument();
-    expect(screen.getAllByText('Snapshot').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('pbs-docker').length).toBeGreaterThan(0);
-
-    await fireEvent.click(screen.getByRole('button', { name: /source details/i }));
-    await fireEvent.click(screen.getByRole('button', { name: 'Snapshots 1' }));
-    expect(screen.getByRole('columnheader', { name: /snapshots/i })).toBeInTheDocument();
   });
 
-  it('expands coverage rows to show inline restore evidence', async () => {
+  it('keeps PBS / archive / snapshot evidence in the row expansion (demote, not delete)', async () => {
     mockBackupAPIs();
 
     renderInRouter(() => (
-      <ProxmoxBackupsTable emptyIcon={<span />} hasPBS workloads={[workloadResource]} />
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
     ));
 
     await screen.findByText('pbs-docker');
@@ -210,8 +173,26 @@ describe('ProxmoxBackupsTable', () => {
       screen.getByRole('button', { name: /show restore evidence for pbs-docker/i }),
     );
 
+    // The per-source detail that used to live behind Source details is now one
+    // click down, inside the workload's row.
     expect(screen.getByText('Restore evidence')).toBeInTheDocument();
+    expect(screen.getAllByText('PBS').length).toBeGreaterThan(0);
     expect(screen.getAllByText('PVE archive').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Snapshot').length).toBeGreaterThan(0);
+  });
+
+  it('filters coverage rows by search term', async () => {
+    mockBackupAPIs();
+
+    renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+    ));
+
+    await screen.findByText('pbs-docker');
+
+    const searchInput = screen.getByPlaceholderText(/search backups by workload/i);
+    await fireEvent.input(searchInput, { target: { value: 'no-such-guest' } });
+
+    expect(screen.queryByText('pbs-docker')).not.toBeInTheDocument();
   });
 });
