@@ -125,6 +125,12 @@ func TestPublicCloudSignupHandleSignupPagePostValidRedirectsToStripe(t *testing.
 		if got := strings.TrimSpace(params.Metadata["signup_source"]); got != "public_cloud_signup" {
 			t.Fatalf("metadata signup_source=%q, want %q", got, "public_cloud_signup")
 		}
+		if got := strings.TrimSpace(params.Metadata[checkoutBillingModeMetadataKey]); got != checkoutBillingModeTrial {
+			t.Fatalf("metadata checkout_billing_mode=%q, want %q", got, checkoutBillingModeTrial)
+		}
+		if params.SubscriptionData == nil || params.SubscriptionData.TrialPeriodDays == nil || *params.SubscriptionData.TrialPeriodDays != int64(publicCloudTrialDays) {
+			t.Fatalf("expected individual Cloud checkout trial days %d, got %+v", publicCloudTrialDays, params.SubscriptionData)
+		}
 		return &stripe.CheckoutSession{URL: "https://checkout.stripe.com/c/pay/cs_test"}, nil
 	}
 

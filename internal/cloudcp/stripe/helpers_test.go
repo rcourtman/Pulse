@@ -127,6 +127,27 @@ func TestDerivePlanVersion(t *testing.T) {
 	}
 }
 
+func TestInitialSubscriptionStateForCheckout(t *testing.T) {
+	tests := []struct {
+		name     string
+		metadata map[string]string
+		want     string
+	}{
+		{"missing metadata defaults to trial for legacy cloud checkouts", nil, "trial"},
+		{"explicit trial metadata", map[string]string{CheckoutBillingModeMetadataKey: CheckoutBillingModeTrial}, "trial"},
+		{"explicit immediate metadata", map[string]string{CheckoutBillingModeMetadataKey: CheckoutBillingModeImmediate}, "active"},
+		{"immediate metadata is case-insensitive", map[string]string{CheckoutBillingModeMetadataKey: " Immediate "}, "active"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := InitialSubscriptionStateForCheckout(tt.metadata); got != tt.want {
+				t.Fatalf("InitialSubscriptionStateForCheckout() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestPlanVersionFromMetadata(t *testing.T) {
 	tests := []struct {
 		name     string

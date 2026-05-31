@@ -714,7 +714,7 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 			StripeCustomerID:          customerID,
 			StripeSubscriptionID:      strings.TrimSpace(session.Subscription),
 			PlanVersion:               planVersion,
-			SubscriptionState:         "trial",
+			SubscriptionState:         InitialSubscriptionStateForCheckout(session.Metadata),
 			StripeSubItemWorkspacesID: "",
 		}
 		if err := p.registry.CreateStripeAccount(newSA); err != nil {

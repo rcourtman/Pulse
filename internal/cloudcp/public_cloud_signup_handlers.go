@@ -15,6 +15,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/cpsec"
 	cpemail "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/email"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
+	cpstripe "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/stripe"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 	stripe "github.com/stripe/stripe-go/v82"
@@ -24,6 +25,9 @@ import (
 const (
 	publicCloudSignupRequestBodyLimit = 64 * 1024
 	publicCloudTrialDays              = 14
+	checkoutBillingModeMetadataKey    = cpstripe.CheckoutBillingModeMetadataKey
+	checkoutBillingModeTrial          = cpstripe.CheckoutBillingModeTrial
+	checkoutBillingModeImmediate      = cpstripe.CheckoutBillingModeImmediate
 )
 
 // cloudTier represents a Cloud plan tier for public signup.
@@ -548,10 +552,22 @@ func (h *PublicCloudSignupHandlers) createCheckout(email, orgName string, tier c
 }
 
 // createTrialCheckoutSession builds a subscription-mode Stripe Checkout session
-// for a single recurring price with the standard public-signup trial, and
-// returns the redirect URL. Shared by the individual Cloud and MSP signup paths;
-// callers own price resolution, success/cancel URLs, and metadata.
+// for a single recurring price with the standard public Cloud signup trial.
 func (h *PublicCloudSignupHandlers) createTrialCheckoutSession(email, priceID, successURL, cancelURL string, metadata map[string]string) (string, error) {
+	return h.createSubscriptionCheckoutSession(email, priceID, successURL, cancelURL, metadata, publicCloudTrialDays)
+}
+
+// createImmediateCheckoutSession builds a subscription-mode Stripe Checkout
+// session without a Stripe trial period.
+func (h *PublicCloudSignupHandlers) createImmediateCheckoutSession(email, priceID, successURL, cancelURL string, metadata map[string]string) (string, error) {
+	return h.createSubscriptionCheckoutSession(email, priceID, successURL, cancelURL, metadata, 0)
+}
+
+func (h *PublicCloudSignupHandlers) createSubscriptionCheckoutSession(
+	email, priceID, successURL, cancelURL string,
+	metadata map[string]string,
+	trialDays int,
+) (string, error) {
 	if h.cfg == nil {
 		return "", fmt.Errorf("control plane config is missing")
 	}
@@ -575,10 +591,12 @@ func (h *PublicCloudSignupHandlers) createTrialCheckoutSession(email, priceID, s
 				Quantity: stripe.Int64(1),
 			},
 		},
-		SubscriptionData: &stripe.CheckoutSessionSubscriptionDataParams{
-			TrialPeriodDays: stripe.Int64(publicCloudTrialDays),
-		},
 		Metadata: metadata,
+	}
+	if trialDays > 0 {
+		params.SubscriptionData = &stripe.CheckoutSessionSubscriptionDataParams{
+			TrialPeriodDays: stripe.Int64(int64(trialDays)),
+		}
 	}
 	session, err := h.createCheckoutSession(params)
 	if err != nil {
@@ -592,10 +610,11 @@ func (h *PublicCloudSignupHandlers) createTrialCheckoutSession(email, priceID, s
 
 func (h *PublicCloudSignupHandlers) buildCheckoutMetadata(priceID, orgName string) map[string]string {
 	meta := map[string]string{
-		"account_kind":         string(registry.AccountKindIndividual),
-		"account_display_name": orgName,
-		"display_name":         orgName,
-		"signup_source":        "public_cloud_signup",
+		"account_kind":                 string(registry.AccountKindIndividual),
+		"account_display_name":         orgName,
+		"display_name":                 orgName,
+		"signup_source":                "public_cloud_signup",
+		checkoutBillingModeMetadataKey: checkoutBillingModeTrial,
 	}
 	// Only accept cloud_* plan versions for public individual signup.
 	// MSP plans require a different signup path; reject them here to prevent

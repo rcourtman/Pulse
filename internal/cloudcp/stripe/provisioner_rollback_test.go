@@ -67,6 +67,54 @@ func newTestProvisioner(t *testing.T, reg *registry.TenantRegistry, tenantsDir s
 	)
 }
 
+func TestHandleCheckoutImmediateBillingMetadataCreatesActiveStripeAccount(t *testing.T) {
+	reg := newStripeTestRegistry(t)
+	provisioner := newTestProvisioner(t, reg, t.TempDir(), nil, true)
+
+	session := CheckoutSession{
+		Customer:      "cus_msp_immediate",
+		Subscription:  "sub_msp_immediate",
+		CustomerEmail: "owner@example.com",
+		Metadata: map[string]string{
+			"account_kind":                 string(registry.AccountKindMSP),
+			"account_display_name":         "Quesys MSP",
+			"plan_version":                 "msp_starter",
+			CheckoutBillingModeMetadataKey: CheckoutBillingModeImmediate,
+		},
+	}
+	if err := provisioner.HandleCheckout(context.Background(), session); err != nil {
+		t.Fatalf("HandleCheckout: %v", err)
+	}
+
+	tenant, err := reg.GetByStripeCustomerID(session.Customer)
+	if err != nil {
+		t.Fatalf("GetByStripeCustomerID: %v", err)
+	}
+	if tenant == nil {
+		t.Fatal("expected tenant after checkout")
+	}
+	if tenant.PlanVersion != "msp_starter" {
+		t.Fatalf("tenant.PlanVersion = %q, want %q", tenant.PlanVersion, "msp_starter")
+	}
+	account, err := reg.GetAccount(tenant.AccountID)
+	if err != nil {
+		t.Fatalf("GetAccount: %v", err)
+	}
+	if account == nil || account.Kind != registry.AccountKindMSP {
+		t.Fatalf("account.Kind = %v, want %q", account, registry.AccountKindMSP)
+	}
+	sa, err := reg.GetStripeAccountByCustomerID(session.Customer)
+	if err != nil {
+		t.Fatalf("GetStripeAccountByCustomerID: %v", err)
+	}
+	if sa == nil {
+		t.Fatal("expected StripeAccount mapping")
+	}
+	if sa.SubscriptionState != "active" {
+		t.Fatalf("StripeAccount.SubscriptionState = %q, want %q", sa.SubscriptionState, "active")
+	}
+}
+
 func TestProvisionWorkspaceRollbackOnContainerFailure(t *testing.T) {
 	reg := newStripeTestRegistry(t)
 	tenantsDir := t.TempDir()

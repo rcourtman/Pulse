@@ -2,7 +2,6 @@ package cloudcp
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -108,8 +107,11 @@ func TestMSPSignupPageRendersFormWhenTierConfigured(t *testing.T) {
 	if !strings.Contains(body, "<form") {
 		t.Fatal("expected signup form when an MSP tier is configured")
 	}
-	if !strings.Contains(body, fmt.Sprintf("Start your %d-day Pulse Cloud for MSPs trial", publicCloudTrialDays)) {
-		t.Fatal("expected MSP trial heading")
+	if !strings.Contains(body, "Start Pulse Cloud for MSPs") {
+		t.Fatal("expected MSP paid signup heading")
+	}
+	if strings.Contains(strings.ToLower(body), "trial") {
+		t.Fatal("MSP signup page should not advertise a trial")
 	}
 	if !strings.Contains(body, `action="/cloud/msp/signup"`) {
 		t.Fatal("expected form to post to the canonical MSP signup path")
@@ -152,9 +154,9 @@ func TestMSPSignupPostValidRedirectsToStripeWithMSPMetadata(t *testing.T) {
 		CloudMSPStarterPriceID: testMSPStarterPriceID,
 	}, nil, nil, nil)
 
-	var meta map[string]string
+	var captured *stripe.CheckoutSessionParams
 	h.createCheckoutSession = func(params *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
-		meta = params.Metadata
+		captured = params
 		return &stripe.CheckoutSession{URL: "https://checkout.stripe.com/c/pay/cs_msp"}, nil
 	}
 
@@ -171,9 +173,13 @@ func TestMSPSignupPostValidRedirectsToStripeWithMSPMetadata(t *testing.T) {
 	if loc := rec.Header().Get("Location"); loc != "https://checkout.stripe.com/c/pay/cs_msp" {
 		t.Fatalf("location=%q, want stripe URL", loc)
 	}
-	if meta == nil {
+	if captured == nil || captured.Metadata == nil {
 		t.Fatal("expected checkout metadata")
 	}
+	if captured.SubscriptionData != nil {
+		t.Fatalf("MSP checkout should not set trial subscription data, got %+v", captured.SubscriptionData)
+	}
+	meta := captured.Metadata
 	if got := meta["account_kind"]; got != "msp" {
 		t.Fatalf("account_kind=%q, want %q", got, "msp")
 	}
@@ -185,6 +191,9 @@ func TestMSPSignupPostValidRedirectsToStripeWithMSPMetadata(t *testing.T) {
 	}
 	if got := meta["account_display_name"]; got != "Quesys MSP" {
 		t.Fatalf("account_display_name=%q, want %q", got, "Quesys MSP")
+	}
+	if got := meta[checkoutBillingModeMetadataKey]; got != checkoutBillingModeImmediate {
+		t.Fatalf("checkout_billing_mode=%q, want %q", got, checkoutBillingModeImmediate)
 	}
 }
 
@@ -291,8 +300,10 @@ func TestMSPSignupAPICreatesCheckout(t *testing.T) {
 		CloudMSPGrowthPriceID:  testMSPGrowthPriceID,
 	}, nil, nil, nil)
 
+	var captured *stripe.CheckoutSessionParams
 	var priceID string
 	h.createCheckoutSession = func(params *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
+		captured = params
 		if len(params.LineItems) > 0 && params.LineItems[0].Price != nil {
 			priceID = *params.LineItems[0].Price
 		}
@@ -306,6 +317,15 @@ func TestMSPSignupAPICreatesCheckout(t *testing.T) {
 
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	if captured == nil {
+		t.Fatal("expected checkout session params")
+	}
+	if captured.SubscriptionData != nil {
+		t.Fatalf("MSP API checkout should not set trial subscription data, got %+v", captured.SubscriptionData)
+	}
+	if got := captured.Metadata[checkoutBillingModeMetadataKey]; got != checkoutBillingModeImmediate {
+		t.Fatalf("checkout_billing_mode=%q, want %q", got, checkoutBillingModeImmediate)
 	}
 	if priceID != testMSPGrowthPriceID {
 		t.Fatalf("price_id=%q, want %q", priceID, testMSPGrowthPriceID)
@@ -354,8 +374,11 @@ func TestMSPSignupCompleteRendersHandoff(t *testing.T) {
 		t.Fatalf("status=%d, want %d", rec.Code, http.StatusOK)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "Trial checkout complete") {
+	if !strings.Contains(body, "Checkout complete") {
 		t.Fatal("expected completion heading")
+	}
+	if strings.Contains(strings.ToLower(body), "trial") {
+		t.Fatal("MSP checkout completion should not advertise a trial")
 	}
 	if !strings.Contains(body, "MSP portal") {
 		t.Fatal("expected MSP portal handoff copy")

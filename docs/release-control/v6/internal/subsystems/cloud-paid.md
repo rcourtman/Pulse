@@ -239,8 +239,11 @@ or other self-hosted uncapped continuity plans.
    `msp_growth`, and `msp_scale` plan versions, and the MSP signup routes stay
    gated behind the same `PublicCloudSignupEnabled` flag as the individual
    cloud signup front door. Checkout metadata produced by the MSP front door
-   must mark `account_kind=msp` so provisioning seeds an operator workspace
-   rather than an individual tenant.
+   must mark `account_kind=msp`, `signup_source=public_msp_signup`, and
+   `checkout_billing_mode=immediate` so provisioning seeds an operator
+   workspace as an immediately active paid account rather than an individual
+   trial tenant. Individual public Cloud signup may keep using the hosted trial
+   checkout helper; MSP public signup must not set Stripe `trial_period_days`.
 6. Add or change the hosted account portal API, Pulse Account access/auth/session handling, task-first browser shell, maintained portal frontend/bundle, or account-scoped workspace/access/billing handoff through `internal/cloudcp/account/audit.go`, `internal/cloudcp/account/handlers.go`, `internal/cloudcp/auth/handlers.go`, `internal/cloudcp/auth/session.go`, `internal/cloudcp/portal/`, and `internal/cloudcp/routes.go`
    That same customer-entry boundary owns the canonical hosted Cloud handoff:
    public Cloud entry, secure checkout return, and returning-customer sign-in
@@ -707,8 +710,13 @@ served only when its Stripe price is configured (`CP_MSP_STARTER_PRICE_ID`,
 `CP_MSP_GROWTH_PRICE_ID`, `CP_MSP_SCALE_PRICE_ID`); the signup page renders an
 explicit "not open for self-serve signup yet" notice when no MSP tier price is
 configured rather than offering an unbacked checkout. Checkout sessions started
-from this front door carry `account_kind=msp` and `signup_source=public_msp_signup`
-metadata so the provisioner seeds an isolated operator workspace.
+from this front door carry `account_kind=msp`, `signup_source=public_msp_signup`,
+and `checkout_billing_mode=immediate` metadata and do not set Stripe
+`trial_period_days`; MSP self-serve checkout is paid-first, while manual pilots
+or discounts belong in operator-controlled Stripe/customer support workflows
+rather than the public front door. The provisioner reads that billing-mode
+metadata so the initial Stripe account mapping is stored as active instead of
+trial before subscription webhooks catch up.
 
 Cloud paid readiness is materially behind architecture work. The main concern is
 contract coherence between pricing, entitlements, and runtime enforcement.

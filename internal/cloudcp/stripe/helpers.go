@@ -1,7 +1,15 @@
 package stripe
 
 import (
+	"strings"
+
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+)
+
+const (
+	CheckoutBillingModeMetadataKey = "checkout_billing_mode"
+	CheckoutBillingModeTrial       = "trial"
+	CheckoutBillingModeImmediate   = "immediate"
 )
 
 // MapSubscriptionStatus converts a Stripe subscription status string to the
@@ -20,6 +28,15 @@ func ShouldGrantCapabilities(state pkglicensing.SubscriptionState) bool {
 // to a Stripe price ID prefix or a generic "stripe" string.
 func DerivePlanVersion(metadata map[string]string, priceID string) string {
 	return pkglicensing.DeriveStripePlanVersion(metadata, priceID)
+}
+
+// InitialSubscriptionStateForCheckout resolves the initial stored billing
+// state for a checkout-created account before subscription webhooks catch up.
+func InitialSubscriptionStateForCheckout(metadata map[string]string) string {
+	if strings.EqualFold(strings.TrimSpace(metadata[CheckoutBillingModeMetadataKey]), CheckoutBillingModeImmediate) {
+		return "active"
+	}
+	return "trial"
 }
 
 // IsSafeStripeID validates that a Stripe ID (cus_..., sub_...) is safe for

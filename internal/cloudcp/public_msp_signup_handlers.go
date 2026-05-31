@@ -140,8 +140,8 @@ var publicMSPSignupPageTemplate = template.Must(template.New("public-msp-signup-
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>Start your {{.TrialDays}}-day Pulse Cloud for MSPs trial</h1>
-      <p>Run Pulse for multiple clients from one hosted operator account. Each client gets an isolated workspace; you manage them all from the MSP portal. Stripe checkout securely collects a payment method, but the subscription starts with a {{.TrialDays}}-day trial and no upfront charge.</p>
+      <h1>Start Pulse Cloud for MSPs</h1>
+      <p>Run Pulse for multiple clients from one hosted operator account. Each client gets an isolated workspace; you manage them all from the MSP portal. Stripe checkout starts the selected monthly subscription and provisions your operator account after payment succeeds.</p>
       {{if .ErrorMessage}}<div class="error">{{.ErrorMessage}}</div>{{end}}
       {{if .Cancelled}}<div class="note">Checkout was cancelled. You can start again below.</div>{{end}}
 
@@ -153,9 +153,9 @@ var publicMSPSignupPageTemplate = template.Must(template.New("public-msp-signup-
         {{if .ShowTierChoice}}
         <label>Plan</label>
         <div class="tier-group">
-          {{if .HasStarter}}<label class="tier-option"><input type="radio" name="tier" value="starter" {{if eq .Tier "starter"}}checked{{end}}> <strong>Starter</strong> — up to 10 client workspaces, $149/mo after trial</label>{{end}}
-          {{if .HasGrowth}}<label class="tier-option"><input type="radio" name="tier" value="growth" {{if eq .Tier "growth"}}checked{{end}}> <strong>Growth</strong> — up to 25 client workspaces, $249/mo after trial</label>{{end}}
-          {{if .HasScale}}<label class="tier-option"><input type="radio" name="tier" value="scale" {{if eq .Tier "scale"}}checked{{end}}> <strong>Scale</strong> — up to 50 client workspaces, $399/mo after trial</label>{{end}}
+          {{if .HasStarter}}<label class="tier-option"><input type="radio" name="tier" value="starter" {{if eq .Tier "starter"}}checked{{end}}> <strong>Starter</strong> — up to 10 client workspaces, $149/mo</label>{{end}}
+          {{if .HasGrowth}}<label class="tier-option"><input type="radio" name="tier" value="growth" {{if eq .Tier "growth"}}checked{{end}}> <strong>Growth</strong> — up to 25 client workspaces, $249/mo</label>{{end}}
+          {{if .HasScale}}<label class="tier-option"><input type="radio" name="tier" value="scale" {{if eq .Tier "scale"}}checked{{end}}> <strong>Scale</strong> — up to 50 client workspaces, $399/mo</label>{{end}}
         </div>
         {{else}}
         <input type="hidden" name="tier" value="{{.Tier}}">
@@ -172,8 +172,8 @@ var publicMSPSignupPageTemplate = template.Must(template.New("public-msp-signup-
 
       <p class="fine">After checkout, we will email a Pulse Account sign-in link so you can open your MSP portal.</p>
       <ol>
-        <li>Stripe starts your {{.TrialDays}}-day trial securely.</li>
-        <li>Pulse Cloud provisions your MSP operator account.</li>
+        <li>Stripe securely starts your MSP subscription.</li>
+        <li>Pulse Cloud provisions your MSP operator account after checkout completes.</li>
         <li>The email link opens Pulse Account, where you add client workspaces and continue setup.</li>
       </ol>
       {{else}}
@@ -203,8 +203,8 @@ var publicMSPSignupCompleteTemplate = template.Must(template.New("public-msp-sig
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>Trial checkout complete</h1>
-      <p>Your {{.TrialDays}}-day Pulse Cloud for MSPs trial checkout completed. Pulse Cloud is provisioning your MSP operator account.</p>
+      <h1>Checkout complete</h1>
+      <p>Your Pulse Cloud for MSPs checkout completed. Pulse Cloud is provisioning your MSP operator account.</p>
       <p>Watch your inbox for a Pulse Account sign-in link. That link lands in Pulse Account, where you can open the MSP portal, add client workspaces, and continue setup.</p>
     </div>
   </div>
@@ -225,7 +225,6 @@ type publicMSPSignupPageData struct {
 	HasStarter     bool
 	HasGrowth      bool
 	HasScale       bool
-	TrialDays      int
 }
 
 // newMSPSignupPageData seeds page data from the currently configured MSP tiers
@@ -247,7 +246,6 @@ func (h *PublicCloudSignupHandlers) newMSPSignupPageData() publicMSPSignupPageDa
 		HasScale:       hasScale,
 		Available:      count > 0,
 		ShowTierChoice: count > 1,
-		TrialDays:      publicCloudTrialDays,
 	}
 	if def, ok := h.defaultMSPTier(); ok {
 		data.Tier = string(def)
@@ -257,9 +255,6 @@ func (h *PublicCloudSignupHandlers) newMSPSignupPageData() publicMSPSignupPageDa
 
 func (h *PublicCloudSignupHandlers) renderMSPSignupPage(w http.ResponseWriter, r *http.Request, status int, data publicMSPSignupPageData) {
 	data.Nonce = cpsec.NonceFromContext(r.Context())
-	if data.TrialDays <= 0 {
-		data.TrialDays = publicCloudTrialDays
-	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	if err := publicMSPSignupPageTemplate.Execute(w, data); err != nil {
@@ -335,8 +330,7 @@ func (h *PublicCloudSignupHandlers) HandleMSPSignupComplete(w http.ResponseWrite
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := publicMSPSignupCompleteTemplate.Execute(w, publicCloudSignupCompleteData{
-		Nonce:     cpsec.NonceFromContext(r.Context()),
-		TrialDays: publicCloudTrialDays,
+		Nonce: cpsec.NonceFromContext(r.Context()),
 	}); err != nil {
 		log.Error().Err(err).Msg("public msp signup complete page render failed")
 	}
@@ -346,7 +340,7 @@ func (h *PublicCloudSignupHandlers) HandleMSPPublicSignup(w http.ResponseWriter,
 	h.servePublicSignupCheckout(w, r,
 		"Invalid plan tier. Must be one of: starter, growth, scale",
 		"public msp signup API checkout creation failed",
-		fmt.Sprintf("Checkout session created. Continue in Stripe to start your %d-day Pulse Cloud for MSPs trial and provision your operator account.", publicCloudTrialDays),
+		"Checkout session created. Continue in Stripe to start your Pulse Cloud for MSPs subscription and provision your operator account.",
 		func(tierRaw string) (bool, bool, func(email, orgName string) (string, error)) {
 			tier, ok := parseMSPTier(tierRaw)
 			if !ok {
@@ -379,15 +373,16 @@ func (h *PublicCloudSignupHandlers) createMSPCheckout(email, orgName string, tie
 		"org_name":  {orgName},
 		"tier":      {string(tier)},
 	})
-	return h.createTrialCheckoutSession(email, priceID, successURL, cancelURL, h.buildMSPCheckoutMetadata(priceID, orgName))
+	return h.createImmediateCheckoutSession(email, priceID, successURL, cancelURL, h.buildMSPCheckoutMetadata(priceID, orgName))
 }
 
 func (h *PublicCloudSignupHandlers) buildMSPCheckoutMetadata(priceID, orgName string) map[string]string {
 	meta := map[string]string{
-		"account_kind":         string(registry.AccountKindMSP),
-		"account_display_name": orgName,
-		"display_name":         orgName,
-		"signup_source":        "public_msp_signup",
+		"account_kind":                 string(registry.AccountKindMSP),
+		"account_display_name":         orgName,
+		"display_name":                 orgName,
+		"signup_source":                "public_msp_signup",
+		checkoutBillingModeMetadataKey: checkoutBillingModeImmediate,
 	}
 	// Only accept msp_* plan versions on the MSP signup path. This is the
 	// mirror of the individual path's cloud_* guard: it prevents granting
