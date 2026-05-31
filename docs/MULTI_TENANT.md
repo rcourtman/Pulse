@@ -118,6 +118,22 @@ curl http://localhost:7655/api/orgs/{orgId}/shares/incoming \
   -H "Authorization: Bearer $TOKEN"
 ```
 
+## Monitoring Multiple Clients (MSP Setup)
+
+A common managed service provider pattern is to run one central Pulse server and keep each client in its own organization, so dashboards, alerts, notifications, and audit logs never mix between clients. The same default node names (`pve`, `pve1`) in different client organizations do not collide, because each organization is a separate namespace.
+
+To onboard a client:
+
+1. **Create an organization for the client** (see [Creating an Organization](#creating-an-organization)).
+2. **Create an org-bound API token** with the `agent:report` scope, bound to that client's organization (`orgId`). A token bound to a single organization automatically routes every agent that uses it into that organization, with no extra header required.
+3. **Install the client's agents** (Proxmox host, Docker, Kubernetes) using that token. Their telemetry lands in the client's organization, isolated from every other client.
+4. **(Optional) Alias node names per client.** If two clients both use the default `pve` hostname and you want them visually distinct, set `--hostname` (or the `PULSE_HOSTNAME` environment variable) on the agent, for example `--hostname "acme-pve1"`. See [UNIFIED_AGENT.md](UNIFIED_AGENT.md).
+5. **(Optional) Isolate agent check-in on its own port.** When client nodes reach the central server across the internet, enable [Split-Port Agent Ingest](CONFIGURATION.md#split-port-agent-ingest-network-isolation) so agents connect on a dedicated, firewalled port that exposes only `/api/agents/*` and never the web UI or management API.
+
+Route each client's alerts into your ticketing system (ConnectWise and others) with per-organization webhooks or the org-scoped alerts API. See the Multi-tenant / MSP section of [WEBHOOKS.md](WEBHOOKS.md).
+
+**Licensing:** a single multi-tenant instance covers every client organization on that server. You do not need a separate Pro license per client. Self-hosted multi-tenant requires an Enterprise license with the `multi_tenant` capability (see [Requirements](#requirements)).
+
 ## Settings Panels
 
 When multi-tenant is enabled, **Settings → Organization** shows:
