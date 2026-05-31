@@ -199,8 +199,8 @@ describe('dockerPageModel', () => {
     ).toBe(true);
   });
 
-  it('derives the visible Docker workflow tabs from Swarm evidence', () => {
-    const nonSwarmModel = buildDockerPageModel([
+  it('derives visible Docker workflow tabs from canonical inventory evidence', () => {
+    const hostOnlyModel = buildDockerPageModel([
       makeResource({
         id: 'docker-host-1',
         type: 'agent',
@@ -212,6 +212,13 @@ describe('dockerPageModel', () => {
           },
         },
       }),
+    ]);
+    const runtimeInventoryModel = buildDockerPageModel([
+      makeResource({ id: 'docker-host-1', type: 'agent' }),
+      makeResource({ id: 'ctr-1', type: 'app-container' }),
+      makeResource({ id: 'image-1', type: 'docker-image' }),
+      makeResource({ id: 'volume-1', type: 'docker-volume' }),
+      makeResource({ id: 'network-1', type: 'docker-network' }),
     ]);
     const swarmModel = buildDockerPageModel([
       makeResource({
@@ -228,8 +235,11 @@ describe('dockerPageModel', () => {
       }),
     ]);
 
-    expect(hasDockerSwarmInventory(nonSwarmModel)).toBe(false);
-    expect(getDockerPageTabSpecs(nonSwarmModel).map((tab) => tab.id)).toEqual([
+    expect(hasDockerSwarmInventory(hostOnlyModel)).toBe(false);
+    expect(getDockerPageTabSpecs(hostOnlyModel).map((tab) => tab.id)).toEqual([
+      'overview',
+    ]);
+    expect(getDockerPageTabSpecs(runtimeInventoryModel).map((tab) => tab.id)).toEqual([
       'overview',
       'containers',
       'images',
@@ -239,12 +249,26 @@ describe('dockerPageModel', () => {
     expect(hasDockerSwarmInventory(swarmModel)).toBe(true);
     expect(getDockerPageTabSpecs(swarmModel).map((tab) => tab.id)).toEqual([
       'overview',
-      'containers',
-      'images',
-      'storage',
-      'networks',
       'swarm',
     ]);
+  });
+
+  it('shows the Storage workflow tab when engine disk usage exists without volume rows', () => {
+    const model = buildDockerPageModel([
+      makeResource({
+        id: 'docker-host-storage',
+        type: 'agent',
+        docker: {
+          runtime: 'docker',
+          imagesUsage: {
+            totalCount: 1,
+            totalSizeBytes: 1024,
+          },
+        },
+      }),
+    ]);
+
+    expect(getDockerPageTabSpecs(model).map((tab) => tab.id)).toEqual(['overview', 'storage']);
   });
 
   it('detects engine storage usage only from populated disk-usage buckets', () => {

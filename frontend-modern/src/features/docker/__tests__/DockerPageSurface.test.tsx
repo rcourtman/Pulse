@@ -168,6 +168,40 @@ const makeDockerVolume = (overrides: Partial<Resource> = {}): Resource => ({
   ...overrides,
 });
 
+const makeDockerImage = (overrides: Partial<Resource> = {}): Resource => ({
+  id: 'docker-image:docker-01:nginx',
+  name: 'nginx:latest',
+  displayName: 'nginx:latest',
+  platformId: 'lab',
+  platformType: 'docker',
+  sourceType: 'agent',
+  status: 'online',
+  type: 'docker-image',
+  lastSeen: 1_700_000_000_000,
+  docker: {
+    runtime: 'docker',
+    image: 'nginx:latest',
+  } as NonNullable<Resource['docker']>,
+  ...overrides,
+});
+
+const makeDockerNetwork = (overrides: Partial<Resource> = {}): Resource => ({
+  id: 'docker-network:docker-01:frontend',
+  name: 'frontend',
+  displayName: 'frontend',
+  platformId: 'lab',
+  platformType: 'docker',
+  sourceType: 'agent',
+  status: 'online',
+  type: 'docker-network',
+  lastSeen: 1_700_000_000_000,
+  docker: {
+    runtime: 'docker',
+    driver: 'bridge',
+  } as NonNullable<Resource['docker']>,
+  ...overrides,
+});
+
 beforeEach(() => {
   mocks.pathname = '/docker/overview';
   mocks.useUnifiedResources.mockReturnValue({
@@ -206,9 +240,31 @@ describe('DockerPageSurface', () => {
     expect(screen.getByTestId('docker-hosts-table')).toHaveAttribute('data-show-toolbar', 'false');
     expect(screen.getByTestId('docker-section-tabs')).toHaveAttribute(
       'data-tabs',
-      'overview,containers,images,storage,networks',
+      'overview,containers',
     );
     expect(screen.queryByTestId('docker-containers-table')).toBeNull();
+  });
+
+  it('shows Docker object tabs only when the matching inventory exists', () => {
+    mocks.useUnifiedResources.mockReturnValue({
+      error: () => null,
+      loading: () => false,
+      refetch: vi.fn(),
+      resources: () => [
+        makeDockerHost(),
+        makeDockerContainer(),
+        makeDockerImage(),
+        makeDockerVolume(),
+        makeDockerNetwork(),
+      ],
+    });
+
+    render(() => <DockerPageSurface />);
+
+    expect(screen.getByTestId('docker-section-tabs')).toHaveAttribute(
+      'data-tabs',
+      'overview,containers,images,storage,networks',
+    );
   });
 
   it('renders the dedicated containers route through the Docker containers table', () => {
@@ -249,7 +305,7 @@ describe('DockerPageSurface', () => {
 
     expect(screen.getByTestId('docker-section-tabs')).toHaveAttribute(
       'data-tabs',
-      'overview,containers,images,storage,networks,swarm',
+      'overview,swarm',
     );
   });
 
@@ -402,7 +458,7 @@ describe('DockerPageSurface', () => {
     );
   });
 
-  it('uses one Storage tab empty state when no storage inventory exists', () => {
+  it('falls back to Overview when the Storage route is requested without storage evidence', () => {
     mocks.pathname = '/docker/storage';
     mocks.useUnifiedResources.mockReturnValue({
       error: () => null,
@@ -415,10 +471,8 @@ describe('DockerPageSurface', () => {
 
     expect(screen.queryByTestId('docker-storage-usage-table')).toBeNull();
     expect(screen.queryByTestId('docker-volumes-table')).toBeNull();
-    expect(screen.getAllByTestId('platform-table-empty-state')).toHaveLength(1);
-    expect(screen.getByTestId('platform-table-empty-state')).toHaveAttribute(
-      'data-title',
-      'No Docker or Podman storage inventory',
-    );
+    expect(screen.getByTestId('docker-section-tabs')).toHaveAttribute('data-active', 'overview');
+    expect(screen.getByTestId('docker-hosts-table')).toHaveAttribute('data-resource-count', '1');
+    expect(screen.queryByTestId('platform-table-empty-state')).toBeNull();
   });
 });

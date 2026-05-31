@@ -27,6 +27,7 @@ import {
   filterDockerResources,
   getDockerPageTabSpecs,
   hasDockerEngineStorageUsage,
+  hasDockerStorageInventory,
   hasDockerSwarmInventory,
   resolveDockerPageTabId,
   type DockerPageModel,
@@ -142,7 +143,6 @@ export default DockerPageSurface;
 
 function DockerStorage(props: { model: DockerPageModel }) {
   const hasEngineUsage = createMemo(() => props.model.hosts.some(hasDockerEngineStorageUsage));
-  const hasStorageInventory = createMemo(() => hasEngineUsage() || props.model.volumes.length > 0);
   const [search, setSearch] = createSignal('');
   const [status, setStatus] = createSignal<DockerResourceStatusFilter>('all');
   const storageHosts = createMemo(() => props.model.hosts.filter(hasDockerEngineStorageUsage));
@@ -160,7 +160,7 @@ function DockerStorage(props: { model: DockerPageModel }) {
 
   return (
     <Show
-      when={hasStorageInventory()}
+      when={hasDockerStorageInventory(props.model)}
       fallback={
         <PlatformTableEmptyState
           icon={dockerIcon()}

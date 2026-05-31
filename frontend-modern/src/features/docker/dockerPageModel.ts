@@ -595,6 +595,9 @@ export const hasDockerEngineStorageUsage = (host: Resource): boolean =>
   hasDockerStorageUsageBucket(host.docker?.volumesUsage) ||
   hasDockerStorageUsageBucket(host.docker?.buildCacheUsage);
 
+export const hasDockerStorageInventory = (model: DockerPageModel): boolean =>
+  model.hosts.some(hasDockerEngineStorageUsage) || model.volumes.length > 0;
+
 export const hasDockerSwarmInventory = (model: DockerPageModel): boolean =>
   model.hosts.some(hasDockerSwarmEvidence) ||
   model.services.length > 0 ||
@@ -603,8 +606,25 @@ export const hasDockerSwarmInventory = (model: DockerPageModel): boolean =>
   model.secrets.length > 0 ||
   model.configs.length > 0;
 
+const hasDockerTabInventory = (model: DockerPageModel, tab: DockerPageTabId): boolean => {
+  switch (tab) {
+    case 'overview':
+      return true;
+    case 'containers':
+      return model.containers.length > 0;
+    case 'images':
+      return model.images.length > 0;
+    case 'storage':
+      return hasDockerStorageInventory(model);
+    case 'networks':
+      return model.networks.length > 0;
+    case 'swarm':
+      return hasDockerSwarmInventory(model);
+  }
+};
+
 export const getDockerPageTabSpecs = (model: DockerPageModel): readonly DockerTabSpec[] =>
-  DOCKER_TAB_SPECS.filter((tab) => tab.id !== 'swarm' || hasDockerSwarmInventory(model));
+  DOCKER_TAB_SPECS.filter((tab) => hasDockerTabInventory(model, tab.id));
 
 const RUNTIME_ONLY_SYSTEM_LABELS = new Set(['docker', 'docker / podman', 'podman']);
 
