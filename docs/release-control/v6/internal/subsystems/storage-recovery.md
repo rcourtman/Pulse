@@ -43,13 +43,10 @@ state.
 14. `frontend-modern/src/utils/storageSummaryCache.ts`
 15. `frontend-modern/src/components/Storage/useStorageSummaryCharts.ts`
 16. `frontend-modern/src/features/storageBackups/storageCapacityDeltaPresentation.ts`
-17. `frontend-modern/src/features/proxmox/BackupActivityChart.tsx`
-18. `frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx`
-19. `frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx`
-20. `frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts`
-21. `frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts`
-22. `frontend-modern/src/features/proxmox/proxmoxBackupSummaryPresentation.ts`
-23. `frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx`
+17. `frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx`
+18. `frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx`
+19. `frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts`
+20. `frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx`
 
 ## Shared Boundaries
 
