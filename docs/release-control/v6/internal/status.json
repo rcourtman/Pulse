@@ -7380,6 +7380,44 @@
       "lane_ids": [
         "L8"
       ]
+    },
+    {
+      "id": "docker-overview-host-plus-workloads",
+      "summary": "Docker / Podman Overview is the primary container-runtime landing surface and must show runtime hosts plus primary container workloads in the proven Pulse host-then-workloads pattern; `/docker/containers` remains a compatibility route to that overview instead of a separate visible tab, while Images, Storage, Networks, and Swarm remain evidence-gated drill-down workflows.",
+      "kind": "contract",
+      "decided_at": "2026-05-31",
+      "subsystem_ids": [
+        "unified-resources"
+      ],
+      "lane_ids": [
+        "L13"
+      ]
+    },
+    {
+      "id": "mock-mode-toggle-seamless",
+      "summary": "Mock-mode toggles are successful only when the managed browser entrypoint reports the requested mock state through `/api/system/mock-mode`; launcher supervisor handoffs during restart must be adopted as managed runtime recovery rather than surfaced as false failures, and non-clean toggle restarts may continue only after that browser-entrypoint proof passes.",
+      "kind": "contract",
+      "decided_at": "2026-05-31",
+      "subsystem_ids": [
+        "deployment-installability"
+      ],
+      "lane_ids": [
+        "L1"
+      ]
+    },
+    {
+      "id": "platform-workflow-tabs-evidence-gated",
+      "summary": "Platform and runtime workflow tabs must be evidence-gated by the native row or signal model that populates them: Overview remains the stable landing tab, supporting workflow tabs appear only when current inventory or signal exists, and legacy/direct object routes fall back to Overview when their workflow has no information to show. Overview content remains platform-specific rather than forcing every platform into a Docker-style clone.",
+      "kind": "contract",
+      "decided_at": "2026-05-31",
+      "subsystem_ids": [
+        "frontend-primitives",
+        "unified-resources"
+      ],
+      "lane_ids": [
+        "L8",
+        "L13"
+      ]
     }
   ]
 }
