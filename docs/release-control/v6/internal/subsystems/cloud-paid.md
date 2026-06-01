@@ -239,7 +239,9 @@ or other self-hosted uncapped continuity plans.
    (`CP_MSP_STARTER_PRICE_ID`, `CP_MSP_GROWTH_PRICE_ID`,
    `CP_MSP_SCALE_PRICE_ID`) is still validated in `internal/cloudcp/config.go`
    against the canonical `msp_starter`, `msp_growth`, and `msp_scale` plan
-   versions, and the MSP signup routes stay gated behind the same
+   versions. The canonical provider workspace limits are 5 client workspaces
+   for Starter, 15 for Growth, and 40 for Scale; larger providers belong to
+   Enterprise/custom terms. The MSP signup routes stay gated behind the same
    `PublicCloudSignupEnabled` flag as the individual cloud signup front door.
    Checkout metadata produced by the MSP front door must mark
    `account_kind=msp`, `signup_source=public_msp_signup`, and

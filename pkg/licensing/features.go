@@ -186,9 +186,9 @@ var CloudPlanWorkspaceLimits = map[string]int{
 	"cloud_founding": 1,
 
 	// MSP tiers — client caps from pricing spec
-	"msp_starter": 10, // MSP Starter: up to 10 clients
-	"msp_growth":  25, // MSP Growth: up to 25 clients
-	"msp_scale":   50, // MSP Scale: up to 50 clients
+	"msp_starter": 5,  // MSP Starter: up to 5 clients
+	"msp_growth":  15, // MSP Growth: up to 15 clients
+	"msp_scale":   40, // MSP Scale: up to 40 clients
 }
 
 // UnknownPlanDefaultWorkspaceLimit is the safe-default workspace limit applied

@@ -43,8 +43,8 @@ func TestMSPPlanAliasCanonicalizationContract(t *testing.T) {
 	if got := CanonicalizePlanVersion("msp_hosted_v1"); got != "msp_starter" {
 		t.Fatalf("CanonicalizePlanVersion(msp_hosted_v1) = %q, want %q", got, "msp_starter")
 	}
-	if limit, known := WorkspaceLimitForPlan("msp_hosted_v1"); !known || limit != 10 {
-		t.Fatalf("WorkspaceLimitForPlan(msp_hosted_v1) = (%d, %v), want (10, true)", limit, known)
+	if limit, known := WorkspaceLimitForPlan("msp_hosted_v1"); !known || limit != 5 {
+		t.Fatalf("WorkspaceLimitForPlan(msp_hosted_v1) = (%d, %v), want (5, true)", limit, known)
 	}
 }
 

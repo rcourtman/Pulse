@@ -7433,6 +7433,21 @@
         "L4",
         "L17"
       ]
+    },
+    {
+      "id": "msp-provider-tier-limit-lock",
+      "summary": "MSP provider workspace limits are intentionally tight: Starter includes up to 5 client workspaces, Growth up to 15, Scale up to 40, and larger providers move to Enterprise/custom terms so support, onboarding, reporting, and deployment load are sized before rollout.",
+      "kind": "pricing",
+      "decided_at": "2026-06-01",
+      "subsystem_ids": [
+        "cloud-paid"
+      ],
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L4",
+        "L17"
+      ]
     }
   ]
 }

@@ -584,10 +584,10 @@ func TestWorkspaceLimitForPlan_KnownPlans(t *testing.T) {
 		{"cloud_power", 1},
 		{"cloud_max", 1},
 		{"cloud_founding", 1},
-		{"msp_starter", 10},
-		{"msp_hosted_v1", 10},
-		{"msp_growth", 25},
-		{"msp_scale", 50},
+		{"msp_starter", 5},
+		{"msp_hosted_v1", 5},
+		{"msp_growth", 15},
+		{"msp_scale", 40},
 	}
 
 	for _, tt := range tests {

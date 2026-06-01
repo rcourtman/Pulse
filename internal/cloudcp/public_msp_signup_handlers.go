@@ -147,8 +147,8 @@ var publicMSPSignupPageTemplate = template.Must(template.New("public-msp-signup-
       <form method="POST" action="{{.FormAction}}">
         <input type="hidden" name="tier" value="{{.Tier}}">
         <div class="tier-group">
-          <div class="tier-option"><strong>Starter</strong> &mdash; up to 10 client workspaces, $149/mo</div>
-          <div class="tier-option"><strong>Growth / Scale</strong> &mdash; request access for 25+ client workspaces, custom onboarding, or assisted rollout.</div>
+          <div class="tier-option"><strong>Starter</strong> &mdash; up to 5 client workspaces, $149/mo</div>
+          <div class="tier-option"><strong>Growth / Scale</strong> &mdash; request access for 15+ client workspaces, custom onboarding, or assisted rollout.</div>
         </div>
 
         <label for="email">Work Email</label>

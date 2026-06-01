@@ -146,6 +146,12 @@ func TestMSPSignupPageKeepsStarterSelfServeWhenMultipleTiersConfigured(t *testin
 	if !strings.Contains(body, "Growth / Scale") || !strings.Contains(body, "request access") {
 		t.Fatal("expected assisted Growth/Scale copy")
 	}
+	if !strings.Contains(body, "up to 5 client workspaces") {
+		t.Fatal("expected canonical MSP Starter workspace limit copy")
+	}
+	if !strings.Contains(body, "15+ client workspaces") {
+		t.Fatal("expected assisted MSP workspace threshold copy")
+	}
 }
 
 func TestMSPSignupPostValidRedirectsToStripeWithMSPMetadata(t *testing.T) {
