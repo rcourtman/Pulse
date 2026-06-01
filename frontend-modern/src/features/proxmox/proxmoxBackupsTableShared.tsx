@@ -5,6 +5,7 @@ import ArrowUpDownIcon from 'lucide-solid/icons/arrow-up-down';
 import { type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { TableHead } from '@/components/shared/Table';
+import { WorkloadTypeBadge as SharedWorkloadTypeBadge } from '@/components/shared/WorkloadTypeBadge';
 
 import type { RecoverableArtifact, WorkloadReference } from './proxmoxBackupRecoveryModel';
 import type {
@@ -175,28 +176,29 @@ export function ArtifactSourceBadge(props: { artifact: RecoverableArtifact }) {
   );
 }
 
-export function WorkloadTypeBadge(props: {
+const proxmoxBackupWorkloadBadgeType = (
+  type: WorkloadReference['type'],
+): string | null | undefined => {
+  if (type === 'ct') return 'system-container';
+  if (type === 'host') return 'agent';
+  return type === 'unknown' ? undefined : type;
+};
+
+const proxmoxBackupWorkloadBadgeTitle = (type: WorkloadReference['type']): string | undefined => {
+  if (type === 'host') return 'Host backup';
+  return undefined;
+};
+
+export function ProxmoxBackupWorkloadTypeBadge(props: {
   type: WorkloadReference['type'];
   label: string;
 }) {
-  const badgeClass = () => {
-    if (props.type === 'host') {
-      return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200';
-    }
-    if (props.type === 'vm') {
-      return 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200';
-    }
-    if (props.type === 'ct') {
-      return 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-200';
-    }
-    return 'bg-surface-alt text-muted';
-  };
   return (
-    <span
-      class={`inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-semibold ${badgeClass()}`}
-    >
-      {props.label}
-    </span>
+    <SharedWorkloadTypeBadge
+      type={proxmoxBackupWorkloadBadgeType(props.type)}
+      label={props.label}
+      title={proxmoxBackupWorkloadBadgeTitle(props.type)}
+    />
   );
 }
 

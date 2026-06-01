@@ -63,7 +63,7 @@ export interface WorkloadCoverageRow {
   snapshotCount: number;
   posture: WorkloadRecoveryPosture;
   postureRank: number;
-  // True only when a VM/CT row exists because a backup/task referenced a VMID
+  // True only when a VM/LXC row exists because a backup/task referenced a VMID
   // with no matching live inventory guest. Host backups can also carry a
   // `backup:` key, but they are first-class backup targets, not orphaned guests.
   isOrphaned: boolean;
@@ -129,7 +129,7 @@ function backupTypeLabel(type: string | undefined): WorkloadReference['type'] {
 
 function typeLabel(type: WorkloadReference['type']): string {
   if (type === 'vm') return 'VM';
-  if (type === 'ct') return 'CT';
+  if (type === 'ct') return 'LXC';
   if (type === 'host') return 'Host';
   return 'Guest';
 }

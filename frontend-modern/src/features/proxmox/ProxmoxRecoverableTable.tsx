@@ -29,9 +29,9 @@ import type { RecoverableSortKey } from './proxmoxBackupsTableModel';
 import {
   ArtifactSourceBadge,
   ArtifactStateBadge,
+  ProxmoxBackupWorkloadTypeBadge,
   RowMetricBar,
   SortableHead,
-  WorkloadTypeBadge,
   artifactStateLabel,
 } from './proxmoxBackupsTableShared';
 
@@ -91,7 +91,10 @@ export function ProxmoxRecoverableTable(props: {
         </div>
       </TableCell>
       <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-        <WorkloadTypeBadge type={artifact.workload.type} label={artifact.workload.typeLabel} />
+        <ProxmoxBackupWorkloadTypeBadge
+          type={artifact.workload.type}
+          label={artifact.workload.typeLabel}
+        />
       </TableCell>
       <TableCell
         class={`${getPlatformTableCellClassForKind('text')} text-muted font-mono text-[11px] tabular-nums`}

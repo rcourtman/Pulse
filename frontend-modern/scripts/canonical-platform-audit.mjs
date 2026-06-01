@@ -486,6 +486,19 @@ const HELPER_RULES = [
       'Do not import canonical workload-type presentation from the badge component. Use @/utils/workloadTypePresentation for non-rendering logic.',
   },
   {
+    rule: 'canonical-type/no-local-workload-type-badge-component',
+    regex: /\b(?:export\s+)?(?:const|function)\s+WorkloadTypeBadge\b/g,
+    message:
+      'Do not define workload type badge components locally. Use @/components/shared/WorkloadTypeBadge so VM/LXC/container/host styling cannot drift across pages.',
+    allowFiles: new Set(['src/components/shared/WorkloadTypeBadge.tsx']),
+  },
+  {
+    rule: 'canonical-type/no-local-proxmox-backup-workload-badge-tones',
+    regex: /props\.type\s*===\s*['"](?:host|vm|ct)['"][\s\S]{0,260}(?:bg-|text-)/g,
+    message:
+      'Do not branch Proxmox backup workload badge colors locally. Map PBS-native backup types to the shared workload type badge presentation instead.',
+  },
+  {
     rule: 'canonical-type/no-imports-from-resource-badge-component',
     regex:
       /import\s*\{[\s\S]*?(?:getPlatformBadge|getSourceBadge|getTypeBadge|getUnifiedSourceBadges|getContainerRuntimeBadge|ResourceBadge)[\s\S]*?\}\s*from\s*['"]@\/components\/Infrastructure\/resourceBadges['"]/g,

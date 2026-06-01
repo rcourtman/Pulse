@@ -143,6 +143,7 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.getByRole('columnheader', { name: /location/i })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: /source/i })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: /type/i })).toBeInTheDocument();
+    expect(screen.getAllByText('LXC').length).toBeGreaterThan(0);
     expect(screen.getAllByText('PBS').length).toBeGreaterThan(0);
     expect(screen.getByText('main / minipc')).toBeInTheDocument();
     expect(

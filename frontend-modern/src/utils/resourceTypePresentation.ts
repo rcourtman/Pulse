@@ -1,5 +1,6 @@
 import type { ResourceType } from '@/types/resource';
 import { canonicalizeFrontendResourceType } from '@/utils/resourceTypeCompat';
+import { getWorkloadTypePresentation } from '@/utils/workloadTypePresentation';
 
 export interface ResourceTypePresentation {
   label: string;
@@ -8,12 +9,19 @@ export interface ResourceTypePresentation {
 
 const DEFAULT_BADGE_CLASSES = 'bg-surface-alt text-base-content';
 
+const workloadTypeResourcePresentation = (
+  workloadType: Parameters<typeof getWorkloadTypePresentation>[0],
+): ResourceTypePresentation => {
+  const presentation = getWorkloadTypePresentation(workloadType);
+  return {
+    label: presentation.label,
+    badgeClasses: presentation.className,
+  };
+};
+
 const RESOURCE_TYPE_PRESENTATION: Partial<Record<ResourceType | string, ResourceTypePresentation>> =
   {
-    agent: {
-      label: 'Agent',
-      badgeClasses: 'bg-blue-500 text-blue-300',
-    },
+    agent: workloadTypeResourcePresentation('agent'),
     'docker-host': {
       label: 'Container Runtime',
       badgeClasses: DEFAULT_BADGE_CLASSES,
@@ -26,26 +34,11 @@ const RESOURCE_TYPE_PRESENTATION: Partial<Record<ResourceType | string, Resource
       label: 'K8s Node',
       badgeClasses: DEFAULT_BADGE_CLASSES,
     },
-    vm: {
-      label: 'VM',
-      badgeClasses: DEFAULT_BADGE_CLASSES,
-    },
-    'system-container': {
-      label: 'Container',
-      badgeClasses: 'bg-blue-500 text-blue-300',
-    },
-    'oci-container': {
-      label: 'Container',
-      badgeClasses: 'bg-blue-500 text-blue-300',
-    },
-    'app-container': {
-      label: 'App Container',
-      badgeClasses: 'bg-blue-500 text-blue-300',
-    },
-    pod: {
-      label: 'Pod',
-      badgeClasses: DEFAULT_BADGE_CLASSES,
-    },
+    vm: workloadTypeResourcePresentation('vm'),
+    'system-container': workloadTypeResourcePresentation('system-container'),
+    'oci-container': workloadTypeResourcePresentation('system-container'),
+    'app-container': workloadTypeResourcePresentation('app-container'),
+    pod: workloadTypeResourcePresentation('pod'),
     jail: {
       label: 'Jail',
       badgeClasses: DEFAULT_BADGE_CLASSES,

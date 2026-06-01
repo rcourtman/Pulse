@@ -39,13 +39,13 @@ describe('proxmoxBackupsTableModel', () => {
 
   describe('label helpers', () => {
     it('formats guest labels by type', () => {
-      expect(guestLabel('ct', 101)).toBe('CT 101');
+      expect(guestLabel('ct', 101)).toBe('LXC 101');
       expect(guestLabel('vm', 202)).toBe('VM 202');
       expect(guestLabel(undefined, 303)).toBe('Guest 303');
     });
 
     it('formats PBS workload labels including host backups', () => {
-      expect(pbsWorkloadLabel(pbs({ backupType: 'ct', vmid: '101' }))).toBe('CT 101');
+      expect(pbsWorkloadLabel(pbs({ backupType: 'ct', vmid: '101' }))).toBe('LXC 101');
       expect(pbsWorkloadLabel(pbs({ backupType: 'vm', vmid: '202' }))).toBe('VM 202');
       expect(pbsWorkloadLabel(pbs({ backupType: 'host', vmid: '' }))).toBe('Host');
       expect(pbsWorkloadLabel(pbs({ backupType: 'host', vmid: '9' }))).toBe('Host 9');

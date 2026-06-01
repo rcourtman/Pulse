@@ -112,7 +112,7 @@ export const ProxmoxBackupsTable: Component<{
   };
 
   // Type scope normalizes vm/qemu and ct/lxc to a canonical token before
-  // comparing, since the recovery model uses vm/ct/host.
+  // comparing, since the recovery model keeps PBS-native ct internally.
   const typeFilter = (): string => (typeof searchParams.type === 'string' ? searchParams.type : '');
   const setTypeFilter = (value: string): void => setSearchParams({ type: value || null });
   const canonicalGuestType = (raw: string | undefined): string => {
@@ -129,7 +129,7 @@ export const ProxmoxBackupsTable: Component<{
   const typeFilterOptions: FilterSelectOption[] = [
     { value: '', label: 'All types' },
     { value: 'vm', label: 'VMs' },
-    { value: 'ct', label: 'Containers' },
+    { value: 'ct', label: 'LXCs' },
     { value: 'host', label: 'Hosts' },
   ];
 
@@ -138,7 +138,7 @@ export const ProxmoxBackupsTable: Component<{
   const [expandedCoverageRows, setExpandedCoverageRows] = createSignal<ReadonlySet<string>>(
     new Set<string>(),
   );
-  // Orphaned backups (VM/CT records whose guest no longer exists in inventory)
+  // Orphaned backups (VM/LXC records whose guest no longer exists in inventory)
   // are collapsed by default so the main table is active backup targets, not a
   // pile of nameless dead records sorted to the top.
   const [showOrphaned, setShowOrphaned] = createSignal(false);
@@ -269,7 +269,7 @@ export const ProxmoxBackupsTable: Component<{
   });
 
   // The main table is the user's active backup targets: live inventory guests
-  // plus first-class host backups. Orphaned VM/CT backup records are partitioned
+  // plus first-class host backups. Orphaned VM/LXC backup records are partitioned
   // out into their own collapsed section so they don't dominate the top of the
   // list with nameless rows.
   const liveCoverageRows = createMemo(() =>

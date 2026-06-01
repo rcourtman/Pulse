@@ -31,8 +31,8 @@ import type { CoverageSortKey } from './proxmoxBackupsTableModel';
 import {
   ArtifactSourceBadge,
   ArtifactStateBadge,
+  ProxmoxBackupWorkloadTypeBadge,
   SortableHead,
-  WorkloadTypeBadge,
   artifactStateLabel,
 } from './proxmoxBackupsTableShared';
 
@@ -245,7 +245,7 @@ export function ProxmoxCoverageTable(props: {
                       <TableCell
                         class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                       >
-                        <WorkloadTypeBadge
+                        <ProxmoxBackupWorkloadTypeBadge
                           type={row.workload.type}
                           label={row.workload.typeLabel}
                         />

@@ -97,7 +97,7 @@ describe('proxmoxBackupRecoveryModel', () => {
     expect(model.recoverableArtifacts).toHaveLength(3);
 
     const row = model.coverageRows[0];
-    expect(row.workload.label).toBe('pbs-docker (CT 112)');
+    expect(row.workload.label).toBe('pbs-docker (LXC 112)');
     expect(row.pbsCount).toBe(1);
     expect(row.archiveCount).toBe(1);
     expect(row.snapshotCount).toBe(1);
@@ -168,9 +168,9 @@ describe('proxmoxBackupRecoveryModel', () => {
     expect(live?.isOrphaned).toBe(false);
     expect(live?.workload.name).toBe('pbs-docker');
     expect(orphan?.isOrphaned).toBe(true);
-    // Orphans have no live guest to name them; label falls back to "CT <vmid>".
+    // Orphans have no live guest to name them; label falls back to "LXC <vmid>".
     expect(orphan?.workload.name).toBeUndefined();
-    expect(orphan?.workload.label).toBe('CT 999');
+    expect(orphan?.workload.label).toBe('LXC 999');
   });
 
   it('keeps host backups in coverage without counting zero-id aggregate artifacts as guests', () => {
@@ -213,7 +213,7 @@ describe('proxmoxBackupRecoveryModel', () => {
     expect(model.coverageRows[0].pbsCount).toBe(1);
     expect(model.coverageRows[0].archiveCount).toBe(1);
     expect(model.recoverableArtifacts.map((artifact) => artifact.workload.label)).toEqual(
-      expect.arrayContaining(['CT backup', 'Host mail-gateway']),
+      expect.arrayContaining(['LXC backup', 'Host mail-gateway']),
     );
   });
 

@@ -14,6 +14,7 @@ import {
 
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TagBadges } from '@/components/shared/TagBadges';
+import { WorkloadTypeBadge } from '@/components/shared/WorkloadTypeBadge';
 import { resolveWorkloadType } from '@/utils/workloads';
 import { EnhancedCPUBar } from '@/components/Workloads/EnhancedCPUBar';
 import { MetricMiniSparkline } from '@/components/Workloads/MetricMiniSparkline';
@@ -259,12 +260,11 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('type')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
-              <span
-                class={`inline-flex items-center px-1 py-0.5 text-[10px] font-medium rounded whitespace-nowrap ${typeInfo().className}`}
+              <WorkloadTypeBadge
+                type={workloadType()}
+                label={typeInfo().label}
                 title={typeInfo().title}
-              >
-                {typeInfo().label}
-              </span>
+              />
             </div>
           </td>
         </Show>

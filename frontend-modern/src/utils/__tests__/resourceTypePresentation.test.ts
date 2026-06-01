@@ -3,6 +3,7 @@ import {
   getResourceTypeLabel,
   getResourceTypePresentation,
 } from '@/utils/resourceTypePresentation';
+import { getWorkloadTypePresentation } from '@/utils/workloadTypePresentation';
 
 describe('resourceTypePresentation', () => {
   it('returns canonical labels for unified resource types', () => {
@@ -43,5 +44,20 @@ describe('resourceTypePresentation', () => {
     expect(getResourceTypePresentation('docker-container')).toMatchObject({
       label: 'Container',
     });
+  });
+
+  it('uses the canonical workload type palette for resource types that also appear in workload tables', () => {
+    for (const [resourceType, workloadType] of [
+      ['vm', 'vm'],
+      ['system-container', 'system-container'],
+      ['oci-container', 'system-container'],
+      ['app-container', 'app-container'],
+      ['pod', 'pod'],
+      ['agent', 'agent'],
+    ] as const) {
+      expect(getResourceTypePresentation(resourceType)?.badgeClasses).toBe(
+        getWorkloadTypePresentation(workloadType).className,
+      );
+    }
   });
 });

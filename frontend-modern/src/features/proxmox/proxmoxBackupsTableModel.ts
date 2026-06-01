@@ -1,5 +1,6 @@
 import type { GuestSnapshot, PBSBackup } from '@/types/api';
 import type { StatusIndicatorVariant } from '@/utils/status';
+import { getWorkloadTypePresentation } from '@/utils/workloadTypePresentation';
 
 // Pure model logic for ProxmoxBackupsTable: tab identifiers, per-tab sort-key
 // types and their default directions, sort comparators, and workload/label/
@@ -69,14 +70,19 @@ export function classifyTaskStatus(status: string): {
 
 export function guestLabel(type: string | undefined, vmid: number): string {
   const t = (type ?? '').toLowerCase();
-  const kind = t === 'ct' ? 'CT' : t === 'vm' ? 'VM' : t.toUpperCase() || 'Guest';
+  const kind =
+    t === 'ct'
+      ? getWorkloadTypePresentation('system-container').label
+      : t === 'vm'
+        ? getWorkloadTypePresentation('vm').label
+        : t.toUpperCase() || 'Guest';
   return `${kind} ${vmid}`;
 }
 
 export function pbsWorkloadLabel(backup: PBSBackup): string {
   const t = (backup.backupType ?? '').toLowerCase();
-  if (t === 'ct') return `CT ${backup.vmid}`;
-  if (t === 'vm') return `VM ${backup.vmid}`;
+  if (t === 'ct') return `${getWorkloadTypePresentation('system-container').label} ${backup.vmid}`;
+  if (t === 'vm') return `${getWorkloadTypePresentation('vm').label} ${backup.vmid}`;
   if (t === 'host') return backup.vmid ? `Host ${backup.vmid}` : 'Host';
   const kind = backup.backupType?.trim().toUpperCase() || 'Backup';
   return backup.vmid ? `${kind} ${backup.vmid}` : kind;
