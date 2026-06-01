@@ -259,6 +259,17 @@ or other self-hosted uncapped continuity plans.
    workspace as an immediately active paid account rather than an individual
    trial tenant. Individual public Cloud signup may keep using the hosted trial
    checkout helper; MSP public signup must not set Stripe `trial_period_days`.
+   Hosted Cloud/MSP tenant runtime may be hibernated for cost control while the
+   default launch motion stays provider-hosted. Hibernation may scale down or
+   pause tenant containers, demo/proof tenants, tenant-only workers, and
+   nonessential hosted observability, but it must preserve snapshots/backups,
+   DNS/config/secrets references, and a documented wake path. It must not
+   disable the commercial/account backbone: public site, license server,
+   checkout/webhook fulfillment, license retrieval, refund/data-request
+   fallbacks, Relay/mobile infrastructure for active users, or Pulse Account
+   account-recovery surfaces. This policy records the allowed cost-control
+   posture only; any live infrastructure shutdown still requires an explicit
+   target inventory, rollback/wake runbook, and operator approval.
 6. Add or change the hosted account portal API, Pulse Account access/auth/session handling, task-first browser shell, maintained portal frontend/bundle, or account-scoped workspace/access/billing handoff through `internal/cloudcp/account/audit.go`, `internal/cloudcp/account/handlers.go`, `internal/cloudcp/auth/handlers.go`, `internal/cloudcp/auth/session.go`, `internal/cloudcp/portal/`, and `internal/cloudcp/routes.go`
    That same customer-entry boundary owns the canonical hosted Cloud handoff:
    public Cloud entry, secure checkout return, and returning-customer sign-in

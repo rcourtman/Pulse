@@ -3798,6 +3798,7 @@ class SubsystemLookupTest(unittest.TestCase):
             {
                 "cloud-msp-price-id-propagation",
                 "cloud-msp-stripe-prices",
+                "hosted-tenant-runtime-hibernation",
                 "legacy-grandfathering-eligibility-cutoff",
                 "msp-buying-motion-lock",
                 "msp-design-partner-growth-offer",
