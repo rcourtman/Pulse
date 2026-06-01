@@ -199,6 +199,13 @@ verify_mock_state_via_frontend_proxy() {
     return 1
 }
 
+managed_hot_dev_reports_mock_state() {
+    local target_mode="$1"
+
+    hot_dev_bg_is_running || return 1
+    verify_mock_state_via_frontend_proxy "$target_mode"
+}
+
 sed_inplace() {
     local expr="$1"
     local file="$2"
@@ -568,7 +575,7 @@ sync_production_config() {
 start_hot_dev_runtime() {
     log_info "Starting managed hot-dev runtime..."
     if ! run_hot_dev_bg start --takeover; then
-        log_error "Managed hot-dev failed to start"
+        log_warn "Managed hot-dev start command did not complete cleanly"
         return 1
     fi
     log_success "Managed hot-dev runtime is running"
@@ -702,7 +709,9 @@ apply_mode() {
             ;;
         managed-hot-dev|hot-dev)
             if ! start_hot_dev_runtime; then
-                if [[ "${allow_fallback}" == "true" ]]; then
+                if managed_hot_dev_reports_mock_state "$target_mode"; then
+                    log_warn "Managed hot-dev reported a restart problem, but the browser entrypoint is serving the requested mock state; continuing"
+                elif [[ "${allow_fallback}" == "true" ]]; then
                     log_warn "hot-dev restart failed or is unhealthy; falling back to standalone backend on port ${DEFAULT_PORT}"
                     stop_hot_dev_runtime "$start_mode" || true
                     start_standalone_runtime "$target_mode"

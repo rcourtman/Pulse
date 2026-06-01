@@ -75,6 +75,10 @@ case "${COMMAND}" in
     fi
     ;;
   start)
+    if [[ "${HOT_DEV_BG_STUB_START_FAIL:-false}" == "true" ]]; then
+      echo "[hot-dev-bg] ERROR: managed runtime startup failed" >&2
+      exit 1
+    fi
     echo "[hot-dev-bg] Started"
     ;;
   stop)
@@ -151,6 +155,35 @@ test_managed_hot_dev_stop_uses_control_plane() {
 
   assert_contains "stop_hot_dev_runtime announces managed stop" "${output}" "Stopping managed hot-dev runtime"
   assert_contains "stop_hot_dev_runtime uses managed stop command" "${calls}" "stop "
+}
+
+test_apply_mode_accepts_recovered_managed_mock_state_after_start_failure() {
+  local stub state output calls
+  state="$(mktemp -d)"
+  temp_dirs+=("${state}")
+  stub="$(make_stub_hot_dev_bg)"
+
+  output="$(
+    HOT_DEV_BG_PATH="${stub}" \
+    HOT_DEV_BG_STUB_LOG="${state}/calls.log" \
+    HOT_DEV_BG_STUB_RUNNING=true \
+    HOT_DEV_BG_STUB_START_FAIL=true \
+    TOGGLE_MOCK_PATH="${TOGGLE_MOCK}" \
+    bash -lc '
+      source "${TOGGLE_MOCK_PATH}"
+      detect_runtime_mode(){ printf "managed-hot-dev\n"; }
+      set_mock_mode(){ printf "set_mode=%s\n" "$1"; }
+      stop_hot_dev_runtime(){ printf "stop=%s\n" "$1"; }
+      verify_mock_state_via_frontend_proxy(){ printf "verified=%s\n" "$1"; return 0; }
+      apply_mode true
+    '
+  )"
+  calls="$(cat "${state}/calls.log")"
+
+  assert_contains "apply_mode still uses managed takeover start" "${calls}" "start --takeover"
+  assert_contains "apply_mode warns on a non-clean managed restart" "${output}" "Managed hot-dev start command did not complete cleanly"
+  assert_contains "apply_mode accepts a recovered requested mock state" "${output}" "browser entrypoint is serving the requested mock state"
+  assert_contains "apply_mode completes the toggle after recovery proof" "${output}" "Mock mode is now enabled"
 }
 
 test_ensure_mock_env_file_seeds_canonical_demo_defaults() {
@@ -260,6 +293,7 @@ main() {
   test_detects_managed_hot_dev_runtime
   test_managed_hot_dev_start_uses_takeover
   test_managed_hot_dev_stop_uses_control_plane
+  test_apply_mode_accepts_recovered_managed_mock_state_after_start_failure
   test_ensure_mock_env_file_seeds_canonical_demo_defaults
   test_ensure_mock_env_file_migrates_legacy_sidecar
   test_set_mock_mode_does_not_recreate_legacy_sidecars

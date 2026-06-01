@@ -389,7 +389,7 @@ test_start_bg_reports_browser_entrypoint() {
       PULSE_DEV_API_PORT=7655
       has_unmanaged_listeners(){ return 1; }
       is_running(){ return 1; }
-      wait_for_managed_listener(){ return 0; }
+      wait_for_managed_runtime_listener(){ return 0; }
       spawn_detached_supervisor(){ printf "4242\n"; }
       start_bg false
     '
@@ -400,6 +400,34 @@ test_start_bg_reports_browser_entrypoint() {
   assert_contains "start reports LAN browser entrypoint" "${output}" "LAN browser entrypoint: http://192.168.50.10:5173"
   assert_contains "start reports managed backend" "${output}" "Managed backend:  http://127.0.0.1:7655"
   assert_not_contains "start no longer reports generic frontend url" "${output}" "Frontend: http://127.0.0.1:5173"
+}
+
+test_wait_for_managed_runtime_listener_adopts_supervisor_handoff() {
+  local test_dir output
+  test_dir="$(mktemp -d)"
+  temp_dirs+=("${test_dir}")
+
+  output="$(
+    HOT_DEV_BG_PATH="${HOT_DEV_BG}" \
+    bash -lc '
+      source "${HOT_DEV_BG_PATH}"
+      PID_FILE="'"${test_dir}"'/hot-dev-bg.pid"
+      DEFAULT_HOT_DEV_BG_PID_FILE="${PID_FILE}"
+      pid_may_be_running(){ return 0; }
+      managed_supervisor_pids(){ printf "1111\n2222\n"; }
+      port_has_managed_listener() {
+        [[ "${1:-}" == "7655" && "${2:-}" == "2222" ]]
+      }
+
+      wait_for_managed_runtime_listener 7655 1111 1
+      printf "status=%s\n" "$?"
+      printf "pid_file=%s\n" "$(cat "${PID_FILE}")"
+    '
+  )"
+
+  assert_contains "startup wait adopts the recovered supervisor" "${output}" "Adopted managed runtime supervisor after handoff (pid: 2222)"
+  assert_contains "startup wait returns success after adoption" "${output}" "status=0"
+  assert_contains "startup wait rewrites the managed pid file" "${output}" "pid_file=2222"
 }
 
 test_supervisor_restarts_unexpected_child_exit() {
@@ -1519,6 +1547,7 @@ main() {
   test_takeover_avoids_killing_current_shell_lineage
   test_launchd_session_supervises_managed_runtime
   test_start_bg_reports_browser_entrypoint
+  test_wait_for_managed_runtime_listener_adopts_supervisor_handoff
   test_supervisor_restarts_unexpected_child_exit
   test_stop_hot_dev_child_targets_child_process_group
   test_launchd_wrapper_uses_managed_supervisor

@@ -871,6 +871,17 @@ deployments each. Bumping either side requires bumping the other (and
 the matching `scripts/tests/test-toggle-mock.sh` fixtures) so toggle
 CLIs, managed runtime restarts, and the in-binary default never drift
 apart.
+Mock toggles are runtime transitions, not just environment-file edits. A
+successful `scripts/toggle-mock.sh on|off` run must leave the managed browser
+entrypoint serving the requested `/api/system/mock-mode` state through the
+frontend proxy before the command reports success. When macOS launchd or
+another managed wrapper hands ownership to a replacement `hot-dev-bg.sh supervise`
+process during the restart, `scripts/hot-dev-bg.sh` must adopt the healthy
+supervisor, refresh the managed pid file, and continue instead of surfacing a
+false startup failure. `scripts/toggle-mock.sh` may only continue after a
+non-clean managed restart when that browser-entrypoint proof confirms the
+requested mock state; otherwise it must fail explicitly or use an intentional
+fallback.
 That same hosted runtime rollout boundary also owns public routing identity for
 managed tenants. `internal/cloudcp/docker/labels.go`,
 `internal/cloudcp/docker/manager.go`, and

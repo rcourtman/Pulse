@@ -121,7 +121,7 @@ process_inspection_restricted() {
   process_probe_denied "${output}"
 }
 
-discover_managed_supervisor_pid() {
+managed_supervisor_pids() {
   local pid command
 
   while IFS= read -r pid; do
@@ -131,10 +131,19 @@ discover_managed_supervisor_pid() {
     case "${command}" in
       "bash ${ROOT_DIR}/scripts/hot-dev-bg.sh supervise"|"/bin/bash ${ROOT_DIR}/scripts/hot-dev-bg.sh supervise"|"${ROOT_DIR}/scripts/hot-dev-bg.sh supervise")
         printf "%s\n" "${pid}"
-        return 0
         ;;
     esac
   done < <(pgrep -f "${ROOT_DIR}/scripts/hot-dev-bg.sh supervise" 2>/dev/null | sort -n)
+}
+
+discover_managed_supervisor_pid() {
+  local pid
+
+  while IFS= read -r pid; do
+    [[ -n "${pid}" ]] || continue
+    printf "%s\n" "${pid}"
+    return 0
+  done < <(managed_supervisor_pids)
 
   return 1
 }
@@ -293,6 +302,46 @@ wait_for_managed_listener() {
 
   while (( checks > 0 )); do
     if port_has_managed_listener "${port}" "${session_pid}"; then
+      return 0
+    fi
+    sleep 0.5
+    checks=$((checks - 1))
+  done
+
+  return 1
+}
+
+adopt_managed_runtime_with_listener() {
+  local port="$1"
+  local candidate_pid
+
+  [[ "${PID_FILE}" == "${DEFAULT_HOT_DEV_BG_PID_FILE}" ]] || return 1
+
+  while IFS= read -r candidate_pid; do
+    [[ -n "${candidate_pid}" ]] || continue
+    pid_may_be_running "${candidate_pid}" || continue
+    if port_has_managed_listener "${port}" "${candidate_pid}"; then
+      mkdir -p "$(dirname "${PID_FILE}")"
+      printf "%s\n" "${candidate_pid}" > "${PID_FILE}"
+      log "Adopted managed runtime supervisor after handoff (pid: ${candidate_pid})"
+      return 0
+    fi
+  done < <(managed_supervisor_pids)
+
+  return 1
+}
+
+wait_for_managed_runtime_listener() {
+  local port="$1"
+  local session_pid="$2"
+  local timeout_seconds="${3:-60}"
+  local checks=$((timeout_seconds * 2))
+
+  while (( checks > 0 )); do
+    if [[ -n "${session_pid}" ]] && port_has_managed_listener "${port}" "${session_pid}"; then
+      return 0
+    fi
+    if adopt_managed_runtime_with_listener "${port}"; then
       return 0
     fi
     sleep 0.5
@@ -676,13 +725,15 @@ start_bg() {
 
   log "Started managed runtime supervisor (pid: ${pid})"
   log "Waiting for managed backend listener on port ${PULSE_DEV_API_PORT}..."
-  if ! wait_for_managed_listener "${PULSE_DEV_API_PORT}" "${pid}" 90; then
+  if ! wait_for_managed_runtime_listener "${PULSE_DEV_API_PORT}" "${pid}" 90; then
     log "Backend did not start. Showing recent logs:"
     tail -n 80 "${LOG_FILE}" || true
     fail "managed runtime startup failed"
   fi
+  pid="$(managed_session_pid || true)"
+  [[ -n "${pid}" ]] || pid="$(cat "${PID_FILE}" 2>/dev/null || true)"
 
-  if ! wait_for_managed_listener "${FRONTEND_DEV_PORT}" "${pid}" 90; then
+  if ! wait_for_managed_runtime_listener "${FRONTEND_DEV_PORT}" "${pid}" 90; then
     log "Backend is up, but a managed frontend listener on port ${FRONTEND_DEV_PORT} is not ready yet."
     log "Check logs with: npm run dev:logs"
   fi
