@@ -78,6 +78,21 @@ type notificationQueueBucket struct {
 	nextRetryAt *time.Time
 }
 
+type notificationDeliveryTarget string
+
+const (
+	notificationDeliveryTargetAll     notificationDeliveryTarget = "all"
+	notificationDeliveryTargetEmail   notificationDeliveryTarget = "email"
+	notificationDeliveryTargetWebhook notificationDeliveryTarget = "webhook"
+	notificationDeliveryTargetApprise notificationDeliveryTarget = "apprise"
+)
+
+type alertSendOptions struct {
+	bypassCooldown bool
+	immediate      bool
+	target         notificationDeliveryTarget
+}
+
 // createSecureWebhookClient creates an HTTP client with security controls
 func (n *NotificationManager) createSecureWebhookClient(timeout time.Duration) *http.Client {
 	return n.createSecureWebhookClientWithTLS(timeout, false)
@@ -934,8 +949,23 @@ func (n *NotificationManager) IsEnabled() bool {
 	return n.enabled
 }
 
-// SendAlert sends notifications for an alert
+// SendAlert sends notifications for a newly fired or explicitly re-notified alert.
 func (n *NotificationManager) SendAlert(alert *alerts.Alert) {
+	n.sendAlert(alert, alertSendOptions{target: notificationDeliveryTargetAll})
+}
+
+// SendEscalatedAlert sends a scheduled escalation notification. Escalation
+// cadence is owned by the alert schedule, so delivery cooldown must not suppress
+// a level that the alert manager has already decided is due.
+func (n *NotificationManager) SendEscalatedAlert(alert *alerts.Alert, notifyTarget string) {
+	n.sendAlert(alert, alertSendOptions{
+		bypassCooldown: true,
+		immediate:      true,
+		target:         normalizeNotificationDeliveryTarget(notifyTarget),
+	})
+}
+
+func (n *NotificationManager) sendAlert(alert *alerts.Alert, options alertSendOptions) {
 	if alert == nil {
 		return
 	}
@@ -943,9 +973,11 @@ func (n *NotificationManager) SendAlert(alert *alerts.Alert) {
 	if alert == nil {
 		return
 	}
+	if options.target == "" {
+		options.target = notificationDeliveryTargetAll
+	}
 
 	n.mu.Lock()
-	defer n.mu.Unlock()
 
 	log.Info().
 		Str("alertID", alert.ID).
@@ -956,20 +988,57 @@ func (n *NotificationManager) SendAlert(alert *alerts.Alert) {
 
 	if !n.enabled {
 		log.Debug().Msg("notifications disabled, skipping")
+		n.mu.Unlock()
 		return
 	}
 
-	// Check cooldown
+	// Check cooldown. A disabled cooldown means "do not send repeat
+	// notifications for the same active alert occurrence"; escalation uses an
+	// explicit bypass because its cadence is owned by the alert schedule.
 	record, exists := n.lastNotified[alert.ID]
-	if exists && record.alertStart.Equal(alert.StartTime) && time.Since(record.lastSent) < n.cooldown {
+	if !options.bypassCooldown && exists && record.alertStart.Equal(alert.StartTime) && (n.cooldown <= 0 || time.Since(record.lastSent) < n.cooldown) {
+		elapsed := time.Since(record.lastSent)
+		remainingCooldown := time.Duration(0)
+		if n.cooldown > elapsed {
+			remainingCooldown = n.cooldown - elapsed
+		}
 		log.Info().
 			Str("alertID", alert.ID).
 			Str("resourceName", alert.ResourceName).
 			Str("type", alert.Type).
-			Dur("timeSince", time.Since(record.lastSent)).
+			Dur("timeSince", elapsed).
 			Dur("cooldown", n.cooldown).
-			Dur("remainingCooldown", n.cooldown-time.Since(record.lastSent)).
+			Dur("remainingCooldown", remainingCooldown).
 			Msg("alert notification in cooldown for active alert - notification suppressed")
+		n.mu.Unlock()
+		return
+	}
+
+	if options.immediate {
+		emailConfig := copyEmailConfig(n.emailConfig)
+		webhooks := copyWebhookConfigs(n.webhooks)
+		appriseConfig := copyAppriseConfig(n.appriseConfig)
+		queue := n.queue
+		n.mu.Unlock()
+
+		alertsToSend := []*alerts.Alert{alert}
+		jobs := buildNotificationDeliveryJobsForTarget(
+			emailConfig,
+			webhooks,
+			appriseConfig,
+			alertsToSend,
+			eventAlert,
+			time.Time{},
+			options.target,
+		)
+		if queue != nil {
+			if anyFailed := n.enqueueNotificationJobs(queue, jobs); anyFailed {
+				n.markAlertsNotified(alertsToSend, time.Now())
+			}
+		} else {
+			n.dispatchNotificationJobsAsync(jobs)
+			n.markAlertsNotified(alertsToSend, time.Now())
+		}
 		return
 	}
 
@@ -995,6 +1064,7 @@ func (n *NotificationManager) SendAlert(alert *alerts.Alert) {
 			Dur("groupWindow", n.groupWindow).
 			Msg("started alert grouping timer")
 	}
+	n.mu.Unlock()
 }
 
 func (n *NotificationManager) markAlertsNotified(alertsToSend []*alerts.Alert, sentAt time.Time) {
@@ -1060,48 +1130,43 @@ func (n *NotificationManager) SendResolvedAlert(resolved *alerts.ResolvedAlert) 
 // CancelAlert removes pending notifications for a resolved alert
 func (n *NotificationManager) CancelAlert(alertID string) {
 	n.mu.Lock()
-	defer n.mu.Unlock()
+	queue := n.queue
 
-	if len(n.pendingAlerts) == 0 {
-		return
-	}
-
-	filtered := n.pendingAlerts[:0]
 	removed := 0
-	for _, pending := range n.pendingAlerts {
-		if pending == nil {
-			continue
+	if len(n.pendingAlerts) > 0 {
+		filtered := n.pendingAlerts[:0]
+		for _, pending := range n.pendingAlerts {
+			if pending == nil {
+				continue
+			}
+			if pending.ID == alertID {
+				removed++
+				continue
+			}
+			filtered = append(filtered, pending)
 		}
-		if pending.ID == alertID {
-			removed++
-			continue
+
+		for i := len(filtered); i < len(n.pendingAlerts); i++ {
+			n.pendingAlerts[i] = nil
 		}
-		filtered = append(filtered, pending)
-	}
 
-	if removed == 0 {
-		return
-	}
+		n.pendingAlerts = filtered
 
-	for i := len(filtered); i < len(n.pendingAlerts); i++ {
-		n.pendingAlerts[i] = nil
-	}
-
-	n.pendingAlerts = filtered
-
-	if len(n.pendingAlerts) == 0 && n.groupTimer != nil {
-		if n.groupTimer.Stop() {
-			log.Debug().Str("alertID", alertID).Msg("stopped grouping timer after alert cancellation")
+		if len(n.pendingAlerts) == 0 && n.groupTimer != nil {
+			if n.groupTimer.Stop() {
+				log.Debug().Str("alertID", alertID).Msg("stopped grouping timer after alert cancellation")
+			}
+			n.groupTimer = nil
 		}
-		n.groupTimer = nil
 	}
 
 	// Clean up cooldown record for resolved alert
 	delete(n.lastNotified, alertID)
+	n.mu.Unlock()
 
 	// Cancel any queued notifications containing this alert
-	if n.queue != nil {
-		if err := n.queue.CancelByAlertIdentifiers([]string{alertID}); err != nil {
+	if queue != nil {
+		if err := queue.CancelByAlertIdentifiers([]string{alertID}); err != nil {
 			log.Error().Err(err).Str("alertID", alertID).Msg("failed to cancel queued notifications")
 		}
 	}
@@ -1158,8 +1223,32 @@ func (n *NotificationManager) sendGroupedAlerts() {
 }
 
 func buildNotificationDeliveryJobs(emailConfig EmailConfig, webhooks []WebhookConfig, appriseConfig AppriseConfig, alertsToSend []*alerts.Alert, event notificationEvent, resolvedAt time.Time) []notificationDeliveryJob {
+	return buildNotificationDeliveryJobsForTarget(
+		emailConfig,
+		webhooks,
+		appriseConfig,
+		alertsToSend,
+		event,
+		resolvedAt,
+		notificationDeliveryTargetAll,
+	)
+}
+
+func buildNotificationDeliveryJobsForTarget(
+	emailConfig EmailConfig,
+	webhooks []WebhookConfig,
+	appriseConfig AppriseConfig,
+	alertsToSend []*alerts.Alert,
+	event notificationEvent,
+	resolvedAt time.Time,
+	target notificationDeliveryTarget,
+) []notificationDeliveryJob {
+	if target == "" {
+		target = notificationDeliveryTargetAll
+	}
+
 	jobs := make([]notificationDeliveryJob, 0, 2+len(webhooks))
-	if emailConfig.Enabled {
+	if emailConfig.Enabled && (target == notificationDeliveryTargetAll || target == notificationDeliveryTargetEmail) {
 		emailCopy := emailConfig
 		jobs = append(jobs, notificationDeliveryJob{
 			Type:        "email",
@@ -1169,20 +1258,22 @@ func buildNotificationDeliveryJobs(emailConfig EmailConfig, webhooks []WebhookCo
 			EmailConfig: &emailCopy,
 		})
 	}
-	for _, webhook := range webhooks {
-		if !webhook.Enabled {
-			continue
+	if target == notificationDeliveryTargetAll || target == notificationDeliveryTargetWebhook {
+		for _, webhook := range webhooks {
+			if !webhook.Enabled {
+				continue
+			}
+			webhookCopy := webhook
+			jobs = append(jobs, notificationDeliveryJob{
+				Type:          "webhook",
+				Event:         event,
+				Alerts:        alertsToSend,
+				ResolvedAt:    resolvedAt,
+				WebhookConfig: &webhookCopy,
+			})
 		}
-		webhookCopy := webhook
-		jobs = append(jobs, notificationDeliveryJob{
-			Type:          "webhook",
-			Event:         event,
-			Alerts:        alertsToSend,
-			ResolvedAt:    resolvedAt,
-			WebhookConfig: &webhookCopy,
-		})
 	}
-	if appriseConfig.Enabled {
+	if appriseConfig.Enabled && (target == notificationDeliveryTargetAll || target == notificationDeliveryTargetApprise) {
 		appriseCopy := appriseConfig
 		jobs = append(jobs, notificationDeliveryJob{
 			Type:          "apprise",
@@ -1201,6 +1292,21 @@ func queueTypeForNotificationDeliveryJob(job notificationDeliveryJob) string {
 		queueType += queueTypeSuffixResolved
 	}
 	return queueType
+}
+
+func normalizeNotificationDeliveryTarget(raw string) notificationDeliveryTarget {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", string(notificationDeliveryTargetAll):
+		return notificationDeliveryTargetAll
+	case string(notificationDeliveryTargetEmail):
+		return notificationDeliveryTargetEmail
+	case string(notificationDeliveryTargetWebhook), "webhooks":
+		return notificationDeliveryTargetWebhook
+	case string(notificationDeliveryTargetApprise):
+		return notificationDeliveryTargetApprise
+	default:
+		return notificationDeliveryTargetAll
+	}
 }
 
 func configJSONForNotificationDeliveryJob(job notificationDeliveryJob) ([]byte, error) {

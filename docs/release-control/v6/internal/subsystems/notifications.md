@@ -158,13 +158,22 @@ That same queue owner also governs alert-resolution cancellation policy.
 Cancelling queued work by alert identifier must remove outstanding firing
 deliveries for that alert, but it must preserve already-queued resolved
 notifications so recovery deliveries cannot be dropped just because the alert
-was resolved before the queue drained.
+was resolved before the queue drained. Cancellation must run even when there is
+no in-memory grouped notification pending, because the persistent queue and the
+delivery cooldown map are also notification-owned state for the alert
+occurrence.
 That same queue boundary also owns processor attachment semantics. The
 canonical queue may persist pending notifications before a delivery processor is
 configured, but it must not mark those entries sending, failed, or sent until a
 processor exists. When a processor is attached, the queue owner must wake the
 pending backlog through the same canonical batch path instead of relying on a
 separate direct-send shortcut or waiting for an unrelated timer tick.
+Alert delivery cooldown is also owned at this boundary. Normal alert delivery
+must suppress duplicate sends for the same active alert occurrence when
+cooldown is disabled or still active; scheduled escalation delivery is the
+explicit exception and must route through the dedicated escalation send path so
+the alert schedule, not transport cooldown, controls escalation cadence and
+channel targeting.
 
 `internal/api/notifications.go` and
 `frontend-modern/src/api/notifications.ts` are shared boundaries with

@@ -431,6 +431,7 @@ func TestEscalationDeliveryDefersToCanonicalAlertSuppression(t *testing.T) {
 		"monitor_alerts.go": {
 			"func (m *Monitor) handleAlertEscalated(hub *websocket.Hub, alert *alerts.Alert, level int) {",
 			"if m.alertManager.ShouldSuppressNotification(alert) {",
+			"m.notificationMgr.SendEscalatedAlert(alert, escalationLevel.Notify)",
 			"m.broadcastEscalatedAlert(hub, alert)",
 		},
 	}

@@ -493,3 +493,66 @@ func TestMonitor_HandleAlertEscalated_SendsNotificationWhenNotSuppressed(t *test
 		t.Fatal("expected escalated notification delivery")
 	}
 }
+
+func TestMonitor_HandleAlertEscalated_BypassesDeliveryCooldown(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	requests := make(chan struct{}, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests <- struct{}{}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	notifMgr := notifications.NewNotificationManager("https://pulse.local")
+	defer notifMgr.Stop()
+	notifMgr.SetGroupingWindow(0)
+	notifMgr.SetCooldown(30)
+	if err := notifMgr.UpdateAllowedPrivateCIDRs("127.0.0.1/32"); err != nil {
+		t.Fatalf("UpdateAllowedPrivateCIDRs: %v", err)
+	}
+	notifMgr.AddWebhook(notifications.WebhookConfig{
+		ID:      "cooldown-hook",
+		Name:    "cooldown",
+		URL:     server.URL,
+		Enabled: true,
+	})
+
+	mgr := alerts.NewManager()
+	cfg := mgr.GetConfig()
+	cfg.Schedule.Escalation.Levels = []alerts.EscalationLevel{{After: 1, Notify: "webhook"}}
+	cfg.Schedule.QuietHours.Enabled = false
+	mgr.UpdateConfig(cfg)
+
+	m := &Monitor{
+		notificationMgr: notifMgr,
+		alertManager:    mgr,
+	}
+
+	alert := &alerts.Alert{
+		ID:           "escalated-with-cooldown",
+		Type:         "memory",
+		Level:        alerts.AlertLevelWarning,
+		ResourceID:   "vm/100",
+		ResourceName: "vm-100",
+		Node:         "pve-1",
+		Instance:     "pve",
+		Message:      "Memory threshold crossed",
+		StartTime:    time.Now().Add(-10 * time.Minute),
+	}
+
+	notifMgr.SendAlert(alert)
+	select {
+	case <-requests:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected initial notification delivery")
+	}
+
+	m.handleAlertEscalated(nil, alert, 1)
+
+	select {
+	case <-requests:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected escalated notification delivery despite active cooldown")
+	}
+}

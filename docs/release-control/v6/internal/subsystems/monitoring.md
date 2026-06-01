@@ -342,7 +342,11 @@ alerts delivery layer. Monitor-owned escalation handling may still publish
 canonical escalation state to websocket consumers, but notification fan-out
 must defer quiet-hours and resolved-notification suppression policy to the
 alerts manager instead of bypassing that shared routing contract when monitor
-plumbs escalations outward.
+plumbs escalations outward. Scheduled escalation delivery must use the
+notification manager's explicit escalation path, not normal alert re-send
+delivery, so delivery cooldown cannot suppress an escalation level that the
+alert manager has already deemed due and the escalation channel target remains
+the configured email/webhook/all target for that level.
 That same monitoring owner now also governs monitored-system grouping readiness
 for settings and support boundaries. A non-nil unified read-state is not
 sufficient when provider-owned supplemental inventories such as TrueNAS or

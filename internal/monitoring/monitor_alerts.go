@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
@@ -196,20 +197,15 @@ func (m *Monitor) handleAlertEscalated(hub *websocket.Hub, alert *alerts.Alert, 
 
 	if m.notificationMgr != nil {
 		escalationLevel := config.Schedule.Escalation.Levels[level-1]
-		switch escalationLevel.Notify {
-		case "email":
-			if emailConfig := m.notificationMgr.GetEmailConfig(); emailConfig.Enabled {
-				m.notificationMgr.SendAlert(alert)
-			}
-		case "webhook":
-			for _, webhook := range m.notificationMgr.GetWebhooks() {
-				if webhook.Enabled {
-					m.notificationMgr.SendAlert(alert)
-					break
-				}
-			}
-		case "all":
-			m.notificationMgr.SendAlert(alert)
+		switch strings.ToLower(strings.TrimSpace(escalationLevel.Notify)) {
+		case "", "all", "email", "webhook", "webhooks":
+			m.notificationMgr.SendEscalatedAlert(alert, escalationLevel.Notify)
+		default:
+			log.Warn().
+				Str("alertID", alert.ID).
+				Int("level", level).
+				Str("notify", escalationLevel.Notify).
+				Msg("Skipping alert escalation with unknown notification target")
 		}
 	}
 

@@ -418,6 +418,165 @@ func TestNotificationCooldownAllowsNewAlertInstance(t *testing.T) {
 	}
 }
 
+func TestNotificationCooldownDisabledSuppressesDuplicateActiveAlert(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	nm := NewNotificationManager("")
+	defer nm.Stop()
+	nm.SetCooldown(0)
+	nm.SetGroupingWindow(3600) // keep timer from firing during assertions
+
+	alert := &alerts.Alert{
+		ID:        "vm-100-cpu",
+		Type:      "cpu",
+		Level:     alerts.AlertLevelWarning,
+		StartTime: time.Now().Add(-time.Minute),
+	}
+
+	nm.SendAlert(alert)
+	flushPending(nm)
+
+	nm.SendAlert(alert)
+
+	nm.mu.RLock()
+	pendingAfterDuplicate := len(nm.pendingAlerts)
+	nm.mu.RUnlock()
+
+	if pendingAfterDuplicate != 0 {
+		t.Fatalf("cooldown-disabled duplicate should not be queued, found %d pending", pendingAfterDuplicate)
+	}
+}
+
+func TestSendEscalatedAlertBypassesCooldownAndTargetsWebhook(t *testing.T) {
+	queue, err := NewNotificationQueue(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create queue: %v", err)
+	}
+	defer func() { _ = queue.Stop() }()
+
+	alertStart := time.Now().Add(-10 * time.Minute)
+	alert := &alerts.Alert{
+		ID:           "vm-100-memory",
+		Type:         "memory",
+		Level:        alerts.AlertLevelWarning,
+		ResourceName: "vm-100",
+		Message:      "memory threshold crossed",
+		StartTime:    alertStart,
+	}
+	nm := &NotificationManager{
+		enabled:  true,
+		cooldown: 30 * time.Minute,
+		emailConfig: EmailConfig{
+			Enabled:  true,
+			SMTPHost: "smtp.example.test",
+			SMTPPort: 587,
+			From:     "pulse@example.test",
+			To:       []string{"ops@example.test"},
+		},
+		webhooks: []WebhookConfig{{
+			ID:      "hook-1",
+			Name:    "Webhook",
+			URL:     "https://hooks.example.test/pulse",
+			Enabled: true,
+		}},
+		appriseConfig: AppriseConfig{
+			Enabled: true,
+			Mode:    AppriseModeCLI,
+			Targets: []string{"mailto://ops@example.test"},
+		},
+		lastNotified: map[string]notificationRecord{
+			alert.ID: {
+				lastSent:   time.Now(),
+				alertStart: alertStart,
+			},
+		},
+		queue: queue,
+	}
+
+	nm.SendAlert(alert)
+	nm.mu.RLock()
+	pendingAfterNormalSend := len(nm.pendingAlerts)
+	nm.mu.RUnlock()
+	if pendingAfterNormalSend != 0 {
+		t.Fatalf("normal send should be suppressed by cooldown, found %d pending", pendingAfterNormalSend)
+	}
+
+	nm.SendEscalatedAlert(alert, "webhook")
+
+	rows, err := queue.db.Query(`SELECT type FROM notification_queue ORDER BY created_at`)
+	if err != nil {
+		t.Fatalf("failed to read queued notifications: %v", err)
+	}
+	defer rows.Close()
+
+	var queuedTypes []string
+	for rows.Next() {
+		var queuedType string
+		if err := rows.Scan(&queuedType); err != nil {
+			t.Fatalf("failed to scan queued notification: %v", err)
+		}
+		queuedTypes = append(queuedTypes, queuedType)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("failed to iterate queued notifications: %v", err)
+	}
+
+	if len(queuedTypes) != 1 || queuedTypes[0] != "webhook" {
+		t.Fatalf("expected only one webhook escalation notification, got %#v", queuedTypes)
+	}
+}
+
+func TestCancelAlertClearsCooldownAndQueueWithoutPendingGroup(t *testing.T) {
+	queue, err := NewNotificationQueue(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create queue: %v", err)
+	}
+	defer func() { _ = queue.Stop() }()
+
+	alert := &alerts.Alert{
+		ID:        "alert-without-pending-group",
+		Type:      "cpu",
+		Level:     alerts.AlertLevelWarning,
+		StartTime: time.Now().Add(-time.Minute),
+	}
+	if err := queue.Enqueue(&QueuedNotification{
+		Type:        "webhook",
+		Status:      QueueStatusPending,
+		Alerts:      []*alerts.Alert{alert},
+		Config:      json.RawMessage(`{"enabled":true,"url":"https://hooks.example.test/pulse"}`),
+		MaxAttempts: 3,
+	}); err != nil {
+		t.Fatalf("failed to enqueue notification: %v", err)
+	}
+
+	nm := &NotificationManager{
+		lastNotified: map[string]notificationRecord{
+			alert.ID: {
+				lastSent:   time.Now(),
+				alertStart: alert.StartTime,
+			},
+		},
+		pendingAlerts: []*alerts.Alert{},
+		queue:         queue,
+	}
+
+	nm.CancelAlert(alert.ID)
+
+	nm.mu.RLock()
+	_, hasCooldownRecord := nm.lastNotified[alert.ID]
+	nm.mu.RUnlock()
+	if hasCooldownRecord {
+		t.Fatal("expected resolved alert cooldown record to be cleared")
+	}
+
+	var status string
+	if err := queue.db.QueryRow(`SELECT status FROM notification_queue WHERE type = ?`, "webhook").Scan(&status); err != nil {
+		t.Fatalf("failed to read queued notification status: %v", err)
+	}
+	if status != string(QueueStatusCancelled) {
+		t.Fatalf("expected queued firing notification to be cancelled, got %q", status)
+	}
+}
+
 func TestCancelAlertRemovesPending(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	nm := NewNotificationManager("")
