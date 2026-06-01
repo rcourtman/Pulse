@@ -66,6 +66,21 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     return true;
   };
 
+  var findWorkspaceIDByName = function(accountID: string, displayName: string): string {
+    var bootstrap = deps.store.getBootstrap();
+    var accounts = Array.isArray(bootstrap.accounts) ? bootstrap.accounts : [];
+    for (var i = 0; i < accounts.length; i += 1) {
+      if (accounts[i].id !== accountID) continue;
+      var workspaces = Array.isArray(accounts[i].workspaces) ? accounts[i].workspaces : [];
+      for (var j = 0; j < workspaces.length; j += 1) {
+        if (workspaces[j].display_name === displayName) {
+          return workspaces[j].id;
+        }
+      }
+    }
+    return '';
+  };
+
   var renderAccountRuntime = function(): void {
     var bootstrap = deps.store.getBootstrap();
     renderAccountUIState(deps.store.getAccountState(), bootstrap.accounts || [], bootstrap.account_api_base_path || '');
@@ -165,7 +180,7 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
       beginMutationState(entry.createWorkspace);
     });
     try {
-      await deps.api.createWorkspace(accountID, { display_name: name });
+      var created = await deps.api.createWorkspace(accountID, { display_name: name });
       if (!await refreshOrRedirect()) {
         deps.store.updateAccountState(function(accountState) {
           var entry = ensurePortalAccountUIEntry(accountState, accountID);
@@ -173,12 +188,20 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
         }, { notify: false });
         return;
       }
+      var createdWorkspaceID = created && typeof created.id === 'string' ? created.id : '';
+      if (!createdWorkspaceID) {
+        createdWorkspaceID = findWorkspaceIDByName(accountID, name);
+      }
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
         entry.addWorkspaceOpen = false;
+        entry.selectedWorkspaceID = createdWorkspaceID;
+        entry.accessVisible = false;
+        entry.activeAccessJob = '';
         succeedMutationState(entry.createWorkspace);
       });
-      deps.showToast('Workspace created!');
+      revealElementWhenReady('workspace-management-' + accountID);
+      deps.showToast('Workspace created. Finish setup next.');
     } catch (error) {
       var message = error instanceof Error ? error.message : 'Failed to create workspace.';
       deps.store.updateAccountState(function(accountState) {

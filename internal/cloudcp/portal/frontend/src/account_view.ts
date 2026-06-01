@@ -41,6 +41,20 @@ function workspaceCreatedLabel(workspace: PortalWorkspaceSummary): string {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+function hasKnownCount(value: unknown): boolean {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function hasPositiveCount(value: unknown): boolean {
+  return hasKnownCount(value) && Number(value) > 0;
+}
+
+function setupCountLabel(value: unknown, singular: string, plural: string): string {
+  if (!hasKnownCount(value)) return 'Unknown';
+  var count = Number(value);
+  return String(count) + ' ' + (count === 1 ? singular : plural);
+}
+
 function workspaceMeta(workspace: PortalWorkspaceSummary): string {
   var parts = [workspace.state];
   if (workspace.health_status) parts.push(workspace.health_status);
@@ -106,12 +120,15 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
   var summary = getElement<HTMLElement>('workspace-management-summary-' + account.id);
   var health = getElement<HTMLElement>('workspace-management-health-' + account.id);
   var setup = getElement<HTMLElement>('workspace-management-setup-' + account.id);
+  var agents = getElement<HTMLElement>('workspace-management-agents-' + account.id);
+  var alerts = getElement<HTMLElement>('workspace-management-alerts-' + account.id);
+  var reports = getElement<HTMLElement>('workspace-management-reports-' + account.id);
   var created = getElement<HTMLElement>('workspace-management-created-' + account.id);
   var guidance = getElement<HTMLElement>('workspace-management-guidance-' + account.id);
   var checkCreated = getElement<HTMLElement>('workspace-management-check-created-' + account.id);
-  var checkOpen = getElement<HTMLElement>('workspace-management-check-open-' + account.id);
   var checkInstall = getElement<HTMLElement>('workspace-management-check-install-' + account.id);
-  var checkOutputs = getElement<HTMLElement>('workspace-management-check-outputs-' + account.id);
+  var checkAlerts = getElement<HTMLElement>('workspace-management-check-alerts-' + account.id);
+  var checkReports = getElement<HTMLElement>('workspace-management-check-reports-' + account.id);
   var checkAccess = getElement<HTMLElement>('workspace-management-check-access-' + account.id);
   var actionButton = getElement<HTMLButtonElement>('workspace-management-action-' + account.id);
   var closeButton = getElement<HTMLButtonElement>('workspace-management-close-' + account.id);
@@ -166,27 +183,41 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
   summary.textContent = workspaceStatusCopy(workspace);
   health.textContent = workspaceHealthLabel(workspace);
   setup.textContent = workspaceSetupLabel(workspace);
+  if (agents) agents.textContent = setupCountLabel(workspace.agent_count, 'agent', 'agents');
+  if (alerts) alerts.textContent = setupCountLabel(workspace.alert_route_count, 'route', 'routes');
+  if (reports) reports.textContent = setupCountLabel(workspace.report_schedule_count, 'schedule', 'schedules');
   created.textContent = workspaceCreatedLabel(workspace);
   guidance.textContent = workspaceGuidanceCopy(workspace);
   var setupState = workspaceSetupState(workspace);
   var isActive = workspace.state === 'active';
+  var hasAgents = hasPositiveCount(workspace.agent_count) || setupState === 'configure_outputs' || setupState === 'ready';
+  var hasAlertRoutes = hasPositiveCount(workspace.alert_route_count);
+  var hasReportSchedules = hasPositiveCount(workspace.report_schedule_count);
   setChecklistStatus(checkCreated, workspace.state ? 'done' : 'pending', workspace.state ? 'Done' : 'Pending');
-  setChecklistStatus(checkOpen, isActive ? 'available' : 'blocked', isActive ? 'Available' : 'Blocked');
-  if (setupState === 'ready' || setupState === 'configure_outputs') {
+  if (hasAgents) {
     setChecklistStatus(checkInstall, 'done', 'Done');
   } else if (setupState === 'install_agents' || setupState === 'setup_path') {
     setChecklistStatus(checkInstall, isActive ? 'next' : 'blocked', isActive ? 'Next' : 'Blocked');
   } else {
     setChecklistStatus(checkInstall, 'blocked', 'Review');
   }
-  if (setupState === 'ready') {
-    setChecklistStatus(checkOutputs, 'done', 'Done');
-  } else if (setupState === 'configure_outputs') {
-    setChecklistStatus(checkOutputs, 'next', 'Next');
+  if (hasAlertRoutes) {
+    setChecklistStatus(checkAlerts, 'done', 'Done');
   } else if (setupState === 'review') {
-    setChecklistStatus(checkOutputs, 'blocked', 'Review');
+    setChecklistStatus(checkAlerts, 'blocked', 'Review');
+  } else if (isActive && hasAgents) {
+    setChecklistStatus(checkAlerts, 'next', 'Next');
   } else {
-    setChecklistStatus(checkOutputs, 'pending', 'Pending');
+    setChecklistStatus(checkAlerts, 'pending', 'Pending');
+  }
+  if (hasReportSchedules) {
+    setChecklistStatus(checkReports, 'done', 'Done');
+  } else if (setupState === 'review') {
+    setChecklistStatus(checkReports, 'blocked', 'Review');
+  } else if (isActive && hasAgents && hasAlertRoutes) {
+    setChecklistStatus(checkReports, 'next', 'Next');
+  } else {
+    setChecklistStatus(checkReports, 'pending', 'Pending');
   }
   setChecklistStatus(checkAccess, 'available', 'Available');
   actionButton.textContent = workspaceActionLabel(workspace);

@@ -75,12 +75,15 @@ describe('account view', function() {
               '<p id="workspace-management-summary-' + accountID + '"></p>' +
               '<div id="workspace-management-health-' + accountID + '"></div>' +
               '<div id="workspace-management-setup-' + accountID + '"></div>' +
+              '<div id="workspace-management-agents-' + accountID + '"></div>' +
+              '<div id="workspace-management-alerts-' + accountID + '"></div>' +
+              '<div id="workspace-management-reports-' + accountID + '"></div>' +
               '<div id="workspace-management-created-' + accountID + '"></div>' +
               '<div id="workspace-management-guidance-' + accountID + '"></div>' +
               '<span id="workspace-management-check-created-' + accountID + '"></span>' +
-              '<span id="workspace-management-check-open-' + accountID + '"></span>' +
               '<span id="workspace-management-check-install-' + accountID + '"></span>' +
-              '<span id="workspace-management-check-outputs-' + accountID + '"></span>' +
+              '<span id="workspace-management-check-alerts-' + accountID + '"></span>' +
+              '<span id="workspace-management-check-reports-' + accountID + '"></span>' +
               '<span id="workspace-management-check-access-' + accountID + '"></span>' +
               '<form id="workspace-management-open-form-' + accountID + '"><button id="workspace-management-open-' + accountID + '"></button></form>' +
               '<form id="workspace-management-install-form-' + accountID + '"><button id="workspace-management-install-' + accountID + '"></button></form>' +
@@ -304,8 +307,12 @@ describe('account view', function() {
     expect(document.getElementById('workspace-management-title-acct_1')?.textContent).toContain('Alpha Workspace');
     expect(document.getElementById('workspace-management-health-acct_1')?.textContent).toContain('Healthy');
     expect(document.getElementById('workspace-management-setup-acct_1')?.textContent).toContain('Setup path');
+    expect(document.getElementById('workspace-management-agents-acct_1')?.textContent).toContain('Unknown');
+    expect(document.getElementById('workspace-management-alerts-acct_1')?.textContent).toContain('Unknown');
+    expect(document.getElementById('workspace-management-reports-acct_1')?.textContent).toContain('Unknown');
     expect(document.getElementById('workspace-management-check-install-acct_1')?.textContent).toContain('Next');
-    expect(document.getElementById('workspace-management-check-outputs-acct_1')?.textContent).toContain('Pending');
+    expect(document.getElementById('workspace-management-check-alerts-acct_1')?.textContent).toContain('Pending');
+    expect(document.getElementById('workspace-management-check-reports-acct_1')?.textContent).toContain('Pending');
     expect(document.getElementById('workspace-management-check-access-acct_1')?.textContent).toContain('Available');
     expect(document.getElementById('workspace-management-action-acct_1')?.textContent).toContain('Suspend workspace');
     expect((document.getElementById('workspace-management-open-form-acct_1') as HTMLFormElement).action).toContain('/api/accounts/acct_1/tenants/ws_1/handoff');

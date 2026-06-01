@@ -68,6 +68,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	}
 	accountMutationAuth := requireAnyAccountRole(registry.MemberRoleOwner, registry.MemberRoleAdmin)
 	rawCommercialLookup := newCommercialIdentityLookup(deps.Config)
+	portalSetupFacts := portal.NewTenantDirWorkspaceSetupFactReader(deps.Config.TenantsDir())
 	portalCommercialLookup := func(ctx context.Context, email string) (*portal.CommercialIdentity, error) {
 		if rawCommercialLookup == nil {
 			return nil, nil
@@ -246,8 +247,8 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	mux.Handle("/api/accounts/{account_id}/tenants/{tenant_id}/handoff", accountAPILimiter.Middleware(accountSessionAuth(accountIDFromPath, handoffHandler)))
 
 	// MSP portal API (session + account-membership authenticated)
-	mux.Handle(portal.PortalBootstrapPath, portalAPILimiter.Middleware(sessionAuth(portal.HandlePortalBootstrapWithSignupPath(deps.MagicLinks, deps.Registry, portalCommercialLookup, publicCloudSignupPath))))
-	mux.Handle(portal.PortalDashboardPath, portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalDashboard(deps.Registry))))
+	mux.Handle(portal.PortalBootstrapPath, portalAPILimiter.Middleware(sessionAuth(portal.HandlePortalBootstrapWithSignupPathAndSetupFacts(deps.MagicLinks, deps.Registry, portalCommercialLookup, publicCloudSignupPath, portalSetupFacts))))
+	mux.Handle(portal.PortalDashboardPath, portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalDashboardWithSetupFacts(deps.Registry, portalSetupFacts))))
 	mux.Handle(portal.PortalWorkspacePath, portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalWorkspaceDetail(deps.Registry))))
 
 	// Stripe Customer Portal redirect (session + account-membership authenticated)
@@ -262,5 +263,5 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 
 	// MSP/Cloud portal HTML page — self-authenticating (shows login form if no session)
 	portalPageLimiter := NewCPRateLimiter(60, time.Minute)
-	mux.Handle(portal.PortalPagePath, portalPageLimiter.Middleware(http.HandlerFunc(portal.HandlePortalPageWithSignupPath(deps.MagicLinks, deps.Registry, portalCommercialLookup, controlPlaneFaviconHref(), publicCloudSignupPath))))
+	mux.Handle(portal.PortalPagePath, portalPageLimiter.Middleware(http.HandlerFunc(portal.HandlePortalPageWithSignupPathAndSetupFacts(deps.MagicLinks, deps.Registry, portalCommercialLookup, controlPlaneFaviconHref(), publicCloudSignupPath, portalSetupFacts))))
 }

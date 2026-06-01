@@ -592,6 +592,19 @@ function setupNeededWorkspaceEntries(entries: WorkspaceSummaryEntry[]): Workspac
   return results;
 }
 
+function setupFactCountLabel(value: unknown, singular: string, plural: string): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 'Unknown ' + plural;
+  return String(value) + ' ' + (value === 1 ? singular : plural);
+}
+
+function workspaceSetupFactsLine(workspace: PortalWorkspaceSummary): string {
+  return [
+    setupFactCountLabel(workspace.agent_count, 'agent', 'agents'),
+    setupFactCountLabel(workspace.alert_route_count, 'alert route', 'alert routes'),
+    setupFactCountLabel(workspace.report_schedule_count, 'report schedule', 'report schedules'),
+  ].join(' · ');
+}
+
 function workspaceSummaryContext(entry: WorkspaceSummaryEntry, includeAccountName: boolean, note: string): string {
   if (!includeAccountName) return note;
   return entry.account.name + ' · ' + note;
@@ -789,6 +802,69 @@ function renderWorkspaceSummaryInline(
   );
 }
 
+function renderWorkspaceSetupQueueAction(entry: WorkspaceSummaryEntry, accountAPIBasePath: string): string {
+  var setup = workspaceSetupState(entry.workspace);
+  if (setup === 'configure_outputs') {
+    return renderWorkspaceReportingHandoffForm(
+      entry.account.id,
+      entry.workspace.id,
+      accountAPIBasePath,
+      'Configure outputs',
+      'btn-primary btn-compact',
+    );
+  }
+  return renderWorkspaceInstallHandoffForm(
+    entry.account.id,
+    entry.workspace.id,
+    accountAPIBasePath,
+    setup === 'install_agents' ? 'Install agents' : 'Open setup',
+    'btn-primary btn-compact',
+  );
+}
+
+function renderWorkspaceSetupQueue(entries: WorkspaceSummaryEntry[], accountAPIBasePath: string): string {
+  var setupNeeded = setupNeededWorkspaceEntries(entries);
+  if (!setupNeeded.length) return '';
+  var visible = setupNeeded.slice(0, 5);
+  return (
+    '<section class="workspace-setup-queue" aria-label="Unfinished workspace setup">' +
+      '<div class="workspace-setup-queue-header">' +
+        '<div>' +
+          '<h3>Unfinished setup</h3>' +
+          '<p>Client workspaces stay here until agents, alert routing, and reports are in place.</p>' +
+        '</div>' +
+        '<span>' + escapeHTML(setupNeededWorkspaceChipLabel(setupNeeded.length)) + '</span>' +
+      '</div>' +
+      '<div class="workspace-setup-queue-list">' +
+        visible.map(function(entry) {
+          return (
+            '<article class="workspace-setup-queue-row">' +
+              '<div class="workspace-setup-queue-main">' +
+                setupBadgeHTML(entry.workspace) +
+                '<div>' +
+                  '<strong>' + escapeHTML(entry.workspace.display_name) + '</strong>' +
+                  '<span>' + escapeHTML(entry.account.name + ' · ' + workspaceSetupNextStep(entry.workspace)) + '</span>' +
+                  '<small>' + escapeHTML(workspaceSetupFactsLine(entry.workspace)) + '</small>' +
+                '</div>' +
+              '</div>' +
+              '<div class="workspace-setup-queue-actions">' +
+                renderWorkspaceSetupQueueAction(entry, accountAPIBasePath) +
+                (entry.account.can_manage
+                  ? '<button type="button" class="btn-secondary btn-compact" data-action="select-workspace" data-account-id="' +
+                    escapeAttr(entry.account.id) +
+                    '" data-workspace-id="' +
+                    escapeAttr(entry.workspace.id) +
+                    '">Checklist</button>'
+                  : renderWorkspaceHandoffForm(entry.account.id, entry.workspace.id, accountAPIBasePath, 'Open workspace')) +
+              '</div>' +
+            '</article>'
+          );
+        }).join('') +
+      '</div>' +
+    '</section>'
+  );
+}
+
 function workspaceSectionHeaderCopy(accounts: PortalAccountSummary[], entries: WorkspaceSummaryEntry[]): string {
   var canManageAnyWorkspace = accounts.some(function(account) { return account.can_manage; });
   if (!entries.length) {
@@ -815,6 +891,7 @@ export function renderWorkspaceSummarySection(context: ShellViewContext): string
       '</div>' +
       renderFactLine('workspace-summary-facts', renderWorkspaceSummaryFacts(accounts, entries)) +
       renderWorkspaceSummaryInline(accounts, entries, context.accountAPIBasePath, showSelfHostedCommercial) +
+      renderWorkspaceSetupQueue(entries, context.accountAPIBasePath) +
     '</section>'
   );
 }
@@ -944,6 +1021,18 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
               '<strong id="workspace-management-setup-' + escapeAttr(account.id) + '"></strong>' +
             '</div>' +
             '<div class="workspace-management-fact">' +
+              '<span>Agents</span>' +
+              '<strong id="workspace-management-agents-' + escapeAttr(account.id) + '"></strong>' +
+            '</div>' +
+            '<div class="workspace-management-fact">' +
+              '<span>Alert routes</span>' +
+              '<strong id="workspace-management-alerts-' + escapeAttr(account.id) + '"></strong>' +
+            '</div>' +
+            '<div class="workspace-management-fact">' +
+              '<span>Report schedules</span>' +
+              '<strong id="workspace-management-reports-' + escapeAttr(account.id) + '"></strong>' +
+            '</div>' +
+            '<div class="workspace-management-fact">' +
               '<span>Created</span>' +
               '<strong id="workspace-management-created-' + escapeAttr(account.id) + '"></strong>' +
             '</div>' +
@@ -957,16 +1046,16 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
               '<div><strong>Workspace created</strong><span>This client has a separate account boundary.</span></div>' +
             '</div>' +
             '<div class="workspace-setup-step">' +
-              '<span class="workspace-setup-status" id="workspace-management-check-open-' + escapeAttr(account.id) + '"></span>' +
-              '<div><strong>Open the workspace</strong><span>Work inside the selected client boundary.</span></div>' +
-            '</div>' +
-            '<div class="workspace-setup-step">' +
               '<span class="workspace-setup-status" id="workspace-management-check-install-' + escapeAttr(account.id) + '"></span>' +
               '<div><strong>Install the first agent</strong><span>Use the workspace-bound install path so data lands in this client.</span></div>' +
             '</div>' +
             '<div class="workspace-setup-step">' +
-              '<span class="workspace-setup-status" id="workspace-management-check-outputs-' + escapeAttr(account.id) + '"></span>' +
-              '<div><strong>Configure alerts and reports</strong><span>Keep notifications and reports scoped to this client.</span></div>' +
+              '<span class="workspace-setup-status" id="workspace-management-check-alerts-' + escapeAttr(account.id) + '"></span>' +
+              '<div><strong>Configure alert routes</strong><span>Keep notifications scoped to this client.</span></div>' +
+            '</div>' +
+            '<div class="workspace-setup-step">' +
+              '<span class="workspace-setup-status" id="workspace-management-check-reports-' + escapeAttr(account.id) + '"></span>' +
+              '<div><strong>Schedule reports</strong><span>Send client performance reports from this workspace.</span></div>' +
             '</div>' +
             '<div class="workspace-setup-step">' +
               '<span class="workspace-setup-status" id="workspace-management-check-access-' + escapeAttr(account.id) + '"></span>' +

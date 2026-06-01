@@ -329,6 +329,19 @@ or other self-hosted uncapped continuity plans.
    runtime; Pulse Account may deep-link to those tenant surfaces but must not
    mint workspace agent credentials or render cross-client monitoring state in
    the account portal.
+   Pulse Account also owns the provider-facing setup progression for client
+   workspaces: after workspace creation the portal should select the created
+   workspace, reveal the setup job, and preserve workspace/target context in
+   install or reporting handoffs so an MSP can continue the first-run flow
+   without guessing where to go next. That setup progression is control-plane
+   guidance, not a second monitoring plane. Workspace readiness must be derived
+   from read-only tenant-local setup facts without creating tenant config,
+   encryption keys, migrations, agent credentials, alert routes, or report
+   schedules as a side effect. The provider shell may show an unfinished-setup
+   queue and fact counts for active workspaces, but `Ready` requires at least
+   one reporting agent, one enabled alert route, and one enabled report
+   schedule; a failed latest health check remains `Review` ahead of setup
+   counts.
    Portal workspace payloads are live-workspace surfaces, not registry history
    dumps: tenants in `deleting` or `deleted` state must stay hidden from the
    browser bootstrap, `/api/portal/dashboard`, and workspace-detail API so

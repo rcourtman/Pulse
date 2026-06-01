@@ -63,6 +63,7 @@ describe('workspace presentation', function() {
     expect(workspaceRowNote(createWorkspace())).toBe('Setup path ready');
     expect(workspaceSetupNextStep(createWorkspace({ setup_status: 'install_agents' }))).toBe('Install the first agent from this workspace so client data lands in the right boundary.');
     expect(workspaceSetupState(createWorkspace({ agent_count: 0 }))).toBe('install_agents');
+    expect(workspaceSetupState(createWorkspace({ setup_status: 'setup_path', agent_count: 0 }))).toBe('install_agents');
     expect(workspaceSetupState(createWorkspace({ agent_count: 1, alert_route_count: 0, report_schedule_count: 0 }))).toBe('configure_outputs');
     expect(workspaceSetupState(createWorkspace({ agent_count: 1, alert_route_count: 1, report_schedule_count: 1 }))).toBe('ready');
     expect(workspaceSetupState(createWorkspace({ state: 'failed', healthy: false, health_status: 'unhealthy' }))).toBe('review');

@@ -28,6 +28,12 @@ export interface PortalWorkspaceCreateRequest {
   display_name: string;
 }
 
+export interface PortalWorkspaceCreateResponse {
+  id?: string;
+  display_name?: string;
+  state?: string;
+}
+
 export interface PortalMemberInviteRequest {
   email: string;
   role: string;
@@ -49,7 +55,7 @@ export interface PortalAPI {
   logout(): Promise<void>;
   getCommercialJSON<T>(path: string): Promise<T>;
   postCommercialJSON<T>(path: string, body: Record<string, unknown>): Promise<T>;
-  createWorkspace(accountID: string, body: PortalWorkspaceCreateRequest): Promise<void>;
+  createWorkspace(accountID: string, body: PortalWorkspaceCreateRequest): Promise<PortalWorkspaceCreateResponse>;
   suspendWorkspace(accountID: string, tenantID: string): Promise<void>;
   deleteWorkspace(accountID: string, tenantID: string): Promise<void>;
   openBilling(accountID: string): Promise<PortalBillingResponse>;
@@ -160,7 +166,7 @@ export function createPortalAPI(context: PortalAPIContext): PortalAPI {
       }, 'Commercial request failed.');
     },
     createWorkspace: function(accountID: string, body: PortalWorkspaceCreateRequest) {
-      return request<void>(accountURL(accountID, '/tenants'), {
+      return request<PortalWorkspaceCreateResponse>(accountURL(accountID, '/tenants'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

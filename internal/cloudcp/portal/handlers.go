@@ -21,13 +21,17 @@ type accountInfo struct {
 }
 
 type workspaceSummaryItem struct {
-	ID              string               `json:"id"`
-	DisplayName     string               `json:"display_name"`
-	State           registry.TenantState `json:"state"`
-	HealthCheckOK   bool                 `json:"health_check_ok"`
-	SetupStatus     string               `json:"setup_status,omitempty"`
-	LastHealthCheck *time.Time           `json:"last_health_check"`
-	CreatedAt       time.Time            `json:"created_at"`
+	ID                  string               `json:"id"`
+	DisplayName         string               `json:"display_name"`
+	State               registry.TenantState `json:"state"`
+	HealthCheckOK       bool                 `json:"health_check_ok"`
+	SetupStatus         string               `json:"setup_status,omitempty"`
+	AgentCount          *int                 `json:"agent_count,omitempty"`
+	LastAgentSeenAt     *time.Time           `json:"last_agent_seen_at,omitempty"`
+	AlertRouteCount     *int                 `json:"alert_route_count,omitempty"`
+	ReportScheduleCount *int                 `json:"report_schedule_count,omitempty"`
+	LastHealthCheck     *time.Time           `json:"last_health_check"`
+	CreatedAt           time.Time            `json:"created_at"`
 }
 
 type dashboardSummary struct {
@@ -71,6 +75,10 @@ func accountIDFromRequest(r *http.Request) string {
 //
 // Auth: control-plane session + account membership middleware.
 func HandlePortalDashboard(reg *registry.TenantRegistry) http.HandlerFunc {
+	return HandlePortalDashboardWithSetupFacts(reg, nil)
+}
+
+func HandlePortalDashboardWithSetupFacts(reg *registry.TenantRegistry, setupFacts WorkspaceSetupFactReader) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -119,15 +127,20 @@ func HandlePortalDashboard(reg *registry.TenantRegistry) http.HandlerFunc {
 			if !isPortalVisibleTenant(t) {
 				continue
 			}
+			facts := workspaceSetupFactsForTenant(setupFacts, t.ID)
 
 			resp.Workspaces = append(resp.Workspaces, workspaceSummaryItem{
-				ID:              t.ID,
-				DisplayName:     t.DisplayName,
-				State:           t.State,
-				HealthCheckOK:   t.HealthCheckOK,
-				SetupStatus:     workspaceSetupStatus(t.State, t.HealthCheckOK, t.LastHealthCheck),
-				LastHealthCheck: t.LastHealthCheck,
-				CreatedAt:       t.CreatedAt,
+				ID:                  t.ID,
+				DisplayName:         t.DisplayName,
+				State:               t.State,
+				HealthCheckOK:       t.HealthCheckOK,
+				SetupStatus:         workspaceSetupStatus(t.State, t.HealthCheckOK, t.LastHealthCheck, facts),
+				AgentCount:          facts.AgentCount,
+				LastAgentSeenAt:     facts.LastAgentSeenAt,
+				AlertRouteCount:     facts.AlertRouteCount,
+				ReportScheduleCount: facts.ReportScheduleCount,
+				LastHealthCheck:     t.LastHealthCheck,
+				CreatedAt:           t.CreatedAt,
 			})
 
 			resp.Summary.Total++
@@ -228,6 +241,10 @@ func HandlePortalBootstrap(sessionSvc *cpauth.Service, reg *registry.TenantRegis
 }
 
 func HandlePortalBootstrapWithSignupPath(sessionSvc *cpauth.Service, reg *registry.TenantRegistry, commercialLookup CommercialIdentityLookup, signupPath string) http.HandlerFunc {
+	return HandlePortalBootstrapWithSignupPathAndSetupFacts(sessionSvc, reg, commercialLookup, signupPath, nil)
+}
+
+func HandlePortalBootstrapWithSignupPathAndSetupFacts(sessionSvc *cpauth.Service, reg *registry.TenantRegistry, commercialLookup CommercialIdentityLookup, signupPath string, setupFacts WorkspaceSetupFactReader) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -249,7 +266,7 @@ func HandlePortalBootstrapWithSignupPath(sessionSvc *cpauth.Service, reg *regist
 			return
 		}
 
-		accounts, err := loadPortalAccountsForUser(reg, claims.UserID)
+		accounts, err := loadPortalAccountsForUserWithSetupFacts(reg, claims.UserID, setupFacts)
 		if err != nil {
 			log.Error().Err(err).Str("user_id", claims.UserID).Msg("cloudcp.portal.bootstrap: load accounts")
 			http.Error(w, "internal error", http.StatusInternalServerError)

@@ -145,6 +145,18 @@ function buildScenarioTemplate(name) {
           report_schedule_count: 0,
           created_at: iso('2026-03-21T10:00:00Z'),
         },
+        {
+          id: 'ws_gamma',
+          display_name: 'MSP Test Workspace C',
+          state: 'active',
+          healthy: true,
+          health_status: 'healthy',
+          setup_status: 'install_agents',
+          agent_count: 0,
+          alert_route_count: 0,
+          report_schedule_count: 0,
+          created_at: iso('2026-03-22T10:00:00Z'),
+        },
       ],
       members: [
         { email: 'owner@example.com', role: 'owner', user_id: 'u_owner' },
@@ -313,6 +325,7 @@ function buildPreviewWorkspaceHTML(bootstrap, workspaceID, targetPath, scenario)
     : targetPath === '/settings/support/reporting'
       ? 'Configure scheduled reports and alert routing for this client workspace before treating onboarding as complete.'
       : 'Use this workspace for client-specific monitoring work after the Pulse Account handoff.';
+  const installCommand = 'pulse-agent install --workspace ' + workspaceID + ' --name <agent-name>';
   return '<!DOCTYPE html>' +
     '<html lang="en">' +
       '<head>' +
@@ -334,7 +347,12 @@ function buildPreviewWorkspaceHTML(bootstrap, workspaceID, targetPath, scenario)
           '.fact strong{display:block;margin-top:2px;font-size:13px}' +
           '.task{border:1px solid #eaecf0;border-radius:6px;background:#f8fafc;padding:14px;margin:16px 0}' +
           '.task code{display:block;margin:8px 0 0;padding:10px;border:1px solid #d0d5dd;border-radius:6px;background:#fff;color:#101828;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}' +
+          '.steps{display:grid;gap:8px;margin:16px 0}' +
+          '.step{display:grid;grid-template-columns:28px minmax(0,1fr);gap:10px;padding:10px;border:1px solid #eaecf0;border-radius:6px;background:#fff}' +
+          '.step b{display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:999px;background:#eef4ff;color:#155eef;font-size:12px}' +
+          '.step strong{display:block;font-size:13px}.step span{display:block;margin-top:2px;color:#667085;font-size:12px;line-height:1.45}' +
           '.button{display:inline-flex;align-items:center;min-height:34px;padding:0 12px;border-radius:6px;background:#155eef;color:#fff;text-decoration:none;font-size:14px;font-weight:600}' +
+          '.copy-button{display:inline-flex;align-items:center;min-height:32px;margin-top:10px;padding:0 10px;border:1px solid #d0d5dd;border-radius:6px;background:#fff;color:#344054;font:inherit;font-size:13px;font-weight:600;cursor:pointer}' +
           '.secondary{background:#fff;color:#344054;border:1px solid #d0d5dd}' +
           '.actions{display:flex;gap:8px;flex-wrap:wrap}' +
           '@media(max-width:640px){.facts{grid-template-columns:1fr}}' +
@@ -356,11 +374,17 @@ function buildPreviewWorkspaceHTML(bootstrap, workspaceID, targetPath, scenario)
               '<strong>' + escapeHTML(targetLabel) + '</strong>' +
               '<p>' + escapeHTML(taskCopy) + '</p>' +
               (targetPath === '/settings/infrastructure?add=linux-host'
-                ? '<code>pulse-agent install --workspace ' + escapeHTML(workspaceID) + ' --name &lt;agent-name&gt;</code>'
+                ? '<code id="preview-install-command">' + escapeHTML(installCommand) + '</code><button class="copy-button" type="button" onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById(\'preview-install-command\').textContent)">Copy command</button>'
                 : '') +
+            '</div>' +
+            '<div class="steps" aria-label="Workspace setup flow">' +
+              '<div class="step"><b>1</b><div><strong>Install agents in this workspace</strong><span>The handoff keeps the agent command tied to this client boundary.</span></div></div>' +
+              '<div class="step"><b>2</b><div><strong>Confirm data is arriving</strong><span>Pulse Account marks the workspace as installed only after an agent-scoped token is used.</span></div></div>' +
+              '<div class="step"><b>3</b><div><strong>Add alert routes and reports</strong><span>Alerts and scheduled reports are part of the setup state, not optional polish.</span></div></div>' +
             '</div>' +
             '<div class="actions">' +
               '<a class="button" href="' + escapeHTML(portalWorkspaceURL) + '">Back to workspace row</a>' +
+              '<a class="button secondary" href="' + escapeHTML(portalURL + '#workspace-management-' + accountID) + '">Refresh setup state</a>' +
               '<a class="button secondary" href="' + escapeHTML(portalURL) + '">Pulse Account home</a>' +
             '</div>' +
           '</section>' +
@@ -581,7 +605,7 @@ function routeAccountAPI(request, response, url, bootstrap, scenario) {
           return;
         }
         account.workspaces = account.workspaces || [];
-        account.workspaces.push({
+        const workspace = {
           id: 'ws_' + Math.random().toString(36).slice(2, 10),
           display_name: displayName,
           state: 'active',
@@ -592,8 +616,9 @@ function routeAccountAPI(request, response, url, bootstrap, scenario) {
           alert_route_count: 0,
           report_schedule_count: 0,
           created_at: iso(new Date()),
-        });
-        sendJSON(response, 200, { ok: true });
+        };
+        account.workspaces.push(workspace);
+        sendJSON(response, 201, workspace);
       }).catch(function() {
         sendJSON(response, 400, { error: 'Invalid JSON.' });
       });

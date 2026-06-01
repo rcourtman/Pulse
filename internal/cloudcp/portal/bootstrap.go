@@ -7,14 +7,18 @@ import (
 )
 
 type BootstrapWorkspace struct {
-	ID              string `json:"id"`
-	DisplayName     string `json:"display_name"`
-	State           string `json:"state"`
-	Healthy         bool   `json:"healthy"`
-	HealthStatus    string `json:"health_status"`
-	SetupStatus     string `json:"setup_status,omitempty"`
-	LastHealthCheck string `json:"last_health_check,omitempty"`
-	CreatedAt       string `json:"created_at"`
+	ID                  string `json:"id"`
+	DisplayName         string `json:"display_name"`
+	State               string `json:"state"`
+	Healthy             bool   `json:"healthy"`
+	HealthStatus        string `json:"health_status"`
+	SetupStatus         string `json:"setup_status,omitempty"`
+	AgentCount          *int   `json:"agent_count,omitempty"`
+	LastAgentSeenAt     string `json:"last_agent_seen_at,omitempty"`
+	AlertRouteCount     *int   `json:"alert_route_count,omitempty"`
+	ReportScheduleCount *int   `json:"report_schedule_count,omitempty"`
+	LastHealthCheck     string `json:"last_health_check,omitempty"`
+	CreatedAt           string `json:"created_at"`
 }
 
 type BootstrapMember struct {
@@ -73,15 +77,23 @@ func BuildBootstrapDataWithSignupPath(authenticated bool, email string, accounts
 			if workspace.LastHealthCheck != nil {
 				lastHealthCheck = workspace.LastHealthCheck.UTC().Format(time.RFC3339)
 			}
+			lastAgentSeenAt := ""
+			if workspace.LastAgentSeenAt != nil {
+				lastAgentSeenAt = workspace.LastAgentSeenAt.UTC().Format(time.RFC3339)
+			}
 			workspaces = append(workspaces, BootstrapWorkspace{
-				ID:              workspace.ID,
-				DisplayName:     workspace.DisplayName,
-				State:           workspace.State,
-				Healthy:         workspace.Healthy,
-				HealthStatus:    workspace.HealthStatus,
-				SetupStatus:     workspace.SetupStatus,
-				LastHealthCheck: lastHealthCheck,
-				CreatedAt:       workspace.CreatedAt.UTC().Format(time.RFC3339),
+				ID:                  workspace.ID,
+				DisplayName:         workspace.DisplayName,
+				State:               workspace.State,
+				Healthy:             workspace.Healthy,
+				HealthStatus:        workspace.HealthStatus,
+				SetupStatus:         workspace.SetupStatus,
+				AgentCount:          workspace.AgentCount,
+				LastAgentSeenAt:     lastAgentSeenAt,
+				AlertRouteCount:     workspace.AlertRouteCount,
+				ReportScheduleCount: workspace.ReportScheduleCount,
+				LastHealthCheck:     lastHealthCheck,
+				CreatedAt:           workspace.CreatedAt.UTC().Format(time.RFC3339),
 			})
 		}
 		members := make([]BootstrapMember, 0, len(account.Members))

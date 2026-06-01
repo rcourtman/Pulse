@@ -176,13 +176,20 @@ Pulse Account workspace summaries carry setup state as a backend-owned payload
 contract. Browser bootstrap and `/api/portal/dashboard` workspace entries may
 include `setup_status` with only `ready`, `setup_path`, `install_agents`,
 `configure_outputs`, or `review`, plus optional setup evidence counts such as
-`agent_count`, `alert_route_count`, and `report_schedule_count` when the
-control plane has a canonical source for them. Until those counts are owned by
-a backend source, active healthy workspaces must report `setup_path` rather
-than pretending onboarding is complete. The browser may present that state as a
-setup checklist and deep-link into tenant install/reporting surfaces, but it
-must not infer cross-client readiness from health alone or mint tenant-owned
-agent, alert, or report configuration from Pulse Account.
+`agent_count`, `last_agent_seen_at`, `alert_route_count`, and
+`report_schedule_count` when the control plane has a canonical source for
+them. The canonical source is a read-only tenant-local setup facts reader, not
+browser inference or portal-local state. Health review still wins first:
+active workspaces with a failed latest health check report `review`. Healthy
+or unchecked workspaces with no used non-expired `agent:report` token report
+`install_agents`; workspaces with an agent but no enabled alert route or no
+enabled report schedule report `configure_outputs`; only workspaces with at
+least one reporting agent, enabled alert route, and enabled report schedule may
+report `ready`. `setup_path` remains the fallback when no canonical setup facts
+source is available. The browser may present that state as a setup checklist
+and deep-link into tenant install/reporting surfaces, but it must not infer
+cross-client readiness from health alone or mint tenant-owned agent, alert, or
+report configuration from Pulse Account.
 
 1. `frontend-modern/src/api/agentProfiles.ts` shared with `agent-lifecycle`: the agent profiles frontend client is both an agent lifecycle control surface and a canonical API payload contract boundary.
 2. `frontend-modern/src/api/ai.ts` shared with `ai-runtime`: the AI frontend client is both an AI runtime control surface and a canonical API payload contract boundary.

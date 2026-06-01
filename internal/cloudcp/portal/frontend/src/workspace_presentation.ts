@@ -67,9 +67,6 @@ function explicitSetupStatus(workspace: PortalWorkspaceSummary): WorkspaceSetupS
 }
 
 export function workspaceSetupState(workspace: PortalWorkspaceSummary): WorkspaceSetupState {
-  var explicit = explicitSetupStatus(workspace);
-  if (explicit) return explicit;
-
   var state = String(workspace.state || '');
   var health = workspaceHealthState(workspace);
   if (state === 'suspended' || state === 'failed' || health === 'unhealthy') return 'review';
@@ -89,6 +86,8 @@ export function workspaceSetupState(workspace: PortalWorkspaceSummary): Workspac
   if (hasAgents && (!knowsAlertCount || hasAlerts) && (!knowsReportCount || hasReports)) {
     return 'ready';
   }
+  var explicit = explicitSetupStatus(workspace);
+  if (explicit) return explicit;
   return 'setup_path';
 }
 

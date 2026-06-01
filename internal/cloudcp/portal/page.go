@@ -14,14 +14,18 @@ import (
 
 // portalPageWorkspace holds per-workspace display data for the portal template.
 type portalPageWorkspace struct {
-	ID              string
-	DisplayName     string
-	State           string
-	Healthy         bool
-	HealthStatus    string
-	SetupStatus     string
-	LastHealthCheck *time.Time
-	CreatedAt       time.Time
+	ID                  string
+	DisplayName         string
+	State               string
+	Healthy             bool
+	HealthStatus        string
+	SetupStatus         string
+	AgentCount          *int
+	LastAgentSeenAt     *time.Time
+	AlertRouteCount     *int
+	ReportScheduleCount *int
+	LastHealthCheck     *time.Time
+	CreatedAt           time.Time
 }
 
 type portalPageMember struct {
@@ -76,6 +80,10 @@ func HandlePortalPage(sessionSvc *cpauth.Service, reg *registry.TenantRegistry, 
 }
 
 func HandlePortalPageWithSignupPath(sessionSvc *cpauth.Service, reg *registry.TenantRegistry, commercialLookup CommercialIdentityLookup, faviconHref string, signupPath string) http.HandlerFunc {
+	return HandlePortalPageWithSignupPathAndSetupFacts(sessionSvc, reg, commercialLookup, faviconHref, signupPath, nil)
+}
+
+func HandlePortalPageWithSignupPathAndSetupFacts(sessionSvc *cpauth.Service, reg *registry.TenantRegistry, commercialLookup CommercialIdentityLookup, faviconHref string, signupPath string, setupFacts WorkspaceSetupFactReader) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -87,7 +95,7 @@ func HandlePortalPageWithSignupPath(sessionSvc *cpauth.Service, reg *registry.Te
 		claims, err := validatePortalSessionClaims(r, sessionSvc, reg)
 		switch {
 		case err == nil:
-			accounts, loadErr := loadPortalAccountsForUser(reg, claims.UserID)
+			accounts, loadErr := loadPortalAccountsForUserWithSetupFacts(reg, claims.UserID, setupFacts)
 			if loadErr != nil {
 				log.Error().Err(loadErr).Str("user_id", claims.UserID).Msg("cloudcp.portal.page: load accounts")
 				http.Error(w, "internal error", http.StatusInternalServerError)
@@ -129,6 +137,10 @@ func validatePortalSessionClaims(r *http.Request, sessionSvc *cpauth.Service, re
 }
 
 func loadPortalAccountsForUser(reg *registry.TenantRegistry, userID string) ([]portalPageAccount, error) {
+	return loadPortalAccountsForUserWithSetupFacts(reg, userID, nil)
+}
+
+func loadPortalAccountsForUserWithSetupFacts(reg *registry.TenantRegistry, userID string, setupFacts WorkspaceSetupFactReader) ([]portalPageAccount, error) {
 	accountIDs, err := reg.ListAccountsByUser(userID)
 	if err != nil {
 		return nil, err
@@ -170,16 +182,7 @@ func loadPortalAccountsForUser(reg *registry.TenantRegistry, userID string) ([]p
 			if !isPortalVisibleTenant(t) {
 				continue
 			}
-			workspaces = append(workspaces, portalPageWorkspace{
-				ID:              t.ID,
-				DisplayName:     t.DisplayName,
-				State:           string(t.State),
-				Healthy:         t.HealthCheckOK,
-				HealthStatus:    workspaceHealthStatus(t.HealthCheckOK, t.LastHealthCheck),
-				SetupStatus:     workspaceSetupStatus(t.State, t.HealthCheckOK, t.LastHealthCheck),
-				LastHealthCheck: t.LastHealthCheck,
-				CreatedAt:       t.CreatedAt,
-			})
+			workspaces = append(workspaces, portalPageWorkspaceFromTenant(t, workspaceSetupFactsForTenant(setupFacts, t.ID)))
 		}
 
 		kindLabel := "Cloud"
@@ -208,6 +211,33 @@ func loadPortalAccountsForUser(reg *registry.TenantRegistry, userID string) ([]p
 	}
 
 	return accounts, nil
+}
+
+func workspaceSetupFactsForTenant(setupFacts WorkspaceSetupFactReader, tenantID string) WorkspaceSetupFacts {
+	if setupFacts == nil {
+		return WorkspaceSetupFacts{}
+	}
+	return setupFacts.FactsForWorkspace(tenantID)
+}
+
+func portalPageWorkspaceFromTenant(t *registry.Tenant, facts WorkspaceSetupFacts) portalPageWorkspace {
+	if t == nil {
+		return portalPageWorkspace{}
+	}
+	return portalPageWorkspace{
+		ID:                  t.ID,
+		DisplayName:         t.DisplayName,
+		State:               string(t.State),
+		Healthy:             t.HealthCheckOK,
+		HealthStatus:        workspaceHealthStatus(t.HealthCheckOK, t.LastHealthCheck),
+		SetupStatus:         workspaceSetupStatus(t.State, t.HealthCheckOK, t.LastHealthCheck, facts),
+		AgentCount:          facts.AgentCount,
+		LastAgentSeenAt:     facts.LastAgentSeenAt,
+		AlertRouteCount:     facts.AlertRouteCount,
+		ReportScheduleCount: facts.ReportScheduleCount,
+		LastHealthCheck:     t.LastHealthCheck,
+		CreatedAt:           t.CreatedAt,
+	}
 }
 
 func loadPortalAccountMembers(reg *registry.TenantRegistry, accountID string, actorRole registry.MemberRole) ([]portalPageMember, error) {
@@ -251,11 +281,22 @@ func workspaceHealthStatus(healthy bool, lastHealthCheck *time.Time) string {
 	return "unhealthy"
 }
 
-func workspaceSetupStatus(state registry.TenantState, healthy bool, lastHealthCheck *time.Time) string {
+func workspaceSetupStatus(state registry.TenantState, healthy bool, lastHealthCheck *time.Time, facts WorkspaceSetupFacts) string {
 	switch state {
 	case registry.TenantStateActive:
 		if !healthy && lastHealthCheck != nil {
 			return "review"
+		}
+		if facts.AgentCount != nil {
+			if *facts.AgentCount <= 0 {
+				return "install_agents"
+			}
+			if factCountIsZero(facts.AlertRouteCount) || factCountIsZero(facts.ReportScheduleCount) {
+				return "configure_outputs"
+			}
+			if factCountIsPositive(facts.AlertRouteCount) && factCountIsPositive(facts.ReportScheduleCount) {
+				return "ready"
+			}
 		}
 		return "setup_path"
 	case registry.TenantStateProvisioning:
@@ -263,6 +304,14 @@ func workspaceSetupStatus(state registry.TenantState, healthy bool, lastHealthCh
 	default:
 		return "review"
 	}
+}
+
+func factCountIsZero(value *int) bool {
+	return value != nil && *value <= 0
+}
+
+func factCountIsPositive(value *int) bool {
+	return value != nil && *value > 0
 }
 
 func renderPortalPage(w http.ResponseWriter, nonce string, faviconHref string, bootstrapData BootstrapData) {

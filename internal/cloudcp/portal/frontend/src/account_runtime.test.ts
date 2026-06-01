@@ -76,7 +76,7 @@ describe('account runtime', function() {
   });
 
   it('creates a workspace through the managed account action flow', async function() {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ tenant_id: 't_123' })));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ id: 'ws_new' })));
 
     document.body.innerHTML =
       '<div id="add-ws-form-acct_1" class="add-workspace-form">' +
@@ -102,8 +102,9 @@ describe('account runtime', function() {
       })
     );
     expect(deps.refreshBootstrap).toHaveBeenCalled();
-    expect(deps.showToast).toHaveBeenCalledWith('Workspace created!');
+    expect(deps.showToast).toHaveBeenCalledWith('Workspace created. Finish setup next.');
     expect(deps.store.getAccountState().byAccountID.acct_1.addWorkspaceOpen).toBe(false);
+    expect(deps.store.getAccountState().byAccountID.acct_1.selectedWorkspaceID).toBe('ws_new');
     expect(deps.store.getAccountState().byAccountID.acct_1.createWorkspace.pending).toBe(false);
     expect((document.getElementById('ws-spinner-acct_1') as HTMLElement).hidden).toBe(true);
   });

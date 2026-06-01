@@ -125,6 +125,8 @@ describe('shell view', function() {
     expect(html).toContain('workspace-summary-shell');
     expect(html).toContain('workspace-summary-facts');
     expect(html).toContain('Next:</strong> Set up Summary Workspace');
+    expect(html).toContain('Unfinished setup');
+    expect(html).toContain('Unknown agents');
     expect(html).toContain('1 workspace in setup');
     expect(html).toContain('Summary Workspace');
     expect(html).not.toContain('overview-task-grid');
@@ -192,6 +194,7 @@ describe('shell view', function() {
     expect(html).toContain('1 workspace in setup');
     expect(html).toContain('2 workspaces to review');
     expect(html).toContain('Next:</strong> Review Beta Workspace');
+    expect(html).toContain('Unfinished setup');
     expect(html).toContain('Create workspace');
     expect(html).not.toContain('Manage billing');
     expect(html).not.toContain('Manage team');
@@ -206,6 +209,8 @@ describe('shell view', function() {
     expect(html).toContain('/api/accounts/acct_1/tenants/ws_active/handoff?target_path=%2Fsettings%2Finfrastructure%3Fadd%3Dlinux-host');
     expect(html).toContain('Open workspace');
     expect(html).toContain('Install agents');
+    expect(html).toContain('Configure alert routes');
+    expect(html).toContain('Schedule reports');
     expect(html).toContain('Open the workspace-bound install commands.');
     expect(html).toContain('Alerts and performance reports stay inside the client workspace.');
     expect(html).toContain('data-action="select-workspace"');

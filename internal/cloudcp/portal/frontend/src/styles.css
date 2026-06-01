@@ -500,7 +500,7 @@ header .logout-btn:hover,
 
 .workspace-management-facts {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
   gap: 8px;
 }
 
@@ -1360,6 +1360,95 @@ header .logout-btn:hover,
   text-decoration: none;
 }
 
+.workspace-setup-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.workspace-setup-queue-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.workspace-setup-queue-header h3 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.workspace-setup-queue-header p {
+  margin: 3px 0 0;
+  color: var(--ink-secondary);
+  font-size: 12px;
+}
+
+.workspace-setup-queue-header > span {
+  flex: 0 0 auto;
+  color: var(--ink-secondary);
+  font-size: 12px;
+}
+
+.workspace-setup-queue-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.workspace-setup-queue-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border-muted);
+}
+
+.workspace-setup-queue-row:first-child {
+  border-top: none;
+}
+
+.workspace-setup-queue-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.workspace-setup-queue-main strong,
+.workspace-setup-queue-main span,
+.workspace-setup-queue-main small {
+  display: block;
+}
+
+.workspace-setup-queue-main strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.workspace-setup-queue-main span,
+.workspace-setup-queue-main small {
+  margin-top: 2px;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.workspace-setup-queue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 /* Remove kicker labels — they feel like a custom portal. Use section context instead. */
 .account-panel-kicker,
 .billing-card-kicker,
@@ -1525,6 +1614,16 @@ header .logout-btn:hover,
   }
 
   .workspace-summary-actions { justify-content: flex-start; }
+  .workspace-setup-queue-header,
+  .workspace-setup-queue-row {
+    grid-template-columns: 1fr;
+  }
+  .workspace-setup-queue-header {
+    flex-direction: column;
+  }
+  .workspace-setup-queue-actions {
+    justify-content: flex-start;
+  }
 
   .workspace-list-head { display: none; }
   .workspace-row { grid-template-columns: 1fr; gap: 8px; }

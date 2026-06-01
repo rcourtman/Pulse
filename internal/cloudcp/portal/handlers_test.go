@@ -35,6 +35,12 @@ func newTestMux(reg *registry.TenantRegistry) *http.ServeMux {
 	return mux
 }
 
+type staticSetupFactReader map[string]WorkspaceSetupFacts
+
+func (r staticSetupFactReader) FactsForWorkspace(tenantID string) WorkspaceSetupFacts {
+	return r[tenantID]
+}
+
 func doRequest(t *testing.T, h http.Handler, req *http.Request) *httptest.ResponseRecorder {
 	t.Helper()
 	req.Header.Set("X-Admin-Key", "secret-key")
@@ -115,13 +121,17 @@ type dashboardResp struct {
 		Kind        registry.AccountKind `json:"kind"`
 	} `json:"account"`
 	Workspaces []struct {
-		ID              string               `json:"id"`
-		DisplayName     string               `json:"display_name"`
-		State           registry.TenantState `json:"state"`
-		HealthCheckOK   bool                 `json:"health_check_ok"`
-		SetupStatus     string               `json:"setup_status"`
-		LastHealthCheck *time.Time           `json:"last_health_check"`
-		CreatedAt       time.Time            `json:"created_at"`
+		ID                  string               `json:"id"`
+		DisplayName         string               `json:"display_name"`
+		State               registry.TenantState `json:"state"`
+		HealthCheckOK       bool                 `json:"health_check_ok"`
+		SetupStatus         string               `json:"setup_status"`
+		AgentCount          *int                 `json:"agent_count"`
+		LastAgentSeenAt     *time.Time           `json:"last_agent_seen_at"`
+		AlertRouteCount     *int                 `json:"alert_route_count"`
+		ReportScheduleCount *int                 `json:"report_schedule_count"`
+		LastHealthCheck     *time.Time           `json:"last_health_check"`
+		CreatedAt           time.Time            `json:"created_at"`
 	} `json:"workspaces"`
 	Summary struct {
 		Total     int `json:"total"`
@@ -237,13 +247,17 @@ func TestPortalDashboard(t *testing.T) {
 	// local helper type for easier indexing
 	for _, ws := range resp.Workspaces {
 		wsByID[ws.ID] = dashboardRespWorkspace{
-			ID:              ws.ID,
-			DisplayName:     ws.DisplayName,
-			State:           ws.State,
-			HealthCheckOK:   ws.HealthCheckOK,
-			SetupStatus:     ws.SetupStatus,
-			LastHealthCheck: ws.LastHealthCheck,
-			CreatedAt:       ws.CreatedAt,
+			ID:                  ws.ID,
+			DisplayName:         ws.DisplayName,
+			State:               ws.State,
+			HealthCheckOK:       ws.HealthCheckOK,
+			SetupStatus:         ws.SetupStatus,
+			AgentCount:          ws.AgentCount,
+			LastAgentSeenAt:     ws.LastAgentSeenAt,
+			AlertRouteCount:     ws.AlertRouteCount,
+			ReportScheduleCount: ws.ReportScheduleCount,
+			LastHealthCheck:     ws.LastHealthCheck,
+			CreatedAt:           ws.CreatedAt,
 		}
 	}
 
@@ -298,14 +312,139 @@ func TestPortalDashboard(t *testing.T) {
 	}
 }
 
+func TestPortalDashboardUsesWorkspaceSetupFacts(t *testing.T) {
+	reg := newTestRegistry(t)
+	mux := http.NewServeMux()
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP, DisplayName: "Example MSP"}); err != nil {
+		t.Fatal(err)
+	}
+
+	tenantInstallID, err := registry.GenerateTenantID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tenantOutputsID, err := registry.GenerateTenantID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tenantReadyID, err := registry.GenerateTenantID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	lastSeen := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
+
+	for _, tenant := range []*registry.Tenant{
+		{
+			ID:            tenantInstallID,
+			AccountID:     accountID,
+			DisplayName:   "Install",
+			State:         registry.TenantStateActive,
+			CreatedAt:     lastSeen,
+			HealthCheckOK: true,
+		},
+		{
+			ID:            tenantOutputsID,
+			AccountID:     accountID,
+			DisplayName:   "Outputs",
+			State:         registry.TenantStateActive,
+			CreatedAt:     lastSeen,
+			HealthCheckOK: true,
+		},
+		{
+			ID:            tenantReadyID,
+			AccountID:     accountID,
+			DisplayName:   "Ready",
+			State:         registry.TenantStateActive,
+			CreatedAt:     lastSeen,
+			HealthCheckOK: true,
+		},
+	} {
+		if err := reg.Create(tenant); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	mux.Handle(PortalDashboardPath, admin.AdminKeyMiddleware("secret-key", HandlePortalDashboardWithSetupFacts(reg, staticSetupFactReader{
+		tenantInstallID: {
+			AgentCount:          intPtr(0),
+			AlertRouteCount:     intPtr(0),
+			ReportScheduleCount: intPtr(0),
+		},
+		tenantOutputsID: {
+			AgentCount:          intPtr(1),
+			LastAgentSeenAt:     &lastSeen,
+			AlertRouteCount:     intPtr(1),
+			ReportScheduleCount: intPtr(0),
+		},
+		tenantReadyID: {
+			AgentCount:          intPtr(2),
+			LastAgentSeenAt:     &lastSeen,
+			AlertRouteCount:     intPtr(1),
+			ReportScheduleCount: intPtr(1),
+		},
+	})))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/portal/dashboard?account_id="+accountID, nil)
+	rec := doRequest(t, mux, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp dashboardResp
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v (body=%q)", err, rec.Body.String())
+	}
+
+	got := map[string]dashboardRespWorkspace{}
+	for _, ws := range resp.Workspaces {
+		got[ws.ID] = dashboardRespWorkspace{
+			ID:                  ws.ID,
+			DisplayName:         ws.DisplayName,
+			State:               ws.State,
+			HealthCheckOK:       ws.HealthCheckOK,
+			SetupStatus:         ws.SetupStatus,
+			AgentCount:          ws.AgentCount,
+			LastAgentSeenAt:     ws.LastAgentSeenAt,
+			AlertRouteCount:     ws.AlertRouteCount,
+			ReportScheduleCount: ws.ReportScheduleCount,
+			LastHealthCheck:     ws.LastHealthCheck,
+			CreatedAt:           ws.CreatedAt,
+		}
+	}
+	if got[tenantInstallID].SetupStatus != "install_agents" {
+		t.Fatalf("install setup_status = %q, want install_agents", got[tenantInstallID].SetupStatus)
+	}
+	if got[tenantOutputsID].SetupStatus != "configure_outputs" {
+		t.Fatalf("outputs setup_status = %q, want configure_outputs", got[tenantOutputsID].SetupStatus)
+	}
+	if got[tenantReadyID].SetupStatus != "ready" {
+		t.Fatalf("ready setup_status = %q, want ready", got[tenantReadyID].SetupStatus)
+	}
+	if got[tenantReadyID].AgentCount == nil || *got[tenantReadyID].AgentCount != 2 {
+		t.Fatalf("ready agent_count = %v, want 2", got[tenantReadyID].AgentCount)
+	}
+	if got[tenantReadyID].LastAgentSeenAt == nil || !got[tenantReadyID].LastAgentSeenAt.Equal(lastSeen) {
+		t.Fatalf("ready last_agent_seen_at = %v, want %v", got[tenantReadyID].LastAgentSeenAt, lastSeen)
+	}
+}
+
 type dashboardRespWorkspace struct {
-	ID              string
-	DisplayName     string
-	State           registry.TenantState
-	HealthCheckOK   bool
-	SetupStatus     string
-	LastHealthCheck *time.Time
-	CreatedAt       time.Time
+	ID                  string
+	DisplayName         string
+	State               registry.TenantState
+	HealthCheckOK       bool
+	SetupStatus         string
+	AgentCount          *int
+	LastAgentSeenAt     *time.Time
+	AlertRouteCount     *int
+	ReportScheduleCount *int
+	LastHealthCheck     *time.Time
+	CreatedAt           time.Time
 }
 
 func TestPortalDashboardEmpty(t *testing.T) {
@@ -1107,6 +1246,62 @@ func TestHandlePortalBootstrap_Success(t *testing.T) {
 	}
 	if got := workspace["setup_status"]; got != "setup_path" {
 		t.Fatalf("workspace setup_status = %#v, want setup_path", got)
+	}
+}
+
+func TestHandlePortalBootstrapIncludesWorkspaceSetupFacts(t *testing.T) {
+	reg, sessionSvc, token, accountID, _ := newPortalSessionFixture(t)
+	lastSeen := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
+
+	if err := reg.Create(&registry.Tenant{
+		ID:            "t_bootstrap_facts",
+		AccountID:     accountID,
+		DisplayName:   "Bootstrap Workspace",
+		State:         registry.TenantStateActive,
+		CreatedAt:     time.Date(2026, 3, 25, 10, 0, 0, 0, time.UTC),
+		HealthCheckOK: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/portal/bootstrap", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	HandlePortalBootstrapWithSignupPathAndSetupFacts(sessionSvc, reg, nil, PortalSignupPath, staticSetupFactReader{
+		"t_bootstrap_facts": {
+			AgentCount:          intPtr(1),
+			LastAgentSeenAt:     &lastSeen,
+			AlertRouteCount:     intPtr(1),
+			ReportScheduleCount: intPtr(0),
+		},
+	}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal bootstrap response: %v", err)
+	}
+	accounts := payload["accounts"].([]any)
+	account := accounts[0].(map[string]any)
+	workspaces := account["workspaces"].([]any)
+	workspace := workspaces[0].(map[string]any)
+	if got := workspace["setup_status"]; got != "configure_outputs" {
+		t.Fatalf("workspace setup_status = %#v, want configure_outputs", got)
+	}
+	if got := workspace["agent_count"]; got != float64(1) {
+		t.Fatalf("workspace agent_count = %#v, want 1", got)
+	}
+	if got := workspace["alert_route_count"]; got != float64(1) {
+		t.Fatalf("workspace alert_route_count = %#v, want 1", got)
+	}
+	if got := workspace["report_schedule_count"]; got != float64(0) {
+		t.Fatalf("workspace report_schedule_count = %#v, want 0", got)
+	}
+	if got := workspace["last_agent_seen_at"]; got != "2026-04-01T10:00:00Z" {
+		t.Fatalf("workspace last_agent_seen_at = %#v, want 2026-04-01T10:00:00Z", got)
 	}
 }
 
