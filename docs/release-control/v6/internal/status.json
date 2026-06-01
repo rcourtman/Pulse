@@ -7418,6 +7418,21 @@
         "L8",
         "L13"
       ]
+    },
+    {
+      "id": "msp-buying-motion-lock",
+      "summary": "MSP public buying motion is split: Starter is the self-serve checkout path for small providers, while Growth, Scale, and Enterprise stay request-based for assisted onboarding, reporting, support, deployment-shape, and terms review.",
+      "kind": "pricing",
+      "decided_at": "2026-06-01",
+      "subsystem_ids": [
+        "cloud-paid"
+      ],
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L4",
+        "L17"
+      ]
     }
   ]
 }

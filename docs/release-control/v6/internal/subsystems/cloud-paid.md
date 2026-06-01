@@ -232,14 +232,17 @@ or other self-hosted uncapped continuity plans.
    through `internal/cloudcp/config.go` and
    `internal/cloudcp/public_cloud_signup_handlers.go`
    Public MSP self-serve signup is the operator-account front door for the same
-   boundary and lives in `internal/cloudcp/public_msp_signup_handlers.go`. Its
-   per-tier price configuration (`CP_MSP_STARTER_PRICE_ID`,
-   `CP_MSP_GROWTH_PRICE_ID`, `CP_MSP_SCALE_PRICE_ID`) is validated in
-   `internal/cloudcp/config.go` against the canonical `msp_starter`,
-   `msp_growth`, and `msp_scale` plan versions, and the MSP signup routes stay
-   gated behind the same `PublicCloudSignupEnabled` flag as the individual
-   cloud signup front door. Checkout metadata produced by the MSP front door
-   must mark `account_kind=msp`, `signup_source=public_msp_signup`, and
+   boundary and lives in `internal/cloudcp/public_msp_signup_handlers.go`.
+   Starter is the only public self-serve MSP checkout tier; Growth, Scale, and
+   Enterprise remain request-based even when their Stripe prices are configured
+   for assisted/operator-controlled workflows. MSP price configuration
+   (`CP_MSP_STARTER_PRICE_ID`, `CP_MSP_GROWTH_PRICE_ID`,
+   `CP_MSP_SCALE_PRICE_ID`) is still validated in `internal/cloudcp/config.go`
+   against the canonical `msp_starter`, `msp_growth`, and `msp_scale` plan
+   versions, and the MSP signup routes stay gated behind the same
+   `PublicCloudSignupEnabled` flag as the individual cloud signup front door.
+   Checkout metadata produced by the MSP front door must mark
+   `account_kind=msp`, `signup_source=public_msp_signup`, and
    `checkout_billing_mode=immediate` so provisioning seeds an operator
    workspace as an immediately active paid account rather than an individual
    trial tenant. Individual public Cloud signup may keep using the hosted trial
@@ -705,18 +708,19 @@ individual cloud signup page. `internal/cloudcp/public_msp_signup_handlers.go`
 serves `/cloud/msp/signup`, `/cloud/msp/signup/complete`, and
 `/api/public/msp/signup`, all gated behind the same `PublicCloudSignupEnabled`
 flag as `/cloud/signup`, so the MSP front door stays dark until an operator
-explicitly enables public signup. Each MSP tier (starter, growth, scale) is
-served only when its Stripe price is configured (`CP_MSP_STARTER_PRICE_ID`,
-`CP_MSP_GROWTH_PRICE_ID`, `CP_MSP_SCALE_PRICE_ID`); the signup page renders an
-explicit "not open for self-serve signup yet" notice when no MSP tier price is
-configured rather than offering an unbacked checkout. Checkout sessions started
-from this front door carry `account_kind=msp`, `signup_source=public_msp_signup`,
-and `checkout_billing_mode=immediate` metadata and do not set Stripe
-`trial_period_days`; MSP self-serve checkout is paid-first, while manual pilots
-or discounts belong in operator-controlled Stripe/customer support workflows
-rather than the public front door. The provisioner reads that billing-mode
-metadata so the initial Stripe account mapping is stored as active instead of
-trial before subscription webhooks catch up.
+explicitly enables public signup. MSP Starter is the only tier served through
+public self-serve checkout, and it is offered only when
+`CP_MSP_STARTER_PRICE_ID` is configured. Growth, Scale, Enterprise, manual
+pilots, and discounts belong in request-based or operator-controlled
+Stripe/customer-support workflows rather than the public front door. The signup
+page renders an explicit "Starter self-serve signup is not open yet" notice when
+the Starter price is not configured rather than offering an unbacked checkout.
+Checkout sessions started from this front door carry `account_kind=msp`,
+`signup_source=public_msp_signup`, and `checkout_billing_mode=immediate`
+metadata and do not set Stripe `trial_period_days`; MSP self-serve checkout is
+paid-first. The provisioner reads that billing-mode metadata so the initial
+Stripe account mapping is stored as active instead of trial before subscription
+webhooks catch up.
 
 Cloud paid readiness is materially behind architecture work. The main concern is
 contract coherence between pricing, entitlements, and runtime enforcement.

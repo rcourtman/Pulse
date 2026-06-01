@@ -3799,6 +3799,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "cloud-msp-price-id-propagation",
                 "cloud-msp-stripe-prices",
                 "legacy-grandfathering-eligibility-cutoff",
+                "msp-buying-motion-lock",
                 "self-hosted-plans-surface-entitlement-first",
                 "self-hosted-paid-surface-classification",
                 "self-hosted-core-monitoring-free",

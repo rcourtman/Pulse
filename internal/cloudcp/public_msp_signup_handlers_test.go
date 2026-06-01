@@ -86,7 +86,7 @@ func TestMSPSignupPageRendersUnavailableWhenNoTierConfigured(t *testing.T) {
 	if strings.Contains(body, "<form") {
 		t.Fatal("expected no signup form when no MSP tier is configured")
 	}
-	if !strings.Contains(body, "not open for self-serve signup yet") {
+	if !strings.Contains(body, "Starter self-serve signup is not open yet") {
 		t.Fatalf("expected unavailable notice, got %q", body)
 	}
 }
@@ -107,7 +107,7 @@ func TestMSPSignupPageRendersFormWhenTierConfigured(t *testing.T) {
 	if !strings.Contains(body, "<form") {
 		t.Fatal("expected signup form when an MSP tier is configured")
 	}
-	if !strings.Contains(body, "Start Pulse Cloud for MSPs") {
+	if !strings.Contains(body, "Start Pulse MSP Starter") {
 		t.Fatal("expected MSP paid signup heading")
 	}
 	if strings.Contains(strings.ToLower(body), "trial") {
@@ -116,7 +116,7 @@ func TestMSPSignupPageRendersFormWhenTierConfigured(t *testing.T) {
 	if !strings.Contains(body, `action="/cloud/msp/signup"`) {
 		t.Fatal("expected form to post to the canonical MSP signup path")
 	}
-	// Single tier configured → hidden input, no radios.
+	// Single tier configured: hidden input, no radios.
 	if strings.Contains(body, `type="radio"`) {
 		t.Fatal("expected no tier radios when only one MSP tier is configured")
 	}
@@ -125,7 +125,7 @@ func TestMSPSignupPageRendersFormWhenTierConfigured(t *testing.T) {
 	}
 }
 
-func TestMSPSignupPageShowsTierRadiosWhenMultipleConfigured(t *testing.T) {
+func TestMSPSignupPageKeepsStarterSelfServeWhenMultipleTiersConfigured(t *testing.T) {
 	h := NewPublicCloudSignupHandlers(&CPConfig{
 		CloudMSPStarterPriceID: testMSPStarterPriceID,
 		CloudMSPGrowthPriceID:  testMSPGrowthPriceID,
@@ -137,13 +137,14 @@ func TestMSPSignupPageShowsTierRadiosWhenMultipleConfigured(t *testing.T) {
 	h.HandleMSPSignupPage(rec, req)
 
 	body := rec.Body.String()
-	for _, v := range []string{`value="starter"`, `value="growth"`, `value="scale"`} {
-		if !strings.Contains(body, v) {
-			t.Fatalf("expected radio option %s", v)
-		}
+	if strings.Contains(body, `type="radio"`) {
+		t.Fatal("expected no tier radios because only MSP Starter is self-serve")
 	}
-	if !strings.Contains(body, `value="growth" checked`) {
-		t.Fatal("expected requested growth tier to be pre-checked")
+	if !strings.Contains(body, `type="hidden" name="tier" value="starter"`) {
+		t.Fatal("expected hidden starter tier input")
+	}
+	if !strings.Contains(body, "Growth / Scale") || !strings.Contains(body, "request access") {
+		t.Fatal("expected assisted Growth/Scale copy")
 	}
 }
 
@@ -211,8 +212,6 @@ func TestMSPSignupPostTierSelectionPicksPrice(t *testing.T) {
 	}{
 		{"", testMSPStarterPriceID},
 		{"starter", testMSPStarterPriceID},
-		{"growth", testMSPGrowthPriceID},
-		{"scale", testMSPScalePriceID},
 	}
 	for _, tt := range tests {
 		t.Run("tier="+tt.tier, func(t *testing.T) {
@@ -240,15 +239,16 @@ func TestMSPSignupPostTierSelectionPicksPrice(t *testing.T) {
 	}
 }
 
-func TestMSPSignupPostUnconfiguredTierReturns400(t *testing.T) {
+func TestMSPSignupPostAssistedTierReturns400EvenWhenConfigured(t *testing.T) {
 	h := NewPublicCloudSignupHandlers(&CPConfig{
 		BaseURL:                "https://cloud.example.com",
 		StripeAPIKey:           "sk_test_123",
 		CloudMSPStarterPriceID: testMSPStarterPriceID,
-		// growth/scale intentionally unconfigured
+		CloudMSPGrowthPriceID:  testMSPGrowthPriceID,
+		CloudMSPScalePriceID:   testMSPScalePriceID,
 	}, nil, nil, nil)
 
-	form := url.Values{"email": {"o@example.com"}, "org_name": {"Quesys MSP"}, "tier": {"scale"}}
+	form := url.Values{"email": {"o@example.com"}, "org_name": {"Quesys MSP"}, "tier": {"growth"}}
 	req := httptest.NewRequest(http.MethodPost, "/cloud/msp/signup", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
@@ -257,14 +257,34 @@ func TestMSPSignupPostUnconfiguredTierReturns400(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "not currently available") {
+	if !strings.Contains(rec.Body.String(), "request-based") {
+		t.Fatalf("expected assisted-tier message, got %q", rec.Body.String())
+	}
+}
+
+func TestMSPSignupPostUnconfiguredStarterReturns400(t *testing.T) {
+	h := NewPublicCloudSignupHandlers(&CPConfig{
+		BaseURL:      "https://cloud.example.com",
+		StripeAPIKey: "sk_test_123",
+	}, nil, nil, nil)
+
+	form := url.Values{"email": {"o@example.com"}, "org_name": {"Quesys MSP"}, "tier": {"starter"}}
+	req := httptest.NewRequest(http.MethodPost, "/cloud/msp/signup", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.HandleMSPSignupPage(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "Starter self-serve checkout is not currently available") {
 		t.Fatalf("expected tier-unavailable message, got %q", rec.Body.String())
 	}
 }
 
 func TestMSPSignupRejectsCloudPriceMisconfiguration(t *testing.T) {
 	// MSP starter price slot misconfigured with a cloud_starter price ID.
-	// Must fail closed before calling Stripe — the MSP path only accepts
+	// Must fail closed before calling Stripe: the MSP path only accepts
 	// msp_* plan versions.
 	h := NewPublicCloudSignupHandlers(&CPConfig{
 		BaseURL:                "https://cloud.example.com",
@@ -310,7 +330,7 @@ func TestMSPSignupAPICreatesCheckout(t *testing.T) {
 		return &stripe.CheckoutSession{URL: "https://checkout.stripe.com/c/pay/cs_api"}, nil
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/public/msp/signup", strings.NewReader(`{"email":"o@example.com","org_name":"Quesys MSP","tier":"growth"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/public/msp/signup", strings.NewReader(`{"email":"o@example.com","org_name":"Quesys MSP","tier":"starter"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	h.HandleMSPPublicSignup(rec, req)
@@ -327,8 +347,8 @@ func TestMSPSignupAPICreatesCheckout(t *testing.T) {
 	if got := captured.Metadata[checkoutBillingModeMetadataKey]; got != checkoutBillingModeImmediate {
 		t.Fatalf("checkout_billing_mode=%q, want %q", got, checkoutBillingModeImmediate)
 	}
-	if priceID != testMSPGrowthPriceID {
-		t.Fatalf("price_id=%q, want %q", priceID, testMSPGrowthPriceID)
+	if priceID != testMSPStarterPriceID {
+		t.Fatalf("price_id=%q, want %q", priceID, testMSPStarterPriceID)
 	}
 	var payload map[string]any
 	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
@@ -339,11 +359,12 @@ func TestMSPSignupAPICreatesCheckout(t *testing.T) {
 	}
 }
 
-func TestMSPSignupAPIUnconfiguredTierReturns400(t *testing.T) {
+func TestMSPSignupAPIAssistedTierReturns400(t *testing.T) {
 	h := NewPublicCloudSignupHandlers(&CPConfig{
 		BaseURL:                "https://cloud.example.com",
 		StripeAPIKey:           "sk_test_123",
 		CloudMSPStarterPriceID: testMSPStarterPriceID,
+		CloudMSPScalePriceID:   testMSPScalePriceID,
 	}, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/public/msp/signup", strings.NewReader(`{"email":"o@example.com","org_name":"Quesys MSP","tier":"scale"}`))
@@ -401,7 +422,7 @@ func TestMSPSignupCancelURLPreservesTier(t *testing.T) {
 		return &stripe.CheckoutSession{URL: "https://checkout.stripe.com/test"}, nil
 	}
 
-	form := url.Values{"email": {"o@example.com"}, "org_name": {"Quesys MSP"}, "tier": {"growth"}}
+	form := url.Values{"email": {"o@example.com"}, "org_name": {"Quesys MSP"}, "tier": {"starter"}}
 	req := httptest.NewRequest(http.MethodPost, "/cloud/msp/signup", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
@@ -414,8 +435,8 @@ func TestMSPSignupCancelURLPreservesTier(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse cancel URL: %v", err)
 	}
-	if got := parsed.Query().Get("tier"); got != "growth" {
-		t.Fatalf("cancel URL tier=%q, want %q (URL: %s)", got, "growth", cancelURL)
+	if got := parsed.Query().Get("tier"); got != "starter" {
+		t.Fatalf("cancel URL tier=%q, want %q (URL: %s)", got, "starter", cancelURL)
 	}
 	if !strings.HasPrefix(parsed.Path, "/cloud/msp/signup") {
 		t.Fatalf("cancel URL path=%q, want MSP signup path", parsed.Path)

@@ -61,9 +61,7 @@ func expectedPlanVersionForMSPTier(tier mspTier) string {
 }
 
 // priceIDForMSPTier returns the configured Stripe price ID for the given MSP
-// tier. Returns ("", false) if the tier's price ID is not configured. An MSP
-// tier with no configured price ID is treated as not offered, which is how the
-// front door stays inert until Richard sets the price IDs in CP env.
+// tier. Returns ("", false) if the tier's price ID is not configured.
 func (h *PublicCloudSignupHandlers) priceIDForMSPTier(tier mspTier) (string, bool) {
 	if h.cfg == nil {
 		return "", false
@@ -83,20 +81,20 @@ func (h *PublicCloudSignupHandlers) priceIDForMSPTier(tier mspTier) (string, boo
 	}
 }
 
+func isSelfServeMSPTier(tier mspTier) bool {
+	return tier == mspTierStarter
+}
+
+func (h *PublicCloudSignupHandlers) selfServeMSPPriceIDForTier(tier mspTier) (string, bool) {
+	if !isSelfServeMSPTier(tier) {
+		return "", false
+	}
+	return h.priceIDForMSPTier(tier)
+}
+
 func (h *PublicCloudSignupHandlers) hasMSPTier(tier mspTier) bool {
 	_, ok := h.priceIDForMSPTier(tier)
 	return ok
-}
-
-// defaultMSPTier returns the lowest configured MSP tier, preferring
-// starter → growth → scale. The bool is false when no MSP tier is configured.
-func (h *PublicCloudSignupHandlers) defaultMSPTier() (mspTier, bool) {
-	for _, t := range []mspTier{mspTierStarter, mspTierGrowth, mspTierScale} {
-		if h.hasMSPTier(t) {
-			return t, true
-		}
-	}
-	return "", false
 }
 
 func validatePublicMSPSignupPriceID(tier mspTier, priceID string) error {
@@ -115,7 +113,7 @@ var publicMSPSignupPageTemplate = template.Must(template.New("public-msp-signup-
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Start Pulse Cloud for MSPs</title>
+  <title>Start Pulse MSP Starter</title>
   <style nonce="{{.Nonce}}">
     :root { color-scheme: light; }
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: linear-gradient(140deg, #f8fafc, #e2e8f0); color: #0f172a; }
@@ -140,26 +138,18 @@ var publicMSPSignupPageTemplate = template.Must(template.New("public-msp-signup-
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>Start Pulse Cloud for MSPs</h1>
-      <p>Run Pulse for multiple clients from one hosted operator account. Each client gets an isolated workspace; you manage them all from the MSP portal. Stripe checkout starts the selected monthly subscription and provisions your operator account after payment succeeds.</p>
+      <h1>Start Pulse MSP Starter</h1>
+      <p>Run Pulse for multiple clients from one hosted operator account. Each client gets an isolated workspace; you manage them all from the MSP portal. Starter is the self-serve checkout path for small providers. Growth and Scale are request-based so onboarding, reporting, and support expectations can be sized with you.</p>
       {{if .ErrorMessage}}<div class="error">{{.ErrorMessage}}</div>{{end}}
       {{if .Cancelled}}<div class="note">Checkout was cancelled. You can start again below.</div>{{end}}
 
       {{if .Available}}
       <form method="POST" action="{{.FormAction}}">
-        {{/* Tier labels show monthly pricing and client-workspace caps for
-             orientation. Stripe checkout displays the actual price from the
-             configured price ID. */}}
-        {{if .ShowTierChoice}}
-        <label>Plan</label>
-        <div class="tier-group">
-          {{if .HasStarter}}<label class="tier-option"><input type="radio" name="tier" value="starter" {{if eq .Tier "starter"}}checked{{end}}> <strong>Starter</strong> — up to 10 client workspaces, $149/mo</label>{{end}}
-          {{if .HasGrowth}}<label class="tier-option"><input type="radio" name="tier" value="growth" {{if eq .Tier "growth"}}checked{{end}}> <strong>Growth</strong> — up to 25 client workspaces, $249/mo</label>{{end}}
-          {{if .HasScale}}<label class="tier-option"><input type="radio" name="tier" value="scale" {{if eq .Tier "scale"}}checked{{end}}> <strong>Scale</strong> — up to 50 client workspaces, $399/mo</label>{{end}}
-        </div>
-        {{else}}
         <input type="hidden" name="tier" value="{{.Tier}}">
-        {{end}}
+        <div class="tier-group">
+          <div class="tier-option"><strong>Starter</strong> &mdash; up to 10 client workspaces, $149/mo</div>
+          <div class="tier-option"><strong>Growth / Scale</strong> &mdash; request access for 25+ client workspaces, custom onboarding, or assisted rollout.</div>
+        </div>
 
         <label for="email">Work Email</label>
         <input id="email" name="email" type="email" value="{{.Email}}" autocomplete="email" required>
@@ -170,14 +160,14 @@ var publicMSPSignupPageTemplate = template.Must(template.New("public-msp-signup-
         <button class="cta" type="submit">Continue To Secure Checkout</button>
       </form>
 
-      <p class="fine">After checkout, we will email a Pulse Account sign-in link so you can open your MSP portal.</p>
+      <p class="fine">After checkout, we will email a Pulse Account sign-in link so you can open your MSP portal. For Growth or Scale, email support@pulserelay.pro and include your expected client workspace count.</p>
       <ol>
-        <li>Stripe securely starts your MSP subscription.</li>
-        <li>Pulse Cloud provisions your MSP operator account after checkout completes.</li>
+        <li>Stripe securely starts your MSP Starter subscription.</li>
+        <li>Pulse provisions your MSP operator account after checkout completes.</li>
         <li>The email link opens Pulse Account, where you add client workspaces and continue setup.</li>
       </ol>
       {{else}}
-      <div class="note">Pulse Cloud for MSPs is not open for self-serve signup yet. Email support@pulserelay.pro and we will get you set up.</div>
+      <div class="note">Pulse MSP Starter self-serve signup is not open yet. Email support@pulserelay.pro and we will get you set up.</div>
       {{end}}
     </div>
   </div>
@@ -190,7 +180,7 @@ var publicMSPSignupCompleteTemplate = template.Must(template.New("public-msp-sig
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pulse Cloud for MSPs Checkout Complete</title>
+  <title>Pulse MSP Starter Checkout Complete</title>
   <style nonce="{{.Nonce}}">
     :root { color-scheme: light; }
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f8fafc; color: #0f172a; }
@@ -204,7 +194,7 @@ var publicMSPSignupCompleteTemplate = template.Must(template.New("public-msp-sig
   <div class="wrap">
     <div class="card">
       <h1>Checkout complete</h1>
-      <p>Your Pulse Cloud for MSPs checkout completed. Pulse Cloud is provisioning your MSP operator account.</p>
+      <p>Your Pulse MSP Starter checkout completed. Pulse is provisioning your MSP operator account.</p>
       <p>Watch your inbox for a Pulse Account sign-in link. That link lands in Pulse Account, where you can open the MSP portal, add client workspaces, and continue setup.</p>
     </div>
   </div>
@@ -213,42 +203,24 @@ var publicMSPSignupCompleteTemplate = template.Must(template.New("public-msp-sig
 `))
 
 type publicMSPSignupPageData struct {
-	Email          string
-	OrgName        string
-	Tier           string // selected tier slug ("starter", "growth", "scale")
-	FormAction     string
-	ErrorMessage   string
-	Cancelled      bool
-	Nonce          string
-	Available      bool // true if at least one MSP tier price is configured
-	ShowTierChoice bool // true if more than one MSP tier is configured
-	HasStarter     bool
-	HasGrowth      bool
-	HasScale       bool
+	Email        string
+	OrgName      string
+	Tier         string // selected tier slug ("starter", "growth", "scale")
+	FormAction   string
+	ErrorMessage string
+	Cancelled    bool
+	Nonce        string
+	Available    bool // true if MSP Starter self-serve checkout is configured
 }
 
-// newMSPSignupPageData seeds page data from the currently configured MSP tiers
-// so every render (initial and error) reflects the same availability state.
+// newMSPSignupPageData seeds page data from the current public MSP buying
+// motion: Starter is self-serve; larger plans are assisted.
 func (h *PublicCloudSignupHandlers) newMSPSignupPageData() publicMSPSignupPageData {
-	hasStarter := h.hasMSPTier(mspTierStarter)
-	hasGrowth := h.hasMSPTier(mspTierGrowth)
-	hasScale := h.hasMSPTier(mspTierScale)
-	count := 0
-	for _, present := range []bool{hasStarter, hasGrowth, hasScale} {
-		if present {
-			count++
-		}
-	}
+	_, starterConfigured := h.selfServeMSPPriceIDForTier(mspTierStarter)
 	data := publicMSPSignupPageData{
-		FormAction:     canonicalPublicMSPSignupPath,
-		HasStarter:     hasStarter,
-		HasGrowth:      hasGrowth,
-		HasScale:       hasScale,
-		Available:      count > 0,
-		ShowTierChoice: count > 1,
-	}
-	if def, ok := h.defaultMSPTier(); ok {
-		data.Tier = string(def)
+		FormAction: canonicalPublicMSPSignupPath,
+		Available:  starterConfigured,
+		Tier:       string(mspTierStarter),
 	}
 	return data
 }
@@ -269,9 +241,6 @@ func (h *PublicCloudSignupHandlers) HandleMSPSignupPage(w http.ResponseWriter, r
 		data.Email = strings.TrimSpace(r.URL.Query().Get("email"))
 		data.OrgName = strings.TrimSpace(r.URL.Query().Get("org_name"))
 		data.Cancelled = strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("cancelled")), "1")
-		if tier, ok := parseMSPTier(strings.TrimSpace(r.URL.Query().Get("tier"))); ok && h.hasMSPTier(tier) {
-			data.Tier = string(tier)
-		}
 		h.renderMSPSignupPage(w, r, http.StatusOK, data)
 	case http.MethodPost:
 		if err := r.ParseForm(); err != nil {
@@ -286,9 +255,6 @@ func (h *PublicCloudSignupHandlers) HandleMSPSignupPage(w http.ResponseWriter, r
 			data := h.newMSPSignupPageData()
 			data.Email = email
 			data.OrgName = orgName
-			if t, ok := parseMSPTier(tierStr); ok && h.hasMSPTier(t) {
-				data.Tier = string(t)
-			}
 			data.ErrorMessage = msg
 			h.renderMSPSignupPage(w, r, status, data)
 		}
@@ -306,8 +272,12 @@ func (h *PublicCloudSignupHandlers) HandleMSPSignupPage(w http.ResponseWriter, r
 			renderErr(http.StatusBadRequest, "Company name must be 3-64 characters and cannot contain slashes.")
 			return
 		}
-		if _, avail := h.priceIDForMSPTier(tier); !avail {
-			renderErr(http.StatusBadRequest, "The selected plan tier is not currently available.")
+		if !isSelfServeMSPTier(tier) {
+			renderErr(http.StatusBadRequest, "MSP Growth and Scale are request-based. Email support@pulserelay.pro with your client workspace count.")
+			return
+		}
+		if _, avail := h.selfServeMSPPriceIDForTier(tier); !avail {
+			renderErr(http.StatusBadRequest, "MSP Starter self-serve checkout is not currently available.")
 			return
 		}
 
@@ -340,13 +310,13 @@ func (h *PublicCloudSignupHandlers) HandleMSPPublicSignup(w http.ResponseWriter,
 	h.servePublicSignupCheckout(w, r,
 		"Invalid plan tier. Must be one of: starter, growth, scale",
 		"public msp signup API checkout creation failed",
-		"Checkout session created. Continue in Stripe to start your Pulse Cloud for MSPs subscription and provision your operator account.",
+		"Checkout session created. Continue in Stripe to start your Pulse MSP Starter subscription and provision your operator account.",
 		func(tierRaw string) (bool, bool, func(email, orgName string) (string, error)) {
 			tier, ok := parseMSPTier(tierRaw)
 			if !ok {
 				return false, false, nil
 			}
-			_, available := h.priceIDForMSPTier(tier)
+			_, available := h.selfServeMSPPriceIDForTier(tier)
 			return true, available, func(email, orgName string) (string, error) {
 				return h.createMSPCheckout(email, orgName, tier)
 			}
@@ -358,9 +328,9 @@ func (h *PublicCloudSignupHandlers) createMSPCheckout(email, orgName string, tie
 	if h.cfg == nil {
 		return "", fmt.Errorf("control plane config is missing")
 	}
-	priceID, ok := h.priceIDForMSPTier(tier)
+	priceID, ok := h.selfServeMSPPriceIDForTier(tier)
 	if !ok || priceID == "" {
-		return "", fmt.Errorf("price id not configured for msp tier %q", tier)
+		return "", fmt.Errorf("self-serve checkout is not configured for msp tier %q", tier)
 	}
 	if err := validatePublicMSPSignupPriceID(tier, priceID); err != nil {
 		return "", err
