@@ -31,7 +31,7 @@ const headerTexts = () =>
 afterEach(cleanup);
 
 describe('ProxmoxCoverageTable column visibility', () => {
-  it('renders only the source columns whose show flag is true', () => {
+  it('renders only action columns and keeps identity context in the workload cell', () => {
     render(() => (
       <ProxmoxCoverageTable
         rows={[row]}
@@ -52,15 +52,18 @@ describe('ProxmoxCoverageTable column visibility', () => {
     ));
 
     const headers = headerTexts();
-    // Always-on columns.
     expect(headers).toContain('Workload');
-    expect(headers).toContain('Type');
-    expect(headers).toContain('Target ID');
-    expect(headers).toContain('Node');
-    // Source columns gate on their flags.
-    expect(headers).toContain('Latest PBS');
-    expect(headers).toContain('Latest snapshot');
-    expect(headers).not.toContain('Latest PVE file');
-    expect(headers).not.toContain('Latest task');
+    expect(headers).toContain('Posture');
+    expect(headers).toContain('Restore');
+    expect(headers).not.toContain('Type');
+    expect(headers).not.toContain('Target ID');
+    expect(headers).not.toContain('Node');
+    expect(headers).toContain('PBS snapshot');
+    expect(headers).toContain('Guest snapshot');
+    expect(headers).not.toContain('PVE file');
+    expect(headers).not.toContain('Task');
+    expect(document.body.textContent).toContain('VM');
+    expect(document.body.textContent).toContain('ID 100');
+    expect(document.body.textContent).toContain('Node pve1');
   });
 });

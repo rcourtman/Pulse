@@ -4,14 +4,7 @@ import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { StatusDot } from '@/components/shared/StatusDot';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/shared/Table';
+import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/shared/Table';
 import { TableCard } from '@/components/shared/TableCard';
 import { formatBytes } from '@/utils/format';
 import {
@@ -92,16 +85,13 @@ export function ProxmoxCoverageTable(props: {
   // Weighted column set; the conditional source/task columns drop out when
   // empty fleet-wide, and table-fixed re-normalizes the rest.
   const visibleColumns = () => [
-    { id: 'workload', weight: 17 },
-    { id: 'type', weight: 7 },
-    { id: 'id', weight: 9 },
-    { id: 'node', weight: 11 },
-    { id: 'posture', weight: 11 },
-    { id: 'latest', weight: 13 },
-    ...(props.showPbsColumn ? [{ id: 'pbs', weight: 11 }] : []),
-    ...(props.showArchiveColumn ? [{ id: 'archive', weight: 11 }] : []),
-    ...(props.showSnapshotColumn ? [{ id: 'snapshot', weight: 11 }] : []),
-    ...(props.showTaskColumn ? [{ id: 'task', weight: 11 }] : []),
+    { id: 'workload', weight: 25 },
+    { id: 'posture', weight: 12 },
+    { id: 'latest', weight: 12 },
+    ...(props.showPbsColumn ? [{ id: 'pbs', weight: 14 }] : []),
+    ...(props.showArchiveColumn ? [{ id: 'archive', weight: 12 }] : []),
+    ...(props.showSnapshotColumn ? [{ id: 'snapshot', weight: 15 }] : []),
+    ...(props.showTaskColumn ? [{ id: 'task', weight: 10 }] : []),
   ];
   const totalColumnWeight = () => visibleColumns().reduce((sum, c) => sum + c.weight, 0);
   const columnCount = () => visibleColumns().length;
@@ -131,7 +121,7 @@ export function ProxmoxCoverageTable(props: {
       }
     >
       <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-        <Table class="min-w-[1200px] table-fixed text-xs">
+        <Table class="min-w-[1000px] table-fixed text-xs">
           <colgroup>
             <For each={visibleColumns()}>
               {(column) => (
@@ -150,11 +140,6 @@ export function ProxmoxCoverageTable(props: {
                 align="left"
                 headClass={getPlatformTableHeadClassForKind('name')}
               />
-              <TableHead class={getPlatformTableHeadClassForKind('text')}>Type</TableHead>
-              <TableHead class={getPlatformTableHeadClassForKind('text')}>
-                {PROXMOX_BACKUP_COLUMN_LABELS.targetId}
-              </TableHead>
-              <TableHead class={getPlatformTableHeadClassForKind('text')}>Node</TableHead>
               <SortableHead
                 label="Posture"
                 sortKey="posture"
@@ -165,7 +150,7 @@ export function ProxmoxCoverageTable(props: {
                 headClass={getPlatformTableHeadClassForKind('text')}
               />
               <SortableHead
-                label="Latest restore"
+                label="Restore"
                 sortKey="latest"
                 currentSort={props.sortKey}
                 direction={props.sortDirection}
@@ -175,7 +160,7 @@ export function ProxmoxCoverageTable(props: {
               />
               <Show when={props.showPbsColumn}>
                 <SortableHead
-                  label={pbsSource.coverageColumnLabel}
+                  label="PBS snapshot"
                   sortKey="pbs"
                   currentSort={props.sortKey}
                   direction={props.sortDirection}
@@ -186,7 +171,7 @@ export function ProxmoxCoverageTable(props: {
               </Show>
               <Show when={props.showArchiveColumn}>
                 <SortableHead
-                  label={archiveSource.coverageColumnLabel}
+                  label="PVE file"
                   sortKey="archive"
                   currentSort={props.sortKey}
                   direction={props.sortDirection}
@@ -197,7 +182,7 @@ export function ProxmoxCoverageTable(props: {
               </Show>
               <Show when={props.showSnapshotColumn}>
                 <SortableHead
-                  label={snapshotSource.coverageColumnLabel}
+                  label="Guest snapshot"
                   sortKey="snapshot"
                   currentSort={props.sortKey}
                   direction={props.sortDirection}
@@ -208,7 +193,7 @@ export function ProxmoxCoverageTable(props: {
               </Show>
               <Show when={props.showTaskColumn}>
                 <SortableHead
-                  label="Latest task"
+                  label="Task"
                   sortKey="task"
                   currentSort={props.sortKey}
                   direction={props.sortDirection}
@@ -233,7 +218,7 @@ export function ProxmoxCoverageTable(props: {
                       <TableCell
                         class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
                       >
-                        <div class="flex min-w-0 items-center gap-2">
+                        <div class="flex min-w-0 items-start gap-2">
                           <button
                             type="button"
                             class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
@@ -248,28 +233,28 @@ export function ProxmoxCoverageTable(props: {
                               aria-hidden="true"
                             />
                           </button>
-                          <span class="truncate font-semibold">
-                            {row.workload.name || row.workload.label}
-                          </span>
+                          <div class="min-w-0">
+                            <span class="block truncate font-semibold">
+                              {row.workload.name || row.workload.label}
+                            </span>
+                            <div class="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[10px] leading-4 text-muted">
+                              <ProxmoxBackupWorkloadTypeBadge
+                                type={row.workload.type}
+                                label={row.workload.typeLabel}
+                              />
+                              <span class="font-mono tabular-nums">
+                                ID {row.workload.vmid || '—'}
+                              </span>
+                              <Show when={row.workload.node}>
+                                {(node) => (
+                                  <span class="truncate font-mono" title={node()}>
+                                    Node {node()}
+                                  </span>
+                                )}
+                              </Show>
+                            </div>
+                          </div>
                         </div>
-                      </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                      >
-                        <ProxmoxBackupWorkloadTypeBadge
-                          type={row.workload.type}
-                          label={row.workload.typeLabel}
-                        />
-                      </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} text-muted font-mono text-[11px] tabular-nums`}
-                      >
-                        {row.workload.vmid || '—'}
-                      </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} text-base-content truncate font-mono text-[11px]`}
-                      >
-                        {row.workload.node || '—'}
                       </TableCell>
                       <TableCell class={getPlatformTableCellClassForKind('text')}>
                         <div class="flex items-center gap-2">
