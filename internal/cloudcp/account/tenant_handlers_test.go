@@ -19,6 +19,7 @@ import (
 	cpstripe "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/stripe"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 func newTestTenantMux(t *testing.T, reg *registry.TenantRegistry, tenantsDir string) (*http.ServeMux, *cpstripe.Provisioner) {
@@ -372,23 +373,26 @@ func TestCreateWorkspace_MSPStarterLimitEnforced(t *testing.T) {
 	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP, DisplayName: "MSP Starter"}); err != nil {
 		t.Fatal(err)
 	}
-	createTestStripeAccount(t, reg, accountID, "msp_starter") // limit = 10
+	createTestStripeAccount(t, reg, accountID, "msp_starter")
+	workspaceLimit, known := pkglicensing.WorkspaceLimitForPlan("msp_starter")
+	if !known {
+		t.Fatal("msp_starter workspace limit is not registered")
+	}
 
-	// Create 10 workspaces (the limit for msp_starter).
-	for i := 0; i < 10; i++ {
+	for i := 0; i < workspaceLimit; i++ {
 		if _, err := provisioner.ProvisionWorkspace(context.Background(), accountID, fmt.Sprintf("Client %d", i+1)); err != nil {
 			t.Fatalf("provision workspace %d: %v", i+1, err)
 		}
 	}
 
-	if _, err := provisioner.ProvisionWorkspace(context.Background(), accountID, "Client 11 direct"); err == nil {
+	if _, err := provisioner.ProvisionWorkspace(context.Background(), accountID, fmt.Sprintf("Client %d direct", workspaceLimit+1)); err == nil {
 		t.Fatal("expected registry-backed workspace limit to block direct provisioning")
 	} else if _, ok := registry.WorkspaceLimitExceeded(err); !ok {
 		t.Fatalf("direct provision error = %v, want workspace limit", err)
 	}
 
 	// The handler should also return the product-level limit response.
-	body := `{"display_name":"Client 11"}`
+	body := fmt.Sprintf(`{"display_name":"Client %d"}`, workspaceLimit+1)
 	req := httptest.NewRequest(http.MethodPost, "/api/accounts/"+accountID+"/tenants", bytes.NewBufferString(body))
 	rec := doRequest(t, mux, req)
 
