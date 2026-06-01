@@ -8,6 +8,10 @@ import { TableHead } from '@/components/shared/Table';
 import { WorkloadTypeBadge as SharedWorkloadTypeBadge } from '@/components/shared/WorkloadTypeBadge';
 
 import type { RecoverableArtifact, WorkloadReference } from './proxmoxBackupRecoveryModel';
+import {
+  getProxmoxBackupSourcePresentation,
+  type ProxmoxBackupSourceKind,
+} from './proxmoxBackupSourcePresentation';
 import type {
   CoverageFilterValue,
   RecoverableFilterValue,
@@ -56,11 +60,26 @@ export const COVERAGE_FILTERS: FilterOption<CoverageFilterValue>[] = [
   { value: 'uncovered', label: 'Uncovered', tone: 'danger', leading: statusDot('bg-red-500') },
 ];
 
+const recoverableSourceFilterOption = (
+  value: ProxmoxBackupSourceKind,
+): FilterOption<RecoverableFilterValue> => {
+  const presentation = getProxmoxBackupSourcePresentation(value);
+  return {
+    value,
+    label: presentation.filterLabel,
+    ariaLabel: presentation.filterAriaLabel,
+    compactLabel: presentation.compactFilterLabel,
+    title: presentation.filterTitle,
+    tone: 'info',
+    leading: statusDot(presentation.timelineSwatchClassName),
+  };
+};
+
 export const RECOVERABLE_FILTERS: FilterOption<RecoverableFilterValue>[] = [
   { value: 'all', label: 'All' },
-  { value: 'pbs', label: 'PBS', tone: 'info', leading: statusDot('bg-cyan-500') },
-  { value: 'archive', label: 'Archives', tone: 'info', leading: statusDot('bg-blue-500') },
-  { value: 'snapshot', label: 'Snapshots', tone: 'info', leading: statusDot('bg-violet-500') },
+  recoverableSourceFilterOption('pbs'),
+  recoverableSourceFilterOption('archive'),
+  recoverableSourceFilterOption('snapshot'),
   { value: 'verified', label: 'Verified', tone: 'success', leading: statusDot('bg-emerald-500') },
   { value: 'unverified', label: 'Unverified', tone: 'warning', leading: statusDot('bg-amber-500') },
 ];
@@ -121,11 +140,13 @@ export function RowMetricBar(props: {
 // Short state label for a recoverable artifact, paired with ArtifactStateBadge
 // for colour. Snapshot and protected take precedence over verification state.
 export function artifactStateLabel(artifact: RecoverableArtifact): string {
-  if (artifact.sourceKind === 'snapshot') return 'Snapshot';
+  if (artifact.sourceKind === 'snapshot') {
+    return getProxmoxBackupSourcePresentation('snapshot').stateFallbackLabel;
+  }
   if (artifact.protected) return 'Protected';
   if (artifact.verified === true) return 'Verified';
   if (artifact.verified === false) return 'Unverified';
-  return 'Archive';
+  return getProxmoxBackupSourcePresentation(artifact.sourceKind).stateFallbackLabel;
 }
 
 export function ArtifactStateBadge(props: { artifact: RecoverableArtifact; label: string }) {
@@ -161,15 +182,13 @@ export function ArtifactStateBadge(props: { artifact: RecoverableArtifact; label
 }
 
 export function ArtifactSourceBadge(props: { artifact: RecoverableArtifact }) {
+  const presentation = () => getProxmoxBackupSourcePresentation(props.artifact.sourceKind);
+  const title = () => props.artifact.sourceTitle ?? presentation().sourceTitle;
+
   return (
     <span
-      class={`inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-semibold ${
-        props.artifact.sourceKind === 'pbs'
-          ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-200'
-          : props.artifact.sourceKind === 'archive'
-            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200'
-            : 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200'
-      }`}
+      class={`inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-semibold ${presentation().badgeClassName}`}
+      title={title()}
     >
       {props.artifact.sourceLabel}
     </span>

@@ -103,7 +103,13 @@ describe('proxmoxBackupRecoveryModel', () => {
     expect(row.snapshotCount).toBe(1);
     expect(row.latestTask?.label).toBe('OK');
     expect(getWorkloadRecoveryPostureLabel(row.posture)).toBe('Current');
+    expect(model.recoverableArtifacts.map((artifact) => artifact.sourceLabel)).toEqual([
+      'PBS',
+      'PVE file',
+      'Snapshot',
+    ]);
     expect(coverageRowMatchesSearch(row, 'pbs-docker')).toBe(true);
+    expect(coverageRowMatchesSearch(row, 'PVE backup file')).toBe(true);
     expect(recoverableArtifactMatchesSearch(model.recoverableArtifacts[0], 'main')).toBe(true);
   });
 

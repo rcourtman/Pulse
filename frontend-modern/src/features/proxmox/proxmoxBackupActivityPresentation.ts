@@ -6,6 +6,8 @@ import {
 import { getRecoveryTimelineLabelEvery } from '@/utils/recoveryTimelineChartPresentation';
 import { getRecoveryTimelineDayFilterStateLabel } from '@/utils/recoveryTimelinePresentation';
 
+import { getProxmoxBackupSourcePresentation } from './proxmoxBackupSourcePresentation';
+
 export type BackupActivityRangeDays = 7 | 30 | 90 | 365;
 
 export const BACKUP_ACTIVITY_RANGE_DAYS = [
@@ -31,14 +33,14 @@ interface BackupActivitySegmentPresentation {
 
 const SEGMENT_PRESENTATION: Record<BackupActivitySegmentKind, BackupActivitySegmentPresentation> = {
   archive: {
-    label: 'Archives',
-    segmentClassName: 'bg-blue-500',
-    swatchClassName: 'bg-blue-500',
+    label: getProxmoxBackupSourcePresentation('archive').timelineLabel,
+    segmentClassName: getProxmoxBackupSourcePresentation('archive').timelineSegmentClassName,
+    swatchClassName: getProxmoxBackupSourcePresentation('archive').timelineSwatchClassName,
   },
   pbs: {
-    label: 'PBS artifacts',
-    segmentClassName: 'bg-cyan-500',
-    swatchClassName: 'bg-cyan-500',
+    label: getProxmoxBackupSourcePresentation('pbs').timelineLabel,
+    segmentClassName: getProxmoxBackupSourcePresentation('pbs').timelineSegmentClassName,
+    swatchClassName: getProxmoxBackupSourcePresentation('pbs').timelineSwatchClassName,
   },
   ok: {
     label: 'OK',
@@ -56,9 +58,9 @@ const SEGMENT_PRESENTATION: Record<BackupActivitySegmentKind, BackupActivitySegm
     swatchClassName: 'bg-amber-500',
   },
   snapshot: {
-    label: 'Snapshots',
-    segmentClassName: 'bg-violet-500',
-    swatchClassName: 'bg-violet-500',
+    label: getProxmoxBackupSourcePresentation('snapshot').timelineLabel,
+    segmentClassName: getProxmoxBackupSourcePresentation('snapshot').timelineSegmentClassName,
+    swatchClassName: getProxmoxBackupSourcePresentation('snapshot').timelineSwatchClassName,
   },
 };
 
@@ -149,7 +151,7 @@ export interface BackupActivityTooltipRow {
   muted: boolean;
 }
 
-export type BackupActivityNoun = 'archive' | 'artifact' | 'task' | 'snapshot';
+export type BackupActivityNoun = 'archive' | 'artifact' | 'backup' | 'task' | 'snapshot';
 
 function formatActivityValue(value: number, mode: BackupActivityMetricMode): string {
   if (mode === 'volume') return formatBytes(Math.max(0, value));

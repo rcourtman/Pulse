@@ -145,6 +145,10 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.getByRole('columnheader', { name: /type/i })).toBeInTheDocument();
     expect(screen.getAllByText('LXC').length).toBeGreaterThan(0);
     expect(screen.getAllByText('PBS').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: /pbs snapshots/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /pve backup files/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /guest snapshots/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Archives' })).not.toBeInTheDocument();
     expect(screen.getByText('main / minipc')).toBeInTheDocument();
     expect(
       screen.getByRole('cell', {
@@ -193,7 +197,7 @@ describe('ProxmoxBackupsTable', () => {
       screen.getByRole('button', { name: /show restore evidence for pbs-docker/i }),
     );
     expect(screen.getByText('Restore evidence')).toBeInTheDocument();
-    expect(screen.getAllByText('PVE archive').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('PVE file').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Snapshot').length).toBeGreaterThan(0);
   });
 

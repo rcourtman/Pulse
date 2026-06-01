@@ -1,7 +1,13 @@
 import type { BackupTask, GuestSnapshot, PBSBackup, StorageBackup } from '@/types/api';
 import type { Resource } from '@/types/resource';
 
-export type RecoverableSourceKind = 'pbs' | 'archive' | 'snapshot';
+import {
+  getProxmoxArchiveSourceTitle,
+  getProxmoxBackupSourcePresentation,
+  type ProxmoxBackupSourceKind,
+} from './proxmoxBackupSourcePresentation';
+
+export type RecoverableSourceKind = ProxmoxBackupSourceKind;
 
 export type WorkloadRecoveryPosture =
   | 'current'
@@ -28,6 +34,7 @@ export interface RecoverableArtifact {
   nativeId: string;
   sourceKind: RecoverableSourceKind;
   sourceLabel: string;
+  sourceTitle?: string;
   workload: WorkloadReference;
   createdAt: string;
   createdMs?: number;
@@ -425,6 +432,9 @@ export function buildProxmoxBackupRecoveryModel(
   for (const candidate of candidates) ensureRow(candidate);
 
   const artifacts: RecoverableArtifact[] = [];
+  const pbsSource = getProxmoxBackupSourcePresentation('pbs');
+  const archiveSource = getProxmoxBackupSourcePresentation('archive');
+  const snapshotSource = getProxmoxBackupSourcePresentation('snapshot');
   const addArtifact = (artifact: RecoverableArtifact) => {
     artifacts.push(artifact);
     if (!isCoverageWorkload(artifact.workload)) return;
@@ -446,7 +456,8 @@ export function buildProxmoxBackupRecoveryModel(
       id: `pbs:${backup.id}`,
       nativeId: backup.id,
       sourceKind: 'pbs',
-      sourceLabel: 'PBS',
+      sourceLabel: pbsSource.badgeLabel,
+      sourceTitle: pbsSource.sourceTitle,
       workload,
       createdAt: backup.backupTime,
       createdMs,
@@ -470,13 +481,14 @@ export function buildProxmoxBackupRecoveryModel(
       id: `archive:${archive.id}`,
       nativeId: archive.id,
       sourceKind: 'archive',
-      sourceLabel: archive.isPBS ? 'PVE PBS archive' : 'PVE archive',
+      sourceLabel: archiveSource.badgeLabel,
+      sourceTitle: getProxmoxArchiveSourceTitle(Boolean(archive.isPBS)),
       workload,
       createdAt: archive.time,
       createdMs,
       size: archive.size,
       location: archive.storage || archive.node || '—',
-      detail: archive.volid || archive.format || 'Backup archive',
+      detail: archive.volid || archive.format || archiveSource.detailFallbackLabel,
       protected: archive.protected,
       verified: archive.isPBS ? archive.verified : undefined,
     });
@@ -493,13 +505,14 @@ export function buildProxmoxBackupRecoveryModel(
       id: `snapshot:${snapshot.id}`,
       nativeId: snapshot.id,
       sourceKind: 'snapshot',
-      sourceLabel: 'Snapshot',
+      sourceLabel: snapshotSource.badgeLabel,
+      sourceTitle: snapshotSource.sourceTitle,
       workload,
       createdAt: snapshot.time,
       createdMs,
       size: snapshot.sizeBytes,
       location: snapshot.node || snapshot.instance || '—',
-      detail: snapshot.description || snapshot.name || 'Guest snapshot',
+      detail: snapshot.description || snapshot.name || snapshotSource.detailFallbackLabel,
       protected: false,
     });
   }
@@ -573,7 +586,8 @@ export function buildProxmoxBackupRecoveryModel(
 }
 
 export function coverageRowMatchesSearch(row: WorkloadCoverageRow, term: string): boolean {
-  if (!term) return true;
+  const normalizedTerm = term.trim().toLowerCase();
+  if (!normalizedTerm) return true;
   const haystack = [
     row.workload.label,
     row.workload.name,
@@ -586,18 +600,20 @@ export function coverageRowMatchesSearch(row: WorkloadCoverageRow, term: string)
     row.latestTask?.error,
     ...row.artifacts.flatMap((artifact) => [
       artifact.sourceLabel,
+      artifact.sourceTitle,
       artifact.location,
       artifact.detail,
     ]),
   ];
-  return haystack.filter(Boolean).join(' ').toLowerCase().includes(term);
+  return haystack.filter(Boolean).join(' ').toLowerCase().includes(normalizedTerm);
 }
 
 export function recoverableArtifactMatchesSearch(
   artifact: RecoverableArtifact,
   term: string,
 ): boolean {
-  if (!term) return true;
+  const normalizedTerm = term.trim().toLowerCase();
+  if (!normalizedTerm) return true;
   const haystack = [
     artifact.workload.label,
     artifact.workload.name,
@@ -606,6 +622,7 @@ export function recoverableArtifactMatchesSearch(
     artifact.workload.node,
     artifact.workload.instance,
     artifact.sourceLabel,
+    artifact.sourceTitle,
     artifact.location,
     artifact.detail,
     artifact.verified === true
@@ -615,5 +632,5 @@ export function recoverableArtifactMatchesSearch(
         : undefined,
     artifact.protected ? 'protected' : 'unprotected',
   ];
-  return haystack.filter(Boolean).join(' ').toLowerCase().includes(term);
+  return haystack.filter(Boolean).join(' ').toLowerCase().includes(normalizedTerm);
 }

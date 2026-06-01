@@ -52,6 +52,7 @@ import {
   RECOVERABLE_FILTERS,
   artifactStateLabel,
 } from './proxmoxBackupsTableShared';
+import { getProxmoxBackupSourcePresentation } from './proxmoxBackupSourcePresentation';
 import { ProxmoxBackupsCoverageStrip } from './ProxmoxBackupsCoverageStrip';
 import { ProxmoxBackupServersTable } from './ProxmoxBackupServersTable';
 import { ProxmoxCoverageTable } from './ProxmoxCoverageTable';
@@ -200,7 +201,7 @@ export const ProxmoxBackupsTable: Component<{
   );
 
   // Node options for the scope filter: the distinct nodes across the workload
-  // set, "All nodes" first. PBS artifacts carry no node, so this scopes the
+  // set, "All nodes" first. PBS snapshots carry no node, so this scopes the
   // node-bearing rows only.
   const nodeOptions = createMemo<FilterSelectOption[]>(() => {
     const nodes = new Set<string>();
@@ -297,7 +298,7 @@ export const ProxmoxBackupsTable: Component<{
     };
   });
 
-  // Recoverable artifact feed: PBS, PVE archive, and guest snapshot rows.
+  // Recoverable artifact feed: PBS snapshots, PVE backup files, and guest snapshot rows.
   const RECOVERABLE_SEGMENT_KINDS: readonly BackupActivitySegmentKind[] = [
     'pbs',
     'archive',
@@ -462,7 +463,7 @@ export const ProxmoxBackupsTable: Component<{
             <EmptyState
               icon={props.emptyIcon}
               title="Loading Proxmox backup inventory"
-              description="Reading PBS artifacts, PVE snapshots, archives and recent backup tasks."
+              description="Reading PBS snapshots, PVE backup files, guest snapshots, and recent backup tasks."
             />
           </Card>
         }
@@ -499,11 +500,12 @@ export const ProxmoxBackupsTable: Component<{
               title="Backup health"
               tail={
                 <span>
-                  {liveTotalCount()} targets · {recoveryModel().coverageSummary.recoverableArtifacts}{' '}
-                  restore points
+                  {liveTotalCount()} targets ·{' '}
+                  {recoveryModel().coverageSummary.recoverableArtifacts} restore points
                   <Show when={recoveryModel().coverageSummary.withPBS > 0}>
                     {' · '}
-                    {recoveryModel().coverageSummary.withPBS} with PBS
+                    {recoveryModel().coverageSummary.withPBS} with{' '}
+                    {getProxmoxBackupSourcePresentation('pbs').filterLabel}
                   </Show>
                   <Show when={orphanedTotalCount() > 0}>
                     {' · '}
@@ -566,7 +568,7 @@ export const ProxmoxBackupsTable: Component<{
               title={
                 recoverableMetricMode() === 'volume' ? 'Backup volume per day' : 'Backups per day'
               }
-              noun="artifact"
+              noun="backup"
               segmentKinds={RECOVERABLE_SEGMENT_KINDS}
               range={chartRange}
               onRangeChange={setChartRange}

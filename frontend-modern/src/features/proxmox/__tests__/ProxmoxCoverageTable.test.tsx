@@ -59,8 +59,8 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(headers).toContain('Node');
     // Source columns gate on their flags.
     expect(headers).toContain('PBS');
-    expect(headers).toContain('Snapshot');
-    expect(headers).not.toContain('Archive');
+    expect(headers).toContain('Snapshots');
+    expect(headers).not.toContain('PVE files');
     expect(headers).not.toContain('Latest task');
   });
 });

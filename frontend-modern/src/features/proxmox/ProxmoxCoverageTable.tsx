@@ -28,6 +28,7 @@ import {
   type WorkloadCoverageRow,
 } from './proxmoxBackupRecoveryModel';
 import type { CoverageSortKey } from './proxmoxBackupsTableModel';
+import { getProxmoxBackupSourcePresentation } from './proxmoxBackupSourcePresentation';
 import {
   ArtifactSourceBadge,
   ArtifactStateBadge,
@@ -62,10 +63,11 @@ const taskWordVariant = (label: string): StatusIndicatorVariant => {
 };
 
 // "Workload coverage" table: one row per workload answering "does this have a
-// backup?" across PBS / archive / snapshot, each expanding to its restore
-// evidence. Presentational — the parent owns the filtered+sorted memo, shared
-// filters, and the expansion set. table-fixed + a colgroup keeps the columns
-// from ballooning; the inner evidence table stays content-sized.
+// backup?" across PBS snapshots / PVE backup files / guest snapshots, each
+// expanding to its restore evidence. Presentational — the parent owns the
+// filtered+sorted memo, shared filters, and the expansion set. table-fixed + a
+// colgroup keeps the columns from ballooning; the inner evidence table stays
+// content-sized.
 export function ProxmoxCoverageTable(props: {
   rows: WorkloadCoverageRow[];
   hasAnyRows: boolean;
@@ -78,7 +80,7 @@ export function ProxmoxCoverageTable(props: {
   expandedKeys: ReadonlySet<string>;
   onToggleExpand: (key: string) => void;
   // Source columns auto-hide when no workload anywhere has that data (e.g. a
-  // PBS-only fleet drops the Archive and Snapshot columns), matching how the
+  // PBS-only fleet drops the PVE files and Snapshots columns), matching how the
   // source-detail tables already drop their conditional columns.
   showPbsColumn: boolean;
   showArchiveColumn: boolean;
@@ -101,6 +103,9 @@ export function ProxmoxCoverageTable(props: {
   ];
   const totalColumnWeight = () => visibleColumns().reduce((sum, c) => sum + c.weight, 0);
   const columnCount = () => visibleColumns().length;
+  const pbsSource = getProxmoxBackupSourcePresentation('pbs');
+  const archiveSource = getProxmoxBackupSourcePresentation('archive');
+  const snapshotSource = getProxmoxBackupSourcePresentation('snapshot');
 
   return (
     <Show
@@ -110,7 +115,9 @@ export function ProxmoxCoverageTable(props: {
           <EmptyState
             icon={props.emptyIcon}
             title={
-              !props.hasAnyRows ? props.emptyTitle : 'No workload coverage rows match current filters'
+              !props.hasAnyRows
+                ? props.emptyTitle
+                : 'No workload coverage rows match current filters'
             }
             description={
               !props.hasAnyRows
@@ -164,7 +171,7 @@ export function ProxmoxCoverageTable(props: {
               />
               <Show when={props.showPbsColumn}>
                 <SortableHead
-                  label="PBS"
+                  label={pbsSource.coverageColumnLabel}
                   sortKey="pbs"
                   currentSort={props.sortKey}
                   direction={props.sortDirection}
@@ -175,7 +182,7 @@ export function ProxmoxCoverageTable(props: {
               </Show>
               <Show when={props.showArchiveColumn}>
                 <SortableHead
-                  label="Archive"
+                  label={archiveSource.coverageColumnLabel}
                   sortKey="archive"
                   currentSort={props.sortKey}
                   direction={props.sortDirection}
@@ -186,7 +193,7 @@ export function ProxmoxCoverageTable(props: {
               </Show>
               <Show when={props.showSnapshotColumn}>
                 <SortableHead
-                  label="Snapshot"
+                  label={snapshotSource.coverageColumnLabel}
                   sortKey="snapshot"
                   currentSort={props.sortKey}
                   direction={props.sortDirection}
@@ -284,7 +291,9 @@ export function ProxmoxCoverageTable(props: {
                           when={row.latestRecovery}
                           fallback={<span class="text-muted">No restore point</span>}
                         >
-                          {(artifact) => formatRelativeTime(artifact().createdAt, { compact: true })}
+                          {(artifact) =>
+                            formatRelativeTime(artifact().createdAt, { compact: true })
+                          }
                         </Show>
                       </TableCell>
                       <Show when={props.showPbsColumn}>
@@ -293,7 +302,9 @@ export function ProxmoxCoverageTable(props: {
                         >
                           <Show
                             when={row.latestPBS}
-                            fallback={<span class="text-muted">No PBS</span>}
+                            fallback={
+                              <span class="text-muted">{pbsSource.coverageFallbackLabel}</span>
+                            }
                           >
                             {(artifact) =>
                               formatRelativeTime(artifact().createdAt, { compact: true })
@@ -307,7 +318,9 @@ export function ProxmoxCoverageTable(props: {
                         >
                           <Show
                             when={row.latestArchive}
-                            fallback={<span class="text-muted">No archive</span>}
+                            fallback={
+                              <span class="text-muted">{archiveSource.coverageFallbackLabel}</span>
+                            }
                           >
                             {(artifact) =>
                               formatRelativeTime(artifact().createdAt, { compact: true })
@@ -321,7 +334,9 @@ export function ProxmoxCoverageTable(props: {
                         >
                           <Show
                             when={row.latestSnapshot}
-                            fallback={<span class="text-muted">No snapshot</span>}
+                            fallback={
+                              <span class="text-muted">{snapshotSource.coverageFallbackLabel}</span>
+                            }
                           >
                             {(artifact) =>
                               formatRelativeTime(artifact().createdAt, { compact: true })
@@ -411,7 +426,9 @@ export function ProxmoxCoverageTable(props: {
                                           </span>
                                         </td>
                                         <td class="px-2 py-1 text-right text-base-content">
-                                          {formatRelativeTime(artifact.createdAt, { compact: true })}
+                                          {formatRelativeTime(artifact.createdAt, {
+                                            compact: true,
+                                          })}
                                         </td>
                                         <td class="px-2 py-1 text-right tabular-nums text-base-content">
                                           <Show
