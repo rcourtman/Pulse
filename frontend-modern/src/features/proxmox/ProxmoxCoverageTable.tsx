@@ -13,7 +13,7 @@ import {
   TableRow,
 } from '@/components/shared/Table';
 import { TableCard } from '@/components/shared/TableCard';
-import { formatBytes, formatRelativeTime } from '@/utils/format';
+import { formatBytes } from '@/utils/format';
 import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_CARD_CLASS,
@@ -33,6 +33,7 @@ import {
   ArtifactSourceBadge,
   ArtifactStateBadge,
   PROXMOX_BACKUP_COLUMN_LABELS,
+  ProxmoxBackupAgeText,
   ProxmoxBackupWorkloadTypeBadge,
   SortableHead,
   artifactStateLabel,
@@ -294,9 +295,7 @@ export function ProxmoxCoverageTable(props: {
                           when={row.latestRecovery}
                           fallback={<span class="text-muted">No restore point</span>}
                         >
-                          {(artifact) =>
-                            formatRelativeTime(artifact().createdAt, { compact: true })
-                          }
+                          {(artifact) => <ProxmoxBackupAgeText artifact={artifact()} />}
                         </Show>
                       </TableCell>
                       <Show when={props.showPbsColumn}>
@@ -309,9 +308,7 @@ export function ProxmoxCoverageTable(props: {
                               <span class="text-muted">{pbsSource.coverageFallbackLabel}</span>
                             }
                           >
-                            {(artifact) =>
-                              formatRelativeTime(artifact().createdAt, { compact: true })
-                            }
+                            {(artifact) => <ProxmoxBackupAgeText artifact={artifact()} />}
                           </Show>
                         </TableCell>
                       </Show>
@@ -325,9 +322,7 @@ export function ProxmoxCoverageTable(props: {
                               <span class="text-muted">{archiveSource.coverageFallbackLabel}</span>
                             }
                           >
-                            {(artifact) =>
-                              formatRelativeTime(artifact().createdAt, { compact: true })
-                            }
+                            {(artifact) => <ProxmoxBackupAgeText artifact={artifact()} />}
                           </Show>
                         </TableCell>
                       </Show>
@@ -341,9 +336,7 @@ export function ProxmoxCoverageTable(props: {
                               <span class="text-muted">{snapshotSource.coverageFallbackLabel}</span>
                             }
                           >
-                            {(artifact) =>
-                              formatRelativeTime(artifact().createdAt, { compact: true })
-                            }
+                            {(artifact) => <ProxmoxBackupAgeText artifact={artifact()} />}
                           </Show>
                         </TableCell>
                       </Show>
@@ -433,9 +426,7 @@ export function ProxmoxCoverageTable(props: {
                                           </span>
                                         </td>
                                         <td class="px-2 py-1 text-right text-base-content">
-                                          {formatRelativeTime(artifact.createdAt, {
-                                            compact: true,
-                                          })}
+                                          <ProxmoxBackupAgeText artifact={artifact} />
                                         </td>
                                         <td class="px-2 py-1 text-right tabular-nums text-base-content">
                                           <Show

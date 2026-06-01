@@ -107,8 +107,22 @@ interface WorkloadCandidate extends WorkloadReference {
 type WorkloadRowDraft = Omit<WorkloadCoverageRow, 'posture' | 'postureRank' | 'isOrphaned'>;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const CURRENT_RECOVERY_MS = 7 * DAY_MS;
-const STALE_RECOVERY_MS = 30 * DAY_MS;
+export const CURRENT_RECOVERY_MS = 7 * DAY_MS;
+export const STALE_RECOVERY_MS = 30 * DAY_MS;
+
+export type RecoveryAgeBand = 'current' | 'aging' | 'stale' | 'unknown';
+
+export function getRecoveryAgeBand(
+  createdMs: number | undefined,
+  nowMs: number = Date.now(),
+): RecoveryAgeBand {
+  if (createdMs === undefined || !Number.isFinite(createdMs)) return 'unknown';
+  const ageMs = nowMs - createdMs;
+  if (!Number.isFinite(ageMs)) return 'unknown';
+  if (ageMs <= CURRENT_RECOVERY_MS) return 'current';
+  if (ageMs <= STALE_RECOVERY_MS) return 'aging';
+  return 'stale';
+}
 
 function parseTimestampMs(value: string | undefined): number | undefined {
   if (!value) return undefined;
@@ -380,12 +394,9 @@ function buildPosture(row: WorkloadRowDraft, nowMs: number) {
   const hasExternalBackup = row.latestPBS !== undefined || row.latestArchive !== undefined;
   if (!hasExternalBackup && row.latestSnapshot)
     return { posture: 'snapshot-only' as const, rank: 3 };
-  const ageMs =
-    row.latestRecovery.createdMs === undefined
-      ? Number.POSITIVE_INFINITY
-      : nowMs - row.latestRecovery.createdMs;
-  if (ageMs <= CURRENT_RECOVERY_MS) return { posture: 'current' as const, rank: 5 };
-  if (ageMs <= STALE_RECOVERY_MS) return { posture: 'aging' as const, rank: 4 };
+  const ageBand = getRecoveryAgeBand(row.latestRecovery.createdMs, nowMs);
+  if (ageBand === 'current') return { posture: 'current' as const, rank: 5 };
+  if (ageBand === 'aging') return { posture: 'aging' as const, rank: 4 };
   return { posture: 'stale' as const, rank: 2 };
 }
 

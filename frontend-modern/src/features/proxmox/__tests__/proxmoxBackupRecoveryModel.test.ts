@@ -5,6 +5,7 @@ import type { Resource } from '@/types/resource';
 import {
   buildProxmoxBackupRecoveryModel,
   coverageRowMatchesSearch,
+  getRecoveryAgeBand,
   getWorkloadRecoveryPostureLabel,
   recoverableArtifactMatchesSearch,
 } from '../proxmoxBackupRecoveryModel';
@@ -83,6 +84,15 @@ const task = (overrides: Partial<BackupTask> = {}): BackupTask => ({
 });
 
 describe('proxmoxBackupRecoveryModel', () => {
+  it('classifies backup ages with the same thresholds used by coverage posture', () => {
+    const nowMs = Date.parse('2026-05-26T08:00:00Z');
+
+    expect(getRecoveryAgeBand(nowMs - 2 * 24 * 60 * 60 * 1000, nowMs)).toBe('current');
+    expect(getRecoveryAgeBand(nowMs - 14 * 24 * 60 * 60 * 1000, nowMs)).toBe('aging');
+    expect(getRecoveryAgeBand(nowMs - 45 * 24 * 60 * 60 * 1000, nowMs)).toBe('stale');
+    expect(getRecoveryAgeBand(undefined, nowMs)).toBe('unknown');
+  });
+
   it('groups PBS, archive, snapshot, and task evidence under the resolved workload', () => {
     const model = buildProxmoxBackupRecoveryModel({
       workloads: [workload({})],

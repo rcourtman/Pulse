@@ -6,8 +6,14 @@ import { type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { TableHead } from '@/components/shared/Table';
 import { WorkloadTypeBadge as SharedWorkloadTypeBadge } from '@/components/shared/WorkloadTypeBadge';
+import { formatRelativeTime } from '@/utils/format';
 
-import type { RecoverableArtifact, WorkloadReference } from './proxmoxBackupRecoveryModel';
+import {
+  getRecoveryAgeBand,
+  type RecoverableArtifact,
+  type RecoveryAgeBand,
+  type WorkloadReference,
+} from './proxmoxBackupRecoveryModel';
 import {
   getProxmoxBackupSourcePresentation,
   type ProxmoxBackupSourceKind,
@@ -31,6 +37,20 @@ export const PROXMOX_BACKUP_COLUMN_LABELS = {
   created: 'Created',
   details: 'Details',
 } as const;
+
+const recoveryAgeClassByBand: Record<RecoveryAgeBand, string> = {
+  current: 'text-emerald-600 dark:text-emerald-300',
+  aging: 'text-amber-600 dark:text-amber-300',
+  stale: 'text-red-600 dark:text-red-300',
+  unknown: 'text-muted',
+};
+
+const recoveryAgeTitleByBand: Record<RecoveryAgeBand, string> = {
+  current: 'Current backup age',
+  aging: 'Aging backup age',
+  stale: 'Stale backup age',
+  unknown: 'Backup age unavailable',
+};
 
 export const ARCHIVE_STATUS_FILTERS: FilterOption<
   'all' | 'protected' | 'verified' | 'unverified'
@@ -141,6 +161,21 @@ export function RowMetricBar(props: {
         }
       />
     </div>
+  );
+}
+
+export function ProxmoxBackupAgeText(props: { artifact: RecoverableArtifact }) {
+  const band = () => getRecoveryAgeBand(props.artifact.createdMs);
+  const relative = () => formatRelativeTime(props.artifact.createdAt, { compact: true });
+  const title = () => {
+    const parts = [recoveryAgeTitleByBand[band()], props.artifact.createdAt].filter(Boolean);
+    return parts.join(' · ');
+  };
+
+  return (
+    <span class={`font-semibold tabular-nums ${recoveryAgeClassByBand[band()]}`} title={title()}>
+      {relative() || '—'}
+    </span>
   );
 }
 

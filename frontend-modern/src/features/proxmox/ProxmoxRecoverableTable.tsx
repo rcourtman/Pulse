@@ -11,7 +11,7 @@ import {
   TableRow,
 } from '@/components/shared/Table';
 import { TableCard } from '@/components/shared/TableCard';
-import { formatBytes, formatRelativeTime } from '@/utils/format';
+import { formatBytes } from '@/utils/format';
 import {
   getRecoveryFullDateLabel,
   recoveryDateKeyFromTimestamp,
@@ -30,6 +30,7 @@ import {
   ArtifactSourceBadge,
   ArtifactStateBadge,
   PROXMOX_BACKUP_COLUMN_LABELS,
+  ProxmoxBackupAgeText,
   ProxmoxBackupWorkloadTypeBadge,
   RowMetricBar,
   SortableHead,
@@ -111,7 +112,7 @@ export function ProxmoxRecoverableTable(props: {
         </span>
       </TableCell>
       <TableCell class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}>
-        {formatRelativeTime(artifact.createdAt, { compact: true })}
+        <ProxmoxBackupAgeText artifact={artifact} />
       </TableCell>
       <TableCell class={`${getPlatformTableCellClassForKind('metric-bar')} text-base-content`}>
         <Show
