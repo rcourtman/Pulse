@@ -10,6 +10,7 @@ describe('upgradeNavigation', () => {
   it('classifies external upgrade hrefs without treating product routes as external', () => {
     expect(isExternalUpgradeHref('https://pulserelay.pro/pricing')).toBe(true);
     expect(isExternalUpgradeHref('http://127.0.0.1:3000/upgrade')).toBe(true);
+    expect(isExternalUpgradeHref('mailto:support@pulserelay.pro')).toBe(true);
     expect(isExternalUpgradeHref('/settings/system/billing')).toBe(false);
     expect(isExternalUpgradeHref('   /cloud  ')).toBe(false);
     expect(isExternalUpgradeHref('')).toBe(false);
@@ -26,6 +27,13 @@ describe('upgradeNavigation', () => {
     });
     expect(resolveUpgradeDestination(' https://pulserelay.pro/pricing ')).toEqual({
       href: 'https://pulserelay.pro/pricing',
+      external: true,
+      hardNavigation: true,
+      newTab: true,
+      preserveOpener: false,
+    });
+    expect(resolveUpgradeDestination(' mailto:support@pulserelay.pro ')).toEqual({
+      href: 'mailto:support@pulserelay.pro',
       external: true,
       hardNavigation: true,
       newTab: true,

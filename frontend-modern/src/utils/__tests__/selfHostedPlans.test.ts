@@ -75,8 +75,8 @@ describe('selfHostedPlans', () => {
       footerLinks: [
         {
           preface: 'Need managed hosting?',
-          label: 'Open Pulse Account',
-          href: 'https://cloud.pulserelay.pro/portal',
+          label: 'Request managed hosting',
+          href: 'mailto:support@pulserelay.pro?subject=Pulse%20Managed%20Hosting',
         },
         {
           preface: 'Managing clients?',

@@ -6,7 +6,8 @@ import {
 
 const DEFAULT_PUBLIC_PRICING_URL =
   'https://pulserelay.pro/pricing?utm_source=pulse&utm_medium=app&utm_campaign=upgrade';
-const DEFAULT_CLOUD_ACCOUNT_PORTAL_URL = 'https://cloud.pulserelay.pro/portal';
+const DEFAULT_MANAGED_HOSTING_REQUEST_URL =
+  'mailto:support@pulserelay.pro?subject=Pulse%20Managed%20Hosting';
 export const SELF_HOSTED_PURCHASE_START_PATH = '/auth/license-purchase-start';
 
 export const SELF_HOSTED_PRO_BILLING_ROUTE = '/settings/system/billing';
@@ -161,14 +162,14 @@ export function getPublicPricingUrl(feature?: string | null): string {
   return url.toString();
 }
 
-export function getCloudAccountPortalUrl(): string {
-  return DEFAULT_CLOUD_ACCOUNT_PORTAL_URL;
+export function getManagedHostingRequestUrl(): string {
+  return DEFAULT_MANAGED_HOSTING_REQUEST_URL;
 }
 
 export function getUpgradeFallbackDestination(feature?: string | null): string | undefined {
   if (isRetiredPricingFeature(feature)) return undefined;
   if (normalizeFeatureKey(feature) === 'cloud') {
-    return getCloudAccountPortalUrl();
+    return getManagedHostingRequestUrl();
   }
   return getInProductPricingDestination(feature) || getSelfHostedPurchaseStartUrl(feature);
 }

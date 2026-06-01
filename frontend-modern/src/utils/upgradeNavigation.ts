@@ -18,7 +18,7 @@ function normalizeUpgradeHref(href: string | null | undefined): string {
 
 export function isExternalUpgradeHref(href: string | null | undefined): boolean {
   const normalized = normalizeUpgradeHref(href);
-  return normalized !== '' && /^https?:\/\//.test(normalized);
+  return normalized !== '' && /^(?:https?:\/\/|mailto:)/.test(normalized);
 }
 
 export function resolveUpgradeDestination(

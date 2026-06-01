@@ -207,8 +207,8 @@ export const SELF_HOSTED_COMMERCIAL_PRESENTATION: SelfHostedCommercialPresentati
   footerLinks: [
     {
       preface: 'Need managed hosting?',
-      label: 'Open Pulse Account',
-      href: 'https://cloud.pulserelay.pro/portal',
+      label: 'Request managed hosting',
+      href: 'mailto:support@pulserelay.pro?subject=Pulse%20Managed%20Hosting',
     },
     {
       preface: 'Managing clients?',
