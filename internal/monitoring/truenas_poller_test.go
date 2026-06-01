@@ -1043,7 +1043,7 @@ func TestTrueNASPollerStaleDataRecovery(t *testing.T) {
 	}, "expected poller to continue attempts throughout failure window")
 
 	waitForCondition(t, 3*time.Second, func() bool {
-		return recoverySuccesses.Load() > 0
+		return recoverySuccesses.Load() > 0 && hasTrueNASHostForOrg(poller, "default", "stale-after")
 	}, "expected poller to recover and ingest refreshed data after failures")
 
 	poller.Stop()
@@ -1124,7 +1124,7 @@ func TestTrueNASPollerConnectionFlap(t *testing.T) {
 	isDown.Store(false)
 
 	waitForCondition(t, 3*time.Second, func() bool {
-		return afterRecoverySuccesses.Load() > 0
+		return afterRecoverySuccesses.Load() > 0 && hasTrueNASHostForOrg(poller, "default", "flap-after")
 	}, "expected poller to recover ingestion after endpoint returns")
 
 	poller.Stop()
