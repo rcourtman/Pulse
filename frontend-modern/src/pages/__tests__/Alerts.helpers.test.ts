@@ -1106,13 +1106,13 @@ describe('unifiedTypeToAlertDisplayType', () => {
     expect(unifiedTypeToAlertDisplayType('vm')).toBe('VM');
   });
 
-  it('maps system-container and oci-container to Container', () => {
-    expect(unifiedTypeToAlertDisplayType('system-container')).toBe('Container');
-    expect(unifiedTypeToAlertDisplayType('oci-container')).toBe('Container');
+  it('maps system-container and oci-container to LXC', () => {
+    expect(unifiedTypeToAlertDisplayType('system-container')).toBe('LXC');
+    expect(unifiedTypeToAlertDisplayType('oci-container')).toBe('LXC');
   });
 
   it('maps app-container to Container', () => {
-    expect(unifiedTypeToAlertDisplayType('app-container')).toBe('App Container');
+    expect(unifiedTypeToAlertDisplayType('app-container')).toBe('Container');
   });
 
   it('maps agent to Agent', () => {
@@ -1153,9 +1153,9 @@ describe('Unified selector parity', () => {
       ['k8s-cluster', 'K8s Cluster'],
       ['k8s-node', 'K8s Node'],
       ['vm', 'VM'],
-      ['system-container', 'Container'],
-      ['oci-container', 'Container'],
-      ['app-container', 'App Container'],
+      ['system-container', 'LXC'],
+      ['oci-container', 'LXC'],
+      ['app-container', 'Container'],
       ['pod', 'Pod'],
       ['jail', 'Jail'],
       ['docker-service', 'Docker Service'],
@@ -1178,7 +1178,7 @@ describe('Unified selector parity', () => {
     expect(unifiedTypeToAlertDisplayType('truenas' as any)).toBe('Agent');
   });
 
-  it('keeps guest override extraction shape aligned with legacy mapping', () => {
+  it('keeps guest override extraction shape aligned with current display mapping', () => {
     const thresholds: RawOverrideConfig = {
       cpu: { trigger: 88, clear: 78 },
       memory: { trigger: 82, clear: 72 },
@@ -1187,7 +1187,7 @@ describe('Unified selector parity', () => {
       poweredOffSeverity: 'critical',
     };
 
-    const buildLegacyGuestOverride = (
+    const buildExpectedGuestOverride = (
       guestType: 'qemu' | 'lxc',
       id: string,
       name: string,
@@ -1198,7 +1198,7 @@ describe('Unified selector parity', () => {
       id,
       name,
       type: 'guest' as const,
-      resourceType: guestType === 'qemu' ? 'VM' : 'Container',
+      resourceType: guestType === 'qemu' ? 'VM' : 'LXC',
       vmid,
       node,
       instance,
@@ -1246,7 +1246,7 @@ describe('Unified selector parity', () => {
     expect(
       buildUnifiedGuestOverride('vm', 'vm-pve1-100', 'app-100', 100, 'pve1', 'pve1/qemu/100'),
     ).toEqual(
-      buildLegacyGuestOverride('qemu', 'vm-pve1-100', 'app-100', 100, 'pve1', 'pve1/qemu/100'),
+      buildExpectedGuestOverride('qemu', 'vm-pve1-100', 'app-100', 100, 'pve1', 'pve1/qemu/100'),
     );
 
     expect(
@@ -1259,7 +1259,7 @@ describe('Unified selector parity', () => {
         'pve1/lxc/200',
       ),
     ).toEqual(
-      buildLegacyGuestOverride('lxc', 'ct-pve1-200', 'ct-200', 200, 'pve1', 'pve1/lxc/200'),
+      buildExpectedGuestOverride('lxc', 'ct-pve1-200', 'ct-200', 200, 'pve1', 'pve1/lxc/200'),
     );
   });
 });

@@ -27,14 +27,12 @@ import kubernetesPodsTableSource from '@/features/kubernetes/KubernetesPodsTable
 import kubernetesPolicyTableSource from '@/features/kubernetes/KubernetesPolicyTable.tsx?raw';
 import kubernetesServicesTableSource from '@/features/kubernetes/KubernetesServicesTable.tsx?raw';
 import kubernetesStorageTableSource from '@/features/kubernetes/KubernetesStorageTable.tsx?raw';
-// The backups page was decomposed into per-view table components; the
-// shared-primitive guardrail follows the tables to their new owners.
-import proxmoxArchivesTableSource from '@/features/proxmox/ProxmoxArchivesTable.tsx?raw';
+// The backups page owns the scope controls and delegates dense table rendering
+// to current per-view components; the shared-primitive guardrail follows those
+// current table owners.
+import proxmoxBackupServersTableSource from '@/features/proxmox/ProxmoxBackupServersTable.tsx?raw';
 import proxmoxCoverageTableSource from '@/features/proxmox/ProxmoxCoverageTable.tsx?raw';
-import proxmoxPbsTableSource from '@/features/proxmox/ProxmoxPbsTable.tsx?raw';
 import proxmoxRecoverableTableSource from '@/features/proxmox/ProxmoxRecoverableTable.tsx?raw';
-import proxmoxSnapshotsTableSource from '@/features/proxmox/ProxmoxSnapshotsTable.tsx?raw';
-import proxmoxTasksTableSource from '@/features/proxmox/ProxmoxTasksTable.tsx?raw';
 import proxmoxCephClusterDrawerSource from '@/features/proxmox/ProxmoxCephClusterDrawer.tsx?raw';
 import proxmoxCephTableSource from '@/features/proxmox/ProxmoxCephTable.tsx?raw';
 import proxmoxMailGatewayDrawerSource from '@/features/proxmox/ProxmoxMailGatewayDrawer.tsx?raw';
@@ -141,10 +139,7 @@ const proxmoxDetailTableSources = [
 const proxmoxBespokeTableSources = [
   proxmoxCoverageTableSource,
   proxmoxRecoverableTableSource,
-  proxmoxPbsTableSource,
-  proxmoxSnapshotsTableSource,
-  proxmoxArchivesTableSource,
-  proxmoxTasksTableSource,
+  proxmoxBackupServersTableSource,
   proxmoxCephTableSource,
   proxmoxMailGatewayTableSource,
   proxmoxReplicationTableSource,

@@ -93,6 +93,7 @@ describe('resource link routing contract', () => {
       runtime: '',
       context: 'cluster-a',
       namespace: '',
+      cluster: '',
       agent: 'worker-1',
       resource: 'cluster-a:worker-1:101',
       summaryGroup: '',
@@ -103,6 +104,7 @@ describe('resource link routing contract', () => {
     expect(WORKLOADS_QUERY_PARAMS.runtime).toBe('runtime');
     expect(WORKLOADS_QUERY_PARAMS.context).toBe('context');
     expect(WORKLOADS_QUERY_PARAMS.namespace).toBe('namespace');
+    expect(WORKLOADS_QUERY_PARAMS.cluster).toBe('cluster');
     expect(WORKLOADS_QUERY_PARAMS.agent).toBe('agent');
     expect(WORKLOADS_QUERY_PARAMS.resource).toBe('resource');
     expect(WORKLOADS_QUERY_PARAMS.summaryGroup).toBe('summaryGroup');
