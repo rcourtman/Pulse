@@ -173,6 +173,44 @@ describe('proxmoxBackupRecoveryModel', () => {
     expect(orphan?.workload.label).toBe('CT 999');
   });
 
+  it('keeps host and zero-id artifacts out of guest coverage and orphan counts', () => {
+    const model = buildProxmoxBackupRecoveryModel({
+      workloads: [],
+      pbsBackups: [
+        pbsBackup({
+          id: 'pbs-main/main/root/ct/0/2026-05-25T01:34:25Z',
+          namespace: 'root',
+          vmid: '0',
+        }),
+        pbsBackup({
+          id: 'pbs-main/main/root/host/mail-gateway/2026-05-25T01:34:25Z',
+          namespace: 'root',
+          backupType: 'host',
+          vmid: 'mail-gateway',
+        }),
+      ],
+      archives: [
+        archive({
+          id: 'host-archive-mail-gateway',
+          type: 'host',
+          vmid: 0,
+          instance: 'mail-gateway',
+          node: 'pmg-01',
+        }),
+      ],
+      snapshots: [],
+      tasks: [],
+      nowMs: Date.parse('2026-05-26T08:00:00Z'),
+    });
+
+    expect(model.recoverableArtifacts).toHaveLength(3);
+    expect(model.coverageRows).toHaveLength(0);
+    expect(model.coverageSummary.totalWorkloads).toBe(0);
+    expect(model.recoverableArtifacts.map((artifact) => artifact.workload.label)).toEqual(
+      expect.arrayContaining(['CT backup', 'Host mail-gateway']),
+    );
+  });
+
   it('does not create phantom workload rows from aggregate vzdump jobs', () => {
     const model = buildProxmoxBackupRecoveryModel({
       workloads: [],

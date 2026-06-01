@@ -135,9 +135,22 @@ function typeLabel(type: WorkloadReference['type']): string {
   return 'Guest';
 }
 
-function workloadFallbackLabel(type: WorkloadReference['type'], vmid: string): string {
+function workloadFallbackLabel(
+  type: WorkloadReference['type'],
+  vmid: string,
+  hints: readonly (string | undefined)[] = [],
+): string {
   const label = typeLabel(type);
-  return vmid ? `${label} ${vmid}` : label;
+  const cleanVmid = vmid.trim();
+  if (type === 'host') {
+    if (cleanVmid && !isZeroWorkloadId(cleanVmid)) return `${label} ${cleanVmid}`;
+    const hintLabel = hints
+      .map((hint) => hint?.trim())
+      .find((hint) => hint && normalizeKey(hint) !== 'root' && normalizeKey(hint) !== '(root)');
+    return hintLabel ? `${label} ${hintLabel}` : 'Host backup';
+  }
+  if (cleanVmid && !isZeroWorkloadId(cleanVmid)) return `${label} ${cleanVmid}`;
+  return type === 'unknown' ? label : `${label} backup`;
 }
 
 function resourceVmid(resource: Resource): string {
@@ -216,9 +229,17 @@ function fallbackWorkload(
     type,
     typeLabel: typeLabel(type),
     vmid,
-    label: workloadFallbackLabel(type, vmid),
+    label: workloadFallbackLabel(type, vmid, hints),
     node: hints.find((hint) => !!hint?.trim()),
   };
+}
+
+function isCoverageWorkload(workload: WorkloadReference): boolean {
+  return (
+    (workload.type === 'vm' || workload.type === 'ct') &&
+    Boolean(workload.vmid.trim()) &&
+    !isZeroWorkloadId(workload.vmid)
+  );
 }
 
 function resolveWorkload(
@@ -396,6 +417,7 @@ export function buildProxmoxBackupRecoveryModel(
   const artifacts: RecoverableArtifact[] = [];
   const addArtifact = (artifact: RecoverableArtifact) => {
     artifacts.push(artifact);
+    if (!isCoverageWorkload(artifact.workload)) return;
     const row = ensureRow(artifact.workload);
     row.artifacts.push(artifact);
     if (artifact.sourceKind === 'pbs') row.pbsCount += 1;
