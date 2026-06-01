@@ -25,6 +25,7 @@ type workspaceSummaryItem struct {
 	DisplayName     string               `json:"display_name"`
 	State           registry.TenantState `json:"state"`
 	HealthCheckOK   bool                 `json:"health_check_ok"`
+	SetupStatus     string               `json:"setup_status,omitempty"`
 	LastHealthCheck *time.Time           `json:"last_health_check"`
 	CreatedAt       time.Time            `json:"created_at"`
 }
@@ -124,6 +125,7 @@ func HandlePortalDashboard(reg *registry.TenantRegistry) http.HandlerFunc {
 				DisplayName:     t.DisplayName,
 				State:           t.State,
 				HealthCheckOK:   t.HealthCheckOK,
+				SetupStatus:     workspaceSetupStatus(t.State, t.HealthCheckOK, t.LastHealthCheck),
 				LastHealthCheck: t.LastHealthCheck,
 				CreatedAt:       t.CreatedAt,
 			})

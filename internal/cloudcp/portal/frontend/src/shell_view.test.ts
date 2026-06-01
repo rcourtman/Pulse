@@ -124,7 +124,8 @@ describe('shell view', function() {
 
     expect(html).toContain('workspace-summary-shell');
     expect(html).toContain('workspace-summary-facts');
-    expect(html).toContain('Next:</strong> Open Summary Workspace');
+    expect(html).toContain('Next:</strong> Set up Summary Workspace');
+    expect(html).toContain('1 workspace in setup');
     expect(html).toContain('Summary Workspace');
     expect(html).not.toContain('overview-task-grid');
   });
@@ -187,7 +188,8 @@ describe('shell view', function() {
     expect(html).toContain('workspace-summary-facts');
     expect(html).toContain('1 account');
     expect(html).toContain('3 workspaces');
-    expect(html).toContain('1 ready workspace');
+    expect(html).toContain('0 ready workspaces');
+    expect(html).toContain('1 workspace in setup');
     expect(html).toContain('2 workspaces to review');
     expect(html).toContain('Next:</strong> Review Beta Workspace');
     expect(html).toContain('Create workspace');
@@ -436,7 +438,7 @@ describe('shell view', function() {
     );
 
     expect(html).toContain('Tech');
-    expect(html).toContain('Review hosted workspace health here and open ready workspaces. An owner or admin must handle lifecycle changes.');
+    expect(html).toContain('Review hosted workspace health here and open ready workspaces. An owner or admin must handle setup and workspace changes.');
     expect(html).toContain('Review who has access. An owner or admin must make changes.');
     expect(html).toContain('An owner or admin on this account needs to open hosted billing.');
     expect(html).toContain('Try first');

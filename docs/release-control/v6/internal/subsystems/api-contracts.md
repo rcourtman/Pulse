@@ -172,6 +172,18 @@ to tenant-owned destinations such as agent installation or reporting without
 turning the tenant exchange into an open redirect or moving API ownership for
 agent tokens, alerts, or reports into the control plane.
 
+Pulse Account workspace summaries carry setup state as a backend-owned payload
+contract. Browser bootstrap and `/api/portal/dashboard` workspace entries may
+include `setup_status` with only `ready`, `setup_path`, `install_agents`,
+`configure_outputs`, or `review`, plus optional setup evidence counts such as
+`agent_count`, `alert_route_count`, and `report_schedule_count` when the
+control plane has a canonical source for them. Until those counts are owned by
+a backend source, active healthy workspaces must report `setup_path` rather
+than pretending onboarding is complete. The browser may present that state as a
+setup checklist and deep-link into tenant install/reporting surfaces, but it
+must not infer cross-client readiness from health alone or mint tenant-owned
+agent, alert, or report configuration from Pulse Account.
+
 1. `frontend-modern/src/api/agentProfiles.ts` shared with `agent-lifecycle`: the agent profiles frontend client is both an agent lifecycle control surface and a canonical API payload contract boundary.
 2. `frontend-modern/src/api/ai.ts` shared with `ai-runtime`: the AI frontend client is both an AI runtime control surface and a canonical API payload contract boundary.
 3. `frontend-modern/src/api/nodes.ts` shared with `agent-lifecycle`: the shared Proxmox node client is both an agent lifecycle setup/install control surface and a canonical API payload contract boundary.

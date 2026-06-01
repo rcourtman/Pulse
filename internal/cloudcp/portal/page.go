@@ -19,6 +19,7 @@ type portalPageWorkspace struct {
 	State           string
 	Healthy         bool
 	HealthStatus    string
+	SetupStatus     string
 	LastHealthCheck *time.Time
 	CreatedAt       time.Time
 }
@@ -175,6 +176,7 @@ func loadPortalAccountsForUser(reg *registry.TenantRegistry, userID string) ([]p
 				State:           string(t.State),
 				Healthy:         t.HealthCheckOK,
 				HealthStatus:    workspaceHealthStatus(t.HealthCheckOK, t.LastHealthCheck),
+				SetupStatus:     workspaceSetupStatus(t.State, t.HealthCheckOK, t.LastHealthCheck),
 				LastHealthCheck: t.LastHealthCheck,
 				CreatedAt:       t.CreatedAt,
 			})
@@ -247,6 +249,20 @@ func workspaceHealthStatus(healthy bool, lastHealthCheck *time.Time) string {
 		return "checking"
 	}
 	return "unhealthy"
+}
+
+func workspaceSetupStatus(state registry.TenantState, healthy bool, lastHealthCheck *time.Time) string {
+	switch state {
+	case registry.TenantStateActive:
+		if !healthy && lastHealthCheck != nil {
+			return "review"
+		}
+		return "setup_path"
+	case registry.TenantStateProvisioning:
+		return "setup_path"
+	default:
+		return "review"
+	}
 }
 
 func renderPortalPage(w http.ResponseWriter, nonce string, faviconHref string, bootstrapData BootstrapData) {

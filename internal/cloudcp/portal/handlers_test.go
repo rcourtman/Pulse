@@ -119,6 +119,7 @@ type dashboardResp struct {
 		DisplayName     string               `json:"display_name"`
 		State           registry.TenantState `json:"state"`
 		HealthCheckOK   bool                 `json:"health_check_ok"`
+		SetupStatus     string               `json:"setup_status"`
 		LastHealthCheck *time.Time           `json:"last_health_check"`
 		CreatedAt       time.Time            `json:"created_at"`
 	} `json:"workspaces"`
@@ -240,6 +241,7 @@ func TestPortalDashboard(t *testing.T) {
 			DisplayName:     ws.DisplayName,
 			State:           ws.State,
 			HealthCheckOK:   ws.HealthCheckOK,
+			SetupStatus:     ws.SetupStatus,
 			LastHealthCheck: ws.LastHealthCheck,
 			CreatedAt:       ws.CreatedAt,
 		}
@@ -258,6 +260,9 @@ func TestPortalDashboard(t *testing.T) {
 	if !active.HealthCheckOK {
 		t.Fatalf("active.health_check_ok = false, want true")
 	}
+	if active.SetupStatus != "setup_path" {
+		t.Fatalf("active.setup_status = %q, want setup_path", active.SetupStatus)
+	}
 	if active.LastHealthCheck == nil || !active.LastHealthCheck.Equal(lastCheck) {
 		t.Fatalf("active.last_health_check = %v, want %v", active.LastHealthCheck, lastCheck)
 	}
@@ -271,6 +276,9 @@ func TestPortalDashboard(t *testing.T) {
 	}
 	if susp.State != registry.TenantStateSuspended {
 		t.Fatalf("suspended.state = %q, want %q", susp.State, registry.TenantStateSuspended)
+	}
+	if susp.SetupStatus != "review" {
+		t.Fatalf("suspended.setup_status = %q, want review", susp.SetupStatus)
 	}
 
 	if resp.Summary.Total != 2 {
@@ -295,6 +303,7 @@ type dashboardRespWorkspace struct {
 	DisplayName     string
 	State           registry.TenantState
 	HealthCheckOK   bool
+	SetupStatus     string
 	LastHealthCheck *time.Time
 	CreatedAt       time.Time
 }
@@ -915,6 +924,7 @@ func TestBuildPortalBootstrapJSON_Contract(t *testing.T) {
 					State:           "active",
 					Healthy:         true,
 					HealthStatus:    "healthy",
+					SetupStatus:     "setup_path",
 					LastHealthCheck: &lastHealthCheck,
 				},
 			},
@@ -1012,6 +1022,9 @@ func TestBuildPortalBootstrapJSON_Contract(t *testing.T) {
 	if got := workspace["health_status"]; got != "healthy" {
 		t.Fatalf("workspace health_status = %#v, want healthy", got)
 	}
+	if got := workspace["setup_status"]; got != "setup_path" {
+		t.Fatalf("workspace setup_status = %#v, want setup_path", got)
+	}
 	if got := workspace["last_health_check"]; got != "2026-03-27T09:00:00Z" {
 		t.Fatalf("workspace last_health_check = %#v, want 2026-03-27T09:00:00Z", got)
 	}
@@ -1091,6 +1104,9 @@ func TestHandlePortalBootstrap_Success(t *testing.T) {
 	}
 	if got := workspace["created_at"]; got != "2026-03-25T10:00:00Z" {
 		t.Fatalf("workspace created_at = %#v", got)
+	}
+	if got := workspace["setup_status"]; got != "setup_path" {
+		t.Fatalf("workspace setup_status = %#v, want setup_path", got)
 	}
 }
 

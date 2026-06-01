@@ -143,14 +143,14 @@ func TestMSPSignupPageKeepsStarterSelfServeWhenMultipleTiersConfigured(t *testin
 	if !strings.Contains(body, `type="hidden" name="tier" value="starter"`) {
 		t.Fatal("expected hidden starter tier input")
 	}
-	if !strings.Contains(body, "Growth / Scale") || !strings.Contains(body, "request access") {
-		t.Fatal("expected assisted Growth/Scale copy")
+	if !strings.Contains(body, "Growth") || !strings.Contains(body, "$249/mo") || !strings.Contains(body, "request-assisted access") {
+		t.Fatal("expected assisted Growth copy")
 	}
 	if !strings.Contains(body, "up to 5 client workspaces") {
 		t.Fatal("expected canonical MSP Starter workspace limit copy")
 	}
-	if !strings.Contains(body, "15+ client workspaces") {
-		t.Fatal("expected assisted MSP workspace threshold copy")
+	if !strings.Contains(body, "Scale") || !strings.Contains(body, "$399/mo") || !strings.Contains(body, "up to 40 client workspaces") {
+		t.Fatal("expected assisted Scale copy")
 	}
 }
 
@@ -407,8 +407,8 @@ func TestMSPSignupCompleteRendersHandoff(t *testing.T) {
 	if strings.Contains(strings.ToLower(body), "trial") {
 		t.Fatal("MSP checkout completion should not advertise a trial")
 	}
-	if !strings.Contains(body, "MSP portal") {
-		t.Fatal("expected MSP portal handoff copy")
+	if !strings.Contains(body, "Pulse Account") || !strings.Contains(body, "add client workspaces") {
+		t.Fatal("expected Pulse Account handoff copy")
 	}
 }
 

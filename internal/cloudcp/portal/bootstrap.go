@@ -12,6 +12,7 @@ type BootstrapWorkspace struct {
 	State           string `json:"state"`
 	Healthy         bool   `json:"healthy"`
 	HealthStatus    string `json:"health_status"`
+	SetupStatus     string `json:"setup_status,omitempty"`
 	LastHealthCheck string `json:"last_health_check,omitempty"`
 	CreatedAt       string `json:"created_at"`
 }
@@ -78,6 +79,7 @@ func BuildBootstrapDataWithSignupPath(authenticated bool, email string, accounts
 				State:           workspace.State,
 				Healthy:         workspace.Healthy,
 				HealthStatus:    workspace.HealthStatus,
+				SetupStatus:     workspace.SetupStatus,
 				LastHealthCheck: lastHealthCheck,
 				CreatedAt:       workspace.CreatedAt.UTC().Format(time.RFC3339),
 			})

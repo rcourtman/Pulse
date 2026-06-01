@@ -139,7 +139,7 @@ var publicMSPSignupPageTemplate = template.Must(template.New("public-msp-signup-
   <div class="wrap">
     <div class="card">
       <h1>Start Pulse MSP Starter</h1>
-      <p>Run Pulse for multiple clients from one hosted operator account. Each client gets an isolated workspace; you manage them all from the MSP portal. Starter is the self-serve checkout path for small providers. Growth and Scale are request-based so onboarding, reporting, and support expectations can be sized with you.</p>
+      <p>Run Pulse for multiple clients from one hosted operator account. Each client gets an isolated workspace; you manage them all from Pulse Account. Starter is the self-serve checkout path for small providers. Growth and Scale have published prices, but access is request-assisted so onboarding, reporting, and support expectations can be sized with you.</p>
       {{if .ErrorMessage}}<div class="error">{{.ErrorMessage}}</div>{{end}}
       {{if .Cancelled}}<div class="note">Checkout was cancelled. You can start again below.</div>{{end}}
 
@@ -148,7 +148,8 @@ var publicMSPSignupPageTemplate = template.Must(template.New("public-msp-signup-
         <input type="hidden" name="tier" value="{{.Tier}}">
         <div class="tier-group">
           <div class="tier-option"><strong>Starter</strong> &mdash; up to 5 client workspaces, $149/mo</div>
-          <div class="tier-option"><strong>Growth / Scale</strong> &mdash; request access for 15+ client workspaces, custom onboarding, or assisted rollout.</div>
+          <div class="tier-option"><strong>Growth</strong> &mdash; up to 15 client workspaces, $249/mo, request-assisted access</div>
+          <div class="tier-option"><strong>Scale</strong> &mdash; up to 40 client workspaces, $399/mo, request-assisted access</div>
         </div>
 
         <label for="email">Work Email</label>
@@ -160,7 +161,7 @@ var publicMSPSignupPageTemplate = template.Must(template.New("public-msp-signup-
         <button class="cta" type="submit">Continue To Secure Checkout</button>
       </form>
 
-      <p class="fine">After checkout, we will email a Pulse Account sign-in link so you can open your MSP portal. For Growth or Scale, email support@pulserelay.pro and include your expected client workspace count.</p>
+      <p class="fine">After checkout, we will email a Pulse Account sign-in link so you can create client workspaces and continue setup. For Growth or Scale, email support@pulserelay.pro and include the tier you want and your expected client workspace count.</p>
       <ol>
         <li>Stripe securely starts your MSP Starter subscription.</li>
         <li>Pulse provisions your MSP operator account after checkout completes.</li>
@@ -195,7 +196,7 @@ var publicMSPSignupCompleteTemplate = template.Must(template.New("public-msp-sig
     <div class="card">
       <h1>Checkout complete</h1>
       <p>Your Pulse MSP Starter checkout completed. Pulse is provisioning your MSP operator account.</p>
-      <p>Watch your inbox for a Pulse Account sign-in link. That link lands in Pulse Account, where you can open the MSP portal, add client workspaces, and continue setup.</p>
+      <p>Watch your inbox for a Pulse Account sign-in link. That link lands in Pulse Account, where you can add client workspaces and continue setup.</p>
     </div>
   </div>
 </body>

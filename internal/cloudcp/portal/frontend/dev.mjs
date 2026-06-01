@@ -57,6 +57,10 @@ function buildScenarioTemplate(name) {
             state: 'active',
             healthy: true,
             health_status: 'healthy',
+            setup_status: 'ready',
+            agent_count: 2,
+            alert_route_count: 1,
+            report_schedule_count: 1,
             created_at: iso('2026-03-20T10:00:00Z'),
           },
           {
@@ -65,6 +69,10 @@ function buildScenarioTemplate(name) {
             state: 'active',
             healthy: true,
             health_status: 'healthy',
+            setup_status: 'ready',
+            agent_count: 1,
+            alert_route_count: 1,
+            report_schedule_count: 1,
             created_at: iso('2026-03-21T10:00:00Z'),
           },
         ],
@@ -122,6 +130,7 @@ function buildScenarioTemplate(name) {
           state: 'suspended',
           healthy: false,
           health_status: 'unhealthy',
+          setup_status: 'review',
           created_at: iso('2026-03-20T10:00:00Z'),
         },
         {
@@ -130,6 +139,10 @@ function buildScenarioTemplate(name) {
           state: 'active',
           healthy: true,
           health_status: 'healthy',
+          setup_status: 'configure_outputs',
+          agent_count: 1,
+          alert_route_count: 0,
+          report_schedule_count: 0,
           created_at: iso('2026-03-21T10:00:00Z'),
         },
       ],
@@ -233,7 +246,9 @@ function escapeHTML(value) {
   return String(value || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function previewReturnURL(request, scenario, toastMessage) {
@@ -281,8 +296,23 @@ function buildPreviewWorkspaceHTML(bootstrap, workspaceID, targetPath, scenario)
   const entry = findWorkspaceByID(bootstrap, workspaceID);
   const title = entry ? entry.workspace.display_name : workspaceID;
   const accountName = entry ? entry.account.name : 'Pulse Account';
+  const accountID = entry ? entry.account.id : '';
   const targetLabel = previewTargetLabel(targetPath);
   const portalURL = '/?scenario=' + encodeURIComponent(scenario);
+  const portalWorkspaceURL = accountID
+    ? portalURL + '#workspace-row-' + encodeURIComponent(accountID) + '-' + encodeURIComponent(workspaceID)
+    : portalURL;
+  const targetPathLabel = targetPath || '/';
+  const targetHeading = targetPath === '/settings/infrastructure?add=linux-host'
+    ? 'Install agents for ' + title
+    : targetPath === '/settings/support/reporting'
+      ? 'Reports for ' + title
+      : title + ' workspace';
+  const taskCopy = targetPath === '/settings/infrastructure?add=linux-host'
+    ? 'Use the install command from this workspace. Agent data must be created inside this client boundary, not on the provider account.'
+    : targetPath === '/settings/support/reporting'
+      ? 'Configure scheduled reports and alert routing for this client workspace before treating onboarding as complete.'
+      : 'Use this workspace for client-specific monitoring work after the Pulse Account handoff.';
   return '<!DOCTYPE html>' +
     '<html lang="en">' +
       '<head>' +
@@ -291,31 +321,48 @@ function buildPreviewWorkspaceHTML(bootstrap, workspaceID, targetPath, scenario)
         '<title>' + escapeHTML(title) + ' - Preview workspace</title>' +
         '<style>' +
           'body{margin:0;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f6f7f9;color:#101828}' +
-          'main{max-width:760px;margin:0 auto;padding:48px 20px}' +
+          'main{max-width:840px;margin:0 auto;padding:48px 20px}' +
           '.panel{background:#fff;border:1px solid #d0d5dd;border-radius:8px;padding:24px;box-shadow:0 1px 2px rgba(16,24,40,.06)}' +
+          '.crumbs{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:18px;color:#667085;font-size:13px}' +
+          '.crumbs a{color:#155eef;text-decoration:none}' +
           'h1{margin:0 0 8px;font-size:24px;letter-spacing:0}' +
+          'h2{margin:24px 0 8px;font-size:16px}' +
           'p{margin:0 0 16px;color:#475467;line-height:1.5}' +
           '.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:20px 0}' +
           '.fact{border:1px solid #eaecf0;border-radius:6px;padding:10px;background:#fcfcfd}' +
           '.fact span{display:block;font-size:12px;color:#667085}' +
           '.fact strong{display:block;margin-top:2px;font-size:13px}' +
-          'a{display:inline-flex;align-items:center;min-height:34px;padding:0 12px;border-radius:6px;background:#155eef;color:#fff;text-decoration:none;font-size:14px;font-weight:600}' +
+          '.task{border:1px solid #eaecf0;border-radius:6px;background:#f8fafc;padding:14px;margin:16px 0}' +
+          '.task code{display:block;margin:8px 0 0;padding:10px;border:1px solid #d0d5dd;border-radius:6px;background:#fff;color:#101828;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}' +
+          '.button{display:inline-flex;align-items:center;min-height:34px;padding:0 12px;border-radius:6px;background:#155eef;color:#fff;text-decoration:none;font-size:14px;font-weight:600}' +
+          '.secondary{background:#fff;color:#344054;border:1px solid #d0d5dd}' +
+          '.actions{display:flex;gap:8px;flex-wrap:wrap}' +
           '@media(max-width:640px){.facts{grid-template-columns:1fr}}' +
         '</style>' +
       '</head>' +
       '<body>' +
         '<main>' +
           '<section class="panel">' +
+            '<div class="crumbs"><a href="' + escapeHTML(portalWorkspaceURL) + '">Pulse Account</a><span>/</span><span>' + escapeHTML(accountName) + '</span><span>/</span><strong>' + escapeHTML(title) + '</strong></div>' +
             '<p>Preview workspace handoff</p>' +
-            '<h1>' + escapeHTML(title) + '</h1>' +
-            '<p>This preview page stands in for the hosted client workspace. In production the signed handoff creates a session inside the client workspace and opens ' + escapeHTML(targetLabel) + '.</p>' +
+            '<h1>' + escapeHTML(targetHeading) + '</h1>' +
+            '<p>You are inside the <strong>' + escapeHTML(title) + '</strong> client workspace. In production the signed handoff creates a tenant session and opens ' + escapeHTML(targetLabel) + '.</p>' +
             '<div class="facts">' +
               '<div class="fact"><span>Account</span><strong>' + escapeHTML(accountName) + '</strong></div>' +
               '<div class="fact"><span>Workspace</span><strong>' + escapeHTML(workspaceID) + '</strong></div>' +
-              '<div class="fact"><span>Target</span><strong>' + escapeHTML(targetPath || '/') + '</strong></div>' +
+              '<div class="fact"><span>Target</span><strong>' + escapeHTML(targetPathLabel) + '</strong></div>' +
             '</div>' +
-            '<p>Agents, alerts, and reports are scoped to this workspace after the handoff.</p>' +
-            '<a href="' + escapeHTML(portalURL) + '">Back to Pulse Account</a>' +
+            '<div class="task">' +
+              '<strong>' + escapeHTML(targetLabel) + '</strong>' +
+              '<p>' + escapeHTML(taskCopy) + '</p>' +
+              (targetPath === '/settings/infrastructure?add=linux-host'
+                ? '<code>pulse-agent install --workspace ' + escapeHTML(workspaceID) + ' --name &lt;agent-name&gt;</code>'
+                : '') +
+            '</div>' +
+            '<div class="actions">' +
+              '<a class="button" href="' + escapeHTML(portalWorkspaceURL) + '">Back to workspace row</a>' +
+              '<a class="button secondary" href="' + escapeHTML(portalURL) + '">Pulse Account home</a>' +
+            '</div>' +
           '</section>' +
         '</main>' +
       '</body>' +
@@ -540,6 +587,10 @@ function routeAccountAPI(request, response, url, bootstrap, scenario) {
           state: 'active',
           healthy: true,
           health_status: 'healthy',
+          setup_status: 'install_agents',
+          agent_count: 0,
+          alert_route_count: 0,
+          report_schedule_count: 0,
           created_at: iso(new Date()),
         });
         sendJSON(response, 200, { ok: true });

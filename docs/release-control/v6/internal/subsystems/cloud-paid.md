@@ -243,7 +243,11 @@ or other self-hosted uncapped continuity plans.
    the MSP runs the Pulse instance in their own cloud or infrastructure while
    Pulse Account owns licensing, account access, and client-workspace
    management. The canonical provider workspace limits are 5 client workspaces
-   for Starter, 15 for Growth, and 40 for Scale; larger providers belong to
+   for Starter, 15 for Growth, and 40 for Scale; the canonical public monthly
+   prices are $149, $249, and $399 respectively. Public copy may publish all
+   three prices, but must keep Starter as the only self-serve checkout path and
+   describe Growth and Scale as request-assisted access rather than implying
+   immediate self-serve provisioning. Larger providers belong to
    Enterprise/custom terms. Pulse-hosted MSP is not part of the default public
    launch motion and must remain request-only until tenant isolation, ingest,
    reporting, operations, and support load are proven. Design-partner discounts

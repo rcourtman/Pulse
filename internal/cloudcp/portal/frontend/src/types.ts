@@ -4,6 +4,10 @@ export interface PortalWorkspaceSummary {
   state: string;
   healthy: boolean;
   health_status: 'healthy' | 'checking' | 'unhealthy';
+  setup_status?: 'ready' | 'setup_path' | 'install_agents' | 'configure_outputs' | 'review';
+  agent_count?: number;
+  alert_route_count?: number;
+  report_schedule_count?: number;
   last_health_check?: string;
   created_at?: string;
 }

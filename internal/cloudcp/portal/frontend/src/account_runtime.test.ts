@@ -82,7 +82,7 @@ describe('account runtime', function() {
       '<div id="add-ws-form-acct_1" class="add-workspace-form">' +
       '<input id="ws-name-acct_1" value="Acme Corp">' +
       '<div id="ws-spinner-acct_1" hidden></div>' +
-      '<div id="workspace-management-acct_1" class="workspace-management-panel"><button id="workspace-management-close-acct_1"></button><div id="workspace-management-empty-acct_1"></div><div id="workspace-management-content-acct_1" hidden><div id="workspace-management-meta-acct_1"></div><h4 id="workspace-management-title-acct_1"></h4><p id="workspace-management-summary-acct_1"></p><div id="workspace-management-health-acct_1"></div><div id="workspace-management-lifecycle-acct_1"></div><div id="workspace-management-created-acct_1"></div><div id="workspace-management-guidance-acct_1"></div><button id="workspace-management-action-acct_1"></button></div></div>' +
+      '<div id="workspace-management-acct_1" class="workspace-management-panel"><button id="workspace-management-close-acct_1"></button><div id="workspace-management-empty-acct_1"></div><div id="workspace-management-content-acct_1" hidden><div id="workspace-management-meta-acct_1"></div><h4 id="workspace-management-title-acct_1"></h4><p id="workspace-management-summary-acct_1"></p><div id="workspace-management-health-acct_1"></div><div id="workspace-management-setup-acct_1"></div><div id="workspace-management-created-acct_1"></div><div id="workspace-management-guidance-acct_1"></div><button id="workspace-management-action-acct_1"></button></div></div>' +
       '</div>';
 
     runtime.toggleAddWorkspace('acct_1');
@@ -144,7 +144,7 @@ describe('account runtime', function() {
       '<h4 id="workspace-management-title-acct_1"></h4>' +
       '<p id="workspace-management-summary-acct_1"></p>' +
       '<div id="workspace-management-health-acct_1"></div>' +
-      '<div id="workspace-management-lifecycle-acct_1"></div>' +
+      '<div id="workspace-management-setup-acct_1"></div>' +
       '<div id="workspace-management-created-acct_1"></div>' +
       '<div id="workspace-management-guidance-acct_1"></div>' +
       '<button id="workspace-management-action-acct_1"></button>' +
@@ -193,7 +193,7 @@ describe('account runtime', function() {
     expect(deps.store.getAccountState().byAccountID.acct_1.selectedWorkspaceID).toBe('');
   });
 
-  it('reveals the lifecycle panel when a workspace job opens below the viewport', function() {
+  it('reveals the setup panel when a workspace job opens below the viewport', function() {
     deps.store.setBootstrap({
       authenticated: true,
       email: 'owner@example.com',
@@ -227,7 +227,7 @@ describe('account runtime', function() {
       '<h4 id="workspace-management-title-acct_1"></h4>' +
       '<p id="workspace-management-summary-acct_1"></p>' +
       '<div id="workspace-management-health-acct_1"></div>' +
-      '<div id="workspace-management-lifecycle-acct_1"></div>' +
+      '<div id="workspace-management-setup-acct_1"></div>' +
       '<div id="workspace-management-created-acct_1"></div>' +
       '<div id="workspace-management-guidance-acct_1"></div>' +
       '<button id="workspace-management-action-acct_1"></button>' +
@@ -287,7 +287,7 @@ describe('account runtime', function() {
       '<h4 id="workspace-management-title-acct_1"></h4>' +
       '<p id="workspace-management-summary-acct_1"></p>' +
       '<div id="workspace-management-health-acct_1"></div>' +
-      '<div id="workspace-management-lifecycle-acct_1"></div>' +
+      '<div id="workspace-management-setup-acct_1"></div>' +
       '<div id="workspace-management-created-acct_1"></div>' +
       '<div id="workspace-management-guidance-acct_1"></div>' +
       '<button id="workspace-management-action-acct_1"></button>' +
@@ -413,7 +413,7 @@ describe('account runtime', function() {
     );
 
     document.body.innerHTML =
-      '<div id="workspace-management-acct_1" class="workspace-management-panel"><button id="workspace-management-close-acct_1"></button><div id="workspace-management-empty-acct_1"></div><div id="workspace-management-content-acct_1" hidden><div id="workspace-management-meta-acct_1"></div><h4 id="workspace-management-title-acct_1"></h4><p id="workspace-management-summary-acct_1"></p><div id="workspace-management-health-acct_1"></div><div id="workspace-management-lifecycle-acct_1"></div><div id="workspace-management-created-acct_1"></div><div id="workspace-management-guidance-acct_1"></div><button id="workspace-management-action-acct_1"></button></div></div>' +
+      '<div id="workspace-management-acct_1" class="workspace-management-panel"><button id="workspace-management-close-acct_1"></button><div id="workspace-management-empty-acct_1"></div><div id="workspace-management-content-acct_1" hidden><div id="workspace-management-meta-acct_1"></div><h4 id="workspace-management-title-acct_1"></h4><p id="workspace-management-summary-acct_1"></p><div id="workspace-management-health-acct_1"></div><div id="workspace-management-setup-acct_1"></div><div id="workspace-management-created-acct_1"></div><div id="workspace-management-guidance-acct_1"></div><button id="workspace-management-action-acct_1"></button></div></div>' +
       '<div id="access-section-acct_1" class="access-section" data-actor-role="owner" data-can-manage="true">' +
       '<div id="access-shell-acct_1"></div>' +
       '<div id="access-detail-acct_1"></div>' +

@@ -8,7 +8,15 @@ import type {
 } from './types';
 import { portalRoleLabel } from './account_roles';
 import { preferredPortalShellSection } from './shell_section';
-import { workspaceHealthLabel, workspaceHealthState, workspaceRowNote, workspaceStatusCopy } from './workspace_presentation';
+import {
+  workspaceHealthLabel,
+  workspaceHealthState,
+  workspaceRowNote,
+  workspaceSetupLabel,
+  workspaceSetupNextStep,
+  workspaceSetupState,
+  workspaceStatusCopy,
+} from './workspace_presentation';
 
 export interface ShellViewContext {
   bootstrap: PortalBootstrapData;
@@ -90,6 +98,10 @@ function readyWorkspaceChipLabel(count: number): string {
 
 function suspendedWorkspaceChipLabel(count: number): string {
   return count === 1 ? '1 suspended workspace' : String(count) + ' suspended workspaces';
+}
+
+function setupNeededWorkspaceChipLabel(count: number): string {
+  return count === 1 ? '1 workspace in setup' : String(count) + ' workspaces in setup';
 }
 
 
@@ -248,6 +260,11 @@ function healthBadgeHTML(workspace: PortalWorkspaceSummary): string {
     return '<span class="badge badge-unhealthy">' + escapeHTML(workspaceHealthLabel(workspace)) + '</span>';
   }
   return '<span class="badge badge-checking">' + escapeHTML(workspaceHealthLabel(workspace)) + '</span>';
+}
+
+function setupBadgeHTML(workspace: PortalWorkspaceSummary): string {
+  var setup = workspaceSetupState(workspace);
+  return '<span class="badge badge-setup-' + escapeHTML(setup) + '">' + escapeHTML(workspaceSetupLabel(workspace)) + '</span>';
 }
 
 function renderBillingActionRow(
@@ -418,6 +435,9 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
   var state = String(workspace.state || '');
   var createdLabel = formatWorkspaceDate(workspace.created_at);
   var metaParts = [];
+  if (state) {
+    metaParts.push('<span class="workspace-meta-item">' + escapeHTML(titleCase(state)) + '</span>');
+  }
   if (createdLabel) {
     metaParts.push('<span class="workspace-meta-item">Created ' + escapeHTML(createdLabel) + '</span>');
   }
@@ -452,7 +472,7 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
       escapeAttr(account.id) +
       '" data-workspace-id="' +
       escapeAttr(workspace.id) +
-      '">Lifecycle</button>';
+      '">Setup checklist</button>';
   }
 
   return (
@@ -465,10 +485,10 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
         '<div class="workspace-row-note">' + escapeHTML(workspaceRowNote(workspace)) + '</div>' +
       '</div>' +
       '<div class="workspace-row-status-cell workspace-row-status-cell-badge">' +
-        healthBadgeHTML(workspace) +
+        setupBadgeHTML(workspace) +
       '</div>' +
       '<div class="workspace-row-status-cell workspace-row-status-cell-badge">' +
-        '<span class="badge badge-' + escapeHTML(state || 'unknown') + '">' + escapeHTML(titleCase(state || 'Unknown')) + '</span>' +
+        healthBadgeHTML(workspace) +
       '</div>' +
       '<div class="workspace-actions">' +
         openAction +
@@ -515,6 +535,19 @@ function renderWorkspaceInstallHandoffForm(accountID: string, workspaceID: strin
   );
 }
 
+function renderWorkspaceReportingHandoffForm(accountID: string, workspaceID: string, accountAPIBasePath: string, label = 'Open reports', buttonClassName = 'btn-secondary btn-compact'): string {
+  if (!accountAPIBasePath) {
+    return '<button class="' + escapeAttr(buttonClassName) + '" type="button" data-shell-action="activate-section" data-shell-section="workspaces">' + escapeHTML(label) + '</button>';
+  }
+  return (
+    '<form method="POST" action="' +
+    escapeAttr(workspaceHandoffActionPath(accountAPIBasePath, accountID, workspaceID, WORKSPACE_REPORTING_TARGET_PATH)) +
+    '">' +
+    '<button type="submit" class="' + escapeAttr(buttonClassName) + '">' + escapeHTML(label) + '</button>' +
+    '</form>'
+  );
+}
+
 function attentionWorkspaceEntries(entries: WorkspaceSummaryEntry[]): WorkspaceSummaryEntry[] {
   var results: WorkspaceSummaryEntry[] = [];
   for (var i = 0; i < entries.length; i += 1) {
@@ -529,7 +562,7 @@ function attentionWorkspaceEntries(entries: WorkspaceSummaryEntry[]): WorkspaceS
 function readyWorkspaceEntries(entries: WorkspaceSummaryEntry[]): WorkspaceSummaryEntry[] {
   var results: WorkspaceSummaryEntry[] = [];
   for (var i = 0; i < entries.length; i += 1) {
-    if (String(entries[i].workspace.state || '') === 'active' && workspaceHealthState(entries[i].workspace) === 'healthy') {
+    if (String(entries[i].workspace.state || '') === 'active' && workspaceSetupState(entries[i].workspace) === 'ready') {
       results.push(entries[i]);
     }
   }
@@ -540,6 +573,19 @@ function suspendedWorkspaceEntries(entries: WorkspaceSummaryEntry[]): WorkspaceS
   var results: WorkspaceSummaryEntry[] = [];
   for (var i = 0; i < entries.length; i += 1) {
     if (String(entries[i].workspace.state || '') === 'suspended') {
+      results.push(entries[i]);
+    }
+  }
+  return results;
+}
+
+function setupNeededWorkspaceEntries(entries: WorkspaceSummaryEntry[]): WorkspaceSummaryEntry[] {
+  var results: WorkspaceSummaryEntry[] = [];
+  for (var i = 0; i < entries.length; i += 1) {
+    if (String(entries[i].workspace.state || '') !== 'active') continue;
+    if (workspaceHealthState(entries[i].workspace) !== 'healthy') continue;
+    var setup = workspaceSetupState(entries[i].workspace);
+    if (setup === 'install_agents' || setup === 'configure_outputs' || setup === 'setup_path') {
       results.push(entries[i]);
     }
   }
@@ -570,6 +616,7 @@ function renderWorkspaceSummaryDecision(
 ): WorkspaceSummaryDecision {
   var attention = attentionWorkspaceEntries(entries);
   var suspended = suspendedWorkspaceEntries(entries);
+  var setupNeeded = setupNeededWorkspaceEntries(entries);
   var ready = readyWorkspaceEntries(entries);
   var primaryAction = '';
   var secondaryAction = '';
@@ -602,7 +649,7 @@ function renderWorkspaceSummaryDecision(
         escapeAttr(attentionEntry.account.id) +
         '" data-workspace-id="' +
         escapeAttr(attentionEntry.workspace.id) +
-        '">Open lifecycle</button>'
+        '">Setup checklist</button>'
       : '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>';
   } else if (suspended.length) {
     var suspendedEntry = suspended[0];
@@ -618,8 +665,37 @@ function renderWorkspaceSummaryDecision(
         escapeAttr(suspendedEntry.account.id) +
         '" data-workspace-id="' +
         escapeAttr(suspendedEntry.workspace.id) +
-        '">Open lifecycle</button>'
+        '">Setup checklist</button>'
       : '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>';
+  } else if (setupNeeded.length) {
+    var setupEntry = setupNeeded[0];
+    var setupState = workspaceSetupState(setupEntry.workspace);
+    title = setupState === 'configure_outputs'
+      ? 'Configure outputs for ' + setupEntry.workspace.display_name
+      : 'Set up ' + setupEntry.workspace.display_name;
+    description = workspaceSummaryContext(setupEntry, accounts.length > 1, workspaceSetupNextStep(setupEntry.workspace));
+    primaryAction = setupState === 'configure_outputs'
+      ? renderWorkspaceReportingHandoffForm(
+        setupEntry.account.id,
+        setupEntry.workspace.id,
+        accountAPIBasePath,
+        'Open reports',
+        'btn-primary btn-compact',
+      )
+      : renderWorkspaceInstallHandoffForm(
+        setupEntry.account.id,
+        setupEntry.workspace.id,
+        accountAPIBasePath,
+        'Install agents',
+        'btn-primary btn-compact',
+      );
+    secondaryAction = setupEntry.account.can_manage
+      ? '<button type="button" class="btn-secondary btn-compact" data-action="select-workspace" data-account-id="' +
+        escapeAttr(setupEntry.account.id) +
+        '" data-workspace-id="' +
+        escapeAttr(setupEntry.workspace.id) +
+        '">Setup checklist</button>'
+      : renderWorkspaceHandoffForm(setupEntry.account.id, setupEntry.workspace.id, accountAPIBasePath, 'Open workspace');
   } else if (ready.length) {
     var readyEntry = ready[0];
     title = 'Open ' + readyEntry.workspace.display_name;
@@ -686,6 +762,7 @@ function renderWorkspaceSummaryFacts(accounts: PortalAccountSummary[], entries: 
     accountCountLabel(accounts.length),
     workspaceCountLabel(entries.length),
     readyWorkspaceChipLabel(readyWorkspaceEntries(entries).length),
+    setupNeededWorkspaceChipLabel(setupNeededWorkspaceEntries(entries).length),
     reviewWorkspaceChipLabel(attentionWorkspaceEntries(entries).length),
     suspendedWorkspaceChipLabel(suspendedWorkspaceEntries(entries).length),
   ];
@@ -720,9 +797,9 @@ function workspaceSectionHeaderCopy(accounts: PortalAccountSummary[], entries: W
       : 'Review hosted workspace state here. An owner or admin must create or change hosted workspaces.';
   }
   if (!canManageAnyWorkspace) {
-    return 'Review hosted workspace health here and open ready workspaces. An owner or admin must handle lifecycle changes.';
+    return 'Review hosted workspace health here and open ready workspaces. An owner or admin must handle setup and workspace changes.';
   }
-  return 'Review hosted workspace health here, open the next ready workspace, and use Lifecycle only when an account-level change is required.';
+  return 'Review client workspaces here, use the setup checklist for onboarding, and keep destructive workspace actions separate from daily workspace work.';
 }
 
 export function renderWorkspaceSummarySection(context: ShellViewContext): string {
@@ -779,7 +856,7 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
   var attentionCount = attentionWorkspaces(workspaces).length;
   var suspendedCount = countWorkspacesByState(workspaces, 'suspended');
   var workspaceListSummary = account.can_manage
-    ? 'Open a workspace to work in it. Use Lifecycle only when you need account-level changes.'
+    ? 'Open a workspace to work in it, or use Setup checklist when onboarding a client.'
     : 'Open a workspace here. An owner or admin must create or change hosted workspaces.';
   var workspaceManagement = '';
   var addWorkspaceForm = '';
@@ -822,8 +899,8 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
       '" hidden>' +
         '<div class="workspace-management-header">' +
           '<div>' +
-            '<h3>Workspace lifecycle</h3>' +
-            '<p>Manage this workspace or create a new one.</p>' +
+            '<h3>Workspace setup checklist</h3>' +
+            '<p>Finish the client setup steps without mixing client data across workspaces.</p>' +
           '</div>' +
           '<button type="button" class="btn-secondary btn-compact" id="workspace-management-close-' +
           escapeAttr(account.id) +
@@ -863,8 +940,8 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
               '<strong id="workspace-management-health-' + escapeAttr(account.id) + '"></strong>' +
             '</div>' +
             '<div class="workspace-management-fact">' +
-              '<span>Lifecycle</span>' +
-              '<strong id="workspace-management-lifecycle-' + escapeAttr(account.id) + '"></strong>' +
+              '<span>Setup</span>' +
+              '<strong id="workspace-management-setup-' + escapeAttr(account.id) + '"></strong>' +
             '</div>' +
             '<div class="workspace-management-fact">' +
               '<span>Created</span>' +
@@ -874,6 +951,28 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
           '<div class="workspace-management-guidance" id="workspace-management-guidance-' +
           escapeAttr(account.id) +
           '"></div>' +
+          '<div class="workspace-setup-checklist" aria-label="Workspace setup checklist">' +
+            '<div class="workspace-setup-step workspace-setup-step-created">' +
+              '<span class="workspace-setup-status" id="workspace-management-check-created-' + escapeAttr(account.id) + '"></span>' +
+              '<div><strong>Workspace created</strong><span>This client has a separate account boundary.</span></div>' +
+            '</div>' +
+            '<div class="workspace-setup-step">' +
+              '<span class="workspace-setup-status" id="workspace-management-check-open-' + escapeAttr(account.id) + '"></span>' +
+              '<div><strong>Open the workspace</strong><span>Work inside the selected client boundary.</span></div>' +
+            '</div>' +
+            '<div class="workspace-setup-step">' +
+              '<span class="workspace-setup-status" id="workspace-management-check-install-' + escapeAttr(account.id) + '"></span>' +
+              '<div><strong>Install the first agent</strong><span>Use the workspace-bound install path so data lands in this client.</span></div>' +
+            '</div>' +
+            '<div class="workspace-setup-step">' +
+              '<span class="workspace-setup-status" id="workspace-management-check-outputs-' + escapeAttr(account.id) + '"></span>' +
+              '<div><strong>Configure alerts and reports</strong><span>Keep notifications and reports scoped to this client.</span></div>' +
+            '</div>' +
+            '<div class="workspace-setup-step">' +
+              '<span class="workspace-setup-status" id="workspace-management-check-access-' + escapeAttr(account.id) + '"></span>' +
+              '<div><strong>Review access</strong><span>Invite provider staff or client users from Access.</span></div>' +
+            '</div>' +
+          '</div>' +
           '<div class="workspace-management-next-steps" id="workspace-management-next-steps-' +
           escapeAttr(account.id) +
           '">' +
@@ -907,6 +1006,10 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
                 '">Open reports</button>' +
               '</form>' +
             '</div>' +
+            '<div class="workspace-next-step workspace-next-step-readonly">' +
+              '<div><strong>Access</strong><span>Invite people or adjust roles from the account access boundary.</span></div>' +
+              '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="access">Open Access</button>' +
+            '</div>' +
           '</div>' +
           '<div class="workspace-management-actions">' +
             '<button type="button" class="btn-danger" id="workspace-management-action-' +
@@ -925,8 +1028,8 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
           (workspaceHeaderActions ? '<div class="workspace-list-toolbar">' + workspaceHeaderActions + '</div>' : '') +
           '<div class="workspace-list-head">' +
             '<span>Workspace</span>' +
+            '<span>Setup</span>' +
             '<span>Health</span>' +
-            '<span>Lifecycle</span>' +
             '<span>Actions</span>' +
           '</div>' +
           '<div class="workspace-list">' + workspaces.map(function(workspace) {
@@ -1380,7 +1483,7 @@ export function renderSignedOutPortalHTML(context: ShellViewContext): string {
         '<h1>Sign in to Pulse Account</h1>' +
         '<p>Use one commercial email address for hosted workspaces, account access, billing, licenses, refunds, and privacy requests.</p>' +
         '<div class="portal-auth-scope-list" aria-label="Pulse Account scope">' +
-          renderAuthScopeRow('Workspaces', 'Open hosted workspaces and review lifecycle state.') +
+          renderAuthScopeRow('Workspaces', 'Open hosted workspaces and review workspace state.') +
           renderAuthScopeRow('Access', 'Review account access and manage roles when permitted.') +
           renderAuthScopeRow('Billing', 'Open hosted billing or self-hosted commercial tools when they apply.') +
         '</div>' +

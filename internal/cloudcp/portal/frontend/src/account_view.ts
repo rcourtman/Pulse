@@ -7,7 +7,13 @@ import type {
   PortalWorkspaceSummary,
 } from './types';
 import { normalizePortalRole, portalRoleCapabilityCopy, portalRoleLabel } from './account_roles';
-import { workspaceGuidanceCopy, workspaceHealthLabel, workspaceStatusCopy } from './workspace_presentation';
+import {
+  workspaceGuidanceCopy,
+  workspaceHealthLabel,
+  workspaceSetupLabel,
+  workspaceSetupState,
+  workspaceStatusCopy,
+} from './workspace_presentation';
 
 type FormValueElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 
@@ -45,6 +51,12 @@ function workspaceMeta(workspace: PortalWorkspaceSummary): string {
     }
   }
   return parts.join(' · ');
+}
+
+function setChecklistStatus(element: HTMLElement | null, tone: string, label: string): void {
+  if (!element) return;
+  element.textContent = label;
+  element.className = 'workspace-setup-status workspace-setup-status-' + tone;
 }
 
 function findWorkspace(account: PortalAccountSummary, workspaceID: string): PortalWorkspaceSummary | null {
@@ -93,9 +105,14 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
   var meta = getElement<HTMLElement>('workspace-management-meta-' + account.id);
   var summary = getElement<HTMLElement>('workspace-management-summary-' + account.id);
   var health = getElement<HTMLElement>('workspace-management-health-' + account.id);
-  var lifecycle = getElement<HTMLElement>('workspace-management-lifecycle-' + account.id);
+  var setup = getElement<HTMLElement>('workspace-management-setup-' + account.id);
   var created = getElement<HTMLElement>('workspace-management-created-' + account.id);
   var guidance = getElement<HTMLElement>('workspace-management-guidance-' + account.id);
+  var checkCreated = getElement<HTMLElement>('workspace-management-check-created-' + account.id);
+  var checkOpen = getElement<HTMLElement>('workspace-management-check-open-' + account.id);
+  var checkInstall = getElement<HTMLElement>('workspace-management-check-install-' + account.id);
+  var checkOutputs = getElement<HTMLElement>('workspace-management-check-outputs-' + account.id);
+  var checkAccess = getElement<HTMLElement>('workspace-management-check-access-' + account.id);
   var actionButton = getElement<HTMLButtonElement>('workspace-management-action-' + account.id);
   var closeButton = getElement<HTMLButtonElement>('workspace-management-close-' + account.id);
   var openForm = getElement<HTMLFormElement>('workspace-management-open-form-' + account.id);
@@ -104,7 +121,7 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
   var installButton = getElement<HTMLButtonElement>('workspace-management-install-' + account.id);
   var reportingForm = getElement<HTMLFormElement>('workspace-management-reporting-form-' + account.id);
   var reportingButton = getElement<HTMLButtonElement>('workspace-management-reporting-' + account.id);
-  if (!empty || !content || !title || !meta || !summary || !health || !lifecycle || !created || !guidance || !actionButton || !closeButton) return;
+  if (!empty || !content || !title || !meta || !summary || !health || !setup || !created || !guidance || !actionButton || !closeButton) return;
 
   var workspace = entry.selectedWorkspaceID ? findWorkspace(account, entry.selectedWorkspaceID) : null;
   var hasSelection = !!workspace;
@@ -148,9 +165,30 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
   meta.textContent = workspaceMeta(workspace);
   summary.textContent = workspaceStatusCopy(workspace);
   health.textContent = workspaceHealthLabel(workspace);
-  lifecycle.textContent = workspace.state ? workspace.state.charAt(0).toUpperCase() + workspace.state.slice(1) : 'Unknown';
+  setup.textContent = workspaceSetupLabel(workspace);
   created.textContent = workspaceCreatedLabel(workspace);
   guidance.textContent = workspaceGuidanceCopy(workspace);
+  var setupState = workspaceSetupState(workspace);
+  var isActive = workspace.state === 'active';
+  setChecklistStatus(checkCreated, workspace.state ? 'done' : 'pending', workspace.state ? 'Done' : 'Pending');
+  setChecklistStatus(checkOpen, isActive ? 'available' : 'blocked', isActive ? 'Available' : 'Blocked');
+  if (setupState === 'ready' || setupState === 'configure_outputs') {
+    setChecklistStatus(checkInstall, 'done', 'Done');
+  } else if (setupState === 'install_agents' || setupState === 'setup_path') {
+    setChecklistStatus(checkInstall, isActive ? 'next' : 'blocked', isActive ? 'Next' : 'Blocked');
+  } else {
+    setChecklistStatus(checkInstall, 'blocked', 'Review');
+  }
+  if (setupState === 'ready') {
+    setChecklistStatus(checkOutputs, 'done', 'Done');
+  } else if (setupState === 'configure_outputs') {
+    setChecklistStatus(checkOutputs, 'next', 'Next');
+  } else if (setupState === 'review') {
+    setChecklistStatus(checkOutputs, 'blocked', 'Review');
+  } else {
+    setChecklistStatus(checkOutputs, 'pending', 'Pending');
+  }
+  setChecklistStatus(checkAccess, 'available', 'Available');
   actionButton.textContent = workspaceActionLabel(workspace);
   actionButton.disabled = entry.manageWorkspace.pending;
   actionButton.setAttribute('data-workspace-id', workspace.id);
