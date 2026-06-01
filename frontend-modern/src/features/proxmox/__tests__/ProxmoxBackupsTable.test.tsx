@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ProxmoxBackupsTable } from '../ProxmoxBackupsTable';
 import type { Resource } from '@/types/resource';
+import { getRecoveryFullDateLabel } from '@/utils/recoveryDatePresentation';
 
 // ProxmoxBackupsTable reads URL search params (node/type scope filters), so it
 // must render inside a Router context.
@@ -143,6 +144,11 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.getByRole('columnheader', { name: /source/i })).toBeInTheDocument();
     expect(screen.getAllByText('PBS').length).toBeGreaterThan(0);
     expect(screen.getByText('main / minipc')).toBeInTheDocument();
+    expect(
+      screen.getByRole('cell', {
+        name: `${getRecoveryFullDateLabel('2026-05-25')} 3 backups`,
+      }),
+    ).toBeInTheDocument();
     expect(apiFetchMock).toHaveBeenCalledWith('/api/backups/pbs');
     expect(apiFetchMock).toHaveBeenCalledWith('/api/backups/pve');
   });

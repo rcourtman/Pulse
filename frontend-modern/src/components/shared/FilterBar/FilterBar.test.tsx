@@ -57,6 +57,8 @@ describe('FilterBar', () => {
 
     expect(setType).toHaveBeenCalledWith('vm');
     const filterSelect = screen.getByRole('combobox', { name: 'Filter' });
+    expect(filterSelect).toHaveValue('');
+    expect(within(filterSelect).getByRole('option', { name: 'Add filter' })).toBeEnabled();
     expect(
       within(filterSelect).queryByRole('option', { name: 'Type: VMs' }),
     ).not.toBeInTheDocument();

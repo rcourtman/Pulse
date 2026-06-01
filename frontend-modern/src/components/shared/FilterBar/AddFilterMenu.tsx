@@ -114,7 +114,7 @@ export const AddFilterMenu: Component<AddFilterMenuProps> = (props) => {
         aria-label="Filter"
         class={`${filterSelectClass} min-w-[9rem] disabled:cursor-not-allowed disabled:opacity-50`}
       >
-        <option value="" disabled>
+        <option value="">
           {isDisabled() ? 'No filters' : 'Add filter'}
         </option>
         <For each={selectableGroups()}>

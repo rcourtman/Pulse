@@ -242,6 +242,7 @@ export function ProxmoxRecoverableTable(props: {
                         class="border-t border-border bg-surface-alt px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-base-content"
                       >
                         {group.label}
+                        {' '}
                         <span class="ml-2 normal-case tracking-normal text-muted">
                           {group.items.length} {group.items.length === 1 ? 'backup' : 'backups'}
                         </span>
