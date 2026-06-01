@@ -464,6 +464,157 @@ func TestNotificationCooldownAllowsNewAlertInstance(t *testing.T) {
 	}
 }
 
+func TestNotificationCooldownDisabledSuppressesDuplicateActiveAlert(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	nm := NewNotificationManager("")
+	defer nm.Stop()
+	nm.SetCooldown(0)
+	nm.SetGroupingWindow(3600)
+
+	alert := &alerts.Alert{
+		ID:        "vm-100-cpu",
+		Type:      "cpu",
+		Level:     alerts.AlertLevelWarning,
+		StartTime: time.Now().Add(-time.Minute),
+	}
+
+	nm.SendAlert(alert)
+	flushPending(nm)
+
+	nm.SendAlert(alert)
+
+	nm.mu.RLock()
+	pendingAfter := len(nm.pendingAlerts)
+	nm.mu.RUnlock()
+	if pendingAfter != 0 {
+		t.Fatalf("duplicate active alert should not be queued when cooldown is disabled, found %d pending", pendingAfter)
+	}
+}
+
+func TestSendAlertToChannelsBypassesCooldownAndTargetsWebhook(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	webhookHits := make(chan string, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		webhookHits <- string(body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	nm := NewNotificationManagerWithDataDir("https://pulse.local", t.TempDir())
+	defer nm.Stop()
+	if err := nm.UpdateAllowedPrivateCIDRs("127.0.0.1/32,::1/128"); err != nil {
+		t.Fatalf("failed to allowlist localhost: %v", err)
+	}
+	nm.SetCooldown(30)
+	nm.SetGroupingWindow(3600)
+	nm.AddWebhook(WebhookConfig{
+		ID:      "webhook-escalation",
+		Name:    "Escalation",
+		URL:     server.URL,
+		Method:  http.MethodPost,
+		Enabled: true,
+	})
+
+	alert := &alerts.Alert{
+		ID:           "vm-100-cpu-escalation",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelCritical,
+		ResourceName: "vm-100",
+		Message:      "CPU usage high",
+		StartTime:    time.Now().Add(-time.Minute),
+	}
+
+	nm.SendAlert(alert)
+	flushPending(nm)
+
+	select {
+	case <-webhookHits:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for initial webhook notification")
+	}
+
+	nm.SendAlert(alert)
+	select {
+	case payload := <-webhookHits:
+		t.Fatalf("regular alert send should have been suppressed during cooldown, got webhook payload %s", payload)
+	case <-time.After(150 * time.Millisecond):
+	}
+
+	nm.mu.RLock()
+	pendingAfterRegularSend := len(nm.pendingAlerts)
+	nm.mu.RUnlock()
+	if pendingAfterRegularSend != 0 {
+		t.Fatalf("regular alert send should not queue during cooldown, found %d pending", pendingAfterRegularSend)
+	}
+
+	nm.SendAlertToChannels(alert, "webhook")
+	select {
+	case payload := <-webhookHits:
+		if !strings.Contains(payload, alert.ID) {
+			t.Fatalf("expected escalation webhook payload for %s, got %s", alert.ID, payload)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for escalation webhook notification")
+	}
+}
+
+func TestCancelAlertClearsCooldownAndQueueWithoutPendingGroup(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	nm := NewNotificationManager("")
+	defer nm.Stop()
+	if nm.queue == nil {
+		t.Fatal("expected notification queue to be available")
+	}
+	nm.queue.processorTicker.Stop()
+
+	alert := testQueuedAlert()
+	nm.mu.Lock()
+	nm.lastNotified[alert.ID] = notificationRecord{
+		lastSent:   time.Now(),
+		alertStart: alert.StartTime,
+	}
+	nm.mu.Unlock()
+
+	configJSON, err := json.Marshal(WebhookConfig{
+		ID:      "queued-webhook",
+		Name:    "Queued",
+		URL:     "https://example.com/webhook",
+		Method:  http.MethodPost,
+		Enabled: true,
+	})
+	if err != nil {
+		t.Fatalf("marshal webhook config: %v", err)
+	}
+
+	notif := &QueuedNotification{
+		ID:        "queued-firing-alert",
+		Type:      "webhook",
+		Config:    configJSON,
+		Alerts:    []*alerts.Alert{alert},
+		CreatedAt: time.Now(),
+	}
+	insertPendingQueuedNotification(t, nm.queue, notif)
+
+	nm.CancelAlert(alert.ID)
+
+	nm.mu.RLock()
+	_, cooldownExists := nm.lastNotified[alert.ID]
+	pendingAfter := len(nm.pendingAlerts)
+	nm.mu.RUnlock()
+
+	if cooldownExists {
+		t.Fatalf("expected cooldown record for %s to be cleared", alert.ID)
+	}
+	if pendingAfter != 0 {
+		t.Fatalf("expected no pending alerts, found %d", pendingAfter)
+	}
+	if got := queuedNotificationStatus(t, nm.queue, notif.ID); got != QueueStatusCancelled {
+		t.Fatalf("expected queued firing notification to be cancelled, got %s", got)
+	}
+}
+
 func TestCancelAlertRemovesPending(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	nm := NewNotificationManager("")

@@ -707,7 +707,7 @@ func (n *NotificationManager) IsEnabled() bool {
 	return n.enabled
 }
 
-// SendAlert sends notifications for an alert
+// SendAlert sends notifications for a newly fired or explicitly re-notified alert.
 func (n *NotificationManager) SendAlert(alert *alerts.Alert) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -724,18 +724,27 @@ func (n *NotificationManager) SendAlert(alert *alerts.Alert) {
 		return
 	}
 
-	// Check cooldown
+	// Check cooldown. A disabled cooldown means "do not send repeat
+	// notifications for the same active alert occurrence"; escalation uses
+	// SendAlertToChannels because its cadence is owned by the alert schedule.
 	record, exists := n.lastNotified[alert.ID]
-	if exists && record.alertStart.Equal(alert.StartTime) && time.Since(record.lastSent) < n.cooldown {
-		log.Info().
-			Str("alertID", alert.ID).
-			Str("resourceName", alert.ResourceName).
-			Str("type", alert.Type).
-			Dur("timeSince", time.Since(record.lastSent)).
-			Dur("cooldown", n.cooldown).
-			Dur("remainingCooldown", n.cooldown-time.Since(record.lastSent)).
-			Msg("Alert notification in cooldown for active alert - notification suppressed")
-		return
+	if exists && record.alertStart.Equal(alert.StartTime) {
+		elapsed := time.Since(record.lastSent)
+		if n.cooldown <= 0 || elapsed < n.cooldown {
+			remainingCooldown := time.Duration(0)
+			if n.cooldown > elapsed {
+				remainingCooldown = n.cooldown - elapsed
+			}
+			log.Info().
+				Str("alertID", alert.ID).
+				Str("resourceName", alert.ResourceName).
+				Str("type", alert.Type).
+				Dur("timeSince", elapsed).
+				Dur("cooldown", n.cooldown).
+				Dur("remainingCooldown", remainingCooldown).
+				Msg("Alert notification in cooldown for active alert - notification suppressed")
+			return
+		}
 	}
 
 	log.Info().
