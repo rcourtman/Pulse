@@ -975,7 +975,11 @@ not a replacement status card, CTA band, or page-local nested card.
     primitives for table shells, alignment, filter buttons, charts, and empty
     states. Frontend-primitives owns those reusable controls and guardrails,
     not the storage/recovery semantics that decide which PBS, PVE archive,
-    snapshot, task, or workload-coverage rows are shown.
+    snapshot, task, or workload-coverage rows are shown. Storage/recovery-owned
+    Proxmox backup subcomponents may live under `frontend-modern/src/features/`
+    when they are listed in the subsystem registry and continue to compose the
+    shared filter, table, chart, and empty-state primitives rather than local
+    shell variants.
     `frontend-modern/src/AppLayout.tsx` may extend the `PrimaryTab` list with
     new platform or runtime-family entries, but primary navigation is a
     support-and-evidence-gated surface: rendered tabs, command/search

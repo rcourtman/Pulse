@@ -18,6 +18,7 @@ import {
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
 } from '@/features/platformPage/sharedPlatformPage';
+import type { PBSBackup } from '@/types/api';
 import type { Resource, ResourcePBSDatastore } from '@/types/resource';
 import type { StatusIndicatorVariant } from '@/utils/status';
 
@@ -35,6 +36,17 @@ interface BackupServerRow {
   connectionLabel: string;
   version?: string;
   datastore?: ResourcePBSDatastore;
+  backupCount: number;
+}
+
+// Key by instance and datastore so multi-datastore servers get accurate counts.
+function buildBackupCounts(backups: readonly PBSBackup[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const backup of backups) {
+    const key = `${backup.instance ?? ''}::${backup.datastore ?? ''}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
 }
 
 function serverIsOnline(resource: Resource): boolean {
@@ -71,8 +83,21 @@ function usageToneClass(pct: number | undefined): string {
   return 'text-base-content';
 }
 
-export function buildBackupServerRows(servers: readonly Resource[]): BackupServerRow[] {
+export function buildBackupServerRows(
+  servers: readonly Resource[],
+  backups: readonly PBSBackup[] = [],
+): BackupServerRow[] {
   const rows: BackupServerRow[] = [];
+  const counts = buildBackupCounts(backups);
+  // PBS backups carry instance; resources may expose it under name or pbs.instanceId.
+  const countFor = (server: Resource, datastoreName: string): number => {
+    const ids = [server.name, server.pbs?.instanceId].filter(Boolean) as string[];
+    for (const id of ids) {
+      const n = counts.get(`${id}::${datastoreName}`);
+      if (n !== undefined) return n;
+    }
+    return 0;
+  };
   // `model().pbs` is scope-filtered (proxmox-pbs), which also catches PBS
   // *datastore* storage resources (type 'storage', sources ['pbs']). This table
   // is about the server, so keep only actual PBS server instances — otherwise a
@@ -86,6 +111,7 @@ export function buildBackupServerRows(servers: readonly Resource[]): BackupServe
         online: serverIsOnline(server),
         connectionLabel: connectionLabel(server),
         version: server.pbs?.version,
+        backupCount: 0,
       });
       continue;
     }
@@ -97,6 +123,7 @@ export function buildBackupServerRows(servers: readonly Resource[]): BackupServe
         connectionLabel: connectionLabel(server),
         version: server.pbs?.version,
         datastore,
+        backupCount: countFor(server, datastore.name),
       });
     }
   }
@@ -105,21 +132,23 @@ export function buildBackupServerRows(servers: readonly Resource[]): BackupServe
 
 export function ProxmoxBackupServersTable(props: {
   servers: readonly Resource[];
+  backups?: readonly PBSBackup[];
   emptyIcon?: JSX.Element;
 }) {
-  const rows = () => buildBackupServerRows(props.servers);
+  const rows = () => buildBackupServerRows(props.servers, props.backups ?? []);
 
   return (
     <Show when={rows().length > 0}>
       <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-        <Table class="min-w-[760px] table-fixed text-xs">
+        <Table class="min-w-[820px] table-fixed text-xs">
           <colgroup>
-            <col style={{ width: '22%' }} />
-            <col style={{ width: '14%' }} />
-            <col style={{ width: '12%' }} />
             <col style={{ width: '20%' }} />
-            <col style={{ width: '22%' }} />
-            <col style={{ width: '10%' }} />
+            <col style={{ width: '13%' }} />
+            <col style={{ width: '11%' }} />
+            <col style={{ width: '18%' }} />
+            <col style={{ width: '20%' }} />
+            <col style={{ width: '9%' }} />
+            <col style={{ width: '9%' }} />
           </colgroup>
           <TableHeader>
             <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
@@ -128,6 +157,9 @@ export function ProxmoxBackupServersTable(props: {
               <TableHead class={getPlatformTableHeadClassForKind('text')}>Version</TableHead>
               <TableHead class={getPlatformTableHeadClassForKind('text')}>Datastore</TableHead>
               <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>Used</TableHead>
+              <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                Backups
+              </TableHead>
               <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>Dedup</TableHead>
             </TableRow>
           </TableHeader>
@@ -188,6 +220,13 @@ export function ProxmoxBackupServersTable(props: {
                             </span>
                           </div>
                         )}
+                      </Show>
+                    </TableCell>
+                    <TableCell
+                      class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                    >
+                      <Show when={row.datastore} fallback={<span class="text-muted">—</span>}>
+                        {row.backupCount.toLocaleString()}
                       </Show>
                     </TableCell>
                     <TableCell

@@ -43,10 +43,14 @@ state.
 14. `frontend-modern/src/utils/storageSummaryCache.ts`
 15. `frontend-modern/src/components/Storage/useStorageSummaryCharts.ts`
 16. `frontend-modern/src/features/storageBackups/storageCapacityDeltaPresentation.ts`
-17. `frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx`
-18. `frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx`
+17. `frontend-modern/src/features/proxmox/BackupActivityChart.tsx`
+18. `frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts`
 19. `frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts`
-20. `frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx`
+20. `frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx`
+21. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx`
+22. `frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx`
+23. `frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx`
+24. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx`
 
 ## Shared Boundaries
 
@@ -83,17 +87,20 @@ protection, verification, namespace, owner, and file facts from
 `models.PBSBackup`. PVE snapshot, storage-archive, and task tables consume
 `/api/backups/pve` and must keep columns source-aware: columns that PVE cannot
 populate for the current data set are omitted rather than rendered as all-dash
-placeholders. The Proxmox Backups tab owns a workload-level coverage view and a
-cross-source restore-point inventory as its primary operator workflows; raw
-PBS, snapshot, and backup-file tables remain a secondary source-detail drilldown
-for audit evidence instead of equal-weight primary destinations. Those aggregate
+placeholders. The Proxmox Backups tab owns two primary operator workflows: a
+default chronological `By date` recoverable-artifact feed with daily activity
+summaries, and a `By guest` workload coverage table for current live guest
+posture. Raw PBS, snapshot, and backup-file facts remain source-visible inside
+those aggregate workflows rather than equal-weight source browser tabs. Those
 views may correlate unified-resource workload identity with PBS artifacts, PVE
 backup archives, guest snapshots, and backup tasks, but they must keep each
 artifact's source visible and must not flatten PBS verification/protection facts
 into PVE archive or snapshot semantics. Workload coverage posture must be
 derived from real recovery evidence and recent task outcomes, including
 explicit uncovered and failed-latest-task states, rather than from source-detail
-row counts alone.
+row counts alone. PBS server/datastore rows may display backup counts, but the
+counts must come from the PBS backup API artifact identity, not from a
+datastore-capacity approximation.
 The Proxmox overview workload table's Backup column is the primary
 glance-level protection signal for current guests. It must remain visible,
 dense, and backed by the canonical guest `LastBackup` synchronization from PVE

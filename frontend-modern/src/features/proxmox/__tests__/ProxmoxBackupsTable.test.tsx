@@ -128,67 +128,75 @@ afterEach(() => {
 });
 
 describe('ProxmoxBackupsTable', () => {
-  it('renders one coverage row per workload with restore posture', async () => {
+  it('defaults to the By date chronological feed with source/location/state columns', async () => {
     mockBackupAPIs();
 
     renderInRouter(() => (
       <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
     ));
 
-    expect(await screen.findByText('pbs-docker')).toBeInTheDocument();
-    // The workload has a recent restore point, so its posture reads "Current".
-    expect(screen.getAllByText('Current').length).toBeGreaterThan(0);
+    // Default view is the v5-parity backup feed: one row PER backup, so the
+    // guest with PBS + archive + snapshot artifacts appears on multiple rows,
+    // sourced and located, not collapsed to a single coverage-posture summary.
+    expect((await screen.findAllByText('pbs-docker')).length).toBeGreaterThan(1);
+    expect(screen.getByRole('columnheader', { name: /location/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /source/i })).toBeInTheDocument();
+    expect(screen.getAllByText('PBS').length).toBeGreaterThan(0);
+    expect(screen.getByText('main / minipc')).toBeInTheDocument();
     expect(apiFetchMock).toHaveBeenCalledWith('/api/backups/pbs');
     expect(apiFetchMock).toHaveBeenCalledWith('/api/backups/pve');
   });
 
-  it('collapses the surface to a single table — no inner source/job/restore tabs', async () => {
+  it('offers By date / By guest views and no legacy sub-tab tree', async () => {
     mockBackupAPIs();
 
     renderInRouter(() => (
       <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
     ));
 
-    await screen.findByText('pbs-docker');
+    await screen.findAllByText('pbs-docker');
 
-    // The old four-tab + sub-tab tree is gone; the surface is the coverage
-    // table alone.
-    expect(screen.queryByRole('button', { name: /workload coverage/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /restore points/i })).not.toBeInTheDocument();
+    // The two top-level views exist...
+    expect(screen.getByRole('button', { name: /by date/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /by guest/i })).toBeInTheDocument();
+    // ...and the old four-tab + sub-tab tree does not.
     expect(screen.queryByRole('button', { name: /source details/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /job history/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /pbs artifacts/i })).not.toBeInTheDocument();
   });
 
-  it('keeps PBS / archive / snapshot evidence in the row expansion (demote, not delete)', async () => {
+  it('switches to By guest showing posture, and keeps per-source evidence in the row expansion', async () => {
     mockBackupAPIs();
 
     renderInRouter(() => (
       <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
     ));
 
-    await screen.findByText('pbs-docker');
+    await screen.findAllByText('pbs-docker');
+    await fireEvent.click(screen.getByRole('button', { name: /by guest/i }));
 
+    // By guest is the coverage/posture view; the workload's recent backup reads
+    // "Current".
+    expect(screen.getByRole('columnheader', { name: /posture/i })).toBeInTheDocument();
+    expect(screen.getAllByText('Current').length).toBeGreaterThan(0);
+
+    // Per-source detail is one click down inside the workload's row.
     await fireEvent.click(
       screen.getByRole('button', { name: /show restore evidence for pbs-docker/i }),
     );
-
-    // The per-source detail that used to live behind Source details is now one
-    // click down, inside the workload's row.
     expect(screen.getByText('Restore evidence')).toBeInTheDocument();
-    expect(screen.getAllByText('PBS').length).toBeGreaterThan(0);
     expect(screen.getAllByText('PVE archive').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Snapshot').length).toBeGreaterThan(0);
   });
 
-  it('filters coverage rows by search term', async () => {
+  it('filters the backup feed by search term', async () => {
     mockBackupAPIs();
 
     renderInRouter(() => (
       <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
     ));
 
-    await screen.findByText('pbs-docker');
+    await screen.findAllByText('pbs-docker');
 
     const searchInput = screen.getByPlaceholderText(/search backups by workload/i);
     await fireEvent.input(searchInput, { target: { value: 'no-such-guest' } });

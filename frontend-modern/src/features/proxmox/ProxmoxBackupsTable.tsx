@@ -1,18 +1,17 @@
-import {
-  Show,
-  createMemo,
-  createResource,
-  createSignal,
-  type Component,
-  type JSX,
-} from 'solid-js';
+import { Show, createMemo, createResource, createSignal, type Component, type JSX } from 'solid-js';
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
+import CalendarIcon from 'lucide-solid/icons/calendar';
+import ShieldCheckIcon from 'lucide-solid/icons/shield-check';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { useSearchParams } from '@solidjs/router';
 import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components/shared/FilterBar';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { apiFetch } from '@/utils/apiClient';
+import {
+  getRecoveryFilterDateLabel,
+  recoveryDateKeyFromTimestamp,
+} from '@/utils/recoveryDatePresentation';
 import type {
   BackupTask,
   GuestSnapshot,
@@ -24,36 +23,44 @@ import type {
   StorageBackup,
 } from '@/types/api';
 import type { Resource } from '@/types/resource';
+import { BackupActivityChart } from './BackupActivityChart';
+import {
+  buildBackupActivityTimeline,
+  type BackupActivityMetricMode,
+  type BackupActivityRangeDays,
+  type BackupActivitySegmentKind,
+} from './proxmoxBackupActivityPresentation';
 import {
   buildProxmoxBackupRecoveryModel,
   coverageRowMatchesSearch,
   isCoverageAttention,
+  recoverableArtifactMatchesSearch,
+  type RecoverableArtifact,
 } from './proxmoxBackupRecoveryModel';
 import {
   COVERAGE_SORT_DEFAULT_DIRECTION,
+  RECOVERABLE_SORT_DEFAULT_DIRECTION,
   cmpNumber,
   cmpString,
   type CoverageFilterValue,
   type CoverageSortKey,
+  type RecoverableFilterValue,
+  type RecoverableSortKey,
 } from './proxmoxBackupsTableModel';
-import { COVERAGE_FILTERS } from './proxmoxBackupsTableShared';
+import {
+  COVERAGE_FILTERS,
+  RECOVERABLE_FILTERS,
+  artifactStateLabel,
+} from './proxmoxBackupsTableShared';
 import { ProxmoxBackupsCoverageStrip } from './ProxmoxBackupsCoverageStrip';
 import { ProxmoxBackupServersTable } from './ProxmoxBackupServersTable';
 import { ProxmoxCoverageTable } from './ProxmoxCoverageTable';
+import { ProxmoxRecoverableTable } from './ProxmoxRecoverableTable';
 
-// The Proxmox backups surface answers one operator question: "is every guest
-// backed up, recently, and did the last job work?" That question IS the whole
-// surface — one row per workload, a posture dot, the latest restore point, and
-// the per-source evidence (PBS snapshots, PVE archives, guest snapshots) tucked
-// into each row's expansion for anyone who wants to drill in.
-//
-// The earlier per-source browsers (PBS artifacts / Snapshots / Backup files),
-// the "Restore points" and "Job history" tabs, and the per-day activity charts
-// were removed deliberately. A monitor is not a console: the live PBS and PVE
-// web UIs already own the forensic per-artifact view, and reproducing it
-// read-only here only buried the one question a backup monitor exists to
-// answer. Nothing was deleted that a power user needs — the evidence lives in
-// the row expansion (demote, not delete).
+// One backups surface, two operator views: a chronological recoverable-artifact
+// feed for "what ran when", and a guest coverage table for "what is protected".
+
+type BackupView = 'date' | 'guest';
 
 async function fetchPVEBackups(): Promise<PVEBackupsPayload> {
   const response = await apiFetch('/api/backups/pve');
@@ -90,10 +97,12 @@ export const ProxmoxBackupsTable: Component<{
 
   // Structured scope filters (node, type) live in the URL so the view is
   // shareable, survives reload, and can be captured by FilterBar saved views.
-  // Search and the posture facet stay ephemeral signals.
+  // Search, the view toggle, and status facets stay ephemeral signals.
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = createSignal('');
+  const [view, setView] = createSignal<BackupView>('date');
   const [coverageFilter, setCoverageFilter] = createSignal<CoverageFilterValue>('all');
+  const [recoverableFilter, setRecoverableFilter] = createSignal<RecoverableFilterValue>('all');
 
   const nodeFilter = (): string => (typeof searchParams.node === 'string' ? searchParams.node : '');
   const setNodeFilter = (value: string): void => setSearchParams({ node: value || null });
@@ -134,12 +143,30 @@ export const ProxmoxBackupsTable: Component<{
   // pile of nameless dead records sorted to the top.
   const [showOrphaned, setShowOrphaned] = createSignal(false);
 
+  // Chronological feed sort and activity-chart controls.
+  const [recoverableSortKey, setRecoverableSortKey] = createSignal<RecoverableSortKey>('created');
+  const [recoverableSortDirection, setRecoverableSortDirection] = createSignal<'asc' | 'desc'>(
+    'desc',
+  );
+  const [chartRange, setChartRange] = createSignal<BackupActivityRangeDays>(30);
+  const [selectedDateKey, setSelectedDateKey] = createSignal<string | null>(null);
+  const [recoverableMetricMode, setRecoverableMetricMode] =
+    createSignal<BackupActivityMetricMode>('count');
+
   const handleCoverageSort = (key: CoverageSortKey) => {
     if (coverageSortKey() === key) {
       setCoverageSortDirection(coverageSortDirection() === 'asc' ? 'desc' : 'asc');
     } else {
       setCoverageSortKey(key);
       setCoverageSortDirection(COVERAGE_SORT_DEFAULT_DIRECTION[key]);
+    }
+  };
+  const handleRecoverableSort = (key: RecoverableSortKey) => {
+    if (recoverableSortKey() === key) {
+      setRecoverableSortDirection(recoverableSortDirection() === 'asc' ? 'desc' : 'asc');
+    } else {
+      setRecoverableSortKey(key);
+      setRecoverableSortDirection(RECOVERABLE_SORT_DEFAULT_DIRECTION[key]);
     }
   };
   const toggleCoverageExpansion = (key: string) =>
@@ -149,6 +176,8 @@ export const ProxmoxBackupsTable: Component<{
       else next.add(key);
       return next;
     });
+  const toggleDay = (key: string) =>
+    setSelectedDateKey((current) => (current === key ? null : key));
 
   const pbsArtifacts = createMemo<PBSBackup[]>(() => pbsBackups()?.backups ?? []);
   const snapshots = createMemo<GuestSnapshot[]>(() => backups()?.guestSnapshots ?? []);
@@ -181,7 +210,9 @@ export const ProxmoxBackupsTable: Component<{
     }
     return [
       { value: '', label: 'All nodes' },
-      ...[...nodes].sort((a, b) => a.localeCompare(b)).map((node) => ({ value: node, label: node })),
+      ...[...nodes]
+        .sort((a, b) => a.localeCompare(b))
+        .map((node) => ({ value: node, label: node })),
     ];
   });
 
@@ -265,39 +296,141 @@ export const ProxmoxBackupsTable: Component<{
     };
   });
 
-  // FilterBar catalog: Node + Type scope filters (in the "+ Filter" menu) and
-  // the posture facet as an inline segmented control, matching the overview /
-  // workloads / storage pages.
-  const buildBackupsFilters = (): FilterDef[] => [
-    {
-      id: 'node',
-      label: 'Node',
-      group: 'scope',
-      options: nodeOptions,
-      value: nodeFilter,
-      setValue: setNodeFilter,
-      defaultValue: '',
-    },
-    {
-      id: 'type',
-      label: 'Type',
-      group: 'scope',
-      options: () => typeFilterOptions,
-      value: typeFilter,
-      setValue: setTypeFilter,
-      defaultValue: '',
-    },
-    {
-      id: 'posture',
-      label: 'Posture',
-      group: 'status',
-      inline: true,
-      options: () => COVERAGE_FILTERS,
-      value: coverageFilter,
-      setValue: (v) => setCoverageFilter(v as CoverageFilterValue),
-      defaultValue: 'all',
-    },
+  // Recoverable artifact feed: PBS, PVE archive, and guest snapshot rows.
+  const RECOVERABLE_SEGMENT_KINDS: readonly BackupActivitySegmentKind[] = [
+    'pbs',
+    'archive',
+    'snapshot',
   ];
+
+  const recoverableTimeline = createMemo(() =>
+    buildBackupActivityTimeline<RecoverableArtifact>(
+      chartRange(),
+      recoveryModel().recoverableArtifacts,
+      (artifact) => artifact.createdMs,
+      (artifact) =>
+        artifact.sourceKind === 'pbs'
+          ? 'pbs'
+          : artifact.sourceKind === 'archive'
+            ? 'archive'
+            : 'snapshot',
+      {
+        getValue:
+          recoverableMetricMode() === 'volume'
+            ? (artifact) => (artifact.size && artifact.size > 0 ? artifact.size : 0)
+            : undefined,
+      },
+    ),
+  );
+
+  const filteredRecoverableArtifacts = createMemo(() => {
+    const term = search().trim().toLowerCase();
+    const filter = recoverableFilter();
+    const dateKey = selectedDateKey();
+    const list = recoveryModel().recoverableArtifacts.filter((artifact) => {
+      if (!nodeMatches(artifact.workload.node)) return false;
+      if (!typeMatches(artifact.workload.type)) return false;
+      if (
+        (filter === 'pbs' || filter === 'archive' || filter === 'snapshot') &&
+        artifact.sourceKind !== filter
+      ) {
+        return false;
+      }
+      if (filter === 'verified' && artifact.verified !== true) return false;
+      if (filter === 'unverified' && artifact.verified !== false) return false;
+      if (
+        dateKey &&
+        (artifact.createdMs === undefined ||
+          recoveryDateKeyFromTimestamp(artifact.createdMs) !== dateKey)
+      ) {
+        return false;
+      }
+      return recoverableArtifactMatchesSearch(artifact, term);
+    });
+    const sortKey = recoverableSortKey();
+    const direction = recoverableSortDirection();
+    list.sort((a, b) => {
+      switch (sortKey) {
+        case 'workload':
+          return cmpString(a.workload.label, b.workload.label, direction);
+        case 'source':
+          return cmpString(a.sourceLabel, b.sourceLabel, direction);
+        case 'location':
+          return cmpString(a.location, b.location, direction);
+        case 'created':
+          return cmpNumber(a.createdMs, b.createdMs, direction);
+        case 'size':
+          return cmpNumber(a.size, b.size, direction);
+        case 'state':
+          return cmpString(artifactStateLabel(a), artifactStateLabel(b), direction);
+      }
+    });
+    return list;
+  });
+
+  const recoverableSizeMaxBytes = createMemo(() => {
+    let max = 0;
+    for (const artifact of filteredRecoverableArtifacts()) {
+      if (artifact.size && artifact.size > max) max = artifact.size;
+    }
+    return max;
+  });
+
+  const totalRecoverableCount = createMemo(() => recoveryModel().recoverableArtifacts.length);
+  const visibleRecoverableCount = createMemo(() => filteredRecoverableArtifacts().length);
+
+  // Shared scope filters plus the per-view inline facet.
+  const buildBackupsFilters = (): FilterDef[] => {
+    const filters: FilterDef[] = [
+      {
+        id: 'node',
+        label: 'Node',
+        group: 'scope',
+        options: nodeOptions,
+        value: nodeFilter,
+        setValue: setNodeFilter,
+        defaultValue: '',
+      },
+      {
+        id: 'type',
+        label: 'Type',
+        group: 'scope',
+        options: () => typeFilterOptions,
+        value: typeFilter,
+        setValue: setTypeFilter,
+        defaultValue: '',
+      },
+    ];
+    if (view() === 'date') {
+      filters.push({
+        id: 'source',
+        label: 'Source',
+        group: 'status',
+        inline: true,
+        options: () => RECOVERABLE_FILTERS,
+        value: recoverableFilter,
+        setValue: (v) => setRecoverableFilter(v as RecoverableFilterValue),
+        defaultValue: 'all',
+      });
+    } else {
+      filters.push({
+        id: 'posture',
+        label: 'Posture',
+        group: 'status',
+        inline: true,
+        options: () => COVERAGE_FILTERS,
+        value: coverageFilter,
+        setValue: (v) => setCoverageFilter(v as CoverageFilterValue),
+        defaultValue: 'all',
+      });
+    }
+    return filters;
+  };
+
+  const viewButtonClass = (active: boolean): string =>
+    `inline-flex min-h-8 items-center gap-1.5 rounded-sm px-3 text-xs font-medium transition-colors ${
+      active ? 'bg-surface-hover text-base-content' : 'text-muted hover:text-base-content'
+    }`;
 
   return (
     <Show
@@ -335,48 +468,113 @@ export const ProxmoxBackupsTable: Component<{
       >
         <div class="space-y-3">
           <Show when={(props.servers?.length ?? 0) > 0}>
-            <ProxmoxBackupServersTable servers={props.servers ?? []} />
+            <ProxmoxBackupServersTable servers={props.servers ?? []} backups={pbsArtifacts()} />
           </Show>
 
-          <ProxmoxBackupsCoverageStrip
-            title="Backup health"
-            tail={
-              <span>
-                {liveTotalCount()} guests ·{' '}
-                {recoveryModel().coverageSummary.recoverableArtifacts} restore points
-                <Show when={recoveryModel().coverageSummary.withPBS > 0}>
-                  {' · '}
-                  {recoveryModel().coverageSummary.withPBS} with PBS
+          <Show
+            when={view() === 'guest'}
+            fallback={
+              <div class="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-[11px] text-muted">
+                <span class="font-semibold uppercase tracking-[0.18em]">Backup health</span>
+                <span class="text-base-content tabular-nums">{liveTotalCount()} guests</span>
+                <span aria-hidden="true">·</span>
+                <span class="tabular-nums">
+                  {recoveryModel().coverageSummary.recoverableArtifacts} restore points
+                </span>
+                <Show when={liveHealthSummary().attention > 0}>
+                  <span aria-hidden="true">·</span>
+                  <span class="text-amber-600 tabular-nums dark:text-amber-300">
+                    {liveHealthSummary().attention} need attention
+                  </span>
                 </Show>
                 <Show when={orphanedTotalCount() > 0}>
-                  {' · '}
-                  {orphanedTotalCount()} orphaned
+                  <span aria-hidden="true">·</span>
+                  <span class="tabular-nums">{orphanedTotalCount()} orphaned</span>
                 </Show>
-              </span>
+              </div>
             }
-            segments={[
-              {
-                key: 'current',
-                value: liveHealthSummary().current,
-                label: 'current',
-                toneClass: 'bg-emerald-500',
-              },
-              {
-                key: 'attention',
-                value: liveHealthSummary().attention,
-                label: 'attention',
-                toneClass: 'bg-amber-500',
-                muted: liveHealthSummary().attention === 0,
-              },
-              {
-                key: 'uncovered',
-                value: liveHealthSummary().uncovered,
-                label: 'uncovered',
-                toneClass: 'bg-red-500',
-                muted: liveHealthSummary().uncovered === 0,
-              },
-            ]}
-          />
+          >
+            <ProxmoxBackupsCoverageStrip
+              title="Backup health"
+              tail={
+                <span>
+                  {liveTotalCount()} guests · {recoveryModel().coverageSummary.recoverableArtifacts}{' '}
+                  restore points
+                  <Show when={recoveryModel().coverageSummary.withPBS > 0}>
+                    {' · '}
+                    {recoveryModel().coverageSummary.withPBS} with PBS
+                  </Show>
+                  <Show when={orphanedTotalCount() > 0}>
+                    {' · '}
+                    {orphanedTotalCount()} orphaned
+                  </Show>
+                </span>
+              }
+              segments={[
+                {
+                  key: 'current',
+                  value: liveHealthSummary().current,
+                  label: 'current',
+                  toneClass: 'bg-emerald-500',
+                },
+                {
+                  key: 'attention',
+                  value: liveHealthSummary().attention,
+                  label: 'attention',
+                  toneClass: 'bg-amber-500',
+                  muted: liveHealthSummary().attention === 0,
+                },
+                {
+                  key: 'uncovered',
+                  value: liveHealthSummary().uncovered,
+                  label: 'uncovered',
+                  toneClass: 'bg-red-500',
+                  muted: liveHealthSummary().uncovered === 0,
+                },
+              ]}
+            />
+          </Show>
+
+          <div
+            role="group"
+            aria-label="Backups view"
+            class="inline-flex items-center gap-1 rounded-md border border-border bg-surface p-1"
+          >
+            <button
+              type="button"
+              class={viewButtonClass(view() === 'date')}
+              aria-pressed={view() === 'date'}
+              onClick={() => setView('date')}
+            >
+              <CalendarIcon class="h-4 w-4" aria-hidden="true" />
+              <span>By date</span>
+            </button>
+            <button
+              type="button"
+              class={viewButtonClass(view() === 'guest')}
+              aria-pressed={view() === 'guest'}
+              onClick={() => setView('guest')}
+            >
+              <ShieldCheckIcon class="h-4 w-4" aria-hidden="true" />
+              <span>By guest</span>
+            </button>
+          </div>
+
+          <Show when={view() === 'date' && recoveryModel().recoverableArtifacts.length > 0}>
+            <BackupActivityChart
+              title={
+                recoverableMetricMode() === 'volume' ? 'Backup volume per day' : 'Backups per day'
+              }
+              noun="artifact"
+              segmentKinds={RECOVERABLE_SEGMENT_KINDS}
+              range={chartRange}
+              onRangeChange={setChartRange}
+              timeline={recoverableTimeline}
+              selectedDateKey={selectedDateKey}
+              onToggleDay={toggleDay}
+              metricToggle={{ mode: recoverableMetricMode, onChange: setRecoverableMetricMode }}
+            />
+          </Show>
 
           <FilterBar
             role="group"
@@ -385,80 +583,125 @@ export const ProxmoxBackupsTable: Component<{
             search={{
               value: search,
               setValue: setSearch,
-              placeholder: 'Search backups by workload, node, or status',
+              placeholder: 'Search backups by workload, node, source, or status',
             }}
             filters={buildBackupsFilters()}
             savedViewsKey="proxmox-backups"
+            searchTrailing={
+              <Show when={view() === 'date' && selectedDateKey() !== null}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDateKey(null)}
+                  class="inline-flex items-center gap-1 rounded-full border border-blue-300 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/50"
+                  aria-label="Clear date filter"
+                >
+                  <span class="uppercase tracking-wide text-[9px] text-blue-600 dark:text-blue-300">
+                    Date
+                  </span>
+                  <span class="font-mono tabular-nums">
+                    {getRecoveryFilterDateLabel(selectedDateKey()!)}
+                  </span>
+                  <span aria-hidden="true">×</span>
+                </button>
+              </Show>
+            }
             viewOptionsTrailing={
               <span class="whitespace-nowrap text-xs font-medium text-muted">
                 <Show
-                  when={visibleLiveCount() !== liveTotalCount()}
-                  fallback={<>{liveTotalCount()} guests</>}
+                  when={view() === 'date'}
+                  fallback={
+                    <Show
+                      when={visibleLiveCount() !== liveTotalCount()}
+                      fallback={<>{liveTotalCount()} guests</>}
+                    >
+                      {visibleLiveCount()} of {liveTotalCount()} guests
+                    </Show>
+                  }
                 >
-                  {visibleLiveCount()} of {liveTotalCount()} guests
+                  <Show
+                    when={visibleRecoverableCount() !== totalRecoverableCount()}
+                    fallback={<>{totalRecoverableCount()} backups</>}
+                  >
+                    {visibleRecoverableCount()} of {totalRecoverableCount()} backups
+                  </Show>
                 </Show>
               </span>
             }
           />
 
-          <ProxmoxCoverageTable
-            rows={liveCoverageRows()}
-            hasAnyRows={liveTotalCount() > 0}
-            emptyIcon={props.emptyIcon}
-            emptyTitle="No workload coverage"
-            emptyDescription="VM and container restore posture will appear here once backup data exists."
-            sortKey={coverageSortKey}
-            sortDirection={coverageSortDirection}
-            onSort={handleCoverageSort}
-            expandedKeys={expandedCoverageRows()}
-            onToggleExpand={toggleCoverageExpansion}
-            showPbsColumn={coverageHasPbs()}
-            showArchiveColumn={coverageHasArchive()}
-            showSnapshotColumn={coverageHasSnapshot()}
-            showTaskColumn={coverageHasTask()}
-          />
+          <Show when={view() === 'date'}>
+            <ProxmoxRecoverableTable
+              artifacts={filteredRecoverableArtifacts()}
+              hasAnyArtifacts={recoveryModel().recoverableArtifacts.length > 0}
+              emptyIcon={props.emptyIcon}
+              emptyTitle="No backups yet"
+              emptyDescription="PBS snapshots, PVE backup files, and guest snapshots will appear here once backups run."
+              sortKey={recoverableSortKey}
+              sortDirection={recoverableSortDirection}
+              onSort={handleRecoverableSort}
+              sizeMaxBytes={recoverableSizeMaxBytes()}
+              groupByDay
+            />
+          </Show>
 
-          <Show when={orphanedTotalCount() > 0}>
-            <div class="rounded-lg border border-border-subtle bg-surface-alt/25">
-              <button
-                type="button"
-                onClick={() => setShowOrphaned((v) => !v)}
-                class="flex w-full items-center justify-between gap-2 px-3 py-2 text-left"
-                aria-expanded={showOrphaned()}
-              >
-                <span class="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
-                  <ChevronRightIcon
-                    class={`h-3.5 w-3.5 transition-transform ${showOrphaned() ? 'rotate-90' : ''}`}
-                    aria-hidden="true"
-                  />
-                  {orphanedTotalCount()} orphaned{' '}
-                  {orphanedTotalCount() === 1 ? 'backup' : 'backups'}
-                </span>
-                <span class="text-[11px] text-muted">
-                  guest no longer exists in inventory
-                </span>
-              </button>
-              <Show when={showOrphaned()}>
-                <div class="border-t border-border-subtle p-2">
-                  <ProxmoxCoverageTable
-                    rows={orphanedCoverageRows()}
-                    hasAnyRows={orphanedTotalCount() > 0}
-                    emptyIcon={props.emptyIcon}
-                    emptyTitle="No orphaned backups"
-                    emptyDescription="Backups whose guest no longer exists will appear here."
-                    sortKey={coverageSortKey}
-                    sortDirection={coverageSortDirection}
-                    onSort={handleCoverageSort}
-                    expandedKeys={expandedCoverageRows()}
-                    onToggleExpand={toggleCoverageExpansion}
-                    showPbsColumn={coverageHasPbs()}
-                    showArchiveColumn={coverageHasArchive()}
-                    showSnapshotColumn={coverageHasSnapshot()}
-                    showTaskColumn={coverageHasTask()}
-                  />
-                </div>
-              </Show>
-            </div>
+          <Show when={view() === 'guest'}>
+            <ProxmoxCoverageTable
+              rows={liveCoverageRows()}
+              hasAnyRows={liveTotalCount() > 0}
+              emptyIcon={props.emptyIcon}
+              emptyTitle="No workload coverage"
+              emptyDescription="VM and container restore posture will appear here once backup data exists."
+              sortKey={coverageSortKey}
+              sortDirection={coverageSortDirection}
+              onSort={handleCoverageSort}
+              expandedKeys={expandedCoverageRows()}
+              onToggleExpand={toggleCoverageExpansion}
+              showPbsColumn={coverageHasPbs()}
+              showArchiveColumn={coverageHasArchive()}
+              showSnapshotColumn={coverageHasSnapshot()}
+              showTaskColumn={coverageHasTask()}
+            />
+
+            <Show when={orphanedTotalCount() > 0}>
+              <div class="rounded-lg border border-border-subtle bg-surface-alt/25">
+                <button
+                  type="button"
+                  onClick={() => setShowOrphaned((v) => !v)}
+                  class="flex w-full items-center justify-between gap-2 px-3 py-2 text-left"
+                  aria-expanded={showOrphaned()}
+                >
+                  <span class="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+                    <ChevronRightIcon
+                      class={`h-3.5 w-3.5 transition-transform ${showOrphaned() ? 'rotate-90' : ''}`}
+                      aria-hidden="true"
+                    />
+                    {orphanedTotalCount()} orphaned{' '}
+                    {orphanedTotalCount() === 1 ? 'backup' : 'backups'}
+                  </span>
+                  <span class="text-[11px] text-muted">guest no longer exists in inventory</span>
+                </button>
+                <Show when={showOrphaned()}>
+                  <div class="border-t border-border-subtle p-2">
+                    <ProxmoxCoverageTable
+                      rows={orphanedCoverageRows()}
+                      hasAnyRows={orphanedTotalCount() > 0}
+                      emptyIcon={props.emptyIcon}
+                      emptyTitle="No orphaned backups"
+                      emptyDescription="Backups whose guest no longer exists will appear here."
+                      sortKey={coverageSortKey}
+                      sortDirection={coverageSortDirection}
+                      onSort={handleCoverageSort}
+                      expandedKeys={expandedCoverageRows()}
+                      onToggleExpand={toggleCoverageExpansion}
+                      showPbsColumn={coverageHasPbs()}
+                      showArchiveColumn={coverageHasArchive()}
+                      showSnapshotColumn={coverageHasSnapshot()}
+                      showTaskColumn={coverageHasTask()}
+                    />
+                  </div>
+                </Show>
+              </div>
+            </Show>
           </Show>
         </div>
       </Show>
