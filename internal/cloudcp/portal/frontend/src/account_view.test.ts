@@ -77,6 +77,9 @@ describe('account view', function() {
               '<div id="workspace-management-lifecycle-' + accountID + '"></div>' +
               '<div id="workspace-management-created-' + accountID + '"></div>' +
               '<div id="workspace-management-guidance-' + accountID + '"></div>' +
+              '<form id="workspace-management-open-form-' + accountID + '"><button id="workspace-management-open-' + accountID + '"></button></form>' +
+              '<form id="workspace-management-install-form-' + accountID + '"><button id="workspace-management-install-' + accountID + '"></button></form>' +
+              '<form id="workspace-management-reporting-form-' + accountID + '"><button id="workspace-management-reporting-' + accountID + '"></button></form>' +
               '<button id="workspace-management-action-' + accountID + '"></button>' +
             '</div>' +
           '</div>' +
@@ -285,7 +288,7 @@ describe('account view', function() {
   it('renders workspace management selection from account UI state', function() {
     document.body.innerHTML = createWorkspaceManagementDOM('acct_1');
 
-    renderWorkspaceManagement(createAccount(), createEntry({ selectedWorkspaceID: 'ws_1' }));
+    renderWorkspaceManagement(createAccount(), createEntry({ selectedWorkspaceID: 'ws_1' }), '/api/accounts');
     expect(document.getElementById('workspace-management-acct_1')?.classList.contains('visible')).toBe(true);
     expect(document.getElementById('workspace-management-acct_1')?.hidden).toBe(false);
     expect(document.getElementById('workspace-operations-detail-acct_1')?.hidden).toBe(false);
@@ -296,6 +299,9 @@ describe('account view', function() {
     expect(document.getElementById('workspace-management-title-acct_1')?.textContent).toContain('Alpha Workspace');
     expect(document.getElementById('workspace-management-health-acct_1')?.textContent).toContain('Healthy');
     expect(document.getElementById('workspace-management-action-acct_1')?.textContent).toContain('Suspend workspace');
+    expect((document.getElementById('workspace-management-open-form-acct_1') as HTMLFormElement).action).toContain('/api/accounts/acct_1/tenants/ws_1/handoff');
+    expect((document.getElementById('workspace-management-install-form-acct_1') as HTMLFormElement).action).toContain('/api/accounts/acct_1/tenants/ws_1/handoff?target_path=%2Fsettings%2Finfrastructure%3Fadd%3Dlinux-host');
+    expect((document.getElementById('workspace-management-reporting-form-acct_1') as HTMLFormElement).action).toContain('/api/accounts/acct_1/tenants/ws_1/handoff?target_path=%2Fsettings%2Fsupport%2Freporting');
   });
 
   it('renders account UI for every tracked account entry', function() {

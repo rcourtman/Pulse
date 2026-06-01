@@ -404,6 +404,15 @@ function workspaceRowAnchorID(accountID: string, workspaceID: string): string {
   return 'workspace-row-' + accountID + '-' + workspaceID;
 }
 
+const WORKSPACE_INSTALL_TARGET_PATH = '/settings/infrastructure?add=linux-host';
+const WORKSPACE_REPORTING_TARGET_PATH = '/settings/support/reporting';
+
+function workspaceHandoffActionPath(accountAPIBasePath: string, accountID: string, workspaceID: string, targetPath = ''): string {
+  var path = accountAPIBasePath + '/' + encodeURIComponent(accountID) + '/tenants/' + encodeURIComponent(workspaceID) + '/handoff';
+  if (!targetPath) return path;
+  return path + '?target_path=' + encodeURIComponent(targetPath);
+}
+
 function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWorkspaceSummary, accountAPIBasePath: string): string {
   var status = workspaceHealthState(workspace);
   var state = String(workspace.state || '');
@@ -420,9 +429,19 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
   if (state === 'active') {
     openAction =
       '<form method="POST" action="' +
-      escapeAttr(accountAPIBasePath + '/' + account.id + '/tenants/' + workspace.id + '/handoff') +
+      escapeAttr(workspaceHandoffActionPath(accountAPIBasePath, account.id, workspace.id)) +
       '">' +
       '<button type="submit" class="btn-primary">Open workspace</button>' +
+      '</form>';
+  }
+
+  var installAction = '';
+  if (state === 'active') {
+    installAction =
+      '<form method="POST" action="' +
+      escapeAttr(workspaceHandoffActionPath(accountAPIBasePath, account.id, workspace.id, WORKSPACE_INSTALL_TARGET_PATH)) +
+      '">' +
+      '<button type="submit" class="btn-secondary">Install agents</button>' +
       '</form>';
   }
 
@@ -453,6 +472,7 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
       '</div>' +
       '<div class="workspace-actions">' +
         openAction +
+        installAction +
         manageAction +
       '</div>' +
     '</article>'
@@ -475,7 +495,20 @@ function renderWorkspaceHandoffForm(accountID: string, workspaceID: string, acco
   }
   return (
     '<form method="POST" action="' +
-    escapeAttr(accountAPIBasePath + '/' + accountID + '/tenants/' + workspaceID + '/handoff') +
+    escapeAttr(workspaceHandoffActionPath(accountAPIBasePath, accountID, workspaceID)) +
+    '">' +
+    '<button type="submit" class="' + escapeAttr(buttonClassName) + '">' + escapeHTML(label) + '</button>' +
+    '</form>'
+  );
+}
+
+function renderWorkspaceInstallHandoffForm(accountID: string, workspaceID: string, accountAPIBasePath: string, label = 'Install agents', buttonClassName = 'btn-secondary btn-compact'): string {
+  if (!accountAPIBasePath) {
+    return '<button class="' + escapeAttr(buttonClassName) + '" type="button" data-shell-action="activate-section" data-shell-section="workspaces">' + escapeHTML(label) + '</button>';
+  }
+  return (
+    '<form method="POST" action="' +
+    escapeAttr(workspaceHandoffActionPath(accountAPIBasePath, accountID, workspaceID, WORKSPACE_INSTALL_TARGET_PATH)) +
     '">' +
     '<button type="submit" class="' + escapeAttr(buttonClassName) + '">' + escapeHTML(label) + '</button>' +
     '</form>'
@@ -600,7 +633,7 @@ function renderWorkspaceSummaryDecision(
     );
     secondaryAction = ready.length > 1
       ? renderWorkspaceAnchorAction(workspaceListAnchorID(readyEntry.account.id), 'See all workspaces')
-      : '';
+      : renderWorkspaceInstallHandoffForm(readyEntry.account.id, readyEntry.workspace.id, accountAPIBasePath);
   } else if (creatableAccount) {
     title = 'Create the first workspace';
     description = 'No hosted workspace is attached yet. Create the first workspace in ' + creatableAccount.name + '.';
@@ -841,6 +874,40 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
           '<div class="workspace-management-guidance" id="workspace-management-guidance-' +
           escapeAttr(account.id) +
           '"></div>' +
+          '<div class="workspace-management-next-steps" id="workspace-management-next-steps-' +
+          escapeAttr(account.id) +
+          '">' +
+            '<div class="workspace-next-step">' +
+              '<div><strong>Open workspace</strong><span>Work inside this client boundary.</span></div>' +
+              '<form method="POST" id="workspace-management-open-form-' +
+              escapeAttr(account.id) +
+              '">' +
+                '<button type="submit" class="btn-primary btn-compact" id="workspace-management-open-' +
+                escapeAttr(account.id) +
+                '">Open workspace</button>' +
+              '</form>' +
+            '</div>' +
+            '<div class="workspace-next-step">' +
+              '<div><strong>Install agents</strong><span>Open the workspace-bound install commands.</span></div>' +
+              '<form method="POST" id="workspace-management-install-form-' +
+              escapeAttr(account.id) +
+              '">' +
+                '<button type="submit" class="btn-secondary btn-compact" id="workspace-management-install-' +
+                escapeAttr(account.id) +
+                '">Install agents</button>' +
+              '</form>' +
+            '</div>' +
+            '<div class="workspace-next-step workspace-next-step-readonly">' +
+              '<div><strong>Alerts and reports</strong><span>Alerts and performance reports stay inside the client workspace.</span></div>' +
+              '<form method="POST" id="workspace-management-reporting-form-' +
+              escapeAttr(account.id) +
+              '">' +
+                '<button type="submit" class="btn-secondary btn-compact" id="workspace-management-reporting-' +
+                escapeAttr(account.id) +
+                '">Open reports</button>' +
+              '</form>' +
+            '</div>' +
+          '</div>' +
           '<div class="workspace-management-actions">' +
             '<button type="button" class="btn-danger" id="workspace-management-action-' +
             escapeAttr(account.id) +

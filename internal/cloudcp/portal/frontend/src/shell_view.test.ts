@@ -201,7 +201,11 @@ describe('shell view', function() {
     expect(html).toContain('This workspace is in a failed state.');
     expect(html).toContain('Health check pending');
     expect(html).toContain('/api/accounts/acct_1/tenants/ws_active/handoff');
+    expect(html).toContain('/api/accounts/acct_1/tenants/ws_active/handoff?target_path=%2Fsettings%2Finfrastructure%3Fadd%3Dlinux-host');
     expect(html).toContain('Open workspace');
+    expect(html).toContain('Install agents');
+    expect(html).toContain('Open the workspace-bound install commands.');
+    expect(html).toContain('Alerts and performance reports stay inside the client workspace.');
     expect(html).toContain('data-action="select-workspace"');
     expect(html).toContain('Create a workspace');
     expect(html).toContain('Access changes stay in Access. Billing changes stay in Billing.');

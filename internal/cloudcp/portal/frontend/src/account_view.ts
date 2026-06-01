@@ -54,7 +54,35 @@ function findWorkspace(account: PortalAccountSummary, workspaceID: string): Port
   return null;
 }
 
-export function renderWorkspaceManagement(account: PortalAccountSummary, entry: PortalAccountUIEntry): void {
+const WORKSPACE_INSTALL_TARGET_PATH = '/settings/infrastructure?add=linux-host';
+const WORKSPACE_REPORTING_TARGET_PATH = '/settings/support/reporting';
+
+function workspaceHandoffActionPath(accountAPIBasePath: string, accountID: string, workspaceID: string, targetPath = ''): string {
+  var path = accountAPIBasePath + '/' + encodeURIComponent(accountID) + '/tenants/' + encodeURIComponent(workspaceID) + '/handoff';
+  if (!targetPath) return path;
+  return path + '?target_path=' + encodeURIComponent(targetPath);
+}
+
+function setWorkspaceHandoffForm(
+  form: HTMLFormElement | null,
+  button: HTMLButtonElement | null,
+  accountAPIBasePath: string,
+  accountID: string,
+  workspace: PortalWorkspaceSummary,
+  targetPath = '',
+  pending = false
+): void {
+  if (!form || !button) return;
+  var canOpen = workspace.state === 'active' && !!accountAPIBasePath;
+  if (canOpen) {
+    form.action = workspaceHandoffActionPath(accountAPIBasePath, accountID, workspace.id, targetPath);
+  } else {
+    form.removeAttribute('action');
+  }
+  button.disabled = pending || !canOpen;
+}
+
+export function renderWorkspaceManagement(account: PortalAccountSummary, entry: PortalAccountUIEntry, accountAPIBasePath = ''): void {
   var panel = getElement<HTMLElement>('workspace-management-' + account.id);
   var shell = getElement<HTMLElement>('workspace-operations-shell-' + account.id);
   var detail = getElement<HTMLElement>('workspace-operations-detail-' + account.id);
@@ -70,6 +98,12 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
   var guidance = getElement<HTMLElement>('workspace-management-guidance-' + account.id);
   var actionButton = getElement<HTMLButtonElement>('workspace-management-action-' + account.id);
   var closeButton = getElement<HTMLButtonElement>('workspace-management-close-' + account.id);
+  var openForm = getElement<HTMLFormElement>('workspace-management-open-form-' + account.id);
+  var openButton = getElement<HTMLButtonElement>('workspace-management-open-' + account.id);
+  var installForm = getElement<HTMLFormElement>('workspace-management-install-form-' + account.id);
+  var installButton = getElement<HTMLButtonElement>('workspace-management-install-' + account.id);
+  var reportingForm = getElement<HTMLFormElement>('workspace-management-reporting-form-' + account.id);
+  var reportingButton = getElement<HTMLButtonElement>('workspace-management-reporting-' + account.id);
   if (!empty || !content || !title || !meta || !summary || !health || !lifecycle || !created || !guidance || !actionButton || !closeButton) return;
 
   var workspace = entry.selectedWorkspaceID ? findWorkspace(account, entry.selectedWorkspaceID) : null;
@@ -101,6 +135,12 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
     actionButton.removeAttribute('data-workspace-id');
     actionButton.removeAttribute('data-workspace-name');
     actionButton.removeAttribute('data-workspace-action');
+    openForm?.removeAttribute('action');
+    installForm?.removeAttribute('action');
+    reportingForm?.removeAttribute('action');
+    if (openButton) openButton.disabled = true;
+    if (installButton) installButton.disabled = true;
+    if (reportingButton) reportingButton.disabled = true;
     return;
   }
 
@@ -117,6 +157,9 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
   actionButton.setAttribute('data-workspace-name', workspace.display_name);
   actionButton.setAttribute('data-workspace-action', workspace.state === 'active' ? 'suspend' : 'delete');
   closeButton.disabled = entry.manageWorkspace.pending;
+  setWorkspaceHandoffForm(openForm, openButton, accountAPIBasePath, account.id, workspace, '', entry.manageWorkspace.pending);
+  setWorkspaceHandoffForm(installForm, installButton, accountAPIBasePath, account.id, workspace, WORKSPACE_INSTALL_TARGET_PATH, entry.manageWorkspace.pending);
+  setWorkspaceHandoffForm(reportingForm, reportingButton, accountAPIBasePath, account.id, workspace, WORKSPACE_REPORTING_TARGET_PATH, entry.manageWorkspace.pending);
 }
 
 function setContainerMessage(container: HTMLElement, title: string, msg: string, isError: boolean): void {
@@ -428,7 +471,7 @@ export function renderAccessSection(accountID: string, entry: PortalAccountUIEnt
   }
 }
 
-export function renderAccountUI(accountState: PortalAccountState, accounts: PortalAccountSummary[]): void {
+export function renderAccountUI(accountState: PortalAccountState, accounts: PortalAccountSummary[], accountAPIBasePath = ''): void {
   var accountIDs = Object.keys(accountState.byAccountID);
   for (var i = 0; i < accountIDs.length; i += 1) {
     var accountID = accountIDs[i];
@@ -441,7 +484,7 @@ export function renderAccountUI(accountState: PortalAccountState, accounts: Port
       }
     }
     renderAddWorkspaceSection(accountID, entry);
-    if (account) renderWorkspaceManagement(account, entry);
+    if (account) renderWorkspaceManagement(account, entry, accountAPIBasePath);
     renderAccessSection(accountID, entry);
   }
 }

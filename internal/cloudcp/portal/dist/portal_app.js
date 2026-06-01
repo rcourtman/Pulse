@@ -74,10 +74,10 @@
     var status = workspaceHealthState(workspace);
     var state = String(workspace.state || "");
     if (state === "active" && status === "healthy") {
-      return "This workspace is active. Open it from the workspace list, or suspend it here if you intend to take it out of service.";
+      return "This workspace is active. Open it to work inside this client boundary, or install agents to reach the workspace-bound install commands.";
     }
     if (state === "active" && status === "checking") {
-      return "This workspace is active. The latest health check is still pending.";
+      return "This workspace is active. The latest health check is still pending, but the workspace can still own agent install commands.";
     }
     if (status === "unhealthy") {
       return "The latest health check is unhealthy. Review the current state before suspending or deleting this workspace.";
@@ -125,7 +125,24 @@
     }
     return null;
   }
-  function renderWorkspaceManagement(account, entry) {
+  var WORKSPACE_INSTALL_TARGET_PATH = "/settings/infrastructure?add=linux-host";
+  var WORKSPACE_REPORTING_TARGET_PATH = "/settings/support/reporting";
+  function workspaceHandoffActionPath(accountAPIBasePath, accountID, workspaceID, targetPath = "") {
+    var path = accountAPIBasePath + "/" + encodeURIComponent(accountID) + "/tenants/" + encodeURIComponent(workspaceID) + "/handoff";
+    if (!targetPath) return path;
+    return path + "?target_path=" + encodeURIComponent(targetPath);
+  }
+  function setWorkspaceHandoffForm(form, button, accountAPIBasePath, accountID, workspace, targetPath = "", pending = false) {
+    if (!form || !button) return;
+    var canOpen = workspace.state === "active" && !!accountAPIBasePath;
+    if (canOpen) {
+      form.action = workspaceHandoffActionPath(accountAPIBasePath, accountID, workspace.id, targetPath);
+    } else {
+      form.removeAttribute("action");
+    }
+    button.disabled = pending || !canOpen;
+  }
+  function renderWorkspaceManagement(account, entry, accountAPIBasePath = "") {
     var panel = getElement("workspace-management-" + account.id);
     var shell = getElement("workspace-operations-shell-" + account.id);
     var detail = getElement("workspace-operations-detail-" + account.id);
@@ -141,6 +158,12 @@
     var guidance = getElement("workspace-management-guidance-" + account.id);
     var actionButton = getElement("workspace-management-action-" + account.id);
     var closeButton = getElement("workspace-management-close-" + account.id);
+    var openForm = getElement("workspace-management-open-form-" + account.id);
+    var openButton = getElement("workspace-management-open-" + account.id);
+    var installForm = getElement("workspace-management-install-form-" + account.id);
+    var installButton = getElement("workspace-management-install-" + account.id);
+    var reportingForm = getElement("workspace-management-reporting-form-" + account.id);
+    var reportingButton = getElement("workspace-management-reporting-" + account.id);
     if (!empty || !content || !title || !meta || !summary || !health || !lifecycle || !created || !guidance || !actionButton || !closeButton) return;
     var workspace = entry.selectedWorkspaceID ? findWorkspace(account, entry.selectedWorkspaceID) : null;
     var hasSelection = !!workspace;
@@ -170,6 +193,12 @@
       actionButton.removeAttribute("data-workspace-id");
       actionButton.removeAttribute("data-workspace-name");
       actionButton.removeAttribute("data-workspace-action");
+      openForm?.removeAttribute("action");
+      installForm?.removeAttribute("action");
+      reportingForm?.removeAttribute("action");
+      if (openButton) openButton.disabled = true;
+      if (installButton) installButton.disabled = true;
+      if (reportingButton) reportingButton.disabled = true;
       return;
     }
     title.textContent = workspace.display_name;
@@ -185,6 +214,9 @@
     actionButton.setAttribute("data-workspace-name", workspace.display_name);
     actionButton.setAttribute("data-workspace-action", workspace.state === "active" ? "suspend" : "delete");
     closeButton.disabled = entry.manageWorkspace.pending;
+    setWorkspaceHandoffForm(openForm, openButton, accountAPIBasePath, account.id, workspace, "", entry.manageWorkspace.pending);
+    setWorkspaceHandoffForm(installForm, installButton, accountAPIBasePath, account.id, workspace, WORKSPACE_INSTALL_TARGET_PATH, entry.manageWorkspace.pending);
+    setWorkspaceHandoffForm(reportingForm, reportingButton, accountAPIBasePath, account.id, workspace, WORKSPACE_REPORTING_TARGET_PATH, entry.manageWorkspace.pending);
   }
   function setContainerMessage(container, title, msg, isError) {
     container.textContent = "";
@@ -450,7 +482,7 @@
       roster.appendChild(renderAccessMemberRow(accountID, member, isOwner, canManage, activeJob));
     }
   }
-  function renderAccountUI(accountState, accounts) {
+  function renderAccountUI(accountState, accounts, accountAPIBasePath = "") {
     var accountIDs = Object.keys(accountState.byAccountID);
     for (var i = 0; i < accountIDs.length; i += 1) {
       var accountID = accountIDs[i];
@@ -463,7 +495,7 @@
         }
       }
       renderAddWorkspaceSection(accountID, entry);
-      if (account) renderWorkspaceManagement(account, entry);
+      if (account) renderWorkspaceManagement(account, entry, accountAPIBasePath);
       renderAccessSection(accountID, entry);
     }
   }
@@ -977,7 +1009,8 @@
       return true;
     };
     var renderAccountRuntime = function() {
-      renderAccountUI(deps.store.getAccountState(), deps.store.getBootstrap().accounts || []);
+      var bootstrap = deps.store.getBootstrap();
+      renderAccountUI(deps.store.getAccountState(), bootstrap.accounts || [], bootstrap.account_api_base_path || "");
     };
     var loadAccessRoster = async function(accountID) {
       var section = getElement("access-section-" + accountID);
@@ -2418,6 +2451,12 @@
   function workspaceRowAnchorID(accountID, workspaceID) {
     return "workspace-row-" + accountID + "-" + workspaceID;
   }
+  var WORKSPACE_INSTALL_TARGET_PATH2 = "/settings/infrastructure?add=linux-host";
+  function workspaceHandoffActionPath2(accountAPIBasePath, accountID, workspaceID, targetPath = "") {
+    var path = accountAPIBasePath + "/" + encodeURIComponent(accountID) + "/tenants/" + encodeURIComponent(workspaceID) + "/handoff";
+    if (!targetPath) return path;
+    return path + "?target_path=" + encodeURIComponent(targetPath);
+  }
   function renderWorkspaceCard(account, workspace, accountAPIBasePath) {
     var status = workspaceHealthState(workspace);
     var state = String(workspace.state || "");
@@ -2431,19 +2470,29 @@
     }
     var openAction = "";
     if (state === "active") {
-      openAction = '<form method="POST" action="' + escapeAttr(accountAPIBasePath + "/" + account.id + "/tenants/" + workspace.id + "/handoff") + '"><button type="submit" class="btn-primary">Open workspace</button></form>';
+      openAction = '<form method="POST" action="' + escapeAttr(workspaceHandoffActionPath2(accountAPIBasePath, account.id, workspace.id)) + '"><button type="submit" class="btn-primary">Open workspace</button></form>';
+    }
+    var installAction = "";
+    if (state === "active") {
+      installAction = '<form method="POST" action="' + escapeAttr(workspaceHandoffActionPath2(accountAPIBasePath, account.id, workspace.id, WORKSPACE_INSTALL_TARGET_PATH2)) + '"><button type="submit" class="btn-secondary">Install agents</button></form>';
     }
     var manageAction = "";
     if (account.can_manage && (state === "active" || state === "suspended" || state === "failed")) {
       manageAction = '<button type="button" class="btn-secondary btn-workspace-manage" data-action="select-workspace" data-account-id="' + escapeAttr(account.id) + '" data-workspace-id="' + escapeAttr(workspace.id) + '">Lifecycle</button>';
     }
-    return '<article class="workspace-row workspace-row-health-' + escapeAttr(status) + " workspace-row-state-" + escapeAttr(state || "unknown") + '" id="' + escapeAttr(workspaceRowAnchorID(account.id, workspace.id)) + '" data-workspace-row="' + escapeAttr(workspace.id) + '"><div class="workspace-row-primary"><div class="workspace-row-heading"><h4 class="workspace-name">' + escapeHTML(workspace.display_name) + '</h4><div class="workspace-meta">' + metaParts.join("") + '</div></div><div class="workspace-row-note">' + escapeHTML(workspaceRowNote(workspace)) + '</div></div><div class="workspace-row-status-cell workspace-row-status-cell-badge">' + healthBadgeHTML(workspace) + '</div><div class="workspace-row-status-cell workspace-row-status-cell-badge"><span class="badge badge-' + escapeHTML(state || "unknown") + '">' + escapeHTML(titleCase(state || "Unknown")) + '</span></div><div class="workspace-actions">' + openAction + manageAction + "</div></article>";
+    return '<article class="workspace-row workspace-row-health-' + escapeAttr(status) + " workspace-row-state-" + escapeAttr(state || "unknown") + '" id="' + escapeAttr(workspaceRowAnchorID(account.id, workspace.id)) + '" data-workspace-row="' + escapeAttr(workspace.id) + '"><div class="workspace-row-primary"><div class="workspace-row-heading"><h4 class="workspace-name">' + escapeHTML(workspace.display_name) + '</h4><div class="workspace-meta">' + metaParts.join("") + '</div></div><div class="workspace-row-note">' + escapeHTML(workspaceRowNote(workspace)) + '</div></div><div class="workspace-row-status-cell workspace-row-status-cell-badge">' + healthBadgeHTML(workspace) + '</div><div class="workspace-row-status-cell workspace-row-status-cell-badge"><span class="badge badge-' + escapeHTML(state || "unknown") + '">' + escapeHTML(titleCase(state || "Unknown")) + '</span></div><div class="workspace-actions">' + openAction + installAction + manageAction + "</div></article>";
   }
   function renderWorkspaceHandoffForm(accountID, workspaceID, accountAPIBasePath, label, buttonClassName = "btn-secondary btn-compact") {
     if (!accountAPIBasePath) {
       return '<button class="' + escapeAttr(buttonClassName) + '" type="button" data-shell-action="activate-section" data-shell-section="workspaces">' + escapeHTML(label) + "</button>";
     }
-    return '<form method="POST" action="' + escapeAttr(accountAPIBasePath + "/" + accountID + "/tenants/" + workspaceID + "/handoff") + '"><button type="submit" class="' + escapeAttr(buttonClassName) + '">' + escapeHTML(label) + "</button></form>";
+    return '<form method="POST" action="' + escapeAttr(workspaceHandoffActionPath2(accountAPIBasePath, accountID, workspaceID)) + '"><button type="submit" class="' + escapeAttr(buttonClassName) + '">' + escapeHTML(label) + "</button></form>";
+  }
+  function renderWorkspaceInstallHandoffForm(accountID, workspaceID, accountAPIBasePath, label = "Install agents", buttonClassName = "btn-secondary btn-compact") {
+    if (!accountAPIBasePath) {
+      return '<button class="' + escapeAttr(buttonClassName) + '" type="button" data-shell-action="activate-section" data-shell-section="workspaces">' + escapeHTML(label) + "</button>";
+    }
+    return '<form method="POST" action="' + escapeAttr(workspaceHandoffActionPath2(accountAPIBasePath, accountID, workspaceID, WORKSPACE_INSTALL_TARGET_PATH2)) + '"><button type="submit" class="' + escapeAttr(buttonClassName) + '">' + escapeHTML(label) + "</button></form>";
   }
   function attentionWorkspaceEntries(entries) {
     var results = [];
@@ -2527,7 +2576,7 @@
         "Open workspace",
         "btn-primary btn-compact"
       );
-      secondaryAction = ready.length > 1 ? renderWorkspaceAnchorAction(workspaceListAnchorID(readyEntry.account.id), "See all workspaces") : "";
+      secondaryAction = ready.length > 1 ? renderWorkspaceAnchorAction(workspaceListAnchorID(readyEntry.account.id), "See all workspaces") : renderWorkspaceInstallHandoffForm(readyEntry.account.id, readyEntry.workspace.id, accountAPIBasePath);
     } else if (creatableAccount) {
       title = "Create the first workspace";
       description = "No hosted workspace is attached yet. Create the first workspace in " + creatableAccount.name + ".";
@@ -2616,7 +2665,7 @@
       if (account.kind === "msp") {
         addWorkspaceForm = '<div class="add-workspace-form" id="add-ws-form-' + escapeAttr(account.id) + '"><label for="ws-name-' + escapeAttr(account.id) + '">Workspace name (for example, a client name)</label><input type="text" id="ws-name-' + escapeAttr(account.id) + '" placeholder="Acme Corp" maxlength="80" autocomplete="off"><div class="form-actions"><button type="button" class="btn-primary" data-action="create-workspace" data-account-id="' + escapeAttr(account.id) + '">Create workspace</button><button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Cancel</button><div class="spinner" id="ws-spinner-' + escapeAttr(account.id) + '" hidden></div></div></div>';
       }
-      workspaceManagement = '<section class="workspace-management-panel workspace-management-panel-idle" id="workspace-management-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-header"><div><h3>Workspace lifecycle</h3><p>Manage this workspace or create a new one.</p></div><button type="button" class="btn-secondary btn-compact" id="workspace-management-close-' + escapeAttr(account.id) + '" data-action="clear-workspace-selection" data-account-id="' + escapeAttr(account.id) + '">Close panel</button></div><div class="workspace-management-empty" id="workspace-management-empty-' + escapeAttr(account.id) + '"><div class="workspace-management-empty-shell"><div class="workspace-management-empty-actions-card"><div class="workspace-management-empty-actions-copy"><h4>Create a workspace</h4><p>Add a new hosted workspace for a customer or operating boundary.</p></div>' + addWorkspaceForm + '</div><div class="workspace-management-empty-note">Access changes stay in Access. Billing changes stay in Billing.</div></div></div><div class="workspace-management-content" id="workspace-management-content-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-meta" id="workspace-management-meta-' + escapeAttr(account.id) + '"></div><h4 id="workspace-management-title-' + escapeAttr(account.id) + '"></h4><p class="workspace-management-summary" id="workspace-management-summary-' + escapeAttr(account.id) + '"></p><div class="workspace-management-facts"><div class="workspace-management-fact"><span>Health</span><strong id="workspace-management-health-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Lifecycle</span><strong id="workspace-management-lifecycle-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Created</span><strong id="workspace-management-created-' + escapeAttr(account.id) + '"></strong></div></div><div class="workspace-management-guidance" id="workspace-management-guidance-' + escapeAttr(account.id) + '"></div><div class="workspace-management-actions"><button type="button" class="btn-danger" id="workspace-management-action-' + escapeAttr(account.id) + '" data-action="workspace-action" data-account-id="' + escapeAttr(account.id) + '">Manage workspace</button></div></div></section>';
+      workspaceManagement = '<section class="workspace-management-panel workspace-management-panel-idle" id="workspace-management-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-header"><div><h3>Workspace lifecycle</h3><p>Manage this workspace or create a new one.</p></div><button type="button" class="btn-secondary btn-compact" id="workspace-management-close-' + escapeAttr(account.id) + '" data-action="clear-workspace-selection" data-account-id="' + escapeAttr(account.id) + '">Close panel</button></div><div class="workspace-management-empty" id="workspace-management-empty-' + escapeAttr(account.id) + '"><div class="workspace-management-empty-shell"><div class="workspace-management-empty-actions-card"><div class="workspace-management-empty-actions-copy"><h4>Create a workspace</h4><p>Add a new hosted workspace for a customer or operating boundary.</p></div>' + addWorkspaceForm + '</div><div class="workspace-management-empty-note">Access changes stay in Access. Billing changes stay in Billing.</div></div></div><div class="workspace-management-content" id="workspace-management-content-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-meta" id="workspace-management-meta-' + escapeAttr(account.id) + '"></div><h4 id="workspace-management-title-' + escapeAttr(account.id) + '"></h4><p class="workspace-management-summary" id="workspace-management-summary-' + escapeAttr(account.id) + '"></p><div class="workspace-management-facts"><div class="workspace-management-fact"><span>Health</span><strong id="workspace-management-health-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Lifecycle</span><strong id="workspace-management-lifecycle-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Created</span><strong id="workspace-management-created-' + escapeAttr(account.id) + '"></strong></div></div><div class="workspace-management-guidance" id="workspace-management-guidance-' + escapeAttr(account.id) + '"></div><div class="workspace-management-next-steps" id="workspace-management-next-steps-' + escapeAttr(account.id) + '"><div class="workspace-next-step"><div><strong>Open workspace</strong><span>Work inside this client boundary.</span></div><form method="POST" id="workspace-management-open-form-' + escapeAttr(account.id) + '"><button type="submit" class="btn-primary btn-compact" id="workspace-management-open-' + escapeAttr(account.id) + '">Open workspace</button></form></div><div class="workspace-next-step"><div><strong>Install agents</strong><span>Open the workspace-bound install commands.</span></div><form method="POST" id="workspace-management-install-form-' + escapeAttr(account.id) + '"><button type="submit" class="btn-secondary btn-compact" id="workspace-management-install-' + escapeAttr(account.id) + '">Install agents</button></form></div><div class="workspace-next-step workspace-next-step-readonly"><div><strong>Alerts and reports</strong><span>Alerts and performance reports stay inside the client workspace.</span></div><form method="POST" id="workspace-management-reporting-form-' + escapeAttr(account.id) + '"><button type="submit" class="btn-secondary btn-compact" id="workspace-management-reporting-' + escapeAttr(account.id) + '">Open reports</button></form></div></div><div class="workspace-management-actions"><button type="button" class="btn-danger" id="workspace-management-action-' + escapeAttr(account.id) + '" data-action="workspace-action" data-account-id="' + escapeAttr(account.id) + '">Manage workspace</button></div></div></section>';
     }
     var workspaceHTML = workspaces.length ? '<div class="workspace-list-wrap" id="' + escapeAttr(workspaceListAnchorID(account.id)) + '">' + (workspaceHeaderActions ? '<div class="workspace-list-toolbar">' + workspaceHeaderActions + "</div>" : "") + '<div class="workspace-list-head"><span>Workspace</span><span>Health</span><span>Lifecycle</span><span>Actions</span></div><div class="workspace-list">' + workspaces.map(function(workspace) {
       return renderWorkspaceCard(account, workspace, accountAPIBasePath);

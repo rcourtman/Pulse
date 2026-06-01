@@ -41,8 +41,8 @@ describe('workspace presentation', function() {
   });
 
   it('uses literal lifecycle guidance instead of commentary', function() {
-    expect(workspaceGuidanceCopy(createWorkspace())).toBe('This workspace is active. Open it from the workspace list, or suspend it here if you intend to take it out of service.');
-    expect(workspaceGuidanceCopy(createWorkspace({ healthy: false, health_status: 'checking' }))).toBe('This workspace is active. The latest health check is still pending.');
+    expect(workspaceGuidanceCopy(createWorkspace())).toBe('This workspace is active. Open it to work inside this client boundary, or install agents to reach the workspace-bound install commands.');
+    expect(workspaceGuidanceCopy(createWorkspace({ healthy: false, health_status: 'checking' }))).toBe('This workspace is active. The latest health check is still pending, but the workspace can still own agent install commands.');
     expect(workspaceGuidanceCopy(createWorkspace({ healthy: false, health_status: 'unhealthy' }))).toBe('The latest health check is unhealthy. Review the current state before suspending or deleting this workspace.');
     expect(workspaceGuidanceCopy(createWorkspace({ state: 'suspended', health_status: 'healthy' }))).toBe('This workspace is suspended. The remaining lifecycle action here is deletion.');
   });

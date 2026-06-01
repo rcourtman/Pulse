@@ -156,14 +156,19 @@ func HandleHandoff(reg *registry.TenantRegistry, tenantsDir string) http.Handler
 		}
 
 		now := time.Now().UTC()
+		targetPath := sanitizeTargetPath(r.URL.Query().Get("target_path"))
+		if targetPath == "" {
+			targetPath = sanitizeTargetPath(r.URL.Query().Get("return_to"))
+		}
 		token, err := MintHandoffToken(secret, HandoffClaims{
-			TenantID:  tenantID,
-			UserID:    userID,
-			AccountID: accountID,
-			Email:     u.Email,
-			Role:      m.Role,
-			IssuedAt:  now,
-			ExpiresAt: now.Add(defaultTTL),
+			TenantID:   tenantID,
+			UserID:     userID,
+			AccountID:  accountID,
+			Email:      u.Email,
+			Role:       m.Role,
+			TargetPath: targetPath,
+			IssuedAt:   now,
+			ExpiresAt:  now.Add(defaultTTL),
 		})
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)

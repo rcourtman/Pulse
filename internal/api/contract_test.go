@@ -7827,6 +7827,37 @@ func TestContract_TenantAIServiceAvoidsSnapshotProviderBridge(t *testing.T) {
 	}
 }
 
+func TestContract_HandoffExchangeTargetPathIsSignedAndLocalOnly(t *testing.T) {
+	source, err := os.ReadFile(filepath.Clean("cloud_handoff_handlers.go"))
+	if err != nil {
+		t.Fatalf("read cloud_handoff_handlers.go: %v", err)
+	}
+	text := string(source)
+
+	for _, required := range []string{
+		"TargetPath string `json:\"target_path,omitempty\"`",
+		"sanitizeCloudHandoffTargetPath(claims.TargetPath)",
+		"http.Redirect(w, r, targetPath, http.StatusTemporaryRedirect)",
+		"strings.HasPrefix(raw, \"//\")",
+		"parsed.IsAbs() || parsed.Host != \"\"",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("cloud handoff exchange must preserve signed local target-path contract: missing %q", required)
+		}
+	}
+
+	for _, forbidden := range []string{
+		"r.FormValue(\"target_path\")",
+		"r.URL.Query().Get(\"target_path\")",
+		"r.FormValue(\"return_to\")",
+		"r.URL.Query().Get(\"return_to\")",
+	} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("cloud handoff exchange must not accept unsigned redirect targets: found %q", forbidden)
+		}
+	}
+}
+
 func TestContract_HostedCloudHandoffUsesExistingTenantOrganizationMembership(t *testing.T) {
 	key := []byte("test-handoff-key")
 	configDir := t.TempDir()

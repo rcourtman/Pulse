@@ -67,7 +67,8 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
   };
 
   var renderAccountRuntime = function(): void {
-    renderAccountUIState(deps.store.getAccountState(), deps.store.getBootstrap().accounts || []);
+    var bootstrap = deps.store.getBootstrap();
+    renderAccountUIState(deps.store.getAccountState(), bootstrap.accounts || [], bootstrap.account_api_base_path || '');
   };
 
   var loadAccessRoster = async function(accountID: string): Promise<void> {

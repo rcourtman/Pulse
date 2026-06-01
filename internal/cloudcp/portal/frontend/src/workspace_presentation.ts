@@ -40,10 +40,10 @@ export function workspaceGuidanceCopy(workspace: PortalWorkspaceSummary): string
   var status = workspaceHealthState(workspace);
   var state = String(workspace.state || '');
   if (state === 'active' && status === 'healthy') {
-    return 'This workspace is active. Open it from the workspace list, or suspend it here if you intend to take it out of service.';
+    return 'This workspace is active. Open it to work inside this client boundary, or install agents to reach the workspace-bound install commands.';
   }
   if (state === 'active' && status === 'checking') {
-    return 'This workspace is active. The latest health check is still pending.';
+    return 'This workspace is active. The latest health check is still pending, but the workspace can still own agent install commands.';
   }
   if (status === 'unhealthy') {
     return 'The latest health check is unhealthy. Review the current state before suspending or deleting this workspace.';

@@ -238,6 +238,13 @@ recovery scope, or a storage/recovery-owned secret source.
    those notes. Recovery-adjacent diagnostics consumers must preserve the
    source-specific Docker / Podman wording and recovery destinations governed
    by the shared diagnostics API contract.
+   Hosted Pulse Account may deep-link a client workspace handoff to reporting
+   surfaces such as `/settings/support/reporting`, but that target is a signed
+   tenant-local navigation hint only. Storage/recovery must not treat control-
+   plane handoff target paths as recovery-point selectors, restore scope,
+   backup freshness evidence, report-generation authority, or a storage-owned
+   redirect channel; report and backup API payloads remain owned by their
+   tenant runtime routes.
    When shared `internal/api/` handlers expose structured Patrol readiness or
    provider/model/tool causes, storage and recovery surfaces may treat them only
    as adjacent operator context and must not convert them into storage health,

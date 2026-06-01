@@ -59,7 +59,7 @@ func TestHandoffHandler(t *testing.T) {
 	h := HandleHandoff(reg, tenantsDir)
 	mux.Handle("/api/accounts/{account_id}/tenants/{tenant_id}/handoff", admin.AdminKeyMiddleware("secret-key", h))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/accounts/"+accountID+"/tenants/"+tenantID+"/handoff", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/accounts/"+accountID+"/tenants/"+tenantID+"/handoff?target_path=%2Fsettings%2Finfrastructure%3Fadd%3Dlinux-host", nil)
 	req.Host = "cloud.example.com"
 	req.Header.Set("X-Admin-Key", "secret-key")
 	req.Header.Set("X-User-ID", userID)
@@ -109,6 +109,9 @@ func TestHandoffHandler(t *testing.T) {
 	}
 	if got.Role != registry.MemberRoleTech {
 		t.Fatalf("role = %q, want %q", got.Role, registry.MemberRoleTech)
+	}
+	if got.TargetPath != "/settings/infrastructure?add=linux-host" {
+		t.Fatalf("target_path = %q, want %q", got.TargetPath, "/settings/infrastructure?add=linux-host")
 	}
 	if got.ExpiresAt == nil || time.Until(got.ExpiresAt.Time) > 60*time.Second+2*time.Second {
 		t.Fatalf("exp looks wrong: %v", got.ExpiresAt)

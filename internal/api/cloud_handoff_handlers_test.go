@@ -544,6 +544,122 @@ func TestHandleHandoffExchangeBrowserFlowSetsSessionCookies(t *testing.T) {
 	}
 }
 
+func TestHandleHandoffExchangeRedirectsToSignedLocalTargetPath(t *testing.T) {
+	key := []byte("test-handoff-key")
+	configDir := t.TempDir()
+	resetSessionStoreForTests()
+	t.Cleanup(resetSessionStoreForTests)
+	resetCSRFStoreForTests()
+	t.Cleanup(resetCSRFStoreForTests)
+	InitSessionStore(configDir)
+	InitCSRFStore(configDir)
+	secretsDir := filepath.Join(configDir, "secrets")
+	if err := os.MkdirAll(secretsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(secretsDir, "handoff.key"), key, 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	handler := HandleHandoffExchange(configDir)
+	tenantID := "tenant-target"
+	saveHandoffTestOrganization(t, configDir, &models.Organization{
+		ID:          tenantID,
+		DisplayName: "Tenant Target",
+		Status:      models.OrgStatusActive,
+		CreatedAt:   time.Now().UTC(),
+		OwnerUserID: "target@example.com",
+	})
+	token := signHandoffToken(t, key, cloudHandoffClaims{
+		AccountID:  "acct-target",
+		Email:      "target@example.com",
+		Role:       "owner",
+		TargetPath: "/settings/infrastructure?add=linux-host",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        "jti-target",
+			Subject:   "user-target",
+			Issuer:    cloudHandoffIssuer,
+			Audience:  jwt.ClaimStrings{tenantID},
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+	})
+
+	form := url.Values{}
+	form.Set("token", token)
+	req := httptest.NewRequest(http.MethodPost, "/api/cloud/handoff/exchange", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Host = tenantID + ".example.com"
+	req.RemoteAddr = "127.0.0.1:12345"
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusTemporaryRedirect)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/settings/infrastructure?add=linux-host" {
+		t.Fatalf("redirect location = %q, want %q", loc, "/settings/infrastructure?add=linux-host")
+	}
+}
+
+func TestHandleHandoffExchangeDropsUnsafeSignedTargetPath(t *testing.T) {
+	key := []byte("test-handoff-key")
+	configDir := t.TempDir()
+	resetSessionStoreForTests()
+	t.Cleanup(resetSessionStoreForTests)
+	resetCSRFStoreForTests()
+	t.Cleanup(resetCSRFStoreForTests)
+	InitSessionStore(configDir)
+	InitCSRFStore(configDir)
+	secretsDir := filepath.Join(configDir, "secrets")
+	if err := os.MkdirAll(secretsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(secretsDir, "handoff.key"), key, 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	handler := HandleHandoffExchange(configDir)
+	tenantID := "tenant-unsafe-target"
+	saveHandoffTestOrganization(t, configDir, &models.Organization{
+		ID:          tenantID,
+		DisplayName: "Tenant Unsafe Target",
+		Status:      models.OrgStatusActive,
+		CreatedAt:   time.Now().UTC(),
+		OwnerUserID: "unsafe-target@example.com",
+	})
+	token := signHandoffToken(t, key, cloudHandoffClaims{
+		AccountID:  "acct-unsafe-target",
+		Email:      "unsafe-target@example.com",
+		Role:       "owner",
+		TargetPath: "https://evil.example.com/pwn",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        "jti-unsafe-target",
+			Subject:   "user-unsafe-target",
+			Issuer:    cloudHandoffIssuer,
+			Audience:  jwt.ClaimStrings{tenantID},
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+	})
+
+	form := url.Values{}
+	form.Set("token", token)
+	req := httptest.NewRequest(http.MethodPost, "/api/cloud/handoff/exchange", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Host = tenantID + ".example.com"
+	req.RemoteAddr = "127.0.0.1:12345"
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusTemporaryRedirect)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/" {
+		t.Fatalf("redirect location = %q, want %q", loc, "/")
+	}
+}
+
 func TestHandleHandoffExchangeRejectsMissingTenantOrganizationMembership(t *testing.T) {
 	key := []byte("test-handoff-key")
 	configDir := t.TempDir()

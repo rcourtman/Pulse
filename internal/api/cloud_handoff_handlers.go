@@ -30,9 +30,10 @@ const (
 var errHandoffAuthorizationDenied = errors.New("handoff authorization denied")
 
 type cloudHandoffClaims struct {
-	AccountID string `json:"account_id"`
-	Email     string `json:"email"`
-	Role      string `json:"role"`
+	AccountID  string `json:"account_id"`
+	Email      string `json:"email"`
+	Role       string `json:"role"`
+	TargetPath string `json:"target_path,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -436,14 +437,36 @@ func HandleHandoffExchange(configDir string) http.HandlerFunc {
 				"jti":        claims.ID,
 				"exp":        claims.ExpiresAt.Time.UTC().Format(time.RFC3339),
 			}
+			if targetPath := sanitizeCloudHandoffTargetPath(claims.TargetPath); targetPath != "" {
+				resp["target_path"] = targetPath
+			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(resp)
 			return
 		}
 
-		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		targetPath := sanitizeCloudHandoffTargetPath(claims.TargetPath)
+		if targetPath == "" {
+			targetPath = "/"
+		}
+		http.Redirect(w, r, targetPath, http.StatusTemporaryRedirect)
 	}
+}
+
+func sanitizeCloudHandoffTargetPath(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || !strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, "//") {
+		return ""
+	}
+	if strings.IndexFunc(raw, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
+		return ""
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.IsAbs() || parsed.Host != "" || parsed.Path == "" || !strings.HasPrefix(parsed.Path, "/") {
+		return ""
+	}
+	return parsed.String()
 }
 
 func authorizeHandoffOrganizationMembership(configDir, tenantID, userID, email, role string) (*handoffAuthorization, error) {

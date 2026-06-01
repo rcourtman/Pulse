@@ -424,6 +424,13 @@ profile and assignment columns, but embedded table framing must route through
    lifecycle surfaces may display contact email when supplied by the shared
    auth boundary, but they must not reinterpret SSO or Stripe email as the
    canonical user identifier for setup, install, or fleet-management actions.
+   Hosted Pulse Account may deep-link an MSP operator into a tenant workspace's
+   agent-install surface through a signed local handoff target such as
+   `/settings/infrastructure?add=linux-host`, but install-token generation,
+   installer command construction, and first-agent onboarding remain
+   agent-lifecycle/API-owned inside the tenant runtime. Control-plane handoff
+   code must not mint lifecycle tokens or synthesize install commands for the
+   tenant; it may only establish the tenant session and local destination.
    Availability-target API changes are adjacent but not lifecycle-owned:
    agentless MQTT, HTTP/S, ping, and TCP targets may appear in shared
    `internal/api/` handlers and resource projections, but their settings owner

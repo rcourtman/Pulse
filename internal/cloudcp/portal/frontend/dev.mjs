@@ -246,6 +246,82 @@ function previewReturnURL(request, scenario, toastMessage) {
   return url.toString();
 }
 
+function previewWorkspaceURL(scenario, workspaceID, targetPath) {
+  const origin = 'http://' + previewHost + ':' + String(previewPort);
+  const url = new URL('/__portal_preview/workspaces/' + encodeURIComponent(workspaceID), origin);
+  url.searchParams.set('scenario', scenario);
+  if (targetPath) {
+    url.searchParams.set('target_path', targetPath);
+  }
+  return url.toString();
+}
+
+function findWorkspaceByID(bootstrap, workspaceID) {
+  for (const account of bootstrap.accounts || []) {
+    for (const workspace of account.workspaces || []) {
+      if (workspace.id === workspaceID) {
+        return { account, workspace };
+      }
+    }
+  }
+  return null;
+}
+
+function previewTargetLabel(targetPath) {
+  if (targetPath === '/settings/infrastructure?add=linux-host') {
+    return 'Settings -> Infrastructure, with the agent install drawer open';
+  }
+  if (targetPath === '/settings/support/reporting') {
+    return 'Settings -> Reporting for this client workspace';
+  }
+  return 'the workspace dashboard';
+}
+
+function buildPreviewWorkspaceHTML(bootstrap, workspaceID, targetPath, scenario) {
+  const entry = findWorkspaceByID(bootstrap, workspaceID);
+  const title = entry ? entry.workspace.display_name : workspaceID;
+  const accountName = entry ? entry.account.name : 'Pulse Account';
+  const targetLabel = previewTargetLabel(targetPath);
+  const portalURL = '/?scenario=' + encodeURIComponent(scenario);
+  return '<!DOCTYPE html>' +
+    '<html lang="en">' +
+      '<head>' +
+        '<meta charset="utf-8">' +
+        '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+        '<title>' + escapeHTML(title) + ' - Preview workspace</title>' +
+        '<style>' +
+          'body{margin:0;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f6f7f9;color:#101828}' +
+          'main{max-width:760px;margin:0 auto;padding:48px 20px}' +
+          '.panel{background:#fff;border:1px solid #d0d5dd;border-radius:8px;padding:24px;box-shadow:0 1px 2px rgba(16,24,40,.06)}' +
+          'h1{margin:0 0 8px;font-size:24px;letter-spacing:0}' +
+          'p{margin:0 0 16px;color:#475467;line-height:1.5}' +
+          '.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:20px 0}' +
+          '.fact{border:1px solid #eaecf0;border-radius:6px;padding:10px;background:#fcfcfd}' +
+          '.fact span{display:block;font-size:12px;color:#667085}' +
+          '.fact strong{display:block;margin-top:2px;font-size:13px}' +
+          'a{display:inline-flex;align-items:center;min-height:34px;padding:0 12px;border-radius:6px;background:#155eef;color:#fff;text-decoration:none;font-size:14px;font-weight:600}' +
+          '@media(max-width:640px){.facts{grid-template-columns:1fr}}' +
+        '</style>' +
+      '</head>' +
+      '<body>' +
+        '<main>' +
+          '<section class="panel">' +
+            '<p>Preview workspace handoff</p>' +
+            '<h1>' + escapeHTML(title) + '</h1>' +
+            '<p>This preview page stands in for the hosted client workspace. In production the signed handoff creates a session inside the client workspace and opens ' + escapeHTML(targetLabel) + '.</p>' +
+            '<div class="facts">' +
+              '<div class="fact"><span>Account</span><strong>' + escapeHTML(accountName) + '</strong></div>' +
+              '<div class="fact"><span>Workspace</span><strong>' + escapeHTML(workspaceID) + '</strong></div>' +
+              '<div class="fact"><span>Target</span><strong>' + escapeHTML(targetPath || '/') + '</strong></div>' +
+            '</div>' +
+            '<p>Agents, alerts, and reports are scoped to this workspace after the handoff.</p>' +
+            '<a href="' + escapeHTML(portalURL) + '">Back to Pulse Account</a>' +
+          '</section>' +
+        '</main>' +
+      '</body>' +
+    '</html>';
+}
+
 function buildPreviewHTML(assets, bootstrap, previewToast) {
   const bootstrapJSON = JSON.stringify(bootstrap).replace(/</g, '\\u003c');
   const safeToast = previewToast ? JSON.stringify(String(previewToast)) : 'null';
@@ -348,7 +424,7 @@ function findAccount(bootstrap, accountID) {
 }
 
 function routeAccountAPI(request, response, url, bootstrap, scenario) {
-  const match = url.pathname.match(/^\/api\/accounts\/([^/]+)\/(tenants|members)(?:\/([^/]+))?$/);
+  const match = url.pathname.match(/^\/api\/accounts\/([^/]+)\/(tenants|members)(?:\/([^/]+))?(?:\/([^/]+))?$/);
   if (!match) {
     sendText(response, 404, 'Not found');
     return;
@@ -357,9 +433,15 @@ function routeAccountAPI(request, response, url, bootstrap, scenario) {
   const accountID = decodeURIComponent(match[1]);
   const resource = match[2];
   const resourceID = match[3] ? decodeURIComponent(match[3]) : '';
+  const action = match[4] ? decodeURIComponent(match[4]) : '';
   const account = findAccount(bootstrap, accountID);
   if (!account) {
     sendJSON(response, 404, { error: 'Account not found.' });
+    return;
+  }
+
+  if (action && !(resource === 'tenants' && action === 'handoff')) {
+    sendText(response, 404, 'Not found');
     return;
   }
 
@@ -421,6 +503,29 @@ function routeAccountAPI(request, response, url, bootstrap, scenario) {
   }
 
   if (resource === 'tenants') {
+    if (request.method === 'POST' && resourceID && action === 'handoff') {
+      const workspace = (account.workspaces || []).find(function(item) {
+        return item.id === resourceID;
+      });
+      if (!workspace) {
+        sendJSON(response, 404, { error: 'Workspace not found.' });
+        return;
+      }
+      if (workspace.state !== 'active') {
+        sendJSON(response, 409, { error: 'Workspace is not active.' });
+        return;
+      }
+      response.writeHead(303, {
+        Location: previewWorkspaceURL(scenario, resourceID, String(url.searchParams.get('target_path') || '')),
+        'Cache-Control': 'no-store',
+      });
+      response.end();
+      return;
+    }
+    if (action) {
+      sendText(response, 405, 'Method not allowed');
+      return;
+    }
     if (request.method === 'POST' && !resourceID) {
       readJSONBody(request).then(function(body) {
         const displayName = String(body.display_name || '').trim();
@@ -710,6 +815,21 @@ const server = http.createServer(function(request, response) {
 
   if (url.pathname.startsWith('/api/accounts/')) {
     routeAccountAPI(request, response, url, getScenarioState(scenario), scenario);
+    return;
+  }
+
+  const previewWorkspaceMatch = url.pathname.match(/^\/__portal_preview\/workspaces\/([^/]+)$/);
+  if (previewWorkspaceMatch) {
+    response.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
+    });
+    response.end(buildPreviewWorkspaceHTML(
+      getScenarioState(scenario),
+      decodeURIComponent(previewWorkspaceMatch[1]),
+      String(url.searchParams.get('target_path') || ''),
+      scenario,
+    ));
     return;
   }
 

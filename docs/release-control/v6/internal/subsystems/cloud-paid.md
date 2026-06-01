@@ -314,6 +314,17 @@ or other self-hosted uncapped continuity plans.
    `Summary` destination. The top of `Workspaces` may surface one quiet inline
    facts line plus one next-action row before the list, but it must not turn
    that summary into a second overview deck, metric grid, or competing shell.
+   Pulse Account workspace handoff is the provider control-plane path into a
+   client workspace, not a parallel monitoring surface. Workspace rows and
+   selected-workspace panels may offer task handoffs such as `Open workspace`,
+   `Install agents`, and reporting, but those actions must stay POST handoffs
+   through the account tenant route. Any task target must be sanitized and
+   signed into the control-plane handoff token as a tenant-local path, then
+   sanitized again by the tenant exchange before redirect. Agent install
+   commands, alerts, and performance reports remain owned by the target tenant
+   runtime; Pulse Account may deep-link to those tenant surfaces but must not
+   mint workspace agent credentials or render cross-client monitoring state in
+   the account portal.
    Portal workspace payloads are live-workspace surfaces, not registry history
    dumps: tenants in `deleting` or `deleted` state must stay hidden from the
    browser bootstrap, `/api/portal/dashboard`, and workspace-detail API so

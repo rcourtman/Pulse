@@ -161,6 +161,17 @@ files, owner, and comment. Recovery history may index those artifacts, but it
 must not be the only API path for PBS protection or verification state when a
 platform page needs source-native backup columns.
 
+Hosted workspace handoff exchange is a canonical API/session payload boundary.
+`/api/cloud/handoff/exchange` may redirect to a tenant-local target path only
+when that path is carried in the signed control-plane JWT as `target_path`.
+The exchange must ignore unsigned request-form or query redirect targets,
+sanitize the signed target as a same-origin local path, fall back to `/` when
+the claim is absent or unsafe, and include `target_path` in JSON responses only
+after the same sanitization. This lets Pulse Account deep-link an MSP operator
+to tenant-owned destinations such as agent installation or reporting without
+turning the tenant exchange into an open redirect or moving API ownership for
+agent tokens, alerts, or reports into the control plane.
+
 1. `frontend-modern/src/api/agentProfiles.ts` shared with `agent-lifecycle`: the agent profiles frontend client is both an agent lifecycle control surface and a canonical API payload contract boundary.
 2. `frontend-modern/src/api/ai.ts` shared with `ai-runtime`: the AI frontend client is both an AI runtime control surface and a canonical API payload contract boundary.
 3. `frontend-modern/src/api/nodes.ts` shared with `agent-lifecycle`: the shared Proxmox node client is both an agent lifecycle setup/install control surface and a canonical API payload contract boundary.

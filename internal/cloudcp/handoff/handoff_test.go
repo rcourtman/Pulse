@@ -14,13 +14,14 @@ func TestMintAndVerify(t *testing.T) {
 	now := time.Now().UTC()
 
 	tokenStr, err := MintHandoffToken(secret, HandoffClaims{
-		TenantID:  "t-TESTTENANT",
-		UserID:    "u_TESTUSER",
-		AccountID: "a_TESTACCOUNT",
-		Email:     "tech@example.com",
-		Role:      registry.MemberRoleTech,
-		IssuedAt:  now,
-		ExpiresAt: now.Add(60 * time.Second),
+		TenantID:   "t-TESTTENANT",
+		UserID:     "u_TESTUSER",
+		AccountID:  "a_TESTACCOUNT",
+		Email:      "tech@example.com",
+		Role:       registry.MemberRoleTech,
+		TargetPath: "/settings/infrastructure?add=linux-host",
+		IssuedAt:   now,
+		ExpiresAt:  now.Add(60 * time.Second),
 	})
 	if err != nil {
 		t.Fatalf("MintHandoffToken: %v", err)
@@ -54,6 +55,9 @@ func TestMintAndVerify(t *testing.T) {
 	if got.Role != registry.MemberRoleTech {
 		t.Fatalf("role = %q, want %q", got.Role, registry.MemberRoleTech)
 	}
+	if got.TargetPath != "/settings/infrastructure?add=linux-host" {
+		t.Fatalf("target_path = %q, want %q", got.TargetPath, "/settings/infrastructure?add=linux-host")
+	}
 	if got.ID == "" {
 		t.Fatalf("jti empty")
 	}
@@ -62,6 +66,45 @@ func TestMintAndVerify(t *testing.T) {
 	}
 	if got.ExpiresAt.Time.Sub(got.IssuedAt.Time) != 60*time.Second {
 		t.Fatalf("exp-iat = %v, want %v", got.ExpiresAt.Time.Sub(got.IssuedAt.Time), 60*time.Second)
+	}
+}
+
+func TestMintHandoffTokenDropsUnsafeTargetPath(t *testing.T) {
+	secret := []byte("0123456789abcdef0123456789abcdef")
+	now := time.Now().UTC()
+
+	tokenStr, err := MintHandoffToken(secret, HandoffClaims{
+		TenantID:   "t-TENANT",
+		UserID:     "u_USER",
+		AccountID:  "a_ACCOUNT",
+		Email:      "x@example.com",
+		Role:       registry.MemberRoleAdmin,
+		TargetPath: "https://evil.example.com/pwn",
+		IssuedAt:   now,
+		ExpiresAt:  now.Add(60 * time.Second),
+		JTI:        "0123456789abcdef0123456789abcdef",
+	})
+	if err != nil {
+		t.Fatalf("MintHandoffToken: %v", err)
+	}
+
+	var got jwtHandoffClaims
+	parsed, err := jwt.ParseWithClaims(
+		tokenStr,
+		&got,
+		func(t *jwt.Token) (any, error) { return secret, nil },
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+		jwt.WithIssuer(issuer),
+		jwt.WithAudience("t-TENANT"),
+	)
+	if err != nil {
+		t.Fatalf("ParseWithClaims: %v", err)
+	}
+	if !parsed.Valid {
+		t.Fatalf("token valid = false, want true")
+	}
+	if got.TargetPath != "" {
+		t.Fatalf("target_path = %q, want empty", got.TargetPath)
 	}
 }
 

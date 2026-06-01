@@ -519,6 +519,44 @@ header .logout-btn:hover,
   color: var(--ink-secondary);
 }
 
+.workspace-management-next-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.workspace-next-step {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.workspace-next-step div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.workspace-next-step strong {
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.workspace-next-step span {
+  font-size: 12px;
+  color: var(--ink-secondary);
+}
+
+.workspace-next-step form {
+  margin: 0;
+}
+
 .workspace-management-actions {
   display: flex;
   gap: 8px;
@@ -1426,6 +1464,8 @@ header .logout-btn:hover,
   .portal-support-simple-row { grid-template-columns: 1fr; gap: 4px; }
 
   .workspace-management-facts { grid-template-columns: 1fr; }
+  .workspace-next-step { grid-template-columns: 1fr; }
+  .workspace-next-step form { justify-self: flex-start; }
 }
 
 @media (max-width: 480px) {
