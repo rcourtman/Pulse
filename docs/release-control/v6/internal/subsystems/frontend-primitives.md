@@ -179,12 +179,21 @@ and Kubernetes platform pages may add native API-backed sections, but the tabs
 must use `PlatformSectionTabs`, canonical table alignment helpers, and shared
 resource type presentation/reporting helpers rather than page-local tab shells,
 alignment classes, or ad hoc report-category coercion. Platform tabs are
-workflow-level navigation, not one visible tab per API resource kind: Docker /
-Podman exposes `Overview`, `Containers`, `Images`, `Storage`, `Networks`, and
-`Swarm`, while Kubernetes exposes `Overview`, `Nodes`, `Workloads`, `Services`,
-`Storage`, `Configuration`, and `Events`. API-native tables remain bespoke under
-those workflows, so Docker `Storage` owns engine disk usage plus volumes and
-Docker `Swarm` owns services, tasks, nodes, secrets, and configs; Kubernetes
+workflow-level navigation, not one visible tab per API resource kind, and they
+must be evidence-gated by their owning row or signal model. `Overview` is the
+stable landing surface; supporting workflow tabs appear only when the current
+setup has native inventory or signal for that workflow, and legacy object URLs
+resolve to their owning workflow only when that workflow is visible. Docker /
+Podman may expose `Overview`, `Images`, `Storage`, `Networks`, and `Swarm`,
+while legacy `/docker/containers` resolves to the Overview landing surface
+rather than remaining a separate visible tab. Kubernetes may expose `Overview`,
+`Nodes`, `Workloads`, `Services`, `Storage`, `Configuration`, and `Events`;
+TrueNAS and vSphere follow the same evidence-gated primitive for native
+storage, service, app, VM, protection, datastore, network, health, and activity
+workflows. API-native tables remain bespoke under those workflows, so Docker
+`Overview` owns runtime hosts plus primary container workloads, Docker `Storage`
+owns engine disk usage plus volumes, and Docker `Swarm` owns services, tasks,
+nodes, secrets, and configs; Kubernetes
 `Workloads` owns Pods, Deployments, controllers, and autoscaling, `Services`
 owns Services plus ingress/endpoint inventory, and `Configuration` owns config
 plus policy inventory. Backup and recovery platform pages follow the same
@@ -194,9 +203,11 @@ not grow one top-level tab for each API source merely because that source has a
 table. Legacy object-specific URLs may resolve to the owning
 workflow tab, but they must not reappear as top-level platform navigation unless
 the product IA is intentionally changed. Overview tabs must stay deliberately
-narrow instead of repeating every detail table: Docker / Podman Overview owns
-runtime hosts, while Kubernetes Overview owns cluster/control-plane rollup; the
-object tables live in their dedicated workflow tabs. Docker / Podman native subsections now
+shaped around the primary operator job instead of repeating every detail table:
+Docker / Podman Overview owns runtime hosts and primary container workloads in
+the proven host-then-workloads pattern, while Kubernetes Overview owns
+cluster/control-plane rollup; supporting object tables live in their dedicated
+workflow tabs. Docker / Podman native subsections now
 include runtime containers, engine storage usage, Swarm node inventory, and
 metadata-only Swarm secret/config inventory where the documented Docker APIs
 report those resources; Podman-only libpod pod inventory must not be represented

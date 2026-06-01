@@ -15,6 +15,7 @@ import {
   filterTrueNASStorageTopologyRows,
   filterTrueNASShares,
   filterTrueNASVMs,
+  getTrueNASPageTabSpecs,
   mapTrueNASAppStatus,
   mapTrueNASIncidentSeverity,
   mapTrueNASProtectionKind,
@@ -58,6 +59,34 @@ describe('truenasPageModel', () => {
       'shares',
       'protection',
     ]);
+  });
+
+  it('shows TrueNAS workflow tabs only when their native facet has inventory', () => {
+    const systemOnlyModel = buildTrueNASPageModel([
+      makeResource({ id: 'truenas-system', type: 'agent' }),
+    ]);
+    const inventoryModel = buildTrueNASPageModel([
+      makeResource({
+        id: 'truenas-system',
+        type: 'agent',
+        truenas: { services: [{ id: '1', service: 'smb', enabled: true, state: 'RUNNING' }] },
+      }),
+      makeResource({ id: 'truenas-vm', type: 'vm' }),
+      makeResource({ id: 'truenas-app', type: 'app-container' }),
+      makeResource({ id: 'truenas-share', type: 'network-share' }),
+      makeResource({
+        id: 'truenas-pool',
+        type: 'storage',
+        storage: { topology: 'pool', platform: 'truenas' },
+      }),
+    ]);
+
+    expect(getTrueNASPageTabSpecs(systemOnlyModel).map((tab) => tab.id)).toEqual(['overview']);
+    expect(
+      getTrueNASPageTabSpecs(inventoryModel, { hasProtectionInventory: true }).map(
+        (tab) => tab.id,
+      ),
+    ).toEqual(['overview', 'storage', 'services', 'apps', 'vms', 'shares', 'protection']);
   });
 
   it('buckets systems, workloads, and native storage inventory by TrueNAS API facet', () => {

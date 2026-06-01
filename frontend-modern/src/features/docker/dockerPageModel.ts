@@ -24,7 +24,6 @@ const DOCKER_CONFIG_TYPES = new Set<ResourceType>(['docker-config']);
 
 export type DockerPageTabId =
   | 'overview'
-  | 'containers'
   | 'images'
   | 'storage'
   | 'networks'
@@ -38,11 +37,9 @@ export type DockerTabSpec = {
 
 export const DOCKER_TAB_SPECS: readonly DockerTabSpec[] = [
   // Keep the runtime lens at operator-workflow granularity. Overview owns
-  // runtime hosts; detailed object inventory belongs in the Containers,
-  // Images, Storage, Networks, and Swarm workflows so the page does not repeat
-  // the same tables in multiple places.
+  // runtime hosts plus primary container workloads; detailed supporting object
+  // inventory belongs in the Images, Storage, Networks, and Swarm workflows.
   { id: 'overview', label: 'Overview', path: '/docker/overview' },
-  { id: 'containers', label: 'Containers', path: '/docker/containers' },
   { id: 'images', label: 'Images', path: '/docker/images' },
   { id: 'storage', label: 'Storage', path: '/docker/storage' },
   { id: 'networks', label: 'Networks', path: '/docker/networks' },
@@ -52,6 +49,7 @@ export const DOCKER_TAB_SPECS: readonly DockerTabSpec[] = [
 const asTrimmedString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
 const DOCKER_ROUTE_TAB_ALIASES: Record<string, DockerPageTabId> = {
+  containers: 'overview',
   configs: 'swarm',
   secrets: 'swarm',
   services: 'swarm',
@@ -610,8 +608,6 @@ const hasDockerTabInventory = (model: DockerPageModel, tab: DockerPageTabId): bo
   switch (tab) {
     case 'overview':
       return true;
-    case 'containers':
-      return model.containers.length > 0;
     case 'images':
       return model.images.length > 0;
     case 'storage':

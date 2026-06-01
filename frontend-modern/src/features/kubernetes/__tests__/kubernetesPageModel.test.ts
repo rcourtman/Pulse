@@ -12,6 +12,7 @@ import {
   compareKubernetesEvents,
   compareKubernetesNodes,
   compareKubernetesPods,
+  getKubernetesPageTabSpecs,
   mapKubernetesControllerStatus,
   mapKubernetesCronJobStatus,
   mapKubernetesDaemonSetStatus,
@@ -62,6 +63,32 @@ describe('kubernetesPageModel', () => {
     expect(resolveKubernetesPageTabId('config')).toBe('configuration');
     expect(resolveKubernetesPageTabId('policy')).toBe('configuration');
     expect(resolveKubernetesPageTabId('unknown')).toBe('overview');
+  });
+
+  it('shows Kubernetes workflow tabs only when the workflow has inventory', () => {
+    const clusterOnlyModel = buildKubernetesPageModel([
+      makeResource({ id: 'cluster-1', type: 'k8s-cluster' }),
+    ]);
+    const workloadModel = buildKubernetesPageModel([
+      makeResource({ id: 'cluster-1', type: 'k8s-cluster' }),
+      makeResource({ id: 'node-1', type: 'k8s-node' }),
+      makeResource({ id: 'pod-1', type: 'pod' }),
+      makeResource({ id: 'svc-1', type: 'k8s-service' }),
+      makeResource({ id: 'pvc-1', type: 'k8s-persistent-volume-claim' }),
+      makeResource({ id: 'cm-1', type: 'k8s-configmap' }),
+      makeResource({ id: 'event-1', type: 'k8s-event' }),
+    ]);
+
+    expect(getKubernetesPageTabSpecs(clusterOnlyModel).map((tab) => tab.id)).toEqual(['overview']);
+    expect(getKubernetesPageTabSpecs(workloadModel).map((tab) => tab.id)).toEqual([
+      'overview',
+      'nodes',
+      'workloads',
+      'services',
+      'storage',
+      'configuration',
+      'events',
+    ]);
   });
 
   it('buckets clusters, nodes, workloads, services, storage, config, policy, autoscaling, and events', () => {

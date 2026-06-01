@@ -88,7 +88,6 @@ describe('dockerPageModel', () => {
   it('declares operator workflow tabs for Docker runtime inventory', () => {
     expect(DOCKER_TAB_SPECS.map((tab) => tab.id)).toEqual([
       'overview',
-      'containers',
       'images',
       'storage',
       'networks',
@@ -98,7 +97,7 @@ describe('dockerPageModel', () => {
 
   it('keeps legacy Docker object routes mapped to workflow tabs', () => {
     expect(resolveDockerPageTabId(undefined)).toBe('overview');
-    expect(resolveDockerPageTabId('containers')).toBe('containers');
+    expect(resolveDockerPageTabId('containers')).toBe('overview');
     expect(resolveDockerPageTabId('volumes')).toBe('storage');
     expect(resolveDockerPageTabId('storage')).toBe('storage');
     expect(resolveDockerPageTabId('services')).toBe('swarm');
@@ -241,7 +240,6 @@ describe('dockerPageModel', () => {
     ]);
     expect(getDockerPageTabSpecs(runtimeInventoryModel).map((tab) => tab.id)).toEqual([
       'overview',
-      'containers',
       'images',
       'storage',
       'networks',

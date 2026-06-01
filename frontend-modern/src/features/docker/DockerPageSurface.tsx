@@ -99,15 +99,8 @@ export function DockerPageSurface() {
               <DockerOverview
                 hosts={model().hosts}
                 hostSourceCount={model().hosts.length}
+                containers={model().containers}
                 incidents={model().incidents}
-              />
-            </Show>
-            <Show when={activeTab() === 'containers'}>
-              <DockerContainersTable
-                resources={model().containers}
-                emptyIcon={dockerIcon()}
-                emptyTitle="No Docker or Podman containers"
-                emptyDescription="Containers appear here when a Docker or Podman host reports workload inventory."
               />
             </Show>
             <Show when={activeTab() === 'images'}>
@@ -275,6 +268,7 @@ function DockerSwarm(props: { model: DockerPageModel }) {
 function DockerOverview(props: {
   hosts: ReturnType<typeof buildDockerPageModel>['hosts'];
   hostSourceCount: number;
+  containers: ReturnType<typeof buildDockerPageModel>['containers'];
   incidents: ReturnType<typeof buildDockerPageModel>['incidents'];
 }) {
   return (
@@ -286,6 +280,12 @@ function DockerOverview(props: {
         emptyTitle="No Docker or Podman hosts"
         emptyDescription="Container hosts appear here once a Pulse agent registers them."
         showToolbar={false}
+      />
+      <DockerContainersTable
+        resources={props.containers}
+        emptyIcon={dockerIcon()}
+        emptyTitle="No Docker or Podman containers"
+        emptyDescription="Containers appear here when a Docker or Podman host reports workload inventory."
       />
       <Show when={props.incidents.length > 0}>
         <DockerAlertsTable

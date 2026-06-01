@@ -160,20 +160,32 @@ generic controller/event inventory table.
 
 Container runtime navigation is a unified-resource consumer boundary: the
 `/docker` route is the Docker / Podman runtime lens, not an exclusive owning
-platform. Its subtabs may be shown only from canonical resource evidence
-(`app-container` for containers, `docker-service` for Swarm services), and
-inactive standalone Swarm metadata must not be interpreted as host-role or
-service-surface proof. The unified-resource adapter is the backend fail-closed
-layer for that rule, so persisted or older-agent inactive Swarm payloads cannot
-reintroduce false Swarm capability surfaces.
+platform. Overview is the primary Docker / Podman landing surface and carries
+runtime host rows plus primary `app-container` workload rows so small and
+medium estates preserve the proven Pulse host-then-workloads interaction. The
+legacy `/docker/containers` route is a compatibility alias for that Overview
+surface, not a separate visible tab. Supporting subtabs such as Images,
+Storage, Networks, and Swarm may be shown only from canonical resource
+evidence, and inactive standalone Swarm metadata must not be interpreted as
+host-role or service-surface proof. The unified-resource adapter is the backend
+fail-closed layer for that rule, so persisted or older-agent inactive Swarm
+payloads cannot reintroduce false Swarm capability surfaces.
 
 Platform Overview tabs are rollup boundaries, not duplicate inventory dumps.
-Docker / Podman Overview owns runtime host rows only; container, image, storage,
-network, and Swarm object rows belong in their workflow tabs. Kubernetes
-Overview owns cluster/control-plane rollup rows only; node, workload, service,
-storage, configuration, policy, and event object rows belong in their workflow
-tabs. If a future Overview repeats a detailed table, the owning workflow must be
-retired or the Overview content must be reduced to aggregate signal.
+Docker / Podman Overview owns runtime host rows and primary container workload
+rows; image, storage, network, and Swarm object rows belong in their workflow
+tabs. Kubernetes Overview owns cluster/control-plane rollup rows only; node,
+workload, service, storage, configuration, policy, and event object rows belong
+in their workflow tabs. If a future Overview repeats a detailed table, the
+owning workflow must be retired or the Overview content must be reduced to
+aggregate signal.
+Across platform/runtime pages, workflow tabs are evidence-gated from the
+canonical model that owns their rows. `Overview` is the stable landing tab;
+supporting tabs appear only when their native inventory or signal exists, and
+legacy/direct object routes fall back to `Overview` when the requested workflow
+has no rows for the current setup. Signals outside unified-resource inventory,
+such as TrueNAS recovery protection points or vSphere activity timeline rows,
+must be treated as explicit tab evidence rather than permanent navigation.
 
 Kubernetes configuration and policy inventory are unified-resource consumer
 boundaries: the `/kubernetes/configuration` workflow tab must render Namespace,
@@ -302,8 +314,9 @@ proof can distinguish a populated disk-usage tab from an empty fixture.
    generic workload rows and Swarm services. Runtime containers must preserve
    Docker Engine container identity, owning host/runtime context, image,
    state/health/restart/update status, ports, networks, and mounts through
-   `DockerData` so `/docker/containers` can use the native
-   `DockerContainersTable` rather than `WorkloadsSurface`. Runtime image,
+   `DockerData` so Docker Overview and its `/docker/containers` compatibility
+   route can use the native `DockerContainersTable` rather than
+   `WorkloadsSurface`. Runtime image,
    volume, network, task, Swarm node, Swarm secret, Swarm config, and
    storage-usage evidence must enter through `DockerData` and the typed Docker
    resource records (`docker-image`, `docker-volume`, `docker-network`,
@@ -566,7 +579,9 @@ AI-only summary payloads, or page-local heuristics.
     hostname, `agent` platform scope, or agent telemetry alone; those facts
     surface as facets on the owning provider page.
     The default tab for each platform path must point at a sub-tab whose
-    canonical unified-resource projection actually populates. The
+    canonical unified-resource projection actually populates, and visible
+    workflow subtabs must stay evidence-gated by the same canonical row or
+    signal source instead of advertising empty object browsers. The
     canonical TrueNAS adapter (`internal/truenas/provider.go::
     truenasRecordsFromSnapshot`) already emits the top-level TrueNAS
     appliance as a unified `agent` row tagged with the `truenas`

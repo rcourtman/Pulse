@@ -52,6 +52,10 @@ export const TRUENAS_TAB_SPECS: readonly TrueNASTabSpec[] = [
   { id: 'protection', label: 'Protection', path: '/truenas/protection' },
 ] as const;
 
+export type TrueNASTabInventoryOptions = {
+  hasProtectionInventory?: boolean;
+};
+
 const TRUENAS_RESOURCE_TYPES = new Set<ResourceType>([
   'agent',
   'vm',
@@ -175,6 +179,38 @@ export function buildTrueNASPageModel(resources: Resource[]): TrueNASPageModel {
     incidents,
   };
 }
+
+const hasTrueNASStorageInventory = (model: TrueNASPageModel): boolean =>
+  model.pools.length > 0 || model.datasets.length > 0 || model.disks.length > 0;
+
+const hasTrueNASTabInventory = (
+  model: TrueNASPageModel,
+  tab: TrueNASPageTabId,
+  options: TrueNASTabInventoryOptions = {},
+): boolean => {
+  switch (tab) {
+    case 'overview':
+      return true;
+    case 'storage':
+      return hasTrueNASStorageInventory(model);
+    case 'services':
+      return model.services.length > 0;
+    case 'apps':
+      return model.apps.length > 0;
+    case 'vms':
+      return model.vms.length > 0;
+    case 'shares':
+      return model.shares.length > 0;
+    case 'protection':
+      return Boolean(options.hasProtectionInventory);
+  }
+};
+
+export const getTrueNASPageTabSpecs = (
+  model: TrueNASPageModel,
+  options: TrueNASTabInventoryOptions = {},
+): readonly TrueNASTabSpec[] =>
+  TRUENAS_TAB_SPECS.filter((tab) => hasTrueNASTabInventory(model, tab.id, options));
 
 const isTrueNASPoolResource = (resource: Resource): boolean =>
   resource.type === 'pool' || resource.storage?.topology === 'pool';

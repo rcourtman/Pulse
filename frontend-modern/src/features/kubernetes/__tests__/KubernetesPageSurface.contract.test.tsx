@@ -153,7 +153,7 @@ describe('KubernetesPageSurface contract', () => {
     vi.clearAllMocks();
   });
 
-  it('declares workflow tabs while querying API-native Kubernetes resources', () => {
+  it('declares inventory-backed workflow tabs while querying API-native Kubernetes resources', () => {
     setResources([
       makeResource({ id: 'cluster-1', type: 'k8s-cluster' }),
       makeResource({ id: 'pod-1', type: 'pod' }),
@@ -185,13 +185,25 @@ describe('KubernetesPageSurface contract', () => {
     );
     expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute(
       'data-tabs',
-      'overview,nodes,workloads,services,storage,configuration,events',
+      'overview,workloads',
     );
     expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute('data-active', 'overview');
     expect(screen.getByTestId('clusters-table')).toHaveAttribute('data-rows', '1');
     expect(screen.queryByTestId('pods-table')).toBeNull();
     expect(screen.queryByTestId('deployments-table')).toBeNull();
     expect(screen.queryByTestId('controllers-table')).toBeNull();
+  });
+
+  it('falls back to Overview when a requested Kubernetes workflow has no inventory', () => {
+    mockPathname.mockReturnValue('/kubernetes/services');
+    setResources([makeResource({ id: 'cluster-1', type: 'k8s-cluster' })]);
+
+    renderSurface();
+
+    expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute('data-tabs', 'overview');
+    expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute('data-active', 'overview');
+    expect(screen.getByTestId('clusters-table')).toHaveAttribute('data-rows', '1');
+    expect(screen.queryByTestId('services-table')).toBeNull();
   });
 
   it('groups workload API tables under the Workloads tab', () => {

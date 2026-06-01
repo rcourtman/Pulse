@@ -566,6 +566,33 @@ export const resolveKubernetesPageTabId = (segment: string | undefined): Kuberne
   return KUBERNETES_ROUTE_TAB_ALIASES[normalized] ?? 'overview';
 };
 
+const hasKubernetesTabInventory = (
+  model: KubernetesPageModel,
+  tab: KubernetesPageTabId,
+): boolean => {
+  switch (tab) {
+    case 'overview':
+      return true;
+    case 'nodes':
+      return model.nodes.length > 0;
+    case 'workloads':
+      return model.workloads.length > 0 || model.autoscaling.length > 0;
+    case 'services':
+      return model.services.length > 0 || model.serviceNetworking.length > 0;
+    case 'storage':
+      return model.storage.length > 0;
+    case 'configuration':
+      return model.config.length > 0 || model.policy.length > 0;
+    case 'events':
+      return model.events.length > 0;
+  }
+};
+
+export const getKubernetesPageTabSpecs = (
+  model: KubernetesPageModel,
+): readonly KubernetesTabSpec[] =>
+  KUBERNETES_TAB_SPECS.filter((tab) => hasKubernetesTabInventory(model, tab.id));
+
 const KUBERNETES_RESOURCE_TYPES = new Set<ResourceType>([
   'k8s-cluster',
   'k8s-node',

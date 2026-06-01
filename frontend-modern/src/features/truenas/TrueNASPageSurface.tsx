@@ -20,6 +20,7 @@ import { TrueNASVirtualMachinesTable } from './TrueNASVirtualMachinesTable';
 import {
   TRUENAS_TAB_SPECS,
   buildTrueNASPageModel,
+  getTrueNASPageTabSpecs,
   type TrueNASPageModel,
   type TrueNASPageTabId,
 } from './truenasPageModel';
@@ -46,16 +47,34 @@ export function TrueNASPageSurface() {
     cacheKey: 'truenas-workspace',
     initialHydration: 'prefer-ws-then-rest',
   });
-  const activeTab = createMemo<TrueNASPageTabId>(() => {
+  const requestedTab = createMemo<TrueNASPageTabId>(() => {
     const segment = location.pathname.split('/').filter(Boolean)[1] as TrueNASPageTabId | undefined;
     return segment && VALID_TABS.has(segment) ? segment : 'overview';
   });
   const model = createMemo(() => buildTrueNASPageModel(resources()));
+  const protection = useRecoveryPoints(() =>
+    model().resources.length > 0
+      ? {
+          platform: TRUENAS_PLATFORM_FILTER,
+          page: 1,
+          limit: 200,
+        }
+      : null,
+  );
+  const hasProtectionInventory = createMemo(
+    () => protection.meta().total > 0 || protection.points().length > 0,
+  );
+  const tabs = createMemo(() =>
+    getTrueNASPageTabSpecs(model(), { hasProtectionInventory: hasProtectionInventory() }),
+  );
+  const activeTab = createMemo<TrueNASPageTabId>(() =>
+    tabs().some((tab) => tab.id === requestedTab()) ? requestedTab() : 'overview',
+  );
 
   return (
     <div data-testid="truenas-page" class="space-y-3">
       <PlatformSectionTabs
-        tabs={TRUENAS_TAB_SPECS}
+        tabs={tabs()}
         active={activeTab()}
         ariaLabel="TrueNAS sections"
       />
@@ -108,7 +127,7 @@ export function TrueNASPageSurface() {
               <TrueNASShares model={model} />
             </Show>
             <Show when={activeTab() === 'protection'}>
-              <TrueNASProtection />
+              <TrueNASProtection recoveryPoints={protection} />
             </Show>
           </Show>
         </Show>
@@ -180,19 +199,13 @@ function TrueNASShares(props: TrueNASOverviewProps) {
   );
 }
 
-function TrueNASProtection() {
-  const recoveryPoints = useRecoveryPoints(() => ({
-    platform: TRUENAS_PLATFORM_FILTER,
-    page: 1,
-    limit: 200,
-  }));
-
+function TrueNASProtection(props: { recoveryPoints: ReturnType<typeof useRecoveryPoints> }) {
   return (
     <TrueNASProtectionTable
-      points={recoveryPoints.points()}
-      loading={recoveryPoints.response.loading}
-      error={recoveryPoints.response.error}
-      onRefresh={() => void recoveryPoints.refetch()}
+      points={props.recoveryPoints.points()}
+      loading={props.recoveryPoints.response.loading}
+      error={props.recoveryPoints.response.error}
+      onRefresh={() => void props.recoveryPoints.refetch()}
       emptyIcon={truenasIcon()}
       emptyTitle="No TrueNAS protection activity"
       emptyDescription="ZFS snapshots and replication tasks appear here once the TrueNAS API reports snapshot or replication activity."

@@ -135,6 +135,24 @@ export function buildVmwarePageModel(
   };
 }
 
+const hasVmwareTabInventory = (model: VmwarePageModel, tab: VmwarePageTabId): boolean => {
+  switch (tab) {
+    case 'overview':
+      return true;
+    case 'storage':
+      return model.datastores.length > 0;
+    case 'networks':
+      return model.networks.length > 0;
+    case 'health':
+      return model.incidents.length > 0;
+    case 'activity':
+      return model.activity.length > 0;
+  }
+};
+
+export const getVmwarePageTabSpecs = (model: VmwarePageModel): readonly VmwareTabSpec[] =>
+  VMWARE_TAB_SPECS.filter((tab) => hasVmwareTabInventory(model, tab.id));
+
 const normalize = (value: unknown): string =>
   typeof value === 'string' ? value.trim().toLowerCase() : '';
 

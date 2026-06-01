@@ -8,6 +8,7 @@ import {
   filterVmwareIncidents,
   filterVmwareNetworks,
   filterVmwareVirtualMachines,
+  getVmwarePageTabSpecs,
   mapVmwareActivityStateBucket,
   mapVmwareDatastoreStatus,
   mapVmwareIncidentSeverity,
@@ -41,6 +42,62 @@ describe('vmwarePageModel', () => {
       'Networks',
       'Health',
       'Activity',
+    ]);
+  });
+
+  it('shows vSphere workflow tabs only when their inventory or signal exists', () => {
+    const hostOnlyModel = buildVmwarePageModel([makeResource({ id: 'esxi-host-1', type: 'agent' })]);
+    const fullModel = buildVmwarePageModel(
+      [
+        makeResource({ id: 'esxi-host-1', type: 'agent' }),
+        makeResource({
+          id: 'datastore-1',
+          type: 'storage',
+          storage: { topology: 'datastore', platform: 'vmware-vsphere' },
+          vmware: { entityType: 'datastore' },
+        }),
+        makeResource({
+          id: 'network-1',
+          type: 'network',
+          vmware: { entityType: 'network', networkType: 'STANDARD_PORTGROUP' },
+        }),
+        makeResource({
+          id: 'alarm-1',
+          type: 'vm',
+          incidents: [
+            {
+              code: 'alarm-1',
+              severity: 'warning',
+              summary: 'Triggered alarm',
+              startedAt: '2026-05-20T00:00:00Z',
+            },
+          ],
+        }),
+      ],
+      [
+        {
+          id: 'task-1',
+          resourceId: 'esxi-host-1',
+          observedAt: '2026-05-20T00:00:00Z',
+          sourceType: 'platform_event',
+          sourceAdapter: 'vmware_adapter',
+          confidence: 'high',
+          kind: 'activity',
+          metadata: {
+            activity_title: 'vCenter task',
+            activity_message: 'Task completed',
+          },
+        },
+      ],
+    );
+
+    expect(getVmwarePageTabSpecs(hostOnlyModel).map((tab) => tab.id)).toEqual(['overview']);
+    expect(getVmwarePageTabSpecs(fullModel).map((tab) => tab.id)).toEqual([
+      'overview',
+      'storage',
+      'networks',
+      'health',
+      'activity',
     ]);
   });
 

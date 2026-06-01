@@ -26,9 +26,9 @@ import { KubernetesPolicyTable } from './KubernetesPolicyTable';
 import { KubernetesServicesTable } from './KubernetesServicesTable';
 import { KubernetesStorageTable } from './KubernetesStorageTable';
 import {
-  KUBERNETES_TAB_SPECS,
   buildKubernetesPageModel,
   filterKubernetesResources,
+  getKubernetesPageTabSpecs,
   resolveKubernetesPageTabId,
   type KubernetesPageModel,
   type KubernetesPageTabId,
@@ -52,17 +52,21 @@ export function KubernetesPageSurface() {
     cacheKey: 'kubernetes-workspace',
     initialHydration: 'prefer-ws-then-rest',
   });
-  const activeTab = createMemo<KubernetesPageTabId>(() => {
+  const requestedTab = createMemo<KubernetesPageTabId>(() => {
     const segment = location.pathname.split('/').filter(Boolean)[1];
     return resolveKubernetesPageTabId(segment);
   });
   const model = createMemo(() => buildKubernetesPageModel(resources()));
+  const tabs = createMemo(() => getKubernetesPageTabSpecs(model()));
+  const activeTab = createMemo<KubernetesPageTabId>(() =>
+    tabs().some((tab) => tab.id === requestedTab()) ? requestedTab() : 'overview',
+  );
   const controllerResources = createMemo(() => getKubernetesControllerResources(model()));
 
   return (
     <div data-testid="kubernetes-page" class="space-y-3">
       <PlatformSectionTabs
-        tabs={KUBERNETES_TAB_SPECS}
+        tabs={tabs()}
         active={activeTab()}
         ariaLabel="Kubernetes sections"
       />

@@ -218,7 +218,7 @@ afterEach(() => {
 });
 
 describe('DockerPageSurface', () => {
-  it('keeps overview focused on runtime hosts while detailed inventory owns the object tabs', () => {
+  it('keeps overview focused on runtime hosts plus primary container workloads', () => {
     render(() => <DockerPageSurface />);
 
     expect(mocks.useUnifiedResources).toHaveBeenCalledWith(
@@ -240,9 +240,16 @@ describe('DockerPageSurface', () => {
     expect(screen.getByTestId('docker-hosts-table')).toHaveAttribute('data-show-toolbar', 'false');
     expect(screen.getByTestId('docker-section-tabs')).toHaveAttribute(
       'data-tabs',
-      'overview,containers',
+      'overview',
     );
-    expect(screen.queryByTestId('docker-containers-table')).toBeNull();
+    expect(screen.getByTestId('docker-containers-table')).toHaveAttribute(
+      'data-resource-count',
+      '1',
+    );
+    expect(screen.getByTestId('docker-containers-table')).toHaveAttribute(
+      'data-show-toolbar',
+      'undefined',
+    );
   });
 
   it('shows Docker object tabs only when the matching inventory exists', () => {
@@ -263,15 +270,17 @@ describe('DockerPageSurface', () => {
 
     expect(screen.getByTestId('docker-section-tabs')).toHaveAttribute(
       'data-tabs',
-      'overview,containers,images,storage,networks',
+      'overview,images,storage,networks',
     );
   });
 
-  it('renders the dedicated containers route through the Docker containers table', () => {
+  it('keeps the legacy containers route on the Overview landing surface', () => {
     mocks.pathname = '/docker/containers';
 
     render(() => <DockerPageSurface />);
 
+    expect(screen.getByTestId('docker-section-tabs')).toHaveAttribute('data-active', 'overview');
+    expect(screen.getByTestId('docker-hosts-table')).toHaveAttribute('data-resource-count', '1');
     expect(screen.getByTestId('docker-containers-table')).toHaveAttribute(
       'data-resource-count',
       '1',
@@ -473,6 +482,9 @@ describe('DockerPageSurface', () => {
     expect(screen.queryByTestId('docker-volumes-table')).toBeNull();
     expect(screen.getByTestId('docker-section-tabs')).toHaveAttribute('data-active', 'overview');
     expect(screen.getByTestId('docker-hosts-table')).toHaveAttribute('data-resource-count', '1');
-    expect(screen.queryByTestId('platform-table-empty-state')).toBeNull();
+    expect(screen.getByTestId('docker-containers-table')).toHaveAttribute(
+      'data-resource-count',
+      '0',
+    );
   });
 });

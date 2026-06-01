@@ -28,6 +28,7 @@ import { VsphereHostsTable } from './VsphereHostsTable';
 import {
   VMWARE_TAB_SPECS,
   buildVmwarePageModel,
+  getVmwarePageTabSpecs,
   type VmwarePageModel,
   type VmwarePageTabId,
 } from './vmwarePageModel';
@@ -71,12 +72,12 @@ export function VmwarePageSurface() {
     cacheKey: 'vmware-workspace',
     initialHydration: 'prefer-ws-then-rest',
   });
-  const activeTab = createMemo<VmwarePageTabId>(() => {
+  const requestedTab = createMemo<VmwarePageTabId>(() => {
     const segment = location.pathname.split('/').filter(Boolean)[1] as VmwarePageTabId | undefined;
     return segment && VALID_TABS.has(segment) ? segment : 'overview';
   });
   const [activityTimeline, { refetch: refetchActivityTimeline }] = createResource(
-    () => (activeTab() === 'activity' ? 'vmware-activity' : undefined),
+    () => (resources().length > 0 ? 'vmware-activity' : undefined),
     async () => {
       const response = await ResourceAPI.getGlobalTimeline({
         limit: 100,
@@ -88,6 +89,10 @@ export function VmwarePageSurface() {
     },
   );
   const model = createMemo(() => buildVmwarePageModel(resources(), activityTimeline() ?? []));
+  const tabs = createMemo(() => getVmwarePageTabSpecs(model()));
+  const activeTab = createMemo<VmwarePageTabId>(() =>
+    tabs().some((tab) => tab.id === requestedTab()) ? requestedTab() : 'overview',
+  );
 
   // Hosts table on top and the embedded WorkloadsSurface below share the
   // bars/sparklines toggle (and the sparkline history range that ships with
@@ -114,7 +119,7 @@ export function VmwarePageSurface() {
   return (
     <div data-testid="vmware-page" class="space-y-3">
       <PlatformSectionTabs
-        tabs={VMWARE_TAB_SPECS}
+        tabs={tabs()}
         active={activeTab()}
         ariaLabel="VMware sections"
       />
