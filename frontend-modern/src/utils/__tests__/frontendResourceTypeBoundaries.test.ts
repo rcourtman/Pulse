@@ -428,6 +428,7 @@ import organizationRolePresentationSource from '@/utils/organizationRolePresenta
 import organizationSettingsPresentationSource from '@/utils/organizationSettingsPresentation.ts?raw';
 import rbacFeatureGateSectionSource from '@/components/Settings/RBACFeatureGateSection.tsx?raw';
 import rbacFeatureGateStateSource from '@/components/Settings/useRBACFeatureGateState.ts?raw';
+import featureGateSectionSource from '@/components/shared/FeatureGateSection.tsx?raw';
 
 import rolesPanelSource from '@/components/Settings/RolesPanel.tsx?raw';
 import rolesPanelStateSource from '@/components/Settings/useRolesPanelState.ts?raw';
@@ -1024,11 +1025,16 @@ describe('frontend resource type boundaries', () => {
     expect(discoverySettingsStateSource).toContain('export function useDiscoverySettingsState');
     expect(discoverySettingsStateSource).toContain('normalizeSubnetList');
     expect(discoverySettingsStateSource).toContain('isValidCIDR');
-    expect(reportingPanelSource).toContain('@/utils/upgradePresentation');
+    // The canonical upgrade CTA contract (button class + label) now lives in
+    // the shared FeatureGateSection; gated panels route their paywall through
+    // it instead of re-deriving the button locally.
+    expect(featureGateSectionSource).toContain('@/utils/upgradePresentation');
+    expect(featureGateSectionSource).toContain('getUpgradeActionButtonClass');
+    expect(featureGateSectionSource).toContain('UPGRADE_ACTION_LABEL');
+    expect(featureGateSectionSource).toContain('@/components/shared/UpgradeLink');
+    expect(reportingPanelSource).toContain('@/components/shared/FeatureGateSection');
     expect(reportingPanelSource).toContain('@/components/Settings/useReportingPanelState');
     expect(reportingPanelSource).toContain('@/components/Settings/reportingPanelModel');
-    expect(reportingPanelSource).toContain('getUpgradeActionButtonClass');
-    expect(reportingPanelSource).toContain('UPGRADE_ACTION_LABEL');
     expect(reportingPanelSource).not.toContain('UPGRADE_TRIAL_LABEL');
     expect(reportingPanelSource).not.toContain('>Upgrade to Pro<');
     expect(reportingPanelSource).not.toContain('>Start free trial<');
@@ -1037,8 +1043,7 @@ describe('frontend resource type boundaries', () => {
     expect(rolesPanelSource).toContain('./useRolesPanelState');
     expect(userAssignmentsPanelSource).toContain('./RBACFeatureGateSection');
     expect(userAssignmentsPanelSource).toContain('./useUserAssignmentsPanelState');
-    expect(rbacFeatureGateSectionSource).toContain('@/utils/upgradePresentation');
-    expect(rbacFeatureGateSectionSource).toContain('getUpgradeActionButtonClass');
+    expect(rbacFeatureGateSectionSource).toContain('@/components/shared/FeatureGateSection');
     expect(rolesPanelStateSource).toContain('getRolesLoadErrorMessage');
     expect(userAssignmentsPanelStateSource).toContain('getUserAssignmentsLoadErrorMessage');
     expect(agentProfilesPanelSource).toContain('./useAgentProfilesPanelState');
@@ -1051,7 +1056,7 @@ describe('frontend resource type boundaries', () => {
       'No agents connected. Install an agent to assign profiles.',
     );
     expect(auditLogPanelSource).toContain('@/utils/upgradePresentation');
-    expect(auditWebhookPanelSource).toContain('@/utils/upgradePresentation');
+    expect(auditWebhookPanelSource).toContain('@/components/shared/FeatureGateSection');
     expect(ssoProvidersPanelSource).not.toContain('@/utils/upgradePresentation');
     expect(upgradePresentationSource).toContain('export const UPGRADE_ACTION_LABEL');
     expect(upgradePresentationSource).not.toContain('UPGRADE_TRIAL_LABEL');

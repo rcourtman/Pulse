@@ -7,14 +7,10 @@ import OperationsPanel from '@/components/Settings/OperationsPanel';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import { formControl, formField, formHelpText, formLabel } from '@/components/shared/Form';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
-import { UpgradeLink } from '@/components/shared/UpgradeLink';
+import { FeatureGateSection } from '@/components/shared/FeatureGateSection';
 import { useReportingPanelState } from '@/components/Settings/useReportingPanelState';
 import type { ReportingFormat } from '@/components/Settings/reportingCatalogModel';
 import { type ReportingRangeValue } from '@/components/Settings/reportingPanelModel';
-import {
-  getUpgradeActionButtonClass,
-  UPGRADE_ACTION_LABEL,
-} from '@/utils/upgradePresentation';
 import { ResourcePicker } from './ResourcePicker';
 
 const REPORTING_FORMAT_ICONS: Record<ReportingFormat, typeof FileText> = {
@@ -137,28 +133,16 @@ export function ReportingPanel() {
           description={reportingCatalog()!.description}
         >
           <div class="p-4 sm:p-6">
-            <div class="flex flex-col sm:flex-row items-center gap-4">
-              <div class="flex-1 text-center sm:text-left">
-                <Show when={lockedState()}>
-                  {(state) => (
-                    <>
-                      <h4 class="text-base font-semibold text-base-content">{state().title}</h4>
-                      <p class="text-sm text-muted mt-1">{state().description}</p>
-                    </>
-                  )}
-                </Show>
-              </div>
-              <Show when={showUpgradePrompts()}>
-                <div class="flex flex-col sm:flex-row items-center gap-2">
-                  <UpgradeLink
-                    destination={upgradeDestination()}
-                    class={getUpgradeActionButtonClass()}
-                  >
-                    {UPGRADE_ACTION_LABEL}
-                  </UpgradeLink>
-                </div>
-              </Show>
-            </div>
+            <Show when={lockedState()}>
+              {(state) => (
+                <FeatureGateSection
+                  title={state().title}
+                  body={state().description}
+                  upgradeDestination={upgradeDestination()}
+                  showUpgradePrompts={showUpgradePrompts()}
+                />
+              )}
+            </Show>
           </div>
         </OperationsPanel>
       </Show>

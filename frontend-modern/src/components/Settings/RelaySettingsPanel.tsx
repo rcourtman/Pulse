@@ -4,7 +4,7 @@ import SettingsPanel from '@/components/shared/SettingsPanel';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { Toggle } from '@/components/shared/Toggle';
 import { Card } from '@/components/shared/Card';
-import { UpgradeLink } from '@/components/shared/UpgradeLink';
+import { FeatureGateSection } from '@/components/shared/FeatureGateSection';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 import { getSettingsConfigurationLoadingState } from '@/utils/settingsShellPresentation';
 import {
@@ -16,7 +16,6 @@ import {
   RELAY_PAIRING_AVAILABILITY_MESSAGE,
   RELAY_PAIRING_AVAILABILITY_TITLE,
   RELAY_PRIMARY_BUTTON_CLASS,
-  RELAY_PRIMARY_LINK_CLASS,
   RELAY_READONLY_NOTICE_CLASS,
 } from '@/utils/relayPresentation';
 import { RelayPairingSection } from './RelayPairingSection';
@@ -34,25 +33,13 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
       <SettingsPanel title="Remote Access">
         <Show when={!state.loading()} fallback={<div class="text-sm ">Loading...</div>}>
           <Card tone="info" padding="md">
-            <div class="flex flex-col sm:flex-row items-center gap-4">
-              <div class="flex items-start gap-3 flex-1">
-                <RadioTower size={20} class="text-blue-500 mt-0.5 flex-shrink-0" strokeWidth={2} />
-                <div>
-                  <p class="text-sm font-medium text-base-content">Remote Access (Relay)</p>
-                  <p class="text-sm text-muted mt-1">{RELAY_LICENSE_REQUIRED_MESSAGE}</p>
-                </div>
-              </div>
-              <Show when={state.showUpgradePrompts()}>
-                <div class="flex flex-col sm:flex-row items-center gap-2">
-                  <UpgradeLink
-                    destination={state.upgradeDestination()}
-                    class={RELAY_PRIMARY_LINK_CLASS}
-                  >
-                    View plans
-                  </UpgradeLink>
-                </div>
-              </Show>
-            </div>
+            <FeatureGateSection
+              icon={<RadioTower size={20} strokeWidth={2} />}
+              title="Remote Access (Relay)"
+              body={RELAY_LICENSE_REQUIRED_MESSAGE}
+              upgradeDestination={state.upgradeDestination()}
+              showUpgradePrompts={state.showUpgradePrompts()}
+            />
           </Card>
         </Show>
       </SettingsPanel>

@@ -6,7 +6,7 @@ import Trash2 from 'lucide-solid/icons/trash-2';
 import ExternalLink from 'lucide-solid/icons/external-link';
 import { Card } from '@/components/shared/Card';
 import { Dialog } from '@/components/shared/Dialog';
-import { UpgradeLink } from '@/components/shared/UpgradeLink';
+import { FeatureGateSection } from '@/components/shared/FeatureGateSection';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { formControl } from '@/components/shared/Form';
 import {
@@ -19,7 +19,6 @@ import {
   getAuditWebhookFeatureGateCopy,
   getAuditWebhookLoadingState,
 } from '@/utils/auditWebhookPresentation';
-import { getUpgradeActionButtonClass } from '@/utils/upgradePresentation';
 import { useAuditWebhookPanelState } from '@/components/Settings/useAuditWebhookPanelState';
 
 interface AuditWebhookPanelProps {
@@ -56,24 +55,14 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
       <SettingsPanel title="Audit Webhooks">
         <Show when={!loading()} fallback={<div class="text-sm text-muted">Loading...</div>}>
           <Card tone="info" padding="md">
-            <div class="flex flex-col sm:flex-row items-center gap-4">
-              <div class="flex-1 text-center sm:text-left">
-                <p class="font-semibold text-base-content">{featureGateCopy().title}</p>
-                <p class="mt-1 text-sm text-muted">{featureGateCopy().body}</p>
-              </div>
-              <Show when={showFeatureGateAction()}>
-                <div class="flex flex-col sm:flex-row items-center gap-2">
-                  <UpgradeLink
-                    destination={upgradeDestination()}
-                    class={getUpgradeActionButtonClass({
-                      tone: paidRuntimeRequired() ? 'warning' : 'primary',
-                    })}
-                  >
-                    {upgradeActionLabel()}
-                  </UpgradeLink>
-                </div>
-              </Show>
-            </div>
+            <FeatureGateSection
+              title={featureGateCopy().title}
+              body={featureGateCopy().body}
+              upgradeDestination={upgradeDestination()}
+              showUpgradePrompts={showFeatureGateAction()}
+              upgradeLabel={upgradeActionLabel()}
+              upgradeButtonTone={paidRuntimeRequired() ? 'warning' : 'primary'}
+            />
           </Card>
         </Show>
       </SettingsPanel>

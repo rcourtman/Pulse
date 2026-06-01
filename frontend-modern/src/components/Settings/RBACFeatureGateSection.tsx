@@ -1,11 +1,7 @@
-import { Component, Show } from 'solid-js';
-import { UpgradeLink } from '@/components/shared/UpgradeLink';
+import { Component } from 'solid-js';
+import { FeatureGateSection } from '@/components/shared/FeatureGateSection';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import type { RBACFeatureGateCopy } from '@/utils/rbacPresentation';
-import {
-  getUpgradeActionButtonClass,
-  UPGRADE_ACTION_LABEL,
-} from '@/utils/upgradePresentation';
 import type { RBACFeatureGateLocation } from './useRBACFeatureGateState';
 
 interface RBACFeatureGateSectionProps {
@@ -16,21 +12,11 @@ interface RBACFeatureGateSectionProps {
 
 export const RBACFeatureGateSection: Component<RBACFeatureGateSectionProps> = (props) => (
   <div class="bg-surface-alt p-4 sm:p-6 transition-colors border-b border-border-subtle">
-    <div class="flex flex-col sm:flex-row items-center gap-4">
-      <div class="flex-1 text-center sm:text-left">
-        <h4 class="text-base font-semibold text-base-content">{props.copy.title}</h4>
-        <p class="text-sm text-muted mt-1">{props.copy.body}</p>
-      </div>
-      <Show when={props.showUpgradePrompts}>
-        <div class="flex flex-col sm:flex-row items-center gap-2">
-          <UpgradeLink
-            destination={getUpgradeActionDestination('rbac')}
-            class={getUpgradeActionButtonClass()}
-          >
-            {UPGRADE_ACTION_LABEL}
-          </UpgradeLink>
-        </div>
-      </Show>
-    </div>
+    <FeatureGateSection
+      title={props.copy.title}
+      body={props.copy.body}
+      upgradeDestination={getUpgradeActionDestination('rbac')}
+      showUpgradePrompts={props.showUpgradePrompts}
+    />
   </div>
 );
