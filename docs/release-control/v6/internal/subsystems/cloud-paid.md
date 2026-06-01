@@ -239,10 +239,20 @@ or other self-hosted uncapped continuity plans.
    (`CP_MSP_STARTER_PRICE_ID`, `CP_MSP_GROWTH_PRICE_ID`,
    `CP_MSP_SCALE_PRICE_ID`) is still validated in `internal/cloudcp/config.go`
    against the canonical `msp_starter`, `msp_growth`, and `msp_scale` plan
-   versions. The canonical provider workspace limits are 5 client workspaces
+   versions. Public MSP pricing covers provider-hosted central deployments:
+   the MSP runs the Pulse instance in their own cloud or infrastructure while
+   Pulse Account owns licensing, account access, and client-workspace
+   management. The canonical provider workspace limits are 5 client workspaces
    for Starter, 15 for Growth, and 40 for Scale; larger providers belong to
-   Enterprise/custom terms. The MSP signup routes stay gated behind the same
-   `PublicCloudSignupEnabled` flag as the individual cloud signup front door.
+   Enterprise/custom terms. Pulse-hosted MSP is not part of the default public
+   launch motion and must remain request-only until tenant isolation, ingest,
+   reporting, operations, and support load are proven. Design-partner discounts
+   do not create a public tier or change runtime limits: a qualified MSP lead
+   may receive assisted Growth access at the Starter price for a limited 6-12
+   month field-feedback window, with up to 15 client workspaces and no
+   self-serve checkout exposure. The MSP signup routes stay gated behind the
+   same `PublicCloudSignupEnabled` flag as the individual cloud signup front
+   door.
    Checkout metadata produced by the MSP front door must mark
    `account_kind=msp`, `signup_source=public_msp_signup`, and
    `checkout_billing_mode=immediate` so provisioning seeds an operator

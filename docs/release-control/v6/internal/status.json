@@ -7435,6 +7435,36 @@
       ]
     },
     {
+      "id": "msp-design-partner-growth-offer",
+      "summary": "Qualified MSP design partners may receive assisted Growth access at the Starter price for a limited 6-12 month field-feedback window, including up to 15 client workspaces, without changing public self-serve pricing or exposing Growth as checkout.",
+      "kind": "pricing",
+      "decided_at": "2026-06-01",
+      "subsystem_ids": [
+        "cloud-paid"
+      ],
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L4",
+        "L17"
+      ]
+    },
+    {
+      "id": "msp-provider-hosted-first-launch",
+      "summary": "MSP launch defaults to provider-hosted central deployments: the MSP runs the Pulse instance in their own cloud or infrastructure while Pulse Account owns licensing and client-workspace management; Pulse-hosted MSP remains concierge/request-only until tenant isolation, ingest, reporting, operations, and support load are proven.",
+      "kind": "pricing",
+      "decided_at": "2026-06-01",
+      "subsystem_ids": [
+        "cloud-paid"
+      ],
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L4",
+        "L17"
+      ]
+    },
+    {
       "id": "msp-provider-tier-limit-lock",
       "summary": "MSP provider workspace limits are intentionally tight: Starter includes up to 5 client workspaces, Growth up to 15, Scale up to 40, and larger providers move to Enterprise/custom terms so support, onboarding, reporting, and deployment load are sized before rollout.",
       "kind": "pricing",
