@@ -32,6 +32,7 @@ import {
   ArtifactSourceBadge,
   ArtifactStateBadge,
   SortableHead,
+  WorkloadTypeBadge,
   artifactStateLabel,
 } from './proxmoxBackupsTableShared';
 
@@ -88,7 +89,8 @@ export function ProxmoxCoverageTable(props: {
   // empty fleet-wide, and table-fixed re-normalizes the rest.
   const visibleColumns = () => [
     { id: 'workload', weight: 17 },
-    { id: 'vmid', weight: 7 },
+    { id: 'type', weight: 7 },
+    { id: 'id', weight: 9 },
     { id: 'node', weight: 11 },
     { id: 'posture', weight: 11 },
     { id: 'latest', weight: 13 },
@@ -139,7 +141,8 @@ export function ProxmoxCoverageTable(props: {
                 align="left"
                 headClass={getPlatformTableHeadClassForKind('name')}
               />
-              <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>VMID</TableHead>
+              <TableHead class={getPlatformTableHeadClassForKind('text')}>Type</TableHead>
+              <TableHead class={getPlatformTableHeadClassForKind('text')}>ID</TableHead>
               <TableHead class={getPlatformTableHeadClassForKind('text')}>Node</TableHead>
               <SortableHead
                 label="Posture"
@@ -240,7 +243,15 @@ export function ProxmoxCoverageTable(props: {
                         </div>
                       </TableCell>
                       <TableCell
-                        class={`${getPlatformTableCellClassForKind('numeric-value')} text-muted font-mono text-[11px] tabular-nums`}
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                      >
+                        <WorkloadTypeBadge
+                          type={row.workload.type}
+                          label={row.workload.typeLabel}
+                        />
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-muted font-mono text-[11px] tabular-nums`}
                       >
                         {row.workload.vmid || '—'}
                       </TableCell>

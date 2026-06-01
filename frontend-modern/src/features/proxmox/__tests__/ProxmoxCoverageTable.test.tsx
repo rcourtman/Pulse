@@ -54,7 +54,8 @@ describe('ProxmoxCoverageTable column visibility', () => {
     const headers = headerTexts();
     // Always-on columns.
     expect(headers).toContain('Workload');
-    expect(headers).toContain('VMID');
+    expect(headers).toContain('Type');
+    expect(headers).toContain('ID');
     expect(headers).toContain('Node');
     // Source columns gate on their flags.
     expect(headers).toContain('PBS');

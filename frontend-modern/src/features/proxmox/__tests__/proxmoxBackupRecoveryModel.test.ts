@@ -173,7 +173,7 @@ describe('proxmoxBackupRecoveryModel', () => {
     expect(orphan?.workload.label).toBe('CT 999');
   });
 
-  it('keeps host and zero-id artifacts out of guest coverage and orphan counts', () => {
+  it('keeps host backups in coverage without counting zero-id aggregate artifacts as guests', () => {
     const model = buildProxmoxBackupRecoveryModel({
       workloads: [],
       pbsBackups: [
@@ -204,8 +204,14 @@ describe('proxmoxBackupRecoveryModel', () => {
     });
 
     expect(model.recoverableArtifacts).toHaveLength(3);
-    expect(model.coverageRows).toHaveLength(0);
-    expect(model.coverageSummary.totalWorkloads).toBe(0);
+    expect(model.coverageRows).toHaveLength(1);
+    expect(model.coverageSummary.totalWorkloads).toBe(1);
+    expect(model.coverageRows[0].isOrphaned).toBe(false);
+    expect(model.coverageRows[0].workload.type).toBe('host');
+    expect(model.coverageRows[0].workload.vmid).toBe('mail-gateway');
+    expect(model.coverageRows[0].workload.label).toBe('Host mail-gateway');
+    expect(model.coverageRows[0].pbsCount).toBe(1);
+    expect(model.coverageRows[0].archiveCount).toBe(1);
     expect(model.recoverableArtifacts.map((artifact) => artifact.workload.label)).toEqual(
       expect.arrayContaining(['CT backup', 'Host mail-gateway']),
     );

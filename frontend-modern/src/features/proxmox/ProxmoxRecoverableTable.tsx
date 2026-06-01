@@ -31,13 +31,14 @@ import {
   ArtifactStateBadge,
   RowMetricBar,
   SortableHead,
+  WorkloadTypeBadge,
   artifactStateLabel,
 } from './proxmoxBackupsTableShared';
 
 // Flat recoverable-artifact table. Parent state owns filtering, sorting, and
 // date/source facets; optional day grouping is presentation only.
 
-const COLUMN_COUNT = 8;
+const COLUMN_COUNT = 9;
 
 interface DayGroup {
   key: string;
@@ -89,8 +90,11 @@ export function ProxmoxRecoverableTable(props: {
           </div>
         </div>
       </TableCell>
+      <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
+        <WorkloadTypeBadge type={artifact.workload.type} label={artifact.workload.typeLabel} />
+      </TableCell>
       <TableCell
-        class={`${getPlatformTableCellClassForKind('numeric-value')} text-muted font-mono text-[11px] tabular-nums`}
+        class={`${getPlatformTableCellClassForKind('text')} text-muted font-mono text-[11px] tabular-nums`}
       >
         {artifact.workload.vmid || '—'}
       </TableCell>
@@ -155,17 +159,18 @@ export function ProxmoxRecoverableTable(props: {
       }
     >
       <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-        <Table class="min-w-[1000px] table-fixed text-xs">
+        <Table class="min-w-[1080px] table-fixed text-xs">
           {/* Keep column widths stable; long locations/details truncate with title text. */}
           <colgroup>
-            <col style={{ width: '20%' }} />
+            <col style={{ width: '17%' }} />
             <col style={{ width: '7%' }} />
             <col style={{ width: '8%' }} />
-            <col style={{ width: '15%' }} />
-            <col style={{ width: '11%' }} />
+            <col style={{ width: '8%' }} />
             <col style={{ width: '14%' }} />
-            <col style={{ width: '10%' }} />
-            <col style={{ width: '15%' }} />
+            <col style={{ width: '11%' }} />
+            <col style={{ width: '13%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '14%' }} />
           </colgroup>
           <TableHeader>
             <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
@@ -178,7 +183,8 @@ export function ProxmoxRecoverableTable(props: {
                 align="left"
                 headClass={getPlatformTableHeadClassForKind('name')}
               />
-              <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>VMID</TableHead>
+              <TableHead class={getPlatformTableHeadClassForKind('text')}>Type</TableHead>
+              <TableHead class={getPlatformTableHeadClassForKind('text')}>ID</TableHead>
               <SortableHead
                 label="Source"
                 sortKey="source"

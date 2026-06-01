@@ -142,6 +142,7 @@ describe('ProxmoxBackupsTable', () => {
     expect((await screen.findAllByText('pbs-docker')).length).toBeGreaterThan(1);
     expect(screen.getByRole('columnheader', { name: /location/i })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: /source/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /type/i })).toBeInTheDocument();
     expect(screen.getAllByText('PBS').length).toBeGreaterThan(0);
     expect(screen.getByText('main / minipc')).toBeInTheDocument();
     expect(
@@ -153,7 +154,7 @@ describe('ProxmoxBackupsTable', () => {
     expect(apiFetchMock).toHaveBeenCalledWith('/api/backups/pve');
   });
 
-  it('offers By date / By guest views and no legacy sub-tab tree', async () => {
+  it('offers By date / Coverage views and no legacy sub-tab tree', async () => {
     mockBackupAPIs();
 
     renderInRouter(() => (
@@ -164,14 +165,14 @@ describe('ProxmoxBackupsTable', () => {
 
     // The two top-level views exist...
     expect(screen.getByRole('button', { name: /by date/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /by guest/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /coverage/i })).toBeInTheDocument();
     // ...and the old four-tab + sub-tab tree does not.
     expect(screen.queryByRole('button', { name: /source details/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /job history/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /pbs artifacts/i })).not.toBeInTheDocument();
   });
 
-  it('switches to By guest showing posture, and keeps per-source evidence in the row expansion', async () => {
+  it('switches to Coverage showing posture, and keeps per-source evidence in the row expansion', async () => {
     mockBackupAPIs();
 
     renderInRouter(() => (
@@ -179,9 +180,9 @@ describe('ProxmoxBackupsTable', () => {
     ));
 
     await screen.findAllByText('pbs-docker');
-    await fireEvent.click(screen.getByRole('button', { name: /by guest/i }));
+    await fireEvent.click(screen.getByRole('button', { name: /coverage/i }));
 
-    // By guest is the coverage/posture view; the workload's recent backup reads
+    // Coverage is the posture view; the workload's recent backup reads
     // "Current".
     expect(screen.getByRole('columnheader', { name: /posture/i })).toBeInTheDocument();
     expect(screen.getAllByText('Current').length).toBeGreaterThan(0);

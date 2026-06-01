@@ -60,7 +60,7 @@ import { ProxmoxRecoverableTable } from './ProxmoxRecoverableTable';
 // One backups surface, two operator views: a chronological recoverable-artifact
 // feed for "what ran when", and a guest coverage table for "what is protected".
 
-type BackupView = 'date' | 'guest';
+type BackupView = 'date' | 'coverage';
 
 async function fetchPVEBackups(): Promise<PVEBackupsPayload> {
   const response = await apiFetch('/api/backups/pve');
@@ -138,8 +138,8 @@ export const ProxmoxBackupsTable: Component<{
   const [expandedCoverageRows, setExpandedCoverageRows] = createSignal<ReadonlySet<string>>(
     new Set<string>(),
   );
-  // Orphaned backups (records whose guest no longer exists in inventory) are
-  // collapsed by default so the main table is the user's live guests, not a
+  // Orphaned backups (VM/CT records whose guest no longer exists in inventory)
+  // are collapsed by default so the main table is active backup targets, not a
   // pile of nameless dead records sorted to the top.
   const [showOrphaned, setShowOrphaned] = createSignal(false);
 
@@ -268,9 +268,10 @@ export const ProxmoxBackupsTable: Component<{
     return list;
   });
 
-  // The main table is the user's live inventory guests; orphaned backup records
-  // (guest no longer exists) are partitioned out into their own collapsed
-  // section so they don't dominate the top of the list with nameless rows.
+  // The main table is the user's active backup targets: live inventory guests
+  // plus first-class host backups. Orphaned VM/CT backup records are partitioned
+  // out into their own collapsed section so they don't dominate the top of the
+  // list with nameless rows.
   const liveCoverageRows = createMemo(() =>
     filteredCoverageRows().filter((row) => !row.isOrphaned),
   );
@@ -285,8 +286,8 @@ export const ProxmoxBackupsTable: Component<{
     () => recoveryModel().coverageRows.filter((row) => row.isOrphaned).length,
   );
 
-  // Health strip counts live guests only — orphaned records are all stale and
-  // would otherwise inflate the "attention" segment with dead data.
+  // Health strip counts active backup targets only — orphaned records are all
+  // stale and would otherwise inflate the "attention" segment with dead data.
   const liveHealthSummary = createMemo(() => {
     const live = recoveryModel().coverageRows.filter((row) => !row.isOrphaned);
     return {
@@ -472,11 +473,11 @@ export const ProxmoxBackupsTable: Component<{
           </Show>
 
           <Show
-            when={view() === 'guest'}
+            when={view() === 'coverage'}
             fallback={
               <div class="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-[11px] text-muted">
                 <span class="font-semibold uppercase tracking-[0.18em]">Backup health</span>
-                <span class="text-base-content tabular-nums">{liveTotalCount()} guests</span>
+                <span class="text-base-content tabular-nums">{liveTotalCount()} targets</span>
                 <span aria-hidden="true">·</span>
                 <span class="tabular-nums">
                   {recoveryModel().coverageSummary.recoverableArtifacts} restore points
@@ -498,7 +499,7 @@ export const ProxmoxBackupsTable: Component<{
               title="Backup health"
               tail={
                 <span>
-                  {liveTotalCount()} guests · {recoveryModel().coverageSummary.recoverableArtifacts}{' '}
+                  {liveTotalCount()} targets · {recoveryModel().coverageSummary.recoverableArtifacts}{' '}
                   restore points
                   <Show when={recoveryModel().coverageSummary.withPBS > 0}>
                     {' · '}
@@ -551,12 +552,12 @@ export const ProxmoxBackupsTable: Component<{
             </button>
             <button
               type="button"
-              class={viewButtonClass(view() === 'guest')}
-              aria-pressed={view() === 'guest'}
-              onClick={() => setView('guest')}
+              class={viewButtonClass(view() === 'coverage')}
+              aria-pressed={view() === 'coverage'}
+              onClick={() => setView('coverage')}
             >
               <ShieldCheckIcon class="h-4 w-4" aria-hidden="true" />
-              <span>By guest</span>
+              <span>Coverage</span>
             </button>
           </div>
 
@@ -612,9 +613,9 @@ export const ProxmoxBackupsTable: Component<{
                   fallback={
                     <Show
                       when={visibleLiveCount() !== liveTotalCount()}
-                      fallback={<>{liveTotalCount()} guests</>}
+                      fallback={<>{liveTotalCount()} targets</>}
                     >
-                      {visibleLiveCount()} of {liveTotalCount()} guests
+                      {visibleLiveCount()} of {liveTotalCount()} targets
                     </Show>
                   }
                 >
@@ -644,13 +645,13 @@ export const ProxmoxBackupsTable: Component<{
             />
           </Show>
 
-          <Show when={view() === 'guest'}>
+          <Show when={view() === 'coverage'}>
             <ProxmoxCoverageTable
               rows={liveCoverageRows()}
               hasAnyRows={liveTotalCount() > 0}
               emptyIcon={props.emptyIcon}
-              emptyTitle="No workload coverage"
-              emptyDescription="VM and container restore posture will appear here once backup data exists."
+              emptyTitle="No backup target coverage"
+              emptyDescription="VM, container, and host restore posture will appear here once backup data exists."
               sortKey={coverageSortKey}
               sortDirection={coverageSortDirection}
               onSort={handleCoverageSort}

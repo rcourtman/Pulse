@@ -63,10 +63,9 @@ export interface WorkloadCoverageRow {
   snapshotCount: number;
   posture: WorkloadRecoveryPosture;
   postureRank: number;
-  // True when this row exists only because a backup/task referenced a VMID with
-  // no matching live inventory guest — i.e. an orphaned backup for a guest that
-  // no longer exists. Live guests carry a `resource:` key; orphans carry a
-  // `backup:` key and have no real name (label falls back to "CT <vmid>").
+  // True only when a VM/CT row exists because a backup/task referenced a VMID
+  // with no matching live inventory guest. Host backups can also carry a
+  // `backup:` key, but they are first-class backup targets, not orphaned guests.
   isOrphaned: boolean;
 }
 
@@ -135,21 +134,31 @@ function typeLabel(type: WorkloadReference['type']): string {
   return 'Guest';
 }
 
-function workloadFallbackLabel(
+function firstHostHint(hints: readonly (string | undefined)[]): string | undefined {
+  return hints
+    .map((hint) => hint?.trim())
+    .find((hint) => hint && normalizeKey(hint) !== 'root' && normalizeKey(hint) !== '(root)');
+}
+
+function fallbackWorkloadId(
   type: WorkloadReference['type'],
   vmid: string,
-  hints: readonly (string | undefined)[] = [],
+  hints: readonly (string | undefined)[],
 ): string {
-  const label = typeLabel(type);
   const cleanVmid = vmid.trim();
   if (type === 'host') {
-    if (cleanVmid && !isZeroWorkloadId(cleanVmid)) return `${label} ${cleanVmid}`;
-    const hintLabel = hints
-      .map((hint) => hint?.trim())
-      .find((hint) => hint && normalizeKey(hint) !== 'root' && normalizeKey(hint) !== '(root)');
-    return hintLabel ? `${label} ${hintLabel}` : 'Host backup';
+    if (cleanVmid && !isZeroWorkloadId(cleanVmid)) return cleanVmid;
+    return firstHostHint(hints) ?? '';
   }
-  if (cleanVmid && !isZeroWorkloadId(cleanVmid)) return `${label} ${cleanVmid}`;
+  if (cleanVmid && !isZeroWorkloadId(cleanVmid)) return cleanVmid;
+  return '';
+}
+
+function workloadFallbackLabel(type: WorkloadReference['type'], id: string): string {
+  const label = typeLabel(type);
+  const cleanId = id.trim();
+  if (cleanId) return `${label} ${cleanId}`;
+  if (type === 'host') return 'Host backup';
   return type === 'unknown' ? label : `${label} backup`;
 }
 
@@ -223,23 +232,24 @@ function fallbackWorkload(
   vmid: string,
   hints: readonly (string | undefined)[],
 ): WorkloadReference {
+  const id = fallbackWorkloadId(type, vmid, hints);
   const scope = hints.map(normalizeKey).find(Boolean) || 'unknown';
+  const keyScope = type === 'host' && id ? 'host' : scope;
   return {
-    key: `backup:${type}:${vmid || 'unknown'}:${scope}`,
+    key: `backup:${type}:${id || 'unknown'}:${keyScope}`,
     type,
     typeLabel: typeLabel(type),
-    vmid,
-    label: workloadFallbackLabel(type, vmid, hints),
-    node: hints.find((hint) => !!hint?.trim()),
+    vmid: id,
+    label: workloadFallbackLabel(type, id),
+    node: type === 'host' ? undefined : hints.find((hint) => !!hint?.trim()),
   };
 }
 
 function isCoverageWorkload(workload: WorkloadReference): boolean {
-  return (
-    (workload.type === 'vm' || workload.type === 'ct') &&
-    Boolean(workload.vmid.trim()) &&
-    !isZeroWorkloadId(workload.vmid)
-  );
+  if (workload.type === 'vm' || workload.type === 'ct') {
+    return Boolean(workload.vmid.trim()) && !isZeroWorkloadId(workload.vmid);
+  }
+  return workload.type === 'host' && Boolean(workload.vmid.trim());
 }
 
 function resolveWorkload(
@@ -534,7 +544,9 @@ export function buildProxmoxBackupRecoveryModel(
       ...row,
       posture: posture.posture,
       postureRank: posture.rank,
-      isOrphaned: !row.key.startsWith('resource:'),
+      isOrphaned:
+        !row.key.startsWith('resource:') &&
+        (row.workload.type === 'vm' || row.workload.type === 'ct'),
     };
   });
 

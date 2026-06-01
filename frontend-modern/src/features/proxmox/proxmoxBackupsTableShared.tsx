@@ -6,7 +6,7 @@ import { type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { TableHead } from '@/components/shared/Table';
 
-import type { RecoverableArtifact } from './proxmoxBackupRecoveryModel';
+import type { RecoverableArtifact, WorkloadReference } from './proxmoxBackupRecoveryModel';
 import type {
   CoverageFilterValue,
   RecoverableFilterValue,
@@ -171,6 +171,31 @@ export function ArtifactSourceBadge(props: { artifact: RecoverableArtifact }) {
       }`}
     >
       {props.artifact.sourceLabel}
+    </span>
+  );
+}
+
+export function WorkloadTypeBadge(props: {
+  type: WorkloadReference['type'];
+  label: string;
+}) {
+  const badgeClass = () => {
+    if (props.type === 'host') {
+      return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200';
+    }
+    if (props.type === 'vm') {
+      return 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200';
+    }
+    if (props.type === 'ct') {
+      return 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-200';
+    }
+    return 'bg-surface-alt text-muted';
+  };
+  return (
+    <span
+      class={`inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-semibold ${badgeClass()}`}
+    >
+      {props.label}
     </span>
   );
 }
