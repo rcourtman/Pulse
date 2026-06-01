@@ -268,8 +268,15 @@ def parse_received_at(raw: str) -> datetime:
     return datetime.strptime(raw, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
 
 
-def fetch_published_versions(repo: str) -> set[str]:
-    versions: set[str] = set()
+def normalize_release_tag(tag: str) -> str:
+    version = tag.strip()
+    if version.startswith("v"):
+        version = version[1:]
+    return version
+
+
+def fetch_published_releases(repo: str) -> list[dict[str, Any]]:
+    releases: list[dict[str, Any]] = []
     page = 1
     while True:
         request = Request(
@@ -286,13 +293,35 @@ def fetch_published_versions(repo: str) -> set[str]:
         for release in payload:
             if release.get("draft"):
                 continue
-            tag = str(release.get("tag_name", "")).strip()
-            if tag.startswith("v"):
-                tag = tag[1:]
-            if tag:
-                versions.add(tag)
+            raw_tag = str(release.get("tag_name", "")).strip()
+            version = normalize_release_tag(raw_tag)
+            if version:
+                releases.append(
+                    {
+                        "version": version,
+                        "tag_name": raw_tag,
+                        "is_prerelease": bool(release.get("prerelease")),
+                        "published_at": str(release.get("published_at") or ""),
+                    }
+                )
         page += 1
-    return versions
+    return releases
+
+
+def fetch_published_versions(repo: str) -> set[str]:
+    return {release["version"] for release in fetch_published_releases(repo)}
+
+
+def latest_rc_version(releases: Iterable[dict[str, Any]]) -> str | None:
+    rc_releases = [
+        release
+        for release in releases
+        if release.get("is_prerelease") and version_channel(str(release.get("version") or "")) == "rc"
+    ]
+    if not rc_releases:
+        return None
+    latest = max(rc_releases, key=lambda release: str(release.get("published_at") or ""))
+    return str(latest["version"])
 
 
 def fetch_rows_local(db_path: str, since_days: int) -> dict[str, Any]:
@@ -483,10 +512,83 @@ def summarize_deep_signal_sources(
     return result
 
 
+def telemetry_signal_specs() -> list[dict[str, str]]:
+    deep_fields = {key for key, _, _ in DEEP_SIGNAL_FIELDS}
+    specs: list[dict[str, str]] = []
+    for key, label in ADOPTION_COUNT_FIELDS:
+        specs.append(
+            {
+                "field": key,
+                "label": label,
+                "type": "count",
+                "group": "deep" if key in deep_fields else "core",
+            }
+        )
+    for key, label in FEATURE_BOOL_FIELDS:
+        specs.append(
+            {
+                "field": key,
+                "label": label,
+                "type": "bool",
+                "group": "deep" if key in deep_fields else "core",
+            }
+        )
+    return specs
+
+
+def summarize_target_version_coverage(
+    latest_by_install: dict[str, dict[str, Any]],
+    published_versions: set[str],
+    target_version: str,
+    *,
+    now: datetime | None = None,
+    window: timedelta = timedelta(days=7),
+) -> dict[str, Any]:
+    current_time = now or datetime.now(timezone.utc)
+    normalized_target = normalize_release_tag(target_version)
+    platform_split: Counter[str] = Counter()
+    target_rows: list[dict[str, Any]] = []
+
+    for row in latest_by_install.values():
+        received_at = parse_received_at(str(row["received_at"]))
+        if current_time - received_at > window:
+            continue
+        identity = classify_row_version(row, published_versions)
+        if identity.version != normalized_target:
+            continue
+        target_rows.append(row)
+        platform = str(row.get("platform") or "unknown").strip() or "unknown"
+        platform_split[platform] += 1
+
+    signals: list[dict[str, Any]] = []
+    for spec in telemetry_signal_specs():
+        values: list[int] = []
+        for row in target_rows:
+            if spec["type"] == "bool":
+                values.append(1 if parse_optional_bool(row.get(spec["field"])) else 0)
+            else:
+                values.append(parse_optional_nonnegative_int(row.get(spec["field"])))
+        signals.append(
+            {
+                **spec,
+                "nonzero_installs": sum(1 for value in values if value > 0),
+                "total": sum(values),
+            }
+        )
+
+    return {
+        "version": normalized_target,
+        "active_installs": len(target_rows),
+        "platforms": counter_entries(platform_split, "platform"),
+        "signals": signals,
+    }
+
+
 def summarize_rows(
     db_stats: dict[str, Any],
     rows: Iterable[dict[str, Any]],
     published_versions: set[str],
+    target_version: str | None = None,
 ) -> dict[str, Any]:
     latest_by_install: dict[str, dict[str, Any]] = {}
     for row in rows:
@@ -512,6 +614,14 @@ def summarize_rows(
             published_versions,
             now=current_time,
         ),
+        "target_release_coverage_7d": summarize_target_version_coverage(
+            latest_by_install,
+            published_versions,
+            target_version,
+            now=current_time,
+        )
+        if target_version
+        else None,
         "active_latest": {
             "active_24h": latest_install_windows["24h"]["active_installs"],
             "active_72h": summary_72h["active_installs"],
@@ -522,6 +632,14 @@ def summarize_rows(
         "non_release_version_split_72h": summary_72h["non_release_versions"],
         "latest_platform_split_72h": summary_72h["platforms"],
     }
+
+
+def format_target_signal(signal: dict[str, Any]) -> str:
+    install_word = "install" if signal["nonzero_installs"] == 1 else "installs"
+    text = f"{signal['label']}: {signal['nonzero_installs']} {install_word}"
+    if signal["type"] == "count":
+        text += f", total {signal['total']}"
+    return text
 
 
 def format_text(summary: dict[str, Any], repo: str, since_days: int) -> str:
@@ -573,6 +691,44 @@ def format_text(summary: dict[str, Any], repo: str, since_days: int) -> str:
         else:
             lines.append("  - none")
 
+    target_coverage = summary.get("target_release_coverage_7d")
+    if target_coverage:
+        lines.extend(
+            [
+                "",
+                f"Target release signal coverage (7d, {target_coverage['version']}):",
+                f"- active installs: {target_coverage['active_installs']}",
+                "- platforms:",
+            ]
+        )
+        if target_coverage["platforms"]:
+            lines.extend(f"  - {entry['platform']}: {entry['installs']}" for entry in target_coverage["platforms"])
+        else:
+            lines.append("  - none")
+
+        for group, heading in (("core", "core signals with data"), ("deep", "deep signals with data")):
+            signals = [
+                signal
+                for signal in target_coverage["signals"]
+                if signal["group"] == group and signal["nonzero_installs"] > 0
+            ]
+            lines.append(f"- {heading}:")
+            if signals:
+                lines.extend(f"  - {format_target_signal(signal)}" for signal in signals)
+            else:
+                lines.append("  - none")
+
+        missing_deep = [
+            signal["label"]
+            for signal in target_coverage["signals"]
+            if signal["group"] == "deep" and signal["nonzero_installs"] == 0
+        ]
+        lines.append("- deep signals with no target-release data:")
+        if missing_deep:
+            lines.append("  - " + ", ".join(missing_deep))
+        else:
+            lines.append("  - none")
+
     lines.extend(["", "Deep telemetry signal sources (7d):"])
     deep_sources = summary.get("deep_signal_sources_7d", [])
     if deep_sources:
@@ -601,6 +757,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="GitHub repo used to validate actually published release tags",
     )
     parser.add_argument(
+        "--target-version",
+        help="release version to highlight for per-signal coverage; defaults to the latest published RC",
+    )
+    parser.add_argument(
         "--format",
         choices=("text", "json"),
         default="text",
@@ -614,13 +774,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.since_days < 3:
         raise SystemExit("--since-days must be at least 3 so the 72h view is meaningful")
 
-    published_versions = fetch_published_versions(args.github_repo)
+    published_releases = fetch_published_releases(args.github_repo)
+    published_versions = {release["version"] for release in published_releases}
+    target_version = args.target_version or latest_rc_version(published_releases)
     source = (
         fetch_rows_remote(args.ssh_host, args.db_path, args.since_days)
         if args.ssh_host
         else fetch_rows_local(args.db_path, args.since_days)
     )
-    summary = summarize_rows(source["db_stats"], source["rows"], published_versions)
+    summary = summarize_rows(source["db_stats"], source["rows"], published_versions, target_version=target_version)
 
     if args.format == "json":
         print(json.dumps(summary, indent=2, sort_keys=True))

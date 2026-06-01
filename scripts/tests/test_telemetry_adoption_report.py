@@ -65,6 +65,35 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         self.assertEqual(identity.version, "6.0.0-rc.2")
         self.assertFalse(identity.is_published_release)
 
+    def test_latest_rc_version_uses_published_order_and_ignores_non_app_prereleases(self) -> None:
+        self.assertEqual(
+            report.latest_rc_version(
+                [
+                    {
+                        "version": "6.0.0-rc.1",
+                        "is_prerelease": True,
+                        "published_at": "2026-05-20T10:00:00Z",
+                    },
+                    {
+                        "version": "6.0.0",
+                        "is_prerelease": False,
+                        "published_at": "2026-05-21T10:00:00Z",
+                    },
+                    {
+                        "version": "helm-chart-5.1.33",
+                        "is_prerelease": True,
+                        "published_at": "2026-05-23T10:00:00Z",
+                    },
+                    {
+                        "version": "6.0.0-rc.2",
+                        "is_prerelease": True,
+                        "published_at": "2026-05-22T10:00:00Z",
+                    },
+                ]
+            ),
+            "6.0.0-rc.2",
+        )
+
     def test_summarize_rows_uses_latest_install_state_and_splits_release_validation(self) -> None:
         now = datetime.now(timezone.utc).replace(microsecond=0)
         rows = [
@@ -113,6 +142,7 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
             },
             rows,
             published_versions={"6.0.0-rc.1"},
+            target_version="v6.0.0-rc.2",
         )
 
         self.assertEqual(summary["active_latest"]["active_24h"], 2)
@@ -179,6 +209,15 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                 },
             ],
         )
+        target_coverage = summary["target_release_coverage_7d"]
+        self.assertEqual(target_coverage["version"], "6.0.0-rc.2")
+        self.assertEqual(target_coverage["active_installs"], 1)
+        self.assertEqual(target_coverage["platforms"], [{"platform": "docker", "installs": 1}])
+        signals = {entry["field"]: entry for entry in target_coverage["signals"]}
+        self.assertEqual(signals["agent_hosts"]["nonzero_installs"], 1)
+        self.assertEqual(signals["agent_hosts"]["total"], 3)
+        self.assertEqual(signals["agent_hosts"]["group"], "deep")
+        self.assertEqual(signals["pve_nodes"]["group"], "core")
 
     def test_format_text_includes_latest_install_windows(self) -> None:
         summary = {
@@ -235,6 +274,45 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                     ],
                 },
             ],
+            "target_release_coverage_7d": {
+                "version": "6.0.0-rc.6",
+                "active_installs": 74,
+                "platforms": [{"platform": "binary", "installs": 54}],
+                "signals": [
+                    {
+                        "field": "pve_nodes",
+                        "label": "PVE nodes",
+                        "type": "count",
+                        "group": "core",
+                        "nonzero_installs": 55,
+                        "total": 131,
+                    },
+                    {
+                        "field": "ai_enabled",
+                        "label": "AI enabled",
+                        "type": "bool",
+                        "group": "core",
+                        "nonzero_installs": 19,
+                        "total": 19,
+                    },
+                    {
+                        "field": "agent_hosts",
+                        "label": "Agent hosts",
+                        "type": "count",
+                        "group": "deep",
+                        "nonzero_installs": 0,
+                        "total": 0,
+                    },
+                    {
+                        "field": "patrol_enabled",
+                        "label": "Patrol enabled",
+                        "type": "bool",
+                        "group": "deep",
+                        "nonzero_installs": 0,
+                        "total": 0,
+                    },
+                ],
+            },
         }
 
         rendered = report.format_text(summary, "rcourtman/Pulse", 7)
@@ -247,6 +325,10 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         self.assertIn("Deep telemetry signal sources (7d):", rendered)
         self.assertIn("- Agent hosts: 6.0.0-rc.2: 4 installs, total 18", rendered)
         self.assertIn("- Patrol enabled: 6.0.0-rc.2: 2 installs", rendered)
+        self.assertIn("Target release signal coverage (7d, 6.0.0-rc.6):", rendered)
+        self.assertIn("  - PVE nodes: 55 installs, total 131", rendered)
+        self.assertIn("  - AI enabled: 19 installs", rendered)
+        self.assertIn("  - Agent hosts, Patrol enabled", rendered)
 
     def test_privacy_docs_keep_relay_mobile_handoff_copy_aligned(self) -> None:
         repo_root = Path(__file__).resolve().parents[2]
