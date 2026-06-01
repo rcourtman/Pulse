@@ -32,6 +32,7 @@ import { getProxmoxBackupSourcePresentation } from './proxmoxBackupSourcePresent
 import {
   ArtifactSourceBadge,
   ArtifactStateBadge,
+  PROXMOX_BACKUP_COLUMN_LABELS,
   ProxmoxBackupWorkloadTypeBadge,
   SortableHead,
   artifactStateLabel,
@@ -149,7 +150,9 @@ export function ProxmoxCoverageTable(props: {
                 headClass={getPlatformTableHeadClassForKind('name')}
               />
               <TableHead class={getPlatformTableHeadClassForKind('text')}>Type</TableHead>
-              <TableHead class={getPlatformTableHeadClassForKind('text')}>ID</TableHead>
+              <TableHead class={getPlatformTableHeadClassForKind('text')}>
+                {PROXMOX_BACKUP_COLUMN_LABELS.targetId}
+              </TableHead>
               <TableHead class={getPlatformTableHeadClassForKind('text')}>Node</TableHead>
               <SortableHead
                 label="Posture"
@@ -404,10 +407,14 @@ export function ProxmoxCoverageTable(props: {
                                   <tr class="bg-surface-alt text-muted">
                                     <th class="px-2 py-0.5 text-left font-medium">Source</th>
                                     <th class="px-2 py-0.5 text-left font-medium">Location</th>
-                                    <th class="px-2 py-0.5 text-right font-medium">Created</th>
+                                    <th class="px-2 py-0.5 text-right font-medium">
+                                      {PROXMOX_BACKUP_COLUMN_LABELS.created}
+                                    </th>
                                     <th class="px-2 py-0.5 text-right font-medium">Size</th>
                                     <th class="px-2 py-0.5 text-left font-medium">State</th>
-                                    <th class="px-2 py-0.5 text-left font-medium">Details</th>
+                                    <th class="px-2 py-0.5 text-left font-medium">
+                                      {PROXMOX_BACKUP_COLUMN_LABELS.details}
+                                    </th>
                                   </tr>
                                 </thead>
                                 <tbody class="divide-y divide-border-subtle">

@@ -12,16 +12,19 @@ describe('proxmoxBackupSourcePresentation', () => {
 
     expect(getProxmoxBackupSourcePresentation('pbs')).toMatchObject({
       badgeLabel: 'PBS',
+      coverageColumnLabel: 'Latest PBS',
       filterLabel: 'PBS snapshots',
       timelineLabel: 'PBS snapshots',
     });
     expect(getProxmoxBackupSourcePresentation('archive')).toMatchObject({
       badgeLabel: 'PVE file',
+      coverageColumnLabel: 'Latest PVE file',
       filterLabel: 'PVE backup files',
       timelineLabel: 'PVE backup files',
     });
     expect(getProxmoxBackupSourcePresentation('snapshot')).toMatchObject({
       badgeLabel: 'Snapshot',
+      coverageColumnLabel: 'Latest snapshot',
       filterLabel: 'Guest snapshots',
       timelineLabel: 'Guest snapshots',
     });

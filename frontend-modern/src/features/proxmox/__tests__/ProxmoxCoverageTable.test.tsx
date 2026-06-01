@@ -55,12 +55,12 @@ describe('ProxmoxCoverageTable column visibility', () => {
     // Always-on columns.
     expect(headers).toContain('Workload');
     expect(headers).toContain('Type');
-    expect(headers).toContain('ID');
+    expect(headers).toContain('Target ID');
     expect(headers).toContain('Node');
     // Source columns gate on their flags.
-    expect(headers).toContain('PBS');
-    expect(headers).toContain('Snapshots');
-    expect(headers).not.toContain('PVE files');
+    expect(headers).toContain('Latest PBS');
+    expect(headers).toContain('Latest snapshot');
+    expect(headers).not.toContain('Latest PVE file');
     expect(headers).not.toContain('Latest task');
   });
 });

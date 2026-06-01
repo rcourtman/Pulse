@@ -116,6 +116,12 @@ function parseTimestampMs(value: string | undefined): number | undefined {
   return Number.isFinite(ms) ? ms : undefined;
 }
 
+function pbsBackupFileDetailLabel(fileCount: number): string {
+  if (fileCount <= 0) return 'PBS files not listed';
+  if (fileCount === 1) return '1 PBS file';
+  return `${fileCount} PBS files`;
+}
+
 function normalizeKey(value: string | number | undefined | null): string {
   return String(value ?? '')
     .trim()
@@ -463,7 +469,7 @@ export function buildProxmoxBackupRecoveryModel(
       createdMs,
       size: backup.size,
       location: `${backup.datastore || '—'} / ${backup.namespace?.trim() || '(root)'}`,
-      detail: backup.files.length === 1 ? '1 file' : `${backup.files.length} files`,
+      detail: pbsBackupFileDetailLabel(backup.files.length),
       protected: backup.protected,
       verified: backup.verified,
       fileCount: backup.files.length,

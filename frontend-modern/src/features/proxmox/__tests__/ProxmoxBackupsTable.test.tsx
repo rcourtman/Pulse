@@ -143,8 +143,10 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.getByRole('columnheader', { name: /location/i })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: /source/i })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: /type/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /target id/i })).toBeInTheDocument();
     expect(screen.getAllByText('LXC').length).toBeGreaterThan(0);
     expect(screen.getAllByText('PBS').length).toBeGreaterThan(0);
+    expect(screen.getByText('2 PBS files')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /pbs snapshots/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /pve backup files/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /guest snapshots/i })).toBeInTheDocument();

@@ -26,18 +26,25 @@ import type {
 
 const statusDot = (className: string) => <span class={`h-2 w-2 rounded-full ${className}`} />;
 
-export const ARCHIVE_STATUS_FILTERS: FilterOption<'all' | 'protected' | 'verified' | 'unverified'>[] =
-  [
-    { value: 'all', label: 'All' },
-    { value: 'protected', label: 'Protected', tone: 'info', leading: statusDot('bg-blue-500') },
-    { value: 'verified', label: 'Verified', tone: 'success', leading: statusDot('bg-emerald-500') },
-    {
-      value: 'unverified',
-      label: 'Unverified',
-      tone: 'warning',
-      leading: statusDot('bg-amber-500'),
-    },
-  ];
+export const PROXMOX_BACKUP_COLUMN_LABELS = {
+  targetId: 'Target ID',
+  created: 'Created',
+  details: 'Details',
+} as const;
+
+export const ARCHIVE_STATUS_FILTERS: FilterOption<
+  'all' | 'protected' | 'verified' | 'unverified'
+>[] = [
+  { value: 'all', label: 'All' },
+  { value: 'protected', label: 'Protected', tone: 'info', leading: statusDot('bg-blue-500') },
+  { value: 'verified', label: 'Verified', tone: 'success', leading: statusDot('bg-emerald-500') },
+  {
+    value: 'unverified',
+    label: 'Unverified',
+    tone: 'warning',
+    leading: statusDot('bg-amber-500'),
+  },
+];
 
 export const PBS_STATUS_FILTERS: FilterOption<'all' | 'protected' | 'verified' | 'unverified'>[] = [
   { value: 'all', label: 'All' },

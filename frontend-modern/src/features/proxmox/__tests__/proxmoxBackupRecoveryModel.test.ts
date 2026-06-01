@@ -108,9 +108,26 @@ describe('proxmoxBackupRecoveryModel', () => {
       'PVE file',
       'Snapshot',
     ]);
+    expect(model.recoverableArtifacts[0].detail).toBe('2 PBS files');
     expect(coverageRowMatchesSearch(row, 'pbs-docker')).toBe(true);
     expect(coverageRowMatchesSearch(row, 'PVE backup file')).toBe(true);
     expect(recoverableArtifactMatchesSearch(model.recoverableArtifacts[0], 'main')).toBe(true);
+  });
+
+  it('does not describe PBS backups with omitted file manifests as zero-file backups', () => {
+    const model = buildProxmoxBackupRecoveryModel({
+      workloads: [workload({})],
+      pbsBackups: [pbsBackup({ files: [] })],
+      archives: [],
+      snapshots: [],
+      tasks: [],
+      nowMs: Date.parse('2026-05-26T08:00:00Z'),
+    });
+
+    expect(model.recoverableArtifacts[0].detail).toBe('PBS files not listed');
+    expect(recoverableArtifactMatchesSearch(model.recoverableArtifacts[0], 'not listed')).toBe(
+      true,
+    );
   });
 
   it('surfaces a failed latest backup task as workload attention', () => {

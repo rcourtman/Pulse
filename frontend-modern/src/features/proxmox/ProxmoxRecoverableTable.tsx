@@ -29,6 +29,7 @@ import type { RecoverableSortKey } from './proxmoxBackupsTableModel';
 import {
   ArtifactSourceBadge,
   ArtifactStateBadge,
+  PROXMOX_BACKUP_COLUMN_LABELS,
   ProxmoxBackupWorkloadTypeBadge,
   RowMetricBar,
   SortableHead,
@@ -187,7 +188,9 @@ export function ProxmoxRecoverableTable(props: {
                 headClass={getPlatformTableHeadClassForKind('name')}
               />
               <TableHead class={getPlatformTableHeadClassForKind('text')}>Type</TableHead>
-              <TableHead class={getPlatformTableHeadClassForKind('text')}>ID</TableHead>
+              <TableHead class={getPlatformTableHeadClassForKind('text')}>
+                {PROXMOX_BACKUP_COLUMN_LABELS.targetId}
+              </TableHead>
               <SortableHead
                 label="Source"
                 sortKey="source"
@@ -207,7 +210,7 @@ export function ProxmoxRecoverableTable(props: {
                 headClass={getPlatformTableHeadClassForKind('text')}
               />
               <SortableHead
-                label="Created"
+                label={PROXMOX_BACKUP_COLUMN_LABELS.created}
                 sortKey="created"
                 currentSort={props.sortKey}
                 direction={props.sortDirection}
@@ -233,7 +236,9 @@ export function ProxmoxRecoverableTable(props: {
                 align="left"
                 headClass={getPlatformTableHeadClassForKind('text')}
               />
-              <TableHead class={getPlatformTableHeadClassForKind('text')}>Details</TableHead>
+              <TableHead class={getPlatformTableHeadClassForKind('text')}>
+                {PROXMOX_BACKUP_COLUMN_LABELS.details}
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
@@ -250,8 +255,7 @@ export function ProxmoxRecoverableTable(props: {
                         colspan={COLUMN_COUNT}
                         class="border-t border-border bg-surface-alt px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-base-content"
                       >
-                        {group.label}
-                        {' '}
+                        {group.label}{' '}
                         <span class="ml-2 normal-case tracking-normal text-muted">
                           {group.items.length} {group.items.length === 1 ? 'backup' : 'backups'}
                         </span>
