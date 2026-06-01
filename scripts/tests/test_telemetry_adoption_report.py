@@ -85,6 +85,7 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                 "platform": "docker",
                 "received_at": (now - timedelta(hours=5)).strftime("%Y-%m-%d %H:%M:%S"),
                 "event": "heartbeat",
+                "agent_hosts": 3,
             },
             {
                 "install_id": "install-b",
@@ -99,6 +100,8 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                 "platform": "binary",
                 "received_at": (now - timedelta(days=2, hours=1)).strftime("%Y-%m-%d %H:%M:%S"),
                 "event": "heartbeat",
+                "agent_hosts": 2,
+                "patrol_enabled": 1,
             },
         ]
 
@@ -114,6 +117,7 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
 
         self.assertEqual(summary["active_latest"]["active_24h"], 2)
         self.assertEqual(summary["active_latest"]["active_72h"], 3)
+        self.assertEqual(summary["active_latest"]["active_7d"], 3)
         self.assertEqual(summary["latest_install_windows"]["24h"]["active_installs"], 2)
         self.assertEqual(summary["latest_install_windows"]["72h"]["active_installs"], 3)
         self.assertEqual(summary["latest_install_windows"]["7d"]["active_installs"], 3)
@@ -146,6 +150,35 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                 {"platform": "docker", "installs": 1},
             ],
         )
+        deep_sources = {entry["field"]: entry for entry in summary["deep_signal_sources_7d"]}
+        self.assertEqual(
+            deep_sources["agent_hosts"]["versions"],
+            [
+                {
+                    "version": "0.0.0-feature-new-metric",
+                    "installs": 1,
+                    "total": 2,
+                    "is_published_release": False,
+                },
+                {
+                    "version": "6.0.0-rc.2",
+                    "installs": 1,
+                    "total": 3,
+                    "is_published_release": False,
+                },
+            ],
+        )
+        self.assertEqual(
+            deep_sources["patrol_enabled"]["versions"],
+            [
+                {
+                    "version": "0.0.0-feature-new-metric",
+                    "installs": 1,
+                    "total": 1,
+                    "is_published_release": False,
+                },
+            ],
+        )
 
     def test_format_text_includes_latest_install_windows(self) -> None:
         summary = {
@@ -174,6 +207,34 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                     "platforms": [{"platform": "binary", "installs": 87}],
                 },
             },
+            "deep_signal_sources_7d": [
+                {
+                    "field": "agent_hosts",
+                    "label": "Agent hosts",
+                    "type": "count",
+                    "versions": [
+                        {
+                            "version": "6.0.0-rc.2",
+                            "installs": 4,
+                            "total": 18,
+                            "is_published_release": False,
+                        },
+                    ],
+                },
+                {
+                    "field": "patrol_enabled",
+                    "label": "Patrol enabled",
+                    "type": "bool",
+                    "versions": [
+                        {
+                            "version": "6.0.0-rc.2",
+                            "installs": 2,
+                            "total": 2,
+                            "is_published_release": False,
+                        },
+                    ],
+                },
+            ],
         }
 
         rendered = report.format_text(summary, "rcourtman/Pulse", 7)
@@ -183,6 +244,9 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         self.assertIn("Latest install state (7d):", rendered)
         self.assertIn("  - 6.0.0-rc.1: 118", rendered)
         self.assertIn("  - 6.0.0-rc.2: 32", rendered)
+        self.assertIn("Deep telemetry signal sources (7d):", rendered)
+        self.assertIn("- Agent hosts: 6.0.0-rc.2: 4 installs, total 18", rendered)
+        self.assertIn("- Patrol enabled: 6.0.0-rc.2: 2 installs", rendered)
 
     def test_privacy_docs_keep_relay_mobile_handoff_copy_aligned(self) -> None:
         repo_root = Path(__file__).resolve().parents[2]

@@ -66,6 +66,28 @@ FEATURE_BOOL_FIELDS = (
     ("paid_license", "Paid license"),
     ("has_api_tokens", "Has API tokens"),
 )
+DEEP_SIGNAL_FIELDS = (
+    ("agent_hosts", "Agent hosts", "count"),
+    ("docker_containers", "Docker containers", "count"),
+    ("kubernetes_nodes", "Kubernetes nodes", "count"),
+    ("kubernetes_pods", "Kubernetes pods", "count"),
+    ("kubernetes_deployments", "Kubernetes deployments", "count"),
+    ("storage_pools", "Storage pools", "count"),
+    ("physical_disks", "Physical disks", "count"),
+    ("ceph_clusters", "Ceph clusters", "count"),
+    ("network_shares", "Network shares", "count"),
+    ("truenas_systems", "TrueNAS systems", "count"),
+    ("truenas_vms", "TrueNAS VMs", "count"),
+    ("truenas_apps", "TrueNAS apps", "count"),
+    ("vmware_hosts", "VMware hosts", "count"),
+    ("vmware_vms", "VMware VMs", "count"),
+    ("vmware_datastores", "VMware datastores", "count"),
+    ("availability_targets", "Availability targets", "count"),
+    ("patrol_enabled", "Patrol enabled", "bool"),
+    ("discovery_enabled", "Discovery enabled", "bool"),
+    ("notifications_enabled", "Notifications enabled", "bool"),
+    ("ai_actions_enabled", "AI actions enabled", "bool"),
+)
 GIT_DESCRIBE_RE = re.compile(
     r"^(?P<base>\d+\.\d+\.\d+(?:-[0-9A-Za-z\.-]+)?)-(?P<count>\d+)-g(?P<sha>[0-9a-fA-F]+)(?P<dirty>-dirty)?$"
 )
@@ -407,6 +429,60 @@ def summarize_latest_install_windows(
     return summary
 
 
+def summarize_deep_signal_sources(
+    latest_by_install: dict[str, dict[str, Any]],
+    published_versions: set[str],
+    *,
+    now: datetime | None = None,
+    window: timedelta = timedelta(days=7),
+) -> list[dict[str, Any]]:
+    current_time = now or datetime.now(timezone.utc)
+    by_field: dict[str, dict[str, dict[str, Any]]] = {key: {} for key, _, _ in DEEP_SIGNAL_FIELDS}
+
+    for row in latest_by_install.values():
+        received_at = parse_received_at(str(row["received_at"]))
+        if current_time - received_at > window:
+            continue
+        identity = classify_row_version(row, published_versions)
+
+        for key, _, kind in DEEP_SIGNAL_FIELDS:
+            if kind == "bool":
+                value = 1 if parse_optional_bool(row.get(key)) else 0
+            else:
+                value = parse_optional_nonnegative_int(row.get(key))
+            if value <= 0:
+                continue
+
+            source = by_field[key].setdefault(
+                identity.version,
+                {
+                    "version": identity.version,
+                    "installs": 0,
+                    "total": 0,
+                    "is_published_release": identity.is_published_release,
+                },
+            )
+            source["installs"] += 1
+            source["total"] += value
+            source["is_published_release"] = source["is_published_release"] or identity.is_published_release
+
+    result: list[dict[str, Any]] = []
+    for key, label, kind in DEEP_SIGNAL_FIELDS:
+        versions = list(by_field[key].values())
+        if not versions:
+            continue
+        versions.sort(key=lambda source: (-int(source["installs"]), str(source["version"])))
+        result.append(
+            {
+                "field": key,
+                "label": label,
+                "type": kind,
+                "versions": versions,
+            }
+        )
+    return result
+
+
 def summarize_rows(
     db_stats: dict[str, Any],
     rows: Iterable[dict[str, Any]],
@@ -419,15 +495,27 @@ def summarize_rows(
         if existing is None or str(row["received_at"]) > str(existing["received_at"]):
             latest_by_install[install_id] = row
 
-    latest_install_windows = summarize_latest_install_windows(latest_by_install, published_versions)
+    current_time = datetime.now(timezone.utc)
+    latest_install_windows = summarize_latest_install_windows(
+        latest_by_install,
+        published_versions,
+        now=current_time,
+    )
     summary_72h = latest_install_windows["72h"]
+    summary_7d = latest_install_windows["7d"]
 
     return {
         "db_stats": db_stats,
         "latest_install_windows": latest_install_windows,
+        "deep_signal_sources_7d": summarize_deep_signal_sources(
+            latest_by_install,
+            published_versions,
+            now=current_time,
+        ),
         "active_latest": {
             "active_24h": latest_install_windows["24h"]["active_installs"],
             "active_72h": summary_72h["active_installs"],
+            "active_7d": summary_7d["active_installs"],
         },
         "latest_version_split_72h": summary_72h["latest_versions"],
         "published_version_split_72h": summary_72h["published_versions"],
@@ -484,6 +572,21 @@ def format_text(summary: dict[str, Any], repo: str, since_days: int) -> str:
             lines.extend(f"  - {entry['label']}: {entry['installs']}" for entry in feature_counts)
         else:
             lines.append("  - none")
+
+    lines.extend(["", "Deep telemetry signal sources (7d):"])
+    deep_sources = summary.get("deep_signal_sources_7d", [])
+    if deep_sources:
+        for entry in deep_sources:
+            versions = []
+            for source in entry["versions"]:
+                install_word = "install" if source["installs"] == 1 else "installs"
+                source_text = f"{source['version']}: {source['installs']} {install_word}"
+                if entry["type"] == "count":
+                    source_text += f", total {source['total']}"
+                versions.append(source_text)
+            lines.append(f"- {entry['label']}: " + "; ".join(versions))
+    else:
+        lines.append("- none")
     return "\n".join(lines)
 
 
