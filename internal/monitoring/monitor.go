@@ -5090,6 +5090,10 @@ func monitorResourceToConvertInput(resource unifiedresources.Resource) models.Re
 	input.HasNetwork = hasNetwork
 	input.NetworkRX = rx
 	input.NetworkTX = tx
+	hasDiskIO, diskRead, diskWrite := monitorDiskIOMetricInput(resource.Metrics)
+	input.HasDiskIO = hasDiskIO
+	input.DiskReadRate = diskRead
+	input.DiskWriteRate = diskWrite
 
 	return input
 }
@@ -5458,6 +5462,22 @@ func monitorNetworkMetricInput(metrics *unifiedresources.ResourceMetrics) (bool,
 		tx = int64(math.Round(metrics.NetOut.Value))
 	}
 	return true, rx, tx
+}
+
+func monitorDiskIOMetricInput(metrics *unifiedresources.ResourceMetrics) (bool, int64, int64) {
+	if metrics == nil || (metrics.DiskRead == nil && metrics.DiskWrite == nil) {
+		return false, 0, 0
+	}
+
+	var read int64
+	var write int64
+	if metrics.DiskRead != nil {
+		read = int64(math.Round(metrics.DiskRead.Value))
+	}
+	if metrics.DiskWrite != nil {
+		write = int64(math.Round(metrics.DiskWrite.Value))
+	}
+	return true, read, write
 }
 
 func monitorTemperature(resource unifiedresources.Resource) *float64 {

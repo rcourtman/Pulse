@@ -173,3 +173,102 @@ func TestCoalescePresentationHostResourcesWithExclusionsHonorsManualSplit(t *tes
 		t.Fatalf("expected manual split exclusion to keep resources separate, got %#v", coalesced)
 	}
 }
+
+// A Proxmox node whose Pulse Agent has gone offline must show the live PVE CPU,
+// not the agent's last (0) reading. The agent is the presentation primary, so
+// without a freshness gate its stale 0 CPU was kept and the live value dropped.
+func TestCoalescePresentationHostResourcesPrefersLiveProxmoxCPUOverOfflineAgent(t *testing.T) {
+	now := time.Now().UTC()
+	resources := []Resource{
+		{
+			ID:       "proxmox-delly",
+			Type:     ResourceTypeAgent,
+			Name:     "delly",
+			Status:   StatusOnline,
+			LastSeen: now,
+			Sources:  []DataSource{SourceProxmox},
+			SourceStatus: map[DataSource]SourceStatus{
+				SourceProxmox: {Status: "online", LastSeen: now},
+			},
+			Identity: ResourceIdentity{Hostnames: []string{"delly"}},
+			Proxmox:  &ProxmoxData{NodeName: "delly", ClusterName: "homelab"},
+			Metrics: &ResourceMetrics{
+				CPU: &MetricValue{Value: 2.88, Percent: 2.88, Unit: "percent", Source: SourceProxmox},
+			},
+		},
+		{
+			ID:       "agent-delly",
+			Type:     ResourceTypeAgent,
+			Name:     "delly",
+			Status:   StatusOnline,
+			LastSeen: now.Add(-2 * time.Hour),
+			Sources:  []DataSource{SourceAgent},
+			SourceStatus: map[DataSource]SourceStatus{
+				SourceAgent: {Status: "stale", LastSeen: now.Add(-2 * time.Hour)},
+			},
+			Identity: ResourceIdentity{MachineID: "agent-machine-delly", Hostnames: []string{"delly"}},
+			Agent:    &AgentData{AgentID: "agent-machine-delly", Hostname: "delly"},
+			Metrics: &ResourceMetrics{
+				CPU: &MetricValue{Value: 0, Percent: 0, Unit: "percent", Source: SourceAgent},
+			},
+		},
+	}
+
+	coalesced := CoalescePresentationHostResources(resources)
+	if len(coalesced) != 1 {
+		t.Fatalf("expected split host resources to coalesce into 1, got %d: %#v", len(coalesced), coalesced)
+	}
+	cpu := coalesced[0].Metrics.CPU
+	if cpu == nil || cpu.Percent != 2.88 {
+		t.Fatalf("expected live Proxmox CPU 2.88 to win over offline agent CPU 0, got %+v", cpu)
+	}
+}
+
+// When the agent is live it stays the preferred CPU source (the presentation
+// primary), so a fresh agent reading is not displaced by the API value.
+func TestCoalescePresentationHostResourcesKeepsLiveAgentCPU(t *testing.T) {
+	now := time.Now().UTC()
+	resources := []Resource{
+		{
+			ID:       "proxmox-pi",
+			Type:     ResourceTypeAgent,
+			Name:     "pi",
+			Status:   StatusOnline,
+			LastSeen: now,
+			Sources:  []DataSource{SourceProxmox},
+			SourceStatus: map[DataSource]SourceStatus{
+				SourceProxmox: {Status: "online", LastSeen: now},
+			},
+			Identity: ResourceIdentity{Hostnames: []string{"pi"}},
+			Proxmox:  &ProxmoxData{NodeName: "pi"},
+			Metrics: &ResourceMetrics{
+				CPU: &MetricValue{Value: 5, Percent: 5, Unit: "percent", Source: SourceProxmox},
+			},
+		},
+		{
+			ID:       "agent-pi",
+			Type:     ResourceTypeAgent,
+			Name:     "pi",
+			Status:   StatusOnline,
+			LastSeen: now,
+			Sources:  []DataSource{SourceAgent},
+			SourceStatus: map[DataSource]SourceStatus{
+				SourceAgent: {Status: "online", LastSeen: now},
+			},
+			Identity: ResourceIdentity{MachineID: "agent-machine-pi", Hostnames: []string{"pi"}},
+			Agent:    &AgentData{AgentID: "agent-machine-pi", Hostname: "pi"},
+			Metrics: &ResourceMetrics{
+				CPU: &MetricValue{Value: 12, Percent: 12, Unit: "percent", Source: SourceAgent},
+			},
+		},
+	}
+
+	coalesced := CoalescePresentationHostResources(resources)
+	if len(coalesced) != 1 {
+		t.Fatalf("expected coalesce into 1, got %d", len(coalesced))
+	}
+	cpu := coalesced[0].Metrics.CPU
+	if cpu == nil || cpu.Percent != 12 {
+		t.Fatalf("expected live agent CPU 12 to be kept, got %+v", cpu)
+	}
+}

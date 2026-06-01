@@ -401,6 +401,12 @@ payloads from the active metrics-target read-state before serialization so
 as `/api/resources`; storage resources must not fall back to generated
 `Resource.ID` values when the unified resource registry can resolve a
 source-owned `storage` target.
+That same broadcast projection owns aggregate resource disk I/O. When the
+canonical unified-resource metrics include `diskRead` or `diskWrite`,
+`internal/monitoring/monitor.go` must project those rates into
+`ResourceFrontend.diskIO` through the shared resource converter, so
+`/api/state` and websocket consumers read disk throughput from the same
+freshness-gated resource metrics contract as CPU, memory, disk, and network.
 Unraid ingest must preserve the agent's native disk topology fields through the
 monitoring model and read-state projection. `internal/monitoring/monitor_agents.go`
 and `internal/monitoring/monitor.go` must carry model, transport, filesystem,

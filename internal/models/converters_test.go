@@ -268,6 +268,30 @@ func TestVMToFrontend_NegativeNetworkValues(t *testing.T) {
 	}
 }
 
+func TestConvertResourceToFrontendIncludesDiskIO(t *testing.T) {
+	frontend := ConvertResourceToFrontend(ResourceConvertInput{
+		ID:            "agent-1",
+		Type:          "agent",
+		Name:          "tower",
+		DisplayName:   "tower",
+		PlatformID:    "tower",
+		PlatformType:  "agent",
+		SourceType:    "agent",
+		Status:        "online",
+		LastSeenUnix:  time.Now().UnixMilli(),
+		HasDiskIO:     true,
+		DiskReadRate:  4096,
+		DiskWriteRate: 8192,
+	})
+
+	if frontend.DiskIO == nil {
+		t.Fatal("expected disk I/O rates to be present")
+	}
+	if frontend.DiskIO.ReadRate != 4096 || frontend.DiskIO.WriteRate != 8192 {
+		t.Fatalf("unexpected disk I/O rates: %+v", frontend.DiskIO)
+	}
+}
+
 func TestContainerToFrontend(t *testing.T) {
 	now := time.Now()
 

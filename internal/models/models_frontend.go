@@ -971,6 +971,7 @@ type ResourceFrontend struct {
 	Memory      *ResourceMetricFrontend  `json:"memory,omitempty"`
 	Disk        *ResourceMetricFrontend  `json:"disk,omitempty"`
 	Network     *ResourceNetworkFrontend `json:"network,omitempty"`
+	DiskIO      *ResourceDiskIOFrontend  `json:"diskIO,omitempty"`
 	Temperature *float64                 `json:"temperature,omitempty"`
 	Uptime      *int64                   `json:"uptime,omitempty"`
 
@@ -1050,6 +1051,12 @@ type ResourceMetricFrontend struct {
 type ResourceNetworkFrontend struct {
 	RXBytes int64 `json:"rxBytes"`
 	TXBytes int64 `json:"txBytes"`
+}
+
+// ResourceDiskIOFrontend represents aggregate disk I/O rates for the frontend.
+type ResourceDiskIOFrontend struct {
+	ReadRate  int64 `json:"readRate"`
+	WriteRate int64 `json:"writeRate"`
 }
 
 // ResourceAlertFrontend represents an alert on a resource.

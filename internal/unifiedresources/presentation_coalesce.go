@@ -209,7 +209,18 @@ func mergePresentationHostResources(left, right Resource) Resource {
 	if merged.Metrics == nil {
 		merged.Metrics = secondary.Metrics
 	} else if secondary.Metrics != nil {
-		merged.Metrics = mergePresentationMetrics(merged.Metrics, secondary.Metrics)
+		now := time.Now().UTC()
+		combinedStatus := make(map[DataSource]SourceStatus, len(primary.SourceStatus)+len(secondary.SourceStatus))
+		for source, status := range secondary.SourceStatus {
+			combinedStatus[source] = status
+		}
+		for source, status := range primary.SourceStatus {
+			combinedStatus[source] = status
+		}
+		stale := func(source DataSource) bool {
+			return presentationSourceStale(now, combinedStatus, source)
+		}
+		merged.Metrics = mergePresentationMetrics(merged.Metrics, secondary.Metrics, stale)
 	}
 	if merged.DiscoveryTarget == nil {
 		merged.DiscoveryTarget = secondary.DiscoveryTarget
@@ -307,7 +318,43 @@ func uniquePresentationStrings(values []string) []string {
 	return unique
 }
 
-func mergePresentationMetrics(left, right *ResourceMetrics) *ResourceMetrics {
+// presentationSourceStale reports whether a source's most recent report is
+// older than its stale threshold. A zero/unknown last-seen is treated as NOT
+// stale so coalescing never demotes a source on missing information.
+func presentationSourceStale(now time.Time, status map[DataSource]SourceStatus, source DataSource) bool {
+	if status == nil {
+		return false
+	}
+	st, ok := status[source]
+	if !ok || st.LastSeen.IsZero() {
+		return false
+	}
+	threshold, ok := defaultStaleThresholds[source]
+	if !ok {
+		threshold = 60 * time.Second
+	}
+	return now.Sub(st.LastSeen) > threshold
+}
+
+// mergePresentationMetric keeps the primary (left) value, except that a metric
+// from a stale source must never win over a metric from a live one. Without
+// this, a Proxmox node whose Pulse Agent has gone offline shows the agent's
+// last (usually 0) CPU instead of the live PVE value, because the agent is the
+// presentation primary and its 0 reading is non-nil.
+func mergePresentationMetric(left, right *MetricValue, stale func(DataSource) bool) *MetricValue {
+	if left == nil {
+		return right
+	}
+	if right == nil {
+		return left
+	}
+	if stale(left.Source) && !stale(right.Source) {
+		return right
+	}
+	return left
+}
+
+func mergePresentationMetrics(left, right *ResourceMetrics, stale func(DataSource) bool) *ResourceMetrics {
 	if left == nil {
 		return right
 	}
@@ -315,27 +362,13 @@ func mergePresentationMetrics(left, right *ResourceMetrics) *ResourceMetrics {
 		return left
 	}
 	merged := *left
-	if merged.CPU == nil {
-		merged.CPU = right.CPU
-	}
-	if merged.Memory == nil {
-		merged.Memory = right.Memory
-	}
-	if merged.Disk == nil {
-		merged.Disk = right.Disk
-	}
-	if merged.NetIn == nil {
-		merged.NetIn = right.NetIn
-	}
-	if merged.NetOut == nil {
-		merged.NetOut = right.NetOut
-	}
-	if merged.DiskRead == nil {
-		merged.DiskRead = right.DiskRead
-	}
-	if merged.DiskWrite == nil {
-		merged.DiskWrite = right.DiskWrite
-	}
+	merged.CPU = mergePresentationMetric(left.CPU, right.CPU, stale)
+	merged.Memory = mergePresentationMetric(left.Memory, right.Memory, stale)
+	merged.Disk = mergePresentationMetric(left.Disk, right.Disk, stale)
+	merged.NetIn = mergePresentationMetric(left.NetIn, right.NetIn, stale)
+	merged.NetOut = mergePresentationMetric(left.NetOut, right.NetOut, stale)
+	merged.DiskRead = mergePresentationMetric(left.DiskRead, right.DiskRead, stale)
+	merged.DiskWrite = mergePresentationMetric(left.DiskWrite, right.DiskWrite, stale)
 	return &merged
 }
 

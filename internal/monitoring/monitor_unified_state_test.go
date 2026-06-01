@@ -119,6 +119,18 @@ func TestConvertResourcesForBroadcastCoalescesSplitHostResources(t *testing.T) {
 				Hostname: "delly",
 				OSName:   "Proxmox VE",
 			},
+			Metrics: &unifiedresources.ResourceMetrics{
+				DiskRead: &unifiedresources.MetricValue{
+					Value:  4096,
+					Unit:   "bytes/s",
+					Source: unifiedresources.SourceAgent,
+				},
+				DiskWrite: &unifiedresources.MetricValue{
+					Value:  8192,
+					Unit:   "bytes/s",
+					Source: unifiedresources.SourceAgent,
+				},
+			},
 		},
 	}
 
@@ -149,6 +161,12 @@ func TestConvertResourcesForBroadcastCoalescesSplitHostResources(t *testing.T) {
 	}
 	if len(resource.Agent) == 0 {
 		t.Fatal("expected merged agent facet")
+	}
+	if resource.DiskIO == nil {
+		t.Fatal("expected aggregate disk I/O rates in broadcast resource")
+	}
+	if resource.DiskIO.ReadRate != 4096 || resource.DiskIO.WriteRate != 8192 {
+		t.Fatalf("unexpected aggregate disk I/O rates: %+v", resource.DiskIO)
 	}
 }
 

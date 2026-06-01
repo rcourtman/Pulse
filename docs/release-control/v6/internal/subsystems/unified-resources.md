@@ -912,6 +912,15 @@ table owners. Proxmox host row version, uptime, temperature, CPU, memory, disk,
 network I/O, and disk I/O presentation must derive from canonical resource
 facets and the shared `nodeFromResource` adapter; platform pages must not
 rebuild resource identity, merge policy, or metric-target inference locally.
+The registry and presentation coalescer also own metric-source freshness. When
+two source facets contribute the same metric, source priority decides only if
+both sources have equivalent freshness. A stale source must not hold CPU,
+memory, disk, network, or disk I/O metrics against a live source, and a stale
+incoming source must not clobber a live metric already attached to the
+canonical resource. This freshness gate belongs in
+`internal/unifiedresources/registry.go` and
+`internal/unifiedresources/presentation_coalesce.go`, not in platform-page
+rendering or frontend fallback code.
 
 `resource_operator_state.go` owns the operator-set per-resource intent
 schema. `ResourceOperatorState` carries four narrow operator-intent

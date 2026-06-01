@@ -2192,11 +2192,12 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 	if incoming.LastSeen.After(existing.LastSeen) {
 		existing.LastSeen = incoming.LastSeen
 	}
-	existing.UpdatedAt = time.Now().UTC()
+	now := time.Now().UTC()
+	existing.UpdatedAt = now
 	existing.ParentID = rr.resolveCanonicalParentID(existing)
 
 	existing.Status = chooseStatus(existing.Status, incoming.Status, source)
-	existing.Metrics = mergeMetrics(existing.Metrics, incoming.Metrics, source)
+	existing.Metrics = mergeMetrics(existing.Metrics, incoming.Metrics, source, now, existing.SourceStatus)
 
 	// Prefer agent naming when available
 	if incoming.Name != "" {
@@ -2772,7 +2773,7 @@ func (rr *ResourceRegistry) mergeResourceData(primary *Resource, other *Resource
 		primary.Ceph = other.Ceph
 	}
 
-	primary.Metrics = mergeMetrics(primary.Metrics, other.Metrics, SourceAgent)
+	primary.Metrics = mergeMetrics(primary.Metrics, other.Metrics, SourceAgent, time.Now().UTC(), primary.SourceStatus)
 	primary.Status = aggregateStatus(primary)
 }
 
@@ -3546,7 +3547,7 @@ func addSources(sources []DataSource, more []DataSource) []DataSource {
 	return out
 }
 
-func mergeMetrics(existing *ResourceMetrics, incoming *ResourceMetrics, source DataSource) *ResourceMetrics {
+func mergeMetrics(existing *ResourceMetrics, incoming *ResourceMetrics, source DataSource, now time.Time, status map[DataSource]SourceStatus) *ResourceMetrics {
 	if existing == nil {
 		return incoming
 	}
@@ -3554,17 +3555,35 @@ func mergeMetrics(existing *ResourceMetrics, incoming *ResourceMetrics, source D
 		return existing
 	}
 	merged := *existing
-	merged.CPU = mergeMetric(existing.CPU, incoming.CPU, source)
-	merged.Memory = mergeMetric(existing.Memory, incoming.Memory, source)
-	merged.Disk = mergeMetric(existing.Disk, incoming.Disk, source)
-	merged.NetIn = mergeMetric(existing.NetIn, incoming.NetIn, source)
-	merged.NetOut = mergeMetric(existing.NetOut, incoming.NetOut, source)
-	merged.DiskRead = mergeMetric(existing.DiskRead, incoming.DiskRead, source)
-	merged.DiskWrite = mergeMetric(existing.DiskWrite, incoming.DiskWrite, source)
+	merged.CPU = mergeMetric(existing.CPU, incoming.CPU, source, now, status)
+	merged.Memory = mergeMetric(existing.Memory, incoming.Memory, source, now, status)
+	merged.Disk = mergeMetric(existing.Disk, incoming.Disk, source, now, status)
+	merged.NetIn = mergeMetric(existing.NetIn, incoming.NetIn, source, now, status)
+	merged.NetOut = mergeMetric(existing.NetOut, incoming.NetOut, source, now, status)
+	merged.DiskRead = mergeMetric(existing.DiskRead, incoming.DiskRead, source, now, status)
+	merged.DiskWrite = mergeMetric(existing.DiskWrite, incoming.DiskWrite, source, now, status)
 	return &merged
 }
 
-func mergeMetric(existing *MetricValue, incoming *MetricValue, source DataSource) *MetricValue {
+// metricSourceStale reports whether a source's most recent report is older than
+// its stale threshold. A zero/unknown last-seen is treated as NOT stale so the
+// merge never demotes a source on missing information.
+func metricSourceStale(now time.Time, status map[DataSource]SourceStatus, source DataSource) bool {
+	if status == nil {
+		return false
+	}
+	st, ok := status[source]
+	if !ok || st.LastSeen.IsZero() {
+		return false
+	}
+	threshold, ok := defaultStaleThresholds[source]
+	if !ok {
+		threshold = 60 * time.Second
+	}
+	return now.Sub(st.LastSeen) > threshold
+}
+
+func mergeMetric(existing *MetricValue, incoming *MetricValue, source DataSource, now time.Time, status map[DataSource]SourceStatus) *MetricValue {
 	if incoming == nil {
 		return existing
 	}
@@ -3572,6 +3591,18 @@ func mergeMetric(existing *MetricValue, incoming *MetricValue, source DataSource
 	incomingCopy.Source = source
 	if existing == nil {
 		return &incomingCopy
+	}
+	// Freshness gates static source priority: a stale source must never hold a
+	// metric against a live one, and a live source overrides a stale one
+	// regardless of priority. Mirrors the presentation-coalesce rule so the
+	// "live source wins a metric" invariant holds in both metric-merge paths.
+	existingStale := metricSourceStale(now, status, existing.Source)
+	incomingStale := metricSourceStale(now, status, source)
+	if existingStale != incomingStale {
+		if existingStale {
+			return &incomingCopy
+		}
+		return existing
 	}
 	if sourcePriority(source) >= sourcePriority(existing.Source) {
 		return &incomingCopy

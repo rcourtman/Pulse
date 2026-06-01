@@ -3999,3 +3999,51 @@ func TestRegistryIngestSnapshotPublishesDockerNativeInventory(t *testing.T) {
 		}
 	}
 }
+
+// A live source must override a metric held by a stale higher-priority source.
+func TestMergeMetric_LiveSourceOverridesStaleHigherPriority(t *testing.T) {
+	now := time.Now().UTC()
+	status := map[DataSource]SourceStatus{
+		SourceAgent:   {Status: "stale", LastSeen: now.Add(-2 * time.Hour)},
+		SourceProxmox: {Status: "online", LastSeen: now},
+	}
+	existing := &MetricValue{Value: 0, Percent: 0, Source: SourceAgent}
+	incoming := &MetricValue{Value: 6.2, Percent: 6.2, Source: SourceProxmox}
+
+	got := mergeMetric(existing, incoming, SourceProxmox, now, status)
+	if got == nil || got.Percent != 6.2 || got.Source != SourceProxmox {
+		t.Fatalf("expected live proxmox CPU to override stale agent CPU, got %+v", got)
+	}
+}
+
+// When both sources are fresh, static priority still decides: the agent wins.
+func TestMergeMetric_FreshHigherPriorityStillWins(t *testing.T) {
+	now := time.Now().UTC()
+	status := map[DataSource]SourceStatus{
+		SourceAgent:   {Status: "online", LastSeen: now},
+		SourceProxmox: {Status: "online", LastSeen: now},
+	}
+	existing := &MetricValue{Percent: 6.2, Source: SourceProxmox}
+	incoming := &MetricValue{Percent: 12.5, Source: SourceAgent}
+
+	got := mergeMetric(existing, incoming, SourceAgent, now, status)
+	if got == nil || got.Percent != 12.5 || got.Source != SourceAgent {
+		t.Fatalf("expected fresh agent CPU to win by priority, got %+v", got)
+	}
+}
+
+// A stale source must not clobber a metric currently held by a live source.
+func TestMergeMetric_StaleSourceDoesNotClobberLive(t *testing.T) {
+	now := time.Now().UTC()
+	status := map[DataSource]SourceStatus{
+		SourceAgent:   {Status: "stale", LastSeen: now.Add(-2 * time.Hour)},
+		SourceProxmox: {Status: "online", LastSeen: now},
+	}
+	existing := &MetricValue{Percent: 6.2, Source: SourceProxmox}
+	incoming := &MetricValue{Percent: 0, Source: SourceAgent}
+
+	got := mergeMetric(existing, incoming, SourceAgent, now, status)
+	if got == nil || got.Percent != 6.2 || got.Source != SourceProxmox {
+		t.Fatalf("expected live proxmox CPU to survive stale agent merge, got %+v", got)
+	}
+}

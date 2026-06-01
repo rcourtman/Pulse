@@ -60,8 +60,8 @@ func (m *Monitor) pollCephCluster(ctx context.Context, instanceName string, clie
 	}
 
 	storedClusters := m.state.UpdateCephClustersForInstance(instanceName, []models.CephCluster{cluster})
-	for _, storedCluster := range storedClusters {
-		m.checkCephPoolStorage(storedCluster)
+	for _, cluster := range storedClusters {
+		m.checkCephPoolStorage(cluster)
 	}
 }
 
