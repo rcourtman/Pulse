@@ -3804,6 +3804,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "msp-design-partner-growth-offer",
                 "msp-provider-hosted-first-launch",
                 "msp-provider-tier-limit-lock",
+                "pre-ga-public-checkout-posture",
                 "self-hosted-plans-surface-entitlement-first",
                 "self-hosted-paid-surface-classification",
                 "self-hosted-core-monitoring-free",

@@ -100,7 +100,10 @@ PULSE_PUBLIC_RELEASE_TRACK=v6 \
 PULSE_V6_RELEASE_APPROVED=1 \
 ./scripts/audit_public_release.sh
 
-# Production GA flip and rollback packet
+# Owner-approved production GA flip and rollback packet
+# Do not run the v6 production flip from preview readiness alone. Until the
+# explicit GA launch approval is active, production remains on v5 with approval
+# disabled.
 PULSE_PUBLIC_RELEASE_TRACK=v6 PULSE_V6_RELEASE_APPROVED=1 ./scripts/deploy-landing.sh
 PULSE_PUBLIC_RELEASE_TRACK=v6 PULSE_V6_RELEASE_APPROVED=1 ./scripts/audit_public_release.sh
 PULSE_PUBLIC_RELEASE_TRACK=v5 PULSE_V6_RELEASE_APPROVED=0 ./scripts/deploy-landing.sh

@@ -182,7 +182,11 @@ Cloud, and self-hosted production users.
 9. For v6 GA, the exact self-hosted public forward and rollback packet must be
    locked in the launch ticket before promotion: preview deploy/audit commands,
    production deploy/audit commands, and the explicit rollback deploy/audit
-   commands that return `pulserelay.pro` to the approved v5 posture.
+   commands that return `pulserelay.pro` to the approved v5 posture. Preview
+   proof, readiness records, and internal target completion do not authorize the
+   production public checkout flip by themselves; until the owner-approved GA
+   packet is actively executed, production public checkout remains
+   `PULSE_PUBLIC_RELEASE_TRACK=v5` with `PULSE_V6_RELEASE_APPROVED=0`.
 10. For v6 GA, attach the dated RC issue-closure record for the candidate so
     the final issue set and its dispositions are explicit in the promotion
     packet rather than implied.

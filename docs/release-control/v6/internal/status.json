@@ -621,7 +621,7 @@
     },
     {
       "id": "RA8",
-      "summary": "Stable or GA promotion happens only after an exercised RC, live release-pipeline proof, a recorded rollback target, a written v5 maintenance-only support policy, and a coherent self-hosted commercial package.",
+      "summary": "Stable or GA promotion and any production v6 public checkout flip happen only after an exercised RC, live release-pipeline proof, a recorded rollback target, a written v5 maintenance-only support policy, a coherent self-hosted commercial package, and explicit owner-approved launch execution.",
       "kind": "trust-gate",
       "blocking_level": "release-ready",
       "proof_type": "hybrid",
@@ -667,6 +667,11 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-blocked-2026-04-21.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/pre-ga-public-checkout-posture-2026-06-01.md",
           "kind": "file"
         },
         {
@@ -3759,7 +3764,7 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Commercial readiness is coherent for explicit preview, checkout handoff, paid-user activation/recovery, and hosted-mode paths, while default self-hosted app surfaces stay free-first and non-promotional; the production public flip and release-day rollout execution remain a separate promotion-time follow-up.",
+        "summary": "Commercial readiness is coherent for explicit preview, checkout handoff, paid-user activation/recovery, and hosted-mode paths, while default self-hosted app surfaces stay free-first and non-promotional; because v6 is not publicly GA, production public checkout stays on v5 until explicit GA cutover approval, and the production public flip plus release-day rollout execution remain a separate promotion-time follow-up.",
         "tracking": [
           {
             "kind": "lane-followup",
@@ -3785,6 +3790,11 @@
           "path": "docs/release-control/v6/internal/records/paid-feature-claim-proof-matrix-2026-04-29.md",
           "kind": "file",
           "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/pre-ga-public-checkout-posture-2026-06-01.md",
+          "kind": "file"
         },
         {
           "repo": "pulse",
@@ -6458,6 +6468,12 @@
       "evidence": [
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/pre-ga-public-checkout-posture-2026-06-01.md",
+          "kind": "file",
+          "evidence_tier": "production-observed"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/self-hosted-commercial-ga-coherence-2026-04-20.md",
           "kind": "file",
           "evidence_tier": "real-external-e2e"
@@ -6636,7 +6652,7 @@
     },
     {
       "id": "commercial-ga-promotion-package",
-      "summary": "Track the production public flip and release-day execution work for the self-hosted commercial package now that preview, external checkout handoff, paid-user recovery paths, and Pulse Account coherence are proved; default self-hosted app surfaces must stay free-first and non-promotional.",
+      "summary": "Track the explicitly approved GA production public flip and release-day execution work for the self-hosted commercial package; until that work is active, production public checkout must remain on v5 with v6 approval disabled, and default self-hosted app surfaces must stay free-first and non-promotional.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-04-20",
@@ -7492,6 +7508,21 @@
         "L3",
         "L4",
         "L17"
+      ]
+    },
+    {
+      "id": "pre-ga-public-checkout-posture",
+      "summary": "Until the project owner explicitly approves the GA/public v6 cutover, production public landing and checkout remain on v5 (`PULSE_PUBLIC_RELEASE_TRACK=v5`, `PULSE_V6_RELEASE_APPROVED=0`, no grandfathered recurring snapshot), while v6 commercial pricing and checkout stay preview/proof-only.",
+      "kind": "release-policy",
+      "decided_at": "2026-06-01",
+      "subsystem_ids": [
+        "cloud-paid"
+      ],
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L9",
+        "L12"
       ]
     }
   ]
