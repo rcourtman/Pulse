@@ -6780,7 +6780,7 @@
     },
     {
       "id": "msp-pricing-band-lock",
-      "summary": "MSP pricing locked at Starter/Growth/Scale = $149/$249/$399 monthly with 10/25/50 workspace breakpoints.",
+      "summary": "Superseded by `msp-provider-tier-limit-lock`: MSP pricing originally used Starter/Growth/Scale = $149/$249/$399 monthly with 10/25/50 workspace breakpoints, but the current public/provider-hosted launch posture keeps the same monthly price points with tighter 5/15/40 workspace limits.",
       "kind": "pricing",
       "decided_at": "2026-02-27",
       "subsystem_ids": [],
@@ -7497,7 +7497,7 @@
     },
     {
       "id": "msp-provider-tier-limit-lock",
-      "summary": "MSP provider workspace limits are intentionally tight: Starter includes up to 5 client workspaces, Growth up to 15, Scale up to 40, and larger providers move to Enterprise/custom terms so support, onboarding, reporting, and deployment load are sized before rollout.",
+      "summary": "MSP provider workspace limits supersede the earlier `msp-pricing-band-lock` breakpoints and are intentionally tight: Starter includes up to 5 client workspaces, Growth up to 15, Scale up to 40, and larger providers move to Enterprise/custom terms so support, onboarding, reporting, and deployment load are sized before rollout.",
       "kind": "pricing",
       "decided_at": "2026-06-01",
       "subsystem_ids": [
