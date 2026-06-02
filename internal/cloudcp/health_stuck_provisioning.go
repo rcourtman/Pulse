@@ -13,6 +13,39 @@ const (
 	provisioningTimeout = 15 * time.Minute
 )
 
+// StuckProvisioningReport describes tenants that have exceeded the
+// provider-control-plane provisioning grace period.
+type StuckProvisioningReport struct {
+	Timeout   time.Duration
+	Count     int
+	TenantIDs []string
+}
+
+// InspectStuckProvisioning returns provisioning tenants that are old enough to
+// be treated as failed by the cleanup loop.
+func InspectStuckProvisioning(reg *registry.TenantRegistry, now time.Time) (*StuckProvisioningReport, error) {
+	if reg == nil {
+		return nil, nil
+	}
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	tenants, err := reg.ListByState(registry.TenantStateProvisioning)
+	if err != nil {
+		return nil, err
+	}
+	cutoff := now.UTC().Add(-provisioningTimeout)
+	report := &StuckProvisioningReport{Timeout: provisioningTimeout}
+	for _, tenant := range tenants {
+		if tenant == nil || tenant.CreatedAt.After(cutoff) {
+			continue
+		}
+		report.Count++
+		report.TenantIDs = append(report.TenantIDs, tenant.ID)
+	}
+	return report, nil
+}
+
 // StuckProvisioningCleanup transitions tenants stuck in provisioning state
 // for longer than provisioningTimeout to failed state.
 type StuckProvisioningCleanup struct {
@@ -43,24 +76,25 @@ func (s *StuckProvisioningCleanup) Run(ctx context.Context) {
 }
 
 func (s *StuckProvisioningCleanup) cleanup(ctx context.Context) {
-	tenants, err := s.registry.ListByState(registry.TenantStateProvisioning)
+	report, err := InspectStuckProvisioning(s.registry, time.Now().UTC())
 	if err != nil {
 		log.Error().Err(err).Msg("Stuck provisioning cleanup: failed to list provisioning tenants")
 		return
 	}
-
-	cutoff := time.Now().UTC().Add(-provisioningTimeout)
-
-	for _, tenant := range tenants {
+	if report == nil || report.Count == 0 {
+		return
+	}
+	for _, tenantID := range report.TenantIDs {
 		if ctx.Err() != nil {
 			return
 		}
-		if tenant == nil {
+		tenant, err := s.registry.Get(tenantID)
+		if err != nil {
+			log.Error().Err(err).Str("tenant_id", tenantID).Msg("Stuck provisioning cleanup: failed to reload tenant")
 			continue
 		}
-
-		if tenant.CreatedAt.After(cutoff) {
-			continue // Still within provisioning window
+		if tenant == nil || tenant.State != registry.TenantStateProvisioning {
+			continue
 		}
 
 		log.Warn().

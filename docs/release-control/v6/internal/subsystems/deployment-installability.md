@@ -29,20 +29,21 @@ surfaces.
 6. `cmd/pulse-control-plane/provider_msp.go`
 7. `cmd/pulse-control-plane/provider_msp_preflight.go`
 8. `cmd/pulse-control-plane/provider_msp_proof.go`
-9. `internal/cloudcp/docker/manager.go`
-10. `internal/cloudcp/docker/labels.go`
-11. `internal/cloudcp/tenant_runtime_rollout.go`
-12. `.github/workflows/create-release.yml`
-13. `.github/workflows/deploy-demo-server.yml`
-14. `.github/workflows/helm-pages.yml`
-15. `.github/workflows/promote-floating-tags.yml`
-16. `.github/workflows/publish-docker.yml`
-17. `.github/workflows/publish-helm-chart.yml`
-18. `.github/workflows/release-dry-run.yml`
-19. `.github/workflows/update-demo-server.yml`
-20. `.github/workflows/validate-release-assets.yml`
-21. `.github/workflows/install-sh-smoke.yml`
-22. `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`
+9. `cmd/pulse-control-plane/provider_msp_status.go`
+10. `internal/cloudcp/docker/manager.go`
+11. `internal/cloudcp/docker/labels.go`
+12. `internal/cloudcp/tenant_runtime_rollout.go`
+13. `.github/workflows/create-release.yml`
+14. `.github/workflows/deploy-demo-server.yml`
+15. `.github/workflows/helm-pages.yml`
+16. `.github/workflows/promote-floating-tags.yml`
+17. `.github/workflows/publish-docker.yml`
+18. `.github/workflows/publish-helm-chart.yml`
+19. `.github/workflows/release-dry-run.yml`
+20. `.github/workflows/update-demo-server.yml`
+21. `.github/workflows/validate-release-assets.yml`
+22. `.github/workflows/install-sh-smoke.yml`
+23. `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`
 23. `docs/RELEASE_NOTES.md`
 24. `docs/releases/`
 25. `docs/UPGRADE_v6.md`
@@ -130,6 +131,11 @@ surfaces.
    treated as proven. The proof is license-backed by default: `license_file`
    must be the resolved provider MSP plan source unless the operator explicitly
    opts into the local-development `--allow-env-plan` escape hatch.
+   `pulse-control-plane provider-msp status` is the non-mutating operational
+   companion to that proof: it must report registry readiness, tenant
+   state/health counts, stuck provisioning workspaces, Docker runtime
+   prerequisites, storage guardrails, and the same license-backed plan identity
+   without pulling tenant images unless the operator asks for it.
 5. `internal/cloudcp/tenant_runtime_rollout.go` shared with `cloud-paid`: hosted tenant runtime rollout is both a Pulse Cloud runtime contract boundary and a deployment-installability release-rollout boundary.
 6. `scripts/install.ps1` shared with `agent-lifecycle`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
    It must expose a non-mutating preflight for the exact Windows agent

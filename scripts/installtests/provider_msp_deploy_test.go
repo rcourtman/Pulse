@@ -48,6 +48,7 @@ func TestProviderMSPDeployEnvExampleMatchesBootstrapPath(t *testing.T) {
 		"CP_TRIAL_ACTIVATION_PRIVATE_KEY=",
 		"docker compose run --rm control-plane provider-msp bootstrap",
 		"docker compose run --rm control-plane provider-msp preflight",
+		"docker compose run --rm control-plane provider-msp status",
 		"docker compose run --rm control-plane provider-msp proof",
 		"--account-name",
 		"--owner-email",

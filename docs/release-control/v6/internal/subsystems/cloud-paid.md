@@ -25,6 +25,10 @@ contract. It must carry the resolved MSP plan version, plan source, workspace
 limit, and validated provider MSP license id/email so installability proof can
 distinguish signed license-backed activation from local environment fallback
 configuration.
+Provider-hosted MSP status uses the same tenant registry, health summary, and
+stuck-provisioning threshold as the control-plane cleanup loop, so operator
+readiness reports and automated failure handling cannot drift into separate
+definitions of a failed provider workspace.
 
 ## Canonical Files
 

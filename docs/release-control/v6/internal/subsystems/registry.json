@@ -2626,6 +2626,7 @@
         "cmd/pulse-control-plane/provider_msp.go",
         "cmd/pulse-control-plane/provider_msp_preflight.go",
         "cmd/pulse-control-plane/provider_msp_proof.go",
+        "cmd/pulse-control-plane/provider_msp_status.go",
         "docker-compose.yml",
         "Dockerfile",
         "docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md",
@@ -2894,6 +2895,7 @@
               "cmd/pulse-control-plane/provider_msp.go",
               "cmd/pulse-control-plane/provider_msp_preflight.go",
               "cmd/pulse-control-plane/provider_msp_proof.go",
+              "cmd/pulse-control-plane/provider_msp_status.go",
               "internal/cloudcp/docker/labels.go",
               "internal/cloudcp/docker/manager.go",
               "internal/cloudcp/tenant_runtime_rollout.go"
@@ -2903,6 +2905,7 @@
             "exact_files": [
               "cmd/pulse-control-plane/provider_msp_preflight_test.go",
               "cmd/pulse-control-plane/provider_msp_proof_test.go",
+              "cmd/pulse-control-plane/provider_msp_status_test.go",
               "internal/cloudcp/docker/manager_test.go",
               "internal/cloudcp/tenant_runtime_rollout_test.go",
               "scripts/installtests/provider_msp_deploy_test.go"
