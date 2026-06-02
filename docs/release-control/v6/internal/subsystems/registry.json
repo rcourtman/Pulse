@@ -643,6 +643,14 @@
       ]
     },
     {
+      "path": "internal/cloudcp/provider_msp_recovery.go",
+      "rationale": "provider-hosted MSP failed-workspace recovery is both a cloud-paid license/account/runtime continuity boundary and a deployment-installability recovery artifact boundary",
+      "subsystems": [
+        "cloud-paid",
+        "deployment-installability"
+      ]
+    },
+    {
       "path": "internal/cloudcp/tenant_runtime_rollout.go",
       "rationale": "hosted tenant runtime rollout is both a Pulse Cloud runtime contract boundary and a deployment-installability release-rollout boundary",
       "subsystems": [
@@ -2635,6 +2643,7 @@
         "cmd/pulse-control-plane/provider_msp_backup.go",
         "cmd/pulse-control-plane/provider_msp_preflight.go",
         "cmd/pulse-control-plane/provider_msp_proof.go",
+        "cmd/pulse-control-plane/provider_msp_recover.go",
         "cmd/pulse-control-plane/provider_msp_status.go",
         "docker-compose.yml",
         "Dockerfile",
@@ -2654,6 +2663,7 @@
         "internal/cloudcp/docker/labels.go",
         "internal/cloudcp/docker/manager.go",
         "internal/cloudcp/provider_msp_backup.go",
+        "internal/cloudcp/provider_msp_recovery.go",
         "internal/cloudcp/tenant_runtime_rollout.go",
         "Makefile",
         "package-lock.json",
@@ -2906,10 +2916,12 @@
               "cmd/pulse-control-plane/provider_msp_backup.go",
               "cmd/pulse-control-plane/provider_msp_preflight.go",
               "cmd/pulse-control-plane/provider_msp_proof.go",
+              "cmd/pulse-control-plane/provider_msp_recover.go",
               "cmd/pulse-control-plane/provider_msp_status.go",
               "internal/cloudcp/docker/labels.go",
               "internal/cloudcp/docker/manager.go",
               "internal/cloudcp/provider_msp_backup.go",
+              "internal/cloudcp/provider_msp_recovery.go",
               "internal/cloudcp/tenant_runtime_rollout.go"
             ],
             "allow_same_subsystem_tests": false,
@@ -2918,9 +2930,11 @@
               "cmd/pulse-control-plane/provider_msp_backup_test.go",
               "cmd/pulse-control-plane/provider_msp_preflight_test.go",
               "cmd/pulse-control-plane/provider_msp_proof_test.go",
+              "cmd/pulse-control-plane/provider_msp_recover_test.go",
               "cmd/pulse-control-plane/provider_msp_status_test.go",
               "internal/cloudcp/docker/manager_test.go",
               "internal/cloudcp/provider_msp_backup_test.go",
+              "internal/cloudcp/provider_msp_recovery_test.go",
               "internal/cloudcp/tenant_runtime_rollout_test.go",
               "scripts/installtests/provider_msp_deploy_test.go"
             ]

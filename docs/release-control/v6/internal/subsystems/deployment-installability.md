@@ -30,11 +30,13 @@ surfaces.
 7. `cmd/pulse-control-plane/provider_msp_backup.go`
 8. `cmd/pulse-control-plane/provider_msp_preflight.go`
 9. `cmd/pulse-control-plane/provider_msp_proof.go`
-10. `cmd/pulse-control-plane/provider_msp_status.go`
-11. `internal/cloudcp/provider_msp_backup.go`
-12. `internal/cloudcp/docker/manager.go`
-13. `internal/cloudcp/docker/labels.go`
-14. `internal/cloudcp/tenant_runtime_rollout.go`
+10. `cmd/pulse-control-plane/provider_msp_recover.go`
+11. `cmd/pulse-control-plane/provider_msp_status.go`
+12. `internal/cloudcp/provider_msp_backup.go`
+13. `internal/cloudcp/provider_msp_recovery.go`
+14. `internal/cloudcp/docker/manager.go`
+15. `internal/cloudcp/docker/labels.go`
+16. `internal/cloudcp/tenant_runtime_rollout.go`
 13. `.github/workflows/create-release.yml`
 14. `.github/workflows/deploy-demo-server.yml`
 15. `.github/workflows/helm-pages.yml`
@@ -150,7 +152,13 @@ surfaces.
    snapshot, license artifact, and tenant runtime directories, and fail closed
    on restore when target provider MSP state already exists unless the operator
    explicitly uses the replace gate after stopping the control plane.
-6. `internal/cloudcp/tenant_runtime_rollout.go` shared with `cloud-paid`: hosted tenant runtime rollout is both a Pulse Cloud runtime contract boundary and a deployment-installability release-rollout boundary.
+6. `internal/cloudcp/provider_msp_recovery.go` shared with `cloud-paid`: provider-hosted MSP failed-workspace recovery is both a cloud-paid license/account/runtime continuity boundary and a deployment-installability recovery artifact boundary.
+   `pulse-control-plane provider-msp recover` must offer a dry-run plan and an
+   explicit execution path for failed, stuck provisioning, and unhealthy active
+   client workspaces; it must require the signed provider MSP license source by
+   default, refuse to recover from missing tenant data, and reuse the canonical
+   tenant-runtime rollout path before marking the workspace active again.
+7. `internal/cloudcp/tenant_runtime_rollout.go` shared with `cloud-paid`: hosted tenant runtime rollout is both a Pulse Cloud runtime contract boundary and a deployment-installability release-rollout boundary.
 7. `scripts/install.ps1` shared with `agent-lifecycle`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
    It must expose a non-mutating preflight for the exact Windows agent
    architecture before Administrator-only install changes, accept token-file

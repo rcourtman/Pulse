@@ -29,6 +29,10 @@ Provider-hosted MSP status uses the same tenant registry, health summary, and
 stuck-provisioning threshold as the control-plane cleanup loop, so operator
 readiness reports and automated failure handling cannot drift into separate
 definitions of a failed provider workspace.
+Provider-hosted MSP recovery uses the same license-backed provider identity,
+workspace registry, tenant data, and canonical tenant-runtime rollout path as
+the rest of the control plane so failed, stuck, or unhealthy client workspaces
+are repaired without introducing a second provisioning model.
 Provider-hosted MSP backup, verification, and restore are part of the cloud-paid
 operator contract because the recovery artifact must preserve the provider's
 license-backed plan identity, control-plane account/workspace registry, and
@@ -117,6 +121,7 @@ tenant-local runtime state without depending on Stripe billing surfaces.
 89. `internal/cloudcp/public_msp_signup_handlers.go`
 90. `internal/cloudcp/provider_msp_bootstrap.go`
 91. `internal/cloudcp/provider_msp_backup.go`
+92. `internal/cloudcp/provider_msp_recovery.go`
 
 ## Shared Boundaries
 
@@ -193,7 +198,12 @@ tenant-local runtime state without depending on Stripe billing surfaces.
     output, restore must recover that license as an explicit operator artifact,
     and the archive must stay Stripe-free so provider-hosted MSP recovery does
     not inherit Pulse-hosted SaaS billing assumptions.
-11. `internal/cloudcp/tenant_runtime_rollout.go` shared with `deployment-installability`: hosted tenant runtime rollout is both a Pulse Cloud runtime contract boundary and a deployment-installability release-rollout boundary.
+11. `internal/cloudcp/provider_msp_recovery.go` shared with `deployment-installability`: provider-hosted MSP failed-workspace recovery is both a cloud-paid license/account/runtime continuity boundary and a deployment-installability recovery artifact boundary.
+    Provider-hosted MSP recovery must require the signed provider MSP license
+    source by default, preserve the client workspace boundary, refuse to start
+    from empty tenant data, and mark a workspace active only after the canonical
+    tenant-runtime rollout path has produced a healthy runtime.
+12. `internal/cloudcp/tenant_runtime_rollout.go` shared with `deployment-installability`: hosted tenant runtime rollout is both a Pulse Cloud runtime contract boundary and a deployment-installability release-rollout boundary.
     Hosted tenant runtime reconciliation must treat a registered tenant with
     preserved tenant data but no live Docker runtime as a recoverable managed
     state, not as a terminal skip. The control-plane-owned reconcile path must

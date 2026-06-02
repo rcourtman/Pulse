@@ -16,6 +16,7 @@ func newProviderMSPCmd() *cobra.Command {
 	cmd.AddCommand(newProviderMSPBackupCmd())
 	cmd.AddCommand(newProviderMSPPreflightCmd())
 	cmd.AddCommand(newProviderMSPProofCmd())
+	cmd.AddCommand(newProviderMSPRecoverCmd())
 	cmd.AddCommand(newProviderMSPStatusCmd())
 	return cmd
 }
