@@ -2604,6 +2604,18 @@ func (s *State) UnlinkHostAgent(hostID string) bool {
 	return true
 }
 
+// GetDedupedCephClusters returns the Ceph clusters with multi-source duplicates
+// collapsed to one deterministic identity per cluster (see DedupeCephClusters).
+// Alert evaluation uses this so it checks the same single pool ID the frontend
+// renders, instead of the raw per-source list (#1341).
+func (s *State) GetDedupedCephClusters() []CephCluster {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	clustersCopy := make([]CephCluster, len(s.CephClusters))
+	copy(clustersCopy, s.CephClusters)
+	return DedupeCephClusters(clustersCopy)
+}
+
 // UpsertCephCluster inserts or updates a Ceph cluster in the state.
 // Uses ID (typically the FSID) for matching.
 func (s *State) UpsertCephCluster(cluster CephCluster) {

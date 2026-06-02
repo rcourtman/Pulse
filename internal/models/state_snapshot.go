@@ -482,28 +482,12 @@ func (s StateSnapshot) ToFrontend() StateFrontend {
 		storage[i] = st.ToFrontend()
 	}
 
-	// Convert Ceph clusters - deduplicate by FSID (same cluster may be reported from multiple sources)
-	// When PVE and host agent both report the same Ceph cluster, prefer the one with more data
-	cephByFSID := make(map[string]CephCluster)
-	for _, cluster := range s.CephClusters {
-		fsid := cluster.FSID
-		if fsid == "" {
-			fsid = cluster.ID // fallback for clusters without FSID
-		}
-		existing, exists := cephByFSID[fsid]
-		if !exists {
-			cephByFSID[fsid] = cluster
-			continue
-		}
-		// Keep the cluster with more complete data (more monitors/managers/pools reported)
-		existingScore := existing.NumMons + existing.NumMgrs + len(existing.Pools)
-		newScore := cluster.NumMons + cluster.NumMgrs + len(cluster.Pools)
-		if newScore > existingScore {
-			cephByFSID[fsid] = cluster
-		}
-	}
-	cephClusters := make([]CephClusterFrontend, 0, len(cephByFSID))
-	for _, cluster := range cephByFSID {
+	// Convert Ceph clusters - collapse the same physical cluster reported by
+	// more than one source (Proxmox API + host-agent) to a single deterministic
+	// identity so the UI and alert evaluation agree on one pool ID (#1341).
+	dedupedCeph := DedupeCephClusters(s.CephClusters)
+	cephClusters := make([]CephClusterFrontend, 0, len(dedupedCeph))
+	for _, cluster := range dedupedCeph {
 		cephClusters = append(cephClusters, cluster.ToFrontend())
 	}
 

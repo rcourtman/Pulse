@@ -1724,7 +1724,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     );
 
     const storageDevices = storageResources.map((storage) => {
-      const override = overridesMap.get(storage.id);
+      // #1341: a Ceph pool collapses to a single (Proxmox API) identity, but an
+      // existing per-pool override may have been saved under the legacy
+      // "agent:"-prefixed pool ID. Fall back to it so the Custom badge and saved
+      // threshold still show, matching the backend override lookup.
+      const override =
+        overridesMap.get(storage.id) ??
+        (storage.type === 'ceph-pool' ? overridesMap.get(`agent:${storage.id}`) : undefined);
 
       // Storage only has usage threshold
       const hasCustomThresholds =

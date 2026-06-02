@@ -3660,14 +3660,22 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			Int("osds", cephCluster.NumOSDs).
 			Msg("Updated Ceph cluster from host agent")
 
-		// #1341: the agent-reported Ceph cluster used to land in state but
-		// never get evaluated for pool alerts. Only the Proxmox-API polling
-		// path ran cephPoolAlertStorageTargets, so overrides set against
-		// agent-prefixed pool IDs (e.g. agent:hostname-ceph-pool-foo) were
-		// dormant. Run the alert check here so agent-sourced pools fire.
+		// #1341: evaluate pool alerts against the deduplicated Ceph view so we
+		// check exactly one identity per pool. When this cluster is also polled
+		// via the Proxmox API, the API identity wins and the agent path no
+		// longer creates a competing agent:-prefixed alert (which produced
+		// duplicate, flapping alerts and a threshold that flipped between the
+		// two identities). For agent-only clusters the agent identity wins and
+		// still fires.
 		if m.alertManager != nil {
-			for _, storage := range cephPoolAlertStorageTargets(cephCluster) {
-				m.alertManager.CheckStorage(storage)
+			reportFSID := models.CephClusterFSIDKey(cephCluster)
+			for _, cluster := range m.state.GetDedupedCephClusters() {
+				if models.CephClusterFSIDKey(cluster) != reportFSID {
+					continue
+				}
+				for _, storage := range cephPoolAlertStorageTargets(cluster) {
+					m.alertManager.CheckStorage(storage)
+				}
 			}
 		}
 	}
@@ -12196,7 +12204,7 @@ func (m *Monitor) checkMockAlerts() {
 			Msg("Checking storage for alerts")
 		m.alertManager.CheckStorage(storage)
 	}
-	for _, cluster := range state.CephClusters {
+	for _, cluster := range models.DedupeCephClusters(state.CephClusters) {
 		for _, storage := range cephPoolAlertStorageTargets(cluster) {
 			log.Debug().
 				Str("name", storage.Name).

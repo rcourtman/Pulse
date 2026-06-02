@@ -34,6 +34,8 @@ vi.mock('../ResourceTable', () => ({
             <div data-testid={`resource-cpu-${r.id}`}>
               {props.formatMetricValue && r.thresholds ? props.formatMetricValue('cpu', r.thresholds.cpu) : (r.thresholds?.cpu ?? '')}
             </div>
+            <div data-testid={`resource-usage-${r.id}`}>{r.thresholds?.usage ?? ''}</div>
+            <div data-testid={`resource-hasoverride-${r.id}`}>{String(Boolean(r.hasOverride))}</div>
           </div>
         ))}
       </div>
@@ -345,6 +347,50 @@ describe('ThresholdsTable Resource Rendering', () => {
 
     expect(screen.getByTestId('resource-row-inst1-ceph-pool-data_replication')).toBeInTheDocument();
     expect(screen.getByTestId('resource-name-inst1-ceph-pool-data_replication')).toHaveTextContent('data_replication');
+  });
+
+  // #1341: a Ceph pool now surfaces under its single (Proxmox API) identity, but
+  // an existing per-pool override may have been saved under the legacy
+  // "agent:"-prefixed pool ID. The row must still pick it up so the Custom badge
+  // and saved threshold show, matching the backend override lookup.
+  it('honors a legacy agent-prefixed override for a Ceph pool row', async () => {
+    setPathname('/alerts/thresholds/proxmox');
+
+    render(() => <ThresholdsTable
+      {...(baseProps() as any)}
+      overrides={() => [
+        { id: 'agent:inst1-ceph-pool-data_replication', name: 'data_replication', type: 'storage', thresholds: { usage: 50 } },
+      ]}
+      cephClusters={[
+        {
+          id: 'ceph-fsid',
+          instance: 'inst1',
+          name: 'Ceph',
+          health: 'HEALTH_OK',
+          totalBytes: 1000,
+          usedBytes: 910,
+          availableBytes: 90,
+          usagePercent: 91,
+          numMons: 3,
+          numMgrs: 1,
+          numOsds: 3,
+          numOsdsUp: 3,
+          numOsdsIn: 3,
+          numPGs: 64,
+          lastUpdated: 1,
+          pools: [
+            { id: 2, name: 'data_replication', storedBytes: 910, availableBytes: 90, objects: 42, percentUsed: 91 },
+          ],
+        },
+      ]}
+    />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-row-inst1-ceph-pool-data_replication')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('resource-usage-inst1-ceph-pool-data_replication')).toHaveTextContent('50');
+    expect(screen.getByTestId('resource-hasoverride-inst1-ceph-pool-data_replication')).toHaveTextContent('true');
   });
 
 });

@@ -1236,3 +1236,94 @@ func TestApplyHostReportFiresCephPoolAlertsForAgentSourcedCluster(t *testing.T) 
 		t.Fatalf("expected agent-sourced Ceph pool alert to fire under override at 61.1%% usage; got %d active alerts", len(active))
 	}
 }
+
+// Regression for #1341 (reopened): when the SAME Ceph cluster is reported by
+// both the Proxmox API (instance "pve5") and a host-agent (instance
+// "agent:pve5"), the two source identities used to coexist and both get
+// alert-checked, producing duplicate/flapping alerts and a per-pool threshold
+// that flipped between the two pool IDs. Alert evaluation now runs on the
+// deduplicated view: the API identity wins, exactly one alert fires, and the
+// user's existing override (saved under the legacy agent-prefixed key) is still
+// honored.
+func TestApplyHostReportDeduplicatesDualSourceCephPoolAlerts(t *testing.T) {
+	// Isolate alert persistence so we do not restore active alerts written by
+	// other tests (this assertion checks for the absence of an agent-prefixed
+	// alert, so a stale on-disk restore would break it).
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	// Proxmox API already reported this cluster (richer topology, no agent prefix).
+	monitor.state.UpsertCephCluster(models.CephCluster{
+		ID:       "pve5-ceph-fsid-1341",
+		Instance: "pve5",
+		Name:     "Ceph",
+		FSID:     "ceph-fsid-1341",
+		NumMons:  3,
+		NumMgrs:  2,
+		Pools:    []models.CephPool{{ID: 2, Name: "data_replication", PercentUsed: 61.1}},
+	})
+
+	overrideTrigger := alerts.HysteresisThreshold{Trigger: 50, Clear: 45}
+	cfg := monitor.alertManager.GetConfig()
+	cfg.MinimumDelta = 0
+	if cfg.TimeThresholds == nil {
+		cfg.TimeThresholds = make(map[string]int)
+	}
+	cfg.TimeThresholds["storage"] = 0
+	cfg.StorageDefault = alerts.HysteresisThreshold{Trigger: 95, Clear: 90}
+	// The user saved their override under the legacy agent-prefixed pool ID.
+	cfg.Overrides = map[string]alerts.ThresholdConfig{
+		"agent:pve5-ceph-pool-data_replication": {Usage: &overrideTrigger},
+	}
+	monitor.alertManager.UpdateConfig(cfg)
+
+	report := agentshost.Report{
+		Agent:     agentshost.AgentInfo{ID: "agent-ceph", Version: "1.0.0", IntervalSeconds: 30},
+		Host:      agentshost.HostInfo{ID: "pve5-host", Hostname: "pve5", Platform: "linux"},
+		Timestamp: time.Now().UTC(),
+		Ceph: &agentshost.CephCluster{
+			FSID:   "ceph-fsid-1341",
+			Health: agentshost.CephHealth{Status: "HEALTH_OK"},
+			Pools: []agentshost.CephPool{
+				{ID: 2, Name: "data_replication", BytesUsed: 611, BytesAvailable: 389, PercentUsed: 61.1},
+			},
+		},
+	}
+
+	if _, err := monitor.ApplyHostReport(report, nil); err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+
+	cephAlerts := 0
+	var winningAlertID string
+	var winningThreshold float64
+	for _, alert := range monitor.alertManager.GetActiveAlerts() {
+		if alert.Type != "usage" || alert.ResourceName != "data_replication" {
+			continue
+		}
+		cephAlerts++
+		winningAlertID = alert.ID
+		winningThreshold = alert.Threshold
+		if alert.ID == "agent:pve5-ceph-pool-data_replication-usage" {
+			t.Errorf("agent-prefixed Ceph pool alert should not coexist with the API identity")
+		}
+	}
+
+	if cephAlerts != 1 {
+		t.Fatalf("expected exactly 1 Ceph pool alert (deduplicated), got %d", cephAlerts)
+	}
+	if winningAlertID != "pve5-ceph-pool-data_replication-usage" {
+		t.Errorf("expected the API pool identity to win, got alert ID %q", winningAlertID)
+	}
+	if winningThreshold != 50 {
+		t.Errorf("expected legacy agent-keyed override (50) to be honored, got threshold %.1f", winningThreshold)
+	}
+}
