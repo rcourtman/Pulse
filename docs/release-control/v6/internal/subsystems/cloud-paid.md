@@ -16,8 +16,9 @@
 ## Purpose
 
 Own cloud plan/version semantics, entitlement limits, hosted billing/runtime
-agreement, the Pulse Cloud control plane, hosted tenant lifecycle, and
-cloud-specific enforcement rules.
+agreement, the Pulse Cloud control plane, provider-hosted MSP account
+bootstrap/licensing, hosted tenant lifecycle, and cloud-specific enforcement
+rules.
 
 ## Canonical Files
 
@@ -99,6 +100,7 @@ cloud-specific enforcement rules.
 87. `internal/cloudcp/stripe/grace_enforcer.go`, `internal/cloudcp/stripe/helpers.go`, `internal/cloudcp/stripe/reconciler.go`, `internal/cloudcp/stripe/webhook.go`
 88. `internal/hosted/hosted_metrics.go`, `internal/hosted/reaper.go`
 89. `internal/cloudcp/public_msp_signup_handlers.go`
+90. `internal/cloudcp/provider_msp_bootstrap.go`
 
 ## Shared Boundaries
 

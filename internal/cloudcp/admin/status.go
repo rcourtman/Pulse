@@ -9,11 +9,24 @@ import (
 )
 
 type statusResponse struct {
-	Version      string                       `json:"version"`
-	TotalTenants int                          `json:"total_tenants"`
-	Healthy      int                          `json:"healthy"`
-	Unhealthy    int                          `json:"unhealthy"`
-	ByState      map[registry.TenantState]int `json:"by_state"`
+	Version                   string                       `json:"version"`
+	ControlPlaneMode          string                       `json:"control_plane_mode,omitempty"`
+	ProviderMSPPlanVersion    string                       `json:"provider_msp_plan_version,omitempty"`
+	ProviderMSPPlanSource     string                       `json:"provider_msp_plan_source,omitempty"`
+	ProviderMSPWorkspaceLimit int                          `json:"provider_msp_workspace_limit,omitempty"`
+	TotalTenants              int                          `json:"total_tenants"`
+	Healthy                   int                          `json:"healthy"`
+	Unhealthy                 int                          `json:"unhealthy"`
+	ByState                   map[registry.TenantState]int `json:"by_state"`
+}
+
+// RuntimeStatus describes control-plane mode and plan state that belongs in
+// the private operator status response.
+type RuntimeStatus struct {
+	ControlPlaneMode          string
+	ProviderMSPPlanVersion    string
+	ProviderMSPPlanSource     string
+	ProviderMSPWorkspaceLimit int
 }
 
 // HandleHealthz returns 200 "ok" unconditionally (liveness probe).
@@ -55,6 +68,12 @@ func HandleReadyz(reg *registry.TenantRegistry) http.HandlerFunc {
 
 // HandleStatus returns a handler that reports aggregate tenant status.
 func HandleStatus(reg *registry.TenantRegistry, version string) http.HandlerFunc {
+	return HandleStatusWithRuntime(reg, version, RuntimeStatus{})
+}
+
+// HandleStatusWithRuntime returns a handler that reports aggregate tenant and
+// runtime status.
+func HandleStatusWithRuntime(reg *registry.TenantRegistry, version string, runtime RuntimeStatus) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if reg == nil {
 			log.Error().Msg("Control plane status check failed: registry dependency unavailable")
@@ -87,11 +106,15 @@ func HandleStatus(reg *registry.TenantRegistry, version string) http.HandlerFunc
 		}
 
 		resp := statusResponse{
-			Version:      version,
-			TotalTenants: total,
-			Healthy:      healthy,
-			Unhealthy:    unhealthy,
-			ByState:      counts,
+			Version:                   version,
+			ControlPlaneMode:          runtime.ControlPlaneMode,
+			ProviderMSPPlanVersion:    runtime.ProviderMSPPlanVersion,
+			ProviderMSPPlanSource:     runtime.ProviderMSPPlanSource,
+			ProviderMSPWorkspaceLimit: runtime.ProviderMSPWorkspaceLimit,
+			TotalTenants:              total,
+			Healthy:                   healthy,
+			Unhealthy:                 unhealthy,
+			ByState:                   counts,
 		}
 
 		w.Header().Set("Content-Type", "application/json")

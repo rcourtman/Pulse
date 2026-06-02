@@ -1,6 +1,7 @@
 package cloudcp
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -8,6 +9,54 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 )
+
+func TestRegisterRoutes_StatusIncludesProviderMSPRuntime(t *testing.T) {
+	dir := t.TempDir()
+	reg, err := registry.NewTenantRegistry(dir)
+	if err != nil {
+		t.Fatalf("NewTenantRegistry: %v", err)
+	}
+	t.Cleanup(func() { _ = reg.Close() })
+
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, &Deps{
+		Config: &CPConfig{
+			DataDir:                dir,
+			AdminKey:               "test-admin-key",
+			BaseURL:                "https://msp.example.com",
+			ControlPlaneMode:       ControlPlaneModeProviderHostedMSP,
+			ProviderMSPPlanVersion: "msp_growth",
+			ProviderMSPPlanSource:  ProviderMSPPlanSourceLicenseFile,
+		},
+		Registry: reg,
+		Version:  "test",
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/status", nil)
+	req.Header.Set("X-Admin-Key", "test-admin-key")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /status status=%d, want %d (body=%q)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode /status payload: %v", err)
+	}
+	if payload["control_plane_mode"] != string(ControlPlaneModeProviderHostedMSP) {
+		t.Fatalf("control_plane_mode = %#v", payload["control_plane_mode"])
+	}
+	if payload["provider_msp_plan_version"] != "msp_growth" {
+		t.Fatalf("provider_msp_plan_version = %#v", payload["provider_msp_plan_version"])
+	}
+	if payload["provider_msp_plan_source"] != ProviderMSPPlanSourceLicenseFile {
+		t.Fatalf("provider_msp_plan_source = %#v", payload["provider_msp_plan_source"])
+	}
+	if payload["provider_msp_workspace_limit"] != float64(15) {
+		t.Fatalf("provider_msp_workspace_limit = %#v", payload["provider_msp_workspace_limit"])
+	}
+}
 
 func TestRegisterRoutes_AccountAndTenantMethodDispatch(t *testing.T) {
 	dir := t.TempDir()

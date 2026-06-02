@@ -1,8 +1,16 @@
 package cloudcp
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
+	"os"
 	"strings"
 	"testing"
+	"time"
+
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 func setRequiredCPEnv(t *testing.T) {
@@ -459,6 +467,41 @@ func setProviderHostedMSPEnv(t *testing.T) {
 	setTrialSigningEnv(t)
 }
 
+func writeProviderMSPLicenseForTest(t *testing.T, tier pkglicensing.Tier, planVersion string) string {
+	t.Helper()
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	t.Setenv("PULSE_LICENSE_PUBLIC_KEY", base64.StdEncoding.EncodeToString(publicKey))
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+	t.Cleanup(func() { pkglicensing.SetPublicKey(nil) })
+
+	claims := pkglicensing.Claims{
+		LicenseID:   "lic_provider_msp_test",
+		Email:       "provider@example.com",
+		Tier:        tier,
+		IssuedAt:    time.Now().Add(-time.Minute).Unix(),
+		ExpiresAt:   time.Now().Add(24 * time.Hour).Unix(),
+		PlanVersion: planVersion,
+	}
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"EdDSA","typ":"JWT"}`))
+	payloadBytes, err := json.Marshal(claims)
+	if err != nil {
+		t.Fatalf("Marshal claims: %v", err)
+	}
+	payload := base64.RawURLEncoding.EncodeToString(payloadBytes)
+	signedData := []byte(header + "." + payload)
+	signature := base64.RawURLEncoding.EncodeToString(ed25519.Sign(privateKey, signedData))
+	licenseKey := header + "." + payload + "." + signature
+
+	path := t.TempDir() + "/provider-msp-license.jwt"
+	if err := os.WriteFile(path, []byte(licenseKey+"\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	return path
+}
+
 func TestLoadConfig_ProviderHostedMSPDoesNotRequireStripe(t *testing.T) {
 	setProviderHostedMSPEnv(t)
 
@@ -474,6 +517,9 @@ func TestLoadConfig_ProviderHostedMSPDoesNotRequireStripe(t *testing.T) {
 	}
 	if cfg.ProviderMSPPlanVersion != "msp_starter" {
 		t.Fatalf("ProviderMSPPlanVersion = %q, want msp_starter", cfg.ProviderMSPPlanVersion)
+	}
+	if cfg.ProviderMSPPlanSource != ProviderMSPPlanSourceEnvFallback {
+		t.Fatalf("ProviderMSPPlanSource = %q, want %q", cfg.ProviderMSPPlanSource, ProviderMSPPlanSourceEnvFallback)
 	}
 }
 
@@ -536,6 +582,56 @@ func TestLoadConfig_ProviderHostedMSPRejectsInvalidPlan(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+func TestLoadConfig_ProviderHostedMSPUsesSignedLicenseFilePlan(t *testing.T) {
+	setProviderHostedMSPEnv(t)
+	t.Setenv("CP_ENV", "production")
+	t.Setenv("CP_PROVIDER_MSP_PLAN_VERSION", "msp_starter")
+	t.Setenv("CP_PROVIDER_MSP_LICENSE_FILE", writeProviderMSPLicenseForTest(t, pkglicensing.TierMSP, "msp_growth"))
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.ProviderMSPPlanVersion != "msp_growth" {
+		t.Fatalf("ProviderMSPPlanVersion = %q, want msp_growth", cfg.ProviderMSPPlanVersion)
+	}
+	if cfg.ProviderMSPPlanSource != ProviderMSPPlanSourceLicenseFile {
+		t.Fatalf("ProviderMSPPlanSource = %q, want %q", cfg.ProviderMSPPlanSource, ProviderMSPPlanSourceLicenseFile)
+	}
+	if cfg.ProviderMSPLicenseID != "lic_provider_msp_test" {
+		t.Fatalf("ProviderMSPLicenseID = %q", cfg.ProviderMSPLicenseID)
+	}
+	if cfg.ProviderMSPLicenseEmail != "provider@example.com" {
+		t.Fatalf("ProviderMSPLicenseEmail = %q", cfg.ProviderMSPLicenseEmail)
+	}
+}
+
+func TestLoadConfig_ProviderHostedMSPRequiresLicenseFileInProduction(t *testing.T) {
+	setProviderHostedMSPEnv(t)
+	t.Setenv("CP_ENV", "production")
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatal("expected error without CP_PROVIDER_MSP_LICENSE_FILE in production")
+	}
+	if !strings.Contains(err.Error(), "CP_PROVIDER_MSP_LICENSE_FILE is required in production") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadConfig_ProviderHostedMSPRejectsNonMSPLicenseFile(t *testing.T) {
+	setProviderHostedMSPEnv(t)
+	t.Setenv("CP_PROVIDER_MSP_LICENSE_FILE", writeProviderMSPLicenseForTest(t, pkglicensing.TierCloud, "cloud_starter"))
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatal("expected error for non-MSP provider license")
+	}
+	if !strings.Contains(err.Error(), "must contain an MSP license tier") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

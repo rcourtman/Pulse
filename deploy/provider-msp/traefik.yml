@@ -1,0 +1,45 @@
+api:
+  dashboard: false
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+    http:
+      middlewares:
+        - security-headers@file
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: pulse-provider-msp
+  file:
+    filename: /etc/traefik/traefik-dynamic.yml
+    watch: true
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: "admin@example.com"
+      storage: /etc/traefik/acme/acme.json
+      dnsChallenge:
+        provider: cloudflare
+        resolvers:
+          - "1.1.1.1:53"
+          - "8.8.8.8:53"
+  le:
+    acme:
+      email: "admin@example.com"
+      storage: /etc/traefik/acme/acme.json
+      dnsChallenge:
+        provider: cloudflare
+        resolvers:
+          - "1.1.1.1:53"
+          - "8.8.8.8:53"

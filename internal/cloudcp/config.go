@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -22,6 +23,9 @@ const (
 	ControlPlaneModePulseHosted         ControlPlaneMode = "pulse_hosted"
 	ControlPlaneModeProviderHostedMSP   ControlPlaneMode = "provider_hosted_msp"
 	defaultProviderHostedMSPPlanVersion                  = "msp_starter"
+	ProviderMSPPlanSourceLicenseFile                     = "license_file"
+	ProviderMSPPlanSourceEnvFallback                     = "environment_fallback"
+	maxProviderMSPLicenseFileBytes                       = 64 * 1024
 )
 
 // CPConfig holds all configuration for the control plane.
@@ -69,6 +73,10 @@ type CPConfig struct {
 	CloudMSPGrowthPriceID             string // MSP Growth tier price ID (optional)
 	CloudMSPScalePriceID              string // MSP Scale tier price ID (optional)
 	ProviderMSPPlanVersion            string // Local provider-hosted MSP workspace limit plan
+	ProviderMSPPlanSource             string // How ProviderMSPPlanVersion was resolved
+	ProviderMSPLicenseFile            string // Signed provider MSP license source
+	ProviderMSPLicenseID              string // Validated provider MSP license ID
+	ProviderMSPLicenseEmail           string // Validated provider MSP license holder
 	LicenseServerURL                  string
 	LicenseAdminToken                 string
 	TrialActivationPrivateKey         string
@@ -166,6 +174,21 @@ func LoadConfig() (*CPConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+	providerMSPLicenseFile := strings.TrimSpace(os.Getenv("CP_PROVIDER_MSP_LICENSE_FILE"))
+	providerMSPPlanVersion := pkglicensing.CanonicalizePlanVersion(envOrDefault("CP_PROVIDER_MSP_PLAN_VERSION", defaultProviderHostedMSPPlanVersion))
+	providerMSPPlanSource := ProviderMSPPlanSourceEnvFallback
+	providerMSPLicenseID := ""
+	providerMSPLicenseEmail := ""
+	if controlPlaneMode == ControlPlaneModeProviderHostedMSP && providerMSPLicenseFile != "" {
+		resolvedPlan, licenseID, licenseEmail, err := resolveProviderMSPPlanFromLicenseFile(providerMSPLicenseFile)
+		if err != nil {
+			return nil, fmt.Errorf("resolve provider MSP license: %w", err)
+		}
+		providerMSPPlanVersion = resolvedPlan
+		providerMSPPlanSource = ProviderMSPPlanSourceLicenseFile
+		providerMSPLicenseID = licenseID
+		providerMSPLicenseEmail = licenseEmail
+	}
 
 	cfg := &CPConfig{
 		DataDir:                           dataDir,
@@ -210,7 +233,11 @@ func LoadConfig() (*CPConfig, error) {
 		CloudMSPStarterPriceID:            strings.TrimSpace(os.Getenv("CP_MSP_STARTER_PRICE_ID")),
 		CloudMSPGrowthPriceID:             strings.TrimSpace(os.Getenv("CP_MSP_GROWTH_PRICE_ID")),
 		CloudMSPScalePriceID:              strings.TrimSpace(os.Getenv("CP_MSP_SCALE_PRICE_ID")),
-		ProviderMSPPlanVersion:            pkglicensing.CanonicalizePlanVersion(envOrDefault("CP_PROVIDER_MSP_PLAN_VERSION", defaultProviderHostedMSPPlanVersion)),
+		ProviderMSPPlanVersion:            providerMSPPlanVersion,
+		ProviderMSPPlanSource:             providerMSPPlanSource,
+		ProviderMSPLicenseFile:            providerMSPLicenseFile,
+		ProviderMSPLicenseID:              providerMSPLicenseID,
+		ProviderMSPLicenseEmail:           providerMSPLicenseEmail,
 		LicenseServerURL:                  envOrDefault("PULSE_LICENSE_SERVER_URL", "https://license.pulserelay.pro"),
 		LicenseAdminToken:                 strings.TrimSpace(os.Getenv("PULSE_LICENSE_ADMIN_TOKEN")),
 		TrialActivationPrivateKey:         strings.TrimSpace(os.Getenv("CP_TRIAL_ACTIVATION_PRIVATE_KEY")),
@@ -317,6 +344,9 @@ func (c *CPConfig) validate() error {
 		}
 		if strings.TrimSpace(c.TrialActivationPrivateKey) == "" {
 			return fmt.Errorf("CP_TRIAL_ACTIVATION_PRIVATE_KEY is required when CP_CONTROL_PLANE_MODE=%s", ControlPlaneModeProviderHostedMSP)
+		}
+		if c.Environment == "production" && strings.TrimSpace(c.ProviderMSPLicenseFile) == "" {
+			return fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE is required in production when CP_CONTROL_PLANE_MODE=%s", ControlPlaneModeProviderHostedMSP)
 		}
 		if !strings.HasPrefix(strings.ToLower(c.ProviderMSPPlanVersion), "msp_") {
 			return fmt.Errorf("CP_PROVIDER_MSP_PLAN_VERSION must be a canonical MSP plan version, got %q", c.ProviderMSPPlanVersion)
@@ -459,6 +489,60 @@ func normalizeControlPlaneMode(raw string) ControlPlaneMode {
 	default:
 		return ControlPlaneMode(strings.ToLower(strings.TrimSpace(raw)))
 	}
+}
+
+func resolveProviderMSPPlanFromLicenseFile(path string) (planVersion, licenseID, licenseEmail string, err error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", "", "", fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE is required")
+	}
+	licenseKey, err := readProviderMSPLicenseFile(path)
+	if err != nil {
+		return "", "", "", err
+	}
+	pkglicensing.InitEmbeddedPublicKey()
+	license, err := pkglicensing.ValidateLicense(licenseKey)
+	if err != nil {
+		return "", "", "", fmt.Errorf("validate CP_PROVIDER_MSP_LICENSE_FILE: %w", err)
+	}
+	if license == nil {
+		return "", "", "", fmt.Errorf("validate CP_PROVIDER_MSP_LICENSE_FILE: no license returned")
+	}
+	if license.Claims.Tier != pkglicensing.TierMSP {
+		return "", "", "", fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE must contain an MSP license tier, got %q", license.Claims.Tier)
+	}
+	plan := license.Claims.EntitlementPlanVersion()
+	if strings.TrimSpace(plan) == "" {
+		return "", "", "", fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE must contain plan_version")
+	}
+	if !strings.HasPrefix(strings.ToLower(plan), "msp_") {
+		return "", "", "", fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE plan_version must be a canonical MSP plan version, got %q", plan)
+	}
+	if _, known := pkglicensing.WorkspaceLimitForPlan(plan); !known {
+		return "", "", "", fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE plan_version must have a known workspace limit, got %q", plan)
+	}
+	return plan, strings.TrimSpace(license.Claims.LicenseID), strings.ToLower(strings.TrimSpace(license.Claims.Email)), nil
+}
+
+func readProviderMSPLicenseFile(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", fmt.Errorf("read CP_PROVIDER_MSP_LICENSE_FILE: %w", err)
+	}
+	defer f.Close()
+
+	buf, err := io.ReadAll(io.LimitReader(f, maxProviderMSPLicenseFileBytes+1))
+	if err != nil {
+		return "", fmt.Errorf("read CP_PROVIDER_MSP_LICENSE_FILE: %w", err)
+	}
+	if len(buf) > maxProviderMSPLicenseFileBytes {
+		return "", fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE exceeds %d bytes", maxProviderMSPLicenseFileBytes)
+	}
+	licenseKey := strings.TrimSpace(string(buf))
+	if licenseKey == "" {
+		return "", fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE is empty")
+	}
+	return licenseKey, nil
 }
 
 func stripeSecretKeyMode(raw string) string {

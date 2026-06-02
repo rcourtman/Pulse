@@ -1,0 +1,86 @@
+services:
+  traefik:
+    image: ${TRAEFIK_IMAGE:?TRAEFIK_IMAGE must be set to a digest-pinned image}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik-dynamic.yml:/etc/traefik/traefik-dynamic.yml:ro
+      - acme-data:/etc/traefik/acme
+    env_file:
+      - .env
+    environment:
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
+      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL=${ACME_EMAIL}
+      - TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_EMAIL=${ACME_EMAIL}
+    networks:
+      - pulse-provider-msp
+    restart: unless-stopped
+
+  control-plane:
+    image: ${CONTROL_PLANE_IMAGE:?CONTROL_PLANE_IMAGE must be set to a digest-pinned image}
+    volumes:
+      - /data:/data
+      - /:/host-root:ro
+      - /var/lib/docker:/host-var-lib-docker:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    secrets:
+      - provider_msp_license
+    env_file:
+      - .env
+    environment:
+      - CP_DATA_DIR=/data
+      - CP_ENV=${CP_ENV}
+      - CP_CONTROL_PLANE_MODE=provider_hosted_msp
+      - CP_BIND_ADDRESS=0.0.0.0
+      - CP_PORT=8443
+      - CP_ADMIN_KEY=${CP_ADMIN_KEY}
+      - CP_BASE_URL=https://${DOMAIN}
+      - CP_PULSE_IMAGE=${CP_PULSE_IMAGE}
+      - CP_DOCKER_NETWORK=pulse-provider-msp
+      - CP_PROVIDER_MSP_LICENSE_FILE=/run/secrets/provider_msp_license
+      - CP_TENANT_MEMORY_LIMIT=${CP_TENANT_MEMORY_LIMIT:-536870912}
+      - CP_ALLOW_DOCKERLESS_PROVISIONING=${CP_ALLOW_DOCKERLESS_PROVISIONING:-false}
+      - CP_STORAGE_GUARDRAILS_ENABLED=${CP_STORAGE_GUARDRAILS_ENABLED:-true}
+      - CP_STORAGE_ROOT_PATH=/host-root
+      - CP_STORAGE_DATA_PATH=/data
+      - CP_STORAGE_DOCKER_PATH=/host-var-lib-docker
+      - CP_STORAGE_MIN_ROOT_AVAILABLE=${CP_STORAGE_MIN_ROOT_AVAILABLE:-10GiB}
+      - CP_STORAGE_MIN_DATA_AVAILABLE=${CP_STORAGE_MIN_DATA_AVAILABLE:-5GiB}
+      - CP_STORAGE_MIN_DOCKER_AVAILABLE=${CP_STORAGE_MIN_DOCKER_AVAILABLE:-10GiB}
+      - CP_STORAGE_MAX_DOCKER_BUILD_CACHE=${CP_STORAGE_MAX_DOCKER_BUILD_CACHE:-2GiB}
+      - CP_PROOF_TENANT_MAX_AGE=${CP_PROOF_TENANT_MAX_AGE:-24h}
+      - CP_PROOF_TENANT_MATCHERS=${CP_PROOF_TENANT_MATCHERS:-proof,canary,rehearsal,msp_prod,ownerseed,owner_seed}
+      - CP_REQUIRE_EMAIL_PROVIDER=${CP_REQUIRE_EMAIL_PROVIDER:-false}
+      - CP_TRIAL_ACTIVATION_PRIVATE_KEY=${CP_TRIAL_ACTIVATION_PRIVATE_KEY}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - PULSE_EMAIL_FROM=${PULSE_EMAIL_FROM}
+      - PULSE_EMAIL_REPLY_TO=${PULSE_EMAIL_REPLY_TO}
+    networks:
+      - pulse-provider-msp
+    depends_on:
+      - traefik
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=pulse-provider-msp
+      - traefik.http.routers.provider-control-plane.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.provider-control-plane.entrypoints=websecure
+      - traefik.http.routers.provider-control-plane.tls=true
+      - traefik.http.routers.provider-control-plane.tls.certresolver=letsencrypt
+      - traefik.http.routers.provider-control-plane.tls.domains[0].main=${DOMAIN}
+      - traefik.http.routers.provider-control-plane.tls.domains[0].sans=*.${DOMAIN}
+      - traefik.http.services.provider-control-plane.loadbalancer.server.port=8443
+
+secrets:
+  provider_msp_license:
+    file: ${CP_PROVIDER_MSP_LICENSE_FILE:?CP_PROVIDER_MSP_LICENSE_FILE must point to the signed provider MSP license file}
+
+networks:
+  pulse-provider-msp:
+    name: pulse-provider-msp
+
+volumes:
+  acme-data:

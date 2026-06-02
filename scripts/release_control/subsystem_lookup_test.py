@@ -3404,7 +3404,10 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            ["internal/cloudcp/tenant_runtime_rollout_test.go"],
+            [
+                "internal/cloudcp/tenant_runtime_rollout_test.go",
+                "scripts/installtests/provider_msp_deploy_test.go",
+            ],
         )
 
     def test_lookup_paths_assigns_release_notes_index_to_deployment_installability(self) -> None:

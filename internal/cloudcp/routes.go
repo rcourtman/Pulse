@@ -17,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/portal"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	cpstripe "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/stripe"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 // Deps holds shared dependencies injected into HTTP handlers.
@@ -46,6 +47,23 @@ func providerMSPPlanVersion(cfg *CPConfig) string {
 		return defaultProviderHostedMSPPlanVersion
 	}
 	return cfg.ProviderMSPPlanVersion
+}
+
+func runtimeStatus(cfg *CPConfig) admin.RuntimeStatus {
+	if cfg == nil {
+		return admin.RuntimeStatus{}
+	}
+	status := admin.RuntimeStatus{
+		ControlPlaneMode: string(cfg.ControlPlaneMode),
+	}
+	if cfg.IsProviderHostedMSP() {
+		status.ProviderMSPPlanVersion = providerMSPPlanVersion(cfg)
+		status.ProviderMSPPlanSource = cfg.ProviderMSPPlanSource
+		if limit, known := pkglicensing.WorkspaceLimitForPlan(status.ProviderMSPPlanVersion); known {
+			status.ProviderMSPWorkspaceLimit = limit
+		}
+	}
+	return status
 }
 
 // RegisterRoutes wires all HTTP handlers onto the given ServeMux.
@@ -102,7 +120,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	mux.HandleFunc("/favicon.ico", handleControlPlaneFaviconICO)
 
 	// Status and metrics are private by default.
-	statusHandler := http.HandlerFunc(admin.HandleStatus(deps.Registry, deps.Version))
+	statusHandler := http.HandlerFunc(admin.HandleStatusWithRuntime(deps.Registry, deps.Version, runtimeStatus(deps.Config)))
 	if deps.Config.PublicStatus {
 		mux.Handle("/status", statusHandler)
 	} else {

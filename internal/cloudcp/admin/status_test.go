@@ -97,6 +97,40 @@ func TestHandleStatus(t *testing.T) {
 	}
 }
 
+func TestHandleStatusWithRuntimeIncludesProviderMSPMode(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	handler := HandleStatusWithRuntime(reg, "test-version", RuntimeStatus{
+		ControlPlaneMode:          "provider_hosted_msp",
+		ProviderMSPPlanVersion:    "msp_growth",
+		ProviderMSPPlanSource:     "license_file",
+		ProviderMSPWorkspaceLimit: 15,
+	})
+	req := httptest.NewRequest(http.MethodGet, "/status", nil)
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var resp statusResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.ControlPlaneMode != "provider_hosted_msp" {
+		t.Fatalf("ControlPlaneMode = %q, want provider_hosted_msp", resp.ControlPlaneMode)
+	}
+	if resp.ProviderMSPPlanVersion != "msp_growth" {
+		t.Fatalf("ProviderMSPPlanVersion = %q, want msp_growth", resp.ProviderMSPPlanVersion)
+	}
+	if resp.ProviderMSPPlanSource != "license_file" {
+		t.Fatalf("ProviderMSPPlanSource = %q, want license_file", resp.ProviderMSPPlanSource)
+	}
+	if resp.ProviderMSPWorkspaceLimit != 15 {
+		t.Fatalf("ProviderMSPWorkspaceLimit = %d, want 15", resp.ProviderMSPWorkspaceLimit)
+	}
+}
+
 func TestHandleStatusNilRegistry(t *testing.T) {
 	handler := HandleStatus(nil, "test-version")
 	req := httptest.NewRequest(http.MethodGet, "/status", nil)

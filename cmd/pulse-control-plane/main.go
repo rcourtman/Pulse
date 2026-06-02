@@ -374,6 +374,7 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(newCloudCmd())
 	rootCmd.AddCommand(newMobileProofCmd())
+	rootCmd.AddCommand(newProviderMSPCmd())
 	rootCmd.AddCommand(newTenantRuntimeCmd())
 }
 
