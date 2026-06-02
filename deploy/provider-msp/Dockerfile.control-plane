@@ -1,0 +1,44 @@
+# syntax=docker/dockerfile:1.7
+
+FROM --platform=$BUILDPLATFORM golang:1.25.9-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f AS builder
+ARG VERSION=dev
+ARG BUILD_TIME=unknown
+ARG GIT_COMMIT=unknown
+ARG TARGETOS
+ARG TARGETARCH
+ARG PULSE_LICENSE_PUBLIC_KEY_SHA256
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN --mount=type=cache,id=pulse-control-plane-go-mod,target=/go/pkg/mod \
+    --mount=type=cache,id=pulse-control-plane-go-build,target=/root/.cache/go-build \
+    go mod download
+COPY cmd/ ./cmd/
+COPY internal/ ./internal/
+COPY pkg/ ./pkg/
+COPY scripts/release_ldflags.sh ./scripts/release_ldflags.sh
+RUN --mount=type=cache,id=pulse-control-plane-go-mod,target=/go/pkg/mod \
+    --mount=type=cache,id=pulse-control-plane-go-build,target=/root/.cache/go-build \
+    --mount=type=secret,id=pulse_license_public_key,required=false \
+    set -eu; \
+    EXPECTED_LICENSE_PUBLIC_KEY_SHA256="${PULSE_LICENSE_PUBLIC_KEY_SHA256#SHA256:}"; \
+    if [ -z "${EXPECTED_LICENSE_PUBLIC_KEY_SHA256}" ]; then echo "Error: PULSE_LICENSE_PUBLIC_KEY_SHA256 is required for control-plane release image builds." >&2; exit 1; fi; \
+    if [ ! -f /run/secrets/pulse_license_public_key ]; then echo "Error: PULSE_LICENSE_PUBLIC_KEY_SHA256 was provided but no license public key was mounted." >&2; exit 1; fi; \
+    LICENSE_PUBLIC_KEY="$(tr -d '\r\n' < /run/secrets/pulse_license_public_key)"; \
+    LICENSE_PUBLIC_KEY_BYTES="$(printf '%s' "${LICENSE_PUBLIC_KEY}" | base64 -d | wc -c | tr -d ' ')"; \
+    if [ "${LICENSE_PUBLIC_KEY_BYTES}" != "32" ]; then echo "Error: mounted license public key must decode to 32 bytes." >&2; exit 1; fi; \
+    ACTUAL_LICENSE_PUBLIC_KEY_SHA256="$(printf '%s' "${LICENSE_PUBLIC_KEY}" | base64 -d | sha256sum | awk '{print $1}')"; \
+    if [ "${ACTUAL_LICENSE_PUBLIC_KEY_SHA256}" != "${EXPECTED_LICENSE_PUBLIC_KEY_SHA256}" ]; then echo "Error: mounted license public key does not match PULSE_LICENSE_PUBLIC_KEY_SHA256." >&2; exit 1; fi; \
+    TARGET_GOOS="${TARGETOS:-linux}"; \
+    TARGET_GOARCH="${TARGETARCH:-$(go env GOARCH)}"; \
+    SERVER_LDFLAGS="$(./scripts/release_ldflags.sh server --version "${VERSION}" --build-time "${BUILD_TIME}" --git-commit "${GIT_COMMIT}" --license-public-key "${LICENSE_PUBLIC_KEY}")"; \
+    CGO_ENABLED=0 GOOS="${TARGET_GOOS}" GOARCH="${TARGET_GOARCH}" go build \
+      -tags release \
+      -ldflags="${SERVER_LDFLAGS}" \
+      -buildvcs=false \
+      -trimpath \
+      -o /pulse-control-plane ./cmd/pulse-control-plane
+
+FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+RUN apk add --no-cache ca-certificates docker-cli
+COPY --from=builder /pulse-control-plane /usr/local/bin/pulse-control-plane
+ENTRYPOINT ["pulse-control-plane"]

@@ -149,6 +149,7 @@ func TestProviderMSPInstallProofRunnerMatchesComposeContract(t *testing.T) {
 		"--install-type",
 		"--target-path",
 		"--skip-image-pull",
+		"${#extra_install_args[@]}",
 		"docker compose run --rm --no-deps control-plane",
 		"docker compose up -d traefik control-plane",
 		"provider-msp status",
@@ -173,6 +174,41 @@ func TestProviderMSPTraefikUsesProviderNetwork(t *testing.T) {
 		"certificatesResolvers:",
 		"letsencrypt:",
 		"le:",
+	)
+}
+
+func TestProviderMSPControlPlaneDockerfileBuildsReleaseLicenseBinary(t *testing.T) {
+	dockerfileBytes, err := os.ReadFile(repoFile("deploy", "provider-msp", "Dockerfile.control-plane"))
+	if err != nil {
+		t.Fatalf("read control-plane Dockerfile: %v", err)
+	}
+	text := string(dockerfileBytes)
+	assertContainsAll(t, text,
+		"# syntax=docker/dockerfile:1.7",
+		"FROM --platform=$BUILDPLATFORM golang:1.25.9-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f AS builder",
+		"FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc",
+		"ARG PULSE_LICENSE_PUBLIC_KEY_SHA256",
+		"ARG TARGETOS",
+		"ARG TARGETARCH",
+		"--mount=type=secret,id=pulse_license_public_key,required=false",
+		"PULSE_LICENSE_PUBLIC_KEY_SHA256 is required for control-plane release image builds.",
+		"PULSE_LICENSE_PUBLIC_KEY_SHA256 was provided but no license public key was mounted.",
+		`LICENSE_PUBLIC_KEY="$(tr -d '\r\n' < /run/secrets/pulse_license_public_key)"`,
+		"mounted license public key must decode to 32 bytes.",
+		"mounted license public key does not match PULSE_LICENSE_PUBLIC_KEY_SHA256.",
+		`TARGET_GOOS="${TARGETOS:-linux}"`,
+		`TARGET_GOARCH="${TARGETARCH:-$(go env GOARCH)}"`,
+		`./scripts/release_ldflags.sh server --version "${VERSION}" --build-time "${BUILD_TIME}" --git-commit "${GIT_COMMIT}" --license-public-key "${LICENSE_PUBLIC_KEY}"`,
+		`CGO_ENABLED=0 GOOS="${TARGET_GOOS}" GOARCH="${TARGET_GOARCH}" go build \`,
+		"-tags release",
+		"-buildvcs=false",
+		"-trimpath",
+		"-o /pulse-control-plane ./cmd/pulse-control-plane",
+	)
+	assertNotContainsAny(t, text,
+		"golang:1.25.7-alpine AS builder",
+		"FROM alpine:3.21",
+		"CGO_ENABLED=0 go build -o /pulse-control-plane ./cmd/pulse-control-plane",
 	)
 }
 

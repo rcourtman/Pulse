@@ -563,12 +563,18 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 		`sbom: true`,
 		`secrets: |`,
 		`id: license_key_cache`,
+		`id: build_control_plane_image`,
+		`file: deploy/provider-msp/Dockerfile.control-plane`,
 		`PULSE_LICENSE_PUBLIC_KEY_SHA256=${{ steps.license_key_cache.outputs.sha256 }}`,
 		`PULSE_UPDATE_SIGNING_PUBLIC_KEY=${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}`,
 		`pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}`,
 		`pulse_update_signing_key=${{ secrets.PULSE_UPDATE_SIGNING_KEY }}`,
 		`subject-name: docker.io/rcourtman/pulse`,
 		`subject-name: ghcr.io/${{ github.repository_owner }}/pulse`,
+		`subject-name: docker.io/rcourtman/pulse-control-plane`,
+		`subject-name: ghcr.io/${{ github.repository_owner }}/pulse-control-plane`,
+		`rcourtman/pulse-control-plane:${{ steps.version.outputs.tag }}`,
+		`ghcr.io/${{ github.repository_owner }}/pulse-control-plane:${{ steps.version.outputs.tag }}`,
 		// pulse-agent ships as release-asset binaries, not as a Docker
 		// image (see commit dropping the agent image publish steps).
 		// The agent attestation subject-names intentionally do not

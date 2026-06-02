@@ -696,6 +696,19 @@ be reused for release-grade hosted or self-hosted runtime images. The matching
 installability proof lives in `scripts/installtests/build_release_assets_test.go`
 and `scripts/release_control/release_promotion_policy_test.py`, and both must
 assert the secret mount and non-secret fingerprint argument together.
+The standalone hosted control-plane image is part of the same release-license
+boundary. `deploy/provider-msp/Dockerfile.control-plane` must build
+`cmd/pulse-control-plane` with `-tags release`, canonical
+`scripts/release_ldflags.sh server` metadata, an embedded license public key
+from the BuildKit `pulse_license_public_key` secret, and the same
+`PULSE_LICENSE_PUBLIC_KEY_SHA256` fingerprint gate. Provider-hosted MSP uses
+that control-plane image for signed MSP-license enforcement, so it must not be
+possible to publish a provider MSP control-plane image that accepts
+`PULSE_LICENSE_DEV_MODE` or `PULSE_LICENSE_PUBLIC_KEY` runtime overrides.
+`.github/workflows/publish-docker.yml` must publish and attest
+`rcourtman/pulse-control-plane` and
+`ghcr.io/<owner>/pulse-control-plane` from that Dockerfile, with the same
+version tags and prerelease/latest tag policy as the main Pulse runtime image.
 That same supply-chain boundary also owns the checked-in build roots
 themselves. `Dockerfile` must pin its Node, Go, and Alpine bases by immutable
 manifest-list digest so multi-arch release builds do not silently drift onto a

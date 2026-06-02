@@ -132,7 +132,9 @@ install_args=(
 if [[ "$skip_runtime_image_pull" == "1" ]]; then
   install_args+=(--skip-image-pull)
 fi
-install_args+=("${extra_install_args[@]}")
+if ((${#extra_install_args[@]} > 0)); then
+  install_args+=("${extra_install_args[@]}")
+fi
 
 docker compose run --rm --no-deps control-plane "${install_args[@]}"
 
