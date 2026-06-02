@@ -133,7 +133,7 @@ export function workspaceSetupNextStep(workspace: PortalWorkspaceSummary): strin
     case 'ready':
       return 'Open the workspace when you need to work inside this client boundary.';
     case 'install_agents':
-      return 'Install the first agent from this workspace so client data lands in the right boundary.';
+      return 'Install the first agent from this workspace so client data lands in the isolated workspace boundary.';
     case 'configure_outputs':
       return 'Configure alert routing and reports before treating the client workspace as ready.';
     case 'review':
@@ -144,7 +144,7 @@ export function workspaceSetupNextStep(workspace: PortalWorkspaceSummary): strin
 }
 
 export function workspaceIdentityCopy(workspace: PortalWorkspaceSummary): string {
-  return 'Client boundary: ' + workspace.display_name + '. Hostnames can repeat across clients; this workspace keeps agents, alerts, and reports scoped to this client.';
+  return 'Client workspace boundary: ' + workspace.display_name + '. Hostnames can repeat across clients because agents, alerts, and reports stay scoped to this workspace.';
 }
 
 export function workspaceSetupDiagnostics(workspace: PortalWorkspaceSummary): string[] {
@@ -216,7 +216,7 @@ export function workspaceSetupGuide(workspace: PortalWorkspaceSummary): Workspac
   if (setup === 'install_agents') {
     return {
       title: 'Install the first agent',
-      description: 'Start inside this client workspace so the first reporting token and future hostnames stay scoped to the client.',
+      description: 'Start inside this isolated client workspace so the first reporting token and future hostnames stay scoped to the client.',
       primaryAction: 'install',
       primaryLabel: 'Install agents',
       diagnostics: workspaceSetupDiagnostics(workspace),

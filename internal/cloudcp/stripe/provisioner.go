@@ -38,6 +38,7 @@ type Provisioner struct {
 	emailFrom                 string
 	trialActivationPrivateKey string
 	hostedEntitlements        *entitlements.Service
+	defaultMSPPlanVersion     string
 	chownFile                 func(string, int, int) error
 	admissionCheck            AdmissionCheck
 }
@@ -73,6 +74,18 @@ func WithHostedEntitlementService(service *entitlements.Service) ProvisionerOpti
 	}
 }
 
+func WithDefaultMSPPlanVersion(planVersion string) ProvisionerOption {
+	return func(p *Provisioner) {
+		if p == nil {
+			return
+		}
+		planVersion = canonicalizeProvisionedPlanVersion(planVersion)
+		if planVersion != "" {
+			p.defaultMSPPlanVersion = planVersion
+		}
+	}
+}
+
 type provisioningCleanupState struct {
 	tenantID      string
 	tenantDataDir string
@@ -83,15 +96,16 @@ type provisioningCleanupState struct {
 // NewProvisioner creates a Provisioner.
 func NewProvisioner(reg *registry.TenantRegistry, tenantsDir string, dockerMgr *docker.Manager, magicLinks *cpauth.Service, baseURL string, emailSender cpemail.Sender, emailFrom string, allowDockerless bool, opts ...ProvisionerOption) *Provisioner {
 	p := &Provisioner{
-		registry:        reg,
-		tenantsDir:      tenantsDir,
-		docker:          dockerMgr,
-		magicLinks:      magicLinks,
-		baseURL:         baseURL,
-		allowDockerless: allowDockerless,
-		emailSender:     emailSender,
-		emailFrom:       strings.TrimSpace(emailFrom),
-		chownFile:       os.Chown,
+		registry:              reg,
+		tenantsDir:            tenantsDir,
+		docker:                dockerMgr,
+		magicLinks:            magicLinks,
+		baseURL:               baseURL,
+		allowDockerless:       allowDockerless,
+		emailSender:           emailSender,
+		emailFrom:             strings.TrimSpace(emailFrom),
+		defaultMSPPlanVersion: "msp_starter",
+		chownFile:             os.Chown,
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -937,12 +951,15 @@ func (p *Provisioner) ProvisionWorkspaceForOwner(ctx context.Context, accountID,
 
 	// Look up the account's actual plan version from its Stripe billing record.
 	// Fail on DB errors (consistent with enforceWorkspaceLimit). Fall back to
-	// msp_starter (lowest MSP tier) only when no billing record exists.
+	// the configured local MSP plan only when no billing record exists.
 	sa, saErr := p.registry.GetStripeAccount(accountID)
 	if saErr != nil {
 		return nil, fmt.Errorf("look up billing record for account %s: %w", accountID, saErr)
 	}
-	planVersion := "msp_starter"
+	planVersion := canonicalizeProvisionedPlanVersion(p.defaultMSPPlanVersion)
+	if planVersion == "" {
+		planVersion = "msp_starter"
+	}
 	if sa != nil && strings.TrimSpace(sa.PlanVersion) != "" {
 		planVersion = canonicalizeProvisionedPlanVersion(sa.PlanVersion)
 	} else {

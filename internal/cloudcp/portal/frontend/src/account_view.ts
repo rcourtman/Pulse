@@ -397,7 +397,7 @@ function renderAccessMemberAction(accountID: string, member: PortalAccessMember,
   return group;
 }
 
-function renderAccessMemberRow(accountID: string, member: PortalAccessMember, isOwner: boolean, canManage: boolean, activeJob: PortalAccessJob, clientLanguage: boolean): HTMLElement {
+function renderAccessMemberRow(accountID: string, member: PortalAccessMember, isOwner: boolean, canManage: boolean, activeJob: PortalAccessJob, clientLanguage: boolean, hasBilling: boolean): HTMLElement {
   var showActionColumn = canManage && activeJob === 'remove';
   var row = document.createElement('div');
   row.className = 'access-member-row' + (showActionColumn ? '' : ' access-member-row-readonly');
@@ -431,7 +431,7 @@ function renderAccessMemberRow(accountID: string, member: PortalAccessMember, is
   caption.className = 'access-member-caption';
   caption.textContent = (member.state || 'active') === 'pending'
     ? 'Invitation pending acceptance.'
-    : portalRoleCapabilityCopy(member.role, clientLanguage);
+    : portalRoleCapabilityCopy(member.role, clientLanguage, hasBilling);
   identity.appendChild(caption);
 
   row.appendChild(identity);
@@ -470,7 +470,7 @@ export function renderAddWorkspaceSection(accountID: string, entry: PortalAccoun
   }
 }
 
-export function renderAccessSection(accountID: string, entry: PortalAccountUIEntry): void {
+export function renderAccessSection(accountID: string, entry: PortalAccountUIEntry, hasBilling = true): void {
   var section = getElement<HTMLElement>('access-section-' + accountID);
   var roster = getElement<HTMLElement>('access-list-' + accountID);
   if (!section || !roster) return;
@@ -545,7 +545,7 @@ export function renderAccessSection(accountID: string, entry: PortalAccountUIEnt
   renderAccessRosterHead(roster, activeJob, canManage);
   for (var i = 0; i < entry.accessQuery.data.length; i += 1) {
     var member = entry.accessQuery.data[i];
-    roster.appendChild(renderAccessMemberRow(accountID, member, isOwner, canManage, activeJob, clientLanguage));
+    roster.appendChild(renderAccessMemberRow(accountID, member, isOwner, canManage, activeJob, clientLanguage, hasBilling));
   }
 }
 
@@ -563,6 +563,6 @@ export function renderAccountUI(accountState: PortalAccountState, accounts: Port
     }
     renderAddWorkspaceSection(accountID, entry);
     if (account) renderWorkspaceManagement(account, entry, accountAPIBasePath);
-    renderAccessSection(accountID, entry);
+    renderAccessSection(accountID, entry, account ? account.has_billing === true : true);
   }
 }

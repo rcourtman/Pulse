@@ -231,32 +231,62 @@ or other self-hosted uncapped continuity plans.
    tenant-runtime capacity/log retention configuration, or checkout gating
    through `internal/cloudcp/config.go` and
    `internal/cloudcp/public_cloud_signup_handlers.go`
-   Public MSP self-serve signup is the operator-account front door for the same
+   Public MSP signup is the Pulse-operated account front door for the same
    boundary and lives in `internal/cloudcp/public_msp_signup_handlers.go`.
-   Starter is the only public self-serve MSP checkout tier; Growth, Scale, and
-   Enterprise remain request-based even when their Stripe prices are configured
-   for assisted/operator-controlled workflows. MSP price configuration
+   Starter is the only tier that may expose checkout when the MSP rollout gate
+   is deliberately opened; Growth, Scale, and Enterprise remain request-based
+   even when their Stripe prices are configured for assisted/operator-controlled
+   workflows. MSP price configuration
    (`CP_MSP_STARTER_PRICE_ID`, `CP_MSP_GROWTH_PRICE_ID`,
    `CP_MSP_SCALE_PRICE_ID`) is still validated in `internal/cloudcp/config.go`
    against the canonical `msp_starter`, `msp_growth`, and `msp_scale` plan
-   versions. Public MSP pricing covers provider-hosted central deployments:
-   the MSP runs the Pulse instance in their own cloud or infrastructure while
-   Pulse Account owns licensing, account access, and client-workspace
-   management. The canonical provider workspace limits are 5 client workspaces
-   for Starter, 15 for Growth, and 40 for Scale; the canonical public monthly
-   prices are $149, $249, and $399 respectively. Public copy may publish all
-   three prices, but must keep Starter as the only self-serve checkout path and
-   describe Growth and Scale as request-assisted access rather than implying
-   immediate self-serve provisioning. Larger providers belong to
-   Enterprise/custom terms. Pulse-hosted MSP is not part of the default public
-   launch motion and must remain request-only until tenant isolation, ingest,
-   reporting, operations, and support load are proven. Design-partner discounts
-   do not create a public tier or change runtime limits: a qualified MSP lead
-   may receive assisted Growth access at the Starter price for a limited 6-12
-   month field-feedback window, with up to 15 client workspaces and no
-   self-serve checkout exposure. The MSP signup routes stay gated behind the
-   same `PublicCloudSignupEnabled` flag as the individual cloud signup front
-   door.
+   versions. The canonical MSP product model is one provider account managing
+   many isolated client workspaces. A client workspace is the hard monitoring
+   boundary: agent credentials, ingest, dashboards, alert routes, reports,
+   users, audit state, and tenant-local runtime data belong to the client
+   workspace, not to a shared provider monitoring namespace. The MSP account
+   portal is the provider control plane and handoff surface; it must not become
+   a cross-client monitoring console or mint tenant-local agent credentials.
+   Public MSP pricing covers the isolated-client MSP product model, not a
+   promise that a provider-hosted stack is already self-serve. Provider-hosted
+   MSP is the intended default launch direction because the MSP runs the
+   control-plane/runtime stack in their own cloud or infrastructure, but it is
+   gated on a packaged provider artifact that a technical MSP can actually
+   operate. That artifact must deliberately remove the SaaS billing/public
+   signup plane and keep only the provider essentials: client-workspace roster,
+   per-client runtime provisioning, account-to-workspace handoff, provider
+   access management, and workspace-bound install tokens. Pulse-hosted MSP is
+   the same isolated-client workspace model operated by Pulse, but it is not
+   part of the default public launch motion and must remain request-only until
+   tenant isolation, ingest, reporting, operations, and support load are proven.
+   The provider-hosted implementation mode is
+   `CP_CONTROL_PLANE_MODE=provider_hosted_msp`. In that mode the control plane
+   is Stripe-free by construction: it must not register Stripe webhook or portal
+   billing routes, must reject Stripe API keys, Stripe webhook secrets, MSP
+   Stripe price IDs, and public signup enablement, and must enforce the MSP
+   client-workspace cap from `CP_PROVIDER_MSP_PLAN_VERSION` using the canonical
+   `msp_starter`, `msp_growth`, and `msp_scale` plan versions. Provider-hosted
+   portal bootstrap/accounts may have no hosted billing record, and that absence
+   must remove Pulse-hosted Billing navigation, support actions, and role copy
+   rather than exposing dead Billing controls.
+   Shared-process multi-tenant mode (`PULSE_MULTI_TENANT_ENABLED` plus
+   `FeatureMultiTenant`) remains an Enterprise/internal-organization capability;
+   it is not the canonical MSP route for separate customer businesses and must
+   not leak MSP terminology, controls, prompts, or setup requirements into
+   ordinary self-hosted Pulse.
+   The canonical provider workspace limits are 5 client workspaces for Starter,
+   15 for Growth, and 40 for Scale; the canonical public monthly prices are
+   $149, $249, and $399 respectively. Public copy may publish all three prices,
+   but must keep Starter as gated checkout rather than a general self-serve
+   provider-hosted purchase path, and describe Growth and Scale as
+   request-assisted access rather than implying immediate self-serve
+   provisioning. Larger providers belong to Enterprise/custom terms.
+   Design-partner discounts do not create a public tier or change runtime
+   limits: a qualified MSP lead may receive assisted Growth access at the
+   Starter price for a limited 6-12 month field-feedback window, with up to 15
+   client workspaces and no self-serve checkout exposure. The MSP signup routes
+   stay gated behind the same `PublicCloudSignupEnabled` flag as the individual
+   cloud signup front door.
    Checkout metadata produced by the MSP front door must mark
    `account_kind=msp`, `signup_source=public_msp_signup`, and
    `checkout_billing_mode=immediate` so provisioning seeds an operator
@@ -767,13 +797,15 @@ boundary: hosted Cloud/MSP checkout events may provision tenants, while
 self-hosted landing purchases are acknowledged and ignored rather than
 creating hosted containers or Stripe account mappings.
 
-The hosted MSP offering now has a public self-serve front door alongside the
+The Pulse-operated MSP account path has a gated public front door alongside the
 individual cloud signup page. `internal/cloudcp/public_msp_signup_handlers.go`
 serves `/cloud/msp/signup`, `/cloud/msp/signup/complete`, and
 `/api/public/msp/signup`, all gated behind the same `PublicCloudSignupEnabled`
 flag as `/cloud/signup`, so the MSP front door stays dark until an operator
-explicitly enables public signup. MSP Starter is the only tier served through
-public self-serve checkout, and it is offered only when
+explicitly enables public signup. This path is not the provider-hosted MSP
+artifact; it is the Pulse-operated checkout/account entry point that proves the
+provider-account/client-workspace model. MSP Starter is the only tier that may
+be served through gated checkout, and it is offered only when
 `CP_MSP_STARTER_PRICE_ID` is configured. Growth, Scale, Enterprise, manual
 pilots, and discounts belong in request-based or operator-controlled
 Stripe/customer-support workflows rather than the public front door. The signup
@@ -781,7 +813,7 @@ page renders an explicit "Starter self-serve signup is not open yet" notice when
 the Starter price is not configured rather than offering an unbacked checkout.
 Checkout sessions started from this front door carry `account_kind=msp`,
 `signup_source=public_msp_signup`, and `checkout_billing_mode=immediate`
-metadata and do not set Stripe `trial_period_days`; MSP self-serve checkout is
+metadata and do not set Stripe `trial_period_days`; any opened checkout is
 paid-first. The provisioner reads that billing-mode metadata so the initial
 Stripe account mapping is stored as active instead of trial before subscription
 webhooks catch up.

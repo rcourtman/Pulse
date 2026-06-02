@@ -24,7 +24,11 @@ import (
 
 func newTestTenantMux(t *testing.T, reg *registry.TenantRegistry, tenantsDir string) (*http.ServeMux, *cpstripe.Provisioner) {
 	t.Helper()
+	return newTestTenantMuxWithWorkspaceLimitPolicy(t, reg, tenantsDir, WorkspaceLimitPolicy{})
+}
 
+func newTestTenantMuxWithWorkspaceLimitPolicy(t *testing.T, reg *registry.TenantRegistry, tenantsDir string, policy WorkspaceLimitPolicy, opts ...cpstripe.ProvisionerOption) (*http.ServeMux, *cpstripe.Provisioner) {
+	t.Helper()
 	mux := http.NewServeMux()
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -42,9 +46,14 @@ func newTestTenantMux(t *testing.T, reg *registry.TenantRegistry, tenantsDir str
 		true,
 		cpstripe.WithTrialActivationPrivateKey(base64.StdEncoding.EncodeToString(privateKey)),
 	)
+	for _, opt := range opts {
+		if opt != nil {
+			opt(provisioner)
+		}
+	}
 
 	listTenants := HandleListTenants(reg)
-	createTenant := HandleCreateTenant(reg, provisioner)
+	createTenant := HandleCreateTenantWithWorkspaceLimitPolicy(reg, provisioner, policy)
 	updateTenant := HandleUpdateTenant(reg)
 	deleteTenant := HandleDeleteTenant(reg, provisioner)
 
@@ -358,6 +367,55 @@ func TestCreateWorkspace_BlockedWhenNoBillingRecord(t *testing.T) {
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusForbidden, rec.Body.String())
+	}
+}
+
+func TestCreateWorkspace_ProviderHostedMSPAllowsNoBillingRecord(t *testing.T) {
+	reg := newTestRegistry(t)
+	tenantsDir := t.TempDir()
+	mux, _ := newTestTenantMuxWithWorkspaceLimitPolicy(
+		t,
+		reg,
+		tenantsDir,
+		WorkspaceLimitPolicy{ProviderHostedMSP: true, ProviderMSPPlanVersion: "msp_growth"},
+		cpstripe.WithDefaultMSPPlanVersion("msp_growth"),
+	)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP, DisplayName: "Provider MSP"}); err != nil {
+		t.Fatal(err)
+	}
+	// Deliberately NOT creating a StripeAccount: provider-hosted MSP mode uses
+	// the local MSP plan as the workspace-limit source.
+
+	body := `{"display_name":"Acme Dental"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/accounts/"+accountID+"/tenants", bytes.NewBufferString(body))
+	rec := doRequest(t, mux, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	var got registry.Tenant
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got.PlanVersion != "msp_growth" {
+		t.Fatalf("workspace PlanVersion = %q, want msp_growth", got.PlanVersion)
+	}
+
+	store := config.NewFileBillingStore(filepath.Join(tenantsDir, got.ID))
+	bs, err := store.GetBillingState("default")
+	if err != nil {
+		t.Fatalf("GetBillingState: %v", err)
+	}
+	if bs == nil {
+		t.Fatal("billing state is nil")
+	}
+	if bs.PlanVersion != "msp_growth" {
+		t.Fatalf("billing PlanVersion = %q, want msp_growth", bs.PlanVersion)
 	}
 }
 

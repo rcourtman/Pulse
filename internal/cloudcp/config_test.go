@@ -443,6 +443,102 @@ func TestLoadConfig_AllowsMissingTrialSignupPriceWhenPublicCloudSignupDisabled(t
 	}
 }
 
+func setProviderHostedMSPEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("CP_ADMIN_KEY", "test-key")
+	t.Setenv("CP_BASE_URL", "https://msp.example.com")
+	t.Setenv("CP_ENV", "development")
+	t.Setenv("CP_CONTROL_PLANE_MODE", "provider_hosted_msp")
+	t.Setenv("CP_REQUIRE_EMAIL_PROVIDER", "false")
+	t.Setenv("STRIPE_WEBHOOK_SECRET", "")
+	t.Setenv("STRIPE_API_KEY", "")
+	t.Setenv("CP_PUBLIC_CLOUD_SIGNUP_ENABLED", "false")
+	t.Setenv("CP_MSP_STARTER_PRICE_ID", "")
+	t.Setenv("CP_MSP_GROWTH_PRICE_ID", "")
+	t.Setenv("CP_MSP_SCALE_PRICE_ID", "")
+	setTrialSigningEnv(t)
+}
+
+func TestLoadConfig_ProviderHostedMSPDoesNotRequireStripe(t *testing.T) {
+	setProviderHostedMSPEnv(t)
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.ControlPlaneMode != ControlPlaneModeProviderHostedMSP {
+		t.Fatalf("ControlPlaneMode = %q, want %q", cfg.ControlPlaneMode, ControlPlaneModeProviderHostedMSP)
+	}
+	if cfg.UsesStripeBilling() {
+		t.Fatal("UsesStripeBilling = true, want false")
+	}
+	if cfg.ProviderMSPPlanVersion != "msp_starter" {
+		t.Fatalf("ProviderMSPPlanVersion = %q, want msp_starter", cfg.ProviderMSPPlanVersion)
+	}
+}
+
+func TestLoadConfig_ProviderHostedMSPRejectsStripeConfig(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		key  string
+		val  string
+	}{
+		{name: "webhook_secret", key: "STRIPE_WEBHOOK_SECRET", val: "whsec_test"},
+		{name: "api_key", key: "STRIPE_API_KEY", val: "sk_test_123"},
+		{name: "msp_price", key: "CP_MSP_STARTER_PRICE_ID", val: "price_1T5kgTBrHBocJIGHjOs15LI2"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			setProviderHostedMSPEnv(t)
+			t.Setenv(tc.key, tc.val)
+
+			_, err := LoadConfig()
+			if err == nil {
+				t.Fatalf("expected error when %s is configured", tc.key)
+			}
+			if !strings.Contains(err.Error(), "must not be configured") {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestLoadConfig_ProviderHostedMSPRejectsPublicSignup(t *testing.T) {
+	setProviderHostedMSPEnv(t)
+	t.Setenv("CP_PUBLIC_CLOUD_SIGNUP_ENABLED", "true")
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatal("expected error when public signup is enabled in provider-hosted MSP mode")
+	}
+	if !strings.Contains(err.Error(), "CP_PUBLIC_CLOUD_SIGNUP_ENABLED must be false") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadConfig_ProviderHostedMSPRejectsInvalidPlan(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		plan string
+		want string
+	}{
+		{name: "non_msp", plan: "cloud_starter", want: "canonical MSP plan"},
+		{name: "unknown_msp", plan: "msp_unknown", want: "known workspace limit"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			setProviderHostedMSPEnv(t)
+			t.Setenv("CP_PROVIDER_MSP_PLAN_VERSION", tc.plan)
+
+			_, err := LoadConfig()
+			if err == nil {
+				t.Fatalf("expected error for CP_PROVIDER_MSP_PLAN_VERSION=%q", tc.plan)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
 func TestLoadConfig_RequiresTrialSignupPriceWhenPublicCloudSignupEnabled(t *testing.T) {
 	setRequiredCPEnv(t)
 	setTrialSigningEnv(t)

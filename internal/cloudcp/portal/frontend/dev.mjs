@@ -9,7 +9,7 @@ import { createPortalBuildOptions, frontendRoot } from './build_config.mjs';
 const scenarioCookieName = 'pulse_portal_preview_scenario';
 const previewHost = process.env.PULSE_PORTAL_PREVIEW_HOST || '127.0.0.1';
 const previewPort = Number(process.env.PULSE_PORTAL_PREVIEW_PORT || '8765');
-const previewScenarios = ['managed', 'readonly', 'selfhosted', 'empty', 'onboarding', 'mixed'];
+const previewScenarios = ['managed', 'readonly', 'selfhosted', 'empty', 'provider', 'onboarding', 'mixed'];
 const previewFaviconSVG = fs.readFileSync(path.join(frontendRoot, '..', '..', 'favicon.svg'), 'utf8');
 const previewFaviconHref = '/favicon.svg?v=' + createHash('sha256').update(previewFaviconSVG).digest('hex').slice(0, 16);
 
@@ -129,6 +129,28 @@ function buildScenarioTemplate(name) {
         workspaces: [],
         members: [
           { email: 'owner@example.com', role: 'owner', user_id: 'u_owner' },
+        ],
+      }],
+    };
+  }
+
+  if (name === 'provider') {
+    return {
+      ...base,
+      signup_path: '',
+      accounts: [{
+        id: 'acct_provider',
+        name: 'Provider MSP',
+        kind: 'msp',
+        kind_label: 'MSP',
+        role: 'owner',
+        can_manage: true,
+        has_billing: false,
+        setup_templates: standardSetupTemplates(),
+        workspaces: [],
+        members: [
+          { email: 'owner@example.com', role: 'owner', user_id: 'u_owner' },
+          { email: 'helpdesk@example.com', role: 'tech', user_id: 'u_helpdesk' },
         ],
       }],
     };
@@ -1283,6 +1305,7 @@ server.listen(previewPort, previewHost, function() {
   console.log('[portal-preview] readonly   -> http://' + previewHost + ':' + String(previewPort) + '/?scenario=readonly');
   console.log('[portal-preview] selfhosted -> http://' + previewHost + ':' + String(previewPort) + '/?scenario=selfhosted');
   console.log('[portal-preview] empty      -> http://' + previewHost + ':' + String(previewPort) + '/?scenario=empty');
+  console.log('[portal-preview] provider   -> http://' + previewHost + ':' + String(previewPort) + '/?scenario=provider');
   console.log('[portal-preview] mixed      -> http://' + previewHost + ':' + String(previewPort) + '/?scenario=mixed');
 });
 

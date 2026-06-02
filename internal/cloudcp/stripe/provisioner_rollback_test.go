@@ -47,13 +47,15 @@ func newFailingDockerManager(t *testing.T) *docker.Manager {
 	return mgr
 }
 
-func newTestProvisioner(t *testing.T, reg *registry.TenantRegistry, tenantsDir string, dockerMgr *docker.Manager, allowDockerless bool) *Provisioner {
+func newTestProvisioner(t *testing.T, reg *registry.TenantRegistry, tenantsDir string, dockerMgr *docker.Manager, allowDockerless bool, opts ...ProvisionerOption) *Provisioner {
 	t.Helper()
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
 	}
 	t.Setenv("PULSE_TRIAL_ACTIVATION_PUBLIC_KEY", base64.StdEncoding.EncodeToString(publicKey))
+	provisionerOpts := []ProvisionerOption{WithTrialActivationPrivateKey(base64.StdEncoding.EncodeToString(privateKey))}
+	provisionerOpts = append(provisionerOpts, opts...)
 	return NewProvisioner(
 		reg,
 		tenantsDir,
@@ -63,7 +65,7 @@ func newTestProvisioner(t *testing.T, reg *registry.TenantRegistry, tenantsDir s
 		nil,
 		"",
 		allowDockerless,
-		WithTrialActivationPrivateKey(base64.StdEncoding.EncodeToString(privateKey)),
+		provisionerOpts...,
 	)
 }
 

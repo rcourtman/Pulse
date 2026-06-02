@@ -333,3 +333,46 @@ func TestRegisterRoutes_PublicCloudSignupRoutesDisabledByDefault(t *testing.T) {
 		t.Fatalf("POST /api/public/magic-link/request status=%d, want %d", publicMagicLinkRec.Code, http.StatusOK)
 	}
 }
+
+func TestRegisterRoutes_ProviderHostedMSPDisablesPulseHostedBillingRoutes(t *testing.T) {
+	dir := t.TempDir()
+	reg, err := registry.NewTenantRegistry(dir)
+	if err != nil {
+		t.Fatalf("NewTenantRegistry: %v", err)
+	}
+	t.Cleanup(func() { _ = reg.Close() })
+
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, &Deps{
+		Config: &CPConfig{
+			DataDir:                  dir,
+			AdminKey:                 "test-admin-key",
+			BaseURL:                  "https://msp.example.com",
+			ControlPlaneMode:         ControlPlaneModeProviderHostedMSP,
+			PublicCloudSignupEnabled: true,
+			ProviderMSPPlanVersion:   "msp_growth",
+		},
+		Registry: reg,
+		Version:  "test",
+	})
+
+	for _, tc := range []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodPost, path: "/api/stripe/webhook"},
+		{method: http.MethodGet, path: "/api/portal/billing"},
+		{method: http.MethodGet, path: "/signup"},
+		{method: http.MethodGet, path: "/cloud/signup"},
+		{method: http.MethodPost, path: "/api/public/signup"},
+		{method: http.MethodGet, path: "/cloud/msp/signup"},
+		{method: http.MethodPost, path: "/api/public/msp/signup"},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("%s %s status=%d, want %d", tc.method, tc.path, rec.Code, http.StatusNotFound)
+		}
+	}
+}

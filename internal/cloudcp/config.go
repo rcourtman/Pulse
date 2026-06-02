@@ -15,10 +15,20 @@ import (
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
+// ControlPlaneMode selects the business/runtime shape exposed by cloudcp.
+type ControlPlaneMode string
+
+const (
+	ControlPlaneModePulseHosted         ControlPlaneMode = "pulse_hosted"
+	ControlPlaneModeProviderHostedMSP   ControlPlaneMode = "provider_hosted_msp"
+	defaultProviderHostedMSPPlanVersion                  = "msp_starter"
+)
+
 // CPConfig holds all configuration for the control plane.
 type CPConfig struct {
 	DataDir                           string
 	Environment                       string
+	ControlPlaneMode                  ControlPlaneMode
 	BindAddress                       string
 	Port                              int
 	AdminKey                          string
@@ -58,6 +68,7 @@ type CPConfig struct {
 	CloudMSPStarterPriceID            string // MSP Starter tier price ID (optional)
 	CloudMSPGrowthPriceID             string // MSP Growth tier price ID (optional)
 	CloudMSPScalePriceID              string // MSP Scale tier price ID (optional)
+	ProviderMSPPlanVersion            string // Local provider-hosted MSP workspace limit plan
 	LicenseServerURL                  string
 	LicenseAdminToken                 string
 	TrialActivationPrivateKey         string
@@ -78,6 +89,14 @@ func (c *CPConfig) ControlPlaneDir() string {
 	return filepath.Join(c.DataDir, "control-plane")
 }
 
+func (c *CPConfig) IsProviderHostedMSP() bool {
+	return c != nil && c.ControlPlaneMode == ControlPlaneModeProviderHostedMSP
+}
+
+func (c *CPConfig) UsesStripeBilling() bool {
+	return c != nil && !c.IsProviderHostedMSP()
+}
+
 // LoadConfig loads control plane configuration from environment variables.
 // A .env file is loaded if present but not required.
 func LoadConfig() (*CPConfig, error) {
@@ -86,6 +105,7 @@ func LoadConfig() (*CPConfig, error) {
 
 	dataDir := envOrDefault("CP_DATA_DIR", "/data")
 	environment := normalizeCPEnvironment(envOrDefault("CP_ENV", "production"))
+	controlPlaneMode := normalizeControlPlaneMode(envOrDefault("CP_CONTROL_PLANE_MODE", string(ControlPlaneModePulseHosted)))
 	port, err := envOrDefaultInt("CP_PORT", 8443)
 	if err != nil {
 		return nil, err
@@ -150,6 +170,7 @@ func LoadConfig() (*CPConfig, error) {
 	cfg := &CPConfig{
 		DataDir:                           dataDir,
 		Environment:                       environment,
+		ControlPlaneMode:                  controlPlaneMode,
 		BindAddress:                       envOrDefault("CP_BIND_ADDRESS", "0.0.0.0"),
 		Port:                              port,
 		AdminKey:                          strings.TrimSpace(os.Getenv("CP_ADMIN_KEY")),
@@ -189,6 +210,7 @@ func LoadConfig() (*CPConfig, error) {
 		CloudMSPStarterPriceID:            strings.TrimSpace(os.Getenv("CP_MSP_STARTER_PRICE_ID")),
 		CloudMSPGrowthPriceID:             strings.TrimSpace(os.Getenv("CP_MSP_GROWTH_PRICE_ID")),
 		CloudMSPScalePriceID:              strings.TrimSpace(os.Getenv("CP_MSP_SCALE_PRICE_ID")),
+		ProviderMSPPlanVersion:            pkglicensing.CanonicalizePlanVersion(envOrDefault("CP_PROVIDER_MSP_PLAN_VERSION", defaultProviderHostedMSPPlanVersion)),
 		LicenseServerURL:                  envOrDefault("PULSE_LICENSE_SERVER_URL", "https://license.pulserelay.pro"),
 		LicenseAdminToken:                 strings.TrimSpace(os.Getenv("PULSE_LICENSE_ADMIN_TOKEN")),
 		TrialActivationPrivateKey:         strings.TrimSpace(os.Getenv("CP_TRIAL_ACTIVATION_PRIVATE_KEY")),
@@ -231,7 +253,7 @@ func (c *CPConfig) validate() error {
 	if c.BaseURL == "" {
 		missing = append(missing, "CP_BASE_URL")
 	}
-	if c.StripeWebhookSecret == "" {
+	if c.UsesStripeBilling() && c.StripeWebhookSecret == "" {
 		missing = append(missing, "STRIPE_WEBHOOK_SECRET")
 	}
 	if len(missing) > 0 {
@@ -274,8 +296,34 @@ func (c *CPConfig) validate() error {
 	if c.Environment != "development" && c.Environment != "staging" && c.Environment != "production" {
 		return fmt.Errorf("CP_ENV must be one of development, staging, production (got %q)", c.Environment)
 	}
+	if c.ControlPlaneMode != ControlPlaneModePulseHosted && c.ControlPlaneMode != ControlPlaneModeProviderHostedMSP {
+		return fmt.Errorf("CP_CONTROL_PLANE_MODE must be one of %s, %s (got %q)", ControlPlaneModePulseHosted, ControlPlaneModeProviderHostedMSP, c.ControlPlaneMode)
+	}
 	if c.Environment == "production" && c.AllowDockerlessProvisioning {
 		return fmt.Errorf("CP_ALLOW_DOCKERLESS_PROVISIONING must be false in production")
+	}
+	if c.IsProviderHostedMSP() {
+		if strings.TrimSpace(c.StripeWebhookSecret) != "" {
+			return fmt.Errorf("STRIPE_WEBHOOK_SECRET must not be configured when CP_CONTROL_PLANE_MODE=%s", ControlPlaneModeProviderHostedMSP)
+		}
+		if strings.TrimSpace(c.StripeAPIKey) != "" {
+			return fmt.Errorf("STRIPE_API_KEY must not be configured when CP_CONTROL_PLANE_MODE=%s", ControlPlaneModeProviderHostedMSP)
+		}
+		if c.PublicCloudSignupEnabled {
+			return fmt.Errorf("CP_PUBLIC_CLOUD_SIGNUP_ENABLED must be false when CP_CONTROL_PLANE_MODE=%s", ControlPlaneModeProviderHostedMSP)
+		}
+		if strings.TrimSpace(c.CloudMSPStarterPriceID) != "" || strings.TrimSpace(c.CloudMSPGrowthPriceID) != "" || strings.TrimSpace(c.CloudMSPScalePriceID) != "" {
+			return fmt.Errorf("CP_MSP_*_PRICE_ID must not be configured when CP_CONTROL_PLANE_MODE=%s", ControlPlaneModeProviderHostedMSP)
+		}
+		if strings.TrimSpace(c.TrialActivationPrivateKey) == "" {
+			return fmt.Errorf("CP_TRIAL_ACTIVATION_PRIVATE_KEY is required when CP_CONTROL_PLANE_MODE=%s", ControlPlaneModeProviderHostedMSP)
+		}
+		if !strings.HasPrefix(strings.ToLower(c.ProviderMSPPlanVersion), "msp_") {
+			return fmt.Errorf("CP_PROVIDER_MSP_PLAN_VERSION must be a canonical MSP plan version, got %q", c.ProviderMSPPlanVersion)
+		}
+		if _, known := pkglicensing.WorkspaceLimitForPlan(c.ProviderMSPPlanVersion); !known {
+			return fmt.Errorf("CP_PROVIDER_MSP_PLAN_VERSION must have a known workspace limit, got %q", c.ProviderMSPPlanVersion)
+		}
 	}
 	if c.StorageGuardrailsEnabled {
 		if strings.TrimSpace(c.StorageRootPath) == "" {
@@ -399,6 +447,17 @@ func normalizeCPEnvironment(raw string) string {
 		return "production"
 	default:
 		return strings.ToLower(strings.TrimSpace(raw))
+	}
+}
+
+func normalizeControlPlaneMode(raw string) ControlPlaneMode {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", "pulse_hosted", "pulse-hosted", "pulse_cloud", "pulse-cloud", "cloud":
+		return ControlPlaneModePulseHosted
+	case "provider_hosted_msp", "provider-hosted-msp", "provider_msp", "provider-msp", "msp_provider", "msp-provider":
+		return ControlPlaneModeProviderHostedMSP
+	default:
+		return ControlPlaneMode(strings.ToLower(strings.TrimSpace(raw)))
 	}
 }
 

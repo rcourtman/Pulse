@@ -282,6 +282,35 @@ describe('account view', function() {
     expect(document.getElementById('access-list-acct_1')?.textContent).not.toContain('Can manage workspaces');
   });
 
+  it('omits billing capability copy when an MSP account has no billing surface', function() {
+    document.body.innerHTML =
+      '<div id="access-section-acct_1" class="access-section" data-actor-role="owner" data-can-manage="true" data-client-language="true">' +
+      '<div id="access-stats-acct_1"></div>' +
+      '<div id="access-list-acct_1"></div>' +
+      '</div>';
+
+    renderAccessSection(
+      'acct_1',
+      createEntry({
+        accessVisible: true,
+        accessQuery: {
+          status: 'ready',
+          error: '',
+          data: [
+            { email: 'owner@example.com', role: 'owner', user_id: 'u1' },
+            { email: 'tech@example.com', role: 'tech', user_id: 'u2' },
+          ],
+        },
+      }),
+      false
+    );
+
+    var text = document.getElementById('access-list-acct_1')?.textContent || '';
+    expect(text).toContain('Full account control, including access control and client control.');
+    expect(text).toContain('Can manage clients without access ownership.');
+    expect(text).not.toContain('billing');
+  });
+
   it('renders access roster as view-only when the account is not manageable', function() {
     document.body.innerHTML =
       '<div id="access-section-acct_1" class="access-section" data-actor-role="tech" data-can-manage="false">' +

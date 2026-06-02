@@ -846,6 +846,47 @@ func TestMSPLifecycle_PlanVersionFallback(t *testing.T) {
 	assertNoRetiredMonitoredSystemLimit(t, bs.Limits)
 }
 
+func TestMSPLifecycle_ConfiguredPlanVersionFallback(t *testing.T) {
+	reg := newStripeTestRegistry(t)
+	tenantsDir := t.TempDir()
+	provisioner := newTestProvisioner(t, reg, tenantsDir, nil, true, WithDefaultMSPPlanVersion("msp_growth"))
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{
+		ID:          accountID,
+		Kind:        registry.AccountKindMSP,
+		DisplayName: "Provider Hosted MSP",
+	}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+
+	// No StripeAccount created: provider-hosted MSP mode uses the configured
+	// local MSP plan as the fallback entitlement/workspace-limit source.
+	ws, err := provisioner.ProvisionWorkspace(context.Background(), accountID, "Client")
+	if err != nil {
+		t.Fatalf("ProvisionWorkspace: %v", err)
+	}
+	if ws.PlanVersion != "msp_growth" {
+		t.Fatalf("workspace.PlanVersion = %q, want %q", ws.PlanVersion, "msp_growth")
+	}
+
+	store := config.NewFileBillingStore(provisioner.tenantDataDir(ws.ID))
+	bs, err := store.GetBillingState("default")
+	if err != nil {
+		t.Fatalf("GetBillingState: %v", err)
+	}
+	if bs == nil {
+		t.Fatal("billing state is nil")
+	}
+	if bs.PlanVersion != "msp_growth" {
+		t.Fatalf("billing.PlanVersion = %q, want %q", bs.PlanVersion, "msp_growth")
+	}
+	assertNoRetiredMonitoredSystemLimit(t, bs.Limits)
+}
+
 // ─── Test helpers ──────────────────────────────────────────────────────────
 
 func newMemberMux(reg *registry.TenantRegistry) *http.ServeMux {

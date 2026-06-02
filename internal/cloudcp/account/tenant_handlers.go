@@ -33,6 +33,11 @@ type ownerAwareWorkspaceProvisioner interface {
 	ProvisionWorkspaceForOwner(ctx context.Context, accountID, displayName, ownerEmail string) (*registry.Tenant, error)
 }
 
+type WorkspaceLimitPolicy struct {
+	ProviderHostedMSP      bool
+	ProviderMSPPlanVersion string
+}
+
 // HandleListTenants lists all tenants for an account.
 // Route: GET /api/accounts/{account_id}/tenants
 func HandleListTenants(reg *registry.TenantRegistry) http.HandlerFunc {
@@ -79,6 +84,10 @@ type createTenantRequest struct {
 // HandleCreateTenant creates a new tenant under an account.
 // Route: POST /api/accounts/{account_id}/tenants
 func HandleCreateTenant(reg *registry.TenantRegistry, provisioner WorkspaceProvisioner) http.HandlerFunc {
+	return HandleCreateTenantWithWorkspaceLimitPolicy(reg, provisioner, WorkspaceLimitPolicy{})
+}
+
+func HandleCreateTenantWithWorkspaceLimitPolicy(reg *registry.TenantRegistry, provisioner WorkspaceProvisioner, workspaceLimitPolicy WorkspaceLimitPolicy) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -145,7 +154,7 @@ func HandleCreateTenant(reg *registry.TenantRegistry, provisioner WorkspaceProvi
 		mu.Lock()
 		limitErr, tenant, provisionErr := func() (*workspaceLimitError, *registry.Tenant, error) {
 			defer mu.Unlock()
-			if le := enforceWorkspaceLimit(reg, a, accountID); le != nil {
+			if le := enforceWorkspaceLimit(reg, a, accountID, workspaceLimitPolicy); le != nil {
 				return le, nil, nil
 			}
 			ownerEmail := strings.ToLower(strings.TrimSpace(r.Header.Get("X-User-Email")))
@@ -223,7 +232,7 @@ type workspaceLimitError struct {
 // enforceWorkspaceLimit checks whether the account is allowed to create
 // another workspace. Returns nil if creation is allowed, or a
 // workspaceLimitError if blocked.
-func enforceWorkspaceLimit(reg *registry.TenantRegistry, account *registry.Account, accountID string) *workspaceLimitError {
+func enforceWorkspaceLimit(reg *registry.TenantRegistry, account *registry.Account, accountID string, policy WorkspaceLimitPolicy) *workspaceLimitError {
 	// Look up the account's Stripe billing record to determine plan version.
 	sa, err := reg.GetStripeAccount(accountID)
 	if err != nil {
@@ -234,27 +243,48 @@ func enforceWorkspaceLimit(reg *registry.TenantRegistry, account *registry.Accou
 			statusCode: http.StatusInternalServerError,
 		}
 	}
+	planVersion := ""
+	usingProviderHostedPlan := false
 	if sa == nil {
-		// No Stripe account → no subscription → cannot create workspaces.
-		return &workspaceLimitError{
-			reason:     "no_billing_record",
-			message:    "account has no active subscription",
-			statusCode: http.StatusForbidden,
+		if policy.ProviderHostedMSP && account != nil && account.Kind == registry.AccountKindMSP {
+			planVersion = pkglicensing.CanonicalizePlanVersion(policy.ProviderMSPPlanVersion)
+			usingProviderHostedPlan = true
+			if strings.TrimSpace(planVersion) == "" {
+				return &workspaceLimitError{
+					reason:     "provider_msp_plan_missing",
+					message:    "provider MSP plan is not configured",
+					statusCode: http.StatusForbidden,
+				}
+			}
+		} else {
+			// No Stripe account → no subscription → cannot create workspaces.
+			return &workspaceLimitError{
+				reason:     "no_billing_record",
+				message:    "account has no active subscription",
+				statusCode: http.StatusForbidden,
+			}
 		}
-	}
-
-	// Reject workspace creation for canceled subscriptions.
-	if strings.EqualFold(sa.SubscriptionState, "canceled") {
-		return &workspaceLimitError{
-			reason:     "subscription_canceled",
-			message:    "cannot create workspaces on a canceled subscription",
-			statusCode: http.StatusForbidden,
+	} else {
+		// Reject workspace creation for canceled subscriptions.
+		if strings.EqualFold(sa.SubscriptionState, "canceled") {
+			return &workspaceLimitError{
+				reason:     "subscription_canceled",
+				message:    "cannot create workspaces on a canceled subscription",
+				statusCode: http.StatusForbidden,
+			}
 		}
+		planVersion = pkglicensing.CanonicalizePlanVersion(sa.PlanVersion)
 	}
 
 	// Determine workspace limit from plan version.
-	planVersion := pkglicensing.CanonicalizePlanVersion(sa.PlanVersion)
 	limit, known := pkglicensing.WorkspaceLimitForPlan(planVersion)
+	if !known && usingProviderHostedPlan {
+		return &workspaceLimitError{
+			reason:     "provider_msp_plan_unknown",
+			message:    fmt.Sprintf("provider MSP plan %q has no workspace limit", planVersion),
+			statusCode: http.StatusForbidden,
+		}
+	}
 	if !known {
 		// Unknown plan → fail-closed with safe default.
 		limit = pkglicensing.UnknownPlanDefaultWorkspaceLimit

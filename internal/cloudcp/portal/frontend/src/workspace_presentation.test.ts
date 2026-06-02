@@ -65,7 +65,7 @@ describe('workspace presentation', function() {
     expect(workspaceSetupState(createWorkspace())).toBe('setup_path');
     expect(workspaceSetupLabel(createWorkspace())).toBe('Setup path');
     expect(workspaceRowNote(createWorkspace())).toBe('Setup path ready');
-    expect(workspaceSetupNextStep(createWorkspace({ setup_status: 'install_agents' }))).toBe('Install the first agent from this workspace so client data lands in the right boundary.');
+    expect(workspaceSetupNextStep(createWorkspace({ setup_status: 'install_agents' }))).toBe('Install the first agent from this workspace so client data lands in the isolated workspace boundary.');
     expect(workspaceSetupState(createWorkspace({ agent_count: 0 }))).toBe('install_agents');
     expect(workspaceSetupState(createWorkspace({ setup_status: 'setup_path', agent_count: 0 }))).toBe('install_agents');
     expect(workspaceSetupState(createWorkspace({ agent_count: 1, alert_route_count: 0, report_schedule_count: 0 }))).toBe('configure_outputs');

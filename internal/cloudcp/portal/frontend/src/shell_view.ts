@@ -134,41 +134,29 @@ function setupNeededWorkspaceChipLabel(count: number, clientLanguage = false): s
 
 
 
-function supportLeadCopy(hasHostedAccounts: boolean, hostedViewOnly: boolean, showSelfHostedCommercial: boolean, clientLanguage = false): string {
-  var primarySection = clientLanguage ? 'Clients' : 'Workspaces';
-  if (!hasHostedAccounts) return 'Use Support only after Billing fails.';
-  if (hostedViewOnly) {
-    return showSelfHostedCommercial
-      ? 'Use Support only after ' + primarySection + ', Access review, owner/admin handoff, or Billing fails.'
-      : 'Use Support only after ' + primarySection + ', Access review, owner/admin handoff, or hosted Billing fails.';
-  }
-  return showSelfHostedCommercial
-    ? 'Use Support only after ' + primarySection + ', Access, or Billing fails.'
-    : 'Use Support only after ' + primarySection + ', Access, or hosted Billing fails.';
-}
-
-function supportRunbookPathCopy(hasHostedAccounts: boolean, hostedViewOnly: boolean, showSelfHostedCommercial: boolean, clientLanguage = false): string {
+function supportRunbookPathCopy(hasHostedAccounts: boolean, hostedViewOnly: boolean, showSelfHostedCommercial: boolean, hasHostedBilling: boolean, clientLanguage = false): string {
   var primarySection = clientLanguage ? 'Clients' : 'Workspaces';
   if (!hasHostedAccounts) return 'Billing, licenses, refunds, or privacy.';
   if (hostedViewOnly) {
-    return showSelfHostedCommercial
-      ? primarySection + ', Access review, owner/admin handoff, hosted billing, licenses, refunds, or privacy.'
-      : primarySection + ', Access review, owner/admin handoff, or hosted billing.';
+    if (showSelfHostedCommercial && hasHostedBilling) return primarySection + ', Access review, owner/admin handoff, hosted billing, licenses, refunds, or privacy.';
+    if (showSelfHostedCommercial) return primarySection + ', Access review, owner/admin handoff, licenses, refunds, or privacy.';
+    if (hasHostedBilling) return primarySection + ', Access review, owner/admin handoff, or hosted billing.';
+    return primarySection + ', Access review, or owner/admin handoff.';
   }
-  return showSelfHostedCommercial
-    ? primarySection + ', Access, hosted billing, licenses, refunds, or privacy.'
-    : primarySection + ', Access, or hosted billing.';
-}
-
-function supportRunbookAccountCopy(hasHostedAccounts: boolean, showSelfHostedCommercial: boolean): string {
-  if (!hasHostedAccounts) return 'Commercial billing email used for the self-hosted purchase.';
-  return showSelfHostedCommercial
-    ? 'Hosted account and workspace when relevant, or billing email for self-hosted work.'
-    : 'Hosted account and workspace, or hosted billing account.';
+  if (showSelfHostedCommercial && hasHostedBilling) return primarySection + ', Access, hosted billing, licenses, refunds, or privacy.';
+  if (showSelfHostedCommercial) return primarySection + ', Access, licenses, refunds, or privacy.';
+  if (hasHostedBilling) return primarySection + ', Access, or hosted billing.';
+  return primarySection + ' or Access.';
 }
 
 function hasHostedAccounts(accounts: PortalAccountSummary[]): boolean {
   return accounts.length > 0;
+}
+
+function hasHostedBillingAccounts(accounts: PortalAccountSummary[]): boolean {
+  return accounts.some(function(account) {
+    return account.has_billing === true;
+  });
 }
 
 function hasSelfHostedCommercial(bootstrap: PortalBootstrapData): boolean {
@@ -404,19 +392,14 @@ function primaryShellSections(bootstrap: PortalBootstrapData): ShellNavEntry[] {
   var accounts = Array.isArray(bootstrap.accounts) ? bootstrap.accounts : [];
   var hosted = hasHostedAccounts(accounts);
   var showSelfHostedCommercial = hasSelfHostedCommercial(bootstrap);
-  var hostedBillingCount = 0;
-  for (var i = 0; i < accounts.length; i += 1) {
-    if (accounts[i].has_billing) {
-      hostedBillingCount += 1;
-    }
-  }
+  var hasHostedBilling = hasHostedBillingAccounts(accounts);
 
   var sections: ShellNavEntry[] = [];
   if (hosted) {
     sections.push({ section: 'workspaces', title: accountsUseClientLanguage(accounts) ? 'Clients' : 'Workspaces' });
     sections.push({ section: 'access', title: 'Access' });
   }
-  if (hostedBillingCount > 0 || showSelfHostedCommercial) {
+  if (hasHostedBilling || showSelfHostedCommercial) {
     sections.push({ section: 'billing', title: 'Billing' });
   }
   return sections;
@@ -889,7 +872,7 @@ function renderProviderSetupTemplates(accounts: PortalAccountSummary[]): string 
           '<span class="workspace-template-summary-title">' + escapeHTML(template.title || 'Provider setup template') + '</span>' +
           '<span class="workspace-template-summary-meta">' + escapeHTML(templateAccount.name) + '</span>' +
         '</summary>' +
-        '<p class="workspace-template-intro">Use the same onboarding shape for each client, then finish the tenant-owned configuration inside that client workspace.</p>' +
+        '<p class="workspace-template-intro">Use the same onboarding shape for each client, then finish the workspace-owned configuration inside that isolated client boundary.</p>' +
         '<div class="workspace-template-grid">' +
           '<div><strong>Agent naming</strong><span>' + escapeHTML(template.agent_naming) + '</span></div>' +
           '<div><strong>Alert routing</strong><span>' + escapeHTML(template.alert_routing) + '</span></div>' +
@@ -963,7 +946,7 @@ function workspaceSectionHeaderCopy(accounts: PortalAccountSummary[], entries: W
       : 'Review hosted workspace health here and open ready workspaces. An owner or admin must handle setup and workspace changes.';
   }
   return clientLanguage
-    ? 'Review clients here, use Client onboarding for setup, and keep destructive client actions separate from daily monitoring.'
+    ? 'Review clients here, use Client onboarding for setup, and keep destructive client actions separate from daily monitoring. Each client remains an isolated workspace.'
     : 'Review client workspaces here, use the setup checklist for onboarding, and keep destructive workspace actions separate from daily workspace work.';
 }
 
@@ -1040,8 +1023,13 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
   var attentionCount = attentionWorkspaces(workspaces).length;
   var suspendedCount = countWorkspacesByState(workspaces, 'suspended');
   var workspaceListSummary = account.can_manage
-    ? (clientLanguage ? 'Open a client to work inside its workspace boundary, or use Client onboarding to finish setup.' : 'Open a workspace to work in it, or use Setup checklist when onboarding a client.')
+    ? (clientLanguage ? 'Open a client to work inside its isolated workspace boundary, or use Client onboarding to finish setup.' : 'Open a workspace to work in it, or use Setup checklist when onboarding a client.')
     : 'Open a workspace here. An owner or admin must create or change hosted workspaces.';
+  var workspaceManagementEmptyNote = account.has_billing
+    ? 'Access changes stay in Access. Billing changes stay in Billing.'
+    : (clientLanguage
+      ? 'Access changes stay in Access. Client runtime changes stay inside the client workspace.'
+      : 'Access changes stay in Access. Workspace runtime changes stay inside the workspace.');
   var workspaceManagement = '';
   var addWorkspaceForm = '';
   var workspaceHeaderActions = '';
@@ -1099,11 +1087,11 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
             '<div class="workspace-management-empty-actions-card">' +
               '<div class="workspace-management-empty-actions-copy">' +
                 '<h4>' + escapeHTML(clientLanguage ? 'Add a client' : 'Create a workspace') + '</h4>' +
-                '<p>' + escapeHTML(clientLanguage ? 'Create the hosted workspace boundary for a customer.' : 'Add a new hosted workspace for a customer or operating boundary.') + '</p>' +
+                '<p>' + escapeHTML(clientLanguage ? 'Create an isolated client workspace for a customer.' : 'Add a new hosted workspace for a customer or operating boundary.') + '</p>' +
               '</div>' +
               addWorkspaceForm +
             '</div>' +
-            '<div class="workspace-management-empty-note">Access changes stay in Access. Billing changes stay in Billing.</div>' +
+            '<div class="workspace-management-empty-note">' + escapeHTML(workspaceManagementEmptyNote) + '</div>' +
           '</div>' +
         '</div>' +
         '<div class="workspace-management-content" id="workspace-management-content-' +
@@ -1174,7 +1162,7 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
           '<div class="workspace-setup-checklist" aria-label="' + escapeAttr(clientLanguage ? 'Client onboarding checklist' : 'Workspace setup checklist') + '">' +
             '<div class="workspace-setup-step workspace-setup-step-created">' +
               '<span class="workspace-setup-status" id="workspace-management-check-created-' + escapeAttr(account.id) + '"></span>' +
-              '<div><strong>' + escapeHTML(clientLanguage ? 'Client added' : 'Workspace created') + '</strong><span>' + escapeHTML(clientLanguage ? 'A separate workspace boundary keeps this client isolated.' : 'This client has a separate account boundary.') + '</span></div>' +
+              '<div><strong>' + escapeHTML(clientLanguage ? 'Client added' : 'Workspace created') + '</strong><span>' + escapeHTML(clientLanguage ? 'A separate workspace boundary keeps this client isolated.' : 'This client has a separate workspace boundary.') + '</span></div>' +
             '</div>' +
             '<div class="workspace-setup-step">' +
               '<span class="workspace-setup-status" id="workspace-management-check-install-' + escapeAttr(account.id) + '"></span>' +
@@ -1284,9 +1272,14 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
 
 function renderAccountAccessSection(account: PortalAccountSummary): string {
   var clientLanguage = accountUsesClientLanguage(account);
+  var hasBilling = account.has_billing === true;
   var accessRoleCopy = {
-    admin: clientLanguage ? 'Client control, billing, and roster management.' : 'Workspace control, billing, and roster management.',
-    tech: clientLanguage ? 'Client control without billing or roster ownership.' : 'Workspace control without billing or roster ownership.',
+    admin: hasBilling
+      ? (clientLanguage ? 'Client control, billing, and roster management.' : 'Workspace control, billing, and roster management.')
+      : (clientLanguage ? 'Client control and roster management.' : 'Workspace control and roster management.'),
+    tech: hasBilling
+      ? (clientLanguage ? 'Client control without billing or roster ownership.' : 'Workspace control without billing or roster ownership.')
+      : (clientLanguage ? 'Client control without roster ownership.' : 'Workspace control without roster ownership.'),
     readOnly: clientLanguage ? 'Review client status without control-plane changes.' : 'Review access without control-plane changes.',
   };
   var accessTaskStrip = account.can_manage
@@ -1307,7 +1300,7 @@ function renderAccountAccessSection(account: PortalAccountSummary): string {
           : 'Use these role meanings to understand what each person on this roster can do.') + '</p>' +
       '</div>' +
       '<div class="access-policy-list">' +
-        '<div class="access-policy-row"><strong>Owner</strong><span>Full account, billing, and access control.</span></div>' +
+        '<div class="access-policy-row"><strong>Owner</strong><span>' + escapeHTML(hasBilling ? 'Full account, billing, and access control.' : 'Full account and access control.') + '</span></div>' +
         '<div class="access-policy-row"><strong>Admin</strong><span>' + escapeHTML(accessRoleCopy.admin) + '</span></div>' +
         '<div class="access-policy-row"><strong>Tech</strong><span>' + escapeHTML(accessRoleCopy.tech) + '</span></div>' +
         '<div class="access-policy-row"><strong>Read-only</strong><span>' + escapeHTML(accessRoleCopy.readOnly) + '</span></div>' +
@@ -1489,6 +1482,7 @@ function renderSupportSection(context: ShellViewContext): string {
   var clientLanguage = accountsUseClientLanguage(accounts);
   var primarySectionLabel = clientLanguage ? 'Clients' : 'Workspaces';
   var showSelfHostedCommercial = hasSelfHostedCommercial(context.bootstrap);
+  var hasBillingSection = hasHostedBillingAccounts(accounts) || showSelfHostedCommercial;
   var supportEmail = context.bootstrap.support_email || '';
   var canManageHostedTasks = false;
   for (var i = 0; i < accounts.length; i += 1) {
@@ -1501,15 +1495,19 @@ function renderSupportSection(context: ShellViewContext): string {
   var retryCopy = isHosted
     ? (
       hostedViewOnly
-        ? 'Review ' + primarySectionLabel + ' or Access first. If billing is involved, hand it to an owner or admin before you escalate.'
-        : 'Retry the same ' + primarySectionLabel + ', Access, or Billing step before you escalate.'
+        ? (
+          hasBillingSection
+            ? 'Review ' + primarySectionLabel + ' or Access first. If billing is involved, hand it to an owner or admin before you escalate.'
+            : 'Review ' + primarySectionLabel + ' or Access first. If account ownership is involved, hand it to an owner or admin before you escalate.'
+        )
+        : 'Retry the same ' + primarySectionLabel + (hasBillingSection ? ', Access, or Billing' : ' or Access') + ' step before you escalate.'
     )
     : 'Retry the same Billing step before you escalate.';
   var supportActions = isHosted
     ? (
       '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">' + escapeHTML(primarySectionLabel) + '</button>' +
       '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="access">Access</button>' +
-      '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Billing</button>'
+      (hasBillingSection ? '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Billing</button>' : '')
     )
     : '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Billing</button>';
   return (
@@ -1519,7 +1517,7 @@ function renderSupportSection(context: ShellViewContext): string {
         '<div class="portal-support-simple-card">' +
           '<div class="portal-support-simple-list">' +
             '<div class="portal-support-simple-row"><strong>Try first</strong><span>' + escapeHTML(retryCopy) + '</span></div>' +
-            '<div class="portal-support-simple-row"><strong>Scope</strong><span>' + escapeHTML(supportRunbookPathCopy(isHosted, hostedViewOnly, showSelfHostedCommercial, clientLanguage)) + '</span></div>' +
+            '<div class="portal-support-simple-row"><strong>Scope</strong><span>' + escapeHTML(supportRunbookPathCopy(isHosted, hostedViewOnly, showSelfHostedCommercial, hasHostedBillingAccounts(accounts), clientLanguage)) + '</span></div>' +
             '<div class="portal-support-simple-row"><strong>Include</strong><span>Account, email, and the exact action that failed.</span></div>' +
           '</div>' +
           '<div class="portal-support-simple-actions">' +
@@ -1550,12 +1548,14 @@ export function renderHeaderHTML(context: ShellViewContext): string {
 export function renderAuthenticatedPortalHTML(context: ShellViewContext): string {
   var accounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
   var hosted = hasHostedAccounts(accounts);
+  var hasHostedBilling = hasHostedBillingAccounts(accounts);
   var showSelfHostedCommercial = hasSelfHostedCommercial(context.bootstrap);
   var showSelfHostedUpgradeHandoff =
     context.billingState.openBillingPanelID === 'upgrade-billing-panel' ||
     !!normalizeUpgradeFeatureKey(context.billingState.upgradeFeatureKey) ||
     !!String(context.billingState.upgradePortalHandoffID || '').trim();
   var showSelfHostedBillingShell = showSelfHostedCommercial || showSelfHostedUpgradeHandoff;
+  var showBillingPanel = hasHostedBilling || showSelfHostedBillingShell;
   var shellSections = visibleShellSections(context.bootstrap);
   var preferredSection = context.activeSection || preferredPortalShellSection(context.bootstrap);
   var activeSection = shellSections.some(function(entry) {
@@ -1563,11 +1563,6 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
   })
     ? preferredSection
     : (shellSections[0] ? shellSections[0].section : 'billing');
-  var billingNote = hosted
-    ? (showSelfHostedCommercial
-      ? 'Hosted billing by account. Self-hosted purchases stay separate below.'
-      : 'Hosted billing by account.')
-    : 'Self-hosted subscriptions, licenses, refunds, and privacy requests.';
   var selfHostedBillingEscalationCopy = hosted
     ? 'Escalate with the same hosted billing action or self-hosted path and the exact failed step.'
     : 'Escalate with the same self-hosted billing path and the exact failed step.';
@@ -1654,8 +1649,9 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
             '</section>'
           )
           : '') +
-        '<section class="portal-content-panel portal-content-panel-billing billing-section" id="billing-section">' +
-          (hosted ? renderHostedBillingCards(accounts, showSelfHostedCommercial) : '') +
+        (showBillingPanel
+          ? '<section class="portal-content-panel portal-content-panel-billing billing-section" id="billing-section">' +
+          (hosted && hasHostedBilling ? renderHostedBillingCards(accounts, showSelfHostedCommercial) : '') +
           (showSelfHostedBillingShell
             ? ('<div class="billing-shell billing-shell-idle">' +
             '<div class="billing-shell-main">' +
@@ -1680,7 +1676,8 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
             '<div class="billing-shell-detail" id="billing-detail-shell" hidden>' + selfHostedBillingPanelsHTML + '</div>' +
           '</div>')
             : '') +
-        '</section>' +
+        '</section>'
+          : '') +
         '<section class="portal-content-panel portal-content-panel-support">' +
           renderSupportSection(context) +
         '</section>' +

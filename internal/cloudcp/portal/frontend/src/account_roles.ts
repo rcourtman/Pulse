@@ -20,17 +20,32 @@ export function portalRoleLabel(role: string): string {
   }
 }
 
-export function portalRoleCapabilityCopy(role: string, clientLanguage = false): string {
+export function portalRoleCapabilityCopy(role: string, clientLanguage = false, hasBilling = true): string {
   switch (normalizePortalRole(role)) {
     case 'owner':
+      if (!hasBilling) {
+        return clientLanguage
+          ? 'Full account control, including access control and client control.'
+          : 'Full account control, including access control and workspace control.';
+      }
       return clientLanguage
         ? 'Full account control, including billing, access control, and client control.'
         : 'Full account control, including billing, access control, and workspace control.';
     case 'admin':
+      if (!hasBilling) {
+        return clientLanguage
+          ? 'Can manage clients and account access.'
+          : 'Can manage workspaces and account access.';
+      }
       return clientLanguage
         ? 'Can manage clients and billing for this account.'
         : 'Can manage workspaces and billing for this account.';
     case 'tech':
+      if (!hasBilling) {
+        return clientLanguage
+          ? 'Can manage clients without access ownership.'
+          : 'Can manage workspaces without access ownership.';
+      }
       return clientLanguage
         ? 'Can manage clients without billing ownership.'
         : 'Can manage workspaces without billing ownership.';

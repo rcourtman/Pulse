@@ -32,10 +32,20 @@ type Deps struct {
 }
 
 func publicCloudSignupPath(cfg *CPConfig) string {
+	if cfg != nil && cfg.IsProviderHostedMSP() {
+		return ""
+	}
 	if cfg != nil && cfg.PublicCloudSignupEnabled {
 		return portal.PortalSignupPath
 	}
 	return ""
+}
+
+func providerMSPPlanVersion(cfg *CPConfig) string {
+	if cfg == nil || strings.TrimSpace(cfg.ProviderMSPPlanVersion) == "" {
+		return defaultProviderHostedMSPPlanVersion
+	}
+	return cfg.ProviderMSPPlanVersion
 }
 
 // RegisterRoutes wires all HTTP handlers onto the given ServeMux.
@@ -124,10 +134,13 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 			deps.Config.AllowDockerlessProvisioning,
 			cpstripe.WithHostedEntitlementService(hostedEntitlements),
 			cpstripe.WithTrialActivationPrivateKey(deps.Config.TrialActivationPrivateKey),
+			cpstripe.WithDefaultMSPPlanVersion(providerMSPPlanVersion(deps.Config)),
 		)
 	}
-	webhookHandler := cpstripe.NewWebhookHandler(deps.Config.StripeWebhookSecret, provisioner)
-	mux.Handle("/api/stripe/webhook", webhookLimiter.Middleware(webhookHandler))
+	if deps.Config.UsesStripeBilling() {
+		webhookHandler := cpstripe.NewWebhookHandler(deps.Config.StripeWebhookSecret, provisioner)
+		mux.Handle("/api/stripe/webhook", webhookLimiter.Middleware(webhookHandler))
+	}
 
 	// Magic link verification (public, token-authenticated)
 	baseDomain := baseDomainFromURL(deps.Config.BaseURL)
@@ -153,7 +166,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 		mux.Handle("/cloud/signup/complete", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandleSignupComplete)))
 		mux.Handle("/api/public/signup", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandlePublicSignup)))
 
-		// Pulse Cloud for MSPs self-serve signup. Registered under the same
+		// Pulse Cloud for MSPs gated signup. Registered under the same
 		// public-signup gate; stays inert (renders an unavailable state) until
 		// an MSP tier price ID is configured in CP env.
 		mux.Handle("/cloud/msp/signup", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandleMSPSignupPage)))
@@ -214,7 +227,12 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 
 	// Workspace management (session + account-membership authenticated)
 	listTenants := account.HandleListTenants(deps.Registry)
-	createTenant := account.HandleCreateTenant(deps.Registry, provisioner)
+	workspaceLimitPolicy := account.WorkspaceLimitPolicy{}
+	if deps.Config.IsProviderHostedMSP() {
+		workspaceLimitPolicy.ProviderHostedMSP = true
+		workspaceLimitPolicy.ProviderMSPPlanVersion = providerMSPPlanVersion(deps.Config)
+	}
+	createTenant := account.HandleCreateTenantWithWorkspaceLimitPolicy(deps.Registry, provisioner, workspaceLimitPolicy)
 	updateTenant := account.HandleUpdateTenant(deps.Registry)
 	deleteTenant := account.HandleDeleteTenant(deps.Registry, provisioner)
 
@@ -251,12 +269,14 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	mux.Handle(portal.PortalDashboardPath, portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalDashboardWithSetupFacts(deps.Registry, portalSetupFacts))))
 	mux.Handle(portal.PortalWorkspacePath, portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalWorkspaceDetail(deps.Registry))))
 
-	// Stripe Customer Portal redirect (session + account-membership authenticated)
-	billingCfg := portal.BillingPortalConfig{
-		StripeAPIKey: deps.Config.StripeAPIKey,
-		ReturnURL:    buildCPURL(deps.Config.BaseURL, portal.PortalPagePath, nil),
+	if deps.Config.UsesStripeBilling() {
+		// Stripe Customer Portal redirect (session + account-membership authenticated)
+		billingCfg := portal.BillingPortalConfig{
+			StripeAPIKey: deps.Config.StripeAPIKey,
+			ReturnURL:    buildCPURL(deps.Config.BaseURL, portal.PortalPagePath, nil),
+		}
+		mux.Handle(portal.PortalBillingPath, portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandleBillingPortalRedirect(deps.Registry, billingCfg))))
 	}
-	mux.Handle(portal.PortalBillingPath, portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandleBillingPortalRedirect(deps.Registry, billingCfg))))
 	mux.Handle(portal.PortalCommercialProxyPath, portalAPILimiter.Middleware(sessionAuth(portal.HandleCommercialProxy(portal.CommercialProxyConfig{
 		BaseURL: deps.Config.LicenseServerURL,
 	}))))

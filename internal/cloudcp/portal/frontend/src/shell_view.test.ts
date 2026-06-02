@@ -276,6 +276,41 @@ describe('shell view', function() {
     expect(html).not.toContain('data-shell-section="overview"');
   });
 
+  it('omits hosted billing surfaces for provider-hosted MSP accounts without billing records', function() {
+    var html = renderAuthenticatedPortalHTML(
+      createContext({
+        bootstrap: createBootstrap({
+          accounts: [
+            {
+              id: 'acct_provider',
+              name: 'Provider MSP',
+              kind: 'msp',
+              kind_label: 'MSP',
+              role: 'owner',
+              can_manage: true,
+              has_billing: false,
+              members: [],
+              workspaces: [],
+            },
+          ],
+        }),
+      })
+    );
+
+    expect(html).toContain('data-shell-section="workspaces">Clients</button>');
+    expect(html).toContain('data-shell-section="access">Access</button>');
+    expect(html).toContain('data-shell-section="support">Support</button>');
+    expect(html).not.toContain('data-shell-section="billing"');
+    expect(html).not.toContain('id="billing-section"');
+    expect(html).not.toContain('hosted billing');
+    expect(html).not.toContain('Full account, billing, and access control.');
+    expect(html).not.toContain('without billing');
+    expect(html).not.toContain('Billing changes stay in Billing.');
+    expect(html).toContain('Access changes stay in Access. Client runtime changes stay inside the client workspace.');
+    expect(html).toContain('Retry the same Clients or Access step before you escalate.');
+    expect(html).toContain('Clients or Access.');
+  });
+
   it('defaults the authenticated hosted shell to workspaces', function() {
     var html = renderAuthenticatedPortalHTML(
       createContext({
