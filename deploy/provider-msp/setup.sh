@@ -121,6 +121,7 @@ install_deploy_bundle() {
     "traefik-dynamic.yml"
     ".env.example"
     "run-install-proof.sh"
+    "upgrade.sh"
   )
 
   if [[ -n "${src_dir}" ]]; then
@@ -166,6 +167,7 @@ This script needs these files present on disk:
   - traefik-dynamic.yml
   - .env.example
   - run-install-proof.sh
+  - upgrade.sh
 
 Run it from deploy/provider-msp/, or set PULSE_PROVIDER_MSP_BUNDLE_URL to a
 tar.gz containing those files.
@@ -178,6 +180,7 @@ EOF
   install -m 0644 "${src_dir}/traefik-dynamic.yml" "${PULSE_PROVIDER_MSP_INSTALL_DIR}/traefik-dynamic.yml"
   install -m 0644 "${src_dir}/.env.example" "${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env.example"
   install -m 0755 "${src_dir}/run-install-proof.sh" "${PULSE_PROVIDER_MSP_INSTALL_DIR}/run-install-proof.sh"
+  install -m 0755 "${src_dir}/upgrade.sh" "${PULSE_PROVIDER_MSP_INSTALL_DIR}/upgrade.sh"
 }
 
 env_value() {

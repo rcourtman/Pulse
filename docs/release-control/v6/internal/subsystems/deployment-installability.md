@@ -150,6 +150,15 @@ surfaces.
    provider images, run the one-off `provider-msp install-proof` command through
    the packaged control-plane service, start the long-running provider stack,
    and finish with `provider-msp status`.
+   `deploy/provider-msp/upgrade.sh` is the compose-level pre-upgrade and
+   pre-maintenance runner for provider-hosted MSP. It must keep dry-run mode
+   non-mutating, validate the provider `.env` and compose config, check
+   provider status and preflight, create and verify a fresh backup before
+   apply, dry-run restore into a separate target data dir, require backup
+   readiness before and after provider service replacement, update the packaged
+   Traefik/control-plane services, print the tenant runtime reconcile plan, and
+   only execute `tenant-runtime reconcile --all` when the operator explicitly
+   asks for tenant rollout.
    `deploy/provider-msp/setup.sh` is the first-time provider host setup
    artifact. It must install the Docker/compose host prerequisites, create the
    provider data, backup, and Docker-network layout, copy the provider MSP

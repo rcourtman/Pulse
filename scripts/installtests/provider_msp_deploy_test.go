@@ -61,6 +61,9 @@ func TestProviderMSPDeployEnvExampleMatchesBootstrapPath(t *testing.T) {
 		"docker compose run --rm control-plane provider-msp preflight",
 		"docker compose run --rm control-plane provider-msp status",
 		"docker compose run --rm control-plane provider-msp status --require-backup",
+		"./upgrade.sh --dry-run",
+		"./upgrade.sh",
+		"./upgrade.sh --rollout-tenants",
 		"./run-install-proof.sh",
 		"docker compose run --rm control-plane provider-msp install-proof",
 		"docker compose run --rm control-plane provider-msp recover --all-degraded --dry-run",
@@ -107,6 +110,7 @@ func TestProviderMSPSetupScriptMatchesProviderContract(t *testing.T) {
 		"traefik-dynamic.yml",
 		".env.example",
 		"run-install-proof.sh",
+		"upgrade.sh",
 		"CP_PROVIDER_MSP_LICENSE_FILE",
 		"CP_TRIAL_ACTIVATION_PRIVATE_KEY",
 		"PULSE_PROVIDER_MSP_DATA_DIR",
@@ -125,6 +129,53 @@ func TestProviderMSPSetupScriptMatchesProviderContract(t *testing.T) {
 		"PULSE_PROVIDER_MSP_ACCOUNT_NAME",
 		"PULSE_PROVIDER_MSP_OWNER_EMAIL",
 		"./run-install-proof.sh",
+	)
+}
+
+func TestProviderMSPUpgradeRunnerMatchesComposeContract(t *testing.T) {
+	scriptPath := repoFile("deploy", "provider-msp", "upgrade.sh")
+	result := exec.Command("bash", "-n", scriptPath)
+	if output, err := result.CombinedOutput(); err != nil {
+		t.Fatalf("provider MSP upgrade runner shell syntax failed: %v\n%s", err, output)
+	}
+	scriptBytes, err := os.ReadFile(scriptPath)
+	if err != nil {
+		t.Fatalf("read provider MSP upgrade runner: %v", err)
+	}
+	text := string(scriptBytes)
+	assertContainsAll(t, text,
+		"PROVIDER_MSP_UPGRADE_DRY_RUN",
+		"PROVIDER_MSP_UPGRADE_ROLLOUT_TENANTS",
+		"PROVIDER_MSP_UPGRADE_PRUNE_PREVIOUS",
+		"PROVIDER_MSP_UPGRADE_BACKUP_OUTPUT",
+		"PROVIDER_MSP_UPGRADE_RESTORE_TARGET",
+		"PROVIDER_MSP_UPGRADE_RUN_ID",
+		"PROVIDER_MSP_UPGRADE_HEALTH_TIMEOUT",
+		"docker compose config --quiet",
+		"docker version >/dev/null",
+		"provider-msp preflight",
+		"provider-msp status",
+		"provider-msp status --require-backup",
+		"provider-msp backup create",
+		"provider-msp backup verify",
+		"provider-msp backup restore",
+		"--target-data-dir",
+		"tenant-runtime reconcile --all --dry-run",
+		"tenant-runtime reconcile",
+		"--all",
+		"--run-id",
+		"--health-timeout",
+		"--prune-previous",
+		"docker compose pull traefik control-plane",
+		"docker compose up -d traefik control-plane",
+		"docker compose run --rm --no-deps control-plane",
+		"provider_msp_upgrade_ok=true",
+		"tenant_runtime_rollout_applied=true",
+		"tenant_runtime_rollout_applied=false",
+	)
+	assertNotContainsAny(t, text,
+		"STRIPE_",
+		"CP_PUBLIC_CLOUD_SIGNUP_ENABLED",
 	)
 }
 
