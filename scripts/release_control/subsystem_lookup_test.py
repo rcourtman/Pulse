@@ -3405,10 +3405,12 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
             [
+                "cmd/pulse-control-plane/provider_msp_backup_test.go",
                 "cmd/pulse-control-plane/provider_msp_preflight_test.go",
                 "cmd/pulse-control-plane/provider_msp_proof_test.go",
                 "cmd/pulse-control-plane/provider_msp_status_test.go",
                 "internal/cloudcp/docker/manager_test.go",
+                "internal/cloudcp/provider_msp_backup_test.go",
                 "internal/cloudcp/tenant_runtime_rollout_test.go",
                 "scripts/installtests/provider_msp_deploy_test.go",
             ],

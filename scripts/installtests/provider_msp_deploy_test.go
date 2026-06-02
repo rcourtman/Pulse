@@ -49,6 +49,8 @@ func TestProviderMSPDeployEnvExampleMatchesBootstrapPath(t *testing.T) {
 		"docker compose run --rm control-plane provider-msp bootstrap",
 		"docker compose run --rm control-plane provider-msp preflight",
 		"docker compose run --rm control-plane provider-msp status",
+		"docker compose run --rm control-plane provider-msp backup create",
+		"docker compose run --rm control-plane provider-msp backup verify",
 		"docker compose run --rm control-plane provider-msp proof",
 		"--account-name",
 		"--owner-email",

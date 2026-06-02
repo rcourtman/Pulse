@@ -27,12 +27,14 @@ surfaces.
 4. `cmd/pulse-control-plane/main.go`
 5. `cmd/pulse-control-plane/mobile_proof_cmd.go`
 6. `cmd/pulse-control-plane/provider_msp.go`
-7. `cmd/pulse-control-plane/provider_msp_preflight.go`
-8. `cmd/pulse-control-plane/provider_msp_proof.go`
-9. `cmd/pulse-control-plane/provider_msp_status.go`
-10. `internal/cloudcp/docker/manager.go`
-11. `internal/cloudcp/docker/labels.go`
-12. `internal/cloudcp/tenant_runtime_rollout.go`
+7. `cmd/pulse-control-plane/provider_msp_backup.go`
+8. `cmd/pulse-control-plane/provider_msp_preflight.go`
+9. `cmd/pulse-control-plane/provider_msp_proof.go`
+10. `cmd/pulse-control-plane/provider_msp_status.go`
+11. `internal/cloudcp/provider_msp_backup.go`
+12. `internal/cloudcp/docker/manager.go`
+13. `internal/cloudcp/docker/labels.go`
+14. `internal/cloudcp/tenant_runtime_rollout.go`
 13. `.github/workflows/create-release.yml`
 14. `.github/workflows/deploy-demo-server.yml`
 15. `.github/workflows/helm-pages.yml`
@@ -117,7 +119,7 @@ surfaces.
 2. `internal/api/updates.go` shared with `api-contracts`: update handlers are both a deployment-installability control surface and a canonical API payload contract boundary.
 3. `internal/cloudcp/docker/labels.go` shared with `cloud-paid`: hosted tenant Docker labels are both a Pulse Cloud runtime contract boundary and a deployment-installability rollout boundary.
 4. `internal/cloudcp/docker/manager.go` shared with `cloud-paid`: hosted tenant container management is both a Pulse Cloud runtime contract boundary and a deployment-installability rollout boundary.
-   Tenant runtime containers must be created with bounded Docker `json-file`
+   Tenant runtime containers must use bounded Docker `json-file`
    logging so rollout and canary fleets cannot consume unbounded production
    host storage while they remain running.
    Provider-hosted MSP workspace creation and preflight must prepare or report
@@ -137,13 +139,22 @@ surfaces.
    state/health counts, stuck provisioning workspaces, Docker runtime
    prerequisites, storage guardrails, and the same license-backed plan identity
    without pulling tenant images unless the operator asks for it.
-5. `internal/cloudcp/tenant_runtime_rollout.go` shared with `cloud-paid`: hosted tenant runtime rollout is both a Pulse Cloud runtime contract boundary and a deployment-installability release-rollout boundary.
-6. `scripts/install.ps1` shared with `agent-lifecycle`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+5. `internal/cloudcp/provider_msp_backup.go` shared with `cloud-paid`: provider-hosted MSP backup is both a cloud-paid license/account/runtime continuity boundary and a deployment-installability recovery artifact boundary.
+   `pulse-control-plane provider-msp backup create` and `backup verify` must
+   create a Stripe-free recovery archive outside the live
+   control-plane/tenant source trees, snapshot SQLite control-plane databases
+   through an online backup path, include tenant runtime directories for all
+   non-deleted registry workspaces, include the signed MSP license file when
+   the plan source is license-backed, and verify the manifest, tenant registry
+   snapshot, license artifact, and tenant runtime directories before the
+   archive is treated as usable for upgrades or recovery drills.
+6. `internal/cloudcp/tenant_runtime_rollout.go` shared with `cloud-paid`: hosted tenant runtime rollout is both a Pulse Cloud runtime contract boundary and a deployment-installability release-rollout boundary.
+7. `scripts/install.ps1` shared with `agent-lifecycle`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
    It must expose a non-mutating preflight for the exact Windows agent
    architecture before Administrator-only install changes, accept token-file
    enrollment input, and avoid interactive download-failure prompts when
    launched by generated non-interactive onboarding commands.
-7. `scripts/install.sh` shared with `agent-lifecycle`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+8. `scripts/install.sh` shared with `agent-lifecycle`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
 
 ## Extension Points
 

@@ -13,6 +13,7 @@ func newProviderMSPCmd() *cobra.Command {
 		Short: "Operate a provider-hosted MSP control plane",
 	}
 	cmd.AddCommand(newProviderMSPBootstrapCmd())
+	cmd.AddCommand(newProviderMSPBackupCmd())
 	cmd.AddCommand(newProviderMSPPreflightCmd())
 	cmd.AddCommand(newProviderMSPProofCmd())
 	cmd.AddCommand(newProviderMSPStatusCmd())
