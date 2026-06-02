@@ -144,6 +144,12 @@ surfaces.
    dry-run restore into a separate target data dir, dry-run failed-workspace
    recovery, remove proof workspaces when requested, and report final
    operational status.
+   `deploy/provider-msp/run-install-proof.sh` is the compose-level operator
+   wrapper for that rehearsal. It must validate the provider `.env` and compose
+   config, require a reachable Docker daemon, optionally pull the pinned
+   provider images, run the one-off `provider-msp install-proof` command through
+   the packaged control-plane service, start the long-running provider stack,
+   and finish with `provider-msp status`.
    `pulse-control-plane provider-msp status` is the non-mutating operational
    companion to that proof: it must report registry readiness, tenant
    state/health counts, stuck provisioning workspaces, Docker runtime

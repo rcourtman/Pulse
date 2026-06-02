@@ -2,6 +2,7 @@ package installtests
 
 import (
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -49,6 +50,7 @@ func TestProviderMSPDeployEnvExampleMatchesBootstrapPath(t *testing.T) {
 		"docker compose run --rm control-plane provider-msp bootstrap",
 		"docker compose run --rm control-plane provider-msp preflight",
 		"docker compose run --rm control-plane provider-msp status",
+		"./run-install-proof.sh",
 		"docker compose run --rm control-plane provider-msp install-proof",
 		"docker compose run --rm control-plane provider-msp recover --all-degraded --dry-run",
 		"docker compose run --rm control-plane provider-msp recover --all-degraded",
@@ -68,6 +70,38 @@ func TestProviderMSPDeployEnvExampleMatchesBootstrapPath(t *testing.T) {
 		"CP_MSP_STARTER_PRICE_ID",
 		"CP_MSP_GROWTH_PRICE_ID",
 		"CP_MSP_SCALE_PRICE_ID",
+		"CP_PUBLIC_CLOUD_SIGNUP_ENABLED",
+	)
+}
+
+func TestProviderMSPInstallProofRunnerMatchesComposeContract(t *testing.T) {
+	scriptPath := repoFile("deploy", "provider-msp", "run-install-proof.sh")
+	result := exec.Command("bash", "-n", scriptPath)
+	if output, err := result.CombinedOutput(); err != nil {
+		t.Fatalf("provider MSP install-proof runner shell syntax failed: %v\n%s", err, output)
+	}
+	scriptBytes, err := os.ReadFile(scriptPath)
+	if err != nil {
+		t.Fatalf("read provider MSP install-proof runner: %v", err)
+	}
+	text := string(scriptBytes)
+	assertContainsAll(t, text,
+		"docker compose config --quiet",
+		"docker version >/dev/null",
+		"docker compose pull traefik control-plane",
+		"provider-msp install-proof",
+		"--account-name",
+		"--owner-email",
+		"--workspace-count",
+		"--install-type",
+		"--target-path",
+		"--skip-image-pull",
+		"docker compose run --rm --no-deps control-plane",
+		"docker compose up -d traefik control-plane",
+		"provider-msp status",
+	)
+	assertNotContainsAny(t, text,
+		"STRIPE_",
 		"CP_PUBLIC_CLOUD_SIGNUP_ENABLED",
 	)
 }
