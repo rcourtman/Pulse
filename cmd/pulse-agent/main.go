@@ -57,7 +57,7 @@ type RemoteConfigApplier interface {
 	ApplyRemoteConfig(settings map[string]interface{}, commandsEnabled *bool)
 }
 
-// Runnable closer for Docker agent which needs cleanup
+// Runnable closer for the Docker / Podman collection module which needs cleanup.
 type RunnableCloser interface {
 	Runnable
 	Close() error
@@ -360,7 +360,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 		}
 	}
 
-	// 9. Start Docker Agent (if enabled)
+	// 9. Start Docker / Podman module (if enabled)
 	var dockerAgent RunnableCloser
 	if cfg.EnableDocker {
 		dockerCfg := dockeragent.Config{
@@ -398,7 +398,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 				agent := initDockerWithRetry(ctx, dockerCfg, &logger)
 				if agent != nil {
 					dockerAgent = agent
-					logger.Info().Msg("Docker agent module started (after retry)")
+					logger.Info().Msg("Docker / Podman module started (after retry)")
 					return agent.Run(ctx)
 				}
 				// Docker never became available, continue without it
@@ -406,7 +406,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			})
 		} else {
 			g.Go(func() error {
-				logger.Info().Msg("Docker agent module started")
+				logger.Info().Msg("Docker / Podman module started")
 				return dockerAgent.Run(ctx)
 			})
 		}
@@ -582,7 +582,7 @@ func cleanupDockerAgent(agent RunnableCloser, logger *zerolog.Logger) {
 			Err(err).
 			Str("component", "docker_agent").
 			Str("action", "shutdown_failed").
-			Msg("Failed to close docker agent")
+			Msg("Failed to close Docker / Podman module")
 	}
 }
 
@@ -806,7 +806,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	logLevelFlag := fs.String("log-level", defaultLogLevel(envLogLevel), "Log level")
 
 	enableHostFlag := fs.Bool("enable-host", defaultEnableHost, "Enable Host Agent module")
-	enableDockerFlag := fs.Bool("enable-docker", defaultEnableDocker, "Enable Docker / Podman Agent module")
+	enableDockerFlag := fs.Bool("enable-docker", defaultEnableDocker, "Enable Docker / Podman collection module")
 	enableKubernetesFlag := fs.Bool("enable-kubernetes", defaultEnableKubernetes, "Enable Kubernetes Agent module")
 	enableProxmoxFlag := fs.Bool("enable-proxmox", defaultEnableProxmox, "Enable Proxmox mode (creates API token, registers node)")
 	proxmoxTypeFlag := fs.String("proxmox-type", envProxmoxType, "Proxmox type: pve or pbs (auto-detected if not specified)")
@@ -1115,8 +1115,8 @@ func resolveTokenInternal(tokenFlag, tokenFileFlag, envToken string, readFile fu
 	return ""
 }
 
-// initDockerWithRetry attempts to initialize the Docker agent with exponential backoff.
-// It returns the agent when Docker becomes available, or nil if the context is cancelled.
+// initDockerWithRetry attempts to initialize the Docker / Podman collection module with exponential backoff.
+// It returns the module when Docker / Podman becomes available, or nil if the context is cancelled.
 // Retry intervals: 5s, 10s, 20s, 40s, 80s, 160s, then cap at 5 minutes.
 func initDockerWithRetry(ctx context.Context, cfg dockeragent.Config, logger *zerolog.Logger) RunnableCloser {
 	const multiplier = 2.0

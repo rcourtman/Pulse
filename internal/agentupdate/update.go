@@ -78,6 +78,7 @@ var (
 	unraidPersistentPathFn       = unraidPersistentPath
 	qnapPersistentPathFn         = qnapPersistentPath
 	restartProcessFn             = restartProcess
+	execCommandContextFn         = exec.CommandContext
 	osExecutableFn               = os.Executable
 	evalSymlinksFn               = filepath.EvalSymlinks
 	createTempFn                 = os.CreateTemp
@@ -136,6 +137,7 @@ type Updater struct {
 	checkInProgress bool
 
 	performUpdateFn func(context.Context) error
+	selfTestFn      func(context.Context, string) error
 	initialDelay    time.Duration
 	newTicker       func(time.Duration) *time.Ticker
 }
@@ -190,6 +192,7 @@ func New(cfg Config) *Updater {
 		configErr: configErr,
 	}
 	u.performUpdateFn = u.performUpdate
+	u.selfTestFn = u.runDownloadedBinarySelfTest
 	u.initialDelay = 5 * time.Second
 	u.newTicker = time.NewTicker
 	return u
@@ -763,6 +766,10 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 		return fmt.Errorf("failed to chmod: %w", err)
 	}
 
+	if err := u.selfTestFn(ctx, tmpPath); err != nil {
+		return err
+	}
+
 	// Atomic replacement with backup (use realExecPath for rename operations)
 	backupPath := realExecPath + ".backup"
 	if err := renameFn(realExecPath, backupPath); err != nil {
@@ -862,6 +869,68 @@ func GetUpdatedFromVersion() string {
 	os.Remove(updateInfoPath)
 
 	return strings.TrimSpace(string(data))
+}
+
+func writeSelfTestTokenFile(token string) (string, error) {
+	trimmed := strings.TrimSpace(token)
+	if trimmed == "" {
+		return "", nil
+	}
+
+	file, err := createTempFn("", "pulse-agent-selftest-token-*")
+	if err != nil {
+		return "", fmt.Errorf("create self-test token file: %w", err)
+	}
+	path := file.Name()
+	cleanupOnError := true
+	defer func() {
+		if cleanupOnError {
+			_ = closeFileFn(file)
+			_ = os.Remove(path)
+		}
+	}()
+
+	if _, err := file.WriteString(trimmed); err != nil {
+		return "", fmt.Errorf("write self-test token file: %w", err)
+	}
+	if err := closeFileFn(file); err != nil {
+		return "", fmt.Errorf("close self-test token file: %w", err)
+	}
+	if err := chmodFn(path, 0o600); err != nil {
+		return "", fmt.Errorf("chmod self-test token file: %w", err)
+	}
+
+	cleanupOnError = false
+	return path, nil
+}
+
+func (u *Updater) runDownloadedBinarySelfTest(ctx context.Context, binaryPath string) error {
+	args := []string{"--self-test"}
+
+	tokenFilePath, err := writeSelfTestTokenFile(u.cfg.APIToken)
+	if err != nil {
+		return fmt.Errorf("prepare self-test token file: %w", err)
+	}
+	if tokenFilePath != "" {
+		defer func() {
+			if removeErr := os.Remove(tokenFilePath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+				u.logger.Warn().Err(removeErr).Str("path", tokenFilePath).Msg("agentupdate.selfTest: failed to remove token file")
+			}
+		}()
+		args = append(args, "--token-file", tokenFilePath)
+	}
+
+	cmd := execCommandContextFn(ctx, binaryPath, args...)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		u.logger.Error().
+			Err(err).
+			Int("outputBytes", len(output)).
+			Msg("agentupdate.selfTest: downloaded binary failed self-test")
+		return fmt.Errorf("new pulse-agent binary failed self-test: %w", err)
+	}
+
+	u.logger.Debug().Msg("downloaded pulse-agent binary passed self-test")
+	return nil
 }
 
 // determineArch returns the architecture string for download URLs (e.g., "linux-amd64", "darwin-arm64").

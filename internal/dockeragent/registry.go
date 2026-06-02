@@ -58,7 +58,7 @@ type ImageUpdateResult struct {
 	Error           string    `json:"error,omitempty"`
 }
 
-// NewRegistryChecker creates a new registry checker for the Docker agent.
+// NewRegistryChecker creates a new registry checker for the Docker / Podman module.
 func NewRegistryChecker(logger zerolog.Logger) *RegistryChecker {
 	return newRegistryCheckerWithConfig(logger, true)
 }

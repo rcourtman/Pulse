@@ -168,6 +168,43 @@ func TestApplyDockerReport_RecreatedContainerAgentIDKeepsTokenBinding(t *testing
 	}
 }
 
+func TestApplyDockerReportTokenConflictUsesModuleCopy(t *testing.T) {
+	monitor := newTestMonitor(t)
+	token := &config.APITokenRecord{ID: "token-conflict", Name: "Docker Token"}
+
+	firstReport := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{ID: "module-a", Version: "1.0.0", IntervalSeconds: 30},
+		Host: agentsdocker.HostInfo{
+			Hostname:  "docker-a",
+			MachineID: "machine-a",
+		},
+		Timestamp: time.Now().UTC(),
+	}
+	if _, err := monitor.ApplyDockerReport(firstReport, token); err != nil {
+		t.Fatalf("first ApplyDockerReport failed: %v", err)
+	}
+
+	conflictingReport := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{ID: "module-b", Version: "1.0.0", IntervalSeconds: 30},
+		Host: agentsdocker.HostInfo{
+			Hostname:  "docker-b",
+			MachineID: "machine-b",
+		},
+		Timestamp: firstReport.Timestamp.Add(time.Minute),
+	}
+	_, err := monitor.ApplyDockerReport(conflictingReport, token)
+	if err == nil {
+		t.Fatal("expected token conflict")
+	}
+	message := err.Error()
+	if !strings.Contains(message, "Each Docker / Podman module must use a unique API token") {
+		t.Fatalf("token conflict must use module copy, got %q", message)
+	}
+	if strings.Contains(message, "Docker"+" agent") || strings.Contains(message, "Docker / Podman"+" agent") {
+		t.Fatalf("token conflict must not describe Docker / Podman as a separate agent product: %q", message)
+	}
+}
+
 func TestApplyDockerReportPreservesDockerSwarmNodes(t *testing.T) {
 	monitor := newTestMonitor(t)
 	now := time.Now().UTC()

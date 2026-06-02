@@ -557,8 +557,8 @@ the canonical monitored-system blocked payload.
     `internal/api/diagnostics.go`,
     `internal/api/diagnostics_additional_test.go`, and
     `internal/api/diagnostics_memory_test.go` together. Docker and Podman
-    agent health notes emitted by diagnostics must lead with Docker / Podman
-    agent language and route operator recovery to the Infrastructure and
+    health notes emitted by diagnostics must lead with Docker / Podman module
+    language and route operator recovery to the Infrastructure and
     Security settings surfaces rather than generic runtime family wording or
     retired agent-management destinations.
 3b. Route Docker / Podman management API response copy through
@@ -566,7 +566,7 @@ the canonical monitored-system blocked payload.
     `frontend-modern/src/api/monitoring.ts`, and their route/client tests
     together. Operator-facing responses for Docker / Podman host removal,
     hide/unhide, pending uninstall, display-name, and host metadata paths must
-    use Docker / Podman agent or host wording instead of generic container
+    use Docker / Podman module or host wording instead of generic container
     runtime labels.
 3c. Route Assistant finding handoff context changes through
     `internal/api/ai_handler.go`, `internal/api/ai_handler_test.go`, and
@@ -3254,6 +3254,13 @@ shared backend install-command helper in `internal/api/agent_install_command_sha
 instead of a handler-local shell formatter, so token omission, plain-HTTP
 `--insecure`, and trailing-slash normalization stay under one canonical API
 contract surface.
+That same Docker / Podman diagnostics and admin-route API copy must preserve
+the single installed-agent product identity: Docker / Podman telemetry is a
+module reported by `pulse-agent`, not a separate customer-facing
+Docker-specific agent product. Existing `/api/agents/docker/*` route names and
+stable error codes may remain for compatibility, but response messages,
+diagnostics notes, docs, and proof labels must use Docker / Podman module
+language.
 That same diagnostics boundary must also consume the canonical monitoring
 memory-source catalog instead of maintaining a second local trust/fallback
 classifier. Node, VM, and LXC memory-source aliases must normalize to the same

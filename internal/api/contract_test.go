@@ -14977,3 +14977,45 @@ func TestContract_ProxmoxGuestDockerDetectionRequiresExplicitOptIn(t *testing.T)
 		}
 	})
 }
+
+func TestContract_DockerPodmanAdminCopyUsesPulseAgentModuleIdentity(t *testing.T) {
+	files := []string{
+		"diagnostics.go",
+		"docker_agents.go",
+		"types.go",
+		"update_detection.go",
+	}
+	for _, file := range files {
+		t.Run(file, func(t *testing.T) {
+			src, err := os.ReadFile(file)
+			if err != nil {
+				t.Fatalf("read %s: %v", file, err)
+			}
+			text := string(src)
+			for _, forbidden := range []string{
+				"Docker" + " agent",
+				"docker" + " agent",
+				"Docker / Podman" + " agent",
+				"Docker / Podman" + " agents",
+			} {
+				if strings.Contains(text, forbidden) {
+					t.Fatalf("%s must describe Docker / Podman as a pulse-agent module, not %q", file, forbidden)
+				}
+			}
+		})
+	}
+
+	diagnostics, err := os.ReadFile("diagnostics.go")
+	if err != nil {
+		t.Fatalf("read diagnostics.go: %v", err)
+	}
+	for _, required := range []string{
+		"Docker / Podman module is still using the shared API token",
+		"No Docker / Podman modules have reported in yet",
+		"All Docker / Podman modules are reporting with dedicated tokens and the expected version.",
+	} {
+		if !strings.Contains(string(diagnostics), required) {
+			t.Errorf("diagnostics.go must preserve module copy %q", required)
+		}
+	}
+}

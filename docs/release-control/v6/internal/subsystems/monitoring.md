@@ -100,7 +100,8 @@ truth for live infrastructure data.
    network summaries, Swarm services, Swarm tasks, Swarm nodes, Swarm secrets,
    Swarm configs, and daemon storage-usage buckets from the documented runtime
    API, then publish those
-   records through the Docker agent report for unified-resource ingestion.
+   records through the Docker / Podman module report for unified-resource
+   ingestion.
    Swarm service records must preserve documented service update status
    (`UpdateStatus.State`, message, and completion time when reported) so the
    container runtime surface can distinguish stable services from active or
@@ -143,10 +144,10 @@ truth for live infrastructure data.
    `internal/monitoring/docker_detection.go`,
    `internal/monitoring/monitor_pve_guest_poll.go`, and monitoring guardrails
    together. Socket detection may only annotate LXC guests after explicit
-   server opt-in. LXC Docker inventory may only emit Docker-agent-compatible
-   reports into `ApplyDockerReport`, must skip guests with a linked online
-   guest-local host agent, and must keep the command set to minimal read-only
-   Docker summary and aggregate stats collection.
+   server opt-in. LXC Docker inventory may only emit Docker / Podman
+   module-compatible reports into `ApplyDockerReport`, must skip guests with a
+   linked online guest-local host agent, and must keep the command set to
+   minimal read-only Docker summary and aggregate stats collection.
 15. Add or change mock-mode Discovery context through the canonical mock
     fixture graph. Mock Discovery records must be derived from the same authored
     state graph as mock nodes, guests, Docker hosts, containers, and Kubernetes
@@ -303,6 +304,10 @@ hostname aliases through the shared unified-resource equivalence rule when it
 binds tokens, matches reports, and removes ignored agents, so reconnects and
 reloads keep the same canonical host without weakening token uniqueness across
 different machines.
+Docker / Podman token binding in `internal/monitoring/monitor_agents.go` follows
+the same single-agent product boundary: token uniqueness and conflict messages
+are about Docker / Podman module reports from `pulse-agent`, not enrollment of a
+separate Docker-specific agent product.
 That same monitoring boundary now owns agentless availability targets as a
 first-class provider, not as a settings-only helper. Saved availability targets
 load from the config persistence boundary, schedule through

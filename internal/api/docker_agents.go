@@ -15,7 +15,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// DockerAgentHandlers manages ingest from the external Docker agent.
+// DockerAgentHandlers manages Docker / Podman module ingest from pulse-agent.
 type DockerAgentHandlers struct {
 	baseAgentHandlers
 	config *config.Config
@@ -70,12 +70,12 @@ func dockerRuntimeAgentIDFromPath(path string, suffix string) string {
 	return strings.TrimSpace(trimmed)
 }
 
-// NewDockerAgentHandlers constructs a new Docker agent handler group.
+// NewDockerAgentHandlers constructs a new Docker / Podman module handler group.
 func NewDockerAgentHandlers(mtm *monitoring.MultiTenantMonitor, m *monitoring.Monitor, hub *websocket.Hub, cfg *config.Config) *DockerAgentHandlers {
 	return &DockerAgentHandlers{baseAgentHandlers: newBaseAgentHandlers(mtm, m, hub), config: cfg}
 }
 
-// HandleReport accepts heartbeat payloads from the Docker agent.
+// HandleReport accepts heartbeat payloads from the Docker / Podman module.
 func (h *DockerAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST is allowed", nil)
@@ -115,7 +115,7 @@ func (h *DockerAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reques
 	log.Debug().
 		Str("dockerHost", host.Hostname).
 		Int("containers", len(host.Containers)).
-		Msg("Docker agent report processed")
+		Msg("Docker / Podman module report processed")
 
 	// Broadcast the updated state for near-real-time UI updates
 	h.broadcastState(r.Context())
@@ -139,7 +139,7 @@ func (h *DockerAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
-		log.Error().Err(err).Msg("Failed to serialize docker agent response")
+		log.Error().Err(err).Msg("Failed to serialize Docker / Podman module response")
 	}
 }
 
@@ -190,7 +190,7 @@ func (h *DockerAgentHandlers) HandleDockerHostActions(w http.ResponseWriter, r *
 	writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed", nil)
 }
 
-// HandleCommandAck processes acknowledgements from docker agents for issued commands.
+// HandleCommandAck processes acknowledgements from Docker / Podman modules for issued commands.
 func (h *DockerAgentHandlers) HandleCommandAck(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST is allowed", nil)
@@ -304,7 +304,7 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 
 	if shouldHide {
 		if !hostExists {
-			writeErrorResponse(w, http.StatusNotFound, "docker_agent_not_found", "Docker / Podman agent not found", nil)
+			writeErrorResponse(w, http.StatusNotFound, "docker_agent_not_found", "Docker / Podman module not found", nil)
 			return
 		}
 		host, err := h.getMonitor(r.Context()).HideDockerHost(agentID)
@@ -318,7 +318,7 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 		if err := utils.WriteJSONResponse(w, map[string]any{
 			"success": true,
 			"agentId": host.ID,
-			"message": "Docker / Podman agent hidden",
+			"message": "Docker / Podman module hidden",
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to serialize docker host operation response")
 		}
@@ -330,14 +330,14 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 			if err := utils.WriteJSONResponse(w, map[string]any{
 				"success": true,
 				"agentId": agentID,
-				"message": "Docker / Podman agent already removed",
+				"message": "Docker / Podman module already removed",
 			}); err != nil {
 				log.Error().Err(err).Msg("Failed to serialize docker host operation response")
 			}
 			return
 		}
 
-		writeErrorResponse(w, http.StatusNotFound, "docker_agent_not_found", "Docker / Podman agent not found", nil)
+		writeErrorResponse(w, http.StatusNotFound, "docker_agent_not_found", "Docker / Podman module not found", nil)
 		return
 	}
 
@@ -372,7 +372,7 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
 		"agentId": host.ID,
-		"message": "Docker / Podman agent removed",
+		"message": "Docker / Podman module removed",
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize docker host operation response")
 	}
@@ -431,7 +431,7 @@ func (h *DockerAgentHandlers) HandleUnhideHost(w http.ResponseWriter, r *http.Re
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
 		"agentId": host.ID,
-		"message": "Docker / Podman agent unhidden",
+		"message": "Docker / Podman module unhidden",
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize docker host unhide response")
 	}
@@ -461,7 +461,7 @@ func (h *DockerAgentHandlers) HandleMarkPendingUninstall(w http.ResponseWriter, 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
 		"agentId": host.ID,
-		"message": "Docker / Podman agent marked as pending uninstall",
+		"message": "Docker / Podman module marked as pending uninstall",
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize docker host pending uninstall response")
 	}
@@ -505,13 +505,13 @@ func (h *DockerAgentHandlers) HandleSetCustomDisplayName(w http.ResponseWriter, 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
 		"agentId": host.ID,
-		"message": "Docker / Podman agent custom display name updated",
+		"message": "Docker / Podman module custom display name updated",
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize docker host custom display name response")
 	}
 }
 
-// HandleContainerUpdate triggers a container update on a Docker agent.
+// HandleContainerUpdate triggers a container update through the Docker / Podman module.
 // POST /api/agents/docker/containers/{containerId}/update
 func (h *DockerAgentHandlers) HandleContainerUpdate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {

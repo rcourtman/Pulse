@@ -29,7 +29,7 @@ type DockerChecker interface {
 // DockerInventoryCollector provides explicitly opted-in Docker inventory from
 // an LXC guest through the Proxmox node that owns it.
 type DockerInventoryCollector interface {
-	// CollectDockerInventory returns a Docker agent-compatible report for the
+	// CollectDockerInventory returns a Docker / Podman module-compatible report for the
 	// supplied Proxmox LXC container. The bool is false when collection was
 	// intentionally skipped, for example because the container is outside the
 	// configured VMID allowlist or no Docker runtime is present.

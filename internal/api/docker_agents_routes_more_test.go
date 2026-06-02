@@ -113,7 +113,7 @@ func TestDockerAgentHandlers_HandleDeleteHost_Errors(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", rec.Code)
 	}
-	if body := rec.Body.String(); !strings.Contains(body, "Docker / Podman agent not found") || strings.Contains(body, "Container runtime") {
+	if body := rec.Body.String(); !strings.Contains(body, "Docker / Podman module not found") || strings.Contains(body, "Container runtime") {
 		t.Fatalf("unexpected missing hide response body: %s", body)
 	}
 
@@ -123,7 +123,7 @@ func TestDockerAgentHandlers_HandleDeleteHost_Errors(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
-	if body := rec.Body.String(); !strings.Contains(body, "Docker / Podman agent already removed") || strings.Contains(body, "Container runtime") {
+	if body := rec.Body.String(); !strings.Contains(body, "Docker / Podman module already removed") || strings.Contains(body, "Container runtime") {
 		t.Fatalf("unexpected forced delete response body: %s", body)
 	}
 }

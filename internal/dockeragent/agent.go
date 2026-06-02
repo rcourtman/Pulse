@@ -29,14 +29,14 @@ type TargetConfig struct {
 	InsecureSkipVerify bool
 }
 
-// Config describes runtime configuration for the Docker agent.
+// Config describes runtime configuration for the Docker / Podman collection module.
 type Config struct {
 	PulseURL            string
 	APIToken            string
 	Interval            time.Duration
 	HostnameOverride    string
 	AgentID             string
-	AgentType           string // "unified" when running as part of pulse-agent, empty for standalone
+	AgentType           string // "unified" when running as part of pulse-agent, empty for legacy standalone mode
 	AgentVersion        string // Version to report; if empty, uses dockeragent.Version
 	InsecureSkipVerify  bool
 	DisableAutoUpdate   bool
@@ -89,7 +89,7 @@ func isBackupContainer(names []string) bool {
 }
 
 // setAgentHeaders sets the standard authentication and metadata headers for
-// requests from the Docker agent to a Pulse backend.
+// requests from the Docker / Podman module to a Pulse backend.
 func setAgentHeaders(req *http.Request, token string) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-API-Token", token)
@@ -97,7 +97,7 @@ func setAgentHeaders(req *http.Request, token string) {
 	req.Header.Set("User-Agent", "pulse-agent/"+Version)
 }
 
-// Agent collects Docker metrics and posts them to Pulse.
+// Agent collects Docker / Podman metrics and posts them to Pulse.
 type Agent struct {
 	cfg                Config
 	docker             dockerClient
@@ -142,7 +142,7 @@ type cpuSample struct {
 	read        time.Time
 }
 
-// New creates a new Docker agent instance.
+// New creates a new Docker / Podman module instance.
 func New(cfg Config) (*Agent, error) {
 	targets, err := normalizeTargetsFn(cfg.Targets)
 	if err != nil {
@@ -873,7 +873,7 @@ func (a *Agent) sendReportToTarget(ctx context.Context, target TargetConfig, pay
 		if strings.Contains(errMsg, "already in use") {
 			a.logger.Error().
 				Str("pulseURL", target.URL).
-				Msg("DOCKER REGISTRATION FAILED: This API token is already used by another Docker agent. " +
+				Msg("DOCKER REGISTRATION FAILED: This API token is already used by another Docker / Podman module. " +
 					"Each Docker host requires its own unique token. " +
 					"Generate a new token in Pulse Settings > Agents and reinstall with the new token.")
 		}
@@ -1192,7 +1192,7 @@ func (a *Agent) Close() error {
 		case <-done:
 			stopTimer(waitTimer)
 		case <-waitTimer.C:
-			a.logger.Warn().Msg("Timed out waiting for docker agent background work to stop")
+			a.logger.Warn().Msg("Timed out waiting for Docker / Podman module background work to stop")
 		}
 
 		for _, client := range a.httpClients {

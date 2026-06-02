@@ -1195,7 +1195,9 @@ clients to recompute and compare.
 `PATCH /api/agents/agent/{agent_id}/config` (admin, `agent:manage`)  
 Updates server-side config for an agent (e.g., `commandsEnabled`).
 
-### Docker Agent Management (Admin)
+### Docker / Podman Module Management (Admin)
+These routes manage Docker / Podman telemetry and container actions reported by the Docker / Podman module inside the installed `pulse-agent` binary.
+
 - `POST /api/agents/docker/commands/{commandId}/ack` (`docker:report`)
 - `DELETE /api/agents/docker/runtimes/{agentId}` (`docker:manage`, supports `?hide=true` or `?force=true`)
 - `POST /api/agents/docker/runtimes/{agentId}/allow-reenroll` (`docker:manage`)

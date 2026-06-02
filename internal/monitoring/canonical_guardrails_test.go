@@ -620,7 +620,7 @@ func TestDockerTokenBindingUsesCanonicalHostIdentity(t *testing.T) {
 		"monitor_agents.go": {
 			"resolveDockerTokenBindingIdentity(identifier, report, previous, hasPrevious)",
 			"dockerTokenBindingMatches(boundAgentID, tokenBindingAliases)",
-			"Bound Docker agent token to host identity",
+			"Bound Docker / Podman module token to host identity",
 		},
 		"monitor.go": {
 			"Docker host identity bindings",

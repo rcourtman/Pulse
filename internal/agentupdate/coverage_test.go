@@ -70,7 +70,102 @@ func newUpdaterForTest(serverURL string) *Updater {
 		CurrentVersion: "1.0.0",
 		CheckInterval:  10 * time.Millisecond,
 	}
-	return New(cfg)
+	u := New(cfg)
+	u.selfTestFn = func(context.Context, string) error { return nil }
+	return u
+}
+
+func selfTestHelperCommand(exitCode string) *exec.Cmd {
+	cmd := exec.Command(os.Args[0], "-test.run=TestAgentUpdateSelfTestHelperProcess", "--")
+	cmd.Env = append(os.Environ(),
+		"PULSE_AGENTUPDATE_SELFTEST_HELPER=1",
+		"PULSE_AGENTUPDATE_SELFTEST_EXIT="+exitCode,
+	)
+	return cmd
+}
+
+func TestAgentUpdateSelfTestHelperProcess(t *testing.T) {
+	if os.Getenv("PULSE_AGENTUPDATE_SELFTEST_HELPER") != "1" {
+		return
+	}
+	if os.Getenv("PULSE_AGENTUPDATE_SELFTEST_EXIT") != "0" {
+		os.Exit(3)
+	}
+	os.Exit(0)
+}
+
+func TestRunDownloadedBinarySelfTestUsesTokenFile(t *testing.T) {
+	u := New(Config{APIToken: " token-with-whitespace \n"})
+
+	origExec := execCommandContextFn
+	t.Cleanup(func() { execCommandContextFn = origExec })
+
+	var (
+		sawBinaryPath string
+		sawArgs       []string
+		tokenFilePath string
+		tokenContent  string
+		tokenMode     os.FileMode
+	)
+	execCommandContextFn = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		sawBinaryPath = name
+		sawArgs = append([]string(nil), args...)
+		if len(args) == 3 {
+			tokenFilePath = args[2]
+			data, err := os.ReadFile(tokenFilePath)
+			if err != nil {
+				t.Fatalf("read self-test token file: %v", err)
+			}
+			tokenContent = string(data)
+			info, err := os.Stat(tokenFilePath)
+			if err != nil {
+				t.Fatalf("stat self-test token file: %v", err)
+			}
+			tokenMode = info.Mode().Perm()
+		}
+		return selfTestHelperCommand("0")
+	}
+
+	if err := u.runDownloadedBinarySelfTest(context.Background(), "/tmp/pulse-agent-new"); err != nil {
+		t.Fatalf("runDownloadedBinarySelfTest: %v", err)
+	}
+
+	if sawBinaryPath != "/tmp/pulse-agent-new" {
+		t.Fatalf("self-test binary path = %q", sawBinaryPath)
+	}
+	if len(sawArgs) != 3 || sawArgs[0] != "--self-test" || sawArgs[1] != "--token-file" || sawArgs[2] == "" {
+		t.Fatalf("unexpected self-test args: %#v", sawArgs)
+	}
+	if tokenContent != "token-with-whitespace" {
+		t.Fatalf("self-test token content = %q", tokenContent)
+	}
+	if runtime.GOOS != "windows" && tokenMode != 0o600 {
+		t.Fatalf("self-test token mode = %o, want 0600", tokenMode)
+	}
+	if _, err := os.Stat(tokenFilePath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected self-test token file cleanup, got err=%v", err)
+	}
+}
+
+func TestRunDownloadedBinarySelfTestPropagatesFailureWithoutTokenArg(t *testing.T) {
+	u := New(Config{})
+
+	origExec := execCommandContextFn
+	t.Cleanup(func() { execCommandContextFn = origExec })
+
+	var sawArgs []string
+	execCommandContextFn = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		sawArgs = append([]string(nil), args...)
+		return selfTestHelperCommand("3")
+	}
+
+	err := u.runDownloadedBinarySelfTest(context.Background(), "/tmp/pulse-agent-new")
+	if err == nil || !strings.Contains(err.Error(), "new pulse-agent binary failed self-test") {
+		t.Fatalf("expected self-test failure, got %v", err)
+	}
+	if len(sawArgs) != 1 || sawArgs[0] != "--self-test" {
+		t.Fatalf("unexpected self-test args without token: %#v", sawArgs)
+	}
 }
 
 func TestRestartProcess(t *testing.T) {
@@ -944,6 +1039,45 @@ func TestPerformUpdateSymlinkFallback(t *testing.T) {
 
 	if err := u.performUpdateWithExecPath(context.Background(), execPath); err != nil {
 		t.Fatalf("expected update success with symlink fallback, got %v", err)
+	}
+}
+
+func TestPerformUpdateSelfTestFailurePreservesCurrentBinary(t *testing.T) {
+	u := newUpdaterForTest("https://example")
+	_, execPath := writeTempExec(t)
+	data := testBinary()
+
+	origRestart := restartProcessFn
+	t.Cleanup(func() { restartProcessFn = origRestart })
+	restartProcessFn = func(string) error {
+		t.Fatalf("restart should not be reached after self-test failure")
+		return nil
+	}
+	u.selfTestFn = func(context.Context, string) error { return errors.New("self-test fail") }
+
+	u.client = &http.Client{
+		Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     "200 OK",
+				Body:       io.NopCloser(bytes.NewReader(data)),
+				Header:     http.Header{"X-Checksum-Sha256": []string{checksum(data)}},
+			}, nil
+		}),
+	}
+
+	if err := u.performUpdateWithExecPath(context.Background(), execPath); err == nil || !strings.Contains(err.Error(), "self-test fail") {
+		t.Fatalf("expected self-test error, got %v", err)
+	}
+	current, err := os.ReadFile(execPath)
+	if err != nil {
+		t.Fatalf("read current binary: %v", err)
+	}
+	if string(current) != "old-binary" {
+		t.Fatalf("current binary changed after failed self-test: %q", string(current))
+	}
+	if _, err := os.Stat(execPath + ".backup"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("backup should not be created before self-test passes, got err=%v", err)
 	}
 }
 

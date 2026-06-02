@@ -723,7 +723,7 @@
     },
     {
       "id": "RA9",
-      "summary": "A real v5-installed Pulse Unified Agent upgrades through v6 release assets into one canonical v6 agent identity, preserves one-shot update continuity metadata, keeps legacy persisted host-agent token scopes valid at the v6 canonical agent endpoints, and does not drift agent-count or fallback behavior during the crossover.",
+      "summary": "A real v5-installed Pulse Unified Agent upgrades through v6 release assets into one canonical v6 pulse-agent identity, preserves one-shot update continuity metadata, keeps self-update preflight token handling out of argv, keeps legacy persisted host-agent token scopes valid at the v6 canonical agent endpoints, and does not drift agent-count or fallback behavior during the crossover.",
       "kind": "journey",
       "blocking_level": "rc-ready",
       "proof_type": "hybrid",
@@ -768,7 +768,7 @@
             "test",
             "./internal/agentupdate",
             "-run",
-            "TestCheckAndUpdateToFirstHostReportCarriesPreviousVersionOnce|TestUpdateToFirstHostReportCarriesPreviousVersionOnce|TestPerformUpdatePersistsPreviousVersionForNextStart",
+            "TestCheckAndUpdateToFirstHostReportCarriesPreviousVersionOnce|TestUpdateToFirstHostReportCarriesPreviousVersionOnce|TestPerformUpdatePersistsPreviousVersionForNextStart|TestRunDownloadedBinarySelfTestUsesTokenFile|TestRunDownloadedBinarySelfTestPropagatesFailureWithoutTokenArg|TestPerformUpdateSelfTestFailurePreservesCurrentBinary",
             "-count=1"
           ]
         }

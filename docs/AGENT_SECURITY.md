@@ -143,7 +143,8 @@ Unified agent (`pulse-agent`):
 2. Verify checksum (required).
 3. Verify the Ed25519 release signature when trusted update keys are embedded.
 4. Validate binary magic (ELF/Mach-O/PE) and size limits (100MB max).
-5. Make executable and swap atomically.
+5. Run the downloaded binary with `--self-test`, passing any live token through a short-lived `0600` token file rather than argv.
+6. Make executable and swap atomically.
 
 ## API Security
 

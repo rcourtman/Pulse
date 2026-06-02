@@ -16,7 +16,10 @@
 ## Purpose
 
 Own unified agent installation, registration, update continuity, profile
-management, and fleet control surfaces.
+management, and fleet control surfaces. Pulse v6 has one host-installed
+infrastructure agent binary, `pulse-agent`; host, Docker / Podman,
+Kubernetes, Proxmox-local, and other node-local telemetry are modules inside
+that binary, not separate customer-facing agent products.
 
 ## Canonical Files
 
@@ -87,10 +90,11 @@ management, and fleet control surfaces.
 
 ## Shared Boundaries
 
-`internal/dockeragent/` is lifecycle-adjacent for agent binary/update trust,
-but Docker runtime capability truth is monitoring-owned. Lifecycle consumers
-must not reinterpret standalone `Swarm.LocalNodeState=inactive` metadata as
-agent enrollment, install, command, or fleet-control authority.
+`internal/dockeragent/` is lifecycle-adjacent for agent binary/update trust
+and owns the Docker / Podman collection module used by `pulse-agent`, but
+Docker runtime capability truth is monitoring-owned. Lifecycle consumers must
+not reinterpret standalone `Swarm.LocalNodeState=inactive` metadata as agent
+enrollment, install, command, or fleet-control authority.
 Inside-guest Docker / Podman visibility is also a privacy boundary: full
 Docker / Podman inventory may come from a guest-local agent or another explicit
 guest reporting path. LXC Docker inventory may also come from the Proxmox host
@@ -2352,17 +2356,18 @@ self-hosted upgrade-metric summaries or infrastructure-onboarding analytics to
 local commercial metrics reporting routes must stay absent from the normal
 product API and must not become lifecycle setup, install, or fleet-progress
 signals.
-Lifecycle-adjacent Docker and Podman agent diagnostics are part of that same
-shared backend dependency. When `internal/api/diagnostics.go` emits agent
+Lifecycle-adjacent Docker and Podman module diagnostics are part of that same
+shared backend dependency. When `internal/api/diagnostics.go` emits module
 health notes for Docker and Podman, the copy must keep Infrastructure as the
-operator recovery surface and must not send users back to retired agent-only
-management routes.
+operator recovery surface and must not send users back to retired
+agent-management routes.
 Lifecycle-adjacent Docker / Podman management responses are part of that same
 shared backend dependency. When `internal/api/docker_agents.go`,
 `internal/api/docker_metadata.go`, or `frontend-modern/src/api/monitoring.ts`
 surface host removal, hide/unhide, pending uninstall, display-name, or metadata
-errors, the operator-facing copy must describe Docker / Podman agents or hosts
-rather than reviving generic container-runtime labels.
+errors, the operator-facing copy must describe Docker / Podman modules or hosts
+rather than reviving generic container-runtime labels or a separate Docker
+product identity.
 That same shared `internal/api/` dependency now also assumes auth persistence
 compatibility is handled as an explicit migration/import boundary: legacy
 raw-token `sessions.json` and `csrf_tokens.json` files may load for upgrade
@@ -2541,9 +2546,10 @@ the matching base64-encoded `X-Signature-SSHSIG`, and
 and agent binaries from local or proxied assets that carry the matching
 detached signature sidecars.
 That same self-update pre-flight must keep the live agent token out of process
-argv. `internal/dockeragent/self_update.go` may pass a short-lived `0600`
-token file into `cmd/pulse-agent/main.go --self-test --token-file`, but it
-must not revive `--token <secret>` argument passing that exposes the runtime
+argv. `internal/agentupdate/update.go` and legacy
+`internal/dockeragent/self_update.go` may pass a short-lived `0600` token file
+into `cmd/pulse-agent/main.go --self-test --token-file`, but they must not
+revive `--token <secret>` argument passing that exposes the runtime
 credential through `/proc/*/cmdline`.
 That same unified-agent runtime boundary also owns vendor-aware host identity.
 When gopsutil reports generic Linux platform fields on NAS appliances,

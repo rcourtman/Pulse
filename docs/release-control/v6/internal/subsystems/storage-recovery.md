@@ -302,7 +302,7 @@ recovery scope, or a storage/recovery-owned secret source.
    storage remediation permission.
    Adjacent Docker / Podman management routes may also share `internal/api/`
    transport with storage/recovery. Storage and recovery consumers must
-   preserve the API-owned Docker / Podman agent or host wording for management
+   preserve the API-owned Docker / Podman module or host wording for management
    responses and must not introduce recovery-local container-runtime labels.
    Proxmox-side LXC Docker inventory wiring may also pass through
    `internal/api/router.go`, but storage and recovery may consume the resulting
@@ -420,6 +420,10 @@ recovery scope, or a storage/recovery-owned secret source.
    `/api/admin/users` and manual discovery at `/api/discover` must stay hidden
    for the same reason; recovery-adjacent pages must not treat those
    admin-oriented read routes as safe public-demo evidence.
+   Storage/recovery-adjacent diagnostics copy that references Docker / Podman
+   runtime coverage must also inherit the canonical installed-agent identity:
+   the coverage comes from Docker / Podman modules inside `pulse-agent`, not
+   from a separate Docker-specific agent product.
    Storage and recovery consumers must also inherit the hook's canonical
    `ResourceType` normalization for route/query filters, so storage subtypes
    such as `physical_disk` stay on the same cache-backed snapshot instead of

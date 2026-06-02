@@ -631,7 +631,7 @@ func (u APITokenUsage) NormalizeCollections() APITokenUsage {
 	return u
 }
 
-// DockerAgentDiagnostic summarizes adoption of the Docker agent command system.
+// DockerAgentDiagnostic summarizes adoption of the Docker / Podman module command system.
 type DockerAgentDiagnostic struct {
 	AgentsTotal               int                    `json:"agentsTotal"`
 	AgentsOnline              int                    `json:"agentsOnline"`
@@ -1158,7 +1158,7 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 	}
 
 	if len(hosts) == 0 {
-		appendNote("No Docker / Podman agents have reported in yet. Use Settings → Infrastructure to install the Docker / Podman agent and unlock remote commands.")
+		appendNote("No Docker / Podman modules have reported in yet. Use Settings → Infrastructure to install pulse-agent with Docker / Podman monitoring and unlock remote commands.")
 		return diag
 	}
 
@@ -1197,7 +1197,7 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 		issues := make([]string, 0, 4)
 
 		if status != "online" && status != "" {
-			issues = append(issues, fmt.Sprintf("Docker / Podman agent reports status %q.", status))
+			issues = append(issues, fmt.Sprintf("Docker / Podman module reports status %q.", status))
 		}
 
 		if versionStr == "" {
@@ -1214,7 +1214,7 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 		}
 
 		if strings.TrimSpace(host.TokenID()) == "" {
-			issues = append(issues, "Docker / Podman agent is still using the shared API token. Generate a dedicated token in Settings → Security and rerun the installer.")
+			issues = append(issues, "Docker / Podman module is still using the shared API token. Generate a dedicated token in Settings → Security and rerun the installer.")
 		}
 
 		if !host.LastSeen().IsZero() && now.Sub(host.LastSeen().UTC()) > 10*time.Minute {
@@ -1236,7 +1236,7 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 
 		if host.PendingUninstall() {
 			diag.AgentsPendingUninstall++
-			issues = append(issues, "Docker / Podman agent is pending uninstall; confirm the agent container stopped or clear the flag.")
+			issues = append(issues, "Docker / Podman module is pending uninstall; confirm pulse-agent stopped reporting Docker / Podman telemetry or clear the flag.")
 		}
 
 		if len(issues) == 0 {
@@ -1262,7 +1262,7 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 	diag.AgentsNeedingAttention = len(diag.Attention)
 
 	if legacyTokenHosts > 0 {
-		appendNote(fmt.Sprintf("%s still %s on the shared API token. Migrate each agent to a dedicated token via Settings → Security and rerun the installer.", dockerPodmanAgentCount(legacyTokenHosts), pluralVerb(legacyTokenHosts, "relies", "rely")))
+		appendNote(fmt.Sprintf("%s still %s on the shared API token. Migrate each module to a dedicated token via Settings → Security and rerun the installer.", dockerPodmanAgentCount(legacyTokenHosts), pluralVerb(legacyTokenHosts, "relies", "rely")))
 	}
 	if diag.AgentsOutdatedVersion > 0 {
 		appendNote(fmt.Sprintf("%s %s out of date. Re-run the installer from Settings → Infrastructure to upgrade.", dockerPodmanAgentCount(diag.AgentsOutdatedVersion), pluralVerb(diag.AgentsOutdatedVersion, "is", "are")))
@@ -1277,7 +1277,7 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 		appendNote(fmt.Sprintf("%s %s pending uninstall. Confirm the uninstall or clear the flag from Settings → Infrastructure.", dockerPodmanAgentCount(diag.AgentsPendingUninstall), pluralVerb(diag.AgentsPendingUninstall, "is", "are")))
 	}
 	if diag.AgentsNeedingAttention == 0 {
-		appendNote("All Docker / Podman agents are reporting with dedicated tokens and the expected version.")
+		appendNote("All Docker / Podman modules are reporting with dedicated tokens and the expected version.")
 	}
 
 	return diag
@@ -1285,16 +1285,16 @@ func buildDockerAgentDiagnostic(m *monitoring.Monitor, serverVersion string) *Do
 
 func dockerPodmanAgentCount(count int) string {
 	if count == 1 {
-		return "1 Docker / Podman agent"
+		return "1 Docker / Podman module"
 	}
-	return fmt.Sprintf("%d Docker / Podman agents", count)
+	return fmt.Sprintf("%d Docker / Podman modules", count)
 }
 
 func dockerPodmanAgentCommandCount(count int) string {
 	if count == 1 {
-		return "1 Docker / Podman agent command"
+		return "1 Docker / Podman module command"
 	}
-	return fmt.Sprintf("%d Docker / Podman agent commands", count)
+	return fmt.Sprintf("%d Docker / Podman module commands", count)
 }
 
 func pluralVerb(count int, singular, plural string) string {

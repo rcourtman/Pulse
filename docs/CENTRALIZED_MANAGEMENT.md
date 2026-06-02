@@ -1,6 +1,6 @@
 # Centralized Agent Management (Pro/legacy Pro+/Cloud)
 
-Pro, legacy Pro+, and Cloud support centralized management of agent configurations, allowing administrators to define "Configuration Profiles" and assign them to specific agents. This enables bulk updates and consistent configuration across your fleet without manually editing configuration files on each host.
+Pro, legacy Pro+, and Cloud support centralized management of `pulse-agent` configurations, allowing administrators to define "Configuration Profiles" and assign them to specific installed agents. This enables bulk updates and consistent configuration across your fleet without manually editing configuration files on each host.
 
 Profiles are managed in the UI: **Settings → Unified Agents → Agent Profiles**.
 

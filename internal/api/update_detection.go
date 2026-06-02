@@ -128,7 +128,7 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdates(w http.ResponseWriter, r
 	agentIDFilter := query.Get("agentId")
 	resourceTypeFilter := strings.ToLower(query.Get("resourceType"))
 
-	// Collect updates from Docker agents
+	// Collect updates from Docker / Podman modules.
 	updates := h.collectDockerUpdates(agentIDFilter)
 
 	// Filter by resource type if specified
@@ -328,7 +328,7 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdatesForAgent(w http.ResponseW
 	}
 }
 
-// collectDockerUpdates gathers update information from Docker agents via ReadState.
+// collectDockerUpdates gathers update information from Docker / Podman modules via ReadState.
 func (h *UpdateDetectionHandlers) collectDockerUpdates(agentIDFilter string) []ContainerUpdateInfo {
 	if h.readState == nil {
 		return nil

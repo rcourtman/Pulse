@@ -69,7 +69,7 @@ func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
 		log.Debug().
 			Str("tokenID", host.TokenID).
 			Str("dockerHostID", hostID).
-			Msg("Unbound Docker agent token from removed host")
+			Msg("Unbound Docker / Podman module token from removed host")
 	}
 	if cmd, ok := m.dockerCommands[hostID]; ok {
 		delete(m.dockerCommandIndex, cmd.status.ID)
@@ -1027,7 +1027,7 @@ func (m *Monitor) AcknowledgeDockerHostCommand(commandID, hostID, status, messag
 	return m.acknowledgeDockerCommand(commandID, hostID, status, message)
 }
 
-// ApplyDockerReport ingests a docker agent report into the shared state.
+// ApplyDockerReport ingests a Docker / Podman module report into the shared state.
 func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *config.APITokenRecord) (models.DockerHost, error) {
 	readState := m.snapshotBackedUnifiedReadState()
 	var dockerHosts []*unifiedresources.DockerHostView
@@ -1099,7 +1099,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 					Str("boundAgentID", boundAgentID).
 					Str("conflictingHost", conflictingHostname).
 					Msg("Rejecting Docker report: token already bound to different agent")
-				return models.DockerHost{}, fmt.Errorf("API token%s is already in use by agent %q (host: %s). Each Docker agent must use a unique API token. Generate a new token for this agent", tokenHint, boundAgentID, conflictingHostname)
+				return models.DockerHost{}, fmt.Errorf("API token%s is already in use by agent %q (host: %s). Each Docker / Podman module must use a unique API token. Generate a new token for this agent", tokenHint, boundAgentID, conflictingHostname)
 			}
 			if boundAgentID != agentID {
 				m.dockerTokenBindings[tokenID] = agentID
@@ -1111,7 +1111,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 				Str("tokenID", tokenID).
 				Str("agentID", agentID).
 				Str("hostname", report.Host.Hostname).
-				Msg("Bound Docker agent token to host identity")
+				Msg("Bound Docker / Podman module token to host identity")
 		}
 		m.mu.Unlock()
 	}

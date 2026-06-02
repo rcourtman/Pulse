@@ -109,7 +109,7 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, cha
 		})
 	}
 
-	// Start Docker Agent (if enabled)
+	// Start Docker / Podman module (if enabled)
 	if ws.cfg.EnableDocker {
 		dockerCfg := dockeragent.Config{
 			PulseURL:           ws.cfg.PulseURL,
@@ -132,16 +132,16 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, cha
 
 		agent, err := dockeragent.New(dockerCfg)
 		if err != nil {
-			ws.logger.Error().Err(err).Msg("Failed to create docker agent")
+			ws.logger.Error().Err(err).Msg("Failed to create Docker / Podman module")
 			if ws.eventLog != nil {
-				ws.eventLog.Error(1, fmt.Sprintf("Failed to create docker agent: %v", err))
+				ws.eventLog.Error(1, fmt.Sprintf("Failed to create Docker / Podman module: %v", err))
 			}
 			changes <- svc.Status{State: svc.Stopped}
 			return true, 1
 		}
 
 		g.Go(func() error {
-			ws.logger.Info().Msg("Docker agent module started")
+			ws.logger.Info().Msg("Docker / Podman module started")
 			return agent.Run(ctx)
 		})
 	}

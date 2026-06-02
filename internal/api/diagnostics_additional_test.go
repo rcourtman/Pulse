@@ -418,8 +418,8 @@ func TestBuildDockerAgentDiagnostic(t *testing.T) {
 		t.Fatalf("Docker diagnostics should not expose generic container-runtime copy, got %q", diagnosticText)
 	}
 	for _, want := range []string{
-		"Docker / Podman agent is still using the shared API token",
-		"1 Docker / Podman agent is out of date",
+		"Docker / Podman module is still using the shared API token",
+		"1 Docker / Podman module is out of date",
 		"Settings → Infrastructure",
 	} {
 		if !strings.Contains(diagnosticText, want) {
@@ -442,7 +442,7 @@ func TestBuildDockerAgentDiagnosticEmptyUsesDockerPodmanCopy(t *testing.T) {
 		t.Fatalf("empty Docker diagnostics should not expose generic container-runtime copy, got %q", notes)
 	}
 	for _, want := range []string{
-		"No Docker / Podman agents have reported in yet",
+		"No Docker / Podman modules have reported in yet",
 		"Settings → Infrastructure",
 	} {
 		if !strings.Contains(notes, want) {

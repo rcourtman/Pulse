@@ -1335,7 +1335,7 @@ func TestDockerAutoDetectHonorsExplicitDisable(t *testing.T) {
 		t.Fatalf("run returned unexpected error: %v", err)
 	}
 	if got := atomic.LoadInt32(&dockerAgentCalls); got != 0 {
-		t.Fatalf("Docker / Podman agent initialized despite explicit disable, calls=%d", got)
+		t.Fatalf("Docker / Podman module initialized despite explicit disable, calls=%d", got)
 	}
 }
 
@@ -1521,7 +1521,7 @@ func TestRun_AgentFailure(t *testing.T) {
 		newDockerAgent = origDocker
 	}()
 
-	// Docker agent fails immediately after start
+	// Docker / Podman module fails immediately after start
 	newDockerAgent = func(cfg dockeragent.Config) (RunnableCloser, error) {
 		return &mockRunnableCloser{mockRunnable: mockRunnable{
 			started: make(chan struct{}),

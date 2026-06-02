@@ -365,7 +365,7 @@ type MetricPoint struct {
 	Value     float64 `json:"value"`
 }
 
-// AgentVersionResponse represents Docker agent version information
+// AgentVersionResponse represents Docker / Podman module version information.
 type AgentVersionResponse struct {
 	Version string `json:"version"`
 }

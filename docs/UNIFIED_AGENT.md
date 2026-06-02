@@ -1,6 +1,6 @@
 # Pulse Unified Agent
 
-The unified agent (`pulse-agent`) combines host, Docker, and Kubernetes monitoring into a single binary. It replaces older split-agent installs with one deployment and one service for simpler operations.
+The unified agent (`pulse-agent`) is the single host-installed Pulse infrastructure agent binary. It combines host, Docker/Podman, Kubernetes, Proxmox-local, and other enabled node-local telemetry modules into one deployment and one service.
 Install it on standalone hosts and on machines where Pulse needs full node-local telemetry.
 For API-backed platforms, start with the platform connection first and add the agent only where local telemetry is needed.
 
@@ -243,8 +243,10 @@ The unified agent automatically checks for updates every hour. When a new versio
 
 1. Agent downloads the new binary from the Pulse server
 2. Verifies the checksum
-3. Replaces itself atomically (with backup)
-4. Restarts with the same configuration
+3. Verifies the release signature when trusted update keys are embedded
+4. Runs the downloaded binary with `--self-test`
+5. Replaces itself atomically (with backup)
+6. Restarts with the same configuration
 
 To disable auto-updates:
 ```bash
