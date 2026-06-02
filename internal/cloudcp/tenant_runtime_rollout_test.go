@@ -543,6 +543,68 @@ func TestTenantRuntimeContractReconcilePlan_ExplicitTenantIDsDedupesAndPreserves
 	}
 }
 
+func TestTenantRuntimeImageRolloutPlan_AllActiveTenantsTargetsConfiguredImage(t *testing.T) {
+	tenantOldImage := &registry.Tenant{ID: "t-OLDIMAGE1", State: registry.TenantStateActive, ContainerID: "old-live"}
+	tenantTargetImage := &registry.Tenant{ID: "t-TARGET01", State: registry.TenantStateActive, ContainerID: "target-live"}
+	tenantMissing := &registry.Tenant{ID: "t-MISSING02", State: registry.TenantStateActive, ContainerID: ""}
+	tenantSuspended := &registry.Tenant{ID: "t-SUSPEND1", State: registry.TenantStateSuspended, ContainerID: "suspended-live"}
+	reg := &fakeTenantRuntimeRolloutRegistry{
+		tenants: []*registry.Tenant{tenantOldImage, tenantTargetImage, tenantMissing, tenantSuspended},
+	}
+	docker := newFakeTenantRuntimeRolloutDocker()
+	targetImage := "pulse-runtime:next"
+	for _, tc := range []struct {
+		tenant *registry.Tenant
+		image  string
+	}{
+		{tenantOldImage, "pulse-runtime:stable"},
+		{tenantTargetImage, targetImage},
+		{tenantSuspended, "pulse-runtime:stable"},
+	} {
+		routing := docker.DesiredRuntimeRouting(tc.tenant.ID)
+		docker.addContainer(&cpDocker.RuntimeContainerInfo{
+			ID:        tc.tenant.ContainerID,
+			Name:      tenantRuntimeContainerName(tc.tenant.ID),
+			ImageRef:  tc.image,
+			ImageID:   "sha256:test",
+			Running:   true,
+			RouteHost: routing.Host,
+			PublicURL: routing.PublicURL,
+		})
+	}
+
+	service := newTestTenantRuntimeRolloutService(reg, docker, &fakeTenantRuntimeRolloutSynchronizer{}, newFakeTenantRuntimeRolloutClock())
+	plan, err := service.PlanImageRollout(context.Background(), TenantRuntimeImageRolloutPlanOptions{
+		All:   true,
+		Image: targetImage,
+	})
+	if err != nil {
+		t.Fatalf("PlanImageRollout() error = %v", err)
+	}
+	if len(plan.Tenants) != 3 {
+		t.Fatalf("plan tenant count = %d, want 3 active tenants", len(plan.Tenants))
+	}
+	got := make(map[string]*TenantRuntimeImageRolloutPlanItem, len(plan.Tenants))
+	for _, item := range plan.Tenants {
+		got[item.TenantID] = item
+	}
+	if got[tenantOldImage.ID].Action != tenantRuntimeContractActionRollout {
+		t.Fatalf("old image action = %q, want rollout", got[tenantOldImage.ID].Action)
+	}
+	if got[tenantOldImage.ID].LiveImageRef != "pulse-runtime:stable" || got[tenantOldImage.ID].TargetImageRef != targetImage {
+		t.Fatalf("old image refs = live %q target %q", got[tenantOldImage.ID].LiveImageRef, got[tenantOldImage.ID].TargetImageRef)
+	}
+	if got[tenantTargetImage.ID].Action != tenantRuntimeContractActionNoop {
+		t.Fatalf("target image action = %q, want noop", got[tenantTargetImage.ID].Action)
+	}
+	if got[tenantMissing.ID].Action != tenantRuntimeContractActionRollout {
+		t.Fatalf("missing tenant action = %q, want rollout", got[tenantMissing.ID].Action)
+	}
+	if _, ok := got[tenantSuspended.ID]; ok {
+		t.Fatalf("suspended tenant should not be selected by --all image rollout plan")
+	}
+}
+
 func newTestTenantRuntimeRolloutService(
 	reg tenantRuntimeRolloutRegistry,
 	docker tenantRuntimeRolloutDocker,

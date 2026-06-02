@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp"
+	cpDocker "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/docker"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/spf13/cobra"
@@ -64,8 +65,14 @@ type providerMSPBackupStatus struct {
 type providerMSPStatusDependencies struct {
 	OpenRegistry func(*cloudcp.CPConfig) (*registry.TenantRegistry, error)
 	RunPreflight func(context.Context, *cloudcp.CPConfig, providerMSPPreflightOptions) (*providerMSPPreflightReport, error)
+	NewDocker    func(*cloudcp.CPConfig) (providerMSPStatusDocker, error)
 	CheckBackup  func(context.Context, *cloudcp.CPConfig) (*providerMSPBackupStatus, error)
 	Now          func() time.Time
+}
+
+type providerMSPStatusDocker interface {
+	HealthCheck(context.Context, string) (bool, error)
+	Close() error
 }
 
 func newProviderMSPStatusCmd() *cobra.Command {
@@ -190,14 +197,17 @@ func runProviderMSPStatusWithDependencies(ctx context.Context, cfg *cloudcp.CPCo
 		}
 	}
 
-	healthy, unhealthy, err := reg.HealthSummary()
+	health, err := checkProviderMSPLiveRuntimeHealth(ctx, cfg, reg, deps)
 	if err != nil {
-		addFailure("tenant health summary: %v", err)
+		addFailure("tenant runtime health summary: %v", err)
 	} else {
-		report.HealthyTenants = healthy
-		report.UnhealthyTenants = unhealthy
-		if unhealthy > 0 {
-			addFailure("unhealthy active workspaces: %d", unhealthy)
+		report.HealthyTenants = health.Healthy
+		report.UnhealthyTenants = health.Unhealthy
+		for _, failure := range health.Failures {
+			addFailure("runtime health: %s", failure)
+		}
+		if health.Unhealthy > 0 {
+			addFailure("unhealthy active workspaces: %d", health.Unhealthy)
 		}
 	}
 
@@ -243,6 +253,11 @@ func normalizeProviderMSPStatusDependencies(deps providerMSPStatusDependencies) 
 	if deps.RunPreflight == nil {
 		deps.RunPreflight = runProviderMSPPreflight
 	}
+	if deps.NewDocker == nil {
+		deps.NewDocker = func(cfg *cloudcp.CPConfig) (providerMSPStatusDocker, error) {
+			return cpDocker.NewManager(providerMSPDockerManagerConfig(cfg))
+		}
+	}
 	if deps.CheckBackup == nil {
 		deps.CheckBackup = checkProviderMSPBackupStatus
 	}
@@ -250,6 +265,58 @@ func normalizeProviderMSPStatusDependencies(deps providerMSPStatusDependencies) 
 		deps.Now = func() time.Time { return time.Now().UTC() }
 	}
 	return deps
+}
+
+type providerMSPLiveRuntimeHealth struct {
+	Healthy   int
+	Unhealthy int
+	Failures  []string
+}
+
+func checkProviderMSPLiveRuntimeHealth(
+	ctx context.Context,
+	cfg *cloudcp.CPConfig,
+	reg *registry.TenantRegistry,
+	deps providerMSPStatusDependencies,
+) (*providerMSPLiveRuntimeHealth, error) {
+	if reg == nil {
+		return nil, fmt.Errorf("tenant registry is required")
+	}
+	dockerMgr, err := deps.NewDocker(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("create Docker manager: %w", err)
+	}
+	defer dockerMgr.Close()
+
+	tenants, err := reg.ListByState(registry.TenantStateActive)
+	if err != nil {
+		return nil, fmt.Errorf("list active tenants: %w", err)
+	}
+
+	health := &providerMSPLiveRuntimeHealth{}
+	for _, tenant := range tenants {
+		if tenant == nil {
+			continue
+		}
+		containerID := strings.TrimSpace(tenant.ContainerID)
+		if containerID == "" {
+			health.Unhealthy++
+			health.Failures = append(health.Failures, fmt.Sprintf("workspace %s has no runtime container id", tenant.ID))
+			continue
+		}
+		healthy, checkErr := dockerMgr.HealthCheck(ctx, containerID)
+		if checkErr != nil {
+			health.Unhealthy++
+			health.Failures = append(health.Failures, fmt.Sprintf("workspace %s container %s: %v", tenant.ID, containerID, checkErr))
+			continue
+		}
+		if healthy {
+			health.Healthy++
+		} else {
+			health.Unhealthy++
+		}
+	}
+	return health, nil
 }
 
 func checkProviderMSPBackupStatus(ctx context.Context, cfg *cloudcp.CPConfig) (*providerMSPBackupStatus, error) {

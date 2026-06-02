@@ -212,6 +212,13 @@ tenant-local runtime state without depending on Stripe billing surfaces.
     coherent.
     Tenant runtime rollout and missing-runtime restore must fail closed on the
     same storage admission guard before snapshotting or swapping containers.
+    `tenant-runtime rollout --all --image <target>` is the canonical hosted
+    fleet image upgrade path for active tenant runtimes. Its `--dry-run` mode
+    must print the target-image rollout plan before mutation, `--all` must
+    select active tenants only, and apply must still use the canonical
+    per-tenant snapshot, health-check, and rollback path. `tenant-runtime
+    reconcile --all` remains contract/routing drift repair for each tenant's
+    current image line, not an image-line upgrade path.
 
 The real `pulse-pro` license-server legacy checkout issuance, recurring
 renewals, manual issue, and legacy exchange flows are part of that same

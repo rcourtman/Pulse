@@ -67,6 +67,30 @@ type TenantRuntimeContractReconcilePlan struct {
 	Tenants []*TenantRuntimeContractReconcilePlanItem
 }
 
+type TenantRuntimeImageRolloutPlanOptions struct {
+	TenantIDs []string
+	All       bool
+	Image     string
+}
+
+type TenantRuntimeImageRolloutPlanItem struct {
+	TenantID         string
+	State            string
+	LiveContainerID  string
+	LiveImageRef     string
+	TargetImageRef   string
+	LiveRouteHost    string
+	DesiredRouteHost string
+	LivePublicURL    string
+	DesiredPublicURL string
+	Action           string
+	Reason           string
+}
+
+type TenantRuntimeImageRolloutPlan struct {
+	Tenants []*TenantRuntimeImageRolloutPlanItem
+}
+
 const (
 	tenantRuntimeContractActionNoop    = "noop"
 	tenantRuntimeContractActionRollout = "rollout"
@@ -145,6 +169,31 @@ func PlanTenantRuntimeContractReconcile(
 	}
 	defer cleanup()
 	return service.PlanContractReconcile(ctx, opts)
+}
+
+func PlanTenantRuntimeImageRollout(
+	ctx context.Context,
+	cfg *CPConfig,
+	opts TenantRuntimeImageRolloutPlanOptions,
+) (*TenantRuntimeImageRolloutPlan, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("control plane config is required")
+	}
+	image := strings.TrimSpace(opts.Image)
+	if image == "" {
+		image = strings.TrimSpace(cfg.PulseImage)
+	}
+	if image == "" {
+		return nil, fmt.Errorf("missing tenant runtime image")
+	}
+	opts.Image = image
+
+	service, cleanup, err := newTenantRuntimeRolloutServiceFromConfig(cfg, image)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+	return service.PlanImageRollout(ctx, opts)
 }
 
 func newTenantRuntimeRolloutServiceFromConfig(
@@ -532,6 +581,77 @@ func (s *tenantRuntimeRolloutService) PlanContractReconcile(
 	return plan, nil
 }
 
+func (s *tenantRuntimeRolloutService) PlanImageRollout(
+	ctx context.Context,
+	opts TenantRuntimeImageRolloutPlanOptions,
+) (*TenantRuntimeImageRolloutPlan, error) {
+	if s == nil {
+		return nil, fmt.Errorf("rollout service is nil")
+	}
+	targetImage := strings.TrimSpace(opts.Image)
+	if targetImage == "" {
+		targetImage = strings.TrimSpace(s.defaultImage)
+	}
+	if targetImage == "" {
+		return nil, fmt.Errorf("image is required")
+	}
+	tenants, err := s.selectImageRolloutTenants(opts)
+	if err != nil {
+		return nil, err
+	}
+	plan := &TenantRuntimeImageRolloutPlan{
+		Tenants: make([]*TenantRuntimeImageRolloutPlanItem, 0, len(tenants)),
+	}
+	for _, tenant := range tenants {
+		item := &TenantRuntimeImageRolloutPlanItem{
+			TenantID:       strings.TrimSpace(tenant.ID),
+			State:          string(tenant.State),
+			TargetImageRef: targetImage,
+		}
+		if tenant.State != registry.TenantStateActive {
+			item.Action = tenantRuntimeContractActionSkip
+			item.Reason = fmt.Sprintf("tenant state is %s, not active", tenant.State)
+			plan.Tenants = append(plan.Tenants, item)
+			continue
+		}
+
+		desiredRouting := s.docker.DesiredRuntimeRouting(tenant.ID)
+		item.DesiredRouteHost = desiredRouting.Host
+		item.DesiredPublicURL = desiredRouting.PublicURL
+
+		live, err := s.resolveLiveContainer(ctx, tenant)
+		if err != nil {
+			if errors.Is(err, errTenantRuntimeMissing) {
+				item.Action = tenantRuntimeContractActionRollout
+				item.Reason = "tenant runtime container is missing; recreate from existing tenant data"
+			} else {
+				item.Action = tenantRuntimeContractActionSkip
+				item.Reason = err.Error()
+			}
+			plan.Tenants = append(plan.Tenants, item)
+			continue
+		}
+
+		item.LiveContainerID = strings.TrimSpace(live.ID)
+		item.LiveImageRef = strings.TrimSpace(live.ImageRef)
+		item.LiveRouteHost = strings.TrimSpace(live.RouteHost)
+		item.LivePublicURL = strings.TrimSpace(live.PublicURL)
+
+		if tenantRuntimeMatchesContract(live, tenantRuntimeContainerName(tenant.ID), targetImage, desiredRouting) {
+			item.Action = tenantRuntimeContractActionNoop
+			item.Reason = "runtime already matches target image and canonical hosted contract"
+		} else if item.LiveImageRef != targetImage {
+			item.Action = tenantRuntimeContractActionRollout
+			item.Reason = "runtime image differs from target"
+		} else {
+			item.Action = tenantRuntimeContractActionRollout
+			item.Reason = "runtime contract drift detected"
+		}
+		plan.Tenants = append(plan.Tenants, item)
+	}
+	return plan, nil
+}
+
 func (s *tenantRuntimeRolloutService) selectContractReconcileTenants(
 	opts TenantRuntimeContractReconcilePlanOptions,
 ) ([]*registry.Tenant, error) {
@@ -563,6 +683,48 @@ func (s *tenantRuntimeRolloutService) selectContractReconcileTenants(
 		if tenant == nil {
 			tenants = append(tenants, &registry.Tenant{ID: tenantID})
 			continue
+		}
+		tenants = append(tenants, tenant)
+	}
+	return tenants, nil
+}
+
+func (s *tenantRuntimeRolloutService) selectImageRolloutTenants(
+	opts TenantRuntimeImageRolloutPlanOptions,
+) ([]*registry.Tenant, error) {
+	if s == nil {
+		return nil, fmt.Errorf("rollout service is nil")
+	}
+	if opts.All && len(dedupeNonEmptyStrings(opts.TenantIDs)) > 0 {
+		return nil, fmt.Errorf("choose either --all or one or more tenant ids")
+	}
+	if opts.All {
+		tenants, err := s.registry.List()
+		if err != nil {
+			return nil, fmt.Errorf("list tenants: %w", err)
+		}
+		active := make([]*registry.Tenant, 0, len(tenants))
+		for _, tenant := range tenants {
+			if tenant != nil && tenant.State == registry.TenantStateActive {
+				active = append(active, tenant)
+			}
+		}
+		return active, nil
+	}
+
+	tenantIDs := dedupeNonEmptyStrings(opts.TenantIDs)
+	if len(tenantIDs) == 0 {
+		return nil, fmt.Errorf("at least one tenant id or --all is required")
+	}
+
+	tenants := make([]*registry.Tenant, 0, len(tenantIDs))
+	for _, tenantID := range tenantIDs {
+		tenant, err := s.registry.Get(tenantID)
+		if err != nil {
+			return nil, fmt.Errorf("load tenant %s: %w", tenantID, err)
+		}
+		if tenant == nil {
+			return nil, fmt.Errorf("tenant %s not found", tenantID)
 		}
 		tenants = append(tenants, tenant)
 	}

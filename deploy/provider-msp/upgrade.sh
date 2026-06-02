@@ -13,12 +13,12 @@ Runs the provider-hosted MSP pre-upgrade and upgrade flow:
   3. creates and verifies a fresh provider MSP backup
   4. dry-runs restore into a separate target data directory
   5. pulls and starts the provider control-plane and Traefik services
-  6. prints the tenant runtime reconcile plan
-  7. optionally reconciles all tenant runtimes onto the configured runtime line
+  6. prints the tenant runtime rollout plan for CP_PULSE_IMAGE
+  7. optionally rolls all tenant runtimes onto CP_PULSE_IMAGE
 
 Options:
   --dry-run                    Print the non-mutating upgrade plan only
-  --rollout-tenants            Execute tenant-runtime reconcile --all after provider services are updated
+  --rollout-tenants            Execute tenant-runtime rollout --all after provider services are updated
   --prune-previous             Remove preserved pre-rollout tenant containers after successful tenant rollout
   --skip-compose-pull          Do not run docker compose pull for provider services
   --skip-runtime-image-pull    Pass --skip-image-pull to provider-msp preflight
@@ -144,6 +144,10 @@ fi
 
 provider_data_dir="$(env_value PULSE_PROVIDER_MSP_DATA_DIR .env)"
 provider_data_dir="${provider_data_dir:-/data}"
+tenant_runtime_image="$(env_value CP_PULSE_IMAGE .env)"
+if [[ -z "${tenant_runtime_image}" ]]; then
+  die "CP_PULSE_IMAGE is required"
+fi
 if [[ -z "${restore_target}" ]]; then
   restore_target="${provider_data_dir%/}/upgrade-restore-drill"
 fi
@@ -163,12 +167,13 @@ fi
 echo "provider_msp_upgrade_dry_run=$(truthy "${dry_run}" && echo true || echo false)"
 echo "provider_msp_upgrade_run_id=${run_id}"
 echo "provider_msp_upgrade_restore_target=${restore_target}"
+echo "provider_msp_upgrade_tenant_runtime_image=${tenant_runtime_image}"
 
 run_control provider-msp status
 run_control "${preflight_args[@]}"
 
 if truthy "${dry_run}"; then
-  run_control tenant-runtime reconcile --all --dry-run
+  run_control tenant-runtime rollout --all --image "${tenant_runtime_image}" --dry-run
   echo "tenant_runtime_rollout_applied=false"
   echo "provider_msp_upgrade_plan_ok=true"
   exit 0
@@ -195,12 +200,13 @@ if ! truthy "${skip_compose_pull}"; then
 fi
 docker compose up -d traefik control-plane
 run_control provider-msp status --require-backup
-run_control tenant-runtime reconcile --all --dry-run
+run_control tenant-runtime rollout --all --image "${tenant_runtime_image}" --dry-run
 
 if truthy "${rollout_tenants}"; then
   reconcile_args=(
-    tenant-runtime reconcile
+    tenant-runtime rollout
     --all
+    --image "${tenant_runtime_image}"
     --run-id "${run_id}"
     --health-timeout "${health_timeout}"
   )
@@ -212,7 +218,7 @@ if truthy "${rollout_tenants}"; then
   echo "tenant_runtime_rollout_applied=true"
 else
   echo "tenant_runtime_rollout_applied=false"
-  echo "tenant_runtime_rollout_next_command=docker compose run --rm --no-deps control-plane tenant-runtime reconcile --all --run-id ${run_id} --health-timeout ${health_timeout}"
+  echo "tenant_runtime_rollout_next_command=docker compose run --rm --no-deps control-plane tenant-runtime rollout --all --image ${tenant_runtime_image} --run-id ${run_id} --health-timeout ${health_timeout}"
 fi
 
 docker compose ps

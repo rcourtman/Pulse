@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -26,9 +27,10 @@ func TestProviderMSPStatusReportsHealthyOperatorSurface(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	createProviderMSPStatusTenant(t, cfg, &registry.Tenant{
 		ID:            "t-HEALTHY",
+		ContainerID:   "c-healthy",
 		State:         registry.TenantStateActive,
 		CreatedAt:     now.Add(-time.Hour),
-		HealthCheckOK: true,
+		HealthCheckOK: false,
 	})
 
 	var gotPreflight providerMSPPreflightOptions
@@ -37,6 +39,9 @@ func TestProviderMSPStatusReportsHealthyOperatorSurface(t *testing.T) {
 			gotPreflight = opts
 			return healthyProviderMSPStatusPreflightReport(), nil
 		},
+		NewDocker: healthyProviderMSPStatusDocker(map[string]bool{
+			"c-healthy": true,
+		}),
 		CheckBackup: func(context.Context, *cloudcp.CPConfig) (*providerMSPBackupStatus, error) {
 			return healthyProviderMSPBackupStatus(now), nil
 		},
@@ -73,9 +78,10 @@ func TestProviderMSPStatusFailsOnFailedUnhealthyAndStuckWorkspaces(t *testing.T)
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	createProviderMSPStatusTenant(t, cfg, &registry.Tenant{
 		ID:            "t-UNHEALTHY",
+		ContainerID:   "c-unhealthy",
 		State:         registry.TenantStateActive,
 		CreatedAt:     now.Add(-time.Hour),
-		HealthCheckOK: false,
+		HealthCheckOK: true,
 	})
 	createProviderMSPStatusTenant(t, cfg, &registry.Tenant{
 		ID:        "t-FAILED",
@@ -92,6 +98,9 @@ func TestProviderMSPStatusFailsOnFailedUnhealthyAndStuckWorkspaces(t *testing.T)
 		RunPreflight: func(context.Context, *cloudcp.CPConfig, providerMSPPreflightOptions) (*providerMSPPreflightReport, error) {
 			return healthyProviderMSPStatusPreflightReport(), nil
 		},
+		NewDocker: healthyProviderMSPStatusDocker(map[string]bool{
+			"c-unhealthy": false,
+		}),
 		Now: func() time.Time { return now },
 	})
 	if err == nil {
@@ -118,6 +127,7 @@ func TestProviderMSPStatusBackupWarningBecomesFailureWhenRequired(t *testing.T) 
 		RunPreflight: func(context.Context, *cloudcp.CPConfig, providerMSPPreflightOptions) (*providerMSPPreflightReport, error) {
 			return healthyProviderMSPStatusPreflightReport(), nil
 		},
+		NewDocker: healthyProviderMSPStatusDocker(nil),
 		CheckBackup: func(context.Context, *cloudcp.CPConfig) (*providerMSPBackupStatus, error) {
 			return &providerMSPBackupStatus{
 				Directory: "/data/backups/provider-msp",
@@ -148,6 +158,31 @@ func TestProviderMSPStatusBackupWarningBecomesFailureWhenRequired(t *testing.T) 
 	if got := strings.Join(requiredReport.Failures, "; "); !strings.Contains(got, "backup: no provider MSP backup archive found") {
 		t.Fatalf("failures = %q, want missing backup failure", got)
 	}
+}
+
+func healthyProviderMSPStatusDocker(health map[string]bool) func(*cloudcp.CPConfig) (providerMSPStatusDocker, error) {
+	return func(*cloudcp.CPConfig) (providerMSPStatusDocker, error) {
+		return &fakeProviderMSPStatusDocker{health: health}, nil
+	}
+}
+
+type fakeProviderMSPStatusDocker struct {
+	health map[string]bool
+}
+
+func (f *fakeProviderMSPStatusDocker) HealthCheck(_ context.Context, containerID string) (bool, error) {
+	if f.health == nil {
+		return false, fmt.Errorf("unexpected health check for %s", containerID)
+	}
+	healthy, ok := f.health[containerID]
+	if !ok {
+		return false, fmt.Errorf("unexpected health check for %s", containerID)
+	}
+	return healthy, nil
+}
+
+func (f *fakeProviderMSPStatusDocker) Close() error {
+	return nil
 }
 
 func healthyProviderMSPStatusPreflightReport() *providerMSPPreflightReport {

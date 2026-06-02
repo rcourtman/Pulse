@@ -85,11 +85,13 @@ func newCloudAuditCmd() *cobra.Command {
 
 func newTenantRuntimeRolloutCmd() *cobra.Command {
 	var tenantID string
+	var all bool
 	var image string
 	var runID string
 	var snapshotRoot string
 	var healthTimeout time.Duration
 	var prunePrevious bool
+	var dryRun bool
 
 	cmd := &cobra.Command{
 		Use:   "rollout",
@@ -98,6 +100,37 @@ func newTenantRuntimeRolloutCmd() *cobra.Command {
 			cfg, err := cloudcp.LoadConfig()
 			if err != nil {
 				return fmt.Errorf("load control plane config: %w", err)
+			}
+			if all && strings.TrimSpace(tenantID) != "" {
+				return fmt.Errorf("choose either --all or --tenant-id")
+			}
+			if !all && strings.TrimSpace(tenantID) == "" {
+				return fmt.Errorf("--tenant-id is required unless --all is set")
+			}
+			if dryRun {
+				tenantIDs := []string{tenantID}
+				if all {
+					tenantIDs = nil
+				}
+				plan, err := cloudcp.PlanTenantRuntimeImageRollout(cmd.Context(), cfg, cloudcp.TenantRuntimeImageRolloutPlanOptions{
+					TenantIDs: tenantIDs,
+					All:       all,
+					Image:     image,
+				})
+				if err != nil {
+					return err
+				}
+				printTenantRuntimeImageRolloutPlan(plan)
+				return nil
+			}
+			if all {
+				return runTenantRuntimeRolloutAll(cmd.Context(), cfg, cloudcp.TenantRuntimeRolloutOptions{
+					Image:         image,
+					RunID:         runID,
+					SnapshotRoot:  snapshotRoot,
+					HealthTimeout: healthTimeout,
+					PrunePrevious: prunePrevious,
+				})
 			}
 			result, err := cloudcp.RolloutTenantRuntime(cmd.Context(), cfg, cloudcp.TenantRuntimeRolloutOptions{
 				TenantID:      tenantID,
@@ -126,14 +159,65 @@ func newTenantRuntimeRolloutCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&tenantID, "tenant-id", "", "Hosted tenant ID to roll")
+	cmd.Flags().BoolVar(&all, "all", false, "Roll all active hosted tenants")
 	cmd.Flags().StringVar(&image, "image", "", "Target Pulse runtime image reference")
 	cmd.Flags().StringVar(&runID, "run-id", "", "Operator-visible rollout run identifier")
 	cmd.Flags().StringVar(&snapshotRoot, "snapshot-root", "", "Override tenant snapshot root (default: <CP_DATA_DIR>/backups/rollout)")
 	cmd.Flags().DurationVar(&healthTimeout, "health-timeout", 90*time.Second, "How long to wait for the target runtime to become healthy")
 	cmd.Flags().BoolVar(&prunePrevious, "prune-previous", false, "Remove the preserved pre-rollout container after success")
-	_ = cmd.MarkFlagRequired("tenant-id")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Print the target image rollout plan without mutating tenant runtimes")
 	_ = cmd.MarkFlagRequired("image")
 	return cmd
+}
+
+func runTenantRuntimeRolloutAll(ctx context.Context, cfg *cloudcp.CPConfig, opts cloudcp.TenantRuntimeRolloutOptions) error {
+	reg, err := registry.NewTenantRegistry(cfg.ControlPlaneDir())
+	if err != nil {
+		return fmt.Errorf("open tenant registry: %w", err)
+	}
+	defer reg.Close()
+	tenants, err := reg.ListByState(registry.TenantStateActive)
+	if err != nil {
+		return fmt.Errorf("list active tenants: %w", err)
+	}
+
+	rolloutCount := 0
+	failureCount := 0
+	for _, tenant := range tenants {
+		if tenant == nil || strings.TrimSpace(tenant.ID) == "" {
+			continue
+		}
+		opts.TenantID = tenant.ID
+		result, err := cloudcp.RolloutTenantRuntime(ctx, cfg, opts)
+		if err != nil {
+			failureCount++
+			fmt.Printf("tenant_id=%s\nstatus=error\nimage_ref=%s\nerror=%v\n\n", tenant.ID, opts.Image, err)
+			continue
+		}
+		rolloutCount++
+		fmt.Printf("tenant_id=%s\nstatus=rolled\nactive_container_id=%s\nactive_image_ref=%s\nactive_image_id=%s\nreconciled_only=%t\n",
+			result.TenantID,
+			result.ActiveContainerID,
+			result.ActiveImageRef,
+			result.ActiveImageID,
+			result.ReconciledOnly,
+		)
+		if result.RestoredMissing {
+			fmt.Printf("restored_missing=%t\n", result.RestoredMissing)
+		}
+		if result.PreviousContainerID != "" {
+			fmt.Printf("previous_container_id=%s\n", result.PreviousContainerID)
+		}
+		if result.BackupContainerName != "" {
+			fmt.Printf("backup_container_name=%s\n", result.BackupContainerName)
+		}
+		fmt.Println()
+	}
+	fmt.Printf("summary_rollout=%d\nsummary_error=%d\nsummary_total=%d\n", rolloutCount, failureCount, len(tenants))
+	if failureCount > 0 {
+		return fmt.Errorf("%d tenant runtime rollouts failed", failureCount)
+	}
+	return nil
 }
 
 func newTenantRuntimeReconcileCmd() *cobra.Command {
@@ -261,6 +345,50 @@ func printTenantRuntimeReconcilePlan(plan *cloudcp.TenantRuntimeContractReconcil
 		}
 		if item.ImageRef != "" {
 			fmt.Printf("image_ref=%s\n", item.ImageRef)
+		}
+		if item.LiveRouteHost != "" || item.DesiredRouteHost != "" {
+			fmt.Printf("live_route_host=%s\ndesired_route_host=%s\n", item.LiveRouteHost, item.DesiredRouteHost)
+		}
+		if item.LivePublicURL != "" || item.DesiredPublicURL != "" {
+			fmt.Printf("live_public_url=%s\ndesired_public_url=%s\n", item.LivePublicURL, item.DesiredPublicURL)
+		}
+		fmt.Println()
+	}
+	fmt.Printf("summary_rollout=%d\nsummary_noop=%d\nsummary_skip=%d\nsummary_total=%d\n", rolloutCount, noopCount, skipCount, len(plan.Tenants))
+}
+
+func printTenantRuntimeImageRolloutPlan(plan *cloudcp.TenantRuntimeImageRolloutPlan) {
+	if plan == nil {
+		fmt.Println("summary_total=0")
+		return
+	}
+	rolloutCount := 0
+	noopCount := 0
+	skipCount := 0
+	for _, item := range plan.Tenants {
+		if item == nil {
+			continue
+		}
+		switch item.Action {
+		case "rollout":
+			rolloutCount++
+		case "noop":
+			noopCount++
+		default:
+			skipCount++
+		}
+		fmt.Printf("tenant_id=%s\naction=%s\nreason=%s\n", item.TenantID, item.Action, item.Reason)
+		if item.State != "" {
+			fmt.Printf("tenant_state=%s\n", item.State)
+		}
+		if item.LiveContainerID != "" {
+			fmt.Printf("live_container_id=%s\n", item.LiveContainerID)
+		}
+		if item.LiveImageRef != "" {
+			fmt.Printf("live_image_ref=%s\n", item.LiveImageRef)
+		}
+		if item.TargetImageRef != "" {
+			fmt.Printf("target_image_ref=%s\n", item.TargetImageRef)
 		}
 		if item.LiveRouteHost != "" || item.DesiredRouteHost != "" {
 			fmt.Printf("live_route_host=%s\ndesired_route_host=%s\n", item.LiveRouteHost, item.DesiredRouteHost)
