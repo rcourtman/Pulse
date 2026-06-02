@@ -144,6 +144,12 @@ TLS floor in the dynamic config.
    `traefik.docker.network`. The packaged compose stack must label the Traefik
    and control-plane support containers so the control plane can attach them to
    each tenant bridge before starting the client runtime.
+   The client runtime must be started as the rootless Pulse UID/GID by the
+   Docker manager, with tenant data ownership prepared on the host before
+   container creation. Provider-hosted installability proof must therefore
+   exercise the actual `CreateAndStart` path with the real Pulse entrypoint
+   shape, not only raw Docker container creation, so capability drops and the
+   read-only root filesystem cannot break first tenant startup unnoticed.
    `pulse-control-plane provider-msp proof` must exercise the first-client
    onboarding path through workspace creation, client-bound install token
    generation, tenant-local unified-agent report ingest, tenant-bound install

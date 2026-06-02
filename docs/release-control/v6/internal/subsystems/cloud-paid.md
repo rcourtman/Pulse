@@ -226,6 +226,12 @@ Stripe-free and avoids a cloud-control-plane report data path across clients.
    and bounded writable tmpfs mounts only for runtime scratch paths. These
    defaults are part of the client isolation contract, not optional compose
    decoration.
+   Tenant runtime containers must also start as the rootless Pulse runtime user
+   instead of entering the image's root-owned chown and `su-exec` branch. The
+   Docker manager owns host-side preparation of the tenant data directory,
+   including recursive ownership alignment to the configured tenant UID/GID and
+   strict permissions on tenant key files, so `CapDrop: ["ALL"]` and
+   read-only root filesystems remain compatible with first workspace startup.
    Client-bound proof must cover the boundary itself: workspace limits must not
    be raceable past the licensed cap, handoff tokens must not be replayed or
    retargeted across workspaces, org-bound agent install/report tokens must not

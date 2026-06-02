@@ -253,6 +253,50 @@ func TestTenantRuntimeLogConfigBoundsJSONLogs(t *testing.T) {
 	}
 }
 
+func TestTenantRuntimeContainerConfigRunsRootless(t *testing.T) {
+	t.Parallel()
+
+	cfg := ManagerConfig{
+		Image:                    "pulse:test",
+		BaseDomain:               "msp.example.com",
+		TrialActivationPublicKey: "pubkey-123",
+	}
+	labels := map[string]string{"pulse.managed": "true"}
+
+	got := tenantRuntimeContainerConfig("t-acme", cfg, labels, []string{"172.18.0.0/16"})
+	if got == nil {
+		t.Fatal("tenantRuntimeContainerConfig returned nil")
+	}
+	if got.User != "1000:1000" {
+		t.Fatalf("User = %q, want rootless tenant runtime user", got.User)
+	}
+	if got.Image != cfg.Image {
+		t.Fatalf("Image = %q, want %q", got.Image, cfg.Image)
+	}
+	if got.Labels["pulse.managed"] != "true" {
+		t.Fatalf("Labels not preserved: %v", got.Labels)
+	}
+	if envValue(got.Env, "PUID") != "1000" || envValue(got.Env, "PGID") != "1000" {
+		t.Fatalf("PUID/PGID env missing from rootless config: %v", got.Env)
+	}
+	if envValue(got.Env, "PULSE_TRUSTED_PROXY_CIDRS") != "172.18.0.0/16" {
+		t.Fatalf("trusted proxy env = %q", envValue(got.Env, "PULSE_TRUSTED_PROXY_CIDRS"))
+	}
+
+	custom := tenantRuntimeContainerConfig("t-acme", ManagerConfig{
+		Image:            "pulse:test",
+		BaseDomain:       "msp.example.com",
+		TenantRuntimeUID: 1234,
+		TenantRuntimeGID: 5678,
+	}, labels, nil)
+	if custom.User != "1234:5678" {
+		t.Fatalf("custom User = %q, want configured rootless runtime user", custom.User)
+	}
+	if envValue(custom.Env, "PUID") != "1234" || envValue(custom.Env, "PGID") != "5678" {
+		t.Fatalf("custom PUID/PGID env missing from rootless config: %v", custom.Env)
+	}
+}
+
 func TestTenantRuntimeHostConfigAppliesEscapeHardening(t *testing.T) {
 	t.Parallel()
 
@@ -336,6 +380,35 @@ func TestPrepareTenantRuntimeMountSourcesAlignsOwnershipAndPermissions(t *testin
 	gid := os.Getgid()
 	if err := prepareTenantRuntimeMountSources(tenantDataDir, uid, gid); err != nil {
 		t.Fatalf("prepareTenantRuntimeMountSources: %v", err)
+	}
+
+	nestedDir := filepath.Join(tenantDataDir, "state")
+	nestedPath := filepath.Join(nestedDir, "runtime.db")
+	if err := os.MkdirAll(nestedDir, 0o755); err != nil {
+		t.Fatalf("mkdir nested state: %v", err)
+	}
+	if err := os.WriteFile(nestedPath, []byte("state"), 0o644); err != nil {
+		t.Fatalf("write nested state: %v", err)
+	}
+	if err := prepareTenantRuntimeMountSources(tenantDataDir, uid, gid); err != nil {
+		t.Fatalf("prepareTenantRuntimeMountSources after nested state: %v", err)
+	}
+
+	for _, path := range []string{tenantDataDir, nestedDir, nestedPath} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("stat %s: %v", path, err)
+		}
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if !ok {
+			t.Fatalf("%s stat type %T, want *syscall.Stat_t", path, info.Sys())
+		}
+		if int(stat.Uid) != uid {
+			t.Fatalf("%s uid = %d, want %d", path, stat.Uid, uid)
+		}
+		if int(stat.Gid) != gid {
+			t.Fatalf("%s gid = %d, want %d", path, stat.Gid, gid)
+		}
 	}
 
 	for _, path := range paths {

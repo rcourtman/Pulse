@@ -31,6 +31,8 @@ type ManagerConfig struct {
 	TrialActivationPublicKey string
 	TrustedProxyCIDRs        []string
 	TenantReportBrand        TenantReportBrandConfig
+	TenantRuntimeUID         int
+	TenantRuntimeGID         int
 	MemoryLimit              int64 // bytes
 	CPUShares                int64
 	TenantLogMaxSize         string
@@ -494,7 +496,7 @@ func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir st
 	if _, _, err := m.ensureRuntimeImageAvailable(ctx, true); err != nil {
 		return "", fmt.Errorf("prepare tenant runtime image: %w", err)
 	}
-	if err := prepareTenantRuntimeMountSources(tenantDataDir, tenantRuntimeUID, tenantRuntimeGID); err != nil {
+	if err := prepareTenantRuntimeMountSources(tenantDataDir, tenantRuntimeUIDFor(m.cfg), tenantRuntimeGIDFor(m.cfg)); err != nil {
 		return "", fmt.Errorf("prepare tenant runtime mounts for %s: %w", tenantID, err)
 	}
 
@@ -509,11 +511,7 @@ func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir st
 	containerName := "pulse-" + tenantID
 
 	resp, err := m.cli.ContainerCreate(ctx, client.ContainerCreateOptions{
-		Config: &container.Config{
-			Image:  m.cfg.Image,
-			Labels: labels,
-			Env:    tenantEnv(tenantID, m.cfg.BaseDomain, m.cfg.TrialActivationPublicKey, m.tenantTrustedProxyCIDRs(ctx, tenantNetworkName), m.cfg.TenantReportBrand),
-		},
+		Config:     tenantRuntimeContainerConfig(tenantID, m.cfg, labels, m.tenantTrustedProxyCIDRs(ctx, tenantNetworkName)),
 		HostConfig: tenantRuntimeHostConfig(tenantDataDir, m.cfg),
 		NetworkingConfig: &network.NetworkingConfig{
 			EndpointsConfig: map[string]*network.EndpointSettings{
@@ -542,6 +540,37 @@ func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir st
 		Msg("Tenant container started")
 
 	return resp.ID, nil
+}
+
+func tenantRuntimeContainerConfig(tenantID string, cfg ManagerConfig, labels map[string]string, trustedProxyCIDRs []string) *container.Config {
+	return &container.Config{
+		Image:  cfg.Image,
+		User:   tenantRuntimeUserFor(cfg),
+		Labels: labels,
+		Env:    tenantEnvForRuntime(tenantID, cfg.BaseDomain, cfg.TrialActivationPublicKey, trustedProxyCIDRs, tenantRuntimeUIDFor(cfg), tenantRuntimeGIDFor(cfg), cfg.TenantReportBrand),
+	}
+}
+
+func tenantRuntimeUser() string {
+	return fmt.Sprintf("%d:%d", tenantRuntimeUID, tenantRuntimeGID)
+}
+
+func tenantRuntimeUserFor(cfg ManagerConfig) string {
+	return fmt.Sprintf("%d:%d", tenantRuntimeUIDFor(cfg), tenantRuntimeGIDFor(cfg))
+}
+
+func tenantRuntimeUIDFor(cfg ManagerConfig) int {
+	if cfg.TenantRuntimeUID > 0 {
+		return cfg.TenantRuntimeUID
+	}
+	return tenantRuntimeUID
+}
+
+func tenantRuntimeGIDFor(cfg ManagerConfig) int {
+	if cfg.TenantRuntimeGID > 0 {
+		return cfg.TenantRuntimeGID
+	}
+	return tenantRuntimeGID
 }
 
 func tenantRuntimeLogConfig(maxSize string, maxFile int) container.LogConfig {
@@ -602,6 +631,10 @@ func tenantRuntimeOwnershipPaths() []string {
 }
 
 func tenantEnv(tenantID, baseDomain, trialActivationPublicKey string, trustedProxyCIDRs []string, reportBrand TenantReportBrandConfig) []string {
+	return tenantEnvForRuntime(tenantID, baseDomain, trialActivationPublicKey, trustedProxyCIDRs, tenantRuntimeUID, tenantRuntimeGID, reportBrand)
+}
+
+func tenantEnvForRuntime(tenantID, baseDomain, trialActivationPublicKey string, trustedProxyCIDRs []string, runtimeUID, runtimeGID int, reportBrand TenantReportBrandConfig) []string {
 	routing := CanonicalTenantRuntimeRouting(tenantID, baseDomain)
 	tenantID = strings.TrimSpace(tenantID)
 
@@ -610,8 +643,8 @@ func tenantEnv(tenantID, baseDomain, trialActivationPublicKey string, trustedPro
 		"PULSE_HOSTED_MODE=true",
 		"PULSE_TENANT_ID=" + tenantID,
 		"PULSE_MULTI_TENANT_ENABLED=true",
-		fmt.Sprintf("PUID=%d", tenantRuntimeUID),
-		fmt.Sprintf("PGID=%d", tenantRuntimeGID),
+		fmt.Sprintf("PUID=%d", runtimeUID),
+		fmt.Sprintf("PGID=%d", runtimeGID),
 		fmt.Sprintf("%s=%s", immutableOwnershipPathsEnv, strings.Join(tenantImmutableOwnershipPaths(), ":")),
 	}
 	if routing.PublicURL != "" {
@@ -751,8 +784,27 @@ func tenantMounts(tenantDataDir string) []mount.Mount {
 }
 
 func prepareTenantRuntimeMountSources(tenantDataDir string, uid, gid int) error {
+	if err := filepath.WalkDir(tenantDataDir, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if err := os.Lchown(path, uid, gid); err != nil {
+			return fmt.Errorf("chown %s to %d:%d: %w", path, uid, gid, err)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
 	for _, relPath := range tenantRuntimeOwnershipPaths() {
 		path := filepath.Join(tenantDataDir, relPath)
+		info, err := os.Lstat(path)
+		if err != nil {
+			return fmt.Errorf("stat %s: %w", path, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("tenant runtime mount source %s must not be a symlink", path)
+		}
 		if err := os.Chmod(path, 0o600); err != nil {
 			return fmt.Errorf("chmod %s: %w", path, err)
 		}
