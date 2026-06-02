@@ -30,6 +30,8 @@ type ProviderMSPBootstrapResult struct {
 	OwnerEmail     string
 	PlanVersion    string
 	PlanSource     string
+	LicenseID      string
+	LicenseEmail   string
 	WorkspaceLimit int
 	MagicLinkURL   string
 }
@@ -107,6 +109,8 @@ func BootstrapProviderMSP(ctx context.Context, cfg *CPConfig, opts ProviderMSPBo
 		OwnerEmail:     ownerEmail,
 		PlanVersion:    cfg.ProviderMSPPlanVersion,
 		PlanSource:     providerMSPPlanSourceOrDefault(cfg.ProviderMSPPlanSource),
+		LicenseID:      strings.TrimSpace(cfg.ProviderMSPLicenseID),
+		LicenseEmail:   strings.ToLower(strings.TrimSpace(cfg.ProviderMSPLicenseEmail)),
 		WorkspaceLimit: workspaceLimit,
 		MagicLinkURL:   magicLinkURL,
 	}, nil

@@ -66,6 +66,8 @@ func printProviderMSPBootstrapResult(result *cloudcp.ProviderMSPBootstrapResult)
 	fmt.Printf("owner_email=%s\n", result.OwnerEmail)
 	fmt.Printf("plan_version=%s\n", result.PlanVersion)
 	fmt.Printf("plan_source=%s\n", result.PlanSource)
+	fmt.Printf("license_id=%s\n", result.LicenseID)
+	fmt.Printf("license_email=%s\n", result.LicenseEmail)
 	fmt.Printf("workspace_limit=%d\n", result.WorkspaceLimit)
 	if result.MagicLinkURL != "" {
 		fmt.Printf("portal_magic_link=%s\n", result.MagicLinkURL)

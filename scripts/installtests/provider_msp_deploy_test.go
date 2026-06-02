@@ -47,8 +47,11 @@ func TestProviderMSPDeployEnvExampleMatchesBootstrapPath(t *testing.T) {
 		"CP_PROVIDER_MSP_LICENSE_FILE=./provider-msp-license.jwt",
 		"CP_TRIAL_ACTIVATION_PRIVATE_KEY=",
 		"docker compose run --rm control-plane provider-msp bootstrap",
+		"docker compose run --rm control-plane provider-msp preflight",
+		"docker compose run --rm control-plane provider-msp proof",
 		"--account-name",
 		"--owner-email",
+		"--cleanup",
 	)
 	assertNotContainsAny(t, text,
 		"STRIPE_",

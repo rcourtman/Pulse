@@ -20,6 +20,12 @@ agreement, the Pulse Cloud control plane, provider-hosted MSP account
 bootstrap/licensing, hosted tenant lifecycle, and cloud-specific enforcement
 rules.
 
+Provider-hosted MSP bootstrap output is part of the cloud-paid operator
+contract. It must carry the resolved MSP plan version, plan source, workspace
+limit, and validated provider MSP license id/email so installability proof can
+distinguish signed license-backed activation from local environment fallback
+configuration.
+
 ## Canonical Files
 
 1. `pkg/licensing/features.go`

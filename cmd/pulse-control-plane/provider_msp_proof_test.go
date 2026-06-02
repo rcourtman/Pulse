@@ -5,10 +5,14 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 func TestProviderMSPCommandExposesProof(t *testing.T) {
@@ -32,6 +36,32 @@ func TestNormalizeProviderMSPProofOptionsRequiresIsolationWorkspaceCount(t *test
 	})
 	if err == nil || !strings.Contains(err.Error(), "at least 2") {
 		t.Fatalf("expected isolation workspace-count error, got %v", err)
+	}
+}
+
+func TestProviderMSPProofRequiresLicenseBackedPlanSourceByDefault(t *testing.T) {
+	cfg := testProviderMSPProofConfig(t)
+	cfg.ProviderMSPPlanSource = cloudcp.ProviderMSPPlanSourceEnvFallback
+
+	rt, err := newProviderMSPProofRuntimeFromConfig(cfg)
+	if err != nil {
+		t.Fatalf("newProviderMSPProofRuntimeFromConfig: %v", err)
+	}
+	defer rt.close()
+
+	_, err = rt.runProviderMSPProof(context.Background(), providerMSPProofOptions{
+		AccountName:     "Acme Provider",
+		OwnerEmail:      "owner@example.com",
+		WorkspacePrefix: "Provider MSP Proof",
+		WorkspaceCount:  2,
+		InstallType:     "pve",
+		TargetPath:      "/settings/infrastructure?add=linux-host",
+	})
+	if err == nil {
+		t.Fatal("expected provider MSP proof to reject environment-fallback plan source")
+	}
+	if !strings.Contains(err.Error(), cloudcp.ProviderMSPPlanSourceLicenseFile) {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -67,6 +97,9 @@ func TestProviderMSPProofExercisesWorkspaceInstallHandoffAndIsolation(t *testing
 	}
 	if report.PlanVersion != "msp_growth" || report.WorkspaceLimit != 15 {
 		t.Fatalf("plan proof = %q limit=%d, want msp_growth limit 15", report.PlanVersion, report.WorkspaceLimit)
+	}
+	if report.PlanSource != cloudcp.ProviderMSPPlanSourceLicenseFile {
+		t.Fatalf("PlanSource = %q, want %q", report.PlanSource, cloudcp.ProviderMSPPlanSourceLicenseFile)
 	}
 	if report.WorkspaceCount != 2 || len(report.Workspaces) != 2 {
 		t.Fatalf("WorkspaceCount = %d len=%d, want 2", report.WorkspaceCount, len(report.Workspaces))
@@ -129,6 +162,60 @@ func TestProviderMSPProofExercisesWorkspaceInstallHandoffAndIsolation(t *testing
 	}
 }
 
+func TestProviderMSPProofLoadsSignedLicenseFilePlan(t *testing.T) {
+	t.Setenv("DOCKER_HOST", "unix:///tmp/pulse-provider-msp-proof-missing-docker.sock")
+	t.Setenv("DOCKER_TLS_VERIFY", "")
+	t.Setenv("DOCKER_CERT_PATH", "")
+
+	dataDir := t.TempDir()
+	licenseFile := writeProviderMSPProofLicenseForTest(t, "lic_provider_msp_proof", "provider@example.com", "msp_growth")
+	setProviderMSPProofLoadConfigEnv(t, dataDir, licenseFile)
+
+	cfg, err := cloudcp.LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.ProviderMSPPlanSource != cloudcp.ProviderMSPPlanSourceLicenseFile {
+		t.Fatalf("ProviderMSPPlanSource = %q, want %q", cfg.ProviderMSPPlanSource, cloudcp.ProviderMSPPlanSourceLicenseFile)
+	}
+	if cfg.ProviderMSPPlanVersion != "msp_growth" {
+		t.Fatalf("ProviderMSPPlanVersion = %q, want msp_growth", cfg.ProviderMSPPlanVersion)
+	}
+
+	rt, err := newProviderMSPProofRuntimeFromConfig(cfg)
+	if err != nil {
+		t.Fatalf("newProviderMSPProofRuntimeFromConfig: %v", err)
+	}
+	defer rt.close()
+
+	report, err := rt.runProviderMSPProof(context.Background(), providerMSPProofOptions{
+		AccountName:     "Acme Provider",
+		OwnerEmail:      "owner@example.com",
+		WorkspacePrefix: "Provider MSP Proof",
+		WorkspaceCount:  2,
+		InstallType:     "pve",
+		TargetPath:      "/settings/infrastructure?add=linux-host",
+	})
+	if err != nil {
+		t.Fatalf("runProviderMSPProof: %v", err)
+	}
+	if report.PlanVersion != "msp_growth" || report.WorkspaceLimit != 15 {
+		t.Fatalf("plan proof = %q limit=%d, want msp_growth limit 15", report.PlanVersion, report.WorkspaceLimit)
+	}
+	if report.PlanSource != cloudcp.ProviderMSPPlanSourceLicenseFile {
+		t.Fatalf("PlanSource = %q, want %q", report.PlanSource, cloudcp.ProviderMSPPlanSourceLicenseFile)
+	}
+	if report.LicenseID != "lic_provider_msp_proof" {
+		t.Fatalf("LicenseID = %q, want lic_provider_msp_proof", report.LicenseID)
+	}
+	if report.LicenseEmail != "provider@example.com" {
+		t.Fatalf("LicenseEmail = %q, want provider@example.com", report.LicenseEmail)
+	}
+	if !report.AgentReportIngestVerified || !report.InstallTokenBoundaryOK || !report.HandoffExchangeVerified {
+		t.Fatalf("provider MSP proof did not complete core runtime checks: %#v", report)
+	}
+}
+
 func testProviderMSPProofConfig(t *testing.T) *cloudcp.CPConfig {
 	t.Helper()
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
@@ -150,8 +237,68 @@ func testProviderMSPProofConfig(t *testing.T) *cloudcp.CPConfig {
 		StorageGuardrailsEnabled:    false,
 		ProviderMSPPlanVersion:      "msp_growth",
 		ProviderMSPPlanSource:       cloudcp.ProviderMSPPlanSourceLicenseFile,
+		ProviderMSPLicenseID:        "lic_provider_msp_test",
+		ProviderMSPLicenseEmail:     "provider@example.com",
 		TrialActivationPrivateKey:   base64.StdEncoding.EncodeToString(privateKey),
 		TrialActivationPublicKey:    base64.StdEncoding.EncodeToString(publicKey),
 		EmailFrom:                   "noreply@example.com",
 	}
+}
+
+func setProviderMSPProofLoadConfigEnv(t *testing.T, dataDir, licenseFile string) {
+	t.Helper()
+	t.Setenv("CP_ADMIN_KEY", "test-key")
+	t.Setenv("CP_BASE_URL", "https://msp.example.com")
+	t.Setenv("CP_DATA_DIR", dataDir)
+	t.Setenv("CP_ENV", "development")
+	t.Setenv("CP_CONTROL_PLANE_MODE", string(cloudcp.ControlPlaneModeProviderHostedMSP))
+	t.Setenv("CP_REQUIRE_EMAIL_PROVIDER", "false")
+	t.Setenv("STRIPE_WEBHOOK_SECRET", "")
+	t.Setenv("STRIPE_API_KEY", "")
+	t.Setenv("CP_PUBLIC_CLOUD_SIGNUP_ENABLED", "false")
+	t.Setenv("CP_MSP_STARTER_PRICE_ID", "")
+	t.Setenv("CP_MSP_GROWTH_PRICE_ID", "")
+	t.Setenv("CP_MSP_SCALE_PRICE_ID", "")
+	t.Setenv("CP_PROVIDER_MSP_PLAN_VERSION", "msp_starter")
+	t.Setenv("CP_PROVIDER_MSP_LICENSE_FILE", licenseFile)
+	t.Setenv("CP_PULSE_IMAGE", "pulse:test")
+	t.Setenv("CP_DOCKER_NETWORK", "bridge")
+	t.Setenv("CP_ALLOW_DOCKERLESS_PROVISIONING", "true")
+	t.Setenv("CP_STORAGE_GUARDRAILS_ENABLED", "false")
+	t.Setenv("CP_TRIAL_ACTIVATION_PRIVATE_KEY", "A8medgdNdm12GXfTXWo6+TMZ2BeHPCLg2kd0znn6ZUk=")
+}
+
+func writeProviderMSPProofLicenseForTest(t *testing.T, licenseID, email, planVersion string) string {
+	t.Helper()
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	t.Setenv("PULSE_LICENSE_PUBLIC_KEY", base64.StdEncoding.EncodeToString(publicKey))
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+	t.Cleanup(func() { pkglicensing.SetPublicKey(nil) })
+
+	claims := pkglicensing.Claims{
+		LicenseID:   licenseID,
+		Email:       email,
+		Tier:        pkglicensing.TierMSP,
+		IssuedAt:    time.Now().Add(-time.Minute).Unix(),
+		ExpiresAt:   time.Now().Add(24 * time.Hour).Unix(),
+		PlanVersion: planVersion,
+	}
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"EdDSA","typ":"JWT"}`))
+	payloadBytes, err := json.Marshal(claims)
+	if err != nil {
+		t.Fatalf("Marshal claims: %v", err)
+	}
+	payload := base64.RawURLEncoding.EncodeToString(payloadBytes)
+	signedData := []byte(header + "." + payload)
+	signature := base64.RawURLEncoding.EncodeToString(ed25519.Sign(privateKey, signedData))
+	licenseKey := header + "." + payload + "." + signature
+
+	path := t.TempDir() + "/provider-msp-license.jwt"
+	if err := os.WriteFile(path, []byte(licenseKey+"\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	return path
 }

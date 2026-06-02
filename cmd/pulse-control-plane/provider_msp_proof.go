@@ -41,6 +41,7 @@ type providerMSPProofOptions struct {
 	InstallType                string
 	TargetPath                 string
 	Cleanup                    bool
+	AllowEnvPlan               bool
 	AllowNonProofWorkspaceName bool
 }
 
@@ -78,6 +79,8 @@ type providerMSPProofReport struct {
 	OwnerEmail                string
 	PlanVersion               string
 	PlanSource                string
+	LicenseID                 string
+	LicenseEmail              string
 	WorkspaceLimit            int
 	WorkspaceCount            int
 	Workspaces                []providerMSPProofWorkspace
@@ -124,6 +127,7 @@ func newProviderMSPProofCmd() *cobra.Command {
 	cmd.Flags().StringVar(&opts.InstallType, "install-type", opts.InstallType, "Hosted tenant install command type: pve or pbs")
 	cmd.Flags().StringVar(&opts.TargetPath, "target-path", opts.TargetPath, "Tenant-local target path to verify during handoff exchange")
 	cmd.Flags().BoolVar(&opts.Cleanup, "cleanup", false, "Delete proof workspaces after the proof completes")
+	cmd.Flags().BoolVar(&opts.AllowEnvPlan, "allow-env-plan", false, "Allow CP_PROVIDER_MSP_PLAN_VERSION fallback instead of a signed provider MSP license file for local development")
 	cmd.Flags().BoolVar(&opts.AllowNonProofWorkspaceName, "allow-non-proof-workspace-name", false, "Allow proof workspace names without proof/canary/rehearsal markers")
 	_ = cmd.MarkFlagRequired("account-name")
 	_ = cmd.MarkFlagRequired("owner-email")
@@ -213,6 +217,9 @@ func (rt *providerMSPProofRuntime) runProviderMSPProof(ctx context.Context, opts
 	if err != nil {
 		return nil, err
 	}
+	if !opts.AllowEnvPlan && strings.TrimSpace(rt.cfg.ProviderMSPPlanSource) != cloudcp.ProviderMSPPlanSourceLicenseFile {
+		return nil, fmt.Errorf("provider MSP proof requires %s plan source; rerun with --allow-env-plan only for local development", cloudcp.ProviderMSPPlanSourceLicenseFile)
+	}
 
 	bootstrap, err := cloudcp.BootstrapProviderMSP(ctx, rt.cfg, cloudcp.ProviderMSPBootstrapOptions{
 		AccountName:       opts.AccountName,
@@ -237,6 +244,8 @@ func (rt *providerMSPProofRuntime) runProviderMSPProof(ctx context.Context, opts
 		OwnerEmail:                bootstrap.OwnerEmail,
 		PlanVersion:               bootstrap.PlanVersion,
 		PlanSource:                bootstrap.PlanSource,
+		LicenseID:                 bootstrap.LicenseID,
+		LicenseEmail:              bootstrap.LicenseEmail,
 		WorkspaceLimit:            bootstrap.WorkspaceLimit,
 		RuntimeContainerVerified:  true,
 		HandoffExchangeVerified:   true,
@@ -792,6 +801,8 @@ func printProviderMSPProofReport(report *providerMSPProofReport) {
 	fmt.Printf("owner_email=%s\n", report.OwnerEmail)
 	fmt.Printf("plan_version=%s\n", report.PlanVersion)
 	fmt.Printf("plan_source=%s\n", report.PlanSource)
+	fmt.Printf("license_id=%s\n", report.LicenseID)
+	fmt.Printf("license_email=%s\n", report.LicenseEmail)
 	fmt.Printf("workspace_limit=%d\n", report.WorkspaceLimit)
 	fmt.Printf("workspace_count=%d\n", report.WorkspaceCount)
 	fmt.Printf("dockerless_provisioning=%t\n", report.DockerlessProvisioning)

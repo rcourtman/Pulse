@@ -34,6 +34,12 @@ func TestBootstrapProviderMSPCreatesOwnerAccountAndMagicLink(t *testing.T) {
 	if result.PlanSource != ProviderMSPPlanSourceLicenseFile {
 		t.Fatalf("PlanSource = %q, want %q", result.PlanSource, ProviderMSPPlanSourceLicenseFile)
 	}
+	if result.LicenseID != "lic_provider_msp_test" {
+		t.Fatalf("LicenseID = %q, want lic_provider_msp_test", result.LicenseID)
+	}
+	if result.LicenseEmail != "provider@example.com" {
+		t.Fatalf("LicenseEmail = %q, want provider@example.com", result.LicenseEmail)
+	}
 	if result.WorkspaceLimit != 15 {
 		t.Fatalf("WorkspaceLimit = %d, want 15", result.WorkspaceLimit)
 	}
@@ -114,11 +120,13 @@ func TestBootstrapProviderMSPRejectsPulseHostedMode(t *testing.T) {
 func testProviderMSPBootstrapConfig(t *testing.T) *CPConfig {
 	t.Helper()
 	return &CPConfig{
-		DataDir:                t.TempDir(),
-		Environment:            "production",
-		ControlPlaneMode:       ControlPlaneModeProviderHostedMSP,
-		BaseURL:                "https://msp.example.com",
-		ProviderMSPPlanVersion: "msp_growth",
-		ProviderMSPPlanSource:  ProviderMSPPlanSourceLicenseFile,
+		DataDir:                 t.TempDir(),
+		Environment:             "production",
+		ControlPlaneMode:        ControlPlaneModeProviderHostedMSP,
+		BaseURL:                 "https://msp.example.com",
+		ProviderMSPPlanVersion:  "msp_growth",
+		ProviderMSPPlanSource:   ProviderMSPPlanSourceLicenseFile,
+		ProviderMSPLicenseID:    "lic_provider_msp_test",
+		ProviderMSPLicenseEmail: "Provider@Example.com",
 	}
 }
