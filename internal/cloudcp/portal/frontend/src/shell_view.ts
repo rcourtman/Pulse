@@ -457,7 +457,7 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
   }
 
   var installAction = '';
-  if (state === 'active') {
+  if (account.can_manage && state === 'active') {
     installAction =
       '<form method="POST" action="' +
       escapeAttr(workspaceHandoffActionPath(accountAPIBasePath, account.id, workspace.id, WORKSPACE_INSTALL_TARGET_PATH)) +
@@ -693,21 +693,25 @@ function renderWorkspaceSummaryDecision(
       ? 'Configure outputs for ' + setupEntry.workspace.display_name
       : 'Set up ' + setupEntry.workspace.display_name;
     description = workspaceSummaryContext(setupEntry, accounts.length > 1, workspaceSetupNextStep(setupEntry.workspace));
-    primaryAction = setupState === 'configure_outputs'
-      ? renderWorkspaceReportingHandoffForm(
+    if (!setupEntry.account.can_manage) {
+      primaryAction = renderWorkspaceHandoffForm(setupEntry.account.id, setupEntry.workspace.id, accountAPIBasePath, 'Open workspace', 'btn-primary btn-compact');
+    } else if (setupState === 'configure_outputs') {
+      primaryAction = renderWorkspaceReportingHandoffForm(
         setupEntry.account.id,
         setupEntry.workspace.id,
         accountAPIBasePath,
         'Open reports',
         'btn-primary btn-compact',
-      )
-      : renderWorkspaceInstallHandoffForm(
+      );
+    } else {
+      primaryAction = renderWorkspaceInstallHandoffForm(
         setupEntry.account.id,
         setupEntry.workspace.id,
         accountAPIBasePath,
         'Install agents',
         'btn-primary btn-compact',
       );
+    }
     secondaryAction = setupEntry.account.can_manage
       ? '<button type="button" class="btn-secondary btn-compact" data-action="select-workspace" data-account-id="' +
         escapeAttr(setupEntry.account.id) +
@@ -728,7 +732,9 @@ function renderWorkspaceSummaryDecision(
     );
     secondaryAction = ready.length > 1
       ? renderWorkspaceAnchorAction(workspaceListAnchorID(readyEntry.account.id), 'See all workspaces')
-      : renderWorkspaceInstallHandoffForm(readyEntry.account.id, readyEntry.workspace.id, accountAPIBasePath);
+      : readyEntry.account.can_manage
+        ? renderWorkspaceInstallHandoffForm(readyEntry.account.id, readyEntry.workspace.id, accountAPIBasePath)
+        : '';
   } else if (creatableAccount) {
     title = 'Create the first workspace';
     description = 'No hosted workspace is attached yet. Create the first workspace in ' + creatableAccount.name + '.';

@@ -394,6 +394,115 @@ function findWorkspaceByID(bootstrap, workspaceID) {
   return null;
 }
 
+function updatePreviewWorkspaceSetupStatus(workspace) {
+  if (!workspace || workspace.state !== 'active' || workspace.health_status === 'unhealthy') {
+    if (workspace) workspace.setup_status = 'review';
+    return;
+  }
+  if (Number(workspace.agent_count || 0) <= 0) {
+    workspace.setup_status = 'install_agents';
+    return;
+  }
+  if (Number(workspace.alert_route_count || 0) <= 0 || Number(workspace.report_schedule_count || 0) <= 0) {
+    workspace.setup_status = 'configure_outputs';
+    return;
+  }
+  workspace.setup_status = 'ready';
+}
+
+function applyPreviewWorkspaceSetupAction(bootstrap, workspaceID, action) {
+  const entry = findWorkspaceByID(bootstrap, workspaceID);
+  if (!entry) {
+    return { ok: false, status: 404, message: 'Workspace not found.' };
+  }
+  const workspace = entry.workspace;
+  if (workspace.state !== 'active') {
+    return { ok: false, status: 409, message: 'Workspace is not active.' };
+  }
+  if (action === 'agent-checkin') {
+    workspace.agent_count = Math.max(1, Number(workspace.agent_count || 0));
+    workspace.agent_token_count = Math.max(1, Number(workspace.agent_token_count || 0));
+    workspace.unused_agent_token_count = 0;
+    workspace.last_agent_seen_at = iso(new Date());
+    updatePreviewWorkspaceSetupStatus(workspace);
+    return {
+      ok: true,
+      targetPath: '/settings/support/reporting',
+      message: 'Preview agent check-in recorded. Finish alerts and reports next.',
+    };
+  }
+  if (action === 'enable-alert-route') {
+    workspace.alert_route_count = Math.max(1, Number(workspace.alert_route_count || 0));
+    workspace.disabled_alert_route_count = 0;
+    updatePreviewWorkspaceSetupStatus(workspace);
+    return {
+      ok: true,
+      targetPath: '/settings/support/reporting',
+      message: 'Preview alert route enabled.',
+    };
+  }
+  if (action === 'schedule-report') {
+    workspace.report_schedule_count = Math.max(1, Number(workspace.report_schedule_count || 0));
+    workspace.disabled_report_schedule_count = 0;
+    updatePreviewWorkspaceSetupStatus(workspace);
+    return {
+      ok: true,
+      targetPath: '/settings/support/reporting',
+      message: workspace.setup_status === 'ready'
+        ? 'Preview report scheduled. This client workspace is ready.'
+        : 'Preview report scheduled.',
+    };
+  }
+  return { ok: false, status: 400, message: 'Preview setup action is invalid.' };
+}
+
+function previewSetupActionURL(scenario, workspaceID, action, targetPath) {
+  const url = new URL('/__portal_preview/workspaces/' + encodeURIComponent(workspaceID) + '/setup', 'http://' + previewHost + ':' + String(previewPort));
+  url.searchParams.set('scenario', scenario);
+  url.searchParams.set('action', action);
+  if (targetPath) {
+    url.searchParams.set('target_path', targetPath);
+  }
+  return url.pathname + url.search;
+}
+
+function previewSetupControlHTML(workspace, scenario, workspaceID, targetPath) {
+  if (!workspace || workspace.state !== 'active') return '';
+  const controls = [];
+  if (Number(workspace.agent_count || 0) <= 0) {
+    controls.push({
+      action: 'agent-checkin',
+      label: 'Record agent check-in',
+      note: 'Simulates the tenant runtime seeing the first workspace-scoped reporting agent.',
+    });
+  }
+  if (Number(workspace.agent_count || 0) > 0 && Number(workspace.alert_route_count || 0) <= 0) {
+    controls.push({
+      action: 'enable-alert-route',
+      label: 'Enable alert route',
+      note: 'Simulates enabling a tenant-owned notification route for this client.',
+    });
+  }
+  if (Number(workspace.agent_count || 0) > 0 && Number(workspace.report_schedule_count || 0) <= 0) {
+    controls.push({
+      action: 'schedule-report',
+      label: 'Schedule report',
+      note: 'Simulates enabling a tenant-owned performance report schedule.',
+    });
+  }
+  if (!controls.length) {
+    return '<div class="preview-controls"><strong>Preview setup controls</strong><p>This workspace already has a reporting agent, alert route, and report schedule.</p></div>';
+  }
+  return '<div class="preview-controls"><strong>Preview setup controls</strong><p>These controls simulate tenant-local setup facts so the Pulse Account flow can be tested end to end.</p>' +
+    controls.map(function(control) {
+      return '<form method="POST" action="' + escapeHTML(previewSetupActionURL(scenario, workspaceID, control.action, targetPath)) + '">' +
+          '<button class="copy-button" type="submit">' + escapeHTML(control.label) + '</button>' +
+          '<span>' + escapeHTML(control.note) + '</span>' +
+        '</form>';
+    }).join('') +
+    '</div>';
+}
+
 function previewTargetLabel(targetPath) {
   if (targetPath === '/settings/infrastructure?add=linux-host') {
     return 'Settings -> Infrastructure, with the agent install drawer open';
@@ -404,7 +513,7 @@ function previewTargetLabel(targetPath) {
   return 'the workspace dashboard';
 }
 
-function buildPreviewWorkspaceHTML(bootstrap, workspaceID, targetPath, scenario) {
+function buildPreviewWorkspaceHTML(bootstrap, workspaceID, targetPath, scenario, previewToast = '') {
   const entry = findWorkspaceByID(bootstrap, workspaceID);
   const title = entry ? entry.workspace.display_name : workspaceID;
   const accountName = entry ? entry.account.name : 'Pulse Account';
@@ -437,6 +546,7 @@ function buildPreviewWorkspaceHTML(bootstrap, workspaceID, targetPath, scenario)
           'body{margin:0;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f6f7f9;color:#101828}' +
           'main{max-width:840px;margin:0 auto;padding:48px 20px}' +
           '.panel{background:#fff;border:1px solid #d0d5dd;border-radius:8px;padding:24px;box-shadow:0 1px 2px rgba(16,24,40,.06)}' +
+          '.preview-message{border:1px solid #bbf7d0;border-radius:6px;background:#f0fdf4;color:#166534;padding:10px;margin:12px 0 16px;font-size:13px}' +
           '.crumbs{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:18px;color:#667085;font-size:13px}' +
           '.crumbs a{color:#155eef;text-decoration:none}' +
           'h1{margin:0 0 8px;font-size:24px;letter-spacing:0}' +
@@ -448,6 +558,10 @@ function buildPreviewWorkspaceHTML(bootstrap, workspaceID, targetPath, scenario)
           '.fact strong{display:block;margin-top:2px;font-size:13px}' +
           '.task{border:1px solid #eaecf0;border-radius:6px;background:#f8fafc;padding:14px;margin:16px 0}' +
           '.task code{display:block;margin:8px 0 0;padding:10px;border:1px solid #d0d5dd;border-radius:6px;background:#fff;color:#101828;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}' +
+          '.preview-controls{border:1px solid #bfdbfe;border-radius:6px;background:#eff6ff;padding:14px;margin:16px 0}' +
+          '.preview-controls strong{display:block;font-size:13px}.preview-controls p{margin:4px 0 10px;font-size:13px;color:#344054}' +
+          '.preview-controls form{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:8px;align-items:center;margin-top:8px}' +
+          '.preview-controls span{font-size:12px;line-height:1.45;color:#475467}' +
           '.steps{display:grid;gap:8px;margin:16px 0}' +
           '.step{display:grid;grid-template-columns:28px minmax(0,1fr);gap:10px;padding:10px;border:1px solid #eaecf0;border-radius:6px;background:#fff}' +
           '.step b{display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:999px;background:#eef4ff;color:#155eef;font-size:12px}' +
@@ -456,7 +570,7 @@ function buildPreviewWorkspaceHTML(bootstrap, workspaceID, targetPath, scenario)
           '.copy-button{display:inline-flex;align-items:center;min-height:32px;margin-top:10px;padding:0 10px;border:1px solid #d0d5dd;border-radius:6px;background:#fff;color:#344054;font:inherit;font-size:13px;font-weight:600;cursor:pointer}' +
           '.secondary{background:#fff;color:#344054;border:1px solid #d0d5dd}' +
           '.actions{display:flex;gap:8px;flex-wrap:wrap}' +
-          '@media(max-width:640px){.facts{grid-template-columns:1fr}}' +
+          '@media(max-width:640px){.facts{grid-template-columns:1fr}.preview-controls form{grid-template-columns:1fr}}' +
         '</style>' +
       '</head>' +
       '<body>' +
@@ -465,6 +579,7 @@ function buildPreviewWorkspaceHTML(bootstrap, workspaceID, targetPath, scenario)
             '<div class="crumbs"><a href="' + escapeHTML(portalWorkspaceURL) + '">Pulse Account</a><span>/</span><span>' + escapeHTML(accountName) + '</span><span>/</span><strong>' + escapeHTML(title) + '</strong></div>' +
             '<p>Preview workspace handoff</p>' +
             '<h1>' + escapeHTML(targetHeading) + '</h1>' +
+            (previewToast ? '<div class="preview-message">' + escapeHTML(previewToast) + '</div>' : '') +
             '<p>You are inside the <strong>' + escapeHTML(title) + '</strong> client workspace. In production the signed handoff creates a tenant session and opens ' + escapeHTML(targetLabel) + '.</p>' +
             '<p>This client boundary is the thing that keeps repeated hostnames, alerts, and reports from being mixed across MSP customers.</p>' +
             '<div class="facts">' +
@@ -480,6 +595,7 @@ function buildPreviewWorkspaceHTML(bootstrap, workspaceID, targetPath, scenario)
                 ? '<code id="preview-install-command">' + escapeHTML(installCommand) + '</code><button class="copy-button" type="button" onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById(\'preview-install-command\').textContent)">Copy command</button>'
                 : '') +
             '</div>' +
+            (entry ? previewSetupControlHTML(entry.workspace, scenario, workspaceID, targetPath) : '') +
             '<div class="steps" aria-label="Workspace setup flow">' +
               '<div class="step"><b>1</b><div><strong>Workspace created</strong><span>The client gets a separate workspace boundary before monitoring data arrives.</span></div></div>' +
               '<div class="step"><b>2</b><div><strong>Install agents in this workspace</strong><span>The handoff keeps the agent command tied to this client boundary.</span></div></div>' +
@@ -1003,6 +1119,37 @@ const server = http.createServer(function(request, response) {
     return;
   }
 
+  const previewSetupMatch = url.pathname.match(/^\/__portal_preview\/workspaces\/([^/]+)\/setup$/);
+  if (previewSetupMatch) {
+    if (request.method !== 'POST') {
+      sendText(response, 405, 'Method not allowed');
+      return;
+    }
+    const workspaceID = decodeURIComponent(previewSetupMatch[1]);
+    const result = applyPreviewWorkspaceSetupAction(
+      getScenarioState(scenario),
+      workspaceID,
+      String(url.searchParams.get('action') || '').trim(),
+    );
+    if (!result.ok) {
+      sendJSON(response, result.status || 400, { error: result.message || 'Preview setup action failed.' });
+      return;
+    }
+    const redirectURL = previewWorkspaceURL(
+      scenario,
+      workspaceID,
+      result.targetPath || String(url.searchParams.get('target_path') || ''),
+    );
+    const nextURL = new URL(redirectURL);
+    nextURL.searchParams.set('preview_toast', result.message || 'Preview setup state updated.');
+    response.writeHead(303, {
+      Location: nextURL.pathname + nextURL.search,
+      'Cache-Control': 'no-store',
+    });
+    response.end();
+    return;
+  }
+
   const previewWorkspaceMatch = url.pathname.match(/^\/__portal_preview\/workspaces\/([^/]+)$/);
   if (previewWorkspaceMatch) {
     response.writeHead(200, {
@@ -1014,6 +1161,7 @@ const server = http.createServer(function(request, response) {
       decodeURIComponent(previewWorkspaceMatch[1]),
       String(url.searchParams.get('target_path') || ''),
       scenario,
+      String(url.searchParams.get('preview_toast') || ''),
     ));
     return;
   }

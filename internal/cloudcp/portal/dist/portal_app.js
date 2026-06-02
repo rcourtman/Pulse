@@ -2773,7 +2773,7 @@
       openAction = '<form method="POST" action="' + escapeAttr(workspaceHandoffActionPath2(accountAPIBasePath, account.id, workspace.id)) + '"><button type="submit" class="btn-primary">Open workspace</button></form>';
     }
     var installAction = "";
-    if (state === "active") {
+    if (account.can_manage && state === "active") {
       installAction = '<form method="POST" action="' + escapeAttr(workspaceHandoffActionPath2(accountAPIBasePath, account.id, workspace.id, WORKSPACE_INSTALL_TARGET_PATH2)) + '"><button type="submit" class="btn-secondary">Install agents</button></form>';
     }
     var manageAction = "";
@@ -2904,19 +2904,25 @@
       var setupState = workspaceSetupState(setupEntry.workspace);
       title = setupState === "configure_outputs" ? "Configure outputs for " + setupEntry.workspace.display_name : "Set up " + setupEntry.workspace.display_name;
       description = workspaceSummaryContext(setupEntry, accounts.length > 1, workspaceSetupNextStep(setupEntry.workspace));
-      primaryAction = setupState === "configure_outputs" ? renderWorkspaceReportingHandoffForm(
-        setupEntry.account.id,
-        setupEntry.workspace.id,
-        accountAPIBasePath,
-        "Open reports",
-        "btn-primary btn-compact"
-      ) : renderWorkspaceInstallHandoffForm(
-        setupEntry.account.id,
-        setupEntry.workspace.id,
-        accountAPIBasePath,
-        "Install agents",
-        "btn-primary btn-compact"
-      );
+      if (!setupEntry.account.can_manage) {
+        primaryAction = renderWorkspaceHandoffForm(setupEntry.account.id, setupEntry.workspace.id, accountAPIBasePath, "Open workspace", "btn-primary btn-compact");
+      } else if (setupState === "configure_outputs") {
+        primaryAction = renderWorkspaceReportingHandoffForm(
+          setupEntry.account.id,
+          setupEntry.workspace.id,
+          accountAPIBasePath,
+          "Open reports",
+          "btn-primary btn-compact"
+        );
+      } else {
+        primaryAction = renderWorkspaceInstallHandoffForm(
+          setupEntry.account.id,
+          setupEntry.workspace.id,
+          accountAPIBasePath,
+          "Install agents",
+          "btn-primary btn-compact"
+        );
+      }
       secondaryAction = setupEntry.account.can_manage ? '<button type="button" class="btn-secondary btn-compact" data-action="select-workspace" data-account-id="' + escapeAttr(setupEntry.account.id) + '" data-workspace-id="' + escapeAttr(setupEntry.workspace.id) + '">Setup checklist</button>' : renderWorkspaceHandoffForm(setupEntry.account.id, setupEntry.workspace.id, accountAPIBasePath, "Open workspace");
     } else if (ready.length) {
       var readyEntry = ready[0];
@@ -2929,7 +2935,7 @@
         "Open workspace",
         "btn-primary btn-compact"
       );
-      secondaryAction = ready.length > 1 ? renderWorkspaceAnchorAction(workspaceListAnchorID(readyEntry.account.id), "See all workspaces") : renderWorkspaceInstallHandoffForm(readyEntry.account.id, readyEntry.workspace.id, accountAPIBasePath);
+      secondaryAction = ready.length > 1 ? renderWorkspaceAnchorAction(workspaceListAnchorID(readyEntry.account.id), "See all workspaces") : readyEntry.account.can_manage ? renderWorkspaceInstallHandoffForm(readyEntry.account.id, readyEntry.workspace.id, accountAPIBasePath) : "";
     } else if (creatableAccount) {
       title = "Create the first workspace";
       description = "No hosted workspace is attached yet. Create the first workspace in " + creatableAccount.name + ".";

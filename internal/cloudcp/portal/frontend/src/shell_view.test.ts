@@ -470,6 +470,9 @@ describe('shell view', function() {
     expect(html).toContain('Scope');
     expect(html).toContain('Include');
     expect(html).toContain('data-can-manage="false"');
+    expect(html).toContain('Open workspace');
+    expect(html).not.toContain('/settings/infrastructure?add=linux-host');
+    expect(html).not.toContain('>Install agents</button>');
     expect(html).not.toContain('Invite people, change roles, and remove account access.');
     expect(html).not.toContain('data-action="invite-member"');
     expect(html).not.toContain('data-action="set-access-job"');
