@@ -3406,6 +3406,7 @@ class SubsystemLookupTest(unittest.TestCase):
             match["verification_requirement"]["exact_files"],
             [
                 "cmd/pulse-control-plane/provider_msp_backup_test.go",
+                "cmd/pulse-control-plane/provider_msp_install_proof_test.go",
                 "cmd/pulse-control-plane/provider_msp_preflight_test.go",
                 "cmd/pulse-control-plane/provider_msp_proof_test.go",
                 "cmd/pulse-control-plane/provider_msp_recover_test.go",

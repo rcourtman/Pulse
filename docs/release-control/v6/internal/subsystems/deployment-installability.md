@@ -28,15 +28,16 @@ surfaces.
 5. `cmd/pulse-control-plane/mobile_proof_cmd.go`
 6. `cmd/pulse-control-plane/provider_msp.go`
 7. `cmd/pulse-control-plane/provider_msp_backup.go`
-8. `cmd/pulse-control-plane/provider_msp_preflight.go`
-9. `cmd/pulse-control-plane/provider_msp_proof.go`
-10. `cmd/pulse-control-plane/provider_msp_recover.go`
-11. `cmd/pulse-control-plane/provider_msp_status.go`
-12. `internal/cloudcp/provider_msp_backup.go`
-13. `internal/cloudcp/provider_msp_recovery.go`
-14. `internal/cloudcp/docker/manager.go`
-15. `internal/cloudcp/docker/labels.go`
-16. `internal/cloudcp/tenant_runtime_rollout.go`
+8. `cmd/pulse-control-plane/provider_msp_install_proof.go`
+9. `cmd/pulse-control-plane/provider_msp_preflight.go`
+10. `cmd/pulse-control-plane/provider_msp_proof.go`
+11. `cmd/pulse-control-plane/provider_msp_recover.go`
+12. `cmd/pulse-control-plane/provider_msp_status.go`
+13. `internal/cloudcp/provider_msp_backup.go`
+14. `internal/cloudcp/provider_msp_recovery.go`
+15. `internal/cloudcp/docker/manager.go`
+16. `internal/cloudcp/docker/labels.go`
+17. `internal/cloudcp/tenant_runtime_rollout.go`
 13. `.github/workflows/create-release.yml`
 14. `.github/workflows/deploy-demo-server.yml`
 15. `.github/workflows/helm-pages.yml`
@@ -136,6 +137,13 @@ surfaces.
    treated as proven. The proof is license-backed by default: `license_file` must be the
    resolved provider MSP plan source unless the operator explicitly opts into
    the local-development `--allow-env-plan` escape hatch.
+   `pulse-control-plane provider-msp install-proof` is the packaged fresh
+   install rehearsal: it must bootstrap the provider owner, run license-backed
+   preflight and status checks, run the workspace/runtime proof with cleanup
+   delayed until after backup capture, create and verify a recovery archive,
+   dry-run restore into a separate target data dir, dry-run failed-workspace
+   recovery, remove proof workspaces when requested, and report final
+   operational status.
    `pulse-control-plane provider-msp status` is the non-mutating operational
    companion to that proof: it must report registry readiness, tenant
    state/health counts, stuck provisioning workspaces, Docker runtime

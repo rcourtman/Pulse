@@ -2641,6 +2641,7 @@
         "cmd/pulse-control-plane/main.go",
         "cmd/pulse-control-plane/provider_msp.go",
         "cmd/pulse-control-plane/provider_msp_backup.go",
+        "cmd/pulse-control-plane/provider_msp_install_proof.go",
         "cmd/pulse-control-plane/provider_msp_preflight.go",
         "cmd/pulse-control-plane/provider_msp_proof.go",
         "cmd/pulse-control-plane/provider_msp_recover.go",
@@ -2914,6 +2915,7 @@
               "cmd/pulse-control-plane/main.go",
               "cmd/pulse-control-plane/provider_msp.go",
               "cmd/pulse-control-plane/provider_msp_backup.go",
+              "cmd/pulse-control-plane/provider_msp_install_proof.go",
               "cmd/pulse-control-plane/provider_msp_preflight.go",
               "cmd/pulse-control-plane/provider_msp_proof.go",
               "cmd/pulse-control-plane/provider_msp_recover.go",
@@ -2928,6 +2930,7 @@
             "test_prefixes": [],
             "exact_files": [
               "cmd/pulse-control-plane/provider_msp_backup_test.go",
+              "cmd/pulse-control-plane/provider_msp_install_proof_test.go",
               "cmd/pulse-control-plane/provider_msp_preflight_test.go",
               "cmd/pulse-control-plane/provider_msp_proof_test.go",
               "cmd/pulse-control-plane/provider_msp_recover_test.go",
