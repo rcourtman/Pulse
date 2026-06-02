@@ -176,9 +176,14 @@ Pulse Account workspace summaries carry setup state as a backend-owned payload
 contract. Browser bootstrap and `/api/portal/dashboard` workspace entries may
 include `setup_status` with only `ready`, `setup_path`, `install_agents`,
 `configure_outputs`, or `review`, plus optional setup evidence counts such as
-`agent_count`, `last_agent_seen_at`, `alert_route_count`, and
-`report_schedule_count` when the control plane has a canonical source for
-them. The canonical source is a read-only tenant-local setup facts reader, not
+`agent_count`, `agent_token_count`, `unused_agent_token_count`,
+`last_agent_seen_at`, `alert_route_count`, `disabled_alert_route_count`,
+`report_schedule_count`, and `disabled_report_schedule_count` when the control
+plane has a canonical source for them. MSP account bootstrap may also include
+account-level `setup_templates` for provider guidance, but those templates are
+copy and sequence guidance only; workspace readiness remains owned by the
+workspace setup facts. The canonical source is a read-only tenant-local setup
+facts reader, not
 browser inference or portal-local state. Health review still wins first:
 active workspaces with a failed latest health check report `review`. Healthy
 or unchecked workspaces with no used non-expired `agent:report` token report

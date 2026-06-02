@@ -51,6 +51,7 @@ describe('portal store', function() {
     expect(bootstrap.authenticated).toBe(true);
     expect(bootstrap.email).toBe('owner@example.com');
     expect(bootstrap.accounts).toHaveLength(1);
+    expect(bootstrap.accounts[0].setup_templates).toEqual([]);
     expect(bootstrap.portal_path).toBe('/portal');
   });
 

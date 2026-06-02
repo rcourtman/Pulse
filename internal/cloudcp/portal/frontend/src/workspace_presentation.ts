@@ -1,6 +1,24 @@
 import type { PortalWorkspaceSummary } from './types';
 
 export type WorkspaceSetupState = 'ready' | 'setup_path' | 'install_agents' | 'configure_outputs' | 'review';
+export type WorkspaceSetupStepID = 'workspace' | 'agent' | 'alerts' | 'reports' | 'access';
+export type WorkspaceSetupStepTone = 'done' | 'next' | 'pending' | 'blocked' | 'available';
+
+export interface WorkspaceSetupStepModel {
+  id: WorkspaceSetupStepID;
+  title: string;
+  detail: string;
+  tone: WorkspaceSetupStepTone;
+  label: string;
+}
+
+export interface WorkspaceSetupGuide {
+  title: string;
+  description: string;
+  primaryAction: 'open' | 'install' | 'outputs' | 'access' | 'review';
+  primaryLabel: string;
+  diagnostics: string[];
+}
 
 export function workspaceHealthState(workspace: PortalWorkspaceSummary): 'healthy' | 'checking' | 'unhealthy' {
   if (workspace.health_status === 'healthy' || workspace.health_status === 'checking' || workspace.health_status === 'unhealthy') {
@@ -50,6 +68,10 @@ function hasNumber(value: unknown): boolean {
 
 function positiveCount(value: unknown): boolean {
   return hasNumber(value) && Number(value) > 0;
+}
+
+function zeroCount(value: unknown): boolean {
+  return hasNumber(value) && Number(value) <= 0;
 }
 
 function explicitSetupStatus(workspace: PortalWorkspaceSummary): WorkspaceSetupState | '' {
@@ -119,6 +141,152 @@ export function workspaceSetupNextStep(workspace: PortalWorkspaceSummary): strin
     default:
       return 'Open the workspace or install agents from the workspace-bound setup path.';
   }
+}
+
+export function workspaceIdentityCopy(workspace: PortalWorkspaceSummary): string {
+  return 'Client boundary: ' + workspace.display_name + '. Hostnames can repeat across clients; this workspace keeps agents, alerts, and reports scoped to this client.';
+}
+
+export function workspaceSetupDiagnostics(workspace: PortalWorkspaceSummary): string[] {
+  var setup = workspaceSetupState(workspace);
+  var diagnostics: string[] = [];
+  if (setup === 'ready') {
+    diagnostics.push('Reporting agent, enabled alert route, and enabled report schedule are present.');
+    return diagnostics;
+  }
+  if (setup === 'review') {
+    diagnostics.push(workspaceStatusCopy(workspace));
+    return diagnostics;
+  }
+
+  if (zeroCount(workspace.agent_count)) {
+    if (positiveCount(workspace.unused_agent_token_count) || positiveCount(workspace.agent_token_count)) {
+      diagnostics.push('Agent install token exists, but no reporting agent has checked in yet.');
+    } else {
+      diagnostics.push('No reporting agent has checked in yet.');
+    }
+  }
+
+  if (positiveCount(workspace.agent_count) && zeroCount(workspace.alert_route_count)) {
+    diagnostics.push(
+      positiveCount(workspace.disabled_alert_route_count)
+        ? 'Alert route configuration exists, but no route is enabled.'
+        : 'No enabled alert route is configured yet.',
+    );
+  }
+
+  if (positiveCount(workspace.agent_count) && zeroCount(workspaceReportScheduleCount(workspace))) {
+    diagnostics.push(
+      positiveCount(workspace.disabled_report_schedule_count)
+        ? 'Report schedule exists, but no schedule is enabled.'
+        : 'No enabled report schedule is configured yet.',
+    );
+  }
+
+  if (!diagnostics.length) {
+    diagnostics.push(workspaceSetupNextStep(workspace));
+  }
+  return diagnostics;
+}
+
+function workspaceReportScheduleCount(workspace: PortalWorkspaceSummary): unknown {
+  return workspace.report_schedule_count;
+}
+
+export function workspaceSetupGuide(workspace: PortalWorkspaceSummary): WorkspaceSetupGuide {
+  var setup = workspaceSetupState(workspace);
+  if (setup === 'ready') {
+    return {
+      title: 'Ready',
+      description: 'Agents, alert routing, and reports are in place for this client workspace.',
+      primaryAction: 'open',
+      primaryLabel: 'Open workspace',
+      diagnostics: workspaceSetupDiagnostics(workspace),
+    };
+  }
+  if (setup === 'review') {
+    return {
+      title: 'Review workspace state',
+      description: 'Resolve the workspace state before continuing client setup.',
+      primaryAction: 'review',
+      primaryLabel: 'Review workspace',
+      diagnostics: workspaceSetupDiagnostics(workspace),
+    };
+  }
+  if (setup === 'install_agents') {
+    return {
+      title: 'Install the first agent',
+      description: 'Start inside this client workspace so the first reporting token and future hostnames stay scoped to the client.',
+      primaryAction: 'install',
+      primaryLabel: 'Install agents',
+      diagnostics: workspaceSetupDiagnostics(workspace),
+    };
+  }
+  if (setup === 'configure_outputs') {
+    var needsAlerts = zeroCount(workspace.alert_route_count);
+    var needsReports = zeroCount(workspaceReportScheduleCount(workspace));
+    return {
+      title: needsAlerts && needsReports ? 'Configure alerts and reports' : needsAlerts ? 'Configure alert routes' : 'Schedule reports',
+      description: 'Finish the output side before this workspace leaves onboarding.',
+      primaryAction: 'outputs',
+      primaryLabel: needsReports && !needsAlerts ? 'Open reports' : 'Configure outputs',
+      diagnostics: workspaceSetupDiagnostics(workspace),
+    };
+  }
+  return {
+    title: 'Follow the setup path',
+    description: 'Open the client workspace and continue the next setup task from there.',
+    primaryAction: 'install',
+    primaryLabel: 'Open setup',
+    diagnostics: workspaceSetupDiagnostics(workspace),
+  };
+}
+
+export function workspaceSetupSteps(workspace: PortalWorkspaceSummary): WorkspaceSetupStepModel[] {
+  var setup = workspaceSetupState(workspace);
+  var state = String(workspace.state || '');
+  var isActive = state === 'active';
+  var hasAgents = positiveCount(workspace.agent_count) || setup === 'configure_outputs' || setup === 'ready';
+  var hasAlerts = positiveCount(workspace.alert_route_count);
+  var hasReports = positiveCount(workspaceReportScheduleCount(workspace));
+
+  return [
+    {
+      id: 'workspace',
+      title: 'Create workspace',
+      detail: 'Separate client boundary created.',
+      tone: state ? 'done' : 'pending',
+      label: state ? 'Done' : 'Pending',
+    },
+    {
+      id: 'agent',
+      title: 'Install first agent',
+      detail: 'First reporting agent checks in inside this workspace.',
+      tone: hasAgents ? 'done' : setup === 'review' || !isActive ? 'blocked' : 'next',
+      label: hasAgents ? 'Done' : setup === 'review' || !isActive ? 'Review' : 'Next',
+    },
+    {
+      id: 'alerts',
+      title: 'Configure alert routes',
+      detail: 'Enabled notification route exists for this client.',
+      tone: hasAlerts ? 'done' : setup === 'review' ? 'blocked' : isActive && hasAgents ? 'next' : 'pending',
+      label: hasAlerts ? 'Done' : setup === 'review' ? 'Review' : isActive && hasAgents ? 'Next' : 'Pending',
+    },
+    {
+      id: 'reports',
+      title: 'Schedule reports',
+      detail: 'Enabled report schedule exists for client reporting.',
+      tone: hasReports ? 'done' : setup === 'review' ? 'blocked' : isActive && hasAgents && hasAlerts ? 'next' : 'pending',
+      label: hasReports ? 'Done' : setup === 'review' ? 'Review' : isActive && hasAgents && hasAlerts ? 'Next' : 'Pending',
+    },
+    {
+      id: 'access',
+      title: 'Review access',
+      detail: 'Provider staff and client users are handled from Access.',
+      tone: 'available',
+      label: 'Available',
+    },
+  ];
 }
 
 export function workspaceGuidanceCopy(workspace: PortalWorkspaceSummary): string {

@@ -91,14 +91,26 @@ func TestTenantDirWorkspaceSetupFactReaderCountsTenantFacts(t *testing.T) {
 	if facts.AgentCount == nil || *facts.AgentCount != 1 {
 		t.Fatalf("AgentCount = %v, want 1", facts.AgentCount)
 	}
+	if facts.AgentTokenCount == nil || *facts.AgentTokenCount != 2 {
+		t.Fatalf("AgentTokenCount = %v, want 2", facts.AgentTokenCount)
+	}
+	if facts.UnusedAgentTokenCount == nil || *facts.UnusedAgentTokenCount != 1 {
+		t.Fatalf("UnusedAgentTokenCount = %v, want 1", facts.UnusedAgentTokenCount)
+	}
 	if facts.LastAgentSeenAt == nil || !facts.LastAgentSeenAt.Equal(lastUsed) {
 		t.Fatalf("LastAgentSeenAt = %v, want %v", facts.LastAgentSeenAt, lastUsed)
 	}
 	if facts.AlertRouteCount == nil || *facts.AlertRouteCount != 4 {
 		t.Fatalf("AlertRouteCount = %v, want 4", facts.AlertRouteCount)
 	}
+	if facts.DisabledAlertRouteCount == nil || *facts.DisabledAlertRouteCount != 1 {
+		t.Fatalf("DisabledAlertRouteCount = %v, want 1", facts.DisabledAlertRouteCount)
+	}
 	if facts.ReportScheduleCount == nil || *facts.ReportScheduleCount != 1 {
 		t.Fatalf("ReportScheduleCount = %v, want 1", facts.ReportScheduleCount)
+	}
+	if facts.DisabledReportScheduleCount == nil || *facts.DisabledReportScheduleCount != 1 {
+		t.Fatalf("DisabledReportScheduleCount = %v, want 1", facts.DisabledReportScheduleCount)
 	}
 }
 
@@ -113,18 +125,36 @@ func TestTenantDirWorkspaceSetupFactReaderMissingFactsAreZero(t *testing.T) {
 	if facts.AgentCount == nil || *facts.AgentCount != 0 {
 		t.Fatalf("AgentCount = %v, want 0", facts.AgentCount)
 	}
+	if facts.AgentTokenCount == nil || *facts.AgentTokenCount != 0 {
+		t.Fatalf("AgentTokenCount = %v, want 0", facts.AgentTokenCount)
+	}
+	if facts.UnusedAgentTokenCount == nil || *facts.UnusedAgentTokenCount != 0 {
+		t.Fatalf("UnusedAgentTokenCount = %v, want 0", facts.UnusedAgentTokenCount)
+	}
 	if facts.AlertRouteCount == nil || *facts.AlertRouteCount != 0 {
 		t.Fatalf("AlertRouteCount = %v, want 0", facts.AlertRouteCount)
 	}
+	if facts.DisabledAlertRouteCount == nil || *facts.DisabledAlertRouteCount != 0 {
+		t.Fatalf("DisabledAlertRouteCount = %v, want 0", facts.DisabledAlertRouteCount)
+	}
 	if facts.ReportScheduleCount == nil || *facts.ReportScheduleCount != 0 {
 		t.Fatalf("ReportScheduleCount = %v, want 0", facts.ReportScheduleCount)
+	}
+	if facts.DisabledReportScheduleCount == nil || *facts.DisabledReportScheduleCount != 0 {
+		t.Fatalf("DisabledReportScheduleCount = %v, want 0", facts.DisabledReportScheduleCount)
 	}
 }
 
 func TestTenantDirWorkspaceSetupFactReaderRejectsUnsafeTenantID(t *testing.T) {
 	tenantsDir := t.TempDir()
 	facts := NewTenantDirWorkspaceSetupFactReader(tenantsDir).FactsForWorkspace("../ws")
-	if facts.AgentCount != nil || facts.AlertRouteCount != nil || facts.ReportScheduleCount != nil {
+	if facts.AgentCount != nil ||
+		facts.AgentTokenCount != nil ||
+		facts.UnusedAgentTokenCount != nil ||
+		facts.AlertRouteCount != nil ||
+		facts.DisabledAlertRouteCount != nil ||
+		facts.ReportScheduleCount != nil ||
+		facts.DisabledReportScheduleCount != nil {
 		t.Fatalf("unsafe tenant facts = %+v, want empty facts", facts)
 	}
 }

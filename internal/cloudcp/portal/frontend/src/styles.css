@@ -526,6 +526,71 @@ header .logout-btn:hover,
   color: var(--ink-secondary);
 }
 
+.workspace-management-identity {
+  padding: 10px 12px;
+  border: 1px solid #c6d9f0;
+  border-radius: var(--radius);
+  background: var(--accent-subtle);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.workspace-setup-guide {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.workspace-setup-guide-copy {
+  min-width: 0;
+}
+
+.workspace-setup-guide-copy > span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.workspace-setup-guide h4 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.workspace-setup-guide p {
+  margin: 4px 0 0;
+  color: var(--ink-secondary);
+  font-size: 13px;
+}
+
+.workspace-setup-guide ul {
+  display: grid;
+  gap: 3px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workspace-setup-guide li {
+  color: var(--ink-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.workspace-setup-guide form {
+  margin: 0;
+}
+
 .workspace-setup-checklist {
   display: grid;
   gap: 8px;
@@ -1449,6 +1514,71 @@ header .logout-btn:hover,
   gap: 8px;
 }
 
+.workspace-template-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.workspace-template-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.workspace-template-heading h3 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.workspace-template-heading p {
+  margin: 3px 0 0;
+  color: var(--ink-secondary);
+  font-size: 12px;
+}
+
+.workspace-template-heading > span {
+  flex: 0 0 auto;
+  color: var(--ink-secondary);
+  font-size: 12px;
+}
+
+.workspace-template-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.workspace-template-grid > div {
+  padding: 10px;
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+}
+
+.workspace-template-grid strong,
+.workspace-template-grid span {
+  display: block;
+}
+
+.workspace-template-grid strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.workspace-template-grid span {
+  margin-top: 3px;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 /* Remove kicker labels — they feel like a custom portal. Use section context instead. */
 .account-panel-kicker,
 .billing-card-kicker,
@@ -1623,6 +1753,16 @@ header .logout-btn:hover,
   }
   .workspace-setup-queue-actions {
     justify-content: flex-start;
+  }
+  .workspace-template-heading {
+    flex-direction: column;
+  }
+  .workspace-template-grid,
+  .workspace-setup-guide {
+    grid-template-columns: 1fr;
+  }
+  .workspace-setup-guide form {
+    justify-self: flex-start;
   }
 
   .workspace-list-head { display: none; }

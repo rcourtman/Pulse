@@ -12,6 +12,7 @@ import {
   workspaceHealthLabel,
   workspaceHealthState,
   workspaceRowNote,
+  workspaceSetupGuide,
   workspaceSetupLabel,
   workspaceSetupNextStep,
   workspaceSetupState,
@@ -244,7 +245,7 @@ function countWorkspacesByState(workspaces: PortalWorkspaceSummary[], state: str
 function countReadyWorkspaces(workspaces: PortalWorkspaceSummary[]): number {
   var count = 0;
   for (var i = 0; i < workspaces.length; i += 1) {
-    if (String(workspaces[i].state || '') === 'active' && workspaceHealthState(workspaces[i]) === 'healthy') {
+    if (String(workspaces[i].state || '') === 'active' && workspaceSetupState(workspaces[i]) === 'ready') {
       count += 1;
     }
   }
@@ -605,6 +606,11 @@ function workspaceSetupFactsLine(workspace: PortalWorkspaceSummary): string {
   ].join(' · ');
 }
 
+function workspaceSetupDiagnosticsLine(workspace: PortalWorkspaceSummary): string {
+  var guide = workspaceSetupGuide(workspace);
+  return guide.diagnostics.length ? guide.diagnostics[0] : workspaceSetupNextStep(workspace);
+}
+
 function workspaceSummaryContext(entry: WorkspaceSummaryEntry, includeAccountName: boolean, note: string): string {
   if (!includeAccountName) return note;
   return entry.account.name + ' · ' + note;
@@ -822,6 +828,31 @@ function renderWorkspaceSetupQueueAction(entry: WorkspaceSummaryEntry, accountAP
   );
 }
 
+function renderProviderSetupTemplates(accounts: PortalAccountSummary[]): string {
+  var templateAccount = accounts.find(function(account) {
+    return account.kind === 'msp' && Array.isArray(account.setup_templates) && account.setup_templates.length > 0;
+  });
+  if (!templateAccount || !templateAccount.setup_templates || !templateAccount.setup_templates.length) return '';
+  var template = templateAccount.setup_templates[0];
+  return (
+    '<section class="workspace-template-panel" aria-label="Provider setup template">' +
+      '<div class="workspace-template-heading">' +
+        '<div>' +
+          '<h3>' + escapeHTML(template.title || 'Provider setup template') + '</h3>' +
+          '<p>Use the same setup shape for each client workspace, then finish the tenant-owned configuration inside that workspace.</p>' +
+        '</div>' +
+        '<span>' + escapeHTML(templateAccount.name) + '</span>' +
+      '</div>' +
+      '<div class="workspace-template-grid">' +
+        '<div><strong>Agent naming</strong><span>' + escapeHTML(template.agent_naming) + '</span></div>' +
+        '<div><strong>Alert routing</strong><span>' + escapeHTML(template.alert_routing) + '</span></div>' +
+        '<div><strong>Reports</strong><span>' + escapeHTML(template.reporting) + '</span></div>' +
+        '<div><strong>Access</strong><span>' + escapeHTML(template.access) + '</span></div>' +
+      '</div>' +
+    '</section>'
+  );
+}
+
 function renderWorkspaceSetupQueue(entries: WorkspaceSummaryEntry[], accountAPIBasePath: string): string {
   var setupNeeded = setupNeededWorkspaceEntries(entries);
   if (!setupNeeded.length) return '';
@@ -843,7 +874,7 @@ function renderWorkspaceSetupQueue(entries: WorkspaceSummaryEntry[], accountAPIB
                 setupBadgeHTML(entry.workspace) +
                 '<div>' +
                   '<strong>' + escapeHTML(entry.workspace.display_name) + '</strong>' +
-                  '<span>' + escapeHTML(entry.account.name + ' · ' + workspaceSetupNextStep(entry.workspace)) + '</span>' +
+                  '<span>' + escapeHTML(entry.account.name + ' · ' + workspaceSetupDiagnosticsLine(entry.workspace)) + '</span>' +
                   '<small>' + escapeHTML(workspaceSetupFactsLine(entry.workspace)) + '</small>' +
                 '</div>' +
               '</div>' +
@@ -891,6 +922,7 @@ export function renderWorkspaceSummarySection(context: ShellViewContext): string
       '</div>' +
       renderFactLine('workspace-summary-facts', renderWorkspaceSummaryFacts(accounts, entries)) +
       renderWorkspaceSummaryInline(accounts, entries, context.accountAPIBasePath, showSelfHostedCommercial) +
+      renderProviderSetupTemplates(accounts) +
       renderWorkspaceSetupQueue(entries, context.accountAPIBasePath) +
     '</section>'
   );
@@ -1040,6 +1072,30 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
           '<div class="workspace-management-guidance" id="workspace-management-guidance-' +
           escapeAttr(account.id) +
           '"></div>' +
+          '<div class="workspace-management-identity" id="workspace-management-identity-' +
+          escapeAttr(account.id) +
+          '"></div>' +
+          '<div class="workspace-setup-guide" aria-label="Guided workspace setup">' +
+            '<div class="workspace-setup-guide-copy">' +
+              '<span>Current step</span>' +
+              '<h4 id="workspace-management-guide-title-' +
+              escapeAttr(account.id) +
+              '"></h4>' +
+              '<p id="workspace-management-guide-description-' +
+              escapeAttr(account.id) +
+              '"></p>' +
+              '<ul id="workspace-management-guide-diagnostics-' +
+              escapeAttr(account.id) +
+              '"></ul>' +
+            '</div>' +
+            '<form method="POST" id="workspace-management-primary-form-' +
+            escapeAttr(account.id) +
+            '">' +
+              '<button type="submit" class="btn-primary btn-compact" id="workspace-management-primary-' +
+              escapeAttr(account.id) +
+              '">Continue setup</button>' +
+            '</form>' +
+          '</div>' +
           '<div class="workspace-setup-checklist" aria-label="Workspace setup checklist">' +
             '<div class="workspace-setup-step workspace-setup-step-created">' +
               '<span class="workspace-setup-status" id="workspace-management-check-created-' + escapeAttr(account.id) + '"></span>' +

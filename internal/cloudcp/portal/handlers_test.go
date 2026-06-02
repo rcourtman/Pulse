@@ -121,17 +121,21 @@ type dashboardResp struct {
 		Kind        registry.AccountKind `json:"kind"`
 	} `json:"account"`
 	Workspaces []struct {
-		ID                  string               `json:"id"`
-		DisplayName         string               `json:"display_name"`
-		State               registry.TenantState `json:"state"`
-		HealthCheckOK       bool                 `json:"health_check_ok"`
-		SetupStatus         string               `json:"setup_status"`
-		AgentCount          *int                 `json:"agent_count"`
-		LastAgentSeenAt     *time.Time           `json:"last_agent_seen_at"`
-		AlertRouteCount     *int                 `json:"alert_route_count"`
-		ReportScheduleCount *int                 `json:"report_schedule_count"`
-		LastHealthCheck     *time.Time           `json:"last_health_check"`
-		CreatedAt           time.Time            `json:"created_at"`
+		ID                          string               `json:"id"`
+		DisplayName                 string               `json:"display_name"`
+		State                       registry.TenantState `json:"state"`
+		HealthCheckOK               bool                 `json:"health_check_ok"`
+		SetupStatus                 string               `json:"setup_status"`
+		AgentCount                  *int                 `json:"agent_count"`
+		AgentTokenCount             *int                 `json:"agent_token_count"`
+		UnusedAgentTokenCount       *int                 `json:"unused_agent_token_count"`
+		LastAgentSeenAt             *time.Time           `json:"last_agent_seen_at"`
+		AlertRouteCount             *int                 `json:"alert_route_count"`
+		DisabledAlertRouteCount     *int                 `json:"disabled_alert_route_count"`
+		ReportScheduleCount         *int                 `json:"report_schedule_count"`
+		DisabledReportScheduleCount *int                 `json:"disabled_report_schedule_count"`
+		LastHealthCheck             *time.Time           `json:"last_health_check"`
+		CreatedAt                   time.Time            `json:"created_at"`
 	} `json:"workspaces"`
 	Summary struct {
 		Total     int `json:"total"`
@@ -247,17 +251,21 @@ func TestPortalDashboard(t *testing.T) {
 	// local helper type for easier indexing
 	for _, ws := range resp.Workspaces {
 		wsByID[ws.ID] = dashboardRespWorkspace{
-			ID:                  ws.ID,
-			DisplayName:         ws.DisplayName,
-			State:               ws.State,
-			HealthCheckOK:       ws.HealthCheckOK,
-			SetupStatus:         ws.SetupStatus,
-			AgentCount:          ws.AgentCount,
-			LastAgentSeenAt:     ws.LastAgentSeenAt,
-			AlertRouteCount:     ws.AlertRouteCount,
-			ReportScheduleCount: ws.ReportScheduleCount,
-			LastHealthCheck:     ws.LastHealthCheck,
-			CreatedAt:           ws.CreatedAt,
+			ID:                          ws.ID,
+			DisplayName:                 ws.DisplayName,
+			State:                       ws.State,
+			HealthCheckOK:               ws.HealthCheckOK,
+			SetupStatus:                 ws.SetupStatus,
+			AgentCount:                  ws.AgentCount,
+			AgentTokenCount:             ws.AgentTokenCount,
+			UnusedAgentTokenCount:       ws.UnusedAgentTokenCount,
+			LastAgentSeenAt:             ws.LastAgentSeenAt,
+			AlertRouteCount:             ws.AlertRouteCount,
+			DisabledAlertRouteCount:     ws.DisabledAlertRouteCount,
+			ReportScheduleCount:         ws.ReportScheduleCount,
+			DisabledReportScheduleCount: ws.DisabledReportScheduleCount,
+			LastHealthCheck:             ws.LastHealthCheck,
+			CreatedAt:                   ws.CreatedAt,
 		}
 	}
 
@@ -371,21 +379,33 @@ func TestPortalDashboardUsesWorkspaceSetupFacts(t *testing.T) {
 
 	mux.Handle(PortalDashboardPath, admin.AdminKeyMiddleware("secret-key", HandlePortalDashboardWithSetupFacts(reg, staticSetupFactReader{
 		tenantInstallID: {
-			AgentCount:          intPtr(0),
-			AlertRouteCount:     intPtr(0),
-			ReportScheduleCount: intPtr(0),
+			AgentCount:                  intPtr(0),
+			AgentTokenCount:             intPtr(1),
+			UnusedAgentTokenCount:       intPtr(1),
+			AlertRouteCount:             intPtr(0),
+			DisabledAlertRouteCount:     intPtr(0),
+			ReportScheduleCount:         intPtr(0),
+			DisabledReportScheduleCount: intPtr(0),
 		},
 		tenantOutputsID: {
-			AgentCount:          intPtr(1),
-			LastAgentSeenAt:     &lastSeen,
-			AlertRouteCount:     intPtr(1),
-			ReportScheduleCount: intPtr(0),
+			AgentCount:                  intPtr(1),
+			AgentTokenCount:             intPtr(1),
+			UnusedAgentTokenCount:       intPtr(0),
+			LastAgentSeenAt:             &lastSeen,
+			AlertRouteCount:             intPtr(1),
+			DisabledAlertRouteCount:     intPtr(1),
+			ReportScheduleCount:         intPtr(0),
+			DisabledReportScheduleCount: intPtr(1),
 		},
 		tenantReadyID: {
-			AgentCount:          intPtr(2),
-			LastAgentSeenAt:     &lastSeen,
-			AlertRouteCount:     intPtr(1),
-			ReportScheduleCount: intPtr(1),
+			AgentCount:                  intPtr(2),
+			AgentTokenCount:             intPtr(2),
+			UnusedAgentTokenCount:       intPtr(0),
+			LastAgentSeenAt:             &lastSeen,
+			AlertRouteCount:             intPtr(1),
+			DisabledAlertRouteCount:     intPtr(0),
+			ReportScheduleCount:         intPtr(1),
+			DisabledReportScheduleCount: intPtr(0),
 		},
 	})))
 
@@ -403,17 +423,21 @@ func TestPortalDashboardUsesWorkspaceSetupFacts(t *testing.T) {
 	got := map[string]dashboardRespWorkspace{}
 	for _, ws := range resp.Workspaces {
 		got[ws.ID] = dashboardRespWorkspace{
-			ID:                  ws.ID,
-			DisplayName:         ws.DisplayName,
-			State:               ws.State,
-			HealthCheckOK:       ws.HealthCheckOK,
-			SetupStatus:         ws.SetupStatus,
-			AgentCount:          ws.AgentCount,
-			LastAgentSeenAt:     ws.LastAgentSeenAt,
-			AlertRouteCount:     ws.AlertRouteCount,
-			ReportScheduleCount: ws.ReportScheduleCount,
-			LastHealthCheck:     ws.LastHealthCheck,
-			CreatedAt:           ws.CreatedAt,
+			ID:                          ws.ID,
+			DisplayName:                 ws.DisplayName,
+			State:                       ws.State,
+			HealthCheckOK:               ws.HealthCheckOK,
+			SetupStatus:                 ws.SetupStatus,
+			AgentCount:                  ws.AgentCount,
+			AgentTokenCount:             ws.AgentTokenCount,
+			UnusedAgentTokenCount:       ws.UnusedAgentTokenCount,
+			LastAgentSeenAt:             ws.LastAgentSeenAt,
+			AlertRouteCount:             ws.AlertRouteCount,
+			DisabledAlertRouteCount:     ws.DisabledAlertRouteCount,
+			ReportScheduleCount:         ws.ReportScheduleCount,
+			DisabledReportScheduleCount: ws.DisabledReportScheduleCount,
+			LastHealthCheck:             ws.LastHealthCheck,
+			CreatedAt:                   ws.CreatedAt,
 		}
 	}
 	if got[tenantInstallID].SetupStatus != "install_agents" {
@@ -431,20 +455,36 @@ func TestPortalDashboardUsesWorkspaceSetupFacts(t *testing.T) {
 	if got[tenantReadyID].LastAgentSeenAt == nil || !got[tenantReadyID].LastAgentSeenAt.Equal(lastSeen) {
 		t.Fatalf("ready last_agent_seen_at = %v, want %v", got[tenantReadyID].LastAgentSeenAt, lastSeen)
 	}
+	if got[tenantInstallID].AgentTokenCount == nil || *got[tenantInstallID].AgentTokenCount != 1 {
+		t.Fatalf("install agent_token_count = %v, want 1", got[tenantInstallID].AgentTokenCount)
+	}
+	if got[tenantInstallID].UnusedAgentTokenCount == nil || *got[tenantInstallID].UnusedAgentTokenCount != 1 {
+		t.Fatalf("install unused_agent_token_count = %v, want 1", got[tenantInstallID].UnusedAgentTokenCount)
+	}
+	if got[tenantOutputsID].DisabledAlertRouteCount == nil || *got[tenantOutputsID].DisabledAlertRouteCount != 1 {
+		t.Fatalf("outputs disabled_alert_route_count = %v, want 1", got[tenantOutputsID].DisabledAlertRouteCount)
+	}
+	if got[tenantOutputsID].DisabledReportScheduleCount == nil || *got[tenantOutputsID].DisabledReportScheduleCount != 1 {
+		t.Fatalf("outputs disabled_report_schedule_count = %v, want 1", got[tenantOutputsID].DisabledReportScheduleCount)
+	}
 }
 
 type dashboardRespWorkspace struct {
-	ID                  string
-	DisplayName         string
-	State               registry.TenantState
-	HealthCheckOK       bool
-	SetupStatus         string
-	AgentCount          *int
-	LastAgentSeenAt     *time.Time
-	AlertRouteCount     *int
-	ReportScheduleCount *int
-	LastHealthCheck     *time.Time
-	CreatedAt           time.Time
+	ID                          string
+	DisplayName                 string
+	State                       registry.TenantState
+	HealthCheckOK               bool
+	SetupStatus                 string
+	AgentCount                  *int
+	AgentTokenCount             *int
+	UnusedAgentTokenCount       *int
+	LastAgentSeenAt             *time.Time
+	AlertRouteCount             *int
+	DisabledAlertRouteCount     *int
+	ReportScheduleCount         *int
+	DisabledReportScheduleCount *int
+	LastHealthCheck             *time.Time
+	CreatedAt                   time.Time
 }
 
 func TestPortalDashboardEmpty(t *testing.T) {
@@ -1172,6 +1212,50 @@ func TestBuildPortalBootstrapJSON_Contract(t *testing.T) {
 	}
 }
 
+func TestBuildPortalBootstrapJSON_IncludesMSPSetupTemplate(t *testing.T) {
+	bootstrapJSON, err := MarshalBootstrapJSON(BuildBootstrapData(true, "owner@example.com", []portalPageAccount{
+		{
+			ID:        "a_msp",
+			Kind:      string(registry.AccountKindMSP),
+			KindLabel: "MSP",
+			Name:      "Example MSP",
+			Role:      "owner",
+			CanManage: true,
+		},
+	}, false))
+	if err != nil {
+		t.Fatalf("MarshalBootstrapJSON: %v", err)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(bootstrapJSON), &payload); err != nil {
+		t.Fatalf("unmarshal bootstrap JSON: %v", err)
+	}
+	accounts, ok := payload["accounts"].([]any)
+	if !ok || len(accounts) != 1 {
+		t.Fatalf("accounts = %#v, want one account", payload["accounts"])
+	}
+	account, ok := accounts[0].(map[string]any)
+	if !ok {
+		t.Fatalf("account payload = %#v", accounts[0])
+	}
+	templates, ok := account["setup_templates"].([]any)
+	if !ok || len(templates) != 1 {
+		t.Fatalf("setup_templates = %#v, want one template", account["setup_templates"])
+	}
+	template, ok := templates[0].(map[string]any)
+	if !ok {
+		t.Fatalf("setup template payload = %#v", templates[0])
+	}
+	if got := template["title"]; got != "Standard client onboarding" {
+		t.Fatalf("setup template title = %#v", got)
+	}
+	agentNaming, ok := template["agent_naming"].(string)
+	if !ok || !strings.Contains(agentNaming, "repeated hostnames") {
+		t.Fatalf("setup template agent_naming = %#v, want repeated-hostname guidance", template["agent_naming"])
+	}
+}
+
 func TestHandlePortalBootstrap_Success(t *testing.T) {
 	reg, sessionSvc, token, accountID, _ := newPortalSessionFixture(t)
 
@@ -1269,10 +1353,14 @@ func TestHandlePortalBootstrapIncludesWorkspaceSetupFacts(t *testing.T) {
 	rec := httptest.NewRecorder()
 	HandlePortalBootstrapWithSignupPathAndSetupFacts(sessionSvc, reg, nil, PortalSignupPath, staticSetupFactReader{
 		"t_bootstrap_facts": {
-			AgentCount:          intPtr(1),
-			LastAgentSeenAt:     &lastSeen,
-			AlertRouteCount:     intPtr(1),
-			ReportScheduleCount: intPtr(0),
+			AgentCount:                  intPtr(1),
+			AgentTokenCount:             intPtr(2),
+			UnusedAgentTokenCount:       intPtr(1),
+			LastAgentSeenAt:             &lastSeen,
+			AlertRouteCount:             intPtr(1),
+			DisabledAlertRouteCount:     intPtr(1),
+			ReportScheduleCount:         intPtr(0),
+			DisabledReportScheduleCount: intPtr(1),
 		},
 	}).ServeHTTP(rec, req)
 
@@ -1294,11 +1382,23 @@ func TestHandlePortalBootstrapIncludesWorkspaceSetupFacts(t *testing.T) {
 	if got := workspace["agent_count"]; got != float64(1) {
 		t.Fatalf("workspace agent_count = %#v, want 1", got)
 	}
+	if got := workspace["agent_token_count"]; got != float64(2) {
+		t.Fatalf("workspace agent_token_count = %#v, want 2", got)
+	}
+	if got := workspace["unused_agent_token_count"]; got != float64(1) {
+		t.Fatalf("workspace unused_agent_token_count = %#v, want 1", got)
+	}
 	if got := workspace["alert_route_count"]; got != float64(1) {
 		t.Fatalf("workspace alert_route_count = %#v, want 1", got)
 	}
+	if got := workspace["disabled_alert_route_count"]; got != float64(1) {
+		t.Fatalf("workspace disabled_alert_route_count = %#v, want 1", got)
+	}
 	if got := workspace["report_schedule_count"]; got != float64(0) {
 		t.Fatalf("workspace report_schedule_count = %#v, want 0", got)
+	}
+	if got := workspace["disabled_report_schedule_count"]; got != float64(1) {
+		t.Fatalf("workspace disabled_report_schedule_count = %#v, want 1", got)
 	}
 	if got := workspace["last_agent_seen_at"]; got != "2026-04-01T10:00:00Z" {
 		t.Fatalf("workspace last_agent_seen_at = %#v, want 2026-04-01T10:00:00Z", got)

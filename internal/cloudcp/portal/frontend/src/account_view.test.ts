@@ -80,6 +80,11 @@ describe('account view', function() {
               '<div id="workspace-management-reports-' + accountID + '"></div>' +
               '<div id="workspace-management-created-' + accountID + '"></div>' +
               '<div id="workspace-management-guidance-' + accountID + '"></div>' +
+              '<div id="workspace-management-identity-' + accountID + '"></div>' +
+              '<div id="workspace-management-guide-title-' + accountID + '"></div>' +
+              '<div id="workspace-management-guide-description-' + accountID + '"></div>' +
+              '<ul id="workspace-management-guide-diagnostics-' + accountID + '"></ul>' +
+              '<form id="workspace-management-primary-form-' + accountID + '"><button id="workspace-management-primary-' + accountID + '"></button></form>' +
               '<span id="workspace-management-check-created-' + accountID + '"></span>' +
               '<span id="workspace-management-check-install-' + accountID + '"></span>' +
               '<span id="workspace-management-check-alerts-' + accountID + '"></span>' +
@@ -310,6 +315,10 @@ describe('account view', function() {
     expect(document.getElementById('workspace-management-agents-acct_1')?.textContent).toContain('Unknown');
     expect(document.getElementById('workspace-management-alerts-acct_1')?.textContent).toContain('Unknown');
     expect(document.getElementById('workspace-management-reports-acct_1')?.textContent).toContain('Unknown');
+    expect(document.getElementById('workspace-management-identity-acct_1')?.textContent).toContain('Hostnames can repeat across clients');
+    expect(document.getElementById('workspace-management-guide-title-acct_1')?.textContent).toContain('Follow the setup path');
+    expect(document.getElementById('workspace-management-guide-diagnostics-acct_1')?.textContent).toContain('Open the workspace or install agents');
+    expect(document.getElementById('workspace-management-primary-acct_1')?.textContent).toContain('Open setup');
     expect(document.getElementById('workspace-management-check-install-acct_1')?.textContent).toContain('Next');
     expect(document.getElementById('workspace-management-check-alerts-acct_1')?.textContent).toContain('Pending');
     expect(document.getElementById('workspace-management-check-reports-acct_1')?.textContent).toContain('Pending');
@@ -318,6 +327,7 @@ describe('account view', function() {
     expect((document.getElementById('workspace-management-open-form-acct_1') as HTMLFormElement).action).toContain('/api/accounts/acct_1/tenants/ws_1/handoff');
     expect((document.getElementById('workspace-management-install-form-acct_1') as HTMLFormElement).action).toContain('/api/accounts/acct_1/tenants/ws_1/handoff?target_path=%2Fsettings%2Finfrastructure%3Fadd%3Dlinux-host');
     expect((document.getElementById('workspace-management-reporting-form-acct_1') as HTMLFormElement).action).toContain('/api/accounts/acct_1/tenants/ws_1/handoff?target_path=%2Fsettings%2Fsupport%2Freporting');
+    expect((document.getElementById('workspace-management-primary-form-acct_1') as HTMLFormElement).action).toContain('/api/accounts/acct_1/tenants/ws_1/handoff?target_path=%2Fsettings%2Finfrastructure%3Fadd%3Dlinux-host');
   });
 
   it('renders account UI for every tracked account entry', function() {

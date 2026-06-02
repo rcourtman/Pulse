@@ -4,9 +4,13 @@ import {
   workspaceGuidanceCopy,
   workspaceHealthLabel,
   workspaceHealthState,
+  workspaceIdentityCopy,
   workspaceRowNote,
+  workspaceSetupDiagnostics,
+  workspaceSetupGuide,
   workspaceSetupLabel,
   workspaceSetupNextStep,
+  workspaceSetupSteps,
   workspaceSetupState,
   workspaceStatusCopy,
 } from './workspace_presentation';
@@ -67,5 +71,44 @@ describe('workspace presentation', function() {
     expect(workspaceSetupState(createWorkspace({ agent_count: 1, alert_route_count: 0, report_schedule_count: 0 }))).toBe('configure_outputs');
     expect(workspaceSetupState(createWorkspace({ agent_count: 1, alert_route_count: 1, report_schedule_count: 1 }))).toBe('ready');
     expect(workspaceSetupState(createWorkspace({ state: 'failed', healthy: false, health_status: 'unhealthy' }))).toBe('review');
+  });
+
+  it('explains setup blockers from backend-owned diagnostic facts', function() {
+    var install = createWorkspace({
+      agent_count: 0,
+      agent_token_count: 1,
+      unused_agent_token_count: 1,
+      alert_route_count: 0,
+      report_schedule_count: 0,
+    });
+    expect(workspaceSetupGuide(install).title).toBe('Install the first agent');
+    expect(workspaceSetupGuide(install).primaryAction).toBe('install');
+    expect(workspaceSetupDiagnostics(install)).toContain('Agent install token exists, but no reporting agent has checked in yet.');
+    expect(workspaceIdentityCopy(install)).toContain('Hostnames can repeat across clients');
+
+    var outputs = createWorkspace({
+      agent_count: 1,
+      alert_route_count: 0,
+      disabled_alert_route_count: 1,
+      report_schedule_count: 0,
+      disabled_report_schedule_count: 1,
+    });
+    expect(workspaceSetupGuide(outputs).title).toBe('Configure alerts and reports');
+    expect(workspaceSetupGuide(outputs).primaryAction).toBe('outputs');
+    expect(workspaceSetupDiagnostics(outputs)).toContain('Alert route configuration exists, but no route is enabled.');
+    expect(workspaceSetupDiagnostics(outputs)).toContain('Report schedule exists, but no schedule is enabled.');
+  });
+
+  it('builds a guided setup step model from the same readiness rules', function() {
+    var steps = workspaceSetupSteps(createWorkspace({
+      agent_count: 1,
+      alert_route_count: 1,
+      report_schedule_count: 0,
+    }));
+
+    expect(steps.map(function(step) { return step.id; })).toEqual(['workspace', 'agent', 'alerts', 'reports', 'access']);
+    expect(steps.find(function(step) { return step.id === 'agent'; })?.tone).toBe('done');
+    expect(steps.find(function(step) { return step.id === 'alerts'; })?.tone).toBe('done');
+    expect(steps.find(function(step) { return step.id === 'reports'; })?.tone).toBe('next');
   });
 });

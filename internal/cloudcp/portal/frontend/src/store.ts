@@ -177,6 +177,7 @@ function normalizeAccounts(accounts: Partial<PortalBootstrapData>['accounts']): 
       ...(account as PortalAccountSummary),
       workspaces: normalizeWorkspaces(account && Array.isArray(account.workspaces) ? account.workspaces : []),
       members: normalizeMembers(account && Array.isArray(account.members) ? account.members : []),
+      setup_templates: Array.isArray(account.setup_templates) ? account.setup_templates.slice() : [],
     };
   });
 }

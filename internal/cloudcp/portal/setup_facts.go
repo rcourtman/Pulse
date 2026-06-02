@@ -15,10 +15,14 @@ import (
 )
 
 type WorkspaceSetupFacts struct {
-	AgentCount          *int
-	LastAgentSeenAt     *time.Time
-	AlertRouteCount     *int
-	ReportScheduleCount *int
+	AgentCount                  *int
+	AgentTokenCount             *int
+	UnusedAgentTokenCount       *int
+	LastAgentSeenAt             *time.Time
+	AlertRouteCount             *int
+	DisabledAlertRouteCount     *int
+	ReportScheduleCount         *int
+	DisabledReportScheduleCount *int
 }
 
 type WorkspaceSetupFactReader interface {
@@ -55,9 +59,9 @@ func readWorkspaceSetupFacts(orgDir string) WorkspaceSetupFacts {
 		return facts
 	}
 
-	facts.AgentCount, facts.LastAgentSeenAt = readAgentSetupFacts(orgDir)
-	facts.AlertRouteCount = intPtr(readAlertRouteCount(orgDir))
-	facts.ReportScheduleCount = intPtr(readReportScheduleCount(orgDir))
+	facts.AgentCount, facts.AgentTokenCount, facts.UnusedAgentTokenCount, facts.LastAgentSeenAt = readAgentSetupFacts(orgDir)
+	facts.AlertRouteCount, facts.DisabledAlertRouteCount = readAlertRouteFacts(orgDir)
+	facts.ReportScheduleCount, facts.DisabledReportScheduleCount = readReportScheduleFacts(orgDir)
 	return facts
 }
 
@@ -65,21 +69,28 @@ func intPtr(value int) *int {
 	return &value
 }
 
-func readAgentSetupFacts(orgDir string) (*int, *time.Time) {
+func readAgentSetupFacts(orgDir string) (*int, *int, *int, *time.Time) {
 	var tokens []config.APITokenRecord
 	ok, err := readMaybeEncryptedJSON(orgDir, "api_tokens.json", &tokens)
 	if err != nil {
 		log.Warn().Err(err).Str("org_dir", orgDir).Msg("cloudcp.portal.setup_facts: read api tokens")
-		return nil, nil
+		return nil, nil, nil, nil
 	}
 	if !ok {
-		return intPtr(0), nil
+		return intPtr(0), intPtr(0), intPtr(0), nil
 	}
 
 	count := 0
+	tokenCount := 0
+	unusedCount := 0
 	var lastSeen *time.Time
 	for i := range tokens {
-		if tokens[i].IsExpired() || !tokens[i].HasScope(config.ScopeAgentReport) || tokens[i].LastUsedAt == nil {
+		if tokens[i].IsExpired() || !tokens[i].HasScope(config.ScopeAgentReport) {
+			continue
+		}
+		tokenCount++
+		if tokens[i].LastUsedAt == nil {
+			unusedCount++
 			continue
 		}
 		count++
@@ -88,31 +99,34 @@ func readAgentSetupFacts(orgDir string) (*int, *time.Time) {
 			lastSeen = &seenAt
 		}
 	}
-	return intPtr(count), lastSeen
+	return intPtr(count), intPtr(tokenCount), intPtr(unusedCount), lastSeen
 }
 
-func readAlertRouteCount(orgDir string) int {
-	count := 0
+func readAlertRouteFacts(orgDir string) (*int, *int) {
+	enabledCount := 0
+	disabledCount := 0
 
 	var email notifications.EmailConfig
 	if ok, err := readMaybeEncryptedJSON(orgDir, "email.enc", &email); err != nil {
 		log.Warn().Err(err).Str("org_dir", orgDir).Msg("cloudcp.portal.setup_facts: read email config")
-	} else if ok && email.Enabled {
-		for _, recipient := range email.To {
-			if strings.TrimSpace(recipient) != "" {
-				count++
-			}
+	} else if ok {
+		emailRecipients := nonBlankCount(email.To)
+		if email.Enabled {
+			enabledCount += emailRecipients
+		} else {
+			disabledCount += emailRecipients
 		}
 	}
 
 	var apprise notifications.AppriseConfig
 	if ok, err := readMaybeEncryptedJSON(orgDir, "apprise.enc", &apprise); err != nil {
 		log.Warn().Err(err).Str("org_dir", orgDir).Msg("cloudcp.portal.setup_facts: read apprise config")
-	} else if ok && apprise.Enabled {
-		for _, target := range apprise.Targets {
-			if strings.TrimSpace(target) != "" {
-				count++
-			}
+	} else if ok {
+		appriseTargets := nonBlankCount(apprise.Targets)
+		if apprise.Enabled {
+			enabledCount += appriseTargets
+		} else {
+			disabledCount += appriseTargets
 		}
 	}
 
@@ -123,15 +137,30 @@ func readAlertRouteCount(orgDir string) int {
 		_, _ = readMaybeEncryptedJSON(orgDir, "webhooks.json", &webhooks)
 	}
 	for _, webhook := range webhooks {
-		if webhook.Enabled && strings.TrimSpace(webhook.URL) != "" {
-			count++
+		if strings.TrimSpace(webhook.URL) == "" {
+			continue
+		}
+		if webhook.Enabled {
+			enabledCount++
+		} else {
+			disabledCount++
 		}
 	}
 
+	return intPtr(enabledCount), intPtr(disabledCount)
+}
+
+func nonBlankCount(values []string) int {
+	count := 0
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			count++
+		}
+	}
 	return count
 }
 
-func readReportScheduleCount(orgDir string) int {
+func readReportScheduleFacts(orgDir string) (*int, *int) {
 	for _, leaf := range []string{"report_schedules.json", filepath.Join("reports", "schedules.json")} {
 		var raw json.RawMessage
 		ok, err := readMaybeEncryptedJSON(orgDir, leaf, &raw)
@@ -140,16 +169,17 @@ func readReportScheduleCount(orgDir string) int {
 			continue
 		}
 		if ok {
-			return countReportSchedules(raw)
+			enabled, disabled := countReportSchedules(raw)
+			return intPtr(enabled), intPtr(disabled)
 		}
 	}
-	return 0
+	return intPtr(0), intPtr(0)
 }
 
-func countReportSchedules(raw json.RawMessage) int {
+func countReportSchedules(raw json.RawMessage) (int, int) {
 	trimmed := strings.TrimSpace(string(raw))
 	if trimmed == "" || trimmed == "null" {
-		return 0
+		return 0, 0
 	}
 
 	var items []json.RawMessage
@@ -159,7 +189,7 @@ func countReportSchedules(raw json.RawMessage) int {
 
 	var object map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &object); err != nil || len(object) == 0 {
-		return 0
+		return 0, 0
 	}
 
 	for _, key := range []string{"schedules", "reports", "items"} {
@@ -172,19 +202,25 @@ func countReportSchedules(raw json.RawMessage) int {
 	}
 
 	if isScheduleItemEnabled(raw) {
-		return 1
+		return 1, 0
 	}
-	return 0
+	if isScheduleItemDisabled(raw) {
+		return 0, 1
+	}
+	return 0, 0
 }
 
-func countEnabledScheduleItems(items []json.RawMessage) int {
-	count := 0
+func countEnabledScheduleItems(items []json.RawMessage) (int, int) {
+	enabledCount := 0
+	disabledCount := 0
 	for _, item := range items {
 		if isScheduleItemEnabled(item) {
-			count++
+			enabledCount++
+		} else if isScheduleItemDisabled(item) {
+			disabledCount++
 		}
 	}
-	return count
+	return enabledCount, disabledCount
 }
 
 func isScheduleItemEnabled(raw json.RawMessage) bool {
@@ -199,6 +235,20 @@ func isScheduleItemEnabled(raw json.RawMessage) bool {
 		return false
 	}
 	return len(item) > 0
+}
+
+func isScheduleItemDisabled(raw json.RawMessage) bool {
+	var item map[string]any
+	if err := json.Unmarshal(raw, &item); err != nil || len(item) == 0 {
+		return false
+	}
+	if enabled, ok := item["enabled"].(bool); ok && !enabled {
+		return true
+	}
+	if disabled, ok := item["disabled"].(bool); ok && disabled {
+		return true
+	}
+	return false
 }
 
 func readMaybeEncryptedJSON(configDir string, leaf string, out any) (bool, error) {

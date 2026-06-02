@@ -107,6 +107,14 @@ describe('shell view', function() {
               can_manage: true,
               has_billing: true,
               members: [],
+              setup_templates: [{
+                id: 'standard-client-onboarding',
+                title: 'Standard client onboarding',
+                agent_naming: 'Workspace boundary keeps repeated hostnames separate.',
+                alert_routing: 'Enable one route per client.',
+                reporting: 'Schedule one report per client.',
+                access: 'Invite staff from Access.',
+              }],
               workspaces: [
                 {
                   id: 'ws_summary',
@@ -127,6 +135,8 @@ describe('shell view', function() {
     expect(html).toContain('Next:</strong> Set up Summary Workspace');
     expect(html).toContain('Unfinished setup');
     expect(html).toContain('Unknown agents');
+    expect(html).toContain('Standard client onboarding');
+    expect(html).toContain('Workspace boundary keeps repeated hostnames separate.');
     expect(html).toContain('1 workspace in setup');
     expect(html).toContain('Summary Workspace');
     expect(html).not.toContain('overview-task-grid');
@@ -146,6 +156,14 @@ describe('shell view', function() {
               can_manage: true,
               has_billing: true,
               members: [],
+              setup_templates: [{
+                id: 'standard-client-onboarding',
+                title: 'Standard client onboarding',
+                agent_naming: 'Client workspace is the identity boundary.',
+                alert_routing: 'Enabled route required.',
+                reporting: 'Enabled report schedule required.',
+                access: 'Provider staff use Access.',
+              }],
               workspaces: [
                 {
                   id: 'ws_active',
@@ -195,6 +213,8 @@ describe('shell view', function() {
     expect(html).toContain('2 workspaces to review');
     expect(html).toContain('Next:</strong> Review Beta Workspace');
     expect(html).toContain('Unfinished setup');
+    expect(html).toContain('Provider setup template');
+    expect(html).toContain('Client workspace is the identity boundary.');
     expect(html).toContain('Create workspace');
     expect(html).not.toContain('Manage billing');
     expect(html).not.toContain('Manage team');

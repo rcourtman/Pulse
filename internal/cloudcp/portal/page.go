@@ -14,18 +14,22 @@ import (
 
 // portalPageWorkspace holds per-workspace display data for the portal template.
 type portalPageWorkspace struct {
-	ID                  string
-	DisplayName         string
-	State               string
-	Healthy             bool
-	HealthStatus        string
-	SetupStatus         string
-	AgentCount          *int
-	LastAgentSeenAt     *time.Time
-	AlertRouteCount     *int
-	ReportScheduleCount *int
-	LastHealthCheck     *time.Time
-	CreatedAt           time.Time
+	ID                          string
+	DisplayName                 string
+	State                       string
+	Healthy                     bool
+	HealthStatus                string
+	SetupStatus                 string
+	AgentCount                  *int
+	AgentTokenCount             *int
+	UnusedAgentTokenCount       *int
+	LastAgentSeenAt             *time.Time
+	AlertRouteCount             *int
+	DisabledAlertRouteCount     *int
+	ReportScheduleCount         *int
+	DisabledReportScheduleCount *int
+	LastHealthCheck             *time.Time
+	CreatedAt                   time.Time
 }
 
 type portalPageMember struct {
@@ -225,18 +229,22 @@ func portalPageWorkspaceFromTenant(t *registry.Tenant, facts WorkspaceSetupFacts
 		return portalPageWorkspace{}
 	}
 	return portalPageWorkspace{
-		ID:                  t.ID,
-		DisplayName:         t.DisplayName,
-		State:               string(t.State),
-		Healthy:             t.HealthCheckOK,
-		HealthStatus:        workspaceHealthStatus(t.HealthCheckOK, t.LastHealthCheck),
-		SetupStatus:         workspaceSetupStatus(t.State, t.HealthCheckOK, t.LastHealthCheck, facts),
-		AgentCount:          facts.AgentCount,
-		LastAgentSeenAt:     facts.LastAgentSeenAt,
-		AlertRouteCount:     facts.AlertRouteCount,
-		ReportScheduleCount: facts.ReportScheduleCount,
-		LastHealthCheck:     t.LastHealthCheck,
-		CreatedAt:           t.CreatedAt,
+		ID:                          t.ID,
+		DisplayName:                 t.DisplayName,
+		State:                       string(t.State),
+		Healthy:                     t.HealthCheckOK,
+		HealthStatus:                workspaceHealthStatus(t.HealthCheckOK, t.LastHealthCheck),
+		SetupStatus:                 workspaceSetupStatus(t.State, t.HealthCheckOK, t.LastHealthCheck, facts),
+		AgentCount:                  facts.AgentCount,
+		AgentTokenCount:             facts.AgentTokenCount,
+		UnusedAgentTokenCount:       facts.UnusedAgentTokenCount,
+		LastAgentSeenAt:             facts.LastAgentSeenAt,
+		AlertRouteCount:             facts.AlertRouteCount,
+		DisabledAlertRouteCount:     facts.DisabledAlertRouteCount,
+		ReportScheduleCount:         facts.ReportScheduleCount,
+		DisabledReportScheduleCount: facts.DisabledReportScheduleCount,
+		LastHealthCheck:             t.LastHealthCheck,
+		CreatedAt:                   t.CreatedAt,
 	}
 }
 

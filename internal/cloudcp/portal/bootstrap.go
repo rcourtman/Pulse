@@ -4,21 +4,27 @@ import (
 	"encoding/json"
 	"html/template"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 )
 
 type BootstrapWorkspace struct {
-	ID                  string `json:"id"`
-	DisplayName         string `json:"display_name"`
-	State               string `json:"state"`
-	Healthy             bool   `json:"healthy"`
-	HealthStatus        string `json:"health_status"`
-	SetupStatus         string `json:"setup_status,omitempty"`
-	AgentCount          *int   `json:"agent_count,omitempty"`
-	LastAgentSeenAt     string `json:"last_agent_seen_at,omitempty"`
-	AlertRouteCount     *int   `json:"alert_route_count,omitempty"`
-	ReportScheduleCount *int   `json:"report_schedule_count,omitempty"`
-	LastHealthCheck     string `json:"last_health_check,omitempty"`
-	CreatedAt           string `json:"created_at"`
+	ID                          string `json:"id"`
+	DisplayName                 string `json:"display_name"`
+	State                       string `json:"state"`
+	Healthy                     bool   `json:"healthy"`
+	HealthStatus                string `json:"health_status"`
+	SetupStatus                 string `json:"setup_status,omitempty"`
+	AgentCount                  *int   `json:"agent_count,omitempty"`
+	AgentTokenCount             *int   `json:"agent_token_count,omitempty"`
+	UnusedAgentTokenCount       *int   `json:"unused_agent_token_count,omitempty"`
+	LastAgentSeenAt             string `json:"last_agent_seen_at,omitempty"`
+	AlertRouteCount             *int   `json:"alert_route_count,omitempty"`
+	DisabledAlertRouteCount     *int   `json:"disabled_alert_route_count,omitempty"`
+	ReportScheduleCount         *int   `json:"report_schedule_count,omitempty"`
+	DisabledReportScheduleCount *int   `json:"disabled_report_schedule_count,omitempty"`
+	LastHealthCheck             string `json:"last_health_check,omitempty"`
+	CreatedAt                   string `json:"created_at"`
 }
 
 type BootstrapMember struct {
@@ -30,16 +36,26 @@ type BootstrapMember struct {
 	CreatedAt string `json:"created_at,omitempty"`
 }
 
+type BootstrapSetupTemplate struct {
+	ID           string `json:"id"`
+	Title        string `json:"title"`
+	AgentNaming  string `json:"agent_naming"`
+	AlertRouting string `json:"alert_routing"`
+	Reporting    string `json:"reporting"`
+	Access       string `json:"access"`
+}
+
 type BootstrapAccount struct {
-	ID         string               `json:"id"`
-	Kind       string               `json:"kind"`
-	KindLabel  string               `json:"kind_label"`
-	Name       string               `json:"name"`
-	Role       string               `json:"role"`
-	CanManage  bool                 `json:"can_manage"`
-	HasBilling bool                 `json:"has_billing"`
-	Workspaces []BootstrapWorkspace `json:"workspaces"`
-	Members    []BootstrapMember    `json:"members"`
+	ID             string                   `json:"id"`
+	Kind           string                   `json:"kind"`
+	KindLabel      string                   `json:"kind_label"`
+	Name           string                   `json:"name"`
+	Role           string                   `json:"role"`
+	CanManage      bool                     `json:"can_manage"`
+	HasBilling     bool                     `json:"has_billing"`
+	Workspaces     []BootstrapWorkspace     `json:"workspaces"`
+	Members        []BootstrapMember        `json:"members"`
+	SetupTemplates []BootstrapSetupTemplate `json:"setup_templates,omitempty"`
 }
 
 type BootstrapData struct {
@@ -82,18 +98,22 @@ func BuildBootstrapDataWithSignupPath(authenticated bool, email string, accounts
 				lastAgentSeenAt = workspace.LastAgentSeenAt.UTC().Format(time.RFC3339)
 			}
 			workspaces = append(workspaces, BootstrapWorkspace{
-				ID:                  workspace.ID,
-				DisplayName:         workspace.DisplayName,
-				State:               workspace.State,
-				Healthy:             workspace.Healthy,
-				HealthStatus:        workspace.HealthStatus,
-				SetupStatus:         workspace.SetupStatus,
-				AgentCount:          workspace.AgentCount,
-				LastAgentSeenAt:     lastAgentSeenAt,
-				AlertRouteCount:     workspace.AlertRouteCount,
-				ReportScheduleCount: workspace.ReportScheduleCount,
-				LastHealthCheck:     lastHealthCheck,
-				CreatedAt:           workspace.CreatedAt.UTC().Format(time.RFC3339),
+				ID:                          workspace.ID,
+				DisplayName:                 workspace.DisplayName,
+				State:                       workspace.State,
+				Healthy:                     workspace.Healthy,
+				HealthStatus:                workspace.HealthStatus,
+				SetupStatus:                 workspace.SetupStatus,
+				AgentCount:                  workspace.AgentCount,
+				AgentTokenCount:             workspace.AgentTokenCount,
+				UnusedAgentTokenCount:       workspace.UnusedAgentTokenCount,
+				LastAgentSeenAt:             lastAgentSeenAt,
+				AlertRouteCount:             workspace.AlertRouteCount,
+				DisabledAlertRouteCount:     workspace.DisabledAlertRouteCount,
+				ReportScheduleCount:         workspace.ReportScheduleCount,
+				DisabledReportScheduleCount: workspace.DisabledReportScheduleCount,
+				LastHealthCheck:             lastHealthCheck,
+				CreatedAt:                   workspace.CreatedAt.UTC().Format(time.RFC3339),
 			})
 		}
 		members := make([]BootstrapMember, 0, len(account.Members))
@@ -112,15 +132,16 @@ func BuildBootstrapDataWithSignupPath(authenticated bool, email string, accounts
 			})
 		}
 		bootstrapAccounts = append(bootstrapAccounts, BootstrapAccount{
-			ID:         account.ID,
-			Kind:       account.Kind,
-			KindLabel:  account.KindLabel,
-			Name:       account.Name,
-			Role:       account.Role,
-			CanManage:  account.CanManage,
-			HasBilling: account.HasBilling,
-			Workspaces: workspaces,
-			Members:    members,
+			ID:             account.ID,
+			Kind:           account.Kind,
+			KindLabel:      account.KindLabel,
+			Name:           account.Name,
+			Role:           account.Role,
+			CanManage:      account.CanManage,
+			HasBilling:     account.HasBilling,
+			Workspaces:     workspaces,
+			Members:        members,
+			SetupTemplates: defaultSetupTemplatesForAccount(account),
 		})
 	}
 
@@ -140,6 +161,22 @@ func BuildBootstrapDataWithSignupPath(authenticated bool, email string, accounts
 		AccountAPIBasePath:      defaultAccountAPIBasePath,
 		PortalAPIBasePath:       defaultPortalAPIBasePath,
 		Accounts:                bootstrapAccounts,
+	}
+}
+
+func defaultSetupTemplatesForAccount(account portalPageAccount) []BootstrapSetupTemplate {
+	if account.Kind != string(registry.AccountKindMSP) {
+		return nil
+	}
+	return []BootstrapSetupTemplate{
+		{
+			ID:           "standard-client-onboarding",
+			Title:        "Standard client onboarding",
+			AgentNaming:  "Keep the client workspace as the identity boundary; repeated hostnames are expected across clients.",
+			AlertRouting: "Create at least one enabled alert route inside each client workspace.",
+			Reporting:    "Schedule at least one client performance report before the workspace is marked ready.",
+			Access:       "Invite provider staff from Access and keep client users on the smallest useful role.",
+		},
 	}
 }
 

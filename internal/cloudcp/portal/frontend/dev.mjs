@@ -9,7 +9,7 @@ import { createPortalBuildOptions, frontendRoot } from './build_config.mjs';
 const scenarioCookieName = 'pulse_portal_preview_scenario';
 const previewHost = process.env.PULSE_PORTAL_PREVIEW_HOST || '127.0.0.1';
 const previewPort = Number(process.env.PULSE_PORTAL_PREVIEW_PORT || '8765');
-const previewScenarios = ['managed', 'readonly', 'selfhosted', 'empty'];
+const previewScenarios = ['managed', 'readonly', 'selfhosted', 'empty', 'onboarding'];
 const previewFaviconSVG = fs.readFileSync(path.join(frontendRoot, '..', '..', 'favicon.svg'), 'utf8');
 const previewFaviconHref = '/favicon.svg?v=' + createHash('sha256').update(previewFaviconSVG).digest('hex').slice(0, 16);
 
@@ -19,6 +19,17 @@ function iso(value) {
 
 function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function standardSetupTemplates() {
+  return [{
+    id: 'standard-client-onboarding',
+    title: 'Standard client onboarding',
+    agent_naming: 'Keep the client workspace as the identity boundary; repeated hostnames are expected across clients.',
+    alert_routing: 'Create at least one enabled alert route inside each client workspace.',
+    reporting: 'Schedule at least one client performance report before the workspace is marked ready.',
+    access: 'Invite provider staff from Access and keep client users on the smallest useful role.',
+  }];
 }
 
 function buildScenarioTemplate(name) {
@@ -50,6 +61,7 @@ function buildScenarioTemplate(name) {
         role: 'read_only',
         can_manage: false,
         has_billing: true,
+        setup_templates: standardSetupTemplates(),
         workspaces: [
           {
             id: 'ws_alpha',
@@ -59,8 +71,12 @@ function buildScenarioTemplate(name) {
             health_status: 'healthy',
             setup_status: 'ready',
             agent_count: 2,
+            agent_token_count: 2,
+            unused_agent_token_count: 0,
             alert_route_count: 1,
+            disabled_alert_route_count: 0,
             report_schedule_count: 1,
+            disabled_report_schedule_count: 0,
             created_at: iso('2026-03-20T10:00:00Z'),
           },
           {
@@ -71,8 +87,12 @@ function buildScenarioTemplate(name) {
             health_status: 'healthy',
             setup_status: 'ready',
             agent_count: 1,
+            agent_token_count: 1,
+            unused_agent_token_count: 0,
             alert_route_count: 1,
+            disabled_alert_route_count: 0,
             report_schedule_count: 1,
+            disabled_report_schedule_count: 0,
             created_at: iso('2026-03-21T10:00:00Z'),
           },
         ],
@@ -105,9 +125,80 @@ function buildScenarioTemplate(name) {
         role: 'owner',
         can_manage: true,
         has_billing: true,
+        setup_templates: standardSetupTemplates(),
         workspaces: [],
         members: [
           { email: 'owner@example.com', role: 'owner', user_id: 'u_owner' },
+        ],
+      }],
+    };
+  }
+
+  if (name === 'onboarding') {
+    return {
+      ...base,
+      accounts: [{
+        id: 'acct_onboarding',
+        name: 'Pulse MSP Demo',
+        kind: 'msp',
+        kind_label: 'MSP',
+        role: 'owner',
+        can_manage: true,
+        has_billing: true,
+        setup_templates: standardSetupTemplates(),
+        workspaces: [
+          {
+            id: 'ws_acme',
+            display_name: 'Acme Dental',
+            state: 'active',
+            healthy: true,
+            health_status: 'healthy',
+            setup_status: 'install_agents',
+            agent_count: 0,
+            agent_token_count: 1,
+            unused_agent_token_count: 1,
+            alert_route_count: 0,
+            disabled_alert_route_count: 0,
+            report_schedule_count: 0,
+            disabled_report_schedule_count: 0,
+            created_at: iso('2026-05-28T10:00:00Z'),
+          },
+          {
+            id: 'ws_northbridge',
+            display_name: 'Northbridge Legal',
+            state: 'active',
+            healthy: true,
+            health_status: 'healthy',
+            setup_status: 'configure_outputs',
+            agent_count: 1,
+            agent_token_count: 1,
+            unused_agent_token_count: 0,
+            alert_route_count: 0,
+            disabled_alert_route_count: 1,
+            report_schedule_count: 0,
+            disabled_report_schedule_count: 1,
+            created_at: iso('2026-05-29T10:00:00Z'),
+          },
+          {
+            id: 'ws_hilltop',
+            display_name: 'Hilltop Care',
+            state: 'active',
+            healthy: true,
+            health_status: 'healthy',
+            setup_status: 'ready',
+            agent_count: 2,
+            agent_token_count: 2,
+            unused_agent_token_count: 0,
+            alert_route_count: 1,
+            disabled_alert_route_count: 0,
+            report_schedule_count: 1,
+            disabled_report_schedule_count: 0,
+            created_at: iso('2026-05-30T10:00:00Z'),
+          },
+        ],
+        members: [
+          { email: 'owner@example.com', role: 'owner', user_id: 'u_owner' },
+          { email: 'helpdesk@example.com', role: 'tech', user_id: 'u_helpdesk' },
         ],
       }],
     };
@@ -123,6 +214,7 @@ function buildScenarioTemplate(name) {
       role: 'owner',
       can_manage: true,
       has_billing: true,
+      setup_templates: standardSetupTemplates(),
       workspaces: [
         {
           id: 'ws_alpha',
@@ -141,8 +233,12 @@ function buildScenarioTemplate(name) {
           health_status: 'healthy',
           setup_status: 'configure_outputs',
           agent_count: 1,
+          agent_token_count: 1,
+          unused_agent_token_count: 0,
           alert_route_count: 0,
+          disabled_alert_route_count: 1,
           report_schedule_count: 0,
+          disabled_report_schedule_count: 1,
           created_at: iso('2026-03-21T10:00:00Z'),
         },
         {
@@ -153,8 +249,12 @@ function buildScenarioTemplate(name) {
           health_status: 'healthy',
           setup_status: 'install_agents',
           agent_count: 0,
+          agent_token_count: 1,
+          unused_agent_token_count: 1,
           alert_route_count: 0,
+          disabled_alert_route_count: 0,
           report_schedule_count: 0,
+          disabled_report_schedule_count: 0,
           created_at: iso('2026-03-22T10:00:00Z'),
         },
       ],
@@ -309,6 +409,7 @@ function buildPreviewWorkspaceHTML(bootstrap, workspaceID, targetPath, scenario)
   const title = entry ? entry.workspace.display_name : workspaceID;
   const accountName = entry ? entry.account.name : 'Pulse Account';
   const accountID = entry ? entry.account.id : '';
+  const setupStatus = entry && entry.workspace.setup_status ? entry.workspace.setup_status : 'workspace';
   const targetLabel = previewTargetLabel(targetPath);
   const portalURL = '/?scenario=' + encodeURIComponent(scenario);
   const portalWorkspaceURL = accountID
@@ -341,7 +442,7 @@ function buildPreviewWorkspaceHTML(bootstrap, workspaceID, targetPath, scenario)
           'h1{margin:0 0 8px;font-size:24px;letter-spacing:0}' +
           'h2{margin:24px 0 8px;font-size:16px}' +
           'p{margin:0 0 16px;color:#475467;line-height:1.5}' +
-          '.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:20px 0}' +
+          '.facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:20px 0}' +
           '.fact{border:1px solid #eaecf0;border-radius:6px;padding:10px;background:#fcfcfd}' +
           '.fact span{display:block;font-size:12px;color:#667085}' +
           '.fact strong{display:block;margin-top:2px;font-size:13px}' +
@@ -365,9 +466,11 @@ function buildPreviewWorkspaceHTML(bootstrap, workspaceID, targetPath, scenario)
             '<p>Preview workspace handoff</p>' +
             '<h1>' + escapeHTML(targetHeading) + '</h1>' +
             '<p>You are inside the <strong>' + escapeHTML(title) + '</strong> client workspace. In production the signed handoff creates a tenant session and opens ' + escapeHTML(targetLabel) + '.</p>' +
+            '<p>This client boundary is the thing that keeps repeated hostnames, alerts, and reports from being mixed across MSP customers.</p>' +
             '<div class="facts">' +
               '<div class="fact"><span>Account</span><strong>' + escapeHTML(accountName) + '</strong></div>' +
               '<div class="fact"><span>Workspace</span><strong>' + escapeHTML(workspaceID) + '</strong></div>' +
+              '<div class="fact"><span>Setup status</span><strong>' + escapeHTML(setupStatus) + '</strong></div>' +
               '<div class="fact"><span>Target</span><strong>' + escapeHTML(targetPathLabel) + '</strong></div>' +
             '</div>' +
             '<div class="task">' +
@@ -378,9 +481,11 @@ function buildPreviewWorkspaceHTML(bootstrap, workspaceID, targetPath, scenario)
                 : '') +
             '</div>' +
             '<div class="steps" aria-label="Workspace setup flow">' +
-              '<div class="step"><b>1</b><div><strong>Install agents in this workspace</strong><span>The handoff keeps the agent command tied to this client boundary.</span></div></div>' +
-              '<div class="step"><b>2</b><div><strong>Confirm data is arriving</strong><span>Pulse Account marks the workspace as installed only after an agent-scoped token is used.</span></div></div>' +
-              '<div class="step"><b>3</b><div><strong>Add alert routes and reports</strong><span>Alerts and scheduled reports are part of the setup state, not optional polish.</span></div></div>' +
+              '<div class="step"><b>1</b><div><strong>Workspace created</strong><span>The client gets a separate workspace boundary before monitoring data arrives.</span></div></div>' +
+              '<div class="step"><b>2</b><div><strong>Install agents in this workspace</strong><span>The handoff keeps the agent command tied to this client boundary.</span></div></div>' +
+              '<div class="step"><b>3</b><div><strong>Confirm data is arriving</strong><span>Pulse Account marks the workspace as installed only after an agent-scoped token is used.</span></div></div>' +
+              '<div class="step"><b>4</b><div><strong>Add alert routes</strong><span>Notification routes stay tenant-owned and enabled inside the client workspace.</span></div></div>' +
+              '<div class="step"><b>5</b><div><strong>Schedule reports</strong><span>Performance reports are part of ready state for MSP onboarding.</span></div></div>' +
             '</div>' +
             '<div class="actions">' +
               '<a class="button" href="' + escapeHTML(portalWorkspaceURL) + '">Back to workspace row</a>' +
@@ -613,8 +718,12 @@ function routeAccountAPI(request, response, url, bootstrap, scenario) {
           health_status: 'healthy',
           setup_status: 'install_agents',
           agent_count: 0,
+          agent_token_count: 1,
+          unused_agent_token_count: 1,
           alert_route_count: 0,
+          disabled_alert_route_count: 0,
           report_schedule_count: 0,
+          disabled_report_schedule_count: 0,
           created_at: iso(new Date()),
         };
         account.workspaces.push(workspace);

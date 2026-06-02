@@ -338,10 +338,13 @@ or other self-hosted uncapped continuity plans.
    from read-only tenant-local setup facts without creating tenant config,
    encryption keys, migrations, agent credentials, alert routes, or report
    schedules as a side effect. The provider shell may show an unfinished-setup
-   queue and fact counts for active workspaces, but `Ready` requires at least
-   one reporting agent, one enabled alert route, and one enabled report
-   schedule; a failed latest health check remains `Review` ahead of setup
-   counts.
+   queue, disabled-output diagnostics, workspace-scoped primary actions, and
+   provider setup templates for MSP accounts, but those templates are guidance
+   rather than configuration. `Ready` requires at least one reporting agent, one
+   enabled alert route, and one enabled report schedule; a failed latest health
+   check remains `Review` ahead of setup counts. Local MSP onboarding previews
+   should be scenario-backed portal bootstrap data, not static screenshots, so
+   they stay grounded in the real portal shape as the bundle changes.
    Portal workspace payloads are live-workspace surfaces, not registry history
    dumps: tenants in `deleting` or `deleted` state must stay hidden from the
    browser bootstrap, `/api/portal/dashboard`, and workspace-detail API so

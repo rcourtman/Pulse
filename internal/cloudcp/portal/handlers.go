@@ -21,17 +21,21 @@ type accountInfo struct {
 }
 
 type workspaceSummaryItem struct {
-	ID                  string               `json:"id"`
-	DisplayName         string               `json:"display_name"`
-	State               registry.TenantState `json:"state"`
-	HealthCheckOK       bool                 `json:"health_check_ok"`
-	SetupStatus         string               `json:"setup_status,omitempty"`
-	AgentCount          *int                 `json:"agent_count,omitempty"`
-	LastAgentSeenAt     *time.Time           `json:"last_agent_seen_at,omitempty"`
-	AlertRouteCount     *int                 `json:"alert_route_count,omitempty"`
-	ReportScheduleCount *int                 `json:"report_schedule_count,omitempty"`
-	LastHealthCheck     *time.Time           `json:"last_health_check"`
-	CreatedAt           time.Time            `json:"created_at"`
+	ID                          string               `json:"id"`
+	DisplayName                 string               `json:"display_name"`
+	State                       registry.TenantState `json:"state"`
+	HealthCheckOK               bool                 `json:"health_check_ok"`
+	SetupStatus                 string               `json:"setup_status,omitempty"`
+	AgentCount                  *int                 `json:"agent_count,omitempty"`
+	AgentTokenCount             *int                 `json:"agent_token_count,omitempty"`
+	UnusedAgentTokenCount       *int                 `json:"unused_agent_token_count,omitempty"`
+	LastAgentSeenAt             *time.Time           `json:"last_agent_seen_at,omitempty"`
+	AlertRouteCount             *int                 `json:"alert_route_count,omitempty"`
+	DisabledAlertRouteCount     *int                 `json:"disabled_alert_route_count,omitempty"`
+	ReportScheduleCount         *int                 `json:"report_schedule_count,omitempty"`
+	DisabledReportScheduleCount *int                 `json:"disabled_report_schedule_count,omitempty"`
+	LastHealthCheck             *time.Time           `json:"last_health_check"`
+	CreatedAt                   time.Time            `json:"created_at"`
 }
 
 type dashboardSummary struct {
@@ -130,17 +134,21 @@ func HandlePortalDashboardWithSetupFacts(reg *registry.TenantRegistry, setupFact
 			facts := workspaceSetupFactsForTenant(setupFacts, t.ID)
 
 			resp.Workspaces = append(resp.Workspaces, workspaceSummaryItem{
-				ID:                  t.ID,
-				DisplayName:         t.DisplayName,
-				State:               t.State,
-				HealthCheckOK:       t.HealthCheckOK,
-				SetupStatus:         workspaceSetupStatus(t.State, t.HealthCheckOK, t.LastHealthCheck, facts),
-				AgentCount:          facts.AgentCount,
-				LastAgentSeenAt:     facts.LastAgentSeenAt,
-				AlertRouteCount:     facts.AlertRouteCount,
-				ReportScheduleCount: facts.ReportScheduleCount,
-				LastHealthCheck:     t.LastHealthCheck,
-				CreatedAt:           t.CreatedAt,
+				ID:                          t.ID,
+				DisplayName:                 t.DisplayName,
+				State:                       t.State,
+				HealthCheckOK:               t.HealthCheckOK,
+				SetupStatus:                 workspaceSetupStatus(t.State, t.HealthCheckOK, t.LastHealthCheck, facts),
+				AgentCount:                  facts.AgentCount,
+				AgentTokenCount:             facts.AgentTokenCount,
+				UnusedAgentTokenCount:       facts.UnusedAgentTokenCount,
+				LastAgentSeenAt:             facts.LastAgentSeenAt,
+				AlertRouteCount:             facts.AlertRouteCount,
+				DisabledAlertRouteCount:     facts.DisabledAlertRouteCount,
+				ReportScheduleCount:         facts.ReportScheduleCount,
+				DisabledReportScheduleCount: facts.DisabledReportScheduleCount,
+				LastHealthCheck:             t.LastHealthCheck,
+				CreatedAt:                   t.CreatedAt,
 			})
 
 			resp.Summary.Total++

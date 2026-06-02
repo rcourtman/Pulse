@@ -6,9 +6,13 @@ export interface PortalWorkspaceSummary {
   health_status: 'healthy' | 'checking' | 'unhealthy';
   setup_status?: 'ready' | 'setup_path' | 'install_agents' | 'configure_outputs' | 'review';
   agent_count?: number;
+  agent_token_count?: number;
+  unused_agent_token_count?: number;
   last_agent_seen_at?: string;
   alert_route_count?: number;
+  disabled_alert_route_count?: number;
   report_schedule_count?: number;
+  disabled_report_schedule_count?: number;
   last_health_check?: string;
   created_at?: string;
 }
@@ -22,6 +26,15 @@ export interface PortalAccessMember {
   created_at?: string;
 }
 
+export interface PortalSetupTemplate {
+  id: string;
+  title: string;
+  agent_naming: string;
+  alert_routing: string;
+  reporting: string;
+  access: string;
+}
+
 export interface PortalAccountSummary {
   id: string;
   name: string;
@@ -32,6 +45,7 @@ export interface PortalAccountSummary {
   has_billing: boolean;
   workspaces: PortalWorkspaceSummary[];
   members: PortalAccessMember[];
+  setup_templates?: PortalSetupTemplate[];
 }
 
 export interface PortalBootstrapData {

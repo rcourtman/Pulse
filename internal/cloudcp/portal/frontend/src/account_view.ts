@@ -10,8 +10,10 @@ import { normalizePortalRole, portalRoleCapabilityCopy, portalRoleLabel } from '
 import {
   workspaceGuidanceCopy,
   workspaceHealthLabel,
+  workspaceIdentityCopy,
+  workspaceSetupGuide,
   workspaceSetupLabel,
-  workspaceSetupState,
+  workspaceSetupSteps,
   workspaceStatusCopy,
 } from './workspace_presentation';
 
@@ -43,10 +45,6 @@ function workspaceCreatedLabel(workspace: PortalWorkspaceSummary): string {
 
 function hasKnownCount(value: unknown): boolean {
   return typeof value === 'number' && Number.isFinite(value);
-}
-
-function hasPositiveCount(value: unknown): boolean {
-  return hasKnownCount(value) && Number(value) > 0;
 }
 
 function setupCountLabel(value: unknown, singular: string, plural: string): string {
@@ -125,6 +123,12 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
   var reports = getElement<HTMLElement>('workspace-management-reports-' + account.id);
   var created = getElement<HTMLElement>('workspace-management-created-' + account.id);
   var guidance = getElement<HTMLElement>('workspace-management-guidance-' + account.id);
+  var identity = getElement<HTMLElement>('workspace-management-identity-' + account.id);
+  var guideTitle = getElement<HTMLElement>('workspace-management-guide-title-' + account.id);
+  var guideDescription = getElement<HTMLElement>('workspace-management-guide-description-' + account.id);
+  var guideDiagnostics = getElement<HTMLElement>('workspace-management-guide-diagnostics-' + account.id);
+  var guidePrimaryForm = getElement<HTMLFormElement>('workspace-management-primary-form-' + account.id);
+  var guidePrimaryButton = getElement<HTMLButtonElement>('workspace-management-primary-' + account.id);
   var checkCreated = getElement<HTMLElement>('workspace-management-check-created-' + account.id);
   var checkInstall = getElement<HTMLElement>('workspace-management-check-install-' + account.id);
   var checkAlerts = getElement<HTMLElement>('workspace-management-check-alerts-' + account.id);
@@ -172,9 +176,11 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
     openForm?.removeAttribute('action');
     installForm?.removeAttribute('action');
     reportingForm?.removeAttribute('action');
+    guidePrimaryForm?.removeAttribute('action');
     if (openButton) openButton.disabled = true;
     if (installButton) installButton.disabled = true;
     if (reportingButton) reportingButton.disabled = true;
+    if (guidePrimaryButton) guidePrimaryButton.disabled = true;
     return;
   }
 
@@ -188,38 +194,37 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
   if (reports) reports.textContent = setupCountLabel(workspace.report_schedule_count, 'schedule', 'schedules');
   created.textContent = workspaceCreatedLabel(workspace);
   guidance.textContent = workspaceGuidanceCopy(workspace);
-  var setupState = workspaceSetupState(workspace);
-  var isActive = workspace.state === 'active';
-  var hasAgents = hasPositiveCount(workspace.agent_count) || setupState === 'configure_outputs' || setupState === 'ready';
-  var hasAlertRoutes = hasPositiveCount(workspace.alert_route_count);
-  var hasReportSchedules = hasPositiveCount(workspace.report_schedule_count);
-  setChecklistStatus(checkCreated, workspace.state ? 'done' : 'pending', workspace.state ? 'Done' : 'Pending');
-  if (hasAgents) {
-    setChecklistStatus(checkInstall, 'done', 'Done');
-  } else if (setupState === 'install_agents' || setupState === 'setup_path') {
-    setChecklistStatus(checkInstall, isActive ? 'next' : 'blocked', isActive ? 'Next' : 'Blocked');
-  } else {
-    setChecklistStatus(checkInstall, 'blocked', 'Review');
+  if (identity) identity.textContent = workspaceIdentityCopy(workspace);
+  var guide = workspaceSetupGuide(workspace);
+  if (guideTitle) guideTitle.textContent = guide.title;
+  if (guideDescription) guideDescription.textContent = guide.description;
+  if (guideDiagnostics) {
+    guideDiagnostics.textContent = '';
+    for (var d = 0; d < guide.diagnostics.length; d += 1) {
+      var item = document.createElement('li');
+      item.textContent = guide.diagnostics[d];
+      guideDiagnostics.appendChild(item);
+    }
   }
-  if (hasAlertRoutes) {
-    setChecklistStatus(checkAlerts, 'done', 'Done');
-  } else if (setupState === 'review') {
-    setChecklistStatus(checkAlerts, 'blocked', 'Review');
-  } else if (isActive && hasAgents) {
-    setChecklistStatus(checkAlerts, 'next', 'Next');
-  } else {
-    setChecklistStatus(checkAlerts, 'pending', 'Pending');
+  var primaryTargetPath = '';
+  if (guide.primaryAction === 'install') {
+    primaryTargetPath = WORKSPACE_INSTALL_TARGET_PATH;
+  } else if (guide.primaryAction === 'outputs') {
+    primaryTargetPath = WORKSPACE_REPORTING_TARGET_PATH;
   }
-  if (hasReportSchedules) {
-    setChecklistStatus(checkReports, 'done', 'Done');
-  } else if (setupState === 'review') {
-    setChecklistStatus(checkReports, 'blocked', 'Review');
-  } else if (isActive && hasAgents && hasAlertRoutes) {
-    setChecklistStatus(checkReports, 'next', 'Next');
-  } else {
-    setChecklistStatus(checkReports, 'pending', 'Pending');
+  if (guidePrimaryButton) guidePrimaryButton.textContent = guide.primaryLabel;
+  setWorkspaceHandoffForm(guidePrimaryForm, guidePrimaryButton, accountAPIBasePath, account.id, workspace, primaryTargetPath, entry.manageWorkspace.pending);
+  var steps = workspaceSetupSteps(workspace);
+  var stepByID = {
+    workspace: checkCreated,
+    agent: checkInstall,
+    alerts: checkAlerts,
+    reports: checkReports,
+    access: checkAccess,
+  };
+  for (var s = 0; s < steps.length; s += 1) {
+    setChecklistStatus(stepByID[steps[s].id], steps[s].tone, steps[s].label);
   }
-  setChecklistStatus(checkAccess, 'available', 'Available');
   actionButton.textContent = workspaceActionLabel(workspace);
   actionButton.disabled = entry.manageWorkspace.pending;
   actionButton.setAttribute('data-workspace-id', workspace.id);
