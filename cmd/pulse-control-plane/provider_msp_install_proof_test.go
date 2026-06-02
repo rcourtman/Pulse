@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -168,6 +170,73 @@ func TestProviderMSPInstallProofRunsFreshInstallSequence(t *testing.T) {
 	}
 	if !fakeRuntime.closed {
 		t.Fatal("proof runtime was not closed")
+	}
+}
+
+func TestProviderMSPInstallProofExercisesRealDockerlessArtifacts(t *testing.T) {
+	t.Setenv("DOCKER_HOST", "unix:///tmp/pulse-provider-msp-install-proof-missing-docker.sock")
+	t.Setenv("DOCKER_TLS_VERIFY", "")
+	t.Setenv("DOCKER_CERT_PATH", "")
+
+	cfg := testProviderMSPProofConfig(t)
+	licenseFile := writeProviderMSPProofLicenseForTest(t, "lic_provider_msp_install_proof", "provider@example.com", "msp_growth")
+	cfg.ProviderMSPLicenseFile = licenseFile
+	cfg.ProviderMSPLicenseID = "lic_provider_msp_install_proof"
+	cfg.ProviderMSPLicenseEmail = "provider@example.com"
+
+	backupPath := filepath.Join(t.TempDir(), "provider-msp-install-proof.tar.gz")
+	restoreTarget := filepath.Join(t.TempDir(), "restore-drill")
+	now := time.Date(2026, 6, 2, 14, 0, 0, 0, time.UTC)
+	runStatus := func(ctx context.Context, cfg *cloudcp.CPConfig, opts providerMSPStatusOptions) (*providerMSPStatusReport, error) {
+		return runProviderMSPStatusWithDependencies(ctx, cfg, opts, providerMSPStatusDependencies{
+			RunPreflight: func(context.Context, *cloudcp.CPConfig, providerMSPPreflightOptions) (*providerMSPPreflightReport, error) {
+				return healthyProviderMSPStatusPreflightReport(), nil
+			},
+			Now: func() time.Time { return now },
+		})
+	}
+
+	report, err := runProviderMSPInstallProofWithDependencies(context.Background(), cfg, providerMSPInstallProofOptions{
+		AccountName:          "Example MSP",
+		OwnerEmail:           "owner@example.com",
+		WorkspacePrefix:      "Provider MSP Proof",
+		WorkspaceCount:       2,
+		InstallType:          "pve",
+		TargetPath:           "/settings/infrastructure?add=linux-host",
+		BackupOutput:         backupPath,
+		RestoreTargetDataDir: restoreTarget,
+		Cleanup:              true,
+	}, providerMSPInstallProofDependencies{
+		RunPreflight: func(context.Context, *cloudcp.CPConfig, providerMSPPreflightOptions) (*providerMSPPreflightReport, error) {
+			return healthyProviderMSPStatusPreflightReport(), nil
+		},
+		RunStatus: runStatus,
+		Now:       func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatalf("runProviderMSPInstallProofWithDependencies: %v", err)
+	}
+	if !report.OK || !report.WorkspaceProofOK || !report.BackupCreated || !report.BackupVerified || !report.RestoreDryRunOK || !report.RecoveryDryRunOK || !report.CleanupOK || !report.FinalStatusOK {
+		t.Fatalf("real install-proof report incomplete: %#v", report)
+	}
+	if report.BackupPath != backupPath || report.BackupBytes <= 0 {
+		t.Fatalf("backup proof = path %q bytes %d", report.BackupPath, report.BackupBytes)
+	}
+	if _, err := os.Stat(backupPath); err != nil {
+		t.Fatalf("backup archive was not written: %v", err)
+	}
+	if report.RestoreTargetDataDir != restoreTarget {
+		t.Fatalf("RestoreTargetDataDir = %q, want %q", report.RestoreTargetDataDir, restoreTarget)
+	}
+	if report.WorkspaceCount != 2 || !report.AgentReportIngestVerified || !report.InstallTokenBoundaryOK || !report.TokenRotationVerified || !report.HandoffExchangeVerified {
+		t.Fatalf("workspace proof did not exercise tenant runtime boundaries: %#v", report)
+	}
+	if !report.NonProofTenantCountPreserved || report.InitialStatusTotalTenants != 0 || report.FinalStatusTotalTenants != 0 {
+		t.Fatalf("proof tenant cleanup did not preserve the starting tenant count: %#v", report)
+	}
+	entries, err := os.ReadDir(cfg.TenantsDir())
+	if err == nil && len(entries) != 0 {
+		t.Fatalf("proof tenant dirs remain after cleanup: %v", entries)
 	}
 }
 
