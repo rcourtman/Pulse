@@ -413,11 +413,11 @@ function updatePreviewWorkspaceSetupStatus(workspace) {
 function applyPreviewWorkspaceSetupAction(bootstrap, workspaceID, action) {
   const entry = findWorkspaceByID(bootstrap, workspaceID);
   if (!entry) {
-    return { ok: false, status: 404, message: 'Workspace not found.' };
+    return { ok: false, status: 404, message: 'Client workspace not found.' };
   }
   const workspace = entry.workspace;
   if (workspace.state !== 'active') {
-    return { ok: false, status: 409, message: 'Workspace is not active.' };
+    return { ok: false, status: 409, message: 'Client workspace is not active.' };
   }
   if (action === 'agent-checkin') {
     workspace.agent_count = Math.max(1, Number(workspace.agent_count || 0));
@@ -491,9 +491,9 @@ function previewSetupControlHTML(workspace, scenario, workspaceID, targetPath) {
     });
   }
   if (!controls.length) {
-    return '<div class="preview-controls"><strong>Preview setup controls</strong><p>This workspace already has a reporting agent, alert route, and report schedule.</p></div>';
+    return '<div class="preview-controls"><strong>Client setup controls</strong><p>This client already has a reporting agent, alert route, and report schedule.</p></div>';
   }
-  return '<div class="preview-controls"><strong>Preview setup controls</strong><p>These controls simulate tenant-local setup facts so the Pulse Account flow can be tested end to end.</p>' +
+  return '<div class="preview-controls"><strong>Client setup controls</strong><p>These controls simulate tenant-local setup facts so the Pulse Account client onboarding flow can be tested end to end.</p>' +
     controls.map(function(control) {
       return '<form method="POST" action="' + escapeHTML(previewSetupActionURL(scenario, workspaceID, control.action, targetPath)) + '">' +
           '<button class="copy-button" type="submit">' + escapeHTML(control.label) + '</button>' +
@@ -510,7 +510,7 @@ function previewTargetLabel(targetPath) {
   if (targetPath === '/settings/support/reporting') {
     return 'Settings -> Reporting for this client workspace';
   }
-  return 'the workspace dashboard';
+  return 'the client workspace dashboard';
 }
 
 function buildPreviewWorkspaceHTML(bootstrap, workspaceID, targetPath, scenario, previewToast = '') {
@@ -529,7 +529,7 @@ function buildPreviewWorkspaceHTML(bootstrap, workspaceID, targetPath, scenario,
     ? 'Install agents for ' + title
     : targetPath === '/settings/support/reporting'
       ? 'Reports for ' + title
-      : title + ' workspace';
+      : title + ' client workspace';
   const taskCopy = targetPath === '/settings/infrastructure?add=linux-host'
     ? 'Use the install command from this workspace. Agent data must be created inside this client boundary, not on the provider account.'
     : targetPath === '/settings/support/reporting'
@@ -541,7 +541,7 @@ function buildPreviewWorkspaceHTML(bootstrap, workspaceID, targetPath, scenario,
       '<head>' +
         '<meta charset="utf-8">' +
         '<meta name="viewport" content="width=device-width, initial-scale=1">' +
-        '<title>' + escapeHTML(title) + ' - Preview workspace</title>' +
+        '<title>' + escapeHTML(title) + ' - Client onboarding preview</title>' +
         '<style>' +
           'body{margin:0;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f6f7f9;color:#101828}' +
           'main{max-width:840px;margin:0 auto;padding:48px 20px}' +
@@ -577,14 +577,14 @@ function buildPreviewWorkspaceHTML(bootstrap, workspaceID, targetPath, scenario,
         '<main>' +
           '<section class="panel">' +
             '<div class="crumbs"><a href="' + escapeHTML(portalWorkspaceURL) + '">Pulse Account</a><span>/</span><span>' + escapeHTML(accountName) + '</span><span>/</span><strong>' + escapeHTML(title) + '</strong></div>' +
-            '<p>Preview workspace handoff</p>' +
+            '<p>Client onboarding preview</p>' +
             '<h1>' + escapeHTML(targetHeading) + '</h1>' +
             (previewToast ? '<div class="preview-message">' + escapeHTML(previewToast) + '</div>' : '') +
-            '<p>You are inside the <strong>' + escapeHTML(title) + '</strong> client workspace. In production the signed handoff creates a tenant session and opens ' + escapeHTML(targetLabel) + '.</p>' +
+            '<p>You are inside the client workspace for <strong>' + escapeHTML(title) + '</strong>. In production the signed handoff creates a tenant session and opens ' + escapeHTML(targetLabel) + '.</p>' +
             '<p>This client boundary is the thing that keeps repeated hostnames, alerts, and reports from being mixed across MSP customers.</p>' +
             '<div class="facts">' +
               '<div class="fact"><span>Account</span><strong>' + escapeHTML(accountName) + '</strong></div>' +
-              '<div class="fact"><span>Workspace</span><strong>' + escapeHTML(workspaceID) + '</strong></div>' +
+              '<div class="fact"><span>Client workspace</span><strong>' + escapeHTML(workspaceID) + '</strong></div>' +
               '<div class="fact"><span>Setup status</span><strong>' + escapeHTML(setupStatus) + '</strong></div>' +
               '<div class="fact"><span>Target</span><strong>' + escapeHTML(targetPathLabel) + '</strong></div>' +
             '</div>' +
@@ -596,15 +596,15 @@ function buildPreviewWorkspaceHTML(bootstrap, workspaceID, targetPath, scenario,
                 : '') +
             '</div>' +
             (entry ? previewSetupControlHTML(entry.workspace, scenario, workspaceID, targetPath) : '') +
-            '<div class="steps" aria-label="Workspace setup flow">' +
-              '<div class="step"><b>1</b><div><strong>Workspace created</strong><span>The client gets a separate workspace boundary before monitoring data arrives.</span></div></div>' +
+            '<div class="steps" aria-label="Client onboarding flow">' +
+              '<div class="step"><b>1</b><div><strong>Client added</strong><span>The client gets a separate workspace boundary before monitoring data arrives.</span></div></div>' +
               '<div class="step"><b>2</b><div><strong>Install agents in this workspace</strong><span>The handoff keeps the agent command tied to this client boundary.</span></div></div>' +
               '<div class="step"><b>3</b><div><strong>Confirm data is arriving</strong><span>Pulse Account marks the workspace as installed only after an agent-scoped token is used.</span></div></div>' +
               '<div class="step"><b>4</b><div><strong>Add alert routes</strong><span>Notification routes stay tenant-owned and enabled inside the client workspace.</span></div></div>' +
               '<div class="step"><b>5</b><div><strong>Schedule reports</strong><span>Performance reports are part of ready state for MSP onboarding.</span></div></div>' +
             '</div>' +
             '<div class="actions">' +
-              '<a class="button" href="' + escapeHTML(portalWorkspaceURL) + '">Back to workspace row</a>' +
+              '<a class="button" href="' + escapeHTML(portalWorkspaceURL) + '">Back to client row</a>' +
               '<a class="button secondary" href="' + escapeHTML(portalURL + '#workspace-management-' + accountID) + '">Refresh setup state</a>' +
               '<a class="button secondary" href="' + escapeHTML(portalURL) + '">Pulse Account home</a>' +
             '</div>' +
@@ -822,7 +822,7 @@ function routeAccountAPI(request, response, url, bootstrap, scenario) {
       readJSONBody(request).then(function(body) {
         const displayName = String(body.display_name || '').trim();
         if (!displayName) {
-          sendJSON(response, 400, { error: 'Workspace name is required.' });
+          sendJSON(response, 400, { error: 'Client name is required.' });
           return;
         }
         account.workspaces = account.workspaces || [];

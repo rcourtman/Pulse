@@ -133,11 +133,11 @@ describe('shell view', function() {
     expect(html).toContain('workspace-summary-shell');
     expect(html).toContain('workspace-summary-facts');
     expect(html).toContain('Next:</strong> Set up Summary Workspace');
-    expect(html).toContain('Unfinished setup');
+    expect(html).toContain('Clients in setup');
     expect(html).toContain('Unknown agents');
     expect(html).toContain('Standard client onboarding');
     expect(html).toContain('Workspace boundary keeps repeated hostnames separate.');
-    expect(html).toContain('1 workspace in setup');
+    expect(html).toContain('1 client in setup');
     expect(html).toContain('Summary Workspace');
     expect(html).not.toContain('overview-task-grid');
   });
@@ -199,7 +199,7 @@ describe('shell view', function() {
     expect(html).toContain('Access');
     expect(html).toContain('Billing');
     expect(html).toContain('Support');
-    expect(html).toContain('Workspaces');
+    expect(html).toContain('Clients');
     expect(html).toContain('id="billing-section"');
     expect(html).toContain('portal-identity-bar');
     expect(html).toContain('Owner');
@@ -207,15 +207,16 @@ describe('shell view', function() {
     expect(html).toContain('Acme MSP');
     expect(html).toContain('workspace-summary-facts');
     expect(html).toContain('1 account');
-    expect(html).toContain('3 workspaces');
-    expect(html).toContain('0 ready workspaces');
-    expect(html).toContain('1 workspace in setup');
-    expect(html).toContain('2 workspaces to review');
+    expect(html).toContain('3 clients');
+    expect(html).toContain('0 ready clients');
+    expect(html).toContain('1 client in setup');
+    expect(html).toContain('2 clients to review');
     expect(html).toContain('Next:</strong> Review Beta Workspace');
-    expect(html).toContain('Unfinished setup');
+    expect(html).toContain('Clients in setup');
     expect(html).toContain('Provider setup template');
     expect(html).toContain('Client workspace is the identity boundary.');
-    expect(html).toContain('Create workspace');
+    expect(html).toContain('Add client');
+    expect(html).not.toContain('Create workspace');
     expect(html).not.toContain('Manage billing');
     expect(html).not.toContain('Manage team');
     expect(html).toContain('Alpha Workspace');
@@ -227,14 +228,14 @@ describe('shell view', function() {
     expect(html).toContain('Health check pending');
     expect(html).toContain('/api/accounts/acct_1/tenants/ws_active/handoff');
     expect(html).toContain('/api/accounts/acct_1/tenants/ws_active/handoff?target_path=%2Fsettings%2Finfrastructure%3Fadd%3Dlinux-host');
-    expect(html).toContain('Open workspace');
+    expect(html).toContain('Open client');
     expect(html).toContain('Install agents');
     expect(html).toContain('Configure alert routes');
     expect(html).toContain('Schedule reports');
     expect(html).toContain('Open the workspace-bound install commands.');
     expect(html).toContain('Alerts and performance reports stay inside the client workspace.');
     expect(html).toContain('data-action="select-workspace"');
-    expect(html).toContain('Create a workspace');
+    expect(html).toContain('Add a client');
     expect(html).toContain('Access changes stay in Access. Billing changes stay in Billing.');
     expect(html).toContain('Close panel');
     expect(html).toContain('id="workspace-management-acct_1" hidden');
@@ -587,8 +588,9 @@ describe('shell view', function() {
       })
     );
 
-    expect(html).toContain('No hosted workspaces yet. Create one to get started.');
-    expect(html).toContain('Create workspace');
+    expect(html).toContain('No clients yet. Add one to get started.');
+    expect(html).toContain('Add client');
+    expect(html).not.toContain('No hosted workspaces yet. Create one to get started.');
   });
 
   it('keeps suspended hosted view-only accounts on review surfaces', function() {
@@ -793,7 +795,7 @@ describe('shell view', function() {
     );
 
     expect(html).toContain('Suspended');
-    expect(html).toContain('Create workspace');
+    expect(html).toContain('Add client');
     expect(html).toContain('Paused Workspace');
   });
 

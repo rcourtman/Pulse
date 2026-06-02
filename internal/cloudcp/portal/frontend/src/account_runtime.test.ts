@@ -75,8 +75,23 @@ describe('account runtime', function() {
     deps.showToast = vi.fn();
   });
 
-  it('creates a workspace through the managed account action flow', async function() {
+  it('adds an MSP client through the managed account action flow', async function() {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ id: 'ws_new' })));
+    deps.store.setBootstrap({
+      authenticated: true,
+      email: 'owner@example.com',
+      accounts: [{
+        id: 'acct_1',
+        name: 'Acme MSP',
+        kind: 'msp',
+        kind_label: 'MSP',
+        role: 'owner',
+        can_manage: true,
+        has_billing: true,
+        members: [],
+        workspaces: [],
+      }],
+    });
 
     document.body.innerHTML =
       '<div id="add-ws-form-acct_1" class="add-workspace-form">' +
@@ -102,7 +117,7 @@ describe('account runtime', function() {
       })
     );
     expect(deps.refreshBootstrap).toHaveBeenCalled();
-    expect(deps.showToast).toHaveBeenCalledWith('Workspace created. Finish setup next.');
+    expect(deps.showToast).toHaveBeenCalledWith('Client added. Finish onboarding next.');
     expect(deps.store.getAccountState().byAccountID.acct_1.addWorkspaceOpen).toBe(false);
     expect(deps.store.getAccountState().byAccountID.acct_1.selectedWorkspaceID).toBe('ws_new');
     expect(deps.store.getAccountState().byAccountID.acct_1.createWorkspace.pending).toBe(false);
@@ -176,12 +191,12 @@ describe('account runtime', function() {
     expect(deps.store.getAccountState().byAccountID.acct_1.addWorkspaceOpen).toBe(false);
     expect(document.getElementById('workspace-operations-shell-acct_1')?.classList.contains('workspace-operations-shell-selected')).toBe(true);
     expect(document.getElementById('workspace-management-title-acct_1')?.textContent).toContain('Alpha Workspace');
-    expect(document.getElementById('workspace-management-action-acct_1')?.textContent).toContain('Suspend workspace');
+    expect(document.getElementById('workspace-management-action-acct_1')?.textContent).toContain('Suspend client');
 
     await runtime.manageWorkspaceAction('acct_1', 'ws_2', 'suspend', 'Alpha Workspace');
     await flushAsync();
 
-    expect(confirmSpy).toHaveBeenCalledWith('Suspend workspace "Alpha Workspace"?');
+    expect(confirmSpy).toHaveBeenCalledWith('Suspend client "Alpha Workspace"?');
     expect(fetch).toHaveBeenCalledWith(
       '/api/accounts/acct_1/tenants/ws_2',
       expect.objectContaining({
@@ -190,7 +205,7 @@ describe('account runtime', function() {
         body: JSON.stringify({ state: 'suspended' }),
       })
     );
-    expect(deps.showToast).toHaveBeenCalledWith('Suspended workspace.');
+    expect(deps.showToast).toHaveBeenCalledWith('Suspended client.');
     expect(deps.store.getAccountState().byAccountID.acct_1.selectedWorkspaceID).toBe('');
   });
 

@@ -32,7 +32,10 @@ export function focusElement(id: string): void {
   if (input) input.focus();
 }
 
-function workspaceActionLabel(workspace: PortalWorkspaceSummary): string {
+function workspaceActionLabel(workspace: PortalWorkspaceSummary, clientLanguage = false): string {
+  if (clientLanguage) {
+    return workspace.state === 'active' ? 'Suspend client' : 'Delete client';
+  }
   return workspace.state === 'active' ? 'Suspend workspace' : 'Delete workspace';
 }
 
@@ -225,7 +228,7 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
   for (var s = 0; s < steps.length; s += 1) {
     setChecklistStatus(stepByID[steps[s].id], steps[s].tone, steps[s].label);
   }
-  actionButton.textContent = workspaceActionLabel(workspace);
+  actionButton.textContent = workspaceActionLabel(workspace, account.kind === 'msp');
   actionButton.disabled = entry.manageWorkspace.pending;
   actionButton.setAttribute('data-workspace-id', workspace.id);
   actionButton.setAttribute('data-workspace-name', workspace.display_name);

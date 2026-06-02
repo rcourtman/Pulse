@@ -66,6 +66,17 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     return true;
   };
 
+  var accountUsesClientLanguage = function(accountID: string): boolean {
+    var bootstrap = deps.store.getBootstrap();
+    var accounts = Array.isArray(bootstrap.accounts) ? bootstrap.accounts : [];
+    for (var i = 0; i < accounts.length; i += 1) {
+      if (accounts[i].id === accountID) {
+        return accounts[i].kind === 'msp';
+      }
+    }
+    return false;
+  };
+
   var findWorkspaceIDByName = function(accountID: string, displayName: string): string {
     var bootstrap = deps.store.getBootstrap();
     var accounts = Array.isArray(bootstrap.accounts) ? bootstrap.accounts : [];
@@ -201,9 +212,9 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
         succeedMutationState(entry.createWorkspace);
       });
       revealElementWhenReady('workspace-management-' + accountID);
-      deps.showToast('Workspace created. Finish setup next.');
+      deps.showToast(accountUsesClientLanguage(accountID) ? 'Client added. Finish onboarding next.' : 'Workspace created. Finish setup next.');
     } catch (error) {
-      var message = error instanceof Error ? error.message : 'Failed to create workspace.';
+      var message = error instanceof Error ? error.message : (accountUsesClientLanguage(accountID) ? 'Failed to add client.' : 'Failed to create workspace.');
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
         failMutationState(entry.createWorkspace, message);
@@ -214,8 +225,10 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
 
   var manageWorkspaceAction = async function(accountID: string, tenantID: string, action: string, name: string): Promise<void> {
     var verb = action === 'suspend' ? 'Suspend' : action === 'delete' ? 'Delete' : '';
+    var pastVerb = action === 'suspend' ? 'Suspended' : action === 'delete' ? 'Deleted' : '';
     if (!verb) return;
-    if (!window.confirm(verb + ' workspace "' + name + '"?')) return;
+    var entityName = accountUsesClientLanguage(accountID) ? 'client' : 'workspace';
+    if (!window.confirm(verb + ' ' + entityName + ' "' + name + '"?')) return;
     deps.store.updateAccountState(function(accountState) {
       var entry = ensurePortalAccountUIEntry(accountState, accountID);
       beginMutationState(entry.manageWorkspace);
@@ -238,13 +251,13 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
         entry.selectedWorkspaceID = '';
         succeedMutationState(entry.manageWorkspace);
       });
-      deps.showToast(verb + 'ed workspace.');
+      deps.showToast(pastVerb + ' ' + entityName + '.');
     } catch (error) {
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
-        failMutationState(entry.manageWorkspace, error instanceof Error ? error.message : 'Failed to ' + verb.toLowerCase() + ' workspace.');
+        failMutationState(entry.manageWorkspace, error instanceof Error ? error.message : 'Failed to ' + verb.toLowerCase() + ' ' + entityName + '.');
       }, { notify: false });
-      deps.showToast(error instanceof Error ? error.message : 'Failed to ' + verb.toLowerCase() + ' workspace.', true);
+      deps.showToast(error instanceof Error ? error.message : 'Failed to ' + verb.toLowerCase() + ' ' + entityName + '.', true);
     }
   };
 

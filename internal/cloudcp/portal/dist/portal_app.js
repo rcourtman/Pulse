@@ -303,7 +303,10 @@
     var input = getElement(id);
     if (input) input.focus();
   }
-  function workspaceActionLabel(workspace) {
+  function workspaceActionLabel(workspace, clientLanguage = false) {
+    if (clientLanguage) {
+      return workspace.state === "active" ? "Suspend client" : "Delete client";
+    }
     return workspace.state === "active" ? "Suspend workspace" : "Delete workspace";
   }
   function workspaceCreatedLabel(workspace) {
@@ -475,7 +478,7 @@
     for (var s = 0; s < steps.length; s += 1) {
       setChecklistStatus(stepByID[steps[s].id], steps[s].tone, steps[s].label);
     }
-    actionButton.textContent = workspaceActionLabel(workspace);
+    actionButton.textContent = workspaceActionLabel(workspace, account.kind === "msp");
     actionButton.disabled = entry.manageWorkspace.pending;
     actionButton.setAttribute("data-workspace-id", workspace.id);
     actionButton.setAttribute("data-workspace-name", workspace.display_name);
@@ -1275,6 +1278,16 @@
       }
       return true;
     };
+    var accountUsesClientLanguage2 = function(accountID) {
+      var bootstrap = deps.store.getBootstrap();
+      var accounts = Array.isArray(bootstrap.accounts) ? bootstrap.accounts : [];
+      for (var i = 0; i < accounts.length; i += 1) {
+        if (accounts[i].id === accountID) {
+          return accounts[i].kind === "msp";
+        }
+      }
+      return false;
+    };
     var findWorkspaceIDByName = function(accountID, displayName) {
       var bootstrap = deps.store.getBootstrap();
       var accounts = Array.isArray(bootstrap.accounts) ? bootstrap.accounts : [];
@@ -1403,9 +1416,9 @@
           succeedMutationState(entry.createWorkspace);
         });
         revealElementWhenReady("workspace-management-" + accountID);
-        deps.showToast("Workspace created. Finish setup next.");
+        deps.showToast(accountUsesClientLanguage2(accountID) ? "Client added. Finish onboarding next." : "Workspace created. Finish setup next.");
       } catch (error) {
-        var message = error instanceof Error ? error.message : "Failed to create workspace.";
+        var message = error instanceof Error ? error.message : accountUsesClientLanguage2(accountID) ? "Failed to add client." : "Failed to create workspace.";
         deps.store.updateAccountState(function(accountState) {
           var entry = ensurePortalAccountUIEntry(accountState, accountID);
           failMutationState(entry.createWorkspace, message);
@@ -1415,8 +1428,10 @@
     };
     var manageWorkspaceAction = async function(accountID, tenantID, action, name) {
       var verb = action === "suspend" ? "Suspend" : action === "delete" ? "Delete" : "";
+      var pastVerb = action === "suspend" ? "Suspended" : action === "delete" ? "Deleted" : "";
       if (!verb) return;
-      if (!window.confirm(verb + ' workspace "' + name + '"?')) return;
+      var entityName = accountUsesClientLanguage2(accountID) ? "client" : "workspace";
+      if (!window.confirm(verb + " " + entityName + ' "' + name + '"?')) return;
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
         beginMutationState(entry.manageWorkspace);
@@ -1439,13 +1454,13 @@
           entry.selectedWorkspaceID = "";
           succeedMutationState(entry.manageWorkspace);
         });
-        deps.showToast(verb + "ed workspace.");
+        deps.showToast(pastVerb + " " + entityName + ".");
       } catch (error) {
         deps.store.updateAccountState(function(accountState) {
           var entry = ensurePortalAccountUIEntry(accountState, accountID);
-          failMutationState(entry.manageWorkspace, error instanceof Error ? error.message : "Failed to " + verb.toLowerCase() + " workspace.");
+          failMutationState(entry.manageWorkspace, error instanceof Error ? error.message : "Failed to " + verb.toLowerCase() + " " + entityName + ".");
         }, { notify: false });
-        deps.showToast(error instanceof Error ? error.message : "Failed to " + verb.toLowerCase() + " workspace.", true);
+        deps.showToast(error instanceof Error ? error.message : "Failed to " + verb.toLowerCase() + " " + entityName + ".", true);
       }
     };
     var openBilling = async function(accountID) {
@@ -2554,30 +2569,41 @@
     if (account.kind === "individual") return "Hosted account";
     return account.kind_label ? account.kind_label + " account" : "Account";
   }
-  function workspaceCountLabel(count) {
-    return count === 1 ? "1 workspace" : String(count) + " workspaces";
+  function accountUsesClientLanguage(account) {
+    return account.kind === "msp";
+  }
+  function accountsUseClientLanguage(accounts) {
+    return accounts.length > 0 && accounts.every(accountUsesClientLanguage);
+  }
+  function workspaceEntityName(clientLanguage, plural = false) {
+    if (clientLanguage) return plural ? "clients" : "client";
+    return plural ? "workspaces" : "workspace";
+  }
+  function workspaceCountLabel(count, clientLanguage = false) {
+    return count === 1 ? "1 " + workspaceEntityName(clientLanguage) : String(count) + " " + workspaceEntityName(clientLanguage, true);
   }
   function accountCountLabel(count) {
     return count === 1 ? "1 account" : String(count) + " accounts";
   }
-  function reviewWorkspaceChipLabel(count) {
-    return count === 1 ? "1 workspace to review" : String(count) + " workspaces to review";
+  function reviewWorkspaceChipLabel(count, clientLanguage = false) {
+    return count === 1 ? "1 " + workspaceEntityName(clientLanguage) + " to review" : String(count) + " " + workspaceEntityName(clientLanguage, true) + " to review";
   }
-  function readyWorkspaceChipLabel(count) {
-    return count === 1 ? "1 ready workspace" : String(count) + " ready workspaces";
+  function readyWorkspaceChipLabel(count, clientLanguage = false) {
+    return count === 1 ? "1 ready " + workspaceEntityName(clientLanguage) : String(count) + " ready " + workspaceEntityName(clientLanguage, true);
   }
-  function suspendedWorkspaceChipLabel(count) {
-    return count === 1 ? "1 suspended workspace" : String(count) + " suspended workspaces";
+  function suspendedWorkspaceChipLabel(count, clientLanguage = false) {
+    return count === 1 ? "1 suspended " + workspaceEntityName(clientLanguage) : String(count) + " suspended " + workspaceEntityName(clientLanguage, true);
   }
-  function setupNeededWorkspaceChipLabel(count) {
-    return count === 1 ? "1 workspace in setup" : String(count) + " workspaces in setup";
+  function setupNeededWorkspaceChipLabel(count, clientLanguage = false) {
+    return count === 1 ? "1 " + workspaceEntityName(clientLanguage) + " in setup" : String(count) + " " + workspaceEntityName(clientLanguage, true) + " in setup";
   }
-  function supportRunbookPathCopy(hasHostedAccounts2, hostedViewOnly, showSelfHostedCommercial) {
+  function supportRunbookPathCopy(hasHostedAccounts2, hostedViewOnly, showSelfHostedCommercial, clientLanguage = false) {
+    var primarySection = clientLanguage ? "Clients" : "Workspaces";
     if (!hasHostedAccounts2) return "Billing, licenses, refunds, or privacy.";
     if (hostedViewOnly) {
-      return showSelfHostedCommercial ? "Workspaces review, Access review, owner/admin handoff, hosted billing, licenses, refunds, or privacy." : "Workspaces review, Access review, owner/admin handoff, or hosted billing.";
+      return showSelfHostedCommercial ? primarySection + ", Access review, owner/admin handoff, hosted billing, licenses, refunds, or privacy." : primarySection + ", Access review, owner/admin handoff, or hosted billing.";
     }
-    return showSelfHostedCommercial ? "Workspaces, Access, hosted billing, licenses, refunds, or privacy." : "Workspaces, Access, or hosted billing.";
+    return showSelfHostedCommercial ? primarySection + ", Access, hosted billing, licenses, refunds, or privacy." : primarySection + ", Access, or hosted billing.";
   }
   function hasHostedAccounts(accounts) {
     return accounts.length > 0;
@@ -2719,7 +2745,7 @@
     }
     var sections = [];
     if (hosted) {
-      sections.push({ section: "workspaces", title: "Workspaces" });
+      sections.push({ section: "workspaces", title: accountsUseClientLanguage(accounts) ? "Clients" : "Workspaces" });
       sections.push({ section: "access", title: "Access" });
     }
     if (hostedBillingCount > 0 || showSelfHostedCommercial) {
@@ -2757,6 +2783,7 @@
   function renderWorkspaceCard(account, workspace, accountAPIBasePath) {
     var status = workspaceHealthState(workspace);
     var state = String(workspace.state || "");
+    var clientLanguage = accountUsesClientLanguage(account);
     var createdLabel = formatWorkspaceDate(workspace.created_at);
     var metaParts = [];
     if (state) {
@@ -2770,7 +2797,7 @@
     }
     var openAction = "";
     if (state === "active") {
-      openAction = '<form method="POST" action="' + escapeAttr(workspaceHandoffActionPath2(accountAPIBasePath, account.id, workspace.id)) + '"><button type="submit" class="btn-primary">Open workspace</button></form>';
+      openAction = '<form method="POST" action="' + escapeAttr(workspaceHandoffActionPath2(accountAPIBasePath, account.id, workspace.id)) + '"><button type="submit" class="btn-primary">' + escapeHTML(clientLanguage ? "Open client" : "Open workspace") + "</button></form>";
     }
     var installAction = "";
     if (account.can_manage && state === "active") {
@@ -2778,7 +2805,7 @@
     }
     var manageAction = "";
     if (account.can_manage && (state === "active" || state === "suspended" || state === "failed")) {
-      manageAction = '<button type="button" class="btn-secondary btn-workspace-manage" data-action="select-workspace" data-account-id="' + escapeAttr(account.id) + '" data-workspace-id="' + escapeAttr(workspace.id) + '">Setup checklist</button>';
+      manageAction = '<button type="button" class="btn-secondary btn-workspace-manage" data-action="select-workspace" data-account-id="' + escapeAttr(account.id) + '" data-workspace-id="' + escapeAttr(workspace.id) + '">' + escapeHTML(clientLanguage ? "Client onboarding" : "Setup checklist") + "</button>";
     }
     return '<article class="workspace-row workspace-row-health-' + escapeAttr(status) + " workspace-row-state-" + escapeAttr(state || "unknown") + '" id="' + escapeAttr(workspaceRowAnchorID(account.id, workspace.id)) + '" data-workspace-row="' + escapeAttr(workspace.id) + '"><div class="workspace-row-primary"><div class="workspace-row-heading"><h4 class="workspace-name">' + escapeHTML(workspace.display_name) + '</h4><div class="workspace-meta">' + metaParts.join("") + '</div></div><div class="workspace-row-note">' + escapeHTML(workspaceRowNote(workspace)) + '</div></div><div class="workspace-row-status-cell workspace-row-status-cell-badge">' + setupBadgeHTML(workspace) + '</div><div class="workspace-row-status-cell workspace-row-status-cell-badge">' + healthBadgeHTML(workspace) + '</div><div class="workspace-actions">' + openAction + installAction + manageAction + "</div></article>";
   }
@@ -2863,6 +2890,7 @@
     return '<a class="' + escapeAttr(className) + '" href="#' + escapeAttr(anchorID) + '">' + escapeHTML(label) + "</a>";
   }
   function renderWorkspaceSummaryDecision(accounts, entries, accountAPIBasePath, showSelfHostedCommercial) {
+    var clientLanguage = accountsUseClientLanguage(accounts);
     var attention = attentionWorkspaceEntries(entries);
     var suspended = suspendedWorkspaceEntries(entries);
     var setupNeeded = setupNeededWorkspaceEntries(entries);
@@ -2885,27 +2913,27 @@
       description = workspaceSummaryContext(attentionEntry, accounts.length > 1, workspaceStatusCopy(attentionEntry.workspace));
       primaryAction = renderWorkspaceAnchorAction(
         workspaceRowAnchorID(attentionEntry.account.id, attentionEntry.workspace.id),
-        "Review workspace",
+        clientLanguage ? "Review client" : "Review workspace",
         "btn-primary btn-compact workspace-summary-link"
       );
-      secondaryAction = attentionEntry.account.can_manage && (attentionEntry.workspace.state === "active" || attentionEntry.workspace.state === "suspended" || attentionEntry.workspace.state === "failed") ? '<button type="button" class="btn-secondary btn-compact" data-action="select-workspace" data-account-id="' + escapeAttr(attentionEntry.account.id) + '" data-workspace-id="' + escapeAttr(attentionEntry.workspace.id) + '">Setup checklist</button>' : '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>';
+      secondaryAction = attentionEntry.account.can_manage && (attentionEntry.workspace.state === "active" || attentionEntry.workspace.state === "suspended" || attentionEntry.workspace.state === "failed") ? '<button type="button" class="btn-secondary btn-compact" data-action="select-workspace" data-account-id="' + escapeAttr(attentionEntry.account.id) + '" data-workspace-id="' + escapeAttr(attentionEntry.workspace.id) + '">' + escapeHTML(clientLanguage ? "Client onboarding" : "Setup checklist") + "</button>" : '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>';
     } else if (suspended.length) {
       var suspendedEntry = suspended[0];
       title = "Review " + suspendedEntry.workspace.display_name;
       description = workspaceSummaryContext(suspendedEntry, accounts.length > 1, workspaceStatusCopy(suspendedEntry.workspace));
       primaryAction = renderWorkspaceAnchorAction(
         workspaceRowAnchorID(suspendedEntry.account.id, suspendedEntry.workspace.id),
-        "Review workspace",
+        clientLanguage ? "Review client" : "Review workspace",
         "btn-primary btn-compact workspace-summary-link"
       );
-      secondaryAction = suspendedEntry.account.can_manage ? '<button type="button" class="btn-secondary btn-compact" data-action="select-workspace" data-account-id="' + escapeAttr(suspendedEntry.account.id) + '" data-workspace-id="' + escapeAttr(suspendedEntry.workspace.id) + '">Setup checklist</button>' : '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>';
+      secondaryAction = suspendedEntry.account.can_manage ? '<button type="button" class="btn-secondary btn-compact" data-action="select-workspace" data-account-id="' + escapeAttr(suspendedEntry.account.id) + '" data-workspace-id="' + escapeAttr(suspendedEntry.workspace.id) + '">' + escapeHTML(clientLanguage ? "Client onboarding" : "Setup checklist") + "</button>" : '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>';
     } else if (setupNeeded.length) {
       var setupEntry = setupNeeded[0];
       var setupState = workspaceSetupState(setupEntry.workspace);
       title = setupState === "configure_outputs" ? "Configure outputs for " + setupEntry.workspace.display_name : "Set up " + setupEntry.workspace.display_name;
       description = workspaceSummaryContext(setupEntry, accounts.length > 1, workspaceSetupNextStep(setupEntry.workspace));
       if (!setupEntry.account.can_manage) {
-        primaryAction = renderWorkspaceHandoffForm(setupEntry.account.id, setupEntry.workspace.id, accountAPIBasePath, "Open workspace", "btn-primary btn-compact");
+        primaryAction = renderWorkspaceHandoffForm(setupEntry.account.id, setupEntry.workspace.id, accountAPIBasePath, clientLanguage ? "Open client" : "Open workspace", "btn-primary btn-compact");
       } else if (setupState === "configure_outputs") {
         primaryAction = renderWorkspaceReportingHandoffForm(
           setupEntry.account.id,
@@ -2923,7 +2951,7 @@
           "btn-primary btn-compact"
         );
       }
-      secondaryAction = setupEntry.account.can_manage ? '<button type="button" class="btn-secondary btn-compact" data-action="select-workspace" data-account-id="' + escapeAttr(setupEntry.account.id) + '" data-workspace-id="' + escapeAttr(setupEntry.workspace.id) + '">Setup checklist</button>' : renderWorkspaceHandoffForm(setupEntry.account.id, setupEntry.workspace.id, accountAPIBasePath, "Open workspace");
+      secondaryAction = setupEntry.account.can_manage ? '<button type="button" class="btn-secondary btn-compact" data-action="select-workspace" data-account-id="' + escapeAttr(setupEntry.account.id) + '" data-workspace-id="' + escapeAttr(setupEntry.workspace.id) + '">' + escapeHTML(clientLanguage ? "Client onboarding" : "Setup checklist") + "</button>" : renderWorkspaceHandoffForm(setupEntry.account.id, setupEntry.workspace.id, accountAPIBasePath, clientLanguage ? "Open client" : "Open workspace");
     } else if (ready.length) {
       var readyEntry = ready[0];
       title = "Open " + readyEntry.workspace.display_name;
@@ -2932,24 +2960,24 @@
         readyEntry.account.id,
         readyEntry.workspace.id,
         accountAPIBasePath,
-        "Open workspace",
+        clientLanguage ? "Open client" : "Open workspace",
         "btn-primary btn-compact"
       );
-      secondaryAction = ready.length > 1 ? renderWorkspaceAnchorAction(workspaceListAnchorID(readyEntry.account.id), "See all workspaces") : readyEntry.account.can_manage ? renderWorkspaceInstallHandoffForm(readyEntry.account.id, readyEntry.workspace.id, accountAPIBasePath) : "";
+      secondaryAction = ready.length > 1 ? renderWorkspaceAnchorAction(workspaceListAnchorID(readyEntry.account.id), clientLanguage ? "See all clients" : "See all workspaces") : readyEntry.account.can_manage ? renderWorkspaceInstallHandoffForm(readyEntry.account.id, readyEntry.workspace.id, accountAPIBasePath) : "";
     } else if (creatableAccount) {
-      title = "Create the first workspace";
-      description = "No hosted workspace is attached yet. Create the first workspace in " + creatableAccount.name + ".";
-      primaryAction = '<button class="btn-primary btn-compact" type="button" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(creatableAccount.id) + '">Create workspace</button>';
+      title = clientLanguage ? "Add the first client" : "Create the first workspace";
+      description = clientLanguage ? "No client is attached yet. Add the first client in " + creatableAccount.name + "." : "No hosted workspace is attached yet. Create the first workspace in " + creatableAccount.name + ".";
+      primaryAction = '<button class="btn-primary btn-compact" type="button" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(creatableAccount.id) + '">' + escapeHTML(clientLanguage ? "Add client" : "Create workspace") + "</button>";
       secondaryAction = accessAccount ? '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>' : "";
     } else if (hostedViewOnly) {
       if (entries.length > 0) {
         title = "Review who can act";
-        description = "Hosted workspaces are attached here, but an owner or admin must make account-level changes.";
+        description = clientLanguage ? "Clients are attached here, but an owner or admin must make account-level changes." : "Hosted workspaces are attached here, but an owner or admin must make account-level changes.";
         primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>';
-        secondaryAction = renderWorkspaceAnchorAction(workspaceListAnchorID(accounts[0].id), "Review workspace list");
+        secondaryAction = renderWorkspaceAnchorAction(workspaceListAnchorID(accounts[0].id), clientLanguage ? "Review client list" : "Review workspace list");
       } else {
         title = "Review who can act";
-        description = showSelfHostedCommercial ? "No hosted workspace is attached. Review Access to see who can manage this hosted account, or use Billing for self-hosted tasks." : "No hosted workspace is attached yet. Review Access to see who can create or manage the first workspace on this account.";
+        description = clientLanguage ? "No client is attached yet. Review Access to see who can add or manage clients on this account." : showSelfHostedCommercial ? "No hosted workspace is attached. Review Access to see who can manage this hosted account, or use Billing for self-hosted tasks." : "No hosted workspace is attached yet. Review Access to see who can create or manage the first workspace on this account.";
         primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>';
         secondaryAction = showSelfHostedCommercial ? '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>' : "";
       }
@@ -2960,7 +2988,7 @@
       secondaryAction = showSelfHostedCommercial ? '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>' : "";
     } else {
       title = "Open billing or support";
-      description = totalWorkspaces > 0 ? "Review the workspace list here, then use Billing for commercial work or Support only after a self-service path fails." : "Use Billing for commercial work. Use Support only after the billing path fails.";
+      description = totalWorkspaces > 0 ? "Review the " + workspaceEntityName(clientLanguage) + " list here, then use Billing for commercial work or Support only after a self-service path fails." : "Use Billing for commercial work. Use Support only after the billing path fails.";
       primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>';
       secondaryAction = '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="support">Escalate</button>';
     }
@@ -2972,13 +3000,14 @@
     };
   }
   function renderWorkspaceSummaryFacts(accounts, entries) {
+    var clientLanguage = accountsUseClientLanguage(accounts);
     return [
       accountCountLabel(accounts.length),
-      workspaceCountLabel(entries.length),
-      readyWorkspaceChipLabel(readyWorkspaceEntries(entries).length),
-      setupNeededWorkspaceChipLabel(setupNeededWorkspaceEntries(entries).length),
-      reviewWorkspaceChipLabel(attentionWorkspaceEntries(entries).length),
-      suspendedWorkspaceChipLabel(suspendedWorkspaceEntries(entries).length)
+      workspaceCountLabel(entries.length, clientLanguage),
+      readyWorkspaceChipLabel(readyWorkspaceEntries(entries).length, clientLanguage),
+      setupNeededWorkspaceChipLabel(setupNeededWorkspaceEntries(entries).length, clientLanguage),
+      reviewWorkspaceChipLabel(attentionWorkspaceEntries(entries).length, clientLanguage),
+      suspendedWorkspaceChipLabel(suspendedWorkspaceEntries(entries).length, clientLanguage)
     ];
   }
   function renderWorkspaceSummaryInline(accounts, entries, accountAPIBasePath, showSelfHostedCommercial) {
@@ -3010,33 +3039,38 @@
     });
     if (!templateAccount || !templateAccount.setup_templates || !templateAccount.setup_templates.length) return "";
     var template = templateAccount.setup_templates[0];
-    return '<section class="workspace-template-panel" aria-label="Provider setup template"><div class="workspace-template-heading"><div><h3>' + escapeHTML(template.title || "Provider setup template") + "</h3><p>Use the same setup shape for each client workspace, then finish the tenant-owned configuration inside that workspace.</p></div><span>" + escapeHTML(templateAccount.name) + '</span></div><div class="workspace-template-grid"><div><strong>Agent naming</strong><span>' + escapeHTML(template.agent_naming) + "</span></div><div><strong>Alert routing</strong><span>" + escapeHTML(template.alert_routing) + "</span></div><div><strong>Reports</strong><span>" + escapeHTML(template.reporting) + "</span></div><div><strong>Access</strong><span>" + escapeHTML(template.access) + "</span></div></div></section>";
+    return '<section class="workspace-template-panel" aria-label="Provider setup template"><div class="workspace-template-heading"><div><h3>' + escapeHTML(template.title || "Provider setup template") + "</h3><p>Use the same onboarding shape for each client, then finish the tenant-owned configuration inside that client workspace.</p></div><span>" + escapeHTML(templateAccount.name) + '</span></div><div class="workspace-template-grid"><div><strong>Agent naming</strong><span>' + escapeHTML(template.agent_naming) + "</span></div><div><strong>Alert routing</strong><span>" + escapeHTML(template.alert_routing) + "</span></div><div><strong>Reports</strong><span>" + escapeHTML(template.reporting) + "</span></div><div><strong>Access</strong><span>" + escapeHTML(template.access) + "</span></div></div></section>";
   }
-  function renderWorkspaceSetupQueue(entries, accountAPIBasePath) {
+  function renderWorkspaceSetupQueue(entries, accountAPIBasePath, clientLanguage = false) {
     var setupNeeded = setupNeededWorkspaceEntries(entries);
     if (!setupNeeded.length) return "";
     var visible = setupNeeded.slice(0, 5);
-    return '<section class="workspace-setup-queue" aria-label="Unfinished workspace setup"><div class="workspace-setup-queue-header"><div><h3>Unfinished setup</h3><p>Client workspaces stay here until agents, alert routing, and reports are in place.</p></div><span>' + escapeHTML(setupNeededWorkspaceChipLabel(setupNeeded.length)) + '</span></div><div class="workspace-setup-queue-list">' + visible.map(function(entry) {
-      return '<article class="workspace-setup-queue-row"><div class="workspace-setup-queue-main">' + setupBadgeHTML(entry.workspace) + "<div><strong>" + escapeHTML(entry.workspace.display_name) + "</strong><span>" + escapeHTML(entry.account.name + " \xB7 " + workspaceSetupDiagnosticsLine(entry.workspace)) + "</span><small>" + escapeHTML(workspaceSetupFactsLine(entry.workspace)) + '</small></div></div><div class="workspace-setup-queue-actions">' + renderWorkspaceSetupQueueAction(entry, accountAPIBasePath) + (entry.account.can_manage ? '<button type="button" class="btn-secondary btn-compact" data-action="select-workspace" data-account-id="' + escapeAttr(entry.account.id) + '" data-workspace-id="' + escapeAttr(entry.workspace.id) + '">Checklist</button>' : renderWorkspaceHandoffForm(entry.account.id, entry.workspace.id, accountAPIBasePath, "Open workspace")) + "</div></article>";
+    return '<section class="workspace-setup-queue" aria-label="' + escapeAttr(clientLanguage ? "Client onboarding queue" : "Unfinished workspace setup") + '"><div class="workspace-setup-queue-header"><div><h3>' + escapeHTML(clientLanguage ? "Clients in setup" : "Unfinished setup") + "</h3><p>" + escapeHTML(clientLanguage ? "Clients stay here until agents, alert routing, and reports are in place." : "Client workspaces stay here until agents, alert routing, and reports are in place.") + "</p></div><span>" + escapeHTML(setupNeededWorkspaceChipLabel(setupNeeded.length, clientLanguage)) + '</span></div><div class="workspace-setup-queue-list">' + visible.map(function(entry) {
+      return '<article class="workspace-setup-queue-row"><div class="workspace-setup-queue-main">' + setupBadgeHTML(entry.workspace) + "<div><strong>" + escapeHTML(entry.workspace.display_name) + "</strong><span>" + escapeHTML(entry.account.name + " \xB7 " + workspaceSetupDiagnosticsLine(entry.workspace)) + "</span><small>" + escapeHTML(workspaceSetupFactsLine(entry.workspace)) + '</small></div></div><div class="workspace-setup-queue-actions">' + renderWorkspaceSetupQueueAction(entry, accountAPIBasePath) + (entry.account.can_manage ? '<button type="button" class="btn-secondary btn-compact" data-action="select-workspace" data-account-id="' + escapeAttr(entry.account.id) + '" data-workspace-id="' + escapeAttr(entry.workspace.id) + '">' + escapeHTML(clientLanguage ? "Onboarding" : "Checklist") + "</button>" : renderWorkspaceHandoffForm(entry.account.id, entry.workspace.id, accountAPIBasePath, clientLanguage ? "Open client" : "Open workspace")) + "</div></article>";
     }).join("") + "</div></section>";
   }
   function workspaceSectionHeaderCopy(accounts, entries) {
     var canManageAnyWorkspace = accounts.some(function(account) {
       return account.can_manage;
     });
+    var clientLanguage = accountsUseClientLanguage(accounts);
     if (!entries.length) {
+      if (clientLanguage) {
+        return canManageAnyWorkspace ? "Add clients here, then use onboarding to finish agents, alert routing, and reports." : "Review client state here. An owner or admin must add or change clients.";
+      }
       return canManageAnyWorkspace ? "Review hosted workspaces here, then create the next workspace when you are ready." : "Review hosted workspace state here. An owner or admin must create or change hosted workspaces.";
     }
     if (!canManageAnyWorkspace) {
-      return "Review hosted workspace health here and open ready workspaces. An owner or admin must handle setup and workspace changes.";
+      return clientLanguage ? "Review client health here and open ready clients. An owner or admin must handle onboarding and client changes." : "Review hosted workspace health here and open ready workspaces. An owner or admin must handle setup and workspace changes.";
     }
-    return "Review client workspaces here, use the setup checklist for onboarding, and keep destructive workspace actions separate from daily workspace work.";
+    return clientLanguage ? "Review clients here, use Client onboarding for setup, and keep destructive client actions separate from daily monitoring." : "Review client workspaces here, use the setup checklist for onboarding, and keep destructive workspace actions separate from daily workspace work.";
   }
   function renderWorkspaceSummarySection(context) {
     var accounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
     var entries = collectWorkspaceSummaryEntries(accounts);
     var showSelfHostedCommercial = hasSelfHostedCommercial(context.bootstrap);
-    return '<section class="workspace-summary-shell"><div class="portal-page-header"><h2>Workspaces</h2><p>' + escapeHTML(workspaceSectionHeaderCopy(accounts, entries)) + "</p></div>" + renderFactLine("workspace-summary-facts", renderWorkspaceSummaryFacts(accounts, entries)) + renderWorkspaceSummaryInline(accounts, entries, context.accountAPIBasePath, showSelfHostedCommercial) + renderProviderSetupTemplates(accounts) + renderWorkspaceSetupQueue(entries, context.accountAPIBasePath) + "</section>";
+    var clientLanguage = accountsUseClientLanguage(accounts);
+    return '<section class="workspace-summary-shell"><div class="portal-page-header"><h2>' + escapeHTML(clientLanguage ? "Clients" : "Workspaces") + "</h2><p>" + escapeHTML(workspaceSectionHeaderCopy(accounts, entries)) + "</p></div>" + renderFactLine("workspace-summary-facts", renderWorkspaceSummaryFacts(accounts, entries)) + renderWorkspaceSummaryInline(accounts, entries, context.accountAPIBasePath, showSelfHostedCommercial) + renderProviderSetupTemplates(accounts) + renderWorkspaceSetupQueue(entries, context.accountAPIBasePath, clientLanguage) + "</section>";
   }
   function renderNoHostedWorkspacesSection() {
     return '<section class="account-content-panel account-content-panel-workspaces"><div class="empty-state"><p>No hosted workspaces are attached to this account. Use Billing for self-hosted subscriptions and licenses.</p></div></section>';
@@ -3046,25 +3080,31 @@
   }
   function renderAccountWorkspaceSection(account, accountAPIBasePath) {
     var workspaces = Array.isArray(account.workspaces) ? account.workspaces : [];
+    var clientLanguage = accountUsesClientLanguage(account);
+    var addEntityLabel = clientLanguage ? "Add client" : "Create workspace";
+    var openEntityLabel = clientLanguage ? "Open client" : "Open workspace";
+    var onboardingLabel = clientLanguage ? "Client onboarding" : "Setup checklist";
     var readyCount = countReadyWorkspaces(workspaces);
     var attentionCount = attentionWorkspaces(workspaces).length;
     var suspendedCount = countWorkspacesByState(workspaces, "suspended");
-    var workspaceListSummary = account.can_manage ? "Open a workspace to work in it, or use Setup checklist when onboarding a client." : "Open a workspace here. An owner or admin must create or change hosted workspaces.";
+    var workspaceListSummary = account.can_manage ? clientLanguage ? "Open a client to work inside its workspace boundary, or use Client onboarding to finish setup." : "Open a workspace to work in it, or use Setup checklist when onboarding a client." : "Open a workspace here. An owner or admin must create or change hosted workspaces.";
     var workspaceManagement = "";
     var addWorkspaceForm = "";
     var workspaceHeaderActions = "";
     if (account.can_manage) {
       if (account.kind === "msp") {
-        workspaceHeaderActions += '<button type="button" class="btn-secondary btn-compact" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Create workspace</button>';
+        workspaceHeaderActions += '<button type="button" class="btn-secondary btn-compact" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">' + escapeHTML(addEntityLabel) + "</button>";
       }
       if (account.kind === "msp") {
-        addWorkspaceForm = '<div class="add-workspace-form" id="add-ws-form-' + escapeAttr(account.id) + '"><label for="ws-name-' + escapeAttr(account.id) + '">Workspace name (for example, a client name)</label><input type="text" id="ws-name-' + escapeAttr(account.id) + '" placeholder="Acme Corp" maxlength="80" autocomplete="off"><div class="form-actions"><button type="button" class="btn-primary" data-action="create-workspace" data-account-id="' + escapeAttr(account.id) + '">Create workspace</button><button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Cancel</button><div class="spinner" id="ws-spinner-' + escapeAttr(account.id) + '" hidden></div></div></div>';
+        addWorkspaceForm = '<div class="add-workspace-form" id="add-ws-form-' + escapeAttr(account.id) + '"><label for="ws-name-' + escapeAttr(account.id) + '">' + escapeHTML(clientLanguage ? "Client name" : "Workspace name (for example, a client name)") + '</label><input type="text" id="ws-name-' + escapeAttr(account.id) + '" placeholder="Acme Corp" maxlength="80" autocomplete="off"><div class="form-actions"><button type="button" class="btn-primary" data-action="create-workspace" data-account-id="' + escapeAttr(account.id) + '">' + escapeHTML(addEntityLabel) + '</button><button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Cancel</button><div class="spinner" id="ws-spinner-' + escapeAttr(account.id) + '" hidden></div></div></div>';
       }
-      workspaceManagement = '<section class="workspace-management-panel workspace-management-panel-idle" id="workspace-management-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-header"><div><h3>Workspace setup checklist</h3><p>Finish the client setup steps without mixing client data across workspaces.</p></div><button type="button" class="btn-secondary btn-compact" id="workspace-management-close-' + escapeAttr(account.id) + '" data-action="clear-workspace-selection" data-account-id="' + escapeAttr(account.id) + '">Close panel</button></div><div class="workspace-management-empty" id="workspace-management-empty-' + escapeAttr(account.id) + '"><div class="workspace-management-empty-shell"><div class="workspace-management-empty-actions-card"><div class="workspace-management-empty-actions-copy"><h4>Create a workspace</h4><p>Add a new hosted workspace for a customer or operating boundary.</p></div>' + addWorkspaceForm + '</div><div class="workspace-management-empty-note">Access changes stay in Access. Billing changes stay in Billing.</div></div></div><div class="workspace-management-content" id="workspace-management-content-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-meta" id="workspace-management-meta-' + escapeAttr(account.id) + '"></div><h4 id="workspace-management-title-' + escapeAttr(account.id) + '"></h4><p class="workspace-management-summary" id="workspace-management-summary-' + escapeAttr(account.id) + '"></p><div class="workspace-management-facts"><div class="workspace-management-fact"><span>Health</span><strong id="workspace-management-health-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Setup</span><strong id="workspace-management-setup-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Agents</span><strong id="workspace-management-agents-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Alert routes</span><strong id="workspace-management-alerts-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Report schedules</span><strong id="workspace-management-reports-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Created</span><strong id="workspace-management-created-' + escapeAttr(account.id) + '"></strong></div></div><div class="workspace-management-guidance" id="workspace-management-guidance-' + escapeAttr(account.id) + '"></div><div class="workspace-management-identity" id="workspace-management-identity-' + escapeAttr(account.id) + '"></div><div class="workspace-setup-guide" aria-label="Guided workspace setup"><div class="workspace-setup-guide-copy"><span>Current step</span><h4 id="workspace-management-guide-title-' + escapeAttr(account.id) + '"></h4><p id="workspace-management-guide-description-' + escapeAttr(account.id) + '"></p><ul id="workspace-management-guide-diagnostics-' + escapeAttr(account.id) + '"></ul></div><form method="POST" id="workspace-management-primary-form-' + escapeAttr(account.id) + '"><button type="submit" class="btn-primary btn-compact" id="workspace-management-primary-' + escapeAttr(account.id) + '">Continue setup</button></form></div><div class="workspace-setup-checklist" aria-label="Workspace setup checklist"><div class="workspace-setup-step workspace-setup-step-created"><span class="workspace-setup-status" id="workspace-management-check-created-' + escapeAttr(account.id) + '"></span><div><strong>Workspace created</strong><span>This client has a separate account boundary.</span></div></div><div class="workspace-setup-step"><span class="workspace-setup-status" id="workspace-management-check-install-' + escapeAttr(account.id) + '"></span><div><strong>Install the first agent</strong><span>Use the workspace-bound install path so data lands in this client.</span></div></div><div class="workspace-setup-step"><span class="workspace-setup-status" id="workspace-management-check-alerts-' + escapeAttr(account.id) + '"></span><div><strong>Configure alert routes</strong><span>Keep notifications scoped to this client.</span></div></div><div class="workspace-setup-step"><span class="workspace-setup-status" id="workspace-management-check-reports-' + escapeAttr(account.id) + '"></span><div><strong>Schedule reports</strong><span>Send client performance reports from this workspace.</span></div></div><div class="workspace-setup-step"><span class="workspace-setup-status" id="workspace-management-check-access-' + escapeAttr(account.id) + '"></span><div><strong>Review access</strong><span>Invite provider staff or client users from Access.</span></div></div></div><div class="workspace-management-next-steps" id="workspace-management-next-steps-' + escapeAttr(account.id) + '"><div class="workspace-next-step"><div><strong>Open workspace</strong><span>Work inside this client boundary.</span></div><form method="POST" id="workspace-management-open-form-' + escapeAttr(account.id) + '"><button type="submit" class="btn-primary btn-compact" id="workspace-management-open-' + escapeAttr(account.id) + '">Open workspace</button></form></div><div class="workspace-next-step"><div><strong>Install agents</strong><span>Open the workspace-bound install commands.</span></div><form method="POST" id="workspace-management-install-form-' + escapeAttr(account.id) + '"><button type="submit" class="btn-secondary btn-compact" id="workspace-management-install-' + escapeAttr(account.id) + '">Install agents</button></form></div><div class="workspace-next-step workspace-next-step-readonly"><div><strong>Alerts and reports</strong><span>Alerts and performance reports stay inside the client workspace.</span></div><form method="POST" id="workspace-management-reporting-form-' + escapeAttr(account.id) + '"><button type="submit" class="btn-secondary btn-compact" id="workspace-management-reporting-' + escapeAttr(account.id) + '">Open reports</button></form></div><div class="workspace-next-step workspace-next-step-readonly"><div><strong>Access</strong><span>Invite people or adjust roles from the account access boundary.</span></div><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="access">Open Access</button></div></div><div class="workspace-management-actions"><button type="button" class="btn-danger" id="workspace-management-action-' + escapeAttr(account.id) + '" data-action="workspace-action" data-account-id="' + escapeAttr(account.id) + '">Manage workspace</button></div></div></section>';
+      workspaceManagement = '<section class="workspace-management-panel workspace-management-panel-idle" id="workspace-management-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-header"><div><h3>' + escapeHTML(onboardingLabel) + "</h3><p>" + escapeHTML(clientLanguage ? "Finish setup while each client keeps a separate workspace boundary." : "Finish the client setup steps without mixing client data across workspaces.") + '</p></div><button type="button" class="btn-secondary btn-compact" id="workspace-management-close-' + escapeAttr(account.id) + '" data-action="clear-workspace-selection" data-account-id="' + escapeAttr(account.id) + '">Close panel</button></div><div class="workspace-management-empty" id="workspace-management-empty-' + escapeAttr(account.id) + '"><div class="workspace-management-empty-shell"><div class="workspace-management-empty-actions-card"><div class="workspace-management-empty-actions-copy"><h4>' + escapeHTML(clientLanguage ? "Add a client" : "Create a workspace") + "</h4><p>" + escapeHTML(clientLanguage ? "Create the hosted workspace boundary for a customer." : "Add a new hosted workspace for a customer or operating boundary.") + "</p></div>" + addWorkspaceForm + '</div><div class="workspace-management-empty-note">Access changes stay in Access. Billing changes stay in Billing.</div></div></div><div class="workspace-management-content" id="workspace-management-content-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-meta" id="workspace-management-meta-' + escapeAttr(account.id) + '"></div><h4 id="workspace-management-title-' + escapeAttr(account.id) + '"></h4><p class="workspace-management-summary" id="workspace-management-summary-' + escapeAttr(account.id) + '"></p><div class="workspace-management-facts"><div class="workspace-management-fact"><span>Health</span><strong id="workspace-management-health-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Setup</span><strong id="workspace-management-setup-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Agents</span><strong id="workspace-management-agents-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Alert routes</span><strong id="workspace-management-alerts-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Report schedules</span><strong id="workspace-management-reports-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Created</span><strong id="workspace-management-created-' + escapeAttr(account.id) + '"></strong></div></div><div class="workspace-management-guidance" id="workspace-management-guidance-' + escapeAttr(account.id) + '"></div><div class="workspace-management-identity" id="workspace-management-identity-' + escapeAttr(account.id) + '"></div><div class="workspace-setup-guide" aria-label="' + escapeAttr(clientLanguage ? "Guided client onboarding" : "Guided workspace setup") + '"><div class="workspace-setup-guide-copy"><span>Current step</span><h4 id="workspace-management-guide-title-' + escapeAttr(account.id) + '"></h4><p id="workspace-management-guide-description-' + escapeAttr(account.id) + '"></p><ul id="workspace-management-guide-diagnostics-' + escapeAttr(account.id) + '"></ul></div><form method="POST" id="workspace-management-primary-form-' + escapeAttr(account.id) + '"><button type="submit" class="btn-primary btn-compact" id="workspace-management-primary-' + escapeAttr(account.id) + '">Continue setup</button></form></div><div class="workspace-setup-checklist" aria-label="' + escapeAttr(clientLanguage ? "Client onboarding checklist" : "Workspace setup checklist") + '"><div class="workspace-setup-step workspace-setup-step-created"><span class="workspace-setup-status" id="workspace-management-check-created-' + escapeAttr(account.id) + '"></span><div><strong>' + escapeHTML(clientLanguage ? "Client added" : "Workspace created") + "</strong><span>" + escapeHTML(clientLanguage ? "A separate workspace boundary keeps this client isolated." : "This client has a separate account boundary.") + '</span></div></div><div class="workspace-setup-step"><span class="workspace-setup-status" id="workspace-management-check-install-' + escapeAttr(account.id) + '"></span><div><strong>Install the first agent</strong><span>Use the workspace-bound install path so data lands in this client.</span></div></div><div class="workspace-setup-step"><span class="workspace-setup-status" id="workspace-management-check-alerts-' + escapeAttr(account.id) + '"></span><div><strong>Configure alert routes</strong><span>Keep notifications scoped to this client.</span></div></div><div class="workspace-setup-step"><span class="workspace-setup-status" id="workspace-management-check-reports-' + escapeAttr(account.id) + '"></span><div><strong>Schedule reports</strong><span>Send client performance reports from this workspace.</span></div></div><div class="workspace-setup-step"><span class="workspace-setup-status" id="workspace-management-check-access-' + escapeAttr(account.id) + '"></span><div><strong>Review access</strong><span>Invite provider staff or client users from Access.</span></div></div></div><div class="workspace-management-next-steps" id="workspace-management-next-steps-' + escapeAttr(account.id) + '"><div class="workspace-next-step"><div><strong>' + escapeHTML(openEntityLabel) + "</strong><span>" + escapeHTML(clientLanguage ? "Work inside this client workspace boundary." : "Work inside this client boundary.") + '</span></div><form method="POST" id="workspace-management-open-form-' + escapeAttr(account.id) + '"><button type="submit" class="btn-primary btn-compact" id="workspace-management-open-' + escapeAttr(account.id) + '">' + escapeHTML(openEntityLabel) + '</button></form></div><div class="workspace-next-step"><div><strong>Install agents</strong><span>Open the workspace-bound install commands.</span></div><form method="POST" id="workspace-management-install-form-' + escapeAttr(account.id) + '"><button type="submit" class="btn-secondary btn-compact" id="workspace-management-install-' + escapeAttr(account.id) + '">Install agents</button></form></div><div class="workspace-next-step workspace-next-step-readonly"><div><strong>Alerts and reports</strong><span>Alerts and performance reports stay inside the client workspace.</span></div><form method="POST" id="workspace-management-reporting-form-' + escapeAttr(account.id) + '"><button type="submit" class="btn-secondary btn-compact" id="workspace-management-reporting-' + escapeAttr(account.id) + '">Open reports</button></form></div><div class="workspace-next-step workspace-next-step-readonly"><div><strong>Access</strong><span>Invite people or adjust roles from the account access boundary.</span></div><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="access">Open Access</button></div></div><div class="workspace-management-actions"><button type="button" class="btn-danger" id="workspace-management-action-' + escapeAttr(account.id) + '" data-action="workspace-action" data-account-id="' + escapeAttr(account.id) + '">' + escapeHTML(clientLanguage ? "Manage client" : "Manage workspace") + "</button></div></div></section>";
     }
-    var workspaceHTML = workspaces.length ? '<div class="workspace-list-wrap" id="' + escapeAttr(workspaceListAnchorID(account.id)) + '">' + (workspaceHeaderActions ? '<div class="workspace-list-toolbar">' + workspaceHeaderActions + "</div>" : "") + '<div class="workspace-list-head"><span>Workspace</span><span>Setup</span><span>Health</span><span>Actions</span></div><div class="workspace-list">' + workspaces.map(function(workspace) {
+    var workspaceHTML = workspaces.length ? '<div class="workspace-list-wrap" id="' + escapeAttr(workspaceListAnchorID(account.id)) + '">' + (workspaceHeaderActions ? '<div class="workspace-list-toolbar">' + workspaceHeaderActions + "</div>" : "") + '<div class="workspace-list-head"><span>' + escapeHTML(clientLanguage ? "Client" : "Workspace") + '</span><span>Setup</span><span>Health</span><span>Actions</span></div><div class="workspace-list">' + workspaces.map(function(workspace) {
       return renderWorkspaceCard(account, workspace, accountAPIBasePath);
-    }).join("") + "</div></div>" : '<div class="empty-state"><p>' + escapeHTML(account.can_manage ? "No hosted workspaces yet. Create one to get started." : "No hosted workspaces are attached yet. An owner or admin must create the first one.") + "</p>" + (workspaceHeaderActions ? '<div style="margin-top: 8px">' + workspaceHeaderActions + "</div>" : "") + "</div>";
+    }).join("") + "</div></div>" : '<div class="empty-state"><p>' + escapeHTML(
+      account.can_manage ? clientLanguage ? "No clients yet. Add one to get started." : "No hosted workspaces yet. Create one to get started." : clientLanguage ? "No clients are attached yet. An owner or admin must add the first one." : "No hosted workspaces are attached yet. An owner or admin must create the first one."
+    ) + "</p>" + (workspaceHeaderActions ? '<div style="margin-top: 8px">' + workspaceHeaderActions + "</div>" : "") + "</div>";
     return '<section class="account-content-panel account-content-panel-workspaces"><div class="workspace-operations-shell workspace-operations-shell-idle" id="workspace-operations-shell-' + escapeAttr(account.id) + '"><div class="workspace-operations-detail" id="workspace-operations-detail-' + escapeAttr(account.id) + '" hidden>' + workspaceManagement + '</div><div class="workspace-operations-main">' + workspaceHTML + "</div></div></section>";
   }
   function renderAccountAccessSection(account) {
@@ -3079,6 +3119,7 @@
     var hostedBillingAccounts = accounts.filter(function(account) {
       return account.has_billing;
     });
+    var clientLanguage = accountsUseClientLanguage(accounts);
     if (!hostedBillingAccounts.length) {
       return '<section class="billing-surface-block billing-surface-block-empty"><div class="billing-surface-header"><h3>No hosted billing attached</h3></div><p>' + escapeHTML(
         showSelfHostedCommercial ? "Use self-hosted billing tools below for self-hosted purchases." : "Hosted invoices and payment methods are not attached to this account."
@@ -3086,7 +3127,7 @@
     }
     return '<section class="billing-surface-block"><div class="billing-surface-header"><h3>Hosted billing</h3></div><div class="billing-action-list billing-action-list-surface">' + hostedBillingAccounts.map(function(account) {
       var actionHTML = account.can_manage ? '<button type="button" class="btn-primary btn-compact" data-action="open-billing" data-account-id="' + escapeAttr(account.id) + '">Open hosted billing</button>' : '<div class="billing-task-note">An owner or admin on this account needs to open hosted billing.</div>';
-      return '<article class="billing-action-row billing-action-row-surface"><div class="billing-action-main"><div class="billing-action-copy"><h3>' + escapeHTML(account.name) + '</h3><p>Invoices, payment methods, and hosted subscription changes for this account.</p></div><div class="billing-action-meta">Keep workspace changes in Workspaces and roster changes in Access.</div></div><div class="billing-action-cta">' + actionHTML + "</div></article>";
+      return '<article class="billing-action-row billing-action-row-surface"><div class="billing-action-main"><div class="billing-action-copy"><h3>' + escapeHTML(account.name) + '</h3><p>Invoices, payment methods, and hosted subscription changes for this account.</p></div><div class="billing-action-meta">' + escapeHTML(clientLanguage ? "Keep client onboarding in Clients and roster changes in Access." : "Keep workspace changes in Workspaces and roster changes in Access.") + '</div></div><div class="billing-action-cta">' + actionHTML + "</div></article>";
     }).join("") + "</div></section>";
   }
   function renderBillingTaskPanel(title, copy, panelID, bodyHTML) {
@@ -3095,6 +3136,8 @@
   function renderSupportSection(context) {
     var accounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
     var isHosted = accounts.length > 0;
+    var clientLanguage = accountsUseClientLanguage(accounts);
+    var primarySectionLabel = clientLanguage ? "Clients" : "Workspaces";
     var showSelfHostedCommercial = hasSelfHostedCommercial(context.bootstrap);
     var supportEmail = context.bootstrap.support_email || "";
     var canManageHostedTasks = false;
@@ -3105,9 +3148,9 @@
       }
     }
     var hostedViewOnly = isHosted && !canManageHostedTasks;
-    var retryCopy = isHosted ? hostedViewOnly ? "Review Workspaces or Access first. If billing is involved, hand it to an owner or admin before you escalate." : "Retry the same Workspaces, Access, or Billing step before you escalate." : "Retry the same Billing step before you escalate.";
-    var supportActions = isHosted ? '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Workspaces</button><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="access">Access</button><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Billing</button>' : '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Billing</button>';
-    return '<section class="portal-support-panel"><p>Use Support only after the self-service path fails. Retry the same step before you escalate.</p><div class="portal-support-simple"><div class="portal-support-simple-card"><div class="portal-support-simple-list"><div class="portal-support-simple-row"><strong>Try first</strong><span>' + escapeHTML(retryCopy) + '</span></div><div class="portal-support-simple-row"><strong>Scope</strong><span>' + escapeHTML(supportRunbookPathCopy(isHosted, hostedViewOnly, showSelfHostedCommercial)) + '</span></div><div class="portal-support-simple-row"><strong>Include</strong><span>Account, email, and the exact action that failed.</span></div></div><div class="portal-support-simple-actions">' + supportActions + '<a class="portal-support-link" href="mailto:' + escapeAttr(supportEmail) + '">' + escapeHTML(supportEmail) + "</a></div></div></div></section>";
+    var retryCopy = isHosted ? hostedViewOnly ? "Review " + primarySectionLabel + " or Access first. If billing is involved, hand it to an owner or admin before you escalate." : "Retry the same " + primarySectionLabel + ", Access, or Billing step before you escalate." : "Retry the same Billing step before you escalate.";
+    var supportActions = isHosted ? '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">' + escapeHTML(primarySectionLabel) + '</button><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="access">Access</button><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Billing</button>' : '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Billing</button>';
+    return '<section class="portal-support-panel"><p>Use Support only after the self-service path fails. Retry the same step before you escalate.</p><div class="portal-support-simple"><div class="portal-support-simple-card"><div class="portal-support-simple-list"><div class="portal-support-simple-row"><strong>Try first</strong><span>' + escapeHTML(retryCopy) + '</span></div><div class="portal-support-simple-row"><strong>Scope</strong><span>' + escapeHTML(supportRunbookPathCopy(isHosted, hostedViewOnly, showSelfHostedCommercial, clientLanguage)) + '</span></div><div class="portal-support-simple-row"><strong>Include</strong><span>Account, email, and the exact action that failed.</span></div></div><div class="portal-support-simple-actions">' + supportActions + '<a class="portal-support-link" href="mailto:' + escapeAttr(supportEmail) + '">' + escapeHTML(supportEmail) + "</a></div></div></div></section>";
   }
   function renderHeaderHTML(context) {
     if (context.bootstrap.authenticated) {

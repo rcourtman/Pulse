@@ -323,11 +323,23 @@ describe('account view', function() {
     expect(document.getElementById('workspace-management-check-alerts-acct_1')?.textContent).toContain('Pending');
     expect(document.getElementById('workspace-management-check-reports-acct_1')?.textContent).toContain('Pending');
     expect(document.getElementById('workspace-management-check-access-acct_1')?.textContent).toContain('Available');
-    expect(document.getElementById('workspace-management-action-acct_1')?.textContent).toContain('Suspend workspace');
+    expect(document.getElementById('workspace-management-action-acct_1')?.textContent).toContain('Suspend client');
     expect((document.getElementById('workspace-management-open-form-acct_1') as HTMLFormElement).action).toContain('/api/accounts/acct_1/tenants/ws_1/handoff');
     expect((document.getElementById('workspace-management-install-form-acct_1') as HTMLFormElement).action).toContain('/api/accounts/acct_1/tenants/ws_1/handoff?target_path=%2Fsettings%2Finfrastructure%3Fadd%3Dlinux-host');
     expect((document.getElementById('workspace-management-reporting-form-acct_1') as HTMLFormElement).action).toContain('/api/accounts/acct_1/tenants/ws_1/handoff?target_path=%2Fsettings%2Fsupport%2Freporting');
     expect((document.getElementById('workspace-management-primary-form-acct_1') as HTMLFormElement).action).toContain('/api/accounts/acct_1/tenants/ws_1/handoff?target_path=%2Fsettings%2Finfrastructure%3Fadd%3Dlinux-host');
+  });
+
+  it('keeps workspace action labels for non-MSP hosted accounts', function() {
+    document.body.innerHTML = createWorkspaceManagementDOM('acct_1');
+
+    renderWorkspaceManagement(
+      createAccount({ kind: 'cloud', kind_label: 'Cloud' }),
+      createEntry({ selectedWorkspaceID: 'ws_1' }),
+      '/api/accounts',
+    );
+
+    expect(document.getElementById('workspace-management-action-acct_1')?.textContent).toContain('Suspend workspace');
   });
 
   it('renders account UI for every tracked account entry', function() {
