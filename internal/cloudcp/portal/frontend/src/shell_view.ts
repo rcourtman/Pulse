@@ -472,9 +472,6 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
   if (createdLabel) {
     metaParts.push('<span class="workspace-meta-item">Created ' + escapeHTML(createdLabel) + '</span>');
   }
-  if (workspace.last_health_check && status === 'healthy') {
-    metaParts.push('<span class="workspace-meta-item">Checked recently</span>');
-  }
 
   var openAction = '';
   if (state === 'active') {
@@ -511,9 +508,8 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
       '<div class="workspace-row-primary">' +
         '<div class="workspace-row-heading">' +
           '<h4 class="workspace-name">' + escapeHTML(workspace.display_name) + '</h4>' +
-          '<div class="workspace-meta">' + metaParts.join('') + '</div>' +
         '</div>' +
-        '<div class="workspace-row-note">' + escapeHTML(workspaceRowNote(workspace)) + '</div>' +
+        (metaParts.length ? '<div class="workspace-meta">' + metaParts.join('') + '</div>' : '') +
       '</div>' +
       '<div class="workspace-row-status-cell workspace-row-status-cell-badge">' +
         setupBadgeHTML(workspace) +
@@ -641,6 +637,14 @@ function workspaceSetupDiagnosticsLine(workspace: PortalWorkspaceSummary): strin
   return guide.diagnostics.length ? guide.diagnostics[0] : workspaceSetupNextStep(workspace);
 }
 
+function workspaceSummaryStatusCopy(workspace: PortalWorkspaceSummary, clientLanguage: boolean): string {
+  if (!clientLanguage) return workspaceStatusCopy(workspace);
+  var state = String(workspace.state || '');
+  if (state === 'suspended') return 'This client is suspended.';
+  if (state === 'failed') return 'This client is in a failed state.';
+  return workspaceStatusCopy(workspace);
+}
+
 function workspaceSummaryContext(entry: WorkspaceSummaryEntry, includeAccountName: boolean, note: string): string {
   if (!includeAccountName) return note;
   return entry.account.name + ' · ' + note;
@@ -684,7 +688,7 @@ function renderWorkspaceSummaryDecision(
   if (attention.length) {
     var attentionEntry = attention[0];
     title = 'Review ' + attentionEntry.workspace.display_name;
-    description = workspaceSummaryContext(attentionEntry, accounts.length > 1, workspaceStatusCopy(attentionEntry.workspace));
+    description = workspaceSummaryContext(attentionEntry, accounts.length > 1, workspaceSummaryStatusCopy(attentionEntry.workspace, clientLanguage));
     primaryAction = renderWorkspaceAnchorAction(
       workspaceRowAnchorID(attentionEntry.account.id, attentionEntry.workspace.id),
       clientLanguage ? 'Review client' : 'Review workspace',
@@ -704,7 +708,7 @@ function renderWorkspaceSummaryDecision(
   } else if (suspended.length) {
     var suspendedEntry = suspended[0];
     title = 'Review ' + suspendedEntry.workspace.display_name;
-    description = workspaceSummaryContext(suspendedEntry, accounts.length > 1, workspaceStatusCopy(suspendedEntry.workspace));
+    description = workspaceSummaryContext(suspendedEntry, accounts.length > 1, workspaceSummaryStatusCopy(suspendedEntry.workspace, clientLanguage));
     primaryAction = renderWorkspaceAnchorAction(
       workspaceRowAnchorID(suspendedEntry.account.id, suspendedEntry.workspace.id),
       clientLanguage ? 'Review client' : 'Review workspace',
@@ -880,19 +884,19 @@ function renderProviderSetupTemplates(accounts: PortalAccountSummary[]): string 
   var template = templateAccount.setup_templates[0];
   return (
     '<section class="workspace-template-panel" aria-label="Provider setup template">' +
-      '<div class="workspace-template-heading">' +
-        '<div>' +
-          '<h3>' + escapeHTML(template.title || 'Provider setup template') + '</h3>' +
-          '<p>Use the same onboarding shape for each client, then finish the tenant-owned configuration inside that client workspace.</p>' +
+      '<details class="workspace-template-details">' +
+        '<summary class="workspace-template-summary">' +
+          '<span class="workspace-template-summary-title">' + escapeHTML(template.title || 'Provider setup template') + '</span>' +
+          '<span class="workspace-template-summary-meta">' + escapeHTML(templateAccount.name) + '</span>' +
+        '</summary>' +
+        '<p class="workspace-template-intro">Use the same onboarding shape for each client, then finish the tenant-owned configuration inside that client workspace.</p>' +
+        '<div class="workspace-template-grid">' +
+          '<div><strong>Agent naming</strong><span>' + escapeHTML(template.agent_naming) + '</span></div>' +
+          '<div><strong>Alert routing</strong><span>' + escapeHTML(template.alert_routing) + '</span></div>' +
+          '<div><strong>Reports</strong><span>' + escapeHTML(template.reporting) + '</span></div>' +
+          '<div><strong>Access</strong><span>' + escapeHTML(template.access) + '</span></div>' +
         '</div>' +
-        '<span>' + escapeHTML(templateAccount.name) + '</span>' +
-      '</div>' +
-      '<div class="workspace-template-grid">' +
-        '<div><strong>Agent naming</strong><span>' + escapeHTML(template.agent_naming) + '</span></div>' +
-        '<div><strong>Alert routing</strong><span>' + escapeHTML(template.alert_routing) + '</span></div>' +
-        '<div><strong>Reports</strong><span>' + escapeHTML(template.reporting) + '</span></div>' +
-        '<div><strong>Access</strong><span>' + escapeHTML(template.access) + '</span></div>' +
-      '</div>' +
+      '</details>' +
     '</section>'
   );
 }
@@ -991,6 +995,18 @@ function renderAccountBlockHeader(
   return (
     (actionsHTML ? '<div class="portal-section-header"><div></div><div>' + actionsHTML + '</div></div>' : '') +
     (copy ? '<p class="portal-section-copy">' + escapeHTML(copy) + '</p>' : '')
+  );
+}
+
+function renderAccountSurfaceHeader(account: PortalAccountSummary, showHeader: boolean): string {
+  if (!showHeader) return '';
+  return (
+    '<div class="portal-section-header account-surface-header">' +
+      '<div>' +
+        '<h3>' + escapeHTML(account.name) + '</h3>' +
+        '<p class="portal-section-copy">' + escapeHTML(accountKindLabel(account) + ' · ' + portalRoleLabel(account.role)) + '</p>' +
+      '</div>' +
+    '</div>'
   );
 }
 
@@ -1267,6 +1283,12 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
 }
 
 function renderAccountAccessSection(account: PortalAccountSummary): string {
+  var clientLanguage = accountUsesClientLanguage(account);
+  var accessRoleCopy = {
+    admin: clientLanguage ? 'Client control, billing, and roster management.' : 'Workspace control, billing, and roster management.',
+    tech: clientLanguage ? 'Client control without billing or roster ownership.' : 'Workspace control without billing or roster ownership.',
+    readOnly: clientLanguage ? 'Review client status without control-plane changes.' : 'Review access without control-plane changes.',
+  };
   var accessTaskStrip = account.can_manage
     ? (
       '<div class="access-task-strip">' +
@@ -1286,9 +1308,9 @@ function renderAccountAccessSection(account: PortalAccountSummary): string {
       '</div>' +
       '<div class="access-policy-list">' +
         '<div class="access-policy-row"><strong>Owner</strong><span>Full account, billing, and access control.</span></div>' +
-        '<div class="access-policy-row"><strong>Admin</strong><span>Workspace control, billing, and roster management.</span></div>' +
-        '<div class="access-policy-row"><strong>Tech</strong><span>Workspace control without billing or roster ownership.</span></div>' +
-        '<div class="access-policy-row"><strong>Read-only</strong><span>Review access without control-plane changes.</span></div>' +
+        '<div class="access-policy-row"><strong>Admin</strong><span>' + escapeHTML(accessRoleCopy.admin) + '</span></div>' +
+        '<div class="access-policy-row"><strong>Tech</strong><span>' + escapeHTML(accessRoleCopy.tech) + '</span></div>' +
+        '<div class="access-policy-row"><strong>Read-only</strong><span>' + escapeHTML(accessRoleCopy.readOnly) + '</span></div>' +
       '</div>' +
     '</div>';
   var accessInvitePanel = account.can_manage
@@ -1344,6 +1366,8 @@ function renderAccountAccessSection(account: PortalAccountSummary): string {
       escapeAttr(account.role) +
       '" data-can-manage="' +
       escapeAttr(account.can_manage ? 'true' : 'false') +
+      '" data-client-language="' +
+      escapeAttr(clientLanguage ? 'true' : 'false') +
       '">' +
         (!account.can_manage
           ? '<p class="portal-section-copy">' + escapeHTML('Review who has access. An owner or admin must make changes.') + '</p>'
@@ -1551,6 +1575,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
     ? accounts.map(function(account) {
       return (
         '<section class="account-surface">' +
+          renderAccountSurfaceHeader(account, accounts.length > 1) +
           renderAccountWorkspaceSection(account, context.accountAPIBasePath) +
         '</section>'
       );
@@ -1561,6 +1586,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
     ? accounts.map(function(account) {
       return (
         '<section class="account-surface">' +
+          renderAccountSurfaceHeader(account, accounts.length > 1) +
           renderAccountAccessSection(account) +
         '</section>'
       );

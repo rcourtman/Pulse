@@ -255,6 +255,33 @@ describe('account view', function() {
     expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('1');
   });
 
+  it('uses client language for MSP access role capability copy', function() {
+    document.body.innerHTML =
+      '<div id="access-section-acct_1" class="access-section" data-actor-role="owner" data-can-manage="true" data-client-language="true">' +
+      '<div id="access-stats-acct_1"></div>' +
+      '<div id="access-list-acct_1"></div>' +
+      '</div>';
+
+    renderAccessSection(
+      'acct_1',
+      createEntry({
+        accessVisible: true,
+        accessQuery: {
+          status: 'ready',
+          error: '',
+          data: [
+            { email: 'tech@example.com', role: 'tech', user_id: 'u2' },
+            { email: 'viewer@example.com', role: 'read_only', user_id: 'u3' },
+          ],
+        },
+      })
+    );
+
+    expect(document.getElementById('access-list-acct_1')?.textContent).toContain('Can manage clients without billing ownership.');
+    expect(document.getElementById('access-list-acct_1')?.textContent).toContain('Can review client status without making control-plane changes.');
+    expect(document.getElementById('access-list-acct_1')?.textContent).not.toContain('Can manage workspaces');
+  });
+
   it('renders access roster as view-only when the account is not manageable', function() {
     document.body.innerHTML =
       '<div id="access-section-acct_1" class="access-section" data-actor-role="tech" data-can-manage="false">' +

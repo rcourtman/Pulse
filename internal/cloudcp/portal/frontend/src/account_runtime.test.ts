@@ -209,6 +209,66 @@ describe('account runtime', function() {
     expect(deps.store.getAccountState().byAccountID.acct_1.selectedWorkspaceID).toBe('');
   });
 
+  it('routes suspended MSP client deletion through the management panel', async function() {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({})));
+    var confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    deps.store.setBootstrap({
+      authenticated: true,
+      email: 'owner@example.com',
+      accounts: [{
+        id: 'acct_1',
+        name: 'Acme MSP',
+        kind: 'msp',
+        kind_label: 'MSP',
+        role: 'owner',
+        can_manage: true,
+        has_billing: true,
+        members: [],
+        workspaces: [{
+          id: 'ws_3',
+          display_name: 'Paused Client',
+          state: 'suspended',
+          healthy: false,
+          health_status: 'unhealthy',
+        }],
+      }],
+    });
+
+    document.body.innerHTML =
+      '<div id="workspace-operations-shell-acct_1" class="workspace-operations-shell workspace-operations-shell-idle">' +
+      '<div id="workspace-operations-detail-acct_1" class="workspace-operations-detail workspace-operations-detail-idle">' +
+      '<div id="workspace-management-acct_1" class="workspace-management-panel">' +
+      '<button id="workspace-management-close-acct_1"></button>' +
+      '<div id="workspace-management-empty-acct_1"></div>' +
+      '<div id="workspace-management-content-acct_1" hidden>' +
+      '<div id="workspace-management-meta-acct_1"></div>' +
+      '<h4 id="workspace-management-title-acct_1"></h4>' +
+      '<p id="workspace-management-summary-acct_1"></p>' +
+      '<div id="workspace-management-health-acct_1"></div>' +
+      '<div id="workspace-management-setup-acct_1"></div>' +
+      '<div id="workspace-management-created-acct_1"></div>' +
+      '<div id="workspace-management-guidance-acct_1"></div>' +
+      '<button id="workspace-management-action-acct_1"></button>' +
+      '</div>' +
+      '</div>' +
+      '</div>' +
+      '</div>';
+
+    runtime.selectWorkspace('acct_1', 'ws_3');
+    expect(document.getElementById('workspace-management-action-acct_1')?.textContent).toContain('Delete client');
+
+    await runtime.manageWorkspaceAction('acct_1', 'ws_3', 'delete', 'Paused Client');
+    await flushAsync();
+
+    expect(confirmSpy).toHaveBeenCalledWith('Delete client "Paused Client"?');
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/accounts/acct_1/tenants/ws_3',
+      expect.objectContaining({ method: 'DELETE' })
+    );
+    expect(deps.showToast).toHaveBeenCalledWith('Deleted client.');
+    expect(deps.store.getAccountState().byAccountID.acct_1.selectedWorkspaceID).toBe('');
+  });
+
   it('reveals the setup panel when a workspace job opens below the viewport', function() {
     deps.store.setBootstrap({
       authenticated: true,

@@ -12,5 +12,7 @@ describe('account roles', function() {
 
   it('returns product copy for read-only operators', function() {
     expect(portalRoleCapabilityCopy('read_only')).toContain('review workspace status');
+    expect(portalRoleCapabilityCopy('read_only', true)).toContain('review client status');
+    expect(portalRoleCapabilityCopy('tech', true)).toContain('manage clients');
   });
 });

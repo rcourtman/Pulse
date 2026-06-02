@@ -20,16 +20,16 @@
         return role || "Member";
     }
   }
-  function portalRoleCapabilityCopy(role) {
+  function portalRoleCapabilityCopy(role, clientLanguage = false) {
     switch (normalizePortalRole(role)) {
       case "owner":
-        return "Full account control, including billing, access control, and workspace control.";
+        return clientLanguage ? "Full account control, including billing, access control, and client control." : "Full account control, including billing, access control, and workspace control.";
       case "admin":
-        return "Can manage workspaces and billing for this account.";
+        return clientLanguage ? "Can manage clients and billing for this account." : "Can manage workspaces and billing for this account.";
       case "tech":
-        return "Can manage workspaces without billing ownership.";
+        return clientLanguage ? "Can manage clients without billing ownership." : "Can manage workspaces without billing ownership.";
       case "read_only":
-        return "Can review workspace status without making control-plane changes.";
+        return clientLanguage ? "Can review client status without making control-plane changes." : "Can review workspace status without making control-plane changes.";
       case "member":
         return "Has access through the account roster.";
       default:
@@ -629,7 +629,7 @@
     group.appendChild(btn);
     return group;
   }
-  function renderAccessMemberRow(accountID, member, isOwner, canManage, activeJob) {
+  function renderAccessMemberRow(accountID, member, isOwner, canManage, activeJob, clientLanguage) {
     var showActionColumn = canManage && activeJob === "remove";
     var row = document.createElement("div");
     row.className = "access-member-row" + (showActionColumn ? "" : " access-member-row-readonly");
@@ -654,7 +654,7 @@
     identity.appendChild(topline);
     var caption = document.createElement("div");
     caption.className = "access-member-caption";
-    caption.textContent = (member.state || "active") === "pending" ? "Invitation pending acceptance." : portalRoleCapabilityCopy(member.role);
+    caption.textContent = (member.state || "active") === "pending" ? "Invitation pending acceptance." : portalRoleCapabilityCopy(member.role, clientLanguage);
     identity.appendChild(caption);
     row.appendChild(identity);
     row.appendChild(renderAccessRoleControl(accountID, member, isOwner, canManage, activeJob));
@@ -703,6 +703,7 @@
     var actorRole = section.getAttribute("data-actor-role") || "";
     var isOwner = actorRole === "owner";
     var canManage = section.getAttribute("data-can-manage") === "true";
+    var clientLanguage = section.getAttribute("data-client-language") === "true";
     var activeJob = canManage ? entry.activeAccessJob : "";
     section.classList.toggle("visible", entry.accessVisible);
     renderAccessStats(accountID, entry, canManage);
@@ -749,7 +750,7 @@
     renderAccessRosterHead(roster, activeJob, canManage);
     for (var i = 0; i < entry.accessQuery.data.length; i += 1) {
       var member = entry.accessQuery.data[i];
-      roster.appendChild(renderAccessMemberRow(accountID, member, isOwner, canManage, activeJob));
+      roster.appendChild(renderAccessMemberRow(accountID, member, isOwner, canManage, activeJob, clientLanguage));
     }
   }
   function renderAccountUI(accountState, accounts, accountAPIBasePath = "") {
@@ -2792,9 +2793,6 @@
     if (createdLabel) {
       metaParts.push('<span class="workspace-meta-item">Created ' + escapeHTML(createdLabel) + "</span>");
     }
-    if (workspace.last_health_check && status === "healthy") {
-      metaParts.push('<span class="workspace-meta-item">Checked recently</span>');
-    }
     var openAction = "";
     if (state === "active") {
       openAction = '<form method="POST" action="' + escapeAttr(workspaceHandoffActionPath2(accountAPIBasePath, account.id, workspace.id)) + '"><button type="submit" class="btn-primary">' + escapeHTML(clientLanguage ? "Open client" : "Open workspace") + "</button></form>";
@@ -2807,7 +2805,7 @@
     if (account.can_manage && (state === "active" || state === "suspended" || state === "failed")) {
       manageAction = '<button type="button" class="btn-secondary btn-workspace-manage" data-action="select-workspace" data-account-id="' + escapeAttr(account.id) + '" data-workspace-id="' + escapeAttr(workspace.id) + '">' + escapeHTML(clientLanguage ? "Client onboarding" : "Setup checklist") + "</button>";
     }
-    return '<article class="workspace-row workspace-row-health-' + escapeAttr(status) + " workspace-row-state-" + escapeAttr(state || "unknown") + '" id="' + escapeAttr(workspaceRowAnchorID(account.id, workspace.id)) + '" data-workspace-row="' + escapeAttr(workspace.id) + '"><div class="workspace-row-primary"><div class="workspace-row-heading"><h4 class="workspace-name">' + escapeHTML(workspace.display_name) + '</h4><div class="workspace-meta">' + metaParts.join("") + '</div></div><div class="workspace-row-note">' + escapeHTML(workspaceRowNote(workspace)) + '</div></div><div class="workspace-row-status-cell workspace-row-status-cell-badge">' + setupBadgeHTML(workspace) + '</div><div class="workspace-row-status-cell workspace-row-status-cell-badge">' + healthBadgeHTML(workspace) + '</div><div class="workspace-actions">' + openAction + installAction + manageAction + "</div></article>";
+    return '<article class="workspace-row workspace-row-health-' + escapeAttr(status) + " workspace-row-state-" + escapeAttr(state || "unknown") + '" id="' + escapeAttr(workspaceRowAnchorID(account.id, workspace.id)) + '" data-workspace-row="' + escapeAttr(workspace.id) + '"><div class="workspace-row-primary"><div class="workspace-row-heading"><h4 class="workspace-name">' + escapeHTML(workspace.display_name) + "</h4></div>" + (metaParts.length ? '<div class="workspace-meta">' + metaParts.join("") + "</div>" : "") + '</div><div class="workspace-row-status-cell workspace-row-status-cell-badge">' + setupBadgeHTML(workspace) + '</div><div class="workspace-row-status-cell workspace-row-status-cell-badge">' + healthBadgeHTML(workspace) + '</div><div class="workspace-actions">' + openAction + installAction + manageAction + "</div></article>";
   }
   function renderWorkspaceHandoffForm(accountID, workspaceID, accountAPIBasePath, label, buttonClassName = "btn-secondary btn-compact") {
     if (!accountAPIBasePath) {
@@ -2882,6 +2880,13 @@
     var guide = workspaceSetupGuide(workspace);
     return guide.diagnostics.length ? guide.diagnostics[0] : workspaceSetupNextStep(workspace);
   }
+  function workspaceSummaryStatusCopy(workspace, clientLanguage) {
+    if (!clientLanguage) return workspaceStatusCopy(workspace);
+    var state = String(workspace.state || "");
+    if (state === "suspended") return "This client is suspended.";
+    if (state === "failed") return "This client is in a failed state.";
+    return workspaceStatusCopy(workspace);
+  }
   function workspaceSummaryContext(entry, includeAccountName, note) {
     if (!includeAccountName) return note;
     return entry.account.name + " \xB7 " + note;
@@ -2910,7 +2915,7 @@
     if (attention.length) {
       var attentionEntry = attention[0];
       title = "Review " + attentionEntry.workspace.display_name;
-      description = workspaceSummaryContext(attentionEntry, accounts.length > 1, workspaceStatusCopy(attentionEntry.workspace));
+      description = workspaceSummaryContext(attentionEntry, accounts.length > 1, workspaceSummaryStatusCopy(attentionEntry.workspace, clientLanguage));
       primaryAction = renderWorkspaceAnchorAction(
         workspaceRowAnchorID(attentionEntry.account.id, attentionEntry.workspace.id),
         clientLanguage ? "Review client" : "Review workspace",
@@ -2920,7 +2925,7 @@
     } else if (suspended.length) {
       var suspendedEntry = suspended[0];
       title = "Review " + suspendedEntry.workspace.display_name;
-      description = workspaceSummaryContext(suspendedEntry, accounts.length > 1, workspaceStatusCopy(suspendedEntry.workspace));
+      description = workspaceSummaryContext(suspendedEntry, accounts.length > 1, workspaceSummaryStatusCopy(suspendedEntry.workspace, clientLanguage));
       primaryAction = renderWorkspaceAnchorAction(
         workspaceRowAnchorID(suspendedEntry.account.id, suspendedEntry.workspace.id),
         clientLanguage ? "Review client" : "Review workspace",
@@ -3039,7 +3044,7 @@
     });
     if (!templateAccount || !templateAccount.setup_templates || !templateAccount.setup_templates.length) return "";
     var template = templateAccount.setup_templates[0];
-    return '<section class="workspace-template-panel" aria-label="Provider setup template"><div class="workspace-template-heading"><div><h3>' + escapeHTML(template.title || "Provider setup template") + "</h3><p>Use the same onboarding shape for each client, then finish the tenant-owned configuration inside that client workspace.</p></div><span>" + escapeHTML(templateAccount.name) + '</span></div><div class="workspace-template-grid"><div><strong>Agent naming</strong><span>' + escapeHTML(template.agent_naming) + "</span></div><div><strong>Alert routing</strong><span>" + escapeHTML(template.alert_routing) + "</span></div><div><strong>Reports</strong><span>" + escapeHTML(template.reporting) + "</span></div><div><strong>Access</strong><span>" + escapeHTML(template.access) + "</span></div></div></section>";
+    return '<section class="workspace-template-panel" aria-label="Provider setup template"><details class="workspace-template-details"><summary class="workspace-template-summary"><span class="workspace-template-summary-title">' + escapeHTML(template.title || "Provider setup template") + '</span><span class="workspace-template-summary-meta">' + escapeHTML(templateAccount.name) + '</span></summary><p class="workspace-template-intro">Use the same onboarding shape for each client, then finish the tenant-owned configuration inside that client workspace.</p><div class="workspace-template-grid"><div><strong>Agent naming</strong><span>' + escapeHTML(template.agent_naming) + "</span></div><div><strong>Alert routing</strong><span>" + escapeHTML(template.alert_routing) + "</span></div><div><strong>Reports</strong><span>" + escapeHTML(template.reporting) + "</span></div><div><strong>Access</strong><span>" + escapeHTML(template.access) + "</span></div></div></details></section>";
   }
   function renderWorkspaceSetupQueue(entries, accountAPIBasePath, clientLanguage = false) {
     var setupNeeded = setupNeededWorkspaceEntries(entries);
@@ -3071,6 +3076,10 @@
     var showSelfHostedCommercial = hasSelfHostedCommercial(context.bootstrap);
     var clientLanguage = accountsUseClientLanguage(accounts);
     return '<section class="workspace-summary-shell"><div class="portal-page-header"><h2>' + escapeHTML(clientLanguage ? "Clients" : "Workspaces") + "</h2><p>" + escapeHTML(workspaceSectionHeaderCopy(accounts, entries)) + "</p></div>" + renderFactLine("workspace-summary-facts", renderWorkspaceSummaryFacts(accounts, entries)) + renderWorkspaceSummaryInline(accounts, entries, context.accountAPIBasePath, showSelfHostedCommercial) + renderProviderSetupTemplates(accounts) + renderWorkspaceSetupQueue(entries, context.accountAPIBasePath, clientLanguage) + "</section>";
+  }
+  function renderAccountSurfaceHeader(account, showHeader) {
+    if (!showHeader) return "";
+    return '<div class="portal-section-header account-surface-header"><div><h3>' + escapeHTML(account.name) + '</h3><p class="portal-section-copy">' + escapeHTML(accountKindLabel(account) + " \xB7 " + portalRoleLabel(account.role)) + "</p></div></div>";
   }
   function renderNoHostedWorkspacesSection() {
     return '<section class="account-content-panel account-content-panel-workspaces"><div class="empty-state"><p>No hosted workspaces are attached to this account. Use Billing for self-hosted subscriptions and licenses.</p></div></section>';
@@ -3108,12 +3117,18 @@
     return '<section class="account-content-panel account-content-panel-workspaces"><div class="workspace-operations-shell workspace-operations-shell-idle" id="workspace-operations-shell-' + escapeAttr(account.id) + '"><div class="workspace-operations-detail" id="workspace-operations-detail-' + escapeAttr(account.id) + '" hidden>' + workspaceManagement + '</div><div class="workspace-operations-main">' + workspaceHTML + "</div></div></section>";
   }
   function renderAccountAccessSection(account) {
+    var clientLanguage = accountUsesClientLanguage(account);
+    var accessRoleCopy = {
+      admin: clientLanguage ? "Client control, billing, and roster management." : "Workspace control, billing, and roster management.",
+      tech: clientLanguage ? "Client control without billing or roster ownership." : "Workspace control without billing or roster ownership.",
+      readOnly: clientLanguage ? "Review client status without control-plane changes." : "Review access without control-plane changes."
+    };
     var accessTaskStrip = account.can_manage ? '<div class="access-task-strip"><button type="button" class="access-task-button" id="access-task-invite-' + escapeAttr(account.id) + '" data-action="set-access-job" data-account-id="' + escapeAttr(account.id) + '" data-access-job="invite">Invite people</button><button type="button" class="access-task-button" id="access-task-change_role-' + escapeAttr(account.id) + '" data-action="set-access-job" data-account-id="' + escapeAttr(account.id) + '" data-access-job="change_role">Change roles</button><button type="button" class="access-task-button" id="access-task-remove-' + escapeAttr(account.id) + '" data-action="set-access-job" data-account-id="' + escapeAttr(account.id) + '" data-access-job="remove">Remove access</button></div>' : renderSectionContextChips(["View roster", "Owner or admin required"]);
-    var accessRoleGuide = '<div class="access-policy-panel"><div class="access-panel-heading"><h4>' + (account.can_manage ? "Choose the smallest role" : "Role meanings") + "</h4><p>" + (account.can_manage ? "Match each person to the narrowest role that still lets them do the job they own." : "Use these role meanings to understand what each person on this roster can do.") + '</p></div><div class="access-policy-list"><div class="access-policy-row"><strong>Owner</strong><span>Full account, billing, and access control.</span></div><div class="access-policy-row"><strong>Admin</strong><span>Workspace control, billing, and roster management.</span></div><div class="access-policy-row"><strong>Tech</strong><span>Workspace control without billing or roster ownership.</span></div><div class="access-policy-row"><strong>Read-only</strong><span>Review access without control-plane changes.</span></div></div></div>';
+    var accessRoleGuide = '<div class="access-policy-panel"><div class="access-panel-heading"><h4>' + (account.can_manage ? "Choose the smallest role" : "Role meanings") + "</h4><p>" + (account.can_manage ? "Match each person to the narrowest role that still lets them do the job they own." : "Use these role meanings to understand what each person on this roster can do.") + '</p></div><div class="access-policy-list"><div class="access-policy-row"><strong>Owner</strong><span>Full account, billing, and access control.</span></div><div class="access-policy-row"><strong>Admin</strong><span>' + escapeHTML(accessRoleCopy.admin) + '</span></div><div class="access-policy-row"><strong>Tech</strong><span>' + escapeHTML(accessRoleCopy.tech) + '</span></div><div class="access-policy-row"><strong>Read-only</strong><span>' + escapeHTML(accessRoleCopy.readOnly) + "</span></div></div></div>";
     var accessInvitePanel = account.can_manage ? '<div class="access-invite-panel"><div class="access-panel-heading"><h4>Invite people</h4><p>Add one person with the minimum role they need on this account.</p></div><div class="access-invite"><div><label for="invite-email-' + escapeAttr(account.id) + '">Email</label><input type="email" id="invite-email-' + escapeAttr(account.id) + '" placeholder="user@example.com" autocomplete="off"></div><div><label for="invite-role-' + escapeAttr(account.id) + '">Role</label><select id="invite-role-' + escapeAttr(account.id) + '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div><button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' + escapeAttr(account.id) + '">Invite</button></div></div>' : "";
     var accessChangeRolePanel = '<div class="access-job-note-panel"><div class="access-panel-heading"><h4>Change roles on the roster</h4><p>Use the role column in the roster to change one person at a time. Keep each person on the smallest role they need.</p></div></div>' + accessRoleGuide;
     var accessRemovePanel = '<div class="access-job-note-panel"><div class="access-panel-heading"><h4>Remove stale access</h4><p>Use removal only when this person should no longer be on this hosted account. Owners may still be protected when they are the last owner.</p></div><div class="access-remove-points"><div class="access-remove-point"><strong>Pick the exact person</strong><span>Use the roster to remove one account member at a time.</span></div><div class="access-remove-point"><strong>Keep current owners safe</strong><span>The last owner cannot be removed until another owner exists.</span></div></div></div>';
-    return '<section class="account-content-panel account-content-panel-access"><section class="access-management-panel access-section access-section-shell" id="access-section-' + escapeAttr(account.id) + '" data-actor-role="' + escapeAttr(account.role) + '" data-can-manage="' + escapeAttr(account.can_manage ? "true" : "false") + '">' + (!account.can_manage ? '<p class="portal-section-copy">' + escapeHTML("Review who has access. An owner or admin must make changes.") + "</p>" : "") + '<div class="access-management-stats" id="access-stats-' + escapeAttr(account.id) + '"></div><div class="access-shell access-shell-idle" id="access-shell-' + escapeAttr(account.id) + '">' + (account.can_manage ? '<div class="access-shell-detail" id="access-detail-' + escapeAttr(account.id) + '" hidden><div class="access-task-panel" id="access-task-panel-' + escapeAttr(account.id) + '" hidden><div class="access-task-header"><div><h4 id="access-task-title-' + escapeAttr(account.id) + '">Invite people</h4><p id="access-task-copy-' + escapeAttr(account.id) + '"></p></div><button type="button" class="btn-secondary btn-compact" data-action="clear-access-job" data-account-id="' + escapeAttr(account.id) + '">Close panel</button></div><div class="access-task-body" id="access-task-body-invite-' + escapeAttr(account.id) + '" hidden>' + accessInvitePanel + accessRoleGuide + '</div><div class="access-task-body" id="access-task-body-change_role-' + escapeAttr(account.id) + '" hidden>' + accessChangeRolePanel + '</div><div class="access-task-body" id="access-task-body-remove-' + escapeAttr(account.id) + '" hidden>' + accessRemovePanel + "</div></div></div>" : "") + '<div class="access-shell-main"><div class="access-roster-column"><div class="access-roster">' + (account.can_manage ? '<div class="access-roster-toolbar">' + accessTaskStrip + "</div>" : "") + '<div class="access-roster-list" id="access-list-' + escapeAttr(account.id) + '"><div class="access-list-message">Loading\u2026</div></div></div></div></div></div></section></section>';
+    return '<section class="account-content-panel account-content-panel-access"><section class="access-management-panel access-section access-section-shell" id="access-section-' + escapeAttr(account.id) + '" data-actor-role="' + escapeAttr(account.role) + '" data-can-manage="' + escapeAttr(account.can_manage ? "true" : "false") + '" data-client-language="' + escapeAttr(clientLanguage ? "true" : "false") + '">' + (!account.can_manage ? '<p class="portal-section-copy">' + escapeHTML("Review who has access. An owner or admin must make changes.") + "</p>" : "") + '<div class="access-management-stats" id="access-stats-' + escapeAttr(account.id) + '"></div><div class="access-shell access-shell-idle" id="access-shell-' + escapeAttr(account.id) + '">' + (account.can_manage ? '<div class="access-shell-detail" id="access-detail-' + escapeAttr(account.id) + '" hidden><div class="access-task-panel" id="access-task-panel-' + escapeAttr(account.id) + '" hidden><div class="access-task-header"><div><h4 id="access-task-title-' + escapeAttr(account.id) + '">Invite people</h4><p id="access-task-copy-' + escapeAttr(account.id) + '"></p></div><button type="button" class="btn-secondary btn-compact" data-action="clear-access-job" data-account-id="' + escapeAttr(account.id) + '">Close panel</button></div><div class="access-task-body" id="access-task-body-invite-' + escapeAttr(account.id) + '" hidden>' + accessInvitePanel + accessRoleGuide + '</div><div class="access-task-body" id="access-task-body-change_role-' + escapeAttr(account.id) + '" hidden>' + accessChangeRolePanel + '</div><div class="access-task-body" id="access-task-body-remove-' + escapeAttr(account.id) + '" hidden>' + accessRemovePanel + "</div></div></div>" : "") + '<div class="access-shell-main"><div class="access-roster-column"><div class="access-roster">' + (account.can_manage ? '<div class="access-roster-toolbar">' + accessTaskStrip + "</div>" : "") + '<div class="access-roster-list" id="access-list-' + escapeAttr(account.id) + '"><div class="access-list-message">Loading\u2026</div></div></div></div></div></div></section></section>';
   }
   function renderHostedBillingCards(accounts, showSelfHostedCommercial) {
     var hostedBillingAccounts = accounts.filter(function(account) {
@@ -3175,11 +3190,11 @@
     var billingNote = hosted ? showSelfHostedCommercial ? "Hosted billing by account. Self-hosted purchases stay separate below." : "Hosted billing by account." : "Self-hosted subscriptions, licenses, refunds, and privacy requests.";
     var selfHostedBillingEscalationCopy = hosted ? "Escalate with the same hosted billing action or self-hosted path and the exact failed step." : "Escalate with the same self-hosted billing path and the exact failed step.";
     var workspacesContent = accounts.length ? accounts.map(function(account) {
-      return '<section class="account-surface">' + renderAccountWorkspaceSection(account, context.accountAPIBasePath) + "</section>";
+      return '<section class="account-surface">' + renderAccountSurfaceHeader(account, accounts.length > 1) + renderAccountWorkspaceSection(account, context.accountAPIBasePath) + "</section>";
     }).join("") : renderNoHostedWorkspacesSection();
     var workspaceSummaryContent = hosted ? renderWorkspaceSummarySection(context) : "";
     var accessContent = accounts.length ? accounts.map(function(account) {
-      return '<section class="account-surface">' + renderAccountAccessSection(account) + "</section>";
+      return '<section class="account-surface">' + renderAccountSurfaceHeader(account, accounts.length > 1) + renderAccountAccessSection(account) + "</section>";
     }).join("") : renderNoHostedAccessSection();
     var selfHostedBillingLeadCopy = showSelfHostedCommercial ? "Use self-hosted billing only for self-hosted purchases." : "Pulse Account owns the commercial handoff for self-hosted upgrades from the app.";
     var selfHostedBillingActionsHTML = renderSelfHostedUpgradeActionRow(context);

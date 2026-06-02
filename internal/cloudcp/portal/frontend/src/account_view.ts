@@ -397,7 +397,7 @@ function renderAccessMemberAction(accountID: string, member: PortalAccessMember,
   return group;
 }
 
-function renderAccessMemberRow(accountID: string, member: PortalAccessMember, isOwner: boolean, canManage: boolean, activeJob: PortalAccessJob): HTMLElement {
+function renderAccessMemberRow(accountID: string, member: PortalAccessMember, isOwner: boolean, canManage: boolean, activeJob: PortalAccessJob, clientLanguage: boolean): HTMLElement {
   var showActionColumn = canManage && activeJob === 'remove';
   var row = document.createElement('div');
   row.className = 'access-member-row' + (showActionColumn ? '' : ' access-member-row-readonly');
@@ -431,7 +431,7 @@ function renderAccessMemberRow(accountID: string, member: PortalAccessMember, is
   caption.className = 'access-member-caption';
   caption.textContent = (member.state || 'active') === 'pending'
     ? 'Invitation pending acceptance.'
-    : portalRoleCapabilityCopy(member.role);
+    : portalRoleCapabilityCopy(member.role, clientLanguage);
   identity.appendChild(caption);
 
   row.appendChild(identity);
@@ -494,6 +494,7 @@ export function renderAccessSection(accountID: string, entry: PortalAccountUIEnt
   var actorRole = section.getAttribute('data-actor-role') || '';
   var isOwner = actorRole === 'owner';
   var canManage = section.getAttribute('data-can-manage') === 'true';
+  var clientLanguage = section.getAttribute('data-client-language') === 'true';
   var activeJob = canManage ? entry.activeAccessJob : '';
   section.classList.toggle('visible', entry.accessVisible);
   renderAccessStats(accountID, entry, canManage);
@@ -544,7 +545,7 @@ export function renderAccessSection(accountID: string, entry: PortalAccountUIEnt
   renderAccessRosterHead(roster, activeJob, canManage);
   for (var i = 0; i < entry.accessQuery.data.length; i += 1) {
     var member = entry.accessQuery.data[i];
-    roster.appendChild(renderAccessMemberRow(accountID, member, isOwner, canManage, activeJob));
+    roster.appendChild(renderAccessMemberRow(accountID, member, isOwner, canManage, activeJob, clientLanguage));
   }
 }
 

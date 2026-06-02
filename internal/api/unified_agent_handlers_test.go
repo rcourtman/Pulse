@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -95,6 +96,106 @@ func TestUnifiedAgentHandlers_HandleReport(t *testing.T) {
 	handler.HandleReport(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUnifiedAgentHandlers_HandleReportIsolatesDuplicateHostnamesAcrossTenants(t *testing.T) {
+	baseDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   baseDir,
+		ConfigPath: baseDir,
+	}
+	persistence := config.NewMultiTenantPersistence(baseDir)
+	for _, orgID := range []string{"client-a", "client-b"} {
+		if _, err := persistence.GetPersistence(orgID); err != nil {
+			t.Fatalf("create tenant persistence %s: %v", orgID, err)
+		}
+	}
+
+	mtm := monitoring.NewMultiTenantMonitor(cfg, persistence, nil)
+	t.Cleanup(mtm.Stop)
+	handler := NewUnifiedAgentHandlers(mtm, nil, nil)
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:      "agent-pve1",
+			Version: "1.0.0",
+		},
+		Host: agentshost.HostInfo{
+			ID:        "machine-pve1",
+			MachineID: "machine-pve1",
+			Hostname:  "pve1",
+			Platform:  "linux",
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	postTenantReport := func(t *testing.T, orgID string, record config.APITokenRecord) string {
+		t.Helper()
+		body, err := json.Marshal(report)
+		if err != nil {
+			t.Fatalf("marshal report: %v", err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/report", bytes.NewReader(body))
+		req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, orgID))
+		attachAPITokenRecord(req, &record)
+		rec := httptest.NewRecorder()
+
+		handler.HandleReport(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("tenant %s report status = %d, want 200: %s", orgID, rec.Code, rec.Body.String())
+		}
+
+		var resp struct {
+			AgentID string `json:"agentId"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+			t.Fatalf("decode tenant %s report response: %v", orgID, err)
+		}
+		if resp.AgentID == "" {
+			t.Fatalf("tenant %s report response omitted agentId", orgID)
+		}
+		return resp.AgentID
+	}
+
+	tokenA := newTokenRecord(t, "tenant-a-agent-token-123.12345678", []string{config.ScopeAgentReport}, nil)
+	tokenA.OrgID = "client-a"
+	tokenB := newTokenRecord(t, "tenant-b-agent-token-123.12345678", []string{config.ScopeAgentReport}, nil)
+	tokenB.OrgID = "client-b"
+
+	agentA := postTenantReport(t, "client-a", tokenA)
+	agentB := postTenantReport(t, "client-b", tokenB)
+	if agentA != agentB {
+		t.Fatalf("expected duplicate tenants to keep the same local agent id, got %q and %q", agentA, agentB)
+	}
+
+	monitorA, ok := mtm.PeekMonitor("client-a")
+	if !ok {
+		t.Fatal("expected client-a monitor to be initialized")
+	}
+	monitorB, ok := mtm.PeekMonitor("client-b")
+	if !ok {
+		t.Fatal("expected client-b monitor to be initialized")
+	}
+	defaultMonitor, ok := mtm.PeekMonitor("default")
+	if !ok {
+		t.Fatal("expected default monitor fallback to be initialized")
+	}
+
+	for orgID, monitor := range map[string]*monitoring.Monitor{
+		"client-a": monitorA,
+		"client-b": monitorB,
+	} {
+		hosts := monitor.GetLiveHostsSnapshot()
+		if len(hosts) != 1 {
+			t.Fatalf("tenant %s hosts = %#v, want exactly one isolated host", orgID, hosts)
+		}
+		if hosts[0].ID != "machine-pve1" || hosts[0].Hostname != "pve1" {
+			t.Fatalf("tenant %s host = %#v, want duplicate pve1 identity isolated inside tenant", orgID, hosts[0])
+		}
+	}
+	if hosts := defaultMonitor.GetLiveHostsSnapshot(); len(hosts) != 0 {
+		t.Fatalf("default tenant should not receive client reports, got %#v", hosts)
 	}
 }
 

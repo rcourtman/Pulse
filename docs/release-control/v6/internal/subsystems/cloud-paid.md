@@ -345,6 +345,16 @@ or other self-hosted uncapped continuity plans.
    check remains `Review` ahead of setup counts. Local MSP onboarding previews
    should be scenario-backed portal bootstrap data, not static screenshots, so
    they stay grounded in the real portal shape as the bundle changes.
+   MSP account surfaces may call account workspaces `clients`, but that is a
+   customer-facing portal vocabulary choice over the same tenant/workspace
+   lifecycle. Mixed-account Pulse Account sessions must label account surfaces
+   clearly enough that MSP client wording, Cloud workspace wording, access role
+   explanations, and lifecycle controls do not bleed across accounts. Read-only
+   account members must not see destructive client lifecycle controls. Repeated
+   customer hostnames are acceptable only because agent ingest and monitors stay
+   tenant-isolated; an MSP flow that lets two clients report `pve1` must keep
+   those reports in separate tenant workspaces rather than centralizing host
+   identity in the provider account.
    Portal workspace payloads are live-workspace surfaces, not registry history
    dumps: tenants in `deleting` or `deleted` state must stay hidden from the
    browser bootstrap, `/api/portal/dashboard`, and workspace-detail API so
@@ -1050,7 +1060,7 @@ on the activation payload shape.
 That same license-server transport boundary now treats Patrol quickstart
 bootstrap as retired, not as a mixed-version runtime extension point.
 `pulse-pro/license-server` must not register `/v1/quickstart/*` routes, parse
-OpenAI/OpenRouter quickstart env, or create new quickstart ledger tables. The
+model-provider quickstart env, or create new quickstart ledger tables. The
 Pulse runtime must not call `POST /v1/quickstart/bootstrap`, must not persist
 quickstart-backed AI config, and must not mint hosted-model tokens from hosted
 or self-hosted billing state. Historical quickstart credit fields may remain

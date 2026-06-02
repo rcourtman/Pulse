@@ -224,8 +224,7 @@ describe('shell view', function() {
     expect(html).toContain('Gamma Workspace');
     expect(html).toContain('Unhealthy</span>');
     expect(html).toContain('Checking</span>');
-    expect(html).toContain('This workspace is in a failed state.');
-    expect(html).toContain('Health check pending');
+    expect(html).toContain('This client is in a failed state.');
     expect(html).toContain('/api/accounts/acct_1/tenants/ws_active/handoff');
     expect(html).toContain('/api/accounts/acct_1/tenants/ws_active/handoff?target_path=%2Fsettings%2Finfrastructure%3Fadd%3Dlinux-host');
     expect(html).toContain('Open client');
@@ -248,9 +247,10 @@ describe('shell view', function() {
     expect(html).toContain('id="access-detail-acct_1" hidden');
     expect(html).toContain('Choose the smallest role');
     expect(html).toContain('Full account, billing, and access control.');
-    expect(html).toContain('Workspace control, billing, and roster management.');
-    expect(html).toContain('Workspace control without billing or roster ownership.');
-    expect(html).toContain('Review access without control-plane changes.');
+    expect(html).toContain('Client control, billing, and roster management.');
+    expect(html).toContain('Client control without billing or roster ownership.');
+    expect(html).toContain('Review client status without control-plane changes.');
+    expect(html).not.toContain('Workspace control, billing, and roster management.');
     expect(html).toContain('data-can-manage="true"');
     expect(html).toContain('Remove stale access');
     expect(html).toContain('data-action="workspace-action"');
@@ -394,6 +394,71 @@ describe('shell view', function() {
     expect(billingIndex).toBeGreaterThan(accessIndex);
     expect(supportIndex).toBeGreaterThan(billingIndex);
     expect(html).not.toContain('Services');
+  });
+
+  it('labels mixed account surfaces and keeps MSP client copy scoped', function() {
+    var html = renderAuthenticatedPortalHTML(
+      createContext({
+        bootstrap: createBootstrap({
+          accounts: [
+            {
+              id: 'acct_msp_mixed',
+              name: 'Provider Account',
+              kind: 'msp',
+              kind_label: 'MSP',
+              role: 'owner',
+              can_manage: true,
+              has_billing: true,
+              members: [],
+              workspaces: [
+                {
+                  id: 'ws_client',
+                  display_name: 'Acme Dental',
+                  state: 'active',
+                  healthy: true,
+                  health_status: 'healthy',
+                },
+              ],
+            },
+            {
+              id: 'acct_cloud_mixed',
+              name: 'Hosted Ops',
+              kind: 'cloud',
+              kind_label: 'Cloud',
+              role: 'admin',
+              can_manage: true,
+              has_billing: true,
+              members: [],
+              workspaces: [
+                {
+                  id: 'ws_ops',
+                  display_name: 'Operations Workspace',
+                  state: 'active',
+                  healthy: true,
+                  health_status: 'healthy',
+                  agent_count: 1,
+                  alert_route_count: 1,
+                  report_schedule_count: 1,
+                },
+              ],
+            },
+          ],
+        }),
+      })
+    );
+
+    expect(html).toContain('data-shell-section="workspaces">Workspaces</button>');
+    expect(html).toContain('<h3>Provider Account</h3>');
+    expect(html).toContain('MSP account · Owner');
+    expect(html).toContain('<h3>Hosted Ops</h3>');
+    expect(html).toContain('Cloud account · Admin');
+    expect(html).toContain('data-client-language="true"');
+    expect(html).toContain('data-client-language="false"');
+    expect(html).toContain('Add client');
+    expect(html).toContain('Open client');
+    expect(html).toContain('Open workspace');
+    expect(html).toContain('Client control, billing, and roster management.');
+    expect(html).toContain('Workspace control, billing, and roster management.');
   });
 
   it('renders one simple account context strip without summary facts', function() {
@@ -795,6 +860,8 @@ describe('shell view', function() {
     );
 
     expect(html).toContain('Suspended');
+    expect(html).toContain('This client is suspended.');
+    expect(html).not.toContain('This workspace is suspended.');
     expect(html).toContain('Add client');
     expect(html).toContain('Paused Workspace');
   });

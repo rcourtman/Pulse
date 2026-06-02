@@ -293,6 +293,10 @@ header .logout-btn:hover,
   border-top: 1px solid var(--border);
 }
 
+.account-surface-header .portal-section-copy {
+  margin: 4px 0 0;
+}
+
 .account-content-panel { display: block; }
 
 .account-content-panel-workspaces,
@@ -357,7 +361,7 @@ header .logout-btn:hover,
 .workspace-row-primary {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -370,13 +374,19 @@ header .logout-btn:hover,
 
 .workspace-name {
   margin: 0;
+  min-width: 0;
+  max-width: 100%;
   font-size: 14px;
   font-weight: 600;
   color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .workspace-meta {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
@@ -389,12 +399,6 @@ header .logout-btn:hover,
   content: '·';
   margin-right: 6px;
   color: var(--border);
-}
-
-.workspace-row-note {
-  margin: 0;
-  font-size: 12px;
-  color: var(--ink-secondary);
 }
 
 .workspace-row-status-cell {
@@ -1524,29 +1528,33 @@ header .logout-btn:hover,
   background: var(--bg);
 }
 
-.workspace-template-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.workspace-template-heading h3 {
-  margin: 0;
+.workspace-template-summary {
+  cursor: pointer;
   font-size: 14px;
+  font-weight: 600;
   color: var(--ink);
 }
 
-.workspace-template-heading p {
-  margin: 3px 0 0;
+.workspace-template-summary::marker,
+.workspace-template-summary::-webkit-details-marker {
+  color: var(--ink-muted);
+}
+
+.workspace-template-summary-meta {
+  margin-left: 8px;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.workspace-template-intro {
+  margin: 10px 0 0;
   color: var(--ink-secondary);
   font-size: 12px;
 }
 
-.workspace-template-heading > span {
-  flex: 0 0 auto;
-  color: var(--ink-secondary);
-  font-size: 12px;
+.workspace-template-details[open] .workspace-template-grid {
+  margin-top: 10px;
 }
 
 .workspace-template-grid {
@@ -1753,9 +1761,6 @@ header .logout-btn:hover,
   }
   .workspace-setup-queue-actions {
     justify-content: flex-start;
-  }
-  .workspace-template-heading {
-    flex-direction: column;
   }
   .workspace-template-grid,
   .workspace-setup-guide {

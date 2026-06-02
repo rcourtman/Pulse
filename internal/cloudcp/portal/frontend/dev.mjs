@@ -9,7 +9,7 @@ import { createPortalBuildOptions, frontendRoot } from './build_config.mjs';
 const scenarioCookieName = 'pulse_portal_preview_scenario';
 const previewHost = process.env.PULSE_PORTAL_PREVIEW_HOST || '127.0.0.1';
 const previewPort = Number(process.env.PULSE_PORTAL_PREVIEW_PORT || '8765');
-const previewScenarios = ['managed', 'readonly', 'selfhosted', 'empty', 'onboarding'];
+const previewScenarios = ['managed', 'readonly', 'selfhosted', 'empty', 'onboarding', 'mixed'];
 const previewFaviconSVG = fs.readFileSync(path.join(frontendRoot, '..', '..', 'favicon.svg'), 'utf8');
 const previewFaviconHref = '/favicon.svg?v=' + createHash('sha256').update(previewFaviconSVG).digest('hex').slice(0, 16);
 
@@ -201,6 +201,77 @@ function buildScenarioTemplate(name) {
           { email: 'helpdesk@example.com', role: 'tech', user_id: 'u_helpdesk' },
         ],
       }],
+    };
+  }
+
+  if (name === 'mixed') {
+    return {
+      ...base,
+      accounts: [
+        {
+          id: 'acct_mixed_msp',
+          name: 'Provider Account',
+          kind: 'msp',
+          kind_label: 'MSP',
+          role: 'owner',
+          can_manage: true,
+          has_billing: true,
+          setup_templates: standardSetupTemplates(),
+          workspaces: [
+            {
+              id: 'ws_mixed_client',
+              display_name: 'Acme Dental',
+              state: 'active',
+              healthy: true,
+              health_status: 'healthy',
+              setup_status: 'install_agents',
+              agent_count: 0,
+              agent_token_count: 1,
+              unused_agent_token_count: 1,
+              alert_route_count: 0,
+              disabled_alert_route_count: 0,
+              report_schedule_count: 0,
+              disabled_report_schedule_count: 0,
+              created_at: iso('2026-05-28T10:00:00Z'),
+            },
+          ],
+          members: [
+            { email: 'owner@example.com', role: 'owner', user_id: 'u_owner' },
+            { email: 'helpdesk@example.com', role: 'tech', user_id: 'u_helpdesk' },
+          ],
+        },
+        {
+          id: 'acct_mixed_cloud',
+          name: 'Hosted Ops',
+          kind: 'cloud',
+          kind_label: 'Cloud',
+          role: 'admin',
+          can_manage: true,
+          has_billing: true,
+          workspaces: [
+            {
+              id: 'ws_mixed_cloud',
+              display_name: 'Operations Workspace',
+              state: 'active',
+              healthy: true,
+              health_status: 'healthy',
+              setup_status: 'ready',
+              agent_count: 2,
+              agent_token_count: 2,
+              unused_agent_token_count: 0,
+              alert_route_count: 1,
+              disabled_alert_route_count: 0,
+              report_schedule_count: 1,
+              disabled_report_schedule_count: 0,
+              created_at: iso('2026-05-30T10:00:00Z'),
+            },
+          ],
+          members: [
+            { email: 'admin@example.com', role: 'admin', user_id: 'u_admin' },
+            { email: 'viewer@example.com', role: 'read_only', user_id: 'u_viewer' },
+          ],
+        },
+      ],
     };
   }
 
@@ -800,11 +871,11 @@ function routeAccountAPI(request, response, url, bootstrap, scenario) {
         return item.id === resourceID;
       });
       if (!workspace) {
-        sendJSON(response, 404, { error: 'Workspace not found.' });
+        sendJSON(response, 404, { error: 'Client workspace not found.' });
         return;
       }
       if (workspace.state !== 'active') {
-        sendJSON(response, 409, { error: 'Workspace is not active.' });
+        sendJSON(response, 409, { error: 'Client workspace is not active.' });
         return;
       }
       response.writeHead(303, {
@@ -855,7 +926,7 @@ function routeAccountAPI(request, response, url, bootstrap, scenario) {
           return item.id === resourceID;
         });
         if (!workspace) {
-          sendJSON(response, 404, { error: 'Workspace not found.' });
+          sendJSON(response, 404, { error: 'Client workspace not found.' });
           return;
         }
         if (String(body.state || '').trim() === 'suspended') {
@@ -1212,6 +1283,7 @@ server.listen(previewPort, previewHost, function() {
   console.log('[portal-preview] readonly   -> http://' + previewHost + ':' + String(previewPort) + '/?scenario=readonly');
   console.log('[portal-preview] selfhosted -> http://' + previewHost + ':' + String(previewPort) + '/?scenario=selfhosted');
   console.log('[portal-preview] empty      -> http://' + previewHost + ':' + String(previewPort) + '/?scenario=empty');
+  console.log('[portal-preview] mixed      -> http://' + previewHost + ':' + String(previewPort) + '/?scenario=mixed');
 });
 
 async function shutdown(signal) {
