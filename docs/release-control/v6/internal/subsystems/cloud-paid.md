@@ -37,6 +37,11 @@ Provider-hosted MSP backup, verification, and restore are part of the cloud-paid
 operator contract because the recovery artifact must preserve the provider's
 license-backed plan identity, control-plane account/workspace registry, and
 tenant-local runtime state without depending on Stripe billing surfaces.
+Provider-hosted MSP tenant runtime isolation is part of the cloud-paid runtime
+contract. `CP_DOCKER_NETWORK` names the provider ingress and support network,
+not the client runtime boundary: each client workspace runtime must be created
+on a derived per-tenant Docker bridge, and support containers must be explicitly
+attached to that bridge before the tenant runtime is started.
 
 ## Canonical Files
 
@@ -192,6 +197,18 @@ tenant-local runtime state without depending on Stripe billing surfaces.
    Pulse Pro operations bundle on a recurring systemd timer, write durable
    status/log output, and emit Prometheus textfile metrics so a clean GA
    baseline is continuously monitored rather than manually rediscovered.
+   Provider-hosted MSP runtime isolation must keep client tenant runtimes off
+   the shared provider ingress/support network. The Docker manager must derive
+   a per-client tenant bridge, label it with tenant identity, pin Traefik
+   routing to that tenant bridge, attach only provider support containers
+   selected by provider MSP labels, start the tenant runtime only after those
+   support attachments succeed, prefer the tenant bridge for health checks, and
+   remove tenant bridges when the owning runtime is removed.
+   Client-bound proof must cover the boundary itself: workspace limits must not
+   be raceable past the licensed cap, handoff tokens must not be replayed or
+   retargeted across workspaces, org-bound agent install/report tokens must not
+   write into another client runtime, and rotated-out install tokens must fail
+   immediately.
 10. `internal/cloudcp/provider_msp_backup.go` shared with `deployment-installability`: provider-hosted MSP backup is both a cloud-paid license/account/runtime continuity boundary and a deployment-installability recovery artifact boundary.
     License-backed provider MSP backups must include the signed MSP license
     file as a recovery artifact while exposing only license metadata in command
@@ -212,6 +229,10 @@ tenant-local runtime state without depending on Stripe billing surfaces.
     coherent.
     Tenant runtime rollout and missing-runtime restore must fail closed on the
     same storage admission guard before snapshotting or swapping containers.
+    Provider-hosted MSP rollout and recovery must preserve the same isolated
+    tenant network contract when recreating, reconciling, or rolling tenant
+    containers; a recovered client workspace must not fall back to the shared
+    provider ingress/support network as its runtime network.
     `tenant-runtime rollout --all --image <target>` is the canonical hosted
     fleet image upgrade path for active tenant runtimes. Its `--dry-run` mode
     must print the target-image rollout plan before mutation, `--all` must

@@ -3,9 +3,11 @@ package registry
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -954,6 +956,63 @@ func TestCreateWithAccountWorkspaceLimitEnforcesActiveCount(t *testing.T) {
 	}
 	if err := reg.CreateWithAccountWorkspaceLimit(&Tenant{ID: "t-LIMIT003", AccountID: accountID, State: TenantStateProvisioning}, 1); err != nil {
 		t.Fatalf("deleted tenant should free an active workspace slot: %v", err)
+	}
+}
+
+func TestCreateWithAccountWorkspaceLimitCannotRacePastLimit(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	accountID, err := GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&Account{ID: accountID, Kind: AccountKindMSP, DisplayName: "Race Account"}); err != nil {
+		t.Fatal(err)
+	}
+
+	const limit = 2
+	const attempts = 16
+	var wg sync.WaitGroup
+	errs := make(chan error, attempts)
+	for i := 0; i < attempts; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			errs <- reg.CreateWithAccountWorkspaceLimit(&Tenant{
+				ID:        fmt.Sprintf("t-RACE%04d", i),
+				AccountID: accountID,
+				State:     TenantStateProvisioning,
+			}, limit)
+		}(i)
+	}
+	wg.Wait()
+	close(errs)
+
+	successes := 0
+	limitErrors := 0
+	for err := range errs {
+		if err == nil {
+			successes++
+			continue
+		}
+		if _, ok := WorkspaceLimitExceeded(err); ok {
+			limitErrors++
+			continue
+		}
+		t.Fatalf("unexpected create error: %v", err)
+	}
+	if successes != limit {
+		t.Fatalf("successful creates = %d, want exactly limit %d", successes, limit)
+	}
+	if limitErrors != attempts-limit {
+		t.Fatalf("limit errors = %d, want %d", limitErrors, attempts-limit)
+	}
+	tenants, err := reg.ListByAccountID(accountID)
+	if err != nil {
+		t.Fatalf("ListByAccountID: %v", err)
+	}
+	if len(tenants) != limit {
+		t.Fatalf("tenant count = %d, want %d", len(tenants), limit)
 	}
 }
 

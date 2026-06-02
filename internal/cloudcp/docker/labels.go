@@ -30,11 +30,11 @@ func CanonicalTenantRuntimeRouting(tenantID, baseDomain string) TenantRuntimeRou
 
 // TraefikLabels generates Docker labels for Traefik reverse-proxy routing.
 // Each tenant gets a subdomain: <tenantID>.cloud.pulserelay.pro
-func TraefikLabels(tenantID, baseDomain string, containerPort int) map[string]string {
+func TraefikLabels(tenantID, baseDomain string, containerPort int, dockerNetwork ...string) map[string]string {
 	svc := "pulse-" + tenantID
 	routing := CanonicalTenantRuntimeRouting(tenantID, baseDomain)
 
-	return map[string]string{
+	labels := map[string]string{
 		"traefik.enable": "true",
 
 		// HTTP router
@@ -48,4 +48,12 @@ func TraefikLabels(tenantID, baseDomain string, containerPort int) map[string]st
 		// Metadata
 		"pulse.tenant.id": tenantID,
 	}
+	for _, networkName := range dockerNetwork {
+		networkName = strings.TrimSpace(networkName)
+		if networkName != "" {
+			labels["traefik.docker.network"] = networkName
+			break
+		}
+	}
+	return labels
 }

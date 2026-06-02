@@ -129,6 +129,13 @@ surfaces.
    the configured tenant runtime image, configured Docker network, Docker
    daemon reachability, and storage-admission guardrails before the provider
    treats a fresh install as ready for client onboarding.
+   Provider-hosted MSP installability treats `CP_DOCKER_NETWORK` as the
+   provider ingress/support network, not the client runtime network. Each
+   workspace runtime must be created on a per-tenant bridge derived by the
+   Docker manager, with Traefik routing pinned to that bridge through
+   `traefik.docker.network`. The packaged compose stack must label the Traefik
+   and control-plane support containers so the control plane can attach them to
+   each tenant bridge before starting the client runtime.
    `pulse-control-plane provider-msp proof` must exercise the first-client
    onboarding path through workspace creation, client-bound install token
    generation, tenant-local unified-agent report ingest, tenant-bound install
@@ -137,6 +144,11 @@ surfaces.
    treated as proven. The proof is license-backed by default: `license_file` must be the
    resolved provider MSP plan source unless the operator explicitly opts into
    the local-development `--allow-env-plan` escape hatch.
+   The same proof surface must also keep adversarial client-boundary probes in
+   scope: workspace-limit check/create must be locked against concurrent cap
+   bypass, handoff tokens must reject cross-workspace retargeting without being
+   consumed, org-bound agent report tokens must not write into another client
+   runtime, and rotated-out install tokens must be rejected immediately.
    `pulse-control-plane provider-msp install-proof` is the packaged fresh
    install rehearsal: it must bootstrap the provider owner, run license-backed
    preflight and status checks, run the workspace/runtime proof with cleanup
@@ -147,9 +159,11 @@ surfaces.
    `deploy/provider-msp/run-install-proof.sh` is the compose-level operator
    wrapper for that rehearsal. It must validate the provider `.env` and compose
    config, require a reachable Docker daemon, optionally pull the pinned
-   provider images, run the one-off `provider-msp install-proof` command through
-   the packaged control-plane service, start the long-running provider stack,
-   and finish with `provider-msp status`.
+   provider images, start Traefik before proof workspace creation so isolated
+   tenant bridges can attach their ingress support container, run the one-off
+   `provider-msp install-proof` command through the packaged control-plane
+   service, start the long-running provider stack, and finish with
+   `provider-msp status`.
    `deploy/provider-msp/upgrade.sh` is the compose-level pre-upgrade and
    pre-maintenance runner for provider-hosted MSP. It must keep dry-run mode
    non-mutating, validate the provider `.env` and compose config, check

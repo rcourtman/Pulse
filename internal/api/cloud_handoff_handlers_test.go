@@ -464,6 +464,61 @@ func TestHandleHandoffExchange(t *testing.T) {
 	})
 }
 
+func TestHandleHandoffExchangeRejectsRetargetWithoutConsumingToken(t *testing.T) {
+	key := []byte("test-handoff-key")
+	configDir := t.TempDir()
+	resetSessionStoreForTests()
+	t.Cleanup(resetSessionStoreForTests)
+	resetCSRFStoreForTests()
+	t.Cleanup(resetCSRFStoreForTests)
+	InitSessionStore(configDir)
+	InitCSRFStore(configDir)
+	secretsDir := filepath.Join(configDir, "secrets")
+	if err := os.MkdirAll(secretsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(secretsDir, "handoff.key"), key, 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	for _, tenantID := range []string{"tenant-a", "tenant-b"} {
+		saveHandoffTestOrganization(t, configDir, &models.Organization{
+			ID:          tenantID,
+			DisplayName: tenantID,
+			Status:      models.OrgStatusActive,
+			CreatedAt:   time.Now().UTC(),
+			OwnerUserID: "user-retarget",
+			Members: []models.OrganizationMember{
+				{UserID: "user-retarget", Email: "retarget@example.com", Role: models.OrgRoleOwner, AddedAt: time.Now().UTC()},
+			},
+		})
+	}
+
+	token := signHandoffToken(t, key, cloudHandoffClaims{
+		AccountID: "acct-retarget",
+		Email:     "retarget@example.com",
+		Role:      "owner",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        "jti-retarget",
+			Subject:   "user-retarget",
+			Issuer:    cloudHandoffIssuer,
+			Audience:  jwt.ClaimStrings{"tenant-a"},
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+	})
+	handler := HandleHandoffExchange(configDir)
+
+	retargeted := makeExchangeRequest(t, handler, "tenant-b.example.com", token)
+	if retargeted.Code != http.StatusUnauthorized {
+		t.Fatalf("retargeted status = %d, want %d: %s", retargeted.Code, http.StatusUnauthorized, retargeted.Body.String())
+	}
+
+	original := makeExchangeRequest(t, handler, "tenant-a.example.com", token)
+	if original.Code != http.StatusOK {
+		t.Fatalf("original tenant status = %d, want %d after failed retarget: %s", original.Code, http.StatusOK, original.Body.String())
+	}
+}
+
 func TestHandleHandoffExchangeBrowserFlowSetsSessionCookies(t *testing.T) {
 	key := []byte("test-handoff-key")
 	configDir := t.TempDir()

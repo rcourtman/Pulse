@@ -1,15 +1,18 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/stretchr/testify/require"
 )
 
@@ -153,4 +156,81 @@ func TestGenerateHostedTenantAgentInstallCommandEnforcesHostedOrgBoundary(t *tes
 	require.Equal(t, "hosted_agent_install_command", tokens[0].Metadata["issued_via"])
 	_, ok := (&config.Config{APITokens: tokens}).ValidateAPIToken(result.Token)
 	require.True(t, ok)
+}
+
+func TestHostedTenantAgentInstallTokenCannotReportToOtherTenant(t *testing.T) {
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+	t.Setenv("PULSE_DEV", "true")
+	setMockModeForTest(t, true)
+
+	dataDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
+		PublicURL:  "https://msp.example.com",
+	}
+	persistence := config.NewConfigPersistence(dataDir)
+	multiTenant := config.NewMultiTenantPersistence(dataDir)
+	for _, orgID := range []string{"client-a", "client-b"} {
+		_, err := multiTenant.GetPersistence(orgID)
+		require.NoError(t, err)
+	}
+
+	mtm := monitoring.NewMultiTenantMonitor(cfg, multiTenant, nil)
+	t.Cleanup(mtm.Stop)
+	_, err := mtm.GetMonitor("client-a")
+	require.NoError(t, err)
+
+	install, err := GenerateHostedTenantAgentInstallCommand(HostedTenantAgentInstallCommandOptions{
+		Config:        cfg,
+		Persistence:   persistence,
+		MultiTenant:   multiTenant,
+		TenantMonitor: mtm,
+		HostedMode:    true,
+		OrgID:         "client-a",
+		InstallType:   "pve",
+		OwnerUserID:   "owner-1",
+		BaseURL:       "https://client-a.msp.example.com",
+	})
+	require.NoError(t, err)
+
+	router := NewRouter(cfg, nil, mtm, nil, nil, "1.0.0")
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:      "agent-client-a",
+			Version: "1.0.0",
+			Type:    "unified",
+		},
+		Host: agentshost.HostInfo{
+			ID:        "machine-client-a",
+			MachineID: "machine-client-a",
+			Hostname:  "pve1",
+			Platform:  "linux",
+		},
+		Timestamp: time.Now().UTC(),
+	}
+	body, err := json.Marshal(report)
+	require.NoError(t, err)
+
+	allowedReq := httptest.NewRequest(http.MethodPost, "/api/agents/agent/report", bytes.NewReader(body))
+	allowedReq.Header.Set("X-API-Token", install.Token)
+	allowedRec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(allowedRec, allowedReq)
+	require.Equal(t, http.StatusOK, allowedRec.Code, allowedRec.Body.String())
+
+	retargetReq := httptest.NewRequest(http.MethodPost, "/api/agents/agent/report", bytes.NewReader(body))
+	retargetReq.Header.Set("X-API-Token", install.Token)
+	retargetReq.Header.Set("X-Pulse-Org-ID", "client-b")
+	retargetRec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(retargetRec, retargetReq)
+	require.Equal(t, http.StatusForbidden, retargetRec.Code, retargetRec.Body.String())
+
+	monitorA, ok := mtm.PeekMonitor("client-a")
+	require.True(t, ok)
+	require.Len(t, monitorA.GetLiveHostsSnapshot(), 1)
+
+	monitorB, ok := mtm.PeekMonitor("client-b")
+	require.True(t, ok)
+	require.Empty(t, monitorB.GetLiveHostsSnapshot(), "retargeted client-a token must not write into client-b")
 }

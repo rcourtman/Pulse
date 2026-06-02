@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/admin"
@@ -456,6 +457,67 @@ func TestCreateWorkspace_MSPStarterLimitEnforced(t *testing.T) {
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusForbidden, rec.Body.String())
+	}
+}
+
+func TestCreateWorkspace_MSPStarterLimitCannotRacePastHandlerLock(t *testing.T) {
+	reg := newTestRegistry(t)
+	tenantsDir := t.TempDir()
+	mux, _ := newTestTenantMux(t, reg, tenantsDir)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP, DisplayName: "Race MSP"}); err != nil {
+		t.Fatal(err)
+	}
+	createTestStripeAccount(t, reg, accountID, "msp_starter")
+	workspaceLimit, known := pkglicensing.WorkspaceLimitForPlan("msp_starter")
+	if !known {
+		t.Fatal("msp_starter workspace limit is not registered")
+	}
+
+	attempts := workspaceLimit + 8
+	var wg sync.WaitGroup
+	statuses := make(chan int, attempts)
+	for i := 0; i < attempts; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			body := fmt.Sprintf(`{"display_name":"Client %d"}`, i+1)
+			req := httptest.NewRequest(http.MethodPost, "/api/accounts/"+accountID+"/tenants", bytes.NewBufferString(body))
+			rec := doRequest(t, mux, req)
+			statuses <- rec.Code
+		}(i)
+	}
+	wg.Wait()
+	close(statuses)
+
+	created := 0
+	blocked := 0
+	for status := range statuses {
+		switch status {
+		case http.StatusCreated:
+			created++
+		case http.StatusForbidden:
+			blocked++
+		default:
+			t.Fatalf("unexpected status %d in concurrent create race", status)
+		}
+	}
+	if created != workspaceLimit {
+		t.Fatalf("created = %d, want exactly workspace limit %d", created, workspaceLimit)
+	}
+	if blocked != attempts-workspaceLimit {
+		t.Fatalf("blocked = %d, want %d", blocked, attempts-workspaceLimit)
+	}
+	tenants, err := reg.ListByAccountID(accountID)
+	if err != nil {
+		t.Fatalf("ListByAccountID: %v", err)
+	}
+	if len(tenants) != workspaceLimit {
+		t.Fatalf("tenant count = %d, want %d", len(tenants), workspaceLimit)
 	}
 }
 

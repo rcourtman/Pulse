@@ -9,9 +9,10 @@ Usage:
 Runs the provider-hosted MSP compose install proof on a Docker host:
   1. validates .env and docker-compose.yml
   2. optionally pulls the pinned Traefik and control-plane images
-  3. runs provider-msp install-proof through the compose control-plane service
-  4. starts the provider stack
-  5. runs provider-msp status as a final operator check
+  3. starts Traefik so proof workspaces can attach isolated tenant networks
+  4. runs provider-msp install-proof through the compose control-plane service
+  5. starts the provider stack
+  6. runs provider-msp status as a final operator check
 
 Options:
   --account-name NAME          Provider MSP account display name
@@ -120,6 +121,8 @@ docker compose config --quiet
 if [[ "$skip_compose_pull" != "1" ]]; then
   docker compose pull traefik control-plane
 fi
+
+docker compose up -d traefik
 
 install_args=(
   provider-msp install-proof

@@ -7,6 +7,9 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+
+	"github.com/moby/moby/api/types/container"
+	mobynetwork "github.com/moby/moby/api/types/network"
 )
 
 func TestTenantImmutableOwnershipPaths(t *testing.T) {
@@ -112,6 +115,66 @@ func TestTraefikLabelsUseCanonicalLowercaseHost(t *testing.T) {
 	got := labels["traefik.http.routers.pulse-T-AbCd123.rule"]
 	if got != "Host(`t-abcd123.cloud.pulserelay.pro`)" {
 		t.Fatalf("router rule = %q, want %q", got, "Host(`t-abcd123.cloud.pulserelay.pro`)")
+	}
+}
+
+func TestTraefikLabelsPinTenantRuntimeToIsolatedNetwork(t *testing.T) {
+	t.Parallel()
+
+	labels := TraefikLabels("t-acme", "msp.example.com", 7655, "pulse-provider-msp-tenant-t-acme")
+	if got := labels["traefik.docker.network"]; got != "pulse-provider-msp-tenant-t-acme" {
+		t.Fatalf("traefik.docker.network = %q, want isolated tenant network", got)
+	}
+}
+
+func TestTenantNetworkNameIsDerivedPerTenant(t *testing.T) {
+	t.Parallel()
+
+	mgr := &Manager{cfg: ManagerConfig{
+		Network:               "pulse-provider-msp",
+		IsolateTenantNetworks: true,
+		TenantNetworkPrefix:   "pulse-provider-msp-tenant",
+	}}
+
+	gotA := mgr.tenantNetworkName("T-Acme")
+	gotB := mgr.tenantNetworkName("T-Beta")
+	if gotA != "pulse-provider-msp-tenant-t-acme" {
+		t.Fatalf("tenantNetworkName(T-Acme) = %q", gotA)
+	}
+	if gotB != "pulse-provider-msp-tenant-t-beta" {
+		t.Fatalf("tenantNetworkName(T-Beta) = %q", gotB)
+	}
+	if gotA == gotB {
+		t.Fatalf("tenant networks must be distinct, got %q", gotA)
+	}
+}
+
+func TestHealthCheckPrefersProviderMSPIsolatedTenantNetwork(t *testing.T) {
+	t.Parallel()
+
+	mgr := &Manager{cfg: ManagerConfig{
+		Network:               "pulse-provider-msp",
+		IsolateTenantNetworks: true,
+		TenantNetworkPrefix:   "pulse-provider-msp-tenant",
+	}}
+	inspect := container.InspectResponse{
+		Config: &container.Config{
+			Labels: map[string]string{"pulse.tenant.id": "t-acme"},
+		},
+		NetworkSettings: &container.NetworkSettings{
+			Networks: map[string]*mobynetwork.EndpointSettings{
+				"pulse-provider-msp":               {},
+				"pulse-provider-msp-tenant-t-acme": {},
+			},
+		},
+	}
+
+	got := mgr.healthCheckNetworkCandidates(inspect)
+	if len(got) < 2 {
+		t.Fatalf("healthCheckNetworkCandidates = %v, want tenant and ingress networks", got)
+	}
+	if got[0] != "pulse-provider-msp-tenant-t-acme" {
+		t.Fatalf("first health network = %q, want isolated tenant network; all=%v", got[0], got)
 	}
 }
 

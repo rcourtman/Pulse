@@ -18,6 +18,8 @@ services:
     networks:
       - pulse-provider-msp
     restart: unless-stopped
+    labels:
+      - pulse.provider-msp.role=traefik
 
   control-plane:
     image: ${CONTROL_PLANE_IMAGE:?CONTROL_PLANE_IMAGE must be set to a digest-pinned image}
@@ -64,6 +66,7 @@ services:
       - traefik
     restart: unless-stopped
     labels:
+      - pulse.provider-msp.role=control-plane
       - traefik.enable=true
       - traefik.docker.network=${PULSE_PROVIDER_MSP_DOCKER_NETWORK:-pulse-provider-msp}
       - traefik.http.routers.provider-control-plane.rule=Host(`${DOMAIN}`)

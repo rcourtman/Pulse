@@ -28,6 +28,8 @@ func TestProviderMSPDeployComposeIsProviderModeAndStripeFree(t *testing.T) {
 		"CP_STORAGE_DATA_PATH=${PULSE_PROVIDER_MSP_DATA_DIR:-/data}",
 		"${PULSE_PROVIDER_MSP_DATA_DIR:-/data}:${PULSE_PROVIDER_MSP_DATA_DIR:-/data}",
 		"${PULSE_PROVIDER_MSP_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock",
+		"pulse.provider-msp.role=traefik",
+		"pulse.provider-msp.role=control-plane",
 		"provider_msp_license:",
 		"name: ${PULSE_PROVIDER_MSP_DOCKER_NETWORK:-pulse-provider-msp}",
 	)
@@ -195,6 +197,7 @@ func TestProviderMSPInstallProofRunnerMatchesComposeContract(t *testing.T) {
 		"docker compose config --quiet",
 		"docker version >/dev/null",
 		"docker compose pull traefik control-plane",
+		"docker compose up -d traefik",
 		"provider-msp install-proof",
 		"--account-name",
 		"--owner-email",

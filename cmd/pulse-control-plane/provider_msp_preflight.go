@@ -186,6 +186,7 @@ func providerMSPDockerManagerConfig(cfg *cloudcp.CPConfig) cpDocker.ManagerConfi
 	return cpDocker.ManagerConfig{
 		Image:                    cfg.PulseImage,
 		Network:                  cfg.DockerNetwork,
+		IsolateTenantNetworks:    true,
 		BaseDomain:               providerMSPBaseDomainFromURL(cfg.BaseURL),
 		TrialActivationPublicKey: cfg.TrialActivationPublicKey,
 		TrustedProxyCIDRs:        cfg.TrustedProxyCIDRs,

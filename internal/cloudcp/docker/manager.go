@@ -24,6 +24,9 @@ import (
 type ManagerConfig struct {
 	Image                    string
 	Network                  string
+	IsolateTenantNetworks    bool
+	TenantNetworkPrefix      string
+	SupportContainerLabels   []string
 	BaseDomain               string
 	TrialActivationPublicKey string
 	TrustedProxyCIDRs        []string
@@ -104,6 +107,13 @@ const (
 	defaultTenantLogMaxFile = 3
 )
 
+const (
+	providerSupportTraefikLabel      = "pulse.provider-msp.role=traefik"
+	providerSupportControlPlaneLabel = "pulse.provider-msp.role=control-plane"
+	tenantRuntimeNetworkLabel        = "pulse.provider-msp.network"
+	tenantRuntimeNetworkLabelValue   = "tenant"
+)
+
 // NewManager creates a Docker manager connected to the local daemon.
 func NewManager(cfg ManagerConfig) (*Manager, error) {
 	cli, err := client.New(client.FromEnv)
@@ -112,6 +122,23 @@ func NewManager(cfg ManagerConfig) (*Manager, error) {
 	}
 	if cfg.ContainerPort == 0 {
 		cfg.ContainerPort = 7655
+	}
+	cfg.Network = strings.TrimSpace(cfg.Network)
+	cfg.TenantNetworkPrefix = strings.TrimSpace(cfg.TenantNetworkPrefix)
+	if cfg.IsolateTenantNetworks {
+		if cfg.TenantNetworkPrefix == "" {
+			if cfg.Network != "" {
+				cfg.TenantNetworkPrefix = cfg.Network + "-tenant"
+			} else {
+				cfg.TenantNetworkPrefix = "pulse-tenant"
+			}
+		}
+		if len(cfg.SupportContainerLabels) == 0 {
+			cfg.SupportContainerLabels = []string{
+				providerSupportTraefikLabel,
+				providerSupportControlPlaneLabel,
+			}
+		}
 	}
 	return &Manager{cli: cli, cfg: cfg}, nil
 }
@@ -263,6 +290,141 @@ func (m *Manager) CheckRuntimePrerequisites(ctx context.Context, opts RuntimePre
 	return report, nil
 }
 
+func (m *Manager) tenantNetworkName(tenantID string) string {
+	if m == nil {
+		return ""
+	}
+	prefix := strings.TrimSpace(m.cfg.TenantNetworkPrefix)
+	if prefix == "" {
+		prefix = strings.TrimSpace(m.cfg.Network)
+	}
+	if prefix == "" {
+		prefix = "pulse-tenant"
+	}
+	return sanitizeDockerNameFragment(prefix + "-" + strings.TrimSpace(tenantID))
+}
+
+func sanitizeDockerNameFragment(raw string) string {
+	raw = strings.ToLower(strings.TrimSpace(raw))
+	if raw == "" {
+		return "pulse-tenant"
+	}
+	var b strings.Builder
+	lastDash := false
+	for _, r := range raw {
+		allowed := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '.' || r == '-'
+		if !allowed {
+			if !lastDash {
+				b.WriteByte('-')
+				lastDash = true
+			}
+			continue
+		}
+		b.WriteRune(r)
+		lastDash = r == '-'
+	}
+	out := strings.Trim(b.String(), "-_.")
+	if out == "" {
+		return "pulse-tenant"
+	}
+	return out
+}
+
+func (m *Manager) ensureTenantNetwork(ctx context.Context, tenantID string) (string, error) {
+	if m == nil {
+		return "", fmt.Errorf("docker manager unavailable")
+	}
+	if !m.cfg.IsolateTenantNetworks {
+		networkName := strings.TrimSpace(m.cfg.Network)
+		if networkName == "" {
+			return "", fmt.Errorf("tenant Docker network is required")
+		}
+		return networkName, nil
+	}
+
+	networkName := m.tenantNetworkName(tenantID)
+	inspect, err := m.cli.NetworkInspect(ctx, networkName, client.NetworkInspectOptions{})
+	if err == nil {
+		if got := strings.TrimSpace(inspect.Network.Labels["pulse.tenant.id"]); got != "" && got != tenantID {
+			return "", fmt.Errorf("tenant network %q belongs to tenant %q, not %q", networkName, got, tenantID)
+		}
+		return networkName, nil
+	}
+	if !errdefs.IsNotFound(err) {
+		return "", fmt.Errorf("inspect tenant network %q: %w", networkName, err)
+	}
+
+	_, err = m.cli.NetworkCreate(ctx, networkName, client.NetworkCreateOptions{
+		Driver: "bridge",
+		Labels: map[string]string{
+			"pulse.managed":           "true",
+			"pulse.tenant.id":         tenantID,
+			tenantRuntimeNetworkLabel: tenantRuntimeNetworkLabelValue,
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("create tenant network %q: %w", networkName, err)
+	}
+	return networkName, nil
+}
+
+func (m *Manager) connectSupportContainersToTenantNetwork(ctx context.Context, networkName string) error {
+	if m == nil || !m.cfg.IsolateTenantNetworks {
+		return nil
+	}
+	for _, label := range m.cfg.SupportContainerLabels {
+		label = strings.TrimSpace(label)
+		if label == "" {
+			continue
+		}
+		if err := m.connectSupportContainersByLabel(ctx, networkName, label); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *Manager) connectSupportContainersByLabel(ctx context.Context, networkName, label string) error {
+	filters := client.Filters{}
+	filters = filters.Add("label", label)
+	result, err := m.cli.ContainerList(ctx, client.ContainerListOptions{
+		Filters: filters,
+	})
+	if err != nil {
+		return fmt.Errorf("list provider support containers for label %q: %w", label, err)
+	}
+	if len(result.Items) == 0 {
+		return fmt.Errorf("provider support container with label %q is required for isolated tenant network %q", label, networkName)
+	}
+
+	for _, item := range result.Items {
+		if item.ID == "" {
+			continue
+		}
+		if err := m.ensureContainerConnectedToNetwork(ctx, networkName, item.ID); err != nil {
+			return fmt.Errorf("connect provider support container %s to tenant network %q: %w", item.ID[:min(len(item.ID), 12)], networkName, err)
+		}
+	}
+	return nil
+}
+
+func (m *Manager) ensureContainerConnectedToNetwork(ctx context.Context, networkName, containerID string) error {
+	inspect, err := m.cli.NetworkInspect(ctx, networkName, client.NetworkInspectOptions{})
+	if err != nil {
+		return fmt.Errorf("inspect tenant network %q: %w", networkName, err)
+	}
+	for id := range inspect.Network.Containers {
+		if id == containerID || strings.HasPrefix(id, containerID) || strings.HasPrefix(containerID, id) {
+			return nil
+		}
+	}
+	_, err = m.cli.NetworkConnect(ctx, networkName, client.NetworkConnectOptions{
+		Container:      containerID,
+		EndpointConfig: &network.EndpointSettings{},
+	})
+	return err
+}
+
 // IsNotFound reports whether Docker treated an identifier as missing.
 func IsNotFound(err error) bool {
 	return errdefs.IsNotFound(err)
@@ -328,7 +490,12 @@ func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir st
 		return "", fmt.Errorf("prepare tenant runtime mounts for %s: %w", tenantID, err)
 	}
 
-	labels := TraefikLabels(tenantID, m.cfg.BaseDomain, m.cfg.ContainerPort)
+	tenantNetworkName, err := m.ensureTenantNetwork(ctx, tenantID)
+	if err != nil {
+		return "", err
+	}
+
+	labels := TraefikLabels(tenantID, m.cfg.BaseDomain, m.cfg.ContainerPort, tenantNetworkName)
 	labels["pulse.managed"] = "true"
 
 	containerName := "pulse-" + tenantID
@@ -337,7 +504,7 @@ func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir st
 		Config: &container.Config{
 			Image:  m.cfg.Image,
 			Labels: labels,
-			Env:    tenantEnv(tenantID, m.cfg.BaseDomain, m.cfg.TrialActivationPublicKey, m.tenantTrustedProxyCIDRs(ctx)),
+			Env:    tenantEnv(tenantID, m.cfg.BaseDomain, m.cfg.TrialActivationPublicKey, m.tenantTrustedProxyCIDRs(ctx, tenantNetworkName)),
 		},
 		HostConfig: &container.HostConfig{
 			RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
@@ -350,13 +517,18 @@ func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir st
 		},
 		NetworkingConfig: &network.NetworkingConfig{
 			EndpointsConfig: map[string]*network.EndpointSettings{
-				m.cfg.Network: {},
+				tenantNetworkName: {},
 			},
 		},
 		Name: containerName,
 	})
 	if err != nil {
 		return "", fmt.Errorf("create container for %s: %w", tenantID, err)
+	}
+
+	if err := m.connectSupportContainersToTenantNetwork(ctx, tenantNetworkName); err != nil {
+		_, _ = m.cli.ContainerRemove(ctx, resp.ID, client.ContainerRemoveOptions{Force: true})
+		return resp.ID, err
 	}
 
 	if _, err := m.cli.ContainerStart(ctx, resp.ID, client.ContainerStartOptions{}); err != nil {
@@ -460,7 +632,7 @@ func envValue(env []string, key string) string {
 	return ""
 }
 
-func (m *Manager) tenantTrustedProxyCIDRs(ctx context.Context) []string {
+func (m *Manager) tenantTrustedProxyCIDRs(ctx context.Context, networkNames ...string) []string {
 	values := make([]string, 0, len(m.cfg.TrustedProxyCIDRs)+1)
 	seen := make(map[string]struct{})
 	appendCIDR := func(raw string) {
@@ -479,8 +651,14 @@ func (m *Manager) tenantTrustedProxyCIDRs(ctx context.Context) []string {
 		appendCIDR(cidr)
 	}
 
-	if m != nil && m.cli != nil && strings.TrimSpace(m.cfg.Network) != "" {
-		networkName := strings.TrimSpace(m.cfg.Network)
+	if len(networkNames) == 0 && m != nil {
+		networkNames = []string{m.cfg.Network}
+	}
+	for _, networkName := range networkNames {
+		networkName = strings.TrimSpace(networkName)
+		if m == nil || m.cli == nil || networkName == "" {
+			continue
+		}
 		inspect, err := m.cli.NetworkInspect(ctx, networkName, client.NetworkInspectOptions{})
 		if err != nil {
 			log.Warn().Err(err).Str("network", networkName).Msg("Failed to inspect tenant network for trusted proxy CIDRs")
@@ -563,10 +741,99 @@ func (m *Manager) Start(ctx context.Context, containerID string) error {
 
 // Remove removes a stopped tenant container.
 func (m *Manager) Remove(ctx context.Context, containerID string) error {
+	networkNames := m.tenantNetworkNamesForContainer(ctx, containerID)
 	_, err := m.cli.ContainerRemove(ctx, containerID, client.ContainerRemoveOptions{
 		Force: true,
 	})
+	if err == nil {
+		for _, networkName := range networkNames {
+			if removeErr := m.removeTenantNetwork(ctx, networkName); removeErr != nil {
+				log.Warn().Err(removeErr).Str("network", networkName).Msg("Failed to remove tenant runtime network")
+			}
+		}
+	}
 	return err
+}
+
+func (m *Manager) tenantNetworkNamesForContainer(ctx context.Context, containerID string) []string {
+	if m == nil || !m.cfg.IsolateTenantNetworks || strings.TrimSpace(containerID) == "" {
+		return nil
+	}
+	inspectResult, err := m.cli.ContainerInspect(ctx, containerID, client.ContainerInspectOptions{})
+	if err != nil {
+		return nil
+	}
+	inspect := inspectResult.Container
+	if inspect.NetworkSettings == nil {
+		return nil
+	}
+	var out []string
+	for networkName := range inspect.NetworkSettings.Networks {
+		if m.isTenantNetwork(ctx, networkName) {
+			out = append(out, networkName)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+func (m *Manager) isTenantNetwork(ctx context.Context, networkName string) bool {
+	networkName = strings.TrimSpace(networkName)
+	if m == nil || networkName == "" {
+		return false
+	}
+	inspect, err := m.cli.NetworkInspect(ctx, networkName, client.NetworkInspectOptions{})
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(inspect.Network.Labels[tenantRuntimeNetworkLabel]) == tenantRuntimeNetworkLabelValue
+}
+
+func (m *Manager) removeTenantNetwork(ctx context.Context, networkName string) error {
+	if m == nil || strings.TrimSpace(networkName) == "" {
+		return nil
+	}
+	if err := m.disconnectSupportContainersFromTenantNetwork(ctx, networkName); err != nil {
+		return err
+	}
+	if _, err := m.cli.NetworkRemove(ctx, networkName, client.NetworkRemoveOptions{}); err != nil {
+		return fmt.Errorf("remove tenant network %q: %w", networkName, err)
+	}
+	return nil
+}
+
+func (m *Manager) disconnectSupportContainersFromTenantNetwork(ctx context.Context, networkName string) error {
+	if m == nil || !m.cfg.IsolateTenantNetworks {
+		return nil
+	}
+	for _, label := range m.cfg.SupportContainerLabels {
+		label = strings.TrimSpace(label)
+		if label == "" {
+			continue
+		}
+		filters := client.Filters{}
+		filters = filters.Add("label", label)
+		result, err := m.cli.ContainerList(ctx, client.ContainerListOptions{
+			All:     true,
+			Filters: filters,
+		})
+		if err != nil {
+			return fmt.Errorf("list provider support containers for disconnect label %q: %w", label, err)
+		}
+		for _, item := range result.Items {
+			if item.ID == "" {
+				continue
+			}
+			_, err := m.cli.NetworkDisconnect(ctx, networkName, client.NetworkDisconnectOptions{
+				Container: item.ID,
+				Force:     true,
+			})
+			if err != nil && !errdefs.IsNotFound(err) {
+				return fmt.Errorf("disconnect provider support container %s from tenant network %q: %w", item.ID[:min(len(item.ID), 12)], networkName, err)
+			}
+		}
+	}
+	return nil
 }
 
 // Rename renames a tenant container to the supplied Docker name.
@@ -634,10 +901,17 @@ func (m *Manager) HealthCheck(ctx context.Context, containerID string) (bool, er
 		return false, nil
 	}
 
-	// Find the container's IP on our network
-	netSettings, ok := inspect.NetworkSettings.Networks[m.cfg.Network]
-	if !ok || !netSettings.IPAddress.IsValid() {
-		return false, fmt.Errorf("container not connected to network %s", m.cfg.Network)
+	networkNames := m.healthCheckNetworkCandidates(inspect)
+	var netSettings *network.EndpointSettings
+	for _, networkName := range networkNames {
+		candidate, ok := inspect.NetworkSettings.Networks[networkName]
+		if ok && candidate != nil && candidate.IPAddress.IsValid() {
+			netSettings = candidate
+			break
+		}
+	}
+	if netSettings == nil {
+		return false, fmt.Errorf("container not connected to tenant health network candidates %s", strings.Join(networkNames, ", "))
 	}
 
 	healthURL := fmt.Sprintf("http://%s:%d/api/health", netSettings.IPAddress.String(), m.cfg.ContainerPort)
@@ -649,4 +923,35 @@ func (m *Manager) HealthCheck(ctx context.Context, containerID string) (bool, er
 	defer func() { _, _ = io.Copy(io.Discard, resp.Body); resp.Body.Close() }()
 
 	return resp.StatusCode == http.StatusOK, nil
+}
+
+func (m *Manager) healthCheckNetworkCandidates(inspect container.InspectResponse) []string {
+	var names []string
+	seen := make(map[string]struct{})
+	appendName := func(name string) {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			return
+		}
+		if _, ok := seen[name]; ok {
+			return
+		}
+		seen[name] = struct{}{}
+		names = append(names, name)
+	}
+
+	if m != nil && m.cfg.IsolateTenantNetworks && inspect.Config != nil {
+		if tenantID := strings.TrimSpace(inspect.Config.Labels["pulse.tenant.id"]); tenantID != "" {
+			appendName(m.tenantNetworkName(tenantID))
+		}
+	}
+	if m != nil {
+		appendName(m.cfg.Network)
+	}
+	if inspect.NetworkSettings != nil {
+		for name := range inspect.NetworkSettings.Networks {
+			appendName(name)
+		}
+	}
+	return names
 }
