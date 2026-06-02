@@ -86,7 +86,7 @@ func TestMSPSignupPageRendersUnavailableWhenNoTierConfigured(t *testing.T) {
 	if strings.Contains(body, "<form") {
 		t.Fatal("expected no signup form when no MSP tier is configured")
 	}
-	if !strings.Contains(body, "Starter self-serve signup is not open yet") {
+	if !strings.Contains(body, "not open for public self-serve purchase yet") {
 		t.Fatalf("expected unavailable notice, got %q", body)
 	}
 }
@@ -107,8 +107,8 @@ func TestMSPSignupPageRendersFormWhenTierConfigured(t *testing.T) {
 	if !strings.Contains(body, "<form") {
 		t.Fatal("expected signup form when an MSP tier is configured")
 	}
-	if !strings.Contains(body, "Start Pulse MSP Starter") {
-		t.Fatal("expected MSP paid signup heading")
+	if !strings.Contains(body, "Request Pulse MSP Access") {
+		t.Fatal("expected MSP access request heading")
 	}
 	if strings.Contains(strings.ToLower(body), "trial") {
 		t.Fatal("MSP signup page should not advertise a trial")
@@ -138,7 +138,7 @@ func TestMSPSignupPageKeepsStarterSelfServeWhenMultipleTiersConfigured(t *testin
 
 	body := rec.Body.String()
 	if strings.Contains(body, `type="radio"`) {
-		t.Fatal("expected no tier radios because only MSP Starter is self-serve")
+		t.Fatal("expected no tier radios because only MSP Starter request path is exposed")
 	}
 	if !strings.Contains(body, `type="hidden" name="tier" value="starter"`) {
 		t.Fatal("expected hidden starter tier input")
@@ -263,7 +263,7 @@ func TestMSPSignupPostAssistedTierReturns400EvenWhenConfigured(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "request-based") {
+	if !strings.Contains(rec.Body.String(), "request-assisted") {
 		t.Fatalf("expected assisted-tier message, got %q", rec.Body.String())
 	}
 }
@@ -283,7 +283,7 @@ func TestMSPSignupPostUnconfiguredStarterReturns400(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "Starter self-serve checkout is not currently available") {
+	if !strings.Contains(rec.Body.String(), "Starter access is not currently available") {
 		t.Fatalf("expected tier-unavailable message, got %q", rec.Body.String())
 	}
 }
@@ -401,14 +401,14 @@ func TestMSPSignupCompleteRendersHandoff(t *testing.T) {
 		t.Fatalf("status=%d, want %d", rec.Code, http.StatusOK)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "Checkout complete") {
+	if !strings.Contains(body, "Request received") {
 		t.Fatal("expected completion heading")
 	}
 	if strings.Contains(strings.ToLower(body), "trial") {
-		t.Fatal("MSP checkout completion should not advertise a trial")
+		t.Fatal("MSP access completion should not advertise a trial")
 	}
-	if !strings.Contains(body, "Pulse Account") || !strings.Contains(body, "add client workspaces") {
-		t.Fatal("expected Pulse Account handoff copy")
+	if !strings.Contains(body, "signed provider license") || !strings.Contains(body, "client workspace cap") {
+		t.Fatal("expected assisted access setup copy")
 	}
 }
 

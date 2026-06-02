@@ -315,7 +315,7 @@ func TestRegisterRoutes_PublicMSPSignupRoutes(t *testing.T) {
 	if mspPageRec.Code != http.StatusOK {
 		t.Fatalf("GET /cloud/msp/signup status=%d, want %d", mspPageRec.Code, http.StatusOK)
 	}
-	if !strings.Contains(mspPageRec.Body.String(), "Start Pulse MSP Starter") {
+	if !strings.Contains(mspPageRec.Body.String(), "Request Pulse MSP Access") {
 		t.Fatalf("expected public MSP signup page body")
 	}
 

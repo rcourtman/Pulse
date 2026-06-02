@@ -10,6 +10,7 @@ Pulse supports multiple deployment models. This page clarifies what differs betw
 | systemd (bare metal / VM) | Traditional Linux hosts | `/etc/pulse` | In-app updates supported |
 | Docker | Quick evaluation and container stacks | `/data` (bind mount / volume) | Image pull + restart |
 | Kubernetes (Helm) | Cluster operators | `/data` (PVC) | Helm upgrade |
+| Provider-hosted MSP | Managed service providers, request-assisted | Provider control plane data plus one tenant data directory per client runtime | Provider control plane rollout plus per-client runtime rollout |
 
 ## Common Ports
 
@@ -53,7 +54,7 @@ Pulse uses a split config model:
 - **Recovery tokens**: `recovery_tokens.json`
 - **Update history**: `update-history.jsonl`
 - **Metrics history**: `metrics.db` (SQLite)
-- **Organization metadata**: `org.json` (multi-tenant)
+- **Organization metadata**: `org.json` (Enterprise/internal multi-org)
 - **TrueNAS connections**: `truenas.enc` (encrypted)
 - **Relay config**: `relay.enc` (encrypted, Relay and above)
 - **RBAC roles**: `rbac_roles.json` (Pro/legacy Pro+/Cloud)
@@ -63,10 +64,17 @@ Path mapping:
 - systemd/LXC: `/etc/pulse/*`
 - Docker/Helm: `/data/*`
 
-Multi-tenant layout:
+Enterprise/internal multi-org layout:
 - Default org uses the root data dir for backward compatibility.
 - Non-default orgs use `/orgs/<org-id>/`.
 - Migration may create `/orgs/default/` and symlinks in the root data dir.
+
+Provider-hosted MSP layout:
+- The MSP runs a Stripe-free provider control plane.
+- A signed MSP license is the activation source and sets the provider plan plus client workspace cap.
+- Each client workspace runs as its own isolated Pulse runtime/container with its own data, metrics, alerts, webhooks, report settings, users, and audit history.
+- Pulse Account is the provider control plane for creating client workspaces and handing operators into the correct tenant-local Pulse runtime.
+- Ordinary self-hosted Pulse deployments do not use this model unless the operator deliberately enters the MSP path.
 
 ## Updates by Model
 
@@ -94,3 +102,9 @@ Upgrade the chart:
 helm repo update
 helm upgrade pulse pulse/pulse -n pulse
 ```
+
+### Provider-hosted MSP
+
+Provider-hosted MSP is not the same as enabling shared-process organizations in a normal Pulse install. The provider-hosted path runs a control plane that creates an isolated Pulse runtime for each client workspace. Alerts, webhook destinations, branded report settings, users, audit history, and metrics stay inside the client runtime. Duplicate hostnames across clients do not collide because they never share the same runtime namespace.
+
+Access is request-assisted while MSP is staged for rollout. The deployable model is license-backed by a signed MSP license, not by Stripe checkout or environment-only plan selection.

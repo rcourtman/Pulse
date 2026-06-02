@@ -2,7 +2,7 @@
 
 RBAC lets you define custom roles with granular permissions and assign them to users. This restricts what each user can see and do in Pulse.
 
-**Requires:** Pro, legacy Pro+, or Cloud license with the `rbac` capability.
+**Requires:** Pro, legacy Pro+, Cloud, MSP, or Enterprise/custom license with the `rbac` capability.
 
 For plan details, see [PULSE_PRO.md](PULSE_PRO.md). For API endpoints, see [API Reference](API.md#-rbac--role-management-pro).
 
@@ -31,7 +31,7 @@ When using OIDC/SSO, roles can be automatically assigned based on group membersh
 
 ## Quick Start
 
-1. Activate a Pro, grandfathered Pro+, or Cloud license in **Settings → Plans**.
+1. Activate a Pro, grandfathered Pro+, Cloud, MSP, or Enterprise/custom license in **Settings → Plans**.
 2. Go to **Settings → Security → Access Control**.
 3. Create roles with the permissions you need.
 4. Assign roles to users.
@@ -151,9 +151,9 @@ See [OIDC documentation](OIDC.md#group-to-role-mapping-pro) for full configurati
 
 ---
 
-## Organization Roles (Multi-Tenant)
+## Organization Roles (Enterprise/Internal Multi-Org)
 
-In multi-tenant deployments (Cloud Enterprise), each organization has its own role hierarchy:
+In Enterprise/internal multi-organization deployments, each organization has its own role hierarchy:
 
 | Role | Permissions |
 |------|------------|
@@ -162,7 +162,9 @@ In multi-tenant deployments (Cloud Enterprise), each organization has its own ro
 | **Editor** | Read/write access to org resources. Cannot manage members. |
 | **Viewer** | Read-only access to all org data. |
 
-These organization roles are separate from the RBAC custom roles described above. Organization roles control access within a specific tenant, while RBAC roles control access to Pulse features globally.
+These organization roles are separate from the RBAC custom roles described above. Organization roles control access within a specific internal organization, while RBAC roles control access to Pulse features globally.
+
+Provider-hosted MSP uses a different boundary: each client workspace is its own isolated Pulse runtime. RBAC inside that runtime controls access for that client, and the provider control plane handles account-level staff access and handoff.
 
 See [Multi-Tenant Organizations](MULTI_TENANT.md) for details.
 

@@ -15,7 +15,7 @@ import (
 
 const canonicalPublicMSPSignupPath = "/cloud/msp/signup"
 
-// mspTier represents a hosted MSP plan tier for public signup. The three tiers
+// mspTier represents an MSP plan tier for public signup. The three tiers
 // mirror the canonical MSP plan-version ladder in pkg/licensing (msp_starter /
 // msp_growth / msp_scale), each capped at a different number of client
 // workspaces.
@@ -113,7 +113,7 @@ var publicMSPSignupPageTemplate = template.Must(template.New("public-msp-signup-
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Start Pulse MSP Starter</title>
+  <title>Request Pulse MSP Access</title>
   <style nonce="{{.Nonce}}">
     :root { color-scheme: light; }
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: linear-gradient(140deg, #f8fafc, #e2e8f0); color: #0f172a; }
@@ -138,18 +138,18 @@ var publicMSPSignupPageTemplate = template.Must(template.New("public-msp-signup-
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>Start Pulse MSP Starter</h1>
-      <p>Run Pulse for multiple clients from one hosted operator account. Each client gets an isolated workspace; you manage them all from Pulse Account. Starter is the self-serve checkout path for small providers. Growth and Scale have published prices, but access is request-assisted so onboarding, reporting, and support expectations can be sized with you.</p>
+      <h1>Request Pulse MSP Access</h1>
+      <p>Run Pulse for multiple clients from one provider account. The provider-hosted model runs a Stripe-free control plane and one isolated Pulse runtime per client workspace. MSP is an explicit provider path, so ordinary self-hosted Pulse stays out of it unless you choose this model. Starter, Growth, and Scale have published prices, but access is request-assisted while rollout, reporting, hosting, and support expectations are sized with you.</p>
       {{if .ErrorMessage}}<div class="error">{{.ErrorMessage}}</div>{{end}}
-      {{if .Cancelled}}<div class="note">Checkout was cancelled. You can start again below.</div>{{end}}
+      {{if .Cancelled}}<div class="note">The previous request was cancelled. You can start again below.</div>{{end}}
 
       {{if .Available}}
       <form method="POST" action="{{.FormAction}}">
         <input type="hidden" name="tier" value="{{.Tier}}">
         <div class="tier-group">
-          <div class="tier-option"><strong>Starter</strong> &mdash; up to 5 client workspaces, $149/mo</div>
-          <div class="tier-option"><strong>Growth</strong> &mdash; up to 15 client workspaces, $249/mo, request-assisted access</div>
-          <div class="tier-option"><strong>Scale</strong> &mdash; up to 40 client workspaces, $399/mo, request-assisted access</div>
+          <div class="tier-option"><strong>Starter</strong>, up to 5 client workspaces, $149/mo, request-assisted access</div>
+          <div class="tier-option"><strong>Growth</strong>, up to 15 client workspaces, $249/mo, request-assisted access</div>
+          <div class="tier-option"><strong>Scale</strong>, up to 40 client workspaces, $399/mo, request-assisted access</div>
         </div>
 
         <label for="email">Work Email</label>
@@ -158,17 +158,17 @@ var publicMSPSignupPageTemplate = template.Must(template.New("public-msp-signup-
         <label for="org_name">Company Name</label>
         <input id="org_name" name="org_name" type="text" value="{{.OrgName}}" autocomplete="organization" required>
 
-        <button class="cta" type="submit">Continue To Secure Checkout</button>
+        <button class="cta" type="submit">Request Assisted Access</button>
       </form>
 
-      <p class="fine">After checkout, we will email a Pulse Account sign-in link so you can create client workspaces and continue setup. For Growth or Scale, email support@pulserelay.pro and include the tier you want and your expected client workspace count.</p>
+      <p class="fine">MSP is not open for public self-serve purchase yet. I will confirm the right tier, license-backed provider activation, and whether provider-hosted or Pulse-hosted operation fits before client data starts flowing. For Growth or Scale, email support@pulserelay.pro and include the tier you want and your expected client workspace count.</p>
       <ol>
-        <li>Stripe securely starts your MSP Starter subscription.</li>
-        <li>Pulse provisions your MSP operator account after checkout completes.</li>
-        <li>The email link opens Pulse Account, where you add client workspaces and continue setup.</li>
+        <li>Confirm the expected client workspace count and hosting model.</li>
+        <li>Issue or verify the signed MSP license that sets the provider plan and client cap.</li>
+        <li>Set up the provider account so you can add client workspaces and hand off into each isolated Pulse runtime.</li>
       </ol>
       {{else}}
-      <div class="note">Pulse MSP Starter self-serve signup is not open yet. Email support@pulserelay.pro and we will get you set up.</div>
+      <div class="note">Pulse MSP is not open for public self-serve purchase yet. Email support@pulserelay.pro and I will get you set up.</div>
       {{end}}
     </div>
   </div>
@@ -181,7 +181,7 @@ var publicMSPSignupCompleteTemplate = template.Must(template.New("public-msp-sig
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pulse MSP Starter Checkout Complete</title>
+  <title>Pulse MSP Access Request Complete</title>
   <style nonce="{{.Nonce}}">
     :root { color-scheme: light; }
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f8fafc; color: #0f172a; }
@@ -194,9 +194,9 @@ var publicMSPSignupCompleteTemplate = template.Must(template.New("public-msp-sig
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>Checkout complete</h1>
-      <p>Your Pulse MSP Starter checkout completed. Pulse is provisioning your MSP operator account.</p>
-      <p>Watch your inbox for a Pulse Account sign-in link. That link lands in Pulse Account, where you can add client workspaces and continue setup.</p>
+      <h1>Request received</h1>
+      <p>Your Pulse MSP access request has been received.</p>
+      <p>Watch your inbox for the next setup step. MSP access is request-assisted, and setup confirms the signed provider license, client workspace cap, and hosting boundary before rollout.</p>
     </div>
   </div>
 </body>
@@ -211,11 +211,11 @@ type publicMSPSignupPageData struct {
 	ErrorMessage string
 	Cancelled    bool
 	Nonce        string
-	Available    bool // true if MSP Starter self-serve checkout is configured
+	Available    bool // true if the gated MSP request path is configured
 }
 
 // newMSPSignupPageData seeds page data from the current public MSP buying
-// motion: Starter is self-serve; larger plans are assisted.
+// motion: all MSP plans are request-assisted while public launch is gated.
 func (h *PublicCloudSignupHandlers) newMSPSignupPageData() publicMSPSignupPageData {
 	_, starterConfigured := h.selfServeMSPPriceIDForTier(mspTierStarter)
 	data := publicMSPSignupPageData{
@@ -274,18 +274,18 @@ func (h *PublicCloudSignupHandlers) HandleMSPSignupPage(w http.ResponseWriter, r
 			return
 		}
 		if !isSelfServeMSPTier(tier) {
-			renderErr(http.StatusBadRequest, "MSP Growth and Scale are request-based. Email support@pulserelay.pro with your client workspace count.")
+			renderErr(http.StatusBadRequest, "MSP Growth and Scale are request-assisted. Email support@pulserelay.pro with your client workspace count.")
 			return
 		}
 		if _, avail := h.selfServeMSPPriceIDForTier(tier); !avail {
-			renderErr(http.StatusBadRequest, "MSP Starter self-serve checkout is not currently available.")
+			renderErr(http.StatusBadRequest, "MSP Starter access is not currently available.")
 			return
 		}
 
 		checkoutURL, err := h.createMSPCheckout(email, orgName, tier)
 		if err != nil {
 			log.Warn().Err(err).Str("email", email).Str("tier", string(tier)).Msg("public msp signup checkout creation failed")
-			renderErr(http.StatusBadGateway, "Unable to create checkout session. Please try again.")
+			renderErr(http.StatusBadGateway, "Unable to start MSP access request. Please try again.")
 			return
 		}
 		http.Redirect(w, r, checkoutURL, http.StatusSeeOther)
@@ -311,7 +311,7 @@ func (h *PublicCloudSignupHandlers) HandleMSPPublicSignup(w http.ResponseWriter,
 	h.servePublicSignupCheckout(w, r,
 		"Invalid plan tier. Must be one of: starter, growth, scale",
 		"public msp signup API checkout creation failed",
-		"Checkout session created. Continue in Stripe to start your Pulse MSP Starter subscription and provision your operator account.",
+		"MSP access request created. Continue with the assisted setup instructions.",
 		func(tierRaw string) (bool, bool, func(email, orgName string) (string, error)) {
 			tier, ok := parseMSPTier(tierRaw)
 			if !ok {
@@ -331,7 +331,7 @@ func (h *PublicCloudSignupHandlers) createMSPCheckout(email, orgName string, tie
 	}
 	priceID, ok := h.selfServeMSPPriceIDForTier(tier)
 	if !ok || priceID == "" {
-		return "", fmt.Errorf("self-serve checkout is not configured for msp tier %q", tier)
+		return "", fmt.Errorf("checkout is not configured for msp tier %q", tier)
 	}
 	if err := validatePublicMSPSignupPriceID(tier, priceID); err != nil {
 		return "", err

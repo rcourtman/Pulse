@@ -1,6 +1,8 @@
 # Pulse Cloud (Hosted)
 
-Pulse Cloud is the hosted version of Pulse — a fully managed monitoring instance that runs in the cloud so you don't have to self-host.
+Pulse Cloud is the hosted version of Pulse. It is a fully managed monitoring instance that runs in the cloud so you don't have to self-host.
+
+Pulse Cloud is for a hosted Pulse instance. Pulse MSP is a separate provider path: the MSP normally runs a Stripe-free provider-hosted control plane with one isolated Pulse runtime per client. Pulse-hosted MSP is available only as a request-assisted option where Pulse operates that provider stack for the MSP.
 
 ## How It Works
 
@@ -25,7 +27,7 @@ Pulse Cloud includes everything in the **Pro** plan, plus:
 
 ### Cloud Enterprise (Add-On)
 
-For organisations that need multi-tenant management:
+For organisations that need internal multi-organization management under one owner:
 
 | Feature | Capability Key |
 |---|---|
@@ -34,6 +36,8 @@ For organisations that need multi-tenant management:
 | Hosted Capacity Policy | `unlimited` |
 
 See [Plans & Entitlements](PULSE_PRO.md) for the full feature matrix.
+
+Cloud Enterprise shared-process organizations are for one owner separating internal sites, departments, or environments. They are not the default MSP model for unrelated customer businesses.
 
 ## Getting Started
 
@@ -117,4 +121,4 @@ Yes. Use the export/import workflow described above. Your monitoring configurati
 - [Plans & Entitlements](PULSE_PRO.md) — feature comparison across Community, Relay, Pro, legacy Pro+, and Cloud
 - [Installation (Self-Hosted)](INSTALL.md) — self-hosted installation guide
 - [Relay / Mobile Access](RELAY.md) — relay setup and mobile rollout status (pre-configured on Cloud)
-- [Multi-Tenant](MULTI_TENANT.md) — multi-tenant mode (Cloud Enterprise)
+- [Multi-Tenant](MULTI_TENANT.md), Enterprise/internal multi-organization mode

@@ -22,7 +22,7 @@ normal contribution flow for this repository. See [CONTRIBUTING.md](CONTRIBUTING
 
 Pulse is a modern, unified monitoring workspace for your **infrastructure** across Proxmox, Docker, Kubernetes, and TrueNAS. It consolidates metrics, alerts, and AI-powered insights from all your systems into a single, beautiful interface.
 
-Designed for homelabs, sysadmins, and MSPs who need a "single pane of glass" without the complexity of enterprise monitoring stacks.
+Designed for homelabs, sysadmins, internal IT teams, and providers who need a clear monitoring view without the complexity of enterprise monitoring stacks. MSP access is a separate, request-assisted provider path and is not part of ordinary self-hosted setup.
 
 ![Pulse Infrastructure](docs/images/01-dashboard.jpg)
 
@@ -150,7 +150,7 @@ and Recovery desktop history-table layout are all aligned.
 - **[API Reference](docs/API.md)**: Integrate Pulse with your own tools.
 - **[Architecture](ARCHITECTURE.md)**: High-level system design and data flow.
 - **[AI Features](docs/AI.md)**: Pulse Assistant (Chat) and Pulse Patrol documentation.
-- **[Multi-Tenant](docs/MULTI_TENANT.md)**: Enterprise multi-tenant setup and configuration.
+- **[Multi-Tenant](docs/MULTI_TENANT.md)**: Enterprise/internal multi-organization setup and configuration.
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)**: Solutions to common issues.
 - **[Agent Security](docs/AGENT_SECURITY.md)**: Agent privilege model, Proxmox API-only choices, and checksum/signature verification.
 - **[Docker Monitoring](docs/DOCKER.md)**: Setup and management of Docker agents.
@@ -166,8 +166,9 @@ Community-maintained integrations and addons:
 
 Pulse is full-featured for core monitoring in every self-hosted tier. Self-hosted
 pricing no longer sells more room for monitoring volume; paid value comes from
-convenience, history, AI operations, and advanced administration. Cloud and MSP
-pricing are unchanged.
+convenience, history, AI operations, and advanced administration. Cloud remains
+the hosted Pulse path. MSP is request-assisted provider hosting, with one
+isolated Pulse runtime per client.
 
 Self-hosted tiers:
 

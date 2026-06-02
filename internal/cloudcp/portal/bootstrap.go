@@ -172,9 +172,9 @@ func defaultSetupTemplatesForAccount(account portalPageAccount) []BootstrapSetup
 		{
 			ID:           "standard-client-onboarding",
 			Title:        "Standard client onboarding",
-			AgentNaming:  "Keep the client workspace as the identity boundary; repeated hostnames are expected across clients.",
-			AlertRouting: "Create at least one enabled alert route inside each client workspace.",
-			Reporting:    "Schedule at least one client performance report before the workspace is marked ready.",
+			AgentNaming:  "Each client workspace opens an isolated Pulse runtime; repeated hostnames are expected across clients.",
+			AlertRouting: "Create at least one enabled alert route inside each client runtime.",
+			Reporting:    "Schedule at least one client performance report, with client branding if white_label is granted, before the workspace is marked ready.",
 			Access:       "Invite provider staff from Access and keep client users on the smallest useful role.",
 		},
 	}

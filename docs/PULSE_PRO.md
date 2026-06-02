@@ -1,4 +1,4 @@
-# Pulse Plans and Entitlements (Community / Relay / Pro / Cloud)
+# Pulse Plans and Entitlements (Community / Relay / Pro / Cloud / MSP)
 
 This document explains Pulse's user-facing plan structure, the locked self-hosted commercial model, and how those plans map to runtime feature gates.
 
@@ -13,13 +13,15 @@ User-facing plans map to internal tiers as follows:
 - **Community**: `free`
 - **Relay**: `relay`
 - **Pro**: `pro`, `pro_annual`, `lifetime`
-- **Cloud**: `msp` or `enterprise`
+- **Cloud**: `cloud` for hosted Pro-level instances, with `enterprise` for internal multi-organization add-ons
+- **MSP**: signed provider MSP license using `msp_*` plan versions, with Enterprise/custom terms for higher client counts or white-label report branding
 
 Notes:
 - `lifetime` keeps the same runtime feature set as Pro, and lifetime plus grandfathered recurring legacy entitlements are not metered by self-hosted monitoring or child-resource volume under the current v6 policy. Other migrated legacy paid installs can still carry cohort continuity metadata for support and audit, but self-hosted monitoring volume is no longer the paid gate.
 - `pro_plus` remains a legacy compatibility tier for existing holders. It is not a current public self-hosted plan because monitored-system volume is no longer the paid boundary.
-- Items marked **Cloud*** require the `enterprise` tier rather than the base `msp` tier.
+- Items marked **Enterprise*** require an Enterprise/custom entitlement rather than the base hosted or MSP tier.
 - If you are self-hosting, you can use capability keys and `GET /api/license/features` to discover exactly what is active in your instance.
+- Ordinary self-hosted Pulse stays free-first. MSP and Enterprise paths are explicit commercial paths and should not appear in normal self-hosted monitoring flows.
 
 ## Self-Hosted Commercial Model
 
@@ -130,7 +132,7 @@ surface upgrade prompts unless the user deliberately enters a commercial path.
 
 Legend:
 - Included: `Y` / `N`
-- `Y*`: Cloud Enterprise only (`enterprise` tier)
+- `Y*`: Enterprise/custom only (`enterprise` tier or explicit entitlement)
 
 This matrix is derived from the canonical table in `docs/architecture/ENTITLEMENT_MATRIX.md` plus runtime history/limit semantics exposed through entitlements.
 
@@ -149,9 +151,10 @@ This matrix is derived from the canonical table in `docs/architecture/ENTITLEMEN
 | `FeatureAuditLogging` | `audit_logging` | Audit Logging | N | N | Y | Y | API route gating for audit query, verify, and export endpoints. |
 | `FeatureAdvancedReporting` | `advanced_reporting` | PDF/CSV Reporting | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., advanced_reporting, ...)`. |
 | `FeatureLongTermMetrics` | `long_term_metrics` | Extended Metric History | N | Y | Y | Y | Runtime history limits are tier-aware through `max_history_days`: Community `7`, Relay `14`, Pro `90`. |
-| `FeatureMultiUser` | `multi_user` | Multi-User Mode | N | N | N | Y* | Cloud Enterprise only. |
+| `FeatureMultiUser` | `multi_user` | Multi-User Mode | N | N | N | Y* | Enterprise/custom only. |
 | `FeatureMultiTenant` | `multi_tenant` | Multi-Tenant Mode | N | N | N | Y* | Requires both `PULSE_MULTI_TENANT_ENABLED=true` and the `multi_tenant` capability for non-default orgs. |
 | `FeatureUnlimited` | `unlimited` | Hosted Capacity Policy | N | N | N | Y | Hosted/enterprise capacity policy only; not a self-hosted core monitoring gate. |
+| `FeatureWhiteLabel` | `white_label` | White-Label Report Branding | N | N | N | Y* | Gates custom report branding. Provider defaults and per-client overrides render only when this entitlement is active. |
 
 ## Autonomy Levels (AI Safety)
 
@@ -191,7 +194,12 @@ Patrol and the Assistant support tiered autonomy:
 
 ### Cloud
 - Hosted Pulse with Pro-level capabilities and hosted lifecycle management.
-- Cloud Enterprise adds multi-tenant orgs and multi-user mode.
+- Cloud Enterprise adds internal multi-organization mode and multi-user mode.
+
+### MSP
+- Provider-hosted MSP is request-assisted and license-backed. The MSP runs a Stripe-free provider control plane that creates one isolated Pulse runtime per client workspace.
+- Each client runtime keeps its own data, alerts, webhooks, users, audit history, report settings, and branded PDF reports when `white_label` is granted.
+- Pulse-hosted MSP is an optional request-assisted path where Pulse operates the provider stack.
 
 ## License Activation and Introspection
 

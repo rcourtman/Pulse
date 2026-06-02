@@ -1,6 +1,8 @@
-# Multi-Tenant Organizations (Cloud Enterprise)
+# Multi-Tenant Organizations (Enterprise/Internal)
 
-Pulse supports isolated, multi-tenant organizations for MSPs, homelabs with multiple environments, and multi-datacenter deployments. Each organization gets its own infrastructure, resources, alerts, and audit log — fully isolated from other organizations on the same Pulse instance.
+Pulse supports shared-process organizations for Enterprise and internal multi-organization deployments. Each organization gets its own infrastructure, resources, alerts, and audit log namespace on the same Pulse process.
+
+This is not the canonical Pulse MSP model for separate customer businesses. MSP crosses legal and security ownership boundaries, so the canonical MSP route is provider-hosted: a Stripe-free provider control plane runs one isolated Pulse runtime per client workspace. Use shared-process organizations when one owner is deliberately separating internal sites, teams, departments, or environments.
 
 ## Requirements
 
@@ -23,7 +25,7 @@ Without these, all API calls return `501 Not Implemented` (flag off) or `402 Pay
 
 ### Organizations
 
-An organization is a fully isolated monitoring environment:
+An organization is a separate monitoring namespace inside the same Pulse runtime:
 
 - Its own set of monitored nodes and resources.
 - Its own alerts, thresholds, and notifications.
@@ -118,21 +120,23 @@ curl http://localhost:7655/api/orgs/{orgId}/shares/incoming \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-## Monitoring Multiple Clients (MSP Setup)
+## Monitoring Multiple Internal Estates
 
-A common managed service provider pattern is to run one central Pulse server and keep each client in its own organization, so dashboards, alerts, notifications, and audit logs never mix between clients. The same default node names (`pve`, `pve1`) in different client organizations do not collide, because each organization is a separate namespace.
+An Enterprise deployment can run one central Pulse server and keep each internal estate in its own organization, so dashboards, alerts, notifications, and audit logs are scoped by organization. The same default node names (`pve`, `pve1`) in different organizations do not collide, because each organization is a separate namespace.
 
-To onboard a client:
+Use this for one company operating many internal sites, teams, departments, or environments. Do not use this as the default MSP model for unrelated customer businesses; MSP client isolation belongs to the provider-hosted client-workspace model with one isolated Pulse runtime per client.
 
-1. **Create an organization for the client** (see [Creating an Organization](#creating-an-organization)).
-2. **Create an org-bound API token** with the `agent:report` scope, bound to that client's organization (`orgId`). A token bound to a single organization automatically routes every agent that uses it into that organization, with no extra header required.
-3. **Install the client's agents** (Proxmox host, Docker, Kubernetes) using that token. Their telemetry lands in the client's organization, isolated from every other client.
-4. **(Optional) Alias node names per client.** If two clients both use the default `pve` hostname and you want them visually distinct, set `--hostname` (or the `PULSE_HOSTNAME` environment variable) on the agent, for example `--hostname "acme-pve1"`. See [UNIFIED_AGENT.md](UNIFIED_AGENT.md).
-5. **(Optional) Isolate agent check-in on its own port.** When client nodes reach the central server across the internet, enable [Split-Port Agent Ingest](CONFIGURATION.md#split-port-agent-ingest-network-isolation) so agents connect on a dedicated, firewalled port that exposes only `/api/agents/*` and never the web UI or management API.
+To onboard an internal estate:
 
-Route each client's alerts into your ticketing system (ConnectWise and others) with per-organization webhooks or the org-scoped alerts API. See the Multi-tenant / MSP section of [WEBHOOKS.md](WEBHOOKS.md).
+1. **Create an organization for the estate** (see [Creating an Organization](#creating-an-organization)).
+2. **Create an org-bound API token** with the `agent:report` scope, bound to that estate's organization (`orgId`). A token bound to a single organization automatically routes every agent that uses it into that organization, with no extra header required.
+3. **Install the estate's agents** (Proxmox host, Docker, Kubernetes) using that token. Their telemetry lands in the selected organization.
+4. **(Optional) Alias node names per estate.** If two estates both use the default `pve` hostname and you want them visually distinct, set `--hostname` (or the `PULSE_HOSTNAME` environment variable) on the agent, for example `--hostname "acme-pve1"`. See [UNIFIED_AGENT.md](UNIFIED_AGENT.md).
+5. **(Optional) Isolate agent check-in on its own port.** When remote nodes reach the central server across the internet, enable [Split-Port Agent Ingest](CONFIGURATION.md#split-port-agent-ingest-network-isolation) so agents connect on a dedicated, firewalled port that exposes only `/api/agents/*` and never the web UI or management API.
 
-**Licensing:** a single multi-tenant instance covers every client organization on that server. You do not need a separate Pro license per client. Self-hosted multi-tenant requires an Enterprise license with the `multi_tenant` capability (see [Requirements](#requirements)).
+Route each estate's alerts into the right internal system with per-organization webhooks or the org-scoped alerts API. See the multi-tenant section of [WEBHOOKS.md](WEBHOOKS.md).
+
+**Licensing:** self-hosted multi-tenant requires an Enterprise license with the `multi_tenant` capability (see [Requirements](#requirements)). MSP licensing is separate and is based on a signed provider MSP license that sets the client workspace cap for isolated client runtimes, not shared-process organizations.
 
 ## Settings Panels
 
@@ -202,6 +206,6 @@ Activate an Enterprise license with the `multi_tenant` capability in **Settings 
 
 ## See Also
 
-- [Plans & Entitlements](PULSE_PRO.md) — multi-tenant availability by plan
-- [Pulse Cloud](CLOUD.md) — hosted multi-tenant environment
-- [Security](../SECURITY.md) — authentication and authorization model
+- [Plans & Entitlements](PULSE_PRO.md), multi-tenant availability by plan
+- [Pulse Cloud](CLOUD.md), hosted Pulse environment
+- [Security](../SECURITY.md), authentication and authorization model

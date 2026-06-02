@@ -224,51 +224,55 @@ Cloud launches alongside v6 (not behind a waitlist).
 
 ---
 
-## MSP Tiers (Multi-Tenant — separate page)
+## MSP Tiers (Provider-hosted, request-assisted)
 
-All MSP tiers include everything in Pro + multi-tenant management UI + port separation
-(agent vs web UI) + webhook templates. Annual pricing is 2 months free (~17% savings).
+Pulse MSP is not the shared-process organization model. The default MSP route is provider-hosted: the MSP runs a Stripe-free control plane that creates one isolated Pulse runtime/container per client workspace. A signed MSP license sets the plan version and client workspace cap. Pulse-hosted MSP is an optional request-assisted path where Pulse operates that provider stack.
+
+MSP is built and staged for assisted rollout, but it is not a public self-serve checkout path yet. Pricing, availability, and launch wording need owner review before publication.
 
 ### MSP Starter — $149/month or $1,490/year
 
 | Element | Value |
 |---|---|
-| Clients | Up to **10** |
-| Host pool | **50** |
-| Multi-tenant UI | Yes |
-| Port separation | Yes |
-| Webhook templates | Yes |
-| White-label | Future |
+| Client workspaces | Up to **5** |
+| Provider control plane | Yes, provider-hosted and Stripe-free |
+| Client runtime isolation | One Pulse runtime/container per client |
+| Portal handoff | Yes |
+| Webhook templates | Gotify, PagerDuty, Slack, and Generic |
+| White-label report branding | Requires `white_label` entitlement |
+| Access motion | Request-assisted |
 
 ### MSP Growth — $249/month or $2,490/year
 
 | Element | Value |
 |---|---|
-| Clients | Up to **25** |
-| Host pool | **150** |
-| Multi-tenant UI | Yes |
-| Port separation | Yes |
-| Webhook templates | Yes |
-| White-label | Future |
+| Client workspaces | Up to **15** |
+| Provider control plane | Yes, provider-hosted and Stripe-free |
+| Client runtime isolation | One Pulse runtime/container per client |
+| Portal handoff | Yes |
+| Webhook templates | Gotify, PagerDuty, Slack, and Generic |
+| White-label report branding | Requires `white_label` entitlement |
+| Access motion | Request-assisted |
 
 ### MSP Scale — $399/month or $3,990/year
 
 | Element | Value |
 |---|---|
-| Clients | Up to **50** |
-| Host pool | **400** |
-| Multi-tenant UI | Yes |
-| Port separation | Yes |
-| Webhook templates | Yes |
-| White-label | Future |
+| Client workspaces | Up to **40** |
+| Provider control plane | Yes, provider-hosted and Stripe-free |
+| Client runtime isolation | One Pulse runtime/container per client |
+| Portal handoff | Yes |
+| Webhook templates | Gotify, PagerDuty, Slack, and Generic |
+| White-label report branding | Requires `white_label` entitlement |
+| Access motion | Request-assisted |
 
 ### MSP Enterprise — Custom
 
 | Element | Value |
 |---|---|
-| Clients | **50+** |
-| Host pool | Custom |
-| White-label | **Yes** |
+| Client workspaces | Custom |
+| Hosting shape | Provider-hosted by default, Pulse-hosted optional by agreement |
+| White-label report branding | **Yes**, when granted through `white_label` |
 | Pricing | Negotiated |
 
 ---
@@ -398,7 +402,7 @@ Below the table:
 ```
   Starter       Growth          Scale           Enterprise
   $149/mo       $249/mo         $399/mo         Custom
-  10 clients    25 clients      50 clients      50+
+  5 clients     15 clients      40 clients      Custom
 ```
 
 ---
@@ -457,6 +461,8 @@ explain monitored-system identity:
 - Cloud Max Annual: `price_1T5kg5BrHBocJIGH5AIJ4nVc` ($699/yr)
 
 ### MSP (created 2026-02-28)
+> Owner review required before publication: these price IDs exist, but MSP is request-assisted and must not be presented as live self-serve checkout until launch is approved.
+
 - MSP Starter Monthly: `price_1T5kgTBrHBocJIGHjOs15LI2` ($149/mo)
 - MSP Starter Annual: `price_1T5kgUBrHBocJIGHT6PiOn6x` ($1,490/yr)
 - MSP Growth Monthly: `price_1T5kgVBrHBocJIGHulNsCTb1` ($249/mo)
@@ -496,6 +502,7 @@ explain monitored-system identity:
 ### Cloud / MSP
 
 - [ ] Keep current Cloud/MSP list pricing unchanged for now unless a separate decision explicitly revises it
+- [ ] Keep MSP request-assisted until owner approval makes the public launch motion explicit
 - [ ] Continue differentiating Cloud / MSP limits via plan-specific license claims rather than self-hosted static bands
 
 ---
@@ -522,6 +529,7 @@ explain monitored-system identity:
 
 | Date | Change | Author |
 |---|---|---|
+| 2026-06-02 | Reconciled MSP pricing evidence with the provider-hosted model: signed MSP license, Stripe-free provider control plane, isolated Pulse runtime per client, 5/15/40 client workspace caps, and request-assisted access until launch approval. | Richard |
 | 2026-04-29 | Replaced stale capacity-style monitoring phrasing with core-monitoring-included language across active v6 docs and upgrade-return copy so Community does not read like a former capacity upsell. | Codex |
 | 2026-04-23 | Removed stale self-hosted monitored-system capacity and Pro+ public-checkout language. Reaffirmed Community / Relay / Pro as current public self-hosted tiers, with Pro+ as continuity only and Pro value centered on operations, history, and admin controls. | Codex |
 | 2026-03-17 | Re-locked the self-hosted commercial model around monitored systems rather than installed agents. New self-hosted public pricing: Relay $4.99/$39, Pro $8.99/$79, Pro+ $14.99/$129. Added free-tier grace policy and marked the monitored-system counting migration as still required in code. | Codex + Richard |

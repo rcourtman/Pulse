@@ -75,24 +75,39 @@ Pro, legacy Pro+, and Cloud support dedicated audit webhooks for security event 
 ### Security
 Audit webhooks are dispatched asynchronously. The payload includes a `signature` field which can be verified using the per-instance HMAC key stored (encrypted) at `.audit-signing.key` in the Pulse data directory. There is no `PULSE_AUDIT_SIGNING_KEY` override.
 
-## 🏢 Multi-tenant / MSP and PSA integration
+## 🏢 Provider-hosted MSP webhooks
 
-In multi-tenant mode (Pulse Cloud, or self-hosted with `PULSE_MULTI_TENANT_ENABLED=true` and an Enterprise license with the `multi_tenant` capability) alerts and notification destinations are isolated **per organization**. Every alert and webhook request resolves an organization and operates only on that org's own alert state and webhook config, so one client's destinations and templates never leak into another's.
+Provider-hosted MSP runs one isolated Pulse runtime per client workspace. That means alert routes and webhook destinations are configured inside the client runtime, not in one shared cross-client alert table. A webhook for Client A only sees Client A alerts because Client A has its own Pulse runtime, data, tokens, and notification config.
+
+Built-in webhook templates include Gotify, PagerDuty, Slack, and Generic. Use the Generic webhook for systems that accept custom inbound payloads, including ConnectWise and similar PSA or ITSM tools. This is webhook routing, not a bespoke PSA integration.
+
+Typical MSP setup:
+
+1. Open the client workspace from Pulse Account.
+2. Add that client's notification destinations in **Alerts → Notification Destinations**.
+3. Use Gotify, PagerDuty, Slack, or Generic depending on where the client or provider team wants alerts to land.
+4. Keep each destination scoped to the client runtime so alert payloads and resolved events never cross into another client's workflow.
+
+## 🏢 Multi-tenant organization integrations
+
+In shared-process multi-tenant mode (self-hosted with `PULSE_MULTI_TENANT_ENABLED=true` and an Enterprise license with the `multi_tenant` capability) alerts and notification destinations are isolated **per organization**. Every alert and webhook request resolves an organization and operates only on that org's own alert state and webhook config.
+
+Use this for one owner separating internal sites, departments, teams, or environments. It is not the canonical Pulse MSP model for separate customer businesses; MSP uses isolated client workspaces with their own runtime boundaries.
 
 The organization for a request is resolved in this order:
 
-1. `X-Pulse-Org-ID: <orgID>` header (the way API clients and PSA middleware should target a specific tenant).
+1. `X-Pulse-Org-ID: <orgID>` header (the way API clients or internal middleware should target a specific organization).
 2. `pulse_org_id` session cookie (browser sessions).
 3. An org-bound API token (a token scoped to a single org needs no header).
 4. Fallback: the `default` org.
 
 Suspended or pending-deletion organizations return `403`, and an unknown org ID returns `400`.
 
-### Wiring tenant alerts into ConnectWise / a PSA
+### Wiring organization alerts into external systems
 
-There are two integration models. Most MSPs use the push model so tickets open and close automatically.
+There are two integration models. The push model is usually the right fit when tickets or incidents should open and close automatically.
 
-**Push (recommended): one outbound webhook per tenant org.** Create a **Generic** webhook for each client org and point it at your PSA's inbound endpoint (ConnectWise inbound webhook, an email connector, or a middleware that opens service tickets). Shape the JSON with a [custom template](#-custom-templates) so it matches your PSA's expected schema — every template variable listed above is available. Pulse fires on both `alert` and `resolved` events (`{{.Event}}` is `"alert"` or `"resolved"`), so the PSA can open a ticket on alert and auto-resolve it on recovery. Add PSA authentication as a custom header (e.g. `Authorization: Bearer ...`).
+**Push (recommended): one outbound webhook per organization.** Create a **Generic** webhook for each organization and point it at your external system's inbound endpoint (an ITSM/PSA inbound webhook, an email connector, or middleware that opens service tickets). Shape the JSON with a [custom template](#-custom-templates) so it matches the receiving system's expected schema: every template variable listed above is available. Pulse fires on both `alert` and `resolved` events (`{{.Event}}` is `"alert"` or `"resolved"`), so the receiving system can open a ticket on alert and auto-resolve it on recovery. Add authentication as a custom header (e.g. `Authorization: Bearer ...`).
 
 Configure it from the UI (**Alerts → Notification Destinations → Add Webhook**) per org, or programmatically with an org-bound admin token:
 
@@ -113,9 +128,9 @@ Content-Type: application/json
 }
 ```
 
-The exact ticket fields differ by PSA (ConnectWise, Autotask, Halo, and others each expect their own inbound shape), so map the template to your platform's contract. The `alertId` round-trips through `{{.ID}}`, which lets the PSA correlate the later `resolved` event to the ticket it opened.
+The exact ticket fields differ by platform (ConnectWise, Autotask, Halo, and others each expect their own inbound shape), so map the template to your platform's contract. The `alertId` round-trips through `{{.ID}}`, which lets the receiving system correlate the later `resolved` event to the ticket it opened.
 
-**Pull (poll): org-scoped read API.** Issue a `monitoring:read` token bound to each client org and poll that org's alerts. Send `X-Pulse-Org-ID` (or rely on the org-bound token) so you get only that tenant's data:
+**Pull (poll): org-scoped read API.** Issue a `monitoring:read` token bound to each organization and poll that org's alerts. Send `X-Pulse-Org-ID` (or rely on the org-bound token) so you get only that organization's data:
 
 - `GET /api/alerts/active` — currently firing alerts for the org.
 - `GET /api/alerts/history` — historical alerts for the org.
@@ -131,4 +146,4 @@ To acknowledge or clear from the PSA side, use a `monitoring:write` token: `POST
 | Read active / historical alerts | `GET /api/alerts/active`, `GET /api/alerts/history` | `monitoring:read` |
 | Acknowledge / clear alerts | `POST /api/alerts/acknowledge`, `POST /api/alerts/clear` | `monitoring:write` |
 
-Target a tenant with the `X-Pulse-Org-ID: <orgID>` header or an org-bound API token. See [API.md](API.md) for the full endpoint and token reference.
+Target an organization with the `X-Pulse-Org-ID: <orgID>` header or an org-bound API token. See [API.md](API.md) for the full endpoint and token reference.

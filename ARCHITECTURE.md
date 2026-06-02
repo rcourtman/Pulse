@@ -60,12 +60,12 @@ All backend code lives under `cmd/`, `internal/`, and `pkg/`. The binary is asse
    - **Polymorphic monitors**: Each Proxmox VE/PBS/PMG node runs in its own goroutine, polling via the platform REST API.
    - **Agent receivers** (`internal/api`): Docker, Host, and Kubernetes agents push metrics via HTTP POST to `/api/agents/{type}/report`.
    - **TrueNAS provider** (`internal/truenas`): Polls TrueNAS REST API for system info, pools, datasets, disks, alerts, ZFS snapshots, and replication tasks.
-   - Multi-tenant aware: when `PULSE_MULTI_TENANT_ENABLED=true`, each organisation gets an isolated monitor instance with its own configuration.
+   - Enterprise/internal multi-org aware: when `PULSE_MULTI_TENANT_ENABLED=true`, each organisation gets a separate shared-process monitor namespace with its own configuration.
 
 4. **WebSocket Hub (`internal/websocket`)**
    - Manages active browser connections with per-message compression (deflate).
-   - Broadcasts state diffs to all subscribed clients; supports per-tenant broadcasts for multi-org setups.
-   - Enforces origin validation, org-level authorization, and multi-tenant license gating.
+   - Broadcasts state diffs to all subscribed clients; supports per-organization broadcasts for internal multi-org setups.
+   - Enforces origin validation, organization-level authorization, and Enterprise/internal multi-org license gating.
 
 5. **Decomposed API Router (`internal/api`)**
    - The router is split into focused registration files for maintainability:
@@ -92,15 +92,21 @@ All backend code lives under `cmd/`, `internal/`, and `pkg/`. The binary is asse
 
 8. **Entitlements & Licensing (`internal/license`)**
    - Capability-key based gating: `ai_autofix`, `rbac`, `multi_tenant`, `relay`, `agent_profiles`, `kubernetes_ai`, `ai_alerts`, etc.
-   - Three tiers: **Community** (free), **Pro** (license key), **Cloud** (subscription).
+   - Core tiers include **Community** (free), **Relay**, **Pro**, hosted **Cloud**, request-assisted **MSP**, and Enterprise/custom entitlements.
    - Trial lifecycle with activation, renewal, and expiry. All state exposed via `/api/license/*`.
 
-9. **Recovery Engine (`internal/recovery`)**
+9. **Provider-hosted MSP control plane (`internal/cloudcp`)**
+   - A Stripe-free provider control plane can run one isolated Pulse runtime/container per client workspace.
+   - A signed MSP license sets the provider plan and client workspace cap.
+   - Pulse Account handles the provider workspace roster, sign-in-once handoff, client-bound agent install paths, and provider access surfaces.
+   - Each client runtime remains a normal Pulse instance for monitoring data, alerts, webhooks, reports, users, and audit history. Shared-process organizations are for Enterprise/internal multi-org, not the default MSP boundary.
+
+10. **Recovery Engine (`internal/recovery`)**
    - Aggregates backup data (PBS snapshots, ZFS snapshots, replication tasks) into a unified recovery point timeline.
    - Provides faceted queries: filter by type, source, status, and source health.
    - API: `/api/recovery/points`, `/api/recovery/series`, `/api/recovery/facets`, `/api/recovery/rollups`.
 
-10. **Audit Logging (`pkg/audit`)**
+11. **Audit Logging (`pkg/audit`)**
     - Defence-in-depth: every mutation is logged to SQLite, optionally signed with per-tenant encryption keys.
     - Async logging mode (`PULSE_AUDIT_ASYNC`) for high-throughput environments.
     - Tenant-aware logger manager for isolated per-org audit trails.
