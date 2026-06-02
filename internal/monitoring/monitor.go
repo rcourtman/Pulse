@@ -3669,13 +3669,25 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		// still fires.
 		if m.alertManager != nil {
 			reportFSID := models.CephClusterFSIDKey(cephCluster)
+			winnerPoolIDs := make(map[string]struct{})
 			for _, cluster := range m.state.GetDedupedCephClusters() {
 				if models.CephClusterFSIDKey(cluster) != reportFSID {
 					continue
 				}
 				for _, storage := range cephPoolAlertStorageTargets(cluster) {
+					winnerPoolIDs[storage.ID] = struct{}{}
 					m.alertManager.CheckStorage(storage)
 				}
+			}
+			// If the Proxmox API identity won the dedup, retire any alert still
+			// active under this agent's own pool IDs (from before this fix) so
+			// the duplicate clears on the next report instead of aging out over
+			// the stale-alert window.
+			for _, storage := range cephPoolAlertStorageTargets(cephCluster) {
+				if _, isWinner := winnerPoolIDs[storage.ID]; isWinner {
+					continue
+				}
+				m.alertManager.ClearAlert(fmt.Sprintf("%s-usage", storage.ID))
 			}
 		}
 	}

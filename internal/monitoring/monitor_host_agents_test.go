@@ -1285,6 +1285,29 @@ func TestApplyHostReportDeduplicatesDualSourceCephPoolAlerts(t *testing.T) {
 	}
 	monitor.alertManager.UpdateConfig(cfg)
 
+	// Simulate a pre-fix duplicate: an alert already active under the legacy
+	// agent-prefixed pool identity. It must be retired once the API identity
+	// becomes canonical.
+	monitor.alertManager.CheckStorage(models.Storage{
+		ID:     "agent:pve5-ceph-pool-data_replication",
+		Name:   "data_replication",
+		Type:   "ceph-pool",
+		Status: "available",
+		Shared: true,
+		Usage:  61.1,
+	})
+	hasAgentAlert := func() bool {
+		for _, a := range monitor.alertManager.GetActiveAlerts() {
+			if a.ID == "agent:pve5-ceph-pool-data_replication-usage" {
+				return true
+			}
+		}
+		return false
+	}
+	if !hasAgentAlert() {
+		t.Fatalf("setup: expected the legacy agent-identity alert to be active before ApplyHostReport")
+	}
+
 	report := agentshost.Report{
 		Agent:     agentshost.AgentInfo{ID: "agent-ceph", Version: "1.0.0", IntervalSeconds: 30},
 		Host:      agentshost.HostInfo{ID: "pve5-host", Hostname: "pve5", Platform: "linux"},
