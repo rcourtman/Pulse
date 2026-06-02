@@ -34,6 +34,12 @@ import {
   type DockerPageTabId,
   type DockerResourceStatusFilter,
 } from './dockerPageModel';
+import {
+  collectOutdatedAgentHosts,
+  formatAgentVersionDisplay,
+} from '@/features/platformPage/agentVersion';
+import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
+import { updateStore } from '@/stores/updates';
 
 const DOCKER_RESOURCE_QUERY =
   'type=agent,docker-host,app-container,docker-service,docker-image,docker-volume,docker-network,docker-task,docker-swarm-node,docker-secret,docker-config';
@@ -56,6 +62,12 @@ export function DockerPageSurface() {
   const tabs = createMemo(() => getDockerPageTabSpecs(model()));
   const activeTab = createMemo<DockerPageTabId>(() =>
     tabs().some((tab) => tab.id === requestedTab()) ? requestedTab() : 'overview',
+  );
+  const outdatedAgentHosts = createMemo(() =>
+    collectOutdatedAgentHosts(model().hosts, updateStore.versionInfo()?.version),
+  );
+  const serverVersionDisplay = createMemo(() =>
+    formatAgentVersionDisplay(updateStore.versionInfo()?.version),
   );
 
   return (
@@ -95,6 +107,11 @@ export function DockerPageSurface() {
               />
             }
           >
+            <PlatformOutdatedAgentNotice
+              hosts={outdatedAgentHosts()}
+              targetVersion={serverVersionDisplay()}
+              missingLabel="images, networks, storage, and Swarm details"
+            />
             <Show when={activeTab() === 'overview'}>
               <DockerOverview
                 hosts={model().hosts}
