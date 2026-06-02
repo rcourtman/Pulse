@@ -123,6 +123,11 @@ surfaces.
    the configured tenant runtime image, configured Docker network, Docker
    daemon reachability, and storage-admission guardrails before the provider
    treats a fresh install as ready for client onboarding.
+   `pulse-control-plane provider-msp proof` must exercise the first-client
+   onboarding path through workspace creation, client-bound install token
+   generation, tenant-local unified-agent report ingest, handoff exchange, and
+   duplicate-hostname isolation before provider-hosted MSP installability is
+   treated as proven.
 5. `internal/cloudcp/tenant_runtime_rollout.go` shared with `cloud-paid`: hosted tenant runtime rollout is both a Pulse Cloud runtime contract boundary and a deployment-installability release-rollout boundary.
 6. `scripts/install.ps1` shared with `agent-lifecycle`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
    It must expose a non-mutating preflight for the exact Windows agent

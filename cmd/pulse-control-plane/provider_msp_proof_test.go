@@ -86,8 +86,8 @@ func TestProviderMSPProofExercisesWorkspaceInstallHandoffAndIsolation(t *testing
 	if !report.SetupFactsTokenUseVisible {
 		t.Fatal("setup facts did not see hosted root token use")
 	}
-	if report.AgentReportIngestVerified {
-		t.Fatal("agent report ingest should remain explicitly unverified in this control-plane proof")
+	if !report.AgentReportIngestVerified {
+		t.Fatal("agent report ingest was not verified")
 	}
 
 	seenTenants := map[string]struct{}{}
@@ -113,6 +113,15 @@ func TestProviderMSPProofExercisesWorkspaceInstallHandoffAndIsolation(t *testing
 		}
 		if !workspace.SetupFactsTokenUseVisible {
 			t.Fatalf("setup facts token use not visible for %s", workspace.TenantID)
+		}
+		if !workspace.AgentReportIngestVerified {
+			t.Fatalf("agent report ingest not verified for %s", workspace.TenantID)
+		}
+		if workspace.AgentReportAgentID == "" {
+			t.Fatalf("agent report id missing for %s", workspace.TenantID)
+		}
+		if workspace.AgentReportHostname != "pve1" {
+			t.Fatalf("AgentReportHostname = %q, want pve1", workspace.AgentReportHostname)
 		}
 		if !workspace.HandoffExchangeVerified || workspace.HandoffTargetPath != "/settings/infrastructure?add=linux-host" {
 			t.Fatalf("handoff exchange proof mismatch: %#v", workspace)

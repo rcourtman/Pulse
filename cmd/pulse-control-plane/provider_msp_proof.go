@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/api"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp"
@@ -23,6 +24,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	cpstripe "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/stripe"
 	runtimeconfig "github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/spf13/cobra"
 )
 
@@ -61,6 +64,9 @@ type providerMSPProofWorkspace struct {
 	InstallCommandGenerated   bool
 	AgentTokenAuthVerified    bool
 	SetupFactsTokenUseVisible bool
+	AgentReportIngestVerified bool
+	AgentReportAgentID        string
+	AgentReportHostname       string
 	HandoffExchangeVerified   bool
 	HandoffTargetPath         string
 }
@@ -236,6 +242,7 @@ func (rt *providerMSPProofRuntime) runProviderMSPProof(ctx context.Context, opts
 		HandoffExchangeVerified:   true,
 		InstallTokenBoundaryOK:    true,
 		SetupFactsTokenUseVisible: true,
+		AgentReportIngestVerified: true,
 		Cleanup:                   opts.Cleanup,
 	}
 
@@ -260,6 +267,9 @@ func (rt *providerMSPProofRuntime) runProviderMSPProof(ctx context.Context, opts
 		}
 		if !workspace.SetupFactsTokenUseVisible {
 			report.SetupFactsTokenUseVisible = false
+		}
+		if !workspace.AgentReportIngestVerified {
+			report.AgentReportIngestVerified = false
 		}
 		report.Workspaces = append(report.Workspaces, workspace)
 	}
@@ -403,6 +413,11 @@ func (rt *providerMSPProofRuntime) proveProviderMSPWorkspace(ctx context.Context
 		facts.AgentTokenCount != nil && *facts.AgentTokenCount > 0 &&
 		facts.LastAgentSeenAt != nil
 
+	agentReport, err := rt.verifyProviderMSPProofAgentReportIngest(ctx, tenant, tenantDataDir, install.Token, install.TokenID)
+	if err != nil {
+		return providerMSPProofWorkspace{}, err
+	}
+
 	exchangedTargetPath, err := rt.verifyProviderMSPProofHandoff(ctx, tenant, ownerUserID, targetPath)
 	if err != nil {
 		return providerMSPProofWorkspace{}, err
@@ -421,8 +436,133 @@ func (rt *providerMSPProofRuntime) proveProviderMSPWorkspace(ctx context.Context
 		InstallCommandGenerated:   true,
 		AgentTokenAuthVerified:    tokenAuthVerified,
 		SetupFactsTokenUseVisible: setupFactsVisible,
+		AgentReportIngestVerified: agentReport.Verified,
+		AgentReportAgentID:        agentReport.AgentID,
+		AgentReportHostname:       agentReport.Hostname,
 		HandoffExchangeVerified:   exchangedTargetPath == targetPath,
 		HandoffTargetPath:         exchangedTargetPath,
+	}, nil
+}
+
+type providerMSPProofAgentReportIngest struct {
+	Verified bool
+	AgentID  string
+	Hostname string
+}
+
+func (rt *providerMSPProofRuntime) verifyProviderMSPProofAgentReportIngest(ctx context.Context, tenant *registry.Tenant, tenantDataDir, rawToken, tokenID string) (providerMSPProofAgentReportIngest, error) {
+	if tenant == nil {
+		return providerMSPProofAgentReportIngest{}, fmt.Errorf("tenant is required")
+	}
+	tenantID := strings.TrimSpace(tenant.ID)
+	if tenantID == "" {
+		return providerMSPProofAgentReportIngest{}, fmt.Errorf("tenant id is required")
+	}
+
+	tokens, err := configPersistenceForProviderMSPProof(tenantDataDir).LoadAPITokens()
+	if err != nil {
+		return providerMSPProofAgentReportIngest{}, fmt.Errorf("load tenant api tokens before report ingest: %w", err)
+	}
+	tenantCfg := &runtimeconfig.Config{
+		DataPath:   tenantDataDir,
+		ConfigPath: tenantDataDir,
+		PublicURL:  rt.providerMSPProofTenantPublicURL(tenantID),
+		APITokens:  tokens,
+	}
+	tenantPersistence := runtimeconfig.NewMultiTenantPersistence(tenantDataDir)
+	if !tenantPersistence.OrgExists(tenantID) {
+		return providerMSPProofAgentReportIngest{}, fmt.Errorf("tenant %s organization metadata is missing from runtime data dir", tenantID)
+	}
+
+	tenantMonitor := monitoring.NewMultiTenantMonitor(tenantCfg, tenantPersistence, nil)
+	defer tenantMonitor.Stop()
+
+	handler := api.NewUnifiedAgentHandlers(tenantMonitor, nil, nil)
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "provider-msp-proof-agent",
+			Version:         "6.0.0-provider-msp-proof",
+			Type:            "unified",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:            "provider-msp-proof-machine",
+			MachineID:     "provider-msp-proof-machine",
+			Hostname:      "pve1",
+			DisplayName:   "pve1",
+			Platform:      "linux",
+			OSName:        "Debian",
+			OSVersion:     "12",
+			Architecture:  "amd64",
+			CPUCount:      4,
+			UptimeSeconds: 3600,
+			KernelVersion: "6.1.0-provider-proof",
+		},
+		Metrics: agentshost.Metrics{
+			CPUUsagePercent: 12.5,
+			Memory: agentshost.MemoryMetric{
+				TotalBytes: 8 * 1024 * 1024 * 1024,
+				UsedBytes:  2 * 1024 * 1024 * 1024,
+				FreeBytes:  6 * 1024 * 1024 * 1024,
+				Usage:      25,
+			},
+		},
+		Timestamp:  time.Now().UTC(),
+		SequenceID: "provider-msp-proof-report",
+	}
+	body, err := json.Marshal(report)
+	if err != nil {
+		return providerMSPProofAgentReportIngest{}, fmt.Errorf("marshal provider MSP proof agent report: %w", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/report", bytes.NewReader(body))
+	req = req.WithContext(context.WithValue(ctx, api.OrgIDContextKey, tenantID))
+	req.Header.Set("Authorization", "Bearer "+rawToken)
+	rec := httptest.NewRecorder()
+	api.RequireAuth(tenantCfg, api.RequireScope(runtimeconfig.ScopeAgentReport, handler.HandleReport))(rec, req)
+	if rec.Code != http.StatusOK {
+		return providerMSPProofAgentReportIngest{}, fmt.Errorf("tenant %s agent report status=%d body=%s", tenantID, rec.Code, strings.TrimSpace(rec.Body.String()))
+	}
+
+	var payload struct {
+		AgentID string `json:"agentId"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		return providerMSPProofAgentReportIngest{}, fmt.Errorf("decode provider MSP proof agent report response: %w", err)
+	}
+	if strings.TrimSpace(payload.AgentID) == "" {
+		return providerMSPProofAgentReportIngest{}, fmt.Errorf("tenant %s agent report response omitted agent id", tenantID)
+	}
+
+	monitor, ok := tenantMonitor.PeekMonitor(tenantID)
+	if !ok || monitor == nil {
+		return providerMSPProofAgentReportIngest{}, fmt.Errorf("tenant %s monitor was not initialized by agent report", tenantID)
+	}
+	hosts := monitor.GetLiveHostsSnapshot()
+	if len(hosts) != 1 {
+		return providerMSPProofAgentReportIngest{}, fmt.Errorf("tenant %s host count after agent report = %d, want 1", tenantID, len(hosts))
+	}
+	host := hosts[0]
+	if host.ID != payload.AgentID {
+		return providerMSPProofAgentReportIngest{}, fmt.Errorf("tenant %s ingested host id=%q, response agent id=%q", tenantID, host.ID, payload.AgentID)
+	}
+	if host.Hostname != "pve1" {
+		return providerMSPProofAgentReportIngest{}, fmt.Errorf("tenant %s ingested hostname=%q, want pve1", tenantID, host.Hostname)
+	}
+	if strings.TrimSpace(tokenID) != "" && strings.TrimSpace(host.TokenID) != strings.TrimSpace(tokenID) {
+		return providerMSPProofAgentReportIngest{}, fmt.Errorf("tenant %s ingested token id=%q, want %q", tenantID, host.TokenID, tokenID)
+	}
+
+	if defaultMonitor, ok := tenantMonitor.PeekMonitor("default"); ok && defaultMonitor != nil {
+		if defaultHosts := defaultMonitor.GetLiveHostsSnapshot(); len(defaultHosts) != 0 {
+			return providerMSPProofAgentReportIngest{}, fmt.Errorf("tenant %s report leaked into default runtime: %#v", tenantID, defaultHosts)
+		}
+	}
+
+	return providerMSPProofAgentReportIngest{
+		Verified: true,
+		AgentID:  payload.AgentID,
+		Hostname: host.Hostname,
 	}, nil
 }
 
@@ -662,7 +802,7 @@ func printProviderMSPProofReport(report *providerMSPProofReport) {
 	fmt.Printf("agent_report_ingest_verified=%t\n", report.AgentReportIngestVerified)
 	fmt.Printf("cleanup=%t\n", report.Cleanup)
 	for _, workspace := range report.Workspaces {
-		fmt.Printf("workspace=%s display_name=%q state=%s plan_version=%s container_id=%s public_url=%s install_type=%s install_token_id=%s install_command_generated=%t agent_token_auth_verified=%t setup_facts_token_use_visible=%t handoff_exchange_verified=%t handoff_target_path=%s\n",
+		fmt.Printf("workspace=%s display_name=%q state=%s plan_version=%s container_id=%s public_url=%s install_type=%s install_token_id=%s install_command_generated=%t agent_token_auth_verified=%t setup_facts_token_use_visible=%t agent_report_ingest_verified=%t agent_report_agent_id=%s agent_report_hostname=%s handoff_exchange_verified=%t handoff_target_path=%s\n",
 			workspace.TenantID,
 			workspace.DisplayName,
 			workspace.State,
@@ -674,6 +814,9 @@ func printProviderMSPProofReport(report *providerMSPProofReport) {
 			workspace.InstallCommandGenerated,
 			workspace.AgentTokenAuthVerified,
 			workspace.SetupFactsTokenUseVisible,
+			workspace.AgentReportIngestVerified,
+			workspace.AgentReportAgentID,
+			workspace.AgentReportHostname,
 			workspace.HandoffExchangeVerified,
 			workspace.HandoffTargetPath,
 		)
