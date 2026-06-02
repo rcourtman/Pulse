@@ -126,11 +126,12 @@ surfaces.
    treats a fresh install as ready for client onboarding.
    `pulse-control-plane provider-msp proof` must exercise the first-client
    onboarding path through workspace creation, client-bound install token
-   generation, tenant-local unified-agent report ingest, handoff exchange, and
+   generation, tenant-local unified-agent report ingest, tenant-bound install
+   token rotation, rotated-out token rejection, handoff exchange, and
    duplicate-hostname isolation before provider-hosted MSP installability is
-   treated as proven. The proof is license-backed by default: `license_file`
-   must be the resolved provider MSP plan source unless the operator explicitly
-   opts into the local-development `--allow-env-plan` escape hatch.
+   treated as proven. The proof is license-backed by default: `license_file` must be the
+   resolved provider MSP plan source unless the operator explicitly opts into
+   the local-development `--allow-env-plan` escape hatch.
    `pulse-control-plane provider-msp status` is the non-mutating operational
    companion to that proof: it must report registry readiness, tenant
    state/health counts, stuck provisioning workspaces, Docker runtime

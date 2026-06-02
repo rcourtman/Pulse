@@ -122,6 +122,9 @@ func TestProviderMSPProofExercisesWorkspaceInstallHandoffAndIsolation(t *testing
 	if !report.AgentReportIngestVerified {
 		t.Fatal("agent report ingest was not verified")
 	}
+	if !report.TokenRotationVerified {
+		t.Fatal("token rotation was not verified")
+	}
 
 	seenTenants := map[string]struct{}{}
 	for _, workspace := range report.Workspaces {
@@ -155,6 +158,21 @@ func TestProviderMSPProofExercisesWorkspaceInstallHandoffAndIsolation(t *testing
 		}
 		if workspace.AgentReportHostname != "pve1" {
 			t.Fatalf("AgentReportHostname = %q, want pve1", workspace.AgentReportHostname)
+		}
+		if !workspace.TokenRotationVerified {
+			t.Fatalf("token rotation not verified for %s", workspace.TenantID)
+		}
+		if workspace.RotatedInstallTokenID == "" || workspace.RotatedInstallTokenID == workspace.InstallTokenID {
+			t.Fatalf("rotated token id = %q, original = %q", workspace.RotatedInstallTokenID, workspace.InstallTokenID)
+		}
+		if workspace.RotatedInstallToken == "" || workspace.RotatedInstallToken == workspace.InstallToken {
+			t.Fatalf("rotated raw token was not replaced for %s", workspace.TenantID)
+		}
+		if !workspace.OldInstallTokenRejected {
+			t.Fatalf("old install token was not rejected for %s", workspace.TenantID)
+		}
+		if !workspace.RotatedAgentReportVerified {
+			t.Fatalf("rotated install token did not report for %s", workspace.TenantID)
 		}
 		if !workspace.HandoffExchangeVerified || workspace.HandoffTargetPath != "/settings/infrastructure?add=linux-host" {
 			t.Fatalf("handoff exchange proof mismatch: %#v", workspace)
@@ -211,7 +229,7 @@ func TestProviderMSPProofLoadsSignedLicenseFilePlan(t *testing.T) {
 	if report.LicenseEmail != "provider@example.com" {
 		t.Fatalf("LicenseEmail = %q, want provider@example.com", report.LicenseEmail)
 	}
-	if !report.AgentReportIngestVerified || !report.InstallTokenBoundaryOK || !report.HandoffExchangeVerified {
+	if !report.AgentReportIngestVerified || !report.InstallTokenBoundaryOK || !report.TokenRotationVerified || !report.HandoffExchangeVerified {
 		t.Fatalf("provider MSP proof did not complete core runtime checks: %#v", report)
 	}
 }

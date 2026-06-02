@@ -26,6 +26,7 @@ import (
 	runtimeconfig "github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/spf13/cobra"
 )
 
@@ -53,23 +54,28 @@ type providerMSPProofRuntime struct {
 }
 
 type providerMSPProofWorkspace struct {
-	TenantID                  string
-	DisplayName               string
-	State                     string
-	PlanVersion               string
-	ContainerID               string
-	PublicURL                 string
-	InstallType               string
-	InstallToken              string
-	InstallTokenID            string
-	InstallCommandGenerated   bool
-	AgentTokenAuthVerified    bool
-	SetupFactsTokenUseVisible bool
-	AgentReportIngestVerified bool
-	AgentReportAgentID        string
-	AgentReportHostname       string
-	HandoffExchangeVerified   bool
-	HandoffTargetPath         string
+	TenantID                   string
+	DisplayName                string
+	State                      string
+	PlanVersion                string
+	ContainerID                string
+	PublicURL                  string
+	InstallType                string
+	InstallToken               string
+	InstallTokenID             string
+	InstallCommandGenerated    bool
+	AgentTokenAuthVerified     bool
+	SetupFactsTokenUseVisible  bool
+	AgentReportIngestVerified  bool
+	AgentReportAgentID         string
+	AgentReportHostname        string
+	TokenRotationVerified      bool
+	RotatedInstallToken        string
+	RotatedInstallTokenID      string
+	OldInstallTokenRejected    bool
+	RotatedAgentReportVerified bool
+	HandoffExchangeVerified    bool
+	HandoffTargetPath          string
 }
 
 type providerMSPProofReport struct {
@@ -90,6 +96,7 @@ type providerMSPProofReport struct {
 	InstallTokenBoundaryOK    bool
 	SetupFactsTokenUseVisible bool
 	AgentReportIngestVerified bool
+	TokenRotationVerified     bool
 	Cleanup                   bool
 }
 
@@ -252,6 +259,7 @@ func (rt *providerMSPProofRuntime) runProviderMSPProof(ctx context.Context, opts
 		InstallTokenBoundaryOK:    true,
 		SetupFactsTokenUseVisible: true,
 		AgentReportIngestVerified: true,
+		TokenRotationVerified:     true,
 		Cleanup:                   opts.Cleanup,
 	}
 
@@ -279,6 +287,9 @@ func (rt *providerMSPProofRuntime) runProviderMSPProof(ctx context.Context, opts
 		}
 		if !workspace.AgentReportIngestVerified {
 			report.AgentReportIngestVerified = false
+		}
+		if !workspace.TokenRotationVerified {
+			report.TokenRotationVerified = false
 		}
 		report.Workspaces = append(report.Workspaces, workspace)
 	}
@@ -427,29 +438,39 @@ func (rt *providerMSPProofRuntime) proveProviderMSPWorkspace(ctx context.Context
 		return providerMSPProofWorkspace{}, err
 	}
 
+	rotation, err := rt.verifyProviderMSPProofInstallTokenRotation(ctx, tenant, tenantDataDir, install.Token, install.TokenID)
+	if err != nil {
+		return providerMSPProofWorkspace{}, err
+	}
+
 	exchangedTargetPath, err := rt.verifyProviderMSPProofHandoff(ctx, tenant, ownerUserID, targetPath)
 	if err != nil {
 		return providerMSPProofWorkspace{}, err
 	}
 
 	return providerMSPProofWorkspace{
-		TenantID:                  tenant.ID,
-		DisplayName:               tenant.DisplayName,
-		State:                     string(tenant.State),
-		PlanVersion:               tenant.PlanVersion,
-		ContainerID:               tenant.ContainerID,
-		PublicURL:                 publicURL,
-		InstallType:               install.InstallType,
-		InstallToken:              install.Token,
-		InstallTokenID:            install.TokenID,
-		InstallCommandGenerated:   true,
-		AgentTokenAuthVerified:    tokenAuthVerified,
-		SetupFactsTokenUseVisible: setupFactsVisible,
-		AgentReportIngestVerified: agentReport.Verified,
-		AgentReportAgentID:        agentReport.AgentID,
-		AgentReportHostname:       agentReport.Hostname,
-		HandoffExchangeVerified:   exchangedTargetPath == targetPath,
-		HandoffTargetPath:         exchangedTargetPath,
+		TenantID:                   tenant.ID,
+		DisplayName:                tenant.DisplayName,
+		State:                      string(tenant.State),
+		PlanVersion:                tenant.PlanVersion,
+		ContainerID:                tenant.ContainerID,
+		PublicURL:                  publicURL,
+		InstallType:                install.InstallType,
+		InstallToken:               install.Token,
+		InstallTokenID:             install.TokenID,
+		InstallCommandGenerated:    true,
+		AgentTokenAuthVerified:     tokenAuthVerified,
+		SetupFactsTokenUseVisible:  setupFactsVisible,
+		AgentReportIngestVerified:  agentReport.Verified,
+		AgentReportAgentID:         agentReport.AgentID,
+		AgentReportHostname:        agentReport.Hostname,
+		TokenRotationVerified:      rotation.Verified,
+		RotatedInstallToken:        rotation.RotatedToken,
+		RotatedInstallTokenID:      rotation.RotatedTokenID,
+		OldInstallTokenRejected:    rotation.OldTokenRejected,
+		RotatedAgentReportVerified: rotation.RotatedAgentReportVerified,
+		HandoffExchangeVerified:    exchangedTargetPath == targetPath,
+		HandoffTargetPath:          exchangedTargetPath,
 	}, nil
 }
 
@@ -457,6 +478,14 @@ type providerMSPProofAgentReportIngest struct {
 	Verified bool
 	AgentID  string
 	Hostname string
+}
+
+type providerMSPProofInstallTokenRotation struct {
+	Verified                   bool
+	RotatedToken               string
+	RotatedTokenID             string
+	OldTokenRejected           bool
+	RotatedAgentReportVerified bool
 }
 
 func (rt *providerMSPProofRuntime) verifyProviderMSPProofAgentReportIngest(ctx context.Context, tenant *registry.Tenant, tenantDataDir, rawToken, tokenID string) (providerMSPProofAgentReportIngest, error) {
@@ -487,38 +516,7 @@ func (rt *providerMSPProofRuntime) verifyProviderMSPProofAgentReportIngest(ctx c
 	defer tenantMonitor.Stop()
 
 	handler := api.NewUnifiedAgentHandlers(tenantMonitor, nil, nil)
-	report := agentshost.Report{
-		Agent: agentshost.AgentInfo{
-			ID:              "provider-msp-proof-agent",
-			Version:         "6.0.0-provider-msp-proof",
-			Type:            "unified",
-			IntervalSeconds: 30,
-		},
-		Host: agentshost.HostInfo{
-			ID:            "provider-msp-proof-machine",
-			MachineID:     "provider-msp-proof-machine",
-			Hostname:      "pve1",
-			DisplayName:   "pve1",
-			Platform:      "linux",
-			OSName:        "Debian",
-			OSVersion:     "12",
-			Architecture:  "amd64",
-			CPUCount:      4,
-			UptimeSeconds: 3600,
-			KernelVersion: "6.1.0-provider-proof",
-		},
-		Metrics: agentshost.Metrics{
-			CPUUsagePercent: 12.5,
-			Memory: agentshost.MemoryMetric{
-				TotalBytes: 8 * 1024 * 1024 * 1024,
-				UsedBytes:  2 * 1024 * 1024 * 1024,
-				FreeBytes:  6 * 1024 * 1024 * 1024,
-				Usage:      25,
-			},
-		},
-		Timestamp:  time.Now().UTC(),
-		SequenceID: "provider-msp-proof-report",
-	}
+	report := providerMSPProofAgentReport()
 	body, err := json.Marshal(report)
 	if err != nil {
 		return providerMSPProofAgentReportIngest{}, fmt.Errorf("marshal provider MSP proof agent report: %w", err)
@@ -575,8 +573,207 @@ func (rt *providerMSPProofRuntime) verifyProviderMSPProofAgentReportIngest(ctx c
 	}, nil
 }
 
+func providerMSPProofAgentReport() agentshost.Report {
+	return agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "provider-msp-proof-agent",
+			Version:         "6.0.0-provider-msp-proof",
+			Type:            "unified",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:            "provider-msp-proof-machine",
+			MachineID:     "provider-msp-proof-machine",
+			Hostname:      "pve1",
+			DisplayName:   "pve1",
+			Platform:      "linux",
+			OSName:        "Debian",
+			OSVersion:     "12",
+			Architecture:  "amd64",
+			CPUCount:      4,
+			UptimeSeconds: 3600,
+			KernelVersion: "6.1.0-provider-proof",
+		},
+		Metrics: agentshost.Metrics{
+			CPUUsagePercent: 12.5,
+			Memory: agentshost.MemoryMetric{
+				TotalBytes: 8 * 1024 * 1024 * 1024,
+				UsedBytes:  2 * 1024 * 1024 * 1024,
+				FreeBytes:  6 * 1024 * 1024 * 1024,
+				Usage:      25,
+			},
+		},
+		Timestamp:  time.Now().UTC(),
+		SequenceID: "provider-msp-proof-report",
+	}
+}
+
 func configPersistenceForProviderMSPProof(tenantDataDir string) *runtimeconfig.ConfigPersistence {
 	return runtimeconfig.NewConfigPersistence(tenantDataDir)
+}
+
+func (rt *providerMSPProofRuntime) verifyProviderMSPProofInstallTokenRotation(ctx context.Context, tenant *registry.Tenant, tenantDataDir, oldRawToken, oldTokenID string) (providerMSPProofInstallTokenRotation, error) {
+	if tenant == nil {
+		return providerMSPProofInstallTokenRotation{}, fmt.Errorf("tenant is required")
+	}
+	tenantID := strings.TrimSpace(tenant.ID)
+	if tenantID == "" {
+		return providerMSPProofInstallTokenRotation{}, fmt.Errorf("tenant id is required")
+	}
+
+	newRawToken, newTokenID, err := rotateProviderMSPProofInstallToken(tenantDataDir, tenantID, oldRawToken, oldTokenID)
+	if err != nil {
+		return providerMSPProofInstallTokenRotation{}, err
+	}
+	oldRejected, err := rt.verifyProviderMSPProofAgentReportRejected(ctx, tenant, tenantDataDir, oldRawToken)
+	if err != nil {
+		return providerMSPProofInstallTokenRotation{}, err
+	}
+	if !oldRejected {
+		return providerMSPProofInstallTokenRotation{}, fmt.Errorf("tenant %s accepted rotated-out install token %s", tenantID, oldTokenID)
+	}
+
+	rotatedReport, err := rt.verifyProviderMSPProofAgentReportIngest(ctx, tenant, tenantDataDir, newRawToken, newTokenID)
+	if err != nil {
+		return providerMSPProofInstallTokenRotation{}, fmt.Errorf("verify rotated install token report ingest: %w", err)
+	}
+
+	return providerMSPProofInstallTokenRotation{
+		Verified:                   oldRejected && rotatedReport.Verified,
+		RotatedToken:               newRawToken,
+		RotatedTokenID:             newTokenID,
+		OldTokenRejected:           oldRejected,
+		RotatedAgentReportVerified: rotatedReport.Verified,
+	}, nil
+}
+
+func rotateProviderMSPProofInstallToken(tenantDataDir, tenantID, oldRawToken, oldTokenID string) (string, string, error) {
+	persistence := configPersistenceForProviderMSPProof(tenantDataDir)
+	tokens, err := persistence.LoadAPITokens()
+	if err != nil {
+		return "", "", fmt.Errorf("load tenant api tokens before rotation: %w", err)
+	}
+	cfg := &runtimeconfig.Config{APITokens: tokens}
+	oldRecord, ok := cfg.ValidateAPIToken(oldRawToken)
+	if !ok || oldRecord == nil {
+		return "", "", fmt.Errorf("tenant %s old install token did not validate before rotation", tenantID)
+	}
+	if strings.TrimSpace(oldRecord.ID) != strings.TrimSpace(oldTokenID) {
+		return "", "", fmt.Errorf("tenant %s old install token id=%q, want %q", tenantID, oldRecord.ID, oldTokenID)
+	}
+	if strings.TrimSpace(oldRecord.OrgID) != tenantID {
+		return "", "", fmt.Errorf("tenant %s old install token org id=%q", tenantID, oldRecord.OrgID)
+	}
+
+	newRawToken, err := internalauth.GenerateAPIToken()
+	if err != nil {
+		return "", "", fmt.Errorf("generate rotated install token: %w", err)
+	}
+	newRecord, err := runtimeconfig.NewAPITokenRecord(newRawToken, oldRecord.Name, oldRecord.Scopes)
+	if err != nil {
+		return "", "", fmt.Errorf("create rotated install token record: %w", err)
+	}
+	newRecord.OrgID = oldRecord.OrgID
+	newRecord.OrgIDs = append([]string{}, oldRecord.OrgIDs...)
+	newRecord.Metadata = cloneProviderMSPProofTokenMetadata(oldRecord.Metadata)
+	if oldRecord.ExpiresAt != nil {
+		expiresAt := *oldRecord.ExpiresAt
+		newRecord.ExpiresAt = &expiresAt
+	}
+
+	nextTokens := make([]runtimeconfig.APITokenRecord, 0, len(cfg.APITokens))
+	removedOld := false
+	for _, token := range cfg.APITokens {
+		if strings.TrimSpace(token.ID) == strings.TrimSpace(oldTokenID) {
+			removedOld = true
+			continue
+		}
+		nextTokens = append(nextTokens, token)
+	}
+	if !removedOld {
+		return "", "", fmt.Errorf("tenant %s old install token id %s disappeared before rotation", tenantID, oldTokenID)
+	}
+	nextTokens = append(nextTokens, *newRecord)
+	rotatedCfg := &runtimeconfig.Config{APITokens: nextTokens}
+	rotatedCfg.SortAPITokens()
+	if err := persistence.SaveAPITokens(rotatedCfg.APITokens); err != nil {
+		return "", "", fmt.Errorf("persist rotated tenant install token: %w", err)
+	}
+
+	loaded, err := persistence.LoadAPITokens()
+	if err != nil {
+		return "", "", fmt.Errorf("reload rotated tenant api tokens: %w", err)
+	}
+	loadedCfg := &runtimeconfig.Config{APITokens: loaded}
+	if _, ok := loadedCfg.ValidateAPIToken(oldRawToken); ok {
+		return "", "", fmt.Errorf("tenant %s old install token still validates after rotation", tenantID)
+	}
+	replacement, ok := loadedCfg.ValidateAPIToken(newRawToken)
+	if !ok || replacement == nil {
+		return "", "", fmt.Errorf("tenant %s rotated install token does not validate", tenantID)
+	}
+	if strings.TrimSpace(replacement.OrgID) != tenantID {
+		return "", "", fmt.Errorf("tenant %s rotated install token org id=%q", tenantID, replacement.OrgID)
+	}
+	if replacement.Metadata["issued_via"] != "hosted_agent_install_command" {
+		return "", "", fmt.Errorf("tenant %s rotated install token lost install metadata", tenantID)
+	}
+	if err := persistence.SaveAPITokens(loadedCfg.APITokens); err != nil {
+		return "", "", fmt.Errorf("persist rotated tenant install token use: %w", err)
+	}
+	return newRawToken, replacement.ID, nil
+}
+
+func cloneProviderMSPProofTokenMetadata(metadata map[string]string) map[string]string {
+	if len(metadata) == 0 {
+		return nil
+	}
+	clone := make(map[string]string, len(metadata))
+	for key, value := range metadata {
+		clone[key] = value
+	}
+	return clone
+}
+
+func (rt *providerMSPProofRuntime) verifyProviderMSPProofAgentReportRejected(ctx context.Context, tenant *registry.Tenant, tenantDataDir, rawToken string) (bool, error) {
+	if tenant == nil {
+		return false, fmt.Errorf("tenant is required")
+	}
+	tenantID := strings.TrimSpace(tenant.ID)
+	tokens, err := configPersistenceForProviderMSPProof(tenantDataDir).LoadAPITokens()
+	if err != nil {
+		return false, fmt.Errorf("load tenant api tokens before old-token rejection proof: %w", err)
+	}
+	tenantCfg := &runtimeconfig.Config{
+		DataPath:   tenantDataDir,
+		ConfigPath: tenantDataDir,
+		PublicURL:  rt.providerMSPProofTenantPublicURL(tenantID),
+		APITokens:  tokens,
+	}
+	tenantPersistence := runtimeconfig.NewMultiTenantPersistence(tenantDataDir)
+	if !tenantPersistence.OrgExists(tenantID) {
+		return false, fmt.Errorf("tenant %s organization metadata is missing from runtime data dir", tenantID)
+	}
+	tenantMonitor := monitoring.NewMultiTenantMonitor(tenantCfg, tenantPersistence, nil)
+	defer tenantMonitor.Stop()
+
+	handler := api.NewUnifiedAgentHandlers(tenantMonitor, nil, nil)
+	body, err := json.Marshal(providerMSPProofAgentReport())
+	if err != nil {
+		return false, fmt.Errorf("marshal provider MSP proof rejected agent report: %w", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/report", bytes.NewReader(body))
+	req = req.WithContext(context.WithValue(ctx, api.OrgIDContextKey, tenantID))
+	req.Header.Set("Authorization", "Bearer "+rawToken)
+	rec := httptest.NewRecorder()
+	api.RequireAuth(tenantCfg, api.RequireScope(runtimeconfig.ScopeAgentReport, handler.HandleReport))(rec, req)
+	if rec.Code == http.StatusOK {
+		return false, nil
+	}
+	if rec.Code != http.StatusUnauthorized {
+		return false, fmt.Errorf("tenant %s rotated-out token report status=%d body=%s, want %d", tenantID, rec.Code, strings.TrimSpace(rec.Body.String()), http.StatusUnauthorized)
+	}
+	return true, nil
 }
 
 func markProviderMSPProofAgentTokenUsed(tenantDataDir, tenantID, rawToken string) (bool, error) {
@@ -659,6 +856,10 @@ func (rt *providerMSPProofRuntime) verifyProviderMSPProofHandoff(ctx context.Con
 
 func (rt *providerMSPProofRuntime) verifyProviderMSPInstallTokenIsolation(workspaces []providerMSPProofWorkspace) (bool, error) {
 	for _, workspace := range workspaces {
+		activeTokenID := strings.TrimSpace(workspace.RotatedInstallTokenID)
+		if activeTokenID == "" {
+			activeTokenID = strings.TrimSpace(workspace.InstallTokenID)
+		}
 		tenantDataDir, err := safeProviderMSPProofTenantDataDir(rt.cfg.TenantsDir(), workspace.TenantID)
 		if err != nil {
 			return false, err
@@ -669,28 +870,40 @@ func (rt *providerMSPProofRuntime) verifyProviderMSPInstallTokenIsolation(worksp
 		}
 		found := false
 		for _, token := range tokens {
-			if strings.TrimSpace(token.ID) == workspace.InstallTokenID {
+			if strings.TrimSpace(token.ID) == activeTokenID {
 				found = true
 				break
 			}
 		}
 		if !found {
-			return false, fmt.Errorf("tenant %s missing proof install token id %s", workspace.TenantID, workspace.InstallTokenID)
+			return false, fmt.Errorf("tenant %s missing active proof install token id %s", workspace.TenantID, activeTokenID)
 		}
 	}
 	for _, left := range workspaces {
+		leftTokenID := strings.TrimSpace(left.RotatedInstallTokenID)
+		if leftTokenID == "" {
+			leftTokenID = strings.TrimSpace(left.InstallTokenID)
+		}
+		leftRawToken := strings.TrimSpace(left.RotatedInstallToken)
+		if leftRawToken == "" {
+			leftRawToken = strings.TrimSpace(left.InstallToken)
+		}
 		for _, right := range workspaces {
 			if left.TenantID == right.TenantID {
 				continue
 			}
-			if left.InstallTokenID == right.InstallTokenID {
-				return false, fmt.Errorf("tenant %s and %s reused install token id %s", left.TenantID, right.TenantID, left.InstallTokenID)
+			rightTokenID := strings.TrimSpace(right.RotatedInstallTokenID)
+			if rightTokenID == "" {
+				rightTokenID = strings.TrimSpace(right.InstallTokenID)
+			}
+			if leftTokenID == rightTokenID {
+				return false, fmt.Errorf("tenant %s and %s reused install token id %s", left.TenantID, right.TenantID, leftTokenID)
 			}
 			rightTenantDataDir, err := safeProviderMSPProofTenantDataDir(rt.cfg.TenantsDir(), right.TenantID)
 			if err != nil {
 				return false, err
 			}
-			accepted, err := providerMSPProofTenantAcceptsToken(rightTenantDataDir, left.InstallToken)
+			accepted, err := providerMSPProofTenantAcceptsToken(rightTenantDataDir, leftRawToken)
 			if err != nil {
 				return false, err
 			}
@@ -811,9 +1024,10 @@ func printProviderMSPProofReport(report *providerMSPProofReport) {
 	fmt.Printf("install_token_boundary_verified=%t\n", report.InstallTokenBoundaryOK)
 	fmt.Printf("setup_facts_token_use_visible=%t\n", report.SetupFactsTokenUseVisible)
 	fmt.Printf("agent_report_ingest_verified=%t\n", report.AgentReportIngestVerified)
+	fmt.Printf("token_rotation_verified=%t\n", report.TokenRotationVerified)
 	fmt.Printf("cleanup=%t\n", report.Cleanup)
 	for _, workspace := range report.Workspaces {
-		fmt.Printf("workspace=%s display_name=%q state=%s plan_version=%s container_id=%s public_url=%s install_type=%s install_token_id=%s install_command_generated=%t agent_token_auth_verified=%t setup_facts_token_use_visible=%t agent_report_ingest_verified=%t agent_report_agent_id=%s agent_report_hostname=%s handoff_exchange_verified=%t handoff_target_path=%s\n",
+		fmt.Printf("workspace=%s display_name=%q state=%s plan_version=%s container_id=%s public_url=%s install_type=%s install_token_id=%s install_command_generated=%t agent_token_auth_verified=%t setup_facts_token_use_visible=%t agent_report_ingest_verified=%t agent_report_agent_id=%s agent_report_hostname=%s token_rotation_verified=%t rotated_install_token_id=%s old_install_token_rejected=%t rotated_agent_report_verified=%t handoff_exchange_verified=%t handoff_target_path=%s\n",
 			workspace.TenantID,
 			workspace.DisplayName,
 			workspace.State,
@@ -828,6 +1042,10 @@ func printProviderMSPProofReport(report *providerMSPProofReport) {
 			workspace.AgentReportIngestVerified,
 			workspace.AgentReportAgentID,
 			workspace.AgentReportHostname,
+			workspace.TokenRotationVerified,
+			workspace.RotatedInstallTokenID,
+			workspace.OldInstallTokenRejected,
+			workspace.RotatedAgentReportVerified,
 			workspace.HandoffExchangeVerified,
 			workspace.HandoffTargetPath,
 		)
