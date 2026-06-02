@@ -29,8 +29,8 @@ Provider-hosted MSP status uses the same tenant registry, health summary, and
 stuck-provisioning threshold as the control-plane cleanup loop, so operator
 readiness reports and automated failure handling cannot drift into separate
 definitions of a failed provider workspace.
-Provider-hosted MSP backup and verification are part of the cloud-paid operator
-contract because the recovery artifact must preserve the provider's
+Provider-hosted MSP backup, verification, and restore are part of the cloud-paid
+operator contract because the recovery artifact must preserve the provider's
 license-backed plan identity, control-plane account/workspace registry, and
 tenant-local runtime state without depending on Stripe billing surfaces.
 
@@ -190,8 +190,9 @@ tenant-local runtime state without depending on Stripe billing surfaces.
 10. `internal/cloudcp/provider_msp_backup.go` shared with `deployment-installability`: provider-hosted MSP backup is both a cloud-paid license/account/runtime continuity boundary and a deployment-installability recovery artifact boundary.
     License-backed provider MSP backups must include the signed MSP license
     file as a recovery artifact while exposing only license metadata in command
-    output, and they must keep the archive Stripe-free so provider-hosted MSP
-    recovery does not inherit Pulse-hosted SaaS billing assumptions.
+    output, restore must recover that license as an explicit operator artifact,
+    and the archive must stay Stripe-free so provider-hosted MSP recovery does
+    not inherit Pulse-hosted SaaS billing assumptions.
 11. `internal/cloudcp/tenant_runtime_rollout.go` shared with `deployment-installability`: hosted tenant runtime rollout is both a Pulse Cloud runtime contract boundary and a deployment-installability release-rollout boundary.
     Hosted tenant runtime reconciliation must treat a registered tenant with
     preserved tenant data but no live Docker runtime as a recoverable managed

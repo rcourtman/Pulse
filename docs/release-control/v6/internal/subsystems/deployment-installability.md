@@ -140,14 +140,16 @@ surfaces.
    prerequisites, storage guardrails, and the same license-backed plan identity
    without pulling tenant images unless the operator asks for it.
 5. `internal/cloudcp/provider_msp_backup.go` shared with `cloud-paid`: provider-hosted MSP backup is both a cloud-paid license/account/runtime continuity boundary and a deployment-installability recovery artifact boundary.
-   `pulse-control-plane provider-msp backup create` and `backup verify` must
+   `pulse-control-plane provider-msp backup create`, `backup verify`, and
+   `backup restore` must
    create a Stripe-free recovery archive outside the live
    control-plane/tenant source trees, snapshot SQLite control-plane databases
    through an online backup path, include tenant runtime directories for all
    non-deleted registry workspaces, include the signed MSP license file when
-   the plan source is license-backed, and verify the manifest, tenant registry
-   snapshot, license artifact, and tenant runtime directories before the
-   archive is treated as usable for upgrades or recovery drills.
+   the plan source is license-backed, verify the manifest, tenant registry
+   snapshot, license artifact, and tenant runtime directories, and fail closed
+   on restore when target provider MSP state already exists unless the operator
+   explicitly uses the replace gate after stopping the control plane.
 6. `internal/cloudcp/tenant_runtime_rollout.go` shared with `cloud-paid`: hosted tenant runtime rollout is both a Pulse Cloud runtime contract boundary and a deployment-installability release-rollout boundary.
 7. `scripts/install.ps1` shared with `agent-lifecycle`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
    It must expose a non-mutating preflight for the exact Windows agent

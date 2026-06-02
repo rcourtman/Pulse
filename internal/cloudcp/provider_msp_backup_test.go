@@ -129,6 +129,102 @@ func TestProviderMSPBackupRequiresRuntimeTenantDirs(t *testing.T) {
 	}
 }
 
+func TestProviderMSPBackupRestoreRecoversStateAndLicense(t *testing.T) {
+	_, archivePath := createProviderMSPBackupArchiveForRestoreTest(t)
+	targetDataDir := filepath.Join(t.TempDir(), "restored-data")
+
+	result, err := RestoreProviderMSPBackup(context.Background(), ProviderMSPBackupRestoreOptions{
+		ArchivePath:   archivePath,
+		TargetDataDir: targetDataDir,
+	})
+	if err != nil {
+		t.Fatalf("RestoreProviderMSPBackup: %v", err)
+	}
+	if result.DryRun {
+		t.Fatal("restore result unexpectedly marked as dry-run")
+	}
+	if result.RestoredRegistryTenantCount != 2 {
+		t.Fatalf("RestoredRegistryTenantCount = %d, want 2", result.RestoredRegistryTenantCount)
+	}
+	if len(result.RestoredRuntimeTenantIDs) != 1 || result.RestoredRuntimeTenantIDs[0] != "t-ACTIVE001" {
+		t.Fatalf("RestoredRuntimeTenantIDs = %#v", result.RestoredRuntimeTenantIDs)
+	}
+	assertProviderMSPBackupRestoredTenantCount(t, filepath.Join(targetDataDir, "control-plane", "tenants.db"), 2)
+	if got, err := os.ReadFile(filepath.Join(targetDataDir, "tenants", "t-ACTIVE001", "runtime.json")); err != nil {
+		t.Fatalf("read restored tenant runtime file: %v", err)
+	} else if string(got) != `{"ok":true}` {
+		t.Fatalf("restored tenant runtime file = %q", got)
+	}
+	if got, err := os.ReadFile(filepath.Join(targetDataDir, "provider-msp-license.jwt")); err != nil {
+		t.Fatalf("read restored license: %v", err)
+	} else if string(got) != "signed-provider-msp-license" {
+		t.Fatalf("restored license = %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(targetDataDir, "tenants", "t-DELETED001")); !os.IsNotExist(err) {
+		t.Fatalf("deleted tenant runtime dir should not be restored, stat err=%v", err)
+	}
+}
+
+func TestProviderMSPBackupRestoreDryRunDoesNotWriteTarget(t *testing.T) {
+	_, archivePath := createProviderMSPBackupArchiveForRestoreTest(t)
+	targetDataDir := filepath.Join(t.TempDir(), "restore-dry-run")
+
+	result, err := RestoreProviderMSPBackup(context.Background(), ProviderMSPBackupRestoreOptions{
+		ArchivePath:   archivePath,
+		TargetDataDir: targetDataDir,
+		DryRun:        true,
+	})
+	if err != nil {
+		t.Fatalf("RestoreProviderMSPBackup dry-run: %v", err)
+	}
+	if !result.DryRun {
+		t.Fatal("restore result should be marked dry-run")
+	}
+	if _, err := os.Stat(filepath.Join(targetDataDir, "control-plane")); !os.IsNotExist(err) {
+		t.Fatalf("dry-run should not create control-plane dir, stat err=%v", err)
+	}
+}
+
+func TestProviderMSPBackupRestoreRequiresReplaceForExistingState(t *testing.T) {
+	_, archivePath := createProviderMSPBackupArchiveForRestoreTest(t)
+	targetDataDir := filepath.Join(t.TempDir(), "restore-replace")
+	stalePath := filepath.Join(targetDataDir, "control-plane", "stale.txt")
+	if err := os.MkdirAll(filepath.Dir(stalePath), 0o755); err != nil {
+		t.Fatalf("create stale control-plane dir: %v", err)
+	}
+	if err := os.WriteFile(stalePath, []byte("stale"), 0o600); err != nil {
+		t.Fatalf("write stale file: %v", err)
+	}
+
+	_, err := RestoreProviderMSPBackup(context.Background(), ProviderMSPBackupRestoreOptions{
+		ArchivePath:   archivePath,
+		TargetDataDir: targetDataDir,
+	})
+	if err == nil {
+		t.Fatal("expected restore to reject existing provider MSP state")
+	}
+	if !strings.Contains(err.Error(), "replace enabled") {
+		t.Fatalf("error = %v", err)
+	}
+
+	result, err := RestoreProviderMSPBackup(context.Background(), ProviderMSPBackupRestoreOptions{
+		ArchivePath:       archivePath,
+		TargetDataDir:     targetDataDir,
+		ReplaceExisting:   true,
+		LicenseOutputPath: filepath.Join(targetDataDir, "provider-msp-license.jwt"),
+	})
+	if err != nil {
+		t.Fatalf("RestoreProviderMSPBackup replace: %v", err)
+	}
+	if !result.ReplaceExisting {
+		t.Fatal("restore result should record replace mode")
+	}
+	if _, err := os.Stat(stalePath); !os.IsNotExist(err) {
+		t.Fatalf("replace should remove stale file, stat err=%v", err)
+	}
+	assertProviderMSPBackupRestoredTenantCount(t, filepath.Join(targetDataDir, "control-plane", "tenants.db"), 2)
+}
+
 func testProviderMSPBackupConfig(t *testing.T) *CPConfig {
 	t.Helper()
 	root := t.TempDir()
@@ -181,6 +277,31 @@ func seedProviderMSPBackupRegistry(t *testing.T, cfg *CPConfig) *registry.Tenant
 		t.Fatalf("Create deleted tenant: %v", err)
 	}
 	return reg
+}
+
+func createProviderMSPBackupArchiveForRestoreTest(t *testing.T) (*CPConfig, string) {
+	t.Helper()
+	cfg := testProviderMSPBackupConfig(t)
+	reg := seedProviderMSPBackupRegistry(t, cfg)
+	if err := reg.Close(); err != nil {
+		t.Fatalf("close registry: %v", err)
+	}
+	magicLinks, err := cpauth.NewService(cfg.ControlPlaneDir())
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	magicLinks.Close()
+	if err := os.MkdirAll(filepath.Join(cfg.TenantsDir(), "t-ACTIVE001"), 0o755); err != nil {
+		t.Fatalf("create active tenant dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cfg.TenantsDir(), "t-ACTIVE001", "runtime.json"), []byte(`{"ok":true}`), 0o600); err != nil {
+		t.Fatalf("write active tenant runtime file: %v", err)
+	}
+	archivePath := filepath.Join(t.TempDir(), "provider-msp-backup.tar.gz")
+	if _, err := CreateProviderMSPBackup(context.Background(), cfg, archivePath); err != nil {
+		t.Fatalf("CreateProviderMSPBackup: %v", err)
+	}
+	return cfg, archivePath
 }
 
 func readProviderMSPBackupEntries(t *testing.T, archivePath string) map[string][]byte {
@@ -236,6 +357,22 @@ func assertProviderMSPBackupRegistrySnapshotCount(t *testing.T, dbBytes []byte, 
 	}
 	if got != want {
 		t.Fatalf("snapshot tenant count = %d, want %d", got, want)
+	}
+}
+
+func assertProviderMSPBackupRestoredTenantCount(t *testing.T, dbPath string, want int) {
+	t.Helper()
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open restored db: %v", err)
+	}
+	defer db.Close()
+	var got int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM tenants`).Scan(&got); err != nil {
+		t.Fatalf("query restored db: %v", err)
+	}
+	if got != want {
+		t.Fatalf("restored tenant count = %d, want %d", got, want)
 	}
 }
 

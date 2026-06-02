@@ -80,6 +80,35 @@ type ProviderMSPBackupVerifyResult struct {
 	VerifiedArchiveBytes int64
 }
 
+// ProviderMSPBackupRestoreOptions controls restoring a provider MSP recovery
+// archive into a target control-plane data directory.
+type ProviderMSPBackupRestoreOptions struct {
+	ArchivePath       string
+	TargetDataDir     string
+	LicenseOutputPath string
+	ReplaceExisting   bool
+	DryRun            bool
+}
+
+// ProviderMSPBackupRestoreResult describes a completed or dry-run provider MSP
+// recovery operation.
+type ProviderMSPBackupRestoreResult struct {
+	ArchivePath                 string
+	TargetDataDir               string
+	ControlPlaneDir             string
+	TenantsDir                  string
+	LicenseOutputPath           string
+	DryRun                      bool
+	ReplaceExisting             bool
+	Manifest                    ProviderMSPBackupManifest
+	VerifiedArchiveBytes        int64
+	ControlPlaneEntriesRestored int
+	TenantEntriesRestored       int
+	LicenseEntriesRestored      int
+	RestoredRegistryTenantCount int
+	RestoredRuntimeTenantIDs    []string
+}
+
 // DefaultProviderMSPBackupPath returns the compose-friendly default backup
 // location under CP_DATA_DIR without placing the archive inside the source trees.
 func DefaultProviderMSPBackupPath(cfg *CPConfig, now time.Time) string {
@@ -205,6 +234,81 @@ func CreateProviderMSPBackup(ctx context.Context, cfg *CPConfig, outputPath stri
 	return result, nil
 }
 
+// RestoreProviderMSPBackup verifies and restores a provider MSP recovery
+// archive. It intentionally does not require a fully validated CPConfig because
+// restore may need to recover the MSP license before normal provider-hosted
+// config validation can pass.
+func RestoreProviderMSPBackup(ctx context.Context, opts ProviderMSPBackupRestoreOptions) (*ProviderMSPBackupRestoreResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	opts.ArchivePath = strings.TrimSpace(opts.ArchivePath)
+	if opts.ArchivePath == "" {
+		return nil, fmt.Errorf("backup archive path is required")
+	}
+	targetDataDir, err := resolveProviderMSPRestoreTargetDataDir(opts.TargetDataDir)
+	if err != nil {
+		return nil, err
+	}
+	licenseOutputPath, err := resolveProviderMSPRestoreLicenseOutputPath(opts.LicenseOutputPath, targetDataDir)
+	if err != nil {
+		return nil, err
+	}
+	controlPlaneDir := filepath.Join(targetDataDir, providerMSPBackupControlPlaneDir)
+	tenantsDir := filepath.Join(targetDataDir, providerMSPBackupTenantsDir)
+	if pathIsInside(licenseOutputPath, controlPlaneDir) || pathIsInside(licenseOutputPath, tenantsDir) {
+		return nil, fmt.Errorf("license output path must not be inside restored %s or %s", providerMSPBackupControlPlaneDir, providerMSPBackupTenantsDir)
+	}
+
+	verified, err := VerifyProviderMSPBackup(ctx, opts.ArchivePath)
+	if err != nil {
+		return nil, err
+	}
+	conflicts, err := providerMSPRestoreConflicts(controlPlaneDir, tenantsDir, licenseOutputPath, verified.Manifest.LicenseIncluded)
+	if err != nil {
+		return nil, err
+	}
+	if len(conflicts) > 0 && !opts.ReplaceExisting {
+		return nil, fmt.Errorf("restore target already contains provider MSP state (%s); rerun with replace enabled only after stopping the control plane", strings.Join(conflicts, ", "))
+	}
+
+	result := &ProviderMSPBackupRestoreResult{
+		ArchivePath:          verified.ArchivePath,
+		TargetDataDir:        targetDataDir,
+		ControlPlaneDir:      controlPlaneDir,
+		TenantsDir:           tenantsDir,
+		LicenseOutputPath:    licenseOutputPath,
+		DryRun:               opts.DryRun,
+		ReplaceExisting:      opts.ReplaceExisting,
+		Manifest:             verified.Manifest,
+		VerifiedArchiveBytes: verified.VerifiedArchiveBytes,
+	}
+	if opts.DryRun {
+		result.ControlPlaneEntriesRestored = verified.ControlPlaneEntries
+		result.TenantEntriesRestored = verified.TenantEntries
+		result.LicenseEntriesRestored = verified.LicenseEntries
+		result.RestoredRegistryTenantCount = verified.Manifest.RegistryTenantCount
+		result.RestoredRuntimeTenantIDs = append([]string(nil), verified.Manifest.RuntimeTenantIDs...)
+		return result, nil
+	}
+
+	if opts.ReplaceExisting {
+		if err := removeProviderMSPRestoreTargets(controlPlaneDir, tenantsDir, licenseOutputPath, verified.Manifest.LicenseIncluded); err != nil {
+			return nil, err
+		}
+	}
+	if err := os.MkdirAll(targetDataDir, 0o755); err != nil {
+		return nil, fmt.Errorf("create restore target data dir: %w", err)
+	}
+	if err := extractProviderMSPBackupArchive(ctx, verified.ArchivePath, targetDataDir, licenseOutputPath, result); err != nil {
+		return nil, err
+	}
+	if err := validateRestoredProviderMSPBackup(result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // VerifyProviderMSPBackup validates that a provider MSP backup contains the
 // manifest, tenant registry snapshot, required tenant directories, and license
 // artifact declared by the manifest.
@@ -326,6 +430,226 @@ func VerifyProviderMSPBackup(ctx context.Context, archivePath string) (*Provider
 	}
 	sort.Strings(result.ControlPlaneDBFiles)
 	return result, nil
+}
+
+func resolveProviderMSPRestoreTargetDataDir(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("restore target data dir is required")
+	}
+	resolved, err := filepath.Abs(filepath.Clean(raw))
+	if err != nil {
+		return "", fmt.Errorf("resolve restore target data dir: %w", err)
+	}
+	return resolved, nil
+}
+
+func resolveProviderMSPRestoreLicenseOutputPath(raw, targetDataDir string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		raw = filepath.Join(targetDataDir, providerMSPBackupLicenseName)
+	}
+	resolved, err := filepath.Abs(filepath.Clean(raw))
+	if err != nil {
+		return "", fmt.Errorf("resolve provider MSP license output path: %w", err)
+	}
+	return resolved, nil
+}
+
+func providerMSPRestoreConflicts(controlPlaneDir, tenantsDir, licenseOutputPath string, requireLicense bool) ([]string, error) {
+	var conflicts []string
+	for _, item := range []struct {
+		label string
+		path  string
+	}{
+		{label: providerMSPBackupControlPlaneDir, path: controlPlaneDir},
+		{label: providerMSPBackupTenantsDir, path: tenantsDir},
+	} {
+		exists, err := providerMSPRestorePathExists(item.path)
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			conflicts = append(conflicts, item.label)
+		}
+	}
+	if requireLicense {
+		exists, err := providerMSPRestorePathExists(licenseOutputPath)
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			conflicts = append(conflicts, "provider-msp-license")
+		}
+	}
+	return conflicts, nil
+}
+
+func providerMSPRestorePathExists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, fmt.Errorf("stat restore target %s: %w", path, err)
+}
+
+func removeProviderMSPRestoreTargets(controlPlaneDir, tenantsDir, licenseOutputPath string, removeLicense bool) error {
+	for _, dir := range []string{controlPlaneDir, tenantsDir} {
+		if err := os.RemoveAll(dir); err != nil {
+			return fmt.Errorf("remove existing restore target %s: %w", dir, err)
+		}
+	}
+	if removeLicense {
+		if err := os.Remove(licenseOutputPath); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove existing provider MSP license output: %w", err)
+		}
+	}
+	return nil
+}
+
+func extractProviderMSPBackupArchive(ctx context.Context, archivePath, targetDataDir, licenseOutputPath string, result *ProviderMSPBackupRestoreResult) error {
+	file, err := os.Open(archivePath)
+	if err != nil {
+		return fmt.Errorf("open backup archive for restore: %w", err)
+	}
+	defer file.Close()
+	gz, err := gzip.NewReader(file)
+	if err != nil {
+		return fmt.Errorf("open backup gzip stream for restore: %w", err)
+	}
+	defer gz.Close()
+
+	tr := tar.NewReader(gz)
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("read backup archive for restore: %w", err)
+		}
+		name, err := cleanProviderMSPArchiveName(header.Name)
+		if err != nil {
+			return err
+		}
+		switch {
+		case name == providerMSPBackupManifestName:
+			continue
+		case name == providerMSPBackupControlPlaneDir || strings.HasPrefix(name, providerMSPBackupControlPlaneDir+"/"):
+			if err := restoreProviderMSPArchiveEntry(tr, header, targetDataDir, name); err != nil {
+				return err
+			}
+			result.ControlPlaneEntriesRestored++
+		case name == providerMSPBackupTenantsDir || strings.HasPrefix(name, providerMSPBackupTenantsDir+"/"):
+			if err := restoreProviderMSPArchiveEntry(tr, header, targetDataDir, name); err != nil {
+				return err
+			}
+			result.TenantEntriesRestored++
+		case name == providerMSPBackupLicenseDir:
+			continue
+		case name == providerMSPBackupLicenseDir+"/"+providerMSPBackupLicenseName:
+			if err := restoreProviderMSPArchiveFile(tr, header, licenseOutputPath); err != nil {
+				return err
+			}
+			result.LicenseEntriesRestored++
+		default:
+			return fmt.Errorf("unexpected backup entry during restore %q", name)
+		}
+	}
+	return nil
+}
+
+func restoreProviderMSPArchiveEntry(reader io.Reader, header *tar.Header, targetDataDir, archiveName string) error {
+	destPath := filepath.Join(targetDataDir, filepath.FromSlash(archiveName))
+	if !pathIsInside(destPath, targetDataDir) {
+		return fmt.Errorf("backup restore entry escapes target data dir: %s", archiveName)
+	}
+	switch header.Typeflag {
+	case tar.TypeDir:
+		return restoreProviderMSPArchiveDir(header, destPath)
+	case tar.TypeReg, tar.TypeRegA:
+		return restoreProviderMSPArchiveFile(reader, header, destPath)
+	default:
+		return fmt.Errorf("unsupported backup restore entry type for %s", archiveName)
+	}
+}
+
+func restoreProviderMSPArchiveDir(header *tar.Header, destPath string) error {
+	mode := os.FileMode(header.Mode) & 0o777
+	if mode == 0 {
+		mode = 0o755
+	}
+	if err := os.MkdirAll(destPath, mode); err != nil {
+		return fmt.Errorf("create restored directory %s: %w", destPath, err)
+	}
+	return nil
+}
+
+func restoreProviderMSPArchiveFile(reader io.Reader, header *tar.Header, destPath string) error {
+	if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+		return fmt.Errorf("backup restore expected regular file at %s", header.Name)
+	}
+	mode := os.FileMode(header.Mode) & 0o777
+	if mode == 0 {
+		mode = 0o600
+	}
+	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
+		return fmt.Errorf("create restored file parent %s: %w", destPath, err)
+	}
+	file, err := os.OpenFile(destPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, mode)
+	if err != nil {
+		return fmt.Errorf("create restored file %s: %w", destPath, err)
+	}
+	_, copyErr := io.Copy(file, reader)
+	closeErr := file.Close()
+	if copyErr != nil {
+		return fmt.Errorf("restore file %s: %w", destPath, copyErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("close restored file %s: %w", destPath, closeErr)
+	}
+	return nil
+}
+
+func validateRestoredProviderMSPBackup(result *ProviderMSPBackupRestoreResult) error {
+	if result == nil {
+		return fmt.Errorf("restore result is required")
+	}
+	if err := requireRegularFile(filepath.Join(result.ControlPlaneDir, "tenants.db"), "restored tenant registry database"); err != nil {
+		return err
+	}
+	if result.Manifest.LicenseIncluded {
+		if err := requireRegularFile(result.LicenseOutputPath, "restored provider MSP license file"); err != nil {
+			return err
+		}
+	}
+	reg, err := registry.NewTenantRegistry(result.ControlPlaneDir)
+	if err != nil {
+		return fmt.Errorf("open restored tenant registry: %w", err)
+	}
+	tenants, listErr := reg.List()
+	closeErr := reg.Close()
+	if listErr != nil {
+		return fmt.Errorf("list restored tenant registry rows: %w", listErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("close restored tenant registry: %w", closeErr)
+	}
+	if len(tenants) != result.Manifest.RegistryTenantCount {
+		return fmt.Errorf("restored tenant registry count = %d, want %d", len(tenants), result.Manifest.RegistryTenantCount)
+	}
+	if err := requireProviderMSPRuntimeTenantDirs(result.TenantsDir, result.Manifest.RuntimeTenantIDs); err != nil {
+		return fmt.Errorf("validate restored tenant runtime dirs: %w", err)
+	}
+	result.RestoredRegistryTenantCount = len(tenants)
+	result.RestoredRuntimeTenantIDs = append([]string(nil), result.Manifest.RuntimeTenantIDs...)
+	return nil
 }
 
 func buildProviderMSPBackupManifest(cfg *CPConfig, tenants []*registry.Tenant, accountCount int) (ProviderMSPBackupManifest, error) {

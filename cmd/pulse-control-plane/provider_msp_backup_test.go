@@ -7,17 +7,23 @@ func TestProviderMSPCommandExposesBackup(t *testing.T) {
 	for _, child := range cmd.Commands() {
 		if child.Name() == "backup" {
 			foundCreate := false
+			foundRestore := false
 			foundVerify := false
 			for _, backupChild := range child.Commands() {
 				switch backupChild.Name() {
 				case "create":
 					foundCreate = true
+				case "restore":
+					foundRestore = true
 				case "verify":
 					foundVerify = true
 				}
 			}
 			if !foundCreate {
 				t.Fatal("provider-msp backup create command is not registered")
+			}
+			if !foundRestore {
+				t.Fatal("provider-msp backup restore command is not registered")
 			}
 			if !foundVerify {
 				t.Fatal("provider-msp backup verify command is not registered")
