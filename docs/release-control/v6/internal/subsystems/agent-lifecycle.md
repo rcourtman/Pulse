@@ -125,6 +125,11 @@ reverse.
     behavior aligned so the Machines onboarding path does not diverge by OS.
 18. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` shared with `api-contracts`: the infrastructure settings presentation helper is both an agent lifecycle control surface and an API-backed direct-node/discovery settings boundary.
 19. `internal/api/agent_install_command_shared.go` shared with `api-contracts`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
+19a. `internal/api/cloud_agent_install_command.go` shared with `api-contracts`, `cloud-paid`: hosted tenant agent install command generation is both an agent lifecycle enrollment surface and a provider-hosted tenant boundary.
+    The hosted PVE/PBS install command path must stay on the same token-file
+    command transport as the normal lifecycle install helpers, while failing
+    closed unless hosted mode is active, the target org exists, and the minted
+    `agent:report` token remains scoped to that tenant workspace.
 20. `internal/api/config_setup_handlers.go` shared with `api-contracts`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
 21. `internal/api/setup_script_render.go` shared with `api-contracts`, `storage-recovery`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).
     PBS setup-script auto-registration remains lifecycle-owned bootstrap

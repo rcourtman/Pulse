@@ -87,3 +87,70 @@ func TestHostedTenantAgentInstallCommand_GeneratesOrgBoundTokenAndCommand(t *tes
 	_, ok := tenantMonitor.GetConfig().ValidateAPIToken(resp.Token)
 	require.True(t, ok, "expected tenant monitor config to validate newly issued token")
 }
+
+func TestGenerateHostedTenantAgentInstallCommandEnforcesHostedOrgBoundary(t *testing.T) {
+	setMockModeForTest(t, true)
+
+	dataDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:  dataDir,
+		PublicURL: "https://cloud.example.com",
+	}
+	persistence := config.NewConfigPersistence(dataDir)
+	multiTenant := config.NewMultiTenantPersistence(dataDir)
+
+	_, err := GenerateHostedTenantAgentInstallCommand(HostedTenantAgentInstallCommandOptions{
+		Config:      cfg,
+		Persistence: persistence,
+		MultiTenant: multiTenant,
+		HostedMode:  false,
+		OrgID:       "acme",
+		InstallType: "pve",
+		BaseURL:     "https://acme.cloud.example.com",
+	})
+	require.ErrorIs(t, err, ErrHostedTenantInstallRequiresHostedMode)
+
+	_, err = GenerateHostedTenantAgentInstallCommand(HostedTenantAgentInstallCommandOptions{
+		Config:      cfg,
+		Persistence: persistence,
+		MultiTenant: multiTenant,
+		HostedMode:  true,
+		OrgID:       "missing",
+		InstallType: "pve",
+		BaseURL:     "https://missing.cloud.example.com",
+	})
+	require.ErrorIs(t, err, ErrHostedTenantInstallInvalidOrg)
+
+	orgID := "acme"
+	_, err = multiTenant.GetPersistence(orgID)
+	require.NoError(t, err)
+
+	result, err := GenerateHostedTenantAgentInstallCommand(HostedTenantAgentInstallCommandOptions{
+		Config:      cfg,
+		Persistence: persistence,
+		MultiTenant: multiTenant,
+		HostedMode:  true,
+		OrgID:       orgID,
+		InstallType: "pbs",
+		OwnerUserID: "owner-1",
+		BaseURL:     "https://acme.cloud.example.com/",
+	})
+	require.NoError(t, err)
+	require.Equal(t, orgID, result.OrgID)
+	require.Equal(t, "pbs", result.InstallType)
+	require.NotEmpty(t, result.Command)
+	require.NotEmpty(t, result.Token)
+	require.NotEmpty(t, result.TokenID)
+	require.Contains(t, result.Command, "https://acme.cloud.example.com/install.sh")
+	require.Contains(t, result.Command, "--proxmox-type "+posixShellQuote("pbs"))
+
+	tokens, err := persistence.LoadAPITokens()
+	require.NoError(t, err)
+	require.Len(t, tokens, 1)
+	require.Equal(t, orgID, tokens[0].OrgID)
+	require.Equal(t, "owner-1", tokens[0].Metadata[apiTokenMetadataOwnerUserID])
+	require.Equal(t, "pbs", tokens[0].Metadata["install_type"])
+	require.Equal(t, "hosted_agent_install_command", tokens[0].Metadata["issued_via"])
+	_, ok := (&config.Config{APITokens: tokens}).ValidateAPIToken(result.Token)
+	require.True(t, ok)
+}

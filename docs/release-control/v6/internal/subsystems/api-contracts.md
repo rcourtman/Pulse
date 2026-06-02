@@ -86,6 +86,7 @@ product API routes free of maintainer commercial analytics.
 51a. `internal/api/pbs_backups.go`
 52. `internal/api/config_setup_handlers.go`
 52a. `internal/api/setup_script_render.go`
+52b. `internal/api/cloud_agent_install_command.go`
 53. `internal/api/demo_mode_commercial.go`
 54. `internal/api/demo_mode_operations.go`
 55. `internal/api/security_status_capabilities.go`
@@ -171,6 +172,13 @@ after the same sanitization. This lets Pulse Account deep-link an MSP operator
 to tenant-owned destinations such as agent installation or reporting without
 turning the tenant exchange into an open redirect or moving API ownership for
 agent tokens, alerts, or reports into the control plane.
+
+Hosted tenant agent install commands are a canonical tenant-runtime API payload
+boundary. The hosted route and its reusable command helper must produce the
+same PVE/PBS install command shape while preserving tenant-local token
+persistence, org binding, token metadata, and already-initialized tenant
+monitor refresh behavior. Provider-hosted MSP control-plane proofs may exercise
+that helper, but they must not create a second control-plane-only token path.
 
 Pulse Account workspace summaries carry setup state as a backend-owned payload
 contract. Browser bootstrap and `/api/portal/dashboard` workspace entries may
@@ -343,6 +351,11 @@ payload shape change when the portal presents compact client rows.
     token-file and preflight transport contract: tokens are passed to the
     installer as ephemeral files, and host install snippets must verify the
     target Pulse URL plus exact agent binary artifact before root escalation.
+32a. `internal/api/cloud_agent_install_command.go` shared with `agent-lifecycle`, `cloud-paid`: hosted tenant agent install commands are agent lifecycle enrollment transport, hosted/provider MSP tenant boundary, and canonical API payload contract.
+    The route and reusable helper must both mint PVE/PBS install tokens only in
+    hosted mode, only for an existing tenant/org, and only into that tenant
+    runtime's token store with the org boundary, command shape, token metadata,
+    and already-loaded tenant-monitor refresh behavior preserved.
 33. `internal/api/ai_handler.go` shared with `ai-runtime`: Pulse Assistant handlers are both an AI runtime control surface and a canonical API payload contract boundary.
     Assistant session list payloads may expose only the safe
     `handoff_summary` projection needed by the browser to mark and restore a

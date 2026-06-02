@@ -38,28 +38,29 @@ func NewTenantDirWorkspaceSetupFactReader(tenantsDir string) WorkspaceSetupFactR
 }
 
 func (r tenantDirWorkspaceSetupFactReader) FactsForWorkspace(tenantID string) WorkspaceSetupFacts {
-	orgDir, ok := r.orgConfigDir(tenantID)
+	tenantDataDir, orgDir, ok := r.workspaceConfigDirs(tenantID)
 	if !ok {
 		return WorkspaceSetupFacts{}
 	}
-	return readWorkspaceSetupFacts(orgDir)
+	return readWorkspaceSetupFacts(tenantID, tenantDataDir, orgDir)
 }
 
-func (r tenantDirWorkspaceSetupFactReader) orgConfigDir(tenantID string) (string, bool) {
+func (r tenantDirWorkspaceSetupFactReader) workspaceConfigDirs(tenantID string) (tenantDataDir string, orgDir string, ok bool) {
 	tenantID = strings.TrimSpace(tenantID)
 	if r.tenantsDir == "" || tenantID == "" || filepath.Base(tenantID) != tenantID {
-		return "", false
+		return "", "", false
 	}
-	return filepath.Join(r.tenantsDir, tenantID, "orgs", tenantID), true
+	tenantDataDir = filepath.Join(r.tenantsDir, tenantID)
+	return tenantDataDir, filepath.Join(tenantDataDir, "orgs", tenantID), true
 }
 
-func readWorkspaceSetupFacts(orgDir string) WorkspaceSetupFacts {
+func readWorkspaceSetupFacts(tenantID, tenantDataDir, orgDir string) WorkspaceSetupFacts {
 	facts := WorkspaceSetupFacts{}
 	if orgDir == "" {
 		return facts
 	}
 
-	facts.AgentCount, facts.AgentTokenCount, facts.UnusedAgentTokenCount, facts.LastAgentSeenAt = readAgentSetupFacts(orgDir)
+	facts.AgentCount, facts.AgentTokenCount, facts.UnusedAgentTokenCount, facts.LastAgentSeenAt = readAgentSetupFacts(tenantID, tenantDataDir, orgDir)
 	facts.AlertRouteCount, facts.DisabledAlertRouteCount = readAlertRouteFacts(orgDir)
 	facts.ReportScheduleCount, facts.DisabledReportScheduleCount = readReportScheduleFacts(orgDir)
 	return facts
@@ -69,16 +70,43 @@ func intPtr(value int) *int {
 	return &value
 }
 
-func readAgentSetupFacts(orgDir string) (*int, *int, *int, *time.Time) {
-	var tokens []config.APITokenRecord
-	ok, err := readMaybeEncryptedJSON(orgDir, "api_tokens.json", &tokens)
-	if err != nil {
-		log.Warn().Err(err).Str("org_dir", orgDir).Msg("cloudcp.portal.setup_facts: read api tokens")
-		return nil, nil, nil, nil
+func readAgentSetupFacts(tenantID, tenantDataDir, orgDir string) (*int, *int, *int, *time.Time) {
+	tokens := make([]config.APITokenRecord, 0)
+	seen := map[string]struct{}{}
+	appendTokens := func(dir, source string, filter func(config.APITokenRecord) bool) {
+		if dir == "" {
+			return
+		}
+		var sourceTokens []config.APITokenRecord
+		ok, err := readMaybeEncryptedJSON(dir, "api_tokens.json", &sourceTokens)
+		if err != nil {
+			log.Warn().Err(err).Str("dir", dir).Str("source", source).Msg("cloudcp.portal.setup_facts: read api tokens")
+			return
+		}
+		if !ok {
+			return
+		}
+		for _, token := range sourceTokens {
+			if filter != nil && !filter(token) {
+				continue
+			}
+			key := agentSetupTokenKey(token)
+			if _, exists := seen[key]; exists {
+				continue
+			}
+			seen[key] = struct{}{}
+			tokens = append(tokens, token)
+		}
 	}
-	if !ok {
-		return intPtr(0), intPtr(0), intPtr(0), nil
-	}
+
+	// Tokens created inside the org-specific config directory belong to that
+	// workspace by construction.
+	appendTokens(orgDir, "org", nil)
+	// Hosted tenant install commands are persisted in the tenant runtime's
+	// shared token store, with OrgID/OrgIDs carrying the workspace boundary.
+	appendTokens(tenantDataDir, "tenant-root", func(token config.APITokenRecord) bool {
+		return agentSetupTokenMatchesWorkspace(token, tenantID)
+	})
 
 	count := 0
 	tokenCount := 0
@@ -100,6 +128,32 @@ func readAgentSetupFacts(orgDir string) (*int, *int, *int, *time.Time) {
 		}
 	}
 	return intPtr(count), intPtr(tokenCount), intPtr(unusedCount), lastSeen
+}
+
+func agentSetupTokenKey(token config.APITokenRecord) string {
+	if strings.TrimSpace(token.ID) != "" {
+		return "id:" + strings.TrimSpace(token.ID)
+	}
+	if strings.TrimSpace(token.Hash) != "" {
+		return "hash:" + strings.TrimSpace(token.Hash)
+	}
+	return "token:" + strings.TrimSpace(token.Name) + ":" + token.CreatedAt.UTC().Format(time.RFC3339Nano) + ":" + strings.Join(token.Scopes, ",")
+}
+
+func agentSetupTokenMatchesWorkspace(token config.APITokenRecord, tenantID string) bool {
+	tenantID = strings.TrimSpace(tenantID)
+	if tenantID == "" {
+		return false
+	}
+	if strings.TrimSpace(token.OrgID) == tenantID {
+		return true
+	}
+	for _, orgID := range token.OrgIDs {
+		if strings.TrimSpace(orgID) == tenantID {
+			return true
+		}
+	}
+	return false
 }
 
 func readAlertRouteFacts(orgDir string) (*int, *int) {

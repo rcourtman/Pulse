@@ -114,6 +114,68 @@ func TestTenantDirWorkspaceSetupFactReaderCountsTenantFacts(t *testing.T) {
 	}
 }
 
+func TestTenantDirWorkspaceSetupFactReaderCountsHostedRootAgentTokens(t *testing.T) {
+	tenantsDir := t.TempDir()
+	tenantDir := filepath.Join(tenantsDir, "ws_one")
+	orgDir := filepath.Join(tenantDir, "orgs", "ws_one")
+	if err := os.MkdirAll(orgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	lastUsed := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
+	writeSetupFactJSON(t, tenantDir, "api_tokens.json", []config.APITokenRecord{
+		{
+			ID:         "agent-used-root",
+			Name:       "Hosted Agent",
+			Hash:       "hash-used",
+			OrgID:      "ws_one",
+			CreatedAt:  lastUsed.Add(-time.Hour),
+			LastUsedAt: &lastUsed,
+			Scopes:     []string{config.ScopeAgentReport},
+		},
+		{
+			ID:        "agent-unused-root",
+			Name:      "Hosted Agent Unused",
+			Hash:      "hash-unused",
+			OrgIDs:    []string{"ws_one"},
+			CreatedAt: lastUsed.Add(-time.Hour),
+			Scopes:    []string{config.ScopeAgentReport},
+		},
+		{
+			ID:         "other-workspace-agent",
+			Name:       "Other Workspace",
+			Hash:       "hash-other",
+			OrgID:      "ws_two",
+			CreatedAt:  lastUsed.Add(-time.Hour),
+			LastUsedAt: &lastUsed,
+			Scopes:     []string{config.ScopeAgentReport},
+		},
+		{
+			ID:         "settings-only-root",
+			Name:       "Settings",
+			Hash:       "hash-settings",
+			OrgID:      "ws_one",
+			CreatedAt:  lastUsed.Add(-time.Hour),
+			LastUsedAt: &lastUsed,
+			Scopes:     []string{config.ScopeSettingsRead},
+		},
+	})
+
+	facts := NewTenantDirWorkspaceSetupFactReader(tenantsDir).FactsForWorkspace("ws_one")
+	if facts.AgentCount == nil || *facts.AgentCount != 1 {
+		t.Fatalf("AgentCount = %v, want 1", facts.AgentCount)
+	}
+	if facts.AgentTokenCount == nil || *facts.AgentTokenCount != 2 {
+		t.Fatalf("AgentTokenCount = %v, want 2", facts.AgentTokenCount)
+	}
+	if facts.UnusedAgentTokenCount == nil || *facts.UnusedAgentTokenCount != 1 {
+		t.Fatalf("UnusedAgentTokenCount = %v, want 1", facts.UnusedAgentTokenCount)
+	}
+	if facts.LastAgentSeenAt == nil || !facts.LastAgentSeenAt.Equal(lastUsed) {
+		t.Fatalf("LastAgentSeenAt = %v, want %v", facts.LastAgentSeenAt, lastUsed)
+	}
+}
+
 func TestTenantDirWorkspaceSetupFactReaderMissingFactsAreZero(t *testing.T) {
 	tenantsDir := t.TempDir()
 	orgDir := filepath.Join(tenantsDir, "ws_empty", "orgs", "ws_empty")

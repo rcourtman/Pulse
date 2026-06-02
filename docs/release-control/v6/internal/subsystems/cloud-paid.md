@@ -51,6 +51,7 @@ rules.
 27. `internal/cloudcp/entitlements/service.go`
 28. `internal/cloudcp/portal/handlers.go`
 29. `internal/cloudcp/portal/page.go`
+29a. `internal/cloudcp/portal/setup_facts.go`
 30. `internal/cloudcp/public_cloud_signup_handlers.go`
 31. `internal/cloudcp/registry/models.go`
 32. `internal/cloudcp/registry/registry.go`
@@ -377,6 +378,11 @@ or other self-hosted uncapped continuity plans.
    check remains `Review` ahead of setup counts. Local MSP onboarding previews
    should be scenario-backed portal bootstrap data, not static screenshots, so
    they stay grounded in the real portal shape as the bundle changes.
+   Hosted provider workspaces may store agent install tokens in the tenant
+   runtime root token store rather than the org-specific config directory.
+   Portal setup facts must count only root tokens whose `OrgID` or `OrgIDs`
+   matches the workspace tenant ID, combine them with org-local setup facts,
+   and never let one client's root token make another client look configured.
    MSP account surfaces may call account workspaces `clients`, but that is a
    customer-facing portal vocabulary choice over the same tenant/workspace
    lifecycle. Mixed-account Pulse Account sessions must label account surfaces

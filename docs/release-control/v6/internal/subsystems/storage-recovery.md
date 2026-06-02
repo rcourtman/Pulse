@@ -65,6 +65,13 @@ diagnostics flows may observe the API-owned `bound_agent_id`,
 `agent:exec` tokens or treat a Proxmox install-command token as recoverable for
 another host after the first command registration identity has been persisted.
 
+Hosted tenant agent install commands in `internal/api/cloud_agent_install_command.go`
+are adjacent API/lifecycle transport only. A provider-hosted MSP PVE/PBS install
+token may allow agent reporting for the scoped tenant workspace, but it must not
+grant backup visibility, recovery authority, or storage health privileges; those
+remain governed by the setup-script and source-specific backup API boundaries
+below.
+
 Generated Proxmox setup-script, runtime host-agent setup, and installer
 auto-registration changes that affect backup visibility permissions are
 storage/recovery-adjacent: optional PVE `/storage` grants must remain effective

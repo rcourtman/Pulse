@@ -2860,8 +2860,8 @@ class SubsystemLookupTest(unittest.TestCase):
                 {
                     "heading": "## Shared Boundaries",
                     "path": "internal/api/access_control_handlers.go",
-                    "line": 327,
-                    "heading_line": 112,
+                    "line": 335,
+                    "heading_line": 113,
                 }
             ],
         )
@@ -3405,6 +3405,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
             [
+                "cmd/pulse-control-plane/provider_msp_proof_test.go",
                 "internal/cloudcp/tenant_runtime_rollout_test.go",
                 "scripts/installtests/provider_msp_deploy_test.go",
             ],
