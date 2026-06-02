@@ -77,6 +77,24 @@ type RuntimeContainerSummary struct {
 	Created      int64
 }
 
+type RuntimePrerequisiteOptions struct {
+	PullImage bool
+}
+
+type RuntimePrerequisiteReport struct {
+	OK                bool
+	DockerReachable   bool
+	NetworkName       string
+	NetworkID         string
+	NetworkOK         bool
+	ImageRef          string
+	ImageID           string
+	ImageAvailable    bool
+	ImagePulled       bool
+	ImagePullRequired bool
+	Failures          []string
+}
+
 const immutableOwnershipPathsEnv = "PULSE_IMMUTABLE_OWNERSHIP_PATHS"
 
 const (
@@ -193,6 +211,58 @@ func (m *Manager) ListManagedRuntimeContainers(ctx context.Context) ([]RuntimeCo
 	return containers, nil
 }
 
+func (m *Manager) CheckRuntimePrerequisites(ctx context.Context, opts RuntimePrerequisiteOptions) (*RuntimePrerequisiteReport, error) {
+	if m == nil {
+		return &RuntimePrerequisiteReport{
+			OK:       false,
+			Failures: []string{"docker manager is not initialized"},
+		}, nil
+	}
+	report := &RuntimePrerequisiteReport{
+		OK:          true,
+		NetworkName: strings.TrimSpace(m.cfg.Network),
+		ImageRef:    strings.TrimSpace(m.cfg.Image),
+	}
+	addFailure := func(format string, args ...any) {
+		report.OK = false
+		report.Failures = append(report.Failures, fmt.Sprintf(format, args...))
+	}
+
+	if err := m.ensureDaemonReachable(ctx); err != nil {
+		addFailure("%v", err)
+		return report, nil
+	}
+	report.DockerReachable = true
+
+	if report.NetworkName == "" {
+		addFailure("tenant Docker network is required")
+	} else {
+		inspect, err := m.cli.NetworkInspect(ctx, report.NetworkName, client.NetworkInspectOptions{})
+		if err != nil {
+			addFailure("inspect tenant Docker network %q: %v", report.NetworkName, err)
+		} else {
+			report.NetworkOK = true
+			report.NetworkID = strings.TrimSpace(inspect.Network.ID)
+		}
+	}
+
+	image, pulled, err := m.ensureRuntimeImageAvailable(ctx, opts.PullImage)
+	report.ImagePulled = pulled
+	report.ImageID = image
+	if err != nil {
+		if !opts.PullImage && errdefs.IsNotFound(err) {
+			report.ImagePullRequired = true
+			addFailure("tenant runtime image %q is not present locally; rerun preflight with image pulling enabled or pull it before creating a workspace", report.ImageRef)
+		} else {
+			addFailure("%v", err)
+		}
+	} else {
+		report.ImageAvailable = true
+	}
+
+	return report, nil
+}
+
 // IsNotFound reports whether Docker treated an identifier as missing.
 func IsNotFound(err error) bool {
 	return errdefs.IsNotFound(err)
@@ -208,11 +278,51 @@ func (m *Manager) ensureDaemonReachable(ctx context.Context) error {
 	return nil
 }
 
+func (m *Manager) ensureRuntimeImageAvailable(ctx context.Context, pullIfMissing bool) (imageID string, pulled bool, err error) {
+	if err := m.ensureDaemonReachable(ctx); err != nil {
+		return "", false, err
+	}
+	imageRef := strings.TrimSpace(m.cfg.Image)
+	if imageRef == "" {
+		return "", false, fmt.Errorf("tenant runtime image is required")
+	}
+	inspect, err := m.cli.ImageInspect(ctx, imageRef)
+	if err == nil {
+		return strings.TrimSpace(inspect.ID), false, nil
+	}
+	if !errdefs.IsNotFound(err) {
+		return "", false, fmt.Errorf("inspect tenant runtime image %q: %w", imageRef, err)
+	}
+	if !pullIfMissing {
+		return "", false, err
+	}
+	rc, err := m.cli.ImagePull(ctx, imageRef, client.ImagePullOptions{})
+	if err != nil {
+		return "", false, fmt.Errorf("pull tenant runtime image %q: %w", imageRef, err)
+	}
+	defer func() {
+		if closeErr := rc.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("close tenant runtime image pull stream %q: %w", imageRef, closeErr)
+		}
+	}()
+	if _, err := io.Copy(io.Discard, rc); err != nil {
+		return "", true, fmt.Errorf("read tenant runtime image pull output %q: %w", imageRef, err)
+	}
+	inspect, err = m.cli.ImageInspect(ctx, imageRef)
+	if err != nil {
+		return "", true, fmt.Errorf("inspect pulled tenant runtime image %q: %w", imageRef, err)
+	}
+	return strings.TrimSpace(inspect.ID), true, nil
+}
+
 // CreateAndStart creates and starts a tenant container.
 // tenantDataDir is the host path that gets bind-mounted to /etc/pulse in the container.
 func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir string) (containerID string, err error) {
 	if err := m.ensureDaemonReachable(ctx); err != nil {
 		return "", err
+	}
+	if _, _, err := m.ensureRuntimeImageAvailable(ctx, true); err != nil {
+		return "", fmt.Errorf("prepare tenant runtime image: %w", err)
 	}
 	if err := prepareTenantRuntimeMountSources(tenantDataDir, tenantRuntimeUID, tenantRuntimeGID); err != nil {
 		return "", fmt.Errorf("prepare tenant runtime mounts for %s: %w", tenantID, err)

@@ -149,6 +149,11 @@ rules.
    Hosted tenant container creation must also bound Docker `json-file` logs
    through the control-plane Docker manager so tenant runtime logging cannot
    fill the live Pulse Cloud host independently of tenant data quotas.
+   Provider-hosted MSP and Pulse-hosted tenant creation must also prepare or
+   fail closed on the configured tenant runtime image before mutating the
+   workspace into a state that expects a live runtime container; readiness
+   checks must surface missing Docker daemon, network, image, and storage
+   prerequisites as operator-facing failures.
    Hosted checkout and MSP workspace provisioning must also pass the
    control-plane storage admission guard before tenant/account mutation: root
    filesystem, tenant data, Docker runtime store, and Docker build-cache

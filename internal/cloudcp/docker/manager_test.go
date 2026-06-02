@@ -280,3 +280,42 @@ func TestCreateAndStartFailsBeforeImmutablePrepWhenDockerUnavailable(t *testing.
 		t.Fatalf("CreateAndStart error = %v, want daemon failure before mount preparation", err)
 	}
 }
+
+func TestCheckRuntimePrerequisitesReportsMissingDockerDaemon(t *testing.T) {
+	t.Setenv("DOCKER_HOST", "unix:///tmp/pulse-missing-docker-preflight.sock")
+	t.Setenv("DOCKER_TLS_VERIFY", "")
+	t.Setenv("DOCKER_CERT_PATH", "")
+
+	mgr, err := NewManager(ManagerConfig{
+		Image:      "pulse:test",
+		Network:    "pulse-provider-msp",
+		BaseDomain: "msp.example.com",
+	})
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+	t.Cleanup(func() { _ = mgr.Close() })
+
+	report, err := mgr.CheckRuntimePrerequisites(context.Background(), RuntimePrerequisiteOptions{PullImage: false})
+	if err != nil {
+		t.Fatalf("CheckRuntimePrerequisites: %v", err)
+	}
+	if report == nil {
+		t.Fatal("report is nil")
+	}
+	if report.OK {
+		t.Fatalf("report.OK = true, want false")
+	}
+	if report.DockerReachable {
+		t.Fatal("DockerReachable = true, want false")
+	}
+	if report.NetworkName != "pulse-provider-msp" {
+		t.Fatalf("NetworkName = %q, want pulse-provider-msp", report.NetworkName)
+	}
+	if report.ImageRef != "pulse:test" {
+		t.Fatalf("ImageRef = %q, want pulse:test", report.ImageRef)
+	}
+	if got := strings.Join(report.Failures, "; "); !strings.Contains(got, "ping docker daemon") {
+		t.Fatalf("failures = %q, want docker daemon ping failure", got)
+	}
+}

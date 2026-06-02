@@ -152,17 +152,7 @@ func newProviderMSPProofRuntimeFromConfig(cfg *cloudcp.CPConfig) (*providerMSPPr
 	}
 
 	var dockerMgr *cpDocker.Manager
-	dockerMgr, err = cpDocker.NewManager(cpDocker.ManagerConfig{
-		Image:                    cfg.PulseImage,
-		Network:                  cfg.DockerNetwork,
-		BaseDomain:               providerMSPProofBaseDomainFromURL(cfg.BaseURL),
-		TrialActivationPublicKey: cfg.TrialActivationPublicKey,
-		TrustedProxyCIDRs:        cfg.TrustedProxyCIDRs,
-		MemoryLimit:              cfg.TenantMemoryLimit,
-		CPUShares:                cfg.TenantCPUShares,
-		TenantLogMaxSize:         cfg.TenantLogMaxSize,
-		TenantLogMaxFile:         cfg.TenantLogMaxFile,
-	})
+	dockerMgr, err = cpDocker.NewManager(providerMSPDockerManagerConfig(cfg))
 	if err != nil {
 		if !cfg.AllowDockerlessProvisioning {
 			reg.Close()
@@ -461,7 +451,7 @@ func markProviderMSPProofAgentTokenUsed(tenantDataDir, tenantID, rawToken string
 }
 
 func (rt *providerMSPProofRuntime) verifyProviderMSPProofHandoff(ctx context.Context, tenant *registry.Tenant, ownerUserID, targetPath string) (string, error) {
-	baseDomain := providerMSPProofBaseDomainFromURL(rt.cfg.BaseURL)
+	baseDomain := providerMSPBaseDomainFromURL(rt.cfg.BaseURL)
 	if baseDomain == "" {
 		return "", fmt.Errorf("could not derive provider base domain from %q", rt.cfg.BaseURL)
 	}
@@ -628,7 +618,7 @@ func providerMSPProofPlanVersion(cfg *cloudcp.CPConfig) string {
 	return strings.TrimSpace(cfg.ProviderMSPPlanVersion)
 }
 
-func providerMSPProofBaseDomainFromURL(baseURL string) string {
+func providerMSPBaseDomainFromURL(baseURL string) string {
 	domain := strings.TrimSpace(baseURL)
 	for _, prefix := range []string{"https://", "http://"} {
 		if strings.HasPrefix(domain, prefix) {
@@ -643,7 +633,7 @@ func providerMSPProofBaseDomainFromURL(baseURL string) string {
 }
 
 func (rt *providerMSPProofRuntime) providerMSPProofTenantPublicURL(tenantID string) string {
-	baseDomain := providerMSPProofBaseDomainFromURL(rt.cfg.BaseURL)
+	baseDomain := providerMSPBaseDomainFromURL(rt.cfg.BaseURL)
 	if baseDomain == "" {
 		return ""
 	}
