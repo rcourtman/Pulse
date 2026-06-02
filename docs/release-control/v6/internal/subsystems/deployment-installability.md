@@ -150,6 +150,15 @@ surfaces.
    provider images, run the one-off `provider-msp install-proof` command through
    the packaged control-plane service, start the long-running provider stack,
    and finish with `provider-msp status`.
+   `deploy/provider-msp/setup.sh` is the first-time provider host setup
+   artifact. It must install the Docker/compose host prerequisites, create the
+   provider data, backup, and Docker-network layout, copy the provider MSP
+   deploy bundle into a stable operator directory, create a private `.env` from
+   the provider template when needed, fail closed on placeholder image refs,
+   missing signed MSP license files, Dockerless production provisioning, disabled
+   storage guardrails, or Stripe/cloud-signup variables, validate compose, and
+   optionally hand off to `run-install-proof.sh` when the provider account name
+   and owner email are supplied.
    `pulse-control-plane provider-msp status` is the non-mutating operational
    companion to that proof: it must report registry readiness, tenant
    state/health counts, stuck provisioning workspaces, Docker runtime

@@ -22,7 +22,7 @@ services:
   control-plane:
     image: ${CONTROL_PLANE_IMAGE:?CONTROL_PLANE_IMAGE must be set to a digest-pinned image}
     volumes:
-      - /data:/data
+      - ${PULSE_PROVIDER_MSP_DATA_DIR:-/data}:/data
       - /:/host-root:ro
       - /var/lib/docker:/host-var-lib-docker:ro
       - /var/run/docker.sock:/var/run/docker.sock
@@ -39,7 +39,7 @@ services:
       - CP_ADMIN_KEY=${CP_ADMIN_KEY}
       - CP_BASE_URL=https://${DOMAIN}
       - CP_PULSE_IMAGE=${CP_PULSE_IMAGE}
-      - CP_DOCKER_NETWORK=pulse-provider-msp
+      - CP_DOCKER_NETWORK=${PULSE_PROVIDER_MSP_DOCKER_NETWORK:-pulse-provider-msp}
       - CP_PROVIDER_MSP_LICENSE_FILE=/run/secrets/provider_msp_license
       - CP_TENANT_MEMORY_LIMIT=${CP_TENANT_MEMORY_LIMIT:-536870912}
       - CP_ALLOW_DOCKERLESS_PROVISIONING=${CP_ALLOW_DOCKERLESS_PROVISIONING:-false}
@@ -65,7 +65,7 @@ services:
     restart: unless-stopped
     labels:
       - traefik.enable=true
-      - traefik.docker.network=pulse-provider-msp
+      - traefik.docker.network=${PULSE_PROVIDER_MSP_DOCKER_NETWORK:-pulse-provider-msp}
       - traefik.http.routers.provider-control-plane.rule=Host(`${DOMAIN}`)
       - traefik.http.routers.provider-control-plane.entrypoints=websecure
       - traefik.http.routers.provider-control-plane.tls=true
@@ -80,7 +80,7 @@ secrets:
 
 networks:
   pulse-provider-msp:
-    name: pulse-provider-msp
+    name: ${PULSE_PROVIDER_MSP_DOCKER_NETWORK:-pulse-provider-msp}
 
 volumes:
   acme-data:

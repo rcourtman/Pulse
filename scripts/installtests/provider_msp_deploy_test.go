@@ -23,9 +23,10 @@ func TestProviderMSPDeployComposeIsProviderModeAndStripeFree(t *testing.T) {
 	assertContainsAll(t, text,
 		"CP_CONTROL_PLANE_MODE=provider_hosted_msp",
 		"CP_PROVIDER_MSP_LICENSE_FILE=/run/secrets/provider_msp_license",
-		"CP_DOCKER_NETWORK=pulse-provider-msp",
+		"CP_DOCKER_NETWORK=${PULSE_PROVIDER_MSP_DOCKER_NETWORK:-pulse-provider-msp}",
+		"${PULSE_PROVIDER_MSP_DATA_DIR:-/data}:/data",
 		"provider_msp_license:",
-		"pulse-provider-msp:",
+		"name: ${PULSE_PROVIDER_MSP_DOCKER_NETWORK:-pulse-provider-msp}",
 	)
 	assertNotContainsAny(t, text,
 		"STRIPE_",
@@ -45,8 +46,11 @@ func TestProviderMSPDeployEnvExampleMatchesBootstrapPath(t *testing.T) {
 	text := string(envBytes)
 	assertContainsAll(t, text,
 		"CP_ENV=production",
+		"PULSE_PROVIDER_MSP_DATA_DIR=/data",
+		"PULSE_PROVIDER_MSP_DOCKER_NETWORK=pulse-provider-msp",
 		"CP_PROVIDER_MSP_LICENSE_FILE=./provider-msp-license.jwt",
 		"CP_TRIAL_ACTIVATION_PRIVATE_KEY=",
+		"sudo -E ./setup.sh",
 		"docker compose run --rm control-plane provider-msp bootstrap",
 		"docker compose run --rm control-plane provider-msp preflight",
 		"docker compose run --rm control-plane provider-msp status",
@@ -71,6 +75,43 @@ func TestProviderMSPDeployEnvExampleMatchesBootstrapPath(t *testing.T) {
 		"CP_MSP_GROWTH_PRICE_ID",
 		"CP_MSP_SCALE_PRICE_ID",
 		"CP_PUBLIC_CLOUD_SIGNUP_ENABLED",
+	)
+}
+
+func TestProviderMSPSetupScriptMatchesProviderContract(t *testing.T) {
+	scriptPath := repoFile("deploy", "provider-msp", "setup.sh")
+	result := exec.Command("bash", "-n", scriptPath)
+	if output, err := result.CombinedOutput(); err != nil {
+		t.Fatalf("provider MSP setup shell syntax failed: %v\n%s", err, output)
+	}
+	scriptBytes, err := os.ReadFile(scriptPath)
+	if err != nil {
+		t.Fatalf("read provider MSP setup: %v", err)
+	}
+	text := string(scriptBytes)
+	assertContainsAll(t, text,
+		"PULSE_PROVIDER_MSP_INSTALL_DIR",
+		"PULSE_PROVIDER_MSP_DATA_DIR",
+		"PULSE_PROVIDER_MSP_DOCKER_NETWORK",
+		"PULSE_PROVIDER_MSP_BUNDLE_URL",
+		"docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin",
+		"docker-compose.yml",
+		"traefik.yml",
+		"traefik-dynamic.yml",
+		".env.example",
+		"run-install-proof.sh",
+		"CP_PROVIDER_MSP_LICENSE_FILE",
+		"CP_TRIAL_ACTIVATION_PRIVATE_KEY",
+		"PULSE_PROVIDER_MSP_DATA_DIR",
+		"PULSE_PROVIDER_MSP_DOCKER_NETWORK",
+		"must not be configured in provider-hosted MSP mode",
+		"CP_ALLOW_DOCKERLESS_PROVISIONING must be false",
+		"CP_STORAGE_GUARDRAILS_ENABLED must be true",
+		"docker compose config --quiet",
+		"docker compose pull traefik control-plane",
+		"PULSE_PROVIDER_MSP_ACCOUNT_NAME",
+		"PULSE_PROVIDER_MSP_OWNER_EMAIL",
+		"./run-install-proof.sh",
 	)
 }
 
