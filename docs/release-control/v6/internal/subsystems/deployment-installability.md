@@ -185,6 +185,13 @@ surfaces.
    containers through the host Docker socket, the provider data directory must
    be mounted at the same absolute path inside the control-plane container that
    the host Docker daemon will later use for tenant runtime bind mounts.
+   Provider-hosted MSP installability must also pass provider-default report
+   branding through the packaged tenant environment rather than requiring
+   report-specific operator provisioning. The deployable control-plane config
+   may carry `CP_REPORT_BRAND_*` values, and `internal/cloudcp/docker/manager.go`
+   translates those into generic tenant runtime `PULSE_REPORT_PROVIDER_BRAND_*`
+   variables; tenant Pulse runtimes still own report rendering and entitlement
+   enforcement.
    `pulse-control-plane provider-msp status` is the non-mutating operational
    companion to that proof: it must report registry readiness, tenant
    state/health counts, stuck provisioning workspaces, Docker runtime

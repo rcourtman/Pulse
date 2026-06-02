@@ -21,6 +21,7 @@ type MetricReportRequest struct {
 	End          time.Time
 	Format       ReportFormat
 	Title        string
+	Branding     ReportBranding
 
 	// Optional enrichment data (populated by handler from monitor state)
 	Resource *ResourceInfo // Details about the resource being reported on
@@ -122,6 +123,7 @@ type MultiReportRequest struct {
 	End        time.Time
 	Title      string
 	MetricType string
+	Branding   ReportBranding
 
 	// Optional fleet-level narrative interpretation. When FleetNarrator is
 	// non-nil the engine builds a FleetNarrativeInput from the queried
@@ -142,6 +144,7 @@ type MultiReportData struct {
 	GeneratedAt time.Time
 	Resources   []*ReportData // Reuse existing ReportData per resource
 	TotalPoints int
+	Brand       *ReportBrand
 
 	// Fleet-level narrative interpretation, populated by the engine when
 	// the request supplies a FleetNarrator (or always populated with the

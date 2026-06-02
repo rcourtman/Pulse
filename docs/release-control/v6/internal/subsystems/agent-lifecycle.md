@@ -130,6 +130,11 @@ reverse.
     command transport as the normal lifecycle install helpers, while failing
     closed unless hosted mode is active, the target org exists, and the minted
     `agent:report` token remains scoped to that tenant workspace.
+    Provider-hosted MSP report branding must not alter agent enrollment or
+    ingest authority. Agents continue to report into one tenant Pulse runtime
+    with tenant-local tokens; branding is report rendering configuration inside
+    that runtime, not a control-plane token, agent profile, or cross-client
+    ingest path.
 20. `internal/api/config_setup_handlers.go` shared with `api-contracts`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
 21. `internal/api/setup_script_render.go` shared with `api-contracts`, `storage-recovery`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).
     PBS setup-script auto-registration remains lifecycle-owned bootstrap

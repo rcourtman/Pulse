@@ -30,11 +30,19 @@ type ManagerConfig struct {
 	BaseDomain               string
 	TrialActivationPublicKey string
 	TrustedProxyCIDRs        []string
+	TenantReportBrand        TenantReportBrandConfig
 	MemoryLimit              int64 // bytes
 	CPUShares                int64
 	TenantLogMaxSize         string
 	TenantLogMaxFile         int
 	ContainerPort            int // port inside the container (default 7655)
+}
+
+type TenantReportBrandConfig struct {
+	DisplayName string
+	LogoPath    string
+	LogoBase64  string
+	LogoFormat  string
 }
 
 // Manager orchestrates Docker containers for tenant lifecycle.
@@ -504,7 +512,7 @@ func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir st
 		Config: &container.Config{
 			Image:  m.cfg.Image,
 			Labels: labels,
-			Env:    tenantEnv(tenantID, m.cfg.BaseDomain, m.cfg.TrialActivationPublicKey, m.tenantTrustedProxyCIDRs(ctx, tenantNetworkName)),
+			Env:    tenantEnv(tenantID, m.cfg.BaseDomain, m.cfg.TrialActivationPublicKey, m.tenantTrustedProxyCIDRs(ctx, tenantNetworkName), m.cfg.TenantReportBrand),
 		},
 		HostConfig: &container.HostConfig{
 			RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
@@ -576,7 +584,7 @@ func tenantRuntimeOwnershipPaths() []string {
 	}
 }
 
-func tenantEnv(tenantID, baseDomain, trialActivationPublicKey string, trustedProxyCIDRs []string) []string {
+func tenantEnv(tenantID, baseDomain, trialActivationPublicKey string, trustedProxyCIDRs []string, reportBrand TenantReportBrandConfig) []string {
 	routing := CanonicalTenantRuntimeRouting(tenantID, baseDomain)
 	tenantID = strings.TrimSpace(tenantID)
 
@@ -597,6 +605,18 @@ func tenantEnv(tenantID, baseDomain, trialActivationPublicKey string, trustedPro
 	}
 	if len(trustedProxyCIDRs) > 0 {
 		env = append(env, "PULSE_TRUSTED_PROXY_CIDRS="+strings.Join(trustedProxyCIDRs, ","))
+	}
+	if value := strings.TrimSpace(reportBrand.DisplayName); value != "" {
+		env = append(env, "PULSE_REPORT_PROVIDER_BRAND_DISPLAY_NAME="+value)
+	}
+	if value := strings.TrimSpace(reportBrand.LogoPath); value != "" {
+		env = append(env, "PULSE_REPORT_PROVIDER_BRAND_LOGO_PATH="+value)
+	}
+	if value := strings.TrimSpace(reportBrand.LogoBase64); value != "" {
+		env = append(env, "PULSE_REPORT_PROVIDER_BRAND_LOGO_BASE64="+value)
+	}
+	if value := strings.TrimSpace(reportBrand.LogoFormat); value != "" {
+		env = append(env, "PULSE_REPORT_PROVIDER_BRAND_LOGO_FORMAT="+value)
 	}
 	return env
 }

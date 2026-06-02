@@ -1882,6 +1882,62 @@ func TestSystemSettingsUpdatePreservesAPIOnlyAuthError(t *testing.T) {
 	}
 }
 
+func TestSystemSettingsReportBrandingValidationRejectsUnsafePayload(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  map[string]interface{}
+		want string
+	}{
+		{
+			name: "non_object",
+			raw:  map[string]interface{}{"reportBranding": "Client"},
+			want: "reportBranding must be an object",
+		},
+		{
+			name: "unsupported_key",
+			raw: map[string]interface{}{"reportBranding": map[string]interface{}{
+				"displayName": "Client",
+				"tenantID":    "other-client",
+			}},
+			want: "reportBranding.tenantID is not supported",
+		},
+		{
+			name: "newline",
+			raw: map[string]interface{}{"reportBranding": map[string]interface{}{
+				"displayName": "Client\nName",
+			}},
+			want: "reportBranding.displayName must not contain newlines",
+		},
+		{
+			name: "invalid_logo_base64",
+			raw: map[string]interface{}{"reportBranding": map[string]interface{}{
+				"logoBase64": "not base64!",
+			}},
+			want: "reportBranding.logoBase64 must be valid base64",
+		},
+		{
+			name: "invalid_logo_format",
+			raw: map[string]interface{}{"reportBranding": map[string]interface{}{
+				"logoFormat": "svg",
+			}},
+			want: "reportBranding.logoFormat must be png, jpg, jpeg, gif, or empty",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateSystemSettings(nil, tt.raw)
+			if err == nil {
+				t.Fatalf("expected validation error containing %q", tt.want)
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("unexpected validation error: %v", err)
+			}
+		})
+	}
+}
+
 func TestMockModeReadRequiresSettingsReadScope(t *testing.T) {
 	rawToken := "mock-mode-read-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)

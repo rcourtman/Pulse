@@ -73,7 +73,7 @@ func TestTenantMountsKeepImmutableFilesReadOnly(t *testing.T) {
 func TestTenantEnvIncludesImmutableOwnershipContract(t *testing.T) {
 	t.Parallel()
 
-	env := tenantEnv("t-example", "cloud.pulserelay.pro", "pubkey-123", []string{"172.18.0.0/16", "127.0.0.1/32"})
+	env := tenantEnv("t-example", "cloud.pulserelay.pro", "pubkey-123", []string{"172.18.0.0/16", "127.0.0.1/32"}, TenantReportBrandConfig{})
 	want := map[string]bool{
 		"PULSE_DATA_DIR=/etc/pulse":       true,
 		"PULSE_HOSTED_MODE=true":          true,
@@ -181,7 +181,7 @@ func TestHealthCheckPrefersProviderMSPIsolatedTenantNetwork(t *testing.T) {
 func TestTenantEnvLowercasesPublicURLHost(t *testing.T) {
 	t.Parallel()
 
-	env := tenantEnv("T-AbCd123", "Cloud.PulseRelay.Pro", "", nil)
+	env := tenantEnv("T-AbCd123", "Cloud.PulseRelay.Pro", "", nil, TenantReportBrandConfig{})
 	want := "PULSE_PUBLIC_URL=https://t-abcd123.cloud.pulserelay.pro"
 	for _, item := range env {
 		if item == want {
@@ -194,7 +194,7 @@ func TestTenantEnvLowercasesPublicURLHost(t *testing.T) {
 func TestTenantEnvOmitsPublicURLWithoutTenantContext(t *testing.T) {
 	t.Parallel()
 
-	env := tenantEnv("", "", "", nil)
+	env := tenantEnv("", "", "", nil, TenantReportBrandConfig{})
 	sawTenantID := false
 	for _, item := range env {
 		if strings.HasPrefix(item, "PULSE_PUBLIC_URL=") {
@@ -206,6 +206,27 @@ func TestTenantEnvOmitsPublicURLWithoutTenantContext(t *testing.T) {
 	}
 	if !sawTenantID {
 		t.Fatalf("expected explicit empty tenant id env item, got %v", env)
+	}
+}
+
+func TestTenantEnvIncludesProviderReportBrandDefaults(t *testing.T) {
+	t.Parallel()
+
+	env := tenantEnv("t-acme", "msp.example.com", "", nil, TenantReportBrandConfig{
+		DisplayName: "Acme Managed IT",
+		LogoBase64:  "iVBORw0KGgo=",
+		LogoFormat:  "png",
+	})
+	want := map[string]bool{
+		"PULSE_REPORT_PROVIDER_BRAND_DISPLAY_NAME=Acme Managed IT": true,
+		"PULSE_REPORT_PROVIDER_BRAND_LOGO_BASE64=iVBORw0KGgo=":     true,
+		"PULSE_REPORT_PROVIDER_BRAND_LOGO_FORMAT=png":              true,
+	}
+	for _, item := range env {
+		delete(want, item)
+	}
+	if len(want) > 0 {
+		t.Fatalf("tenantEnv() missing report brand env items: %v; env=%v", want, env)
 	}
 }
 

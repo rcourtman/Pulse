@@ -180,6 +180,17 @@ persistence, org binding, token metadata, and already-initialized tenant
 monitor refresh behavior. Provider-hosted MSP control-plane proofs may exercise
 that helper, but they must not create a second control-plane-only token path.
 
+Performance report branding is a canonical reporting API payload boundary.
+Reporting handlers may attach `ReportBranding` to the existing single-resource
+and multi-resource report request contracts by combining provider-default
+runtime configuration with an optional tenant-local `system.json` workspace
+override. The API must pass the active `white_label` entitlement state into the
+reporting layer, and the reporting layer remains the final gate: an unentitled
+tenant runtime must render the normal Pulse report identity even if branding
+configuration is present. Provider-hosted MSP proofs may exercise branding
+through tenant runtimes, but the control plane must not gain MSP-specific report
+generation plumbing or cross-client report content.
+
 Pulse Account workspace summaries carry setup state as a backend-owned payload
 contract. Browser bootstrap and `/api/portal/dashboard` workspace entries may
 include `setup_status` with only `ready`, `setup_path`, `install_agents`,

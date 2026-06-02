@@ -110,6 +110,13 @@ controls as normal product settings.
     `remoteControl` or `commandsEnabled` must not be used to imply that a
     desired server state is already enforced on the agent when the applied
     report is missing or divergent.
+    Report branding settings are also a trust-surface payload because they
+    can carry operator-authored names and logo material into generated PDFs.
+    `reportBranding` updates must validate object shape, supported keys,
+    string types, bounded lengths, newline-free values, supported logo formats,
+    and valid bounded base64 before persistence. Rendering custom branding
+    remains gated by the `white_label` entitlement in the reporting layer, so
+    storing a brand setting never becomes a free branding bypass.
 16. `internal/cloudcp/auth/magiclink.go` shared with `cloud-paid`: control-plane magic-link HMAC handling is both a Pulse Cloud account-access boundary and a security/privacy token-secrecy boundary.
 17. `internal/cloudcp/auth/magiclink_store.go` shared with `cloud-paid`: control-plane magic-link persistence is both a Pulse Cloud account-access boundary and a security/privacy storage-hardening boundary.
 

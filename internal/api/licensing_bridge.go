@@ -56,6 +56,7 @@ const (
 	featureAuditLoggingValue       = pkglicensing.FeatureAuditLogging
 	featureRBACValue               = pkglicensing.FeatureRBAC
 	featureAdvancedReportingValue  = pkglicensing.FeatureAdvancedReporting
+	featureWhiteLabelValue         = pkglicensing.FeatureWhiteLabel
 	featureLongTermMetricsValue    = pkglicensing.FeatureLongTermMetrics
 	featureDemoFixturesValue       = pkglicensing.FeatureDemoFixtures
 	maxUsersLicenseGateKey         = pkglicensing.MaxUsersLicenseGateKey

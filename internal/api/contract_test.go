@@ -3760,6 +3760,51 @@ func TestContract_PerformanceReportTransportUsesCatalogDefinition(t *testing.T) 
 	}
 }
 
+func TestContract_ReportingRequestCarriesEntitledReportBranding(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	service := pkglicensing.NewService()
+	service.SetCurrentForTesting(&pkglicensing.License{
+		Claims: pkglicensing.Claims{
+			LicenseID: "lic_contract_report_branding",
+			Email:     "brand@example.test",
+			Tier:      pkglicensing.TierEnterprise,
+		},
+		ValidatedAt: time.Now(),
+	})
+	SetLicenseServiceProvider(reportBrandLicenseProvider{service: service})
+	t.Cleanup(func() { SetLicenseServiceProvider(nil) })
+
+	t.Setenv("PULSE_REPORT_PROVIDER_BRAND_DISPLAY_NAME", "Provider Default")
+	handler := NewReportingHandlers(nil, nil)
+	handler.SetSystemSettingsStore(reportBrandSettingsStore{settings: &config.SystemSettings{
+		ReportBranding: &config.ReportBrandSettings{DisplayName: "Client One"},
+	}})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/reporting?resourceType=node&resourceId=node-1", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGenerateReport(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if !engine.lastReq.Branding.Entitled {
+		t.Fatal("expected reporting request to carry white_label entitlement state")
+	}
+	if got := engine.lastReq.Branding.ProviderDefault.DisplayName; got != "Provider Default" {
+		t.Fatalf("provider brand = %q, want Provider Default", got)
+	}
+	if got := engine.lastReq.Branding.WorkspaceOverride.DisplayName; got != "Client One" {
+		t.Fatalf("workspace brand = %q, want Client One", got)
+	}
+	if got := engine.lastReq.Branding.EffectiveBrand(); got == nil || got.DisplayName != "Client One" {
+		t.Fatalf("effective brand should prefer workspace override, got %+v", got)
+	}
+}
+
 func TestContract_ReportingCatalogRouteAccessibleWithoutReportingFeature(t *testing.T) {
 	rawToken := "reporting-catalog-contract-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)

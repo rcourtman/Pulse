@@ -127,6 +127,30 @@ func TestDeriveCapabilitiesFromTier_Sorted(t *testing.T) {
 	}
 }
 
+func TestWhiteLabelBrandingRemainsExplicitEnterpriseEntitlement(t *testing.T) {
+	if TierHasFeature(TierFree, FeatureWhiteLabel) {
+		t.Fatal("community tier must not include white_label report branding")
+	}
+	if TierHasFeature(TierMSP, FeatureWhiteLabel) {
+		t.Fatal("MSP tier defaults must not imply white_label unless the license grants it")
+	}
+	if !TierHasFeature(TierEnterprise, FeatureWhiteLabel) {
+		t.Fatal("enterprise tier must keep white_label report branding entitlement")
+	}
+
+	got := DeriveCapabilitiesFromTier(TierMSP, []string{FeatureWhiteLabel})
+	found := false
+	for _, feature := range got {
+		if feature == FeatureWhiteLabel {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("explicit white_label grants must be merged into MSP capabilities")
+	}
+}
+
 func TestSelfHostedPaidFeatureClaimMatrix(t *testing.T) {
 	tests := []struct {
 		name                     string

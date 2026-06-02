@@ -314,6 +314,16 @@ func applyDiscoveryConfigOverrides(current config.DiscoveryConfig, cfgMap map[st
 
 // validateSystemSettings validates settings before applying them
 func validateSystemSettings(_ *config.SystemSettings, rawRequest map[string]interface{}) error {
+	if val, ok := rawRequest["reportBranding"]; ok {
+		settings, ok := val.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("reportBranding must be an object")
+		}
+		if err := validateReportBrandingSettings(settings); err != nil {
+			return err
+		}
+	}
+
 	if val, ok := rawRequest["pvePollingInterval"]; ok {
 		if interval, ok := val.(float64); ok {
 			if interval <= 0 {
@@ -591,6 +601,46 @@ func validateSystemSettings(_ *config.SystemSettings, rawRequest map[string]inte
 	return nil
 }
 
+func validateReportBrandingSettings(settings map[string]interface{}) error {
+	allowed := map[string]struct{}{
+		"displayName": {},
+		"logoPath":    {},
+		"logoBase64":  {},
+		"logoFormat":  {},
+	}
+	for key, val := range settings {
+		if _, ok := allowed[key]; !ok {
+			return fmt.Errorf("reportBranding.%s is not supported", key)
+		}
+		str, ok := val.(string)
+		if !ok {
+			return fmt.Errorf("reportBranding.%s must be a string", key)
+		}
+		if strings.ContainsAny(str, "\r\n") {
+			return fmt.Errorf("reportBranding.%s must not contain newlines", key)
+		}
+		switch key {
+		case "displayName":
+			if len(strings.TrimSpace(str)) > config.ReportBrandDisplayNameMaxLength {
+				return fmt.Errorf("reportBranding.displayName must be <= %d characters", config.ReportBrandDisplayNameMaxLength)
+			}
+		case "logoPath":
+			if len(strings.TrimSpace(str)) > config.ReportBrandLogoPathMaxLength {
+				return fmt.Errorf("reportBranding.logoPath must be <= %d characters", config.ReportBrandLogoPathMaxLength)
+			}
+		case "logoBase64":
+			if _, err := config.DecodeReportBrandLogoBase64(str); err != nil {
+				return fmt.Errorf("reportBranding.%s", err.Error())
+			}
+		case "logoFormat":
+			if _, ok := config.CanonicalReportBrandLogoFormat(str); !ok {
+				return fmt.Errorf("reportBranding.logoFormat must be png, jpg, jpeg, gif, or empty")
+			}
+		}
+	}
+	return nil
+}
+
 // HandleGetSystemSettings returns the current system settings
 func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -832,6 +882,11 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	// Allow configuring public URL for notifications (used in email alerts)
 	if _, ok := rawRequest["publicURL"]; ok {
 		settings.PublicURL = updates.PublicURL
+	}
+	// Allow per-runtime report branding overrides. The reporting layer still
+	// enforces the white_label entitlement before rendering these values.
+	if _, ok := rawRequest["reportBranding"]; ok {
+		settings.ReportBranding = updates.ReportBranding
 	}
 
 	// Boolean fields need special handling since false is a valid value

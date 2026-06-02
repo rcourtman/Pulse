@@ -36,7 +36,7 @@ const (
 
 	// MSP/Enterprise tier features
 	FeatureMultiUser   = "multi_user"   // Multi-user (likely merged with RBAC)
-	FeatureWhiteLabel  = "white_label"  // Custom branding - NOT IMPLEMENTED YET
+	FeatureWhiteLabel  = "white_label"  // Custom report branding
 	FeatureMultiTenant = "multi_tenant" // Multi-tenant organizations
 	FeatureUnlimited   = "unlimited"    // Compatibility capability marker for MSP/enterprise deals
 

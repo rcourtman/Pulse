@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	runtimeconfig "github.com/rcourtman/pulse-go-rewrite/internal/config"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
@@ -52,6 +53,10 @@ type CPConfig struct {
 	TenantCPUShares                   int64
 	TenantLogMaxSize                  string
 	TenantLogMaxFile                  int
+	ReportBrandDisplayName            string // Provider-level default for tenant report PDFs
+	ReportBrandLogoPath               string
+	ReportBrandLogoBase64             string
+	ReportBrandLogoFormat             string
 	AllowDockerlessProvisioning       bool
 	StorageGuardrailsEnabled          bool
 	StorageRootPath                   string
@@ -213,6 +218,10 @@ func LoadConfig() (*CPConfig, error) {
 		TenantCPUShares:                   tenantCPUShares,
 		TenantLogMaxSize:                  envOrDefault("CP_TENANT_LOG_MAX_SIZE", "10m"),
 		TenantLogMaxFile:                  tenantLogMaxFile,
+		ReportBrandDisplayName:            strings.TrimSpace(os.Getenv("CP_REPORT_BRAND_DISPLAY_NAME")),
+		ReportBrandLogoPath:               strings.TrimSpace(os.Getenv("CP_REPORT_BRAND_LOGO_PATH")),
+		ReportBrandLogoBase64:             strings.TrimSpace(os.Getenv("CP_REPORT_BRAND_LOGO_BASE64")),
+		ReportBrandLogoFormat:             strings.TrimSpace(os.Getenv("CP_REPORT_BRAND_LOGO_FORMAT")),
 		AllowDockerlessProvisioning:       envOrDefaultBool("CP_ALLOW_DOCKERLESS_PROVISIONING", false),
 		StorageGuardrailsEnabled:          envOrDefaultBool("CP_STORAGE_GUARDRAILS_ENABLED", environment != "development"),
 		StorageRootPath:                   envOrDefault("CP_STORAGE_ROOT_PATH", "/"),
@@ -301,6 +310,18 @@ func (c *CPConfig) validate() error {
 	}
 	if c.TenantLogMaxFile <= 0 {
 		return fmt.Errorf("CP_TENANT_LOG_MAX_FILE must be greater than 0")
+	}
+	if len(strings.TrimSpace(c.ReportBrandDisplayName)) > runtimeconfig.ReportBrandDisplayNameMaxLength {
+		return fmt.Errorf("CP_REPORT_BRAND_DISPLAY_NAME must be <= %d characters", runtimeconfig.ReportBrandDisplayNameMaxLength)
+	}
+	if len(strings.TrimSpace(c.ReportBrandLogoPath)) > runtimeconfig.ReportBrandLogoPathMaxLength {
+		return fmt.Errorf("CP_REPORT_BRAND_LOGO_PATH must be <= %d characters", runtimeconfig.ReportBrandLogoPathMaxLength)
+	}
+	if _, err := runtimeconfig.DecodeReportBrandLogoBase64(c.ReportBrandLogoBase64); err != nil {
+		return fmt.Errorf("CP_REPORT_BRAND_LOGO_BASE64 %s", err.Error())
+	}
+	if _, ok := runtimeconfig.CanonicalReportBrandLogoFormat(c.ReportBrandLogoFormat); !ok {
+		return fmt.Errorf("CP_REPORT_BRAND_LOGO_FORMAT must be png, jpg, jpeg, gif, or empty")
 	}
 	if c.WebhookRateLimitPerMinute <= 0 {
 		return fmt.Errorf("CP_RL_WEBHOOK_PER_MINUTE must be greater than 0")

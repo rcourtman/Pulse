@@ -3,8 +3,12 @@ package reporting
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -33,6 +37,117 @@ type PDFGenerator struct{}
 // NewPDFGenerator creates a new PDF generator.
 func NewPDFGenerator() *PDFGenerator {
 	return &PDFGenerator{}
+}
+
+func reportCoverBrandName(brand *ReportBrand) string {
+	if brand != nil && strings.TrimSpace(brand.DisplayName) != "" {
+		return strings.TrimSpace(brand.DisplayName)
+	}
+	return "PULSE"
+}
+
+func reportHeaderBrandName(brand *ReportBrand, fallback string) string {
+	if brand != nil && strings.TrimSpace(brand.DisplayName) != "" {
+		return strings.ToUpper(strings.TrimSpace(brand.DisplayName))
+	}
+	return fallback
+}
+
+func reportLogoTypeFromData(data []byte, configured string) string {
+	if normalized := normalizeLogoFormat(configured); normalized != "" {
+		return normalized
+	}
+	switch {
+	case len(data) >= 8 && bytes.Equal(data[:8], []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}):
+		return "png"
+	case len(data) >= 3 && data[0] == 0xff && data[1] == 0xd8 && data[2] == 0xff:
+		return "jpg"
+	case len(data) >= 6 && (bytes.Equal(data[:6], []byte("GIF87a")) || bytes.Equal(data[:6], []byte("GIF89a"))):
+		return "gif"
+	default:
+		return ""
+	}
+}
+
+func reportLogoTypeFromPath(path string, configured string) string {
+	if normalized := normalizeLogoFormat(configured); normalized != "" {
+		return normalized
+	}
+	switch strings.ToLower(strings.TrimPrefix(filepath.Ext(path), ".")) {
+	case "jpg", "jpeg":
+		return "jpg"
+	case "png":
+		return "png"
+	case "gif":
+		return "gif"
+	default:
+		return ""
+	}
+}
+
+func scaledLogoSize(info *fpdf.ImageInfoType, maxW, maxH float64) (float64, float64) {
+	if info == nil {
+		return 0, 0
+	}
+	w := info.Width()
+	h := info.Height()
+	if w <= 0 || h <= 0 {
+		return 0, 0
+	}
+	scale := math.Min(maxW/w, maxH/h)
+	if scale <= 0 {
+		return 0, 0
+	}
+	return w * scale, h * scale
+}
+
+func (g *PDFGenerator) drawBrandLogo(pdf *fpdf.Fpdf, brand *ReportBrand, x, y, maxW, maxH float64) bool {
+	if brand == nil || maxW <= 0 || maxH <= 0 {
+		return false
+	}
+
+	options := fpdf.ImageOptions{ReadDpi: true}
+	var imageName string
+	var info *fpdf.ImageInfoType
+
+	if len(brand.LogoData) > 0 {
+		imageType := reportLogoTypeFromData(brand.LogoData, brand.LogoFormat)
+		if imageType == "" {
+			return false
+		}
+		sum := sha256.Sum256(brand.LogoData)
+		imageName = "report-brand-logo-" + hex.EncodeToString(sum[:8])
+		options.ImageType = imageType
+		info = pdf.RegisterImageOptionsReader(imageName, options, bytes.NewReader(brand.LogoData))
+	} else if strings.TrimSpace(brand.LogoPath) != "" {
+		path := strings.TrimSpace(brand.LogoPath)
+		imageType := reportLogoTypeFromPath(path, brand.LogoFormat)
+		if imageType == "" {
+			return false
+		}
+		stat, err := os.Stat(path)
+		if err != nil || stat.IsDir() {
+			return false
+		}
+		imageName = path
+		options.ImageType = imageType
+		info = pdf.RegisterImageOptions(imageName, options)
+	}
+
+	if pdf.Err() || info == nil {
+		pdf.ClearError()
+		return false
+	}
+	w, h := scaledLogoSize(info, maxW, maxH)
+	if w <= 0 || h <= 0 {
+		return false
+	}
+	pdf.ImageOptions(imageName, x+(maxW-w)/2, y+(maxH-h)/2, w, h, false, options, 0, "")
+	if pdf.Err() {
+		pdf.ClearError()
+		return false
+	}
+	return true
 }
 
 // Generate creates a PDF report from the provided data.
@@ -113,11 +228,15 @@ func (g *PDFGenerator) writeCoverPage(pdf *fpdf.Fpdf, data *ReportData) {
 	pdf.SetFillColor(colorPrimary[0], colorPrimary[1], colorPrimary[2])
 	pdf.Rect(0, 0, pageWidth, 8, "F")
 
-	// Pulse branding area
-	pdf.SetY(50)
+	// Branding area
+	if g.drawBrandLogo(pdf, data.Brand, pageWidth/2-20, 34, 40, 18) {
+		pdf.SetY(58)
+	} else {
+		pdf.SetY(50)
+	}
 	pdf.SetFont("Arial", "B", 32)
 	pdf.SetTextColor(colorPrimary[0], colorPrimary[1], colorPrimary[2])
-	pdf.CellFormat(0, 15, "PULSE", "", 1, "C", false, 0, "")
+	pdf.CellFormat(0, 15, reportCoverBrandName(data.Brand), "", 1, "C", false, 0, "")
 
 	pdf.SetFont("Arial", "", 12)
 	pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
@@ -576,14 +695,19 @@ func (g *PDFGenerator) addPageHeader(pdf *fpdf.Fpdf, data *ReportData, section s
 	pdf.Line(20, 15, pageWidth-20, 15)
 
 	// Header text
-	pdf.SetY(18)
+	textX := 20.0
+	if g.drawBrandLogo(pdf, data.Brand, 20, 17, 7, 7) {
+		textX = 30
+	}
+	pdf.SetXY(textX, 18)
 	pdf.SetFont("Arial", "B", 9)
 	pdf.SetTextColor(colorPrimary[0], colorPrimary[1], colorPrimary[2])
-	pdf.CellFormat(0, 5, "PULSE PERFORMANCE REPORT", "", 0, "L", false, 0, "")
+	pdf.CellFormat(pageWidth-textX-20, 5, reportHeaderBrandName(data.Brand, "PULSE")+" PERFORMANCE REPORT", "", 0, "L", false, 0, "")
 
 	pdf.SetFont("Arial", "", 9)
 	pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
-	pdf.CellFormat(0, 5, data.ResourceID, "", 1, "R", false, 0, "")
+	pdf.SetXY(20, 18)
+	pdf.CellFormat(pageWidth-40, 5, data.ResourceID, "", 1, "R", false, 0, "")
 
 	// Section title
 	pdf.SetY(30)
@@ -1573,11 +1697,15 @@ func (g *PDFGenerator) writeMultiCoverPage(pdf *fpdf.Fpdf, data *MultiReportData
 	pdf.SetFillColor(colorPrimary[0], colorPrimary[1], colorPrimary[2])
 	pdf.Rect(0, 0, pageWidth, 8, "F")
 
-	// Pulse branding area
-	pdf.SetY(50)
+	// Branding area
+	if g.drawBrandLogo(pdf, data.Brand, pageWidth/2-20, 34, 40, 18) {
+		pdf.SetY(58)
+	} else {
+		pdf.SetY(50)
+	}
 	pdf.SetFont("Arial", "B", 32)
 	pdf.SetTextColor(colorPrimary[0], colorPrimary[1], colorPrimary[2])
-	pdf.CellFormat(0, 15, "PULSE", "", 1, "C", false, 0, "")
+	pdf.CellFormat(0, 15, reportCoverBrandName(data.Brand), "", 1, "C", false, 0, "")
 
 	pdf.SetFont("Arial", "", 12)
 	pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
@@ -1702,14 +1830,19 @@ func (g *PDFGenerator) addMultiPageHeader(pdf *fpdf.Fpdf, data *MultiReportData,
 	pdf.Line(20, 15, pageWidth-20, 15)
 
 	// Header text
-	pdf.SetY(18)
+	textX := 20.0
+	if g.drawBrandLogo(pdf, data.Brand, 20, 17, 7, 7) {
+		textX = 30
+	}
+	pdf.SetXY(textX, 18)
 	pdf.SetFont("Arial", "B", 9)
 	pdf.SetTextColor(colorPrimary[0], colorPrimary[1], colorPrimary[2])
-	pdf.CellFormat(0, 5, "PULSE FLEET REPORT", "", 0, "L", false, 0, "")
+	pdf.CellFormat(pageWidth-textX-20, 5, reportHeaderBrandName(data.Brand, "PULSE")+" FLEET REPORT", "", 0, "L", false, 0, "")
 
 	pdf.SetFont("Arial", "", 9)
 	pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
-	pdf.CellFormat(0, 5, fmt.Sprintf("%d Resources", len(data.Resources)), "", 1, "R", false, 0, "")
+	pdf.SetXY(20, 18)
+	pdf.CellFormat(pageWidth-40, 5, fmt.Sprintf("%d Resources", len(data.Resources)), "", 1, "R", false, 0, "")
 
 	// Section title
 	pdf.SetY(30)

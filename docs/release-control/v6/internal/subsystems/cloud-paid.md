@@ -42,6 +42,13 @@ contract. `CP_DOCKER_NETWORK` names the provider ingress and support network,
 not the client runtime boundary: each client workspace runtime must be created
 on a derived per-tenant Docker bridge, and support containers must be explicitly
 attached to that bridge before the tenant runtime is started.
+Provider-hosted MSP report branding is a tenant runtime configuration
+contract, not control-plane report generation. The control plane may accept
+provider-default report brand environment values and pass them into each tenant
+container as generic `PULSE_REPORT_PROVIDER_BRAND_*` runtime configuration, but
+the tenant Pulse runtime owns report rendering, per-workspace override loading,
+and the `white_label` entitlement gate. This keeps provider-hosted MSP
+Stripe-free and avoids a cloud-control-plane report data path across clients.
 
 ## Canonical Files
 
@@ -209,6 +216,12 @@ attached to that bridge before the tenant runtime is started.
    retargeted across workspaces, org-bound agent install/report tokens must not
    write into another client runtime, and rotated-out install tokens must fail
    immediately.
+   Provider-default report branding is part of the same tenant environment
+   contract: `internal/cloudcp/docker/manager.go` may inject
+   `PULSE_REPORT_PROVIDER_BRAND_DISPLAY_NAME`, logo path/data, and logo format
+   into each tenant container, but it must not collect report data or render
+   PDFs in the control plane. Tenant-local reporting and tenant-local licensing
+   decide whether that configured brand appears.
 10. `internal/cloudcp/provider_msp_backup.go` shared with `deployment-installability`: provider-hosted MSP backup is both a cloud-paid license/account/runtime continuity boundary and a deployment-installability recovery artifact boundary.
     License-backed provider MSP backups must include the signed MSP license
     file as a recovery artifact while exposing only license metadata in command

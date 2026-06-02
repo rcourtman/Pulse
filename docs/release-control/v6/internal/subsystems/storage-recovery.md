@@ -71,6 +71,11 @@ token may allow agent reporting for the scoped tenant workspace, but it must not
 grant backup visibility, recovery authority, or storage health privileges; those
 remain governed by the setup-script and source-specific backup API boundaries
 below.
+Tenant report branding settings are adjacent tenant-local configuration, not a
+storage or recovery product state. `reportBranding` persisted in a tenant
+runtime's `system.json` should be preserved by the existing tenant data
+backup/restore path, but it must not create cross-client report storage,
+restore scope, backup visibility, or recovery authority.
 
 Generated Proxmox setup-script, runtime host-agent setup, and installer
 auto-registration changes that affect backup visibility permissions are

@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
@@ -93,6 +95,11 @@ type ReportingHandlers struct {
 	mtMonitor        *monitoring.MultiTenantMonitor
 	recoveryManager  *recoverymanager.Manager
 	narratorResolver func(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider)
+	settingsStore    reportingSystemSettingsStore
+}
+
+type reportingSystemSettingsStore interface {
+	LoadSystemSettings() (*config.SystemSettings, error)
 }
 
 // SetNarratorResolver wires an optional resolver that returns the
@@ -107,11 +114,65 @@ func (h *ReportingHandlers) SetNarratorResolver(resolver func(ctx context.Contex
 	h.narratorResolver = resolver
 }
 
+func (h *ReportingHandlers) SetSystemSettingsStore(store reportingSystemSettingsStore) {
+	if h == nil {
+		return
+	}
+	h.settingsStore = store
+}
+
 func (h *ReportingHandlers) resolveNarrator(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider) {
 	if h == nil || h.narratorResolver == nil {
 		return nil, nil, nil
 	}
 	return h.narratorResolver(ctx)
+}
+
+func (h *ReportingHandlers) resolveReportBranding(ctx context.Context) reporting.ReportBranding {
+	service := getLicenseServiceForContext(ctx)
+	entitled := service != nil && service.HasFeature(featureWhiteLabelValue)
+
+	branding := reporting.ReportBranding{
+		Entitled:        entitled,
+		ProviderDefault: reportBrandFromEnv(),
+	}
+	if h == nil || h.settingsStore == nil {
+		return branding
+	}
+	settings, err := h.settingsStore.LoadSystemSettings()
+	if err != nil || settings == nil {
+		return branding
+	}
+	if settings.ReportBranding != nil {
+		branding.WorkspaceOverride = reportBrandFromSettings(*settings.ReportBranding)
+	}
+	return branding
+}
+
+func reportBrandFromEnv() reporting.ReportBrand {
+	return reportBrandFromSettings(config.ReportBrandSettings{
+		DisplayName: os.Getenv("PULSE_REPORT_PROVIDER_BRAND_DISPLAY_NAME"),
+		LogoPath:    os.Getenv("PULSE_REPORT_PROVIDER_BRAND_LOGO_PATH"),
+		LogoBase64:  os.Getenv("PULSE_REPORT_PROVIDER_BRAND_LOGO_BASE64"),
+		LogoFormat:  os.Getenv("PULSE_REPORT_PROVIDER_BRAND_LOGO_FORMAT"),
+	})
+}
+
+func reportBrandFromSettings(settings config.ReportBrandSettings) reporting.ReportBrand {
+	logoData, err := config.DecodeReportBrandLogoBase64(settings.LogoBase64)
+	if err != nil {
+		log.Warn().Err(err).Msg("Ignoring invalid report brand logoBase64")
+	}
+	format, ok := config.CanonicalReportBrandLogoFormat(settings.LogoFormat)
+	if !ok {
+		format = ""
+	}
+	return reporting.ReportBrand{
+		DisplayName: strings.TrimSpace(settings.DisplayName),
+		LogoPath:    strings.TrimSpace(settings.LogoPath),
+		LogoData:    logoData,
+		LogoFormat:  format,
+	}
 }
 
 func performanceReportDefinition() reporting.PerformanceReportDefinition {
@@ -499,6 +560,7 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 		End:          end,
 		Format:       format,
 		Title:        title,
+		Branding:     h.resolveReportBranding(r.Context()),
 	}
 
 	// Enrich with resource data if monitor is available
@@ -869,6 +931,7 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 		End:        end,
 		Title:      title,
 		MetricType: metricType,
+		Branding:   h.resolveReportBranding(r.Context()),
 	}
 
 	// Get monitor state for enrichment
@@ -899,6 +962,7 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 			End:          end,
 			Format:       format,
 			Title:        title,
+			Branding:     multiReq.Branding,
 		}
 
 		// Enrich with resource data

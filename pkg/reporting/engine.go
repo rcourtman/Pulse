@@ -213,6 +213,7 @@ type ReportData struct {
 	Metrics      map[string][]MetricDataPoint
 	TotalPoints  int
 	Summary      MetricSummary
+	Brand        *ReportBrand
 
 	// Enrichment data (optional, for richer PDF reports)
 	Resource *ResourceInfo
@@ -267,6 +268,7 @@ func (e *ReportEngine) queryMetrics(req MetricReportRequest) (*ReportData, error
 		End:          req.End,
 		GeneratedAt:  time.Now(),
 		Metrics:      make(map[string][]MetricDataPoint),
+		Brand:        req.Branding.EffectiveBrand(),
 		Summary: MetricSummary{
 			ByMetric: make(map[string]MetricStats),
 		},
@@ -379,6 +381,7 @@ func (e *ReportEngine) GenerateMulti(req MultiReportRequest) (data []byte, conte
 		Start:       req.Start,
 		End:         req.End,
 		GeneratedAt: time.Now(),
+		Brand:       req.Branding.EffectiveBrand(),
 	}
 
 	if multiData.Title == "" {
@@ -393,6 +396,7 @@ func (e *ReportEngine) GenerateMulti(req MultiReportRequest) (data []byte, conte
 		resReq.Start = req.Start
 		resReq.End = req.End
 		resReq.MetricType = req.MetricType
+		resReq.Branding = req.Branding
 		if resReq.Narrator == nil {
 			resReq.Narrator = req.Narrator
 		}

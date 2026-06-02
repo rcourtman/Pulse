@@ -219,6 +219,11 @@ regression protection.
    before returning it to AI runtime, but it must not scan run history broadly,
    hydrate resource inventories, call models, or perform persistence fan-out as
    part of router setup or generic request admission.
+   Report branding follows the same bounded-work rule. Reporting handlers may
+   read provider-default env configuration and a tenant-local system-settings
+   record when a report is generated, but router setup and normal protected
+   request handling must not scan tenants, hydrate cross-client state, read logo
+   files outside PDF rendering, or add report-specific control-plane fan-out.
    API action-completion event bridging in `internal/api/router.go` follows
    the same bounded-work rule: router wiring may connect the already-completed
    action audit record to the agent SSE projection, but it must not perform

@@ -528,6 +528,7 @@ func (r *Router) setupRoutes() {
 	// Wire license service provider so middleware can access per-tenant license services
 	SetLicenseServiceProvider(r.licenseHandlers)
 	r.reportingHandlers = NewReportingHandlers(r.mtMonitor, recoveryManager)
+	r.reportingHandlers.SetSystemSettingsStore(r.persistence)
 	r.logHandlers = NewLogHandlers(r.config, r.persistence)
 	rbacHandlers := NewRBACHandlers(r.config, rbacProvider)
 	var magicLinkService *MagicLinkService

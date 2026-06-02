@@ -222,10 +222,16 @@ func newTenantRuntimeRolloutServiceFromConfig(
 		BaseDomain:               baseDomainFromURL(cfg.BaseURL),
 		TrialActivationPublicKey: cfg.TrialActivationPublicKey,
 		TrustedProxyCIDRs:        cfg.TrustedProxyCIDRs,
-		MemoryLimit:              cfg.TenantMemoryLimit,
-		CPUShares:                cfg.TenantCPUShares,
-		TenantLogMaxSize:         cfg.TenantLogMaxSize,
-		TenantLogMaxFile:         cfg.TenantLogMaxFile,
+		TenantReportBrand: cpDocker.TenantReportBrandConfig{
+			DisplayName: cfg.ReportBrandDisplayName,
+			LogoPath:    cfg.ReportBrandLogoPath,
+			LogoBase64:  cfg.ReportBrandLogoBase64,
+			LogoFormat:  cfg.ReportBrandLogoFormat,
+		},
+		MemoryLimit:      cfg.TenantMemoryLimit,
+		CPUShares:        cfg.TenantCPUShares,
+		TenantLogMaxSize: cfg.TenantLogMaxSize,
+		TenantLogMaxFile: cfg.TenantLogMaxFile,
 	})
 	if err != nil {
 		_ = reg.Close()

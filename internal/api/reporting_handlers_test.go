@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,7 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 )
 
@@ -52,6 +55,22 @@ func (s *stubReportingEngine) FleetNarrativeFor(req reporting.MultiReportRequest
 		return nil, s.err
 	}
 	return &reporting.FleetNarrative{Source: reporting.NarrativeSourceHeuristic}, nil
+}
+
+type reportBrandSettingsStore struct {
+	settings *config.SystemSettings
+}
+
+func (s reportBrandSettingsStore) LoadSystemSettings() (*config.SystemSettings, error) {
+	return s.settings, nil
+}
+
+type reportBrandLicenseProvider struct {
+	service *pkglicensing.Service
+}
+
+func (p reportBrandLicenseProvider) Service(context.Context) *pkglicensing.Service {
+	return p.service
 }
 
 func TestReportingHandlers_MethodNotAllowed(t *testing.T) {
@@ -153,6 +172,55 @@ func TestReportingHandlers_GenerateReport(t *testing.T) {
 
 	if engine.lastReq.ResourceType != "node" || engine.lastReq.ResourceID != "node-1" {
 		t.Fatalf("unexpected request: %+v", engine.lastReq)
+	}
+}
+
+func TestReportingHandlers_AttachesEntitledReportBranding(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	service := pkglicensing.NewService()
+	service.SetCurrentForTesting(&pkglicensing.License{
+		Claims: pkglicensing.Claims{
+			LicenseID: "lic_report_branding",
+			Email:     "brand@example.test",
+			Tier:      pkglicensing.TierEnterprise,
+		},
+		ValidatedAt: time.Now(),
+	})
+	SetLicenseServiceProvider(reportBrandLicenseProvider{service: service})
+	t.Cleanup(func() { SetLicenseServiceProvider(nil) })
+
+	handler := NewReportingHandlers(nil, nil)
+	handler.SetSystemSettingsStore(reportBrandSettingsStore{settings: &config.SystemSettings{
+		ReportBranding: &config.ReportBrandSettings{
+			DisplayName: "Client Alpha MSP",
+			LogoBase64:  "iVBORw0KGgo=",
+			LogoFormat:  "png",
+		},
+	}})
+	t.Setenv("PULSE_REPORT_PROVIDER_BRAND_DISPLAY_NAME", "Provider Default")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/reporting?format=pdf&resourceType=node&resourceId=node-1", nil)
+	rr := httptest.NewRecorder()
+	handler.HandleGenerateReport(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rr.Code, rr.Body.String())
+	}
+	if !engine.lastReq.Branding.Entitled {
+		t.Fatal("expected report branding to be marked entitled")
+	}
+	if got := engine.lastReq.Branding.ProviderDefault.DisplayName; got != "Provider Default" {
+		t.Fatalf("provider brand = %q, want Provider Default", got)
+	}
+	if got := engine.lastReq.Branding.WorkspaceOverride.DisplayName; got != "Client Alpha MSP" {
+		t.Fatalf("workspace brand = %q, want Client Alpha MSP", got)
+	}
+	if len(engine.lastReq.Branding.WorkspaceOverride.LogoData) == 0 {
+		t.Fatal("expected workspace logo base64 to be decoded into logo data")
 	}
 }
 

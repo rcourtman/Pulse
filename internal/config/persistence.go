@@ -1351,36 +1351,37 @@ type NodesConfig struct {
 
 // SystemSettings represents system configuration settings
 type SystemSettings struct {
-	PVEPollingInterval           int             `json:"pvePollingInterval"` // PVE polling interval in seconds
-	PBSPollingInterval           int             `json:"pbsPollingInterval"` // PBS polling interval in seconds
-	PMGPollingInterval           int             `json:"pmgPollingInterval"` // PMG polling interval in seconds
-	BackupPollingInterval        int             `json:"backupPollingInterval,omitempty"`
-	BackupPollingEnabled         *bool           `json:"backupPollingEnabled,omitempty"`
-	AdaptivePollingEnabled       *bool           `json:"adaptivePollingEnabled,omitempty"`
-	AdaptivePollingBaseInterval  int             `json:"adaptivePollingBaseInterval,omitempty"`
-	AdaptivePollingMinInterval   int             `json:"adaptivePollingMinInterval,omitempty"`
-	AdaptivePollingMaxInterval   int             `json:"adaptivePollingMaxInterval,omitempty"`
-	FrontendPort                 int             `json:"frontendPort,omitempty"`
-	AllowedOrigins               string          `json:"allowedOrigins,omitempty"`
-	ConnectionTimeout            int             `json:"connectionTimeout,omitempty"`
-	UpdateChannel                string          `json:"updateChannel,omitempty"`
-	AutoUpdateEnabled            bool            `json:"autoUpdateEnabled"` // Removed omitempty so false is saved
-	AutoUpdateCheckInterval      int             `json:"autoUpdateCheckInterval,omitempty"`
-	AutoUpdateTime               string          `json:"autoUpdateTime,omitempty"`
-	LogLevel                     string          `json:"logLevel,omitempty"`
-	DiscoveryEnabled             bool            `json:"discoveryEnabled"`
-	DiscoverySubnet              string          `json:"discoverySubnet,omitempty"`
-	DiscoveryConfig              DiscoveryConfig `json:"discoveryConfig"`
-	Theme                        string          `json:"theme,omitempty"`               // User theme preference: "light", "dark", or empty for system default
-	FullWidthMode                bool            `json:"fullWidthMode"`                 // Full-width layout mode preference
-	AllowEmbedding               bool            `json:"allowEmbedding"`                // Allow iframe embedding
-	AllowedEmbedOrigins          string          `json:"allowedEmbedOrigins,omitempty"` // Comma-separated list of allowed origins for embedding
-	TemperatureMonitoringEnabled bool            `json:"temperatureMonitoringEnabled"`
-	DNSCacheTimeout              int             `json:"dnsCacheTimeout,omitempty"`            // DNS cache timeout in seconds (0 = default 5 minutes)
-	SSHPort                      int             `json:"sshPort,omitempty"`                    // Default SSH port for temperature monitoring (0 = use 22)
-	WebhookAllowedPrivateCIDRs   string          `json:"webhookAllowedPrivateCIDRs,omitempty"` // Comma-separated list of private CIDR ranges allowed for webhooks (e.g., "192.168.1.0/24,10.0.0.0/8")
-	HideLocalLogin               bool            `json:"hideLocalLogin"`                       // Hide local login form (username/password)
-	PublicURL                    string          `json:"publicURL,omitempty"`                  // Public URL for email notifications (e.g., http://198.51.100.100:8080)
+	PVEPollingInterval           int                  `json:"pvePollingInterval"` // PVE polling interval in seconds
+	PBSPollingInterval           int                  `json:"pbsPollingInterval"` // PBS polling interval in seconds
+	PMGPollingInterval           int                  `json:"pmgPollingInterval"` // PMG polling interval in seconds
+	BackupPollingInterval        int                  `json:"backupPollingInterval,omitempty"`
+	BackupPollingEnabled         *bool                `json:"backupPollingEnabled,omitempty"`
+	AdaptivePollingEnabled       *bool                `json:"adaptivePollingEnabled,omitempty"`
+	AdaptivePollingBaseInterval  int                  `json:"adaptivePollingBaseInterval,omitempty"`
+	AdaptivePollingMinInterval   int                  `json:"adaptivePollingMinInterval,omitempty"`
+	AdaptivePollingMaxInterval   int                  `json:"adaptivePollingMaxInterval,omitempty"`
+	FrontendPort                 int                  `json:"frontendPort,omitempty"`
+	AllowedOrigins               string               `json:"allowedOrigins,omitempty"`
+	ConnectionTimeout            int                  `json:"connectionTimeout,omitempty"`
+	UpdateChannel                string               `json:"updateChannel,omitempty"`
+	AutoUpdateEnabled            bool                 `json:"autoUpdateEnabled"` // Removed omitempty so false is saved
+	AutoUpdateCheckInterval      int                  `json:"autoUpdateCheckInterval,omitempty"`
+	AutoUpdateTime               string               `json:"autoUpdateTime,omitempty"`
+	LogLevel                     string               `json:"logLevel,omitempty"`
+	DiscoveryEnabled             bool                 `json:"discoveryEnabled"`
+	DiscoverySubnet              string               `json:"discoverySubnet,omitempty"`
+	DiscoveryConfig              DiscoveryConfig      `json:"discoveryConfig"`
+	Theme                        string               `json:"theme,omitempty"`               // User theme preference: "light", "dark", or empty for system default
+	FullWidthMode                bool                 `json:"fullWidthMode"`                 // Full-width layout mode preference
+	AllowEmbedding               bool                 `json:"allowEmbedding"`                // Allow iframe embedding
+	AllowedEmbedOrigins          string               `json:"allowedEmbedOrigins,omitempty"` // Comma-separated list of allowed origins for embedding
+	TemperatureMonitoringEnabled bool                 `json:"temperatureMonitoringEnabled"`
+	DNSCacheTimeout              int                  `json:"dnsCacheTimeout,omitempty"`            // DNS cache timeout in seconds (0 = default 5 minutes)
+	SSHPort                      int                  `json:"sshPort,omitempty"`                    // Default SSH port for temperature monitoring (0 = use 22)
+	WebhookAllowedPrivateCIDRs   string               `json:"webhookAllowedPrivateCIDRs,omitempty"` // Comma-separated list of private CIDR ranges allowed for webhooks (e.g., "192.168.1.0/24,10.0.0.0/8")
+	HideLocalLogin               bool                 `json:"hideLocalLogin"`                       // Hide local login form (username/password)
+	PublicURL                    string               `json:"publicURL,omitempty"`                  // Public URL for email notifications (e.g., http://198.51.100.100:8080)
+	ReportBranding               *ReportBrandSettings `json:"reportBranding,omitempty"`             // Optional per-workspace report branding override
 
 	// Metrics retention configuration (in hours)
 	// These control how long historical metrics are stored at each aggregation tier.
@@ -1402,6 +1403,16 @@ type SystemSettings struct {
 	TelemetryEnabled *bool `json:"telemetryEnabled,omitempty"` // Send anonymous usage telemetry (install ID, version, resource counts, feature flags — no PII)
 
 	// APIToken is not persisted in system settings; API tokens are managed in api_tokens.json.
+}
+
+// ReportBrandSettings stores optional report-brand override material for this
+// Pulse runtime. In provider-hosted MSP each runtime is one client workspace,
+// so this is naturally per-client without special reporting plumbing.
+type ReportBrandSettings struct {
+	DisplayName string `json:"displayName,omitempty"`
+	LogoPath    string `json:"logoPath,omitempty"`
+	LogoBase64  string `json:"logoBase64,omitempty"`
+	LogoFormat  string `json:"logoFormat,omitempty"`
 }
 
 // DefaultSystemSettings returns a SystemSettings struct populated with sane defaults.

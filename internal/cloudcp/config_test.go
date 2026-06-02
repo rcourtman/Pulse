@@ -523,6 +523,44 @@ func TestLoadConfig_ProviderHostedMSPDoesNotRequireStripe(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_ProviderHostedMSPReportBrandDefaults(t *testing.T) {
+	setProviderHostedMSPEnv(t)
+	t.Setenv("CP_REPORT_BRAND_DISPLAY_NAME", "Provider Default")
+	t.Setenv("CP_REPORT_BRAND_LOGO_PATH", "/etc/pulse/brand.png")
+	t.Setenv("CP_REPORT_BRAND_LOGO_BASE64", "iVBORw0KGgo=")
+	t.Setenv("CP_REPORT_BRAND_LOGO_FORMAT", "png")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.ReportBrandDisplayName != "Provider Default" {
+		t.Fatalf("ReportBrandDisplayName = %q, want Provider Default", cfg.ReportBrandDisplayName)
+	}
+	if cfg.ReportBrandLogoPath != "/etc/pulse/brand.png" {
+		t.Fatalf("ReportBrandLogoPath = %q", cfg.ReportBrandLogoPath)
+	}
+	if cfg.ReportBrandLogoBase64 != "iVBORw0KGgo=" {
+		t.Fatalf("ReportBrandLogoBase64 = %q", cfg.ReportBrandLogoBase64)
+	}
+	if cfg.ReportBrandLogoFormat != "png" {
+		t.Fatalf("ReportBrandLogoFormat = %q, want png", cfg.ReportBrandLogoFormat)
+	}
+}
+
+func TestLoadConfig_ReportBrandDefaultsRejectInvalidLogoFormat(t *testing.T) {
+	setProviderHostedMSPEnv(t)
+	t.Setenv("CP_REPORT_BRAND_LOGO_FORMAT", "svg")
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatal("expected invalid report brand logo format to fail config validation")
+	}
+	if !strings.Contains(err.Error(), "CP_REPORT_BRAND_LOGO_FORMAT must be png, jpg, jpeg, gif, or empty") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestLoadConfig_ProviderHostedMSPRejectsStripeConfig(t *testing.T) {
 	for _, tc := range []struct {
 		name string
