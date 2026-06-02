@@ -5,7 +5,7 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${PULSE_PROVIDER_MSP_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock:ro
       - ./traefik.yml:/etc/traefik/traefik.yml:ro
       - ./traefik-dynamic.yml:/etc/traefik/traefik-dynamic.yml:ro
       - acme-data:/etc/traefik/acme
@@ -22,16 +22,16 @@ services:
   control-plane:
     image: ${CONTROL_PLANE_IMAGE:?CONTROL_PLANE_IMAGE must be set to a digest-pinned image}
     volumes:
-      - ${PULSE_PROVIDER_MSP_DATA_DIR:-/data}:/data
-      - /:/host-root:ro
-      - /var/lib/docker:/host-var-lib-docker:ro
-      - /var/run/docker.sock:/var/run/docker.sock
+      - ${PULSE_PROVIDER_MSP_DATA_DIR:-/data}:${PULSE_PROVIDER_MSP_DATA_DIR:-/data}
+      - ${PULSE_PROVIDER_MSP_HOST_ROOT:-/}:/host-root:ro
+      - ${PULSE_PROVIDER_MSP_DOCKER_DATA_DIR:-/var/lib/docker}:/host-var-lib-docker:ro
+      - ${PULSE_PROVIDER_MSP_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
     secrets:
       - provider_msp_license
     env_file:
       - .env
     environment:
-      - CP_DATA_DIR=/data
+      - CP_DATA_DIR=${PULSE_PROVIDER_MSP_DATA_DIR:-/data}
       - CP_ENV=${CP_ENV}
       - CP_CONTROL_PLANE_MODE=provider_hosted_msp
       - CP_BIND_ADDRESS=0.0.0.0
@@ -45,7 +45,7 @@ services:
       - CP_ALLOW_DOCKERLESS_PROVISIONING=${CP_ALLOW_DOCKERLESS_PROVISIONING:-false}
       - CP_STORAGE_GUARDRAILS_ENABLED=${CP_STORAGE_GUARDRAILS_ENABLED:-true}
       - CP_STORAGE_ROOT_PATH=/host-root
-      - CP_STORAGE_DATA_PATH=/data
+      - CP_STORAGE_DATA_PATH=${PULSE_PROVIDER_MSP_DATA_DIR:-/data}
       - CP_STORAGE_DOCKER_PATH=/host-var-lib-docker
       - CP_STORAGE_MIN_ROOT_AVAILABLE=${CP_STORAGE_MIN_ROOT_AVAILABLE:-10GiB}
       - CP_STORAGE_MIN_DATA_AVAILABLE=${CP_STORAGE_MIN_DATA_AVAILABLE:-5GiB}

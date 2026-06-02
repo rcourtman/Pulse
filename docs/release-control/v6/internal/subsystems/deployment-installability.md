@@ -158,7 +158,10 @@ surfaces.
    missing signed MSP license files, Dockerless production provisioning, disabled
    storage guardrails, or Stripe/cloud-signup variables, validate compose, and
    optionally hand off to `run-install-proof.sh` when the provider account name
-   and owner email are supplied.
+   and owner email are supplied. Because provider-hosted MSP provisions tenant
+   containers through the host Docker socket, the provider data directory must
+   be mounted at the same absolute path inside the control-plane container that
+   the host Docker daemon will later use for tenant runtime bind mounts.
    `pulse-control-plane provider-msp status` is the non-mutating operational
    companion to that proof: it must report registry readiness, tenant
    state/health counts, stuck provisioning workspaces, Docker runtime
