@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildCephPoolThresholdStorage,
   buildThresholdStorageResources,
+  cephPoolStorageAliasIds,
   cephPoolStorageId,
 } from '../cephThresholdStorage';
 import type { CephCluster, Storage } from '@/types/api';
@@ -113,5 +114,50 @@ describe('ceph threshold storage helpers', () => {
     ];
 
     expect(buildThresholdStorageResources(storage, clusters)).toHaveLength(1);
+  });
+
+  // #1341: in a cluster the API instance name (cluster name) differs from the
+  // host-agent's node hostname, so the pool's source identities share no
+  // prefix. The alias IDs must bridge them so a per-pool override resolves.
+  it('builds cross-source alias ids from instance aliases', () => {
+    const aliases = cephPoolStorageAliasIds(
+      'prodcluster',
+      { id: 2, name: 'data_replication' },
+      ['agent:pve5'],
+    );
+    expect(aliases).toContain('agent:pve5-ceph-pool-data_replication');
+    expect(aliases).toContain('pve5-ceph-pool-data_replication');
+    expect(aliases).toContain('agent:prodcluster-ceph-pool-data_replication');
+    // The primary id is never listed as its own alias.
+    expect(aliases).not.toContain('prodcluster-ceph-pool-data_replication');
+  });
+
+  it('attaches alias ids to ceph pool threshold resources from instanceAliases', () => {
+    const clusters: CephCluster[] = [
+      {
+        id: 'cluster-1',
+        instance: 'prodcluster',
+        instanceAliases: ['agent:pve5'],
+        name: 'Ceph',
+        health: 'HEALTH_OK',
+        totalBytes: 1000,
+        usedBytes: 910,
+        availableBytes: 90,
+        usagePercent: 91,
+        numMons: 3,
+        numMgrs: 1,
+        numOsds: 3,
+        numOsdsUp: 3,
+        numOsdsIn: 3,
+        numPGs: 64,
+        lastUpdated: 1,
+        pools: [
+          { id: 2, name: 'data_replication', storedBytes: 910, availableBytes: 90, objects: 1, percentUsed: 91 },
+        ],
+      },
+    ];
+    const [row] = buildCephPoolThresholdStorage(clusters);
+    expect(row.id).toBe('prodcluster-ceph-pool-data_replication');
+    expect(row.aliasIds).toContain('agent:pve5-ceph-pool-data_replication');
   });
 });

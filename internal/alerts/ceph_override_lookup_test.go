@@ -6,40 +6,43 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
-// #1341: alert evaluation collapses a dual-source Ceph cluster to the Proxmox
-// API pool identity (e.g. "pve5-ceph-pool-data_replication"). An existing
-// per-pool override may have been saved under the legacy host-agent identity
-// ("agent:pve5-ceph-pool-data_replication"); findStorageOverride must still
-// honor it so the threshold keeps firing without manual re-entry.
-func TestFindStorageOverrideHonorsLegacyAgentCephPoolKey(t *testing.T) {
+// #1341: a Ceph pool is known by a different ID per reporting source. The pool
+// target carries those alternate IDs in AliasIDs, and findStorageOverride must
+// honor a per-pool override saved under any of them, so the threshold does not
+// fall back to the default when a different source wins.
+func TestFindStorageOverrideHonorsCephPoolAliasID(t *testing.T) {
 	usage := HysteresisThreshold{Trigger: 50, Clear: 45}
 	overrides := map[string]ThresholdConfig{
+		// Saved under the host-agent node identity.
 		"agent:pve5-ceph-pool-data_replication": {Usage: &usage},
 	}
 
+	// The winning identity is the Proxmox-API CLUSTER name, which differs from
+	// the agent's node hostname (the real-world clustered case). The override
+	// must still resolve via the alias.
 	apiPool := models.Storage{
-		ID:     "pve5-ceph-pool-data_replication",
-		Name:   "data_replication",
-		Type:   "ceph-pool",
-		Shared: true,
+		ID:       "prodcluster-ceph-pool-data_replication",
+		AliasIDs: []string{"agent:pve5-ceph-pool-data_replication", "pve5-ceph-pool-data_replication"},
+		Name:     "data_replication",
+		Type:     "ceph-pool",
+		Shared:   true,
 	}
 
 	override, ok, key := findStorageOverride(overrides, apiPool)
 	if !ok {
-		t.Fatalf("expected legacy agent-keyed override to be found for API pool identity")
+		t.Fatalf("expected the override to resolve via a pool alias ID")
 	}
 	if key != "agent:pve5-ceph-pool-data_replication" {
-		t.Errorf("expected match on legacy agent key, got %q", key)
+		t.Errorf("expected match on the agent alias key, got %q", key)
 	}
 	if override.Usage == nil || override.Usage.Trigger != 50 {
 		t.Errorf("expected override trigger 50, got %+v", override.Usage)
 	}
 }
 
-// An override saved under the canonical (non-agent) Ceph pool ID must continue
-// to match directly, and an agent-sourced pool must not gain a double "agent:"
-// prefix.
-func TestFindStorageOverrideCephPoolDirectAndAgentSource(t *testing.T) {
+// A direct (primary-ID) override still matches, and the lookup keys include the
+// pool's alias IDs.
+func TestStorageOverrideLookupKeysIncludeCephPoolAliases(t *testing.T) {
 	usage := HysteresisThreshold{Trigger: 70, Clear: 65}
 
 	direct := models.Storage{ID: "pve5-ceph-pool-data_replication", Name: "data_replication", Type: "ceph-pool", Shared: true}
@@ -49,11 +52,26 @@ func TestFindStorageOverrideCephPoolDirectAndAgentSource(t *testing.T) {
 		t.Errorf("expected direct canonical key match, ok=%v key=%q", ok, key)
 	}
 
-	agentPool := models.Storage{ID: "agent:pve5-ceph-pool-data_replication", Name: "data_replication", Type: "ceph-pool", Shared: true}
-	keys := storageOverrideLookupKeys(agentPool)
+	pool := models.Storage{
+		ID:       "prodcluster-ceph-pool-data_replication",
+		AliasIDs: []string{"agent:pve5-ceph-pool-data_replication"},
+		Name:     "data_replication",
+		Type:     "ceph-pool",
+		Shared:   true,
+	}
+	keys := storageOverrideLookupKeys(pool)
+	want := map[string]bool{
+		"prodcluster-ceph-pool-data_replication": false,
+		"agent:pve5-ceph-pool-data_replication":  false,
+	}
 	for _, k := range keys {
-		if k == "agent:agent:pve5-ceph-pool-data_replication" {
-			t.Errorf("agent-sourced pool must not gain a doubled agent: prefix; keys=%v", keys)
+		if _, ok := want[k]; ok {
+			want[k] = true
+		}
+	}
+	for k, seen := range want {
+		if !seen {
+			t.Errorf("expected lookup keys to include %q; got %v", k, keys)
 		}
 	}
 }

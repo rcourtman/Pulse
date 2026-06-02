@@ -5725,13 +5725,14 @@ func storageOverrideLookupKeys(storage models.Storage) []string {
 
 	addKey(storage.ID)
 
-	// #1341: a Ceph pool reported by both the Proxmox API and a host-agent used
-	// to surface (and save its per-pool override) under an "agent:"-prefixed
-	// pool ID. Alert evaluation now collapses to the API identity, so also try
-	// the legacy agent-keyed override here to keep existing thresholds firing
-	// without forcing the user to re-enter them.
-	if storage.Type == "ceph-pool" && !strings.HasPrefix(storage.ID, "agent:") {
-		addKey("agent:" + storage.ID)
+	// #1341: a Ceph pool reported by both the Proxmox API and a host-agent is
+	// known by a different ID per source (the API cluster name vs the agent's
+	// node hostname). AliasIDs carries the pool ID under every source instance
+	// (plus the agent-prefix toggle), so a per-pool override saved under one
+	// source still resolves under another instead of falling back to the
+	// default as the winning source changes between polls.
+	for _, aliasID := range storage.AliasIDs {
+		addKey(aliasID)
 	}
 
 	if !storage.Shared {

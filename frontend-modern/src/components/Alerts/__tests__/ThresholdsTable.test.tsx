@@ -393,6 +393,51 @@ describe('ThresholdsTable Resource Rendering', () => {
     expect(screen.getByTestId('resource-hasoverride-inst1-ceph-pool-data_replication')).toHaveTextContent('true');
   });
 
+  // #1341 (clustered case): the row shows under the Proxmox-API cluster name,
+  // but the override was saved under the host-agent node identity, which shares
+  // no prefix. The instanceAliases-derived alias ids must still resolve it, so
+  // the value shows 50 instead of flapping to the default.
+  it('resolves a Ceph pool override across a mismatched cluster name', async () => {
+    setPathname('/alerts/thresholds/proxmox');
+
+    render(() => <ThresholdsTable
+      {...(baseProps() as any)}
+      overrides={() => [
+        { id: 'agent:pve5-ceph-pool-data_replication', name: 'data_replication', type: 'storage', thresholds: { usage: 50 } },
+      ]}
+      cephClusters={[
+        {
+          id: 'ceph-fsid',
+          instance: 'prodcluster',
+          instanceAliases: ['agent:pve5'],
+          name: 'Ceph',
+          health: 'HEALTH_OK',
+          totalBytes: 1000,
+          usedBytes: 910,
+          availableBytes: 90,
+          usagePercent: 91,
+          numMons: 3,
+          numMgrs: 1,
+          numOsds: 3,
+          numOsdsUp: 3,
+          numOsdsIn: 3,
+          numPGs: 64,
+          lastUpdated: 1,
+          pools: [
+            { id: 2, name: 'data_replication', storedBytes: 910, availableBytes: 90, objects: 42, percentUsed: 91 },
+          ],
+        },
+      ]}
+    />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-row-prodcluster-ceph-pool-data_replication')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('resource-usage-prodcluster-ceph-pool-data_replication')).toHaveTextContent('50');
+    expect(screen.getByTestId('resource-hasoverride-prodcluster-ceph-pool-data_replication')).toHaveTextContent('true');
+  });
+
 });
 
 describe('ThresholdsTable Metric Formatting', () => {

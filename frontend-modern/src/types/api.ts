@@ -604,6 +604,10 @@ export interface Storage {
   nodes?: string[];
   nodeIds?: string[];
   nodeCount?: number;
+  // Alternate stable IDs the same resource is known by across reporting sources
+  // (e.g. a Ceph pool reported by both the Proxmox API and a host-agent). Used
+  // so a per-pool override saved under one source still resolves (#1341).
+  aliasIds?: string[];
   pbsNames?: string[];
   pool?: string;
   // ZFS pool status
@@ -613,6 +617,8 @@ export interface Storage {
 export interface CephCluster {
   id: string;
   instance: string;
+  // Instance names of other sources that reported the same cluster (#1341).
+  instanceAliases?: string[];
   name: string;
   fsid?: string;
   health: string;

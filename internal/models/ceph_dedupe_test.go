@@ -37,6 +37,49 @@ func TestDedupeCephClustersPrefersApiSourceForSharedFSID(t *testing.T) {
 	}
 }
 
+// #1341: when the same FSID is reported by sources with different instance
+// names (a Proxmox-API cluster name vs the host-agent's node hostname), the
+// winner must carry the other source's instance in InstanceAliases so per-pool
+// overrides resolve regardless of which source wins.
+func TestDedupeCephClustersRecordsCrossSourceInstanceAliases(t *testing.T) {
+	api := CephCluster{
+		ID:       "prodcluster-ceph-fsid-1341",
+		Instance: "prodcluster",
+		Name:     "Ceph",
+		FSID:     "ceph-fsid-1341",
+		NumMons:  3,
+		Pools:    []CephPool{{ID: 2, Name: "data_replication", PercentUsed: 61.1}},
+	}
+	agent := CephCluster{
+		ID:       "ceph-fsid-1341",
+		Instance: "agent:pve5",
+		Name:     "pve5 Ceph",
+		FSID:     "ceph-fsid-1341",
+		Pools:    []CephPool{{ID: 2, Name: "data_replication", PercentUsed: 61.1}},
+	}
+
+	deduped := DedupeCephClusters([]CephCluster{api, agent})
+	if len(deduped) != 1 {
+		t.Fatalf("expected 1 deduped cluster, got %d", len(deduped))
+	}
+	winner := deduped[0]
+	if winner.Instance != "prodcluster" {
+		t.Fatalf("expected the API cluster to win, got %q", winner.Instance)
+	}
+	found := false
+	for _, alias := range winner.InstanceAliases {
+		if alias == "agent:pve5" {
+			found = true
+		}
+		if alias == "prodcluster" {
+			t.Errorf("winner's own instance should not be listed as an alias")
+		}
+	}
+	if !found {
+		t.Errorf("expected InstanceAliases to include the host-agent instance, got %v", winner.InstanceAliases)
+	}
+}
+
 // When only a host-agent reports the cluster, it must survive dedup so its
 // pools still drive alerts.
 func TestDedupeCephClustersKeepsAgentOnlyCluster(t *testing.T) {

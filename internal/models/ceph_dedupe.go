@@ -66,14 +66,18 @@ func cephClusterPreferred(candidate, incumbent CephCluster) bool {
 // same single identity per pool, so selection here is deterministic and stable
 // rather than dependent on a fluctuating completeness score.
 func DedupeCephClusters(clusters []CephCluster) []CephCluster {
-	if len(clusters) <= 1 {
+	if len(clusters) == 0 {
 		return clusters
 	}
 
 	winners := make(map[string]CephCluster, len(clusters))
 	order := make([]string, 0, len(clusters))
+	instancesByKey := make(map[string][]string, len(clusters))
 	for _, cluster := range clusters {
 		key := CephClusterFSIDKey(cluster)
+		if inst := strings.TrimSpace(cluster.Instance); inst != "" {
+			instancesByKey[key] = appendUniqueString(instancesByKey[key], inst)
+		}
 		existing, exists := winners[key]
 		if !exists {
 			winners[key] = cluster
@@ -87,7 +91,28 @@ func DedupeCephClusters(clusters []CephCluster) []CephCluster {
 
 	deduped := make([]CephCluster, 0, len(order))
 	for _, key := range order {
-		deduped = append(deduped, winners[key])
+		winner := winners[key]
+		// Record every other source instance that reported this FSID so a
+		// per-pool override saved under one source resolves regardless of
+		// which source currently wins the dedup (#1341). Without this, a
+		// clustered setup whose Proxmox-API instance name differs from the
+		// host-agent's node hostname shows the override under one identity and
+		// the default under the other, which looks like the value flapping.
+		winnerInstance := strings.TrimSpace(winner.Instance)
+		aliases := make([]string, 0, len(instancesByKey[key]))
+		for _, inst := range instancesByKey[key] {
+			if strings.TrimSpace(inst) == winnerInstance {
+				continue
+			}
+			aliases = appendUniqueString(aliases, inst)
+		}
+		sort.Strings(aliases)
+		if len(aliases) > 0 {
+			winner.InstanceAliases = aliases
+		} else {
+			winner.InstanceAliases = nil
+		}
+		deduped = append(deduped, winner)
 	}
 	sort.Slice(deduped, func(i, j int) bool {
 		if deduped[i].Name != deduped[j].Name {
@@ -96,4 +121,17 @@ func DedupeCephClusters(clusters []CephCluster) []CephCluster {
 		return deduped[i].ID < deduped[j].ID
 	})
 	return deduped
+}
+
+func appendUniqueString(values []string, candidate string) []string {
+	candidate = strings.TrimSpace(candidate)
+	if candidate == "" {
+		return values
+	}
+	for _, existing := range values {
+		if existing == candidate {
+			return values
+		}
+	}
+	return append(values, candidate)
 }

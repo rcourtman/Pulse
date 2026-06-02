@@ -727,6 +727,12 @@ type Storage struct {
 	Name      string   `json:"name"`
 	Node      string   `json:"node"`
 	Instance  string   `json:"instance"`
+	// AliasIDs lists alternate stable IDs the same resource is known by across
+	// reporting sources. A Ceph pool reported by both the Proxmox API and a
+	// host-agent carries the pool ID under each source instance here so a
+	// per-pool override saved under one source still resolves under the other
+	// (#1341).
+	AliasIDs  []string `json:"aliasIds,omitempty"`
 	Nodes     []string `json:"nodes,omitempty"`
 	NodeIDs   []string `json:"nodeIds,omitempty"`
 	NodeCount int      `json:"nodeCount,omitempty"`
@@ -772,6 +778,11 @@ type ZFSDevice struct {
 type CephCluster struct {
 	ID             string              `json:"id"`
 	Instance       string              `json:"instance"`
+	// InstanceAliases lists the instance names of other sources that reported
+	// the same physical cluster (same FSID). Populated when DedupeCephClusters
+	// collapses a multi-source cluster so per-pool overrides keep resolving
+	// regardless of which source currently wins (#1341).
+	InstanceAliases []string           `json:"instanceAliases,omitempty"`
 	Name           string              `json:"name"`
 	FSID           string              `json:"fsid,omitempty"`
 	Health         string              `json:"health"`

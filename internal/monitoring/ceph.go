@@ -166,6 +166,50 @@ func cephPoolStorageID(instanceName string, pool models.CephPool) string {
 	return fmt.Sprintf("%s-ceph-pool-%s", instance, poolName)
 }
 
+// cephPoolStorageAliasIDs returns the alternate stable IDs the given pool is
+// known by across reporting sources: the pool ID under every alias instance
+// plus the agent-prefix toggle of each, excluding the primary ID. A per-pool
+// override saved under one source (e.g. the host-agent's `agent:pve5-...`) then
+// resolves when another source wins (e.g. the Proxmox-API cluster name), which
+// is what stops the threshold appearing to flap between the custom value and
+// the default in clustered setups (#1341).
+func cephPoolStorageAliasIDs(instanceName string, pool models.CephPool, instanceAliases ...string) []string {
+	primaryID := cephPoolStorageID(instanceName, pool)
+	aliases := make([]string, 0, len(instanceAliases)+1)
+	add := func(id string) {
+		if id == "" || id == primaryID {
+			return
+		}
+		for _, existing := range aliases {
+			if existing == id {
+				return
+			}
+		}
+		aliases = append(aliases, id)
+	}
+	for _, instance := range append([]string{instanceName}, instanceAliases...) {
+		instance = strings.TrimSpace(instance)
+		if instance == "" {
+			continue
+		}
+		candidates := []string{instance}
+		if strings.HasPrefix(instance, "agent:") {
+			if unprefixed := strings.TrimSpace(strings.TrimPrefix(instance, "agent:")); unprefixed != "" {
+				candidates = append(candidates, unprefixed)
+			}
+		} else {
+			candidates = append(candidates, "agent:"+instance)
+		}
+		for _, candidate := range candidates {
+			add(cephPoolStorageID(candidate, pool))
+		}
+	}
+	if len(aliases) == 0 {
+		return nil
+	}
+	return aliases
+}
+
 func cephPoolAlertStorageTargets(cluster models.CephCluster) []models.Storage {
 	if len(cluster.Pools) == 0 {
 		return nil
@@ -193,6 +237,7 @@ func cephPoolAlertStorageTargets(cluster models.CephCluster) []models.Storage {
 
 		targets = append(targets, models.Storage{
 			ID:       cephPoolStorageID(instanceName, pool),
+			AliasIDs: cephPoolStorageAliasIDs(instanceName, pool, cluster.InstanceAliases...),
 			Name:     name,
 			Node:     "cluster",
 			Instance: instanceName,

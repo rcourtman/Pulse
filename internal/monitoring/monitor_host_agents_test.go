@@ -1350,3 +1350,83 @@ func TestApplyHostReportDeduplicatesDualSourceCephPoolAlerts(t *testing.T) {
 		t.Errorf("expected legacy agent-keyed override (50) to be honored, got threshold %.1f", winningThreshold)
 	}
 }
+
+// Regression for #1341 (reopened, clustered case): in a Proxmox CLUSTER the
+// Proxmox-API instance name (cluster/connection name) differs from the
+// host-agent's node hostname, so the pool's two source identities share no
+// prefix. The per-pool override is saved under the host-agent identity. The
+// override must still resolve when the API identity wins, otherwise the
+// threshold appears to flap between the custom value and the default as the
+// (intermittent, in a cluster) API source comes and goes.
+func TestApplyHostReportResolvesCephOverrideAcrossMismatchedClusterName(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	// Proxmox API reported this cluster under the CLUSTER name, not the node.
+	monitor.state.UpsertCephCluster(models.CephCluster{
+		ID:       "prodcluster-ceph-fsid-1341",
+		Instance: "prodcluster",
+		Name:     "Ceph",
+		FSID:     "ceph-fsid-1341",
+		NumMons:  3,
+		NumMgrs:  2,
+		Pools:    []models.CephPool{{ID: 2, Name: "data_replication", PercentUsed: 61.1}},
+	})
+
+	overrideTrigger := alerts.HysteresisThreshold{Trigger: 50, Clear: 45}
+	cfg := monitor.alertManager.GetConfig()
+	cfg.MinimumDelta = 0
+	if cfg.TimeThresholds == nil {
+		cfg.TimeThresholds = make(map[string]int)
+	}
+	cfg.TimeThresholds["storage"] = 0
+	cfg.StorageDefault = alerts.HysteresisThreshold{Trigger: 95, Clear: 90}
+	// Saved under the host-agent node identity, which shares no prefix with the
+	// API cluster name.
+	cfg.Overrides = map[string]alerts.ThresholdConfig{
+		"agent:pve5-ceph-pool-data_replication": {Usage: &overrideTrigger},
+	}
+	monitor.alertManager.UpdateConfig(cfg)
+
+	report := agentshost.Report{
+		Agent:     agentshost.AgentInfo{ID: "agent-ceph", Version: "1.0.0", IntervalSeconds: 30},
+		Host:      agentshost.HostInfo{ID: "pve5-host", Hostname: "pve5", Platform: "linux"},
+		Timestamp: time.Now().UTC(),
+		Ceph: &agentshost.CephCluster{
+			FSID:   "ceph-fsid-1341",
+			Health: agentshost.CephHealth{Status: "HEALTH_OK"},
+			Pools: []agentshost.CephPool{
+				{ID: 2, Name: "data_replication", BytesUsed: 611, BytesAvailable: 389, PercentUsed: 61.1},
+			},
+		},
+	}
+
+	if _, err := monitor.ApplyHostReport(report, nil); err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+
+	var alert *alerts.Alert
+	for _, a := range monitor.alertManager.GetActiveAlerts() {
+		if a.Type == "usage" && a.ResourceName == "data_replication" {
+			copy := a
+			alert = &copy
+		}
+	}
+	if alert == nil {
+		t.Fatalf("expected a Ceph pool alert to fire via the cross-source alias override")
+	}
+	if alert.ID != "prodcluster-ceph-pool-data_replication-usage" {
+		t.Errorf("expected the API cluster identity to win, got %q", alert.ID)
+	}
+	if alert.Threshold != 50 {
+		t.Errorf("expected override (50) resolved across the mismatched cluster name, got %.1f", alert.Threshold)
+	}
+}

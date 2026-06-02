@@ -19,6 +19,38 @@ export const cephPoolStorageId = (
   return `${instance}-ceph-pool-${poolName}`;
 };
 
+// #1341: a Ceph pool reported by both the Proxmox API and a host-agent is known
+// by a different ID per source (the API cluster name vs the agent's node
+// hostname). Build the pool ID under every source instance (plus the
+// agent-prefix toggle), excluding the primary ID, so a per-pool override saved
+// under one source still resolves under another instead of falling back to the
+// default as the winning source changes.
+export const cephPoolStorageAliasIds = (
+  instanceName: string,
+  pool: Pick<CephPool, 'id' | 'name'>,
+  instanceAliases: string[] = [],
+): string[] => {
+  const primaryId = cephPoolStorageId(instanceName, pool);
+  const aliases: string[] = [];
+  const add = (id: string) => {
+    if (!id || id === primaryId || aliases.includes(id)) return;
+    aliases.push(id);
+  };
+  [instanceName, ...instanceAliases].forEach((rawInstance) => {
+    const instance = (rawInstance || '').trim();
+    if (!instance) return;
+    const candidates = [instance];
+    if (instance.startsWith('agent:')) {
+      const unprefixed = instance.slice('agent:'.length).trim();
+      if (unprefixed) candidates.push(unprefixed);
+    } else {
+      candidates.push(`agent:${instance}`);
+    }
+    candidates.forEach((candidate) => add(cephPoolStorageId(candidate, pool)));
+  });
+  return aliases;
+};
+
 export const buildCephPoolThresholdStorage = (cephClusters: CephCluster[] = []): Storage[] => {
   const targets: Storage[] = [];
 
@@ -30,9 +62,11 @@ export const buildCephPoolThresholdStorage = (cephClusters: CephCluster[] = []):
       const free = pool.availableBytes || 0;
       const total = used + free;
       const usage = pool.percentUsed > 0 ? pool.percentUsed : total > 0 ? (used / total) * 100 : 0;
+      const aliasIds = cephPoolStorageAliasIds(instance, pool, cluster.instanceAliases || []);
 
       targets.push({
         id: cephPoolStorageId(instance, pool),
+        ...(aliasIds.length > 0 ? { aliasIds } : {}),
         name,
         node: 'cluster',
         instance,
