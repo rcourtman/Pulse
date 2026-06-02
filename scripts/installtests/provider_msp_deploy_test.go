@@ -60,6 +60,7 @@ func TestProviderMSPDeployEnvExampleMatchesBootstrapPath(t *testing.T) {
 		"docker compose run --rm control-plane provider-msp bootstrap",
 		"docker compose run --rm control-plane provider-msp preflight",
 		"docker compose run --rm control-plane provider-msp status",
+		"docker compose run --rm control-plane provider-msp status --require-backup",
 		"./run-install-proof.sh",
 		"docker compose run --rm control-plane provider-msp install-proof",
 		"docker compose run --rm control-plane provider-msp recover --all-degraded --dry-run",

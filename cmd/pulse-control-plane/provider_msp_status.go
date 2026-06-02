@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -14,8 +16,9 @@ import (
 )
 
 type providerMSPStatusOptions struct {
-	AllowEnvPlan bool
-	PullImage    bool
+	AllowEnvPlan  bool
+	PullImage     bool
+	RequireBackup bool
 }
 
 type providerMSPStatusReport struct {
@@ -38,12 +41,30 @@ type providerMSPStatusReport struct {
 	StuckProvisioningTenants []string
 	CountsByState            map[registry.TenantState]int
 	Preflight                *providerMSPPreflightReport
+	Backup                   *providerMSPBackupStatus
+	BackupReadyForUpgrade    bool
 	Failures                 []string
+	Warnings                 []string
+}
+
+type providerMSPBackupStatus struct {
+	Directory           string
+	LatestPath          string
+	LatestCreatedAt     time.Time
+	LatestModifiedAt    time.Time
+	LatestAge           time.Duration
+	LatestBytes         int64
+	Verified            bool
+	LicenseIncluded     bool
+	RegistryTenantCount int
+	RuntimeTenantCount  int
+	Warning             string
 }
 
 type providerMSPStatusDependencies struct {
 	OpenRegistry func(*cloudcp.CPConfig) (*registry.TenantRegistry, error)
 	RunPreflight func(context.Context, *cloudcp.CPConfig, providerMSPPreflightOptions) (*providerMSPPreflightReport, error)
+	CheckBackup  func(context.Context, *cloudcp.CPConfig) (*providerMSPBackupStatus, error)
 	Now          func() time.Time
 }
 
@@ -64,6 +85,7 @@ func newProviderMSPStatusCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&opts.AllowEnvPlan, "allow-env-plan", false, "Allow CP_PROVIDER_MSP_PLAN_VERSION fallback instead of a signed provider MSP license file for local development")
 	cmd.Flags().BoolVar(&opts.PullImage, "pull-image", false, "Pull the tenant runtime image during status instead of inspecting only")
+	cmd.Flags().BoolVar(&opts.RequireBackup, "require-backup", false, "Fail status unless a verified provider MSP backup archive is available")
 	return cmd
 }
 
@@ -93,6 +115,17 @@ func runProviderMSPStatusWithDependencies(ctx context.Context, cfg *cloudcp.CPCo
 	addFailure := func(format string, args ...any) {
 		report.OK = false
 		report.Failures = append(report.Failures, fmt.Sprintf(format, args...))
+	}
+	addWarning := func(format string, args ...any) {
+		report.Warnings = append(report.Warnings, fmt.Sprintf(format, args...))
+	}
+	addBackupProblem := func(format string, args ...any) {
+		message := fmt.Sprintf(format, args...)
+		if opts.RequireBackup {
+			addFailure("backup: %s", message)
+		} else {
+			addWarning("backup: %s", message)
+		}
 	}
 
 	preflight, preflightErr := deps.RunPreflight(ctx, cfg, providerMSPPreflightOptions{
@@ -179,6 +212,25 @@ func runProviderMSPStatusWithDependencies(ctx context.Context, cfg *cloudcp.CPCo
 		}
 	}
 
+	backup, backupErr := deps.CheckBackup(ctx, cfg)
+	report.Backup = backup
+	if backupErr != nil {
+		addBackupProblem("%v", backupErr)
+	} else if backup == nil {
+		addBackupProblem("backup posture unavailable")
+	} else {
+		if !backup.LatestCreatedAt.IsZero() {
+			backup.LatestAge = deps.Now().Sub(backup.LatestCreatedAt)
+			if backup.LatestAge < 0 {
+				backup.LatestAge = 0
+			}
+		}
+		report.BackupReadyForUpgrade = backup.Verified
+		if backup.Warning != "" {
+			addBackupProblem("%s", backup.Warning)
+		}
+	}
+
 	return report, providerMSPStatusError(report)
 }
 
@@ -191,10 +243,63 @@ func normalizeProviderMSPStatusDependencies(deps providerMSPStatusDependencies) 
 	if deps.RunPreflight == nil {
 		deps.RunPreflight = runProviderMSPPreflight
 	}
+	if deps.CheckBackup == nil {
+		deps.CheckBackup = checkProviderMSPBackupStatus
+	}
 	if deps.Now == nil {
 		deps.Now = func() time.Time { return time.Now().UTC() }
 	}
 	return deps
+}
+
+func checkProviderMSPBackupStatus(ctx context.Context, cfg *cloudcp.CPConfig) (*providerMSPBackupStatus, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("control plane config is required")
+	}
+	backupDir := filepath.Join(strings.TrimSpace(cfg.DataDir), "backups", "provider-msp")
+	status := &providerMSPBackupStatus{Directory: backupDir}
+
+	entries, err := os.ReadDir(backupDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			status.Warning = "no provider MSP backup directory found; run provider-msp backup create before upgrades or recovery drills"
+			return status, nil
+		}
+		return status, fmt.Errorf("read provider MSP backup directory: %w", err)
+	}
+
+	var latestInfo os.FileInfo
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".tar.gz") {
+			continue
+		}
+		info, infoErr := entry.Info()
+		if infoErr != nil {
+			return status, fmt.Errorf("stat provider MSP backup archive %s: %w", entry.Name(), infoErr)
+		}
+		if latestInfo == nil || info.ModTime().After(latestInfo.ModTime()) {
+			latestInfo = info
+			status.LatestPath = filepath.Join(backupDir, entry.Name())
+			status.LatestModifiedAt = info.ModTime()
+			status.LatestBytes = info.Size()
+		}
+	}
+	if latestInfo == nil {
+		status.Warning = "no provider MSP backup archive found; run provider-msp backup create before upgrades or recovery drills"
+		return status, nil
+	}
+
+	verify, err := cloudcp.VerifyProviderMSPBackup(ctx, status.LatestPath)
+	if err != nil {
+		return status, fmt.Errorf("verify latest provider MSP backup %s: %w", status.LatestPath, err)
+	}
+	status.Verified = true
+	status.LatestCreatedAt = verify.Manifest.CreatedAt
+	status.LatestBytes = verify.VerifiedArchiveBytes
+	status.LicenseIncluded = verify.Manifest.LicenseIncluded
+	status.RegistryTenantCount = verify.Manifest.RegistryTenantCount
+	status.RuntimeTenantCount = verify.Manifest.RuntimeTenantCount
+	return status, nil
 }
 
 func providerMSPStatusError(report *providerMSPStatusReport) error {
@@ -251,6 +356,26 @@ func printProviderMSPStatusReport(report *providerMSPStatusReport) {
 	if report.Preflight != nil && report.Preflight.Storage != nil {
 		fmt.Printf("storage_guardrails_enabled=%t\n", report.Preflight.Storage.Enabled)
 		fmt.Printf("storage_guardrails_ok=%t\n", report.Preflight.Storage.OK)
+	}
+	fmt.Printf("backup_ready_for_upgrade=%t\n", report.BackupReadyForUpgrade)
+	if report.Backup != nil {
+		fmt.Printf("backup_directory=%s\n", report.Backup.Directory)
+		fmt.Printf("latest_backup_path=%s\n", report.Backup.LatestPath)
+		if !report.Backup.LatestCreatedAt.IsZero() {
+			fmt.Printf("latest_backup_created_at=%s\n", report.Backup.LatestCreatedAt.UTC().Format(time.RFC3339))
+		}
+		if !report.Backup.LatestModifiedAt.IsZero() {
+			fmt.Printf("latest_backup_modified_at=%s\n", report.Backup.LatestModifiedAt.UTC().Format(time.RFC3339))
+		}
+		fmt.Printf("latest_backup_age=%s\n", report.Backup.LatestAge)
+		fmt.Printf("latest_backup_bytes=%d\n", report.Backup.LatestBytes)
+		fmt.Printf("latest_backup_verified=%t\n", report.Backup.Verified)
+		fmt.Printf("latest_backup_license_included=%t\n", report.Backup.LicenseIncluded)
+		fmt.Printf("latest_backup_registry_tenants=%d\n", report.Backup.RegistryTenantCount)
+		fmt.Printf("latest_backup_runtime_tenants=%d\n", report.Backup.RuntimeTenantCount)
+	}
+	for _, warning := range report.Warnings {
+		fmt.Printf("warning=%s\n", warning)
 	}
 	for _, failure := range report.Failures {
 		fmt.Printf("failure=%s\n", failure)

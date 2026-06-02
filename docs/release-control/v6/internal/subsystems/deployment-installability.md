@@ -166,7 +166,11 @@ surfaces.
    companion to that proof: it must report registry readiness, tenant
    state/health counts, stuck provisioning workspaces, Docker runtime
    prerequisites, storage guardrails, and the same license-backed plan identity
-   without pulling tenant images unless the operator asks for it.
+   without pulling tenant images unless the operator asks for it. It must also
+   surface backup readiness for upgrades and recovery drills by identifying the
+   latest verified provider MSP backup archive when one exists, warning when no
+   backup is available yet, and offering a strict `--require-backup` status gate
+   for pre-upgrade or pre-maintenance checks.
 5. `internal/cloudcp/provider_msp_backup.go` shared with `cloud-paid`: provider-hosted MSP backup is both a cloud-paid license/account/runtime continuity boundary and a deployment-installability recovery artifact boundary.
    `pulse-control-plane provider-msp backup create`, `backup verify`, and
    `backup restore` must

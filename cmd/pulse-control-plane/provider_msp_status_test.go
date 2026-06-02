@@ -37,6 +37,9 @@ func TestProviderMSPStatusReportsHealthyOperatorSurface(t *testing.T) {
 			gotPreflight = opts
 			return healthyProviderMSPStatusPreflightReport(), nil
 		},
+		CheckBackup: func(context.Context, *cloudcp.CPConfig) (*providerMSPBackupStatus, error) {
+			return healthyProviderMSPBackupStatus(now), nil
+		},
 		Now: func() time.Time { return now },
 	})
 	if err != nil {
@@ -56,6 +59,12 @@ func TestProviderMSPStatusReportsHealthyOperatorSurface(t *testing.T) {
 	}
 	if report.LicenseID != "lic_provider_msp_test" || report.LicenseEmail != "provider@example.com" {
 		t.Fatalf("license status = %q %q", report.LicenseID, report.LicenseEmail)
+	}
+	if !report.BackupReadyForUpgrade || report.Backup == nil || !report.Backup.Verified {
+		t.Fatalf("backup posture not ready for upgrade: %#v", report.Backup)
+	}
+	if report.Backup.LatestAge != 2*time.Hour {
+		t.Fatalf("backup age = %s, want 2h", report.Backup.LatestAge)
 	}
 }
 
@@ -102,6 +111,45 @@ func TestProviderMSPStatusFailsOnFailedUnhealthyAndStuckWorkspaces(t *testing.T)
 	}
 }
 
+func TestProviderMSPStatusBackupWarningBecomesFailureWhenRequired(t *testing.T) {
+	cfg := testProviderMSPPreflightConfig(t, cloudcp.ProviderMSPPlanSourceLicenseFile)
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	deps := providerMSPStatusDependencies{
+		RunPreflight: func(context.Context, *cloudcp.CPConfig, providerMSPPreflightOptions) (*providerMSPPreflightReport, error) {
+			return healthyProviderMSPStatusPreflightReport(), nil
+		},
+		CheckBackup: func(context.Context, *cloudcp.CPConfig) (*providerMSPBackupStatus, error) {
+			return &providerMSPBackupStatus{
+				Directory: "/data/backups/provider-msp",
+				Warning:   "no provider MSP backup archive found; run provider-msp backup create before upgrades or recovery drills",
+			}, nil
+		},
+		Now: func() time.Time { return now },
+	}
+
+	report, err := runProviderMSPStatusWithDependencies(context.Background(), cfg, providerMSPStatusOptions{}, deps)
+	if err != nil {
+		t.Fatalf("status without required backup should warn, not fail: %v", err)
+	}
+	if !report.OK || report.BackupReadyForUpgrade {
+		t.Fatalf("optional backup status = ok %t ready %t", report.OK, report.BackupReadyForUpgrade)
+	}
+	if got := strings.Join(report.Warnings, "; "); !strings.Contains(got, "provider-msp backup create") {
+		t.Fatalf("warnings = %q, want backup create guidance", got)
+	}
+
+	requiredReport, err := runProviderMSPStatusWithDependencies(context.Background(), cfg, providerMSPStatusOptions{RequireBackup: true}, deps)
+	if err == nil {
+		t.Fatal("expected required backup status to fail")
+	}
+	if requiredReport == nil || requiredReport.OK {
+		t.Fatalf("required backup report OK = %v, want false", requiredReport != nil && requiredReport.OK)
+	}
+	if got := strings.Join(requiredReport.Failures, "; "); !strings.Contains(got, "backup: no provider MSP backup archive found") {
+		t.Fatalf("failures = %q, want missing backup failure", got)
+	}
+}
+
 func healthyProviderMSPStatusPreflightReport() *providerMSPPreflightReport {
 	return &providerMSPPreflightReport{
 		OK:             true,
@@ -126,6 +174,20 @@ func healthyProviderMSPStatusPreflightReport() *providerMSPPreflightReport {
 			Enabled: true,
 			OK:      true,
 		},
+	}
+}
+
+func healthyProviderMSPBackupStatus(now time.Time) *providerMSPBackupStatus {
+	return &providerMSPBackupStatus{
+		Directory:           "/data/backups/provider-msp",
+		LatestPath:          "/data/backups/provider-msp/provider-msp-backup-20260602T100000Z.tar.gz",
+		LatestCreatedAt:     now.Add(-2 * time.Hour),
+		LatestModifiedAt:    now.Add(-time.Hour),
+		LatestBytes:         4096,
+		Verified:            true,
+		LicenseIncluded:     true,
+		RegistryTenantCount: 1,
+		RuntimeTenantCount:  1,
 	}
 }
 
