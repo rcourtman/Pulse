@@ -227,6 +227,13 @@ recovery scope, or a storage/recovery-owned secret source.
 
 1. Add or change recovery-point persistence, rollups, or series derivation through `internal/recovery/`
 4. Route transport changes for storage and recovery endpoints through `internal/api/` and the owning `api-contracts` proof routes
+   Report branding validation and reporting request assembly in
+   `internal/api/system_settings.go` and
+   `internal/api/metrics_reporting_handlers.go` remain adjacent
+   API/security/reporting ownership. Storage and recovery workflows may consume
+   generated report output when a separate reporting surface exposes it, but
+   workspace logo settings are not backup artifacts, recovery-point metadata,
+   restore evidence, or storage-provider credentials.
    Update-plan readiness payloads and apply-route readiness enforcement are
    adjacent shared API context only. Storage and recovery surfaces may observe
    the resulting update state if a future settings flow links to recovery

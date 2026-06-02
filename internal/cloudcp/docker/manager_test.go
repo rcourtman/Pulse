@@ -253,6 +253,42 @@ func TestTenantRuntimeLogConfigBoundsJSONLogs(t *testing.T) {
 	}
 }
 
+func TestTenantRuntimeHostConfigAppliesEscapeHardening(t *testing.T) {
+	t.Parallel()
+
+	cfg := ManagerConfig{
+		MemoryLimit:      512 * 1024 * 1024,
+		CPUShares:        512,
+		TenantLogMaxSize: "20m",
+		TenantLogMaxFile: 2,
+	}
+	hostCfg := tenantRuntimeHostConfig("/data/tenants/t-acme", cfg)
+	if hostCfg == nil {
+		t.Fatal("tenantRuntimeHostConfig returned nil")
+	}
+	if !hostCfg.ReadonlyRootfs {
+		t.Fatal("tenant runtime root filesystem must be read-only")
+	}
+	if got := hostCfg.SecurityOpt; len(got) != 1 || got[0] != "no-new-privileges:true" {
+		t.Fatalf("SecurityOpt = %v, want no-new-privileges", got)
+	}
+	if got := hostCfg.CapDrop; len(got) != 1 || got[0] != "ALL" {
+		t.Fatalf("CapDrop = %v, want [ALL]", got)
+	}
+	if _, ok := hostCfg.Tmpfs["/tmp"]; !ok {
+		t.Fatalf("Tmpfs missing /tmp: %v", hostCfg.Tmpfs)
+	}
+	if _, ok := hostCfg.Tmpfs["/run"]; !ok {
+		t.Fatalf("Tmpfs missing /run: %v", hostCfg.Tmpfs)
+	}
+	if hostCfg.LogConfig.Type != "json-file" || hostCfg.LogConfig.Config["max-size"] != "20m" || hostCfg.LogConfig.Config["max-file"] != "2" {
+		t.Fatalf("LogConfig not preserved: %+v", hostCfg.LogConfig)
+	}
+	if hostCfg.Resources.Memory != cfg.MemoryLimit || hostCfg.Resources.CPUShares != cfg.CPUShares {
+		t.Fatalf("Resources not preserved: %+v", hostCfg.Resources)
+	}
+}
+
 func TestCanonicalTrustedProxyCIDR(t *testing.T) {
 	t.Parallel()
 

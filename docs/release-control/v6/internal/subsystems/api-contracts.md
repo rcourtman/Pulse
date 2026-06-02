@@ -189,7 +189,10 @@ reporting layer, and the reporting layer remains the final gate: an unentitled
 tenant runtime must render the normal Pulse report identity even if branding
 configuration is present. Provider-hosted MSP proofs may exercise branding
 through tenant runtimes, but the control plane must not gain MSP-specific report
-generation plumbing or cross-client report content.
+generation plumbing or cross-client report content. Tenant-local workspace
+branding overrides may carry display names and bounded inline logo data only;
+local filesystem `logoPath` input is reserved for provider-default runtime
+configuration and must not be accepted from persisted workspace settings.
 
 Pulse Account workspace summaries carry setup state as a backend-owned payload
 contract. Browser bootstrap and `/api/portal/dashboard` workspace entries may

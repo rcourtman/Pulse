@@ -8,9 +8,10 @@ IFS=$'\n\t'
 PULSE_PROVIDER_MSP_INSTALL_DIR="${PULSE_PROVIDER_MSP_INSTALL_DIR:-/opt/pulse-provider-msp}"
 PULSE_PROVIDER_MSP_DATA_DIR="${PULSE_PROVIDER_MSP_DATA_DIR:-/data}"
 PULSE_PROVIDER_MSP_DOCKER_NETWORK="${PULSE_PROVIDER_MSP_DOCKER_NETWORK:-pulse-provider-msp}"
+PULSE_PROVIDER_MSP_DOCKER_SUBNET="${PULSE_PROVIDER_MSP_DOCKER_SUBNET:-172.30.0.0/24}"
 PULSE_PROVIDER_MSP_DOCKER_SOCKET="${PULSE_PROVIDER_MSP_DOCKER_SOCKET:-/var/run/docker.sock}"
-PULSE_PROVIDER_MSP_HOST_ROOT="${PULSE_PROVIDER_MSP_HOST_ROOT:-/}"
-PULSE_PROVIDER_MSP_DOCKER_DATA_DIR="${PULSE_PROVIDER_MSP_DOCKER_DATA_DIR:-/var/lib/docker}"
+PULSE_PROVIDER_MSP_ROOT_SPACECHECK_DIR="${PULSE_PROVIDER_MSP_ROOT_SPACECHECK_DIR:-/var/lib/pulse-provider-msp/spacecheck/root}"
+PULSE_PROVIDER_MSP_DOCKER_SPACECHECK_DIR="${PULSE_PROVIDER_MSP_DOCKER_SPACECHECK_DIR:-/var/lib/docker/.pulse-provider-msp-spacecheck}"
 PULSE_PROVIDER_MSP_BUNDLE_URL="${PULSE_PROVIDER_MSP_BUNDLE_URL:-}"
 PULSE_PROVIDER_MSP_EXPECT_ENV="${PULSE_PROVIDER_MSP_EXPECT_ENV:-production}"
 PULSE_PROVIDER_MSP_SKIP_PULL="${PULSE_PROVIDER_MSP_SKIP_PULL:-0}"
@@ -73,7 +74,7 @@ EOF
 
 install_ops_tools() {
   log "installing ops tools"
-  apt_install jq rsync sqlite3 rclone s3cmd
+  apt_install jq openssl rsync sqlite3 rclone s3cmd
 }
 
 create_data_dirs() {
@@ -85,14 +86,40 @@ create_data_dirs() {
   install -d -m 0700 "${data_dir}/control-plane"
   install -d -m 0700 "${data_dir}/backups"
   install -d -m 0700 "${data_dir}/backups/provider-msp"
+
+  local root_spacecheck docker_spacecheck
+  root_spacecheck="$(provider_root_spacecheck_dir)"
+  docker_spacecheck="$(provider_docker_spacecheck_dir)"
+  log "creating storage space-check marker directories"
+  install -d -m 0700 "${root_spacecheck}"
+  install -d -m 0700 "${docker_spacecheck}"
 }
 
 ensure_docker_network() {
-  local network
+  local network subnet existing_subnets
   network="$(provider_docker_network)"
-  log "ensuring Docker network ${network} exists"
+  subnet="$(provider_docker_subnet)"
+  log "checking Docker network ${network}"
   if ! docker network inspect "${network}" >/dev/null 2>&1; then
-    docker network create "${network}" >/dev/null
+    log "Docker network ${network} will be created by compose with subnet ${subnet}"
+    return 0
+  fi
+
+  existing_subnets="$(docker network inspect -f '{{range .IPAM.Config}}{{println .Subnet}}{{end}}' "${network}" 2>/dev/null | tr '\n' ',' | sed 's/,$//' || true)"
+  if [[ ",${existing_subnets}," != *",${subnet},"* ]]; then
+    die "Docker network ${network} exists with subnet(s) ${existing_subnets:-<none>}; expected ${subnet} so CP_TRUSTED_PROXY_CIDRS can trust Traefik without trusting every peer"
+  fi
+}
+
+block_container_metadata_service() {
+  if ! have iptables; then
+    log "iptables not found; skipping container metadata-service block"
+    return 0
+  fi
+  log "ensuring containers cannot reach cloud metadata service"
+  iptables -N DOCKER-USER 2>/dev/null || true
+  if ! iptables -C DOCKER-USER -d 169.254.169.254/32 -j REJECT >/dev/null 2>&1; then
+    iptables -I DOCKER-USER -d 169.254.169.254/32 -j REJECT
   fi
 }
 
@@ -211,6 +238,65 @@ provider_docker_network() {
   echo "${configured:-${PULSE_PROVIDER_MSP_DOCKER_NETWORK}}"
 }
 
+provider_docker_subnet() {
+  local env_path="${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env"
+  local configured=""
+  if [[ -f "${env_path}" ]]; then
+    configured="$(env_value PULSE_PROVIDER_MSP_DOCKER_SUBNET "${env_path}")"
+  fi
+  echo "${configured:-${PULSE_PROVIDER_MSP_DOCKER_SUBNET}}"
+}
+
+provider_root_spacecheck_dir() {
+  local env_path="${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env"
+  local configured=""
+  if [[ -f "${env_path}" ]]; then
+    configured="$(env_value PULSE_PROVIDER_MSP_ROOT_SPACECHECK_DIR "${env_path}")"
+  fi
+  echo "${configured:-${PULSE_PROVIDER_MSP_ROOT_SPACECHECK_DIR}}"
+}
+
+provider_docker_spacecheck_dir() {
+  local env_path="${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env"
+  local configured=""
+  if [[ -f "${env_path}" ]]; then
+    configured="$(env_value PULSE_PROVIDER_MSP_DOCKER_SPACECHECK_DIR "${env_path}")"
+  fi
+  echo "${configured:-${PULSE_PROVIDER_MSP_DOCKER_SPACECHECK_DIR}}"
+}
+
+set_env_value() {
+  local key="$1"
+  local value="$2"
+  local env_path="${3:-${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env}"
+  local tmp
+  tmp="$(mktemp)"
+  if grep -q -E "^${key}=" "${env_path}"; then
+    awk -v key="${key}" -v value="${value}" 'BEGIN{done=0} $0 ~ "^" key "=" && done==0 { print key "=" value; done=1; next } { print }' "${env_path}" >"${tmp}"
+  else
+    cat "${env_path}" >"${tmp}"
+    printf '%s=%s\n' "${key}" "${value}" >>"${tmp}"
+  fi
+  cat "${tmp}" >"${env_path}"
+  rm -f "${tmp}"
+}
+
+ensure_generated_secrets() {
+  local env_path="${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env"
+  [[ -f "${env_path}" ]] || die "missing ${env_path}"
+  have openssl || die "openssl is required to generate provider MSP secrets"
+
+  if [[ -z "$(env_value CP_ADMIN_KEY "${env_path}")" ]]; then
+    log "generating CP_ADMIN_KEY"
+    set_env_value CP_ADMIN_KEY "$(openssl rand -hex 32)" "${env_path}"
+  fi
+  if [[ -z "$(env_value CP_TRIAL_ACTIVATION_PRIVATE_KEY "${env_path}")" ]]; then
+    log "generating CP_TRIAL_ACTIVATION_PRIVATE_KEY"
+    set_env_value CP_TRIAL_ACTIVATION_PRIVATE_KEY "$(openssl rand -base64 32 | tr -d '\n')" "${env_path}"
+  fi
+  chmod 0600 "${env_path}"
+}
+
 truthy() {
   case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
     true|1|yes|on) return 0 ;;
@@ -245,14 +331,20 @@ Edit it now and set required values:
   - ACME_EMAIL
   - CF_DNS_API_TOKEN
   - TRAEFIK_IMAGE (digest pinned)
+  - DOCKER_SOCKET_PROXY_IMAGE (digest pinned)
   - CONTROL_PLANE_IMAGE (digest pinned)
   - CP_PULSE_IMAGE (digest pinned)
-  - CP_ADMIN_KEY
   - PULSE_PROVIDER_MSP_DATA_DIR
   - PULSE_PROVIDER_MSP_DOCKER_NETWORK
+  - PULSE_PROVIDER_MSP_DOCKER_SUBNET
   - PULSE_PROVIDER_MSP_DOCKER_SOCKET
+  - PULSE_PROVIDER_MSP_ROOT_SPACECHECK_DIR
+  - PULSE_PROVIDER_MSP_DOCKER_SPACECHECK_DIR
+  - CP_TRUSTED_PROXY_CIDRS
   - CP_PROVIDER_MSP_LICENSE_FILE
-  - CP_TRIAL_ACTIVATION_PRIVATE_KEY
+
+setup.sh will generate CP_ADMIN_KEY and CP_TRIAL_ACTIVATION_PRIVATE_KEY if they
+are still blank.
 
 EOF
 
@@ -276,7 +368,7 @@ validate_env_file() {
 
   local missing=()
   local k v
-  for k in DOMAIN ACME_EMAIL CF_DNS_API_TOKEN CP_ENV TRAEFIK_IMAGE CONTROL_PLANE_IMAGE CP_ADMIN_KEY CP_PULSE_IMAGE PULSE_PROVIDER_MSP_DATA_DIR PULSE_PROVIDER_MSP_DOCKER_NETWORK PULSE_PROVIDER_MSP_DOCKER_SOCKET PULSE_PROVIDER_MSP_HOST_ROOT PULSE_PROVIDER_MSP_DOCKER_DATA_DIR CP_PROVIDER_MSP_LICENSE_FILE CP_TRIAL_ACTIVATION_PRIVATE_KEY CP_TENANT_MEMORY_LIMIT CP_ALLOW_DOCKERLESS_PROVISIONING CP_STORAGE_GUARDRAILS_ENABLED CP_STORAGE_MIN_ROOT_AVAILABLE CP_STORAGE_MIN_DATA_AVAILABLE CP_STORAGE_MIN_DOCKER_AVAILABLE CP_STORAGE_MAX_DOCKER_BUILD_CACHE CP_PROOF_TENANT_MAX_AGE CP_PROOF_TENANT_MATCHERS CP_REQUIRE_EMAIL_PROVIDER PULSE_EMAIL_FROM PULSE_EMAIL_REPLY_TO; do
+  for k in DOMAIN ACME_EMAIL CF_DNS_API_TOKEN CP_ENV TRAEFIK_IMAGE DOCKER_SOCKET_PROXY_IMAGE CONTROL_PLANE_IMAGE CP_ADMIN_KEY CP_PULSE_IMAGE PULSE_PROVIDER_MSP_DATA_DIR PULSE_PROVIDER_MSP_DOCKER_NETWORK PULSE_PROVIDER_MSP_DOCKER_SUBNET PULSE_PROVIDER_MSP_DOCKER_SOCKET PULSE_PROVIDER_MSP_ROOT_SPACECHECK_DIR PULSE_PROVIDER_MSP_DOCKER_SPACECHECK_DIR CP_TRUSTED_PROXY_CIDRS CP_PROVIDER_MSP_LICENSE_FILE CP_TRIAL_ACTIVATION_PRIVATE_KEY CP_TENANT_MEMORY_LIMIT CP_ALLOW_DOCKERLESS_PROVISIONING CP_STORAGE_GUARDRAILS_ENABLED CP_STORAGE_MIN_ROOT_AVAILABLE CP_STORAGE_MIN_DATA_AVAILABLE CP_STORAGE_MIN_DOCKER_AVAILABLE CP_STORAGE_MAX_DOCKER_BUILD_CACHE CP_PROOF_TENANT_MAX_AGE CP_PROOF_TENANT_MATCHERS CP_REQUIRE_EMAIL_PROVIDER PULSE_EMAIL_FROM PULSE_EMAIL_REPLY_TO; do
     v="$(env_value "${k}" "${env_path}")"
     if [[ -z "${v}" ]]; then
       missing+=("${k}")
@@ -292,7 +384,7 @@ validate_env_file() {
   fi
 
   local path_var path_value
-  for path_var in PULSE_PROVIDER_MSP_DATA_DIR PULSE_PROVIDER_MSP_DOCKER_SOCKET PULSE_PROVIDER_MSP_HOST_ROOT PULSE_PROVIDER_MSP_DOCKER_DATA_DIR; do
+  for path_var in PULSE_PROVIDER_MSP_DATA_DIR PULSE_PROVIDER_MSP_DOCKER_SOCKET PULSE_PROVIDER_MSP_ROOT_SPACECHECK_DIR PULSE_PROVIDER_MSP_DOCKER_SPACECHECK_DIR; do
     path_value="$(env_value "${path_var}" "${env_path}")"
     if [[ "${path_value}" != /* ]]; then
       die "${path_var} must be an absolute path"
@@ -301,12 +393,9 @@ validate_env_file() {
   if [[ ! -S "$(env_value PULSE_PROVIDER_MSP_DOCKER_SOCKET "${env_path}")" ]]; then
     die "PULSE_PROVIDER_MSP_DOCKER_SOCKET must point to a reachable Docker socket"
   fi
-  if [[ ! -d "$(env_value PULSE_PROVIDER_MSP_HOST_ROOT "${env_path}")" ]]; then
-    die "PULSE_PROVIDER_MSP_HOST_ROOT must point to an existing directory"
-  fi
 
   local image_ref
-  for k in TRAEFIK_IMAGE CONTROL_PLANE_IMAGE CP_PULSE_IMAGE; do
+  for k in TRAEFIK_IMAGE DOCKER_SOCKET_PROXY_IMAGE CONTROL_PLANE_IMAGE CP_PULSE_IMAGE; do
     image_ref="$(env_value "${k}" "${env_path}")"
     if [[ "${image_ref}" != *@sha256:* || "${image_ref}" == *"<pin>"* ]]; then
       die "${k} must be an immutable digest ref (expected ...@sha256:...)"
@@ -327,8 +416,20 @@ validate_env_file() {
   if ! truthy "$(env_value CP_STORAGE_GUARDRAILS_ENABLED "${env_path}")"; then
     die "CP_STORAGE_GUARDRAILS_ENABLED must be true for provider-hosted MSP deploys"
   fi
-  if [[ ! -d "$(env_value PULSE_PROVIDER_MSP_DOCKER_DATA_DIR "${env_path}")" ]]; then
-    die "PULSE_PROVIDER_MSP_DOCKER_DATA_DIR must point to the host Docker data directory"
+
+  local admin_key trial_key trusted_cidrs docker_subnet
+  admin_key="$(env_value CP_ADMIN_KEY "${env_path}")"
+  if [[ "${#admin_key}" -lt 32 ]]; then
+    die "CP_ADMIN_KEY must be at least 32 characters"
+  fi
+  trial_key="$(env_value CP_TRIAL_ACTIVATION_PRIVATE_KEY "${env_path}")"
+  if ! printf '%s' "${trial_key}" | base64 -d >/dev/null 2>&1; then
+    die "CP_TRIAL_ACTIVATION_PRIVATE_KEY must be valid base64"
+  fi
+  docker_subnet="$(env_value PULSE_PROVIDER_MSP_DOCKER_SUBNET "${env_path}")"
+  trusted_cidrs="$(env_value CP_TRUSTED_PROXY_CIDRS "${env_path}" | tr -d '[:space:]')"
+  if [[ ",${trusted_cidrs}," != *",${docker_subnet},"* ]]; then
+    die "CP_TRUSTED_PROXY_CIDRS must include PULSE_PROVIDER_MSP_DOCKER_SUBNET (${docker_subnet})"
   fi
 
   local proof_matchers required_matcher
@@ -367,7 +468,7 @@ pull_provider_images() {
     return 0
   fi
   log "pulling provider MSP images"
-  (cd "${PULSE_PROVIDER_MSP_INSTALL_DIR}" && docker compose pull traefik control-plane)
+  (cd "${PULSE_PROVIDER_MSP_INSTALL_DIR}" && docker compose pull traefik docker-socket-proxy control-plane)
 }
 
 run_install_proof_if_requested() {
@@ -432,9 +533,11 @@ main() {
   install_ops_tools
   install_deploy_bundle
   ensure_env_file
+  ensure_generated_secrets
   validate_env_file
   create_data_dirs
   ensure_docker_network
+  block_container_metadata_service
   validate_compose_config
   pull_provider_images
   run_install_proof_if_requested

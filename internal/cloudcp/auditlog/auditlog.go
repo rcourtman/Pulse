@@ -1,33 +1,15 @@
 package auditlog
 
 import (
-	"net"
 	"net/http"
 	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/proxytrust"
 )
 
 // ClientIP resolves the best-effort client IP for audit metadata.
 func ClientIP(r *http.Request) string {
-	if r == nil {
-		return ""
-	}
-
-	if xff := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); xff != "" {
-		if i := strings.IndexByte(xff, ','); i >= 0 {
-			return strings.TrimSpace(xff[:i])
-		}
-		return xff
-	}
-
-	if rip := strings.TrimSpace(r.Header.Get("X-Real-IP")); rip != "" {
-		return strings.Trim(rip, "[]")
-	}
-
-	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
-	if err != nil {
-		return strings.TrimSpace(r.RemoteAddr)
-	}
-	return strings.TrimSpace(host)
+	return proxytrust.ClientIP(r)
 }
 
 // ActorID returns the request actor identifier from common headers.

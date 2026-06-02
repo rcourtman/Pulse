@@ -224,6 +224,48 @@ func TestReportingHandlers_AttachesEntitledReportBranding(t *testing.T) {
 	}
 }
 
+func TestReportingHandlers_StripsWorkspaceReportBrandLogoPath(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	service := pkglicensing.NewService()
+	service.SetCurrentForTesting(&pkglicensing.License{
+		Claims: pkglicensing.Claims{
+			LicenseID: "lic_report_branding_path",
+			Email:     "brand-path@example.test",
+			Tier:      pkglicensing.TierEnterprise,
+		},
+		ValidatedAt: time.Now(),
+	})
+	SetLicenseServiceProvider(reportBrandLicenseProvider{service: service})
+	t.Cleanup(func() { SetLicenseServiceProvider(nil) })
+
+	handler := NewReportingHandlers(nil, nil)
+	handler.SetSystemSettingsStore(reportBrandSettingsStore{settings: &config.SystemSettings{
+		ReportBranding: &config.ReportBrandSettings{
+			DisplayName: "Client Path",
+			LogoPath:    "/etc/pulse/secrets/handoff.key",
+		},
+	}})
+	t.Setenv("PULSE_REPORT_PROVIDER_BRAND_LOGO_PATH", "/etc/pulse/provider-brand.png")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/reporting?format=pdf&resourceType=node&resourceId=node-1", nil)
+	rr := httptest.NewRecorder()
+	handler.HandleGenerateReport(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rr.Code, rr.Body.String())
+	}
+	if got := engine.lastReq.Branding.ProviderDefault.LogoPath; got != "/etc/pulse/provider-brand.png" {
+		t.Fatalf("provider logo path = %q, want provider env path", got)
+	}
+	if got := engine.lastReq.Branding.WorkspaceOverride.LogoPath; got != "" {
+		t.Fatalf("workspace logo path must be stripped, got %q", got)
+	}
+}
+
 func TestReportingHandlers_GenerateReport_TrimsOptionalFields(t *testing.T) {
 	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
 	original := reporting.GetEngine()

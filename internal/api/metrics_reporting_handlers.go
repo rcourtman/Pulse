@@ -144,7 +144,7 @@ func (h *ReportingHandlers) resolveReportBranding(ctx context.Context) reporting
 		return branding
 	}
 	if settings.ReportBranding != nil {
-		branding.WorkspaceOverride = reportBrandFromSettings(*settings.ReportBranding)
+		branding.WorkspaceOverride = reportBrandFromWorkspaceSettings(*settings.ReportBranding)
 	}
 	return branding
 }
@@ -156,6 +156,12 @@ func reportBrandFromEnv() reporting.ReportBrand {
 		LogoBase64:  os.Getenv("PULSE_REPORT_PROVIDER_BRAND_LOGO_BASE64"),
 		LogoFormat:  os.Getenv("PULSE_REPORT_PROVIDER_BRAND_LOGO_FORMAT"),
 	})
+}
+
+func reportBrandFromWorkspaceSettings(settings config.ReportBrandSettings) reporting.ReportBrand {
+	brand := reportBrandFromSettings(settings)
+	brand.LogoPath = ""
+	return brand
 }
 
 func reportBrandFromSettings(settings config.ReportBrandSettings) reporting.ReportBrand {

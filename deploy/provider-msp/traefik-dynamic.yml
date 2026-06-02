@@ -9,3 +9,9 @@ http:
         contentTypeNosniff: true
         browserXssFilter: true
         referrerPolicy: "strict-origin-when-cross-origin"
+
+tls:
+  options:
+    default:
+      minVersion: VersionTLS12
+      sniStrict: true

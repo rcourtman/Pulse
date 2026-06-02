@@ -8,8 +8,8 @@ Usage:
 
 Runs the provider-hosted MSP compose install proof on a Docker host:
   1. validates .env and docker-compose.yml
-  2. optionally pulls the pinned Traefik and control-plane images
-  3. starts Traefik so proof workspaces can attach isolated tenant networks
+  2. optionally pulls the pinned Traefik, Docker socket proxy, and control-plane images
+  3. starts Traefik and the Docker socket proxy so proof workspaces can attach isolated tenant networks
   4. runs provider-msp install-proof through the compose control-plane service
   5. starts the provider stack
   6. runs provider-msp status as a final operator check
@@ -119,10 +119,10 @@ docker version >/dev/null
 docker compose config --quiet
 
 if [[ "$skip_compose_pull" != "1" ]]; then
-  docker compose pull traefik control-plane
+  docker compose pull traefik docker-socket-proxy control-plane
 fi
 
-docker compose up -d traefik
+docker compose up -d traefik docker-socket-proxy
 
 install_args=(
   provider-msp install-proof
@@ -142,7 +142,7 @@ fi
 docker compose run --rm --no-deps control-plane "${install_args[@]}"
 
 if [[ "$start_after_proof" != "0" ]]; then
-  docker compose up -d traefik control-plane
+  docker compose up -d traefik docker-socket-proxy control-plane
   docker compose run --rm --no-deps control-plane provider-msp status
   docker compose ps
 fi

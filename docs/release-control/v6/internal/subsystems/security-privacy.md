@@ -114,7 +114,9 @@ controls as normal product settings.
     can carry operator-authored names and logo material into generated PDFs.
     `reportBranding` updates must validate object shape, supported keys,
     string types, bounded lengths, newline-free values, supported logo formats,
-    and valid bounded base64 before persistence. Rendering custom branding
+    and valid bounded base64 before persistence. Workspace settings must not
+    accept local filesystem `logoPath` values; file-backed logo paths are
+    provider-default runtime configuration only. Rendering custom branding
     remains gated by the `white_label` entitlement in the reporting layer, so
     storing a brand setting never becomes a free branding bypass.
 16. `internal/cloudcp/auth/magiclink.go` shared with `cloud-paid`: control-plane magic-link HMAC handling is both a Pulse Cloud account-access boundary and a security/privacy token-secrecy boundary.

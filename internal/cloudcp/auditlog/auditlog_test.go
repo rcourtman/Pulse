@@ -4,9 +4,14 @@ import (
 	"net/http"
 	"net/url"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/proxytrust"
 )
 
 func TestClientIP(t *testing.T) {
+	t.Setenv("CP_TRUSTED_PROXY_CIDRS", "127.0.0.1/32,10.0.0.0/8")
+	proxytrust.ResetForTesting()
+
 	tests := []struct {
 		name       string
 		request    *http.Request
@@ -18,33 +23,38 @@ func TestClientIP(t *testing.T) {
 			expectedIP: "",
 		},
 		{
-			name:       "X-Forwarded-For single IP",
-			request:    newRequestWithHeaders(t, "", map[string]string{"X-Forwarded-For": "192.168.1.100"}),
+			name:       "X-Forwarded-For single IP from trusted proxy",
+			request:    newRequestWithHeaders(t, "127.0.0.1:1234", map[string]string{"X-Forwarded-For": "192.168.1.100"}),
 			expectedIP: "192.168.1.100",
 		},
 		{
-			name:       "X-Forwarded-For multiple IPs",
-			request:    newRequestWithHeaders(t, "", map[string]string{"X-Forwarded-For": "192.168.1.100, 10.0.0.1, 172.16.0.1"}),
+			name:       "X-Forwarded-For multiple IPs selects right-most untrusted hop",
+			request:    newRequestWithHeaders(t, "127.0.0.1:1234", map[string]string{"X-Forwarded-For": "192.168.1.100, 10.0.0.1"}),
 			expectedIP: "192.168.1.100",
 		},
 		{
 			name:       "X-Forwarded-For with spaces",
-			request:    newRequestWithHeaders(t, "", map[string]string{"X-Forwarded-For": "  192.168.1.100  , 10.0.0.1"}),
+			request:    newRequestWithHeaders(t, "127.0.0.1:1234", map[string]string{"X-Forwarded-For": "  192.168.1.100  , 10.0.0.1"}),
 			expectedIP: "192.168.1.100",
 		},
 		{
-			name:       "X-Real-IP when no XFF",
-			request:    newRequestWithHeaders(t, "10.0.0.5:1234", map[string]string{"X-Real-IP": "10.0.0.5"}),
+			name:       "X-Forwarded-For ignored from untrusted remote",
+			request:    newRequestWithHeaders(t, "198.51.100.10:1234", map[string]string{"X-Forwarded-For": "192.168.1.100"}),
+			expectedIP: "198.51.100.10",
+		},
+		{
+			name:       "X-Real-IP when no XFF from trusted proxy",
+			request:    newRequestWithHeaders(t, "127.0.0.1:1234", map[string]string{"X-Real-IP": "10.0.0.5"}),
 			expectedIP: "10.0.0.5",
 		},
 		{
 			name:       "X-Real-IP takes precedence when XFF is empty",
-			request:    newRequestWithHeaders(t, "10.0.0.5:1234", map[string]string{"X-Forwarded-For": "", "X-Real-IP": "10.0.0.5"}),
+			request:    newRequestWithHeaders(t, "127.0.0.1:1234", map[string]string{"X-Forwarded-For": "", "X-Real-IP": "10.0.0.5"}),
 			expectedIP: "10.0.0.5",
 		},
 		{
 			name:       "X-Real-IP with brackets stripped",
-			request:    newRequestWithHeaders(t, "10.0.0.5:1234", map[string]string{"X-Real-IP": "[::1]"}),
+			request:    newRequestWithHeaders(t, "127.0.0.1:1234", map[string]string{"X-Real-IP": "[::1]"}),
 			expectedIP: "::1",
 		},
 		{

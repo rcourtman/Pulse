@@ -42,6 +42,13 @@ contract. `CP_DOCKER_NETWORK` names the provider ingress and support network,
 not the client runtime boundary: each client workspace runtime must be created
 on a derived per-tenant Docker bridge, and support containers must be explicitly
 attached to that bridge before the tenant runtime is started.
+Provider-hosted MSP control-plane host access is part of the same runtime
+contract. The internet-facing control plane must not receive broad host-root or
+Docker-data read mounts for storage admission checks; it may stat only narrow
+operator-owned marker directories on the target filesystems. Docker daemon
+access must be routed through the packaged socket proxy rather than a raw
+read-write socket mount, and audit/rate-limit client IP recovery must honor
+forwarded headers only from configured trusted provider proxy CIDRs.
 Provider-hosted MSP report branding is a tenant runtime configuration
 contract, not control-plane report generation. The control plane may accept
 provider-default report brand environment values and pass them into each tenant
@@ -123,6 +130,7 @@ Stripe-free and avoids a cloud-control-plane report data path across clients.
 68. `frontend-modern/src/utils/selfHostedFeatureCatalog.generated.ts`
 80. `internal/cloudcp/server.go`, `internal/cloudcp/authz.go`, `internal/cloudcp/commercial_identity.go`, `internal/cloudcp/security.go`
 81. `internal/cloudcp/health_monitor.go`, `internal/cloudcp/health_stuck_provisioning.go`, `internal/cloudcp/tenant_state_metrics.go`, `internal/cloudcp/ratelimit.go`
+81a. `internal/cloudcp/proxytrust/client_ip.go`
 82. `internal/cloudcp/hosted_entitlement_handlers.go`, `internal/cloudcp/url_helpers.go`
 83. `internal/cloudcp/admin/handlers.go`, `internal/cloudcp/admin/status.go`, `internal/cloudcp/auditlog/auditlog.go`
 84. `internal/cloudcp/cpmetrics/metrics.go`, `internal/cloudcp/cpsec/nonce.go`, `internal/cloudcp/static_assets.go`, `internal/cloudcp/favicon.svg`
@@ -211,6 +219,13 @@ Stripe-free and avoids a cloud-control-plane report data path across clients.
    selected by provider MSP labels, start the tenant runtime only after those
    support attachments succeed, prefer the tenant bridge for health checks, and
    remove tenant bridges when the owning runtime is removed.
+   Tenant runtime containers must also start with the provider-hosted escape
+   hardening defaults owned by the Docker manager: no-new-privileges, dropped
+   Linux capabilities unless explicitly reintroduced by a governed need,
+   Docker's default seccomp profile still active, a read-only root filesystem,
+   and bounded writable tmpfs mounts only for runtime scratch paths. These
+   defaults are part of the client isolation contract, not optional compose
+   decoration.
    Client-bound proof must cover the boundary itself: workspace limits must not
    be raceable past the licensed cap, handoff tokens must not be replayed or
    retargeted across workspaces, org-bound agent install/report tokens must not

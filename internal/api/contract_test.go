@@ -3805,6 +3805,25 @@ func TestContract_ReportingRequestCarriesEntitledReportBranding(t *testing.T) {
 	}
 }
 
+func TestContract_ReportBrandingSettingsRejectWorkspaceLogoPath(t *testing.T) {
+	err := validateReportBrandingSettings(map[string]interface{}{
+		"displayName": "Client One",
+		"logoPath":    "/etc/pulse/secrets/handoff.key",
+	})
+	if err == nil || !strings.Contains(err.Error(), "reportBranding.logoPath is not supported") {
+		t.Fatalf("expected workspace logoPath to be rejected, got %v", err)
+	}
+
+	err = validateReportBrandingSettings(map[string]interface{}{
+		"displayName": "Client One",
+		"logoBase64":  "iVBORw0KGgo=",
+		"logoFormat":  "png",
+	})
+	if err != nil {
+		t.Fatalf("expected inline report logo settings to remain valid, got %v", err)
+	}
+}
+
 func TestContract_ReportingCatalogRouteAccessibleWithoutReportingFeature(t *testing.T) {
 	rawToken := "reporting-catalog-contract-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)

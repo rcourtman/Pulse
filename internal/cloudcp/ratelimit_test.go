@@ -3,14 +3,14 @@ package cloudcp
 import (
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/proxytrust"
 )
 
 func resetTrustedProxyConfig() {
-	trustedProxyOnce = sync.Once{}
-	trustedProxyCIDRs = nil
+	proxytrust.ResetForTesting()
 }
 
 func TestCPRateLimiterAllow_WithinLimitThenRejects(t *testing.T) {
@@ -88,8 +88,8 @@ func TestClientIP(t *testing.T) {
 		}
 	})
 
-	t.Run("x-forwarded-for-first-value", func(t *testing.T) {
-		t.Setenv("CP_TRUSTED_PROXY_CIDRS", "127.0.0.1/32")
+	t.Run("x-forwarded-for-right-most-untrusted-hop", func(t *testing.T) {
+		t.Setenv("CP_TRUSTED_PROXY_CIDRS", "127.0.0.1/32,10.0.0.0/8")
 		resetTrustedProxyConfig()
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.Header.Set("X-Forwarded-For", " 203.0.113.1 , 10.0.0.1 ")

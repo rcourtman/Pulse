@@ -12,7 +12,7 @@ Runs the provider-hosted MSP pre-upgrade and upgrade flow:
   2. checks provider status and install preflight
   3. creates and verifies a fresh provider MSP backup
   4. dry-runs restore into a separate target data directory
-  5. pulls and starts the provider control-plane and Traefik services
+  5. pulls and starts the provider Traefik, Docker socket proxy, and control-plane services
   6. prints the tenant runtime rollout plan for CP_PULSE_IMAGE
   7. optionally rolls all tenant runtimes onto CP_PULSE_IMAGE
 
@@ -196,9 +196,9 @@ run_control provider-msp backup restore "${archive_path}" --target-data-dir "${r
 run_control provider-msp status --require-backup
 
 if ! truthy "${skip_compose_pull}"; then
-  docker compose pull traefik control-plane
+  docker compose pull traefik docker-socket-proxy control-plane
 fi
-docker compose up -d traefik control-plane
+docker compose up -d traefik docker-socket-proxy control-plane
 run_control provider-msp status --require-backup
 run_control tenant-runtime rollout --all --image "${tenant_runtime_image}" --dry-run
 

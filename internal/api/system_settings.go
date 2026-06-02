@@ -604,7 +604,6 @@ func validateSystemSettings(_ *config.SystemSettings, rawRequest map[string]inte
 func validateReportBrandingSettings(settings map[string]interface{}) error {
 	allowed := map[string]struct{}{
 		"displayName": {},
-		"logoPath":    {},
 		"logoBase64":  {},
 		"logoFormat":  {},
 	}
@@ -623,10 +622,6 @@ func validateReportBrandingSettings(settings map[string]interface{}) error {
 		case "displayName":
 			if len(strings.TrimSpace(str)) > config.ReportBrandDisplayNameMaxLength {
 				return fmt.Errorf("reportBranding.displayName must be <= %d characters", config.ReportBrandDisplayNameMaxLength)
-			}
-		case "logoPath":
-			if len(strings.TrimSpace(str)) > config.ReportBrandLogoPathMaxLength {
-				return fmt.Errorf("reportBranding.logoPath must be <= %d characters", config.ReportBrandLogoPathMaxLength)
 			}
 		case "logoBase64":
 			if _, err := config.DecodeReportBrandLogoBase64(str); err != nil {

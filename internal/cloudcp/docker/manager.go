@@ -514,15 +514,7 @@ func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir st
 			Labels: labels,
 			Env:    tenantEnv(tenantID, m.cfg.BaseDomain, m.cfg.TrialActivationPublicKey, m.tenantTrustedProxyCIDRs(ctx, tenantNetworkName), m.cfg.TenantReportBrand),
 		},
-		HostConfig: &container.HostConfig{
-			RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
-			LogConfig:     tenantRuntimeLogConfig(m.cfg.TenantLogMaxSize, m.cfg.TenantLogMaxFile),
-			Resources: container.Resources{
-				Memory:    m.cfg.MemoryLimit,
-				CPUShares: m.cfg.CPUShares,
-			},
-			Mounts: tenantMounts(tenantDataDir),
-		},
+		HostConfig: tenantRuntimeHostConfig(tenantDataDir, m.cfg),
 		NetworkingConfig: &network.NetworkingConfig{
 			EndpointsConfig: map[string]*network.EndpointSettings{
 				tenantNetworkName: {},
@@ -567,6 +559,31 @@ func tenantRuntimeLogConfig(maxSize string, maxFile int) container.LogConfig {
 			"max-file": fmt.Sprintf("%d", maxFile),
 		},
 	}
+}
+
+func tenantRuntimeHostConfig(tenantDataDir string, cfg ManagerConfig) *container.HostConfig {
+	return &container.HostConfig{
+		RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
+		LogConfig:     tenantRuntimeLogConfig(cfg.TenantLogMaxSize, cfg.TenantLogMaxFile),
+		Resources: container.Resources{
+			Memory:    cfg.MemoryLimit,
+			CPUShares: cfg.CPUShares,
+		},
+		Mounts:         tenantMounts(tenantDataDir),
+		SecurityOpt:    tenantRuntimeSecurityOptions(),
+		CapDrop:        []string{"ALL"},
+		ReadonlyRootfs: true,
+		Tmpfs: map[string]string{
+			"/run": "rw,noexec,nosuid,nodev,size=16m",
+			"/tmp": "rw,noexec,nosuid,nodev,size=64m",
+		},
+	}
+}
+
+func tenantRuntimeSecurityOptions() []string {
+	// Do not set seccomp=unconfined. Docker's default seccomp profile remains
+	// active unless the daemon has been explicitly weakened outside Pulse.
+	return []string{"no-new-privileges:true"}
 }
 
 func tenantImmutableOwnershipPaths() []string {

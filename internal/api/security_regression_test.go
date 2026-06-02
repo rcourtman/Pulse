@@ -1902,6 +1902,13 @@ func TestSystemSettingsReportBrandingValidationRejectsUnsafePayload(t *testing.T
 			want: "reportBranding.tenantID is not supported",
 		},
 		{
+			name: "workspace_logo_path_unsupported",
+			raw: map[string]interface{}{"reportBranding": map[string]interface{}{
+				"logoPath": "/etc/pulse/secrets/handoff.key",
+			}},
+			want: "reportBranding.logoPath is not supported",
+		},
+		{
 			name: "newline",
 			raw: map[string]interface{}{"reportBranding": map[string]interface{}{
 				"displayName": "Client\nName",

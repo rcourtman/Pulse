@@ -19,6 +19,14 @@ Own server installation, deployment bootstrap behavior, provider-hosted MSP
 deployment artifacts, update planning, and server-side update execution
 surfaces.
 
+Provider-hosted MSP deploy artifacts must package the provider control plane as
+a least-privilege Docker provisioner. The packaged compose/setup path must avoid
+whole-host and Docker-data read mounts, expose storage admission only through
+narrow marker directories, broker Docker daemon access through the socket proxy,
+pin trusted proxy CIDRs to the provider network, block tenant bridge access to
+cloud metadata endpoints at the host firewall when possible, and pin the Traefik
+TLS floor in the dynamic config.
+
 ## Canonical Files
 
 1. `internal/updates/`
@@ -175,16 +183,25 @@ surfaces.
    <CP_PULSE_IMAGE>` when the operator explicitly asks for tenant rollout.
    `deploy/provider-msp/setup.sh` is the first-time provider host setup
    artifact. It must install the Docker/compose host prerequisites, create the
-   provider data, backup, and Docker-network layout, copy the provider MSP
-   deploy bundle into a stable operator directory, create a private `.env` from
-   the provider template when needed, fail closed on placeholder image refs,
-   missing signed MSP license files, Dockerless production provisioning, disabled
-   storage guardrails, or Stripe/cloud-signup variables, validate compose, and
-   optionally hand off to `run-install-proof.sh` when the provider account name
-   and owner email are supplied. Because provider-hosted MSP provisions tenant
-   containers through the host Docker socket, the provider data directory must
-   be mounted at the same absolute path inside the control-plane container that
-   the host Docker daemon will later use for tenant runtime bind mounts.
+   provider data and backup layout, validate the provider Docker network when
+   it already exists and otherwise let compose create it with the configured
+   subnet, copy the provider MSP deploy bundle into a stable operator
+   directory, create a private `.env` from the provider template when needed,
+   fail closed on placeholder image refs, missing signed MSP license files,
+   Dockerless production provisioning, disabled storage guardrails, or
+   Stripe/cloud-signup variables, validate compose, and optionally hand off to
+   `run-install-proof.sh` when the provider account name and owner email are
+   supplied. Because provider-hosted MSP provisions tenant containers through
+   the host Docker socket, the provider data directory must be mounted at the
+   same absolute path inside the control-plane container that the host Docker
+   daemon will later use for tenant runtime bind mounts.
+   The setup artifact must also generate strong provider secrets when the
+   template leaves `CP_ADMIN_KEY` or `CP_TRIAL_ACTIVATION_PRIVATE_KEY` blank,
+   enforce minimum admin-key strength and a valid activation signing key before
+   compose starts, require `CP_TRUSTED_PROXY_CIDRS` to include the provider
+   Docker subnet, create the storage-admission marker directories, and install a
+   host-level `DOCKER-USER` rule blocking `169.254.169.254` from tenant
+   containers when iptables is available.
    Provider-hosted MSP installability must also pass provider-default report
    branding through the packaged tenant environment rather than requiring
    report-specific operator provisioning. The deployable control-plane config
