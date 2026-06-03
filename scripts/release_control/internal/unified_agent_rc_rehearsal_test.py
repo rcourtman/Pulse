@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import shutil
 import tempfile
 import threading
 import unittest
@@ -12,9 +13,11 @@ from pathlib import Path
 
 from unified_agent_rc_rehearsal import (
     agent_binary_asset_name,
+    check_local_runtime_self_update,
     check_update_info,
     main,
     render_markdown_report,
+    render_text,
     release_asset_url,
     run_rehearsal,
     summarize_http_error_body,
@@ -60,6 +63,101 @@ class UnifiedAgentRCRehearsalTest(unittest.TestCase):
     def set_routes(self, routes: dict[str, tuple[int, bytes, dict[str, str]]]) -> None:
         _FixtureHandler.routes = routes
         _FixtureHandler.request_headers = {}
+
+    def write_fake_runtime_agents(self, root: Path) -> tuple[Path, Path]:
+        v5 = root / "fake-v5-agent"
+        v6 = root / "fake-v6-agent"
+        v5.write_text(
+            """#!/usr/bin/env python3
+import json
+import os
+import sys
+import urllib.request
+
+def arg(name):
+    if name in sys.argv:
+        index = sys.argv.index(name)
+        if index + 1 < len(sys.argv):
+            return sys.argv[index + 1]
+    return ""
+
+if "--version" in sys.argv:
+    print("v5.1.34")
+    sys.exit(0)
+
+base_url = arg("--url").rstrip("/")
+agent_id = arg("--agent-id") or "agent-v5"
+
+def post(path, payload):
+    request = urllib.request.Request(
+        base_url + path,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    urllib.request.urlopen(request, timeout=5).read()
+
+post("/api/agents/host/report", {"agent": {"id": agent_id, "type": "unified", "version": "v5.1.34"}})
+urllib.request.urlopen(base_url + "/api/agent/version", timeout=5).read()
+download = urllib.request.urlopen(base_url + "/download/pulse-agent?arch=darwin-arm64", timeout=5).read()
+with open(sys.argv[0], "wb") as handle:
+    handle.write(download)
+os.chmod(sys.argv[0], 0o755)
+with open(os.path.join(os.path.dirname(sys.argv[0]), ".pulse-update-info"), "w", encoding="utf-8") as handle:
+    handle.write("v5.1.34")
+os.execv(sys.argv[0], sys.argv)
+""",
+            encoding="utf-8",
+        )
+        v6.write_text(
+            """#!/usr/bin/env python3
+import json
+import os
+import sys
+import time
+import urllib.request
+
+def arg(name):
+    if name in sys.argv:
+        index = sys.argv.index(name)
+        if index + 1 < len(sys.argv):
+            return sys.argv[index + 1]
+    return ""
+
+if "--version" in sys.argv:
+    print("v6.0.0-rc.6")
+    sys.exit(0)
+
+base_url = arg("--url").rstrip("/")
+agent_id = arg("--agent-id") or "agent-v6"
+info_path = os.path.join(os.path.dirname(sys.argv[0]), ".pulse-update-info")
+updated_from = ""
+if os.path.exists(info_path):
+    with open(info_path, encoding="utf-8") as handle:
+        updated_from = handle.read().strip()
+    os.remove(info_path)
+payload = {
+    "agent": {
+        "id": agent_id,
+        "type": "unified",
+        "version": "v6.0.0-rc.6",
+        "updatedFrom": updated_from,
+    }
+}
+request = urllib.request.Request(
+    base_url + "/api/agents/agent/report",
+    data=json.dumps(payload).encode("utf-8"),
+    headers={"Content-Type": "application/json"},
+    method="POST",
+)
+urllib.request.urlopen(request, timeout=5).read()
+time.sleep(60)
+""",
+            encoding="utf-8",
+        )
+        v5.chmod(0o755)
+        v6.chmod(0o755)
+        return v5, v6
 
     def test_release_asset_url(self) -> None:
         got = release_asset_url("https://example.invalid/releases/download/", "6.0.0-rc.1", "install.sh")
@@ -113,6 +211,14 @@ class UnifiedAgentRCRehearsalTest(unittest.TestCase):
                 "expected_agent_name": [],
                 "expected_online_agents": None,
                 "json": False,
+                "skip_asset_checks": False,
+                "runtime_v5_agent": None,
+                "runtime_v6_agent": None,
+                "runtime_expected_from": "v5.1.34",
+                "runtime_expected_to": None,
+                "runtime_timeout": 60.0,
+                "runtime_work_dir": None,
+                "runtime_keep_work_dir": False,
             },
         )()
         results = run_rehearsal(args)
@@ -216,6 +322,90 @@ class UnifiedAgentRCRehearsalTest(unittest.TestCase):
         self.assertIn("`PASS` `agent-version-endpoint`", report)
         self.assertIn("`FAIL` `agent-binary-linux-amd64`", report)
         self.assertIn("## Manual Follow-up", report)
+
+    def test_render_text_accepts_one_pass_iterable(self) -> None:
+        result = type(
+            "R",
+            (),
+            {
+                "name": "local-runtime-self-update",
+                "ok": True,
+                "detail": "runtime proof passed",
+            },
+        )()
+        rendered = render_text(item for item in [result])
+        self.assertIn("[PASS] local-runtime-self-update", rendered)
+        self.assertIn("Runtime follow-up covered", rendered)
+
+    def test_main_refuses_empty_runtime_only_selection(self) -> None:
+        exit_code = run_main(
+            [
+                "--base-url",
+                f"{self.base_url}/pulse",
+                "--expected-version",
+                "6.0.0-rc.1",
+                "--release-base-url",
+                f"{self.base_url}/releases",
+                "--skip-asset-checks",
+                "--json",
+            ]
+        )
+        self.assertEqual(exit_code, 1)
+
+    def test_main_refuses_arch_when_asset_checks_are_skipped(self) -> None:
+        exit_code = run_main(
+            [
+                "--base-url",
+                f"{self.base_url}/pulse",
+                "--expected-version",
+                "6.0.0-rc.1",
+                "--release-base-url",
+                f"{self.base_url}/releases",
+                "--skip-asset-checks",
+                "--arch",
+                "linux-amd64",
+                "--json",
+            ]
+        )
+        self.assertEqual(exit_code, 1)
+
+    def test_local_runtime_self_update_exercises_process_swap(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            v5, v6 = self.write_fake_runtime_agents(Path(tmp))
+
+            result = check_local_runtime_self_update(
+                v5_agent=str(v5),
+                v6_agent=str(v6),
+                expected_from="v5.1.34",
+                expected_to="v6.0.0-rc.6",
+                timeout=10,
+                work_dir=None,
+                keep_work_dir=False,
+            )
+
+        self.assertTrue(result.ok, result.detail)
+
+    def test_local_runtime_self_update_keeps_temp_work_dir_when_requested(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            v5, v6 = self.write_fake_runtime_agents(Path(tmp))
+
+            result = check_local_runtime_self_update(
+                v5_agent=str(v5),
+                v6_agent=str(v6),
+                expected_from="v5.1.34",
+                expected_to="v6.0.0-rc.6",
+                timeout=10,
+                work_dir=None,
+                keep_work_dir=True,
+            )
+
+        self.assertTrue(result.ok, result.detail)
+        work_dir = Path(result.detail.rsplit("work_dir=", maxsplit=1)[1])
+        try:
+            self.assertTrue(work_dir.exists())
+            self.assertTrue((work_dir / "pulse-agent").exists())
+        finally:
+            shutil.rmtree(work_dir, ignore_errors=True)
 
     def test_main_writes_report(self) -> None:
         install = b"#!/bin/sh\necho install\n"
