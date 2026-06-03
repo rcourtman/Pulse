@@ -510,6 +510,13 @@ TLS floor in the dynamic config.
    `docs/RELEASE_NOTES.md` index keeps both the stable packet and the preserved
    RC packet discoverable, and `docs/UPGRADE_v6.md` points operators at the
    live stable support transition instead of a retired prerelease packet.
+   The first stable `6.0.0` GA packet must keep the promoted prerelease tag,
+   rollback target, exact GA date, and exact v5 end-of-support date aligned
+   across release notes, upgrade guidance, support policy, promotion records,
+   and release-promotion resolver proof before workflow dispatch. For the
+   2026-06-03 cutover candidate, that packet is
+   `promoted_from_tag=v6.0.0-rc.6`, `rollback_version=v5.1.34`,
+   `ga_date=2026-06-03`, and `v5_eos_date=2026-09-01`.
 7. Preserve release-matched installer and Helm operator documentation links through `scripts/install.sh`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-helm-chart.yml`, and the chart metadata itself so deployment guidance and packaged chart metadata do not drift back to branch-tip `main` docs when a release line or promoted tag already exists.
    The same governed Helm boundary also owns `deploy/helm/pulse/` itself:
    chart metadata, default values, templates, and generated chart docs must

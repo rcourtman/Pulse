@@ -102,8 +102,8 @@ servers.
 
 ### Can I keep Pulse v5 stable while I test Pulse v6?
 
-Pulse v5 entered maintenance-only support on `2026-04-20` and remains eligible
-only for critical maintenance fixes until `2026-07-19`.
+Pulse v5 entered maintenance-only support on `2026-06-03` and remains eligible
+only for critical maintenance fixes until `2026-09-01`.
 
 If you want extra caution, use a staging or otherwise controlled upgrade first
 and keep a rollback path available, but v6 is now the supported stable line.
@@ -114,7 +114,7 @@ and keep a rollback path available, but v6 is now the supported stable line.
 
 Pulse v6.0.0-rc.6 and later ship with the platform-shaped top-level
 navigation existing v5 operators already know: Proxmox, Docker, Kubernetes,
-TrueNAS, vSphere, Standalone, Alerts, Patrol, and Settings.
+TrueNAS, vSphere, Machines, Alerts, Patrol, and Settings.
 
 The backend unified resource model and `/api/resources` contract remain
 canonical, but the retired rc.1 through rc.5 `/infrastructure`, `/workloads`,

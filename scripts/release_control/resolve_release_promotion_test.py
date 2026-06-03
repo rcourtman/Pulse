@@ -3,9 +3,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 import unittest
 
 import resolve_release_promotion as resolver
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 class ResolveReleasePromotionTest(unittest.TestCase):
@@ -81,6 +84,30 @@ class ResolveReleasePromotionTest(unittest.TestCase):
                 tag_created_unix_fn=lambda tag: 100,
                 now_unix_fn=lambda: 100 + (73 * 3600),
             )
+
+    def test_current_stable_v6_packet_resolves_with_publish_dates(self) -> None:
+        release_notes = (REPO_ROOT / "docs/releases/RELEASE_NOTES_v6.md").read_text(encoding="utf-8")
+        metadata = resolver.resolve_metadata(
+            version="6.0.0",
+            promoted_from_tag_input="v6.0.0-rc.6",
+            rollback_version_input="v5.1.34",
+            ga_date_input="2026-06-03",
+            v5_eos_date_input="2026-09-01",
+            hotfix_exception=False,
+            hotfix_reason_input="",
+            release_notes_input=release_notes,
+            tag_exists_fn=lambda tag: tag in {"v6.0.0-rc.6", "v5.1.34"},
+            tag_commit_fn=lambda tag: "rc6-commit",
+            head_descends_from_fn=lambda commit: commit == "rc6-commit",
+            tag_created_unix_fn=lambda tag: 100,
+            now_unix_fn=lambda: 100 + (163 * 3600),
+        )
+
+        self.assertEqual(metadata["promoted_from_tag"], "v6.0.0-rc.6")
+        self.assertEqual(metadata["rollback_tag"], "v5.1.34")
+        self.assertEqual(metadata["rollback_command"], "./scripts/install.sh --version v5.1.34")
+        self.assertEqual(metadata["ga_date"], "2026-06-03")
+        self.assertEqual(metadata["v5_eos_date"], "2026-09-01")
 
     def test_stable_hotfix_requires_reason(self) -> None:
         with self.assertRaisesRegex(ValueError, "hotfix_reason is required"):

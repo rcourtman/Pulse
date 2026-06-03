@@ -1,8 +1,8 @@
 # Pulse v6.0.0
 
 _This changelog describes the shipped stable `v6.0.0` release compared with
-`v5.1.27`. It includes the corrective changes that were validated across
-`v6.0.0-rc.1` and `v6.0.0-rc.2`._
+`v5.1.34`. It includes the corrective changes that were validated across
+`v6.0.0-rc.1` through `v6.0.0-rc.6`._
 
 ## What v6 changes at a high level
 
