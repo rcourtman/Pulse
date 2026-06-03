@@ -1,8 +1,15 @@
 import { useLocation, useSearchParams } from '@solidjs/router';
 import { Show, createMemo, createSignal, type Accessor } from 'solid-js';
+import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
 import type { FilterDef } from '@/components/shared/FilterBar';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
+import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
+import {
+  collectOutdatedAgentHosts,
+  formatAgentVersionDisplay,
+} from '@/features/platformPage/agentVersion';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
+import { updateStore } from '@/stores/updates';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformErrorState,
@@ -62,6 +69,12 @@ export function KubernetesPageSurface() {
     tabs().some((tab) => tab.id === requestedTab()) ? requestedTab() : 'overview',
   );
   const controllerResources = createMemo(() => getKubernetesControllerResources(model()));
+  const outdatedAgentHosts = createMemo(() =>
+    collectOutdatedAgentHosts(model().nodes, updateStore.versionInfo()?.version),
+  );
+  const serverVersionDisplay = createMemo(() =>
+    formatAgentVersionDisplay(updateStore.versionInfo()?.version),
+  );
 
   return (
     <div data-testid="kubernetes-page" class="space-y-3">
@@ -100,6 +113,13 @@ export function KubernetesPageSurface() {
               />
             }
           >
+            <PlatformOutdatedAgentNotice
+              hosts={outdatedAgentHosts()}
+              targetVersion={serverVersionDisplay()}
+              missingLabel="Kubernetes nodes, workloads, services, storage, configuration, and events"
+              actionHref={buildInfrastructureWorkspacePath()}
+              actionLabel="Open agent upgrade commands"
+            />
             <Show when={activeTab() === 'overview'}>
               <KubernetesOverview model={model} />
             </Show>

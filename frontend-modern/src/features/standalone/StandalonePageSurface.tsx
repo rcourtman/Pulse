@@ -3,7 +3,15 @@ import { A, useLocation, useNavigate } from '@solidjs/router';
 import ActivityIcon from 'lucide-solid/icons/activity';
 import ServerIcon from 'lucide-solid/icons/server';
 import SettingsIcon from 'lucide-solid/icons/settings';
-import { buildInfrastructureOnboardingPath } from '@/components/Settings/infrastructureWorkspaceModel';
+import {
+  buildInfrastructureOnboardingPath,
+  buildInfrastructureWorkspacePath,
+} from '@/components/Settings/infrastructureWorkspaceModel';
+import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
+import {
+  collectOutdatedAgentHosts,
+  formatAgentVersionDisplay,
+} from '@/features/platformPage/agentVersion';
 import {
   PlatformErrorState,
   PlatformSectionTabs,
@@ -12,6 +20,7 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { STANDALONE_PATH, buildStandalonePath } from '@/routing/resourceLinks';
+import { updateStore } from '@/stores/updates';
 import { AvailabilityChecksTable } from './AvailabilityChecksTable';
 import { AgentsMachinesTable } from './AgentsMachinesTable';
 import { buildStandalonePageModel } from './standalonePageModel';
@@ -59,6 +68,12 @@ export function StandalonePageSurface() {
       !error() &&
       model().machines.length === 0 &&
       model().availabilityChecks.length === 0,
+  );
+  const outdatedAgentHosts = createMemo(() =>
+    collectOutdatedAgentHosts(model().machines, updateStore.versionInfo()?.version),
+  );
+  const serverVersionDisplay = createMemo(() =>
+    formatAgentVersionDisplay(updateStore.versionInfo()?.version),
   );
 
   createEffect(() => {
@@ -138,6 +153,13 @@ export function StandalonePageSurface() {
               }
             >
               <div class="space-y-4">
+                <PlatformOutdatedAgentNotice
+                  hosts={outdatedAgentHosts()}
+                  targetVersion={serverVersionDisplay()}
+                  missingLabel="current machine telemetry, command status, and agent-managed platform details"
+                  actionHref={buildInfrastructureWorkspacePath()}
+                  actionLabel="Open agent upgrade commands"
+                />
                 <Show
                   when={model().machines.length > 0}
                   fallback={

@@ -20,11 +20,17 @@ describe('PlatformOutdatedAgentNotice', () => {
         hosts={[{ name: 'tower', version: 'v6.0.0-rc.5' }]}
         targetVersion="v6.0.0-rc.6"
         missingLabel="images, networks, and storage"
+        actionHref="/settings/infrastructure"
+        actionLabel="Open agent upgrade commands"
       />
     ));
     const notice = screen.getByTestId('platform-outdated-agent-notice');
     expect(notice).toHaveTextContent(
       'tower is running an older Pulse agent (v6.0.0-rc.5). Update it to v6.0.0-rc.6 to see images, networks, and storage for this host.',
+    );
+    expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(
+      'href',
+      '/settings/infrastructure',
     );
   });
 

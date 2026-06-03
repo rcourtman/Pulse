@@ -1,8 +1,15 @@
 import { useLocation } from '@solidjs/router';
 import { Show, createMemo, type Accessor } from 'solid-js';
+import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
+import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
+import {
+  collectOutdatedAgentHosts,
+  formatAgentVersionDisplay,
+} from '@/features/platformPage/agentVersion';
 import { useRecoveryPoints } from '@/hooks/useRecoveryPoints';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
+import { updateStore } from '@/stores/updates';
 import {
   PlatformErrorState,
   PlatformSectionTabs,
@@ -70,6 +77,12 @@ export function TrueNASPageSurface() {
   const activeTab = createMemo<TrueNASPageTabId>(() =>
     tabs().some((tab) => tab.id === requestedTab()) ? requestedTab() : 'overview',
   );
+  const outdatedAgentHosts = createMemo(() =>
+    collectOutdatedAgentHosts(model().systems, updateStore.versionInfo()?.version),
+  );
+  const serverVersionDisplay = createMemo(() =>
+    formatAgentVersionDisplay(updateStore.versionInfo()?.version),
+  );
 
   return (
     <div data-testid="truenas-page" class="space-y-3">
@@ -108,6 +121,13 @@ export function TrueNASPageSurface() {
               />
             }
           >
+            <PlatformOutdatedAgentNotice
+              hosts={outdatedAgentHosts()}
+              targetVersion={serverVersionDisplay()}
+              missingLabel="TrueNAS storage, services, apps, VMs, shares, and protection details"
+              actionHref={buildInfrastructureWorkspacePath()}
+              actionLabel="Open agent upgrade commands"
+            />
             <Show when={activeTab() === 'overview'}>
               <TrueNASOverview model={model} />
             </Show>

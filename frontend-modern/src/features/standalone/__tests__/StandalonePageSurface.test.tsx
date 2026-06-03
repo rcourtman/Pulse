@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   pathname: '/standalone/machines',
   navigate: vi.fn(),
   useUnifiedResources: vi.fn(),
+  versionInfo: vi.fn(),
   AgentsMachinesTable: vi.fn((props: { resources: Resource[] }) => (
     <div data-testid="agents-machines-table" data-resource-count={props.resources.length} />
   )),
@@ -18,6 +19,12 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/hooks/useUnifiedResources', () => ({
   useUnifiedResources: mocks.useUnifiedResources,
+}));
+
+vi.mock('@/stores/updates', () => ({
+  updateStore: {
+    versionInfo: mocks.versionInfo,
+  },
 }));
 
 vi.mock('@solidjs/router', async () => {
@@ -82,6 +89,7 @@ const resource = (overrides: Partial<Resource>): Resource =>
 beforeEach(() => {
   mocks.pathname = '/standalone/machines';
   mocks.navigate.mockClear();
+  mocks.versionInfo.mockReturnValue(null);
   mocks.useUnifiedResources.mockReturnValue({
     resources: () => [
       resource({ id: 'linux-server', type: 'agent', platformType: 'agent', sources: ['agent'] }),
@@ -126,6 +134,35 @@ describe('StandalonePageSurface', () => {
     );
     expect(screen.getByTestId('agents-machines-table')).toHaveAttribute('data-resource-count', '1');
     expect(screen.queryByTestId('availability-checks-table')).not.toBeInTheDocument();
+  });
+
+  it('surfaces stale Pulse Agent binaries on the Machines page', () => {
+    mocks.versionInfo.mockReturnValue({ version: 'v6.0.0-rc.6' });
+    mocks.useUnifiedResources.mockReturnValue({
+      resources: () => [
+        resource({
+          id: 'tower',
+          name: 'tower',
+          type: 'agent',
+          platformType: 'agent',
+          sources: ['agent'],
+          agent: { agentVersion: 'v5.1.34' },
+        }),
+      ],
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(),
+    });
+
+    render(() => <StandalonePageSurface />);
+
+    const notice = screen.getByTestId('platform-outdated-agent-notice');
+    expect(notice).toHaveTextContent('tower is running an older Pulse agent (v5.1.34).');
+    expect(notice).toHaveTextContent('current machine telemetry');
+    expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(
+      'href',
+      '/settings/infrastructure',
+    );
   });
 
   it('redirects retired Standalone overview links to the machines tab', () => {

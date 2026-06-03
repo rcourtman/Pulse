@@ -6,6 +6,7 @@ import { KubernetesPageSurface } from '../KubernetesPageSurface';
 
 const mockUseUnifiedResources = vi.fn();
 const mockPathname = vi.hoisted(() => vi.fn(() => '/'));
+const mockVersionInfo = vi.hoisted(() => vi.fn());
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource => ({
   name: resource.id,
@@ -37,6 +38,12 @@ const renderSurface = () =>
 
 vi.mock('@/hooks/useUnifiedResources', () => ({
   useUnifiedResources: (...args: unknown[]) => mockUseUnifiedResources(...args),
+}));
+
+vi.mock('@/stores/updates', () => ({
+  updateStore: {
+    versionInfo: mockVersionInfo,
+  },
 }));
 
 vi.mock('@solidjs/router', async () => {
@@ -146,6 +153,7 @@ vi.mock('../KubernetesStorageTable', () => ({
 describe('KubernetesPageSurface contract', () => {
   beforeEach(() => {
     mockPathname.mockReturnValue('/');
+    mockVersionInfo.mockReturnValue(null);
   });
 
   afterEach(() => {
@@ -204,6 +212,29 @@ describe('KubernetesPageSurface contract', () => {
     expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute('data-active', 'overview');
     expect(screen.getByTestId('clusters-table')).toHaveAttribute('data-rows', '1');
     expect(screen.queryByTestId('services-table')).toBeNull();
+  });
+
+  it('surfaces stale agent-backed Kubernetes nodes', () => {
+    mockVersionInfo.mockReturnValue({ version: 'v6.0.0-rc.6' });
+    setResources([
+      makeResource({
+        id: 'agent:k8s-node-1',
+        name: 'k8s-node-1',
+        type: 'agent',
+        sources: ['agent', 'kubernetes'],
+        agent: { agentVersion: 'v5.1.34' },
+      }),
+    ]);
+
+    renderSurface();
+
+    const notice = screen.getByTestId('platform-outdated-agent-notice');
+    expect(notice).toHaveTextContent('k8s-node-1 is running an older Pulse agent (v5.1.34).');
+    expect(notice).toHaveTextContent('Kubernetes nodes, workloads, services, storage');
+    expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(
+      'href',
+      '/settings/infrastructure',
+    );
   });
 
   it('groups workload API tables under the Workloads tab', () => {

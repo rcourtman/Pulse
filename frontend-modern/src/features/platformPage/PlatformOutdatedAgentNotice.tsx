@@ -1,5 +1,5 @@
 import { Show, createMemo } from 'solid-js';
-import { AlertTriangle } from 'lucide-solid';
+import { AlertTriangle, ArrowRight } from 'lucide-solid';
 import type { OutdatedAgentHost } from './agentVersion';
 
 type PlatformOutdatedAgentNoticeProps = {
@@ -11,6 +11,8 @@ type PlatformOutdatedAgentNoticeProps = {
   // What the stale agents cannot report, e.g. "images, networks, and storage".
   // Phrased to slot into "to see {missingLabel} for ...".
   missingLabel: string;
+  actionHref?: string;
+  actionLabel?: string;
 };
 
 // Inline, self-explaining notice shown on a platform page when one or more of
@@ -21,6 +23,7 @@ type PlatformOutdatedAgentNoticeProps = {
 export function PlatformOutdatedAgentNotice(props: PlatformOutdatedAgentNoticeProps) {
   const count = createMemo(() => props.hosts.length);
   const names = createMemo(() => props.hosts.map((host) => host.name).join(', '));
+  const actionLabel = createMemo(() => props.actionLabel || 'Open Infrastructure settings');
 
   const message = createMemo(() => {
     const target = props.targetVersion ? ` to ${props.targetVersion}` : '';
@@ -39,7 +42,20 @@ export function PlatformOutdatedAgentNotice(props: PlatformOutdatedAgentNoticePr
         class="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800/60 dark:bg-amber-900/20 dark:text-amber-200"
       >
         <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-        <span>{message()}</span>
+        <div class="min-w-0 flex-1 space-y-1">
+          <div>{message()}</div>
+          <Show when={props.actionHref}>
+            {(href) => (
+              <a
+                href={href()}
+                class="inline-flex items-center gap-1 text-xs font-semibold text-amber-900 underline-offset-2 hover:underline dark:text-amber-100"
+              >
+                <span>{actionLabel()}</span>
+                <ArrowRight class="h-3.5 w-3.5" aria-hidden="true" />
+              </a>
+            )}
+          </Show>
+        </div>
       </div>
     </Show>
   );
