@@ -237,9 +237,9 @@ recovery scope, or a storage/recovery-owned secret source.
    Update-plan readiness payloads and apply-route readiness enforcement are
    adjacent shared API context only. Storage and recovery surfaces may observe
    the resulting update state if a future settings flow links to recovery
-   preparation, but they must not reinterpret agent-token or server-update
-   readiness checks as backup freshness, restore capability, or storage-provider
-   health.
+   preparation, but they must not reinterpret agent-token,
+   agent-migration-security, or server-update readiness checks as backup
+   freshness, restore capability, or storage-provider health.
    Shared API-token transport helpers may be consumed by storage/recovery-
    adjacent flows, but `owner_user_id` remains server-authored token identity
    metadata; storage/recovery extensions must not pass metadata that authors

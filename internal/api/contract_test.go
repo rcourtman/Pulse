@@ -15019,3 +15019,21 @@ func TestContract_DockerPodmanAdminCopyUsesPulseAgentModuleIdentity(t *testing.T
 		}
 	}
 }
+
+func TestContract_UpdateReadinessIncludesV5AgentMigrationSecurityGuidance(t *testing.T) {
+	source, err := os.ReadFile("update_readiness.go")
+	if err != nil {
+		t.Fatalf("read update_readiness.go: %v", err)
+	}
+	text := string(source)
+	for _, required := range []string{
+		`ID:      "agent-migration-security"`,
+		"v5 agents can auto-update to v6, but the first hop depends on trusted transport.",
+		"Use HTTPS, or keep the Pulse-to-agent migration path on a trusted local network",
+		"For high-assurance environments, reinstall the v6 pulse-agent through the signed installer path",
+	} {
+		if !strings.Contains(text, required) {
+			t.Errorf("update_readiness.go must preserve v5-to-v6 migration security guidance %q", required)
+		}
+	}
+}

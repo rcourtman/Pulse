@@ -499,9 +499,13 @@ payload shape change when the portal presents compact client rows.
     they actually need.
 53. `internal/api/updates.go` shared with `deployment-installability`: update handlers are both a deployment-installability control surface and a canonical API payload contract boundary.
     Update-plan responses own the structured readiness verdict for server
-    updater capability, rollback support, agent continuity, and agent reporting
-    token scope. That verdict is part of the update-plan API contract, not a
-    settings-only migration registry. `POST /api/updates/apply` must derive
+    updater capability, rollback support, agent continuity, v5 agent migration
+    transport security, and agent reporting token scope. That verdict is part
+    of the update-plan API contract, not a settings-only migration registry.
+    When v5 or legacy agents are present, readiness must preserve the
+    `agent-migration-security` warning that automatic first-hop migration
+    depends on HTTPS or trusted local-network transport, with signed-installer
+    reinstall as the high-assurance path. `POST /api/updates/apply` must derive
     the requested target version through the shared update-target validation
     path, recompute readiness from live backend state, and reject `blocked`
     verdicts before update execution starts.
@@ -3765,9 +3769,12 @@ The same update-plan contract now carries an optional `readiness` verdict.
 Backend handlers own the `ready` / `attention` / `blocked` status vocabulary
 and per-check payload shape, while frontend clients must preserve that payload
 unchanged so settings surfaces can disable automatic install on blocked checks
-without inventing a parallel migration state model. The UI disablement is only
-presentation: backend apply handlers must still enforce `blocked` readiness
-server-side.
+without inventing a parallel migration state model. The same payload must also
+carry the v5-to-v6 first-hop transport warning when legacy agents are present,
+because the first automatic hop runs through the already-installed v5 updater
+before v6 signature and downloaded-binary self-test protections apply. The UI
+disablement is only presentation: backend apply handlers must still enforce
+`blocked` readiness server-side.
 Those same install-command payloads now also carry a non-TLS continuity
 contract: when Pulse returns a plain `http://` base URL for a generated agent
 install command, the command must include `--insecure` so the installed agent

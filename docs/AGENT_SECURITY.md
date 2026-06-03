@@ -121,6 +121,15 @@ signature, and pass that same tag to `bash install.sh --version`. Agent
 self-updates still verify checksum headers, and release builds require
 signatures when a trusted update key is embedded.
 
+The first automatic hop from an already-installed v5 `pulse-agent` to v6 is
+performed by the v5 updater. That updater verifies TLS by default, requires the
+server-provided SHA-256 checksum, validates executable magic, enforces the size
+limit, and swaps atomically, but it does not yet have the v6 Ed25519 signature
+requirement or downloaded-binary `--self-test`. For that migration hop, use
+HTTPS or a trusted local network. In high-assurance environments, reinstall the
+v6 `pulse-agent` through the signed installer path instead of relying on the
+automatic v5-to-v6 first hop over plain HTTP.
+
 ## Self-Update Security
 
 The agent's self-update mechanism is critical for security and stability. To prevent supply chain attacks or compromised update servers from distributing malicious or broken agents, Pulse employs a rigorous verification process.

@@ -162,15 +162,17 @@ Server update planning is part of the same lifecycle contract. The System
 Updates plan must surface a structured upgrade-readiness verdict before an
 operator installs a v6 update, and the backend apply route must enforce a
 `blocked` verdict before starting the updater: server update path, registered
-agent continuity, and agent reporting token scope must be derived from the
-existing updater, connections ledger, and API token state rather than from
-docs-only guidance or a parallel migration registry. v5 or legacy agents that
-are still reporting must be treated as compatible with the v6 reporting
-boundary, while stale agents, missing reported versions, missing agent
-reporting scope, or expired agent tokens must be called out before the update
-starts. Root `install.sh` v5-to-v6 upgrades must also inspect local token
-metadata before binary replacement and warn when the shell path cannot prove
-agent-token continuity.
+agent continuity, v5 agent migration transport security, and agent reporting
+token scope must be derived from the existing updater, connections ledger, and
+API token state rather than from docs-only guidance or a parallel migration
+registry. v5 or legacy agents that are still reporting must be treated as
+compatible with the v6 reporting boundary, while still surfacing that their
+first automatic hop uses the v5 updater before v6 signature and downloaded
+binary self-test protections apply. Stale agents, missing reported versions,
+missing agent reporting scope, or expired agent tokens must be called out
+before the update starts. Root `install.sh` v5-to-v6 upgrades must also inspect
+local token metadata before binary replacement and warn when the shell path
+cannot prove agent-token continuity.
 
 Agent lifecycle and fleet-operation surfaces may consume
 `POST /api/actions/plan` for resource capability planning, but the action plan
@@ -2528,6 +2530,13 @@ The updater/runtime surfaces must preserve the one-shot `updated_from`
 continuity handoff and the non-TLS continuity path for supported self-hosted
 installs, so upgrade-safe agent behavior does not drift between install,
 restart, and reconnect paths.
+The v5-to-v6 automatic migration boundary must name its first-hop trust model
+explicitly: an already-installed v5 `pulse-agent` may use its v5 updater to
+reach v6, but release readiness and operator docs must warn that this hop
+depends on HTTPS or trusted local-network transport until the v6 signature and
+downloaded-binary self-test protections are installed. High-assurance
+environments must be pointed at signed v6 installer reinstall instead of a
+plain-HTTP first hop.
 That same shared agent transport boundary must not force operators to choose
 between public-CA trust and blanket TLS disablement. `cmd/pulse-agent/main.go`,
 `internal/hostagent/`, `internal/agentupdate/`, and adjacent remote-config

@@ -693,11 +693,17 @@ func TestHandleGetUpdatePlan_IncludesUpgradeReadiness(t *testing.T) {
 	if plan.Readiness == nil {
 		t.Fatal("expected readiness on update plan")
 	}
-	if plan.Readiness.Status != "ready" {
-		t.Fatalf("readiness status = %q, want ready: %#v", plan.Readiness.Status, plan.Readiness)
+	if plan.Readiness.Status != "attention" {
+		t.Fatalf("readiness status = %q, want attention: %#v", plan.Readiness.Status, plan.Readiness)
 	}
-	if len(plan.Readiness.Checks) != 3 {
-		t.Fatalf("readiness checks = %d, want 3", len(plan.Readiness.Checks))
+	if len(plan.Readiness.Checks) != 4 {
+		t.Fatalf("readiness checks = %d, want 4", len(plan.Readiness.Checks))
+	}
+	if got := plan.Readiness.Checks[2].ID; got != "agent-migration-security" {
+		t.Fatalf("readiness check[2] id = %q, want agent-migration-security", got)
+	}
+	if got := plan.Readiness.Checks[2].Status; got != "warning" {
+		t.Fatalf("agent migration security status = %q, want warning", got)
 	}
 }
 

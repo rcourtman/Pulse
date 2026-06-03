@@ -248,6 +248,14 @@ The unified agent automatically checks for updates every hour. When a new versio
 5. Replaces itself atomically (with backup)
 6. Restarts with the same configuration
 
+When an already-installed v5 `pulse-agent` moves to v6, the first automatic hop
+is performed by the v5 updater. That hop verifies TLS by default, the SHA-256
+checksum, executable magic, size limits, and atomic replacement, but the newer
+v6 signature and `--self-test` checks apply only after the agent has landed on
+v6. Use HTTPS or a trusted local network for v5-to-v6 automatic migration. For
+high-assurance environments, reinstall the v6 `pulse-agent` through the signed
+installer path instead of relying on a plain-HTTP first hop.
+
 To disable auto-updates:
 ```bash
 # During installation

@@ -38,6 +38,7 @@ func buildUpdateReadiness(in updateReadinessInputs) *updates.UpdateReadiness {
 	checks := []updates.UpdateReadinessCheck{
 		buildUpdatePathReadinessCheck(in.plan),
 		buildAgentContinuityReadinessCheck(in.hosts, in.targetVersion, now),
+		buildAgentMigrationSecurityReadinessCheck(in.hosts),
 		buildAgentTokenReadinessCheck(in.cfg, len(in.hosts), now),
 	}
 
@@ -134,7 +135,7 @@ func buildAgentContinuityReadinessCheck(hosts []models.Host, targetVersion strin
 	active := 0
 	pendingOrStale := 0
 	behind := 0
-	legacy := 0
+	legacy := countLegacyAgents(hosts)
 	unknownVersion := 0
 	for _, conn := range connections {
 		if conn.Type != ConnectionTypeAgent {
@@ -153,12 +154,6 @@ func buildAgentContinuityReadinessCheck(hosts []models.Host, targetVersion strin
 			unknownVersion++
 		}
 	}
-	for _, host := range hosts {
-		if host.IsLegacy || looksLikePreV6Version(host.AgentVersion) {
-			legacy++
-		}
-	}
-
 	details := []string{fmt.Sprintf("%s currently registered.", countWithNoun(len(hosts), "agent", "agents"))}
 	if active > 0 {
 		details = append(details, fmt.Sprintf("%s have a recent heartbeat.", countWithNoun(active, "agent", "agents")))
@@ -198,6 +193,30 @@ func buildAgentContinuityReadinessCheck(hosts []models.Host, targetVersion strin
 		Title:   "Agent continuity",
 		Summary: "Registered agents have recent heartbeats and can continue through the v6 compatibility path.",
 		Details: details,
+	}
+}
+
+func buildAgentMigrationSecurityReadinessCheck(hosts []models.Host) updates.UpdateReadinessCheck {
+	legacy := countLegacyAgents(hosts)
+	if legacy == 0 {
+		return updates.UpdateReadinessCheck{
+			ID:      "agent-migration-security",
+			Status:  updateReadinessCheckPass,
+			Title:   "Agent migration security",
+			Summary: "No v5 or legacy agents need a first-hop automatic migration.",
+		}
+	}
+
+	return updates.UpdateReadinessCheck{
+		ID:      "agent-migration-security",
+		Status:  updateReadinessCheckWarning,
+		Title:   "Agent migration security",
+		Summary: "v5 agents can auto-update to v6, but the first hop depends on trusted transport.",
+		Details: []string{
+			fmt.Sprintf("%s will use the v5 updater before v6 signature and self-test protections are available.", countWithNoun(legacy, "v5 or legacy agent", "v5 or legacy agents")),
+			"Use HTTPS, or keep the Pulse-to-agent migration path on a trusted local network; v5 checksum validation alone does not protect plain HTTP from an on-path attacker.",
+			"For high-assurance environments, reinstall the v6 pulse-agent through the signed installer path instead of relying on automatic first-hop migration.",
+		},
 	}
 }
 
@@ -275,6 +294,16 @@ func buildAgentTokenReadinessCheck(cfg *config.Config, agentCount int, now time.
 		Summary: "Loaded API tokens include agent reporting scope for registered agents.",
 		Details: []string{fmt.Sprintf("%s available.", countWithNoun(agentScoped, "agent reporting token", "agent reporting tokens"))},
 	}
+}
+
+func countLegacyAgents(hosts []models.Host) int {
+	legacy := 0
+	for _, host := range hosts {
+		if host.IsLegacy || looksLikePreV6Version(host.AgentVersion) {
+			legacy++
+		}
+	}
+	return legacy
 }
 
 func looksLikePreV6Version(version string) bool {
