@@ -20,8 +20,11 @@ func TestProviderMSPDeployComposeIsProviderModeAndStripeFree(t *testing.T) {
 		t.Fatalf("provider MSP compose must be valid YAML: %v", err)
 	}
 	text := string(composeBytes)
-	assertContainsAll(t, text,
+	assertContainsAny(t, text,
 		"CP_CONTROL_PLANE_MODE=provider_hosted_msp",
+		"CP_CONTROL_PLANE_MODE=${CP_CONTROL_PLANE_MODE:-provider_hosted_msp}",
+	)
+	assertContainsAll(t, text,
 		"CP_DATA_DIR=${PULSE_PROVIDER_MSP_DATA_DIR:-/data}",
 		"CP_PROVIDER_MSP_LICENSE_FILE=/run/secrets/provider_msp_license",
 		"CP_DOCKER_NETWORK=${PULSE_PROVIDER_MSP_DOCKER_NETWORK:-pulse-provider-msp}",
@@ -297,6 +300,16 @@ func assertContainsAll(t *testing.T, text string, required ...string) {
 			t.Fatalf("missing %q in:\n%s", needle, text)
 		}
 	}
+}
+
+func assertContainsAny(t *testing.T, text string, allowed ...string) {
+	t.Helper()
+	for _, needle := range allowed {
+		if strings.Contains(text, needle) {
+			return
+		}
+	}
+	t.Fatalf("missing any of %q in:\n%s", allowed, text)
 }
 
 func assertNotContainsAny(t *testing.T, text string, forbidden ...string) {

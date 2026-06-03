@@ -306,6 +306,8 @@ func startManagedLicenseServer(
 ) *managedLicenseServer {
 	t.Helper()
 	addr := allocateManagedLicenseServerAddr(t)
+	stripeIPsPath := filepath.Join(t.TempDir(), "stripe-ips.txt")
+	require.NoError(t, os.WriteFile(stripeIPsPath, []byte("127.0.0.1/32\n"), 0o600))
 	logBuf := &bytes.Buffer{}
 	cmd := exec.Command(binaryPath)
 	cmd.Env = append(os.Environ(),
@@ -313,6 +315,8 @@ func startManagedLicenseServer(
 		"PULSE_LICENSE_DATA_DIR="+dataDir,
 		"PULSE_LICENSE_PRIVATE_KEY="+base64.StdEncoding.EncodeToString(privateKey.Seed()),
 		"PULSE_LICENSE_PLANS="+plansJSON,
+		"PULSE_LICENSE_STRIPE_IPS_FILE="+stripeIPsPath,
+		"PULSE_LICENSE_STRIPE_IPS_ENFORCE=true",
 		"PULSE_LICENSE_V6_ENABLED=true",
 	)
 	cmd.Stdout = logBuf

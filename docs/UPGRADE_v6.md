@@ -112,11 +112,19 @@ and keep a rollback path available, but v6 is now the supported stable line.
 
 ### Unified Navigation (Bookmarks and Deep Links)
 
-Legacy page aliases have been removed. Use canonical unified routes only.
+Pulse v6.0.0-rc.6 and later ship with the platform-shaped top-level
+navigation existing v5 operators already know: Proxmox, Docker, Kubernetes,
+TrueNAS, vSphere, Standalone, Alerts, Patrol, and Settings.
+
+The backend unified resource model and `/api/resources` contract remain
+canonical, but the retired rc.1 through rc.5 `/infrastructure`, `/workloads`,
+`/storage`, and `/recovery` layout is not the shipped v6 user interface.
 
 - Reference: `docs/MIGRATION_UNIFIED_NAV.md`
-- Optional migration aid: enable the "Classic platform shortcuts" bar (Settings → System → General).
-- Optional preference: switch to **Classic** navigation style (Settings → System → General). This is stored per browser.
+- If you used rc.1 through rc.5, update bookmarks or runbooks from the retired
+  unified routes to the platform-shaped equivalents listed in that guide.
+- If you are upgrading directly from v5, start from the familiar platform pages
+  rather than looking for the temporary unified pages from early v6 RCs.
 
 ### API Changes
 
