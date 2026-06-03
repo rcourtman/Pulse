@@ -211,5 +211,3 @@ export function useWebInterfaceUrlFieldState(props: WebInterfaceUrlFieldProps) {
     urlValue,
   };
 }
-
-export type WebInterfaceUrlFieldState = ReturnType<typeof useWebInterfaceUrlFieldState>;

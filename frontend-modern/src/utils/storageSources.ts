@@ -163,9 +163,3 @@ export const buildStorageSourceOptionsFromKeys = (
   const orderedKeys = orderStorageSourceKeys(keys).filter((key) => key !== 'all');
   return [ALL_STORAGE_SOURCE_OPTION, ...orderedKeys.map((key) => getStorageSourceOption(key))];
 };
-
-export const DEFAULT_STORAGE_SOURCE_OPTIONS: StorageSourceOption[] =
-  buildStorageSourceOptionsFromKeys(['proxmox-pve', 'proxmox-pbs', 'ceph', 'truenas']);
-
-export const buildStorageSourceOptions = (storageList: Storage[]): StorageSourceOption[] =>
-  buildStorageSourceOptionsFromKeys(storageList.map((storage) => resolveStorageSourceKey(storage)));

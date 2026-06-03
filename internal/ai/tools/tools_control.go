@@ -1581,24 +1581,6 @@ func extractServiceUnitName(command string) string {
 	return ""
 }
 
-// extractContainerName parses the container name out of a docker/podman
-// command of the form "docker restart <name>" or "podman stop <name>".
-func extractContainerName(command string) string {
-	fields := strings.Fields(strings.TrimSpace(command))
-	if len(fields) < 3 {
-		return ""
-	}
-	first := strings.ToLower(fields[0])
-	if first != "docker" && first != "podman" {
-		return ""
-	}
-	verb := strings.ToLower(fields[1])
-	if verb != "restart" && verb != "stop" && verb != "start" {
-		return ""
-	}
-	return fields[2]
-}
-
 // shellQuoteSingle wraps the value in single quotes and escapes any
 // embedded single quotes for shell-safe inclusion in the verification
 // command. The verification path runs through the same agent dispatch as

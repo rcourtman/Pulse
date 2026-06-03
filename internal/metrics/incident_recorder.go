@@ -694,41 +694,6 @@ func (r *IncidentRecorder) snapshotCompletedWindows() []*IncidentWindow {
 	return snapshot
 }
 
-func (r *IncidentRecorder) requestAsyncSave() {
-	if r.filePath == "" {
-		return
-	}
-
-	r.saveMu.Lock()
-	r.saveRequested = true
-	if r.saveInProgress {
-		r.saveMu.Unlock()
-		return
-	}
-	r.saveInProgress = true
-	r.saveMu.Unlock()
-
-	go r.saveLoop()
-}
-
-func (r *IncidentRecorder) saveLoop() {
-	for {
-		r.saveMu.Lock()
-		if !r.saveRequested {
-			r.saveInProgress = false
-			r.saveCond.Broadcast()
-			r.saveMu.Unlock()
-			return
-		}
-		r.saveRequested = false
-		r.saveMu.Unlock()
-
-		if err := r.saveToDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to save incident windows")
-		}
-	}
-}
-
 func (r *IncidentRecorder) waitForPendingSaves() {
 	if r.filePath == "" {
 		return

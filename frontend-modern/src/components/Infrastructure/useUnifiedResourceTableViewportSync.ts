@@ -45,7 +45,3 @@ export function useUnifiedResourceTableViewportSync(
     setHostBodyRef,
   };
 }
-
-export type UnifiedResourceTableViewportSync = ReturnType<
-  typeof useUnifiedResourceTableViewportSync
->;

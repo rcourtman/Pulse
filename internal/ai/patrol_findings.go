@@ -1872,10 +1872,6 @@ func patrolRegisterResourceMetrics(dest map[string]map[string]float64, metrics m
 	}
 }
 
-func patrolGuestMatches(guestID, id, name string, vmid int) bool {
-	return id == guestID || name == guestID || fmt.Sprintf("%d", vmid) == guestID
-}
-
 func patrolFirstIP(ips []string) string {
 	if len(ips) == 0 {
 		return ""

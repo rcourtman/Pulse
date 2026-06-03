@@ -328,30 +328,6 @@ func DefaultConfig() Config {
 	}
 }
 
-func normalizeServiceConfig(cfg Config) Config {
-	if cfg.Interval <= 0 {
-		log.Warn().Dur("interval", cfg.Interval).Dur("default", defaultDiscoveryInterval).Msg("Invalid discovery interval; using default")
-		cfg.Interval = defaultDiscoveryInterval
-	}
-	if cfg.CacheExpiry <= 0 {
-		log.Warn().Dur("cache_expiry", cfg.CacheExpiry).Dur("default", defaultDiscoveryCacheExpiry).Msg("Invalid discovery cache expiry; using default")
-		cfg.CacheExpiry = defaultDiscoveryCacheExpiry
-	}
-	if cfg.DeepScanTimeout <= 0 {
-		log.Warn().Dur("deep_scan_timeout", cfg.DeepScanTimeout).Dur("default", defaultDiscoveryScanTimeout).Msg("Invalid deep scan timeout; using default")
-		cfg.DeepScanTimeout = defaultDiscoveryScanTimeout
-	}
-	switch {
-	case cfg.MaxDiscoveryAge <= 0:
-		log.Warn().Dur("max_discovery_age", cfg.MaxDiscoveryAge).Dur("default", defaultDiscoveryMaxAge).Msg("Invalid max discovery age; using default")
-		cfg.MaxDiscoveryAge = defaultDiscoveryMaxAge
-	case cfg.MaxDiscoveryAge < minDiscoveryMaxAge:
-		log.Warn().Dur("max_discovery_age", cfg.MaxDiscoveryAge).Dur("minimum", minDiscoveryMaxAge).Msg("Max discovery age below minimum; clamping")
-		cfg.MaxDiscoveryAge = minDiscoveryMaxAge
-	}
-	return cfg
-}
-
 func normalizeDiscoveryInterval(interval time.Duration) time.Duration {
 	if interval > 0 {
 		return interval
@@ -640,19 +616,6 @@ func (s *Service) runDiscoveryLoop(ctx context.Context, stopCh <-chan struct{}, 
 			return
 		}
 	}
-}
-
-func (s *Service) finishDiscoveryLoop(stopCh <-chan struct{}) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	// Only clear lifecycle state if this is still the active run.
-	if s.stopCh != nil && s.stopCh != stopCh {
-		return
-	}
-	s.running = false
-	s.stopping = false
-	s.stopCh = nil
-	s.loopDone = nil
 }
 
 func (s *Service) runAutomaticDiscoveryRefresh(ctx context.Context) {
@@ -2220,13 +2183,6 @@ func parseLegacyURLSuggestionSource(note string) (sourceCode, sourceDetail strin
 		}
 	}
 	return trimmed, ""
-}
-
-// suggestHostManagementURL provides host-level fallback URL suggestions when
-// AI discovery does not identify a known web service.
-func (s *Service) suggestHostManagementURL(req DiscoveryRequest, host string) string {
-	url, _, _ := s.suggestHostManagementURLWithReason(req, host)
-	return url
 }
 
 func (s *Service) suggestHostManagementURLWithReason(req DiscoveryRequest, host string) (string, string, string) {

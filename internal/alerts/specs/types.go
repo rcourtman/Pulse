@@ -1066,16 +1066,6 @@ type OverridePolicy struct {
 	ExpiresAt *time.Time     `json:"expiresAt,omitempty"`
 }
 
-func (p OverridePolicy) Validate() error {
-	if err := p.Target.Validate(); err != nil {
-		return err
-	}
-	if p.ExpiresAt != nil && p.ExpiresAt.IsZero() {
-		return fmt.Errorf("expires at must be set when provided")
-	}
-	return nil
-}
-
 func isKnownResourceType(rt unifiedresources.ResourceType) bool {
 	if rt == "" {
 		return false

@@ -48,10 +48,6 @@ func writeMonitoredSystemUsageUnavailable(w http.ResponseWriter, reason string) 
 	)
 }
 
-func legacyConnectionCounts(monitor *monitoring.Monitor) legacyConnectionCountsModel {
-	return legacyConnectionCountsModel{}
-}
-
 func legacyConnectionCountsFromReadState(rs unifiedresources.ReadState) legacyConnectionCountsModel {
 	return legacyConnectionCountsModel{}
 }

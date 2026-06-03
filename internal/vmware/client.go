@@ -215,11 +215,6 @@ func (c *Client) CollectInventory(ctx context.Context) (*InventorySnapshot, erro
 	return inventory, nil
 }
 
-func (c *Client) collectInventoryBase(ctx context.Context) (*InventorySnapshot, error) {
-	snapshot, _, err := c.collectInventoryBaseWithSession(ctx)
-	return snapshot, err
-}
-
 func (c *Client) collectInventoryBaseWithSession(ctx context.Context) (*InventorySnapshot, string, error) {
 	automationSessionID, err := c.createAutomationSession(ctx)
 	if err != nil {

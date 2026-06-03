@@ -52,13 +52,6 @@ func makeTestGrantJWT(t *testing.T, gc *GrantClaims) string {
 	return signTestJWT(t, payload, testPrivateKey)
 }
 
-// makeTestJWT creates a properly signed test JWT with the given raw payload.
-func makeTestJWT(t *testing.T, payload string) string {
-	t.Helper()
-	testKeyPairInit()
-	return signTestJWT(t, []byte(payload), testPrivateKey)
-}
-
 // makeUnsignedTestGrantJWT creates an unsigned test JWT (placeholder signature).
 // Use only for tests that specifically exercise parseGrantJWTUnsafe.
 func makeUnsignedTestGrantJWT(t *testing.T, gc *GrantClaims) string {

@@ -190,10 +190,6 @@ export function getAlertConfigDiscardLabel(isReloading: boolean) {
   return isReloading ? ALERT_CONFIG_DISCARDING_LABEL : ALERT_CONFIG_DISCARD_LABEL;
 }
 
-export function getAlertConfigSwarmGapValidationError() {
-  return ALERT_CONFIG_SWARM_GAP_VALIDATION;
-}
-
 export function getAlertConfigQuietHourSuppressOptions() {
   return ALERT_CONFIG_QUIET_HOUR_SUPPRESS_OPTIONS;
 }

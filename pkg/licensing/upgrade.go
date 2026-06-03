@@ -40,11 +40,6 @@ func ResolvePulseAccountPortalURL(override string) string {
 	return DefaultPulseAccountPortalURL
 }
 
-// ProTrialSignupURL returns the default legacy hosted commercial base URL.
-func ProTrialSignupURL() string {
-	return DefaultProTrialSignupURL
-}
-
 func validateExternalUpgradeURLOverride(raw string) (string, bool) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {

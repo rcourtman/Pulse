@@ -11,9 +11,7 @@ import { useSelectionCardGroupState } from './useSelectionCardGroupState';
 
 export type {
   SelectionCardGroupProps,
-  SelectionCardGroupVariant,
   SelectionCardOption,
-  SelectionCardTone,
 } from './selectionCardGroupModel';
 
 export function SelectionCardGroup<T extends string | number>(props: SelectionCardGroupProps<T>) {

@@ -16,7 +16,6 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
@@ -104,13 +103,6 @@ func readRegisteredPayload(t *testing.T, conn *websocket.Conn) agentexec.Registe
 		t.Fatalf("unmarshal registered payload: %v", err)
 	}
 	return payload
-}
-
-// newLegacyAIServiceForTest creates an *ai.Service with loaded config for route-level tests.
-func newLegacyAIServiceForTest(persistence *config.ConfigPersistence) *ai.Service {
-	svc := ai.NewService(persistence, nil)
-	_ = svc.LoadConfig()
-	return svc
 }
 
 func TestSimpleStatsRequiresAuthInAPIMode(t *testing.T) {

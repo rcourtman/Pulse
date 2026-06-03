@@ -670,17 +670,6 @@ func (h *LicenseHandlers) syncReleaseDemoFixtureRuntime(orgID string, service *l
 	}
 }
 
-func (h *LicenseHandlers) canonicalMonitoredSystemGrandfatherFloor(ctx context.Context) (int, bool) {
-	usage := h.entitlementUsageSnapshot(ctx)
-	if !usage.MonitoredSystemsAvailable {
-		return 0, false
-	}
-	if usage.MonitoredSystems < 0 {
-		return 0, false
-	}
-	return int(usage.MonitoredSystems), true
-}
-
 func (h *LicenseHandlers) ensureEvaluatorForOrg(orgID string, service *licenseService) error {
 	if h == nil || service == nil || h.mtPersistence == nil {
 		return nil

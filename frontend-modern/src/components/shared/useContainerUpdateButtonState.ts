@@ -126,5 +126,3 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
     shouldHideButton,
   };
 }
-
-export type ContainerUpdateButtonState = ReturnType<typeof useContainerUpdateButtonState>;

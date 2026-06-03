@@ -29,7 +29,6 @@ export const TRUENAS_DEFAULT_TAB = 'overview';
 export const VMWARE_PATH = '/vmware';
 export const VMWARE_DEFAULT_TAB = 'overview';
 export const PMG_THRESHOLDS_PATH = '/alerts/thresholds/mail-gateway';
-export const ALERTS_OVERVIEW_PATH = '/alerts/overview';
 export const PATROL_PATH = '/patrol';
 
 export const STORAGE_QUERY_PARAMS = {

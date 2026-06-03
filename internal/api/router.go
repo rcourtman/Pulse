@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"hash/fnv"
 	"io"
 	"math"
 	"net"
@@ -6530,28 +6529,6 @@ const (
 	mockWorkloadMaxSeriesPoints = 180
 )
 
-func clampChartValue(value, min, max float64) float64 {
-	if math.IsNaN(value) || math.IsInf(value, 0) {
-		return min
-	}
-	if value < min {
-		return min
-	}
-	if value > max {
-		return max
-	}
-	return value
-}
-
-func hashChartSeed(parts ...string) uint64 {
-	h := fnv.New64a()
-	for _, p := range parts {
-		_, _ = h.Write([]byte(p))
-		_, _ = h.Write([]byte{0})
-	}
-	return h.Sum64()
-}
-
 func targetMockSeriesPoints(duration time.Duration, maxPoints int) int {
 	target := int(duration / (2 * time.Minute))
 	if target < mockWorkloadMinSeriesPoints {
@@ -6623,19 +6600,6 @@ func generateStyledMockSeries(
 		}
 	}
 	return points
-}
-
-func updateOldestTimestampFromSeries(metrics VMChartData, oldestTimestamp *int64) {
-	if oldestTimestamp == nil {
-		return
-	}
-	for _, points := range metrics {
-		for _, point := range points {
-			if point.Timestamp < *oldestTimestamp {
-				*oldestTimestamp = point.Timestamp
-			}
-		}
-	}
 }
 
 func buildSyntheticMetricHistorySeries(
@@ -7543,40 +7507,6 @@ func clampNonNegativeWorkloadValue(value float64) float64 {
 	return value
 }
 
-func kubernetesClusterKey(cluster models.KubernetesCluster) string {
-	if value := strings.TrimSpace(cluster.ID); value != "" {
-		return value
-	}
-	if value := strings.TrimSpace(cluster.Name); value != "" {
-		return value
-	}
-	if value := strings.TrimSpace(cluster.DisplayName); value != "" {
-		return value
-	}
-	return "k8s-cluster"
-}
-
-func kubernetesPodIdentifier(pod models.KubernetesPod) string {
-	if value := strings.TrimSpace(pod.UID); value != "" {
-		return value
-	}
-	namespace := strings.TrimSpace(pod.Namespace)
-	name := strings.TrimSpace(pod.Name)
-	if namespace != "" || name != "" {
-		return fmt.Sprintf("%s/%s", namespace, name)
-	}
-	return "pod"
-}
-
-func kubernetesPodMetricID(cluster models.KubernetesCluster, pod models.KubernetesPod) string {
-	clusterKey := kubernetesClusterKey(cluster)
-	podKey := kubernetesPodIdentifier(pod)
-	if clusterKey == "" || podKey == "" {
-		return ""
-	}
-	return fmt.Sprintf("k8s:%s:pod:%s", clusterKey, podKey)
-}
-
 func kubernetesPodMetricIDFromView(pod *unifiedresources.PodView) string {
 	if pod == nil {
 		return ""
@@ -7597,71 +7527,6 @@ func kubernetesPodMetricIDFromView(pod *unifiedresources.PodView) string {
 		return ""
 	}
 	return fmt.Sprintf("k8s:%s:pod:%s", clusterKey, podKey)
-}
-
-func kubernetesPodDisplayName(pod models.KubernetesPod) string {
-	name := strings.TrimSpace(pod.Name)
-	namespace := strings.TrimSpace(pod.Namespace)
-	if namespace == "" {
-		if name == "" {
-			return kubernetesPodIdentifier(pod)
-		}
-		return name
-	}
-	if name == "" {
-		return namespace
-	}
-	return fmt.Sprintf("%s/%s", namespace, name)
-}
-
-func kubernetesPodIsRunning(pod models.KubernetesPod) bool {
-	return strings.EqualFold(strings.TrimSpace(pod.Phase), "running")
-}
-
-func kubernetesPodCurrentMetrics(cluster models.KubernetesCluster, pod models.KubernetesPod) map[string]float64 {
-	cpuPercent := clampWorkloadPercent(pod.UsageCPUPercent)
-	memoryPercent := clampWorkloadPercent(pod.UsageMemoryPercent)
-
-	if memoryPercent <= 0 && pod.UsageMemoryBytes > 0 {
-		totalBytes := kubernetesPodMemoryTotalBytes(cluster, pod)
-		if totalBytes > 0 {
-			memoryPercent = clampWorkloadPercent((float64(pod.UsageMemoryBytes) / float64(totalBytes)) * 100)
-		}
-	}
-
-	diskPercent := clampWorkloadPercent(pod.DiskUsagePercent)
-	netIn := clampNonNegativeWorkloadValue(pod.NetInRate)
-	netOut := clampNonNegativeWorkloadValue(pod.NetOutRate)
-
-	return map[string]float64{
-		"cpu":       cpuPercent,
-		"memory":    memoryPercent,
-		"disk":      diskPercent,
-		"diskread":  0,
-		"diskwrite": 0,
-		"netin":     netIn,
-		"netout":    netOut,
-	}
-}
-
-func kubernetesPodMemoryTotalBytes(cluster models.KubernetesCluster, pod models.KubernetesPod) int64 {
-	nodeName := strings.TrimSpace(pod.NodeName)
-	if nodeName == "" {
-		return 0
-	}
-	for _, node := range cluster.Nodes {
-		if !strings.EqualFold(strings.TrimSpace(node.Name), nodeName) {
-			continue
-		}
-		if node.AllocMemoryBytes > 0 {
-			return node.AllocMemoryBytes
-		}
-		if node.CapacityMemoryBytes > 0 {
-			return node.CapacityMemoryBytes
-		}
-		return 0
-	}
-	return 0
 }
 
 func getOrCreateWorkloadBucket(buckets map[int64]*workloadSummaryBuckets, bucketTs int64) *workloadSummaryBuckets {

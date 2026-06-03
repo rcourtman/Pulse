@@ -758,13 +758,3 @@ export function getContainerRuntimeBadgeForRuntime(runtime?: string | null): Res
     title: `Runtime: ${label}`,
   };
 }
-
-export function getContainerRuntimeBadge(
-  platformType?: PlatformType,
-  platformData?: Record<string, unknown> | null,
-): ResourceBadge | null {
-  if (platformType !== 'docker' || !platformData) return null;
-
-  const docker = (platformData as { docker?: { runtime?: string } } | undefined)?.docker;
-  return getContainerRuntimeBadgeForRuntime(docker?.runtime);
-}

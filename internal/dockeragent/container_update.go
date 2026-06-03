@@ -403,30 +403,6 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 	return result
 }
 
-func drainAndClosePullResponse(pullResp io.ReadCloser) error {
-	if pullResp == nil {
-		return errors.New("pull response body is nil")
-	}
-
-	_, drainErr := io.Copy(io.Discard, pullResp)
-	closeErr := pullResp.Close()
-
-	if drainErr != nil && closeErr != nil {
-		return errors.Join(
-			fmt.Errorf("drain pull response body: %w", drainErr),
-			fmt.Errorf("close pull response body: %w", closeErr),
-		)
-	}
-	if drainErr != nil {
-		return fmt.Errorf("drain pull response body: %w", drainErr)
-	}
-	if closeErr != nil {
-		return fmt.Errorf("close pull response body: %w", closeErr)
-	}
-
-	return nil
-}
-
 func (a *Agent) rollbackRenameAndRestart(ctx context.Context, backupName, originalName, originalID string, restart bool) {
 	if err := a.docker.ContainerRename(ctx, backupName, originalName); err != nil {
 		a.logger.Warn().

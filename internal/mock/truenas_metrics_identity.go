@@ -36,14 +36,3 @@ func TrueNASScopedMetricID(hostname string, sourceID string) string {
 	}
 	return "system:" + hostname + "/" + sourceID
 }
-
-func trueNASDiskMetricsResourceID(disk truenas.Disk) string {
-	resourceID := strings.TrimSpace(disk.Serial)
-	if resourceID == "" {
-		resourceID = strings.TrimSpace(disk.ID)
-	}
-	if resourceID == "" {
-		resourceID = strings.TrimSpace(disk.Name)
-	}
-	return resourceID
-}

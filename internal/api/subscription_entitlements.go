@@ -225,20 +225,6 @@ func buildEntitlementPayload(status *licenseStatus, subscriptionState string) En
 	return buildEntitlementPayloadFromLicensing(status, subscriptionState)
 }
 
-func buildRuntimeCapabilitiesPayload(
-	status *licenseStatus,
-	subscriptionState string,
-) RuntimeCapabilitiesPayload {
-	return buildRuntimeCapabilitiesPayloadFromLicensing(status, subscriptionState)
-}
-
-func buildCommercialPosturePayload(
-	status *licenseStatus,
-	subscriptionState string,
-) CommercialPosturePayload {
-	return buildCommercialPosturePayloadFromLicensing(status, subscriptionState)
-}
-
 // buildEntitlementPayloadWithUsage constructs the normalized payload from LicenseStatus and observed usage.
 func buildEntitlementPayloadWithUsage(
 	status *licenseStatus,
@@ -358,35 +344,6 @@ func (h *LicenseHandlers) ensureOnboardingOverflow(ctx context.Context, tier lic
 		return nil
 	}
 	return &now
-}
-
-// overflowGrantedAtForContext returns the OverflowGrantedAt timestamp for the
-// current org, reading from the evaluator first (hosted path), then falling
-// back to billing state on disk (self-hosted path). Does NOT lazy-initialize.
-func (h *LicenseHandlers) overflowGrantedAtForContext(ctx context.Context) *int64 {
-	if h == nil || h.mtPersistence == nil {
-		return nil
-	}
-
-	// Hosted path: evaluator already has OverflowGrantedAt cached.
-	svc, _, err := h.getTenantComponents(ctx)
-	if err == nil && svc != nil {
-		if eval := svc.Evaluator(); eval != nil {
-			return eval.OverflowGrantedAt()
-		}
-	}
-
-	// Self-hosted path: read from billing state directly.
-	orgID := GetOrgID(ctx)
-	if orgID == "" {
-		orgID = "default"
-	}
-	billingStore := config.NewFileBillingStore(h.mtPersistence.BaseDataDir())
-	existing, readErr := billingStore.GetBillingState(orgID)
-	if readErr != nil || existing == nil {
-		return nil
-	}
-	return existing.OverflowGrantedAt
 }
 
 func (h *LicenseHandlers) billingStateForContext(ctx context.Context) *billingState {

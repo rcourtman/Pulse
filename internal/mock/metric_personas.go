@@ -52,10 +52,6 @@ func setMetricRoleRegistry(registry map[string]string) {
 	metricRoleRegistry.Store(cloned)
 }
 
-func clearMetricRoleRegistry() {
-	metricRoleRegistry.Store(map[string]string{})
-}
-
 func currentMetricRoleRegistry() map[string]string {
 	raw := metricRoleRegistry.Load()
 	if raw == nil {

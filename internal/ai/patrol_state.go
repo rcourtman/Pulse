@@ -419,17 +419,6 @@ func patrolRuntimeSortedResourceIDs(s patrolRuntimeState) []string {
 	return ids
 }
 
-func patrolRuntimeStorageResourceCount(s patrolRuntimeState) int {
-	count := 0
-	patrolVisitRuntimeResources(s, func(record patrolRuntimeResourceRecord) bool {
-		if record.kind == patrolRuntimeResourceStorage || record.kind == patrolRuntimeResourcePhysicalDisk {
-			count++
-		}
-		return true
-	})
-	return count
-}
-
 type patrolRuntimeResourceCounts struct {
 	nodes      int
 	guests     int

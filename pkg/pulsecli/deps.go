@@ -124,10 +124,6 @@ func (env *Env) CommandDeps(process ProcessIO, mockFS MockFS) CommandDeps {
 	}
 }
 
-func (env *Env) ResetFlags() {
-	ResetFlags(env.ConfigDeps(ProcessIO{}))
-}
-
 func NewConfigDeps(exportFile, importFile, passphrase *string, forceImport *bool, readPassword func(int) ([]byte, error)) *ConfigDeps {
 	return &ConfigDeps{
 		ExportFile:   exportFile,

@@ -11,8 +11,6 @@ import (
 
 func ptrInt64(v int64) *int64 { return &v }
 
-func ptrFloat64(v float64) *float64 { return &v }
-
 func assertStringSlice(t *testing.T, got, want []string) {
 	t.Helper()
 	if len(got) != len(want) {

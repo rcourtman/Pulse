@@ -86,12 +86,6 @@ func SetReleaseFixturesAuthorized(authorized bool) {
 	mockruntime.SetReleaseFixturesAuthorized(authorized)
 }
 
-// ValidateEnablement checks whether the current build/runtime may enter the
-// requested mock mode state.
-func ValidateEnablement(enable bool) error {
-	return mockruntime.ValidateEnablement(enable)
-}
-
 // SetEnabled enables or disables mock mode.
 func SetEnabled(enable bool) error {
 	return setEnabled(enable, false)
@@ -429,20 +423,6 @@ func LoadMockConfig() MockConfig {
 	}
 
 	return normalizeMockConfig(config)
-}
-
-func parseIntEnv(key, value string, fallback int, min int) (int, bool) {
-	n, err := strconv.Atoi(value)
-	if err == nil && n >= min {
-		return n, true
-	}
-	log.Warn().
-		Str("env_var", key).
-		Str("env_value", value).
-		Int("default", fallback).
-		Int("minimum", min).
-		Msg("Ignoring invalid mock configuration integer override")
-	return 0, false
 }
 
 // SetMockConfig updates the mock configuration dynamically and regenerates data when enabled.

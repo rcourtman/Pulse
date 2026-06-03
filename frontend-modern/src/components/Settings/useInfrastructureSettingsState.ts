@@ -6,12 +6,6 @@ import { useInfrastructureDiscoveryRuntimeState } from './useInfrastructureDisco
 import { useTrueNASSettingsPanelState } from './useTrueNASSettingsPanelState';
 import { useVMwareSettingsPanelState } from './useVMwareSettingsPanelState';
 
-export type {
-  DiscoveryScanStatus,
-  DiscoveredServer,
-  NodeType,
-} from './infrastructureSettingsModel';
-
 type InfrastructureEventBus = {
   on<T extends EventType>(event: T, handler: (data?: EventDataMap[T]) => void): () => void;
 };

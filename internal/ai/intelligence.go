@@ -1315,15 +1315,6 @@ func (i *Intelligence) getResourcesAtRisk(limit int) []ResourceRiskSummary {
 	return summaries
 }
 
-func (i *Intelligence) detectCurrentAnomalies(resourceID string) []AnomalyReport {
-	if i.anomalyDetector != nil {
-		return i.anomalyDetector(resourceID)
-	}
-	// This would be called with current metrics from state
-	// For now, return empty - will be integrated with patrol
-	return nil
-}
-
 func (i *Intelligence) getRecentChangesForResource(resourceID string, limit int) []unifiedresources.ResourceChange {
 	resourceID = strings.TrimSpace(resourceID)
 	if resourceID == "" || limit <= 0 {

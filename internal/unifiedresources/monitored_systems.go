@@ -152,19 +152,6 @@ type monitoredSystemGroup struct {
 	explanation MonitoredSystemGroupingExplanation
 }
 
-func monitoredSystemGroups(rs ReadState) []monitoredSystemGroup {
-	resolver := resolveMonitoredSystemTopLevelSystems(rs)
-	groups := make([]monitoredSystemGroup, 0, len(resolver.groups))
-	for _, group := range resolver.groups {
-		groups = append(groups, monitoredSystemGroup{
-			keys:        cloneStringSet(group.strongIDs),
-			resources:   group.resources,
-			explanation: group.explanation,
-		})
-	}
-	return groups
-}
-
 func monitoredSystemRoots(rs ReadState) []*Resource {
 	if rs == nil {
 		return nil
@@ -930,10 +917,6 @@ func monitoredSystemSurfaceStatusReasonSummary(
 		return summary
 	}
 	return summary + "."
-}
-
-func monitoredSystemLastSeen(resources []*Resource) time.Time {
-	return monitoredSystemLatestObservation(resources).LastSeen
 }
 
 func monitoredSystemSource(resources []*Resource) string {

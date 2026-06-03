@@ -584,10 +584,6 @@ type incidentEventView struct {
 	Details   map[string]interface{}   `json:"details"`
 }
 
-func emptyIncidentEventView() incidentEventView {
-	return incidentEventView{}.NormalizeCollections()
-}
-
 func (v incidentEventView) NormalizeCollections() incidentEventView {
 	if v.Details == nil {
 		v.Details = map[string]interface{}{}

@@ -63,30 +63,6 @@ export interface ConnectedInfrastructureItem {
   surfaces: ConnectedInfrastructureSurface[];
 }
 
-export interface KubernetesCluster {
-  id: string;
-  agentId: string;
-  name?: string;
-  displayName?: string;
-  customDisplayName?: string;
-  server?: string;
-  context?: string;
-  version?: string;
-  status: string;
-  lastSeen: number;
-  intervalSeconds: number;
-  agentVersion?: string;
-  tokenId?: string;
-  tokenName?: string;
-  tokenHint?: string;
-  tokenLastUsedAt?: number;
-  hidden?: boolean;
-  pendingUninstall?: boolean;
-  nodes?: KubernetesNode[];
-  pods?: KubernetesPod[];
-  deployments?: KubernetesDeployment[];
-}
-
 export interface KubernetesNode {
   uid: string;
   name: string;
@@ -1068,11 +1044,6 @@ export interface PhysicalDisk {
   smartAttributes?: SMARTAttributes;
 }
 
-/** Returns the best resource ID for disk metrics queries (serial preferred, WWN fallback). */
-export function diskResourceId(disk: PhysicalDisk): string | null {
-  return disk.serial || disk.wwn || null;
-}
-
 export interface CPUInfo {
   model: string;
   cores: number;
@@ -1259,7 +1230,3 @@ export type WSMessage =
         scanning?: boolean;
       };
     };
-
-// Utility types
-export type Status = 'running' | 'stopped' | 'paused' | 'unknown';
-export type GuestType = 'vm' | 'system-container';

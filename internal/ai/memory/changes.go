@@ -174,41 +174,6 @@ func (d *ChangeDetector) DetectChanges(currentSnapshots []ResourceSnapshot) []Ch
 	return newChanges
 }
 
-func (d *ChangeDetector) requestAsyncSave() {
-	if d.dataDir == "" {
-		return
-	}
-
-	d.saveStateMu.Lock()
-	d.saveRequested = true
-	if d.saveRunning {
-		d.saveStateMu.Unlock()
-		return
-	}
-	d.saveRunning = true
-	d.saveStateMu.Unlock()
-
-	go d.runSaveLoop()
-}
-
-func (d *ChangeDetector) runSaveLoop() {
-	for {
-		d.saveStateMu.Lock()
-		shouldSave := d.saveRequested
-		d.saveRequested = false
-		if !shouldSave {
-			d.saveRunning = false
-			d.saveStateMu.Unlock()
-			return
-		}
-		d.saveStateMu.Unlock()
-
-		if err := d.saveToDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to save change history")
-		}
-	}
-}
-
 // detectResourceChanges checks for changes between two snapshots of the same resource
 func (d *ChangeDetector) detectResourceChanges(prev, current ResourceSnapshot, now time.Time) []Change {
 	var changes []Change

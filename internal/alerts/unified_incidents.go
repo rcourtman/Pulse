@@ -6,7 +6,6 @@ import (
 	"time"
 
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
-	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -258,17 +257,6 @@ func resourceSupportsUnifiedIncidentAlerts(resource unifiedresources.Resource) b
 		return len(resource.Incidents) > 0
 	default:
 		return false
-	}
-}
-
-func alertLevelFromIncidentSeverity(level storagehealth.RiskLevel) (AlertLevel, bool) {
-	switch level {
-	case storagehealth.RiskCritical:
-		return AlertLevelCritical, true
-	case storagehealth.RiskWarning:
-		return AlertLevelWarning, true
-	default:
-		return "", false
 	}
 }
 
@@ -524,39 +512,6 @@ func unifiedIncidentConsumerSummary(storage *unifiedresources.StorageMeta) strin
 	}
 
 	return unifiedresources.StorageConsumerImpactSummary(storage)
-}
-
-func unifiedIncidentDependentConsumerSummary(storage *unifiedresources.StorageMeta) string {
-	if storage == nil || storage.ConsumerCount <= 0 {
-		return ""
-	}
-
-	names := make([]string, 0, len(storage.TopConsumers))
-	for _, consumer := range storage.TopConsumers {
-		name := strings.TrimSpace(consumer.Name)
-		if name == "" {
-			continue
-		}
-		names = append(names, name)
-		if len(names) == 3 {
-			break
-		}
-	}
-
-	resourceLabel := "dependent resource"
-	if storage.ConsumerCount != 1 {
-		resourceLabel = "dependent resources"
-	}
-
-	if len(names) == 0 {
-		return "Affects " + intLabel(storage.ConsumerCount) + " " + resourceLabel
-	}
-
-	if remaining := storage.ConsumerCount - len(names); remaining > 0 {
-		return "Affects " + intLabel(storage.ConsumerCount) + " " + resourceLabel + ": " + strings.Join(names, ", ") + ", and " + intLabel(remaining) + " more"
-	}
-
-	return "Affects " + intLabel(storage.ConsumerCount) + " " + resourceLabel + ": " + strings.Join(names, ", ")
 }
 
 func unifiedIncidentBackupConsumerSummary(storage *unifiedresources.StorageMeta) string {

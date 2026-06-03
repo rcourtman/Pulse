@@ -87,11 +87,6 @@ func NewTenantMiddlewareWithConfig(cfg TenantMiddlewareConfig) *TenantMiddleware
 	}
 }
 
-// SetAuthChecker sets the authorization checker for the middleware.
-func (m *TenantMiddleware) SetAuthChecker(checker AuthorizationChecker) {
-	m.authChecker = checker
-}
-
 func (m *TenantMiddleware) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// 1. Extract Org ID

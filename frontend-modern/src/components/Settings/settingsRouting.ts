@@ -1,16 +1,3 @@
 export {
-  DEFAULT_SETTINGS_TAB,
-  agentKeyFromPlatformType,
-  deriveTabFromPath,
-  deriveTabFromQuery,
-  isRetiredSettingsCompatibilityPath,
-  isRouteableSettingsPath,
-  resolveCanonicalSettingsPath,
-  settingsAgentLabel,
   settingsAgentNodeLabel,
-  settingsAgentPlatformType,
-  settingsTabPath,
-  type AgentKey,
-  type ProxmoxPlatformType,
-  type SettingsTab,
 } from './settingsNavigationModel';

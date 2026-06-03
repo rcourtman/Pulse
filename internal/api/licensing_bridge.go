@@ -279,11 +279,6 @@ func writeLicenseRequiredFromLicensing(w http.ResponseWriter, feature, message s
 // licenseTierFreeValue is the canonical free-tier constant for use outside the bridge.
 const licenseTierFreeValue = pkglicensing.TierFree
 
-// overflowBonusFromLicensing returns the number of bonus host slots granted by the onboarding overflow.
-func overflowBonusFromLicensing(tier licenseTier, overflowGrantedAt *int64, now time.Time) int {
-	return pkglicensing.OverflowBonus(tier, overflowGrantedAt, now)
-}
-
 // overflowDaysRemainingFromLicensing returns the number of days remaining in the overflow window.
 func overflowDaysRemainingFromLicensing(tier licenseTier, overflowGrantedAt *int64, now time.Time) int {
 	return pkglicensing.OverflowDaysRemaining(tier, overflowGrantedAt, now)

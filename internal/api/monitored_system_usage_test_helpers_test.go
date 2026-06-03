@@ -42,11 +42,6 @@ func (p *testSupplementalUsageProvider) SupplementalInventoryReadyAt(*monitoring
 	return p.readyAt, p.settled
 }
 
-func (p *testSupplementalUsageProvider) settleWithRecords(records []unifiedresources.IngestRecord) time.Time {
-	now := time.Now().UTC()
-	return p.settleAtWithRecords(now, records)
-}
-
 func (p *testSupplementalUsageProvider) settleAtWithRecords(at time.Time, records []unifiedresources.IngestRecord) time.Time {
 	p.readyAt = at
 	p.settled = true

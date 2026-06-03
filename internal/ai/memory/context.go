@@ -85,16 +85,6 @@ type ContextStoreConfig struct {
 	RelevanceDecayDays int // Days after which relevance starts decaying
 }
 
-// DefaultContextStoreConfig returns sensible defaults
-func DefaultContextStoreConfig() ContextStoreConfig {
-	return ContextStoreConfig{
-		MaxMemoriesPerType: 1000,
-		MaxResourceNotes:   20,
-		RetentionDays:      90,
-		RelevanceDecayDays: 7,
-	}
-}
-
 // ContextStore stores and manages persistent AI context
 type ContextStore struct {
 	mu     sync.RWMutex
@@ -366,31 +356,6 @@ func (s *ContextStore) Recall(resourceID string) []Memory {
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].Relevance > result[j].Relevance
 	})
-
-	return result
-}
-
-// RecallByType retrieves memories of a specific type
-func (s *ContextStore) RecallByType(memType MemoryType, limit int) []Memory {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	var result []Memory
-	if memories, ok := s.memories[memType]; ok {
-		for _, mem := range memories {
-			s.markUsedLocked(mem)
-			result = append(result, *mem)
-		}
-	}
-
-	// Sort by relevance
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].Relevance > result[j].Relevance
-	})
-
-	if limit > 0 && len(result) > limit {
-		result = result[:limit]
-	}
 
 	return result
 }

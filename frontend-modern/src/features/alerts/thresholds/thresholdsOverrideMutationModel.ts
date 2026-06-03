@@ -40,17 +40,3 @@ export const stripStateKeys = (
   delete (next as Record<string, unknown>).poweredOffSeverity;
   return next;
 };
-
-export const removeOverrideState = (
-  overrides: Override[],
-  rawOverridesConfig: Record<string, RawOverrideConfig>,
-  resourceId: string,
-) => {
-  const nextRawConfig = { ...rawOverridesConfig };
-  delete nextRawConfig[resourceId];
-
-  return {
-    nextOverrides: overrides.filter((override) => override.id !== resourceId),
-    nextRawConfig,
-  };
-};

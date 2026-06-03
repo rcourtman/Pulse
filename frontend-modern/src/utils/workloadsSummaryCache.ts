@@ -9,7 +9,6 @@ import { normalizeOrgScope } from '@/utils/orgScope';
 import { eventBus } from '@/stores/events';
 
 export const WORKLOADS_SUMMARY_CACHE_VERSION = 6;
-export const WORKLOAD_CHART_DEFAULT_POINT_LIMIT = 180;
 
 const WORKLOADS_SUMMARY_CACHE_PREFIX = 'pulse.workloadsSummaryCharts.';
 const WORKLOADS_SUMMARY_CACHE_MAX_AGE_MS = 5 * 60_000;

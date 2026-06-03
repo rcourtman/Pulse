@@ -10,7 +10,6 @@ import { useFilterButtonGroupState } from './useFilterButtonGroupState';
 
 export type {
   FilterButtonGroupProps,
-  FilterButtonGroupVariant,
   FilterOption,
 } from './filterButtonGroupModel';
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -13,22 +12,9 @@ type WSMockLicenseService struct {
 	Features map[string]bool
 }
 
-func (m *WSMockLicenseService) HasFeature(feature string) bool {
-	return m.Features[feature]
-}
-
-func (m *WSMockLicenseService) Service(ctx context.Context) *pkglicensing.Service {
-	// Return empty service (no license) by default
-	return pkglicensing.NewService()
-}
-
 // WebSocketMockLicenseProvider to return our mock service
 type WebSocketMockLicenseProvider struct {
 	service *WSMockLicenseService
-}
-
-func (p *WebSocketMockLicenseProvider) Service(ctx context.Context) *pkglicensing.Service {
-	return pkglicensing.NewService()
 }
 
 func TestWebSocketIsolation_Permanent(t *testing.T) {

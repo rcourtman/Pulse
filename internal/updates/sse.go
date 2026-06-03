@@ -356,10 +356,6 @@ func (b *SSEBroadcaster) sendHeartbeatToClient(c *SSEClient) {
 	c.LastActive = time.Now()
 }
 
-func (b *SSEBroadcaster) isClosed() bool {
-	return b.closed.Load()
-}
-
 func closeDone(ch chan bool) {
 	select {
 	case <-ch:

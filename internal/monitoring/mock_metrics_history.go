@@ -1139,60 +1139,6 @@ func recordVMwareFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, fixtures
 	}
 }
 
-func vmwareFloat64Metric(metrics *vmware.InventoryMetrics, pick func(*vmware.InventoryMetrics) *float64) float64 {
-	if metrics == nil || pick == nil {
-		return 0
-	}
-	value := pick(metrics)
-	if value == nil {
-		return 0
-	}
-	return *value
-}
-
-func vmwareDatastoreUsageByID(datastores []vmware.InventoryDatastore) map[string]float64 {
-	out := make(map[string]float64, len(datastores))
-	for _, datastore := range datastores {
-		id := strings.TrimSpace(datastore.Datastore)
-		if id == "" {
-			continue
-		}
-		out[id] = vmwareDatastoreUsagePercent(datastore)
-	}
-	return out
-}
-
-func vmwareAverageDatastoreUsage(byID map[string]float64, ids []string) float64 {
-	if len(ids) == 0 || len(byID) == 0 {
-		return 0
-	}
-	var total float64
-	var count int
-	for _, id := range ids {
-		usage, ok := byID[strings.TrimSpace(id)]
-		if !ok {
-			continue
-		}
-		total += usage
-		count++
-	}
-	if count == 0 {
-		return 0
-	}
-	return total / float64(count)
-}
-
-func vmwareDatastoreUsagePercent(datastore vmware.InventoryDatastore) float64 {
-	if datastore.Capacity <= 0 {
-		return 0
-	}
-	used := datastore.Capacity - datastore.FreeSpace
-	if used < 0 {
-		used = 0
-	}
-	return clampFloat((float64(used)/float64(datastore.Capacity))*100, 0, 100)
-}
-
 type guestMetricSource interface {
 	GetID() string
 	GetStatus() string

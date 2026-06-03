@@ -15,18 +15,6 @@ import (
 
 type fakeCrypto struct{}
 
-func (fakeCrypto) Encrypt(plaintext []byte) ([]byte, error) {
-	out := make([]byte, len(plaintext))
-	for i := range plaintext {
-		out[i] = plaintext[len(plaintext)-1-i]
-	}
-	return out, nil
-}
-
-func (fakeCrypto) Decrypt(ciphertext []byte) ([]byte, error) {
-	return fakeCrypto{}.Encrypt(ciphertext)
-}
-
 type taggedCrypto struct{}
 
 func (taggedCrypto) Encrypt(plaintext []byte) ([]byte, error) {
@@ -1201,13 +1189,4 @@ func TestStore_GetStaleResources(t *testing.T) {
 	if _, err := store.GetStaleResources(time.Hour); err == nil {
 		t.Fatalf("expected GetStaleResources to return list error")
 	}
-}
-
-func containsString(items []string, target string) bool {
-	for _, item := range items {
-		if item == target {
-			return true
-		}
-	}
-	return false
 }

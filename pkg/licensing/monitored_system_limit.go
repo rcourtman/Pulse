@@ -22,18 +22,6 @@ func InstalledUnifiedAgentCount(state models.StateSnapshot) int {
 	return len(state.Hosts)
 }
 
-func CanonicalizeMonitoredSystemLimitKey(key string) string {
-	normalized := strings.TrimSpace(key)
-	switch normalized {
-	case "", MaxMonitoredSystemsLicenseGateKey:
-		return MaxMonitoredSystemsLicenseGateKey
-	}
-	if canonical, ok := canonicalizeLegacyV5MonitoredSystemLimitKey(normalized); ok {
-		return canonical
-	}
-	return normalized
-}
-
 func NormalizeMonitoredSystemLimits(limits map[string]int64) map[string]int64 {
 	if limits == nil {
 		return nil

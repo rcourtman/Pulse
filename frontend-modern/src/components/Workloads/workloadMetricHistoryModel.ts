@@ -68,7 +68,6 @@ export const WORKLOAD_TABLE_HISTORY_RANGE_LABELS: Record<WorkloadTableMetricHist
     '7d': '7d',
   };
 export const WORKLOAD_TABLE_HISTORY_DEFAULT_RANGE: WorkloadTableMetricHistoryRange = '1h';
-export const WORKLOAD_TABLE_HISTORY_RANGE = WORKLOAD_TABLE_HISTORY_DEFAULT_RANGE;
 export const WORKLOAD_TABLE_HISTORY_MAX_POINTS = 72;
 export const WORKLOAD_TABLE_HISTORY_POLL_MS = 30_000;
 

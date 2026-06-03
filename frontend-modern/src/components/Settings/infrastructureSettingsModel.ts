@@ -48,34 +48,6 @@ export const matchConfiguredNodeToResource = (
   });
 };
 
-export const collectConfiguredInfrastructureHosts = (nodes: NodeConfigWithStatus[]) => {
-  const configuredHosts = new Set<string>();
-  const clusterMemberIPs = new Set<string>();
-
-  nodes.forEach((node) => {
-    const cleanedHost = node.host.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
-    configuredHosts.add(cleanedHost.toLowerCase());
-
-    if (!('isCluster' in node) || !node.isCluster || !('clusterEndpoints' in node)) {
-      return;
-    }
-
-    node.clusterEndpoints?.forEach((endpoint: ClusterEndpoint) => {
-      if (endpoint.ip) {
-        clusterMemberIPs.add(endpoint.ip.toLowerCase());
-      }
-      if (endpoint.host) {
-        clusterMemberIPs.add(endpoint.host.toLowerCase());
-      }
-    });
-  });
-
-  return {
-    clusterMemberIPs,
-    configuredHosts,
-  };
-};
-
 const createRepresentedDiscoveryHosts = (): RepresentedDiscoveryHosts => ({
   pve: new Set<string>(),
   pbs: new Set<string>(),

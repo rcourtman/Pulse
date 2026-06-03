@@ -307,14 +307,6 @@ export function readInfrastructureSummaryCache(
   }
 }
 
-export function hasFreshInfrastructureSummaryCache(
-  range: TimeRange,
-  maxAgeMs: number = INFRA_SUMMARY_CACHE_MAX_AGE_MS,
-  metrics?: readonly InfrastructureSummaryMetric[] | null,
-): boolean {
-  return readInfrastructureSummaryCache(range, maxAgeMs, undefined, metrics) !== null;
-}
-
 const inFlightFetches = new Map<string, Promise<InfrastructureSummaryFetchResult>>();
 let infraSummaryFetchSeq = 0;
 

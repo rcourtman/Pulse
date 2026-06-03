@@ -48,8 +48,6 @@ export interface HostedCommercialModelInput {
   guestUsage: number;
   renewsOrExpires: string;
 }
-
-export const SELF_HOSTED_NOT_METERED_LABEL = 'Not metered';
 export const LIFETIME_DAYS_REMAINING_LABEL = 'Permanent';
 
 const asUnlimitedLimit = (value?: number) =>

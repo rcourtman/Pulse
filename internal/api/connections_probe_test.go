@@ -113,14 +113,6 @@ func pbsHandler(body string) http.HandlerFunc {
 	}
 }
 
-func pmgHandler(body string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Server", "pmg-api-daemon/8.1")
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprint(w, body)
-	}
-}
-
 func vmwareHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/xml")

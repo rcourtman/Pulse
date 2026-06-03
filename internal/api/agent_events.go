@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -384,10 +383,3 @@ func (b *AgentEventBroadcaster) PublishActionCompletedRecord(record unifiedresou
 // call sites don't need this — they hold a direct reference — but
 // keeping it here makes the dependency explicit.
 type agentEventBroadcasterContextKey struct{}
-
-// ContextWithAgentEventBroadcaster attaches a broadcaster to a
-// context. Used by integration tests that need to inject a fake
-// broadcaster.
-func ContextWithAgentEventBroadcaster(ctx context.Context, b *AgentEventBroadcaster) context.Context {
-	return context.WithValue(ctx, agentEventBroadcasterContextKey{}, b)
-}

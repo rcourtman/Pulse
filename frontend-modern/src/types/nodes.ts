@@ -104,18 +104,3 @@ export type NodeConfigWithStatus = NodeConfig & {
   hasToken?: boolean;
   status: 'connected' | 'disconnected' | 'offline' | 'error' | 'pending';
 };
-
-export interface NodesResponse {
-  pve_instances: PVENodeConfig[];
-  pbs_instances: PBSNodeConfig[];
-  pmg_instances?: PMGNodeConfig[];
-}
-
-export interface NodeUpdateRequest {
-  node: NodeConfig;
-}
-
-export interface NodeDeleteResponse {
-  success: boolean;
-  message: string;
-}

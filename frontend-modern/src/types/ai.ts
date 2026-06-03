@@ -191,18 +191,6 @@ export interface AIConversationMessage {
   content: string;
 }
 
-// AI Execute request/response types
-export interface AIExecuteRequest {
-  prompt: string;
-  target_type?: string; // "agent", "system-container", "vm", etc.
-  target_id?: string;
-  context?: Record<string, unknown>;
-  history?: AIConversationMessage[]; // Previous conversation messages
-  finding_id?: string; // If fixing a patrol finding, the ID to resolve on success
-  model?: string; // Override model for this request (user selection in chat)
-  use_case?: 'chat' | 'patrol'; // Optional server-side routing/model selection
-}
-
 // Tool execution info
 export interface AIToolExecution {
   name: string; // "run_command", "read_file"
@@ -385,15 +373,6 @@ export interface AIChatMessage {
   model?: string;
   tokens?: AIChatMessageTokens;
   toolCalls?: AIChatToolCall[];
-}
-
-export interface AIChatSession {
-  id: string;
-  username: string;
-  title: string;
-  createdAt: Date;
-  updatedAt: Date;
-  messages: AIChatMessage[];
 }
 
 // Summary returned by list endpoint (no messages)

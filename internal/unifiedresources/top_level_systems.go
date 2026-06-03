@@ -214,34 +214,6 @@ func (r TopLevelSystemResolver) records() []MonitoredSystemRecord {
 	return records
 }
 
-func (r TopLevelSystemResolver) HasMatchingCandidate(candidate MonitoredSystemCandidate) bool {
-	resource := monitoredSystemCandidateResource(candidate)
-	if resource == nil {
-		return false
-	}
-	if !monitoredSystemCandidateAllowsHostAttachment(candidate) &&
-		len(monitoredSystemCandidateStrongIDs(candidate)) == 0 {
-		return false
-	}
-
-	resources := r.resources()
-	resources = append(resources, *resource)
-	return ResolveTopLevelSystems(resources).Count() == r.Count()
-}
-
-func (r TopLevelSystemResolver) resources() []Resource {
-	resources := make([]Resource, 0, len(r.resourceToGroup))
-	for _, group := range r.groups {
-		for _, resource := range group.resources {
-			if resource == nil {
-				continue
-			}
-			resources = append(resources, cloneResource(resource))
-		}
-	}
-	return resources
-}
-
 func buildTopLevelSystemResolvedGroups(
 	nodes []topLevelSystemNode,
 	parent []int,
@@ -536,105 +508,6 @@ func uniqueBetterTopLevelSystemTarget(
 		}, true
 	}
 	return topLevelSystemFallbackTarget{}, false
-}
-
-func candidateExactTargetGroups(
-	candidate MonitoredSystemCandidate,
-	hostOwners map[string]map[string]struct{},
-	ipOwners map[string]map[string]struct{},
-	groups map[string]topLevelSystemResolvedGroup,
-	priority int,
-) map[string]struct{} {
-	targets := make(map[string]struct{})
-	groupIDs := make(map[string]struct{}, len(groups))
-	for groupID := range groups {
-		groupIDs[groupID] = struct{}{}
-	}
-	for host := range monitoredSystemCandidateExactHosts(candidate) {
-		for groupID := range hostOwners[host] {
-			if groups[groupID].priority >= priority {
-				continue
-			}
-			targets[groupID] = struct{}{}
-		}
-	}
-	candidateHosts := monitoredSystemCandidateExactHosts(candidate)
-	for _, groupID := range topLevelSystemSortedSet(groupIDs) {
-		if groups[groupID].priority >= priority {
-			continue
-		}
-		if _, ok := targets[groupID]; ok {
-			continue
-		}
-		if _, ok := topLevelSystemShortFormHostMatchValue(candidateHosts, groups[groupID].exactHosts); ok {
-			targets[groupID] = struct{}{}
-		}
-	}
-	for ip := range monitoredSystemCandidateExactIPs(candidate) {
-		for groupID := range ipOwners[ip] {
-			if groups[groupID].priority >= priority {
-				continue
-			}
-			targets[groupID] = struct{}{}
-		}
-	}
-	return targets
-}
-
-func monitoredSystemCandidateStrongIDs(candidate MonitoredSystemCandidate) map[string]struct{} {
-	ids := make(map[string]struct{})
-	if resourceID := strings.TrimSpace(candidate.ResourceID); resourceID != "" {
-		ids["resource:"+resourceID] = struct{}{}
-	}
-	if machineID := strings.TrimSpace(candidate.MachineID); machineID != "" {
-		ids["machine:"+machineID] = struct{}{}
-	}
-	if candidate.Type != ResourceTypeK8sCluster {
-		if agentID := strings.TrimSpace(candidate.AgentID); agentID != "" {
-			ids["agent:"+agentID] = struct{}{}
-		}
-	}
-	return ids
-}
-
-func monitoredSystemCandidateExactHosts(candidate MonitoredSystemCandidate) map[string]struct{} {
-	hosts := make(map[string]struct{})
-	for _, value := range []string{candidate.Hostname, extractHostname(candidate.HostURL)} {
-		if normalized := topLevelSystemNormalizeHost(value); normalized != "" {
-			hosts[normalized] = struct{}{}
-		}
-	}
-	return hosts
-}
-
-func monitoredSystemCandidateExactIPs(candidate MonitoredSystemCandidate) map[string]struct{} {
-	ips := make(map[string]struct{})
-	for _, value := range []string{candidate.Hostname, extractHostname(candidate.HostURL)} {
-		if normalized := NormalizeIP(value); normalized != "" && !isNonUniqueIP(normalized) {
-			ips[normalized] = struct{}{}
-		}
-	}
-	return ips
-}
-
-func monitoredSystemCandidatePriority(candidate MonitoredSystemCandidate) int {
-	switch candidate.Type {
-	case ResourceTypePBS:
-		return 10
-	case ResourceTypePMG:
-		return 11
-	case ResourceTypeK8sCluster:
-		return 12
-	default:
-		return 3
-	}
-}
-
-func monitoredSystemCandidateAllowsHostAttachment(candidate MonitoredSystemCandidate) bool {
-	if candidate.Type == ResourceTypeK8sCluster {
-		return false
-	}
-	return len(monitoredSystemCandidateExactHosts(candidate)) > 0 || len(monitoredSystemCandidateExactIPs(candidate)) > 0
 }
 
 func monitoredSystemResourceAllowsHostAttachment(resource *Resource) bool {
@@ -1018,30 +891,6 @@ func topLevelSystemSortedSet(values map[string]struct{}) []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-func topLevelSystemSetsOverlap(left, right map[string]struct{}) bool {
-	if len(left) == 0 || len(right) == 0 {
-		return false
-	}
-	if len(left) > len(right) {
-		left, right = right, left
-	}
-	for value := range left {
-		if _, ok := right[value]; ok {
-			return true
-		}
-	}
-	return false
-}
-
-func addTopLevelSystemOwner(index map[string]map[string]struct{}, key, owner string) {
-	bucket := index[key]
-	if bucket == nil {
-		bucket = make(map[string]struct{})
-		index[key] = bucket
-	}
-	bucket[owner] = struct{}{}
 }
 
 func topLevelSystemNormalizeHost(value string) string {

@@ -342,23 +342,6 @@ export const getFindingSeverityCompactLabel = (
   severity: UnifiedFinding['severity'] | string,
 ): string => FINDING_SEVERITY_COMPACT_LABELS[severity] || String(severity).toUpperCase();
 
-export const getFindingCompactBadgePresentation = (
-  finding: Pick<UnifiedFinding, 'severity' | 'resourceId' | 'resourceName' | 'title'>,
-): FindingCompactBadgePresentation => {
-  if (isPatrolRuntimeFinding(finding)) {
-    const severityPresentation = getFindingSeverityPresentation(finding);
-    return {
-      label: severityPresentation.label,
-      badgeClasses: severityPresentation.badgeClasses,
-    };
-  }
-
-  return {
-    label: getFindingSeverityCompactLabel(finding.severity),
-    badgeClasses: getFindingSeverityBadgeClasses(finding.severity),
-  };
-};
-
 export const isPatrolRuntimeFinding = (
   finding: Pick<UnifiedFinding, 'resourceId' | 'resourceName' | 'title'>,
 ): boolean => {
@@ -615,25 +598,6 @@ export const doesFindingNeedAttention = (
     finding.investigationOutcome === 'fix_queued' &&
     !hasPendingInvestigationFixApproval(finding.id, approvals)
   );
-};
-
-// True when the finding has an investigation outcome indicating that some
-// remediation step has run against it — anything past "fix queued." For these
-// states, Verify fix is a meaningful action; for fix_queued (still awaiting
-// approval) and earlier states there is nothing applied yet to verify, and
-// for fix_failed the fix didn't complete so verification doesn't apply.
-export const findingHasAppliedFix = (
-  finding: Pick<UnifiedFinding, 'investigationOutcome'>,
-): boolean => {
-  switch (finding.investigationOutcome) {
-    case 'fix_executed':
-    case 'fix_verified':
-    case 'fix_verification_failed':
-    case 'fix_verification_unknown':
-      return true;
-    default:
-      return false;
-  }
 };
 
 export const getFindingLoopStateBadgeClasses = (loopState: string): string =>

@@ -137,10 +137,6 @@ export interface RecoveryPointsSeriesBucket {
   remote: number;
 }
 
-export interface RecoveryPointsSeriesResponse {
-  data: RecoveryPointsSeriesBucket[];
-}
-
 export interface RecoveryPointsFacets {
   clusters?: string[];
   nodesAgents?: string[];
@@ -149,8 +145,4 @@ export interface RecoveryPointsFacets {
   hasSize?: boolean;
   hasVerification?: boolean;
   hasEntityId?: boolean;
-}
-
-export interface RecoveryPointsFacetsResponse {
-  data: RecoveryPointsFacets;
 }

@@ -359,5 +359,3 @@ export const formatInteger = (value?: number): string => {
   if (value === undefined || value === null || Number.isNaN(value)) return '—';
   return new Intl.NumberFormat().format(Math.round(value));
 };
-
-export const ALIAS_COLLAPSE_THRESHOLD = 4;

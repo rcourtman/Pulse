@@ -194,13 +194,6 @@ func normalizeConfig(cfg Config) Config {
 	return cfg
 }
 
-func normalizeContext(ctx context.Context) context.Context {
-	if ctx == nil {
-		return context.Background()
-	}
-	return ctx
-}
-
 // NewService creates a new infrastructure discovery service.
 func NewService(knowledgeStore *knowledge.Store, cfg Config) *Service {
 	cfg = normalizeConfig(cfg)
@@ -243,21 +236,6 @@ func (s *Service) SetReadState(rs unifiedresources.ReadState) {
 		log.Info().Msg("ReadState wired after service start; triggering initial discovery")
 		s.ForceRefresh(nil)
 	}
-}
-
-// goRecover launches fn in a goroutine with panic recovery logging.
-func goRecover(label string, fn func()) {
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Error().
-					Interface("panic", r).
-					Stack().
-					Msgf("Recovered from panic in %s", label)
-			}
-		}()
-		fn()
-	}()
 }
 
 // Start begins the background discovery service.
@@ -912,22 +890,6 @@ func (s *Service) saveDiscoveries(apps []DiscoveredApp) {
 				Msg("Failed to save infrastructure discovery to knowledge store")
 		}
 	}
-}
-
-func (s *Service) tryStartDiscovery() bool {
-	s.discoveryMu.Lock()
-	defer s.discoveryMu.Unlock()
-	if s.discoveryRun {
-		return false
-	}
-	s.discoveryRun = true
-	return true
-}
-
-func (s *Service) finishDiscovery() {
-	s.discoveryMu.Lock()
-	s.discoveryRun = false
-	s.discoveryMu.Unlock()
 }
 
 // GetDiscoveries returns the cached list of discovered applications.

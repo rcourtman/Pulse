@@ -331,20 +331,6 @@ func parseTenantState(s string) (registry.TenantState, bool) {
 	}
 }
 
-func loadTenantForAccount(reg *registry.TenantRegistry, accountID, tenantID string) (*registry.Tenant, error) {
-	t, err := reg.Get(tenantID)
-	if err != nil {
-		return nil, fmt.Errorf("load tenant %q: %w", tenantID, err)
-	}
-	if t == nil {
-		return nil, nil
-	}
-	if strings.TrimSpace(t.AccountID) == "" || t.AccountID != accountID {
-		return nil, nil
-	}
-	return t, nil
-}
-
 // HandleUpdateTenant updates display name and/or state.
 // Route: PATCH /api/accounts/{account_id}/tenants/{tenant_id}
 func HandleUpdateTenant(reg *registry.TenantRegistry) http.HandlerFunc {

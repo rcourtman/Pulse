@@ -556,20 +556,6 @@ export interface StepResult {
   run_at: string;
 }
 
-export interface RemediationExecution {
-  id: string;
-  plan_id: string;
-  status: 'pending' | 'approved' | 'running' | 'completed' | 'failed' | 'rolled_back';
-  approved_by?: string;
-  approved_at?: string;
-  started_at?: string;
-  completed_at?: string;
-  current_step: number;
-  step_results?: StepResult[];
-  error?: string;
-  rollback_error?: string;
-}
-
 // Compatibility response shape for older execution endpoints.
 export interface RemediationExecutionResult {
   execution_id: string;

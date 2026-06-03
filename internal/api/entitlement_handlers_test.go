@@ -986,18 +986,3 @@ func TestEntitlementHandler_CommercialMigrationDoesNotExposeTrialStartReason(t *
 		t.Fatalf("trial_eligibility_reason=%q, want empty", payload.TrialEligibilityReason)
 	}
 }
-
-// countProMinusFreeFeatures returns the number of Pro features not included in Free.
-func countProMinusFreeFeatures() int {
-	freeSet := make(map[string]struct{}, len(license.TierFeatures[license.TierFree]))
-	for _, f := range license.TierFeatures[license.TierFree] {
-		freeSet[f] = struct{}{}
-	}
-	count := 0
-	for _, f := range license.TierFeatures[license.TierPro] {
-		if _, ok := freeSet[f]; !ok {
-			count++
-		}
-	}
-	return count
-}

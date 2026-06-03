@@ -559,5 +559,3 @@ Pulse prepares the first-host install token from setup so you can move straight 
     tokenName,
   };
 };
-
-export type InfrastructureInstallState = ReturnType<typeof useInfrastructureInstallState>;

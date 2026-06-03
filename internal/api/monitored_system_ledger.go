@@ -322,14 +322,6 @@ func monitoredSystemLedgerEntry(system unifiedresources.MonitoredSystemRecord) M
 	}
 }
 
-func monitoredSystemLedgerEntryPointer(system *unifiedresources.MonitoredSystemRecord) *MonitoredSystemLedgerEntry {
-	if system == nil {
-		return nil
-	}
-	entry := monitoredSystemLedgerEntry(*system)
-	return &entry
-}
-
 func monitoredSystemLedgerEntries(
 	systems []unifiedresources.MonitoredSystemRecord,
 ) []MonitoredSystemLedgerEntry {

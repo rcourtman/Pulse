@@ -12,10 +12,6 @@ type MockStateGetter struct {
 	state interface{}
 }
 
-func (m *MockStateGetter) GetState() interface{} {
-	return m.state
-}
-
 // MockTenantStateGetter implements TenantStateGetter interface
 type MockTenantStateGetter struct {
 	state map[string]interface{}

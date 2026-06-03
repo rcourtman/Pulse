@@ -43,10 +43,6 @@ func normalizeActivationContinuity(continuity ActivationContinuity) ActivationCo
 	return continuity
 }
 
-func (c ActivationContinuity) needsLegacyMonitoredSystemCapture() bool {
-	return false
-}
-
 func grantClaimsUseUncappedCoreMonitoring(gc *GrantClaims) bool {
 	if gc == nil {
 		return false

@@ -146,10 +146,6 @@ export function parseCloudTier(value?: string | null): CloudTierKey {
   }
 }
 
-export function getCloudPlanForTier(value?: string | null): CloudPlanDefinition {
-  return CLOUD_PLAN_BY_TIER[parseCloudTier(value)];
-}
-
 export function getCloudPlanPricePresentation(
   plan: CloudPlanDefinition,
 ): CloudPlanPricePresentation {

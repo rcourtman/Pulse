@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -150,43 +149,4 @@ func runCommandOutputLimited(cmd *exec.Cmd, maxBytes int) ([]byte, error) {
 	}
 
 	return output, nil
-}
-
-func readRPiThermalMilliDegrees(path string) (int64, error) {
-	raw, err := readLimitedTrimmedString(path, maxThermalFileReadBytes)
-	if err != nil {
-		return 0, err
-	}
-
-	if raw == "" {
-		return 0, fmt.Errorf("empty thermal value")
-	}
-
-	temp, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("invalid thermal value: %w", err)
-	}
-	if temp < -100000 || temp > 300000 {
-		return 0, fmt.Errorf("thermal value out of range")
-	}
-
-	return temp, nil
-}
-
-func readLimitedTrimmedString(path string, maxBytes int64) (string, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-
-	data, err := io.ReadAll(io.LimitReader(file, maxBytes+1))
-	if err != nil {
-		return "", err
-	}
-	if int64(len(data)) > maxBytes {
-		return "", fmt.Errorf("file exceeds maximum size of %d bytes", maxBytes)
-	}
-
-	return strings.TrimSpace(string(data)), nil
 }
