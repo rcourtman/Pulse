@@ -15,6 +15,23 @@ describe('UpdatesAPI', () => {
     apiFetchJSONMock.mockReset();
   });
 
+  it('preserves the app version and agent update target from version payloads', async () => {
+    const response = {
+      version: '6.0.0-rc.6+git.174.g259476907.dirty',
+      build: 'development',
+      runtime: 'go',
+      isDocker: false,
+      isSourceBuild: false,
+      isDevelopment: true,
+      deploymentType: 'development',
+      agentUpdateTargetVersion: '6.0.0-rc.6',
+    };
+    apiFetchJSONMock.mockResolvedValueOnce(response as any);
+
+    await expect(UpdatesAPI.getVersion()).resolves.toEqual(response);
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/version');
+  });
+
   it('encodes optional update-check channel safely', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({ available: false } as any);
     await UpdatesAPI.checkForUpdates('rc');

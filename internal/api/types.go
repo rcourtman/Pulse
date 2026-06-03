@@ -25,20 +25,21 @@ func (r HealthResponse) NormalizeCollections() HealthResponse {
 
 // VersionResponse represents version information
 type VersionResponse struct {
-	Version         string `json:"version"`
-	BuildTime       string `json:"buildTime,omitempty"`
-	Build           string `json:"build,omitempty"`
-	GoVersion       string `json:"goVersion,omitempty"`
-	Runtime         string `json:"runtime,omitempty"`
-	Channel         string `json:"channel,omitempty"`
-	IsDocker        bool   `json:"isDocker"`
-	IsSourceBuild   bool   `json:"isSourceBuild"`
-	IsDevelopment   bool   `json:"isDevelopment"`
-	DeploymentType  string `json:"deploymentType,omitempty"`
-	UpdateAvailable bool   `json:"updateAvailable"`
-	LatestVersion   string `json:"latestVersion,omitempty"`
-	Containerized   bool   `json:"containerized"`
-	ContainerID     string `json:"containerId,omitempty"`
+	Version                  string `json:"version"`
+	BuildTime                string `json:"buildTime,omitempty"`
+	Build                    string `json:"build,omitempty"`
+	GoVersion                string `json:"goVersion,omitempty"`
+	Runtime                  string `json:"runtime,omitempty"`
+	Channel                  string `json:"channel,omitempty"`
+	IsDocker                 bool   `json:"isDocker"`
+	IsSourceBuild            bool   `json:"isSourceBuild"`
+	IsDevelopment            bool   `json:"isDevelopment"`
+	DeploymentType           string `json:"deploymentType,omitempty"`
+	AgentUpdateTargetVersion string `json:"agentUpdateTargetVersion,omitempty"`
+	UpdateAvailable          bool   `json:"updateAvailable"`
+	LatestVersion            string `json:"latestVersion,omitempty"`
+	Containerized            bool   `json:"containerized"`
+	ContainerID              string `json:"containerId,omitempty"`
 }
 
 // ChartResponse represents chart data

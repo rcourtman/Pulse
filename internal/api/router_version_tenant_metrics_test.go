@@ -87,6 +87,31 @@ func TestHandleVersion_Success(t *testing.T) {
 	}
 }
 
+func TestHandleVersion_IncludesReleaseAgentUpdateTarget(t *testing.T) {
+	oldBuildVersion := updates.BuildVersion
+	updates.BuildVersion = "6.0.0-rc.6"
+	t.Cleanup(func() {
+		updates.BuildVersion = oldBuildVersion
+	})
+
+	router := &Router{updateManager: updates.NewManager(&config.Config{})}
+	req := httptest.NewRequest(http.MethodGet, "/api/version", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleVersion(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var payload VersionResponse
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload.AgentUpdateTargetVersion != "6.0.0-rc.6" {
+		t.Fatalf("AgentUpdateTargetVersion = %q, want 6.0.0-rc.6", payload.AgentUpdateTargetVersion)
+	}
+}
+
 func TestHandleMetricsHistory_MethodNotAllowed(t *testing.T) {
 	router := &Router{}
 	req := httptest.NewRequest(http.MethodPost, "/api/metrics/history", nil)

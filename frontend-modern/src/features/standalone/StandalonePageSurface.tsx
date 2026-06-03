@@ -69,14 +69,17 @@ export function StandalonePageSurface() {
       model().machines.length === 0 &&
       model().availabilityChecks.length === 0,
   );
+  const agentUpdateTargetVersion = createMemo(
+    () => updateStore.versionInfo()?.agentUpdateTargetVersion,
+  );
   const outdatedAgentHosts = createMemo(() =>
-    collectOutdatedAgentHosts(model().machines, updateStore.versionInfo()?.version),
+    collectOutdatedAgentHosts(model().machines, agentUpdateTargetVersion()),
   );
   const outdatedAgentUpdatePath = createMemo(() =>
     buildInfrastructureAgentUpdatesPath(outdatedAgentHosts().map((host) => host.agentId)),
   );
   const serverVersionDisplay = createMemo(() =>
-    formatAgentVersionDisplay(updateStore.versionInfo()?.version),
+    formatAgentVersionDisplay(agentUpdateTargetVersion()),
   );
 
   createEffect(() => {
@@ -200,7 +203,7 @@ export function StandalonePageSurface() {
                     emptyIcon={machineIcon()}
                     emptyTitle="No machines"
                     emptyDescription="Install Pulse Agent on Linux, macOS, Windows, or Unraid systems for full CPU, memory, disk, and network telemetry."
-                    targetAgentVersion={updateStore.versionInfo()?.version}
+                    targetAgentVersion={agentUpdateTargetVersion()}
                   />
                 </Show>
               </div>

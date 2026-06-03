@@ -69,7 +69,10 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
 
 vi.mock('@/stores/updates', () => ({
   updateStore: {
-    versionInfo: () => ({ version: '6.0.0-rc.6' }),
+    versionInfo: () => ({
+      version: '6.0.0-rc.6',
+      agentUpdateTargetVersion: '6.0.0-rc.6',
+    }),
   },
 }));
 

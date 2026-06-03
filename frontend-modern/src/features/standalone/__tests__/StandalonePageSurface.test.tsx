@@ -137,7 +137,10 @@ describe('StandalonePageSurface', () => {
   });
 
   it('surfaces stale Pulse Agent binaries on the Machines page', () => {
-    mocks.versionInfo.mockReturnValue({ version: 'v6.0.0-rc.6' });
+    mocks.versionInfo.mockReturnValue({
+      version: 'v6.0.0-rc.6',
+      agentUpdateTargetVersion: 'v6.0.0-rc.6',
+    });
     mocks.useUnifiedResources.mockReturnValue({
       resources: () => [
         resource({

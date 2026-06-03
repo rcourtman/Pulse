@@ -85,14 +85,17 @@ export function ProxmoxPageSurface() {
     if (!segment || !VALID_TABS.has(segment)) return 'overview';
     return visibleTabIds().has(segment) ? segment : 'overview';
   });
+  const agentUpdateTargetVersion = createMemo(
+    () => updateStore.versionInfo()?.agentUpdateTargetVersion,
+  );
   const outdatedAgentHosts = createMemo(() =>
-    collectOutdatedAgentHosts(model().pveNodes, updateStore.versionInfo()?.version),
+    collectOutdatedAgentHosts(model().pveNodes, agentUpdateTargetVersion()),
   );
   const outdatedAgentUpdatePath = createMemo(() =>
     buildInfrastructureAgentUpdatesPath(outdatedAgentHosts().map((host) => host.agentId)),
   );
   const serverVersionDisplay = createMemo(() =>
-    formatAgentVersionDisplay(updateStore.versionInfo()?.version),
+    formatAgentVersionDisplay(agentUpdateTargetVersion()),
   );
 
   // The hosts table at the top and the embedded WorkloadsSurface below share

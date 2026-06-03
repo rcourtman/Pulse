@@ -215,7 +215,10 @@ describe('KubernetesPageSurface contract', () => {
   });
 
   it('surfaces stale agent-backed Kubernetes nodes', () => {
-    mockVersionInfo.mockReturnValue({ version: 'v6.0.0-rc.6' });
+    mockVersionInfo.mockReturnValue({
+      version: 'v6.0.0-rc.6',
+      agentUpdateTargetVersion: 'v6.0.0-rc.6',
+    });
     setResources([
       makeResource({
         id: 'agent:k8s-node-1',

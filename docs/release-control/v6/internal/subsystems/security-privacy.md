@@ -121,13 +121,17 @@ controls as normal product settings.
     storing a brand setting never becomes a free branding bypass.
 16. `internal/cloudcp/auth/magiclink.go` shared with `cloud-paid`: control-plane magic-link HMAC handling is both a Pulse Cloud account-access boundary and a security/privacy token-secrecy boundary.
 17. `internal/cloudcp/auth/magiclink_store.go` shared with `cloud-paid`: control-plane magic-link persistence is both a Pulse Cloud account-access boundary and a security/privacy storage-hardening boundary.
-
 ## Extension Points
 
 1. Change privacy disclosures, usage-data vocabulary, or outbound-data guarantees through `docs/PRIVACY.md` and `internal/telemetry/telemetry.go` together.
 2. Change security policy, hardening guidance, or supported auth boundaries through `SECURITY.md`.
 3. Change telemetry/privacy settings state handling through `frontend-modern/src/components/Settings/useSystemSettingsState.ts`.
 4. Change security/auth/token transport behavior through the shared `frontend-modern/src/api/security.ts`, `frontend-modern/src/components/Settings/APITokenManager.tsx`, `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`, `internal/api/security.go`, `internal/api/security_tokens.go`, and `internal/api/system_settings.go` boundary.
+   Release metadata surfaced through `/api/version` remains outside token,
+   auth, and privacy state. Adding or changing `agentUpdateTargetVersion`
+   must stay limited to non-secret deployable release identity and must not
+   expose agent inventory, scoped update selections, or command authorization
+   state.
    CSRF token-store behavior in `internal/api/csrf_store.go` is part of that
    shared browser-auth trust boundary: parallel stale-token mutations may
    receive distinct bounded replacement tokens for one session, but explicit

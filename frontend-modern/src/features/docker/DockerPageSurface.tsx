@@ -64,14 +64,17 @@ export function DockerPageSurface() {
   const activeTab = createMemo<DockerPageTabId>(() =>
     tabs().some((tab) => tab.id === requestedTab()) ? requestedTab() : 'overview',
   );
+  const agentUpdateTargetVersion = createMemo(
+    () => updateStore.versionInfo()?.agentUpdateTargetVersion,
+  );
   const outdatedAgentHosts = createMemo(() =>
-    collectOutdatedAgentHosts(model().hosts, updateStore.versionInfo()?.version),
+    collectOutdatedAgentHosts(model().hosts, agentUpdateTargetVersion()),
   );
   const outdatedAgentUpdatePath = createMemo(() =>
     buildInfrastructureAgentUpdatesPath(outdatedAgentHosts().map((host) => host.agentId)),
   );
   const serverVersionDisplay = createMemo(() =>
-    formatAgentVersionDisplay(updateStore.versionInfo()?.version),
+    formatAgentVersionDisplay(agentUpdateTargetVersion()),
   );
 
   return (

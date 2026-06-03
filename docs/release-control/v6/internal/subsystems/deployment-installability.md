@@ -127,6 +127,11 @@ TLS floor in the dynamic config.
 ## Shared Boundaries
 
 1. `frontend-modern/src/api/updates.ts` shared with `api-contracts`: the updates frontend client is both a deployment-installability control surface and a canonical API payload contract boundary.
+   The version payload consumed by this client must preserve the distinction
+   between the running app build `version` and the deployable
+   `agentUpdateTargetVersion`; update/install surfaces may display the app
+   build, but agent update prompts must only use the agent target when the
+   backend exposes one.
 2. `internal/api/updates.go` shared with `api-contracts`: update handlers are both a deployment-installability control surface and a canonical API payload contract boundary.
 3. `internal/cloudcp/docker/labels.go` shared with `cloud-paid`: hosted tenant Docker labels are both a Pulse Cloud runtime contract boundary and a deployment-installability rollout boundary.
 4. `internal/cloudcp/docker/manager.go` shared with `cloud-paid`: hosted tenant container management is both a Pulse Cloud runtime contract boundary and a deployment-installability rollout boundary.

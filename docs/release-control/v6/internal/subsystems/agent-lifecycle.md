@@ -180,14 +180,18 @@ cannot prove agent-token continuity.
 Stale-agent platform notices and the Infrastructure `agentUpdates` workspace
 route are part of that same lifecycle contract. Platform pages may link to the
 central Infrastructure update dialog with a scoped list of affected agent
-connection IDs, but command rendering stays lifecycle-owned in Settings. For
-Unix-like agents that Pulse already sees, the copied stale-agent update command
-must use `scripts/install.sh --update` and recover URL, token, identity, custom
-CA, and insecure transport from installer-owned saved state instead of asking
-the operator to mint a fresh install token or exposing agent IDs in the copied
-command. Windows stale-agent update commands remain on the existing
-token-gated install transport until the Windows installer owns an equivalent
-saved-state update mode.
+connection IDs, but command rendering stays lifecycle-owned in Settings.
+`currentAgentTargetVersion()` is the canonical agent update target and must be
+projected to browser clients as `/api/version.agentUpdateTargetVersion`;
+platform pages and Settings must not compare agent binaries against the app
+build `version` when the server would tell agents `dev`. For Unix-like agents
+that Pulse already sees, the copied stale-agent update command must use
+`scripts/install.sh --update` and recover URL, token, identity, custom CA, and
+insecure transport from installer-owned saved state instead of asking the
+operator to mint a fresh install token or exposing agent IDs in the copied
+command. Windows stale-agent update commands remain on the existing token-gated
+install transport until the Windows installer owns an equivalent saved-state
+update mode.
 
 Agent lifecycle and fleet-operation surfaces may consume
 `POST /api/actions/plan` for resource capability planning, but the action plan

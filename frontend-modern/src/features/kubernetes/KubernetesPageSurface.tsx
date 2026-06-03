@@ -69,14 +69,17 @@ export function KubernetesPageSurface() {
     tabs().some((tab) => tab.id === requestedTab()) ? requestedTab() : 'overview',
   );
   const controllerResources = createMemo(() => getKubernetesControllerResources(model()));
+  const agentUpdateTargetVersion = createMemo(
+    () => updateStore.versionInfo()?.agentUpdateTargetVersion,
+  );
   const outdatedAgentHosts = createMemo(() =>
-    collectOutdatedAgentHosts(model().nodes, updateStore.versionInfo()?.version),
+    collectOutdatedAgentHosts(model().nodes, agentUpdateTargetVersion()),
   );
   const outdatedAgentUpdatePath = createMemo(() =>
     buildInfrastructureAgentUpdatesPath(outdatedAgentHosts().map((host) => host.agentId)),
   );
   const serverVersionDisplay = createMemo(() =>
-    formatAgentVersionDisplay(updateStore.versionInfo()?.version),
+    formatAgentVersionDisplay(agentUpdateTargetVersion()),
   );
 
   return (

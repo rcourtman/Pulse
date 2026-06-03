@@ -488,6 +488,9 @@ AI-only summary payloads, or page-local heuristics.
    route to the affected agents. That scoped lifecycle handoff must not become a
    new resource-action authority, a page-local command runner, or a substitute
    for the `/api/connections` fleet command-policy truth described above.
+   Resource consumers must also use the API-owned agent update target when
+   comparing resource-carried agent versions; the running app build version is
+   not a resource freshness contract.
    `internal/unifiedresources/top_level_systems.go`
    Explicit linked-host correlation is canonical here: when Kubernetes node
    ingest has a resolved backing host agent, the registry must merge that node

@@ -120,8 +120,12 @@ update commands opened from platform notices must not serialize API tokens,
 agent IDs, or hostnames into Unix shell payloads. Those commands route through
 the `agentUpdates` settings query for scoped row selection and then call the
 installer-owned `scripts/install.sh --update` saved-state path on the target
-host. Windows remains on the existing token-gated PowerShell payload until its
-installer owns the same saved-state update contract.
+host. Stale-agent UI must consume `/api/version`'s
+`agentUpdateTargetVersion`, not the app build `version`, so development/source
+builds that intentionally report `dev` to agents do not surface update nags
+when no real agent update target exists. Windows remains on the existing
+token-gated PowerShell payload until its installer owns the same saved-state
+update contract.
 
 Summary-chart response caching is a shared API boundary:
 `internal/api/router.go` may serve a short cached JSON payload for repeated

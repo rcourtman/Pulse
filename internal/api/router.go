@@ -5275,16 +5275,17 @@ func (r *Router) handleVersion(w http.ResponseWriter, req *http.Request) {
 
 	// Convert to typed response
 	response := VersionResponse{
-		Version:        versionInfo.Version,
-		BuildTime:      versionInfo.Build,
-		Build:          versionInfo.Build,
-		GoVersion:      runtime.Version(),
-		Runtime:        versionInfo.Runtime,
-		Channel:        versionInfo.Channel,
-		IsDocker:       versionInfo.IsDocker,
-		IsSourceBuild:  versionInfo.IsSourceBuild,
-		IsDevelopment:  versionInfo.IsDevelopment,
-		DeploymentType: versionInfo.DeploymentType,
+		Version:                  versionInfo.Version,
+		BuildTime:                versionInfo.Build,
+		Build:                    versionInfo.Build,
+		GoVersion:                runtime.Version(),
+		Runtime:                  versionInfo.Runtime,
+		Channel:                  versionInfo.Channel,
+		IsDocker:                 versionInfo.IsDocker,
+		IsSourceBuild:            versionInfo.IsSourceBuild,
+		IsDevelopment:            versionInfo.IsDevelopment,
+		DeploymentType:           versionInfo.DeploymentType,
+		AgentUpdateTargetVersion: currentAgentTargetVersion(),
 	}
 
 	// Detect containerization (LXC/Docker)

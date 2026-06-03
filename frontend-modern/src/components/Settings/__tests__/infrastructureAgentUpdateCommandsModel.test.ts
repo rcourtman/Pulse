@@ -124,7 +124,7 @@ describe('infrastructure agent update commands model', () => {
     });
   });
 
-  it('falls back to the app build version when the connections ledger has no target version', () => {
+  it('uses the explicit agent update target when the connection has no target version', () => {
     const staleAgent = connection({
       id: 'agent:agent-delly',
       type: 'agent',
@@ -144,7 +144,7 @@ describe('infrastructure agent update commands model', () => {
           attachedConnections: [staleAgent],
         }),
       ],
-      '6.0.0-rc.6+git.172.g2c360f779.dirty',
+      'v6.0.0-rc.6',
     );
 
     expect(targets).toHaveLength(1);
@@ -153,6 +153,29 @@ describe('infrastructure agent update commands model', () => {
       currentVersion: 'v6.0.0-rc.5',
       expectedVersion: 'v6.0.0-rc.6',
     });
+  });
+
+  it('does not infer stale targets without an agent update target', () => {
+    const staleAgent = connection({
+      id: 'agent:agent-delly',
+      type: 'agent',
+      name: 'delly',
+      address: 'delly',
+      surfaces: ['host'],
+      scope: { host: true },
+      source: 'agent',
+      agentVersion: 'v6.0.0-rc.5',
+      agentUpdateAvailable: false,
+      capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+    });
+
+    const targets = collectInfrastructureAgentUpdateTargets([
+      row({
+        attachedConnections: [staleAgent],
+      }),
+    ]);
+
+    expect(targets).toEqual([]);
   });
 
   it('filters to scoped agent IDs when a platform notice links to specific hosts', () => {

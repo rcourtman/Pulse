@@ -233,9 +233,12 @@ surface a compact stale-agent cue when their row model carries Pulse agent
 identity and version evidence, but the CTA must route to the canonical
 Infrastructure settings update-command surface with scoped agent IDs instead of
 duplicating installer command assembly, tokens, or lifecycle copy in each
-platform page. Agentless API-only platforms such as vSphere must not grow this
-notice unless a concrete guest or monitored system row actually carries a Pulse
-agent identity.
+platform page. These notices must compare against the API-owned
+`agentUpdateTargetVersion` rather than the app build version, so development
+builds can show their dirty server version without implying agents can or
+should update toward that build. Agentless API-only platforms such as vSphere
+must not grow this notice unless a concrete guest or monitored system row
+actually carries a Pulse agent identity.
 Kubernetes policy inventory follows that same primitive boundary while the
 unified-resource owner supplies NetworkPolicy policy type and rule-count
 columns, PodDisruptionBudget budget and observed health columns, ResourceQuota

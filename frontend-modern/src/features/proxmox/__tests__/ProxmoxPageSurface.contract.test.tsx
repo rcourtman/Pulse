@@ -123,7 +123,10 @@ describe('ProxmoxPageSurface contract', () => {
   });
 
   it('surfaces stale agent-backed Proxmox nodes', () => {
-    mockVersionInfo.mockReturnValue({ version: 'v6.0.0-rc.6' });
+    mockVersionInfo.mockReturnValue({
+      version: 'v6.0.0-rc.6',
+      agentUpdateTargetVersion: 'v6.0.0-rc.6',
+    });
     setResources([
       makeResource({
         id: 'agent:delly',
@@ -148,5 +151,26 @@ describe('ProxmoxPageSurface contract', () => {
       'href',
       '/settings/infrastructure?agentUpdates=1&agents=agent%3Aagent-delly',
     );
+  });
+
+  it('does not surface stale-agent notices for development builds without an agent target', () => {
+    mockVersionInfo.mockReturnValue({
+      version: '6.0.0-rc.6+git.172.g2c360f779.dirty',
+      isDevelopment: true,
+    });
+    setResources([
+      makeResource({
+        id: 'agent:delly',
+        name: 'delly',
+        displayName: 'delly',
+        type: 'agent',
+        proxmox: { nodeName: 'delly', clusterName: 'homelab' },
+        agent: { agentId: 'agent-delly', agentVersion: 'v5.1.34' },
+      }),
+    ]);
+
+    render(() => <ProxmoxPageSurface />);
+
+    expect(screen.queryByTestId('platform-outdated-agent-notice')).not.toBeInTheDocument();
   });
 });

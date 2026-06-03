@@ -195,7 +195,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   const agentUpdateTargets = createMemo(() =>
     collectInfrastructureAgentUpdateTargets(
       rows(),
-      updateStore.versionInfo()?.version,
+      updateStore.versionInfo()?.agentUpdateTargetVersion,
       agentUpdateScope(),
     ),
   );

@@ -435,6 +435,62 @@ describe('InfrastructureWorkspace', () => {
     });
   });
 
+  it('does not invent scoped update commands when the backend publishes no agent target', async () => {
+    routeState.search = '?agentUpdates=1&agents=agent%3Aagent-zeus';
+    const primaryConnection = connectionFixture();
+    const attachedAgent = connectionFixture({
+      id: 'agent:agent-zeus',
+      type: 'agent',
+      name: 'zeus-agent',
+      address: 'zeus.lab',
+      surfaces: ['host'],
+      scope: { host: true },
+      source: 'agent',
+      agentVersion: '5.1.34',
+      agentUpdateAvailable: false,
+      agentIdentity: {
+        hostname: 'zeus',
+        platform: 'linux',
+      },
+      capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+    });
+    connectionState.connections = [primaryConnection, attachedAgent];
+    connectionState.rows = [
+      {
+        id: primaryConnection.id,
+        ownerType: 'pve',
+        name: 'homelab',
+        subtitle: 'via platform API and Pulse Agent',
+        source: 'both',
+        host: primaryConnection.address,
+        coverageLabels: ['VMs', 'Host telemetry'],
+        statusLabel: 'Active',
+        statusClassName: 'bg-green-100 text-green-800',
+        agentUpdateCount: 0,
+        lastActivityText: '1m ago',
+        ...emptyFleetRow,
+        enabled: true,
+        canEdit: true,
+        canPause: true,
+        canRemove: true,
+        isAgent: false,
+        isCluster: false,
+        attachedConnections: [attachedAgent],
+        members: [],
+        connection: primaryConnection,
+      },
+    ];
+
+    renderWorkspace();
+
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      within(dialog).getByText('Pulse does not currently see any agents behind the target version.'),
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByText('zeus')).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/upgrade agent:agent-zeus/)).not.toBeInTheDocument();
+  });
+
   it('keeps source groups in the catalog order instead of count order', async () => {
     const pveConnection = connectionFixture({
       id: 'pve:zeus',

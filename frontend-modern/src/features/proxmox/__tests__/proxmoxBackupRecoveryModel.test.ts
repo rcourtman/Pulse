@@ -201,6 +201,7 @@ describe('proxmoxBackupRecoveryModel', () => {
 
     expect(model.coverageRows).toHaveLength(1);
     expect(model.coverageRows[0].posture).toBe('uncovered');
+    expect(model.coverageSummary.uncovered).toBe(1);
     expect(model.coverageRows[0].pbsCount).toBe(0);
     expect(model.coverageRows[0].archiveCount).toBe(0);
     expect(model.coverageRows[0].snapshotCount).toBe(0);

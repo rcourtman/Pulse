@@ -141,7 +141,6 @@ regression protection.
 15. `frontend-modern/src/routing/routePreload.ts` shared with `frontend-primitives`: the app-shell route preload registry is both a canonical frontend shell boundary and an authenticated hot-path performance boundary.
 16. `frontend-modern/src/useAppRuntimeState.ts` shared with `cloud-paid`: the authenticated app runtime bootstrap is both a hosted commercial org-context boundary and a protected app-shell performance boundary.
 17. `internal/api/slo.go` shared with `api-contracts`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
-
 ## Extension Points
 
 1. Add performance budgets through SLO or contract tests
@@ -177,6 +176,10 @@ regression protection.
    process version once, but they must not add per-request release lookups,
    filesystem walks, or other heavy work just to compute whether an attached
    agent is current.
+   The `/api/version.agentUpdateTargetVersion` projection follows that same
+   rule: it may mirror the cached deployable agent target exposed to agents,
+   but it must not inspect attached agents, download artifacts, or resolve
+   release metadata on each request.
    Update-readiness planning follows the same bounded-router rule. The router
    may wire cached config and monitor host snapshots into the updates handler,
    but it must not add release lookups, broad persistence scans, or live agent

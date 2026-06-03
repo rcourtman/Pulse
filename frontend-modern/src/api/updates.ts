@@ -30,6 +30,7 @@ export interface VersionInfo {
   isSourceBuild: boolean;
   isDevelopment: boolean;
   deploymentType?: string;
+  agentUpdateTargetVersion?: string;
 }
 
 export type UpdateReadinessStatus = 'ready' | 'attention' | 'blocked';
