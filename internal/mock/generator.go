@@ -3668,14 +3668,6 @@ func generateMockHostRate(ioType string) float64 {
 	}
 }
 
-func generateMockTemperature(cpuUsagePercent float64) *float64 {
-	if cpuUsagePercent <= 0 {
-		return nil
-	}
-	temp := clampFloat(34+(cpuUsagePercent*0.45)+rand.Float64()*4, 32, 88)
-	return &temp
-}
-
 func fluctuateMockHostRate(current float64, ioType string, min, max float64) float64 {
 	if current <= 0 {
 		current = generateMockHostRate(ioType)
@@ -3686,42 +3678,6 @@ func fluctuateMockHostRate(current float64, ioType string, min, max float64) flo
 		next *= 1.4 + rand.Float64()*0.8
 	}
 	return clampFloat(next, min, max)
-}
-
-func updateMockHostRates(host *models.Host) {
-	if host == nil {
-		return
-	}
-	if strings.EqualFold(host.Status, "offline") {
-		host.NetInRate = 0
-		host.NetOutRate = 0
-		host.DiskReadRate = 0
-		host.DiskWriteRate = 0
-		return
-	}
-
-	host.NetInRate = fluctuateMockHostRate(host.NetInRate, "network-in", 32*1024, 250*1024*1024)
-	host.NetOutRate = fluctuateMockHostRate(host.NetOutRate, "network-out", 24*1024, 200*1024*1024)
-	host.DiskReadRate = fluctuateMockHostRate(host.DiskReadRate, "disk-read", 16*1024, 120*1024*1024)
-	host.DiskWriteRate = fluctuateMockHostRate(host.DiskWriteRate, "disk-write", 8*1024, 90*1024*1024)
-}
-
-func updateMockDockerHostRates(host *models.DockerHost) {
-	if host == nil {
-		return
-	}
-	if strings.EqualFold(host.Status, "offline") {
-		host.NetInRate = 0
-		host.NetOutRate = 0
-		host.DiskReadRate = 0
-		host.DiskWriteRate = 0
-		return
-	}
-
-	host.NetInRate = fluctuateMockHostRate(host.NetInRate, "network-in", 32*1024, 250*1024*1024)
-	host.NetOutRate = fluctuateMockHostRate(host.NetOutRate, "network-out", 24*1024, 200*1024*1024)
-	host.DiskReadRate = fluctuateMockHostRate(host.DiskReadRate, "disk-read", 16*1024, 120*1024*1024)
-	host.DiskWriteRate = fluctuateMockHostRate(host.DiskWriteRate, "disk-write", 8*1024, 90*1024*1024)
 }
 
 func generateDockerContainers(hostName string, hostIdx int, config MockConfig, podman bool) []models.DockerContainer {
@@ -4123,29 +4079,6 @@ func applyDiskUsage(disk *models.Disk, usage float64) {
 	if disk.Free < 0 {
 		disk.Free = 0
 	}
-}
-
-func naturalMetricUpdate(current, min, max float64, resourceClass, resourceID, metric string, speed float64) float64 {
-	now := time.Now()
-	if speed <= 0 {
-		speed = 1.0
-	}
-
-	ideal := sampleNaturalMetric(resourceClass, resourceID, metric, min, max, speed, now)
-	alpha := 0.06 * speed
-	if speed >= 0.8 && math.Abs(ideal-current) > math.Max(1, (max-min)*0.03) {
-		alpha = 0.15 // track spike (gentler than before to avoid jarring snaps)
-	}
-	if alpha < 0.005 {
-		alpha = 0.005
-	}
-	if alpha > 0.5 {
-		alpha = 0.5
-	}
-	alpha = normalizeMockBlendWeight(alpha, currentMockUpdateInterval(), time.Minute)
-	newValue := current + alpha*(ideal-current)
-
-	return clampFloat(newValue, min, max)
 }
 
 func randomHexString(n int) string {

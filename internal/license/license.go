@@ -30,17 +30,6 @@ func SetPublicKey(key ed25519.PublicKey) {
 	pkglicensing.SetPublicKey(key)
 }
 
-func currentPublicKey() ed25519.PublicKey {
-	publicKeyMu.RLock()
-	defer publicKeyMu.RUnlock()
-	if len(publicKey) == 0 {
-		return nil
-	}
-	keyCopy := make(ed25519.PublicKey, len(publicKey))
-	copy(keyCopy, publicKey)
-	return keyCopy
-}
-
 var (
 	ErrInvalidLicense     = pkglicensing.ErrInvalidLicense
 	ErrExpiredLicense     = pkglicensing.ErrExpiredLicense

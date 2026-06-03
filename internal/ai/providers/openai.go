@@ -180,14 +180,6 @@ func (c *OpenAIClient) shouldSendReasoningContent() bool {
 	return c.isDeepSeek()
 }
 
-func normalizeOpenAICompatibleModelName(model string) string {
-	model = strings.ToLower(strings.TrimSpace(model))
-	for _, prefix := range []string{"openai:", "openrouter:", "deepseek:"} {
-		model = strings.TrimPrefix(model, prefix)
-	}
-	return model
-}
-
 func (c *OpenAIClient) applyProviderHeaders(req *http.Request) {
 	if !c.isOpenRouter() {
 		return

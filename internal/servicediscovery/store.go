@@ -1021,32 +1021,6 @@ func (s *Store) CleanupOrphanedDiscoveries(currentResourceIDs map[string]bool) i
 	return removed
 }
 
-// filenameToResourceID converts a discovery filename back to a resource ID.
-// Reverses the transformation done in getFilePath.
-func filenameToResourceID(filename string) string {
-	// The filename uses underscores for colons and slashes
-	// We need to be smart about this - the format is type_host_resourceid
-	// First underscore separates type, rest could have underscores in host/resource names
-
-	parts := strings.SplitN(filename, "_", 3)
-	if len(parts) < 3 {
-		return filename // Can't parse, return as-is
-	}
-
-	resourceType := parts[0]
-	host := parts[1]
-	resourceID := parts[2]
-
-	// For k8s, the resource ID might have been namespace/name which became namespace_name
-	// We convert back: k8s:cluster:namespace/name
-	if resourceType == "k8s" && strings.Contains(resourceID, "_") {
-		// Could be namespace_name, convert back to namespace/name
-		resourceID = strings.Replace(resourceID, "_", "/", 1)
-	}
-
-	return resourceType + ":" + host + ":" + resourceID
-}
-
 func (s *Store) readDiscoveryIDFromPath(filePath string) (string, error) {
 	data, migratedPlaintext, err := s.loadDiscoveryFileData(filePath, maxDiscoveryFileReadBytes)
 	if err != nil {

@@ -551,10 +551,6 @@ func tenantRuntimeContainerConfig(tenantID string, cfg ManagerConfig, labels map
 	}
 }
 
-func tenantRuntimeUser() string {
-	return fmt.Sprintf("%d:%d", tenantRuntimeUID, tenantRuntimeGID)
-}
-
 func tenantRuntimeUserFor(cfg ManagerConfig) string {
 	return fmt.Sprintf("%d:%d", tenantRuntimeUIDFor(cfg), tenantRuntimeGIDFor(cfg))
 }

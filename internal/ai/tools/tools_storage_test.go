@@ -28,10 +28,6 @@ type stubDiskHealthProvider struct {
 	hosts []*unifiedresources.HostView
 }
 
-func (s *stubDiskHealthProvider) GetHosts() []*unifiedresources.HostView {
-	return s.hosts
-}
-
 type stubUpdatesProvider struct {
 	pending            []ContainerUpdateInfo
 	enabled            bool

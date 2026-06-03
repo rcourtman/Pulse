@@ -19,14 +19,6 @@ func loadHostedAwareAIConfig(hostedMode bool, billingBaseDir, orgID string, pers
 	return cfg, nil
 }
 
-func shouldAutoBootstrapHostedAIConfig(hostedMode bool, persistence *config.ConfigPersistence) bool {
-	return false
-}
-
-func hostedAIAutoBootstrapEligible(state *billingState) bool {
-	return false
-}
-
 func hostedModeEnabledFromEnv() bool {
 	return os.Getenv("PULSE_HOSTED_MODE") == "true"
 }

@@ -430,11 +430,6 @@ func NewProvider(snapshot InventorySnapshot) *Provider {
 	return provider
 }
 
-// NewDefaultProvider returns a provider loaded with the default VMware fixtures.
-func NewDefaultProvider() *Provider {
-	return NewProvider(DefaultFixtures())
-}
-
 // Refresh fetches and caches the latest snapshot.
 func (p *Provider) Refresh(ctx context.Context) error {
 	if p == nil {

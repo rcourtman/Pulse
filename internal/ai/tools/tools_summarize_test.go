@@ -39,18 +39,6 @@ func newSummarizeTestEnvironment(t *testing.T) (*PulseToolExecutor, func()) {
 	return exec, cleanup
 }
 
-func writeMetricSamples(t *testing.T, dir string, store *metrics.Store, resourceID string, value float64, count int) {
-	t.Helper()
-	now := time.Now()
-	for i := 0; i < count; i++ {
-		ts := now.Add(time.Duration(-30+i*2) * time.Minute)
-		store.Write("node", resourceID, "cpu", value, ts)
-		store.Write("node", resourceID, "memory", value-10, ts)
-	}
-	store.Flush()
-	_ = dir
-}
-
 func TestSummarizeTool_RegisteredAndDiscoverable(t *testing.T) {
 	exec, cleanup := newSummarizeTestEnvironment(t)
 	defer cleanup()

@@ -61,19 +61,6 @@ func AvailabilityFixtures() []AvailabilityFixture {
 	return CurrentFixtureGraph().AvailabilityFixtures
 }
 
-func AvailabilityTargets() []AvailabilityTargetFixture {
-	fixtures := AvailabilityFixtures()
-	out := make([]AvailabilityTargetFixture, 0, len(fixtures))
-	for _, fixture := range fixtures {
-		target := normalizeAvailabilityTargetFixture(fixture.Target)
-		if strings.TrimSpace(target.ID) == "" {
-			continue
-		}
-		out = append(out, target)
-	}
-	return out
-}
-
 func normalizeAvailabilityTargetFixture(target AvailabilityTargetFixture) AvailabilityTargetFixture {
 	target.ID = strings.TrimSpace(target.ID)
 	target.Name = strings.TrimSpace(target.Name)

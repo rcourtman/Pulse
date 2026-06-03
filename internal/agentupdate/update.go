@@ -333,14 +333,6 @@ func (u *Updater) CheckAndUpdate(ctx context.Context) {
 	u.logger.Info().Msg("agent updated successfully, restarting")
 }
 
-// setAuthHeaders adds authentication headers to the request if an API token is configured.
-func (u *Updater) setAuthHeaders(req *http.Request) {
-	if u.cfg.APIToken != "" {
-		req.Header.Set(apiTokenHeader, u.cfg.APIToken)
-		req.Header.Set(authorizationHeader, bearerTokenPrefix+u.cfg.APIToken)
-	}
-}
-
 func (u *Updater) startCheck() bool {
 	u.checkMu.Lock()
 	defer u.checkMu.Unlock()

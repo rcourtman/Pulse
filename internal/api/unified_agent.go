@@ -442,10 +442,6 @@ func readBinaryWithChecksum(body io.Reader) ([]byte, string, error) {
 	return content, hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
-func serveProxiedAgentBinary(w http.ResponseWriter, content []byte, checksum, servedFrom string) {
-	serveProxiedAgentBinaryWithSignatures(w, content, checksum, "", "", servedFrom)
-}
-
 func serveProxiedAgentBinaryWithSignatures(w http.ResponseWriter, content []byte, checksum, signature, sshSignature, servedFrom string) {
 	w.Header().Set(checksumHeaderName, checksum)
 	if strings.TrimSpace(signature) != "" {

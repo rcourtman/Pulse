@@ -17,15 +17,6 @@ type aggregatorRuntimeSources struct {
 	truenasPoller *monitoring.TrueNASPoller
 }
 
-// buildAggregatorInputs gathers the same inputs the HTTP connections handler
-// uses so the alerts pipeline can derive identical Connection rows without
-// going through the HTTP layer. Returning an empty aggregatorInputs when a
-// dependency is unavailable keeps the alerts loop a no-op rather than a hard
-// failure.
-func buildAggregatorInputs(ctx context.Context, cfg *config.Config, persistence *config.ConfigPersistence, monitor *monitoring.Monitor) aggregatorInputs {
-	return buildAggregatorInputsWithRuntimeSources(ctx, cfg, persistence, monitor, aggregatorRuntimeSources{})
-}
-
 func buildAggregatorInputsWithRuntimeSources(
 	ctx context.Context,
 	cfg *config.Config,
@@ -135,14 +126,6 @@ func snapshotConnectionsForAlerts(connections []Connection) []alerts.ConnectionS
 		out = append(out, snap)
 	}
 	return out
-}
-
-// BuildAlertConnectionSnapshots returns the platform-connection snapshots the
-// alerts package consumes for the connection-degraded check. This is the
-// monitor-loop counterpart to the HTTP connections handler — it runs the
-// same derivation but skips the JSON envelope.
-func BuildAlertConnectionSnapshots(ctx context.Context, cfg *config.Config, persistence *config.ConfigPersistence, monitor *monitoring.Monitor) []alerts.ConnectionSnapshot {
-	return buildAlertConnectionSnapshotsWithRuntimeSources(ctx, cfg, persistence, monitor, aggregatorRuntimeSources{})
 }
 
 func buildAlertConnectionSnapshotsWithRuntimeSources(

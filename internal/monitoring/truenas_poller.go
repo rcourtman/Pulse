@@ -402,23 +402,6 @@ func (p *TrueNASPoller) syncConnections() {
 	}
 }
 
-func (p *TrueNASPoller) closeAllProviders() {
-	if p == nil {
-		return
-	}
-
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	for _, providers := range p.providersByOrg {
-		for _, provider := range providers {
-			if provider != nil {
-				provider.Close()
-			}
-		}
-	}
-}
-
 // ConnectionSummaries returns per-connection runtime health and discovered
 // contribution summaries for the supplied TrueNAS settings records.
 func (p *TrueNASPoller) ConnectionSummaries(orgID string, instances []config.TrueNASInstance) map[string]TrueNASConnectionSummary {

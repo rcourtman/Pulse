@@ -111,14 +111,6 @@ func publicDemoCommercialPolicyForRequest(
 	return "", false
 }
 
-func publicDemoCommercialRouteInventory() []string {
-	routes := make([]string, 0, len(publicDemoCommercialPolicies))
-	for _, policy := range publicDemoCommercialPolicies {
-		routes = append(routes, policy.route)
-	}
-	return routes
-}
-
 func sanitizeRuntimeCapabilitiesPayloadForPublicDemo(
 	payload RuntimeCapabilitiesPayload,
 ) RuntimeCapabilitiesPayload {

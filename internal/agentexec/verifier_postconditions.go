@@ -21,16 +21,16 @@ const (
 	FieldContainerStatus PostconditionField = "status"
 
 	// Systemd unit fields read via DBus or systemctl show.
-	FieldUnitActiveState           PostconditionField = "ActiveState"
-	FieldUnitSubState              PostconditionField = "SubState"
-	FieldUnitActiveEnterTimestamp  PostconditionField = "ActiveEnterTimestamp"
+	FieldUnitActiveState          PostconditionField = "ActiveState"
+	FieldUnitSubState             PostconditionField = "SubState"
+	FieldUnitActiveEnterTimestamp PostconditionField = "ActiveEnterTimestamp"
 
 	// Docker container fields.
 	FieldDockerStatus      PostconditionField = "status"
 	FieldDockerLastStarted PostconditionField = "last_started"
 
 	// Kubernetes deployment fields.
-	FieldDeploymentReadyReplicas    PostconditionField = "readyReplicas"
+	FieldDeploymentReadyReplicas   PostconditionField = "readyReplicas"
 	FieldDeploymentDesiredReplicas PostconditionField = "desiredReplicas"
 )
 
@@ -69,11 +69,11 @@ type PostconditionCheck struct {
 // postcondition to be observed; capabilities with no natural settle
 // (a single-shot status read) use the default.
 type CapabilityPostcondition struct {
-	Capability  string                 `json:"capability"`
-	VerifyRead  string                 `json:"verifyRead"`
-	Window      time.Duration          `json:"window"`
-	Description string                 `json:"description"`
-	Checks      []PostconditionCheck   `json:"checks"`
+	Capability  string               `json:"capability"`
+	VerifyRead  string               `json:"verifyRead"`
+	Window      time.Duration        `json:"window"`
+	Description string               `json:"description"`
+	Checks      []PostconditionCheck `json:"checks"`
 }
 
 // defaultVerifyWindow is the per-capability fallback window. The agentexec
@@ -81,23 +81,6 @@ type CapabilityPostcondition struct {
 // per-capability values here are the substrate's "what is reasonable for
 // this surface" hint.
 const defaultVerifyWindow = 2 * time.Minute
-
-// CapabilityPostconditions returns the canonical capability -> postcondition
-// map for the verifier substrate. The returned map is a copy so callers
-// cannot mutate the shared substrate.
-//
-// Capabilities not present in this map have no automated postcondition and
-// will surface as VerificationUnknown on the audit record.
-func CapabilityPostconditions() map[string]CapabilityPostcondition {
-	out := make(map[string]CapabilityPostcondition, len(capabilityPostconditions))
-	for k, v := range capabilityPostconditions {
-		copyChecks := make([]PostconditionCheck, len(v.Checks))
-		copy(copyChecks, v.Checks)
-		v.Checks = copyChecks
-		out[k] = v
-	}
-	return out
-}
 
 // LookupCapabilityPostcondition returns the postcondition for the given
 // capability name, or false if no postcondition is registered.

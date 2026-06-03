@@ -626,69 +626,12 @@ func firstNonEmptyTrimmed(values ...string) string {
 	return ""
 }
 
-func cloneRecoveryPoints(src []recovery.RecoveryPoint) []recovery.RecoveryPoint {
-	if len(src) == 0 {
-		return nil
-	}
-	dst := make([]recovery.RecoveryPoint, 0, len(src))
-	for _, p := range src {
-		dst = append(dst, cloneRecoveryPoint(p))
-	}
-	return dst
-}
-
-func cloneRecoveryPoint(p recovery.RecoveryPoint) recovery.RecoveryPoint {
-	out := p
-
-	out.StartedAt = cloneTimePtr(p.StartedAt)
-	out.CompletedAt = cloneTimePtr(p.CompletedAt)
-	out.SizeBytes = cloneInt64Ptr(p.SizeBytes)
-	out.Verified = cloneBoolPtr(p.Verified)
-	out.Encrypted = cloneBoolPtr(p.Encrypted)
-	out.Immutable = cloneBoolPtr(p.Immutable)
-
-	if p.SubjectRef != nil {
-		ref := *p.SubjectRef
-		if p.SubjectRef.Extra != nil {
-			ref.Extra = cloneStringMap(p.SubjectRef.Extra)
-		}
-		out.SubjectRef = &ref
-	}
-	if p.RepositoryRef != nil {
-		ref := *p.RepositoryRef
-		if p.RepositoryRef.Extra != nil {
-			ref.Extra = cloneStringMap(p.RepositoryRef.Extra)
-		}
-		out.RepositoryRef = &ref
-	}
-	if p.Details != nil {
-		out.Details = cloneAnyMap(p.Details)
-	}
-	return out
-}
-
 func cloneStringMap(src map[string]string) map[string]string {
 	if len(src) == 0 {
 		return nil
 	}
 	dst := make(map[string]string, len(src))
 	for k, v := range src {
-		dst[k] = v
-	}
-	return dst
-}
-
-func cloneAnyMap(src map[string]any) map[string]any {
-	if len(src) == 0 {
-		return nil
-	}
-	dst := make(map[string]any, len(src))
-	for k, v := range src {
-		// Values are primitives/slices in our mock payloads; shallow copy is sufficient.
-		if s, ok := v.([]string); ok {
-			dst[k] = append([]string(nil), s...)
-			continue
-		}
 		dst[k] = v
 	}
 	return dst

@@ -1253,13 +1253,6 @@ func maxInt(a, b int) int {
 	return b
 }
 
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func (p *PatrolService) assembleSeedWithinBudget(sections []seedSection, budgetTokens int) string {
 	if len(sections) == 0 {
 		return ""

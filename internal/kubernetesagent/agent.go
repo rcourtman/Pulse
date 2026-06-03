@@ -1270,14 +1270,6 @@ func hasPodUsage(usage agentsk8s.PodUsage) bool {
 		usage.EphemeralStorageCapacityBytes > 0
 }
 
-func copyStringMap(m map[string]string) map[string]string {
-	c := make(map[string]string, len(m))
-	for k, v := range m {
-		c[k] = v
-	}
-	return c
-}
-
 func parseQuantity(value string, convert func(k8sresource.Quantity) int64) int64 {
 	value = strings.TrimSpace(value)
 	if value == "" {

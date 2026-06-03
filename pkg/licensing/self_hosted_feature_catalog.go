@@ -354,26 +354,6 @@ func IsCompatibilityOnlyFeature(feature string) bool {
 		entry.SelfHostedRoles.Pro == SelfHostedFeatureRoleCompatibilityOnly
 }
 
-func SelfHostedComparisonFeatures() []FeatureMetadata {
-	out := make([]FeatureMetadata, 0)
-	for _, entry := range AllFeatureMetadata() {
-		if entry.ShowInComparisonTable {
-			out = append(out, entry)
-		}
-	}
-	return out
-}
-
-func SelfHostedPlanFeaturesForRole(tier Tier, role SelfHostedFeatureRole) []FeatureMetadata {
-	out := make([]FeatureMetadata, 0)
-	for _, entry := range AllFeatureMetadata() {
-		if GetSelfHostedFeatureRole(entry.Key, tier) == role {
-			out = append(out, entry)
-		}
-	}
-	return out
-}
-
 func GenericUpgradeFeatureMetadata() []FeatureMetadata {
 	out := make([]FeatureMetadata, 0)
 	for _, entry := range AllFeatureMetadata() {

@@ -30,15 +30,6 @@ func healthEntry(lastSuccess *time.Time, errMessage, errCategory string, breaker
 	}
 }
 
-func desiredAgentConfigFingerprint(t *testing.T, commandsEnabled *bool, settings map[string]interface{}) ConnectionFleetConfigFingerprint {
-	t.Helper()
-	desired := desiredAgentConfig(t, commandsEnabled, settings)
-	if desired.Fingerprint == nil {
-		t.Fatal("expected desired config fingerprint")
-	}
-	return *desired.Fingerprint
-}
-
 func desiredAgentConfig(t *testing.T, commandsEnabled *bool, settings map[string]interface{}) connectionAgentDesiredConfig {
 	t.Helper()
 	metadata, err := remoteconfig.BuildDesiredConfigMetadata(commandsEnabled, settings)

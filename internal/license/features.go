@@ -49,11 +49,6 @@ var TierFeatures = licensing.TierFeatures
 // TierHistoryDays defines the maximum metrics history retention per tier.
 var TierHistoryDays = licensing.TierHistoryDays
 
-// DeriveCapabilitiesFromTier derives effective capabilities from tier and explicit features.
-func DeriveCapabilitiesFromTier(tier Tier, explicitFeatures []string) []string {
-	return licensing.DeriveCapabilitiesFromTier(tier, explicitFeatures)
-}
-
 // DeriveEntitlements derives capabilities and limits from tier and canonical monitored-system fields.
 func DeriveEntitlements(tier Tier, features []string, maxMonitoredSystems int, maxGuests int) (capabilities []string, limits map[string]int64) {
 	return licensing.DeriveEntitlements(tier, features, maxMonitoredSystems, maxGuests)
@@ -72,11 +67,4 @@ func GetTierDisplayName(tier Tier) string {
 // GetFeatureDisplayName returns a human-readable name for a feature.
 func GetFeatureDisplayName(feature string) string {
 	return licensing.GetFeatureDisplayName(feature)
-}
-
-// IsCompatibilityOnlyFeature reports capability keys that remain valid runtime
-// contracts for backwards compatibility but should not be marketed as current
-// v6 commercial pillars or generic upgrade prompts.
-func IsCompatibilityOnlyFeature(feature string) bool {
-	return licensing.IsCompatibilityOnlyFeature(feature)
 }

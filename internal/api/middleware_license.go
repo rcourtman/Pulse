@@ -172,33 +172,6 @@ func RequireMultiTenant(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// RequireMultiTenantHandler returns middleware for http.Handler.
-func RequireMultiTenantHandler(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		orgID := GetOrgID(r.Context())
-
-		// Default org is always allowed (backward compatibility)
-		if orgID == "" || orgID == "default" {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		// Feature flag check - multi-tenant must be explicitly enabled
-		if !multiTenantEnabled {
-			writeMultiTenantDisabledError(w)
-			return
-		}
-
-		// Non-default orgs require multi-tenant license
-		if !hasMultiTenantFeatureForContext(r.Context()) {
-			writeMultiTenantRequiredError(w)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
-}
-
 // writeMultiTenantRequiredError writes a 402 Payment Required response
 // indicating that multi-tenant requires an Enterprise license.
 func writeMultiTenantRequiredError(w http.ResponseWriter) {

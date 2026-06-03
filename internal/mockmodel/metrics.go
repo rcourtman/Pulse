@@ -102,21 +102,6 @@ func NormalizeBlendWeight(weight float64, step, reference time.Duration) float64
 	return clampFloat(normalized, 0.0005, 0.999)
 }
 
-func StyleSpeed(style SeriesStyle) float64 {
-	switch style {
-	case StylePlateau:
-		return 0.5
-	case StyleFlat:
-		return 0.12
-	default:
-		return 1.0
-	}
-}
-
-func ValueAt(seed uint64, min, max float64, speed float64, at time.Time) float64 {
-	return valueAtProfile(seed, min, max, profileFromSpeed(speed), at)
-}
-
 func ValueAtMetric(seed uint64, min, max float64, metric string, speed float64, at time.Time) float64 {
 	return ValueAtMetricWithRole(seed, min, max, metric, speed, "", at)
 }
@@ -262,10 +247,6 @@ func seriesForProfileWithRole(
 	}
 	values[len(values)-1] = current
 	return values
-}
-
-func valueAtProfile(seed uint64, min, max float64, profile metricProfile, at time.Time) float64 {
-	return valueAtProfileWithRole(seed, min, max, profile, "", at)
 }
 
 func valueAtProfileWithRole(seed uint64, min, max float64, profile metricProfile, role string, at time.Time) float64 {

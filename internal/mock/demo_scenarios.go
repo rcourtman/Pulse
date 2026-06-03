@@ -1204,10 +1204,6 @@ func scenarioClusterAlias(name string) string {
 	}
 }
 
-func scenarioStorageAlias(name string) string {
-	return scenarioStorageAliasForNode(name, "")
-}
-
 func storageScenarioAlias(storage models.Storage) string {
 	return scenarioStorageAliasForNode(storage.Name, storage.Node)
 }

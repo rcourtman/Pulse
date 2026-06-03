@@ -400,25 +400,6 @@ func quietHoursReplayAtForAlert(alert *alerts.Alert, now time.Time) *time.Time {
 	return &parsed
 }
 
-func quietHoursReplayAtForAlerts(alertList []*alerts.Alert, now time.Time) *time.Time {
-	var replayAt time.Time
-	for _, alert := range alertList {
-		alertReplayAt := quietHoursReplayAtForAlert(alert, now)
-		if alertReplayAt == nil {
-			continue
-		}
-		if replayAt.IsZero() || alertReplayAt.After(replayAt) {
-			replayAt = *alertReplayAt
-		}
-	}
-
-	if replayAt.IsZero() {
-		return nil
-	}
-	replayAt = replayAt.UTC()
-	return &replayAt
-}
-
 func notificationQueueBucketsForJob(job notificationDeliveryJob, now time.Time) []notificationQueueBucket {
 	if len(job.Alerts) == 0 {
 		return []notificationQueueBucket{{job: job}}
@@ -1990,16 +1971,6 @@ func (n *NotificationManager) sendHTMLEmailWithError(subject, htmlBody, textBody
 	return nil
 }
 
-// sendHTMLEmail sends an HTML email with multipart content
-func (n *NotificationManager) sendHTMLEmail(subject, htmlBody, textBody string, config EmailConfig) {
-	if err := n.sendHTMLEmailWithError(subject, htmlBody, textBody, config); err != nil {
-		log.Error().
-			Err(err).
-			Str("smtp", fmt.Sprintf("%s:%d", config.SMTPHost, config.SMTPPort)).
-			Msg("failed to send HTML email notification")
-	}
-}
-
 type webhookRenderMode string
 
 const (
@@ -2562,55 +2533,6 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 			Str("response", result.body).
 			Msg("webhook returned non-success status")
 		return fmt.Errorf("webhook returned HTTP %d: %s", result.statusCode, result.body)
-	}
-}
-
-func (n *NotificationManager) sendSingleWebhookWithError(webhook WebhookConfig, alert *alerts.Alert) error {
-	customFields := convertWebhookCustomFields(webhook.CustomFields)
-	data := n.prepareWebhookData(alert, customFields)
-
-	var err error
-	webhook, data, err = n.prepareWebhookDeliveryContext(webhook, data)
-	if err != nil {
-		log.Error().
-			Err(err).
-			Str("webhook", webhook.Name).
-			Msg("failed to prepare webhook delivery context")
-		return err
-	}
-
-	jsonData, err := n.renderWebhookPayloadJSON(webhook, data, webhookRenderModeSingle, func() ([]byte, error) {
-		payload := map[string]interface{}{
-			"alert":     alert,
-			"timestamp": time.Now().Unix(),
-			"source":    "pulse-monitoring",
-		}
-		return json.Marshal(payload)
-	})
-	if err != nil {
-		log.Error().
-			Err(err).
-			Str("webhook", webhook.Name).
-			Str("alertID", alert.ID).
-			Msg("failed to render webhook payload")
-		return err
-	}
-
-	// Send using common request logic
-	if err := n.sendWebhookRequest(webhook, jsonData, fmt.Sprintf("alert-%s", alert.ID)); err != nil {
-		return err
-	}
-	return nil
-}
-
-// sendWebhook sends a webhook notification
-func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.Alert) {
-	if err := n.sendSingleWebhookWithError(webhook, alert); err != nil {
-		log.Error().
-			Err(err).
-			Str("webhook", webhook.Name).
-			Str("alertID", alert.ID).
-			Msg("failed to send webhook notification")
 	}
 }
 

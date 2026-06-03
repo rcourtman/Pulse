@@ -91,21 +91,6 @@ func (i *Integration) SetPatrolTrigger(fn PatrolTriggerFunc) {
 	i.bridge.SetPatrolTrigger(fn)
 }
 
-// Start starts the unified system
-func (i *Integration) Start() {
-	i.bridge.Start()
-	log.Info().Msg("unified alert/finding system started")
-}
-
-// Stop stops the unified system
-func (i *Integration) Stop() {
-	i.bridge.Stop()
-	if err := i.store.ForceSave(); err != nil {
-		log.Error().Err(err).Msg("failed to save unified findings on shutdown")
-	}
-	log.Info().Msg("unified alert/finding system stopped")
-}
-
 // GetStore returns the unified store
 func (i *Integration) GetStore() *UnifiedStore {
 	return i.store

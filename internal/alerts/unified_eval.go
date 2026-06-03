@@ -109,16 +109,6 @@ func unifiedAlertType(typeKey string) string {
 	}
 }
 
-// isUnifiedGuestType returns true for resource types that support I/O metrics.
-func isUnifiedGuestType(typeKey string) bool {
-	switch typeKey {
-	case "vm", "system-container", "app-container":
-		return true
-	default:
-		return false
-	}
-}
-
 func supportsUnifiedIOMetrics(typeKey string) bool {
 	switch typeKey {
 	case "vm", "system-container", "app-container", "k8s-cluster", "k8s-deployment", "pod", "truenas-system", "vmware-host", "vmware-vm":
@@ -595,32 +585,6 @@ func unifiedResourceAlertInstance(resource unifiedresources.Resource, typeKey st
 		return "vSphere"
 	}
 	return ""
-}
-
-func mergeMetricOptions(base *metricOptions, extra map[string]interface{}) *metricOptions {
-	if len(extra) == 0 {
-		return base
-	}
-
-	merged := &metricOptions{}
-	if base != nil {
-		*merged = *base
-	}
-	if len(extra) > 0 {
-		if merged.Metadata == nil {
-			merged.Metadata = make(map[string]interface{}, len(extra))
-		} else {
-			copied := make(map[string]interface{}, len(merged.Metadata)+len(extra))
-			for k, v := range merged.Metadata {
-				copied[k] = v
-			}
-			merged.Metadata = copied
-		}
-		for k, v := range extra {
-			merged.Metadata[k] = v
-		}
-	}
-	return merged
 }
 
 func (i *UnifiedResourceInput) CPUValue() float64 {

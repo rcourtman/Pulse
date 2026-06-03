@@ -238,23 +238,6 @@ const (
 	ErrCodeNoAgent          = "NO_AGENT"
 )
 
-// NewToolSuccess creates a successful tool response
-func NewToolSuccess(data interface{}) ToolResponse {
-	return ToolResponse{
-		OK:   true,
-		Data: data,
-	}
-}
-
-// NewToolSuccessWithMeta creates a successful tool response with metadata
-func NewToolSuccessWithMeta(data interface{}, meta map[string]interface{}) ToolResponse {
-	return ToolResponse{
-		OK:   true,
-		Data: data,
-		Meta: meta,
-	}
-}
-
 // NewToolBlockedError creates a policy/validation blocked error
 func NewToolBlockedError(code, message string, details map[string]interface{}) ToolResponse {
 	return ToolResponse{
@@ -264,20 +247,6 @@ func NewToolBlockedError(code, message string, details map[string]interface{}) T
 			Message: message,
 			Blocked: true,
 			Details: details,
-		},
-	}
-}
-
-// NewToolFailedError creates a runtime failure error
-func NewToolFailedError(code, message string, retryable bool, details map[string]interface{}) ToolResponse {
-	return ToolResponse{
-		OK: false,
-		Error: &ToolError{
-			Code:      code,
-			Message:   message,
-			Failed:    true,
-			Retryable: retryable,
-			Details:   details,
 		},
 	}
 }

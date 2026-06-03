@@ -50,26 +50,6 @@ type mockBaselineStore struct {
 	anomalies map[string]baselineResult
 }
 
-func (m *mockBaselineStore) CheckAnomaly(resourceID, metric string, value float64) (baseline.AnomalySeverity, float64, *baseline.MetricBaseline) {
-	res, ok := m.anomalies[resourceID+":"+metric]
-	if !ok {
-		return baseline.AnomalyNone, 0, &baseline.MetricBaseline{}
-	}
-	return res.severity, res.zScore, res.bl
-}
-
-func (m *mockBaselineStore) GetBaseline(resourceID, metric string) (*baseline.MetricBaseline, bool) {
-	res, ok := m.anomalies[resourceID+":"+metric]
-	if !ok {
-		return nil, false
-	}
-	return res.bl, true
-}
-
-func (m *mockBaselineStore) Update(resourceID, metric string, value float64) {}
-func (m *mockBaselineStore) Save() error                                     { return nil }
-func (m *mockBaselineStore) Load() error                                     { return nil }
-
 func TestGenerateRemediationSummary(t *testing.T) {
 	tests := []struct {
 		command  string
@@ -642,20 +622,4 @@ func TestService_BuildRecentResourceChangesContext_FallsBackToMemoryFormatter(t 
 }
 
 type mockIncidentStore struct {
-}
-
-func (m *mockIncidentStore) FormatForAlert(alertID string, limit int) string {
-	return "alert:" + alertID
-}
-
-func (m *mockIncidentStore) FormatForResource(resourceID string, limit int) string {
-	return "res:" + resourceID
-}
-
-func (m *mockIncidentStore) FormatForPatrol(limit int) string {
-	return "patrol"
-}
-
-func (m *mockIncidentStore) Record(resourceID, resourceType, alertID, analysis, remediation string) error {
-	return nil
 }

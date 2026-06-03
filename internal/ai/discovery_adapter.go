@@ -157,14 +157,3 @@ func cloneStringSlice(values []string) []string {
 	copy(cloned, values)
 	return cloned
 }
-
-func cloneStringMap(values map[string]string) map[string]string {
-	if len(values) == 0 {
-		return nil
-	}
-	cloned := make(map[string]string, len(values))
-	for k, v := range values {
-		cloned[k] = v
-	}
-	return cloned
-}

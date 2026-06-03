@@ -139,17 +139,6 @@ func ProjectMonitoredSystemRecords(
 	return projectMonitoredSystemResources(rs, nil, recordsBySource, nil)
 }
 
-// ProjectMonitoredSystemRecordsReplacement projects source-native records while
-// replacing one existing source-owned surface in the canonical top-level
-// resolver.
-func ProjectMonitoredSystemRecordsReplacement(
-	rs ReadState,
-	replacement MonitoredSystemReplacement,
-	recordsBySource map[DataSource][]IngestRecord,
-) MonitoredSystemProjection {
-	return projectMonitoredSystemResources(rs, nil, recordsBySource, &replacement)
-}
-
 func projectMonitoredSystemResources(
 	rs ReadState,
 	additionalResources []Resource,
@@ -324,21 +313,6 @@ func previewProjectedMonitoredSystems(
 	return monitoredSystemRecordsForGroupIDs(projectedResolver, groupIDs)
 }
 
-func monitoredSystemRecordForGroupID(resolver TopLevelSystemResolver, groupID string) *MonitoredSystemRecord {
-	groupID = strings.TrimSpace(groupID)
-	if groupID == "" {
-		return nil
-	}
-	for _, group := range resolver.groups {
-		if group.id != groupID {
-			continue
-		}
-		record := monitoredSystemRecordForResolvedGroup(group)
-		return &record
-	}
-	return nil
-}
-
 func monitoredSystemRecordsForGroupIDs(
 	resolver TopLevelSystemResolver,
 	groupIDs map[string]struct{},
@@ -385,14 +359,6 @@ func (r TopLevelSystemResolver) groupForResourceID(resourceID string) *topLevelS
 		return &r.groups[i]
 	}
 	return nil
-}
-
-func monitoredSystemGroupResourceIDs(resources []*Resource, excludeID string) map[string]struct{} {
-	excluded := make(map[string]struct{})
-	if excludeID = strings.TrimSpace(excludeID); excludeID != "" {
-		excluded[excludeID] = struct{}{}
-	}
-	return monitoredSystemGroupResourceIDsExcluding(resources, excluded)
 }
 
 func monitoredSystemGroupResourceIDsExcluding(

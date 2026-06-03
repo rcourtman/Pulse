@@ -153,15 +153,6 @@ func hasAnyMarker(content string, markers []string) bool {
 	return false
 }
 
-func isHexString(s string) bool {
-	for _, c := range s {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-			return false
-		}
-	}
-	return true
-}
-
 // DetectLXCCTID attempts to detect the Proxmox LXC container ID.
 // Returns empty string if not in an LXC container or CTID cannot be determined.
 func DetectLXCCTID() string {

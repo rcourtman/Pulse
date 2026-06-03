@@ -85,12 +85,6 @@ func sessionFSMState(fsm *SessionFSM) string {
 	return string(fsm.State)
 }
 
-func (a *AgenticLoop) currentFSMState() string {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return sessionFSMState(a.sessionFSM)
-}
-
 func fallbackProviderStreamErrorMessage(err error) string {
 	const defaultMessage = "AI response stream interrupted before completion. Please retry."
 	if err == nil {

@@ -236,10 +236,6 @@ func (r *Router) securityStatusSettingsCapabilitiesFromSnapshot(snapshot securit
 	}
 }
 
-func (r *Router) securityStatusSettingsCapabilities(req *http.Request) securityStatusSettingsCapabilities {
-	return r.securityStatusSettingsCapabilitiesFromSnapshot(r.buildSecurityStatusAuthSnapshot(req))
-}
-
 func (r *Router) securityStatusSessionCapabilities(ctx context.Context) securityStatusSessionCapabilities {
 	demoMode := r != nil && r.config != nil && r.config.DemoMode
 	assistantEnabled := false

@@ -127,10 +127,6 @@ type ChatResponse struct {
 	OutputTokens     int        `json:"output_tokens,omitempty"`
 }
 
-func EmptyChatResponse() ChatResponse {
-	return ChatResponse{}.NormalizeCollections()
-}
-
 func (r ChatResponse) NormalizeCollections() ChatResponse {
 	if r.ToolCalls == nil {
 		r.ToolCalls = []ToolCall{}

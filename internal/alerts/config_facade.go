@@ -66,28 +66,7 @@ func ensureValidHysteresis(threshold *HysteresisThreshold, metricName string) {
 	alertconfig.EnsureValidHysteresis(threshold, metricName)
 }
 
-func normalizeStorageDefaults(config *AlertConfig) { alertconfig.NormalizeStorageDefaults(config) }
-
-func normalizeDockerThreshold(th HysteresisThreshold, defaultTrigger float64, metricName string) HysteresisThreshold {
-	return alertconfig.NormalizeDockerThreshold(th, defaultTrigger, metricName)
-}
-
-func normalizeDockerDefaults(config *AlertConfig)   { alertconfig.NormalizeDockerDefaults(config) }
-func normalizePMGDefaults(config *AlertConfig)      { alertconfig.NormalizePMGDefaults(config) }
 func normalizeSnapshotDefaults(config *AlertConfig) { alertconfig.NormalizeSnapshotDefaults(config) }
 func normalizeBackupDefaults(config *AlertConfig)   { alertconfig.NormalizeBackupDefaults(config) }
-func normalizeNodeDefaults(config *AlertConfig)     { alertconfig.NormalizeNodeDefaults(config) }
-func normalizeAgentDefaults(config *AlertConfig)    { alertconfig.NormalizeAgentDefaults(config) }
-func normalizeKubernetesDefaults(config *AlertConfig) {
-	alertconfig.NormalizeKubernetesDefaults(config)
-}
-func normalizeTrueNASDefaults(config *AlertConfig) { alertconfig.NormalizeTrueNASDefaults(config) }
-func normalizeVMwareDefaults(config *AlertConfig)  { alertconfig.NormalizeVMwareDefaults(config) }
-func normalizeGeneralSettings(config *AlertConfig) { alertconfig.NormalizeGeneralSettings(config) }
-func normalizeTimeThresholds(config *AlertConfig)  { alertconfig.NormalizeTimeThresholds(config) }
-
-func validateHysteresisThresholds(config *AlertConfig) {
-	alertconfig.ValidateHysteresisThresholds(config)
-}
 
 func validateQuietHoursTimezone(config *AlertConfig) { alertconfig.ValidateQuietHoursTimezone(config) }

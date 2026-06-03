@@ -46,13 +46,6 @@ func (q *Queue[T]) Push(item T) {
 	q.data = append(q.data, item)
 }
 
-func normalizeCapacity(capacity int) int {
-	if capacity < minCapacity {
-		return minCapacity
-	}
-	return capacity
-}
-
 // Pop removes and returns the oldest item from the queue.
 // Returns zero value and false if empty.
 func (q *Queue[T]) Pop() (T, bool) {
@@ -107,11 +100,4 @@ func (q *Queue[T]) Items() []T {
 	cp := make([]T, len(q.data))
 	copy(cp, q.data)
 	return cp
-}
-
-func sanitizeCapacity(capacity int) int {
-	if capacity < minQueueCapacity {
-		return minQueueCapacity
-	}
-	return capacity
 }

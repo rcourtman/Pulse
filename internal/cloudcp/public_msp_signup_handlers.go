@@ -92,11 +92,6 @@ func (h *PublicCloudSignupHandlers) selfServeMSPPriceIDForTier(tier mspTier) (st
 	return h.priceIDForMSPTier(tier)
 }
 
-func (h *PublicCloudSignupHandlers) hasMSPTier(tier mspTier) bool {
-	_, ok := h.priceIDForMSPTier(tier)
-	return ok
-}
-
 func validatePublicMSPSignupPriceID(tier mspTier, priceID string) error {
 	wantPlanVersion := expectedPlanVersionForMSPTier(tier)
 	if wantPlanVersion == "" {

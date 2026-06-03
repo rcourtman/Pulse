@@ -1376,24 +1376,6 @@ func applyRemoteSettings(cfg *Config, settings map[string]interface{}, logger *z
 	}
 }
 
-func remoteBoolSetting(settings map[string]interface{}, key string) (bool, bool) {
-	value, ok := settings[key]
-	if !ok {
-		return false, false
-	}
-	parsed, ok := value.(bool)
-	return parsed, ok
-}
-
-func remoteStringSetting(settings map[string]interface{}, key string) (string, bool) {
-	value, ok := settings[key]
-	if !ok {
-		return "", false
-	}
-	parsed, ok := value.(string)
-	return parsed, ok
-}
-
 func remoteDurationSetting(settings map[string]interface{}, key string) (time.Duration, bool) {
 	value, ok := settings[key]
 	if !ok {

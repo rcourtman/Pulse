@@ -13,24 +13,6 @@ type mockAuthManager struct {
 	updatedRoles []string
 }
 
-func (m *mockAuthManager) GetRoles() []auth.Role                         { return nil }
-func (m *mockAuthManager) GetRole(id string) (auth.Role, bool)           { return auth.Role{}, false }
-func (m *mockAuthManager) SaveRole(role auth.Role) error                 { return nil }
-func (m *mockAuthManager) DeleteRole(id string) error                    { return nil }
-func (m *mockAuthManager) GetUserAssignments() []auth.UserRoleAssignment { return nil }
-func (m *mockAuthManager) GetUserAssignment(username string) (auth.UserRoleAssignment, bool) {
-	return auth.UserRoleAssignment{}, false
-}
-func (m *mockAuthManager) AssignRole(username string, roleID string) error      { return nil }
-func (m *mockAuthManager) RemoveRole(username string, roleID string) error      { return nil }
-func (m *mockAuthManager) GetUserPermissions(username string) []auth.Permission { return nil }
-
-func (m *mockAuthManager) UpdateUserRoles(username string, roleIDs []string) error {
-	m.updatedUser = username
-	m.updatedRoles = roleIDs
-	return nil
-}
-
 func TestOIDCRoleMappingLogic(t *testing.T) {
 	tests := []struct {
 		name          string

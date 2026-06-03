@@ -1140,10 +1140,6 @@ func clonePBSBackups(src []PBSBackup) []PBSBackup {
 	return dest
 }
 
-func clonePMGBackup(src PMGBackup) PMGBackup {
-	return src
-}
-
 func clonePMGBackups(src []PMGBackup) []PMGBackup {
 	return append([]PMGBackup(nil), src...)
 }

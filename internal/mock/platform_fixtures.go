@@ -151,13 +151,6 @@ func SupplementalChanges(source unifiedresources.DataSource) []unifiedresources.
 	}
 }
 
-func PlatformOwnedSources() []unifiedresources.DataSource {
-	return []unifiedresources.DataSource{
-		unifiedresources.SourceTrueNAS,
-		unifiedresources.SourceVMware,
-	}
-}
-
 func SupplementalOwnedSources() []unifiedresources.DataSource {
 	return []unifiedresources.DataSource{
 		unifiedresources.SourceTrueNAS,

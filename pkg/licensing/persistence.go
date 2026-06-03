@@ -421,11 +421,6 @@ func (p *Persistence) encrypt(plaintext []byte) ([]byte, error) {
 	return ciphertext, nil
 }
 
-// decrypt uses AES-GCM to decrypt data with the current encryption key.
-func (p *Persistence) decrypt(ciphertext []byte) ([]byte, error) {
-	return p.decryptWithKey(ciphertext, p.deriveKey())
-}
-
 // decryptWithKey uses AES-GCM to decrypt data with a specific key.
 func (p *Persistence) decryptWithKey(ciphertext []byte, key []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)

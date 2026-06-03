@@ -198,13 +198,6 @@ func (b *callbackBus) alertForAICallbacks() []func(alert *Alert) {
 	return callbacks
 }
 
-func (b *callbackBus) resolvedCallback() func(alertID string) {
-	b.mu.RLock()
-	cb := b.onResolved
-	b.mu.RUnlock()
-	return cb
-}
-
 func (b *callbackBus) resolvedCallbacks() []func(alertID string) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
@@ -328,10 +321,6 @@ func (m *Manager) getAlertForAICallback() func(alert *Alert) {
 
 func (m *Manager) getAlertForAICallbacks() []func(alert *Alert) {
 	return m.callbacks.alertForAICallbacks()
-}
-
-func (m *Manager) getResolvedCallback() func(alertID string) {
-	return m.callbacks.resolvedCallback()
 }
 
 func (m *Manager) getResolvedCallbacks() []func(alertID string) {
