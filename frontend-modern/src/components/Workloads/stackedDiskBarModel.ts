@@ -14,6 +14,8 @@ export interface StackedDiskBarProps {
   disks?: Disk[];
   aggregateDisk?: Disk;
   mode?: 'stacked' | 'aggregate' | 'mini' | 'vertical-bars';
+  summaryStrategy?: 'total' | 'max';
+  showDiskCount?: boolean;
   anomaly?: AnomalyReport | null;
   thresholds?: MetricDisplayThresholds | null;
 }
@@ -53,6 +55,8 @@ export interface StackedDiskVerticalBar {
 export interface StackedDiskMaxInfo {
   label: string;
   percent: number;
+  total: number;
+  used: number;
 }
 
 export interface StackedDiskBarPresentation {
@@ -63,6 +67,8 @@ export interface StackedDiskBarPresentation {
   barColor: string;
   barPercent: number;
   containerClass: string;
+  diskCountLabel: string;
+  diskCountTitle: string;
   displayLabel: string;
   displayPercentValue: number;
   displaySublabel: string;
@@ -220,6 +226,8 @@ function getMaxDiskInfo(disks: Disk[]): StackedDiskMaxInfo | null {
       maxInfo = {
         label: getDiskLabel(disk, index),
         percent,
+        total: disk.total,
+        used: disk.used,
       };
     }
   }
@@ -234,6 +242,7 @@ export function buildStackedDiskBarPresentation(
   const hasDisks = disks.length > 0;
   const hasMultipleDisks = disks.length > 1;
   const aggregateMode = props.mode === 'aggregate';
+  const summaryStrategy = props.summaryStrategy ?? 'total';
   const miniMode = props.mode === 'mini';
   const explicitStackedMode = props.mode === 'stacked';
   const verticalBarsMode = props.mode === 'vertical-bars' && hasDisks;
@@ -258,21 +267,31 @@ export function buildStackedDiskBarPresentation(
         : 0;
   const anomalyRatio = formatAnomalyRatio(props.anomaly) ?? '';
   const maxInfo = getMaxDiskInfo(disks);
-  const displayPercentValue = overallPercent;
+  const useMaxSummary =
+    aggregateMode && hasMultipleDisks && summaryStrategy === 'max' && maxInfo !== null;
+  const displayPercentValue = useMaxSummary && maxInfo ? maxInfo.percent : overallPercent;
   const barPercent = Math.min(displayPercentValue, 100);
   const maxLabelShort = maxInfo ? `max ${formatPercent(maxInfo.percent)}` : '';
   const maxLabelFull = maxInfo ? `Max ${formatPercent(maxInfo.percent)} (${maxInfo.label})` : '';
   const displayLabel = formatPercent(displayPercentValue);
-  const displaySublabel = `${formatBytes(totalUsed)}/${formatBytes(totalCapacity)}`;
+  const displaySublabel = useMaxSummary && maxInfo
+    ? maxInfo.label
+    : `${formatBytes(totalUsed)}/${formatBytes(totalCapacity)}`;
+  const diskCountLabel = hasMultipleDisks ? `(${disks.length})` : '';
+  const diskCountTitle = hasMultipleDisks ? `${disks.length} disks` : '';
+  const showDiskCount = Boolean(props.showDiskCount && hasMultipleDisks);
   const showMaxLabel =
     aggregateMode &&
     hasMultipleDisks &&
+    !useMaxSummary &&
     maxLabelShort.length > 0 &&
     containerWidth >= estimateTextWidth(`${displayLabel} ${maxLabelShort}`);
   const showSublabel =
     containerWidth >=
     estimateTextWidth(
-      `${displayLabel}${showMaxLabel ? ` ${maxLabelShort}` : ''} (${displaySublabel})`,
+      `${displayLabel}${showMaxLabel ? ` ${maxLabelShort}` : ''} (${displaySublabel})${
+        showDiskCount ? ` ${diskCountLabel}` : ''
+      }`,
     );
   const barColor =
     aggregateMode && hasMultipleDisks && maxInfo
@@ -340,6 +359,8 @@ export function buildStackedDiskBarPresentation(
       : inlineDiskMode && hasDisks
         ? 'metric-text w-full h-4 min-w-0'
         : 'metric-text w-full h-4 flex items-center justify-center',
+    diskCountLabel,
+    diskCountTitle,
     displayLabel,
     displayPercentValue,
     displaySublabel,
@@ -351,7 +372,7 @@ export function buildStackedDiskBarPresentation(
     miniDisks,
     miniMode,
     segments,
-    showDiskCount: useStackedSegments,
+    showDiskCount: useStackedSegments || showDiskCount,
     showMaxLabel,
     showSublabel,
     tooltipContent,

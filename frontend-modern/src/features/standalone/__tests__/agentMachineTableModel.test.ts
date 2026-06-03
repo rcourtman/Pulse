@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 import {
+  getAgentMachineDiskPercent,
   getAgentMachineDiskIODetails,
   getAgentMachineNetworkInterfaceDetails,
   getAgentMachineRaidArrayDetails,
@@ -271,6 +272,118 @@ describe('agentMachineTableModel', () => {
     );
 
     expect(sorted.map((machine) => machine.id)).toEqual(['warm', 'cool']);
+  });
+
+  it('uses the worst operational filesystem as the machine disk percent', () => {
+    const machine = resource({
+      disk: {
+        total: 1000,
+        used: 300,
+        free: 700,
+        current: 30,
+      },
+      agent: {
+        disks: [
+          {
+            device: '/dev/sda2',
+            mountpoint: '/',
+            type: 'ext4',
+            total: 1000,
+            used: 420,
+            free: 580,
+          },
+          {
+            device: '/dev/sdb1',
+            mountpoint: '/var/lib/postgresql',
+            type: 'xfs',
+            total: 1000,
+            used: 920,
+            free: 80,
+          },
+          {
+            device: 'pmxcfs',
+            mountpoint: '/etc/pve',
+            type: 'fuse',
+            total: 1000,
+            used: 990,
+            free: 10,
+          },
+          {
+            device: 'D:',
+            mountpoint: 'D:\\',
+            type: 'NTFS',
+            total: 1000,
+            used: 510,
+            free: 490,
+          },
+          {
+            device: 'system-reserved',
+            mountpoint: 'System Reserved',
+            type: 'NTFS',
+            total: 1000,
+            used: 980,
+            free: 20,
+          },
+        ],
+      },
+    });
+
+    expect(getAgentMachineDiskPercent(machine)).toBe(92);
+  });
+
+  it('sorts machines by worst operational disk pressure', () => {
+    const sorted = sortAgentMachines(
+      [
+        resource({
+          id: 'aggregate-heavy',
+          name: 'Aggregate Heavy',
+          disk: { total: 10_000, used: 6_000, free: 4_000, current: 60 },
+          agent: {
+            disks: [
+              {
+                device: '/dev/sda1',
+                mountpoint: '/',
+                type: 'ext4',
+                total: 10_000,
+                used: 6_000,
+                free: 4_000,
+              },
+            ],
+          },
+        }),
+        resource({
+          id: 'small-hot-volume',
+          name: 'Small Hot Volume',
+          disk: { total: 10_000, used: 2_000, free: 8_000, current: 20 },
+          agent: {
+            disks: [
+              {
+                device: '/dev/sda1',
+                mountpoint: '/',
+                type: 'ext4',
+                total: 9_000,
+                used: 1_000,
+                free: 8_000,
+              },
+              {
+                device: '/dev/sdb1',
+                mountpoint: '/srv/app',
+                type: 'xfs',
+                total: 1_000,
+                used: 910,
+                free: 90,
+              },
+            ],
+          },
+        }),
+      ],
+      'disk',
+      'desc',
+      () => '',
+      () => '',
+    );
+
+    expect(sorted.map((machine) => machine.id)).toEqual(['small-hot-volume', 'aggregate-heavy']);
   });
 
   it('matches machine-native search fields beyond the generic resource identity', () => {

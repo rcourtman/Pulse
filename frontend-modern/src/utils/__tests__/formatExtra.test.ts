@@ -201,6 +201,55 @@ describe('normalizeDiskArray', () => {
     expect(result?.map((disk) => disk.mountpoint)).toEqual(['/', '/Volumes/Development']);
   });
 
+  it('filters platform plumbing while preserving operational Windows and Linux disks', () => {
+    const result = normalizeDiskArray([
+      {
+        device: '/dev/sda1',
+        mountpoint: '/boot/firmware',
+        filesystem: 'vfat',
+        total: 536870912,
+        used: 67108864,
+      },
+      {
+        device: '/dev/sda2',
+        mountpoint: '/boot',
+        filesystem: 'ext4',
+        total: 2147483648,
+        used: 268435456,
+      },
+      {
+        device: 'C:',
+        mountpoint: 'C:\\',
+        filesystem: 'NTFS',
+        total: 536870912000,
+        used: 268435456000,
+      },
+      {
+        device: 'D:',
+        mountpoint: 'D:\\',
+        filesystem: 'NTFS',
+        total: 1099511627776,
+        used: 549755813888,
+      },
+      {
+        device: '\\\\?\\Volume{system-reserved}\\',
+        mountpoint: 'System Reserved',
+        filesystem: 'NTFS',
+        total: 524288000,
+        used: 104857600,
+      },
+      {
+        device: 'pmxcfs',
+        mountpoint: '/etc/pve',
+        filesystem: 'fuse',
+        total: 134217728,
+        used: 262144,
+      },
+    ]);
+
+    expect(result?.map((disk) => disk.mountpoint)).toEqual(['/boot', 'C:\\', 'D:\\']);
+  });
+
   it('returns undefined when all disk rows are non-operational macOS mounts', () => {
     expect(
       normalizeDiskArray([

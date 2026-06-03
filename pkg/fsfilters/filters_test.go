@@ -175,6 +175,9 @@ func TestShouldSkipFilesystem(t *testing.T) {
 		{"/var/lib/docker", "ext4", "/var/lib/docker/overlay2", 1000000, 500000, true},
 		{"/snap prefix", "ext4", "/snap/core/12345", 1000000, 500000, true},
 		{"/boot/efi exact", "vfat", "/boot/efi", 512 * 1024 * 1024, 50 * 1024 * 1024, true},
+		{"/boot/firmware exact", "vfat", "/boot/firmware", 512 * 1024 * 1024, 50 * 1024 * 1024, true},
+		{"/boot regular filesystem - should NOT skip", "ext4", "/boot", 2 * 1024 * 1024 * 1024, 256 * 1024 * 1024, false},
+		{"Proxmox cluster config filesystem", "fuse", "/etc/pve", 128 * 1024 * 1024, 256 * 1024, true},
 		{"/var/lib/containers podman", "ext4", "/var/lib/containers/storage/overlay/abc123/merged", 1000000, 500000, true},
 
 		// Container overlay paths in non-standard locations (issue #790)

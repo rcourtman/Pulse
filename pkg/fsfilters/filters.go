@@ -103,6 +103,15 @@ var specialMountPrefixes = []string{
 	"/Library/Developer/CoreSimulator/Volumes/", // Xcode simulator runtime disk images
 }
 
+// specialMountpoints are exact mountpoints that represent platform plumbing
+// rather than operator-managed capacity.
+var specialMountpoints = map[string]bool{
+	"/boot/efi":      true,
+	"/boot/firmware": true,
+	"/etc/pve":       true,
+	"/var/run":       true,
+}
+
 // containerOverlayPatterns detect container overlay filesystem paths from various
 // container runtimes (Docker, Podman, LXC, EnhanceCP, etc.) that may not be in
 // standard locations. These paths should be excluded from disk usage as they
@@ -155,7 +164,7 @@ func ShouldSkipFilesystem(fsType, mountpoint string, totalBytes, usedBytes uint6
 	}
 
 	// Check specific special mountpoints
-	if mountpoint == "/boot/efi" || mountpoint == "/var/run" {
+	if specialMountpoints[mountpoint] {
 		reasons = append(reasons, "special-mountpoint")
 	}
 

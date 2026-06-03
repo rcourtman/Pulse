@@ -250,6 +250,46 @@ describe('StackedDiskBar', () => {
       const disk2 = makeDisk();
       render(() => <StackedDiskBar disks={[disk1, disk2]} mode="aggregate" />);
       expect(screen.queryByText('[2]')).not.toBeInTheDocument();
+      expect(screen.queryByText('(2)')).not.toBeInTheDocument();
+    });
+
+    it('uses total usage as the default aggregate summary', () => {
+      const disk1 = makeDisk({
+        used: 21474836480, // 20 GiB
+        total: 53687091200, // 50 GiB
+      });
+      const disk2 = makeDisk({
+        used: 53687091200, // 50 GiB
+        total: 107374182400, // 100 GiB
+      });
+      render(() => <StackedDiskBar disks={[disk1, disk2]} mode="aggregate" />);
+      expect(screen.getByText('47%')).toBeInTheDocument();
+    });
+
+    it('can summarize aggregate mode by the highest individual disk usage', () => {
+      const disk1 = makeDisk({
+        used: Math.round(107374182400 * 0.2),
+        total: 107374182400,
+        mountpoint: '/data',
+      });
+      const disk2 = makeDisk({
+        used: Math.round(53687091200 * 0.92),
+        total: 53687091200,
+        mountpoint: '/var',
+      });
+      const { container } = render(() => (
+        <StackedDiskBar
+          disks={[disk1, disk2]}
+          mode="aggregate"
+          summaryStrategy="max"
+          showDiskCount
+        />
+      ));
+      const bar = getSingleBarFill(container);
+      expect(screen.getByText('92%')).toBeInTheDocument();
+      expect(screen.getByText('(2)')).toHaveAttribute('title', '2 disks');
+      expect(bar).toHaveAttribute('width', '92');
+      expect(bar?.getAttribute('fill')).toContain('239, 68, 68');
     });
   });
 

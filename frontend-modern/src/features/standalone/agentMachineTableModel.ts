@@ -1,6 +1,7 @@
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import type { HostDiskIO, HostRAIDArray, HostRAIDDevice } from '@/types/api';
 import type { Resource } from '@/types/resource';
+import { normalizeDiskArray } from '@/utils/format';
 import { asTrimmedString } from '@/utils/stringUtils';
 
 export type AgentMachineColumnId =
@@ -164,6 +165,31 @@ const positiveTemperature = (value: number | undefined): number | undefined => {
 const maxTemperatureReading = (readings: readonly TemperatureReading[]): number | undefined =>
   readings.length > 0 ? Math.max(...readings.map((reading) => reading.value)) : undefined;
 
+const getDiskUsagePercent = (disk: {
+  total?: number;
+  used?: number;
+  usage?: number;
+}): number | undefined => {
+  const total = finiteMetric(disk.total);
+  const used = finiteMetric(disk.used);
+  if (total && total > 0 && typeof used === 'number') {
+    return (used / total) * 100;
+  }
+
+  const usage = finiteMetric(disk.usage);
+  if (usage === undefined) return undefined;
+  return usage <= 1 ? usage * 100 : usage;
+};
+
+const getMaxOperationalDiskPercent = (machine: Resource): number | undefined => {
+  const disks = normalizeDiskArray(machine.agent?.disks) ?? [];
+  return disks.reduce<number | undefined>((maxPercent, disk) => {
+    const percent = getDiskUsagePercent(disk);
+    if (percent === undefined) return maxPercent;
+    return maxPercent === undefined ? percent : Math.max(maxPercent, percent);
+  }, undefined);
+};
+
 const getPositiveRecordReadings = (
   values: Record<string, number> | undefined,
 ): TemperatureReading[] =>
@@ -241,6 +267,9 @@ export const getAgentMachineMemoryPercent = (machine: Resource): number | undefi
 };
 
 export const getAgentMachineDiskPercent = (machine: Resource): number | undefined => {
+  const maxDiskPercent = getMaxOperationalDiskPercent(machine);
+  if (maxDiskPercent !== undefined) return maxDiskPercent;
+
   const total = finiteMetric(machine.disk?.total);
   const used = finiteMetric(machine.disk?.used);
   if (total && total > 0 && typeof used === 'number') {

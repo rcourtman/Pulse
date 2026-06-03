@@ -1612,7 +1612,9 @@ export const AgentsMachinesTable: Component<{
                               fallback={metricFallback()}
                             >
                               <StackedDiskBar
-                                mode={(disks()?.length ?? 0) > 1 ? 'vertical-bars' : undefined}
+                                mode={(disks()?.length ?? 0) > 1 ? 'aggregate' : undefined}
+                                summaryStrategy="max"
+                                showDiskCount
                                 disks={disks()}
                                 aggregateDisk={aggregateDisk()}
                               />

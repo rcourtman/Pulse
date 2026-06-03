@@ -16,9 +16,18 @@ const NON_OPERATIONAL_DISK_MOUNT_PREFIXES = [
   '/Library/Developer/CoreSimulator/Volumes/',
 ];
 
+const NON_OPERATIONAL_DISK_MOUNTPOINTS = new Set([
+  '/boot/efi',
+  '/boot/firmware',
+  '/etc/pve',
+  'System Reserved',
+]);
+
 function shouldDisplayDisk(disk: DiskInput): boolean {
   const mountpoint = disk.mountpoint?.trim() ?? '';
   if (!mountpoint) return true;
+  if (NON_OPERATIONAL_DISK_MOUNTPOINTS.has(mountpoint)) return false;
+  if (mountpoint.includes('System Reserved')) return false;
   return !NON_OPERATIONAL_DISK_MOUNT_PREFIXES.some((prefix) => mountpoint.startsWith(prefix));
 }
 
