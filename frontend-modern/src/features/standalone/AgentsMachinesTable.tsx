@@ -34,6 +34,11 @@ import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import {
+  compareAgentVersions,
+  formatAgentVersionDisplay,
+  hostAgentVersion,
+} from '@/features/platformPage/agentVersion';
+import {
   PlatformResourceDetailTableRow,
   createPlatformResourceDetailState,
   getPlatformResourceDetailRowClass,
@@ -122,10 +127,19 @@ const formatLastSeen = (value: number | string | Date | undefined): string => {
   return `${Math.floor(hours / 24)}d`;
 };
 
-const metricFallback = () => (
+type MetricFallbackReason = {
+  label: string;
+  title: string;
+};
+
+const metricFallback = (reason?: MetricFallbackReason) => (
   <div class="flex justify-center">
-    <span class="text-xs text-muted" aria-hidden="true">
-      —
+    <span
+      class={reason ? 'text-[9px] font-medium text-muted' : 'text-xs text-muted'}
+      title={reason?.title}
+      aria-label={reason?.title ?? 'No telemetry data'}
+    >
+      {reason?.label ?? '—'}
     </span>
   </div>
 );
@@ -953,6 +967,28 @@ const titleCase = (value: string): string =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
     .join(' ');
 
+const SYSTEM_NAME_OVERRIDES = new Map<string, string>([
+  ['darwin', 'macOS'],
+  ['freebsd', 'FreeBSD'],
+  ['linux', 'Linux'],
+  ['mac os', 'macOS'],
+  ['macos', 'macOS'],
+  ['microsoft windows', 'Windows'],
+  ['unraid', 'Unraid'],
+  ['win32', 'Windows'],
+  ['windows', 'Windows'],
+]);
+
+const systemNameForDisplay = (value: string, titleCaseFallback = false): string => {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+
+  const normalized = trimmed.toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+  return (
+    SYSTEM_NAME_OVERRIDES.get(normalized) ?? (titleCaseFallback ? titleCase(trimmed) : trimmed)
+  );
+};
+
 const normalizedIdentityToken = (value: string | undefined): string =>
   (value ?? '').trim().toLowerCase();
 
@@ -992,15 +1028,36 @@ const systemLabelFor = (machine: Resource): string => {
   }
   const osName = asTrimmedString(machine.agent?.osName);
   const osVersion = asTrimmedString(machine.agent?.osVersion);
-  if (osName && osVersion) return `${osName} ${osVersion}`;
-  if (osName) return osName;
-  return titleCase(
+  if (osName && osVersion) return `${systemNameForDisplay(osName)} ${osVersion}`;
+  if (osName) return systemNameForDisplay(osName);
+  return systemNameForDisplay(
     asTrimmedString(machine.agent?.platform) || asTrimmedString(machine.technology) || 'Agent',
+    true,
   );
 };
 
 const agentVersionFor = (machine: Resource): string =>
   isAgentlessMachine(machine) ? 'Agentless' : asTrimmedString(machine.agent?.agentVersion) || '—';
+
+const outdatedAgentTelemetryFallbackFor = (
+  machine: Resource,
+  targetAgentVersion: string | null | undefined,
+): MetricFallbackReason | undefined => {
+  if (isAgentlessMachine(machine)) return undefined;
+
+  const agentVersion = hostAgentVersion(machine);
+  const comparison = compareAgentVersions(agentVersion, targetAgentVersion);
+  if (comparison === null || comparison >= 0) return undefined;
+
+  const current = formatAgentVersionDisplay(agentVersion) || agentVersion || 'this version';
+  const target = formatAgentVersionDisplay(targetAgentVersion) || targetAgentVersion;
+  return {
+    label: 'old agent',
+    title: target
+      ? `Update this agent from ${current} to ${target} for full machine telemetry.`
+      : `Update this agent from ${current} for full machine telemetry.`,
+  };
+};
 
 const filterAgentMachineResources = (
   resources: Resource[],
@@ -1161,6 +1218,7 @@ export const AgentsMachinesTable: Component<{
   emptyIcon: JSX.Element;
   emptyTitle: string;
   emptyDescription: string;
+  targetAgentVersion?: string | null;
 }> = (props) => {
   const [locallyRemovedResourceIds, setLocallyRemovedResourceIds] = createSignal<
     Record<string, boolean>
@@ -1436,6 +1494,10 @@ export const AgentsMachinesTable: Component<{
                     const agentVersion = () => agentVersionFor(machine);
                     const indicator = () => getSimpleStatusIndicator(machine.status);
                     const canRenderMetrics = () => indicator().variant !== 'danger';
+                    const telemetryFallback = () =>
+                      canRenderMetrics()
+                        ? outdatedAgentTelemetryFallbackFor(machine, props.targetAgentVersion)
+                        : undefined;
                     const metricsKey = () => buildMetricKeyForUnifiedResource(machine);
                     const cpuPercent = () => getAgentMachineCpuPercent(machine);
                     const cpuCores = () => cpuCoresFor(machine);
@@ -1576,7 +1638,7 @@ export const AgentsMachinesTable: Component<{
                           >
                             <Show
                               when={canRenderMetrics() && cpuPercent() !== undefined}
-                              fallback={metricFallback()}
+                              fallback={metricFallback(telemetryFallback())}
                             >
                               <EnhancedCPUBar
                                 usage={cpuPercent() ?? 0}
@@ -1591,7 +1653,7 @@ export const AgentsMachinesTable: Component<{
                           >
                             <Show
                               when={canRenderMetrics() && hasMemoryMetric()}
-                              fallback={metricFallback()}
+                              fallback={metricFallback(telemetryFallback())}
                             >
                               <StackedMemoryBar
                                 used={memoryUsed()}
@@ -1609,7 +1671,7 @@ export const AgentsMachinesTable: Component<{
                           >
                             <Show
                               when={canRenderMetrics() && hasDiskMetric()}
-                              fallback={metricFallback()}
+                              fallback={metricFallback(telemetryFallback())}
                             >
                               <StackedDiskBar
                                 mode={(disks()?.length ?? 0) > 1 ? 'aggregate' : undefined}
@@ -1626,7 +1688,7 @@ export const AgentsMachinesTable: Component<{
                             >
                               <Show
                                 when={canRenderMetrics() && networkTotal() !== undefined}
-                                fallback={metricFallback()}
+                                fallback={metricFallback(telemetryFallback())}
                               >
                                 <AgentMachineNetworkCell
                                   network={machine.network}
@@ -1642,7 +1704,7 @@ export const AgentsMachinesTable: Component<{
                             >
                               <Show
                                 when={canRenderMetrics() && diskIOTotal() !== undefined}
-                                fallback={metricFallback()}
+                                fallback={metricFallback(telemetryFallback())}
                               >
                                 <AgentMachineDiskIOCell
                                   diskIO={machine.diskIO}

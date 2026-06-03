@@ -179,10 +179,7 @@ function buildTooltipContent(
   },
 ): StackedDiskTooltipItem[] {
   const useUsageColors =
-    options.aggregateMode ||
-    options.inlineDiskMode ||
-    options.miniMode ||
-    options.verticalBarsMode;
+    options.aggregateMode || options.inlineDiskMode || options.miniMode || options.verticalBarsMode;
   if (disks.length > 0) {
     return disks.map((disk, index) => {
       const percentValue = getDiskUsagePercent(disk);
@@ -247,10 +244,7 @@ export function buildStackedDiskBarPresentation(
   const explicitStackedMode = props.mode === 'stacked';
   const verticalBarsMode = props.mode === 'vertical-bars' && hasDisks;
   const inlineDiskMode =
-    (miniMode || hasMultipleDisks) &&
-    !aggregateMode &&
-    !explicitStackedMode &&
-    !verticalBarsMode;
+    (miniMode || hasMultipleDisks) && !aggregateMode && !explicitStackedMode && !verticalBarsMode;
   const useStackedSegments = hasMultipleDisks && explicitStackedMode;
   const inlineDiskSlotWidth = disks.length > 0 ? containerWidth / disks.length : 0;
   const totalCapacity = hasDisks
@@ -271,28 +265,34 @@ export function buildStackedDiskBarPresentation(
     aggregateMode && hasMultipleDisks && summaryStrategy === 'max' && maxInfo !== null;
   const displayPercentValue = useMaxSummary && maxInfo ? maxInfo.percent : overallPercent;
   const barPercent = Math.min(displayPercentValue, 100);
-  const maxLabelShort = maxInfo ? `max ${formatPercent(maxInfo.percent)}` : '';
-  const maxLabelFull = maxInfo ? `Max ${formatPercent(maxInfo.percent)} (${maxInfo.label})` : '';
+  const maxLabelShort = maxInfo
+    ? useMaxSummary
+      ? 'max'
+      : `max ${formatPercent(maxInfo.percent)}`
+    : '';
+  const maxLabelFull = maxInfo
+    ? `Highest usage: ${maxInfo.label} ${formatPercent(maxInfo.percent)}`
+    : '';
   const displayLabel = formatPercent(displayPercentValue);
-  const displaySublabel = useMaxSummary && maxInfo
-    ? maxInfo.label
-    : `${formatBytes(totalUsed)}/${formatBytes(totalCapacity)}`;
-  const diskCountLabel = hasMultipleDisks ? `(${disks.length})` : '';
-  const diskCountTitle = hasMultipleDisks ? `${disks.length} disks` : '';
+  const displaySublabel =
+    useMaxSummary && maxInfo ? '' : `${formatBytes(totalUsed)}/${formatBytes(totalCapacity)}`;
+  const diskCountLabel = hasMultipleDisks ? `${disks.length} disks` : '';
+  const diskCountTitle = hasMultipleDisks ? `${disks.length} operational disks in breakdown` : '';
   const showDiskCount = Boolean(props.showDiskCount && hasMultipleDisks);
   const showMaxLabel =
-    aggregateMode &&
-    hasMultipleDisks &&
-    !useMaxSummary &&
-    maxLabelShort.length > 0 &&
-    containerWidth >= estimateTextWidth(`${displayLabel} ${maxLabelShort}`);
+    useMaxSummary ||
+    (aggregateMode &&
+      hasMultipleDisks &&
+      maxLabelShort.length > 0 &&
+      containerWidth >= estimateTextWidth(`${displayLabel} ${maxLabelShort}`));
   const showSublabel =
+    displaySublabel.length > 0 &&
     containerWidth >=
-    estimateTextWidth(
-      `${displayLabel}${showMaxLabel ? ` ${maxLabelShort}` : ''} (${displaySublabel})${
-        showDiskCount ? ` ${diskCountLabel}` : ''
-      }`,
-    );
+      estimateTextWidth(
+        `${displayLabel}${showMaxLabel ? ` ${maxLabelShort}` : ''} (${displaySublabel})${
+          showDiskCount ? ` ${diskCountLabel}` : ''
+        }`,
+      );
   const barColor =
     aggregateMode && hasMultipleDisks && maxInfo
       ? getMetricColorRgba(maxInfo.percent, 'disk', props.thresholds)

@@ -197,6 +197,7 @@ export function StandalonePageSurface() {
                     emptyIcon={machineIcon()}
                     emptyTitle="No machines"
                     emptyDescription="Install Pulse Agent on Linux, macOS, Windows, or Unraid systems for full CPU, memory, disk, and network telemetry."
+                    targetAgentVersion={updateStore.versionInfo()?.version}
                   />
                 </Show>
               </div>

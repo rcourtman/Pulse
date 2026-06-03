@@ -208,6 +208,67 @@ describe('AgentsMachinesTable', () => {
     expect(screen.getByText('richard-mac-mini.local | 192.168.0.98')).toBeInTheDocument();
   });
 
+  it('normalizes canonical OS labels from platform fallback values', () => {
+    render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({
+            id: 'mac-mini',
+            name: 'Mac Mini',
+            agent: {
+              agentVersion: '6.0.0',
+              platform: 'macos',
+            },
+          }),
+          resource({
+            id: 'linux-server',
+            name: 'Linux Server',
+            agent: {
+              agentVersion: '6.0.0',
+              osName: 'Proxmox VE',
+              osVersion: '8.3.3',
+            },
+          }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    expect(screen.getAllByText('macOS').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Proxmox VE 8.3.3').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('explains missing telemetry when the agent version is behind the server', () => {
+    render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({
+            id: 'old-agent',
+            name: 'Old Agent',
+            cpu: { current: 3 },
+            agent: {
+              agentVersion: 'v6.0.0-rc.5',
+              platform: 'macos',
+            },
+          }),
+        ]}
+        targetAgentVersion="v6.0.0-rc.6"
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    expect(screen.getAllByText('old agent').length).toBeGreaterThanOrEqual(2);
+    expect(
+      screen.getAllByTitle(
+        'Update this agent from v6.0.0-rc.5 to v6.0.0-rc.6 for full machine telemetry.',
+      ).length,
+    ).toBeGreaterThanOrEqual(2);
+  });
+
   it('searches machine-native fields and exposes host-style search affordances', async () => {
     render(() => (
       <AgentsMachinesTable
