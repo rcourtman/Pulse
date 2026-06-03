@@ -82,10 +82,9 @@ export const InfrastructureAgentUpdatesDialog: Component<InfrastructureAgentUpda
             <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
               <div class="font-semibold">{targetSummary()}</div>
               <p class="mt-1 text-xs leading-5 text-amber-800 dark:text-amber-200">
-                Run these commands on the affected hosts. They reuse the signed unified installer,
-                recover the existing agent connection state where supported, verify the matching
-                agent binary, preserve host identity, and restart the service after the binary is
-                updated.
+                Run these commands on the affected hosts. The installer reuses the existing agent
+                connection state where supported, verifies the matching agent binary, preserves host
+                identity, and restarts the service after the update.
               </p>
             </div>
 
