@@ -93,7 +93,7 @@ operator-facing alert routing behavior for live runtime alerts.
 
 ## Shared Boundaries
 
-1. None.
+1. `internal/proxmoxidentity/backup_identity.go` shared with `monitoring`, `storage-recovery`: Proxmox PBS backup subject identity is a shared runtime boundary for monitoring backup freshness, backup-age alert attribution, and recovery-point guest mapping.
 
 ## Extension Points
 

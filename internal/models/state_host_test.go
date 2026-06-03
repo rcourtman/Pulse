@@ -855,7 +855,7 @@ func TestSyncGuestBackupTimes(t *testing.T) {
 
 	// Add PBS backup for container 200
 	state.UpdatePBSBackups("pbs-1", []PBSBackup{
-		{ID: "pbs-backup-1", VMID: "200", BackupTime: newBackup},
+		{ID: "pbs-backup-1", VMID: "200", BackupType: "ct", BackupTime: newBackup},
 	})
 
 	// Sync backup times
@@ -1038,6 +1038,87 @@ func TestSyncGuestBackupTimesNamespaceDisambiguation(t *testing.T) {
 	}
 }
 
+// TestSyncGuestBackupTimesClusterEntrypointUsesGuestNodeNamespace verifies that
+// a cluster API entrypoint name does not shadow the guest's actual node namespace.
+func TestSyncGuestBackupTimesClusterEntrypointUsesGuestNodeNamespace(t *testing.T) {
+	state := NewState()
+
+	now := time.Now()
+	oldBackupTime := now.Add(-180 * 24 * time.Hour)
+	freshBackupTime := now.Add(-1 * time.Hour)
+
+	state.UpdateContainers([]Container{
+		{VMID: 112, Name: "debian-go", Instance: "delly", Node: "minipc"},
+	})
+
+	state.mu.Lock()
+	state.PBSBackups = []PBSBackup{
+		{
+			ID:         "pbs-delly-112-old",
+			VMID:       "112",
+			Namespace:  "delly",
+			BackupType: "ct",
+			Comment:    "112",
+			BackupTime: oldBackupTime,
+			Instance:   "pbs-main",
+		},
+		{
+			ID:         "pbs-minipc-112-fresh",
+			VMID:       "112",
+			Namespace:  "minipc",
+			BackupType: "ct",
+			Comment:    "debian-go",
+			BackupTime: freshBackupTime,
+			Instance:   "pbs-main",
+		},
+	}
+	state.mu.Unlock()
+
+	state.SyncGuestBackupTimes()
+	snapshot := state.GetSnapshot()
+
+	var found *Container
+	for i := range snapshot.Containers {
+		if snapshot.Containers[i].VMID == 112 {
+			found = &snapshot.Containers[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("container 112 not found")
+	}
+	if !found.LastBackup.Equal(freshBackupTime) {
+		t.Errorf("cluster entrypoint guest LastBackup = %v, want fresh node-namespaced backup %v",
+			found.LastBackup, freshBackupTime)
+	}
+}
+
+func TestSyncGuestBackupTimesClearsStaleBackupWhenCurrentEvidenceDisappears(t *testing.T) {
+	state := NewState()
+
+	staleBackupTime := time.Now().Add(-30 * 24 * time.Hour)
+	state.UpdateVMs([]VM{
+		{VMID: 101, Name: "unbacked-vm", Instance: "pve-1", Node: "node1", LastBackup: staleBackupTime},
+	})
+	state.UpdateContainers([]Container{
+		{VMID: 201, Name: "unbacked-ct", Instance: "pve-1", Node: "node1", LastBackup: staleBackupTime},
+	})
+
+	state.SyncGuestBackupTimes()
+	snapshot := state.GetSnapshot()
+
+	for _, vm := range snapshot.VMs {
+		if vm.VMID == 101 && !vm.LastBackup.IsZero() {
+			t.Errorf("VM stale LastBackup should be cleared, got %v", vm.LastBackup)
+		}
+	}
+	for _, ct := range snapshot.Containers {
+		if ct.VMID == 201 && !ct.LastBackup.IsZero() {
+			t.Errorf("container stale LastBackup should be cleared, got %v", ct.LastBackup)
+		}
+	}
+}
+
 // TestSyncGuestBackupTimesVMIDCollisionNonMatchingNamespace verifies that when the same VMID
 // exists on multiple PVE instances and a PBS backup namespace matches neither, both guests
 // get zero LastBackup instead of a false positive.
@@ -1162,8 +1243,9 @@ func TestSyncGuestBackupTimesUniqueVMIDFallback(t *testing.T) {
 	}
 }
 
-// TestSyncGuestBackupTimesVMContainerCollision verifies that when a VM and Container
-// share the same VMID on different instances, neither gets an unmatched PBS backup.
+// TestSyncGuestBackupTimesVMContainerCollision verifies that PBS vm/ID and ct/ID
+// subjects are matched independently even when a VM and container share the same
+// numeric ID.
 func TestSyncGuestBackupTimesVMContainerCollision(t *testing.T) {
 	state := NewState()
 
@@ -1177,13 +1259,12 @@ func TestSyncGuestBackupTimesVMContainerCollision(t *testing.T) {
 		{VMID: 100, Name: "ct-pve2", Instance: "pve2", Node: "node2"},
 	})
 
-	// PBS backup with namespace matching neither
 	state.mu.Lock()
 	state.PBSBackups = []PBSBackup{
 		{
 			ID:         "pbs-100",
 			VMID:       "100",
-			Namespace:  "other",
+			Namespace:  "node1",
 			BackupType: "vm",
 			BackupTime: backupTime,
 			Instance:   "pbs-main",
@@ -1195,14 +1276,14 @@ func TestSyncGuestBackupTimesVMContainerCollision(t *testing.T) {
 	snapshot := state.GetSnapshot()
 
 	for _, vm := range snapshot.VMs {
-		if vm.VMID == 100 && !vm.LastBackup.IsZero() {
-			t.Errorf("VM %q should have zero LastBackup (ambiguous VMID with container), got %v",
-				vm.Name, vm.LastBackup)
+		if vm.VMID == 100 && !vm.LastBackup.Equal(backupTime) {
+			t.Errorf("VM %q LastBackup = %v, want typed vm/100 backup %v",
+				vm.Name, vm.LastBackup, backupTime)
 		}
 	}
 	for _, ct := range snapshot.Containers {
 		if ct.VMID == 100 && !ct.LastBackup.IsZero() {
-			t.Errorf("Container %q should have zero LastBackup (ambiguous VMID with VM), got %v",
+			t.Errorf("Container %q should have zero LastBackup because the PBS subject is vm/100, got %v",
 				ct.Name, ct.LastBackup)
 		}
 	}

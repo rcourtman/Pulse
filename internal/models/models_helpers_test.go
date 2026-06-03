@@ -3,6 +3,8 @@ package models
 import (
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/proxmoxidentity"
 )
 
 // --- normalizeNodeIdentityPart ---
@@ -215,25 +217,25 @@ func TestBackupKey(t *testing.T) {
 	}
 }
 
-// --- namespaceMatchesInstance ---
+// --- PBS namespace matching ---
 
-func TestNamespaceMatchesInstance(t *testing.T) {
+func TestNamespaceMatchesLocation(t *testing.T) {
 	tests := []struct {
-		namespace, instance string
+		namespace, location string
 		expected            bool
 	}{
 		{"pve1", "pve1", true},                  // Exact match
 		{"PVE1", "pve1", true},                  // Case-insensitive
-		{"nat", "pve-nat", true},                // Namespace is suffix of normalized instance
+		{"nat", "pve-nat", true},                // Namespace is suffix of normalized location
 		{"pvebackups", "pve", false},            // "pve" is a prefix not suffix of "pvebackups"
 		{"", "pve1", false},                     // Empty namespace
-		{"pve1", "", false},                     // Empty instance
+		{"pve1", "", false},                     // Empty location
 		{"completely-different", "pve1", false}, // No match
 	}
 	for _, tt := range tests {
-		got := namespaceMatchesInstance(tt.namespace, tt.instance)
+		got := proxmoxidentity.NamespaceMatchesLocation(tt.namespace, tt.location)
 		if got != tt.expected {
-			t.Errorf("namespaceMatchesInstance(%q, %q) = %v, want %v", tt.namespace, tt.instance, got, tt.expected)
+			t.Errorf("NamespaceMatchesLocation(%q, %q) = %v, want %v", tt.namespace, tt.location, got, tt.expected)
 		}
 	}
 }

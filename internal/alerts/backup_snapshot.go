@@ -9,6 +9,7 @@ import (
 
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/proxmoxidentity"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
@@ -612,11 +613,27 @@ func (m *Manager) CheckBackupsWithInventory(
 					if len(guests) == 1 {
 						info = guests[0]
 					} else if len(guests) > 1 && strings.TrimSpace(ref.Namespace) != "" {
+						bestScore := 0
+						matchedMultiple := false
 						for _, g := range guests {
-							if namespaceMatchesInstance(ref.Namespace, g.Instance) {
+							score := proxmoxidentity.BackupGuestMatchScore(
+								ref.Namespace,
+								ref.Name,
+								vmidStr,
+								g.Name,
+								g.Instance,
+								g.Node,
+							)
+							if score > bestScore {
+								bestScore = score
 								info = g
-								break
+								matchedMultiple = false
+							} else if score > 0 && score == bestScore {
+								matchedMultiple = true
 							}
+						}
+						if matchedMultiple {
+							info = GuestLookup{}
 						}
 					}
 					if info.Instance != "" && info.Node != "" {
@@ -889,55 +906,6 @@ func parseGuestID(raw string) (instance string, node string, vmid int, ok bool) 
 		return "", "", 0, false
 	}
 	return strings.TrimSpace(inst), strings.TrimSpace(prev), n, true
-}
-
-// namespaceMatchesInstance checks if a PBS namespace likely corresponds to a PVE instance.
-// This helps disambiguate backups when multiple PVE instances have VMs with the same VMID.
-// Examples: namespace "pve1" matches instance "pve1", namespace "nat" matches instance "pve-nat"
-func namespaceMatchesInstance(namespace, instance string) bool {
-	if namespace == "" || instance == "" {
-		return false
-	}
-
-	// Normalize both strings: lowercase and keep only alphanumeric
-	normalize := func(s string) string {
-		var b strings.Builder
-		for _, r := range strings.ToLower(s) {
-			if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-				b.WriteRune(r)
-			}
-		}
-		return b.String()
-	}
-
-	ns := normalize(namespace)
-	inst := normalize(instance)
-
-	if ns == "" || inst == "" {
-		return false
-	}
-
-	// Exact match after normalization
-	if ns == inst {
-		return true
-	}
-
-	// Check if namespace is a suffix of instance
-	// e.g., namespace "nat" matches instance "pvenat" (normalized from "pve-nat")
-	// This is more precise than substring matching because:
-	// - "nat" should match "pve-nat" but not "natpve"
-	// - "pve" should match "pve" but not "pve-nat" (handled by exact match above)
-	if strings.HasSuffix(inst, ns) {
-		return true
-	}
-
-	// Check if instance is a suffix of namespace (reverse case)
-	// e.g., namespace "pvebackups" could match instance "pve"
-	if strings.HasSuffix(ns, inst) {
-		return true
-	}
-
-	return false
 }
 
 func (m *Manager) clearSnapshotAlertsForInstance(instance string) {

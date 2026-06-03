@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/proxmoxidentity"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -36,54 +37,8 @@ func guestLookupKey(instanceName, nodeName string, vmid int) string {
 	return fmt.Sprintf("%s|%s|%d", strings.TrimSpace(instanceName), strings.TrimSpace(nodeName), vmid)
 }
 
-func namespaceLikelyMatchesProxmoxLocation(namespace, value string) bool {
-	namespace = strings.TrimSpace(namespace)
-	value = strings.TrimSpace(value)
-	if namespace == "" || value == "" {
-		return false
-	}
-
-	normalize := func(s string) string {
-		var b strings.Builder
-		for _, r := range strings.ToLower(s) {
-			if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-				b.WriteRune(r)
-			}
-		}
-		return b.String()
-	}
-
-	ns := normalize(namespace)
-	location := normalize(value)
-	if ns == "" || location == "" {
-		return false
-	}
-	if ns == location {
-		return true
-	}
-	return strings.HasSuffix(location, ns) || strings.HasSuffix(ns, location)
-}
-
 func preferredPBSBackupSubjectName(comment, vmid string) string {
-	comment = strings.TrimSpace(comment)
-	vmid = strings.TrimSpace(vmid)
-	if comment == "" {
-		return ""
-	}
-	if vmid != "" {
-		if comment == vmid {
-			return ""
-		}
-		parts := strings.Split(comment, ",")
-		if len(parts) >= 2 {
-			last := strings.TrimSpace(parts[len(parts)-1])
-			first := strings.TrimSpace(parts[0])
-			if last == vmid && first != "" && first != vmid {
-				return first
-			}
-		}
-	}
-	return comment
+	return proxmoxidentity.PreferredPBSBackupSubjectName(comment, vmid)
 }
 
 func selectPBSGuestCandidate(backup models.PBSBackup, candidates []GuestCandidate) (GuestCandidate, bool) {
@@ -98,8 +53,7 @@ func selectPBSGuestCandidate(backup models.PBSBackup, candidates []GuestCandidat
 	if namespace := strings.TrimSpace(backup.Namespace); namespace != "" {
 		filtered := make([]GuestCandidate, 0, len(matched))
 		for _, candidate := range matched {
-			if namespaceLikelyMatchesProxmoxLocation(namespace, candidate.InstanceName) ||
-				namespaceLikelyMatchesProxmoxLocation(namespace, candidate.NodeName) {
+			if proxmoxidentity.NamespaceLocationScore(namespace, candidate.InstanceName, candidate.NodeName) > proxmoxidentity.NamespaceNoLocationMatch {
 				filtered = append(filtered, candidate)
 			}
 		}

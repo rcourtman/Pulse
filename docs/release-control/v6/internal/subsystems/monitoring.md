@@ -76,7 +76,7 @@ truth for live infrastructure data.
 
 ## Shared Boundaries
 
-1. None.
+1. `internal/proxmoxidentity/backup_identity.go` shared with `alerts`, `storage-recovery`: Proxmox PBS backup subject identity is a shared runtime boundary for monitoring backup freshness, backup-age alert attribution, and recovery-point guest mapping.
 
 ## Extension Points
 

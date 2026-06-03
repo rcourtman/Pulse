@@ -224,6 +224,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 "docker-runtime-report-model",
                 "proxmox-zfs-runtime",
                 "proxmox-ceph-runtime",
+                "proxmox-backup-identity-monitoring",
                 "container-entrypoint-runtime",
                 "mock-runtime-fixtures",
                 "monitoring-runtime",
@@ -240,6 +241,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "test_prefixes": [],
                     "exact_files": [
                         "internal/monitoring/canonical_guardrails_test.go",
+                        "internal/monitoring/monitor_backups_readstate_test.go",
                         "internal/monitoring/monitor_host_agents_test.go",
                         "internal/unifiedresources/code_standards_test.go",
                     ],

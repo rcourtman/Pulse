@@ -369,8 +369,8 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	guestInfo := buildProxmoxGuestInfoIndex(readState)
 	m.ingestRecoveryPointsAsync(proxmoxrecoverymapper.FromPVEStorageBackups(allBackups, guestInfo))
 
-	// Sync backup times to VMs/Containers for backup status indicators
-	m.state.SyncGuestBackupTimes()
+	// Sync backup times to VMs/Containers and republish them to canonical resources.
+	m.syncGuestBackupTimesAndResourceStore()
 
 	if m.alertManager != nil {
 		guestsByKey, guestsByVMID := buildGuestLookupsFromReadState(m.GetUnifiedReadStateOrSnapshot(), m.guestMetadataStore)
@@ -414,6 +414,15 @@ func shouldPreservePBSBackups(datastoreCount, datastoreFetches int) bool {
 		return true
 	}
 	return false
+}
+
+func (m *Monitor) syncGuestBackupTimesAndResourceStore() {
+	if m == nil || m.state == nil {
+		return
+	}
+
+	m.state.SyncGuestBackupTimes()
+	m.updateResourceStore(m.state.GetSnapshot())
 }
 
 func storageNamesForNode(readState unifiedresources.ReadState, instanceName, nodeName string) []string {
@@ -1441,8 +1450,8 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 	candidates := buildPBSGuestCandidates(m.GetUnifiedReadStateOrSnapshot())
 	m.ingestRecoveryPointsAsync(proxmoxrecoverymapper.FromPBSBackups(allBackups, candidates))
 
-	// Sync backup times to VMs/Containers for backup status indicators
-	m.state.SyncGuestBackupTimes()
+	// Sync backup times to VMs/Containers and republish them to canonical resources.
+	m.syncGuestBackupTimesAndResourceStore()
 
 	if m.alertManager != nil {
 		guestsByKey, guestsByVMID := buildGuestLookupsFromReadState(m.GetUnifiedReadStateOrSnapshot(), m.guestMetadataStore)

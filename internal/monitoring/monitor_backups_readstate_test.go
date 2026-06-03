@@ -230,6 +230,95 @@ func TestMonitorPollStorageBackupsWithNodes_UsesCanonicalReadStateForGuestNodeLo
 	}
 }
 
+func TestSyncGuestBackupTimesAndResourceStore_RefreshesCanonicalWorkloads(t *testing.T) {
+	stale := time.Date(2026, 1, 10, 2, 0, 0, 0, time.UTC)
+	fresh := time.Date(2026, 3, 11, 10, 0, 0, 0, time.UTC)
+
+	state := models.NewState()
+	state.UpdateVMsForInstance("homelab", []models.VM{{
+		ID:         "homelab-minipc-vm-100",
+		VMID:       100,
+		Name:       "docker",
+		Node:       "minipc",
+		Instance:   "homelab",
+		Status:     "running",
+		LastBackup: stale,
+		LastSeen:   fresh,
+	}})
+	state.UpdatePBSBackups("pbs-docker", []models.PBSBackup{{
+		ID:         "pbs-docker/store/minipc/vm/100/2026-03-11T10:00:00Z",
+		Instance:   "pbs-docker",
+		Datastore:  "store",
+		Namespace:  "minipc",
+		BackupType: "vm",
+		VMID:       "100",
+		BackupTime: fresh,
+		Comment:    "docker",
+	}})
+
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(state.GetSnapshot())
+	adapter := unifiedresources.NewMonitorAdapter(registry)
+	m := &Monitor{
+		state:         state,
+		resourceStore: adapter,
+	}
+
+	m.syncGuestBackupTimesAndResourceStore()
+
+	snapshot := state.GetSnapshot()
+	if len(snapshot.VMs) != 1 || !snapshot.VMs[0].LastBackup.Equal(fresh) {
+		t.Fatalf("expected state VM last backup %v, got %+v", fresh, snapshot.VMs)
+	}
+
+	vms := adapter.VMs()
+	if len(vms) != 1 {
+		t.Fatalf("expected one canonical VM, got %d", len(vms))
+	}
+	if got := vms[0].LastBackup(); !got.Equal(fresh) {
+		t.Fatalf("expected canonical VM last backup %v, got %v", fresh, got)
+	}
+}
+
+func TestSyncGuestBackupTimesAndResourceStore_ClearsCanonicalStaleBackup(t *testing.T) {
+	stale := time.Date(2026, 1, 10, 2, 0, 0, 0, time.UTC)
+
+	state := models.NewState()
+	state.UpdateVMsForInstance("homelab", []models.VM{{
+		ID:         "homelab-minipc-vm-100",
+		VMID:       100,
+		Name:       "docker",
+		Node:       "minipc",
+		Instance:   "homelab",
+		Status:     "running",
+		LastBackup: stale,
+		LastSeen:   stale,
+	}})
+
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(state.GetSnapshot())
+	adapter := unifiedresources.NewMonitorAdapter(registry)
+	m := &Monitor{
+		state:         state,
+		resourceStore: adapter,
+	}
+
+	m.syncGuestBackupTimesAndResourceStore()
+
+	snapshot := state.GetSnapshot()
+	if len(snapshot.VMs) != 1 || !snapshot.VMs[0].LastBackup.IsZero() {
+		t.Fatalf("expected state VM last backup to clear, got %+v", snapshot.VMs)
+	}
+
+	vms := adapter.VMs()
+	if len(vms) != 1 {
+		t.Fatalf("expected one canonical VM, got %d", len(vms))
+	}
+	if got := vms[0].LastBackup(); !got.IsZero() {
+		t.Fatalf("expected canonical VM last backup to clear, got %v", got)
+	}
+}
+
 func TestBuildPBSGuestCandidates_UsesCanonicalReadState(t *testing.T) {
 	readState := backupReadState([]unifiedresources.Resource{
 		{

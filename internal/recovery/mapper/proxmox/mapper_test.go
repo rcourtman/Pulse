@@ -279,6 +279,36 @@ func TestFromPBSBackups_PrefersCommentNameWhenGuestIsUnresolved(t *testing.T) {
 	}
 }
 
+func TestFromPBSBackups_IgnoresNumericOnlyCommentName(t *testing.T) {
+	backups := []models.PBSBackup{
+		{
+			ID:         "pbs-backup-numeric-comment",
+			VMID:       "112",
+			Instance:   "pbs-docker",
+			Namespace:  "minipc",
+			Datastore:  "main",
+			BackupType: "ct",
+			BackupTime: time.Date(2026, 3, 29, 3, 3, 31, 0, time.UTC),
+			Comment:    "112",
+		},
+	}
+
+	result := FromPBSBackups(backups, nil)
+
+	if len(result) != 1 {
+		t.Fatalf("expected 1 point, got %d", len(result))
+	}
+	if result[0].SubjectRef == nil {
+		t.Fatal("expected SubjectRef to be set")
+	}
+	if got := result[0].SubjectRef.Name; got != "112" {
+		t.Fatalf("SubjectRef.Name = %q, want VMID fallback", got)
+	}
+	if got := result[0].Details["comment"]; got != "112" {
+		t.Fatalf("Details[comment] = %#v, want raw numeric comment preserved", got)
+	}
+}
+
 func TestFromPBSBackups_WithCandidates(t *testing.T) {
 	backups := []models.PBSBackup{
 		{

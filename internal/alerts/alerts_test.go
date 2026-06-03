@@ -14,6 +14,7 @@ import (
 
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/proxmoxidentity"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -1608,7 +1609,7 @@ func TestCheckBackupsDisambiguatesWithNamespace(t *testing.T) {
 			RollupID: "ext:pbs-nat-100",
 			SubjectRef: &recovery.ExternalRef{
 				Type:      "proxmox-vm",
-				Namespace: "nat", // namespaceMatchesInstance("nat", "pve-nat") should match
+				Namespace: "nat", // namespace "nat" should match the pve-nat location
 				Name:      "100",
 				ID:        "100",
 			},
@@ -1726,6 +1727,85 @@ func TestCheckBackupsVMIDCollisionNonMatchingNamespace(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected a backup-age alert for the orphaned PBS rollup")
+	}
+}
+
+func TestCheckBackupsDisambiguatesClusterEntrypointByNodeNamespace(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:      true,
+		WarningDays:  3,
+		CriticalDays: 5,
+	}
+	m.mu.Unlock()
+
+	now := time.Now()
+
+	guestsByKey := map[string]GuestLookup{
+		"delly-delly-112": {
+			ResourceID: "lxc/112",
+			Name:       "old-debian-go",
+			Instance:   "delly",
+			Node:       "delly",
+			Type:       "lxc",
+			VMID:       112,
+		},
+		"delly-minipc-112": {
+			ResourceID: "lxc/112",
+			Name:       "debian-go",
+			Instance:   "delly",
+			Node:       "minipc",
+			Type:       "lxc",
+			VMID:       112,
+		},
+	}
+	guestsByVMID := map[string][]GuestLookup{
+		"112": {
+			guestsByKey["delly-delly-112"],
+			guestsByKey["delly-minipc-112"],
+		},
+	}
+
+	rollups := []recovery.ProtectionRollup{
+		{
+			RollupID: "ext:pbs-minipc-112",
+			SubjectRef: &recovery.ExternalRef{
+				Type:      "proxmox-lxc",
+				Namespace: "minipc",
+				Name:      "debian-go",
+				ID:        "112",
+			},
+			LastSuccessAt: ptrTime(now.Add(-6 * 24 * time.Hour)),
+			LastOutcome:   recovery.OutcomeSuccess,
+			Providers:     []recovery.Provider{recovery.ProviderProxmoxPBS},
+		},
+	}
+
+	m.CheckBackups(rollups, guestsByKey, guestsByVMID)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	alert, exists := testLookupActiveAlert(t, m, "backup-age-delly-minipc-112")
+	if !exists {
+		var keys []string
+		for storageKey, active := range m.activeAlerts {
+			keys = append(keys, effectiveAlertID(active, storageKey))
+		}
+		t.Fatalf("expected minipc backup alert; found keys: %v", keys)
+	}
+	if alert.ResourceName != "debian-go backup" {
+		t.Errorf("ResourceName = %q, want %q", alert.ResourceName, "debian-go backup")
+	}
+	if alert.Instance != "delly" {
+		t.Errorf("Instance = %q, want %q", alert.Instance, "delly")
+	}
+	if alert.Node != "minipc" {
+		t.Errorf("Node = %q, want %q", alert.Node, "minipc")
 	}
 }
 
@@ -18346,22 +18426,22 @@ func TestLoadActiveAlertsHardensExistingFilePermissions(t *testing.T) {
 	}
 }
 
-func TestNamespaceMatchesInstance(t *testing.T) {
+func TestNamespaceMatchesLocation(t *testing.T) {
 	tests := []struct {
 		name      string
 		namespace string
-		instance  string
+		location  string
 		expected  bool
 	}{
 		// Exact matches
 		{"exact match", "pve", "pve", true},
 		{"exact match with numbers", "pve1", "pve1", true},
 
-		// Suffix matches (namespace is suffix of instance)
-		{"namespace suffix of instance", "nat", "pve-nat", true},
-		{"namespace suffix of instance no dash", "nat", "pvenat", true},
+		// Suffix matches (namespace is suffix of location)
+		{"namespace suffix of location", "nat", "pve-nat", true},
+		{"namespace suffix of location no dash", "nat", "pvenat", true},
 
-		// Suffix matches (instance is suffix of namespace)
+		// Suffix matches (location is suffix of namespace)
 		{"instance suffix of namespace", "pvebackups", "pve", false},  // "pve" is not suffix of "pvebackups"
 		{"instance suffix of namespace 2", "backupspve", "pve", true}, // "pve" IS suffix of "backupspve"
 
@@ -18396,10 +18476,10 @@ func TestNamespaceMatchesInstance(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := namespaceMatchesInstance(tt.namespace, tt.instance)
+			result := proxmoxidentity.NamespaceMatchesLocation(tt.namespace, tt.location)
 			if result != tt.expected {
-				t.Errorf("namespaceMatchesInstance(%q, %q) = %v, want %v",
-					tt.namespace, tt.instance, result, tt.expected)
+				t.Errorf("NamespaceMatchesLocation(%q, %q) = %v, want %v",
+					tt.namespace, tt.location, result, tt.expected)
 			}
 		})
 	}

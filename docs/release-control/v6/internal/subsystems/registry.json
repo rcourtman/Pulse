@@ -659,6 +659,15 @@
       ]
     },
     {
+      "path": "internal/proxmoxidentity/backup_identity.go",
+      "rationale": "Proxmox PBS backup subject identity is a shared runtime boundary for monitoring backup freshness, backup-age alert attribution, and recovery-point guest mapping",
+      "subsystems": [
+        "alerts",
+        "monitoring",
+        "storage-recovery"
+      ]
+    },
+    {
       "path": "scripts/install.ps1",
       "rationale": "the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary",
       "subsystems": [
@@ -1265,7 +1274,8 @@
         "frontend-modern/src/utils/alertThresholdsPresentation.ts",
         "frontend-modern/src/utils/alertThresholdsSectionPresentation.ts",
         "frontend-modern/src/utils/alertWebhookPresentation.ts",
-        "frontend-modern/src/utils/metricThresholds.ts"
+        "frontend-modern/src/utils/metricThresholds.ts",
+        "internal/proxmoxidentity/backup_identity.go"
       ],
       "verification": {
         "allow_same_subsystem_tests": true,
@@ -1496,6 +1506,20 @@
               "internal/alerts/synology_test.go",
               "internal/alerts/threshold_resolution_shared_test.go",
               "internal/alerts/update_alerts_test.go"
+            ]
+          },
+          {
+            "id": "proxmox-backup-identity-alerts",
+            "label": "Proxmox backup identity alert proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/proxmoxidentity/backup_identity.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/alerts/alerts_test.go",
+              "internal/proxmoxidentity/backup_identity_test.go"
             ]
           }
         ],
@@ -3572,6 +3596,7 @@
         "internal/models/deepcopy.go",
         "internal/models/models.go",
         "internal/models/models_frontend.go",
+        "internal/proxmoxidentity/backup_identity.go",
         "pkg/agents/docker/report.go",
         "pkg/agents/kubernetes/report.go",
         "pkg/proxmox/ceph.go",
@@ -3775,6 +3800,7 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/dockeragent/swarm_coverage_test.go",
+              "internal/models/state_host_test.go",
               "internal/monitoring/monitor_host_agents_test.go",
               "internal/unifiedresources/adapter_coverage_test.go",
               "internal/unifiedresources/registry_test.go"
@@ -3806,6 +3832,20 @@
             "exact_files": [
               "pkg/proxmox/ceph_test.go",
               "pkg/proxmox/cluster_client_api_test.go"
+            ]
+          },
+          {
+            "id": "proxmox-backup-identity-monitoring",
+            "label": "Proxmox backup identity monitoring proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/proxmoxidentity/backup_identity.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/models/state_host_test.go",
+              "internal/proxmoxidentity/backup_identity_test.go"
             ]
           },
           {
@@ -3852,6 +3892,7 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/monitoring/canonical_guardrails_test.go",
+              "internal/monitoring/monitor_backups_readstate_test.go",
               "internal/monitoring/monitor_host_agents_test.go",
               "internal/unifiedresources/code_standards_test.go"
             ]
@@ -4892,7 +4933,8 @@
         "frontend-modern/src/utils/recoveryOutcomePresentation.ts",
         "frontend-modern/src/utils/recoveryTimelineChartPresentation.ts",
         "frontend-modern/src/utils/recoveryTimelinePresentation.ts",
-        "internal/api/setup_script_render.go"
+        "internal/api/setup_script_render.go",
+        "internal/proxmoxidentity/backup_identity.go"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -4915,6 +4957,7 @@
             "exact_files": [
               "internal/recovery/idgen/idgen_test.go",
               "internal/recovery/manager/manager_test.go",
+              "internal/recovery/mapper/proxmox/mapper_test.go",
               "internal/recovery/recovery_test.go",
               "internal/recovery/store/store_queryplan_test.go",
               "internal/recovery/store/store_rollups_test.go",
@@ -5002,6 +5045,20 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/api/contract_test.go"
+            ]
+          },
+          {
+            "id": "proxmox-backup-identity-recovery",
+            "label": "Proxmox backup identity recovery proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/proxmoxidentity/backup_identity.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/proxmoxidentity/backup_identity_test.go",
+              "internal/recovery/mapper/proxmox/mapper_test.go"
             ]
           }
         ],

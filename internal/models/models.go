@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/proxmoxidentity"
 )
 
 // State represents the current state of all monitored resources
@@ -3599,62 +3601,19 @@ func backupKey(instance string, vmid int) string {
 	return instance + "-" + strconv.Itoa(vmid)
 }
 
-// namespaceMatchesInstance checks if a PBS namespace likely corresponds to a PVE instance.
-// This helps disambiguate backups when multiple PVE instances have VMs with the same VMID.
-// Examples: namespace "pve1" matches instance "pve1", namespace "nat" matches instance "pve-nat"
-func namespaceMatchesInstance(namespace, instance string) bool {
-	if namespace == "" || instance == "" {
-		return false
-	}
-
-	// Normalize both strings: lowercase and keep only alphanumeric
-	normalize := func(s string) string {
-		var b strings.Builder
-		for _, r := range strings.ToLower(s) {
-			if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-				b.WriteRune(r)
-			}
-		}
-		return b.String()
-	}
-
-	ns := normalize(namespace)
-	inst := normalize(instance)
-
-	if ns == "" || inst == "" {
-		return false
-	}
-
-	// Exact match after normalization
-	if ns == inst {
-		return true
-	}
-
-	// Check if namespace is a suffix of instance
-	// e.g., namespace "nat" matches instance "pvenat" (normalized from "pve-nat")
-	// This is more precise than substring matching because:
-	// - "nat" should match "pve-nat" but not "natpve"
-	// - "pve" should match "pve" but not "pve-nat" (handled by exact match above)
-	if strings.HasSuffix(inst, ns) {
-		return true
-	}
-
-	// Check if instance is a suffix of namespace (reverse case)
-	// e.g., namespace "pvebackups" could match instance "pve"
-	if strings.HasSuffix(ns, inst) {
-		return true
-	}
-
-	return false
-}
-
 // SyncGuestBackupTimes updates LastBackup on VMs and Containers from storage backups and PBS backups.
 // Call this after updating storage backups or PBS backups to ensure guest backup indicators are accurate.
 // Matching is done by instance+VMID to prevent cross-instance VMID collisions.
-// For PBS backups with namespaces, namespace matching is used to disambiguate.
+// For PBS backups with namespaces, namespace matching is ranked against the guest's node and
+// connection instance so clustered API entrypoints do not shadow the guest's actual placement.
 func (s *State) SyncGuestBackupTimes() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	type pbsSubjectKey struct {
+		backupType string
+		vmid       int
+	}
 
 	// Build a map of instance+VMID -> latest backup time from all backup sources
 	// Using composite key prevents cross-instance VMID collision issues
@@ -3671,113 +3630,120 @@ func (s *State) SyncGuestBackupTimes() {
 		}
 	}
 
-	// Process PBS backups (VMID is string, BackupTime is the timestamp)
-	// PBS backups can have a Namespace field that often corresponds to the PVE instance.
-	// We use namespace matching to associate PBS backups with the correct PVE instance.
-	// Structure: map[vmid][]PBSBackup to handle multiple backups per VMID
-	pbsBackupsByVMID := make(map[int][]PBSBackup)
+	// Process PBS backups (VMID is string, BackupTime is the timestamp).
+	// Group by PBS subject type and VMID so VM and CT IDs do not cross-match.
+	pbsBackupsBySubject := make(map[pbsSubjectKey][]PBSBackup)
 	for _, backup := range s.PBSBackups {
 		vmid, err := strconv.Atoi(backup.VMID)
 		if err != nil || vmid <= 0 {
 			continue
 		}
-		pbsBackupsByVMID[vmid] = append(pbsBackupsByVMID[vmid], backup)
+		backupType := strings.ToLower(strings.TrimSpace(backup.BackupType))
+		if backupType != "vm" && backupType != "ct" {
+			continue
+		}
+		key := pbsSubjectKey{backupType: backupType, vmid: vmid}
+		pbsBackupsBySubject[key] = append(pbsBackupsBySubject[key], backup)
 	}
 
-	// Build a set of VMIDs that appear on more than one PVE instance.
-	// When a VMID is ambiguous, we must not fall back to VMID-only matching
+	// Build a set of typed VMIDs that appear on more than one PVE location.
+	// When a typed VMID is ambiguous, we must not fall back to VMID-only matching
 	// because we can't tell which guest the backup belongs to.
-	vmidInstances := make(map[int]map[string]struct{})
+	subjectLocations := make(map[pbsSubjectKey]map[string]struct{})
 	for i := range s.VMs {
-		m, ok := vmidInstances[s.VMs[i].VMID]
+		key := pbsSubjectKey{backupType: "vm", vmid: s.VMs[i].VMID}
+		m, ok := subjectLocations[key]
 		if !ok {
 			m = make(map[string]struct{})
-			vmidInstances[s.VMs[i].VMID] = m
+			subjectLocations[key] = m
 		}
-		m[s.VMs[i].Instance] = struct{}{}
+		m[backupKey(s.VMs[i].Instance, s.VMs[i].VMID)+"@"+s.VMs[i].Node] = struct{}{}
 	}
 	for i := range s.Containers {
-		m, ok := vmidInstances[s.Containers[i].VMID]
+		key := pbsSubjectKey{backupType: "ct", vmid: s.Containers[i].VMID}
+		m, ok := subjectLocations[key]
 		if !ok {
 			m = make(map[string]struct{})
-			vmidInstances[s.Containers[i].VMID] = m
+			subjectLocations[key] = m
 		}
-		m[s.Containers[i].Instance] = struct{}{}
+		m[backupKey(s.Containers[i].Instance, s.Containers[i].VMID)+"@"+s.Containers[i].Node] = struct{}{}
 	}
-	vmidIsAmbiguous := make(map[int]bool)
-	for vmid, instances := range vmidInstances {
-		if len(instances) > 1 {
-			vmidIsAmbiguous[vmid] = true
+	subjectIsAmbiguous := make(map[pbsSubjectKey]bool)
+	for key, locations := range subjectLocations {
+		if len(locations) > 1 {
+			subjectIsAmbiguous[key] = true
 		}
 	}
 
-	// findBestPBSBackup finds the most recent PBS backup for a given VMID and instance.
-	// If the backup has a namespace that matches the instance, it's preferred.
+	// findBestPBSBackup finds the best PBS backup for a given typed VMID and guest location.
+	// Placement and guest-name matches are preferred over VMID-only fallback.
 	// Returns zero time if no suitable backup found.
-	findBestPBSBackup := func(vmid int, instance string) time.Time {
-		backups, ok := pbsBackupsByVMID[vmid]
+	findBestPBSBackup := func(vmid int, backupType string, instance string, node string, name string) time.Time {
+		subjectKey := pbsSubjectKey{backupType: backupType, vmid: vmid}
+		backups, ok := pbsBackupsBySubject[subjectKey]
 		if !ok || len(backups) == 0 {
 			return time.Time{}
 		}
 
 		var bestTime time.Time
-		var bestMatchTime time.Time // Best time among namespace-matched backups
+		bestScore := -1
 
 		for _, backup := range backups {
-			// If namespace matches this instance, track it separately
-			if backup.Namespace != "" && namespaceMatchesInstance(backup.Namespace, instance) {
-				if backup.BackupTime.After(bestMatchTime) {
-					bestMatchTime = backup.BackupTime
-				}
+			score := proxmoxidentity.BackupGuestMatchScore(
+				backup.Namespace,
+				backup.Comment,
+				backup.VMID,
+				name,
+				instance,
+				node,
+			)
+			if score == 0 && !subjectIsAmbiguous[subjectKey] {
+				score = 1
 			}
-			// Track overall best time as fallback
-			if backup.BackupTime.After(bestTime) {
+			if score <= 0 {
+				continue
+			}
+			if score > bestScore || (score == bestScore && backup.BackupTime.After(bestTime)) {
+				bestScore = score
 				bestTime = backup.BackupTime
 			}
 		}
 
-		// Prefer namespace-matched backup if available
-		if !bestMatchTime.IsZero() {
-			return bestMatchTime
-		}
-
-		// Fall back to any backup with this VMID, but only when the VMID is
-		// unique across PVE instances. If the VMID exists on multiple instances,
-		// the match is ambiguous and we must not guess.
-		if vmidIsAmbiguous[vmid] {
-			return time.Time{}
-		}
 		return bestTime
 	}
 
-	// Update VMs - prefer instance-specific PVE backup, fall back to PBS
+	// Update VMs - recompute from current backup evidence instead of preserving stale values
 	for i := range s.VMs {
+		var lastBackup time.Time
 		key := backupKey(s.VMs[i].Instance, s.VMs[i].VMID)
 		if backupTime, ok := latestBackup[key]; ok {
-			s.VMs[i].LastBackup = backupTime
+			lastBackup = backupTime
 		}
 		// Check if PBS has a more recent backup
-		pbsTime := findBestPBSBackup(s.VMs[i].VMID, s.VMs[i].Instance)
+		pbsTime := findBestPBSBackup(s.VMs[i].VMID, "vm", s.VMs[i].Instance, s.VMs[i].Node, s.VMs[i].Name)
 		if !pbsTime.IsZero() {
-			if s.VMs[i].LastBackup.IsZero() || pbsTime.After(s.VMs[i].LastBackup) {
-				s.VMs[i].LastBackup = pbsTime
+			if lastBackup.IsZero() || pbsTime.After(lastBackup) {
+				lastBackup = pbsTime
 			}
 		}
+		s.VMs[i].LastBackup = lastBackup
 	}
 
-	// Update Containers - prefer instance-specific PVE backup, fall back to PBS
+	// Update Containers - recompute from current backup evidence instead of preserving stale values
 	for i := range s.Containers {
+		var lastBackup time.Time
 		key := backupKey(s.Containers[i].Instance, s.Containers[i].VMID)
 		if backupTime, ok := latestBackup[key]; ok {
-			s.Containers[i].LastBackup = backupTime
+			lastBackup = backupTime
 		}
 		// Check if PBS has a more recent backup
-		pbsTime := findBestPBSBackup(s.Containers[i].VMID, s.Containers[i].Instance)
+		pbsTime := findBestPBSBackup(s.Containers[i].VMID, "ct", s.Containers[i].Instance, s.Containers[i].Node, s.Containers[i].Name)
 		if !pbsTime.IsZero() {
-			if s.Containers[i].LastBackup.IsZero() || pbsTime.After(s.Containers[i].LastBackup) {
-				s.Containers[i].LastBackup = pbsTime
+			if lastBackup.IsZero() || pbsTime.After(lastBackup) {
+				lastBackup = pbsTime
 			}
 		}
+		s.Containers[i].LastBackup = lastBackup
 	}
 
 	s.LastUpdate = time.Now()
