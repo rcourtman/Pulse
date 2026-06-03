@@ -572,7 +572,7 @@ describe('Workloads performance contract', () => {
       expect(mockLocationSearch).toBe(routeSearchBeforeOpen);
     });
 
-    it('summarizes missing in-guest agents once instead of repeating row actions', async () => {
+    it('keeps in-guest agent install prompts out of the monitoring overview', async () => {
       mockLocationSearch = '?type=all';
       mockWorkloads = [
         makeGuest(1, {
@@ -615,12 +615,12 @@ describe('Workloads performance contract', () => {
       render(() => <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
 
       await waitFor(() => {
-        expect(screen.getByText('2 running workloads have no Pulse Agent')).toBeInTheDocument();
+        expect(screen.getByText('vm-missing-agent')).toBeInTheDocument();
       });
 
-      const link = screen.getByRole('link', { name: 'Install agent' });
-      expect(link).toHaveAttribute('href', '/settings/infrastructure?add=agent');
-      expect(document.body).not.toHaveTextContent('Add Pulse Agent for AI actions');
+      expect(screen.queryByText('2 running workloads have no Pulse Agent')).toBeNull();
+      expect(screen.queryByRole('link', { name: 'Install agent' })).toBeNull();
+      expect(document.body).not.toHaveTextContent('Add agent for AI actions');
     });
 
     it('searches policy-redacted resources by their raw display name in operator-local UI', () => {

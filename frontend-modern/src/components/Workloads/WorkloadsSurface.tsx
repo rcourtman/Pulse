@@ -1,11 +1,7 @@
-import { createMemo, Show } from 'solid-js';
-import { TerminalSquare } from 'lucide-solid';
+import { Show } from 'solid-js';
 
-import { buildInfrastructureOnboardingPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { TableCard } from '@/components/shared/TableCard';
-import { isNodeOnline } from '@/utils/status';
-import { getCanonicalWorkloadId } from '@/utils/workloads';
 import { WorkloadsFilter } from './WorkloadsFilter';
 import {
   DEFAULT_WORKLOADS_VIEW_MODE,
@@ -17,11 +13,6 @@ import {
   type WorkloadsState,
   type WorkloadsSurfaceProps,
 } from './useWorkloadsState';
-import {
-  IN_GUEST_AGENT_INSTALL_SUMMARY_LABEL,
-  IN_GUEST_AGENT_INSTALL_TITLE,
-  shouldShowInGuestAgentInstallCue,
-} from './workloadAgentReadiness';
 export type { WorkloadsSurfaceProps } from './useWorkloadsState';
 
 interface WorkloadsSurfaceComponentProps extends WorkloadsSurfaceProps {
@@ -32,18 +23,6 @@ interface WorkloadsSurfaceComponentProps extends WorkloadsSurfaceProps {
 
 export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
   const state = props.state ?? useWorkloadsState(props);
-  const missingAgentWorkloadCount = createMemo(() => {
-    const parentNodeByGuestId = state.guestParentNodeMap();
-    return state.filteredGuests().reduce((count, guest) => {
-      const parentNode = parentNodeByGuestId[getCanonicalWorkloadId(guest)];
-      const parentNodeOnline = parentNode ? isNodeOnline(parentNode) : true;
-      return shouldShowInGuestAgentInstallCue(guest, parentNodeOnline) ? count + 1 : count;
-    }, 0);
-  });
-  const missingAgentWorkloadLabel = createMemo(() => {
-    const count = missingAgentWorkloadCount();
-    return `${count} running ${count === 1 ? 'workload has' : 'workloads have'} no Pulse Agent`;
-  });
   const tableOnlyFiltersActive = () =>
     hasActiveWorkloadsFilters({
       search: state.search(),
@@ -113,33 +92,6 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
               }
               onClearPinnedSelection={state.clearPinnedSummaryScope}
             />
-          </div>
-        </Show>
-
-        <Show
-          when={
-            !state.kioskMode() &&
-            state.surfaceConnected() &&
-            state.surfaceInitialDataReceived() &&
-            missingAgentWorkloadCount() > 0
-          }
-        >
-          <div class="flex flex-col gap-2 rounded-md border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-900 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100 sm:flex-row sm:items-center sm:justify-between">
-            <div class="min-w-0">
-              <div class="font-semibold">{missingAgentWorkloadLabel()}</div>
-              <div class="mt-0.5 text-amber-800/80 dark:text-amber-200/80">
-                Platform monitoring stays available. Install inside guests where Pulse should run
-                AI actions.
-              </div>
-            </div>
-            <a
-              href={buildInfrastructureOnboardingPath('agent')}
-              class="inline-flex shrink-0 items-center gap-1 self-start rounded border border-amber-300 bg-white px-2 py-1 font-semibold text-amber-800 shadow-sm hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100 dark:hover:bg-amber-900 sm:self-center"
-              title={IN_GUEST_AGENT_INSTALL_TITLE}
-            >
-              <TerminalSquare class="h-3.5 w-3.5" aria-hidden="true" />
-              <span>{IN_GUEST_AGENT_INSTALL_SUMMARY_LABEL}</span>
-            </a>
           </div>
         </Show>
 

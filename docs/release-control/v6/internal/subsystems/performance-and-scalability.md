@@ -652,6 +652,14 @@ platform-page consumers that render their own hosts summary must set
 this flag; standalone Workloads surfaces (no top hosts table) keep the
 original verbose group rows by default.
 
+WorkloadsSurface stays monitoring-first. It must not render a persistent
+aggregate banner just because running VMs or system containers lack an
+in-guest Pulse Agent; many healthy estates include appliances, test guests,
+or workloads where Pulse should remain API-only. Agent install guidance for
+AI actions belongs on intentful guest/action surfaces, such as the guest
+drawer, where the operator is inspecting a specific workload and can decide
+whether that guest should be agent-managed.
+
 The Workloads table metric display mode is part of the protected Workloads
 hot path. The default bar mode must keep the existing zero-extra-history cost;
 the sparkline mode may hydrate a short shared history window only when selected
