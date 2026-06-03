@@ -266,9 +266,9 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 		shouldRenotify := false
 		if existingAlert.Acknowledged {
 		} else if m.shouldNotifyAfterCooldown(existingAlert) {
-			shouldRenotify = true
+			shouldRenotify = m.allowNotificationByRateLimit(trackingKey, existingAlert, "cooldown")
 		} else if oldLevel != existingAlert.Level && existingAlert.Level == AlertLevelCritical {
-			shouldRenotify = true
+			shouldRenotify = m.allowNotificationByRateLimit(trackingKey, existingAlert, "critical-escalation")
 		}
 
 		if shouldRenotify && m.getAlertCallback() != nil {

@@ -174,7 +174,8 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 	}
 
 	notifiedAt := time.Now()
-	alert.LastNotified = &notifiedAt
+	m.recordAlertNotifiedNoLock(alert, notifiedAt)
+	m.saveActiveAlertsAsync("alert-dispatch")
 
 	alertCopy := cloneAlertForOutput(alert)
 	if async {
@@ -210,6 +211,34 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 		}(callbacks)
 	}
 	return true
+}
+
+func (m *Manager) recordAlertNotifiedNoLock(alert *Alert, notifiedAt time.Time) {
+	if alert == nil {
+		return
+	}
+
+	setAlertLastNotified(alert, notifiedAt)
+
+	if trackingKey := canonicalTrackingKeyForAlert(alert); trackingKey != "" {
+		if active, exists := m.getActiveAlertNoLock(trackingKey); exists && active != nil {
+			setAlertLastNotified(active, notifiedAt)
+			return
+		}
+	}
+	if alert.ID != "" {
+		if active, exists := m.getActiveAlertNoLock(alert.ID); exists && active != nil {
+			setAlertLastNotified(active, notifiedAt)
+		}
+	}
+}
+
+func setAlertLastNotified(alert *Alert, notifiedAt time.Time) {
+	if alert == nil {
+		return
+	}
+	t := notifiedAt
+	alert.LastNotified = &t
 }
 
 func isMonitorOnlyAlert(alert *Alert) bool {
@@ -537,6 +566,33 @@ func (m *Manager) shouldNotifyAfterCooldown(alert *Alert) bool {
 	timeSinceLastNotification := time.Since(*alert.LastNotified)
 
 	return timeSinceLastNotification >= cooldownDuration
+}
+
+func (m *Manager) allowNotificationByRateLimit(trackingKey string, alert *Alert, reason string) bool {
+	if trackingKey == "" && alert != nil {
+		trackingKey = canonicalTrackingKeyForAlert(alert)
+	}
+	if trackingKey == "" && alert != nil {
+		trackingKey = alert.ID
+	}
+	if m.checkRateLimit(trackingKey) {
+		return true
+	}
+
+	log.Debug().
+		Str("alertID", alertIDForLog(alert)).
+		Str("trackingKey", trackingKey).
+		Str("reason", reason).
+		Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
+		Msg("Alert notification suppressed due to rate limit")
+	return false
+}
+
+func alertIDForLog(alert *Alert) string {
+	if alert == nil {
+		return ""
+	}
+	return alert.ID
 }
 
 // checkRateLimit checks if an alert has exceeded rate limit

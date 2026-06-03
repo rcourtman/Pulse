@@ -445,17 +445,21 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 					Str("alertID", alertID).
 					Msg("Alert is acknowledged, skipping re-notification")
 			} else if m.shouldNotifyAfterCooldown(existingAlert) {
-				shouldRenotify = true
-				log.Debug().
-					Str("alertID", alertID).
-					Dur("cooldown", time.Duration(m.config.Schedule.Cooldown)*time.Minute).
-					Msg("Cooldown period has passed, will re-notify")
+				shouldRenotify = m.allowNotificationByRateLimit(trackingKey, existingAlert, "cooldown")
+				if shouldRenotify {
+					log.Debug().
+						Str("alertID", alertID).
+						Dur("cooldown", time.Duration(m.config.Schedule.Cooldown)*time.Minute).
+						Msg("Cooldown period has passed, will re-notify")
+				}
 			} else if oldLevel != existingAlert.Level && existingAlert.Level == AlertLevelCritical {
 				// Always re-notify if alert escalated to critical
-				shouldRenotify = true
-				log.Debug().
-					Str("alertID", alertID).
-					Msg("Alert escalated to critical, will re-notify despite cooldown")
+				shouldRenotify = m.allowNotificationByRateLimit(trackingKey, existingAlert, "critical-escalation")
+				if shouldRenotify {
+					log.Debug().
+						Str("alertID", alertID).
+						Msg("Alert escalated to critical, will re-notify despite cooldown")
+				}
 			}
 
 			// Send re-notification if appropriate (may be suppressed by quiet hours)

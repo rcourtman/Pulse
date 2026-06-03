@@ -189,6 +189,13 @@ forbidden.
 Per-platform defaults, per-resource overrides, global disables, active-alert
 reevaluation, history persistence, and notification delivery must use the same
 alert configuration shape rather than a platform-specific sidecar.
+Notification cadence is part of that runtime contract. `Schedule.Cooldown` and
+`Schedule.MaxAlertsHour` apply to already-active alert re-notifications as well
+as first-fire creation, including canonical metric alerts, legacy metric paths,
+and severity-change re-notifications. Accepted alert dispatch must record
+`LastNotified` back onto the live active-alert state before persistence, even
+when a restored or replayed alert is dispatched through a clone, so reloads do
+not reopen the same alert's notification window.
 The browser thresholds surface is also platform-shaped: Proxmox, Docker,
 Kubernetes, TrueNAS, vSphere, PBS, PMG, and Systems. It must use the shared
 FilterBar chip and "+ Filter" pattern for resource filtering, and alert tables

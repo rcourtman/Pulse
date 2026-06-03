@@ -126,6 +126,63 @@ func assertAlertMissing(t *testing.T, m *Manager, alertID string) {
 	}
 }
 
+func TestUnifiedGuestDiskRenotificationRespectsMaxAlertsHour(t *testing.T) {
+	m := newTestManager(t)
+	cfg := unifiedEvalBaseConfig()
+	cfg.GuestDefaults = ThresholdConfig{
+		Disk: &HysteresisThreshold{Trigger: 80, Clear: 70},
+	}
+	cfg.Schedule.Cooldown = 30
+	cfg.Schedule.MaxAlertsHour = 1
+	configureUnifiedEvalManager(t, m, cfg)
+
+	dispatched := make(chan string, 4)
+	m.SetAlertCallback(func(alert *Alert) {
+		dispatched <- alert.ID
+	})
+
+	container := models.Container{
+		ID:     "ct101",
+		Name:   "smr",
+		Node:   "ryzen5800x",
+		Status: "running",
+		Disks: []models.Disk{{
+			Mountpoint: "/",
+			Usage:      90.5,
+			Total:      100,
+			Used:       90,
+			Free:       10,
+		}},
+	}
+
+	m.CheckGuest(container, "pve1")
+
+	select {
+	case <-dispatched:
+	case <-time.After(time.Second):
+		t.Fatal("expected initial guest disk alert notification")
+	}
+
+	alertID := canonicalMetricStateID("ct101-disk-root", "disk")
+	lastNotified := time.Now().Add(-31 * time.Minute)
+	m.mu.Lock()
+	alert, exists := m.getActiveAlertNoLock(alertID)
+	if !exists {
+		m.mu.Unlock()
+		t.Fatalf("expected active guest disk alert %s", alertID)
+	}
+	alert.LastNotified = &lastNotified
+	m.mu.Unlock()
+
+	m.CheckGuest(container, "pve1")
+
+	select {
+	case id := <-dispatched:
+		t.Fatalf("expected max-alerts/hour to suppress repeated disk notification, got %s", id)
+	case <-time.After(250 * time.Millisecond):
+	}
+}
+
 func TestCheckUnifiedResourceMajorFamilies(t *testing.T) {
 	m := newTestManager(t)
 	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())

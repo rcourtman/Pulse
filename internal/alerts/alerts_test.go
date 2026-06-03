@@ -17281,6 +17281,47 @@ func TestDispatchAlert(t *testing.T) {
 		}
 	})
 
+	t.Run("records last notified on active alert when dispatched clone succeeds", func(t *testing.T) {
+		m := newTestManager(t)
+
+		m.SetAlertCallback(func(a *Alert) {})
+
+		m.mu.Lock()
+		m.config.ActivationState = ActivationActive
+		active := &Alert{
+			ID:           "test-alert",
+			Type:         "cpu",
+			ResourceName: "testvm",
+		}
+		m.setActiveAlertNoLock(active.ID, active)
+		m.mu.Unlock()
+
+		dispatched := active.Clone()
+		if dispatched == nil {
+			t.Fatal("expected alert clone")
+		}
+
+		if !m.dispatchAlert(dispatched, false) {
+			t.Fatal("expected dispatch to succeed")
+		}
+		if dispatched.LastNotified == nil {
+			t.Fatal("expected dispatched clone to record LastNotified")
+		}
+
+		m.mu.RLock()
+		stored, exists := m.getActiveAlertNoLock(active.ID)
+		m.mu.RUnlock()
+		if !exists || stored == nil {
+			t.Fatalf("expected active alert %s to remain stored", active.ID)
+		}
+		if stored.LastNotified == nil {
+			t.Fatal("expected active alert to record LastNotified")
+		}
+		if !stored.LastNotified.Equal(*dispatched.LastNotified) {
+			t.Fatalf("active LastNotified = %v, want %v", stored.LastNotified, dispatched.LastNotified)
+		}
+	})
+
 	t.Run("dispatches asynchronously when async is true", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
