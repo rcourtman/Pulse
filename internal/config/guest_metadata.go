@@ -37,10 +37,12 @@ func cloneGuestMetadata(meta *GuestMetadata) *GuestMetadata {
 
 	clone := *meta
 	if meta.Tags != nil {
-		clone.Tags = append([]string(nil), meta.Tags...)
+		clone.Tags = make([]string, len(meta.Tags))
+		copy(clone.Tags, meta.Tags)
 	}
 	if meta.Notes != nil {
-		clone.Notes = append([]string(nil), meta.Notes...)
+		clone.Notes = make([]string, len(meta.Notes))
+		copy(clone.Notes, meta.Notes)
 	}
 	return &clone
 }
