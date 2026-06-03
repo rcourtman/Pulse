@@ -60,10 +60,6 @@ export interface LicenseInlineNotice {
   body: string;
 }
 
-export interface LicenseActionNotice extends LicenseInlineNotice {
-  actionLabel: string;
-}
-
 export interface BillingAdminOrganizationBadge {
   label: string;
   badgeClass: string;

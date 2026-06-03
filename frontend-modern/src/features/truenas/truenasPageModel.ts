@@ -854,18 +854,6 @@ const matchesTrueNASStorageSearch = (resource: Resource, search: string): boolea
   return haystack.includes(needle);
 };
 
-export function filterTrueNASStorageResources(
-  resources: Resource[],
-  search: string,
-  status: TrueNASStorageStatusFilter,
-): Resource[] {
-  return resources.filter((resource) => {
-    if (!matchesTrueNASStorageSearch(resource, search)) return false;
-    if (status === 'all') return true;
-    return mapTrueNASStorageStatus(resource) === status;
-  });
-}
-
 const resourceIncidentLabel = (resource: Resource, incident: ResourceIncident): string => {
   const label = asTrimmedString(resource.incidentLabel);
   if (label) return label;

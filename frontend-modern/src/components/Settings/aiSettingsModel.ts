@@ -216,16 +216,3 @@ export function isModelProviderConfigured(
   const provider = getProviderFromModelId(modelId);
   return isAIProviderConfigured(provider, settings);
 }
-
-export function groupModelsByProvider(models: AIAvailableModel[]): Map<string, AIAvailableModel[]> {
-  const grouped = new Map<string, AIAvailableModel[]>();
-
-  for (const model of models) {
-    const provider = getProviderFromModelId(model.id);
-    const existing = grouped.get(provider) || [];
-    existing.push(model);
-    grouped.set(provider, existing);
-  }
-
-  return grouped;
-}

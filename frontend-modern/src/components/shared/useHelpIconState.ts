@@ -98,5 +98,3 @@ export function useHelpIconState(props: HelpIconProps) {
     toggleOpen,
   };
 }
-
-export type HelpIconState = ReturnType<typeof useHelpIconState>;

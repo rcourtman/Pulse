@@ -39,12 +39,6 @@ export function getUnifiedAgentLastSeenLabel(
   return row.lastSeen ? formatRelativeTime(row.lastSeen) : '—';
 }
 
-export function getMonitoringStoppedEmptyState(hasFilters: boolean): string {
-  return hasFilters
-    ? 'No monitoring-stopped items match the current filters.'
-    : 'No infrastructure currently has monitoring stopped.';
-}
-
 export function getUnifiedAgentStopMonitoringUnavailableMessage(): string {
   return 'No host identifiers are available to stop monitoring.';
 }

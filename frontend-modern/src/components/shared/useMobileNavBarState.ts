@@ -80,5 +80,3 @@ export function useMobileNavBarState(props: MobileNavBarProps) {
     showLeftFade,
   };
 }
-
-export type MobileNavBarState = ReturnType<typeof useMobileNavBarState>;

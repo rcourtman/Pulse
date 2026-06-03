@@ -201,14 +201,6 @@ export function apiErrorCode(error: unknown): string | null {
   return trimmedOptionalString((error as APIErrorLike).code);
 }
 
-export function apiErrorDetail(error: unknown): string | null {
-  if (!error || typeof error !== 'object') {
-    return null;
-  }
-
-  return trimmedOptionalString((error as APIErrorLike).detail);
-}
-
 export function apiErrorDetails(error: unknown): Record<string, string> | null {
   if (!error || typeof error !== 'object') {
     return null;

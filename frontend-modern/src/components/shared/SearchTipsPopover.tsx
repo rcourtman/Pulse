@@ -11,7 +11,7 @@ import {
 } from './searchTipsPopoverModel';
 import { useSearchTipsPopoverState } from './useSearchTipsPopoverState';
 
-export type { SearchTip, SearchTipsPopoverProps } from './searchTipsPopoverModel';
+export type { SearchTipsPopoverProps } from './searchTipsPopoverModel';
 
 export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
   const triggerVariant = () => getSearchTipsPopoverTriggerVariant(props.triggerVariant);

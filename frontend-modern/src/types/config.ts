@@ -88,15 +88,6 @@ export interface NodesConfig {
 }
 
 /**
- * Complete configuration structure
- */
-export interface PulseConfig {
-  auth: Partial<AuthConfig>; // From .env
-  system: SystemConfig; // From system.json
-  nodes: NodesConfig; // From nodes.enc
-}
-
-/**
  * API response for security status
  */
 export interface SecurityStatusSettingsCapabilities {
@@ -180,47 +171,3 @@ export interface SSOProviderInfo {
   iconUrl?: string;
   loginUrl: string;
 }
-
-/**
- * First-run setup request
- */
-export interface SetupRequest {
-  username: string;
-  password: string;
-  apiToken?: string;
-  enableNotifications?: boolean;
-  darkMode?: boolean;
-}
-
-/**
- * Type guards for configuration validation
- */
-export const isValidUpdateChannel = (value: string): value is UpdateChannel => {
-  return value === 'stable' || value === 'rc';
-};
-
-export const isValidTimeFormat = (value: string): boolean => {
-  return /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
-};
-
-/**
- * Default values for configuration
- */
-export const DEFAULT_CONFIG: {
-  system: SystemConfig;
-} = {
-  system: {
-    connectionTimeout: 60,
-    autoUpdateEnabled: false,
-    updateChannel: 'stable',
-    autoUpdateCheckInterval: 24,
-    autoUpdateTime: '03:00',
-    backupPollingEnabled: true,
-    backupPollingInterval: 0,
-    temperatureMonitoringEnabled: true,
-    telemetryEnabled: true,
-    sshPort: 22,
-    allowedOrigins: '',
-    frontendPort: 7655,
-  },
-};

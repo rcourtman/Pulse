@@ -13,7 +13,6 @@ export interface UnifiedAgentLookupStatusPresentation {
 }
 
 export const MONITORING_STOPPED_STATUS_LABEL = 'Monitoring stopped';
-export const ALLOW_RECONNECT_LABEL = 'Allow reconnect';
 
 export function getUnifiedAgentStatusPresentation(
   state: UnifiedAgentMonitoringState,

@@ -3,9 +3,6 @@ import { type SearchFieldProps } from './searchFieldModel';
 import { useSearchFieldState } from './useSearchFieldState';
 
 export type {
-  SearchFieldFocusEvent,
-  SearchFieldKeyboardEvent,
-  SearchFieldMouseEvent,
   SearchFieldProps,
 } from './searchFieldModel';
 

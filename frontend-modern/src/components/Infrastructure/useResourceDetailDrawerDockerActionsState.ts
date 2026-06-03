@@ -95,7 +95,3 @@ export const useResourceDetailDrawerDockerActionsState = (
     queueDockerUpdateAll,
   };
 };
-
-export type UseResourceDetailDrawerDockerActionsStateResult = ReturnType<
-  typeof useResourceDetailDrawerDockerActionsState
->;

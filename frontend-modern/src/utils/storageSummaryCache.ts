@@ -48,11 +48,6 @@ export function fetchStorageSummaryAndCache(
   return request;
 }
 
-export function __resetStorageSummaryCacheForTests(): void {
-  inMemoryCache.clear();
-  inFlightFetches.clear();
-}
-
 const unsubscribeStorageOrgSwitch = eventBus.on('org_switched', () => {
   inMemoryCache.clear();
   inFlightFetches.clear();

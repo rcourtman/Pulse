@@ -8,6 +8,3 @@ export const SUMMARY_TIME_RANGE_LABEL: Record<SummaryTimeRange, string> = {
   '24h': '24h',
   '7d': '7d',
 };
-
-export const isSummaryTimeRange = (value: string): value is SummaryTimeRange =>
-  (SUMMARY_TIME_RANGES as readonly string[]).includes(value);

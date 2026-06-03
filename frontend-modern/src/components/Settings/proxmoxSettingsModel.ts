@@ -12,8 +12,6 @@ import type { DiscoverySettingsFormProps } from './discoverySettingsModel';
 import type { TrueNASSettingsPanelState } from './useTrueNASSettingsPanelState';
 import type { VMwareSettingsPanelState } from './useVMwareSettingsPanelState';
 
-export type DiscoveryMode = 'auto' | 'custom';
-
 export interface InfrastructurePlatformSettingsProps {
   selectedAgent: Accessor<NodeType>;
   onSelectAgent: (agent: NodeType) => void;

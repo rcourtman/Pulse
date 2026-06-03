@@ -234,7 +234,3 @@ export const useResourceDetailDrawerHistoryState = (
     refetchHistoryFacets,
   };
 };
-
-export type ResourceDetailDrawerHistoryState = ReturnType<
-  typeof useResourceDetailDrawerHistoryState
->;

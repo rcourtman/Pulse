@@ -196,8 +196,6 @@ export const requiresGovernedResourceDisplay = (policy?: ResourcePolicy | null):
   if (!policy) return false;
   return policy.routing.scope === 'local-only' || (policy.routing.redact?.length ?? 0) > 0;
 };
-
-export type ResourceApprovalLevel = 'none' | 'dry_run_only' | 'admin' | 'mfa';
 export type ResourceChangeConfidence = 'high' | 'medium' | 'low';
 export type ResourceChangeKind =
   | 'state_transition'

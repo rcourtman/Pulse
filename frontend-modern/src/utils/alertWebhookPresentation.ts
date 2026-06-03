@@ -275,17 +275,6 @@ export function getAlertWebhookUrlPlaceholder(urlPattern?: string) {
   return urlPattern || ALERT_WEBHOOK_URL_PLACEHOLDER;
 }
 
-export function getAlertWebhookMentionPlaceholder(service: string) {
-  return (
-    ALERT_WEBHOOK_SERVICE_PRESENTATION[service as AlertWebhookService]?.mentionPlaceholder ||
-    ALERT_WEBHOOK_MENTION_FALLBACK_PLACEHOLDER
-  );
-}
-
-export function getAlertWebhookMentionHelp(service: string) {
-  return ALERT_WEBHOOK_SERVICE_PRESENTATION[service as AlertWebhookService]?.mentionHelp || '';
-}
-
 export function getAlertWebhookSummaryLabel(enabledCount: number, totalCount: number) {
   return `${enabledCount} of ${totalCount} webhooks enabled`;
 }

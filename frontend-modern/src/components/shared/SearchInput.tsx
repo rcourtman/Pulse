@@ -7,7 +7,7 @@ import {
 import { type SearchInputProps } from './searchInputModel';
 import { useSearchInputState } from './useSearchInputState';
 
-export type { SearchInputKeyboardEvent, SearchInputProps } from './searchInputModel';
+export type { SearchInputProps } from './searchInputModel';
 
 export const SearchInput: Component<SearchInputProps> = (props) => {
   const search = useSearchInputState(props);

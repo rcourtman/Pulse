@@ -124,16 +124,6 @@ export const getGuestOverrideIdentity = (
   };
 };
 
-export const canonicalGuestOverrideResourceId = (
-  resource: GuestOverrideResourceLike,
-): string | undefined => {
-  const identity = getGuestOverrideIdentity(resource);
-  if (!identity) {
-    return undefined;
-  }
-  return `${identity.instance}:${identity.node}:${identity.vmid}`;
-};
-
 export const guestOverrideStorageId = (resource: GuestOverrideResourceLike): string => {
   const identity = getGuestOverrideIdentity(resource);
   if (!identity) {

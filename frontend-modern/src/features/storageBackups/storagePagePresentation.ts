@@ -81,14 +81,6 @@ export const getStoragePoolTableColumns = (
     colClassName: 'hidden xl:table-column xl:w-[11%]',
   },
 ];
-
-export const STORAGE_CONTROLS_NODE_SELECT_CLASS =
-  'px-2 py-1 text-xs border border-border rounded-md bg-surface text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500';
-
-export const STORAGE_CONTROLS_NODE_DIVIDER_CLASS = 'h-5 w-px bg-surface-hover hidden sm:block';
-
-export const STORAGE_CONTENT_CARD_HEADER_CLASS =
-  'border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted';
 export const STORAGE_CONTENT_CARD_BODY_CLASS = 'p-2';
 
 export const STORAGE_POOLS_EMPTY_STATE_CLASS = 'p-6 text-sm text-muted';

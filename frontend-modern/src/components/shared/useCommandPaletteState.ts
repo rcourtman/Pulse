@@ -73,5 +73,3 @@ export function useCommandPaletteState(props: CommandPaletteModalProps) {
     setQuery,
   };
 }
-
-export type CommandPaletteState = ReturnType<typeof useCommandPaletteState>;

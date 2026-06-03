@@ -162,10 +162,6 @@ export interface UpdateNotesRequest {
   user_secrets?: Record<string, string>;
 }
 
-export interface UpdateSettingsRequest {
-  max_discovery_age_days?: number; // Days before rediscovery (default 30)
-}
-
 // AI provider information for discovery transparency
 export interface AIProviderInfo {
   provider: string; // e.g., "anthropic", "openai", "ollama"

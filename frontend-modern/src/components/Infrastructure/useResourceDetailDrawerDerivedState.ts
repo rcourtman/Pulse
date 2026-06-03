@@ -490,7 +490,3 @@ export const useResourceDetailDrawerDerivedState = (
     tabs,
   };
 };
-
-export type ResourceDetailDrawerDerivedState = ReturnType<
-  typeof useResourceDetailDrawerDerivedState
->;

@@ -16,29 +16,6 @@ import {
   parseOptionalAPIResponseOrNull,
 } from './responseUtils';
 
-export interface RemovedDockerHost {
-  id: string;
-  hostname?: string;
-  displayName?: string;
-  removedAt: number;
-}
-
-export interface RemovedHostAgent {
-  id: string;
-  hostname?: string;
-  displayName?: string;
-  linkedVmId?: string;
-  linkedContainerId?: string;
-  removedAt: number;
-}
-
-export interface RemovedKubernetesCluster {
-  id: string;
-  name?: string;
-  displayName?: string;
-  removedAt: number;
-}
-
 async function deleteResource<T extends object>(
   url: string,
   parseErrorMessage: string,
