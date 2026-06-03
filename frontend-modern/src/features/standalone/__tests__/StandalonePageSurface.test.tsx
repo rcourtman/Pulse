@@ -158,7 +158,7 @@ describe('StandalonePageSurface', () => {
 
     const notice = screen.getByTestId('platform-outdated-agent-notice');
     expect(notice).toHaveTextContent('tower is running an older Pulse agent (v5.1.34).');
-    expect(notice).toHaveTextContent('current machine telemetry');
+    expect(notice).toHaveTextContent('command support and newer agent-managed platform details');
     expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(
       'href',
       '/settings/infrastructure',
