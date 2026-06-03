@@ -1251,11 +1251,14 @@ func TestTrueNASPollerSkipsDisabledConnections(t *testing.T) {
 	t.Cleanup(poller.Stop)
 
 	waitForCondition(t, 2*time.Second, func() bool {
-		return pollerProviderCount(poller) == 1 && enabled.RequestCount() >= 5
+		return pollerProviderCount(poller) == 1 &&
+			enabled.RequestCount() >= 5 &&
+			hasTrueNASHostForOrg(poller, "default", "nas-enabled")
 	}, "expected only enabled connection provider and resources")
 
 	waitForCondition(t, 2*time.Second, func() bool {
-		return enabled.RequestCount() >= 10
+		return enabled.RequestCount() >= 10 &&
+			hasTrueNASHostForOrg(poller, "default", "nas-enabled")
 	}, "expected additional polling cycles for enabled connection")
 
 	if disabled.RequestCount() != 0 {
