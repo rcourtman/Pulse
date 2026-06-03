@@ -20,7 +20,10 @@ func TestCommandClient_LoopsCoverage(t *testing.T) {
 
 	upgrader := websocket.Upgrader{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn, _ := upgrader.Upgrade(w, r, nil)
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
 		defer conn.Close()
 
 		// 1. Receive registration
@@ -82,7 +85,11 @@ func TestCommandClient_PingLoop_Direct(t *testing.T) {
 	// Directly test pingLoop logic for coverage
 	upgrader := websocket.Upgrader{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn, _ := upgrader.Upgrade(w, r, nil)
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
 		for {
 			if _, _, err := conn.ReadMessage(); err != nil {
 				return
@@ -92,7 +99,10 @@ func TestCommandClient_PingLoop_Direct(t *testing.T) {
 	defer server.Close()
 
 	dialer := websocket.Dialer{}
-	conn, _, _ := dialer.Dial("ws"+strings.TrimPrefix(server.URL, "http"), nil)
+	conn, _, err := dialer.Dial("ws"+strings.TrimPrefix(server.URL, "http"), nil)
+	if err != nil {
+		t.Fatalf("dial websocket: %v", err)
+	}
 	defer conn.Close()
 
 	client := &CommandClient{
@@ -116,7 +126,10 @@ func TestCommandClient_RegistrationFailure(t *testing.T) {
 
 	upgrader := websocket.Upgrader{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn, _ := upgrader.Upgrade(w, r, nil)
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
 		defer conn.Close()
 
 		// Receive registration

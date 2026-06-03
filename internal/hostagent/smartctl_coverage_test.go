@@ -1106,13 +1106,17 @@ func TestCollectDeviceSMARTNoDataReturnsNil(t *testing.T) {
 
 func TestListBlockDevicesFreeBSDError(t *testing.T) {
 	origRun := smartRunCommandOutput
-	t.Cleanup(func() { smartRunCommandOutput = origRun })
+	origReadDir := readDir
+	t.Cleanup(func() { smartRunCommandOutput = origRun; readDir = origReadDir })
 
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if name != "sysctl" {
 			return nil, errors.New("unexpected command")
 		}
 		return nil, errors.New("sysctl failed")
+	}
+	readDir = func(string) ([]os.DirEntry, error) {
+		return nil, errors.New("dev unavailable")
 	}
 
 	if _, err := listBlockDevicesFreeBSD(context.Background(), nil); err == nil {
