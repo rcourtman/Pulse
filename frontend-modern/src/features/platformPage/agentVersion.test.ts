@@ -85,6 +85,29 @@ describe('hostAgentVersion', () => {
     ).toBe('v6.0.0-rc.5');
   });
 
+  it('reads the Kubernetes cluster-agent version projected onto node rows', () => {
+    expect(
+      hostAgentVersion(
+        host({
+          type: 'k8s-node',
+          kubernetes: { agentVersion: 'v6.0.0-rc.5' } as Resource['kubernetes'],
+        }),
+      ),
+    ).toBe('v6.0.0-rc.5');
+  });
+
+  it('prefers Kubernetes cluster-agent version for Kubernetes platform rows', () => {
+    expect(
+      hostAgentVersion(
+        host({
+          type: 'k8s-node',
+          agent: { agentVersion: 'v6.0.0-rc.6' } as Resource['agent'],
+          kubernetes: { agentVersion: 'v6.0.0-rc.5' } as Resource['kubernetes'],
+        }),
+      ),
+    ).toBe('v6.0.0-rc.5');
+  });
+
   it('returns undefined when no version is reported', () => {
     expect(hostAgentVersion(host({}))).toBeUndefined();
   });
@@ -95,7 +118,22 @@ describe('hostAgentVersion', () => {
     ).toBe('agent:agent-delly');
     expect(
       hostAgentConnectionID(
-        host({ kubernetes: { agentId: 'agent:agent-k8s' } as Resource['kubernetes'] }),
+        host({
+          type: 'k8s-node',
+          kubernetes: { agentId: 'agent:agent-k8s' } as Resource['kubernetes'],
+        }),
+      ),
+    ).toBe('agent:agent-k8s');
+  });
+
+  it('prefers Kubernetes cluster-agent IDs for Kubernetes platform rows', () => {
+    expect(
+      hostAgentConnectionID(
+        host({
+          type: 'k8s-node',
+          agent: { agentId: 'agent-host' } as Resource['agent'],
+          kubernetes: { agentId: 'agent-k8s' } as Resource['kubernetes'],
+        }),
       ),
     ).toBe('agent:agent-k8s');
   });

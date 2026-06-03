@@ -121,6 +121,8 @@ export function KubernetesPageSurface() {
               missingLabel="Kubernetes nodes, workloads, services, storage, configuration, and events"
               actionHref={outdatedAgentUpdatePath()}
               actionLabel="Open agent upgrade commands"
+              subjectSingular="node"
+              subjectPlural="nodes"
             />
             <Show when={activeTab() === 'overview'}>
               <KubernetesOverview model={model} />

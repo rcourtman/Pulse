@@ -715,6 +715,39 @@ func TestResourceFromHostSMARTDiskFallsBackToFilesystemSize(t *testing.T) {
 	}
 }
 
+func TestResourceFromKubernetesNodeProjectsClusterAgentVersion(t *testing.T) {
+	cluster := models.KubernetesCluster{
+		ID:           "cluster-1",
+		AgentID:      "agent-k8s-1",
+		Name:         "prod",
+		DisplayName:  "Production",
+		LastSeen:     time.Now().UTC(),
+		AgentVersion: "5.1.34",
+	}
+	node := models.KubernetesNode{
+		UID:   "node-1",
+		Name:  "worker-1",
+		Ready: true,
+	}
+
+	resource, _ := resourceFromKubernetesNode(cluster, node, nil, nil)
+	if resource.Type != ResourceTypeK8sNode {
+		t.Fatalf("resource type = %q, want %q", resource.Type, ResourceTypeK8sNode)
+	}
+	if resource.Agent != nil {
+		t.Fatalf("expected pure k8s-node adapter row without agent facet, got %+v", resource.Agent)
+	}
+	if resource.Kubernetes == nil {
+		t.Fatalf("expected kubernetes facet")
+	}
+	if resource.Kubernetes.AgentID != "agent-k8s-1" {
+		t.Fatalf("agent id = %q, want agent-k8s-1", resource.Kubernetes.AgentID)
+	}
+	if resource.Kubernetes.AgentVersion != "5.1.34" {
+		t.Fatalf("agent version = %q, want 5.1.34", resource.Kubernetes.AgentVersion)
+	}
+}
+
 func TestResourceFromKubernetesDeployment_PopulatesMetricsUnderMockMode(t *testing.T) {
 	mockruntime.SetEnabled(true)
 	t.Cleanup(func() { mockruntime.SetEnabled(false) })

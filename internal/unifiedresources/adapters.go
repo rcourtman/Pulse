@@ -2421,6 +2421,7 @@ func resourceFromKubernetesNode(cluster models.KubernetesCluster, node models.Ku
 			ClusterID:               cluster.ID,
 			ClusterName:             clusterName,
 			AgentID:                 cluster.AgentID,
+			AgentVersion:            cluster.AgentVersion,
 			Context:                 cluster.Context,
 			Server:                  cluster.Server,
 			Version:                 cluster.Version,

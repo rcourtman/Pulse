@@ -491,6 +491,13 @@ AI-only summary payloads, or page-local heuristics.
    Resource consumers must also use the API-owned agent update target when
    comparing resource-carried agent versions; the running app build version is
    not a resource freshness contract.
+   Kubernetes node rows are cluster-agent-backed for this purpose: even when a
+   canonical `k8s-node` row is a pure Kubernetes API projection with no merged
+   `agent` facet, `internal/unifiedresources/adapters.go` must carry the
+   cluster `AgentID` and cluster-scoped `AgentVersion` on the row's
+   Kubernetes facet so platform consumers can scope stale-agent notices and
+   update-command links from typed resource evidence instead of rebuilding
+   ownership from the parent cluster row.
    `internal/unifiedresources/top_level_systems.go`
    Explicit linked-host correlation is canonical here: when Kubernetes node
    ingest has a resolved backing host agent, the registry must merge that node

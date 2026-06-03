@@ -240,6 +240,50 @@ describe('KubernetesPageSurface contract', () => {
     );
   });
 
+  it('surfaces stale cluster-backed Kubernetes node rows without agent metadata', () => {
+    mockVersionInfo.mockReturnValue({
+      version: 'v6.0.0-rc.6',
+      agentUpdateTargetVersion: 'v6.0.0-rc.6',
+    });
+    setResources([
+      makeResource({
+        id: 'cluster-1',
+        name: 'prod-cluster',
+        type: 'k8s-cluster',
+        kubernetes: {
+          agentId: 'agent-k8s-cluster',
+          agentVersion: 'v5.1.34',
+          clusterId: 'cluster-1',
+          clusterName: 'prod-cluster',
+        },
+      }),
+      makeResource({
+        id: 'k8s-node:worker-1',
+        name: 'worker-1',
+        type: 'k8s-node',
+        agent: undefined,
+        kubernetes: {
+          agentId: 'agent-k8s-cluster',
+          agentVersion: 'v5.1.34',
+          clusterId: 'cluster-1',
+          clusterName: 'prod-cluster',
+          nodeName: 'worker-1',
+        },
+      }),
+    ]);
+
+    renderSurface();
+
+    const notice = screen.getByTestId('platform-outdated-agent-notice');
+    expect(notice).toHaveTextContent('worker-1 is running an older Pulse agent (v5.1.34).');
+    expect(notice).toHaveTextContent('for this node');
+    expect(notice).toHaveTextContent('Kubernetes nodes, workloads, services, storage');
+    expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(
+      'href',
+      '/settings/infrastructure?agentUpdates=1&agents=agent%3Aagent-k8s-cluster',
+    );
+  });
+
   it('groups workload API tables under the Workloads tab', () => {
     mockPathname.mockReturnValue('/kubernetes/workloads');
     setResources([

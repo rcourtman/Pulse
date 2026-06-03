@@ -1759,6 +1759,69 @@ func TestResourceListIncludesKubernetesPods(t *testing.T) {
 	}
 }
 
+func TestResourceListProjectsKubernetesClusterAgentVersionOntoNode(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{
+			{
+				ID:           "cluster-1",
+				AgentID:      "agent-1",
+				Name:         "prod-k8s",
+				Context:      "prod",
+				Status:       "online",
+				LastSeen:     now,
+				Version:      "1.31.2",
+				AgentVersion: "5.1.34",
+				Nodes: []models.KubernetesNode{
+					{
+						UID:     "node-1",
+						Name:    "worker-1",
+						Ready:   true,
+						OSImage: "Ubuntu 24.04",
+					},
+				},
+			},
+		},
+	}
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=k8s-node", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected 1 kubernetes node resource, got %d", len(resp.Data))
+	}
+
+	resource := resp.Data[0]
+	if resource.Type != unified.ResourceTypeK8sNode {
+		t.Fatalf("resource type = %q, want %q", resource.Type, unified.ResourceTypeK8sNode)
+	}
+	if resource.Agent != nil {
+		t.Fatalf("expected pure k8s-node row without agent metadata, got %+v", resource.Agent)
+	}
+	if resource.Kubernetes == nil {
+		t.Fatalf("expected kubernetes metadata")
+	}
+	if resource.Kubernetes.AgentID != "agent-1" {
+		t.Fatalf("kubernetes agentID = %q, want agent-1", resource.Kubernetes.AgentID)
+	}
+	if resource.Kubernetes.AgentVersion != "5.1.34" {
+		t.Fatalf("kubernetes agentVersion = %q, want 5.1.34", resource.Kubernetes.AgentVersion)
+	}
+}
+
 func TestResourceListFiltersCanonicalKubernetesNamespace(t *testing.T) {
 	now := time.Now().UTC()
 	snapshot := models.StateSnapshot{

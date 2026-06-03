@@ -241,7 +241,11 @@ must not grow this notice unless a concrete guest or monitored system row
 actually carries a Pulse agent identity. On vSphere specifically, stale-agent
 copy belongs to correlated in-guest VM agents and must not describe ESXi hosts
 as Pulse-agent update targets just because phase-1 host resources use the
-canonical `agent` resource type.
+canonical `agent` resource type. Kubernetes is cluster-agent-backed: canonical
+`k8s-node` rows may be pure Kubernetes API rows rather than merged `agent`
+rows, so the unified-resource owner must project the cluster agent identity and
+cluster-scoped agent version onto those node rows before the shared stale-agent
+collector can decide whether the node inventory is gated by an older agent.
 Kubernetes policy inventory follows that same primitive boundary while the
 unified-resource owner supplies NetworkPolicy policy type and rule-count
 columns, PodDisruptionBudget budget and observed health columns, ResourceQuota

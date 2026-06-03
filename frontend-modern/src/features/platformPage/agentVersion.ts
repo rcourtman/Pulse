@@ -22,13 +22,37 @@ import {
 // second case by comparing each host's reported agent version against the
 // server that is rendering the page.
 
+const isKubernetesPlatformRow = (host: Resource): boolean =>
+  host.type === 'k8s-node' ||
+  host.type === 'k8s-cluster' ||
+  host.platformType === 'kubernetes' ||
+  host.sources?.includes('kubernetes') === true;
+
 // The agent version reported for a host. Docker hosts carry it on the docker
-// meta; plain host agents carry it on the agent meta.
+// meta; Kubernetes platform rows carry the cluster agent version on the
+// kubernetes meta; plain host agents carry it on the agent meta.
 export function hostAgentVersion(host: Resource): string | undefined {
-  return host.docker?.agentVersion?.trim() || host.agent?.agentVersion?.trim() || undefined;
+  const kubernetesAgentVersion = host.kubernetes?.agentVersion?.trim();
+  if (kubernetesAgentVersion && isKubernetesPlatformRow(host)) {
+    return kubernetesAgentVersion;
+  }
+  return (
+    host.docker?.agentVersion?.trim() ||
+    host.agent?.agentVersion?.trim() ||
+    kubernetesAgentVersion ||
+    undefined
+  );
 }
 
 export function hostAgentConnectionID(host: Resource): string | undefined {
+  if (isKubernetesPlatformRow(host)) {
+    const kubernetesAgentId = host.kubernetes?.agentId?.trim();
+    if (kubernetesAgentId) {
+      return kubernetesAgentId.startsWith('agent:')
+        ? kubernetesAgentId
+        : `agent:${kubernetesAgentId}`;
+    }
+  }
   const agentId =
     host.agent?.agentId?.trim() ||
     host.kubernetes?.agentId?.trim() ||

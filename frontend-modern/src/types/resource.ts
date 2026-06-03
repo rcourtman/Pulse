@@ -903,6 +903,7 @@ export interface ResourceKubernetesPodContainerStatus {
 export interface ResourceKubernetesMeta {
   clusterId?: string;
   agentId?: string;
+  agentVersion?: string;
   clusterName?: string;
   resourceUid?: string;
   resourceKind?: string;
