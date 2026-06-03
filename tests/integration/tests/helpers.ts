@@ -275,9 +275,11 @@ async function completeSetupWizard(
     name: "Install Pulse Agent",
     exact: true,
   });
-  const securePulseHeading = wizard.getByText("Secure Pulse");
-  const continueButton = wizard.getByRole("button", {
-    name: /verify bootstrap token|continue to setup|continue/i,
+  const securityStepHeading = wizard.getByRole("heading", {
+    name: /secure pulse|create your admin account/i,
+  });
+  const unlockButton = wizard.getByRole("button", {
+    name: /verify bootstrap token|continue to setup|continue to security/i,
   });
   const finishButton = wizard.getByRole("button", {
     name: /open infrastructure|skip for now/i,
@@ -299,19 +301,26 @@ async function completeSetupWizard(
   };
 
   const clickContinueIfReady = async (): Promise<boolean> => {
-    if (!(await continueButton.isVisible({ timeout: 250 }).catch(() => false))) {
+    if (!(await unlockButton.isVisible({ timeout: 250 }).catch(() => false))) {
       return false;
     }
-    if (!(await continueButton.isEnabled().catch(() => false))) {
+    if (!(await unlockButton.isEnabled().catch(() => false))) {
+      if (
+        !(await bootstrapTokenInput
+          .isVisible({ timeout: 250 })
+          .catch(() => false))
+      ) {
+        return false;
+      }
       if ((await bootstrapTokenInput.inputValue().catch(() => "")) !== bootstrapToken) {
         await enterBootstrapToken();
       }
     }
-    if (!(await continueButton.isEnabled().catch(() => false))) {
+    if (!(await unlockButton.isEnabled().catch(() => false))) {
       return false;
     }
     try {
-      await continueButton.click({ timeout: 1_000 });
+      await unlockButton.click({ timeout: 1_000 });
       return true;
     } catch {
       return false;
@@ -337,7 +346,7 @@ async function completeSetupWizard(
       return "completion";
     }
     if (
-      await securePulseHeading.isVisible({ timeout: 100 }).catch(() => false)
+      await securityStepHeading.isVisible({ timeout: 100 }).catch(() => false)
     ) {
       return "security";
     }

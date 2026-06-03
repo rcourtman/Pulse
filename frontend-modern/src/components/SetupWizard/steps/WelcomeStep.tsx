@@ -94,6 +94,11 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
     try {
       const response = await apiFetch('/api/security/validate-bootstrap-token', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        skipAuth: true,
+        skipOrgContext: true,
         body: JSON.stringify({ token: trimmedToken }),
       });
 

@@ -113,6 +113,45 @@ describe('WelcomeStep', () => {
     ).toBeInTheDocument();
   });
 
+  it('validates raw bootstrap tokens with an unauthenticated JSON request', async () => {
+    const rawToken = '0123456789abcdef0123456789abcdef0123456789abcdef';
+    const onNext = vi.fn();
+    const setIsUnlocked = vi.fn();
+
+    apiFetchMock.mockResolvedValue({ ok: true });
+
+    render(() => (
+      <WelcomeStep
+        onNext={onNext}
+        bootstrapToken={`  ${rawToken}  `}
+        setBootstrapToken={vi.fn()}
+        isUnlocked={false}
+        setIsUnlocked={setIsUnlocked}
+      />
+    ));
+
+    await waitFor(() => {
+      expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/security/status');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Verify bootstrap token →' }));
+
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/security/validate-bootstrap-token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        skipAuth: true,
+        skipOrgContext: true,
+        body: JSON.stringify({ token: rawToken }),
+      });
+    });
+    expect(setIsUnlocked).toHaveBeenCalledWith(true);
+    expect(onNext).toHaveBeenCalledTimes(1);
+    expect(showErrorMock).not.toHaveBeenCalled();
+  });
+
   it('blocks encrypted bootstrap snapshot pastes with a specific error', async () => {
     const onNext = vi.fn();
 
