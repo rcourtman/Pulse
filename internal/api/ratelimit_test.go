@@ -108,35 +108,29 @@ func TestRateLimiter_Allow_WindowExpiry(t *testing.T) {
 }
 
 func TestRateLimiter_Allow_SlidingWindow(t *testing.T) {
-	// Test that the window is truly sliding (not fixed intervals)
 	rl := NewRateLimiter(2, 100*time.Millisecond)
 	defer rl.Stop()
 
 	ip := "192.168.1.1"
+	base := time.Unix(1_700_000_000, 0)
 
-	// First attempt
-	if !rl.Allow(ip) {
+	allowed, _ := rl.allowAt(ip, base)
+	if !allowed {
 		t.Error("attempt 1 should be allowed")
 	}
 
-	// Wait half the window
-	time.Sleep(60 * time.Millisecond)
-
-	// Second attempt
-	if !rl.Allow(ip) {
+	allowed, _ = rl.allowAt(ip, base.Add(60*time.Millisecond))
+	if !allowed {
 		t.Error("attempt 2 should be allowed")
 	}
 
-	// Third attempt should be denied (both still in window)
-	if rl.Allow(ip) {
+	allowed, _ = rl.allowAt(ip, base.Add(60*time.Millisecond))
+	if allowed {
 		t.Error("attempt 3 should be denied")
 	}
 
-	// Wait for first attempt to expire (another 50ms should be enough)
-	time.Sleep(50 * time.Millisecond)
-
-	// Now should be allowed (first attempt expired, second still valid)
-	if !rl.Allow(ip) {
+	allowed, _ = rl.allowAt(ip, base.Add(110*time.Millisecond))
+	if !allowed {
 		t.Error("attempt 4 should be allowed after first expires")
 	}
 }
