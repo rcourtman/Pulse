@@ -1,7 +1,5 @@
 import { createMemo, For, Show } from 'solid-js';
-import { TerminalSquare } from 'lucide-solid';
 
-import { buildInfrastructureOnboardingPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import { useTooltip } from '@/hooks/useTooltip';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -12,26 +10,6 @@ import {
   getWorkloadsGuestBackupTooltip,
   getWorkloadsGuestNetworkEmptyState,
 } from '@/utils/workloadGuestPresentation';
-import {
-  IN_GUEST_AGENT_INSTALL_LABEL,
-  IN_GUEST_AGENT_INSTALL_TITLE,
-} from './workloadAgentReadiness';
-
-function InGuestAgentInstallCue() {
-  return (
-    <a
-      href={buildInfrastructureOnboardingPath('agent')}
-      class="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold text-amber-700 underline-offset-2 hover:underline dark:text-amber-300"
-      title={IN_GUEST_AGENT_INSTALL_TITLE}
-      aria-label="Add Pulse Agent for AI actions"
-      onClick={(event) => event.stopPropagation()}
-      onMouseDown={(event) => event.stopPropagation()}
-    >
-      <TerminalSquare class="h-3 w-3" aria-hidden="true" />
-      <span>{IN_GUEST_AGENT_INSTALL_LABEL}</span>
-    </a>
-  );
-}
 
 function BackupIndicator(props: {
   lastBackup: string | number | null | undefined;
@@ -426,4 +404,4 @@ function InfoTooltipCell(props: { value: string; tooltip: string; type: string }
   );
 }
 
-export { BackupIndicator, BackupStatusCell, InGuestAgentInstallCue, InfoTooltipCell, NetworkInfoCell, OSInfoCell };
+export { BackupIndicator, BackupStatusCell, InfoTooltipCell, NetworkInfoCell, OSInfoCell };

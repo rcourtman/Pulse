@@ -25,7 +25,7 @@ export const shouldShowInGuestAgentInstallCue = (
   !hasInGuestPulseAgent(guest) &&
   isGuestRunning(guest, parentNodeOnline);
 
-export const IN_GUEST_AGENT_INSTALL_LABEL = 'Add agent';
+export const IN_GUEST_AGENT_INSTALL_SUMMARY_LABEL = 'Install agent';
 export const IN_GUEST_AGENT_INSTALL_ACTION_LABEL = 'Add agent for AI actions';
 export const IN_GUEST_AGENT_INSTALL_TITLE =
   'Install Pulse Agent inside this guest to unlock deep telemetry and AI actions.';

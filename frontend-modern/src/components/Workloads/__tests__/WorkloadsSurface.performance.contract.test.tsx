@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, waitFor } from '@solidjs/testing-library';
+import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal, onCleanup, onMount } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { WorkloadsSurface } from '../WorkloadsSurface';
@@ -570,6 +570,57 @@ describe('Workloads performance contract', () => {
       );
       expect(navigateSpy).not.toHaveBeenCalled();
       expect(mockLocationSearch).toBe(routeSearchBeforeOpen);
+    });
+
+    it('summarizes missing in-guest agents once instead of repeating row actions', async () => {
+      mockLocationSearch = '?type=all';
+      mockWorkloads = [
+        makeGuest(1, {
+          name: 'vm-missing-agent',
+          type: 'qemu',
+          workloadType: 'vm',
+          status: 'running',
+          agentVersion: undefined,
+        }),
+        makeGuest(2, {
+          name: 'lxc-missing-agent',
+          type: 'lxc',
+          workloadType: 'system-container',
+          status: 'running',
+          agentVersion: '',
+        }),
+        makeGuest(3, {
+          name: 'app-container',
+          type: 'docker-container',
+          workloadType: 'app-container',
+          status: 'running',
+          agentVersion: undefined,
+        }),
+        makeGuest(4, {
+          name: 'stopped-vm',
+          type: 'qemu',
+          workloadType: 'vm',
+          status: 'stopped',
+          agentVersion: undefined,
+        }),
+        makeGuest(5, {
+          name: 'agented-vm',
+          type: 'qemu',
+          workloadType: 'vm',
+          status: 'running',
+          agentVersion: 'v6.0.0',
+        }),
+      ];
+
+      render(() => <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
+
+      await waitFor(() => {
+        expect(screen.getByText('2 running workloads have no Pulse Agent')).toBeInTheDocument();
+      });
+
+      const link = screen.getByRole('link', { name: 'Install agent' });
+      expect(link).toHaveAttribute('href', '/settings/infrastructure?add=agent');
+      expect(document.body).not.toHaveTextContent('Add Pulse Agent for AI actions');
     });
 
     it('searches policy-redacted resources by their raw display name in operator-local UI', () => {

@@ -201,38 +201,9 @@ describe('GuestRow', () => {
       expect(screen.getByText('my-webserver')).toBeTruthy();
     });
 
-    it('surfaces the in-guest agent install path for running VMs without an agent', () => {
+    it('does not repeat the in-guest agent install action in every row', () => {
       renderGuestRow({
         guest: makeGuest({ agentVersion: undefined, status: 'running' }),
-        visibleColumnIds: ['name'],
-      });
-
-      const link = screen.getByRole('link', { name: 'Add Pulse Agent for AI actions' });
-      expect(link).toHaveAttribute('href', '/settings/infrastructure?add=agent');
-      expect(link).toHaveTextContent('Add agent');
-      expect(link).toHaveAttribute(
-        'title',
-        'Install Pulse Agent inside this guest to unlock deep telemetry and AI actions.',
-      );
-    });
-
-    it('does not show the agent install cue when the VM already has an agent', () => {
-      renderGuestRow({
-        guest: makeGuest({ agentVersion: 'v6.0.0', status: 'running' }),
-        visibleColumnIds: ['name'],
-      });
-
-      expect(screen.queryByRole('link', { name: 'Add Pulse Agent for AI actions' })).toBeNull();
-    });
-
-    it('does not show the agent install cue for app containers', () => {
-      renderGuestRow({
-        guest: makeGuest({
-          agentVersion: undefined,
-          status: 'running',
-          type: 'docker-container',
-          workloadType: 'app-container',
-        }),
         visibleColumnIds: ['name'],
       });
 

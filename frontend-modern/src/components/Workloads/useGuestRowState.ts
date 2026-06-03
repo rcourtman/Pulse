@@ -22,7 +22,6 @@ import {
   getWorkloadAlertThresholdScope,
   getWorkloadDockerHostId,
 } from './workloadTopology';
-import { shouldShowInGuestAgentInstallCue } from './workloadAgentReadiness';
 import {
   DEFAULT_FIRST_CELL_INDENT,
   EMPTY_IO_EMPHASIS,
@@ -224,9 +223,6 @@ export function useGuestRowState(props: GuestRowProps) {
 
   const parentOnline = createMemo(() => props.parentNodeOnline !== false);
   const isRunning = createMemo(() => isGuestRunning(props.guest, parentOnline()));
-  const showInGuestAgentInstallCue = createMemo(() =>
-    shouldShowInGuestAgentInstallCue(props.guest, parentOnline()),
-  );
   const guestStatus = createMemo(() => getGuestPowerIndicator(props.guest, parentOnline()));
   const lockLabel = createMemo(() => (props.guest.lock || '').trim());
 
@@ -321,6 +317,5 @@ export function useGuestRowState(props: GuestRowProps) {
     clusterName,
     agentVersion,
     rowClass,
-    showInGuestAgentInstallCue,
   };
 }
