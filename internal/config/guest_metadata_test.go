@@ -48,6 +48,16 @@ func TestGuestMetadataStore_Get(t *testing.T) {
 	if result.LastKnownType != "qemu" {
 		t.Errorf("LastKnownType = %q, want %q", result.LastKnownType, "qemu")
 	}
+
+	result.CustomURL = "http://mutated.example.com"
+	result.Tags[0] = "mutated"
+	again := store.Get("pve1:node1:100")
+	if again.CustomURL != "http://example.com" {
+		t.Errorf("Get should return a metadata copy; stored CustomURL = %q, want %q", again.CustomURL, "http://example.com")
+	}
+	if again.Tags[0] != "tag1" {
+		t.Errorf("Get should copy slice fields; stored tag = %q, want tag1", again.Tags[0])
+	}
 }
 
 func TestGuestMetadataStore_GetAll(t *testing.T) {
@@ -75,6 +85,10 @@ func TestGuestMetadataStore_GetAll(t *testing.T) {
 	if len(store.metadata) != 2 {
 		t.Error("GetAll should return a copy, not the original map")
 	}
+	all["id1"].CustomURL = "mutated"
+	if got := store.Get("id1").CustomURL; got != "url1" {
+		t.Errorf("GetAll should return metadata copies; stored CustomURL = %q, want url1", got)
+	}
 }
 
 func TestGuestMetadataStore_Set(t *testing.T) {
@@ -100,9 +114,9 @@ func TestGuestMetadataStore_Set(t *testing.T) {
 		t.Fatalf("Set failed: %v", err)
 	}
 
-	// Verify ID is set
-	if meta.ID != "id1" {
-		t.Errorf("ID = %q, want %q", meta.ID, "id1")
+	// Verify Set does not mutate caller-owned metadata.
+	if meta.ID != "" {
+		t.Errorf("caller metadata ID = %q, want empty", meta.ID)
 	}
 
 	// Verify stored
@@ -115,6 +129,19 @@ func TestGuestMetadataStore_Set(t *testing.T) {
 	}
 	if stored.LastKnownName != "vm1" {
 		t.Errorf("Stored LastKnownName = %q, want %q", stored.LastKnownName, "vm1")
+	}
+	if stored.ID != "id1" {
+		t.Errorf("Stored ID = %q, want %q", stored.ID, "id1")
+	}
+
+	meta.CustomURL = "http://mutated.example"
+	meta.Tags[0] = "mutated"
+	stored = store.Get("id1")
+	if stored.CustomURL != "http://test.com" {
+		t.Errorf("Set should store a metadata copy; stored CustomURL = %q, want %q", stored.CustomURL, "http://test.com")
+	}
+	if stored.Tags[0] != "tag1" {
+		t.Errorf("Set should copy slice fields; stored tag = %q, want tag1", stored.Tags[0])
 	}
 
 	// Verify persisted to disk

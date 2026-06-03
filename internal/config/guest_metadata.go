@@ -30,6 +30,21 @@ type GuestMetadataStore struct {
 	fs       FileSystem
 }
 
+func cloneGuestMetadata(meta *GuestMetadata) *GuestMetadata {
+	if meta == nil {
+		return nil
+	}
+
+	clone := *meta
+	if meta.Tags != nil {
+		clone.Tags = append([]string(nil), meta.Tags...)
+	}
+	if meta.Notes != nil {
+		clone.Notes = append([]string(nil), meta.Notes...)
+	}
+	return &clone
+}
+
 // NewGuestMetadataStore creates a new metadata store
 func NewGuestMetadataStore(dataPath string, fs FileSystem) *GuestMetadataStore {
 	store := &GuestMetadataStore{
@@ -49,8 +64,6 @@ func NewGuestMetadataStore(dataPath string, fs FileSystem) *GuestMetadataStore {
 
 	return store
 }
-
-// ... Get/GetWithLegacyMigration/GetAll/Set/Delete/ReplaceAll ... (unchanged)
 
 // Load reads metadata from disk
 func (s *GuestMetadataStore) Load() error {
@@ -105,7 +118,7 @@ func (s *GuestMetadataStore) Get(guestID string) *GuestMetadata {
 	defer s.mu.RUnlock()
 
 	if meta, exists := s.metadata[guestID]; exists {
-		return meta
+		return cloneGuestMetadata(meta)
 	}
 	return nil
 }
@@ -124,35 +137,34 @@ func (s *GuestMetadataStore) GetWithLegacyMigration(guestID, instance, node stri
 	s.mu.RUnlock()
 
 	if exists {
-		return meta
+		return cloneGuestMetadata(meta)
 	}
 
 	// Helper to migrate a legacy ID to the new format
 	migrate := func(legacyID string) *GuestMetadata {
-		s.mu.RLock()
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
 		legacyMeta := s.metadata[legacyID]
-		s.mu.RUnlock()
-
-		if legacyMeta != nil {
-			log.Info().
-				Str("legacyID", legacyID).
-				Str("newID", guestID).
-				Msg("Migrating guest metadata from legacy ID format")
-
-			s.mu.Lock()
-			// Move to new ID
-			s.metadata[guestID] = legacyMeta
-			legacyMeta.ID = guestID
-			delete(s.metadata, legacyID)
-			// Persist while holding the store lock. save() assumes locked access.
-			if err := s.save(); err != nil {
-				log.Error().Err(err).Msg("Failed to save guest metadata after migration")
-			}
-			s.mu.Unlock()
-
-			return legacyMeta
+		if legacyMeta == nil {
+			return cloneGuestMetadata(s.metadata[guestID])
 		}
-		return nil
+
+		log.Info().
+			Str("legacyID", legacyID).
+			Str("newID", guestID).
+			Msg("Migrating guest metadata from legacy ID format")
+
+		migrated := cloneGuestMetadata(legacyMeta)
+		migrated.ID = guestID
+		s.metadata[guestID] = migrated
+		delete(s.metadata, legacyID)
+		// Persist while holding the store lock. save() assumes locked access.
+		if err := s.save(); err != nil {
+			log.Error().Err(err).Msg("Failed to save guest metadata after migration")
+		}
+
+		return cloneGuestMetadata(migrated)
 	}
 
 	// Try legacy format 1: instance-node-vmid (most specific)
@@ -187,7 +199,7 @@ func (s *GuestMetadataStore) GetAll() map[string]*GuestMetadata {
 	// Return a copy to prevent external modifications
 	result := make(map[string]*GuestMetadata)
 	for k, v := range s.metadata {
-		result[k] = v
+		result[k] = cloneGuestMetadata(v)
 	}
 	return result
 }
@@ -201,8 +213,9 @@ func (s *GuestMetadataStore) Set(guestID string, meta *GuestMetadata) error {
 		return fmt.Errorf("metadata cannot be nil")
 	}
 
-	meta.ID = guestID
-	s.metadata[guestID] = meta
+	clone := cloneGuestMetadata(meta)
+	clone.ID = guestID
+	s.metadata[guestID] = clone
 
 	// Save to disk
 	return s.save()
@@ -231,13 +244,13 @@ func (s *GuestMetadataStore) ReplaceAll(metadata map[string]*GuestMetadata) erro
 			continue
 		}
 
-		clone := *meta
+		clone := cloneGuestMetadata(meta)
 		clone.ID = guestID
 		// Ensure slice copy is not nil to allow JSON marshalling of empty tags
 		if clone.Tags == nil {
 			clone.Tags = []string{}
 		}
-		s.metadata[guestID] = &clone
+		s.metadata[guestID] = clone
 	}
 
 	return s.save()

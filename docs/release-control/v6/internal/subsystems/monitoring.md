@@ -1269,6 +1269,11 @@ shared guest metadata cache must keep VM network and identity metadata alive
 long enough to survive short Proxmox status failures, while incomplete
 guest-agent metadata stays on a short retry cadence instead of freezing
 partial VM summary data for minutes.
+The persisted guest metadata store must also remain the synchronization
+boundary for last-known guest identity updates. Store reads and writes must
+copy metadata, including slice fields, so asynchronous monitor persistence
+cannot expose mutable store pointers to caller goroutines or race with
+release-pipeline `-race` backend proofs.
 When Proxmox reports saturated VM memory without `meminfo` or `freemem` but
 the QEMU guest agent is queryable, the monitoring memory selector must prefer
 the guest's own `/proc/meminfo` `MemAvailable` signal before lower-trust
