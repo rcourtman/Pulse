@@ -386,6 +386,115 @@ describe('Docker native tables', () => {
     expect(detail.getByText('nginx:latest')).toBeInTheDocument();
   });
 
+  it('keeps dense Docker network attachment lists searchable and grouped', () => {
+    const network = makeResource({
+      id: 'network-dense',
+      type: 'docker-network',
+      name: 'frontend',
+      docker: {
+        hostname: 'edge-01',
+        hostSourceId: 'docker-host-1',
+        networkId: 'net-dense',
+        driver: 'bridge',
+        scope: 'local',
+        enableIpv4: true,
+      },
+    });
+    const makeAttachedContainer = (
+      index: number,
+      overrides: Partial<Resource['docker']> = {},
+    ): Resource => {
+      const name =
+        index === 0
+          ? 'api-unhealthy'
+          : index === 1
+            ? 'api-restarting'
+            : index === 2
+              ? 'worker-stopped'
+              : `worker-${String(index).padStart(2, '0')}`;
+      return makeResource({
+        id: `container-${index}`,
+        type: 'app-container',
+        name,
+        displayName: name,
+        status: 'running',
+        relationships: [
+          {
+            sourceId: `container-${index}`,
+            targetId: 'network-dense',
+            type: 'attached_to',
+            confidence: 1,
+            active: true,
+            discoverer: 'docker_adapter',
+            observedAt: '2026-06-03T09:00:00Z',
+            lastSeenAt: '2026-06-03T09:00:00Z',
+          },
+        ],
+        docker: {
+          hostname: 'edge-01',
+          hostSourceId: 'docker-host-1',
+          image: `repo/${name}:latest`,
+          containerState: 'running',
+          networks: [{ name: 'frontend', ipv4: `10.88.0.${index + 10}` }],
+          ports: [{ ip: '0.0.0.0', publicPort: 8000 + index, privatePort: 80, protocol: 'tcp' }],
+          ...overrides,
+        },
+      });
+    };
+    const containers = [
+      makeAttachedContainer(0, { health: 'unhealthy' }),
+      makeAttachedContainer(1, { containerState: 'restarting' }),
+      makeAttachedContainer(2, { containerState: 'exited', exitCode: 0 }),
+      ...Array.from({ length: 27 }, (_, offset) => makeAttachedContainer(offset + 3)),
+    ];
+
+    render(() => (
+      <DockerNetworksTable
+        resources={[network]}
+        relatedResources={[network, ...containers]}
+        emptyIcon={<span />}
+        emptyTitle="No networks"
+        emptyDescription="No networks"
+      />
+    ));
+
+    expect(
+      screen.getByText(
+        '30 attached containers · api-unhealthy 10.88.0.10, api-restarting 10.88.0.11, worker-stopped 10.88.0.12 +27',
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.click(document.querySelector('[data-docker-network-row="network-dense"]')!);
+
+    const detail = within(
+      document.querySelector('[data-docker-network-detail-row="network-dense"]')!,
+    );
+    expect(detail.getByPlaceholderText('Search attached containers')).toBeInTheDocument();
+    expect(detail.getByText('Show all 30 containers')).toBeInTheDocument();
+    expect(detail.getByText('api-unhealthy')).toBeInTheDocument();
+    expect(detail.getByText('api-restarting')).toBeInTheDocument();
+    expect(detail.queryByText('worker-29')).toBeNull();
+
+    fireEvent.click(detail.getByRole('button', { name: 'Show all 30 containers' }));
+    expect(detail.getByText('worker-29')).toBeInTheDocument();
+    expect(detail.getByText('Show first 24')).toBeInTheDocument();
+
+    fireEvent.click(detail.getByRole('button', { name: 'Attention' }));
+    expect(detail.getByText('2 containers of 30 containers')).toBeInTheDocument();
+    expect(detail.getByText('api-unhealthy')).toBeInTheDocument();
+    expect(detail.getByText('api-restarting')).toBeInTheDocument();
+    expect(detail.queryByText('worker-29')).toBeNull();
+
+    fireEvent.click(detail.getByRole('button', { name: 'All' }));
+    fireEvent.input(detail.getByPlaceholderText('Search attached containers'), {
+      target: { value: 'worker-29' },
+    });
+
+    expect(detail.getByText('1 container of 30 containers')).toBeInTheDocument();
+    expect(detail.getByText('worker-29')).toBeInTheDocument();
+    expect(detail.getByText('0.0.0.0:8029->80/tcp')).toBeInTheDocument();
+  });
+
   it('renders Docker Swarm node API fields', () => {
     render(() => (
       <DockerSwarmNodesTable

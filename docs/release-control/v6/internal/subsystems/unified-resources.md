@@ -227,7 +227,11 @@ with the same edge visible on both resources so network workflow tables and
 resource drawers can explain the relationship from either endpoint. The
 Docker Networks table may keep a host-scoped legacy `docker.networks[]`
 fallback only for older snapshots that have not yet published the relationship
-edge; that fallback must not match containers across Docker hosts.
+edge; that fallback must not match containers across Docker hosts. When a
+single network has many attached containers, relationship consumers must keep
+the attached container fields searchable and attention-filterable from the
+network detail disclosure instead of forcing operators to inspect a full
+container inventory table.
 
 1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `performance-and-scalability`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 2. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `performance-and-scalability`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.

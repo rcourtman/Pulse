@@ -257,7 +257,10 @@ network id details belong in the inline row disclosure. Attached container
 names, network addresses, image, health/state, and published ports are
 feature-owned data, but search and disclosure behavior must remain inside the
 shared table chrome rather than a card deck, nested card, or route-changing
-object browser.
+object browser. Dense networks must keep the inline disclosure bounded by
+default and provide local attached-container search, status grouping, and
+attention/running/other filters so large bridge or overlay networks remain
+scan-friendly without hiding any container from drilldown.
 
 1. `frontend-modern/src/components/Settings/APIAccessPanel.tsx` shared with `security-privacy`: the API Access settings intro is both a security/privacy token-management trust surface and a canonical settings-shell presentation boundary.
    The panel may own shell placement and local action layout, but

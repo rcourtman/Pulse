@@ -1,4 +1,6 @@
-import { For, Show, createMemo, type Component } from 'solid-js';
+import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
+import { FilterSegmentedControl } from '@/components/shared/FilterToolbar';
+import { SearchInput } from '@/components/shared/SearchInput';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
@@ -46,6 +48,24 @@ type DockerNetworksTableProps = DockerNativeTableProps & {
   relatedResources?: Resource[];
 };
 
+type AttachmentStatusFilter = 'all' | 'attention' | 'running' | 'other';
+
+type AttachmentGroupKey = Exclude<AttachmentStatusFilter, 'all'>;
+
+type AttachmentGroup = {
+  key: AttachmentGroupKey;
+  label: string;
+  description: string;
+};
+
+const ATTACHMENT_DETAIL_ROW_LIMIT = 24;
+
+const ATTACHMENT_GROUPS: readonly AttachmentGroup[] = [
+  { key: 'attention', label: 'Attention', description: 'Needs operator review' },
+  { key: 'other', label: 'Other', description: 'Stopped, paused, or unknown' },
+  { key: 'running', label: 'Running', description: 'No active issue reported' },
+] as const;
+
 const networkFlags = (resource: Resource): string =>
   dockerJoinValues(
     [
@@ -75,6 +95,9 @@ const networkSubnets = (resource: Resource): string =>
 
 const attachmentCountLabel = (count: number): string =>
   `${count} attached ${count === 1 ? 'container' : 'containers'}`;
+
+const attachmentPlainCountLabel = (count: number): string =>
+  `${count} ${count === 1 ? 'container' : 'containers'}`;
 
 const attachmentSummary = (rows: readonly DockerNetworkAttachmentRow[]): string => {
   if (rows.length === 0) return 'No containers';
@@ -112,49 +135,215 @@ const networkDetailRows = (resource: Resource) => [
   ['Network ID', dockerTextValue(resource.docker?.networkId)],
 ];
 
-const AttachmentDetail: Component<{ rows: readonly DockerNetworkAttachmentRow[] }> = (props) => (
-  <section class="min-w-0">
-    <div class="mb-2 flex items-center justify-between gap-2">
-      <h3 class="text-xs font-semibold text-base-content">Attached containers</h3>
-      <span class="text-[11px] text-muted">{attachmentCountLabel(props.rows.length)}</span>
-    </div>
-    <Show
-      when={props.rows.length > 0}
-      fallback={
-        <div class="rounded border border-border bg-surface px-3 py-2 text-[11px] text-muted">
-          No attached Docker containers reported on this network.
-        </div>
-      }
-    >
-      <div class="space-y-1.5">
-        <For each={props.rows}>
-          {(row) => (
-            <div class="rounded border border-border bg-surface px-3 py-2">
-              <div class="grid gap-2 text-[11px] md:grid-cols-[minmax(0,1.2fr)_7rem_9rem_minmax(0,1fr)] md:items-center">
-                <div class="flex min-w-0 items-center gap-2">
-                  <StatusDot size="sm" variant={row.status.variant} title={row.status.label} />
-                  <span class="truncate font-semibold text-base-content" title={row.name}>
-                    {row.name}
-                  </span>
-                </div>
-                <span class="text-base-content">{row.status.label}</span>
-                <span class="font-mono text-base-content" title={row.address}>
-                  {row.address}
-                </span>
-                <span class="truncate font-mono text-muted" title={row.ports}>
-                  {row.ports}
-                </span>
-              </div>
-              <div class="mt-1 truncate text-[10px] text-muted" title={row.image}>
-                {row.image}
-              </div>
-            </div>
-          )}
-        </For>
-      </div>
-    </Show>
-  </section>
+const attachmentGroupKey = (row: DockerNetworkAttachmentRow): AttachmentGroupKey => {
+  if (row.status.variant === 'danger' || row.status.variant === 'warning') return 'attention';
+  if (row.status.variant === 'success') return 'running';
+  return 'other';
+};
+
+const attachmentFilterMatches = (
+  row: DockerNetworkAttachmentRow,
+  filter: AttachmentStatusFilter,
+): boolean => filter === 'all' || attachmentGroupKey(row) === filter;
+
+const attachmentStatusCounts = (rows: readonly DockerNetworkAttachmentRow[]) => {
+  const counts: Record<AttachmentStatusFilter, number> = {
+    all: rows.length,
+    attention: 0,
+    running: 0,
+    other: 0,
+  };
+  for (const row of rows) {
+    counts[attachmentGroupKey(row)] += 1;
+  }
+  return counts;
+};
+
+const filterOptionLabel = (label: string, count: number): JSX.Element => (
+  <>
+    <span>{label}</span>
+    <span class="rounded bg-surface-alt px-1.5 py-px text-[10px] font-semibold text-muted">
+      {count}
+    </span>
+  </>
 );
+
+const AttachmentRowCard: Component<{ row: DockerNetworkAttachmentRow }> = (props) => (
+  <div class="rounded border border-border bg-surface px-3 py-2">
+    <div class="grid gap-2 text-[11px] md:grid-cols-[minmax(0,1.2fr)_7rem_9rem_minmax(0,1fr)] md:items-center">
+      <div class="flex min-w-0 items-center gap-2">
+        <StatusDot size="sm" variant={props.row.status.variant} title={props.row.status.label} />
+        <span class="truncate font-semibold text-base-content" title={props.row.name}>
+          {props.row.name}
+        </span>
+      </div>
+      <span class="text-base-content">{props.row.status.label}</span>
+      <span class="font-mono text-base-content" title={props.row.address}>
+        {props.row.address}
+      </span>
+      <span class="truncate font-mono text-muted" title={props.row.ports}>
+        {props.row.ports}
+      </span>
+    </div>
+    <div class="mt-1 truncate text-[10px] text-muted" title={props.row.image}>
+      {props.row.image}
+    </div>
+  </div>
+);
+
+const AttachmentDetail: Component<{ rows: readonly DockerNetworkAttachmentRow[] }> = (props) => {
+  const [attachmentSearch, setAttachmentSearch] = createSignal('');
+  const [attachmentFilter, setAttachmentFilter] = createSignal<AttachmentStatusFilter>('all');
+  const [showAll, setShowAll] = createSignal(false);
+  const counts = createMemo(() => attachmentStatusCounts(props.rows));
+  const filterOptions = createMemo(() => [
+    {
+      value: 'all',
+      label: filterOptionLabel('All', counts().all),
+      ariaLabel: 'All',
+      title: 'All attached containers',
+    },
+    {
+      value: 'attention',
+      label: filterOptionLabel('Attention', counts().attention),
+      ariaLabel: 'Attention',
+      title: 'Containers that need review',
+    },
+    {
+      value: 'running',
+      label: filterOptionLabel('Running', counts().running),
+      ariaLabel: 'Running',
+      title: 'Running containers',
+    },
+    {
+      value: 'other',
+      label: filterOptionLabel('Other', counts().other),
+      ariaLabel: 'Other',
+      title: 'Stopped, paused, or unknown containers',
+    },
+  ]);
+  const filteredRows = createMemo(() => {
+    const needle = attachmentSearch().trim().toLowerCase();
+    return props.rows.filter((row) => {
+      if (!attachmentFilterMatches(row, attachmentFilter())) return false;
+      if (!needle) return true;
+      return row.searchText.includes(needle);
+    });
+  });
+  const visibleRows = createMemo(() =>
+    showAll() ? filteredRows() : filteredRows().slice(0, ATTACHMENT_DETAIL_ROW_LIMIT),
+  );
+  const groupedRows = createMemo(() =>
+    ATTACHMENT_GROUPS.map((group) => ({
+      ...group,
+      rows: visibleRows().filter((row) => attachmentGroupKey(row) === group.key),
+    })).filter((group) => group.rows.length > 0),
+  );
+  const hiddenRowCount = createMemo(() =>
+    Math.max(filteredRows().length - visibleRows().length, 0),
+  );
+  const activeFilterCount = createMemo(() => {
+    let count = 0;
+    if (attachmentSearch().trim()) count += 1;
+    if (attachmentFilter() !== 'all') count += 1;
+    return count;
+  });
+  const filteredSummary = createMemo(() => {
+    if (activeFilterCount() === 0) return attachmentCountLabel(props.rows.length);
+    return `${attachmentPlainCountLabel(filteredRows().length)} of ${attachmentPlainCountLabel(
+      props.rows.length,
+    )}`;
+  });
+  const setSearch = (value: string) => {
+    setAttachmentSearch(value);
+    setShowAll(false);
+  };
+  const setFilter = (value: string) => {
+    setAttachmentFilter(value as AttachmentStatusFilter);
+    setShowAll(false);
+  };
+
+  return (
+    <section class="min-w-0">
+      <div class="mb-2 flex items-center justify-between gap-2">
+        <h3 class="text-xs font-semibold text-base-content">Attached containers</h3>
+        <span class="text-[11px] text-muted">{filteredSummary()}</span>
+      </div>
+      <Show
+        when={props.rows.length > 0}
+        fallback={
+          <div class="rounded border border-border bg-surface px-3 py-2 text-[11px] text-muted">
+            No attached Docker containers reported on this network.
+          </div>
+        }
+      >
+        <div class="mb-3 grid gap-2 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+          <SearchInput
+            value={attachmentSearch}
+            onChange={setSearch}
+            placeholder="Search attached containers"
+            title="Search attached containers"
+            inputClass="py-1.5 text-xs"
+            clearOnFocusedEscape
+          />
+          <FilterSegmentedControl
+            value={attachmentFilter()}
+            onChange={setFilter}
+            options={filterOptions()}
+            aria-label="Attached container status"
+            class="justify-start xl:justify-end"
+          />
+        </div>
+
+        <Show
+          when={filteredRows().length > 0}
+          fallback={
+            <div class="rounded border border-border bg-surface px-3 py-2 text-[11px] text-muted">
+              No attached containers match current filters.
+            </div>
+          }
+        >
+          <div class="space-y-3">
+            <For each={groupedRows()}>
+              {(group) => (
+                <section class="space-y-1.5">
+                  <div class="flex items-center justify-between gap-2 text-[11px]">
+                    <div class="flex min-w-0 items-center gap-2">
+                      <span class="font-semibold text-base-content">{group.label}</span>
+                      <span class="truncate text-muted">{group.description}</span>
+                    </div>
+                    <span class="text-muted">{attachmentPlainCountLabel(group.rows.length)}</span>
+                  </div>
+                  <div class="space-y-1.5">
+                    <For each={group.rows}>{(row) => <AttachmentRowCard row={row} />}</For>
+                  </div>
+                </section>
+              )}
+            </For>
+            <Show when={hiddenRowCount() > 0}>
+              <button
+                type="button"
+                class="w-full rounded border border-border bg-surface px-3 py-2 text-xs font-medium text-base-content hover:bg-surface-hover"
+                onClick={() => setShowAll(true)}
+              >
+                Show all {attachmentPlainCountLabel(filteredRows().length)}
+              </button>
+            </Show>
+            <Show when={showAll() && filteredRows().length > ATTACHMENT_DETAIL_ROW_LIMIT}>
+              <button
+                type="button"
+                class="w-full rounded border border-border bg-surface px-3 py-2 text-xs font-medium text-base-content hover:bg-surface-hover"
+                onClick={() => setShowAll(false)}
+              >
+                Show first {ATTACHMENT_DETAIL_ROW_LIMIT}
+              </button>
+            </Show>
+          </div>
+        </Show>
+      </Show>
+    </section>
+  );
+};
 
 const NetworkConfigDetail: Component<{ resource: Resource }> = (props) => (
   <section class="min-w-0">
