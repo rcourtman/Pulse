@@ -16,6 +16,7 @@ import (
 )
 
 const autoMergeThreshold = 0.85
+const dockerAdapterRelationshipDiscoverer = "docker_adapter"
 
 var defaultStaleThresholds = map[DataSource]time.Duration{
 	SourceProxmox:      60 * time.Second,
@@ -188,6 +189,7 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 		for _, network := range dh.Networks {
 			rr.ingestDockerNetwork(network, dh)
 		}
+		rr.refreshDockerNetworkAttachmentRelationships(dh)
 	}
 
 	type dockerSecretCandidate struct {
@@ -1485,6 +1487,181 @@ func (rr *ResourceRegistry) ingestDockerNetwork(network models.DockerNetwork, ho
 		return
 	}
 	rr.ingest(SourceDocker, sourceID, resource, identity)
+}
+
+func (rr *ResourceRegistry) refreshDockerNetworkAttachmentRelationships(host models.DockerHost) {
+	if len(host.Containers) == 0 && len(host.Networks) == 0 {
+		return
+	}
+
+	observedAt := host.LastSeen
+	if observedAt.IsZero() {
+		observedAt = time.Now().UTC()
+	}
+
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
+
+	dockerSource := rr.bySource[SourceDocker]
+	networkIDByName := make(map[string]string, len(host.Networks))
+	for _, network := range host.Networks {
+		networkName := normalizeDockerNetworkName(network.Name)
+		if networkName == "" {
+			continue
+		}
+		sourceID := normalizeSourceID(dockerNetworkSourceID(host, network))
+		resourceID := dockerSource[sourceID]
+		if resourceID == "" {
+			continue
+		}
+		networkIDByName[networkName] = resourceID
+	}
+
+	relationshipsByContainer := make(map[string][]ResourceRelationship, len(host.Containers))
+	relationshipsByNetwork := make(map[string][]ResourceRelationship, len(networkIDByName))
+
+	for _, container := range host.Containers {
+		containerSourceID := normalizeSourceID(dockerContainerSourceID(host, container))
+		containerID := dockerSource[containerSourceID]
+		if containerID == "" {
+			continue
+		}
+		for _, attachment := range container.Networks {
+			networkID := networkIDByName[normalizeDockerNetworkName(attachment.Name)]
+			if networkID == "" {
+				continue
+			}
+			relationship := ResourceRelationship{
+				SourceID:   containerID,
+				TargetID:   networkID,
+				Type:       RelAttachedTo,
+				Confidence: 1,
+				Active:     true,
+				Discoverer: dockerAdapterRelationshipDiscoverer,
+				Metadata:   dockerNetworkAttachmentMetadata(host, attachment),
+			}
+			relationshipsByContainer[containerID] = append(relationshipsByContainer[containerID], relationship)
+			relationshipsByNetwork[networkID] = append(relationshipsByNetwork[networkID], relationship)
+		}
+	}
+
+	for _, container := range host.Containers {
+		containerID := dockerSource[normalizeSourceID(dockerContainerSourceID(host, container))]
+		if containerID == "" {
+			continue
+		}
+		rr.setDockerNetworkAttachmentRelationshipsLocked(
+			containerID,
+			relationshipsByContainer[containerID],
+			observedAt,
+		)
+	}
+	for _, networkID := range networkIDByName {
+		rr.setDockerNetworkAttachmentRelationshipsLocked(
+			networkID,
+			relationshipsByNetwork[networkID],
+			observedAt,
+		)
+	}
+}
+
+func (rr *ResourceRegistry) setDockerNetworkAttachmentRelationshipsLocked(
+	resourceID string,
+	relationships []ResourceRelationship,
+	observedAt time.Time,
+) {
+	resource := rr.resources[resourceID]
+	if resource == nil {
+		return
+	}
+
+	existingByEdge := make(map[string]ResourceRelationship)
+	base := make([]ResourceRelationship, 0, len(resource.Relationships)+len(relationships))
+	for _, relationship := range resource.Relationships {
+		if isDockerNetworkAttachmentRelationship(relationship) {
+			existingByEdge[resourceRelationshipEdgeKey(relationship)] = relationship
+			continue
+		}
+		base = append(base, relationship)
+	}
+
+	nextDockerRelationships := make([]ResourceRelationship, 0, len(relationships))
+	seen := make(map[string]struct{}, len(relationships))
+	for _, relationship := range relationships {
+		key := resourceRelationshipEdgeKey(relationship)
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		if existing, ok := existingByEdge[key]; ok {
+			relationship.ObservedAt = existing.ObservedAt
+			relationship.LastSeenAt = existing.LastSeenAt
+		}
+		if relationship.ObservedAt.IsZero() {
+			relationship.ObservedAt = observedAt
+		}
+		if relationship.LastSeenAt.IsZero() {
+			relationship.LastSeenAt = observedAt
+		}
+		nextDockerRelationships = append(nextDockerRelationships, relationship)
+	}
+	sort.Slice(nextDockerRelationships, func(i, j int) bool {
+		left := nextDockerRelationships[i]
+		right := nextDockerRelationships[j]
+		if left.SourceID != right.SourceID {
+			return left.SourceID < right.SourceID
+		}
+		return left.TargetID < right.TargetID
+	})
+
+	resource.Relationships = append(base, nextDockerRelationships...)
+}
+
+func isDockerNetworkAttachmentRelationship(relationship ResourceRelationship) bool {
+	return relationship.Type == RelAttachedTo &&
+		strings.TrimSpace(relationship.Discoverer) == dockerAdapterRelationshipDiscoverer
+}
+
+func resourceRelationshipEdgeKey(relationship ResourceRelationship) string {
+	sourceID := CanonicalResourceID(relationship.SourceID)
+	targetID := CanonicalResourceID(relationship.TargetID)
+	if sourceID == "" || targetID == "" || relationship.Type == "" {
+		return ""
+	}
+	return strings.Join(
+		[]string{sourceID, targetID, string(relationship.Type), strings.TrimSpace(relationship.Discoverer)},
+		"\x00",
+	)
+}
+
+func normalizeDockerNetworkName(name string) string {
+	return strings.TrimSpace(strings.ToLower(name))
+}
+
+func dockerNetworkAttachmentMetadata(
+	host models.DockerHost,
+	attachment models.DockerContainerNetworkLink,
+) map[string]any {
+	metadata := make(map[string]any, 5)
+	if hostSourceID := strings.TrimSpace(host.ID); hostSourceID != "" {
+		metadata["hostSourceId"] = hostSourceID
+	}
+	if hostname := strings.TrimSpace(host.Hostname); hostname != "" {
+		metadata["host"] = hostname
+	}
+	if networkName := strings.TrimSpace(attachment.Name); networkName != "" {
+		metadata["networkName"] = networkName
+	}
+	if ipv4 := strings.TrimSpace(attachment.IPv4); ipv4 != "" {
+		metadata["ipv4"] = ipv4
+	}
+	if ipv6 := strings.TrimSpace(attachment.IPv6); ipv6 != "" {
+		metadata["ipv6"] = ipv6
+	}
+	return metadata
 }
 
 func (rr *ResourceRegistry) ingestDockerTask(task models.DockerTask, host models.DockerHost) {

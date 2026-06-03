@@ -134,6 +134,7 @@ export function DockerPageSurface() {
             <Show when={activeTab() === 'networks'}>
               <DockerNetworksTable
                 resources={model().networks}
+                relatedResources={model().resources}
                 emptyIcon={dockerIcon()}
                 emptyTitle="No networks"
                 emptyDescription="Networks appear here when the container runtime reports network inventory."

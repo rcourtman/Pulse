@@ -4,6 +4,7 @@ import type { Resource } from '@/types/resource';
 import {
   DOCKER_TAB_SPECS,
   buildDockerIncidentRows,
+  buildDockerNetworkAttachmentRows,
   buildDockerPageModel,
   compareDockerContainers,
   compareDockerServices,
@@ -106,6 +107,79 @@ describe('dockerPageModel', () => {
     expect(resolveDockerPageTabId('secrets')).toBe('swarm');
     expect(resolveDockerPageTabId('configs')).toBe('swarm');
     expect(resolveDockerPageTabId('unknown')).toBe('overview');
+  });
+
+  it('builds host-scoped Docker network attachment rows from relationships and legacy network names', () => {
+    const network = makeResource({
+      id: 'network-1',
+      type: 'docker-network',
+      name: 'frontend',
+      docker: {
+        hostname: 'edge-01',
+        hostSourceId: 'docker-host-1',
+      },
+    });
+    const related = makeResource({
+      id: 'container-1',
+      type: 'app-container',
+      name: 'api',
+      displayName: 'api',
+      status: 'running',
+      relationships: [
+        {
+          sourceId: 'container-1',
+          targetId: 'network-1',
+          type: 'attached_to',
+          confidence: 1,
+          active: true,
+          discoverer: 'docker_adapter',
+          observedAt: '2026-06-03T09:00:00Z',
+          lastSeenAt: '2026-06-03T09:00:00Z',
+        },
+      ],
+      docker: {
+        hostname: 'edge-01',
+        hostSourceId: 'docker-host-1',
+        image: 'repo/api:latest',
+        containerState: 'running',
+        health: 'healthy',
+        networks: [{ name: 'frontend', ipv4: '10.88.0.12' }],
+      },
+    });
+    const fallback = makeResource({
+      id: 'container-2',
+      type: 'app-container',
+      name: 'worker',
+      displayName: 'worker',
+      status: 'running',
+      docker: {
+        hostname: 'edge-01',
+        hostSourceId: 'docker-host-1',
+        image: 'repo/worker:latest',
+        containerState: 'running',
+        networks: [{ name: 'frontend', ipv4: '10.88.0.13' }],
+      },
+    });
+    const otherHost = makeResource({
+      id: 'container-3',
+      type: 'app-container',
+      name: 'other-host-api',
+      displayName: 'other-host-api',
+      status: 'running',
+      docker: {
+        hostname: 'edge-02',
+        hostSourceId: 'docker-host-2',
+        networks: [{ name: 'frontend', ipv4: '10.99.0.12' }],
+      },
+    });
+
+    const rows = buildDockerNetworkAttachmentRows(network, [network, related, fallback, otherHost]);
+
+    expect(rows.map((row) => [row.name, row.address])).toEqual([
+      ['api', '10.88.0.12'],
+      ['worker', '10.88.0.13'],
+    ]);
+    expect(rows[0].searchText).toContain('repo/api:latest');
   });
 
   it('excludes non-Docker hosts that share the agent type', () => {
@@ -235,9 +309,7 @@ describe('dockerPageModel', () => {
     ]);
 
     expect(hasDockerSwarmInventory(hostOnlyModel)).toBe(false);
-    expect(getDockerPageTabSpecs(hostOnlyModel).map((tab) => tab.id)).toEqual([
-      'overview',
-    ]);
+    expect(getDockerPageTabSpecs(hostOnlyModel).map((tab) => tab.id)).toEqual(['overview']);
     expect(getDockerPageTabSpecs(runtimeInventoryModel).map((tab) => tab.id)).toEqual([
       'overview',
       'images',
@@ -245,10 +317,7 @@ describe('dockerPageModel', () => {
       'networks',
     ]);
     expect(hasDockerSwarmInventory(swarmModel)).toBe(true);
-    expect(getDockerPageTabSpecs(swarmModel).map((tab) => tab.id)).toEqual([
-      'overview',
-      'swarm',
-    ]);
+    expect(getDockerPageTabSpecs(swarmModel).map((tab) => tab.id)).toEqual(['overview', 'swarm']);
   });
 
   it('shows the Storage workflow tab when engine disk usage exists without volume rows', () => {
@@ -716,16 +785,18 @@ describe('dockerPageModel', () => {
     });
 
     it('still combines status and search', () => {
-      expect(
-        filterDockerResources(rows, 'payments-worker', 'degraded').map((r) => r.id),
-      ).toEqual(['svc-payments']);
+      expect(filterDockerResources(rows, 'payments-worker', 'degraded').map((r) => r.id)).toEqual([
+        'svc-payments',
+      ]);
       expect(filterDockerResources(rows, 'payments-worker', 'online')).toEqual([]);
     });
 
     it('returns all rows for empty search and triad filters by status', () => {
-      expect(filterDockerResources(rows, '', 'all').map((r) => r.id).sort()).toEqual(
-        ['edge-proxy', 'redis-vol', 'svc-payments', 'web'].sort(),
-      );
+      expect(
+        filterDockerResources(rows, '', 'all')
+          .map((r) => r.id)
+          .sort(),
+      ).toEqual(['edge-proxy', 'redis-vol', 'svc-payments', 'web'].sort());
       expect(filterDockerResources(rows, '', 'degraded').map((r) => r.id)).toEqual([
         'svc-payments',
       ]);
@@ -840,24 +911,24 @@ describe('dockerPageModel', () => {
     ]);
 
     it('filters by severity bucket', () => {
-      expect(
-        filterDockerIncidents(incidents, '', 'critical').map((r) => r.resourceId),
-      ).toEqual(['host-edge']);
-      expect(
-        filterDockerIncidents(incidents, '', 'warning').map((r) => r.resourceId),
-      ).toEqual(['ctr-payments']);
+      expect(filterDockerIncidents(incidents, '', 'critical').map((r) => r.resourceId)).toEqual([
+        'host-edge',
+      ]);
+      expect(filterDockerIncidents(incidents, '', 'warning').map((r) => r.resourceId)).toEqual([
+        'ctr-payments',
+      ]);
     });
 
     it('matches resource name, code, summary, and host', () => {
       expect(filterDockerIncidents(incidents, 'payments', 'all').map((r) => r.resourceId)).toEqual([
         'ctr-payments',
       ]);
-      expect(filterDockerIncidents(incidents, 'host_down', 'all').map((r) => r.resourceId)).toEqual([
-        'host-edge',
-      ]);
-      expect(filterDockerIncidents(incidents, 'engine down', 'all').map((r) => r.resourceId)).toEqual([
-        'host-edge',
-      ]);
+      expect(filterDockerIncidents(incidents, 'host_down', 'all').map((r) => r.resourceId)).toEqual(
+        ['host-edge'],
+      );
+      expect(
+        filterDockerIncidents(incidents, 'engine down', 'all').map((r) => r.resourceId),
+      ).toEqual(['host-edge']);
       expect(filterDockerIncidents(incidents, 'edge-01', 'all').length).toBe(2);
     });
   });

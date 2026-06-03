@@ -8,11 +8,12 @@ const parentRelationshipDiscoverer = "resource_registry"
 type RelationshipType string
 
 const (
-	RelRunsOn    RelationshipType = "runs_on"    // e.g., container runs_on machine
-	RelDependsOn RelationshipType = "depends_on" // e.g., app depends_on database
-	RelMountedTo RelationshipType = "mounted_to" // e.g., volume mounted_to container
-	RelExposedBy RelationshipType = "exposed_by" // e.g., container exposed_by ingress
-	RelOwnedBy   RelationshipType = "owned_by"   // e.g., pod owned_by deployment
+	RelRunsOn     RelationshipType = "runs_on"     // e.g., container runs_on machine
+	RelDependsOn  RelationshipType = "depends_on"  // e.g., app depends_on database
+	RelMountedTo  RelationshipType = "mounted_to"  // e.g., volume mounted_to container
+	RelExposedBy  RelationshipType = "exposed_by"  // e.g., container exposed_by ingress
+	RelOwnedBy    RelationshipType = "owned_by"    // e.g., pod owned_by deployment
+	RelAttachedTo RelationshipType = "attached_to" // e.g., container attached_to network
 )
 
 // ResourceRelationship represents a typed relationship edge between two unified resources.

@@ -250,6 +250,14 @@ hydrated from runtime disk-usage data. Kubernetes deployments must surface the
 API-native observed generation and metadata age columns through the shared
 table shell without page-local alignment helpers or generic infrastructure
 columns.
+Docker network rows use the same shared table/detail primitive split:
+the default table columns prioritize attached workloads, attention state,
+subnets, driver, and host, while lower-level scope, addressing, flags, and
+network id details belong in the inline row disclosure. Attached container
+names, network addresses, image, health/state, and published ports are
+feature-owned data, but search and disclosure behavior must remain inside the
+shared table chrome rather than a card deck, nested card, or route-changing
+object browser.
 
 1. `frontend-modern/src/components/Settings/APIAccessPanel.tsx` shared with `security-privacy`: the API Access settings intro is both a security/privacy token-management trust surface and a canonical settings-shell presentation boundary.
    The panel may own shell placement and local action layout, but

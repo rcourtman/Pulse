@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -264,24 +264,26 @@ describe('Docker native tables', () => {
   });
 
   it('renders Docker network API fields', () => {
+    const network = makeResource({
+      id: 'network-1',
+      type: 'docker-network',
+      name: 'frontend',
+      docker: {
+        hostname: 'edge-01',
+        hostSourceId: 'docker-host-1',
+        networkId: 'net-1',
+        driver: 'overlay',
+        scope: 'swarm',
+        enableIpv4: true,
+        attachable: true,
+        ingress: true,
+        subnets: [{ subnet: '10.88.0.0/24', gateway: '10.88.0.1' }],
+      },
+    });
+
     render(() => (
       <DockerNetworksTable
-        resources={[
-          makeResource({
-            id: 'network-1',
-            type: 'docker-network',
-            name: 'frontend',
-            docker: {
-              hostname: 'edge-01',
-              driver: 'overlay',
-              scope: 'swarm',
-              enableIpv4: true,
-              attachable: true,
-              ingress: true,
-              subnets: [{ subnet: '10.88.0.0/24', gateway: '10.88.0.1' }],
-            },
-          }),
-        ]}
+        resources={[network]}
         emptyIcon={<span />}
         emptyTitle="No networks"
         emptyDescription="No networks"
@@ -289,13 +291,99 @@ describe('Docker native tables', () => {
       />
     ));
 
+    expect(screen.getByText('Attached workloads')).toBeInTheDocument();
+    expect(screen.getByText('Attention')).toBeInTheDocument();
+    expect(screen.getByText('frontend')).toBeInTheDocument();
+    expect(screen.getByText('No containers')).toBeInTheDocument();
+    expect(screen.getByText('Unused')).toBeInTheDocument();
+    expect(screen.getByText('overlay')).toBeInTheDocument();
+    expect(screen.getByText('10.88.0.0/24 via 10.88.0.1')).toBeInTheDocument();
+
+    const row = document.querySelector('[data-docker-network-row="network-1"]');
+    expect(row).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(row!);
+
+    expect(row).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText('Addressing')).toBeInTheDocument();
     expect(screen.getByText('Flags')).toBeInTheDocument();
-    expect(screen.getByText('frontend')).toBeInTheDocument();
-    expect(screen.getByText('overlay')).toBeInTheDocument();
     expect(screen.getByText('IPv4')).toBeInTheDocument();
     expect(screen.getByText('attachable, ingress')).toBeInTheDocument();
-    expect(screen.getByText('10.88.0.0/24 via 10.88.0.1')).toBeInTheDocument();
+    expect(screen.getByText('net-1')).toBeInTheDocument();
+  });
+
+  it('nests Docker containers attached to a network and searches attachment fields', () => {
+    const network = makeResource({
+      id: 'network-1',
+      type: 'docker-network',
+      name: 'frontend',
+      docker: {
+        hostname: 'edge-01',
+        hostSourceId: 'docker-host-1',
+        networkId: 'net-1',
+        driver: 'bridge',
+        scope: 'local',
+        enableIpv4: true,
+        subnets: [{ subnet: '10.88.0.0/24', gateway: '10.88.0.1' }],
+      },
+    });
+    const container = makeResource({
+      id: 'container-1',
+      type: 'app-container',
+      name: 'edge-web',
+      displayName: 'edge-web',
+      status: 'running',
+      relationships: [
+        {
+          sourceId: 'container-1',
+          targetId: 'network-1',
+          type: 'attached_to',
+          confidence: 1,
+          active: true,
+          discoverer: 'docker_adapter',
+          observedAt: '2026-06-03T09:00:00Z',
+          lastSeenAt: '2026-06-03T09:00:00Z',
+        },
+      ],
+      docker: {
+        hostname: 'edge-01',
+        hostSourceId: 'docker-host-1',
+        image: 'nginx:latest',
+        containerState: 'running',
+        health: 'healthy',
+        networks: [{ name: 'frontend', ipv4: '10.88.0.12' }],
+        ports: [{ ip: '0.0.0.0', publicPort: 8080, privatePort: 80, protocol: 'tcp' }],
+      },
+    });
+
+    render(() => (
+      <DockerNetworksTable
+        resources={[network]}
+        relatedResources={[network, container]}
+        emptyIcon={<span />}
+        emptyTitle="No networks"
+        emptyDescription="No networks"
+      />
+    ));
+
+    expect(screen.getByText('1 attached container · edge-web 10.88.0.12')).toBeInTheDocument();
+    expect(screen.getByText('1 running')).toBeInTheDocument();
+
+    const search = screen.getByPlaceholderText('Search networks');
+    fireEvent.input(search, { target: { value: '8080' } });
+
+    expect(document.querySelector('[data-docker-network-row="network-1"]')).not.toBeNull();
+
+    const row = document.querySelector('[data-docker-network-row="network-1"]');
+    fireEvent.click(row!);
+
+    const detail = within(document.querySelector('[data-docker-network-detail-row="network-1"]')!);
+    expect(detail.getByText('Attached containers')).toBeInTheDocument();
+    expect(detail.getByText('edge-web')).toBeInTheDocument();
+    expect(detail.getByText('Healthy')).toBeInTheDocument();
+    expect(detail.getByText('10.88.0.12')).toBeInTheDocument();
+    expect(detail.getByText('0.0.0.0:8080->80/tcp')).toBeInTheDocument();
+    expect(detail.getByText('nginx:latest')).toBeInTheDocument();
   });
 
   it('renders Docker Swarm node API fields', () => {

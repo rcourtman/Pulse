@@ -4000,6 +4000,66 @@ func TestRegistryIngestSnapshotPublishesDockerNativeInventory(t *testing.T) {
 	}
 }
 
+func TestRegistryIngestSnapshotLinksDockerContainersToNetworks(t *testing.T) {
+	now := time.Date(2026, 6, 3, 9, 0, 0, 0, time.UTC)
+	rr := NewRegistry(NewMemoryStore())
+	rr.IngestSnapshot(models.StateSnapshot{
+		DockerHosts: []models.DockerHost{{
+			ID:       "docker-host-1",
+			Hostname: "edge",
+			Runtime:  "docker",
+			Status:   "online",
+			LastSeen: now,
+			Containers: []models.DockerContainer{{
+				ID:    "container-1",
+				Name:  "api",
+				Image: "repo/api:latest",
+				State: "running",
+				Networks: []models.DockerContainerNetworkLink{{
+					Name: "frontend",
+					IPv4: "10.88.0.12",
+				}},
+			}},
+			Networks: []models.DockerNetwork{{
+				ID:     "network-1",
+				Name:   "frontend",
+				Driver: "bridge",
+			}},
+		}},
+	})
+
+	containers := rr.ListByType(ResourceTypeAppContainer)
+	networks := rr.ListByType(ResourceTypeDockerNetwork)
+	if len(containers) != 1 || len(networks) != 1 {
+		t.Fatalf("expected one container and one network, got containers=%d networks=%d", len(containers), len(networks))
+	}
+
+	container := containers[0]
+	network := networks[0]
+	assertDockerNetworkAttachment := func(resource Resource) {
+		t.Helper()
+		for _, relationship := range resource.Relationships {
+			if relationship.Type != RelAttachedTo {
+				continue
+			}
+			if relationship.SourceID != container.ID || relationship.TargetID != network.ID {
+				t.Fatalf("unexpected attachment relationship endpoints on %s: %+v", resource.ID, relationship)
+			}
+			if relationship.Discoverer != dockerAdapterRelationshipDiscoverer {
+				t.Fatalf("relationship discoverer = %q, want %q", relationship.Discoverer, dockerAdapterRelationshipDiscoverer)
+			}
+			if relationship.Metadata["networkName"] != "frontend" || relationship.Metadata["ipv4"] != "10.88.0.12" {
+				t.Fatalf("relationship metadata = %#v", relationship.Metadata)
+			}
+			return
+		}
+		t.Fatalf("expected docker network attachment relationship on %s, got %+v", resource.ID, resource.Relationships)
+	}
+
+	assertDockerNetworkAttachment(container)
+	assertDockerNetworkAttachment(network)
+}
+
 // A live source must override a metric held by a stale higher-priority source.
 func TestMergeMetric_LiveSourceOverridesStaleHigherPriority(t *testing.T) {
 	now := time.Now().UTC()

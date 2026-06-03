@@ -247,6 +247,7 @@ export type ResourceRelationshipType =
   | 'mounted_to'
   | 'exposed_by'
   | 'owned_by'
+  | 'attached_to'
   | string;
 
 export interface ResourceRelationship {

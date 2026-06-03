@@ -39,36 +39,15 @@ import {
 } from './DockerNativeTableShared';
 import {
   compareDockerContainers,
+  dockerContainerPortsSummary,
   filterDockerResources,
   mapDockerContainerStatus,
   type DockerResourceStatusFilter,
 } from './dockerPageModel';
 import type { Resource } from '@/types/resource';
 
-type DockerPort = NonNullable<NonNullable<Resource['docker']>['ports']>[number];
 type DockerNetwork = NonNullable<NonNullable<Resource['docker']>['networks']>[number];
 type DockerMount = NonNullable<NonNullable<Resource['docker']>['mounts']>[number];
-
-const numberSearchValue = (value: number | undefined): string | undefined =>
-  typeof value === 'number' ? String(value) : undefined;
-
-const portLabel = (port: DockerPort): string => {
-  const protocol = asTrimmedString(port.protocol)?.toLowerCase() || 'tcp';
-  const privatePort = numberSearchValue(port.privatePort);
-  const publicPort = numberSearchValue(port.publicPort);
-  const ip = asTrimmedString(port.ip);
-
-  if (privatePort && publicPort) {
-    return `${ip ? `${ip}:` : ''}${publicPort}->${privatePort}/${protocol}`;
-  }
-
-  if (privatePort) return `${privatePort}/${protocol}`;
-  if (publicPort) return `${ip ? `${ip}:` : ''}${publicPort}/${protocol}`;
-  return protocol;
-};
-
-const portsSummary = (resource: Resource): string =>
-  dockerJoinValues(resource.docker?.ports?.map((port) => portLabel(port)));
 
 const networkLabel = (network: DockerNetwork): string => {
   const name = asTrimmedString(network.name);
@@ -286,7 +265,7 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
                     const health = () => dockerTextValue(resource.docker?.health);
                     const runtime = () => runtimeSummary(resource);
                     const host = () => dockerHostName(resource);
-                    const ports = () => portsSummary(resource);
+                    const ports = () => dockerContainerPortsSummary(resource);
                     const networks = () => networksSummary(resource);
                     const mounts = () => mountsSummary(resource);
                     const updates = () => updateStatusLabel(resource);
@@ -306,73 +285,73 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
                           tabIndex={0}
                         >
                           <DockerResourceNameCell resource={resource} indicator={indicator} />
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                        >
-                          <span class="block max-w-full truncate" title={host()}>
-                            {host()}
-                          </span>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                        >
-                          <span class="block max-w-full truncate" title={runtime()}>
-                            {runtime()}
-                          </span>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                        >
-                          <span class="block max-w-full truncate" title={image()}>
-                            {image()}
-                          </span>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                        >
-                          {state()}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                        >
-                          {health()}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                        >
-                          {dockerNumberValue(resource.docker?.restartCount)}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                        >
-                          <span
-                            class="block max-w-full truncate font-mono text-[11px]"
-                            title={ports()}
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
-                            {ports()}
-                          </span>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                        >
-                          <span class="block max-w-full truncate" title={networks()}>
-                            {networks()}
-                          </span>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                        >
-                          <span class="block max-w-full truncate" title={mounts()}>
-                            {mounts()}
-                          </span>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                        >
-                          <span class="block max-w-full truncate" title={updateTitle()}>
-                            {updates()}
-                          </span>
-                        </TableCell>
+                            <span class="block max-w-full truncate" title={host()}>
+                              {host()}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                          >
+                            <span class="block max-w-full truncate" title={runtime()}>
+                              {runtime()}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <span class="block max-w-full truncate" title={image()}>
+                              {image()}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            {state()}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                          >
+                            {health()}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
+                            {dockerNumberValue(resource.docker?.restartCount)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                          >
+                            <span
+                              class="block max-w-full truncate font-mono text-[11px]"
+                              title={ports()}
+                            >
+                              {ports()}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                          >
+                            <span class="block max-w-full truncate" title={networks()}>
+                              {networks()}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                          >
+                            <span class="block max-w-full truncate" title={mounts()}>
+                              {mounts()}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <span class="block max-w-full truncate" title={updateTitle()}>
+                              {updates()}
+                            </span>
+                          </TableCell>
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={resource}

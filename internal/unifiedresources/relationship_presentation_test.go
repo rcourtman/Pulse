@@ -12,6 +12,7 @@ func TestRelationshipTypeLabel(t *testing.T) {
 		RelMountedTo:                    "Mounted to",
 		RelExposedBy:                    "Exposed by",
 		RelOwnedBy:                      "Owned by",
+		RelAttachedTo:                   "Attached to",
 		RelationshipType("custom_link"): "Custom link",
 		RelationshipType(""):            "Related to",
 	}

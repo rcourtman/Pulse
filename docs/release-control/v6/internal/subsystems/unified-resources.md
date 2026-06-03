@@ -218,6 +218,16 @@ those rows through a variant-switched generic inventory table. Swarm service
 rows must preserve the service update status emitted by the Docker adapter, and
 engine storage rows must stay host-scoped with table proof hooks so browser
 proof can distinguish a populated disk-usage tab from an empty fixture.
+Docker network rows must consume canonical runtime attachment relationships,
+not page-local topology inference, when the unified-resource snapshot provides
+them. Runtime container-to-network membership is represented as active
+`attached_to` relationships from the `app-container` resource to the
+`docker-network` resource, scoped to the reporting Docker host and discoverer,
+with the same edge visible on both resources so network workflow tables and
+resource drawers can explain the relationship from either endpoint. The
+Docker Networks table may keep a host-scoped legacy `docker.networks[]`
+fallback only for older snapshots that have not yet published the relationship
+edge; that fallback must not match containers across Docker hosts.
 
 1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `performance-and-scalability`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 2. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `performance-and-scalability`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
@@ -326,6 +336,12 @@ proof can distinguish a populated disk-usage tab from an empty fixture.
    manager address, leader state, engine version, platform, resource capacity,
    labels, and engine labels under the owning Docker host or Swarm cluster
    identity.
+   Docker container network membership also extends the relationship contract:
+   `internal/unifiedresources/registry.go` must emit host-scoped
+   `attached_to` edges from runtime containers to reported Docker networks,
+   preserving network name and reported IPv4/IPv6 attachment metadata on the
+   relationship instead of requiring frontend consumers to reconstruct topology
+   from raw container facets.
    Swarm secret and config records are metadata projections only. They may
    preserve id, name, labels, driver/template metadata, and timestamps, but
    Docker secret/config payload bytes are outside the unified-resource contract.

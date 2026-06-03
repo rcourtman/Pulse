@@ -22,12 +22,7 @@ const DOCKER_SWARM_NODE_TYPES = new Set<ResourceType>(['docker-swarm-node']);
 const DOCKER_SECRET_TYPES = new Set<ResourceType>(['docker-secret']);
 const DOCKER_CONFIG_TYPES = new Set<ResourceType>(['docker-config']);
 
-export type DockerPageTabId =
-  | 'overview'
-  | 'images'
-  | 'storage'
-  | 'networks'
-  | 'swarm';
+export type DockerPageTabId = 'overview' | 'images' | 'storage' | 'networks' | 'swarm';
 
 export type DockerTabSpec = {
   id: DockerPageTabId;
@@ -72,23 +67,19 @@ const isDockerPlatform = (resource: Resource): boolean =>
 // `containerState` reasons that mean the container will not stay up on its
 // own. Distinct from `exited` with exit code 0, which is just a stopped
 // container, and from `restarting`, which is in-flight.
-const FATAL_CONTAINER_STATES = new Set([
-  'dead',
-  'removing',
-  'oomkilled',
-]);
+const FATAL_CONTAINER_STATES = new Set(['dead', 'removing', 'oomkilled']);
 
 // Container states that read as deliberately stopped rather than as a
 // problem. Pulse should surface these as muted, not as success or danger.
-const STOPPED_CONTAINER_STATES = new Set([
-  'created',
-  'paused',
-  'stopped',
-  'exited',
-]);
+const STOPPED_CONTAINER_STATES = new Set(['created', 'paused', 'stopped', 'exited']);
 
 const normalizeDockerToken = (value: unknown): string =>
-  typeof value === 'string' ? value.trim().toLowerCase().replace(/[\s_-]/g, '') : '';
+  typeof value === 'string'
+    ? value
+        .trim()
+        .toLowerCase()
+        .replace(/[\s_-]/g, '')
+    : '';
 
 const dockerDisplayName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) ||
@@ -245,6 +236,145 @@ const dockerPortToken = (
   if (publicPort) return `${ip ? `${ip}:` : ''}${publicPort}/${protocol}`;
   return protocol;
 };
+
+type DockerContainerPort = NonNullable<NonNullable<Resource['docker']>['ports']>[number];
+type DockerContainerNetwork = NonNullable<NonNullable<Resource['docker']>['networks']>[number];
+
+export type DockerNetworkAttachmentRow = {
+  id: string;
+  resource: Resource;
+  name: string;
+  networkName: string;
+  address: string;
+  image: string;
+  state: string;
+  health: string;
+  ports: string;
+  status: StatusIndicator;
+  searchText: string;
+};
+
+export const dockerContainerPortLabel = (port: DockerContainerPort): string =>
+  dockerPortToken(port);
+
+export const dockerContainerPortsSummary = (resource: Resource): string =>
+  (resource.docker?.ports ?? [])
+    .map((port) => dockerContainerPortLabel(port))
+    .filter((value) => value.trim().length > 0)
+    .join(', ') || '—';
+
+const dockerContainerNetworkAddress = (
+  network: DockerContainerNetwork | undefined,
+  relationship: NonNullable<Resource['relationships']>[number] | undefined,
+): string =>
+  asTrimmedString(network?.ipv4) ||
+  asTrimmedString(network?.ipv6) ||
+  asTrimmedString(relationship?.metadata?.ipv4) ||
+  asTrimmedString(relationship?.metadata?.ipv6) ||
+  '—';
+
+const dockerContainerNetworkName = (
+  network: DockerContainerNetwork | undefined,
+  relationship: NonNullable<Resource['relationships']>[number] | undefined,
+  fallbackName: string,
+): string =>
+  asTrimmedString(network?.name) ||
+  asTrimmedString(relationship?.metadata?.networkName) ||
+  fallbackName;
+
+const findContainerNetworkAttachment = (
+  network: Resource,
+  container: Resource,
+): DockerContainerNetwork | undefined => {
+  const networkName = asTrimmedString(network.name || network.displayName).toLowerCase();
+  if (!networkName) return undefined;
+  return container.docker?.networks?.find(
+    (attachment) => asTrimmedString(attachment.name).toLowerCase() === networkName,
+  );
+};
+
+const dockerHostScopeMatches = (network: Resource, container: Resource): boolean => {
+  const networkHostSourceId = asTrimmedString(network.docker?.hostSourceId);
+  const containerHostSourceId = asTrimmedString(container.docker?.hostSourceId);
+  if (networkHostSourceId && containerHostSourceId) {
+    return networkHostSourceId === containerHostSourceId;
+  }
+
+  const networkHostName = asTrimmedString(network.docker?.hostname);
+  const containerHostName = asTrimmedString(container.docker?.hostname);
+  return networkHostName !== '' && networkHostName === containerHostName;
+};
+
+const findDockerNetworkAttachmentRelationship = (
+  network: Resource,
+  container: Resource,
+): NonNullable<Resource['relationships']>[number] | undefined => {
+  const sourceId = asTrimmedString(container.id);
+  const targetId = asTrimmedString(network.id);
+  return [...(container.relationships ?? []), ...(network.relationships ?? [])].find(
+    (relationship) =>
+      relationship.active !== false &&
+      relationship.type === 'attached_to' &&
+      asTrimmedString(relationship.sourceId) === sourceId &&
+      asTrimmedString(relationship.targetId) === targetId,
+  );
+};
+
+export function buildDockerNetworkAttachmentRows(
+  network: Resource,
+  resources: readonly Resource[],
+): DockerNetworkAttachmentRow[] {
+  const fallbackNetworkName = asTrimmedString(network.name || network.displayName) || network.id;
+  return resources
+    .filter((resource) => DOCKER_CONTAINER_TYPES.has(resource.type) && isDockerPlatform(resource))
+    .flatMap((container): DockerNetworkAttachmentRow[] => {
+      const relationship = findDockerNetworkAttachmentRelationship(network, container);
+      const attachment = findContainerNetworkAttachment(network, container);
+      if (!relationship && (!attachment || !dockerHostScopeMatches(network, container))) {
+        return [];
+      }
+
+      const name = dockerDisplayName(container);
+      const networkName = dockerContainerNetworkName(attachment, relationship, fallbackNetworkName);
+      const address = dockerContainerNetworkAddress(attachment, relationship);
+      const image = asTrimmedString(container.docker?.image) || '—';
+      const state = asTrimmedString(container.docker?.containerState || container.status) || '—';
+      const health = asTrimmedString(container.docker?.health) || '—';
+      const ports = dockerContainerPortsSummary(container);
+      const status = mapDockerContainerStatus(container);
+      const searchText = [
+        name,
+        networkName,
+        address,
+        image,
+        state,
+        health,
+        ports,
+        container.id,
+        ...(container.tags ?? []),
+      ]
+        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+        .join(' ')
+        .toLowerCase();
+
+      return [
+        {
+          id: `${network.id}:${container.id}`,
+          resource: container,
+          name,
+          networkName,
+          address,
+          image,
+          state,
+          health,
+          ports,
+          status,
+          searchText,
+        },
+      ];
+    })
+    .sort((left, right) => compareDockerContainers(left.resource, right.resource));
+}
 
 // Builds the lowercase search haystack a Docker page table consults when
 // filtering rows. The shared platformPage helper carries only generic Resource
@@ -422,8 +552,8 @@ const hasIncidentRollup = (resource: Resource): boolean =>
   (resource.incidentCount ?? 0) > 0 ||
   Boolean(
     asTrimmedString(resource.incidentCode) ||
-      asTrimmedString(resource.incidentSummary) ||
-      asTrimmedString(resource.incidentLabel),
+    asTrimmedString(resource.incidentSummary) ||
+    asTrimmedString(resource.incidentLabel),
   );
 
 const buildDockerIncidentRow = (
@@ -581,10 +711,10 @@ export type DockerPageModel = {
 export const hasDockerStorageUsageBucket = (bucket?: DockerStorageUsageMeta): boolean =>
   Boolean(
     bucket &&
-      ((bucket.totalCount ?? 0) > 0 ||
-        (bucket.activeCount ?? 0) > 0 ||
-        (bucket.totalSizeBytes ?? 0) > 0 ||
-        (bucket.reclaimableBytes ?? 0) > 0),
+    ((bucket.totalCount ?? 0) > 0 ||
+      (bucket.activeCount ?? 0) > 0 ||
+      (bucket.totalSizeBytes ?? 0) > 0 ||
+      (bucket.reclaimableBytes ?? 0) > 0),
   );
 
 export const hasDockerEngineStorageUsage = (host: Resource): boolean =>
