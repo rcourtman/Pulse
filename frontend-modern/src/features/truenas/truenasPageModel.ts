@@ -1,5 +1,6 @@
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { hasImpairedResourceSource } from '@/utils/resourceSourceHealth';
 import type {
   Resource,
   ResourceIncident,
@@ -588,6 +589,9 @@ export function filterTrueNASStorageTopologyRows(
 const normalize = (value: unknown): string =>
   typeof value === 'string' ? value.trim().toLowerCase() : '';
 
+export const getTrueNASResourceDisplayStatus = (resource: Resource): string =>
+  hasImpairedResourceSource(resource, 'truenas') ? 'degraded' : resource.status;
+
 const normalizeProtectionOutcome = (
   value: unknown,
 ): Exclude<TrueNASProtectionStatusFilter, 'all'> => {
@@ -680,7 +684,7 @@ export function mapTrueNASIncidentSeverity(
 export function mapTrueNASStorageStatus(
   resource: Resource,
 ): Exclude<TrueNASStorageStatusFilter, 'all'> | 'unknown' {
-  const status = normalize(resource.status);
+  const status = normalize(getTrueNASResourceDisplayStatus(resource));
   const zfsState = normalize(resource.storage?.zfsPoolState);
   const diskHealth = normalize(resource.physicalDisk?.health);
 
@@ -980,6 +984,7 @@ export function buildTrueNASIncidentRows(resources: Resource[]): TrueNASIncident
 }
 
 export function mapTrueNASAppStatus(resource: Resource): Exclude<TrueNASAppStatusFilter, 'all'> {
+  if (hasImpairedResourceSource(resource, 'truenas')) return 'attention';
   const state = normalize(resource.truenas?.app?.state);
   if (state === 'running') return 'running';
   if (state === 'stopped') return 'stopped';
@@ -994,6 +999,7 @@ export function mapTrueNASAppStatus(resource: Resource): Exclude<TrueNASAppStatu
 export function mapTrueNASServiceStatus(
   row: TrueNASServiceRow,
 ): Exclude<TrueNASServiceStatusFilter, 'all'> {
+  if (hasImpairedResourceSource(row.system, 'truenas')) return 'attention';
   const state = normalize(row.service.state);
   if (['running', 'started', 'active'].includes(state)) return 'running';
   if (['failed', 'error', 'crashed', 'degraded', 'unknown'].includes(state)) return 'attention';
@@ -1005,6 +1011,7 @@ export function mapTrueNASServiceStatus(
 }
 
 export function mapTrueNASVMStatus(resource: Resource): Exclude<TrueNASVMStatusFilter, 'all'> {
+  if (hasImpairedResourceSource(resource, 'truenas')) return 'attention';
   const state = normalize(resource.truenas?.vm?.state || resource.truenas?.vm?.domainState);
   if (state === 'running' || state === 'active') return 'running';
   if (state === 'stopped' || state === 'shutoff' || state === 'shutdown' || state === 'poweroff') {
@@ -1022,6 +1029,7 @@ export function mapTrueNASVMStatus(resource: Resource): Exclude<TrueNASVMStatusF
 export function mapTrueNASShareStatus(
   resource: Resource,
 ): Exclude<TrueNASShareStatusFilter, 'all'> {
+  if (hasImpairedResourceSource(resource, 'truenas')) return 'attention';
   const share = resource.truenas?.share;
   if (share?.enabled === false || resource.status === 'offline' || resource.status === 'stopped') {
     return 'disabled';

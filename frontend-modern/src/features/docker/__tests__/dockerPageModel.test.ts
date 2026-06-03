@@ -753,6 +753,12 @@ describe('dockerPageModel', () => {
         },
       }),
       makeResource({
+        id: 'svc-search',
+        type: 'docker-service',
+        status: 'warning' as Resource['status'],
+        docker: { serviceName: 'search-worker' },
+      }),
+      makeResource({
         id: 'redis-vol',
         type: 'docker-volume',
         status: 'online',
@@ -796,10 +802,10 @@ describe('dockerPageModel', () => {
         filterDockerResources(rows, '', 'all')
           .map((r) => r.id)
           .sort(),
-      ).toEqual(['edge-proxy', 'redis-vol', 'svc-payments', 'web'].sort());
-      expect(filterDockerResources(rows, '', 'degraded').map((r) => r.id)).toEqual([
-        'svc-payments',
-      ]);
+      ).toEqual(['edge-proxy', 'redis-vol', 'svc-payments', 'svc-search', 'web'].sort());
+      expect(filterDockerResources(rows, '', 'degraded').map((r) => r.id).sort()).toEqual(
+        ['svc-payments', 'svc-search'].sort(),
+      );
     });
   });
 

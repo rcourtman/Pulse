@@ -29,6 +29,11 @@ describe('filterPlatformResources', () => {
     makeResource({ id: 'host-echo', type: 'agent', status: 'stopped' }),
     makeResource({ id: 'host-foxtrot', type: 'agent', status: 'paused' }),
     makeResource({
+      id: 'host-golf',
+      type: 'agent',
+      status: 'warning' as Resource['status'],
+    }),
+    makeResource({
       id: 'host-with-tag',
       type: 'agent',
       status: 'online',
@@ -47,9 +52,11 @@ describe('filterPlatformResources', () => {
     );
   });
 
-  it('collapses degraded/paused into the degraded chip', () => {
+  it('collapses degraded/warning/paused into the degraded chip', () => {
     const filtered = filterPlatformResources(resources, '', 'degraded');
-    expect(filtered.map((r) => r.id).sort()).toEqual(['host-charlie', 'host-foxtrot'].sort());
+    expect(filtered.map((r) => r.id).sort()).toEqual(
+      ['host-charlie', 'host-foxtrot', 'host-golf'].sort(),
+    );
   });
 
   it('collapses offline/stopped into the offline chip', () => {
@@ -115,7 +122,21 @@ describe('filterPlatformResources', () => {
 
   it('combines search and status filters', () => {
     const filtered = filterPlatformResources(resources, 'host', 'degraded');
-    expect(filtered.map((r) => r.id).sort()).toEqual(['host-charlie', 'host-foxtrot'].sort());
+    expect(filtered.map((r) => r.id).sort()).toEqual(
+      ['host-charlie', 'host-foxtrot', 'host-golf'].sort(),
+    );
+  });
+
+  it('supports platform table status resolvers for source-aware display state', () => {
+    const filtered = filterPlatformResources(
+      resources,
+      '',
+      'degraded',
+      (resource) => (resource.id === 'host-alpha' ? 'degraded' : resource.status),
+    );
+    expect(filtered.map((r) => r.id).sort()).toEqual(
+      ['host-alpha', 'host-charlie', 'host-foxtrot', 'host-golf'].sort(),
+    );
   });
 
   it('centralizes provider table filter state and row counts', () => {

@@ -33,6 +33,7 @@ import {
 import type { Resource } from '@/types/resource';
 import {
   filterVmwareNetworks,
+  getVmwareResourceDisplayStatus,
   type VmwareNetworkStatusFilter,
 } from './vmwarePageModel';
 
@@ -187,7 +188,8 @@ export const VsphereNetworksTable: Component<{
                   {(network) => {
                     const hosts = createMemo(() => hostSummary(network));
                     const vms = createMemo(() => vmSummary(network));
-                    const indicator = () => getSimpleStatusIndicator(network.status);
+                    const displayStatus = () => getVmwareResourceDisplayStatus(network);
+                    const indicator = () => getSimpleStatusIndicator(displayStatus());
                     const name = () => networkName(network);
                     const datacenter = () => asTrimmedString(network.vmware?.datacenterName) || '—';
                     const networkSubtitle = () =>

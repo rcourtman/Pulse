@@ -30,7 +30,11 @@ import {
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource, ResourceTrueNASVMMeta } from '@/types/resource';
-import { filterTrueNASVMs, type TrueNASVMStatusFilter } from './truenasPageModel';
+import {
+  filterTrueNASVMs,
+  getTrueNASResourceDisplayStatus,
+  type TrueNASVMStatusFilter,
+} from './truenasPageModel';
 
 const TRUENAS_VM_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASVMStatusFilter>[] = [
   { value: 'all', label: 'All' },
@@ -206,7 +210,8 @@ export const TrueNASVirtualMachinesTable: Component<{
                       asTrimmedString(resource.displayName) ||
                       asTrimmedString(resource.name) ||
                       resource.id;
-                    const indicator = () => getSimpleStatusIndicator(resource.status);
+                    const displayStatus = () => getTrueNASResourceDisplayStatus(resource);
+                    const indicator = () => getSimpleStatusIndicator(displayStatus());
                     const stateLabel = () => titleCase(vm()?.state || vm()?.domainState);
                     const devices = createMemo(() => formatDevices(vm()));
                     const flags = createMemo(() => flagLabels(vm()));

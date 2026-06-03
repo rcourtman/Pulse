@@ -36,6 +36,7 @@ import {
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import {
   buildTrueNASSystemChildCounts,
+  getTrueNASResourceDisplayStatus,
   type TrueNASSystemChildCounts,
 } from '@/features/truenas/truenasPageModel';
 import type { Resource } from '@/types/resource';
@@ -135,7 +136,8 @@ export const TrueNASSystemsTable: Component<{
   const tableState = createPlatformTableFilterState({
     resources: () => props.systems,
     initialStatus: 'all' as PlatformResourceStatusFilter,
-    filter: filterPlatformResources,
+    filter: (resources, search, status) =>
+      filterPlatformResources(resources, search, status, getTrueNASResourceDisplayStatus),
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'truenas-system-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
@@ -228,7 +230,8 @@ export const TrueNASSystemsTable: Component<{
                   {(system) => {
                     const name = () => asTrimmedString(system.name) || system.id;
                     const version = () => asTrimmedString(system.agent?.osVersion) || '—';
-                    const indicator = () => getSimpleStatusIndicator(system.status);
+                    const displayStatus = () => getTrueNASResourceDisplayStatus(system);
+                    const indicator = () => getSimpleStatusIndicator(displayStatus());
                     const storagePercent = () => {
                       if (typeof system.disk?.current === 'number') return system.disk.current;
                       if (
@@ -281,7 +284,7 @@ export const TrueNASSystemsTable: Component<{
                               <StatusDot
                                 size="sm"
                                 variant={indicator().variant}
-                                title={system.status || 'unknown'}
+                                title={displayStatus() || 'unknown'}
                                 ariaHidden
                               />
                               <div class="min-w-0">

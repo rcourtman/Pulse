@@ -206,16 +206,17 @@ export const compareDockerSwarmNodes = compareByDockerStatus(mapDockerSwarmNodeS
 export type DockerResourceStatusFilter = 'all' | 'online' | 'degraded' | 'offline';
 
 const ONLINE_STATUSES = new Set<string>(['online', 'running']);
-const DEGRADED_STATUSES = new Set<string>(['degraded', 'paused']);
+const DEGRADED_STATUSES = new Set<string>(['degraded', 'warning', 'paused']);
 const OFFLINE_STATUSES = new Set<string>(['offline', 'stopped']);
 
 const mapResourceStatusToTriad = (
   status: string | undefined,
 ): Exclude<DockerResourceStatusFilter, 'all'> | 'unknown' => {
   if (!status) return 'unknown';
-  if (ONLINE_STATUSES.has(status)) return 'online';
-  if (DEGRADED_STATUSES.has(status)) return 'degraded';
-  if (OFFLINE_STATUSES.has(status)) return 'offline';
+  const normalized = status.trim().toLowerCase();
+  if (ONLINE_STATUSES.has(normalized)) return 'online';
+  if (DEGRADED_STATUSES.has(normalized)) return 'degraded';
+  if (OFFLINE_STATUSES.has(normalized)) return 'offline';
   return 'unknown';
 };
 

@@ -9,6 +9,7 @@ import {
   filterVmwareNetworks,
   filterVmwareVirtualMachines,
   getVmwarePageTabSpecs,
+  getVmwareResourceDisplayStatus,
   mapVmwareActivityStateBucket,
   mapVmwareDatastoreStatus,
   mapVmwareIncidentSeverity,
@@ -190,6 +191,27 @@ describe('vmwarePageModel', () => {
         (resource) => resource.id,
       ),
     ).toEqual(['ds-inaccessible']);
+
+    const staleConnection = makeResource({
+      id: 'ds-stale-vcenter',
+      type: 'storage',
+      storage: { topology: 'datastore', platform: 'vmware-vsphere' },
+      vmware: { entityType: 'datastore', datastoreAccessible: true },
+      platformData: { sourceStatus: { vmware: { status: 'stale' } } },
+    });
+
+    expect(getVmwareResourceDisplayStatus(staleConnection)).toBe('degraded');
+    expect(mapVmwareDatastoreStatus(staleConnection)).toBe('attention');
+    expect(
+      filterVmwareDatastores([accessible, staleConnection], '', 'accessible').map(
+        (resource) => resource.id,
+      ),
+    ).toEqual(['ds-accessible']);
+    expect(
+      filterVmwareDatastores([accessible, staleConnection], '', 'attention').map(
+        (resource) => resource.id,
+      ),
+    ).toEqual(['ds-stale-vcenter']);
   });
 
   it('filters vSphere networks using vCenter network topology', () => {
@@ -233,6 +255,15 @@ describe('vmwarePageModel', () => {
         (resource) => resource.id,
       ),
     ).toEqual(['network-attention']);
+
+    const staleConnection = makeResource({
+      id: 'network-stale-vcenter',
+      type: 'network',
+      vmware: { entityType: 'network', overallStatus: 'green' },
+      platformData: { sourceStatus: { 'vmware-vsphere': { status: 'offline' } } },
+    });
+
+    expect(mapVmwareNetworkStatus(staleConnection)).toBe('attention');
   });
 
   it('filters vSphere VMs using vCenter VM metadata', () => {
@@ -306,6 +337,15 @@ describe('vmwarePageModel', () => {
         (resource) => resource.id,
       ),
     ).toEqual(['vm-powered-on']);
+
+    const staleConnection = makeResource({
+      id: 'vm-stale-vcenter',
+      type: 'vm',
+      vmware: { entityType: 'vm', powerState: 'POWERED_ON' },
+      platformData: { sourceStatus: { vmware: { status: 'error' } } },
+    });
+
+    expect(mapVmwareVirtualMachineStatus(staleConnection)).toBe('attention');
   });
 
   it('builds and filters vSphere health signals from resource incidents', () => {

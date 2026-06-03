@@ -1,4 +1,5 @@
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
+import { hasImpairedResourceSource } from '@/utils/resourceSourceHealth';
 import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 import type { Resource, ResourceChange, ResourceIncident, ResourceType } from '@/types/resource';
 
@@ -155,6 +156,9 @@ export const getVmwarePageTabSpecs = (model: VmwarePageModel): readonly VmwareTa
 
 const normalize = (value: unknown): string =>
   typeof value === 'string' ? value.trim().toLowerCase() : '';
+
+export const getVmwareResourceDisplayStatus = (resource: Resource): string =>
+  hasImpairedResourceSource(resource, 'vmware-vsphere') ? 'degraded' : resource.status;
 
 const trimString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
@@ -327,8 +331,9 @@ export function getVmwarePowerStateVariant(
 export function mapVmwareVirtualMachineStatus(
   resource: Resource,
 ): Exclude<VmwareVirtualMachineStatusFilter, 'all'> {
+  if (hasImpairedResourceSource(resource, 'vmware-vsphere')) return 'attention';
   const powerState = normalizeToken(resource.vmware?.powerState);
-  const status = normalize(resource.status);
+  const status = normalize(getVmwareResourceDisplayStatus(resource));
   const overall = normalize(resource.vmware?.overallStatus);
   const activeAlarms = resource.vmware?.activeAlarmCount ?? 0;
 
@@ -356,8 +361,9 @@ export function mapVmwareVirtualMachineStatus(
 export function mapVmwareDatastoreStatus(
   resource: Resource,
 ): Exclude<VmwareDatastoreStatusFilter, 'all'> {
+  if (hasImpairedResourceSource(resource, 'vmware-vsphere')) return 'attention';
   const maintenanceMode = normalize(resource.vmware?.maintenanceMode);
-  const status = normalize(resource.status);
+  const status = normalize(getVmwareResourceDisplayStatus(resource));
   const overall = normalize(resource.vmware?.overallStatus);
 
   if (
@@ -384,7 +390,7 @@ export function mapVmwareDatastoreStatus(
 export function mapVmwareNetworkStatus(
   resource: Resource,
 ): Exclude<VmwareNetworkStatusFilter, 'all'> {
-  const status = normalize(resource.status);
+  const status = normalize(getVmwareResourceDisplayStatus(resource));
   const overall = normalize(resource.vmware?.overallStatus);
   const activeAlarms = resource.vmware?.activeAlarmCount ?? 0;
 

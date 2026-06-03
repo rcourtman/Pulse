@@ -34,6 +34,7 @@ import {
 import type { Resource } from '@/types/resource';
 import {
   filterVmwareDatastores,
+  getVmwareResourceDisplayStatus,
   type VmwareDatastoreStatusFilter,
 } from './vmwarePageModel';
 
@@ -216,7 +217,8 @@ export const VsphereDatastoresTable: Component<{
                   {(datastore) => {
                     const hosts = createMemo(() => hostSummary(datastore));
                     const consumers = createMemo(() => consumerSummary(datastore));
-                    const indicator = () => getSimpleStatusIndicator(datastore.status);
+                    const displayStatus = () => getVmwareResourceDisplayStatus(datastore);
+                    const indicator = () => getSimpleStatusIndicator(displayStatus());
                     const name = () => datastoreName(datastore);
                     const datacenter = () =>
                       asTrimmedString(datastore.vmware?.datacenterName) || '—';

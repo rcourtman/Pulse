@@ -34,7 +34,11 @@ import {
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource, ResourceTrueNASAppMeta, ResourceTrueNASAppPort } from '@/types/resource';
-import { filterTrueNASApps, type TrueNASAppStatusFilter } from './truenasPageModel';
+import {
+  filterTrueNASApps,
+  getTrueNASResourceDisplayStatus,
+  type TrueNASAppStatusFilter,
+} from './truenasPageModel';
 
 const TRUENAS_APP_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASAppStatusFilter>[] = [
   { value: 'all', label: 'All' },
@@ -241,7 +245,8 @@ export const TrueNASAppsTable: Component<{
                       asTrimmedString(resource.displayName) ||
                       asTrimmedString(resource.name) ||
                       resource.id;
-                    const indicator = () => getSimpleStatusIndicator(resource.status);
+                    const displayStatus = () => getTrueNASResourceDisplayStatus(resource);
+                    const indicator = () => getSimpleStatusIndicator(displayStatus());
                     const metricsKey = () => buildMetricKeyForUnifiedResource(resource);
                     const cpuPercent = () => finiteMetric(resource.cpu?.current);
                     const memoryTotal = () => finiteMetric(resource.memory?.total) ?? 0;

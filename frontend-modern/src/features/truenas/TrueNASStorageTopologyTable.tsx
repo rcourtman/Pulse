@@ -37,6 +37,7 @@ import type { Resource } from '@/types/resource';
 import {
   buildTrueNASStorageTopologyRows,
   filterTrueNASStorageTopologyRows,
+  getTrueNASResourceDisplayStatus,
   mapTrueNASStorageStatus,
   type TrueNASStorageStatusFilter,
   type TrueNASStorageTopologyKind,
@@ -193,7 +194,8 @@ export const getTrueNASStorageTopologyIndentClass = (depth: number): string => {
 };
 
 const ResourceCell: Component<{ row: TrueNASStorageTopologyRow }> = (props) => {
-  const indicator = () => getSimpleStatusIndicator(props.row.resource.status);
+  const displayStatus = () => getTrueNASResourceDisplayStatus(props.row.resource);
+  const indicator = () => getSimpleStatusIndicator(displayStatus());
   const name = () => resourceName(props.row.resource);
   return (
     <div

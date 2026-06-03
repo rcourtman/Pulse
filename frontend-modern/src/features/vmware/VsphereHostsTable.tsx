@@ -18,6 +18,7 @@ import { formatUptime } from '@/utils/format';
 import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 import {
   formatVmwarePowerState,
+  getVmwareResourceDisplayStatus,
   getVmwarePowerStateVariant,
 } from './vmwarePageModel';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
@@ -79,7 +80,8 @@ export const VsphereHostsTable: Component<{
   const tableState = createPlatformTableFilterState({
     resources: () => props.hosts,
     initialStatus: 'all' as PlatformResourceStatusFilter,
-    filter: filterPlatformResources,
+    filter: (resources, search, status) =>
+      filterPlatformResources(resources, search, status, getVmwareResourceDisplayStatus),
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'vsphere-host-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
@@ -220,7 +222,8 @@ export const VsphereHostsTable: Component<{
                       meta()?.datastoreIds?.length ?? meta()?.datastoreNames?.length ?? 0;
                     const vmCount = () =>
                       vmCountByHost().get(asTrimmedString(meta()?.managedObjectId) || '') ?? 0;
-                    const indicator = () => getSimpleStatusIndicator(host.status);
+                    const displayStatus = () => getVmwareResourceDisplayStatus(host);
+                    const indicator = () => getSimpleStatusIndicator(displayStatus());
                     const metricsKey = () => buildMetricKeyForUnifiedResource(host);
                     const cpuPercent = () => finiteMetric(host.cpu?.current);
                     const memoryTotal = () => finiteMetric(host.memory?.total) ?? 0;
@@ -248,7 +251,7 @@ export const VsphereHostsTable: Component<{
                               <StatusDot
                                 size="sm"
                                 variant={indicator().variant}
-                                title={host.status || 'unknown'}
+                                title={displayStatus() || 'unknown'}
                                 ariaHidden
                               />
                               <span class="truncate font-semibold text-base-content" title={name()}>

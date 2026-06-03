@@ -9,7 +9,7 @@ import { type SearchInputProps } from '@/components/shared/SearchInput';
 import { TableCard } from '@/components/shared/TableCard';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
-import type { Resource, ResourceStatus } from '@/types/resource';
+import type { Resource } from '@/types/resource';
 import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 import { getPlatformColumnAlign, type PlatformTableColumnKind } from './columnAlignment';
 
@@ -168,17 +168,18 @@ export const PLATFORM_HEALTH_FILTER_OPTIONS: PlatformTableFilterOption<PlatformR
     { value: 'offline', label: 'Offline', tone: 'danger', leading: statusDot('bg-red-500') },
   ];
 
-const ONLINE_STATUSES = new Set<ResourceStatus>(['online', 'running']);
-const OFFLINE_STATUSES = new Set<ResourceStatus>(['offline', 'stopped']);
-const DEGRADED_STATUSES = new Set<ResourceStatus>(['degraded', 'paused']);
+const ONLINE_STATUSES = new Set<string>(['online', 'running']);
+const OFFLINE_STATUSES = new Set<string>(['offline', 'stopped']);
+const DEGRADED_STATUSES = new Set<string>(['degraded', 'warning', 'paused']);
 
 const mapResourceStatusToTriad = (
-  status: ResourceStatus | undefined,
+  status: string | undefined,
 ): Exclude<PlatformResourceStatusFilter, 'all'> | 'unknown' => {
   if (!status) return 'unknown';
-  if (ONLINE_STATUSES.has(status)) return 'online';
-  if (DEGRADED_STATUSES.has(status)) return 'degraded';
-  if (OFFLINE_STATUSES.has(status)) return 'offline';
+  const normalized = status.trim().toLowerCase();
+  if (ONLINE_STATUSES.has(normalized)) return 'online';
+  if (DEGRADED_STATUSES.has(normalized)) return 'degraded';
+  if (OFFLINE_STATUSES.has(normalized)) return 'offline';
   return 'unknown';
 };
 
@@ -229,12 +230,13 @@ export const filterPlatformResources = (
   resources: Resource[],
   search: string,
   status: PlatformResourceStatusFilter,
+  resolveStatus: (resource: Resource) => string | undefined = (resource) => resource.status,
 ): Resource[] => {
   const result: Resource[] = [];
   for (const resource of resources) {
     if (!matchesPlatformSearch(resource, search)) continue;
     if (status !== 'all') {
-      const mapped = mapResourceStatusToTriad(resource.status);
+      const mapped = mapResourceStatusToTriad(resolveStatus(resource));
       if (mapped !== status) continue;
     }
     result.push(resource);

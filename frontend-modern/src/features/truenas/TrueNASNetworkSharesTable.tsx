@@ -32,6 +32,7 @@ import {
 import type { Resource, ResourceTrueNASShareMeta } from '@/types/resource';
 import {
   filterTrueNASShares,
+  getTrueNASResourceDisplayStatus,
   mapTrueNASShareStatus,
   type TrueNASShareStatusFilter,
 } from './truenasPageModel';
@@ -201,7 +202,8 @@ export const TrueNASNetworkSharesTable: Component<{
                   {(resource) => {
                     const share = () => shareMeta(resource);
                     const name = () => shareName(resource, share());
-                    const indicator = () => getSimpleStatusIndicator(resource.status);
+                    const displayStatus = () => getTrueNASResourceDisplayStatus(resource);
+                    const indicator = () => getSimpleStatusIndicator(displayStatus());
                     const access = createMemo(() => formatAccess(share()));
                     const clients = createMemo(() => formatClients(share()));
                     const security = createMemo(() => formatSecurity(share()));

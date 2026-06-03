@@ -16,6 +16,7 @@ import {
   filterTrueNASShares,
   filterTrueNASVMs,
   getTrueNASPageTabSpecs,
+  getTrueNASResourceDisplayStatus,
   mapTrueNASAppStatus,
   mapTrueNASIncidentSeverity,
   mapTrueNASProtectionKind,
@@ -316,6 +317,15 @@ describe('truenasPageModel', () => {
     expect(mapTrueNASServiceStatus(rows[0])).toBe('stopped');
     expect(mapTrueNASServiceStatus(rows[1])).toBe('disabled');
     expect(mapTrueNASServiceStatus(rows[2])).toBe('running');
+    expect(
+      mapTrueNASServiceStatus({
+        ...rows[2],
+        system: {
+          ...system,
+          platformData: { sourceStatus: { truenas: { status: 'offline' } } },
+        },
+      }),
+    ).toBe('attention');
     expect(filterTrueNASServices(rows, 'nas-primary', 'all')).toHaveLength(3);
     expect(filterTrueNASServices(rows, 'smb', 'running').map((row) => row.service.service)).toEqual(
       ['smb'],
@@ -534,6 +544,17 @@ describe('truenasPageModel', () => {
     expect(mapTrueNASStorageStatus(degradedPool)).toBe('attention');
     expect(mapTrueNASStorageStatus(disk)).toBe('attention');
 
+    const staleConnectionPool = makeResource({
+      id: 'pool-stale',
+      type: 'storage',
+      name: 'stale',
+      storage: { topology: 'pool', platform: 'truenas', zfsPoolState: 'ONLINE' },
+      platformData: { sourceStatus: { truenas: { status: 'stale' } } },
+    });
+
+    expect(getTrueNASResourceDisplayStatus(staleConnectionPool)).toBe('degraded');
+    expect(mapTrueNASStorageStatus(staleConnectionPool)).toBe('attention');
+
     const rows = buildTrueNASStorageTopologyRows([pool, degradedPool, disk]);
     expect(
       filterTrueNASStorageTopologyRows(rows, 'serial-degraded', 'attention').map((row) => row.id),
@@ -580,6 +601,12 @@ describe('truenasPageModel', () => {
 
     expect(mapTrueNASAppStatus(nextcloud)).toBe('running');
     expect(mapTrueNASAppStatus(adguard)).toBe('stopped');
+    expect(
+      mapTrueNASAppStatus({
+        ...nextcloud,
+        platformData: { sourceStatus: { truenas: { status: 'offline' } } },
+      }),
+    ).toBe('attention');
     expect(filterTrueNASApps([nextcloud, adguard], '30443', 'all').map((r) => r.id)).toEqual([
       'app-nextcloud',
     ]);
@@ -621,6 +648,12 @@ describe('truenasPageModel', () => {
 
     expect(mapTrueNASVMStatus(windows)).toBe('running');
     expect(mapTrueNASVMStatus(ubuntu)).toBe('stopped');
+    expect(
+      mapTrueNASVMStatus({
+        ...windows,
+        platformData: { sourceStatus: { truenas: { status: 'error' } } },
+      }),
+    ).toBe('attention');
     expect(filterTrueNASVMs([windows, ubuntu], 'passthrough', 'running').map((r) => r.id)).toEqual([
       'vm-windows',
     ]);
@@ -669,6 +702,12 @@ describe('truenasPageModel', () => {
 
     expect(mapTrueNASShareStatus(media)).toBe('active');
     expect(mapTrueNASShareStatus(archive)).toBe('disabled');
+    expect(
+      mapTrueNASShareStatus({
+        ...media,
+        platformData: { sourceStatus: { truenas: { status: 'unknown' } } },
+      }),
+    ).toBe('attention');
     expect(filterTrueNASShares([media, archive], 'audit', 'active').map((r) => r.id)).toEqual([
       'share-media',
     ]);
