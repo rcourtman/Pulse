@@ -1,8 +1,15 @@
 import { useLocation } from '@solidjs/router';
 import { Show, createMemo, createResource, type Accessor } from 'solid-js';
+import { buildInfrastructureAgentUpdatesPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
+import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
+import {
+  collectOutdatedAgentHosts,
+  formatAgentVersionDisplay,
+} from '@/features/platformPage/agentVersion';
 import { ResourceAPI } from '@/api/resources';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
+import { updateStore } from '@/stores/updates';
 import {
   PlatformErrorState,
   PlatformSectionTabs,
@@ -93,6 +100,18 @@ export function VmwarePageSurface() {
   const activeTab = createMemo<VmwarePageTabId>(() =>
     tabs().some((tab) => tab.id === requestedTab()) ? requestedTab() : 'overview',
   );
+  const agentUpdateTargetVersion = createMemo(
+    () => updateStore.versionInfo()?.agentUpdateTargetVersion,
+  );
+  const outdatedAgentVMs = createMemo(() =>
+    collectOutdatedAgentHosts(model().vms, agentUpdateTargetVersion()),
+  );
+  const outdatedAgentUpdatePath = createMemo(() =>
+    buildInfrastructureAgentUpdatesPath(outdatedAgentVMs().map((vm) => vm.agentId)),
+  );
+  const serverVersionDisplay = createMemo(() =>
+    formatAgentVersionDisplay(agentUpdateTargetVersion()),
+  );
 
   // Hosts table on top and the embedded WorkloadsSurface below share the
   // bars/sparklines toggle (and the sparkline history range that ships with
@@ -153,6 +172,16 @@ export function VmwarePageSurface() {
               />
             }
           >
+            <PlatformOutdatedAgentNotice
+              hosts={outdatedAgentVMs()}
+              targetVersion={serverVersionDisplay()}
+              missingLabel="in-guest telemetry and command support"
+              copyVariant="latest-detail"
+              actionHref={outdatedAgentUpdatePath()}
+              actionLabel="Open agent upgrade commands"
+              subjectSingular="VM"
+              subjectPlural="VMs"
+            />
             <Show when={activeTab() === 'overview'}>
               <VmwareOverview
                 model={model}

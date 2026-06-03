@@ -64,4 +64,27 @@ describe('PlatformOutdatedAgentNotice', () => {
       'delly is running an older Pulse agent (v5.1.34). Update it to v6.0.0-rc.6 for the latest agent-contributed platform detail on this host.',
     );
   });
+
+  it('can describe stale in-guest agents on VMs without host copy', () => {
+    render(() => (
+      <PlatformOutdatedAgentNotice
+        hosts={[
+          { name: 'app-01', version: 'v5.1.34' },
+          { name: 'db-01', version: 'v5.1.34' },
+        ]}
+        targetVersion="v6.0.0-rc.6"
+        missingLabel="in-guest telemetry and command support"
+        copyVariant="latest-detail"
+        subjectSingular="VM"
+        subjectPlural="VMs"
+      />
+    ));
+
+    const notice = screen.getByTestId('platform-outdated-agent-notice');
+    expect(notice).toHaveTextContent('2 VMs are running an older Pulse agent.');
+    expect(notice).toHaveTextContent(
+      'Update them to v6.0.0-rc.6 for the latest in-guest telemetry and command support.',
+    );
+    expect(notice).toHaveTextContent('Affected: app-01, db-01.');
+  });
 });

@@ -238,7 +238,10 @@ platform page. These notices must compare against the API-owned
 builds can show their dirty server version without implying agents can or
 should update toward that build. Agentless API-only platforms such as vSphere
 must not grow this notice unless a concrete guest or monitored system row
-actually carries a Pulse agent identity.
+actually carries a Pulse agent identity. On vSphere specifically, stale-agent
+copy belongs to correlated in-guest VM agents and must not describe ESXi hosts
+as Pulse-agent update targets just because phase-1 host resources use the
+canonical `agent` resource type.
 Kubernetes policy inventory follows that same primitive boundary while the
 unified-resource owner supplies NetworkPolicy policy type and rule-count
 columns, PodDisruptionBudget budget and observed health columns, ResourceQuota
