@@ -156,7 +156,8 @@ export function StandalonePageSurface() {
                 <PlatformOutdatedAgentNotice
                   hosts={outdatedAgentHosts()}
                   targetVersion={serverVersionDisplay()}
-                  missingLabel="command support and newer agent-managed platform details"
+                  missingLabel="agent command support and agent-managed platform detail"
+                  copyVariant="latest-detail"
                   actionHref={buildInfrastructureWorkspacePath()}
                   actionLabel="Open agent upgrade commands"
                 />

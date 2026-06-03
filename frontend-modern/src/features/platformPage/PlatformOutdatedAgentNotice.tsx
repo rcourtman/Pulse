@@ -8,9 +8,11 @@ type PlatformOutdatedAgentNoticeProps = {
   // The version users should update to (the server's version). Optional: the
   // notice still reads sensibly without it.
   targetVersion?: string;
-  // What the stale agents cannot report, e.g. "images, networks, and storage".
-  // Phrased to slot into "to see {missingLabel} for ...".
+  // What the update unlocks, e.g. "images, networks, and storage".
+  // Default copy phrases this as missing data; latest-detail copy phrases it as
+  // newer agent-contributed detail for hybrid platform pages.
   missingLabel: string;
+  copyVariant?: 'missing-data' | 'latest-detail';
   actionHref?: string;
   actionLabel?: string;
 };
@@ -27,9 +29,16 @@ export function PlatformOutdatedAgentNotice(props: PlatformOutdatedAgentNoticePr
 
   const message = createMemo(() => {
     const target = props.targetVersion ? ` to ${props.targetVersion}` : '';
+    const copyVariant = props.copyVariant || 'missing-data';
     if (count() === 1) {
       const host = props.hosts[0];
+      if (copyVariant === 'latest-detail') {
+        return `${host.name} is running an older Pulse agent (${host.version}). Update it${target} for the latest ${props.missingLabel} on this host.`;
+      }
       return `${host.name} is running an older Pulse agent (${host.version}). Update it${target} to see ${props.missingLabel} for this host.`;
+    }
+    if (copyVariant === 'latest-detail') {
+      return `${count()} hosts are running an older Pulse agent. Update them${target} for the latest ${props.missingLabel}. Affected: ${names()}.`;
     }
     return `${count()} hosts are running an older Pulse agent. Update them${target} to see ${props.missingLabel}. Affected: ${names()}.`;
   });

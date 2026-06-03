@@ -124,7 +124,8 @@ export function TrueNASPageSurface() {
             <PlatformOutdatedAgentNotice
               hosts={outdatedAgentHosts()}
               targetVersion={serverVersionDisplay()}
-              missingLabel="TrueNAS storage, services, apps, VMs, shares, and protection details"
+              missingLabel="agent-contributed TrueNAS system detail and command support"
+              copyVariant="latest-detail"
               actionHref={buildInfrastructureWorkspacePath()}
               actionLabel="Open agent upgrade commands"
             />

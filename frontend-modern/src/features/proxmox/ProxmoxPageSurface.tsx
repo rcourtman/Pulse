@@ -14,7 +14,13 @@ import {
   isWorkloadTableMetricHistoryRange,
   type WorkloadTableMetricHistoryRange,
 } from '@/components/Workloads/workloadMetricHistoryModel';
+import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
+import {
+  collectOutdatedAgentHosts,
+  formatAgentVersionDisplay,
+} from '@/features/platformPage/agentVersion';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
+import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { resourceMatchesSearch } from '@/utils/resourceSearchMatch';
@@ -30,6 +36,7 @@ import { ProxmoxMailGatewayTable } from './ProxmoxMailGatewayTable';
 import { ProxmoxNodesTable } from './ProxmoxNodesTable';
 import { ProxmoxReplicationTable } from './ProxmoxReplicationTable';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
+import { updateStore } from '@/stores/updates';
 import {
   PROXMOX_TAB_SPECS,
   buildProxmoxPageModel,
@@ -78,6 +85,12 @@ export function ProxmoxPageSurface() {
     if (!segment || !VALID_TABS.has(segment)) return 'overview';
     return visibleTabIds().has(segment) ? segment : 'overview';
   });
+  const outdatedAgentHosts = createMemo(() =>
+    collectOutdatedAgentHosts(model().pveNodes, updateStore.versionInfo()?.version),
+  );
+  const serverVersionDisplay = createMemo(() =>
+    formatAgentVersionDisplay(updateStore.versionInfo()?.version),
+  );
 
   // The hosts table at the top and the embedded WorkloadsSurface below share
   // the bars/sparklines toggle (and the sparkline history range that ships
@@ -136,6 +149,14 @@ export function ProxmoxPageSurface() {
               />
             }
           >
+            <PlatformOutdatedAgentNotice
+              hosts={outdatedAgentHosts()}
+              targetVersion={serverVersionDisplay()}
+              missingLabel="agent-contributed Proxmox node detail and command support"
+              copyVariant="latest-detail"
+              actionHref={buildInfrastructureWorkspacePath()}
+              actionLabel="Open agent upgrade commands"
+            />
             <Show when={activeTab() === 'overview'}>
               <ProxmoxOverview
                 model={model}

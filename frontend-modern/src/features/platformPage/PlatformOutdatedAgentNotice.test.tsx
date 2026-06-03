@@ -49,4 +49,19 @@ describe('PlatformOutdatedAgentNotice', () => {
     expect(notice).toHaveTextContent('2 hosts are running an older Pulse agent.');
     expect(notice).toHaveTextContent('Affected: tower, delly.');
   });
+
+  it('uses latest-detail copy for hybrid platform pages', () => {
+    render(() => (
+      <PlatformOutdatedAgentNotice
+        hosts={[{ name: 'delly', version: 'v5.1.34' }]}
+        targetVersion="v6.0.0-rc.6"
+        missingLabel="agent-contributed platform detail"
+        copyVariant="latest-detail"
+      />
+    ));
+
+    expect(screen.getByTestId('platform-outdated-agent-notice')).toHaveTextContent(
+      'delly is running an older Pulse agent (v5.1.34). Update it to v6.0.0-rc.6 for the latest agent-contributed platform detail on this host.',
+    );
+  });
 });
