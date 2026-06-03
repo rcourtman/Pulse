@@ -517,6 +517,9 @@ TLS floor in the dynamic config.
    2026-06-03 cutover candidate, that packet is
    `promoted_from_tag=v6.0.0-rc.6`, `rollback_version=v5.1.34`,
    `ga_date=2026-06-03`, and `v5_eos_date=2026-09-01`.
+   That stable cut must also move the repo-root Docker compose default and
+   `scripts/install-docker.sh` fallback from the final RC image tag to the
+   stable `6.0.0` image tag in the same commit as `VERSION=6.0.0`.
 7. Preserve release-matched installer and Helm operator documentation links through `scripts/install.sh`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-helm-chart.yml`, and the chart metadata itself so deployment guidance and packaged chart metadata do not drift back to branch-tip `main` docs when a release line or promoted tag already exists.
    The same governed Helm boundary also owns `deploy/helm/pulse/` itself:
    chart metadata, default values, templates, and generated chart docs must

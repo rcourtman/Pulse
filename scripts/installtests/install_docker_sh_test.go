@@ -92,6 +92,9 @@ func TestRepoDockerComposeDefaultPinsCurrentVersion(t *testing.T) {
 	if !strings.Contains(text, "image: ${PULSE_IMAGE:-rcourtman/pulse:"+version+"}") {
 		t.Fatalf("repo docker-compose.yml must pin the current release version:\n%s", text)
 	}
+	if strings.Contains(text, "6.0.0-rc.") {
+		t.Fatalf("stable repo docker-compose.yml must not keep a prerelease image default:\n%s", text)
+	}
 	if strings.Contains(text, ":latest") {
 		t.Fatalf("repo docker-compose.yml must not default to a floating latest tag:\n%s", text)
 	}
@@ -107,6 +110,9 @@ func TestInstallDockerScriptFallbackPinsCurrentVersion(t *testing.T) {
 	text := string(content)
 	if !strings.Contains(text, `CANONICAL_DEFAULT_PULSE_VERSION="`+version+`"`) {
 		t.Fatalf("install-docker.sh fallback must pin the current release version:\n%s", text)
+	}
+	if strings.Contains(text, `CANONICAL_DEFAULT_PULSE_VERSION="6.0.0-rc.`) {
+		t.Fatalf("stable install-docker.sh fallback must not keep a prerelease default:\n%s", text)
 	}
 }
 

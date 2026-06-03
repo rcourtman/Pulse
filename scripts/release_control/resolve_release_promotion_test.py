@@ -86,6 +86,7 @@ class ResolveReleasePromotionTest(unittest.TestCase):
             )
 
     def test_current_stable_v6_packet_resolves_with_publish_dates(self) -> None:
+        self.assertEqual((REPO_ROOT / "VERSION").read_text(encoding="utf-8").strip(), "6.0.0")
         release_notes = (REPO_ROOT / "docs/releases/RELEASE_NOTES_v6.md").read_text(encoding="utf-8")
         metadata = resolver.resolve_metadata(
             version="6.0.0",
