@@ -608,9 +608,12 @@ func TestHandleCanonicalAutoRegisterNoOpReRegistrationSkipsMonitorReload(t *test
 	}
 
 	handler := newTestConfigHandlers(t, cfg)
-	reloadCalls := 0
+	reloadCalls := make(chan struct{}, 1)
 	handler.reloadFunc = func() error {
-		reloadCalls++
+		select {
+		case reloadCalls <- struct{}{}:
+		default:
+		}
 		return nil
 	}
 
@@ -631,12 +634,11 @@ func TestHandleCanonicalAutoRegisterNoOpReRegistrationSkipsMonitorReload(t *test
 	if rec.Code != http.StatusOK {
 		t.Fatalf("warm-up call status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
-	// Allow the warm-up reload goroutine to run before resetting the counter.
-	time.Sleep(50 * time.Millisecond)
-	if reloadCalls == 0 {
-		t.Fatalf("expected the first state-changing auto-register to call reloadFunc, got %d", reloadCalls)
+	select {
+	case <-reloadCalls:
+	case <-time.After(time.Second):
+		t.Fatal("expected the first state-changing auto-register to call reloadFunc")
 	}
-	reloadCalls = 0
 
 	// Second call with the identical payload: this is the no-op scenario
 	// the fix targets. No persisted-config delta → no save → no reload.
@@ -647,13 +649,10 @@ func TestHandleCanonicalAutoRegisterNoOpReRegistrationSkipsMonitorReload(t *test
 		t.Fatalf("no-op call status = %d, want 200: %s", rec2.Code, rec2.Body.String())
 	}
 
-	// Wait long enough for a scheduled reload goroutine to surface if one
-	// was queued. Reload is fired via `go func()` so a tight assert race is
-	// unsafe; this gives it a generous slice of wall time to fail loudly.
-	time.Sleep(150 * time.Millisecond)
-
-	if reloadCalls != 0 {
-		t.Fatalf("no-op auto-register triggered %d monitor reload(s); expected zero so the WebSocket-visible resource store is not wiped", reloadCalls)
+	select {
+	case <-reloadCalls:
+		t.Fatal("no-op auto-register triggered a monitor reload; expected zero so the WebSocket-visible resource store is not wiped")
+	case <-time.After(150 * time.Millisecond):
 	}
 }
 
