@@ -165,4 +165,53 @@ describe('normalizeDiskArray', () => {
     const result = normalizeDiskArray([{ device: '/dev/sda', mountpoint: '/home' }]);
     expect(result?.[0].mountpoint).toBe('/home');
   });
+
+  it('filters macOS APFS companion volumes and simulator runtime images', () => {
+    const result = normalizeDiskArray([
+      {
+        device: '/dev/disk3s1s1',
+        mountpoint: '/',
+        filesystem: 'apfs',
+        total: 245107195904,
+        used: 213573853184,
+      },
+      {
+        device: '/dev/disk8s1',
+        mountpoint: '/Library/Developer/CoreSimulator/Volumes/iOS_23C54',
+        filesystem: 'apfs',
+        total: 17645436928,
+        used: 17188392960,
+      },
+      {
+        device: '/dev/disk3s5',
+        mountpoint: '/System/Volumes/Data',
+        filesystem: 'apfs',
+        total: 245107195904,
+        used: 213573853184,
+      },
+      {
+        device: '/dev/disk7s1',
+        mountpoint: '/Volumes/Development',
+        filesystem: 'apfs',
+        total: 999995129856,
+        used: 204885471232,
+      },
+    ]);
+
+    expect(result?.map((disk) => disk.mountpoint)).toEqual(['/', '/Volumes/Development']);
+  });
+
+  it('returns undefined when all disk rows are non-operational macOS mounts', () => {
+    expect(
+      normalizeDiskArray([
+        {
+          device: '/dev/disk3s2',
+          mountpoint: '/System/Volumes/Preboot',
+          filesystem: 'apfs',
+          total: 245107195904,
+          used: 213573853184,
+        },
+      ]),
+    ).toBeUndefined();
+  });
 });

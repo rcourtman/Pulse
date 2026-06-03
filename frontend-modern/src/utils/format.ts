@@ -1,6 +1,27 @@
 // Type-safe formatting utilities
 import type { Disk } from '@/types/api';
 
+type DiskInput = {
+  device?: string;
+  mountpoint?: string;
+  filesystem?: string;
+  type?: string;
+  total?: number;
+  used?: number;
+  free?: number;
+};
+
+const NON_OPERATIONAL_DISK_MOUNT_PREFIXES = [
+  '/System/Volumes/',
+  '/Library/Developer/CoreSimulator/Volumes/',
+];
+
+function shouldDisplayDisk(disk: DiskInput): boolean {
+  const mountpoint = disk.mountpoint?.trim() ?? '';
+  if (!mountpoint) return true;
+  return !NON_OPERATIONAL_DISK_MOUNT_PREFIXES.some((prefix) => mountpoint.startsWith(prefix));
+}
+
 /**
  * Format bytes to human-readable string with dynamic precision.
  * @param bytes - Number of bytes to format
@@ -289,19 +310,9 @@ export function getShortImageName(fullImage: string | undefined): string {
  * Normalize raw disk objects (from API/agent) into proper Disk[].
  * Calculates `usage` from used/total and defaults missing fields.
  */
-export function normalizeDiskArray(
-  disks?: Array<{
-    device?: string;
-    mountpoint?: string;
-    filesystem?: string;
-    type?: string;
-    total?: number;
-    used?: number;
-    free?: number;
-  }>,
-): Disk[] | undefined {
+export function normalizeDiskArray(disks?: DiskInput[]): Disk[] | undefined {
   if (!disks || disks.length === 0) return undefined;
-  return disks.map((d) => {
+  const normalized = disks.filter(shouldDisplayDisk).map((d) => {
     const total = d.total ?? 0;
     const used = d.used ?? 0;
     const free = d.free ?? (total > 0 ? Math.max(0, total - used) : 0);
@@ -316,4 +327,5 @@ export function normalizeDiskArray(
       device: d.device,
     };
   });
+  return normalized.length > 0 ? normalized : undefined;
 }

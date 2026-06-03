@@ -318,6 +318,16 @@ describe('StackedDiskBar', () => {
       expect(screen.getByText('Disk Breakdown')).toBeInTheDocument();
     });
 
+    it('wraps long mountpoint labels in the tooltip instead of truncating them', async () => {
+      const longMountpoint = '/Volumes/Development/projects/pulse/cache/runtime-images';
+      const disk1 = makeDisk({ mountpoint: '/' });
+      const disk2 = makeDisk({ mountpoint: longMountpoint });
+      const { container } = render(() => <StackedDiskBar disks={[disk1, disk2]} />);
+      await fireEvent.mouseEnter(getBarTrigger(container));
+
+      expect(screen.getByText(longMountpoint)).toHaveClass('break-all');
+    });
+
     it('hides tooltip on mouse leave', async () => {
       const disk = makeDisk({ mountpoint: '/home' });
       const { container } = render(() => <StackedDiskBar disks={[disk]} />);

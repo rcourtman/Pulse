@@ -194,6 +194,14 @@ func TestShouldSkipFilesystem(t *testing.T) {
 		{"Windows C drive - should NOT skip", "NTFS", "C:\\", 500 * 1024 * 1024 * 1024, 200 * 1024 * 1024 * 1024, false},
 		{"Windows D drive - should NOT skip", "NTFS", "D:\\", 1000 * 1024 * 1024 * 1024, 500 * 1024 * 1024 * 1024, false},
 
+		// macOS APFS companion volumes and simulator runtime images should not
+		// look like separate machine disks.
+		{"macos root APFS volume - should NOT skip", "apfs", "/", 245107195904, 213573853184, false},
+		{"macos external APFS volume - should NOT skip", "apfs", "/Volumes/Development", 999995129856, 204885471232, false},
+		{"macos data companion volume", "apfs", "/System/Volumes/Data", 245107195904, 213573853184, true},
+		{"macos preboot companion volume", "apfs", "/System/Volumes/Preboot", 245107195904, 213573853184, true},
+		{"macos simulator runtime volume", "apfs", "/Library/Developer/CoreSimulator/Volumes/iOS_23E254a", 18058575872, 17593331712, true},
+
 		// Regular filesystems that should NOT be skipped
 		{"ext4 root", "ext4", "/", 100 * 1024 * 1024 * 1024, 50 * 1024 * 1024 * 1024, false},
 		{"xfs data", "xfs", "/data", 500 * 1024 * 1024 * 1024, 200 * 1024 * 1024 * 1024, false},

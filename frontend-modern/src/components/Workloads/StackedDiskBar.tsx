@@ -232,8 +232,13 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
       </Show>
 
       {/* Tooltip for disk breakdown */}
-      <TooltipPortal when={state.tooltipVisible()} x={state.tip.pos().x} y={state.tip.pos().y}>
-        <div class="min-w-[140px]">
+      <TooltipPortal
+        when={state.tooltipVisible()}
+        x={state.tip.pos().x}
+        y={state.tip.pos().y}
+        maxWidth={420}
+      >
+        <div class="w-[360px] max-w-full">
           <div class="font-medium mb-1 text-slate-300 border-b border-border pb-1">
             {presentation().tooltipTitle}
           </div>
@@ -243,15 +248,18 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                 class="flex flex-col gap-1 py-0.5"
                 classList={{ 'border-t border-border': idx() > 0 }}
               >
-                <div class="flex justify-between gap-3">
-                  <span class="flex max-w-[100px] items-center gap-1 truncate text-slate-300">
-                    <svg aria-hidden="true" class="h-2 w-2 shrink-0" viewBox="0 0 8 8">
+                <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-0.5">
+                  <span class="flex min-w-0 items-start gap-1.5 text-slate-300">
+                    <svg aria-hidden="true" class="mt-0.5 h-2 w-2 shrink-0" viewBox="0 0 8 8">
                       <circle cx="4" cy="4" r="4" fill={item.color} />
                     </svg>
-                    <span class="truncate">{item.label}</span>
+                    <span class="min-w-0 break-all leading-snug">{item.label}</span>
                   </span>
-                  <span class="whitespace-nowrap text-slate-300">
-                    {item.percent} ({item.used}/{item.total})
+                  <span class="whitespace-nowrap text-right font-medium text-base-content">
+                    {item.percent}
+                  </span>
+                  <span class="col-span-2 text-right text-[9px] leading-none text-muted">
+                    {item.used}/{item.total}
                   </span>
                 </div>
                 <div class="relative h-1.5 w-full overflow-hidden rounded bg-surface-hover">

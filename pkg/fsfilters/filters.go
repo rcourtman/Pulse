@@ -99,6 +99,8 @@ var specialMountPrefixes = []string{
 	"/var/lib/docker",
 	"/var/lib/containers",
 	"/snap",
+	"/System/Volumes/", // macOS APFS system/data/preboot/update companion volumes
+	"/Library/Developer/CoreSimulator/Volumes/", // Xcode simulator runtime disk images
 }
 
 // containerOverlayPatterns detect container overlay filesystem paths from various
@@ -124,6 +126,7 @@ var containerPathPrefixes = []string{
 // should be excluded, along with a list of reason strings.
 func ShouldSkipFilesystem(fsType, mountpoint string, totalBytes, usedBytes uint64) (skip bool, reasons []string) {
 	fsTypeLower := strings.ToLower(strings.TrimSpace(fsType))
+	mountpoint = strings.TrimSpace(mountpoint)
 
 	// Check read-only filesystems (existing logic)
 	if reason, isReadOnly := ReadOnlyFilesystemReason(fsType, totalBytes, usedBytes); isReadOnly {
