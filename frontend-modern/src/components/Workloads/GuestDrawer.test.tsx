@@ -447,11 +447,40 @@ describe('GuestDrawer', () => {
       expect(screen.getByText('1.0.0')).toBeInTheDocument();
     });
 
-    it('hides agent section when no agentVersion', () => {
+    it('surfaces the install path when a running VM has no Pulse agent', () => {
       render(() => (
         <GuestDrawer guest={makeGuest({ agentVersion: undefined })} onClose={vi.fn()} />
       ));
+      expect(screen.getByText('Agent')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Add agent for AI actions' })).toHaveAttribute(
+        'href',
+        '/settings/infrastructure?add=agent',
+      );
+    });
+
+    it('hides agent guidance for app containers without an in-guest agent target', () => {
+      render(() => (
+        <GuestDrawer
+          guest={makeGuest({
+            agentVersion: undefined,
+            type: 'docker-container',
+            workloadType: 'app-container',
+          })}
+          onClose={vi.fn()}
+        />
+      ));
       expect(screen.queryByText('Agent')).not.toBeInTheDocument();
+    });
+
+    it('hides agent guidance when the parent node is offline', () => {
+      render(() => (
+        <GuestDrawer
+          guest={makeGuest({ agentVersion: undefined, status: 'running' })}
+          parentNodeOnline={false}
+          onClose={vi.fn()}
+        />
+      ));
+      expect(screen.queryByRole('link', { name: 'Add agent for AI actions' })).toBeNull();
     });
   });
 

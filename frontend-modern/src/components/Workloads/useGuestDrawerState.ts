@@ -36,6 +36,7 @@ import {
   type GuestDrawerProps,
   type GuestDrawerTab,
 } from './guestDrawerModel';
+import { shouldShowInGuestAgentInstallCue } from './workloadAgentReadiness';
 
 interface GuestDiscoverySourceKey {
   type: DiscoveryResourceType;
@@ -76,6 +77,9 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
   const agentLabel = createMemo(() => getGuestDrawerAgentLabel(props.guest));
   const agentTitle = createMemo(() => getGuestDrawerAgentTitle(props.guest));
   const hasAgentInfo = createMemo(() => agentLabel().length > 0);
+  const showInGuestAgentInstallCue = createMemo(() =>
+    shouldShowInGuestAgentInstallCue(props.guest, props.parentNodeOnline !== false),
+  );
   const ipAddresses = createMemo(() => props.guest.ipAddresses || []);
   const hasFilesystemDetails = createMemo(() => hasGuestDrawerFilesystemDetails(props.guest));
   const networkInterfaces = createMemo(() => getGuestDrawerNetworkInterfaces(props.guest));
@@ -160,6 +164,7 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
     normalizedTags,
     osName,
     osVersion,
+    showInGuestAgentInstallCue,
     switchTab,
     setHistoryRange,
     webInterfaceTargetLabel,

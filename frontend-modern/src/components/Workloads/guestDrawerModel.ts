@@ -16,6 +16,7 @@ export interface GuestDrawerProps {
   onClose: () => void;
   customUrl?: string;
   onCustomUrlChange?: (guestId: string, url: string) => void;
+  parentNodeOnline?: boolean;
 }
 
 export type GuestDrawerTab = 'overview' | 'history' | 'discovery';

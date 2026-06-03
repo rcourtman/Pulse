@@ -1,6 +1,8 @@
 import { For, Show } from 'solid-js';
+import { TerminalSquare } from 'lucide-solid';
 
 import { formatDiscoveryAge } from '@/api/discovery';
+import { buildInfrastructureOnboardingPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { DiscoveryProvenanceMarker } from '@/components/shared/DiscoveryProvenanceMarker';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import type { DiscoveryIdentifiedSummary } from '@/utils/discoveryPresentation';
@@ -9,6 +11,10 @@ import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 
 import { DiskList } from './DiskList';
 import { getGuestDrawerMemoryRows, isGuestDrawerVM } from './guestDrawerModel';
+import {
+  IN_GUEST_AGENT_INSTALL_ACTION_LABEL,
+  IN_GUEST_AGENT_INSTALL_TITLE,
+} from './workloadAgentReadiness';
 
 import type { GuestDrawerProps } from './guestDrawerModel';
 
@@ -22,6 +28,7 @@ interface GuestDrawerOverviewProps {
   hasFilesystemDetails: boolean;
   hasNetworkInterfaces: boolean;
   hasOsInfo: boolean;
+  showInGuestAgentInstallCue: boolean;
   ipAddresses: string[];
   networkInterfaces: NonNullable<GuestDrawerProps['guest']['networkInterfaces']>;
   normalizedTags: string[];
@@ -150,6 +157,19 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                 <span class="font-medium text-base-content truncate ml-2" title={props.agentTitle}>
                   {props.agentLabel}
                 </span>
+              </div>
+            </Show>
+            <Show when={props.showInGuestAgentInstallCue}>
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-muted">Agent</span>
+                <a
+                  href={buildInfrastructureOnboardingPath('agent')}
+                  class="inline-flex items-center gap-1 text-right text-[11px] font-semibold text-amber-700 underline-offset-2 hover:underline dark:text-amber-300"
+                  title={IN_GUEST_AGENT_INSTALL_TITLE}
+                >
+                  <TerminalSquare class="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>{IN_GUEST_AGENT_INSTALL_ACTION_LABEL}</span>
+                </a>
               </div>
             </Show>
           </div>

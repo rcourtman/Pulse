@@ -34,6 +34,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     networkInterfaces,
     normalizedTags,
     setHistoryRange,
+    showInGuestAgentInstallCue,
     switchTab,
     webInterfaceTargetLabel,
   } = useGuestDrawerState(props);
@@ -94,6 +95,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
           backupPresentation={backupPresentation()}
           diskThresholds={diskThresholds()}
           discoveryIdentifiedSummary={discoveryIdentifiedSummary()}
+          showInGuestAgentInstallCue={showInGuestAgentInstallCue()}
           webInterfaceTargetLabel={webInterfaceTargetLabel()}
         />
       </div>

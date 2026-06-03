@@ -7,6 +7,7 @@ import { StackedMemoryBar } from './StackedMemoryBar';
 import {
   BackupIndicator,
   BackupStatusCell,
+  InGuestAgentInstallCue,
   InfoTooltipCell,
   NetworkInfoCell,
   OSInfoCell,
@@ -86,6 +87,7 @@ export function GuestRow(props: GuestRowProps) {
     osVersion,
     alertAccentTone,
     rowClass,
+    showInGuestAgentInstallCue,
     supportsBackup,
     typeInfo,
     workloadType,
@@ -219,6 +221,9 @@ export function GuestRow(props: GuestRowProps) {
                     lastBackup={props.guest.lastBackup}
                     isTemplate={props.guest.template}
                   />
+                </Show>
+                <Show when={showInGuestAgentInstallCue()}>
+                  <InGuestAgentInstallCue />
                 </Show>
               </div>
             </div>

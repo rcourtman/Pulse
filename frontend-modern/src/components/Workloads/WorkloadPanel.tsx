@@ -576,6 +576,7 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                                 onClose={() => props.setSelectedGuestId(null)}
                                 customUrl={metadata()?.customUrl}
                                 onCustomUrlChange={props.handleCustomUrlUpdate}
+                                parentNodeOnline={parentNodeOnline()}
                               />
                             </div>
                           </TableCell>
