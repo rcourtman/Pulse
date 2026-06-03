@@ -3548,11 +3548,13 @@ the app shell must not add a separate top-level Availability destination.
 The Machines page must not pretend its machine list is a generic overview:
 the default tab is `Machines`, the Machines table is only for Pulse Agent-backed
 resources with host telemetry, and the full availability-check row list belongs
-to the `Availability checks` tab. Its default disk column is an operator risk
-summary: it should surface the highest-usage operational filesystem for the
-machine, keep platform plumbing out of the visible disk set, and leave the full
-per-filesystem breakdown to hover/detail affordances rather than rendering the
-row as a raw mount browser. Servers, laptops, desktops, and comparable
+to the `Availability checks` tab. Its default disk column follows the platform
+host-table scan pattern: multi-disk machines render compact per-disk mini-bars
+so operators can quickly see disk count and pressure distribution, while sorting
+still uses the highest-usage operational filesystem, platform plumbing stays out
+of the visible disk set, and full per-filesystem labels remain in hover/detail
+affordances rather than turning the row into a raw mount browser. Servers,
+laptops, desktops, and comparable
 computers monitored only by agentless reachability checks may use
 `targetKind=machine` in the availability form, but they stay in Availability
 checks until a Pulse Agent registers and supplies CPU, memory, disk, and network

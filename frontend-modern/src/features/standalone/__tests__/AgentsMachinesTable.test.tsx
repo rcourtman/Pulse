@@ -269,6 +269,48 @@ describe('AgentsMachinesTable', () => {
     ).toBeGreaterThanOrEqual(2);
   });
 
+  it('renders multi-disk machine usage as vertical mini-bars', () => {
+    const { container } = render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({
+            id: 'multi-disk',
+            name: 'Multi Disk',
+            agent: {
+              agentVersion: '6.0.0',
+              osName: 'Linux',
+              disks: [
+                {
+                  device: '/dev/sda1',
+                  mountpoint: '/',
+                  type: 'ext4',
+                  total: 1000,
+                  used: 250,
+                  free: 750,
+                },
+                {
+                  device: '/dev/sdb1',
+                  mountpoint: '/data',
+                  type: 'xfs',
+                  total: 1000,
+                  used: 910,
+                  free: 90,
+                },
+              ],
+            },
+          }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    expect(container.querySelectorAll('[data-stacked-disk-fill="vertical"]')).toHaveLength(2);
+    expect(screen.queryByText('max')).not.toBeInTheDocument();
+    expect(screen.queryByText('2 disks')).not.toBeInTheDocument();
+  });
+
   it('searches machine-native fields and exposes host-style search affordances', async () => {
     render(() => (
       <AgentsMachinesTable

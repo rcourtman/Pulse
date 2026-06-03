@@ -1674,9 +1674,7 @@ export const AgentsMachinesTable: Component<{
                               fallback={metricFallback(telemetryFallback())}
                             >
                               <StackedDiskBar
-                                mode={(disks()?.length ?? 0) > 1 ? 'aggregate' : undefined}
-                                summaryStrategy="max"
-                                showDiskCount
+                                mode={(disks()?.length ?? 0) > 1 ? 'vertical-bars' : undefined}
                                 disks={disks()}
                                 aggregateDisk={aggregateDisk()}
                               />
