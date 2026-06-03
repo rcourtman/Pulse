@@ -48,12 +48,14 @@ that binary, not separate customer-facing agent products.
 22. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx`
 22a. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx`
 23. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`
+23a. `frontend-modern/src/components/Settings/InfrastructureAgentUpdatesDialog.tsx`
 24. `frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx`
 25. `frontend-modern/src/components/Settings/InfrastructureSourcePicker.tsx`
 26. `frontend-modern/src/components/Settings/InfrastructureDiscoverySettingsDialog.tsx`
 27. `frontend-modern/src/components/Settings/DiscoverySettingsForm.tsx`
 28. `frontend-modern/src/components/Settings/discoverySettingsModel.ts`
 29. `frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts`
+29a. `frontend-modern/src/components/Settings/infrastructureAgentUpdateCommandsModel.ts`
 30. `frontend-modern/src/components/Settings/proxmoxSettingsModel.ts`
 31. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
 32. `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`
@@ -67,6 +69,7 @@ that binary, not separate customer-facing agent products.
 40. `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
 41. `frontend-modern/src/utils/agentProfilesPresentation.ts`
 42. `frontend-modern/src/utils/agentInstallCommand.ts`
+42a. `frontend-modern/src/utils/agentVersion.ts`
 43. `frontend-modern/src/utils/infrastructureOnboardingPresentation.ts`
 44. `frontend-modern/src/api/nodes.ts`
 45. `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
@@ -173,6 +176,18 @@ missing agent reporting scope, or expired agent tokens must be called out
 before the update starts. Root `install.sh` v5-to-v6 upgrades must also inspect
 local token metadata before binary replacement and warn when the shell path
 cannot prove agent-token continuity.
+
+Stale-agent platform notices and the Infrastructure `agentUpdates` workspace
+route are part of that same lifecycle contract. Platform pages may link to the
+central Infrastructure update dialog with a scoped list of affected agent
+connection IDs, but command rendering stays lifecycle-owned in Settings. For
+Unix-like agents that Pulse already sees, the copied stale-agent update command
+must use `scripts/install.sh --update` and recover URL, token, identity, custom
+CA, and insecure transport from installer-owned saved state instead of asking
+the operator to mint a fresh install token or exposing agent IDs in the copied
+command. Windows stale-agent update commands remain on the existing
+token-gated install transport until the Windows installer owns an equivalent
+saved-state update mode.
 
 Agent lifecycle and fleet-operation surfaces may consume
 `POST /api/actions/plan` for resource capability planning, but the action plan

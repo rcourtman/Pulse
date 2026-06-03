@@ -14,7 +14,7 @@ import {
   isWorkloadTableMetricHistoryRange,
   type WorkloadTableMetricHistoryRange,
 } from '@/components/Workloads/workloadMetricHistoryModel';
-import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
+import { buildInfrastructureAgentUpdatesPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import {
   collectOutdatedAgentHosts,
   formatAgentVersionDisplay,
@@ -88,6 +88,9 @@ export function ProxmoxPageSurface() {
   const outdatedAgentHosts = createMemo(() =>
     collectOutdatedAgentHosts(model().pveNodes, updateStore.versionInfo()?.version),
   );
+  const outdatedAgentUpdatePath = createMemo(() =>
+    buildInfrastructureAgentUpdatesPath(outdatedAgentHosts().map((host) => host.agentId)),
+  );
   const serverVersionDisplay = createMemo(() =>
     formatAgentVersionDisplay(updateStore.versionInfo()?.version),
   );
@@ -154,7 +157,7 @@ export function ProxmoxPageSurface() {
               targetVersion={serverVersionDisplay()}
               missingLabel="agent-contributed Proxmox node detail and command support"
               copyVariant="latest-detail"
-              actionHref={buildInfrastructureWorkspacePath()}
+              actionHref={outdatedAgentUpdatePath()}
               actionLabel="Open agent upgrade commands"
             />
             <Show when={activeTab() === 'overview'}>

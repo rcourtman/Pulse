@@ -178,6 +178,35 @@ describe('proxmoxBackupRecoveryModel', () => {
     expect(model.coverageSummary.uncovered).toBe(1);
   });
 
+  it('does not treat a linked Pulse agent facet as recovery evidence or authority', () => {
+    const model = buildProxmoxBackupRecoveryModel({
+      workloads: [
+        workload({
+          id: 'vm-201',
+          sourceType: 'hybrid',
+          proxmox: { vmid: 201, node: 'delly', instance: 'homelab' },
+          agent: {
+            agentId: 'agent-delly',
+            agentVersion: '6.0.0-rc.5',
+            commandsEnabled: true,
+          },
+        }),
+      ],
+      pbsBackups: [],
+      archives: [],
+      snapshots: [],
+      tasks: [],
+      nowMs: Date.parse('2026-05-26T08:00:00Z'),
+    });
+
+    expect(model.coverageRows).toHaveLength(1);
+    expect(model.coverageRows[0].posture).toBe('uncovered');
+    expect(model.coverageRows[0].pbsCount).toBe(0);
+    expect(model.coverageRows[0].archiveCount).toBe(0);
+    expect(model.coverageRows[0].snapshotCount).toBe(0);
+    expect(model.recoverableArtifacts).toHaveLength(0);
+  });
+
   it('flags backups whose guest is absent from inventory as orphaned, live guests as not', () => {
     const model = buildProxmoxBackupRecoveryModel({
       // Only VMID 112 exists in inventory; the PBS backup for 999 does not.

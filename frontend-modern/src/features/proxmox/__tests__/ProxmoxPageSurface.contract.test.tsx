@@ -131,7 +131,7 @@ describe('ProxmoxPageSurface contract', () => {
         displayName: 'delly',
         type: 'agent',
         proxmox: { nodeName: 'delly', clusterName: 'homelab' },
-        agent: { agentVersion: 'v5.1.34' },
+        agent: { agentId: 'agent-delly', agentVersion: 'v5.1.34' },
       }),
     ]);
 
@@ -146,7 +146,7 @@ describe('ProxmoxPageSurface contract', () => {
     );
     expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(
       'href',
-      '/settings/infrastructure',
+      '/settings/infrastructure?agentUpdates=1&agents=agent%3Aagent-delly',
     );
   });
 });

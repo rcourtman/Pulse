@@ -227,6 +227,15 @@ unified-resource owner supplies StorageClass, PersistentVolume, and
 PersistentVolumeClaim-specific columns. Kubernetes networking inventory also
 follows that same primitive boundary while the unified-resource owner supplies
 Service, Ingress, and EndpointSlice-specific columns.
+Outdated-agent notices on platform pages are part of this same shared
+frontend/platform primitive boundary. Agent-backed and hybrid platform pages may
+surface a compact stale-agent cue when their row model carries Pulse agent
+identity and version evidence, but the CTA must route to the canonical
+Infrastructure settings update-command surface with scoped agent IDs instead of
+duplicating installer command assembly, tokens, or lifecycle copy in each
+platform page. Agentless API-only platforms such as vSphere must not grow this
+notice unless a concrete guest or monitored system row actually carries a Pulse
+agent identity.
 Kubernetes policy inventory follows that same primitive boundary while the
 unified-resource owner supplies NetworkPolicy policy type and rule-count
 columns, PodDisruptionBudget budget and observed health columns, ResourceQuota

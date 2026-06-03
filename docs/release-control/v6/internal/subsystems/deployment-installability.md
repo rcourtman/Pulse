@@ -248,6 +248,13 @@ TLS floor in the dynamic config.
    enrollment input, and avoid interactive download-failure prompts when
    launched by generated non-interactive onboarding commands.
 8. `scripts/install.sh` shared with `agent-lifecycle`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+   Existing-agent update commands copied from the settings UI must use the
+   installer-owned `--update` mode rather than serializing a fresh enrollment
+   token into platform notice links. In `--update` mode, `scripts/install.sh`
+   must recover the server URL, token-file state, identity material, CA trust
+   settings, insecure flag, and persisted agent id from the local installed
+   agent state, must fail closed when no existing installation or connection
+   state is present, and must refuse to silently become a new install command.
 
 ## Extension Points
 

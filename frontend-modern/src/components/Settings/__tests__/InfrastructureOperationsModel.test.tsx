@@ -345,6 +345,36 @@ describe('infrastructure operations model', () => {
     expect(operationsStateSource).not.toContain('const tokenEnv = token ?');
   });
 
+  it('keeps stale Unix agent update commands on the saved-state update path', async () => {
+    const operationsStateSource = await import('../useInfrastructureOperationsState?raw').then(
+      (mod) => (mod as { default: string }).default,
+    );
+    const agentUpgradeStart = operationsStateSource.indexOf(
+      'const getAgentConnectionUpgradeCommand =',
+    );
+    const agentUpgradeEnd = operationsStateSource.indexOf(
+      'const getAgentConnectionUpgradeCommandRequiresToken',
+      agentUpgradeStart,
+    );
+    expect(agentUpgradeStart).toBeGreaterThanOrEqual(0);
+    expect(agentUpgradeEnd).toBeGreaterThan(agentUpgradeStart);
+    const agentUpgradeSource = operationsStateSource.slice(agentUpgradeStart, agentUpgradeEnd);
+    const unixUpgradeStart = agentUpgradeSource.indexOf('let command = `curl');
+    expect(unixUpgradeStart).toBeGreaterThanOrEqual(0);
+    const unixUpgradeSource = agentUpgradeSource.slice(unixUpgradeStart);
+
+    expect(agentUpgradeSource).toContain(
+      '| bash -s -- --update --url ${shellQuoteArg(url)} --non-interactive',
+    );
+    expect(operationsStateSource).toContain('getAgentConnectionUpgradeCommandRequiresToken');
+    expect(operationsStateSource).toContain(
+      "getConnectionUpgradePlatform(connection) === 'windows' && installState.requiresToken()",
+    );
+    expect(unixUpgradeSource).not.toContain('command += ` --token ${shellQuoteArg(token)}`;');
+    expect(unixUpgradeSource).not.toContain('--agent-id');
+    expect(unixUpgradeSource).not.toContain('--hostname');
+  });
+
   it('keeps discovered-node filtering anchored to canonical represented-host dedupe', async () => {
     const discoveryStateSource = await import('../useInfrastructureDiscoveryRuntimeState?raw').then(
       (mod) => (mod as { default: string }).default,

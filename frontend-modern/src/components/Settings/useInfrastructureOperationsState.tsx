@@ -1,4 +1,5 @@
 import { createContext, useContext, type ParentComponent } from 'solid-js';
+import type { Connection } from '@/api/connections';
 import {
   buildPowerShellInstallScriptBootstrap,
   buildWindowsAgentInstallCommand,
@@ -70,6 +71,32 @@ export const useInfrastructureOperationsState = (
   const getCanonicalUninstallAgentId = (row?: UnifiedAgentRow) =>
     row?.agentActionId?.trim() || row?.agentId?.trim() || '';
   const getCanonicalUninstallHostname = (row?: UnifiedAgentRow) => row?.hostname?.trim() || '';
+  const getCanonicalConnectionAgentId = (connection: Connection) => {
+    if (connection.type !== 'agent') return '';
+    const id = connection.id.trim();
+    return id.startsWith('agent:') ? id.slice('agent:'.length).trim() : id;
+  };
+  const getCanonicalConnectionHostname = (connection: Connection) => {
+    const hostname = connection.agentIdentity?.hostname?.trim();
+    if (hostname) return hostname;
+    const address = connection.address?.trim();
+    if (address && !address.includes('://')) return address;
+    return connection.name?.trim() || '';
+  };
+  const getConnectionUpgradePlatform = (connection: Connection): AgentPlatform => {
+    const platform = connection.agentIdentity?.platform?.trim().toLowerCase();
+    switch (platform) {
+      case 'windows':
+        return 'windows';
+      case 'darwin':
+      case 'macos':
+        return 'macos';
+      case 'freebsd':
+        return 'freebsd';
+      default:
+        return 'linux';
+    }
+  };
 
   const getUninstallCommand = (row?: UnifiedAgentRow) => {
     const url = installState.selectedAgentUrl();
@@ -158,8 +185,60 @@ export const useInfrastructureOperationsState = (
     return withPrivilegeEscalation(command);
   };
 
+  const getAgentConnectionUpgradeCommand = (
+    connection: Connection,
+    installFlags: string[] = [],
+  ) => {
+    const token = resolvedCommandToken();
+    const url = installState.selectedAgentUrl();
+    const agentId = getCanonicalConnectionAgentId(connection);
+    const hostname = getCanonicalConnectionHostname(connection);
+    const commandsEnabled = Boolean(connection.agentIdentity?.commandsEnabled);
+    const platform = getConnectionUpgradePlatform(connection);
+    if (platform === 'windows') {
+      const envAssignments = [
+        ...getPowerShellInstallProfileEnvFromFlags(installFlags),
+        ...getPowerShellModeEnv(),
+      ];
+      if (commandsEnabled && !installState.enableCommands()) {
+        envAssignments.push(`$env:PULSE_ENABLE_COMMANDS="true"`);
+      }
+      if (agentId) {
+        envAssignments.push(`$env:PULSE_AGENT_ID="${powerShellQuote(agentId)}"`);
+      }
+      if (hostname) {
+        envAssignments.push(`$env:PULSE_HOSTNAME="${powerShellQuote(hostname)}"`);
+      }
+      return buildWindowsAgentInstallCommand({
+        baseUrl: url,
+        token,
+        insecure: installState.insecureMode(),
+        caCertPath: selectedCustomCaPath(),
+        extraEnvAssignments: envAssignments,
+      });
+    }
+
+    let command = `curl ${getCurlFlags()}${getShellCustomCaCurlFlag()} ${shellQuoteArg(`${url}/install.sh`)} | bash -s -- --update --url ${shellQuoteArg(url)} --non-interactive`;
+    if (installFlags.length > 0) {
+      command += ` ${installFlags.join(' ')}`;
+    }
+    if (commandsEnabled || installState.enableCommands()) {
+      command += ' --enable-commands';
+    }
+    if (urlRequiresInstallerInsecure(url)) {
+      command += getInsecureFlag(url);
+    }
+    command += getShellCustomCaInstallerFlag();
+    return withPrivilegeEscalation(command);
+  };
+
+  const getAgentConnectionUpgradeCommandRequiresToken = (connection: Connection) =>
+    getConnectionUpgradePlatform(connection) === 'windows' && installState.requiresToken();
+
   return {
     ...installState,
+    getAgentConnectionUpgradeCommand,
+    getAgentConnectionUpgradeCommandRequiresToken,
     getPlatformUninstallCommand,
     getUninstallCommand,
     getUpgradeCommand,

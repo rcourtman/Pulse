@@ -5,6 +5,7 @@ import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy
 import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
 import { copyToClipboard } from '@/utils/clipboard';
 import { notificationStore } from '@/stores/notifications';
+import { updateStore } from '@/stores/updates';
 import { Dialog } from '@/components/shared/Dialog';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
 import { ConnectionEditor } from './ConnectionEditor/ConnectionEditor';
@@ -16,6 +17,7 @@ import type { TrueNASConnection } from '@/api/truenas';
 import type { VMwareConnection } from '@/api/vmware';
 import type { NodeConfig, NodeConfigWithStatus } from '@/types/nodes';
 import { InfrastructureDiscoverySettingsDialog } from './InfrastructureDiscoverySettingsDialog';
+import { InfrastructureAgentUpdatesDialog } from './InfrastructureAgentUpdatesDialog';
 import {
   InfrastructureInstallerSection,
   type InfrastructureInstallerFocus,
@@ -31,10 +33,13 @@ import {
 import {
   buildInfrastructureOnboardingPath,
   buildInfrastructureWorkspacePath,
+  deriveAgentUpdateScopeFromLocation,
+  deriveAgentUpdatesFromLocation,
   deriveAddStepFromLocation,
   type InfrastructureAddStep,
   type InfrastructurePanelStep,
 } from './infrastructureWorkspaceModel';
+import { collectInfrastructureAgentUpdateTargets } from './infrastructureAgentUpdateCommandsModel';
 import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
 import { useConnectionsLedger } from './useConnectionsLedger';
 import { useConnectionRowActions } from './useConnectionRowActions';
@@ -131,6 +136,15 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     if (readOnly()) return null;
     return deriveAddStepFromLocation(location.pathname, location.search ?? '');
   });
+  const showAgentUpdateCommands = createMemo(
+    () =>
+      !readOnly() &&
+      deriveAgentUpdatesFromLocation(location.pathname, location.search ?? '') &&
+      routeStep() === null,
+  );
+  const agentUpdateScope = createMemo(() =>
+    deriveAgentUpdateScopeFromLocation(location.pathname, location.search ?? ''),
+  );
   const activeAddType = createMemo<ConnectionType | null>(() => {
     const step = routeStep();
     if (!step || step === 'pick' || step === 'detect') return null;
@@ -178,6 +192,13 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   };
 
   const rows = createMemo(() => ledger.rows());
+  const agentUpdateTargets = createMemo(() =>
+    collectInfrastructureAgentUpdateTargets(
+      rows(),
+      updateStore.versionInfo()?.version,
+      agentUpdateScope(),
+    ),
+  );
   const visibleDiscoveredNodes = createMemo(() =>
     filterRepresentedDiscoveredServers(
       props.discoveredNodes(),
@@ -234,6 +255,10 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     setSelectedDiscoveredSource(null);
     setSelectedProbeCandidate(null);
     navigateToWorkspace(Boolean(routeStep()));
+  };
+
+  const closeAgentUpdateCommands = () => {
+    navigateToWorkspace(Boolean(showAgentUpdateCommands()));
   };
 
   const closeEditFlow = () => {
@@ -885,6 +910,14 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         currentDraftSubnetValue={props.currentDraftSubnetValue}
         discoverySubnetInputRef={props.discoverySubnetInputRef}
       />
+
+      <Show when={showAgentUpdateCommands()}>
+        <InfrastructureAgentUpdatesDialog
+          isOpen={true}
+          targets={agentUpdateTargets()}
+          onClose={closeAgentUpdateCommands}
+        />
+      </Show>
 
       <Show when={routeStep() !== null}>
         <Dialog

@@ -67,6 +67,12 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
   useUnifiedResources: mocks.useUnifiedResources,
 }));
 
+vi.mock('@/stores/updates', () => ({
+  updateStore: {
+    versionInfo: () => ({ version: '6.0.0-rc.6' }),
+  },
+}));
+
 vi.mock('@solidjs/router', () => ({
   useLocation: () => ({
     get pathname() {
@@ -238,10 +244,7 @@ describe('DockerPageSurface', () => {
     );
     expect(screen.getByTestId('docker-hosts-table')).toHaveAttribute('data-resource-count', '1');
     expect(screen.getByTestId('docker-hosts-table')).toHaveAttribute('data-show-toolbar', 'false');
-    expect(screen.getByTestId('docker-section-tabs')).toHaveAttribute(
-      'data-tabs',
-      'overview',
-    );
+    expect(screen.getByTestId('docker-section-tabs')).toHaveAttribute('data-tabs', 'overview');
     expect(screen.getByTestId('docker-containers-table')).toHaveAttribute(
       'data-resource-count',
       '1',
@@ -249,6 +252,27 @@ describe('DockerPageSurface', () => {
     expect(screen.getByTestId('docker-containers-table')).toHaveAttribute(
       'data-show-toolbar',
       'undefined',
+    );
+  });
+
+  it('routes stale agent notices to the agent install commands', () => {
+    mocks.useUnifiedResources.mockReturnValue({
+      error: () => null,
+      loading: () => false,
+      refetch: vi.fn(),
+      resources: () => [
+        makeDockerHost({
+          name: 'docker-old-agent',
+          agent: { agentId: 'agent-docker-old', agentVersion: 'v5.1.34' },
+        }),
+      ],
+    });
+
+    render(() => <DockerPageSurface />);
+
+    expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(
+      'href',
+      '/settings/infrastructure?agentUpdates=1&agents=agent%3Aagent-docker-old',
     );
   });
 

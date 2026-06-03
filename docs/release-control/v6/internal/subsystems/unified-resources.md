@@ -483,6 +483,11 @@ AI-only summary payloads, or page-local heuristics.
    treat top-level `remoteControl` as applied agent runtime truth, and they
    must preserve desired/applied drift or no-report attention when enriching
    resource rows.
+   Platform-page stale-agent notices may consume canonical agent identity from
+   merged resources only to scope the Infrastructure settings update-command
+   route to the affected agents. That scoped lifecycle handoff must not become a
+   new resource-action authority, a page-local command runner, or a substitute
+   for the `/api/connections` fleet command-policy truth described above.
    `internal/unifiedresources/top_level_systems.go`
    Explicit linked-host correlation is canonical here: when Kubernetes node
    ingest has a resolved backing host agent, the registry must merge that node

@@ -146,7 +146,7 @@ describe('StandalonePageSurface', () => {
           type: 'agent',
           platformType: 'agent',
           sources: ['agent'],
-          agent: { agentVersion: 'v5.1.34' },
+          agent: { agentId: 'agent-tower', agentVersion: 'v5.1.34' },
         }),
       ],
       loading: () => false,
@@ -163,7 +163,7 @@ describe('StandalonePageSurface', () => {
     );
     expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(
       'href',
-      '/settings/infrastructure',
+      '/settings/infrastructure?agentUpdates=1&agents=agent%3Aagent-tower',
     );
   });
 

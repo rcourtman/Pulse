@@ -532,6 +532,33 @@ func TestInstallSHRecoversSavedStateForPartialUninstallContext(t *testing.T) {
 	}
 }
 
+func TestInstallSHSupportsSavedStateUpdateMode(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`--update            Update an existing agent using saved connection state`,
+		`UPDATE_ONLY="false"`,
+		`--update) UPDATE_ONLY="true"; shift ;;`,
+		`if [[ "$UPDATE_ONLY" == "true" ]]; then`,
+		`update_conn_env=$(find_connection_state_file || true)`,
+		`recover_connection_state "$update_conn_env"`,
+		`recover_agent_id_from_state_file() {`,
+		`AGENT_ID=$(recover_agent_id_from_state_file || true)`,
+		`No existing Pulse Agent connection state found. Use the install command instead.`,
+		`if [[ "$UPDATE_ONLY" == "true" && "$UPGRADE_MODE" != "true" ]]; then`,
+		`No existing Pulse Agent installation found to update. Use the install command instead.`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing saved-state update mode contract: %s", needle)
+		}
+	}
+}
+
 func TestInstallSHUsesCanonicalServiceLifecycleHelpers(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {

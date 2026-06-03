@@ -112,6 +112,17 @@ product API routes free of maintainer commercial analytics.
 
 ## Shared Boundaries
 
+Infrastructure settings copied agent commands are a shared API/payload boundary
+even when the final command string is assembled in the browser. Selected-row
+upgrade commands may carry fresh token and identity fields when the operator is
+rerunning a known install command for a specific connection, but stale-agent
+update commands opened from platform notices must not serialize API tokens,
+agent IDs, or hostnames into Unix shell payloads. Those commands route through
+the `agentUpdates` settings query for scoped row selection and then call the
+installer-owned `scripts/install.sh --update` saved-state path on the target
+host. Windows remains on the existing token-gated PowerShell payload until its
+installer owns the same saved-state update contract.
+
 Summary-chart response caching is a shared API boundary:
 `internal/api/router.go` may serve a short cached JSON payload for repeated
 infrastructure-summary and workloads-summary requests with the same
@@ -3509,6 +3520,15 @@ The same identity-preservation contract applies to copied upgrade transport:
 shell upgrade payloads must carry `--agent-id` and `--hostname`, and
 PowerShell upgrade payloads must carry `PULSE_AGENT_ID` and `PULSE_HOSTNAME`,
 so upgrade reruns stay bound to the selected governed inventory record.
+That selected-agent upgrade rerun is distinct from the stale-agent update
+commands opened from platform notices. The `agentUpdates` Infrastructure route
+may carry scoped agent connection IDs in the URL so Settings can select the
+affected inventory rows, but Unix-like copied stale-agent update commands must
+not serialize API tokens, agent IDs, or hostnames into the shell payload. They
+must call `scripts/install.sh --update` and let the installer recover the
+saved connection state on the target host. Windows stale-agent update commands
+continue to use the existing token-gated PowerShell install command shape
+until `install.ps1` has its own saved-state update mode.
 That same Unix transport boundary must also preserve shell-safe argument
 encoding: copied shell uninstall and upgrade payloads must quote canonical URL,
 token, agent ID, and hostname arguments so governed lifecycle commands do not

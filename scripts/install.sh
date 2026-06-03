@@ -5,6 +5,7 @@
 #
 # Usage:
 #   curl -fsSL http://pulse/install.sh | bash -s -- --url http://pulse --token <token> [options]
+#   curl -fsSL http://pulse/install.sh | bash -s -- --update --url http://pulse [options]
 #
 # Options:
 #   --enable-host       Enable host metrics (default: true)
@@ -23,6 +24,7 @@
 #   --insecure          Skip TLS certificate verification
 #   --enable-commands   Enable AI command execution on agent (disabled by default)
 #   --health-addr <addr> Health/metrics listener address (default: 127.0.0.1:9191, use "" to disable)
+#   --update            Update an existing agent using saved connection state
 #   --uninstall         Remove the agent
 #
 # Auto-Detection:
@@ -72,6 +74,7 @@ ENABLE_DOCKER=""  # Empty means "auto-detect"
 ENABLE_KUBERNETES=""  # Empty means "auto-detect"
 ENABLE_PROXMOX=""  # Empty means "auto-detect"
 PROXMOX_TYPE=""
+UPDATE_ONLY="false"
 UNINSTALL="false"
 INSECURE="false"
 AGENT_ID=""
@@ -286,6 +289,7 @@ Options:
   --enable-commands       Enable AI command execution
   --health-addr <addr>    Health/metrics listener address (default: 127.0.0.1:9191; use "" to disable)
   --enroll                Exchange bootstrap token for runtime token (deploy wizard)
+  --update                Update an existing agent using saved connection state
   --uninstall             Remove the agent
   --non-interactive       Skip TTY prompts (for automated/scripted installs)
   --token-file <path>     Read token from file (alternative to --token)
@@ -1427,6 +1431,26 @@ find_connection_state_file() {
     return 1
 }
 
+recover_agent_id_from_state_file() {
+    local aid_path=""
+    local qnap_state_dir=""
+    local aid_paths=(/var/lib/pulse-agent/agent-id /boot/config/plugins/pulse-agent/agent-id "$TRUENAS_STATE_DIR/agent-id")
+
+    qnap_state_dir=$(find_qnap_state_dir || true)
+    if [[ -n "$qnap_state_dir" ]]; then
+        aid_paths+=("$qnap_state_dir/agent-id")
+    fi
+
+    for aid_path in "${aid_paths[@]}"; do
+        if [[ -f "$aid_path" ]]; then
+            cat "$aid_path"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 # Save install script and connection details for offline uninstall
 save_connection_info() {
     local state_dir="$1"
@@ -1492,6 +1516,7 @@ while [[ $# -gt 0 ]]; do
         --enable-commands) ENABLE_COMMANDS="true"; shift ;;
         --health-addr) HEALTH_ADDR="$2"; HEALTH_ADDR_SET="true"; shift 2 ;;
         --enroll) ENROLL="true"; shift ;;
+        --update) UPDATE_ONLY="true"; shift ;;
         --uninstall) UNINSTALL="true"; shift ;;
         --agent-id) AGENT_ID="$2"; shift 2 ;;
         --hostname) HOSTNAME_OVERRIDE="$2"; shift 2 ;;
@@ -1536,6 +1561,33 @@ fi
 # --- URL Normalization ---
 # Strip trailing slashes from PULSE_URL to prevent double-slash URLs
 # (e.g., http://host:7655//download/... which would match frontend routes)
+if [[ -n "$PULSE_URL" ]]; then
+    PULSE_URL="${PULSE_URL%/}"
+fi
+
+# --- Update State Recovery ---
+# Update commands are intentionally tokenless for already-installed agents. The
+# installer reuses the canonical saved connection state instead of asking the
+# operator to mint a new install token for a host Pulse already knows about.
+if [[ "$UPDATE_ONLY" == "true" ]]; then
+    if [[ -z "$PULSE_URL" || -z "$PULSE_TOKEN" || -z "$AGENT_ID" || -z "$HOSTNAME_OVERRIDE" || -z "$CURL_CA_BUNDLE" || "$INSECURE" != "true" ]]; then
+        local update_conn_env=""
+        update_conn_env=$(find_connection_state_file || true)
+        if [[ -n "$update_conn_env" ]]; then
+            log_info "Recovering connection details from ${update_conn_env}..."
+            recover_connection_state "$update_conn_env"
+        elif [[ -z "$PULSE_URL" || -z "$PULSE_TOKEN" ]]; then
+            fail "No existing Pulse Agent connection state found. Use the install command instead." "$EXIT_MISSING_ARGS"
+        fi
+        if [[ -z "$AGENT_ID" ]]; then
+            AGENT_ID=$(recover_agent_id_from_state_file || true)
+            if [[ -n "$AGENT_ID" ]]; then
+                log_info "Recovered agent ID from persisted agent-id state."
+            fi
+        fi
+    fi
+fi
+
 if [[ -n "$PULSE_URL" ]]; then
     PULSE_URL="${PULSE_URL%/}"
 fi
@@ -2067,8 +2119,15 @@ if [[ -x "${INSTALL_DIR}/${BINARY_NAME}" ]]; then
     fi
 elif command -v systemctl >/dev/null 2>&1 && systemctl is-enabled --quiet "${AGENT_NAME}" 2>/dev/null; then
     # Service exists but binary is missing - reinstall scenario
+    if [[ "$UPDATE_ONLY" == "true" ]]; then
+        fail "No existing Pulse Agent binary found to update. Use the install command instead." "$EXIT_MISSING_ARGS"
+    fi
     log_info "Agent service exists but binary is missing. Reinstalling..."
     systemctl stop "${AGENT_NAME}" 2>/dev/null || true
+fi
+
+if [[ "$UPDATE_ONLY" == "true" && "$UPGRADE_MODE" != "true" ]]; then
+    fail "No existing Pulse Agent installation found to update. Use the install command instead." "$EXIT_MISSING_ARGS"
 fi
 
 # Install Binary

@@ -222,7 +222,7 @@ describe('KubernetesPageSurface contract', () => {
         name: 'k8s-node-1',
         type: 'agent',
         sources: ['agent', 'kubernetes'],
-        agent: { agentVersion: 'v5.1.34' },
+        agent: { agentId: 'agent-k8s-node-1', agentVersion: 'v5.1.34' },
       }),
     ]);
 
@@ -233,7 +233,7 @@ describe('KubernetesPageSurface contract', () => {
     expect(notice).toHaveTextContent('Kubernetes nodes, workloads, services, storage');
     expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(
       'href',
-      '/settings/infrastructure',
+      '/settings/infrastructure?agentUpdates=1&agents=agent%3Aagent-k8s-node-1',
     );
   });
 

@@ -4,8 +4,8 @@ import ActivityIcon from 'lucide-solid/icons/activity';
 import ServerIcon from 'lucide-solid/icons/server';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import {
+  buildInfrastructureAgentUpdatesPath,
   buildInfrastructureOnboardingPath,
-  buildInfrastructureWorkspacePath,
 } from '@/components/Settings/infrastructureWorkspaceModel';
 import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
 import {
@@ -71,6 +71,9 @@ export function StandalonePageSurface() {
   );
   const outdatedAgentHosts = createMemo(() =>
     collectOutdatedAgentHosts(model().machines, updateStore.versionInfo()?.version),
+  );
+  const outdatedAgentUpdatePath = createMemo(() =>
+    buildInfrastructureAgentUpdatesPath(outdatedAgentHosts().map((host) => host.agentId)),
   );
   const serverVersionDisplay = createMemo(() =>
     formatAgentVersionDisplay(updateStore.versionInfo()?.version),
@@ -158,7 +161,7 @@ export function StandalonePageSurface() {
                   targetVersion={serverVersionDisplay()}
                   missingLabel="agent command support and agent-managed platform detail"
                   copyVariant="latest-detail"
-                  actionHref={buildInfrastructureWorkspacePath()}
+                  actionHref={outdatedAgentUpdatePath()}
                   actionLabel="Open agent upgrade commands"
                 />
                 <Show

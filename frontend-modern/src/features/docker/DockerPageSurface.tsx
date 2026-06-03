@@ -40,7 +40,7 @@ import {
 } from '@/features/platformPage/agentVersion';
 import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
 import { updateStore } from '@/stores/updates';
-import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
+import { buildInfrastructureAgentUpdatesPath } from '@/components/Settings/infrastructureWorkspaceModel';
 
 const DOCKER_RESOURCE_QUERY =
   'type=agent,docker-host,app-container,docker-service,docker-image,docker-volume,docker-network,docker-task,docker-swarm-node,docker-secret,docker-config';
@@ -66,6 +66,9 @@ export function DockerPageSurface() {
   );
   const outdatedAgentHosts = createMemo(() =>
     collectOutdatedAgentHosts(model().hosts, updateStore.versionInfo()?.version),
+  );
+  const outdatedAgentUpdatePath = createMemo(() =>
+    buildInfrastructureAgentUpdatesPath(outdatedAgentHosts().map((host) => host.agentId)),
   );
   const serverVersionDisplay = createMemo(() =>
     formatAgentVersionDisplay(updateStore.versionInfo()?.version),
@@ -112,7 +115,7 @@ export function DockerPageSurface() {
               hosts={outdatedAgentHosts()}
               targetVersion={serverVersionDisplay()}
               missingLabel="images, networks, storage, and Swarm details"
-              actionHref={buildInfrastructureWorkspacePath()}
+              actionHref={outdatedAgentUpdatePath()}
               actionLabel="Open agent upgrade commands"
             />
             <Show when={activeTab() === 'overview'}>

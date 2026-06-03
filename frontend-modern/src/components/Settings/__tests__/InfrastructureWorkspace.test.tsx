@@ -89,9 +89,20 @@ vi.mock('@/stores/sessionPresentationPolicy', () => ({
 vi.mock('../useInfrastructureOperationsState', () => ({
   InfrastructureOperationsStateProvider: (props: { children: unknown }) => <>{props.children}</>,
   useInfrastructureOperationsContext: () => ({
+    acknowledgeNoToken: vi.fn(),
+    commandsUnlocked: () => true,
+    confirmedNoToken: () => true,
+    getAgentConnectionUpgradeCommand: (connection: Connection, installFlags: string[] = []) =>
+      `upgrade ${connection.id}${installFlags.length > 0 ? ` ${installFlags.join(' ')}` : ''}`,
+    getAgentConnectionUpgradeCommandRequiresToken: () => false,
     getUninstallCommand: () => 'curl -fsSL http://pulse/install.sh | bash -s -- --uninstall',
     getWindowsUninstallCommand: () =>
       '$env:PULSE_URL="http://pulse"; $env:PULSE_UNINSTALL="true"; iwr /install.ps1 | iex',
+    handleGenerateToken: vi.fn(),
+    isGeneratingToken: () => false,
+    requiresToken: () => false,
+    setTokenName: vi.fn(),
+    tokenName: () => '',
   }),
 }));
 
@@ -340,6 +351,88 @@ describe('InfrastructureWorkspace', () => {
     });
 
     expect(screen.queryByRole('button', { name: /^Monitor endpoint$/i })).toBeNull();
+  });
+
+  it('opens stale agent update commands from the canonical route', async () => {
+    routeState.search = '?agentUpdates=1&agents=agent%3Aagent-zeus';
+    const primaryConnection = connectionFixture();
+    const attachedAgent = connectionFixture({
+      id: 'agent:agent-zeus',
+      type: 'agent',
+      name: 'zeus-agent',
+      address: 'zeus.lab',
+      surfaces: ['host'],
+      scope: { host: true },
+      source: 'agent',
+      agentVersion: '5.1.34',
+      expectedAgentVersion: '6.0.0-rc.6',
+      agentUpdateAvailable: true,
+      agentIdentity: {
+        hostname: 'zeus',
+        platform: 'linux',
+      },
+      capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+    });
+    const unrelatedStaleAgent = connectionFixture({
+      id: 'agent:agent-other',
+      type: 'agent',
+      name: 'other-agent',
+      address: 'other.lab',
+      surfaces: ['host'],
+      scope: { host: true },
+      source: 'agent',
+      agentVersion: '5.1.34',
+      expectedAgentVersion: '6.0.0-rc.6',
+      agentUpdateAvailable: true,
+      agentIdentity: {
+        hostname: 'other',
+        platform: 'linux',
+      },
+      capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+    });
+    connectionState.connections = [primaryConnection, attachedAgent, unrelatedStaleAgent];
+    connectionState.rows = [
+      {
+        id: primaryConnection.id,
+        ownerType: 'pve',
+        name: 'homelab',
+        subtitle: 'via platform API and Pulse Agent',
+        source: 'both',
+        host: primaryConnection.address,
+        coverageLabels: ['VMs', 'Host telemetry'],
+        statusLabel: 'Active',
+        statusClassName: 'bg-green-100 text-green-800',
+        agentUpdateCount: 1,
+        lastActivityText: '1m ago',
+        ...emptyFleetRow,
+        enabled: true,
+        canEdit: true,
+        canPause: true,
+        canRemove: true,
+        isAgent: false,
+        isCluster: false,
+        attachedConnections: [attachedAgent, unrelatedStaleAgent],
+        members: [],
+        connection: primaryConnection,
+      },
+    ];
+
+    renderWorkspace();
+
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    expect(screen.getByText('Update Pulse Agents')).toBeInTheDocument();
+    expect(screen.getByText('zeus')).toBeInTheDocument();
+    expect(screen.queryByText('other')).not.toBeInTheDocument();
+    expect(screen.getByText(/5\.1\.34 -> 6\.0\.0-rc\.6/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/upgrade agent:agent-zeus --enable-proxmox --proxmox-type pve/),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close agent update commands' }));
+    expect(navigateSpy).toHaveBeenLastCalledWith('/settings/infrastructure', {
+      replace: true,
+      scroll: false,
+    });
   });
 
   it('keeps source groups in the catalog order instead of count order', async () => {

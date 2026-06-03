@@ -1,6 +1,6 @@
 import { useLocation } from '@solidjs/router';
 import { Show, createMemo, type Accessor } from 'solid-js';
-import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
+import { buildInfrastructureAgentUpdatesPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
 import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
 import {
@@ -80,17 +80,16 @@ export function TrueNASPageSurface() {
   const outdatedAgentHosts = createMemo(() =>
     collectOutdatedAgentHosts(model().systems, updateStore.versionInfo()?.version),
   );
+  const outdatedAgentUpdatePath = createMemo(() =>
+    buildInfrastructureAgentUpdatesPath(outdatedAgentHosts().map((host) => host.agentId)),
+  );
   const serverVersionDisplay = createMemo(() =>
     formatAgentVersionDisplay(updateStore.versionInfo()?.version),
   );
 
   return (
     <div data-testid="truenas-page" class="space-y-3">
-      <PlatformSectionTabs
-        tabs={tabs()}
-        active={activeTab()}
-        ariaLabel="TrueNAS sections"
-      />
+      <PlatformSectionTabs tabs={tabs()} active={activeTab()} ariaLabel="TrueNAS sections" />
 
       <Show
         when={!loading() || model().resources.length > 0}
@@ -126,7 +125,7 @@ export function TrueNASPageSurface() {
               targetVersion={serverVersionDisplay()}
               missingLabel="agent-contributed TrueNAS system detail and command support"
               copyVariant="latest-detail"
-              actionHref={buildInfrastructureWorkspacePath()}
+              actionHref={outdatedAgentUpdatePath()}
               actionLabel="Open agent upgrade commands"
             />
             <Show when={activeTab() === 'overview'}>

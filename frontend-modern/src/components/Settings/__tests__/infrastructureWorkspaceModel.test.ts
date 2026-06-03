@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildInfrastructureAgentUpdatesPath,
   buildInfrastructureOnboardingPath,
   buildInfrastructureWorkspacePath,
+  deriveAgentUpdateScopeFromLocation,
+  deriveAgentUpdatesFromLocation,
   deriveAddStepFromLocation,
 } from '../infrastructureWorkspaceModel';
 
@@ -22,6 +25,31 @@ describe('infrastructureWorkspaceModel', () => {
     expect(buildInfrastructureOnboardingPath('unraid')).toBe('/settings/infrastructure?add=unraid');
     expect(buildInfrastructureOnboardingPath('docker')).toBe('/settings/infrastructure?add=docker');
     expect(buildInfrastructureOnboardingPath('vmware')).toBe('/settings/infrastructure?add=vmware');
+  });
+
+  it('builds and derives the canonical agent update command route', () => {
+    expect(buildInfrastructureAgentUpdatesPath()).toBe('/settings/infrastructure?agentUpdates=1');
+    expect(buildInfrastructureAgentUpdatesPath(['agent:agent-delly', 'agent-pi'])).toBe(
+      '/settings/infrastructure?agentUpdates=1&agents=agent%3Aagent-delly&agents=agent%3Aagent-pi',
+    );
+    expect(deriveAgentUpdatesFromLocation('/settings/infrastructure', '?agentUpdates=1')).toBe(
+      true,
+    );
+    expect(
+      deriveAgentUpdateScopeFromLocation(
+        '/settings/infrastructure',
+        '?agentUpdates=1&agents=agent%3Aagent-pi&agents=agent-delly',
+      ),
+    ).toEqual(['agent:agent-delly', 'agent:agent-pi']);
+    expect(deriveAgentUpdatesFromLocation('/settings/infrastructure', '?agentUpdates=0')).toBe(
+      false,
+    );
+    expect(
+      deriveAgentUpdateScopeFromLocation('/settings/infrastructure', '?agentUpdates=0&agents=a'),
+    ).toEqual([]);
+    expect(
+      deriveAgentUpdatesFromLocation('/settings/infrastructure/install', '?agentUpdates=1'),
+    ).toBe(false);
   });
 
   it('derives add steps only from the canonical infrastructure workspace query', () => {

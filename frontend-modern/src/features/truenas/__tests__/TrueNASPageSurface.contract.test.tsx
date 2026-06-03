@@ -140,7 +140,7 @@ describe('TrueNASPageSurface contract', () => {
         id: 'agent:truenas-scale',
         name: 'truenas-scale',
         type: 'agent',
-        agent: { agentVersion: 'v5.1.34' },
+        agent: { agentId: 'agent-truenas-scale', agentVersion: 'v5.1.34' },
       }),
     ]);
 
@@ -155,7 +155,7 @@ describe('TrueNASPageSurface contract', () => {
     );
     expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(
       'href',
-      '/settings/infrastructure',
+      '/settings/infrastructure?agentUpdates=1&agents=agent%3Aagent-truenas-scale',
     );
   });
 });

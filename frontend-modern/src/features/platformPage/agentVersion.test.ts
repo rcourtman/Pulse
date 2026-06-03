@@ -4,6 +4,7 @@ import {
   collectOutdatedAgentHosts,
   compareAgentVersions,
   formatAgentVersionDisplay,
+  hostAgentConnectionID,
   hostAgentVersion,
   parseAgentVersion,
 } from './agentVersion';
@@ -68,23 +69,35 @@ describe('formatAgentVersionDisplay', () => {
   });
 });
 
-const host = (over: Partial<Resource>): Resource => ({ id: 'x', name: 'host', type: 'docker-host', ...over }) as Resource;
+const host = (over: Partial<Resource>): Resource =>
+  ({ id: 'x', name: 'host', type: 'docker-host', ...over }) as Resource;
 
 describe('hostAgentVersion', () => {
   it('reads the docker meta version for a docker host', () => {
-    expect(hostAgentVersion(host({ docker: { agentVersion: 'v6.0.0-rc.5' } as Resource['docker'] }))).toBe(
-      'v6.0.0-rc.5',
-    );
+    expect(
+      hostAgentVersion(host({ docker: { agentVersion: 'v6.0.0-rc.5' } as Resource['docker'] })),
+    ).toBe('v6.0.0-rc.5');
   });
 
   it('falls back to the agent meta version for a plain agent host', () => {
-    expect(hostAgentVersion(host({ agent: { agentVersion: 'v6.0.0-rc.5' } as Resource['agent'] }))).toBe(
-      'v6.0.0-rc.5',
-    );
+    expect(
+      hostAgentVersion(host({ agent: { agentVersion: 'v6.0.0-rc.5' } as Resource['agent'] })),
+    ).toBe('v6.0.0-rc.5');
   });
 
   it('returns undefined when no version is reported', () => {
     expect(hostAgentVersion(host({}))).toBeUndefined();
+  });
+
+  it('normalizes agent connection IDs from agent and Kubernetes metadata', () => {
+    expect(
+      hostAgentConnectionID(host({ agent: { agentId: 'agent-delly' } as Resource['agent'] })),
+    ).toBe('agent:agent-delly');
+    expect(
+      hostAgentConnectionID(
+        host({ kubernetes: { agentId: 'agent:agent-k8s' } as Resource['kubernetes'] }),
+      ),
+    ).toBe('agent:agent-k8s');
   });
 });
 
@@ -95,11 +108,14 @@ describe('collectOutdatedAgentHosts', () => {
     const hosts = [
       host({ name: 'tower', docker: { agentVersion: 'v6.0.0-rc.5' } as Resource['docker'] }),
       host({ name: 'current', docker: { agentVersion: 'v6.0.0-rc.6' } as Resource['docker'] }),
-      host({ name: 'delly', agent: { agentVersion: 'v6.0.0-rc.5' } as Resource['agent'] }),
+      host({
+        name: 'delly',
+        agent: { agentId: 'agent-delly', agentVersion: 'v6.0.0-rc.5' } as Resource['agent'],
+      }),
     ];
     expect(collectOutdatedAgentHosts(hosts, server)).toEqual([
       { name: 'tower', version: 'v6.0.0-rc.5' },
-      { name: 'delly', version: 'v6.0.0-rc.5' },
+      { name: 'delly', version: 'v6.0.0-rc.5', agentId: 'agent:agent-delly' },
     ]);
   });
 
@@ -108,7 +124,9 @@ describe('collectOutdatedAgentHosts', () => {
   });
 
   it('returns nothing when the server version is unknown or unparseable', () => {
-    const hosts = [host({ name: 'tower', docker: { agentVersion: 'v6.0.0-rc.5' } as Resource['docker'] })];
+    const hosts = [
+      host({ name: 'tower', docker: { agentVersion: 'v6.0.0-rc.5' } as Resource['docker'] }),
+    ];
     expect(collectOutdatedAgentHosts(hosts, '')).toEqual([]);
     expect(collectOutdatedAgentHosts(hosts, 'dev')).toEqual([]);
   });
