@@ -1,6 +1,7 @@
 import { For, Show, createMemo, type Component } from 'solid-js';
 import { useSearchParams } from '@solidjs/router';
 import type { FilterDef } from '@/components/shared/FilterBar';
+import { UpdateButton } from '@/components/shared/ContainerUpdateBadge';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import {
@@ -44,6 +45,7 @@ import {
   mapDockerContainerStatus,
   type DockerResourceStatusFilter,
 } from './dockerPageModel';
+import type { DockerContainerUpdateStatus } from '@/types/api';
 import type { Resource } from '@/types/resource';
 
 type DockerNetwork = NonNullable<NonNullable<Resource['docker']>['networks']>[number];
@@ -107,6 +109,55 @@ const updateStatusTitle = (resource: Resource): string => {
     ],
     updateStatusLabel(resource),
   );
+};
+
+const updateLastCheckedMillis = (lastChecked: string | undefined): number => {
+  if (!lastChecked) return 0;
+  const parsed = Date.parse(lastChecked);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const containerUpdateStatus = (resource: Resource): DockerContainerUpdateStatus | undefined => {
+  const update = resource.docker?.updateStatus;
+  if (!update) return undefined;
+
+  const error = asTrimmedString(update.error);
+  if (typeof update.updateAvailable !== 'boolean' && !error) return undefined;
+
+  return {
+    updateAvailable: update.updateAvailable === true,
+    currentDigest: asTrimmedString(update.currentDigest) || undefined,
+    latestDigest: asTrimmedString(update.latestDigest) || undefined,
+    lastChecked: updateLastCheckedMillis(update.lastChecked),
+    error: error || undefined,
+  };
+};
+
+const containerUpdateAction = (
+  resource: Resource,
+):
+  | {
+      agentId: string;
+      containerId: string;
+      containerName: string;
+      updateStatus: DockerContainerUpdateStatus;
+    }
+  | undefined => {
+  const updateStatus = containerUpdateStatus(resource);
+  const agentId = asTrimmedString(resource.docker?.hostSourceId);
+  const containerId = asTrimmedString(resource.docker?.containerId);
+  if (!updateStatus || !agentId || !containerId) return undefined;
+
+  return {
+    agentId,
+    containerId,
+    containerName:
+      asTrimmedString(resource.name) ||
+      asTrimmedString(resource.displayName) ||
+      asTrimmedString(resource.docker?.displayName) ||
+      containerId,
+    updateStatus,
+  };
 };
 
 export const DockerContainersTable: Component<DockerNativeTableProps> = (props) => {
@@ -251,7 +302,7 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
                   >
                     Mounts
                   </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} w-[100px]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} w-[130px]`}>
                     Updates
                   </TableHead>
                 </TableRow>
@@ -270,6 +321,7 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
                     const mounts = () => mountsSummary(resource);
                     const updates = () => updateStatusLabel(resource);
                     const updateTitle = () => updateStatusTitle(resource);
+                    const action = containerUpdateAction(resource);
                     const detailRowId = () => drawer.detailRowId(resource);
                     const isExpanded = () => drawer.isExpanded(resource);
 
@@ -348,9 +400,23 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="block max-w-full truncate" title={updateTitle()}>
-                              {updates()}
-                            </span>
+                            <Show
+                              when={action}
+                              fallback={
+                                <span class="block max-w-full truncate" title={updateTitle()}>
+                                  {updates()}
+                                </span>
+                              }
+                            >
+                              {(updateAction) => (
+                                <UpdateButton
+                                  agentId={updateAction().agentId}
+                                  containerId={updateAction().containerId}
+                                  containerName={updateAction().containerName}
+                                  updateStatus={updateAction().updateStatus}
+                                />
+                              )}
+                            </Show>
                           </TableCell>
                         </TableRow>
                         <PlatformResourceDetailTableRow

@@ -1,8 +1,9 @@
-import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import type { JSX } from 'solid-js';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { MonitoringAPI } from '@/api/monitoring';
 import type { Resource } from '@/types/resource';
 import { DockerContainersTable } from '../DockerContainersTable';
 import { DockerConfigsTable } from '../DockerConfigsTable';
@@ -14,6 +15,26 @@ import { DockerStorageUsageTable } from '../DockerStorageUsageTable';
 import { DockerSwarmNodesTable } from '../DockerSwarmNodesTable';
 import { DockerTasksTable } from '../DockerTasksTable';
 import { DockerVolumesTable } from '../DockerVolumesTable';
+
+vi.mock('@/api/monitoring', () => ({
+  MonitoringAPI: {
+    updateDockerContainer: vi.fn().mockResolvedValue({ success: true }),
+  },
+}));
+
+vi.mock('@/stores/containerUpdates', () => ({
+  clearContainerUpdateState: vi.fn(),
+  getContainerUpdateState: vi.fn(() => undefined),
+  markContainerQueued: vi.fn(),
+  markContainerUpdateError: vi.fn(),
+  markContainerUpdateSuccess: vi.fn(),
+  updateStates: vi.fn(() => ({})),
+}));
+
+vi.mock('@/stores/systemSettings', () => ({
+  areSystemSettingsLoaded: () => true,
+  shouldHideDockerUpdateActions: () => false,
+}));
 
 const makeResource = ({
   id,
@@ -44,6 +65,7 @@ const renderInRouter = (component: () => JSX.Element) =>
 
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
 });
 
 describe('Docker native tables', () => {
@@ -105,6 +127,50 @@ describe('Docker native tables', () => {
     expect(screen.getByText('frontend 172.18.0.2')).toBeInTheDocument();
     expect(screen.getByText('volume:/usr/share/nginx/html (rw)')).toBeInTheDocument();
     expect(screen.getByText('Available')).toBeInTheDocument();
+  });
+
+  it('renders actionable Docker container updates with native agent and container IDs', async () => {
+    renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            docker: {
+              hostSourceId: 'agent-edge',
+              containerId: 'native-container-1',
+              hostname: 'edge-01',
+              image: 'nginx:latest',
+              containerState: 'running',
+              updateStatus: {
+                updateAvailable: true,
+                currentDigest: 'sha256:current',
+                latestDigest: 'sha256:latest',
+                lastChecked: '2026-05-24T13:00:00Z',
+              },
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    const updateButton = screen.getByRole('button', { name: /click to update/i });
+    fireEvent.click(updateButton);
+    fireEvent.click(screen.getByRole('button', { name: /click again to confirm update/i }));
+
+    await waitFor(() =>
+      expect(MonitoringAPI.updateDockerContainer).toHaveBeenCalledWith(
+        'agent-edge',
+        'native-container-1',
+        'edge-web',
+      ),
+    );
   });
 
   it('renders container rows with status mapped from containerState + health + exitCode, attention rows first', () => {
