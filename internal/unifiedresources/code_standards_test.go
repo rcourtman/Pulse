@@ -943,6 +943,7 @@ func TestTopLevelSystemResolverPinsCanonicalInfrastructureCounting(t *testing.T)
 			"match.Confidence < HighConfidenceThreshold",
 			"topLevelSystemGroupingExplanation(",
 			"monitoredSystemCandidateAllowsHostAttachment(candidate)",
+			"isNonUniqueIP(normalizedIP)",
 			"When adding a new top-level monitored-system source, update:",
 		},
 	}

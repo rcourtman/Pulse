@@ -881,6 +881,9 @@ That same frontend-release boundary also owns shared header-composition proof.
 must both run the same `lint:headers` audit so a branch that would be rejected
 by the real publish workflow cannot pass the governed dry run only because the
 rehearsal skipped that header-composition gate.
+That same dry-run backend gate must run non-race Go package tests serially with
+`go test -p 1 ./...` so release SLO proof reflects product behavior rather
+than cross-package contention on 2-core hosted runners.
 That same governed demo-deployment boundary now owns target separation between
 the public stable demo and the opt-in v6 preview demo. `.github/workflows/create-release.yml`,
 `.github/workflows/update-demo-server.yml`, and `.github/workflows/deploy-demo-server.yml`

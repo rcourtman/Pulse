@@ -383,6 +383,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("Prerelease soak hours at rehearsal time", workflow)
         self.assertIn("Planned GA date", workflow)
         self.assertIn("Planned v5 end-of-support date", workflow)
+        self.assertIn("go test -p 1 ./...", workflow)
+        self.assertIn("2-core hosted runners", workflow)
         self.assertIn("resolve_release_promotion.py", release_workflow)
         self.assertIn("render_release_body.py", release_workflow)
         self.assertIn("build_promotion_metadata_section", renderer)

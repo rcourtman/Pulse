@@ -118,6 +118,17 @@ func TestHostnameIPMatchRequiresReview(t *testing.T) {
 	}
 }
 
+func TestIdentityMatcherRejectsUnspecifiedIPIdentity(t *testing.T) {
+	matcher := NewIdentityMatcher()
+	matcher.Add("host-1", ResourceIdentity{
+		IPAddresses: []string{"0.0.0.0", "::"},
+	})
+
+	if candidates := matcher.FindCandidates(ResourceIdentity{IPAddresses: []string{"0.0.0.0", "::"}}); len(candidates) != 0 {
+		t.Fatalf("expected unspecified IP identity to be ignored, got %+v", candidates)
+	}
+}
+
 func TestHostnameMACMatch(t *testing.T) {
 	matcher := NewIdentityMatcher()
 	matcher.Add("host-1", ResourceIdentity{

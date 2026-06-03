@@ -216,6 +216,56 @@ func TestHasMatchingMonitoredSystemDoesNotMergeKubernetesCandidateBySharedAgentI
 	}
 }
 
+func TestMonitoredSystemCandidateAllowsHostAttachment(t *testing.T) {
+	tests := []struct {
+		name      string
+		candidate MonitoredSystemCandidate
+		want      bool
+	}{
+		{
+			name: "rejects kubernetes cluster even with host evidence",
+			candidate: MonitoredSystemCandidate{
+				Type:     ResourceTypeK8sCluster,
+				Hostname: "tower.local",
+				HostURL:  "https://tower.local:6443",
+			},
+			want: false,
+		},
+		{
+			name: "rejects non unique ip evidence",
+			candidate: MonitoredSystemCandidate{
+				Type:    ResourceTypeAgent,
+				HostURL: "http://0.0.0.0",
+			},
+			want: false,
+		},
+		{
+			name: "allows exact hostname for host backed resource",
+			candidate: MonitoredSystemCandidate{
+				Type:     ResourceTypeAgent,
+				Hostname: "tower.local",
+			},
+			want: true,
+		},
+		{
+			name: "allows routable ip for host backed resource",
+			candidate: MonitoredSystemCandidate{
+				Type:    ResourceTypeAgent,
+				HostURL: "https://10.20.30.40:9443",
+			},
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := monitoredSystemCandidateAllowsHostAttachment(tt.candidate); got != tt.want {
+				t.Fatalf("monitoredSystemCandidateAllowsHostAttachment() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func assertTopLevelSystemGroupPairs(t *testing.T, resolver TopLevelSystemResolver, same, different [][2]string) {
 	t.Helper()
 

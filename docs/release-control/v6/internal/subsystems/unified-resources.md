@@ -1456,10 +1456,14 @@ presentation-only and must not participate in monitored-system counting.
 URL-backed host fields must be normalized down to canonical hostnames before
 they participate in exact-host fallback attachment, and Kubernetes cluster
 ownership metadata such as `AgentID` must not collapse a cluster into the
-underlying host's monitored-system identity. The canonical resolver coverage
-is pinned by an explicit top-level source matrix and mixed-environment
-characterization tests so new top-level sources cannot quietly bypass the
-counting contract.
+underlying host's monitored-system identity. Production grouping and monitored
+system candidate previews must both flow through
+`monitoredSystemCandidateAllowsHostAttachment(candidate)` so Kubernetes cluster
+exclusions and non-unique IP filtering cannot drift between those paths.
+Unspecified addresses such as `0.0.0.0` and `::` are not identity evidence for
+host attachment. The canonical resolver coverage is pinned by an explicit
+top-level source matrix and mixed-environment characterization tests so new
+top-level sources cannot quietly bypass the counting contract.
 That same resolver now also owns monitored-system grouping explanations. When
 one counted system includes multiple top-level collection paths, the resolver
 must record the actual canonical merge evidence it used, expose sanitized

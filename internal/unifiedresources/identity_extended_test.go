@@ -59,6 +59,8 @@ func TestIsNonUniqueIP(t *testing.T) {
 		expected bool
 	}{
 		{"", true},
+		{"0.0.0.0", true},
+		{"::", true},
 		{"127.0.0.1", true},
 		{"127.0.1.1", true},
 		{"::1", true},

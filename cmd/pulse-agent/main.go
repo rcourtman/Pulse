@@ -806,7 +806,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	logLevelFlag := fs.String("log-level", defaultLogLevel(envLogLevel), "Log level")
 
 	enableHostFlag := fs.Bool("enable-host", defaultEnableHost, "Enable Host Agent module")
-	enableDockerFlag := fs.Bool("enable-docker", defaultEnableDocker, "Enable Docker / Podman collection module")
+	enableDockerFlag := fs.Bool("enable-docker", defaultEnableDocker, "Enable Docker / Podman Agent module")
 	enableKubernetesFlag := fs.Bool("enable-kubernetes", defaultEnableKubernetes, "Enable Kubernetes Agent module")
 	enableProxmoxFlag := fs.Bool("enable-proxmox", defaultEnableProxmox, "Enable Proxmox mode (creates API token, registers node)")
 	proxmoxTypeFlag := fs.String("proxmox-type", envProxmoxType, "Proxmox type: pve or pbs (auto-detected if not specified)")

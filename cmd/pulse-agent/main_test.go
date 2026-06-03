@@ -56,6 +56,7 @@ func TestDockerRuntimeHelpUsesDockerPodmanCopy(t *testing.T) {
 	}
 	for _, stale := range []string{
 		"Enable Docker Agent module",
+		"Enable Docker / Podman collection module",
 		"Container runtime: auto, docker, or podman (default: auto)",
 		"Force container runtime: docker, podman, or auto",
 	} {

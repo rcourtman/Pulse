@@ -734,7 +734,9 @@ profile and assignment columns, but embedded table framing must route through
    `--enable-docker` and `--docker-runtime` flag names for compatibility, but
    help text and inline comments must describe the module and runtime as
    Docker / Podman rather than exposing the generic container-runtime family
-   label.
+   label. The `--enable-docker` help text must use the operator-facing
+   "Enable Docker / Podman Agent module" wording instead of leaking the
+   implementation-level collection-module name.
    The CLI entrypoint also owns the local Docker / Podman privacy opt-out:
    when `--enable-docker=false` or `PULSE_ENABLE_DOCKER=false` is set on
    the host, auto-detection and remote config must not start the Docker /

@@ -197,7 +197,9 @@ jobs:
           cache: true
 
       - name: Run backend tests
-        run: go test ./...
+        # Serial package execution keeps non-race SLO tests meaningful on
+        # 2-core hosted runners instead of measuring cross-package contention.
+        run: go test -p 1 ./...
 
       - name: Prepare integration test dependencies
         working-directory: tests/integration

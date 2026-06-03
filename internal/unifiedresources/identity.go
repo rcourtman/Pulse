@@ -55,6 +55,9 @@ func isNonUniqueIP(ip string) bool {
 	if ip == "" {
 		return true
 	}
+	if parsed := net.ParseIP(ip); parsed != nil && parsed.IsUnspecified() {
+		return true
+	}
 	if ip == "127.0.0.1" || ip == "::1" || strings.HasPrefix(ip, "127.") {
 		return true
 	}

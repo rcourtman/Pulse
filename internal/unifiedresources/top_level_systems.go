@@ -511,10 +511,43 @@ func uniqueBetterTopLevelSystemTarget(
 }
 
 func monitoredSystemResourceAllowsHostAttachment(resource *Resource) bool {
-	if resource == nil || CanonicalResourceType(resource.Type) == ResourceTypeK8sCluster {
+	if resource == nil {
 		return false
 	}
-	return len(topLevelSystemExactHosts(*resource)) > 0 || len(topLevelSystemExactIPs(*resource)) > 0
+
+	hosts := topLevelSystemExactHosts(*resource)
+	ips := topLevelSystemExactIPs(*resource)
+	candidate := MonitoredSystemCandidate{
+		Type: CanonicalResourceType(resource.Type),
+	}
+	if orderedHosts := topLevelSystemSortedSet(hosts); len(orderedHosts) > 0 {
+		candidate.Hostname = orderedHosts[0]
+	}
+	if orderedIPs := topLevelSystemSortedSet(ips); len(orderedIPs) > 0 {
+		candidate.HostURL = orderedIPs[0]
+	}
+	return monitoredSystemCandidateAllowsHostAttachment(candidate)
+}
+
+func monitoredSystemCandidateAllowsHostAttachment(candidate MonitoredSystemCandidate) bool {
+	if CanonicalResourceType(candidate.Type) == ResourceTypeK8sCluster {
+		return false
+	}
+	for _, raw := range []string{
+		candidate.Hostname,
+		extractHostname(candidate.HostURL),
+	} {
+		if normalizedIP := NormalizeIP(raw); normalizedIP != "" {
+			if !isNonUniqueIP(normalizedIP) {
+				return true
+			}
+			continue
+		}
+		if topLevelSystemNormalizeHost(raw) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func topLevelSystemGroupID(group topLevelSystemResolvedGroup) string {
