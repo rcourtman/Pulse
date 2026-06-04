@@ -1889,6 +1889,74 @@ func TestCheckBackupsVMIDCollisionNoNamespace(t *testing.T) {
 	}
 }
 
+func TestCheckBackupsTypeMismatchDoesNotAttributeToWrongGuest(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:      true,
+		WarningDays:  3,
+		CriticalDays: 5,
+	}
+	m.mu.Unlock()
+
+	now := time.Now()
+
+	// Only an LXC container exists with vmid 101...
+	guestsByKey := map[string]GuestLookup{
+		"pve1-node1-101": {
+			ResourceID: "lxc/101",
+			Name:       "ct-101",
+			Instance:   "pve1",
+			Node:       "node1",
+			Type:       "lxc",
+			VMID:       101,
+		},
+	}
+	guestsByVMID := map[string][]GuestLookup{
+		"101": {guestsByKey["pve1-node1-101"]},
+	}
+
+	// ...but the backup is for a VM with the same vmid (no namespace -> VMID path).
+	rollups := []recovery.ProtectionRollup{
+		{
+			RollupID: "ext:pbs-typed-101",
+			SubjectRef: &recovery.ExternalRef{
+				Type: "proxmox-vm",
+				Name: "101",
+				ID:   "101",
+			},
+			LastSuccessAt: ptrTime(now.Add(-30 * 24 * time.Hour)),
+			LastOutcome:   recovery.OutcomeSuccess,
+			Providers:     []recovery.Provider{recovery.ProviderProxmoxPBS},
+		},
+	}
+
+	m.CheckBackups(rollups, guestsByKey, guestsByVMID)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// The vm backup must not be attributed to the lxc container.
+	for storageKey, alert := range m.activeAlerts {
+		key := effectiveAlertID(alert, storageKey)
+		if strings.Contains(key, "pve1-node1-101") {
+			t.Errorf("vm backup must not be attributed to lxc guest, found key %q", key)
+		}
+	}
+
+	// It should still surface as the canonical rollup-backed (orphaned) alert.
+	if !testHasActiveAlert(t, m, buildCanonicalStateID("backup-subject:ext-pbs-typed-101", "backup-subject:ext-pbs-typed-101-backup-age")) {
+		var keys []string
+		for storageKey, active := range m.activeAlerts {
+			keys = append(keys, effectiveAlertID(active, storageKey))
+		}
+		t.Fatalf("expected canonical rollup-backed alert, found keys: %v", keys)
+	}
+}
+
 func TestCheckBackupsHandlesPmgBackups(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()

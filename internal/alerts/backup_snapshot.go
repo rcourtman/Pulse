@@ -171,6 +171,49 @@ func normalizeBackupGuestType(guestType string) string {
 	}
 }
 
+// backupGuestTypeKnown reports whether the type resolves to a concrete guest
+// kind (qemu/lxc). Host/storage/unknown subjects return false so type filtering
+// is skipped for them.
+func backupGuestTypeKnown(guestType string) bool {
+	switch normalizeBackupGuestType(guestType) {
+	case "qemu", "lxc":
+		return true
+	default:
+		return false
+	}
+}
+
+// guestMatchesBackupType reports whether a candidate guest is the same kind as
+// the backup. A backup with an unknown/host type matches anything; a guest with
+// an unknown type never matches a typed backup. Prevents a vm backup with
+// vmid=101 from being attributed to an lxc container with the same vmid (and
+// vice-versa), which would otherwise suppress the orphaned-backup alert.
+func guestMatchesBackupType(guest GuestLookup, backupType string) bool {
+	if !backupGuestTypeKnown(backupType) {
+		return true
+	}
+	if !backupGuestTypeKnown(guest.Type) {
+		return false
+	}
+	return normalizeBackupGuestType(guest.Type) == normalizeBackupGuestType(backupType)
+}
+
+// filterGuestsByBackupType keeps only the candidates whose kind matches the
+// backup type. Returns the input unchanged when the backup type is not a
+// concrete guest kind.
+func filterGuestsByBackupType(guests []GuestLookup, backupType string) []GuestLookup {
+	if !backupGuestTypeKnown(backupType) {
+		return guests
+	}
+	filtered := make([]GuestLookup, 0, len(guests))
+	for _, guest := range guests {
+		if guestMatchesBackupType(guest, backupType) {
+			filtered = append(filtered, guest)
+		}
+	}
+	return filtered
+}
+
 func backupOrphanInventoryReady(scope *BackupInventoryScope, record backupRecord) bool {
 	if scope == nil || scope.PVEOrphanInventoryReady == nil {
 		return true
@@ -594,6 +637,11 @@ func (m *Manager) CheckBackupsWithInventory(
 			if inst, nd, vmid, ok := parseGuestID(ref.ID); ok {
 				key = BuildGuestKey(inst, nd, vmid)
 				info = guestsByKey[key]
+				// A vm and a container can share instance:node:vmid; never
+				// attribute the backup to a guest of the wrong kind.
+				if !guestMatchesBackupType(info, subjectType) {
+					info = GuestLookup{}
+				}
 				instance = inst
 				node = nd
 				vmID = strconv.Itoa(vmid)
@@ -609,7 +657,9 @@ func (m *Manager) CheckBackupsWithInventory(
 			if vmidStr != "" {
 				if vmid, err := strconv.Atoi(vmidStr); err == nil && vmid > 0 {
 					vmID = vmidStr
-					guests := guestsByVMID[vmidStr]
+					// Drop same-VMID guests of the wrong kind so a vm backup is
+					// not matched to an lxc container (or vice-versa).
+					guests := filterGuestsByBackupType(guestsByVMID[vmidStr], subjectType)
 					if len(guests) == 1 {
 						info = guests[0]
 					} else if len(guests) > 1 && strings.TrimSpace(ref.Namespace) != "" {
