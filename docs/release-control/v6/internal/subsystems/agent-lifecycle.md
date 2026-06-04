@@ -427,6 +427,11 @@ custom subnet selection a full-row operator control, not a narrow or hidden
 input target; common subnet chips and the custom subnet field must share the
 same environment-override and in-flight-save lock semantics as the scan-scope
 selector.
+Adjacent Assistant resource-context handling in `internal/api/ai_handler.go`
+may reference agent-backed resources only as selected-resource, model-only
+context. It must not mutate agent lifecycle state, start agent discovery, or
+grant agent command authority unless the request flows through the governed
+agent/action execution contract.
 Reported agent-backed host profiles must be visible at the source-manager
 grouping level without changing the canonical connection type: an Unraid agent
 row stays `agent` internally, but the connected-systems table groups it under

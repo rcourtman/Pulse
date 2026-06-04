@@ -999,6 +999,11 @@ not a replacement status card, CTA band, or page-local nested card.
     plain select options. The picker must also constrain its dropdown and
     internal result list to the available viewport height so settings model
     catalogs remain usable on mobile and tablet layouts with bottom navigation.
+    Gateway-routed model choices must not look like direct-provider choices:
+    the shared picker, System AI settings status strip, and per-surface
+    inherited-default descriptions must render OpenRouter-hosted provider
+    models with an explicit `via OpenRouter` route label while leaving direct
+    DeepSeek/OpenAI/Anthropic/Gemini/Ollama selections unqualified.
     Platform-first top-level pages registered through
     `frontend-modern/src/App.tsx` must stay chrome-only and route through the
     canonical app shell: each per-platform surface owns navigation and sub-tab

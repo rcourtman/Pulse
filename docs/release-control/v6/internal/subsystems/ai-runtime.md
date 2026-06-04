@@ -81,6 +81,12 @@ runtime cost control, and shared AI transport surfaces.
    management surface.
 5. Add or change AI usage/cost dashboard presentation through `frontend-modern/src/components/AI/AICostDashboard.tsx` and `frontend-modern/src/utils/aiCostPresentation.ts`
 6. Add or change AI provider, control-level, or chat/session presentation through `frontend-modern/src/components/AI/Chat/`, `frontend-modern/src/utils/aiProviderPresentation.ts`, `frontend-modern/src/utils/aiProviderHealthPresentation.ts`, `frontend-modern/src/utils/aiControlLevelPresentation.ts`, `frontend-modern/src/utils/aiChatPresentation.ts`, and `frontend-modern/src/utils/aiSessionDiffPresentation.ts`
+   AI provider/model presentation must preserve the model transport route when
+   the selected provider is a gateway. OpenRouter-routed model IDs such as
+   `openrouter:deepseek/...` must render with an explicit `via OpenRouter`
+   label in the shared picker, System AI settings status, and inherited default
+   descriptions unless the server-supplied model name already carries that
+   route. Direct provider models must not gain a gateway label.
 7. Keep AI chat presentation helpers aligned through `frontend-modern/src/components/AI/Chat/` and the shared `frontend-modern/src/utils/textPresentation.ts`
 8. Keep assistant drawer context, session, and org-switch reset state aligned through the shared `frontend-modern/src/stores/aiChat.ts` boundary instead of letting `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, or feature callers fork their own assistant shell state
    That shared drawer ownership also covers passive resource reads while the
@@ -201,6 +207,11 @@ runtime cost control, and shared AI transport surfaces.
    tool call, must use the safe handle for scoped reads, must refuse raw
    provider/config/environment/secret-bearing context expansion, and must not
    leak configured forbidden resource details in content or tool inputs.
+   Context-only resource handoff turns must be enforced at the tool-manifest
+   boundary, not only by prompt wording: unless the operator explicitly asks for
+   live runtime verification, a read attempt, or discovery execution, the
+   Assistant loop must receive no tools and must answer from the attached
+   context or state that Pulse does not currently have that fact.
    Resource-context model packs and drawer handoff briefings must carry the
    canonical discovery readiness state (`fresh`, `stale`, `missing`, `running`,
    `failed`, `unavailable`, or `unsupported`) with provenance and freshness

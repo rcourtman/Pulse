@@ -326,11 +326,11 @@ describe('AISettings model loading error states', () => {
     renderComponent();
 
     const pickerButton = await screen.findByTitle('Select shared default model');
-    expect(screen.getByText('MiniMax: MiniMax M2.5')).toBeInTheDocument();
+    expect(screen.getByText('MiniMax: MiniMax M2.5 via OpenRouter')).toBeInTheDocument();
 
     fireEvent.click(pickerButton);
 
-    expect(screen.queryByText('Legacy Model V1')).not.toBeInTheDocument();
+    expect(screen.queryByText('Legacy Model V1 via OpenRouter')).not.toBeInTheDocument();
     expect(screen.queryByText('Claude Sonnet 4')).not.toBeInTheDocument();
     expect(screen.getByText('Show 1 older models')).toBeInTheDocument();
 
@@ -338,7 +338,46 @@ describe('AISettings model loading error states', () => {
       target: { value: 'legacy' },
     });
 
-    expect(screen.getByText('Legacy Model V1')).toBeInTheDocument();
+    expect(screen.getByText('Legacy Model V1 via OpenRouter')).toBeInTheDocument();
+  });
+
+  it('shows the OpenRouter route for a gateway-hosted DeepSeek default model', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      model: 'openrouter:deepseek/deepseek-v4-pro',
+      openrouter_configured: true,
+      deepseek_configured: true,
+      configured_providers: ['openrouter', 'deepseek'],
+    });
+    getModelsMock.mockResolvedValue({
+      models: [
+        {
+          id: 'openrouter:deepseek/deepseek-v4-pro',
+          name: 'DeepSeek: DeepSeek V4 Pro',
+          provider: 'openrouter',
+          notable: true,
+        },
+        {
+          id: 'deepseek:deepseek-v4-pro',
+          name: 'DeepSeek: DeepSeek V4 Pro',
+          provider: 'deepseek',
+          notable: true,
+        },
+      ],
+    });
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(screen.getByTitle('Select shared default model')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('DeepSeek: DeepSeek V4 Pro via OpenRouter')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Default: DeepSeek: DeepSeek V4 Pro via OpenRouter/),
+    ).toBeInTheDocument();
   });
 
   it('hides autonomous controls when auto-fix is locked and upgrade prompts are hidden', async () => {

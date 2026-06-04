@@ -14,12 +14,14 @@ const models: ModelInfo[] = [
     name: 'MiniMax: MiniMax M2.5',
     description: 'Current OpenRouter model',
     notable: true,
+    provider: 'openrouter',
   },
   {
     id: 'openrouter:legacy/model-v1',
     name: 'Legacy Model V1',
     description: 'Older provider catalog entry',
     notable: false,
+    provider: 'openrouter',
   },
   {
     id: 'openai:gpt-5.1-mini',
@@ -41,10 +43,45 @@ describe('AIModelPicker', () => {
 
     fireEvent.click(screen.getByTitle('Select shared default model'));
 
-    expect(screen.getAllByText('MiniMax: MiniMax M2.5').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('MiniMax: MiniMax M2.5 via OpenRouter').length).toBeGreaterThan(0);
     expect(screen.getByText('GPT-5.1 Mini')).toBeInTheDocument();
-    expect(screen.queryByText('Legacy Model V1')).not.toBeInTheDocument();
+    expect(screen.queryByText('Legacy Model V1 via OpenRouter')).not.toBeInTheDocument();
     expect(screen.getByText('Show 1 older models')).toBeInTheDocument();
+  });
+
+  it('labels gateway-routed selected models with the transport provider', () => {
+    const routeModels: ModelInfo[] = [
+      {
+        id: 'openrouter:deepseek/deepseek-v4-pro',
+        name: 'DeepSeek: DeepSeek V4 Pro',
+        provider: 'openrouter',
+        notable: true,
+      },
+      {
+        id: 'deepseek:deepseek-v4-pro',
+        name: 'DeepSeek: DeepSeek V4 Pro',
+        provider: 'deepseek',
+        notable: true,
+      },
+    ];
+
+    render(() => (
+      <AIModelPicker
+        models={routeModels}
+        selectedModel="openrouter:deepseek/deepseek-v4-pro"
+        onModelSelect={vi.fn()}
+        title="Select shared default model"
+      />
+    ));
+
+    expect(screen.getByText('DeepSeek: DeepSeek V4 Pro via OpenRouter')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle('Select shared default model'));
+
+    expect(screen.getAllByText('DeepSeek: DeepSeek V4 Pro via OpenRouter').length).toBeGreaterThan(
+      0,
+    );
+    expect(screen.getByText('DeepSeek: DeepSeek V4 Pro')).toBeInTheDocument();
   });
 
   it('constrains the dropdown to the available mobile viewport height', () => {
@@ -94,7 +131,7 @@ describe('AIModelPicker', () => {
       target: { value: 'legacy' },
     });
 
-    expect(screen.getByText('Legacy Model V1')).toBeInTheDocument();
+    expect(screen.getByText('Legacy Model V1 via OpenRouter')).toBeInTheDocument();
     expect(screen.queryByText('Show 1 older models')).not.toBeInTheDocument();
   });
 
@@ -114,7 +151,7 @@ describe('AIModelPicker', () => {
       target: { value: 'minimax' },
     });
 
-    expect(screen.getByText('MiniMax: MiniMax M2.5')).toBeInTheDocument();
+    expect(screen.getByText('MiniMax: MiniMax M2.5 via OpenRouter')).toBeInTheDocument();
     expect(screen.queryByText('Use "minimax"')).not.toBeInTheDocument();
 
     fireEvent.keyDown(screen.getByPlaceholderText('Search or enter model ID'), { key: 'Enter' });
@@ -134,7 +171,7 @@ describe('AIModelPicker', () => {
 
     fireEvent.click(screen.getByTitle('Select shared default model'));
 
-    expect(screen.getAllByText('Legacy Model V1').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Legacy Model V1 via OpenRouter').length).toBeGreaterThan(0);
     expect(screen.queryByText('Show 1 older models')).not.toBeInTheDocument();
   });
 

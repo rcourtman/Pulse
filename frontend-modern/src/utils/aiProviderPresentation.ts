@@ -1,4 +1,4 @@
-import type { AIProvider } from '@/types/ai';
+import type { AIProvider, ModelInfo } from '@/types/ai';
 
 export const AI_PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   anthropic: 'Anthropic',
@@ -46,3 +46,47 @@ export function getProviderFromModelId(modelId: string): AIProvider | string {
   }
   return 'ollama';
 }
+
+type AIModelRouteLabelInput =
+  | string
+  | (Pick<ModelInfo, 'id'> & Partial<Pick<ModelInfo, 'name' | 'provider'>>);
+
+const GATEWAY_MODEL_PROVIDERS = new Set<string>(['openrouter']);
+
+const modelIdForLabel = (model: AIModelRouteLabelInput): string =>
+  typeof model === 'string' ? model.trim() : model.id.trim();
+
+const baseModelLabel = (model: AIModelRouteLabelInput): string => {
+  if (typeof model !== 'string') {
+    const name = model.name?.trim();
+    if (name) {
+      return name;
+    }
+  }
+  const id = modelIdForLabel(model);
+  return id.split(':').pop() || id;
+};
+
+const transportProviderForLabel = (model: AIModelRouteLabelInput): string => {
+  if (typeof model !== 'string') {
+    const provider = model.provider?.trim();
+    if (provider) {
+      return provider;
+    }
+  }
+  const id = modelIdForLabel(model);
+  return id ? getProviderFromModelId(id) : '';
+};
+
+export const formatAIModelRouteLabel = (model: AIModelRouteLabelInput): string => {
+  const label = baseModelLabel(model);
+  const provider = transportProviderForLabel(model);
+  if (!provider || !GATEWAY_MODEL_PROVIDERS.has(provider)) {
+    return label;
+  }
+  const providerName = getAIProviderDisplayName(provider);
+  if (!providerName || label.toLowerCase().includes(providerName.toLowerCase())) {
+    return label;
+  }
+  return `${label} via ${providerName}`;
+};

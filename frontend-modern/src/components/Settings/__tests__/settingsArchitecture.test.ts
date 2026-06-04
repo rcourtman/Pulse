@@ -3,6 +3,7 @@ import settingsSource from '../Settings.tsx?raw';
 import settingsDialogsSource from '../SettingsDialogs.tsx?raw';
 import settingsPageShellSource from '../SettingsPageShell.tsx?raw';
 import aiSettingsDialogsSource from '../AISettingsDialogs.tsx?raw';
+import aiSettingsStatusAndActionsSource from '../AISettingsStatusAndActions.tsx?raw';
 import aiChatMaintenanceSectionSource from '../AIChatMaintenanceSection.tsx?raw';
 import aiModelSelectionSectionSource from '../AIModelSelectionSection.tsx?raw';
 import aiProviderConfigurationSectionSource from '../AIProviderConfigurationSection.tsx?raw';
@@ -565,6 +566,9 @@ describe('settings architecture guardrails', () => {
     expect(aiModelSelectionSectionSource).toContain(
       'searchPlaceholder="Search configured provider models"',
     );
+    expect(aiModelSelectionSectionSource).toContain('formatAIModelRouteLabel(match || trimmed)');
+    expect(aiSettingsStatusAndActionsSource).toContain('formatAIModelRouteLabel(match || modelId)');
+    expect(aiSettingsStatusAndActionsSource).not.toContain("model?.split(':').pop()");
     expect(aiModelSelectionSectionSource).not.toContain('<select');
     expect(aiModelSelectionSectionSource).not.toContain('<optgroup');
 

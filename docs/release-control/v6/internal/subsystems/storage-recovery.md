@@ -564,6 +564,12 @@ recovery scope, or a storage/recovery-owned secret source.
     explanation context, but must not treat the handoff resource or action
     reference as backup freshness, restore eligibility, recovery execution
     authority, storage health truth, or a storage-local approval shortcut.
+    Resource-context Assistant handoffs through `internal/api/ai_handler.go`
+    follow the same adjacent-boundary rule: storage or recovery resources may
+    enter Assistant only as selected-resource, model-only context, not as a
+    provider command, recovery action, raw path/config disclosure, or
+    storage/recovery execution authority unless a governed action or recovery
+    contract explicitly owns that operation.
     That same adjacent boundary also keeps the retired Patrol quickstart
     contract out of storage/recovery ownership: shared AI handlers no longer
     expose active quickstart credit, token, or hosted-model provider state, and

@@ -2439,7 +2439,10 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		if storedMetadata, err := svc.GetModelHandoffMetadata(ctx, req.SessionID); err != nil {
 			log.Debug().Err(err).Str("session_id", req.SessionID).Msg("Unable to load stored Assistant handoff metadata")
 		} else {
-			handoffMetadata = chat.NormalizeHandoffMetadata(storedMetadata)
+			storedMetadata = chat.NormalizeHandoffMetadata(storedMetadata)
+			if storedMetadata.Kind == "patrol_run" {
+				handoffMetadata = storedMetadata
+			}
 		}
 	}
 	if findingID == "" && handoffMetadata.Kind == "patrol_run" {

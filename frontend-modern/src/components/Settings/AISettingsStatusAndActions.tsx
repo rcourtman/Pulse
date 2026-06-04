@@ -1,5 +1,6 @@
 import { Component, Show } from 'solid-js';
 import type { AISettingsState } from '@/components/Settings/useAISettingsState';
+import { formatAIModelRouteLabel } from '@/utils/aiProviderPresentation';
 
 interface AISettingsStatusAndActionsProps {
   state: AISettingsState;
@@ -7,6 +8,14 @@ interface AISettingsStatusAndActionsProps {
 
 export const AISettingsStatusAndActions: Component<AISettingsStatusAndActionsProps> = (props) => {
   const { state } = props;
+  const defaultModelLabel = () => {
+    const modelId = state.settings()?.model?.trim();
+    if (!modelId) {
+      return '';
+    }
+    const match = state.availableModels().find((model) => model.id === modelId);
+    return formatAIModelRouteLabel(match || modelId);
+  };
 
   return (
     <>
@@ -20,7 +29,7 @@ export const AISettingsStatusAndActions: Component<AISettingsStatusAndActionsPro
               <span class="text-xs font-medium">{state.settingsReadiness().summary}</span>
               <Show when={state.settings()?.configured && state.settings()?.model}>
                 <span class="block sm:inline text-xs opacity-75 sm:ml-2">
-                  • Default: {state.settings()?.model?.split(':').pop() || state.settings()?.model}
+                  • Default: {defaultModelLabel()}
                 </span>
               </Show>
             </div>

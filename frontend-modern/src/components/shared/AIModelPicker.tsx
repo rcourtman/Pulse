@@ -5,7 +5,11 @@ import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import { SearchField } from '@/components/shared/SearchField';
 import type { ModelInfo } from '@/types/ai';
 import { AI_CHAT_MODEL_SELECTOR_EMPTY_STATE } from '@/utils/aiChatPresentation';
-import { getAIProviderDisplayName, getProviderFromModelId } from '@/utils/aiProviderPresentation';
+import {
+  formatAIModelRouteLabel,
+  getAIProviderDisplayName,
+  getProviderFromModelId,
+} from '@/utils/aiProviderPresentation';
 
 type AIModelPickerDefaultOption = {
   label: string;
@@ -141,9 +145,9 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
     }
     const match = props.models.find((model) => model.id === selected);
     if (match) {
-      return match.name || match.id.split(':').pop() || match.id;
+      return formatAIModelRouteLabel(match);
     }
-    return selected;
+    return formatAIModelRouteLabel(selected);
   });
 
   const dropdownStyle = createMemo(() => {
@@ -331,7 +335,7 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
                         class={`w-full px-3 py-2 text-left text-sm hover:bg-surface-hover ${selectedModel() === model.id ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
                       >
                         <div class="font-medium text-base-content">
-                          {model.name || model.id.split(':').pop() || model.id}
+                          {formatAIModelRouteLabel(model)}
                         </div>
                         <Show when={model.description}>
                           <div class="line-clamp-2 text-[11px] text-muted">{model.description}</div>

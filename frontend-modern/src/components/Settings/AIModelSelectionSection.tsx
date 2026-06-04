@@ -5,7 +5,11 @@ import type { AISettingsState } from '@/components/Settings/useAISettingsState';
 import { AIModelPicker } from '@/components/shared/AIModelPicker';
 import { formField, labelClass, controlClass } from '@/components/shared/Form';
 import { AI_SETTINGS_MODEL_OVERRIDES_TITLE } from '@/utils/aiSettingsPresentation';
-import { getAIProviderDisplayName, getProviderFromModelId } from '@/utils/aiProviderPresentation';
+import {
+  formatAIModelRouteLabel,
+  getAIProviderDisplayName,
+  getProviderFromModelId,
+} from '@/utils/aiProviderPresentation';
 
 interface AIModelSelectionSectionProps {
   state: AISettingsState;
@@ -158,7 +162,7 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
       return '';
     }
     const match = state.availableModels().find((model) => model.id === trimmed);
-    return match?.name || trimmed.split(':').pop() || trimmed;
+    return formatAIModelRouteLabel(match || trimmed);
   };
   const selectableModels = (selectedModel: string) => {
     const selected = selectedModel.trim();
@@ -313,7 +317,9 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
             <span class="text-sm font-medium text-base-content">
               {AI_SETTINGS_MODEL_OVERRIDES_TITLE}
             </span>
-            <Show when={state.form.chatModel || state.form.patrolModel || state.form.discoveryModel}>
+            <Show
+              when={state.form.chatModel || state.form.patrolModel || state.form.discoveryModel}
+            >
               <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
                 Customized
               </span>
@@ -424,12 +430,10 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
               <PatrolPreflightControl state={state} />
             </div>
             <div>
-              <label class="block text-xs font-medium text-muted mb-0.5">
-                Discovery Model
-              </label>
+              <label class="block text-xs font-medium text-muted mb-0.5">Discovery Model</label>
               <p class="text-[11px] text-muted mb-1">
-                Used for one-shot service identification on a single resource — a cheaper model
-                like Haiku is usually sufficient.
+                Used for one-shot service identification on a single resource — a cheaper model like
+                Haiku is usually sufficient.
               </p>
               <Show
                 when={discoveryModelOptions().length > 0}

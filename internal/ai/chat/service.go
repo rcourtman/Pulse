@@ -531,11 +531,19 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	handoffActions := normalizeHandoffActions(req.HandoffActions)
 	handoffMetadata := NormalizeHandoffMetadata(req.HandoffMetadata)
 	handoffFindingID := strings.TrimSpace(req.FindingID)
+	handoffMetadataCarriesEnvelope := !handoffMetadataEmpty(handoffMetadata)
+	if handoffMetadata.Kind == sessionHandoffKindResourceContext &&
+		handoffFindingID == "" &&
+		handoffContext == "" &&
+		len(handoffResources) == 0 &&
+		len(handoffActions) == 0 {
+		handoffMetadataCarriesEnvelope = false
+	}
 	hasRequestHandoffEnvelope := handoffFindingID != "" ||
 		handoffContext != "" ||
 		len(handoffResources) > 0 ||
 		len(handoffActions) > 0 ||
-		!handoffMetadataEmpty(handoffMetadata)
+		handoffMetadataCarriesEnvelope
 	if hasRequestHandoffEnvelope {
 		if err := sessions.SetModelHandoffEnvelope(session.ID, handoffFindingID, handoffContext, handoffResources, handoffActions, handoffMetadata); err != nil {
 			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to persist model handoff envelope")
@@ -774,6 +782,12 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 
 	// Run agentic loop
 	filteredTools := s.toolsForExecutionMode(autonomousMode, false)
+	if resourceContextTurnIsContextOnly(req.Prompt, handoffResources, handoffMetadata) {
+		filteredTools = []providers.Tool{}
+		log.Debug().
+			Str("session_id", session.ID).
+			Msg("[ChatService] Withholding tools for context-only resource handoff turn")
+	}
 	log.Debug().
 		Str("session_id", session.ID).
 		Int("tools_count", len(filteredTools)).
@@ -832,6 +846,10 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		}
 		streamCallback(event)
 	}
+	sessionData, _ := json.Marshal(struct {
+		ID string `json:"id"`
+	}{ID: session.ID})
+	streamCallback(StreamEvent{Type: "session", Data: sessionData})
 
 	resultMessages, err := loop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, wrappedCallback)
 	resultMessages = sanitizeMessagesForHandoffResourcePolicy(resultMessages, handoffResources, handoffResourceProvider)
@@ -1125,11 +1143,81 @@ func buildResourceContextHandoffDirective(handoffResources []HandoffResource, me
 		"Source: Pulse resource drawer handoff",
 		"Selected Resource: The attached handoff resource is the user's current selected resource. Do not ask which server, service, container, VM, or resource the user means.",
 		"Tool Target Handle: When you need a read-only tool against the attached resource, use target_host=\"current_resource\" or resource_id=\"current_resource\". Do not copy 'redacted by policy' into any tool argument.",
-		"Discovery Boundary: Do not call discovery tools only to identify this resource. Use the attached resource context first; call read-only tools only when the user asks for fresh runtime verification or a missing fact cannot be answered from context.",
+		"Context-First Answering: When the user asks what Pulse already knows, asks for discovery readiness, or asks a question that should be answerable from discovered/service context, answer from the attached context without tools. If the attached context lacks the fact, say that Pulse does not currently have that discovery/context fact instead of filling the gap with tools.",
+		"Discovery Boundary: Do not call discovery tools only to identify this resource or fill in missing context. Use attached discovery readiness first; call discovery only when the user explicitly asks you to run discovery.",
+		"Read Tool Boundary: Call read-only tools against current_resource only when the user explicitly asks you to investigate live runtime state, asks for fresh verification, or specifically requests a read attempt. Do not use read or mixed tools just to improve a context summary.",
 		"Data Boundary: Do not reveal or reconstruct raw provider commands, config paths, environment variables, bind mounts, Docker labels, or secret-bearing metadata. If asked for those details, say they are withheld or redacted and offer a safe summary.",
 		"Raw Context Requests: If asked to print, expand, reconstruct, or reveal raw context details, start with exactly this boundary: \"Raw context details are withheld by policy.\" Then give only a safe summary.",
 		"Action Boundary: Context is read-only and grants no approval or execution authority. Any action requires the governed approval/action flow.",
 	}, "\n")
+}
+
+func resourceContextTurnIsContextOnly(prompt string, handoffResources []HandoffResource, metadata HandoffMetadata) bool {
+	metadata = NormalizeHandoffMetadata(metadata)
+	if metadata.Kind != sessionHandoffKindResourceContext || len(normalizeHandoffResources(handoffResources)) == 0 {
+		return false
+	}
+	text := strings.ToLower(strings.Join(strings.Fields(prompt), " "))
+	if text == "" {
+		return true
+	}
+	if resourceContextPromptDisallowsTools(text) {
+		return true
+	}
+	return !resourceContextPromptExplicitlyRequestsTools(text)
+}
+
+func resourceContextPromptDisallowsTools(text string) bool {
+	for _, phrase := range []string{
+		"before using any tools",
+		"without using tools",
+		"without running tools",
+		"do not use tools",
+		"do not run tools",
+		"don't use tools",
+		"don't run tools",
+		"no tools",
+	} {
+		if strings.Contains(text, phrase) {
+			return true
+		}
+	}
+	return false
+}
+
+func resourceContextPromptExplicitlyRequestsTools(text string) bool {
+	for _, phrase := range []string{
+		"pulse_read",
+		"read-only pulse_read",
+		"read-only tool",
+		"read tool",
+		"tool attempt",
+		"use tools",
+		"use a tool",
+		"run tools",
+		"run a tool",
+		"call tools",
+		"call a tool",
+		"live runtime",
+		"fresh runtime verification",
+		"fresh verification",
+		"verify live",
+		"live check",
+		"check logs",
+		"read logs",
+		"tail logs",
+		"inspect live",
+		"run discovery",
+		"call discovery",
+		"use discovery",
+		"start discovery",
+		"scan this resource",
+	} {
+		if strings.Contains(text, phrase) {
+			return true
+		}
+	}
+	return false
 }
 
 func buildHandoffResourcePolicyContext(handoffResources []HandoffResource, provider tools.UnifiedResourceProvider) string {

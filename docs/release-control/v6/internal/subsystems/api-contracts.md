@@ -413,6 +413,11 @@ payload shape change when the portal presents compact client rows.
     actions when the run cannot be resolved. Stored session metadata must be
     readable by the handler so follow-up turns can rehydrate the same backend
     context without asking the browser to resend provider-bound payloads.
+    Resource-context follow-up turns are different from Patrol-run rehydration:
+    browser-safe `handoff_metadata.kind=resource_context` must not replace a
+    stored rich handoff envelope with a partial metadata-only envelope, and the
+    handler must not ask the browser to resend resource context that the chat
+    runtime can rehydrate from the stored selected-resource envelope.
     Chat stream events are generated from `internal/ai/chat` payload structs
     into `frontend-modern/src/api/generated/aiChatEvents.ts`; that generated
     union must not include the retired `explore_status` pre-pass event. Runtime
@@ -2973,7 +2978,12 @@ bounded resource/action counts when available. Resource drawer handoffs use
 `handoff_metadata.kind=resource_context` with a structured `handoff_resources`
 reference and no browser-authored prompt or model text; the backend chat
 runtime must hydrate the shared resource context pack from canonical resources
-instead of trusting the browser to serialize rich context. Frontend-visible Patrol
+instead of trusting the browser to serialize rich context. Context-only
+resource handoff questions must remain context-first at the API/runtime
+boundary: unless the operator explicitly asks for discovery execution, live
+verification, or a read attempt, the runtime withholds tools and returns the
+attached context or an explicit missing-fact answer rather than treating the
+question as permission to call discovery/read tools. Frontend-visible Patrol
 assessment briefings must not render recommendation fields as separate title,
 reason, route-action facts, or prompt chips; the configured model owns those
 decisions from the structured handoff metadata and bounded chat context.

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   AI_PROVIDER_DISPLAY_NAMES,
+  formatAIModelRouteLabel,
   getAIProviderDisplayName,
   getProviderFromModelId,
 } from '@/utils/aiProviderPresentation';
@@ -21,5 +22,33 @@ describe('aiProviderPresentation', () => {
     expect(getProviderFromModelId('deepseek-r1')).toBe('deepseek');
     expect(getProviderFromModelId('gemini-2.5-pro')).toBe('gemini');
     expect(getProviderFromModelId('llama3.1')).toBe('ollama');
+  });
+
+  it('keeps OpenRouter-routed model labels distinct from direct provider models', () => {
+    expect(
+      formatAIModelRouteLabel({
+        id: 'openrouter:deepseek/deepseek-v4-pro',
+        name: 'DeepSeek: DeepSeek V4 Pro',
+        provider: 'openrouter',
+      }),
+    ).toBe('DeepSeek: DeepSeek V4 Pro via OpenRouter');
+
+    expect(
+      formatAIModelRouteLabel({
+        id: 'deepseek:deepseek-v4-pro',
+        name: 'DeepSeek: DeepSeek V4 Pro',
+        provider: 'deepseek',
+      }),
+    ).toBe('DeepSeek: DeepSeek V4 Pro');
+  });
+
+  it('does not duplicate an existing OpenRouter route label', () => {
+    expect(
+      formatAIModelRouteLabel({
+        id: 'openrouter:deepseek/deepseek-r1',
+        name: 'DeepSeek R1 via OpenRouter',
+        provider: 'openrouter',
+      }),
+    ).toBe('DeepSeek R1 via OpenRouter');
   });
 });

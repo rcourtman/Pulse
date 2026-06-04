@@ -157,9 +157,7 @@ describe('shared primitive guardrails', () => {
       .map(([path]) => path)
       .sort();
 
-    expect(rawTableUsers).toEqual([
-      './PulseDataGrid.tsx',
-    ]);
+    expect(rawTableUsers).toEqual(['./PulseDataGrid.tsx']);
   });
 
   it('routes canonical settings segmented selectors through FilterButtonGroup', () => {
@@ -190,6 +188,12 @@ describe('shared primitive guardrails', () => {
     expect(reportingPanelSource).toContain('variant="prominent"');
     expect(reportingPanelSource).not.toContain('getReportingToggleButtonClass');
     expect(reportingPanelSource).not.toContain('<For each={REPORTING_RANGE_OPTIONS}>');
+  });
+
+  it('keeps AI model picker labels route-aware for gateway providers', () => {
+    expect(aiModelPickerSource).toContain('formatAIModelRouteLabel(match)');
+    expect(aiModelPickerSource).toContain('formatAIModelRouteLabel(model)');
+    expect(aiModelPickerSource).not.toContain("model.id.split(':').pop()");
   });
 
   it('keeps native form selects on the shared labelled primitive', () => {
@@ -358,7 +362,6 @@ describe('shared primitive guardrails', () => {
     expect(workloadSelectionStateSource).toContain('activeSummaryWorkloadGroupScope');
     expect(workloadSelectionStateSource).not.toContain('const scrollTop = scroller?.scrollTop');
 
-
     expect(summaryTableFocusSource).toContain('export function useSummaryTableFocusBridge');
     expect(summaryTableFocusSource).toContain('export function useSummaryPageInteractionState');
     expect(summaryTableFocusSource).toContain('resolveSummaryActiveSeriesId');
@@ -377,16 +380,9 @@ describe('shared primitive guardrails', () => {
       "row.scrollIntoView({ behavior: 'smooth', block: 'center' })",
     );
     expect(summaryTableFocusSource).not.toContain('useNavigate(');
-
-
-
   });
 
-  it('keeps synchronized summary values on one shared card/readout contract', () => {
-
-
-
-  });
+  it('keeps synchronized summary values on one shared card/readout contract', () => {});
 
   it('keeps summary-linked table row emphasis on the shared active-row presentation contract', () => {
     expect(frontendIndexCssSource).toContain("tr[data-summary-row-active='true'] > td");
@@ -498,10 +494,7 @@ describe('shared primitive guardrails', () => {
       expect(source).toContain('<TableCard');
     }
 
-    for (const source of [
-      unifiedResourceHostTableCardSource,
-      storageContentCardSource,
-    ]) {
+    for (const source of [unifiedResourceHostTableCardSource, storageContentCardSource]) {
       expect(source).toContain('TableCardHeader');
     }
 
@@ -539,8 +532,7 @@ describe('shared primitive guardrails', () => {
     expect(rolesPanelSource.match(/frame="flush"/g) ?? []).toHaveLength(1);
     expect(userAssignmentsPanelSource.match(/frame="flush"/g) ?? []).toHaveLength(1);
 
-    for (const source of [
-    ]) {
+    for (const source of []) {
       expect(source).toContain("from '@/components/shared/Table'");
       expect(source).not.toContain('<table');
       expect(source).not.toContain('<thead');
@@ -729,7 +721,7 @@ describe('shared primitive guardrails', () => {
     expect(discoveryReadinessBadgeSource).toContain(
       "import type { DiscoveryReadinessPresentation } from '@/utils/resourceDiscoveryReadiness'",
     );
-    expect(discoveryReadinessBadgeSource).toContain("aria-label={presentation()?.title");
+    expect(discoveryReadinessBadgeSource).toContain('aria-label={presentation()?.title');
     expect(discoveryReadinessBadgeSource).toContain('title={presentation()?.title}');
     expect(discoveryReadinessBadgeSource).toContain('aria-hidden="true"');
     expect(discoveryReadinessBadgeSource).not.toContain('fetch(');
@@ -758,15 +750,10 @@ describe('shared primitive guardrails', () => {
     expect(guestRowSource).toContain("from '@/components/shared/TagBadges'");
     expect(guestRowSource).not.toContain("from './TagBadges'");
     expect(resourceDetailSummarySource).toContain("from '@/components/shared/TagBadges'");
-    expect(resourceDetailSummarySource).not.toContain(
-      "from '@/components/Workloads/TagBadges'",
-    );
+    expect(resourceDetailSummarySource).not.toContain("from '@/components/Workloads/TagBadges'");
   });
 
-  it('keeps interactive sparkline on shell, runtime, and model owners', () => {
-
-
-  });
+  it('keeps interactive sparkline on shell, runtime, and model owners', () => {});
 
   it('keeps dialog on shell, runtime, and model owners', () => {
     expect(dialogSource).toContain('useDialogState');
@@ -1065,7 +1052,6 @@ describe('shared primitive guardrails', () => {
   });
 
   it('keeps summary density control inside the shared summary primitives', () => {
-
     expect(summaryChartLayoutSource).toContain(
       "export const SUMMARY_CHART_SLOT_CLASS = 'h-[136px] sm:h-[150px]'",
     );
