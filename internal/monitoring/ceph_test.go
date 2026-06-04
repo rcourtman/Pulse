@@ -323,20 +323,80 @@ func TestCountServiceDaemons(t *testing.T) {
 func TestCountCephMonitorDaemons(t *testing.T) {
 	t.Parallel()
 
-	status := &proxmox.CephStatus{
-		MonMap: proxmox.CephMonMap{NumMons: 3},
-		ServiceMap: proxmox.CephServiceMap{
-			Services: map[string]proxmox.CephServiceDefinition{
-				"mon": {
-					Daemons: map[string]proxmox.CephServiceDaemon{
-						"a": {Host: "node1", Status: "running"},
+	tests := []struct {
+		name   string
+		status *proxmox.CephStatus
+		want   int
+	}{
+		{
+			name: "uses explicit mon count",
+			status: &proxmox.CephStatus{
+				MonMap: proxmox.CephMonMap{NumMons: 3},
+				ServiceMap: proxmox.CephServiceMap{
+					Services: map[string]proxmox.CephServiceDefinition{
+						"mon": {
+							Daemons: map[string]proxmox.CephServiceDaemon{
+								"a": {Host: "node1", Status: "running"},
+							},
+						},
 					},
 				},
 			},
+			want: 3,
+		},
+		{
+			name: "uses mons fallback",
+			status: &proxmox.CephStatus{
+				MonMap: proxmox.CephMonMap{
+					Mons: []proxmox.CephMonitor{{Name: "a"}, {Name: "b"}},
+				},
+			},
+			want: 2,
+		},
+		{
+			name: "uses quorum names fallback",
+			status: &proxmox.CephStatus{
+				MonMap: proxmox.CephMonMap{
+					QuorumNames: []string{"a", "b", "c"},
+				},
+				ServiceMap: proxmox.CephServiceMap{
+					Services: map[string]proxmox.CephServiceDefinition{
+						"mon": {
+							Daemons: map[string]proxmox.CephServiceDaemon{
+								"a": {Host: "node1", Status: "running"},
+							},
+						},
+					},
+				},
+			},
+			want: 3,
+		},
+		{
+			name: "falls back to service map",
+			status: &proxmox.CephStatus{
+				ServiceMap: proxmox.CephServiceMap{
+					Services: map[string]proxmox.CephServiceDefinition{
+						"mon": {
+							Daemons: map[string]proxmox.CephServiceDaemon{
+								"a": {Host: "node1", Status: "running"},
+								"b": {Host: "node2", Status: "running"},
+							},
+						},
+					},
+				},
+			},
+			want: 2,
 		},
 	}
-	if got := countCephMonitorDaemons(status); got != 3 {
-		t.Fatalf("countCephMonitorDaemons() = %d, want 3", got)
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := countCephMonitorDaemons(tc.status); got != tc.want {
+				t.Fatalf("countCephMonitorDaemons() = %d, want %d", got, tc.want)
+			}
+		})
 	}
 }
 

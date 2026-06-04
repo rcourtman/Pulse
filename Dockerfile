@@ -213,7 +213,8 @@ FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6
 ARG TARGETARCH
 ARG TARGETVARIANT
 
-RUN apk --no-cache add ca-certificates tzdata
+RUN apk --no-cache add ca-certificates tzdata && \
+    mkdir -p /var/lib/pulse-agent
 
 WORKDIR /app
 
@@ -234,9 +235,16 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 
 COPY --from=release-assets-builder /app/VERSION /VERSION
 
-ENV PULSE_NO_AUTO_UPDATE=true
+ENV PULSE_NO_AUTO_UPDATE=true \
+    PULSE_DISABLE_AUTO_UPDATE=true \
+    PULSE_ENABLE_HOST=false \
+    PULSE_ENABLE_DOCKER=true \
+    PULSE_AGENT_ID_FILE=/var/lib/pulse-agent/agent-id \
+    PULSE_STATE_DIR=/var/lib/pulse-agent
 
-ENTRYPOINT ["/usr/local/bin/pulse-agent", "--enable-docker", "--enable-host=false"]
+VOLUME ["/var/lib/pulse-agent"]
+
+ENTRYPOINT ["/usr/local/bin/pulse-agent"]
 
 # Base Pulse server runtime shared by self-hosted and hosted tenant images.
 FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS pulse-runtime-base

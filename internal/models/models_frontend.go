@@ -893,14 +893,15 @@ type ReplicationJobFrontend struct {
 
 // StateFrontend represents the state with frontend-friendly field names
 type StateFrontend struct {
-	ActiveAlerts                 []Alert         `json:"activeAlerts"`                 // Active alerts
-	RecentlyResolved             []ResolvedAlert `json:"recentlyResolved"`             // Recently resolved alerts
-	Metrics                      []Metric        `json:"metrics"`                      // Time-series metrics
-	Performance                  Performance     `json:"performance"`                  // Polling/runtime performance
-	ConnectionHealth             map[string]bool `json:"connectionHealth"`             // Keep as is
-	Stats                        Stats           `json:"stats"`                        // Runtime statistics
-	LastUpdate                   int64           `json:"lastUpdate"`                   // Unix timestamp
-	TemperatureMonitoringEnabled bool            `json:"temperatureMonitoringEnabled"` // Global temperature monitoring setting
+	ActiveAlerts                 []Alert           `json:"activeAlerts"`                 // Active alerts
+	RecentlyResolved             []ResolvedAlert   `json:"recentlyResolved"`             // Recently resolved alerts
+	Metrics                      []Metric          `json:"metrics"`                      // Time-series metrics
+	Performance                  Performance       `json:"performance"`                  // Polling/runtime performance
+	ConnectionHealth             map[string]bool   `json:"connectionHealth"`             // Keep as is
+	Stats                        Stats             `json:"stats"`                        // Runtime statistics
+	LastUpdate                   int64             `json:"lastUpdate"`                   // Unix timestamp
+	TemperatureMonitoringEnabled bool              `json:"temperatureMonitoringEnabled"` // Global temperature monitoring setting
+	PVETagColors                 map[string]string `json:"pveTagColors"`                 // Tag name -> "#rrggbb" from Proxmox datacenter config
 	// Unified resources - the new way to access all monitored entities
 	Resources               []ResourceFrontend                    `json:"resources"`
 	ConnectedInfrastructure []ConnectedInfrastructureItemFrontend `json:"connectedInfrastructure"`
@@ -926,6 +927,9 @@ func (s StateFrontend) NormalizeCollections() StateFrontend {
 	}
 	if s.ConnectionHealth == nil {
 		s.ConnectionHealth = map[string]bool{}
+	}
+	if s.PVETagColors == nil {
+		s.PVETagColors = map[string]string{}
 	}
 	if s.Performance.APICallDuration == nil {
 		s.Performance.APICallDuration = map[string]float64{}
@@ -976,10 +980,11 @@ type ResourceFrontend struct {
 	Uptime      *int64                   `json:"uptime,omitempty"`
 
 	// Metadata
-	Tags     []string                `json:"tags"`
-	Labels   map[string]string       `json:"labels"`
-	LastSeen int64                   `json:"lastSeen"` // Unix milliseconds
-	Alerts   []ResourceAlertFrontend `json:"alerts"`
+	Tags      []string                `json:"tags"`
+	Labels    map[string]string       `json:"labels"`
+	CustomURL string                  `json:"customUrl,omitempty"`
+	LastSeen  int64                   `json:"lastSeen"` // Unix milliseconds
+	Alerts    []ResourceAlertFrontend `json:"alerts"`
 
 	IncidentCount         int    `json:"incidentCount,omitempty"`
 	IncidentCode          string `json:"incidentCode,omitempty"`

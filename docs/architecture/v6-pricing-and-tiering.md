@@ -529,7 +529,7 @@ explain monitored-system identity:
 
 | Date | Change | Author |
 |---|---|---|
-| 2026-06-02 | Reconciled MSP pricing evidence with the provider-hosted model: signed MSP license, Stripe-free provider control plane, isolated Pulse runtime per client, 5/15/40 client workspace caps, and request-assisted access until launch approval. | Richard |
+| 2026-06-02 | Reconciled MSP pricing evidence with the provider-operated architecture: signed MSP license, Stripe-free provider control plane, isolated Pulse runtime per client, 5/15/40 client workspace caps, and request-assisted access until launch approval. | Richard |
 | 2026-04-29 | Replaced stale capacity-style monitoring phrasing with core-monitoring-included language across active v6 docs and upgrade-return copy so Community does not read like a former capacity upsell. | Codex |
 | 2026-04-23 | Removed stale self-hosted monitored-system capacity and Pro+ public-checkout language. Reaffirmed Community / Relay / Pro as current public self-hosted tiers, with Pro+ as continuity only and Pro value centered on operations, history, and admin controls. | Codex |
 | 2026-03-17 | Re-locked the self-hosted commercial model around monitored systems rather than installed agents. New self-hosted public pricing: Relay $4.99/$39, Pro $8.99/$79, Pro+ $14.99/$129. Added free-tier grace policy and marked the monitored-system counting migration as still required in code. | Codex + Richard |

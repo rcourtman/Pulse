@@ -101,6 +101,19 @@ INSTALL_SIGNATURE_NAMESPACE="pulse-install"
 INSTALL_SIGNATURE_IDENTITY="pulse-installer"
 PINNED_INSTALLER_SSH_PUBLIC_KEY="__PULSE_INSTALLER_SSH_PUBLIC_KEY__"
 
+ROOTLESS_RUNTIME_KIND=""
+ROOTLESS_RUNTIME_SOCKET_PATH=""
+ROOTLESS_RUNTIME_SOCKET_URI=""
+ROOTLESS_RUNTIME_XDG_DIR=""
+
+SYSTEMD_ENV_LINES=""
+SHELL_EXPORT_LINES=""
+PLIST_ENV_ENTRIES=""
+PLIST_ENV_BLOCK=""
+UPSTART_ENV_LINES=""
+SED_EXPORT_LINES=""
+APPLIED_SERVICE_ENV_KEYS="|"
+
 # Track if flags were explicitly set (to override auto-detection)
 DOCKER_EXPLICIT="false"
 KUBERNETES_EXPLICIT="false"
@@ -700,9 +713,7 @@ render_systemd_agent_unit() {
     local user_line=""
     local log_lines=""
 
-    if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
-        env_line=$'\n'"Environment=${SSL_CERT_ENV_NAME}=${SSL_CERT_ENV_VALUE}"
-    fi
+    env_line="$SYSTEMD_ENV_LINES"
     if [[ -n "$wants_targets" ]]; then
         wants_line=$'\n'"Wants=${wants_targets}"
     fi
@@ -743,11 +754,7 @@ render_freebsd_rc_agent_script() {
     local script_path="$1"
     local exec_path="$2"
     local exec_args="$3"
-    local ssl_cert_line=""
-
-    if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
-        ssl_cert_line="export ${SSL_CERT_ENV_NAME}=\"${SSL_CERT_ENV_VALUE}\""
-    fi
+    local service_env_lines="$SHELL_EXPORT_LINES"
 
     cat > "$script_path" <<EOF
 #!/bin/sh
@@ -815,7 +822,7 @@ pulse_agent_start()
 
         rm -f \${pidfile} \${child_pidfile}
         echo "Starting \${name}."
-        ${ssl_cert_line}
+        ${service_env_lines}
         /usr/sbin/daemon -r -P \${pidfile} -p \${child_pidfile} -f "\${command}" \${command_args}
     fi
 }
@@ -1018,11 +1025,7 @@ write_qnap_wrapper_script() {
     local wrapper_script="$1"
     local runtime_binary="$2"
     local stored_binary="$3"
-    local export_ssl_cert=""
-
-    if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
-        export_ssl_cert=$'\n'"export ${SSL_CERT_ENV_NAME}=\"${SSL_CERT_ENV_VALUE}\""
-    fi
+    local service_env_lines="$SHELL_EXPORT_LINES"
 
     cat > "$wrapper_script" <<EOF
 #!/bin/sh
@@ -1044,7 +1047,7 @@ sleep 2
 
 mkdir -p "$(dirname "$runtime_binary")" 2>/dev/null || true
 cp "${stored_binary}" "${runtime_binary}"
-chmod +x "${runtime_binary}"${export_ssl_cert}
+chmod +x "${runtime_binary}"${service_env_lines}
 
 # Watchdog loop: restart agent if it exits.
 RESTART_DELAY=5
@@ -1123,6 +1126,73 @@ detect_docker() {
             log_warn "Podman binary found but 'podman info' failed."
         fi
     fi
+    if discover_rootless_container_runtime; then
+        return 0
+    fi
+    return 1
+}
+
+discover_single_socket_match() {
+    local pattern="$1"
+    local matches=()
+    local candidate=""
+
+    for candidate in $pattern; do
+        [[ -S "$candidate" ]] || continue
+        matches+=("$candidate")
+    done
+
+    case "${#matches[@]}" in
+        0)
+            return 1
+            ;;
+        1)
+            printf '%s\n' "${matches[0]}"
+            return 0
+            ;;
+        *)
+            printf '%s\n' "__AMBIGUOUS__"
+            return 0
+            ;;
+    esac
+}
+
+discover_rootless_container_runtime() {
+    local docker_match=""
+    local podman_match=""
+
+    ROOTLESS_RUNTIME_KIND=""
+    ROOTLESS_RUNTIME_SOCKET_PATH=""
+    ROOTLESS_RUNTIME_SOCKET_URI=""
+    ROOTLESS_RUNTIME_XDG_DIR=""
+
+    if [[ "$(uname -s)" != "Linux" ]]; then
+        return 1
+    fi
+
+    docker_match=$(discover_single_socket_match "/run/user/*/docker.sock" || true)
+    podman_match=$(discover_single_socket_match "/run/user/*/podman/podman.sock" || true)
+
+    if [[ "$docker_match" == "__AMBIGUOUS__" ]]; then
+        log_warn "Multiple rootless Docker sockets found under /run/user; not auto-selecting one."
+    elif [[ -n "$docker_match" ]]; then
+        ROOTLESS_RUNTIME_KIND="docker"
+        ROOTLESS_RUNTIME_SOCKET_PATH="$docker_match"
+        ROOTLESS_RUNTIME_SOCKET_URI="unix://${docker_match}"
+        ROOTLESS_RUNTIME_XDG_DIR="$(dirname "$docker_match")"
+        return 0
+    fi
+
+    if [[ "$podman_match" == "__AMBIGUOUS__" ]]; then
+        log_warn "Multiple rootless Podman sockets found under /run/user; not auto-selecting one."
+    elif [[ -n "$podman_match" ]]; then
+        ROOTLESS_RUNTIME_KIND="podman"
+        ROOTLESS_RUNTIME_SOCKET_PATH="$podman_match"
+        ROOTLESS_RUNTIME_SOCKET_URI="unix://${podman_match}"
+        ROOTLESS_RUNTIME_XDG_DIR="${podman_match%/podman/podman.sock}"
+        return 0
+    fi
+
     return 1
 }
 
@@ -1512,13 +1582,21 @@ while [[ $# -gt 0 ]]; do
         --token) PULSE_TOKEN="$2"; shift 2 ;;
         --interval) INTERVAL="$2"; shift 2 ;;
         --enable-host) ENABLE_HOST="true"; shift ;;
+        --enable-host=true) ENABLE_HOST="true"; shift ;;
+        --enable-host=false) ENABLE_HOST="false"; shift ;;
         --disable-host) ENABLE_HOST="false"; shift ;;
         --enable-docker) ENABLE_DOCKER="true"; DOCKER_EXPLICIT="true"; shift ;;
+        --enable-docker=true) ENABLE_DOCKER="true"; DOCKER_EXPLICIT="true"; shift ;;
+        --enable-docker=false) ENABLE_DOCKER="false"; DOCKER_EXPLICIT="true"; shift ;;
         --disable-docker) ENABLE_DOCKER="false"; DOCKER_EXPLICIT="true"; shift ;;
         --enable-kubernetes) ENABLE_KUBERNETES="true"; KUBERNETES_EXPLICIT="true"; shift ;;
+        --enable-kubernetes=true) ENABLE_KUBERNETES="true"; KUBERNETES_EXPLICIT="true"; shift ;;
+        --enable-kubernetes=false) ENABLE_KUBERNETES="false"; KUBERNETES_EXPLICIT="true"; shift ;;
         --disable-kubernetes) ENABLE_KUBERNETES="false"; KUBERNETES_EXPLICIT="true"; shift ;;
         --kubeconfig) KUBECONFIG_PATH="$2"; KUBERNETES_EXPLICIT="true"; ENABLE_KUBERNETES="true"; shift 2 ;;
         --enable-proxmox) ENABLE_PROXMOX="true"; PROXMOX_EXPLICIT="true"; shift ;;
+        --enable-proxmox=true) ENABLE_PROXMOX="true"; PROXMOX_EXPLICIT="true"; shift ;;
+        --enable-proxmox=false) ENABLE_PROXMOX="false"; PROXMOX_EXPLICIT="true"; shift ;;
         --disable-proxmox) ENABLE_PROXMOX="false"; PROXMOX_EXPLICIT="true"; shift ;;
         --proxmox-type) PROXMOX_TYPE="$2"; shift 2 ;;
         --insecure) INSECURE="true"; shift ;;
@@ -1620,6 +1698,65 @@ if [[ -n "$CURL_CA_BUNDLE" ]]; then
     fi
 fi
 
+service_env_has_key() {
+    local env_key="$1"
+    case "$APPLIED_SERVICE_ENV_KEYS" in
+        *"|${env_key}|"*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+shell_export_value() {
+    local value="$1"
+    value="${value//\\/\\\\}"
+    value="${value//\"/\\\"}"
+    value="${value//\$/\\$}"
+    value="${value//\`/\\\`}"
+    printf '"%s"' "$value"
+}
+
+append_service_env() {
+    local env_key="$1"
+    local env_val="$2"
+    local shell_value=""
+    local plist_key=""
+    local plist_value=""
+
+    if [[ -z "$env_key" ]] || service_env_has_key "$env_key"; then
+        return
+    fi
+
+    shell_value="$(shell_export_value "$env_val")"
+    SYSTEMD_ENV_LINES+=$'\n'"Environment=\"${env_key}=${env_val}\""
+    SHELL_EXPORT_LINES+=$'\n'"export ${env_key}=${shell_value}"
+    UPSTART_ENV_LINES+=$'\n'"env ${env_key}=${env_val}"
+    if [[ -n "$SED_EXPORT_LINES" ]]; then
+        SED_EXPORT_LINES+="; "
+    fi
+    SED_EXPORT_LINES+="export ${env_key}=${shell_value}"
+
+    plist_key="$(xml_escape "$env_key")"
+    plist_value="$(xml_escape "$env_val")"
+    PLIST_ENV_ENTRIES+="
+        <key>${plist_key}</key>
+        <string>${plist_value}</string>"
+    APPLIED_SERVICE_ENV_KEYS+="${env_key}|"
+}
+
+finalize_plist_env_block() {
+    PLIST_ENV_BLOCK=""
+    if [[ -n "$PLIST_ENV_ENTRIES" ]]; then
+        PLIST_ENV_BLOCK="
+    <key>EnvironmentVariables</key>
+    <dict>${PLIST_ENV_ENTRIES}
+    </dict>"
+    fi
+}
+
+if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
+    append_service_env "$SSL_CERT_ENV_NAME" "$SSL_CERT_ENV_VALUE"
+fi
+
 # --- Platform Auto-Detection ---
 # Only auto-detect if flags weren't explicitly set
 log_info "Detecting available platforms..."
@@ -1667,6 +1804,30 @@ if [[ "$ENABLE_PROXMOX" == "true" ]]; then
         log_info "  Proxmox type: auto-detect all installed services"
     fi
 fi
+
+if [[ "$ENABLE_DOCKER" == "true" ]] && discover_rootless_container_runtime; then
+    if [[ "$ROOTLESS_RUNTIME_KIND" == "docker" ]]; then
+        if ! service_env_has_key "DOCKER_HOST"; then
+            append_service_env "DOCKER_HOST" "$ROOTLESS_RUNTIME_SOCKET_URI"
+            if ! service_env_has_key "XDG_RUNTIME_DIR"; then
+                append_service_env "XDG_RUNTIME_DIR" "$ROOTLESS_RUNTIME_XDG_DIR"
+            fi
+            log_info "Using rootless Docker socket for agent service: ${ROOTLESS_RUNTIME_SOCKET_PATH}"
+        fi
+    elif [[ "$ROOTLESS_RUNTIME_KIND" == "podman" ]]; then
+        if ! service_env_has_key "CONTAINER_HOST" && ! service_env_has_key "PODMAN_HOST"; then
+            append_service_env "PULSE_DOCKER_RUNTIME" "podman"
+            append_service_env "CONTAINER_HOST" "$ROOTLESS_RUNTIME_SOCKET_URI"
+            append_service_env "PODMAN_HOST" "$ROOTLESS_RUNTIME_SOCKET_URI"
+            if ! service_env_has_key "XDG_RUNTIME_DIR"; then
+                append_service_env "XDG_RUNTIME_DIR" "$ROOTLESS_RUNTIME_XDG_DIR"
+            fi
+            log_info "Using rootless Podman socket for agent service: ${ROOTLESS_RUNTIME_SOCKET_PATH}"
+        fi
+    fi
+fi
+
+finalize_plist_env_block
 
 # --- Uninstall Logic ---
 if [[ "$UNINSTALL" == "true" ]]; then
@@ -2041,9 +2202,6 @@ esac
 # Construct arch param in format expected by download endpoint (e.g., linux-amd64)
 ARCH_PARAM="${OS}-${ARCH}"
 
-DOWNLOAD_URL="${PULSE_URL}/download/${BINARY_NAME}?arch=${ARCH_PARAM}"
-log_info "Downloading agent from ${DOWNLOAD_URL}..."
-
 # Create temp file and register for cleanup
 TMP_BIN=$(mktemp)
 TMP_FILES+=("$TMP_BIN")
@@ -2054,6 +2212,23 @@ TMP_FILES+=("$TMP_HEADERS")
 CURL_ARGS=(-fsSL --connect-timeout 30 --max-time 300 -D "$TMP_HEADERS" -o "$TMP_BIN")
 if [[ "$INSECURE" == "true" ]]; then CURL_ARGS+=(-k); fi
 if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
+
+SERVER_VERSION=""
+VERSION_CURL_ARGS=(-fsSL --connect-timeout 10 --max-time 30)
+if [[ "$INSECURE" == "true" ]]; then VERSION_CURL_ARGS+=(-k); fi
+if [[ -n "$CURL_CA_BUNDLE" ]]; then VERSION_CURL_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
+if server_version_json="$(curl "${VERSION_CURL_ARGS[@]}" "${PULSE_URL}/api/version" 2>/dev/null)"; then
+    SERVER_VERSION="$(printf '%s' "$server_version_json" | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+fi
+
+DOWNLOAD_QUERY="arch=${ARCH_PARAM}"
+if [[ -n "$SERVER_VERSION" ]]; then
+    DOWNLOAD_QUERY="${DOWNLOAD_QUERY}&serverVersion=${SERVER_VERSION}"
+    log_info "Pulse server version: ${SERVER_VERSION}"
+fi
+
+DOWNLOAD_URL="${PULSE_URL}/download/${BINARY_NAME}?${DOWNLOAD_QUERY}"
+log_info "Downloading agent from ${DOWNLOAD_URL}..."
 
 if ! curl "${CURL_ARGS[@]}" "$DOWNLOAD_URL"; then
     fail "Download failed. Check URL and connectivity." "$EXIT_DOWNLOAD_FAILED"
@@ -2105,6 +2280,11 @@ log_info "Binary checksum verified"
 verify_download_signature "$TMP_BIN" "$SSH_SIGNATURE_HEADER"
 
 chmod +x "$TMP_BIN"
+NEW_VERSION=$("$TMP_BIN" --version 2>/dev/null | head -1 || echo "unknown")
+
+if [[ -n "$SERVER_VERSION" && -n "$NEW_VERSION" && "$NEW_VERSION" != "unknown" && "$NEW_VERSION" != "$SERVER_VERSION" ]]; then
+    log_warn "Downloaded agent version (${NEW_VERSION}) does not match Pulse server version (${SERVER_VERSION}). Check that Pulse is upgraded and that any reverse proxy is not serving a stale cached binary."
+fi
 
 # --- Upgrade Detection ---
 # Check if pulse-agent is already installed and handle upgrade gracefully
@@ -2113,8 +2293,7 @@ UPGRADE_MODE=false
 
 if [[ -x "${INSTALL_DIR}/${BINARY_NAME}" ]]; then
     EXISTING_VERSION=$("${INSTALL_DIR}/${BINARY_NAME}" --version 2>/dev/null | head -1 || echo "unknown")
-    NEW_VERSION=$("$TMP_BIN" --version 2>/dev/null | head -1 || echo "unknown")
-    
+
     if [[ -n "$EXISTING_VERSION" && "$EXISTING_VERSION" != "unknown" ]]; then
         UPGRADE_MODE=true
         log_info "Existing installation detected: $EXISTING_VERSION"
@@ -2161,17 +2340,6 @@ if [[ "$OS" == "darwin" ]]; then
 
     build_plist_program_arguments "${INSTALL_DIR}/${BINARY_NAME}"
 
-    PLIST_ENV=""
-    if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
-        PLIST_SSL_CERT_ENV_VALUE=$(xml_escape "$SSL_CERT_ENV_VALUE")
-        PLIST_ENV="
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>${SSL_CERT_ENV_NAME}</key>
-        <string>${PLIST_SSL_CERT_ENV_VALUE}</string>
-    </dict>"
-    fi
-
     cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -2182,7 +2350,7 @@ if [[ "$OS" == "darwin" ]]; then
     <key>ProgramArguments</key>
     <array>
 ${PLIST_ARGS}
-    </array>${PLIST_ENV}
+    </array>${PLIST_ENV_BLOCK}
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
@@ -2225,11 +2393,6 @@ if [[ -d /usr/syno ]] && [[ -f /etc/VERSION ]]; then
         CONF="/etc/init/${AGENT_NAME}.conf"
         log_info "Configuring Upstart service at $CONF (DSM 6.x)..."
 
-        UPSTART_ENV=""
-        if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
-            UPSTART_ENV=$'\n'"env ${SSL_CERT_ENV_NAME}=${SSL_CERT_ENV_VALUE}"
-        fi
-
         cat > "$CONF" <<EOF
 description "Pulse Unified Agent"
 author "Pulse"
@@ -2238,7 +2401,7 @@ start on syno.network.ready
 stop on runlevel [06]
 
 respawn
-respawn limit 5 10${UPSTART_ENV}
+respawn limit 5 10${UPSTART_ENV_LINES}
 
 exec ${INSTALL_DIR}/${BINARY_NAME} ${EXEC_ARGS} >> ${LOG_FILE} 2>&1
 EOF
@@ -2286,10 +2449,7 @@ if [[ -f /etc/unraid-version ]]; then
 
     # Create a wrapper script that will be called from /boot/config/go
     # This script copies from persistent storage to RAM disk on boot, then starts the agent
-    EXPORT_SSL_CERT_FILE=""
-    if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
-        EXPORT_SSL_CERT_FILE=$'\n'"export ${SSL_CERT_ENV_NAME}=\"${SSL_CERT_ENV_VALUE}\""
-    fi
+    EXPORT_SERVICE_ENV="$SHELL_EXPORT_LINES"
 
     WRAPPER_SCRIPT="${UNRAID_STORAGE_DIR}/start-pulse-agent.sh"
     cat > "$WRAPPER_SCRIPT" <<EOF
@@ -2304,7 +2464,7 @@ sleep 2
 
 # Copy binary from persistent storage to RAM disk (needed after reboot)
 cp "${UNRAID_STORED_BINARY}" "${RUNTIME_BINARY}"
-chmod +x "${RUNTIME_BINARY}"${EXPORT_SSL_CERT_FILE}
+chmod +x "${RUNTIME_BINARY}"${EXPORT_SERVICE_ENV}
 
 # Watchdog loop: restart agent if it exits
 # Uses exponential backoff to prevent rapid restart loops
@@ -2535,11 +2695,6 @@ if [[ "$TRUENAS" == true ]]; then
             TRUENAS_LOG_TARGET="$TRUENAS_LOG_FILE"
         fi
 
-        SYSTEMD_ENV=""
-        if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
-            SYSTEMD_ENV=$'\n'"Environment=${SSL_CERT_ENV_NAME}=${SSL_CERT_ENV_VALUE}"
-        fi
-
         render_systemd_agent_unit "$TRUENAS_SERVICE_STORAGE" "${TRUENAS_RUNTIME_BINARY}" "${EXEC_ARGS}" "network-online.target docker.service" "network-online.target" "root" "${TRUENAS_LOG_TARGET}"
     elif [[ "$(uname -s)" == "FreeBSD" ]]; then
         render_freebsd_rc_agent_script "$TRUENAS_SERVICE_STORAGE" "${TRUENAS_RUNTIME_BINARY}" "${EXEC_ARGS}"
@@ -2660,11 +2815,7 @@ INITEOF
     sed -i "s|INSTALL_DIR_PLACEHOLDER|${INSTALL_DIR}|g" "$INITSCRIPT"
     sed -i "s|BINARY_NAME_PLACEHOLDER|${BINARY_NAME}|g" "$INITSCRIPT"
     sed -i "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$INITSCRIPT"
-    SSL_CERT_LINE=""
-    if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
-        SSL_CERT_LINE="export ${SSL_CERT_ENV_NAME}=\"${SSL_CERT_ENV_VALUE}\""
-    fi
-    sed -i "s|SSL_CERT_FILE_PLACEHOLDER|${SSL_CERT_LINE}|g" "$INITSCRIPT"
+    sed -i "s|SSL_CERT_FILE_PLACEHOLDER|${SED_EXPORT_LINES}|g" "$INITSCRIPT"
 
     chmod +x "$INITSCRIPT"
     restart_openrc_agent_service
@@ -2869,11 +3020,7 @@ INITEOF
     sed -i "s|INSTALL_DIR_PLACEHOLDER|${INSTALL_DIR}|g" "$INITSCRIPT"
     sed -i "s|BINARY_NAME_PLACEHOLDER|${BINARY_NAME}|g" "$INITSCRIPT"
     sed -i "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$INITSCRIPT"
-    SSL_CERT_LINE=""
-    if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
-        SSL_CERT_LINE="export ${SSL_CERT_ENV_NAME}=\"${SSL_CERT_ENV_VALUE}\""
-    fi
-    sed -i "s|SSL_CERT_FILE_PLACEHOLDER|${SSL_CERT_LINE}|g" "$INITSCRIPT"
+    sed -i "s|SSL_CERT_FILE_PLACEHOLDER|${SED_EXPORT_LINES}|g" "$INITSCRIPT"
 
     chmod +x "$INITSCRIPT"
 

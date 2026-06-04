@@ -7,6 +7,7 @@ import {
   triggerDiscovery,
   updateDiscoveryNotes,
 } from '@/api/discovery';
+import { AIAPI } from '@/api/ai';
 import { eventBus } from '@/stores/events';
 import type { DiscoveryProgress, ResourceType } from '@/types/discovery';
 import {
@@ -52,9 +53,25 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
     makeResourceId(props.resourceType, targetAgentId(), props.resourceId),
   );
 
+  const [aiSettings] = createResource(async () => {
+    try {
+      return await AIAPI.getSettings();
+    } catch {
+      return null;
+    }
+  });
+  const discoveryFeatureResolved = createMemo(() => !aiSettings.loading);
+  const discoveryFeatureEnabled = createMemo(
+    () => discoveryFeatureResolved() && aiSettings()?.discovery_enabled !== false,
+  );
+  const discoveryFeatureKnownDisabled = createMemo(
+    () => discoveryFeatureResolved() && aiSettings()?.discovery_enabled === false,
+  );
+
   const [discoveryInfo] = createResource(
-    () => props.resourceType,
+    () => (discoveryFeatureEnabled() ? props.resourceType : null),
     async (type) => {
+      if (!type) return null;
       try {
         return await getDiscoveryInfo(type);
       } catch {
@@ -63,13 +80,19 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
     },
   );
 
-  const [connectedAgents] = createResource(async () => {
-    try {
-      return await getConnectedAgents();
-    } catch {
-      return { count: 0, agents: [] };
-    }
-  });
+  const [connectedAgents] = createResource(
+    () => discoveryFeatureEnabled(),
+    async (enabled) => {
+      if (!enabled) {
+        return { count: 0, agents: [] };
+      }
+      try {
+        return await getConnectedAgents();
+      } catch {
+        return { count: 0, agents: [] };
+      }
+    },
+  );
 
   const hasConnectedAgent = createMemo(() => {
     const agentId = targetAgentId();
@@ -83,20 +106,28 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
 
     return agents.length === 1;
   });
-  const canTriggerDiscovery = createMemo(() => Boolean(targetAgentId()));
+  const canTriggerDiscovery = createMemo(
+    () => discoveryFeatureEnabled() && Boolean(targetAgentId()),
+  );
 
-  const [discovery, { refetch, mutate }] = createResource(discoverySourceKey, async () => {
-    const agentId = targetAgentId();
-    if (!agentId) return null;
+  const [discovery, { refetch, mutate }] = createResource(
+    () => (discoveryFeatureEnabled() ? discoverySourceKey() : null),
+    async (sourceKey) => {
+      if (!sourceKey) return null;
 
-    try {
-      return await getDiscovery(props.resourceType, agentId, props.resourceId);
-    } catch {
-      return null;
-    }
-  });
+      const agentId = targetAgentId();
+      if (!agentId) return null;
+
+      try {
+        return await getDiscovery(props.resourceType, agentId, props.resourceId);
+      } catch {
+        return null;
+      }
+    },
+  );
 
   createEffect(() => {
+    void discoveryFeatureEnabled();
     void discoverySourceKey();
     setIsScanning(false);
     setHttpScanInProgress(false);
@@ -111,9 +142,13 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
   });
 
   createEffect(() => {
+    if (discoveryFeatureKnownDisabled()) {
+      setShowLoadingSpinner(false);
+      return;
+    }
     if (discovery.loading) {
       const timer = setTimeout(() => {
-        if (discovery.loading) {
+        if (discovery.loading && !discoveryFeatureKnownDisabled()) {
           setShowLoadingSpinner(true);
         }
       }, 150);
@@ -136,6 +171,11 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
   });
 
   const handleTriggerDiscovery = async (force = false) => {
+    if (!discoveryFeatureEnabled()) {
+      setScanError('AI discovery is disabled in Settings -> AI.');
+      return;
+    }
+
     setIsScanning(true);
     setHttpScanInProgress(true);
     setScanProgress(null);
@@ -231,6 +271,8 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
   };
 
   createEffect(() => {
+    if (!discoveryFeatureEnabled()) return;
+
     const unsubscribe = eventBus.on('ai_discovery_progress', (progress) => {
       if (!progress || progress.resource_id !== resourceId()) return;
 
@@ -277,6 +319,7 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
     canTriggerDiscovery,
     copiedDiscoveryValue,
     discovery,
+    discoveryFeatureKnownDisabled,
     discoveryInfo,
     editingNotes,
     handleSaveNotes,

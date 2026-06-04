@@ -63,3 +63,32 @@ func TestHandleDownloadUnifiedAgentSetsChecksumAndInvalidatesOnChange(t *testing
 		t.Fatalf("unexpected response body after update")
 	}
 }
+
+func TestHandleDownloadUnifiedAgentAllowsVersionCacheKeyQuery(t *testing.T) {
+	binDir := setupTempPulseBin(t)
+	filePath := filepath.Join(binDir, "pulse-agent-linux-amd64")
+
+	payload := validTestUnifiedAgentBinary("agent-binary-v1")
+	if err := os.WriteFile(filePath, payload, 0o755); err != nil {
+		t.Fatalf("failed to write test binary: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/download/pulse-agent?arch=linux-amd64&serverVersion=v6.0.0-rc.6", nil)
+	rr := httptest.NewRecorder()
+
+	router := &Router{checksumCache: make(map[string]checksumCacheEntry)}
+	router.handleDownloadUnifiedAgent(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", rr.Code)
+	}
+
+	expected := fmt.Sprintf("%x", sha256.Sum256(payload))
+	if got := rr.Header().Get("X-Checksum-Sha256"); got != expected {
+		t.Fatalf("unexpected checksum header: got %q want %q", got, expected)
+	}
+
+	if strings.TrimSpace(rr.Body.String()) != string(payload) {
+		t.Fatalf("unexpected response body")
+	}
+}

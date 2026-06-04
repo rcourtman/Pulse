@@ -993,12 +993,14 @@ type Monitor struct {
 	guestMetadataRefreshJitter time.Duration
 	guestMetadataRetryBackoff  time.Duration
 	guestMetadataHoldDuration  time.Duration
+	guestAgentWorkSlots        chan struct{}
 	// Configurable guest agent timeouts (refs #592)
 	guestAgentFSInfoTimeout  time.Duration
 	guestAgentNetworkTimeout time.Duration
 	guestAgentOSInfoTimeout  time.Duration
 	guestAgentVersionTimeout time.Duration
 	guestAgentRetries        int
+	guestAgentVMBudget       time.Duration
 	executor                 PollExecutor
 	breakerBaseRetry         time.Duration
 	breakerMaxDelay          time.Duration
@@ -1419,6 +1421,8 @@ func New(cfg *config.Config) (*Monitor, error) {
 	guestAgentOSInfoTimeout := parsePositiveDurationEnv("GUEST_AGENT_OSINFO_TIMEOUT", defaultGuestAgentOSInfoTimeout)
 	guestAgentVersionTimeout := parsePositiveDurationEnv("GUEST_AGENT_VERSION_TIMEOUT", defaultGuestAgentVersionTimeout)
 	guestAgentRetries := parseNonNegativeIntEnv("GUEST_AGENT_RETRIES", defaultGuestAgentRetries)
+	guestAgentVMBudget := parseDurationEnv("GUEST_AGENT_VM_BUDGET", 0)
+	guestAgentVMMaxConcurrent := parseNonNegativeIntEnv("GUEST_AGENT_VM_MAX_CONCURRENT", defaultGuestAgentVMMaxConcurrent)
 
 	// Initialize persistent metrics store (SQLite) with configurable retention
 	var metricsStore *metrics.Store
@@ -1547,6 +1551,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		guestAgentOSInfoTimeout:    guestAgentOSInfoTimeout,
 		guestAgentVersionTimeout:   guestAgentVersionTimeout,
 		guestAgentRetries:          guestAgentRetries,
+		guestAgentVMBudget:         guestAgentVMBudget,
 		instanceInfoCache:          make(map[string]*instanceInfo),
 		pollStatusMap:              make(map[string]*pollStatus),
 		dlqInsightMap:              make(map[string]*dlqInsight),
@@ -1600,6 +1605,9 @@ func New(cfg *config.Config) (*Monitor, error) {
 
 	if concurrency > 0 {
 		m.guestMetadataSlots = make(chan struct{}, concurrency)
+	}
+	if guestAgentVMMaxConcurrent > 0 {
+		m.guestAgentWorkSlots = make(chan struct{}, guestAgentVMMaxConcurrent)
 	}
 
 	if appriseConfig, err := m.configPersist.LoadAppriseConfig(); err == nil {
@@ -3751,6 +3759,7 @@ func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateS
 	unifiedView := m.currentUnifiedStateView()
 	metricsTargetResolver := broadcastMetricsTargetResolver(unifiedView.readState)
 	broadcastResources := unifiedresources.CoalescePresentationHostResources(unifiedView.resources)
+	broadcastResources = m.applyDockerMetadataToUnifiedResources(broadcastResources)
 	frontendState.Resources = convertResourcesForBroadcast(broadcastResources, metricsTargetResolver)
 	frontendState.ConnectedInfrastructure = buildConnectedInfrastructure(broadcastResources, snapshot)
 	if !unifiedView.freshness.IsZero() {
@@ -4926,9 +4935,33 @@ func (m *Monitor) getResourcesForBroadcast() []models.ResourceFrontend {
 	store := m.resourceStore
 	m.mu.RUnlock()
 	return convertResourcesForBroadcast(
-		m.getUnifiedResourcesForBroadcast(),
+		m.applyDockerMetadataToUnifiedResources(m.getUnifiedResourcesForBroadcast()),
 		broadcastMetricsTargetResolver(store),
 	)
+}
+
+func (m *Monitor) applyDockerMetadataToUnifiedResources(resources []unifiedresources.Resource) []unifiedresources.Resource {
+	if len(resources) == 0 || m == nil || m.dockerMetadataStore == nil {
+		return resources
+	}
+
+	out := make([]unifiedresources.Resource, len(resources))
+	copy(out, resources)
+	for i := range out {
+		resource := &out[i]
+		if resource.Type != unifiedresources.ResourceTypeAppContainer || strings.TrimSpace(resource.CustomURL) != "" || resource.Docker == nil {
+			continue
+		}
+		hostID := strings.TrimSpace(resource.Docker.HostSourceID)
+		containerID := strings.TrimSpace(resource.Docker.ContainerID)
+		if hostID == "" || containerID == "" {
+			continue
+		}
+		if meta := m.dockerMetadataStore.Get(fmt.Sprintf("%s:container:%s", hostID, containerID)); meta != nil {
+			resource.CustomURL = strings.TrimSpace(meta.CustomURL)
+		}
+	}
+	return out
 }
 
 // convertResourcesForBroadcast converts unified resources into the frontend payload shape.
@@ -5066,6 +5099,7 @@ func monitorResourceToConvertInput(resource unifiedresources.Resource) models.Re
 		Uptime:                monitorUptime(resource),
 		Tags:                  append([]string(nil), resource.Tags...),
 		Labels:                monitorLabels(resource),
+		CustomURL:             strings.TrimSpace(resource.CustomURL),
 		LastSeenUnix:          monitorLastSeenUnix(resource.LastSeen),
 		IncidentCount:         resource.IncidentCount,
 		IncidentCode:          resource.IncidentCode,

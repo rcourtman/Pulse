@@ -245,8 +245,8 @@ describe('toDiscoveryConfig', () => {
       agentId: 'docker-host-1',
       resourceId: 'container-abc123',
       hostname: 'stale-hostname',
-      metadataKind: 'guest',
-      metadataId: 'resource:app-container:hash-1',
+      metadataKind: 'docker',
+      metadataId: 'docker-host-1:container:container-abc123',
       targetLabel: 'container',
     });
   });
@@ -280,8 +280,8 @@ describe('toDiscoveryConfig', () => {
       agentId: 'agent-edge-01',
       resourceId: 'customer-portal',
       hostname: 'edge-apps-01',
-      metadataKind: 'guest',
-      metadataId: 'customer-portal',
+      metadataKind: 'docker',
+      metadataId: 'agent-edge-01:container:abc123def456',
       targetLabel: 'container',
     });
   });

@@ -3,6 +3,7 @@ package installtests
 import (
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -66,6 +67,51 @@ func TestInstallSHAutoDetectProxmoxKeepsRuntimeTypeUnpinned(t *testing.T) {
 	for _, needle := range forbidden {
 		if strings.Contains(script, needle) {
 			t.Fatalf("install.sh preserved stale single-type Proxmox auto-detect contract: %s", needle)
+		}
+	}
+}
+
+func TestInstallSHAcceptsLegacyBooleanFlagValues(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`--enable-host=true) ENABLE_HOST="true"; shift ;;`,
+		`--enable-host=false) ENABLE_HOST="false"; shift ;;`,
+		`--enable-docker=true) ENABLE_DOCKER="true"; DOCKER_EXPLICIT="true"; shift ;;`,
+		`--enable-docker=false) ENABLE_DOCKER="false"; DOCKER_EXPLICIT="true"; shift ;;`,
+		`--enable-kubernetes=true) ENABLE_KUBERNETES="true"; KUBERNETES_EXPLICIT="true"; shift ;;`,
+		`--enable-kubernetes=false) ENABLE_KUBERNETES="false"; KUBERNETES_EXPLICIT="true"; shift ;;`,
+		`--enable-proxmox=true) ENABLE_PROXMOX="true"; PROXMOX_EXPLICIT="true"; shift ;;`,
+		`--enable-proxmox=false) ENABLE_PROXMOX="false"; PROXMOX_EXPLICIT="true"; shift ;;`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing legacy boolean flag alias: %s", needle)
+		}
+	}
+}
+
+func TestInstallSHAgentDownloadIsServerVersionAware(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`"${PULSE_URL}/api/version"`,
+		`SERVER_VERSION="$(printf '%s' "$server_version_json" | sed -n 's/.*"version"`,
+		`DOWNLOAD_QUERY="${DOWNLOAD_QUERY}&serverVersion=${SERVER_VERSION}"`,
+		`log_info "Pulse server version: ${SERVER_VERSION}"`,
+		`Downloaded agent version (${NEW_VERSION}) does not match Pulse server version (${SERVER_VERSION})`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing version-aware agent download behavior: %s", needle)
 		}
 	}
 }
@@ -703,6 +749,107 @@ func TestInstallSHUsesSharedServiceRenderers(t *testing.T) {
 		if !strings.Contains(script, needle) {
 			t.Fatalf("install.sh missing shared service renderer usage: %s", needle)
 		}
+	}
+}
+
+func TestInstallSHPersistsRootlessContainerRuntimeServiceEnvironment(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`ROOTLESS_RUNTIME_SOCKET_URI=""`,
+		`discover_rootless_container_runtime() {`,
+		`discover_single_socket_match "/run/user/*/docker.sock"`,
+		`discover_single_socket_match "/run/user/*/podman/podman.sock"`,
+		`append_service_env "DOCKER_HOST" "$ROOTLESS_RUNTIME_SOCKET_URI"`,
+		`append_service_env "PULSE_DOCKER_RUNTIME" "podman"`,
+		`append_service_env "CONTAINER_HOST" "$ROOTLESS_RUNTIME_SOCKET_URI"`,
+		`append_service_env "PODMAN_HOST" "$ROOTLESS_RUNTIME_SOCKET_URI"`,
+		`append_service_env "XDG_RUNTIME_DIR" "$ROOTLESS_RUNTIME_XDG_DIR"`,
+		`env_line="$SYSTEMD_ENV_LINES"`,
+		`local service_env_lines="$SHELL_EXPORT_LINES"`,
+		`</array>${PLIST_ENV_BLOCK}`,
+		`respawn limit 5 10${UPSTART_ENV_LINES}`,
+		`sed -i "s|SSL_CERT_FILE_PLACEHOLDER|${SED_EXPORT_LINES}|g" "$INITSCRIPT"`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing rootless service environment persistence contract: %s", needle)
+		}
+	}
+}
+
+func TestInstallSHServiceEnvAccumulatorRendersRootlessSocketVariables(t *testing.T) {
+	script := `
+		APPLIED_SERVICE_ENV_KEYS="|"
+		SYSTEMD_ENV_LINES=""
+		SHELL_EXPORT_LINES=""
+		UPSTART_ENV_LINES=""
+		SED_EXPORT_LINES=""
+		PLIST_ENV_ENTRIES=""
+		PLIST_ENV_BLOCK=""
+` + extractInstallShellFunction(t, "xml_escape") + `
+` + extractInstallShellFunction(t, "service_env_has_key") + `
+` + extractInstallShellFunction(t, "shell_export_value") + `
+` + extractInstallShellFunction(t, "append_service_env") + `
+` + extractInstallShellFunction(t, "finalize_plist_env_block") + `
+		append_service_env "DOCKER_HOST" "unix:///run/user/1000/docker.sock"
+		append_service_env "XDG_RUNTIME_DIR" "/run/user/1000"
+		append_service_env "DOCKER_HOST" "unix:///run/user/2000/docker.sock"
+		finalize_plist_env_block
+		printf '%s\n---shell---\n%s\n---sed---\n%s\n---plist---\n%s\n' "$SYSTEMD_ENV_LINES" "$SHELL_EXPORT_LINES" "$SED_EXPORT_LINES" "$PLIST_ENV_BLOCK"
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	got := string(out)
+	required := []string{
+		`Environment="DOCKER_HOST=unix:///run/user/1000/docker.sock"`,
+		`Environment="XDG_RUNTIME_DIR=/run/user/1000"`,
+		`export DOCKER_HOST="unix:///run/user/1000/docker.sock"`,
+		`export XDG_RUNTIME_DIR="/run/user/1000"`,
+		`export DOCKER_HOST="unix:///run/user/1000/docker.sock"; export XDG_RUNTIME_DIR="/run/user/1000"`,
+		`<key>DOCKER_HOST</key>`,
+		`<string>unix:///run/user/1000/docker.sock</string>`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(got, needle) {
+			t.Fatalf("service env output missing %s:\n%s", needle, got)
+		}
+	}
+	if strings.Contains(got, "unix:///run/user/2000/docker.sock") {
+		t.Fatalf("service env accumulator did not ignore duplicate key:\n%s", got)
+	}
+}
+
+func TestInstallSHDiscoverSingleSocketMatch(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("/tmp", "pulse-sock-*")
+	if err != nil {
+		t.Fatalf("mktemp socket dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+	socketPath := filepath.Join(tmpDir, "docker.sock")
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatalf("listen unix socket: %v", err)
+	}
+	defer listener.Close()
+
+	script := `
+` + extractInstallShellFunction(t, "discover_single_socket_match") + `
+		discover_single_socket_match "` + filepath.ToSlash(tmpDir) + `/*.sock"
+	`
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	if strings.TrimSpace(string(out)) != filepath.ToSlash(socketPath) {
+		t.Fatalf("socket match = %q, want %q", strings.TrimSpace(string(out)), filepath.ToSlash(socketPath))
 	}
 }
 
@@ -2236,6 +2383,8 @@ esac
 ` + extractAutoUpdateFunction(t, "require_release_signature_verifier") + `
 ` + extractAutoUpdateFunction(t, "verify_release_signature") + `
 ` + extractAutoUpdateFunction(t, "resolve_install_script_url") + `
+` + extractAutoUpdateFunction(t, "is_prerelease_tag") + `
+		wait_for_service_active() { return 0; }
 ` + extractAutoUpdateFunction(t, "perform_update") + `
 		perform_update v9.9.9
 	`

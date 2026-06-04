@@ -112,6 +112,40 @@ func TestProviderMSPPreflightPassesWithLicenseDockerAndStorage(t *testing.T) {
 	}
 }
 
+func TestProviderMSPPreflightAcceptsPulseHostedMSPMode(t *testing.T) {
+	docker := &fakeProviderMSPPreflightDocker{
+		report: &cpDocker.RuntimePrerequisiteReport{
+			OK:              true,
+			DockerReachable: true,
+			NetworkName:     "pulse-provider-msp",
+			NetworkOK:       true,
+			NetworkID:       "network-test",
+			ImageRef:        "pulse:test",
+			ImageID:         "sha256:test",
+			ImageAvailable:  true,
+		},
+	}
+	cfg := testProviderMSPPreflightConfig(t, cloudcp.ProviderMSPPlanSourceLicenseFile)
+	cfg.ControlPlaneMode = cloudcp.ControlPlaneModePulseHostedMSP
+
+	report, err := runProviderMSPPreflightWithDependencies(
+		context.Background(),
+		cfg,
+		providerMSPPreflightOptions{},
+		fakeProviderMSPPreflightDependencies(docker, &cloudcp.StorageGuardrailReport{Enabled: false, OK: true}),
+	)
+
+	if err != nil {
+		t.Fatalf("runProviderMSPPreflightWithDependencies: %v", err)
+	}
+	if !report.OK {
+		t.Fatalf("report.OK = false, failures = %v", report.Failures)
+	}
+	if report.ControlMode != string(cloudcp.ControlPlaneModePulseHostedMSP) {
+		t.Fatalf("ControlMode = %q, want %q", report.ControlMode, cloudcp.ControlPlaneModePulseHostedMSP)
+	}
+}
+
 func TestProviderMSPPreflightSkipImagePullUsesInspectOnly(t *testing.T) {
 	docker := &fakeProviderMSPPreflightDocker{
 		report: &cpDocker.RuntimePrerequisiteReport{

@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"sync"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
@@ -77,6 +78,7 @@ func (m *Monitor) collectGuestsFromClusterResources(
 ) ([]models.VM, []models.Container) {
 	allVMs := make([]models.VM, 0, len(resources))
 	allContainers := make([]models.Container, 0, len(resources))
+	vmResources := make([]indexedClusterResource, 0, len(resources))
 
 	for _, res := range resources {
 		// Generate canonical guest ID: instance:node:vmid
@@ -92,15 +94,11 @@ func (m *Monitor) collectGuestsFromClusterResources(
 
 		switch res.Type {
 		case "qemu":
-			var prevVM *models.VM
-			if prev, ok := prevVMByID[guestID]; ok {
-				prevVM = &prev
-			}
-			vm, ok := m.handleClusterVMResource(ctx, instanceName, res, guestID, client, prevVM, vmIDToHostAgent)
-			if !ok {
-				continue
-			}
-			allVMs = append(allVMs, vm)
+			vmResources = append(vmResources, indexedClusterResource{
+				order:    len(vmResources),
+				resource: res,
+				guestID:  guestID,
+			})
 		case "lxc":
 			container, ok := m.handleClusterContainerResource(ctx, instanceName, res, guestID, client, prevContainerIsOCI)
 			if !ok {
@@ -110,7 +108,91 @@ func (m *Monitor) collectGuestsFromClusterResources(
 		}
 	}
 
+	if len(vmResources) > 0 {
+		allVMs = append(allVMs, m.collectClusterVMResources(ctx, instanceName, vmResources, client, prevVMByID, vmIDToHostAgent)...)
+	}
+
 	return allVMs, allContainers
+}
+
+type indexedClusterResource struct {
+	order    int
+	resource proxmox.ClusterResource
+	guestID  string
+}
+
+type clusterVMResourceResult struct {
+	order int
+	vm    models.VM
+	ok    bool
+}
+
+func (m *Monitor) collectClusterVMResources(
+	ctx context.Context,
+	instanceName string,
+	resources []indexedClusterResource,
+	client PVEClientInterface,
+	prevVMByID map[string]models.VM,
+	vmIDToHostAgent map[string]models.Host,
+) []models.VM {
+	resultCh := make(chan clusterVMResourceResult, len(resources))
+	jobCh := make(chan indexedClusterResource, len(resources))
+	var wg sync.WaitGroup
+
+	workerCount := m.efficientQEMUWorkerCount(len(resources))
+	for i := 0; i < workerCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for entry := range jobCh {
+				var result clusterVMResourceResult
+				ran := m.runGuestAgentVMWork(ctx, func(workCtx context.Context) {
+					var prevVM *models.VM
+					if prev, ok := prevVMByID[entry.guestID]; ok {
+						prevVM = &prev
+					}
+					vm, ok := m.handleClusterVMResource(workCtx, instanceName, entry.resource, entry.guestID, client, prevVM, vmIDToHostAgent)
+					result = clusterVMResourceResult{
+						order: entry.order,
+						vm:    vm,
+						ok:    ok,
+					}
+				})
+				if !ran {
+					result = clusterVMResourceResult{order: entry.order, ok: false}
+				}
+				resultCh <- result
+			}
+		}()
+	}
+
+	for _, entry := range resources {
+		jobCh <- entry
+	}
+	close(jobCh)
+
+	go func() {
+		wg.Wait()
+		close(resultCh)
+	}()
+
+	orderedVMs := make([]models.VM, len(resources))
+	orderedOK := make([]bool, len(resources))
+	for result := range resultCh {
+		if result.order < 0 || result.order >= len(resources) || !result.ok {
+			continue
+		}
+		orderedVMs[result.order] = result.vm
+		orderedOK[result.order] = true
+	}
+
+	vms := make([]models.VM, 0, len(resources))
+	for i, ok := range orderedOK {
+		if ok {
+			vms = append(vms, orderedVMs[i])
+		}
+	}
+	return vms
 }
 
 func (m *Monitor) handleClusterVMResource(

@@ -1360,6 +1360,20 @@ func (cc *ClusterClient) GetClusterResources(ctx context.Context, resourceType s
 	return result, err
 }
 
+// GetClusterOptions fetches datacenter options via the first healthy node.
+func (cc *ClusterClient) GetClusterOptions(ctx context.Context) (*ClusterOptions, error) {
+	var result *ClusterOptions
+	err := cc.executeWithFailover(ctx, func(client *Client) error {
+		opts, err := client.GetClusterOptions(ctx)
+		if err != nil {
+			return err
+		}
+		result = opts
+		return nil
+	})
+	return result, err
+}
+
 // GetContainerStatus returns the status of a specific container
 func (cc *ClusterClient) GetContainerStatus(ctx context.Context, node string, vmid int) (*Container, error) {
 	var result *Container

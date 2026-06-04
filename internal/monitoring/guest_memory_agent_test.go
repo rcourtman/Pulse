@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
@@ -108,6 +109,74 @@ func TestGetVMAgentMemAvailableCachesResults(t *testing.T) {
 			t.Fatalf("expected negative result to back off, got %d calls", client.memCalls)
 		}
 	})
+}
+
+func TestGetVMAgentMemAvailableRetriesKnownNonWindowsGuestSoonerAfterNegativeCache(t *testing.T) {
+	t.Parallel()
+
+	client := &guestMemoryAgentTestClient{
+		stubPVEClient: &stubPVEClient{},
+		memAvailable:  2 * 1024 * 1024 * 1024,
+	}
+	mon := &Monitor{
+		guestMetadataCache: map[string]guestMetadataCacheEntry{
+			guestMetadataCacheKey("pve1", "node1", 100): {
+				osName:    "Ubuntu",
+				fetchedAt: time.Now(),
+			},
+		},
+		vmAgentMemCache: map[string]agentMemCacheEntry{
+			guestMemoryCacheKey("pve1", "node1", 100): {
+				negative:  true,
+				fetchedAt: time.Now().Add(-vmAgentMemNegativeKnownGuestTTL - time.Second),
+			},
+		},
+	}
+
+	available, err := mon.getVMAgentMemAvailable(context.Background(), client, "pve1", "node1", 100)
+	if err != nil {
+		t.Fatalf("getVMAgentMemAvailable() error = %v", err)
+	}
+	if available != 2*1024*1024*1024 {
+		t.Fatalf("getVMAgentMemAvailable() available = %d", available)
+	}
+	if client.memCalls != 1 {
+		t.Fatalf("expected guest-agent meminfo retry, got %d calls", client.memCalls)
+	}
+}
+
+func TestGetVMAgentMemAvailableKeepsLongNegativeCacheForWindowsGuest(t *testing.T) {
+	t.Parallel()
+
+	client := &guestMemoryAgentTestClient{
+		stubPVEClient: &stubPVEClient{},
+		memAvailable:  2 * 1024 * 1024 * 1024,
+	}
+	mon := &Monitor{
+		guestMetadataCache: map[string]guestMetadataCacheEntry{
+			guestMetadataCacheKey("pve1", "node1", 100): {
+				osName:    "Microsoft Windows",
+				fetchedAt: time.Now(),
+			},
+		},
+		vmAgentMemCache: map[string]agentMemCacheEntry{
+			guestMemoryCacheKey("pve1", "node1", 100): {
+				negative:  true,
+				fetchedAt: time.Now().Add(-vmAgentMemNegativeKnownGuestTTL - time.Second),
+			},
+		},
+	}
+
+	available, err := mon.getVMAgentMemAvailable(context.Background(), client, "pve1", "node1", 100)
+	if err == nil {
+		t.Fatal("expected cached negative result for Windows guest")
+	}
+	if available != 0 {
+		t.Fatalf("expected no memavailable result, got %d", available)
+	}
+	if client.memCalls != 0 {
+		t.Fatalf("expected Windows guest negative cache to suppress retry, got %d calls", client.memCalls)
+	}
 }
 
 func TestResolveGuestStatusMemoryUsesGuestAgentMeminfoFallback(t *testing.T) {

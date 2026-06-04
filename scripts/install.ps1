@@ -655,6 +655,26 @@ if ($processorArch -eq "ARM64" -or $processorArch64 -eq "ARM64") {
 }
 $ArchParam = "windows-$Arch"
 $DownloadUrl = "$Url/download/pulse-agent?arch=$ArchParam"
+$ServerVersion = ""
+
+try {
+    $versionResponse = Invoke-WithOptionalInsecureTls -AllowInsecure $Insecure -CustomCaCertificate $CustomCaCertificate -Action {
+        Invoke-WebRequest -Uri "$Url/api/version" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+    }
+    if ($versionResponse -and $versionResponse.Content) {
+        $versionInfo = $versionResponse.Content | ConvertFrom-Json
+        if ($versionInfo -and $versionInfo.version) {
+            $ServerVersion = [string]$versionInfo.version
+            Write-Host "Pulse server version: $ServerVersion" -ForegroundColor Cyan
+        }
+    }
+} catch {
+}
+
+if (-not [string]::IsNullOrWhiteSpace($ServerVersion)) {
+    $escapedServerVersion = [Uri]::EscapeDataString($ServerVersion)
+    $DownloadUrl = "$DownloadUrl&serverVersion=$escapedServerVersion"
+}
 
 function Invoke-AgentDownloadPreflight {
     param([string]$Uri)
@@ -814,6 +834,17 @@ if (Test-HasPinnedInstallerSignatureKey) {
         Show-Error "$_"
         Exit 1
     }
+}
+
+$DownloadedVersion = ""
+try {
+    $DownloadedVersion = ((& $TempPath --version 2>$null) | Select-Object -First 1).Trim()
+} catch {
+    $DownloadedVersion = ""
+}
+
+if (-not [string]::IsNullOrWhiteSpace($ServerVersion) -and -not [string]::IsNullOrWhiteSpace($DownloadedVersion) -and $DownloadedVersion -ne $ServerVersion) {
+    Write-Host "Warning: downloaded agent version ($DownloadedVersion) does not match Pulse server version ($ServerVersion). Check that Pulse is upgraded and that any reverse proxy is not serving a stale cached binary." -ForegroundColor Yellow
 }
 
 # --- Install Binary ---

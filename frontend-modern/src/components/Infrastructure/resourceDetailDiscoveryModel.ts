@@ -20,7 +20,7 @@ export type DiscoveryConfig = {
   agentId: string;
   resourceId: string;
   hostname: string;
-  metadataKind: 'guest' | 'agent';
+  metadataKind: 'guest' | 'agent' | 'docker';
   metadataId: string;
   targetLabel: string;
 };
@@ -31,6 +31,7 @@ type ProxmoxPlatformData = {
 };
 
 type DockerPlatformData = {
+  hostSourceId?: string;
   containerId?: string;
   hostname?: string;
 };
@@ -84,7 +85,44 @@ const getPreferredHostLabel = (resource: Resource): string =>
   getPreferredInfrastructureDisplayName(resource) ||
   resource.id;
 
+const getDockerContainerMetadataId = (
+  resource: Resource,
+  platformData: PlatformData | undefined,
+): string | undefined => {
+  const dockerPlatformData = platformData?.docker;
+  const hostSourceId =
+    asString(resource.docker?.hostSourceId) || asString(dockerPlatformData?.hostSourceId);
+  const containerId =
+    asString(resource.docker?.containerId) || asString(dockerPlatformData?.containerId);
+
+  if (!hostSourceId || !containerId) return undefined;
+  return `${hostSourceId}:container:${containerId}`;
+};
+
+const getMetadataTarget = (
+  resource: Resource,
+  resourceType: DiscoveryResourceType,
+  fallbackMetadataId: string,
+  platformData: PlatformData | undefined,
+): Pick<DiscoveryConfig, 'metadataKind' | 'metadataId'> => {
+  if (resourceType === 'app-container') {
+    const dockerMetadataId = getDockerContainerMetadataId(resource, platformData);
+    if (dockerMetadataId) {
+      return {
+        metadataKind: 'docker',
+        metadataId: dockerMetadataId,
+      };
+    }
+  }
+
+  return {
+    metadataKind: 'guest',
+    metadataId: fallbackMetadataId,
+  };
+};
+
 export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null => {
+  const platformData = resource.platformData as PlatformData | undefined;
   const explicitDiscoveryTarget = resource.discoveryTarget;
   const explicitDiscoveryAgentId = asString(
     (explicitDiscoveryTarget as { agentId?: unknown } | undefined)?.agentId,
@@ -119,6 +157,9 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     if (resourceType) {
       const hostname = explicitDiscoveryTarget.hostname || getPreferredHostLabel(resource);
       const isHostDiscovery = isAgentDiscoveryResourceType(resourceType);
+      const metadataTarget = isHostDiscovery
+        ? { metadataKind: 'agent' as const, metadataId: explicitDiscoveryAgentId }
+        : getMetadataTarget(resource, resourceType, explicitDiscoveryResourceId, platformData);
       const targetLabel = isHostDiscovery
         ? 'agent'
         : resourceType === 'app-container'
@@ -131,14 +172,13 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
         agentId: explicitDiscoveryAgentId,
         resourceId: explicitDiscoveryResourceId,
         hostname,
-        metadataKind: isHostDiscovery ? 'agent' : 'guest',
-        metadataId: explicitDiscoveryResourceId,
+        metadataKind: metadataTarget.metadataKind,
+        metadataId: metadataTarget.metadataId,
         targetLabel,
       };
     }
   }
 
-  const platformData = resource.platformData as PlatformData | undefined;
   const dockerPlatformData = platformData?.docker;
   const kubernetesPlatformData = platformData?.kubernetes;
   const proxmoxVmid =
@@ -253,8 +293,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
         agentId: workloadAgentId,
         resourceId: asString(dockerPlatformData?.containerId) || resource.id,
         hostname,
-        metadataKind: 'guest',
-        metadataId: resource.id,
+        ...getMetadataTarget(resource, 'app-container', resource.id, platformData),
         targetLabel: 'container',
       };
     case 'pod':

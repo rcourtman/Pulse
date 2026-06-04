@@ -1,7 +1,7 @@
 export const RESOURCE_METADATA_CHANGED_EVENT = 'pulse:resource-metadata-changed';
 
 export type ResourceMetadataChangedDetail = {
-  metadataKind: 'agent' | 'guest';
+  metadataKind: 'agent' | 'guest' | 'docker';
   metadataId: string;
   customUrl?: string;
 };

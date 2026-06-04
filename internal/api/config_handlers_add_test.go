@@ -156,6 +156,31 @@ func TestHandleAddNode(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "success_add_pve_token_aliases",
+			requestBody: map[string]interface{}{
+				"name":        "test-token-alias-pve",
+				"type":        "pve",
+				"host":        "10.0.0.4",
+				"tokenId":     "root@pam!alias",
+				"tokenSecret": "alias-secret",
+			},
+			expectedStatus: http.StatusCreated,
+			verifyConfig: func(t *testing.T, c *config.Config) {
+				for _, node := range c.PVEInstances {
+					if node.Name == "test-token-alias-pve" {
+						if node.TokenName != "root@pam!alias" {
+							t.Errorf("expected token name alias to persist, got %q", node.TokenName)
+						}
+						if node.TokenValue != "alias-secret" {
+							t.Errorf("expected token secret alias to persist, got %q", node.TokenValue)
+						}
+						return
+					}
+				}
+				t.Error("new PVE node (token aliases) not found in config")
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -174,6 +199,33 @@ func TestHandleAddNode(t *testing.T) {
 				tt.verifyConfig(t, dummyCfg)
 			}
 		})
+	}
+}
+
+func TestNodeConfigRequestNormalizeTokenAliases(t *testing.T) {
+	req := NodeConfigRequest{
+		TokenID:     " root@pam!token ",
+		TokenSecret: " secret ",
+	}
+	req.normalizeTokenAliases()
+
+	if req.TokenName != "root@pam!token" {
+		t.Fatalf("TokenName = %q, want tokenId alias", req.TokenName)
+	}
+	if req.TokenValue != "secret" {
+		t.Fatalf("TokenValue = %q, want tokenSecret alias", req.TokenValue)
+	}
+
+	req = NodeConfigRequest{
+		TokenName:   " root@pam!canonical ",
+		TokenValue:  " canonical-secret ",
+		TokenID:     "root@pam!alias",
+		TokenSecret: "alias-secret",
+	}
+	req.normalizeTokenAliases()
+
+	if req.TokenName != "root@pam!canonical" || req.TokenValue != "canonical-secret" {
+		t.Fatalf("canonical token fields must win over aliases, got name=%q value=%q", req.TokenName, req.TokenValue)
 	}
 }
 

@@ -53,7 +53,7 @@ services:
     environment:
       - CP_DATA_DIR=${PULSE_PROVIDER_MSP_DATA_DIR:-/data}
       - CP_ENV=${CP_ENV}
-      - CP_CONTROL_PLANE_MODE=provider_hosted_msp
+      - CP_CONTROL_PLANE_MODE=${CP_CONTROL_PLANE_MODE:-provider_hosted_msp}
       - CP_BIND_ADDRESS=0.0.0.0
       - CP_PORT=8443
       - CP_ADMIN_KEY=${CP_ADMIN_KEY}

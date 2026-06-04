@@ -261,6 +261,7 @@ configure_pve_pulse_monitor_role() {
     local apply_token_acl="$1"
     local HAS_VM_MONITOR=false
     local HAS_VM_GUEST_AGENT_AUDIT=false
+    local HAS_VM_GUEST_AGENT_FILE_READ=false
     local HAS_SYS_AUDIT=false
     local PVE_VERSION=""
     local EXTRA_PRIVS=()
@@ -278,6 +279,13 @@ configure_pve_pulse_monitor_role() {
         pveum role delete TestGuestAgentAudit 2>/dev/null || true
     fi
 
+    if pveum role list 2>/dev/null | grep -q "VM.GuestAgent.FileRead"; then
+        HAS_VM_GUEST_AGENT_FILE_READ=true
+    elif pveum role add TestGuestAgentFileRead -privs VM.GuestAgent.FileRead 2>/dev/null; then
+        HAS_VM_GUEST_AGENT_FILE_READ=true
+        pveum role delete TestGuestAgentFileRead 2>/dev/null || true
+    fi
+
     if pveum role list 2>/dev/null | grep -q "Sys.Audit"; then
         HAS_SYS_AUDIT=true
     elif pveum role add TestSysAudit -privs Sys.Audit 2>/dev/null; then
@@ -293,10 +301,13 @@ configure_pve_pulse_monitor_role() {
         EXTRA_PRIVS+=("Sys.Audit")
     fi
 
-    if [ "$HAS_VM_MONITOR" = true ]; then
-        EXTRA_PRIVS+=("VM.Monitor")
-    elif [ "$HAS_VM_GUEST_AGENT_AUDIT" = true ]; then
+    if [ "$HAS_VM_GUEST_AGENT_AUDIT" = true ]; then
         EXTRA_PRIVS+=("VM.GuestAgent.Audit")
+        if [ "$HAS_VM_GUEST_AGENT_FILE_READ" = true ]; then
+            EXTRA_PRIVS+=("VM.GuestAgent.FileRead")
+        fi
+    elif [ "$HAS_VM_MONITOR" = true ]; then
+        EXTRA_PRIVS+=("VM.Monitor")
     fi
 
     if [ ${#EXTRA_PRIVS[@]} -gt 0 ]; then
@@ -612,6 +623,66 @@ pveum user add pulse-monitor@pve --comment "Pulse monitoring service" 2>/dev/nul
 
 AUTO_REG_SUCCESS=false
 
+extract_json_string_field() {
+    local json_input="$1"
+    local field_name="$2"
+
+    printf '%%s\n' "$json_input" | sed -n 's/.*"'"$field_name"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1
+}
+
+extract_pve_token_value() {
+    local token_output="$1"
+    local token_value=""
+
+    token_value=$(extract_json_string_field "$token_output" "value")
+    if [ -n "$token_value" ]; then
+        printf '%%s\n' "$token_value"
+        return 0
+    fi
+
+    printf '%%s\n' "$token_output" | awk -F'[|│]' '
+        function trim(value) {
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+            return value
+        }
+
+        {
+            key = trim($2)
+            value = trim($3)
+            if (key == "value" && value != "") {
+                print value
+                exit
+            }
+        }
+    '
+}
+
+create_pve_token() {
+    if TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 1 --output-format json 2>&1); then
+        TOKEN_CREATE_RC=0
+    else
+        TOKEN_CREATE_RC=$?
+    fi
+
+    if [ "$TOKEN_CREATE_RC" -eq 0 ]; then
+        TOKEN_VALUE=$(extract_pve_token_value "$TOKEN_OUTPUT")
+        return 0
+    fi
+
+    if echo "$TOKEN_OUTPUT" | grep -Eqi 'unknown option|unknown command|no such option|unable to parse option|output-format'; then
+        if TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 1 2>&1); then
+            TOKEN_CREATE_RC=0
+        else
+            TOKEN_CREATE_RC=$?
+        fi
+        if [ "$TOKEN_CREATE_RC" -eq 0 ]; then
+            TOKEN_VALUE=$(extract_pve_token_value "$TOKEN_OUTPUT")
+        fi
+    fi
+
+    return "$TOKEN_CREATE_RC"
+}
+
 attempt_auto_registration() {
     if [ -z "$PULSE_SETUP_TOKEN" ]; then
         if [ -t 0 ]; then
@@ -697,8 +768,7 @@ if pulse_pve_token_exists; then
 fi
 
 # Create a privilege-separated token and capture value (shown once by Proxmox)
-TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 1 2>&1)
-TOKEN_CREATE_RC=$?
+create_pve_token
 if [ "$TOKEN_CREATE_RC" -ne 0 ]; then
     echo "❌ Failed to create token '$TOKEN_NAME'"
     echo "$TOKEN_OUTPUT"
@@ -707,7 +777,6 @@ if [ "$TOKEN_CREATE_RC" -ne 0 ]; then
     echo ""
 else
     TOKEN_CREATED=true
-    TOKEN_VALUE=$(echo "$TOKEN_OUTPUT" | grep "│ value" | awk -F'│' '{print $3}' | tr -d ' ' | tail -1)
 
     if [ -z "$TOKEN_VALUE" ]; then
         echo ""

@@ -745,6 +745,51 @@ func TestProxmoxSetup_ProbePVEPrivilege_ReturnsFalseOnAddError(t *testing.T) {
 	}
 }
 
+func TestProxmoxSetup_ConfigurePVEPermissions_PrefersGuestAgentPrivileges(t *testing.T) {
+	mc := &mockCollector{}
+	var pulseMonitorPrivs string
+	var calls []commandCall
+	tokenID := fmt.Sprintf("%s!%s", proxmoxUserPVE, "pulse-node-1")
+
+	mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
+		calls = append(calls, newCommandCall(name, arg...))
+		if name != "pveum" {
+			return "", nil
+		}
+
+		if len(arg) >= 5 && arg[0] == "role" && (arg[1] == "modify" || arg[1] == "add") && arg[2] == proxmoxMonitorRole {
+			for i := 0; i < len(arg)-1; i++ {
+				if arg[i] == "-privs" {
+					pulseMonitorPrivs = arg[i+1]
+				}
+			}
+			return "", nil
+		}
+
+		return "", nil
+	}
+
+	p := &ProxmoxSetup{
+		logger:    zerolog.Nop(),
+		collector: mc,
+	}
+
+	p.configurePVEPermissions(context.Background(), tokenID)
+
+	if !strings.Contains(pulseMonitorPrivs, "VM.GuestAgent.Audit") {
+		t.Fatalf("expected PulseMonitor privileges to include VM.GuestAgent.Audit, got %q", pulseMonitorPrivs)
+	}
+	if !strings.Contains(pulseMonitorPrivs, "VM.GuestAgent.FileRead") {
+		t.Fatalf("expected PulseMonitor privileges to include VM.GuestAgent.FileRead, got %q", pulseMonitorPrivs)
+	}
+	if strings.Contains(pulseMonitorPrivs, "VM.Monitor") {
+		t.Fatalf("did not expect PulseMonitor privileges to include VM.Monitor when guest-agent privileges are available, got %q", pulseMonitorPrivs)
+	}
+	if hasCommandCall(calls, "pveum", "role", "add", privProbeRoleName("VM.Monitor"), "-privs", "VM.Monitor") {
+		t.Fatalf("expected guest-agent privilege support to avoid probing legacy VM.Monitor; calls=%#v", calls)
+	}
+}
+
 func TestProxmoxSetup_ConfigurePVEPermissions_FallsBackToGuestAgentAudit(t *testing.T) {
 	mc := &mockCollector{}
 	var pulseMonitorPrivs string

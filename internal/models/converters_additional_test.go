@@ -160,6 +160,7 @@ func TestConvertResourceToFrontend(t *testing.T) {
 		HasNetwork:   true,
 		Tags:         []string{"prod"},
 		Labels:       map[string]string{"env": "prod"},
+		CustomURL:    "https://resource.internal",
 		LastSeenUnix: 12345,
 		Alerts: []ResourceAlertInput{
 			{ID: "a1", Type: "cpu", Level: "warn", Message: "high", Value: 90, Threshold: 80, StartTimeUnix: 111},
@@ -180,6 +181,9 @@ func TestConvertResourceToFrontend(t *testing.T) {
 	}
 	if len(frontend.Alerts) != 1 || frontend.Alerts[0].ID != "a1" {
 		t.Fatalf("Alerts = %#v, want 1 alert", frontend.Alerts)
+	}
+	if frontend.CustomURL != input.CustomURL {
+		t.Fatalf("CustomURL = %q, want %q", frontend.CustomURL, input.CustomURL)
 	}
 	if frontend.Identity == nil || frontend.Identity.Hostname != identity.Hostname {
 		t.Fatalf("Identity = %#v, want hostname %q", frontend.Identity, identity.Hostname)

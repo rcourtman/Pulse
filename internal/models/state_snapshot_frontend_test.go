@@ -32,6 +32,7 @@ func TestStateSnapshotToFrontend_UsesConcreteStateContract(t *testing.T) {
 		RecentlyResolved:             []ResolvedAlert{},
 		LastUpdate:                   now,
 		TemperatureMonitoringEnabled: true,
+		PVETagColors:                 map[string]string{"production": "#ff0000"},
 	}.ToFrontend()
 
 	if len(frontend.Metrics) != 1 || frontend.Metrics[0].ID != "node-1" {
@@ -42,6 +43,9 @@ func TestStateSnapshotToFrontend_UsesConcreteStateContract(t *testing.T) {
 	}
 	if frontend.Stats.Version != "v6.0.0" {
 		t.Fatalf("expected concrete stats payload, got %#v", frontend.Stats)
+	}
+	if frontend.PVETagColors["production"] != "#ff0000" {
+		t.Fatalf("expected PVE tag colors to survive frontend conversion, got %#v", frontend.PVETagColors)
 	}
 
 	encoded, err := json.Marshal(frontend)
@@ -68,6 +72,9 @@ func TestStateSnapshotToFrontend_UsesConcreteStateContract(t *testing.T) {
 	}
 	if connectedInfrastructure, ok := payload["connectedInfrastructure"].([]any); !ok || len(connectedInfrastructure) != 0 {
 		t.Fatalf("expected connectedInfrastructure to serialize as an empty array, got %T (%v)", payload["connectedInfrastructure"], payload["connectedInfrastructure"])
+	}
+	if tagColors, ok := payload["pveTagColors"].(map[string]any); !ok || tagColors["production"] != "#ff0000" {
+		t.Fatalf("expected pveTagColors to serialize as an object, got %T (%v)", payload["pveTagColors"], payload["pveTagColors"])
 	}
 }
 

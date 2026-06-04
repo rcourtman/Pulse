@@ -531,6 +531,9 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 	}
 
 	if chatErr != nil {
+		if attempt != nil && attempt.response != nil {
+			p.recordPatrolUsage(attempt.response.InputTokens, attempt.response.OutputTokens)
+		}
 		if !noStream {
 			p.setStreamPhase("idle")
 			p.broadcast(PatrolStreamEvent{Type: "error", Content: chatErr.Error()})
@@ -734,6 +737,9 @@ func (p *PatrolService) runEvaluationPass(ctx context.Context, adapter *patrolFi
 	})
 
 	if err != nil {
+		if resp != nil {
+			p.recordPatrolUsage(resp.InputTokens, resp.OutputTokens)
+		}
 		log.Warn().Err(err).Msg("AI Patrol: Evaluation pass failed")
 		return nil, err
 	}

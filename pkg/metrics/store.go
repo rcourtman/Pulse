@@ -135,6 +135,11 @@ type bufferedMetric struct {
 	tier         Tier
 }
 
+type writeRequest struct {
+	metrics []bufferedMetric
+	done    chan struct{}
+}
+
 type metricBatchKey struct {
 	resourceType  string
 	resourceID    string
@@ -170,7 +175,7 @@ type Store struct {
 	buffer   []bufferedMetric
 
 	// Background workers
-	writeCh       chan []bufferedMetric
+	writeCh       chan writeRequest
 	maintenanceCh chan maintenanceRequest
 	stopCh        chan struct{}
 	doneCh        chan struct{}
@@ -224,7 +229,7 @@ func NewStore(config StoreConfig) (*Store, error) {
 		db:            db,
 		config:        config,
 		buffer:        make([]bufferedMetric, 0, config.WriteBufferSize),
-		writeCh:       make(chan []bufferedMetric, 100), // Buffer for write batches
+		writeCh:       make(chan writeRequest, 100), // Buffer for write batches
 		maintenanceCh: make(chan maintenanceRequest, 1),
 		stopCh:        make(chan struct{}),
 		doneCh:        make(chan struct{}),
@@ -504,9 +509,9 @@ func (s *Store) WriteWithTier(resourceType, resourceID, metricType string, value
 	}
 
 	s.bufferMu.Lock()
-	defer s.bufferMu.Unlock()
 
 	if s.stopping.Load() {
+		s.bufferMu.Unlock()
 		return
 	}
 
@@ -520,9 +525,13 @@ func (s *Store) WriteWithTier(resourceType, resourceID, metricType string, value
 	})
 
 	// Flush if buffer is full
+	var toWrite []bufferedMetric
 	if len(s.buffer) >= s.config.WriteBufferSize {
-		s.flushLocked()
+		toWrite = s.detachBufferLocked()
 	}
+	s.bufferMu.Unlock()
+
+	s.enqueueWrite(writeRequest{metrics: toWrite})
 }
 
 // WriteBatchSync writes metrics directly to the database without buffering.
@@ -638,10 +647,11 @@ func (s *Store) runStartupMaintenance() {
 	log.Info().Dur("duration", time.Since(start)).Msg("Deferred metrics startup maintenance completed")
 }
 
-// flush writes buffered metrics to the database (caller must hold bufferMu)
-func (s *Store) flushLocked() {
+// detachBufferLocked returns the current in-memory buffer and resets it.
+// Caller must hold bufferMu.
+func (s *Store) detachBufferLocked() []bufferedMetric {
 	if len(s.buffer) == 0 {
-		return
+		return nil
 	}
 
 	// Copy buffer for writing
@@ -649,17 +659,75 @@ func (s *Store) flushLocked() {
 	copy(toWrite, s.buffer)
 	s.buffer = s.buffer[:0]
 
-	// Send to serialized write channel
+	return toWrite
+}
+
+// flush writes buffered metrics to the database (caller must hold bufferMu)
+func (s *Store) flushLocked() {
+	s.enqueueWrite(writeRequest{metrics: s.detachBufferLocked()})
+}
+
+func (s *Store) enqueueWrite(req writeRequest) {
+	if len(req.metrics) == 0 && req.done == nil {
+		return
+	}
+
 	select {
-	case s.writeCh <- toWrite:
+	case s.writeCh <- req:
 	default:
 		log.Warn().
 			Str("component", "metrics_store").
 			Str("action", "drop_write_batch").
-			Int("batch_size", len(toWrite)).
+			Int("batch_size", len(req.metrics)).
 			Int("write_queue_depth", len(s.writeCh)).
 			Int("write_queue_capacity", cap(s.writeCh)).
 			Msg("Metrics write channel full, dropping batch")
+		if req.done != nil {
+			close(req.done)
+		}
+	}
+}
+
+func (s *Store) enqueueAndWait(req writeRequest) {
+	if req.done == nil {
+		req.done = make(chan struct{})
+	}
+
+	s.writeCh <- req
+	<-req.done
+}
+
+func (s *Store) drainBuffer() []bufferedMetric {
+	s.bufferMu.Lock()
+	defer s.bufferMu.Unlock()
+	return s.detachBufferLocked()
+}
+
+func (s *Store) flushBufferedAsync() {
+	s.enqueueWrite(writeRequest{metrics: s.drainBuffer()})
+}
+
+func (s *Store) processWriteRequests(requests []writeRequest) {
+	if len(requests) == 0 {
+		return
+	}
+
+	combined := make([]bufferedMetric, 0)
+	doneChans := make([]chan struct{}, 0)
+	for _, req := range requests {
+		if len(req.metrics) > 0 {
+			combined = append(combined, req.metrics...)
+		}
+		if req.done != nil {
+			doneChans = append(doneChans, req.done)
+		}
+	}
+
+	if len(combined) > 0 {
+		s.writeBatch(combined)
+	}
+	for _, done := range doneChans {
+		close(done)
 	}
 }
 
@@ -775,26 +843,25 @@ func coalesceMetricBatch(metrics []bufferedMetric) []bufferedMetric {
 	return coalesced
 }
 
-// coalesceQueuedBatches drains any already-queued write batches so the worker
-// can commit them in a single SQLite transaction. This reduces WAL write
-// amplification when the in-memory buffer flushes multiple times during one
-// poll cycle.
-func (s *Store) coalesceQueuedBatches(initial []bufferedMetric) []bufferedMetric {
-	if len(initial) == 0 {
+// coalesceQueuedRequests drains any already-queued write requests so the worker
+// can commit pending metrics in a single SQLite transaction while preserving
+// Flush completion barriers.
+func (s *Store) coalesceQueuedRequests(initial writeRequest) []writeRequest {
+	if len(initial.metrics) == 0 && initial.done == nil {
 		return nil
 	}
 
-	combined := initial
+	combined := []writeRequest{initial}
 	for {
 		select {
 		case next, ok := <-s.writeCh:
 			if !ok {
 				return combined
 			}
-			if len(next) == 0 {
+			if len(next.metrics) == 0 && next.done == nil {
 				continue
 			}
-			combined = append(combined, next...)
+			combined = append(combined, next)
 		default:
 			return combined
 		}
@@ -1402,24 +1469,22 @@ func (s *Store) backgroundWorker() {
 	for {
 		select {
 		case <-s.stopCh:
-			// Final flush before stopping
-			s.Flush()
-			// Process remaining writes
+			var remaining []writeRequest
+			if batch := s.drainBuffer(); len(batch) > 0 {
+				remaining = append(remaining, writeRequest{metrics: batch})
+			}
 			close(s.writeCh)
-			var remaining []bufferedMetric
-			for batch := range s.writeCh {
-				if len(batch) == 0 {
-					continue
-				}
-				remaining = append(remaining, batch...)
+			for req := range s.writeCh {
+				remaining = append(remaining, req)
 			}
-			if len(remaining) > 0 {
-				s.writeBatch(remaining)
-			}
+			s.processWriteRequests(remaining)
 			return
 
-		case batch := <-s.writeCh:
-			s.writeBatch(s.coalesceQueuedBatches(batch))
+		case req, ok := <-s.writeCh:
+			if !ok {
+				return
+			}
+			s.processWriteRequests(s.coalesceQueuedRequests(req))
 
 		case maintenance := <-s.maintenanceCh:
 			if maintenance.run != nil {
@@ -1430,7 +1495,7 @@ func (s *Store) backgroundWorker() {
 			}
 
 		case <-flushTicker.C:
-			s.Flush()
+			s.flushBufferedAsync()
 
 		case <-rollupTicker.C:
 			s.runRollup()
@@ -1441,11 +1506,13 @@ func (s *Store) backgroundWorker() {
 	}
 }
 
-// Flush writes any buffered metrics to the database
+// Flush writes any buffered metrics to the database and waits for all queued
+// writes ahead of the flush barrier to become visible.
 func (s *Store) Flush() {
-	s.bufferMu.Lock()
-	defer s.bufferMu.Unlock()
-	s.flushLocked()
+	if s == nil || s.stopping.Load() {
+		return
+	}
+	s.enqueueAndWait(writeRequest{metrics: s.drainBuffer()})
 }
 
 // runRollup aggregates raw data into higher tiers

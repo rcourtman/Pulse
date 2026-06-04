@@ -218,7 +218,7 @@ func newTenantRuntimeRolloutServiceFromConfig(
 	dockerMgr, err := cpDocker.NewManager(cpDocker.ManagerConfig{
 		Image:                    image,
 		Network:                  cfg.DockerNetwork,
-		IsolateTenantNetworks:    cfg.IsProviderHostedMSP(),
+		IsolateTenantNetworks:    cfg.IsMSPControlPlane(),
 		BaseDomain:               baseDomainFromURL(cfg.BaseURL),
 		TrialActivationPublicKey: cfg.TrialActivationPublicKey,
 		TrustedProxyCIDRs:        cfg.TrustedProxyCIDRs,

@@ -2275,6 +2275,74 @@ func (c *Client) GetClusterResources(ctx context.Context, resourceType string) (
 	return result.Data, nil
 }
 
+// ClusterOptions holds selected Proxmox datacenter configuration options.
+type ClusterOptions struct {
+	TagStyle string `json:"tag-style,omitempty"`
+}
+
+// GetClusterOptions fetches datacenter-level options such as tag color config.
+func (c *Client) GetClusterOptions(ctx context.Context) (*ClusterOptions, error) {
+	resp, err := c.get(ctx, "/cluster/options")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data ClusterOptions `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return &result.Data, nil
+}
+
+// ParseTagColorMap parses a Proxmox tag-style string and returns a map of
+// lowercase tag name to "#rrggbb" hex color string.
+// Example input: "color-map=production:ff0000;staging:ffaa00,ordering=config"
+func ParseTagColorMap(tagStyle string) map[string]string {
+	colors := make(map[string]string)
+	for _, part := range strings.Split(tagStyle, ",") {
+		part = strings.TrimSpace(part)
+		if !strings.HasPrefix(part, "color-map=") {
+			continue
+		}
+		for _, pair := range strings.Split(strings.TrimPrefix(part, "color-map="), ";") {
+			fields := strings.Split(pair, ":")
+			if len(fields) < 2 {
+				continue
+			}
+			tag := strings.ToLower(strings.TrimSpace(fields[0]))
+			hex := strings.TrimSpace(fields[1])
+			hex = strings.TrimPrefix(hex, "#")
+			if tag == "" || !isHexColorToken(hex) {
+				continue
+			}
+			colors[tag] = "#" + strings.ToLower(hex)
+		}
+	}
+	return colors
+}
+
+func isHexColorToken(value string) bool {
+	switch len(value) {
+	case 3, 6, 8:
+	default:
+		return false
+	}
+
+	for _, r := range value {
+		switch {
+		case r >= '0' && r <= '9':
+		case r >= 'a' && r <= 'f':
+		case r >= 'A' && r <= 'F':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 // ZFSPoolStatus represents the status of a ZFS pool (list endpoint)
 type ZFSPoolStatus struct {
 	Name   string  `json:"name"`

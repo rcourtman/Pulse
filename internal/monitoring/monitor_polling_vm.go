@@ -2,22 +2,18 @@ package monitoring
 
 import (
 	"context"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
 func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clusterName string, isCluster bool, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) {
 	startTime := time.Now()
 
-	// Channel to collect VM results from each node
 	type nodeResult struct {
 		node             string
 		vms              []models.VM
@@ -28,7 +24,6 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 	resultChan := make(chan nodeResult, len(nodes))
 	var wg sync.WaitGroup
 
-	// Count online nodes for logging
 	onlineNodes := 0
 	for _, node := range nodes {
 		if nodeEffectiveStatus[node.Node] == "online" {
@@ -36,8 +31,6 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 		}
 	}
 
-	// Capture the previous guest context once per poll cycle so fallback behavior
-	// is based on a consistent pre-poll snapshot.
 	prevGuests := m.previousGuestContextForInstance(instanceName)
 	prevVMByID := prevGuests.vmsByID
 	vmIDToHostAgent := prevGuests.hostAgentsByVMID
@@ -48,9 +41,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 		Int("onlineNodes", onlineNodes).
 		Msg("Starting parallel VM polling")
 
-	// Launch a goroutine for each online node
 	for _, node := range nodes {
-		// Skip offline nodes
 		if nodeEffectiveStatus[node.Node] != "online" {
 			log.Debug().
 				Str("node", node.Node).
@@ -64,8 +55,6 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 			defer wg.Done()
 
 			nodeStart := time.Now()
-
-			// Fetch VMs for this node
 			vms, err := client.GetVMs(ctx, n.Node)
 			if err != nil {
 				monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_vms", instanceName, err).WithNode(n.Node)
@@ -74,536 +63,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 				return
 			}
 
-			var nodeVMs []models.VM
-			nodeTemplateSubjects := make(map[string]struct{})
-
-			// Process each VM
-			for _, vm := range vms {
-				// Skip templates
-				if vm.Template == 1 {
-					if key := pveBackupTemplateSubjectKey(instanceName, "qemu", n.Node, vm.VMID); key != "" {
-						nodeTemplateSubjects[key] = struct{}{}
-					}
-					continue
-				}
-
-				// Parse tags
-				var tags []string
-				if vm.Tags != "" {
-					tags = strings.Split(vm.Tags, ";")
-				}
-
-				// Generate canonical guest ID: instance:node:vmid
-				guestID := makeGuestID(instanceName, n.Node, vm.VMID)
-				var prevVM *models.VM
-				if prev, ok := prevVMByID[guestID]; ok {
-					prevVM = &prev
-				}
-
-				guestRaw := VMMemoryRaw{
-					ListingMem:    vm.Mem,
-					ListingMaxMem: vm.MaxMem,
-					Agent:         vm.Agent,
-				}
-				memorySource := "cluster-resources"
-
-				// Initialize metrics from VM listing (may be 0 for disk I/O)
-				diskReadBytes := int64(vm.DiskRead)
-				diskWriteBytes := int64(vm.DiskWrite)
-				networkInBytes := int64(vm.NetIn)
-				networkOutBytes := int64(vm.NetOut)
-
-				// Get memory info for running VMs (and agent status for disk)
-				memUsed := uint64(0)
-				memTotal := vm.MaxMem
-				var vmStatus *proxmox.VMStatus
-				var ipAddresses []string
-				var networkInterfaces []models.GuestNetworkInterface
-				var osName, osVersion, guestAgentVersion string
-
-				if vm.Status == "running" {
-					// Try to get detailed VM status (but don't wait too long)
-					statusCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-					if status, err := client.GetVMStatus(statusCtx, n.Node, vm.VMID); err == nil {
-						vmStatus = status
-						guestRaw.StatusMaxMem = status.MaxMem
-						guestRaw.StatusMem = status.Mem
-						guestRaw.StatusFreeMem = status.FreeMem
-						guestRaw.Balloon = status.Balloon
-						guestRaw.BalloonMin = status.BalloonMin
-						guestRaw.Agent = status.Agent.Value
-						memTotal, memUsed, memorySource = m.resolveGuestStatusMemory(
-							ctx,
-							client,
-							instanceName,
-							vm.Name,
-							n.Node,
-							vm.VMID,
-							guestID,
-							status,
-							vmIDToHostAgent,
-							memTotal,
-							memorySource,
-							&guestRaw,
-						)
-						// Use actual disk I/O values from detailed status
-						diskReadBytes = int64(vmStatus.DiskRead)
-						diskWriteBytes = int64(vmStatus.DiskWrite)
-						networkInBytes = int64(vmStatus.NetIn)
-						networkOutBytes = int64(vmStatus.NetOut)
-					}
-					cancel()
-				}
-
-				if vm.Status != "running" {
-					memorySource = "powered-off"
-				} else if vmStatus == nil {
-					memorySource = "status-unavailable"
-				}
-
-				now := time.Now()
-				guestAgentAvailable := vm.Status == "running" &&
-					(shouldQueryGuestAgent(vmStatus, prevVM, now) ||
-						m.hasRecentGuestMetadataEvidence(instanceName, n.Node, vm.VMID, now))
-				if guestAgentAvailable {
-					guestIPs, guestIfaces, guestOSName, guestOSVersion, agentVersion := m.fetchGuestAgentMetadata(ctx, client, instanceName, n.Node, vm.Name, vm.VMID, vmStatus, vmStatus == nil)
-					if len(guestIPs) > 0 {
-						ipAddresses = guestIPs
-					}
-					if len(guestIfaces) > 0 {
-						networkInterfaces = guestIfaces
-					}
-					if guestOSName != "" {
-						osName = guestOSName
-					}
-					if guestOSVersion != "" {
-						osVersion = guestOSVersion
-					}
-					if agentVersion != "" {
-						guestAgentVersion = agentVersion
-					}
-				}
-
-				// Calculate I/O rates after we have the actual values
-				sampleTime := time.Now()
-				currentMetrics := IOMetrics{
-					DiskRead:   diskReadBytes,
-					DiskWrite:  diskWriteBytes,
-					NetworkIn:  networkInBytes,
-					NetworkOut: networkOutBytes,
-					Timestamp:  sampleTime,
-				}
-				diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
-
-				// Debug log disk I/O rates
-				if diskReadRate > 0 || diskWriteRate > 0 {
-					log.Debug().
-						Str("vm", vm.Name).
-						Int("vmid", vm.VMID).
-						Float64("diskReadRate", diskReadRate).
-						Float64("diskWriteRate", diskWriteRate).
-						Int64("diskReadBytes", diskReadBytes).
-						Int64("diskWriteBytes", diskWriteBytes).
-						Msg("VM disk I/O rates calculated")
-				}
-
-				// Set CPU to 0 for non-running VMs
-				cpuUsage := safeFloat(vm.CPU)
-				if vm.Status != "running" {
-					cpuUsage = 0
-				}
-
-				// Calculate disk usage - start with allocated disk size
-				// NOTE: The Proxmox cluster/resources API always returns 0 for VM disk usage
-				// We must query the guest agent to get actual disk usage
-				diskUsed := vm.Disk
-				diskTotal := vm.MaxDisk
-				diskFree := diskTotal - diskUsed
-				diskUsage := safePercentage(float64(diskUsed), float64(diskTotal))
-				diskFromAgent := false
-				diskStatusReason := ""
-				var individualDisks []models.Disk
-
-				// For stopped VMs, we can't get guest agent data
-				if vm.Status != "running" {
-					// Show allocated disk size for stopped VMs
-					if diskTotal > 0 {
-						diskUsage = -1 // Indicates "allocated size only"
-						diskStatusReason = "vm-stopped"
-					}
-				}
-
-				// For running VMs, ALWAYS try to get filesystem info from guest agent
-				// The cluster/resources endpoint always returns 0 for disk usage
-				if guestAgentAvailable && diskTotal > 0 {
-					agentValue := 0
-					if vmStatus != nil {
-						agentValue = vmStatus.Agent.Value
-					}
-
-					// Log the initial state
-					if logging.IsLevelEnabled(zerolog.DebugLevel) {
-						log.Debug().
-							Str("instance", instanceName).
-							Str("vm", vm.Name).
-							Int("vmid", vm.VMID).
-							Int("agent", agentValue).
-							Uint64("diskUsed", diskUsed).
-							Uint64("diskTotal", diskTotal).
-							Msg("VM has 0 disk usage, checking guest agent")
-					}
-
-					// Check if agent is enabled
-					if vmStatus != nil && !vmStatus.Agent.IsAvailable() {
-						if vmStatus.Agent.IsEnabled() {
-							diskStatusReason = "agent-not-running"
-						} else {
-							diskStatusReason = "agent-disabled"
-						}
-						if logging.IsLevelEnabled(zerolog.DebugLevel) {
-							log.Debug().
-								Str("instance", instanceName).
-								Str("vm", vm.Name).
-								Bool("agentEnabled", vmStatus.Agent.IsEnabled()).
-								Msg("Guest agent is not currently queryable")
-						}
-					} else {
-						if logging.IsLevelEnabled(zerolog.DebugLevel) {
-							log.Debug().
-								Str("instance", instanceName).
-								Str("vm", vm.Name).
-								Int("vmid", vm.VMID).
-								Msg("Guest agent enabled, fetching filesystem info")
-						}
-
-						// Filesystem info with configurable timeout and retry (refs #592)
-						fsInfoRaw, err := m.retryGuestAgentCall(ctx, m.guestAgentFSInfoTimeout, m.guestAgentRetries, func(ctx context.Context) (interface{}, error) {
-							return client.GetVMFSInfo(ctx, n.Node, vm.VMID)
-						})
-						var fsInfo []proxmox.VMFileSystem
-						if err == nil {
-							if fs, ok := fsInfoRaw.([]proxmox.VMFileSystem); ok {
-								fsInfo = fs
-							}
-						}
-						if err != nil {
-							// Handle errors
-							errStr := err.Error()
-							log.Warn().
-								Str("instance", instanceName).
-								Str("vm", vm.Name).
-								Int("vmid", vm.VMID).
-								Str("error", errStr).
-								Msg("Failed to get VM filesystem info from guest agent")
-
-							diskStatusReason = classifyGuestAgentDiskStatusError(err)
-
-							switch diskStatusReason {
-							case "agent-not-running":
-								log.Info().
-									Str("instance", instanceName).
-									Str("vm", vm.Name).
-									Int("vmid", vm.VMID).
-									Msg("Guest agent enabled in VM config but not running inside guest OS. Install and start qemu-guest-agent in the VM")
-							case "permission-denied":
-								log.Warn().
-									Str("instance", instanceName).
-									Str("vm", vm.Name).
-									Int("vmid", vm.VMID).
-									Msg("Permission denied accessing guest agent. Verify Pulse user has VM.Monitor (PVE 8) or VM.Audit+VM.GuestAgent.Audit (PVE 9) permissions")
-							}
-						} else if len(fsInfo) == 0 {
-							diskStatusReason = "no-filesystems"
-							log.Warn().
-								Str("instance", instanceName).
-								Str("vm", vm.Name).
-								Int("vmid", vm.VMID).
-								Msg("Guest agent returned empty filesystem list")
-						} else {
-							log.Info().
-								Str("instance", instanceName).
-								Str("vm", vm.Name).
-								Int("vmid", vm.VMID).
-								Int("filesystems", len(fsInfo)).
-								Msg("Got filesystem info from guest agent")
-							// Aggregate disk usage from all filesystems
-							// Fix for #425: Track seen devices to avoid counting duplicates
-							var totalBytes, usedBytes uint64
-							seenDevices := make(map[string]bool)
-
-							for _, fs := range fsInfo {
-								// Log each filesystem for debugging
-								log.Debug().
-									Str("vm", vm.Name).
-									Str("mountpoint", fs.Mountpoint).
-									Str("type", fs.Type).
-									Str("disk", fs.Disk).
-									Uint64("total", fs.TotalBytes).
-									Uint64("used", fs.UsedBytes).
-									Msg("Processing filesystem from guest agent")
-
-								// Skip special filesystems and Windows System Reserved
-								// For Windows, mountpoints are like "C:\\" or "D:\\" - don't skip those
-								isWindowsDrive := len(fs.Mountpoint) >= 2 && fs.Mountpoint[1] == ':' && strings.Contains(fs.Mountpoint, "\\")
-
-								if !isWindowsDrive {
-									if reason, skip := readOnlyFilesystemReason(fs.Type, fs.TotalBytes, fs.UsedBytes); skip {
-										log.Debug().
-											Str("vm", vm.Name).
-											Str("mountpoint", fs.Mountpoint).
-											Str("type", fs.Type).
-											Str("skipReason", reason).
-											Uint64("total", fs.TotalBytes).
-											Uint64("used", fs.UsedBytes).
-											Msg("Skipping read-only filesystem from guest agent")
-										continue
-									}
-
-									if fs.Type == "tmpfs" || fs.Type == "devtmpfs" ||
-										strings.HasPrefix(fs.Mountpoint, "/dev") ||
-										strings.HasPrefix(fs.Mountpoint, "/proc") ||
-										strings.HasPrefix(fs.Mountpoint, "/sys") ||
-										strings.HasPrefix(fs.Mountpoint, "/run") ||
-										fs.Mountpoint == "/boot/efi" ||
-										fs.Mountpoint == "System Reserved" ||
-										strings.Contains(fs.Mountpoint, "System Reserved") ||
-										strings.HasPrefix(fs.Mountpoint, "/snap") { // Skip snap mounts
-										log.Debug().
-											Str("vm", vm.Name).
-											Str("mountpoint", fs.Mountpoint).
-											Str("type", fs.Type).
-											Msg("Skipping special filesystem")
-										continue
-									}
-								}
-
-								// Skip if we've already seen this device (duplicate mount point)
-								if fs.Disk != "" && seenDevices[fs.Disk] {
-									log.Debug().
-										Str("vm", vm.Name).
-										Str("mountpoint", fs.Mountpoint).
-										Str("disk", fs.Disk).
-										Msg("Skipping duplicate mount of same device")
-									continue
-								}
-
-								// Only count real filesystems with valid data
-								if fs.TotalBytes > 0 {
-									// Mark this device as seen
-									if fs.Disk != "" {
-										seenDevices[fs.Disk] = true
-									}
-
-									totalBytes += fs.TotalBytes
-									usedBytes += fs.UsedBytes
-									individualDisks = append(individualDisks, models.Disk{
-										Total:      int64(fs.TotalBytes),
-										Used:       int64(fs.UsedBytes),
-										Free:       int64(fs.TotalBytes - fs.UsedBytes),
-										Usage:      safePercentage(float64(fs.UsedBytes), float64(fs.TotalBytes)),
-										Mountpoint: fs.Mountpoint,
-										Type:       fs.Type,
-										Device:     fs.Disk,
-									})
-									log.Debug().
-										Str("vm", vm.Name).
-										Str("mountpoint", fs.Mountpoint).
-										Str("disk", fs.Disk).
-										Uint64("added_total", fs.TotalBytes).
-										Uint64("added_used", fs.UsedBytes).
-										Msg("Adding filesystem to total")
-								} else {
-									log.Debug().
-										Str("vm", vm.Name).
-										Str("mountpoint", fs.Mountpoint).
-										Msg("Skipping filesystem with 0 total bytes")
-								}
-							}
-
-							// If we got valid data from guest agent, use it
-							if totalBytes > 0 {
-								diskTotal = totalBytes
-								diskUsed = usedBytes
-								diskFree = totalBytes - usedBytes
-								diskUsage = safePercentage(float64(usedBytes), float64(totalBytes))
-								diskFromAgent = true
-								diskStatusReason = "" // Clear reason on success
-
-								log.Info().
-									Str("instance", instanceName).
-									Str("vm", vm.Name).
-									Int("vmid", vm.VMID).
-									Uint64("totalBytes", totalBytes).
-									Uint64("usedBytes", usedBytes).
-									Float64("usage", diskUsage).
-									Msg("✓ Successfully retrieved disk usage from guest agent")
-							} else {
-								// Only special filesystems found - show allocated disk size instead
-								diskStatusReason = "special-filesystems-only"
-								if diskTotal > 0 {
-									diskUsage = -1 // Show as allocated size
-								}
-								log.Info().
-									Str("instance", instanceName).
-									Str("vm", vm.Name).
-									Int("filesystems_found", len(fsInfo)).
-									Msg("Guest agent provided filesystem info but no usable filesystems found (all were special mounts)")
-							}
-						}
-					}
-				} else if vm.Status == "running" && diskTotal > 0 {
-					// Running VM but no guest-agent evidence - show allocated disk
-					diskUsage = -1
-					if vmStatus == nil {
-						diskStatusReason = "no-status"
-					} else {
-						diskStatusReason = "no-agent"
-					}
-				}
-
-				if vm.Status == "running" {
-					var preferred bool
-					diskTotal, diskUsed, diskFree, diskUsage, individualDisks, diskStatusReason, preferred = preferLinkedHostAgentDiskInventory(
-						guestID,
-						vmIDToHostAgent,
-						diskTotal,
-						diskUsed,
-						diskFree,
-						diskUsage,
-						individualDisks,
-						diskStatusReason,
-					)
-					if preferred {
-						log.Debug().
-							Str("instance", instanceName).
-							Str("vm", vm.Name).
-							Str("node", n.Node).
-							Int("vmid", vm.VMID).
-							Bool("guestAgentDiskAvailable", diskFromAgent).
-							Float64("usage", diskUsage).
-							Msg("QEMU disk: preferring linked Pulse host agent disk inventory")
-					}
-				}
-				diskTotal, diskUsed, diskFree, diskUsage, individualDisks, diskStatusReason = stabilizeGuestLowTrustDisk(
-					prevVM,
-					vm.Status,
-					diskTotal,
-					diskUsed,
-					diskFree,
-					diskUsage,
-					individualDisks,
-					diskStatusReason,
-					diskFromAgent,
-					sampleTime,
-				)
-
-				prevSnapshot := m.previousGuestSnapshot(instanceName, "qemu", n.Node, vm.VMID)
-				memUsed, memorySource, snapshotNotes := stabilizeGuestLowTrustMemory(
-					prevSnapshot,
-					vm.Status,
-					memorySource,
-					memTotal,
-					memUsed,
-					sampleTime,
-					guestAgentSignalsHealthy(
-						vmStatus,
-						diskFromAgent,
-						ipAddresses,
-						networkInterfaces,
-						osName,
-						osVersion,
-						guestAgentVersion,
-					),
-				)
-
-				memTotalBytes := clampToInt64(memTotal)
-				memUsedBytes := clampToInt64(memUsed)
-				if memTotalBytes > 0 && memUsedBytes > memTotalBytes {
-					memUsedBytes = memTotalBytes
-				}
-				memFreeBytes := memTotalBytes - memUsedBytes
-				if memFreeBytes < 0 {
-					memFreeBytes = 0
-				}
-				memory := models.Memory{
-					Total: memTotalBytes,
-					Used:  memUsedBytes,
-					Free:  memFreeBytes,
-					Usage: safePercentage(float64(memUsed), float64(memTotal)),
-				}
-				if guestRaw.Balloon > 0 {
-					memory.Balloon = clampToInt64(guestRaw.Balloon)
-				}
-
-				// Create VM model
-				modelVM := models.VM{
-					ID:       guestID,
-					VMID:     vm.VMID,
-					Name:     vm.Name,
-					Node:     n.Node,
-					Pool:     strings.TrimSpace(vm.Pool),
-					Instance: instanceName,
-					Status:   vm.Status,
-					Type:     "qemu",
-					CPU:      cpuUsage,
-					CPUs:     vm.CPUs,
-					Memory:   memory,
-					Disk: models.Disk{
-						Total: int64(diskTotal),
-						Used:  int64(diskUsed),
-						Free:  int64(diskFree),
-						Usage: diskUsage,
-					},
-					Disks:             individualDisks,
-					DiskStatusReason:  diskStatusReason,
-					NetworkIn:         max(0, int64(netInRate)),
-					NetworkOut:        max(0, int64(netOutRate)),
-					DiskRead:          max(0, int64(diskReadRate)),
-					DiskWrite:         max(0, int64(diskWriteRate)),
-					Uptime:            int64(vm.Uptime),
-					Template:          vm.Template == 1,
-					LastSeen:          sampleTime,
-					Tags:              tags,
-					IPAddresses:       ipAddresses,
-					OSName:            osName,
-					OSVersion:         osVersion,
-					AgentVersion:      guestAgentVersion,
-					NetworkInterfaces: networkInterfaces,
-				}
-
-				// Zero out metrics for non-running VMs
-				if vm.Status != "running" {
-					modelVM.CPU = 0
-					modelVM.Memory.Usage = 0
-					modelVM.Disk.Usage = 0
-					modelVM.NetworkIn = 0
-					modelVM.NetworkOut = 0
-					modelVM.DiskRead = 0
-					modelVM.DiskWrite = 0
-				}
-
-				// Trigger guest metadata migration if old format exists
-				if m.guestMetadataStore != nil {
-					m.guestMetadataStore.GetWithLegacyMigration(guestID, instanceName, n.Node, vm.VMID)
-				}
-
-				nodeVMs = append(nodeVMs, modelVM)
-
-				m.recordGuestSnapshot(instanceName, modelVM.Type, n.Node, vm.VMID, GuestMemorySnapshot{
-					Name:           vm.Name,
-					Status:         vm.Status,
-					RetrievedAt:    sampleTime,
-					MemorySource:   memorySource,
-					FallbackReason: guestMemoryFallbackReason(memorySource),
-					Memory:         modelVM.Memory,
-					Raw:            guestRaw,
-					Notes:          snapshotNotes,
-				})
-
-				// Check alerts
-				m.alertManager.CheckGuest(modelVM, instanceName)
-			}
-
+			nodeVMs, nodeTemplateSubjects := m.pollNodeVMsWithClusterResourceBuilder(ctx, instanceName, n.Node, vms, client, prevVMByID, vmIDToHostAgent)
 			nodeDuration := time.Since(nodeStart)
 			log.Debug().
 				Str("node", n.Node).
@@ -615,13 +75,11 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 		}(node)
 	}
 
-	// Close channel when all goroutines complete
 	go func() {
 		wg.Wait()
 		close(resultChan)
 	}()
 
-	// Collect results from all nodes
 	var allVMs []models.VM
 	qemuTemplateSubjects := make(map[string]struct{})
 	successfulNodes := 0
@@ -630,20 +88,18 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 	for result := range resultChan {
 		if result.err != nil {
 			failedNodes++
-		} else {
-			successfulNodes++
-			allVMs = append(allVMs, result.vms...)
-			for key := range result.templateSubjects {
-				qemuTemplateSubjects[key] = struct{}{}
-			}
+			continue
+		}
+		successfulNodes++
+		allVMs = append(allVMs, result.vms...)
+		for key := range result.templateSubjects {
+			qemuTemplateSubjects[key] = struct{}{}
 		}
 	}
 	if failedNodes == 0 && successfulNodes > 0 {
 		m.updatePVEBackupTemplateSubjectsForType(instanceName, "qemu", qemuTemplateSubjects)
 	}
 
-	// If we got ZERO VMs but had VMs before (likely cluster health issue),
-	// preserve previous VMs instead of clearing them
 	if len(allVMs) == 0 && len(nodes) > 0 {
 		allVMs = append(allVMs, prevGuests.vms...)
 		prevVMCount := len(prevGuests.vms)
@@ -657,10 +113,8 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 		}
 	}
 
-	// Update state with all VMs
 	m.state.UpdateVMsForInstance(instanceName, allVMs)
 
-	// Record guest metrics history for running VMs (enables sparkline/trends view)
 	if !shouldSkipNativeMockStateMetricWrites() {
 		now := time.Now()
 		for _, vm := range allVMs {
@@ -672,7 +126,6 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 			if vm.Disk.Usage >= 0 {
 				m.metricsHistory.AddGuestMetric(vm.ID, "disk", vm.Disk.Usage, now)
 			}
-			// Also write to persistent store
 			if m.metricsStore != nil {
 				m.metricsStore.Write("vm", vm.ID, "cpu", vm.CPU*100, now)
 				m.metricsStore.Write("vm", vm.ID, "memory", vm.Memory.Usage, now)
@@ -692,7 +145,3 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 		Dur("duration", duration).
 		Msg("Parallel VM polling completed")
 }
-
-// pollContainersWithNodes polls containers from all nodes in parallel using goroutines
-// When the instance is part of a cluster, the cluster name is used for guest IDs to prevent duplicates
-// when multiple cluster nodes are configured as separate PVE instances.

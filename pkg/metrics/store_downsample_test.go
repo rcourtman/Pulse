@@ -191,7 +191,7 @@ func TestStoreFlushLockedDropsWhenChannelFull(t *testing.T) {
 	store := &Store{
 		config:  StoreConfig{WriteBufferSize: 1},
 		buffer:  []bufferedMetric{{resourceType: "vm", resourceID: "v3", metricType: "cpu", value: 1, timestamp: time.Now(), tier: TierRaw}},
-		writeCh: make(chan []bufferedMetric),
+		writeCh: make(chan writeRequest),
 	}
 
 	store.bufferMu.Lock()

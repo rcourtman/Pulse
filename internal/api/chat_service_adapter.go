@@ -43,6 +43,13 @@ func (a *chatServiceAdapter) ExecutePatrolStream(ctx context.Context, req ai.Pat
 		MaxTurns:     req.MaxTurns,
 	}, adaptCallback(callback))
 	if err != nil {
+		if resp != nil {
+			return &ai.PatrolStreamResponse{
+				Content:      resp.Content,
+				InputTokens:  resp.InputTokens,
+				OutputTokens: resp.OutputTokens,
+			}, err
+		}
 		return nil, err
 	}
 	return &ai.PatrolStreamResponse{

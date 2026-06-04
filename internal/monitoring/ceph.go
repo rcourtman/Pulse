@@ -193,6 +193,18 @@ func countCephMonitorDaemons(status *proxmox.CephStatus) int {
 	if status.MonMap.NumMons > 0 {
 		return status.MonMap.NumMons
 	}
+	if len(status.MonMap.Mons) > 0 {
+		return len(status.MonMap.Mons)
+	}
+	if len(status.MonMap.Monitors) > 0 {
+		return len(status.MonMap.Monitors)
+	}
+	if len(status.MonMap.QuorumNames) > 0 {
+		return len(status.MonMap.QuorumNames)
+	}
+	if len(status.MonMap.Quorum) > 0 {
+		return len(status.MonMap.Quorum)
+	}
 	return countServiceDaemons(status.ServiceMap.Services, "mon")
 }
 

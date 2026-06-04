@@ -92,8 +92,8 @@ class ResolveReleasePromotionTest(unittest.TestCase):
             version="6.0.0",
             promoted_from_tag_input="v6.0.0-rc.6",
             rollback_version_input="v5.1.34",
-            ga_date_input="2026-06-03",
-            v5_eos_date_input="2026-09-01",
+            ga_date_input="2026-06-04",
+            v5_eos_date_input="2026-09-02",
             hotfix_exception=False,
             hotfix_reason_input="",
             release_notes_input=release_notes,
@@ -107,8 +107,8 @@ class ResolveReleasePromotionTest(unittest.TestCase):
         self.assertEqual(metadata["promoted_from_tag"], "v6.0.0-rc.6")
         self.assertEqual(metadata["rollback_tag"], "v5.1.34")
         self.assertEqual(metadata["rollback_command"], "./scripts/install.sh --version v5.1.34")
-        self.assertEqual(metadata["ga_date"], "2026-06-03")
-        self.assertEqual(metadata["v5_eos_date"], "2026-09-01")
+        self.assertEqual(metadata["ga_date"], "2026-06-04")
+        self.assertEqual(metadata["v5_eos_date"], "2026-09-02")
 
     def test_stable_hotfix_requires_reason(self) -> None:
         with self.assertRaisesRegex(ValueError, "hotfix_reason is required"):

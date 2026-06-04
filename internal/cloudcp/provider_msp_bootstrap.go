@@ -37,8 +37,8 @@ type ProviderMSPBootstrapResult struct {
 }
 
 // BootstrapProviderMSP creates or reuses the MSP account and owner identity for
-// a provider-hosted MSP control plane. It is deliberately unavailable in normal
-// Pulse-hosted mode so the MSP bootstrap path cannot leak into ordinary hosting.
+// an MSP control plane. It is deliberately unavailable in normal Pulse-hosted
+// mode so the MSP bootstrap path cannot leak into ordinary hosting.
 func BootstrapProviderMSP(ctx context.Context, cfg *CPConfig, opts ProviderMSPBootstrapOptions) (*ProviderMSPBootstrapResult, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -46,8 +46,8 @@ func BootstrapProviderMSP(ctx context.Context, cfg *CPConfig, opts ProviderMSPBo
 	if cfg == nil {
 		return nil, fmt.Errorf("control plane config is required")
 	}
-	if !cfg.IsProviderHostedMSP() {
-		return nil, fmt.Errorf("provider MSP bootstrap requires CP_CONTROL_PLANE_MODE=%s", ControlPlaneModeProviderHostedMSP)
+	if !cfg.IsMSPControlPlane() {
+		return nil, fmt.Errorf("provider MSP bootstrap requires CP_CONTROL_PLANE_MODE=%s or %s", ControlPlaneModeProviderHostedMSP, ControlPlaneModePulseHostedMSP)
 	}
 
 	accountName := strings.TrimSpace(opts.AccountName)

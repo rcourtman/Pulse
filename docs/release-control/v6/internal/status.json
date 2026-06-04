@@ -6763,7 +6763,21 @@
   ],
   "coverage_gaps": [],
   "candidate_lanes": [],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "codex-v6-release-release-gate-known-rc-issue-closure-for-ga",
+      "agent_id": "codex-v6-release",
+      "summary": "Resolve current v5-to-v6 parity audit gaps that would regress known user-visible fixes before GA publication.",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-06-04T11:23:28Z",
+      "heartbeat_at": "2026-06-04T13:02:12Z",
+      "expires_at": "2026-06-04T17:02:12Z",
+      "work_item": {
+        "kind": "release-gate",
+        "id": "known-rc-issue-closure-for-ga"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

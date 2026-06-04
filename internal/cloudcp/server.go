@@ -55,7 +55,7 @@ func Run(ctx context.Context, version string) error {
 	dockerMgr, err = cpDocker.NewManager(cpDocker.ManagerConfig{
 		Image:                    cfg.PulseImage,
 		Network:                  cfg.DockerNetwork,
-		IsolateTenantNetworks:    cfg.IsProviderHostedMSP(),
+		IsolateTenantNetworks:    cfg.IsMSPControlPlane(),
 		BaseDomain:               baseDomainFromURL(cfg.BaseURL),
 		TrialActivationPublicKey: cfg.TrialActivationPublicKey,
 		TrustedProxyCIDRs:        cfg.TrustedProxyCIDRs,

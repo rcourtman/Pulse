@@ -1,111 +1,93 @@
-// Generate consistent colors for tags based on their text
-// This replicates Proxmox's tag color generation logic
-
-/**
- * Simple hash function to generate a number from a string
- * This ensures the same tag always gets the same color
- */
-function hashString(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash = hash & hash; // Convert to 32bit integer
-  }
-  return Math.abs(hash);
-}
-
-/**
- * Generate a color for a tag based on its text
- * Uses HSL to ensure good visibility and consistent saturation/lightness
- * (Internal helper - use getTagColorWithSpecial instead)
- */
-function getTagColor(tag: string): { bg: string; text: string; border: string } {
-  // Get a hash of the tag
-  const hash = hashString(tag.toLowerCase());
-
-  // Generate hue from hash (0-360 degrees)
-  const hue = hash % 360;
-
-  // Use moderate saturation for subtle but visible colors
-  // These values are tuned to be noticeable without being distracting
-  const saturation = 65; // Moderate saturation
-  const lightnessBg = 60; // Slightly muted background
-  const lightnessText = 25; // Dark text for contrast
-  const lightnessBorder = 50; // Medium border
-
-  // For dark mode, we'll adjust these in the component
-  return {
-    bg: `hsl(${hue}, ${saturation}%, ${lightnessBg}%)`,
-    text: `hsl(${hue}, ${saturation}%, ${lightnessText}%)`,
-    border: `hsl(${hue}, ${saturation}%, ${lightnessBorder}%)`,
-  };
-}
-
-/**
- * Get tag colors adjusted for dark mode
- * (Internal helper - use getTagColorWithSpecial instead)
- */
-function getTagColorDark(tag: string): { bg: string; text: string; border: string } {
-  const hash = hashString(tag.toLowerCase());
-  const hue = hash % 360;
-  const saturation = 55; // Moderate saturation in dark mode
-
-  return {
-    bg: `hsl(${hue}, ${saturation}%, 35%)`, // Subtler background
-    text: `hsl(${hue}, ${saturation}%, 85%)`, // Light text
-    border: `hsl(${hue}, ${saturation}%, 45%)`, // Subtle border
-  };
-}
-
 interface TagColorStyle {
   bg: string;
   text: string;
   border: string;
 }
 
-interface TagColorTheme {
-  light: TagColorStyle;
-  dark: TagColorStyle;
+function stringToRGB(tag: string): [number, number, number] {
+  let hash = 0;
+  if (!tag) {
+    return [255, 255, 255];
+  }
+
+  const value = `${tag.toLowerCase()}prox`;
+  for (let i = 0; i < value.length; i++) {
+    hash = value.charCodeAt(i) + ((hash << 5) - hash);
+    hash &= hash;
+  }
+
+  const alpha = 0.7;
+  const bg = 255;
+
+  return [
+    (hash & 255) * alpha + bg * (1 - alpha),
+    ((hash >> 8) & 255) * alpha + bg * (1 - alpha),
+    ((hash >> 16) & 255) * alpha + bg * (1 - alpha),
+  ];
+}
+
+function rgbToCss(rgb: [number, number, number]): string {
+  return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+}
+
+function getTextContrastClass(rgb: [number, number, number]): 'light' | 'dark' {
+  const blkThrs = 0.022;
+  const blkClmp = 1.414;
+
+  const r = (rgb[0] / 255) ** 2.4;
+  const g = (rgb[1] / 255) ** 2.4;
+  const b = (rgb[2] / 255) ** 2.4;
+
+  let bg = r * 0.2126729 + g * 0.7151522 + b * 0.072175;
+  bg = bg > blkThrs ? bg : bg + (blkThrs - bg) ** blkClmp;
+
+  const contrastLight = bg ** 0.65 - 1;
+  const contrastDark = bg ** 0.56 - 0.046134502;
+
+  return Math.abs(contrastLight) >= Math.abs(contrastDark) ? 'light' : 'dark';
+}
+
+function parseHexColor(hex: string): [number, number, number] | null {
+  const normalized = hex.trim().replace(/^#/, '');
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) {
+    return null;
+  }
+
+  return [
+    parseInt(normalized.slice(0, 2), 16),
+    parseInt(normalized.slice(2, 4), 16),
+    parseInt(normalized.slice(4, 6), 16),
+  ];
+}
+
+function buildStyleFromRGB(rgb: [number, number, number]): TagColorStyle {
+  const bg = rgbToCss(rgb);
+  const text = getTextContrastClass(rgb) === 'light' ? '#ffffff' : '#000000';
+
+  return {
+    bg,
+    text,
+    border: bg,
+  };
 }
 
 /**
- * Proxmox's default tag colors for special tags
- * These override the hash-based colors for specific tags
- */
-const specialTagColors: Record<string, TagColorTheme> = {
-  production: {
-    light: { bg: 'rgb(254, 226, 226)', text: 'rgb(153, 27, 27)', border: 'rgb(239, 68, 68)' },
-    dark: { bg: 'rgb(127, 29, 29)', text: 'rgb(254, 202, 202)', border: 'rgb(185, 28, 28)' },
-  },
-  staging: {
-    light: { bg: 'rgb(254, 243, 199)', text: 'rgb(146, 64, 14)', border: 'rgb(245, 158, 11)' },
-    dark: { bg: 'rgb(120, 53, 15)', text: 'rgb(253, 230, 138)', border: 'rgb(217, 119, 6)' },
-  },
-  development: {
-    light: { bg: 'rgb(220, 252, 231)', text: 'rgb(22, 101, 52)', border: 'rgb(34, 197, 94)' },
-    dark: { bg: 'rgb(20, 83, 45)', text: 'rgb(187, 247, 208)', border: 'rgb(34, 197, 94)' },
-  },
-  backup: {
-    light: { bg: 'rgb(219, 234, 254)', text: 'rgb(30, 58, 138)', border: 'rgb(59, 130, 246)' },
-    dark: { bg: 'rgb(30, 58, 138)', text: 'rgb(191, 219, 254)', border: 'rgb(59, 130, 246)' },
-  },
-};
-
-/**
- * Get color for a tag, checking special colors first
+ * Get color for a tag.
+ * Priority: Proxmox-supplied hex color -> Proxmox fallback hash algorithm.
  */
 export function getTagColorWithSpecial(
   tag: string,
-  isDarkMode: boolean,
-): { bg: string; text: string; border: string } {
+  _isDarkMode: boolean,
+  colorMap?: Record<string, string>,
+): TagColorStyle {
   const lowerTag = tag.toLowerCase();
-
-  // Check if it's a special tag
-  if (specialTagColors[lowerTag]) {
-    return isDarkMode ? specialTagColors[lowerTag].dark : specialTagColors[lowerTag].light;
+  const proxmoxHex = colorMap?.[lowerTag];
+  if (proxmoxHex) {
+    const rgb = parseHexColor(proxmoxHex);
+    if (rgb) {
+      return buildStyleFromRGB(rgb);
+    }
   }
 
-  // Otherwise use hash-based color
-  return isDarkMode ? getTagColorDark(tag) : getTagColor(tag);
+  return buildStyleFromRGB(stringToRGB(tag));
 }

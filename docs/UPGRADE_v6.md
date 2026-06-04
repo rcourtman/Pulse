@@ -96,8 +96,8 @@ servers.
 
 ### Can I keep Pulse v5 stable while I test Pulse v6?
 
-Pulse v5 entered maintenance-only support on `2026-06-03` and remains eligible
-only for critical maintenance fixes until `2026-09-01`.
+Pulse v5 entered maintenance-only support on `2026-06-04` and remains eligible
+only for critical maintenance fixes until `2026-09-02`.
 
 If you want extra caution, use a staging or otherwise controlled upgrade first
 and keep a rollback path available, but v6 is now the supported stable line.

@@ -497,6 +497,22 @@ type mockPVEClientExtra struct {
 	agentVersion string
 }
 
+type delayedGuestAgentClient struct {
+	mockPVEClientExtra
+	fsDelay time.Duration
+}
+
+func (m *delayedGuestAgentClient) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]proxmox.VMFileSystem, error) {
+	if m.fsDelay > 0 {
+		select {
+		case <-time.After(m.fsDelay):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	return m.mockPVEClientExtra.GetVMFSInfo(ctx, node, vmid)
+}
+
 func (m *mockPVEClientExtra) GetClusterResources(ctx context.Context, resourceType string) ([]proxmox.ClusterResource, error) {
 	return m.resources, nil
 }
@@ -646,6 +662,65 @@ func TestMonitor_PollVMsAndContainersEfficient_Extra(t *testing.T) {
 	}
 	if len(state.Containers) != 1 {
 		t.Errorf("Expected 1 Container, got %d", len(state.Containers))
+	}
+}
+
+func TestPollVMsWithNodesCompletesDiskQueriesWithinPollBudget(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	m := &Monitor{
+		state:                    models.NewState(),
+		guestAgentFSInfoTimeout:  250 * time.Millisecond,
+		guestAgentRetries:        0,
+		guestAgentNetworkTimeout: 250 * time.Millisecond,
+		guestAgentOSInfoTimeout:  250 * time.Millisecond,
+		guestAgentVersionTimeout: 250 * time.Millisecond,
+		guestMetadataCache:       make(map[string]guestMetadataCacheEntry),
+		guestMetadataLimiter:     make(map[string]time.Time),
+		rateTracker:              NewRateTracker(),
+		metricsHistory:           NewMetricsHistory(100, time.Hour),
+		alertManager:             alerts.NewManager(),
+		stalenessTracker:         NewStalenessTracker(nil),
+		nodeRRDMemCache:          make(map[string]rrdMemCacheEntry),
+		vmRRDMemCache:            make(map[string]rrdMemCacheEntry),
+		vmAgentMemCache:          make(map[string]agentMemCacheEntry),
+		guestAgentWorkSlots:      make(chan struct{}, 3),
+	}
+	defer m.alertManager.Stop()
+
+	client := &delayedGuestAgentClient{
+		mockPVEClientExtra: mockPVEClientExtra{
+			vms: []proxmox.VM{
+				{VMID: 100, Name: "vm100", Node: "node1", Status: "running", CPUs: 2, MaxMem: 8 * 1024, Mem: 4 * 1024, MaxDisk: 100 * 1024 * 1024 * 1024},
+				{VMID: 101, Name: "vm101", Node: "node1", Status: "running", CPUs: 2, MaxMem: 8 * 1024, Mem: 4 * 1024, MaxDisk: 100 * 1024 * 1024 * 1024},
+				{VMID: 102, Name: "vm102", Node: "node1", Status: "running", CPUs: 2, MaxMem: 8 * 1024, Mem: 4 * 1024, MaxDisk: 100 * 1024 * 1024 * 1024},
+			},
+			vmStatus: &proxmox.VMStatus{
+				Status: "running",
+				Agent:  proxmox.VMAgentField{Value: 1},
+				MaxMem: 8 * 1024,
+				Mem:    4 * 1024,
+			},
+			fsInfo: []proxmox.VMFileSystem{
+				{Mountpoint: "/", TotalBytes: 100 * 1024 * 1024 * 1024, UsedBytes: 40 * 1024 * 1024 * 1024, Type: "ext4", Disk: "/dev/vda"},
+			},
+		},
+		fsDelay: 60 * time.Millisecond,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Millisecond)
+	defer cancel()
+
+	m.pollVMsWithNodes(ctx, "pve1", "", false, client, []proxmox.Node{{Node: "node1", Status: "online"}}, map[string]string{"node1": "online"})
+
+	state := m.GetState()
+	if len(state.VMs) != 3 {
+		t.Fatalf("expected all VM disk queries to complete inside poll budget, got %d VMs", len(state.VMs))
+	}
+	for _, vm := range state.VMs {
+		if vm.Disk.Usage <= 0 {
+			t.Fatalf("expected VM %d to keep guest-agent disk usage, got %+v", vm.VMID, vm.Disk)
+		}
 	}
 }
 

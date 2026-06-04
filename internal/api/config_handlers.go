@@ -669,6 +669,8 @@ type NodeConfigRequest struct {
 	Password                     string   `json:"password,omitempty"`
 	TokenName                    string   `json:"tokenName,omitempty"`
 	TokenValue                   string   `json:"tokenValue,omitempty"`
+	TokenID                      string   `json:"tokenId,omitempty"`
+	TokenSecret                  string   `json:"tokenSecret,omitempty"`
 	Fingerprint                  string   `json:"fingerprint,omitempty"`
 	VerifySSL                    *bool    `json:"verifySSL,omitempty"`
 	MonitorVMs                   *bool    `json:"monitorVMs,omitempty"`                   // PVE only
@@ -689,6 +691,18 @@ type NodeConfigRequest struct {
 	MonitorQuarantine            *bool    `json:"monitorQuarantine,omitempty"`            // PMG only
 	MonitorDomainStats           *bool    `json:"monitorDomainStats,omitempty"`           // PMG only
 	Enabled                      *bool    `json:"enabled,omitempty"`                      // Lifecycle toggle; nil on update preserves current
+}
+
+func (r *NodeConfigRequest) normalizeTokenAliases() {
+	r.TokenName = strings.TrimSpace(r.TokenName)
+	r.TokenValue = strings.TrimSpace(r.TokenValue)
+
+	if r.TokenName == "" {
+		r.TokenName = strings.TrimSpace(r.TokenID)
+	}
+	if r.TokenValue == "" {
+		r.TokenValue = strings.TrimSpace(r.TokenSecret)
+	}
 }
 
 // NodeResponse represents a node in API responses

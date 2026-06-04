@@ -23,12 +23,13 @@ const (
 
 	// Guest agent timeout defaults (configurable via environment variables)
 	// Increased from 3-5s to 10-15s to handle high-load environments better (refs #592)
-	defaultGuestAgentFSInfoTimeout  = 15 * time.Second // GUEST_AGENT_FSINFO_TIMEOUT
-	defaultGuestAgentNetworkTimeout = 10 * time.Second // GUEST_AGENT_NETWORK_TIMEOUT
-	defaultGuestAgentOSInfoTimeout  = 10 * time.Second // GUEST_AGENT_OSINFO_TIMEOUT
-	defaultGuestAgentVersionTimeout = 10 * time.Second // GUEST_AGENT_VERSION_TIMEOUT
-	defaultGuestAgentRetries        = 1                // GUEST_AGENT_RETRIES (0 = no retry, 1 = one retry)
-	defaultGuestAgentRetryDelay     = 500 * time.Millisecond
+	defaultGuestAgentFSInfoTimeout   = 15 * time.Second // GUEST_AGENT_FSINFO_TIMEOUT
+	defaultGuestAgentNetworkTimeout  = 10 * time.Second // GUEST_AGENT_NETWORK_TIMEOUT
+	defaultGuestAgentOSInfoTimeout   = 10 * time.Second // GUEST_AGENT_OSINFO_TIMEOUT
+	defaultGuestAgentVersionTimeout  = 10 * time.Second // GUEST_AGENT_VERSION_TIMEOUT
+	defaultGuestAgentRetries         = 1                // GUEST_AGENT_RETRIES (0 = no retry, 1 = one retry)
+	defaultGuestAgentRetryDelay      = 500 * time.Millisecond
+	defaultGuestAgentVMMaxConcurrent = 8 // GUEST_AGENT_VM_MAX_CONCURRENT
 
 	// Skip OS info calls after this many consecutive failures to avoid triggering buggy guest agents (refs #692)
 	guestAgentOSInfoFailureThreshold = 3

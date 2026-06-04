@@ -151,19 +151,19 @@ func TestMockVMPollingDefersMemoryHistoryToCanonicalSampler(t *testing.T) {
 func TestPollVMPrefersCanonicalLinkedHostAgentDiskInventory(t *testing.T) {
 	t.Parallel()
 
-	data, err := os.ReadFile("monitor_polling_vm.go")
+	data, err := os.ReadFile("monitor_pve_guest_builders.go")
 	if err != nil {
-		t.Fatalf("failed to read monitor_polling_vm.go: %v", err)
+		t.Fatalf("failed to read monitor_pve_guest_builders.go: %v", err)
 	}
 	source := string(data)
 
 	for _, snippet := range []string{
 		"preferLinkedHostAgentDiskInventory(",
-		`Bool("guestAgentDiskAvailable", diskFromAgent)`,
+		`Bool("guestAgentDiskAvailable", state.diskFromAgent)`,
 		`Msg("QEMU disk: preferring linked Pulse host agent disk inventory")`,
 	} {
 		if !strings.Contains(source, snippet) {
-			t.Fatalf("monitor_polling_vm.go must contain %q", snippet)
+			t.Fatalf("monitor_pve_guest_builders.go must contain %q", snippet)
 		}
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 )
 
@@ -433,6 +434,60 @@ func TestApplyDockerReportSkipsMetadataMigrationForAmbiguousContainerNames(t *te
 	meta := monitor.dockerMetadataStore.Get(host.ID + ":container:container-new")
 	if meta != nil {
 		t.Fatalf("expected ambiguous metadata migration to be skipped, got %#v", meta)
+	}
+}
+
+func TestApplyDockerMetadataToUnifiedResourcesAddsContainerCustomURL(t *testing.T) {
+	monitor := newTestMonitor(t)
+	if err := monitor.dockerMetadataStore.Set("docker-host-1:container:container-new", &config.DockerMetadata{
+		CustomURL: " https://app.internal ",
+	}); err != nil {
+		t.Fatalf("seed docker metadata: %v", err)
+	}
+
+	resources := []unifiedresources.Resource{
+		{
+			ID:   "resource:app-container:app",
+			Type: unifiedresources.ResourceTypeAppContainer,
+			Docker: &unifiedresources.DockerData{
+				HostSourceID: " docker-host-1 ",
+				ContainerID:  " container-new ",
+			},
+		},
+	}
+
+	got := monitor.applyDockerMetadataToUnifiedResources(resources)
+	if got[0].CustomURL != "https://app.internal" {
+		t.Fatalf("CustomURL = %q, want migrated Docker metadata URL", got[0].CustomURL)
+	}
+	if resources[0].CustomURL != "" {
+		t.Fatalf("applyDockerMetadataToUnifiedResources mutated input CustomURL to %q", resources[0].CustomURL)
+	}
+}
+
+func TestApplyDockerMetadataToUnifiedResourcesKeepsResourceCustomURL(t *testing.T) {
+	monitor := newTestMonitor(t)
+	if err := monitor.dockerMetadataStore.Set("docker-host-1:container:container-new", &config.DockerMetadata{
+		CustomURL: "https://metadata.internal",
+	}); err != nil {
+		t.Fatalf("seed docker metadata: %v", err)
+	}
+
+	resources := []unifiedresources.Resource{
+		{
+			ID:        "resource:app-container:app",
+			Type:      unifiedresources.ResourceTypeAppContainer,
+			CustomURL: "https://resource.internal",
+			Docker: &unifiedresources.DockerData{
+				HostSourceID: "docker-host-1",
+				ContainerID:  "container-new",
+			},
+		},
+	}
+
+	got := monitor.applyDockerMetadataToUnifiedResources(resources)
+	if got[0].CustomURL != "https://resource.internal" {
+		t.Fatalf("CustomURL = %q, want existing resource URL to win", got[0].CustomURL)
 	}
 }
 

@@ -266,6 +266,7 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
+	req.normalizeTokenAliases()
 
 	log.Info().
 		Str("type", req.Type).
@@ -764,6 +765,7 @@ func (h *ConfigHandlers) handleTestConnection(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
+	req.normalizeTokenAliases()
 
 	log.Info().
 		Str("type", req.Type).
@@ -1075,6 +1077,7 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
+	req.normalizeTokenAliases()
 
 	// Debug: Log the received temperatureMonitoringEnabled value
 	log.Info().
@@ -1699,6 +1702,7 @@ func (h *ConfigHandlers) handleTestNodeConfig(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
+	req.normalizeTokenAliases()
 
 	var testResult map[string]interface{}
 

@@ -1037,6 +1037,7 @@ type ResourceConvertInput struct {
 	Uptime                *int64
 	Tags                  []string
 	Labels                map[string]string
+	CustomURL             string
 	LastSeenUnix          int64
 	Alerts                []ResourceAlertInput
 	IncidentCount         int
@@ -1118,6 +1119,7 @@ func ConvertResourceToFrontend(input ResourceConvertInput) ResourceFrontend {
 		Uptime:                input.Uptime,
 		Tags:                  append([]string(nil), input.Tags...),
 		Labels:                nil,
+		CustomURL:             input.CustomURL,
 		LastSeen:              input.LastSeenUnix,
 		IncidentCount:         input.IncidentCount,
 		IncidentCode:          input.IncidentCode,

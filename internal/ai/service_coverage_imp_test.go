@@ -33,9 +33,13 @@ func TestService_QuickAnalysis(t *testing.T) {
 				t.Fatalf("execution_id=%q want patrol-run-123", req.ExecutionID)
 			}
 			return &providers.ChatResponse{
-				Content: "Analysis Result",
+				Content:      "Analysis Result",
+				Model:        "fast-model-response",
+				InputTokens:  12,
+				OutputTokens: 5,
 			}, nil
 		},
+		nameFunc: func() string { return "mock-provider" },
 	}
 	svc.provider = mockProv
 	svc.cfg = &config.AIConfig{
@@ -53,6 +57,13 @@ func TestService_QuickAnalysis(t *testing.T) {
 	}
 	if res != "Analysis Result" {
 		t.Errorf("Unexpected result: %s", res)
+	}
+	events := svc.ListCostEvents(1)
+	if len(events) != 1 {
+		t.Fatalf("expected QuickAnalysis usage event, got %d", len(events))
+	}
+	if events[0].Provider == "" || events[0].UseCase != "patrol" || events[0].InputTokens != 12 || events[0].OutputTokens != 5 {
+		t.Fatalf("unexpected QuickAnalysis usage event: %+v", events[0])
 	}
 
 	// Case 3: Empty response

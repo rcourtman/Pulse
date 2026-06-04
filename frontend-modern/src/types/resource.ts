@@ -1316,6 +1316,7 @@ export interface Resource {
   // Metadata
   tags?: string[];
   labels?: Record<string, string>;
+  customUrl?: string;
   lastSeen: number; // Unix milliseconds
   alerts?: ResourceAlert[];
   incidents?: ResourceIncident[];

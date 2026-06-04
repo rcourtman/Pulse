@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -73,5 +74,33 @@ func TestRunEvaluationPass(t *testing.T) {
 	}
 	if resp == nil || resp.InputTokens != 10 || resp.OutputTokens != 20 {
 		t.Fatalf("unexpected evaluation response: %+v", resp)
+	}
+}
+
+func TestRunEvaluationPassRecordsPartialUsageOnStreamError(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	svc := NewService(persistence, nil)
+	svc.cfg = &config.AIConfig{Enabled: true, PatrolModel: "mock:patrol"}
+	svc.provider = &mockProvider{nameFunc: func() string { return "mock" }}
+	svc.SetChatService(&patrolMockChatService{
+		executePatrolStreamFunc: func(ctx context.Context, req PatrolExecuteRequest, callback ChatStreamCallback) (*PatrolStreamResponse, error) {
+			return &PatrolStreamResponse{InputTokens: 11, OutputTokens: 7}, errors.New("stream interrupted")
+		},
+	})
+
+	ps := NewPatrolService(svc, nil)
+	resp, err := ps.runEvaluationPass(context.Background(), nil, []DetectedSignal{{SignalType: SignalHighCPU}}, "patrol-run-eval")
+	if err == nil {
+		t.Fatal("expected evaluation error")
+	}
+	if resp != nil {
+		t.Fatalf("expected no response on evaluation error, got %+v", resp)
+	}
+	events := svc.ListCostEvents(1)
+	if len(events) != 1 {
+		t.Fatalf("expected one partial usage event, got %d", len(events))
+	}
+	if events[0].Provider != "mock" || events[0].RequestModel != "mock:patrol" || events[0].UseCase != "patrol" || events[0].InputTokens != 11 || events[0].OutputTokens != 7 {
+		t.Fatalf("unexpected partial usage event: %+v", events[0])
 	}
 }

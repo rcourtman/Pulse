@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -195,6 +196,70 @@ func TestService_ExecutePatrolStream_Success(t *testing.T) {
 	}
 	if len(msgs) < 2 {
 		t.Fatalf("expected at least 2 messages saved, got %d", len(msgs))
+	}
+}
+
+func TestServiceExecutePatrolStreamReturnsPartialTokenCountsOnError(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+
+	service := &Service{
+		started:  true,
+		sessions: store,
+		executor: executor,
+		cfg:      &config.AIConfig{PatrolModel: "mock:model"},
+	}
+	executor.RegisterTool(tools.RegisteredTool{
+		Definition: tools.Tool{
+			Name:        "test_tool",
+			Description: "test tool",
+			InputSchema: tools.InputSchema{
+				Type:       "object",
+				Properties: map[string]tools.PropertySchema{},
+			},
+		},
+		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
+			return tools.NewTextResult("tool ok"), nil
+		},
+	})
+	callCount := 0
+	service.providerFactory = func(modelStr string) (providers.StreamingProvider, error) {
+		return &mockStreamingProvider{
+			chatStreamFunc: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+				callCount++
+				if callCount == 1 {
+					callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{
+						InputTokens:  13,
+						OutputTokens: 8,
+						ToolCalls: []providers.ToolCall{{
+							ID:    "call-1",
+							Name:  "test_tool",
+							Input: map[string]interface{}{},
+						}},
+					}})
+					return nil
+				}
+				return errors.New("provider interrupted")
+			},
+		}, nil
+	}
+
+	resp, err := service.ExecutePatrolStream(context.Background(), PatrolRequest{
+		Prompt:    "check status",
+		MaxTurns:  2,
+		SessionID: "patrol-main",
+	}, func(event StreamEvent) {})
+	if err == nil {
+		t.Fatal("expected patrol stream error")
+	}
+	if resp == nil {
+		t.Fatal("expected partial patrol response")
+	}
+	if resp.InputTokens != 13 || resp.OutputTokens != 8 {
+		t.Fatalf("unexpected partial token counts: %+v", resp)
 	}
 }
 

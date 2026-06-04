@@ -118,6 +118,63 @@ func TestGetCephStatusCountsMonitorArrayFallback(t *testing.T) {
 	}
 }
 
+func TestGetCephStatusCountsQuorumMonMapFallbacks(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/cluster/ceph/status" {
+			http.NotFound(w, r)
+			return
+		}
+		resp := map[string]interface{}{
+			"data": map[string]interface{}{
+				"fsid": "fsid-1",
+				"health": map[string]interface{}{
+					"status":  "HEALTH_OK",
+					"summary": []map[string]interface{}{},
+					"checks":  map[string]interface{}{},
+				},
+				"servicemap": map[string]interface{}{
+					"services": map[string]interface{}{},
+				},
+				"monmap": map[string]interface{}{
+					"monitors": []string{"mon-a", "mon-b"},
+					"quorum_names": []string{
+						"mon-a",
+						"mon-b",
+						"mon-c",
+					},
+					"quorum": []interface{}{0, 1, 2},
+				},
+				"mgrmap": map[string]interface{}{
+					"available":   true,
+					"num_mgrs":    1,
+					"active_name": "mgr-a",
+					"standbys":    []string{},
+				},
+				"osdmap": map[string]interface{}{},
+				"pgmap":  map[string]interface{}{},
+			},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := &Client{baseURL: server.URL, httpClient: server.Client()}
+	status, err := client.GetCephStatus(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if status.MonMap.NumMons != 3 {
+		t.Fatalf("expected quorum fallback to count 3 monitors, got %+v", status.MonMap)
+	}
+	if len(status.MonMap.Monitors) != 2 || status.MonMap.Monitors[0].Name != "mon-a" {
+		t.Fatalf("expected monitor aliases to be preserved, got %+v", status.MonMap.Monitors)
+	}
+	if len(status.MonMap.QuorumNames) != 3 || len(status.MonMap.Quorum) != 3 {
+		t.Fatalf("expected quorum metadata to be preserved, got %+v", status.MonMap)
+	}
+}
+
 func TestGetCephStatusAcceptsStructuredManagerStandbys(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/cluster/ceph/status" {

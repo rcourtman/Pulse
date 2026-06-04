@@ -225,6 +225,26 @@ func TestProviderMSPBackupRestoreRequiresReplaceForExistingState(t *testing.T) {
 	assertProviderMSPBackupRestoredTenantCount(t, filepath.Join(targetDataDir, "control-plane", "tenants.db"), 2)
 }
 
+func TestProviderMSPBackupManifestAcceptsMSPControlPlaneModes(t *testing.T) {
+	base := ProviderMSPBackupManifest{
+		Version:         ProviderMSPBackupManifestVersion,
+		PlanVersion:     "msp_growth",
+		PlanSource:      ProviderMSPPlanSourceLicenseFile,
+		ControlPlaneDir: providerMSPBackupControlPlaneDir,
+		TenantsDir:      providerMSPBackupTenantsDir,
+	}
+
+	for _, mode := range []ControlPlaneMode{ControlPlaneModeProviderHostedMSP, ControlPlaneModePulseHostedMSP} {
+		t.Run(string(mode), func(t *testing.T) {
+			manifest := base
+			manifest.ControlPlaneMode = string(mode)
+			if err := validateProviderMSPBackupManifest(manifest); err != nil {
+				t.Fatalf("validateProviderMSPBackupManifest: %v", err)
+			}
+		})
+	}
+}
+
 func testProviderMSPBackupConfig(t *testing.T) *CPConfig {
 	t.Helper()
 	root := t.TempDir()

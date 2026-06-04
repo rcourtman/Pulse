@@ -3,14 +3,16 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 )
 
 const (
-	vmAgentMemCacheTTL      = 60 * time.Second // Cache guest-agent /proc/meminfo reads.
-	vmAgentMemRequestTTL    = 3 * time.Second  // Bound guest-agent file-read latency.
-	vmAgentMemNegativeTTL   = 5 * time.Minute  // Back off on unsupported or failing guests.
-	vmAgentMemCleanupMaxAge = 2 * vmAgentMemNegativeTTL
+	vmAgentMemCacheTTL              = 60 * time.Second // Cache guest-agent /proc/meminfo reads.
+	vmAgentMemRequestTTL            = 3 * time.Second  // Bound guest-agent file-read latency.
+	vmAgentMemNegativeTTL           = 5 * time.Minute  // Back off on unsupported or failing guests.
+	vmAgentMemNegativeKnownGuestTTL = 30 * time.Second // Retry sooner for guests we know are non-Windows.
+	vmAgentMemCleanupMaxAge         = 2 * vmAgentMemNegativeTTL
 )
 
 type agentMemCacheEntry struct {
@@ -43,7 +45,7 @@ func (m *Monitor) getVMAgentMemAvailable(ctx context.Context, client PVEClientIn
 	if entry, ok := m.vmAgentMemCache[cacheKey]; ok {
 		ttl := vmAgentMemCacheTTL
 		if entry.negative {
-			ttl = vmAgentMemNegativeTTL
+			ttl = m.vmAgentMemNegativeCacheTTL(instanceName, node, vmid)
 		}
 		if now.Sub(entry.fetchedAt) < ttl {
 			m.rrdCacheMu.RUnlock()
@@ -74,4 +76,28 @@ func (m *Monitor) getVMAgentMemAvailable(ctx context.Context, client PVEClientIn
 
 	m.vmAgentMemCache[cacheKey] = agentMemCacheEntry{available: available, fetchedAt: now}
 	return available, nil
+}
+
+func (m *Monitor) vmAgentMemNegativeCacheTTL(instanceName, node string, vmid int) time.Duration {
+	if m == nil {
+		return vmAgentMemNegativeTTL
+	}
+
+	key := guestMetadataCacheKey(instanceName, node, vmid)
+	m.guestMetadataMu.RLock()
+	entry, ok := m.guestMetadataCache[key]
+	m.guestMetadataMu.RUnlock()
+	if !ok {
+		return vmAgentMemNegativeTTL
+	}
+
+	osName := strings.ToLower(strings.TrimSpace(entry.osName))
+	osVersion := strings.ToLower(strings.TrimSpace(entry.osVersion))
+	if osName == "" && osVersion == "" {
+		return vmAgentMemNegativeTTL
+	}
+	if strings.Contains(osName, "windows") || strings.Contains(osVersion, "windows") {
+		return vmAgentMemNegativeTTL
+	}
+	return vmAgentMemNegativeKnownGuestTTL
 }

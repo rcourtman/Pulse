@@ -94,8 +94,8 @@ func runProviderMSPPreflightWithDependencies(ctx context.Context, cfg *cloudcp.C
 		report.Failures = append(report.Failures, fmt.Sprintf(format, args...))
 	}
 
-	if !cfg.IsProviderHostedMSP() {
-		addFailure("CP_CONTROL_PLANE_MODE must be %s", cloudcp.ControlPlaneModeProviderHostedMSP)
+	if !cfg.IsMSPControlPlane() {
+		addFailure("CP_CONTROL_PLANE_MODE must be %s or %s", cloudcp.ControlPlaneModeProviderHostedMSP, cloudcp.ControlPlaneModePulseHostedMSP)
 	}
 	if cfg.UsesStripeBilling() {
 		addFailure("provider-hosted MSP preflight must be Stripe-free")

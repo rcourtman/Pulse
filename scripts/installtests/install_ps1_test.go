@@ -68,6 +68,28 @@ func TestInstallPS1AllowsMissingTokenForOptionalAuth(t *testing.T) {
 	}
 }
 
+func TestInstallPS1AgentDownloadIsServerVersionAware(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.ps1"))
+	if err != nil {
+		t.Fatalf("read install.ps1: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`Invoke-WebRequest -Uri "$Url/api/version"`,
+		`$versionInfo = $versionResponse.Content | ConvertFrom-Json`,
+		`$ServerVersion = [string]$versionInfo.version`,
+		`$escapedServerVersion = [Uri]::EscapeDataString($ServerVersion)`,
+		`$DownloadUrl = "$DownloadUrl&serverVersion=$escapedServerVersion"`,
+		`downloaded agent version ($DownloadedVersion) does not match Pulse server version ($ServerVersion)`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.ps1 missing version-aware agent download behavior: %s", needle)
+		}
+	}
+}
+
 func TestInstallPS1AllowsOptionalAuthUninstallWithoutToken(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.ps1"))
 	if err != nil {

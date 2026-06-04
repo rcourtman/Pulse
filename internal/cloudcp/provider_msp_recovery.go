@@ -204,8 +204,8 @@ func validateProviderMSPRecoveryOptions(opts ProviderMSPRecoveryOptions) error {
 }
 
 func validateProviderMSPRecoveryConfig(cfg *CPConfig, opts ProviderMSPRecoveryOptions) error {
-	if !cfg.IsProviderHostedMSP() {
-		return fmt.Errorf("provider MSP recovery requires CP_CONTROL_PLANE_MODE=%s", ControlPlaneModeProviderHostedMSP)
+	if !cfg.IsMSPControlPlane() {
+		return fmt.Errorf("provider MSP recovery requires CP_CONTROL_PLANE_MODE=%s or %s", ControlPlaneModeProviderHostedMSP, ControlPlaneModePulseHostedMSP)
 	}
 	if cfg.UsesStripeBilling() {
 		return fmt.Errorf("provider-hosted MSP recovery must be Stripe-free")

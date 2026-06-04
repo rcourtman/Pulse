@@ -44,6 +44,7 @@ type State struct {
 	RecentlyResolved             []ResolvedAlert            `json:"recentlyResolved"`
 	LastUpdate                   time.Time                  `json:"lastUpdate"`
 	TemperatureMonitoringEnabled bool                       `json:"temperatureMonitoringEnabled"`
+	PVETagColors                 map[string]string          `json:"pveTagColors,omitempty"`
 }
 
 var (
@@ -2939,12 +2940,29 @@ func NewState() *State {
 		ConnectionHealth: make(map[string]bool),
 		ActiveAlerts:     make([]Alert, 0),
 		RecentlyResolved: make([]ResolvedAlert, 0),
+		PVETagColors:     make(map[string]string),
 		Performance:      Performance{}.NormalizeCollections(),
 		LastUpdate:       time.Now(),
 	}
 
 	state.syncBackupsLocked()
 	return state
+}
+
+// MergeTagColors merges Proxmox tag color entries into the shared state.
+func (s *State) MergeTagColors(colors map[string]string) {
+	if len(colors) == 0 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.PVETagColors == nil {
+		s.PVETagColors = make(map[string]string, len(colors))
+	}
+	for tag, color := range colors {
+		s.PVETagColors[strings.ToLower(strings.TrimSpace(tag))] = strings.TrimSpace(color)
+	}
+	s.LastUpdate = time.Now()
 }
 
 // syncBackupsLocked updates the aggregated backups structure.

@@ -1980,7 +1980,10 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 				log.Warn().Err(saveErr).Msg("failed to save patrol message after error")
 			}
 		}
-		return nil, err
+		return &PatrolResponse{
+			InputTokens:  tempLoop.GetTotalInputTokens(),
+			OutputTokens: tempLoop.GetTotalOutputTokens(),
+		}, err
 	}
 
 	// Save result messages

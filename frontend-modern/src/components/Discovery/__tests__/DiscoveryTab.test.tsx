@@ -20,15 +20,26 @@ vi.mock('@/utils/clipboard', () => ({
   copyToClipboard: vi.fn(async () => true),
 }));
 
+vi.mock('@/api/ai', () => ({
+  AIAPI: {
+    getSettings: vi.fn(async () => ({ discovery_enabled: true })),
+  },
+}));
+
+import { AIAPI } from '@/api/ai';
 import * as discoveryApi from '@/api/discovery';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
 import { copyToClipboard } from '@/utils/clipboard';
 import { getDiscoveryProvenanceTitle } from '@/utils/discoveryPresentation';
 
+const aiSettingsWithDiscovery = (discovery_enabled: boolean) =>
+  ({ discovery_enabled }) as Awaited<ReturnType<typeof AIAPI.getSettings>>;
+
 describe('DiscoveryTab', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    vi.mocked(AIAPI.getSettings).mockResolvedValue(aiSettingsWithDiscovery(true));
   });
 
   it('keeps run action visible while discovery lookup is still loading', async () => {
@@ -37,6 +48,19 @@ describe('DiscoveryTab', () => {
     ));
 
     expect(await screen.findByRole('button', { name: 'Run Discovery Now' })).toBeInTheDocument();
+  });
+
+  it('does not fetch discovery data when AI discovery is disabled', async () => {
+    vi.mocked(AIAPI.getSettings).mockResolvedValue(aiSettingsWithDiscovery(false));
+
+    render(() => (
+      <DiscoveryTab resourceType="agent" agentId="agent-1" resourceId="agent-1" hostname="pve1" />
+    ));
+
+    expect(await screen.findByText('AI Discovery Disabled')).toBeInTheDocument();
+    expect(discoveryApi.getDiscovery).not.toHaveBeenCalled();
+    expect(discoveryApi.getDiscoveryInfo).not.toHaveBeenCalled();
+    expect(discoveryApi.getConnectedAgents).not.toHaveBeenCalled();
   });
 
   it('treats placeholder-only discovery records as unidentified instead of valid results', async () => {
@@ -135,7 +159,9 @@ describe('DiscoveryTab', () => {
       />
     ));
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Run Discovery' }));
+    const runButton = await screen.findByRole('button', { name: 'Run Discovery' });
+    await waitFor(() => expect(runButton).not.toBeDisabled());
+    fireEvent.click(runButton);
 
     await waitFor(() => {
       expect(discoveryApi.triggerDiscovery).toHaveBeenCalledWith('agent', 'agent-1', 'agent-1', {

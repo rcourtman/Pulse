@@ -124,6 +124,7 @@ export const useAppRuntimeState = () => {
     },
     activeAlerts: [],
     recentlyResolved: [],
+    pveTagColors: {},
     lastUpdate: 0,
     resources: [],
   };

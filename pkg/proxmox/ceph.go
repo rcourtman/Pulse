@@ -62,7 +62,18 @@ type CephServiceDaemon struct {
 
 // CephMonMap captures monitor summary information.
 type CephMonMap struct {
-	NumMons int `json:"num_mons"`
+	NumMons     int               `json:"num_mons"`
+	Mons        []CephMonitor     `json:"mons,omitempty"`
+	Monitors    []CephMonitor     `json:"monitors,omitempty"`
+	QuorumNames []string          `json:"quorum_names,omitempty"`
+	Quorum      []json.RawMessage `json:"quorum,omitempty"`
+}
+
+// CephMonitor captures a monitor entry from Ceph monmap payloads.
+type CephMonitor struct {
+	Name string `json:"name"`
+	Rank int    `json:"rank"`
+	Addr string `json:"addr"`
 }
 
 func (m *CephMonMap) UnmarshalJSON(data []byte) error {
@@ -71,6 +82,8 @@ func (m *CephMonMap) UnmarshalJSON(data []byte) error {
 		NumMonsLegacy int               `json:"numMons"`
 		Mons          []json.RawMessage `json:"mons"`
 		Monitors      []json.RawMessage `json:"monitors"`
+		QuorumNames   []string          `json:"quorum_names"`
+		Quorum        []json.RawMessage `json:"quorum"`
 	}
 
 	var raw rawCephMonMap
@@ -78,20 +91,71 @@ func (m *CephMonMap) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	switch {
-	case raw.NumMons > 0:
-		m.NumMons = raw.NumMons
-	case raw.NumMonsLegacy > 0:
-		m.NumMons = raw.NumMonsLegacy
-	case len(raw.Mons) > 0:
-		m.NumMons = len(raw.Mons)
-	case len(raw.Monitors) > 0:
-		m.NumMons = len(raw.Monitors)
-	default:
-		m.NumMons = 0
-	}
+	m.Mons = parseCephMonitors(raw.Mons)
+	m.Monitors = parseCephMonitors(raw.Monitors)
+	m.QuorumNames = trimNonEmptyStrings(raw.QuorumNames)
+	m.Quorum = append(m.Quorum[:0], raw.Quorum...)
+
+	m.NumMons = maxCephMonitorCount(
+		raw.NumMons,
+		raw.NumMonsLegacy,
+		len(m.Mons),
+		len(m.Monitors),
+		len(m.QuorumNames),
+		len(m.Quorum),
+	)
 
 	return nil
+}
+
+func parseCephMonitors(rawMonitors []json.RawMessage) []CephMonitor {
+	if len(rawMonitors) == 0 {
+		return nil
+	}
+
+	monitors := make([]CephMonitor, 0, len(rawMonitors))
+	for _, raw := range rawMonitors {
+		var monitor CephMonitor
+		if err := json.Unmarshal(raw, &monitor); err == nil {
+			monitors = append(monitors, monitor)
+			continue
+		}
+
+		var name string
+		if err := json.Unmarshal(raw, &name); err == nil {
+			monitors = append(monitors, CephMonitor{Name: strings.TrimSpace(name)})
+			continue
+		}
+
+		monitors = append(monitors, CephMonitor{})
+	}
+
+	return monitors
+}
+
+func trimNonEmptyStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
+}
+
+func maxCephMonitorCount(values ...int) int {
+	maxValue := 0
+	for _, value := range values {
+		if value > maxValue {
+			maxValue = value
+		}
+	}
+	return maxValue
 }
 
 // CephMgrMap captures manager summary information.

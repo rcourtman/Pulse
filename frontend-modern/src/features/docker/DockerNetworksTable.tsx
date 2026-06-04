@@ -1,6 +1,4 @@
-import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
-import { FilterSegmentedControl } from '@/components/shared/FilterToolbar';
-import { SearchInput } from '@/components/shared/SearchInput';
+import { For, Show, createMemo, createSignal, type Component } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
@@ -17,6 +15,7 @@ import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_CARD_CLASS,
   PLATFORM_TABLE_HEADER_ROW_CLASS,
+  type PlatformTableFilterOption,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
@@ -48,9 +47,9 @@ type DockerNetworksTableProps = DockerNativeTableProps & {
   relatedResources?: Resource[];
 };
 
-type AttachmentStatusFilter = 'all' | 'attention' | 'running' | 'other';
+type AttachmentGroupKey = 'attention' | 'running' | 'other';
 
-type AttachmentGroupKey = Exclude<AttachmentStatusFilter, 'all'>;
+type AttachmentStatusFilter = 'all' | AttachmentGroupKey;
 
 type AttachmentGroup = {
   key: AttachmentGroupKey;
@@ -65,6 +64,28 @@ const ATTACHMENT_GROUPS: readonly AttachmentGroup[] = [
   { key: 'other', label: 'Other', description: 'Stopped, paused, or unknown' },
   { key: 'running', label: 'Running', description: 'No active issue reported' },
 ] as const;
+
+const ATTACHMENT_STATUS_FILTER_OPTIONS: PlatformTableFilterOption<AttachmentStatusFilter>[] = [
+  { value: 'all', label: 'All', ariaLabel: 'All', title: 'All attached containers' },
+  {
+    value: 'attention',
+    label: 'Attention',
+    ariaLabel: 'Attention',
+    title: 'Containers that need review',
+  },
+  {
+    value: 'running',
+    label: 'Running',
+    ariaLabel: 'Running',
+    title: 'Running containers',
+  },
+  {
+    value: 'other',
+    label: 'Other',
+    ariaLabel: 'Other',
+    title: 'Stopped, paused, or unknown containers',
+  },
+];
 
 const networkFlags = (resource: Resource): string =>
   dockerJoinValues(
@@ -141,32 +162,18 @@ const attachmentGroupKey = (row: DockerNetworkAttachmentRow): AttachmentGroupKey
   return 'other';
 };
 
-const attachmentFilterMatches = (
-  row: DockerNetworkAttachmentRow,
-  filter: AttachmentStatusFilter,
-): boolean => filter === 'all' || attachmentGroupKey(row) === filter;
-
-const attachmentStatusCounts = (rows: readonly DockerNetworkAttachmentRow[]) => {
-  const counts: Record<AttachmentStatusFilter, number> = {
-    all: rows.length,
-    attention: 0,
-    running: 0,
-    other: 0,
-  };
-  for (const row of rows) {
-    counts[attachmentGroupKey(row)] += 1;
-  }
-  return counts;
+const filterAttachmentRows = (
+  rows: DockerNetworkAttachmentRow[],
+  search: string,
+  status: AttachmentStatusFilter,
+): DockerNetworkAttachmentRow[] => {
+  const needle = search.trim().toLowerCase();
+  return rows.filter((row) => {
+    if (status !== 'all' && attachmentGroupKey(row) !== status) return false;
+    if (!needle) return true;
+    return row.searchText.includes(needle);
+  });
 };
-
-const filterOptionLabel = (label: string, count: number): JSX.Element => (
-  <>
-    <span>{label}</span>
-    <span class="rounded bg-surface-alt px-1.5 py-px text-[10px] font-semibold text-muted">
-      {count}
-    </span>
-  </>
-);
 
 const AttachmentRowCard: Component<{ row: DockerNetworkAttachmentRow }> = (props) => (
   <div class="rounded border border-border bg-surface px-3 py-2">
@@ -192,46 +199,14 @@ const AttachmentRowCard: Component<{ row: DockerNetworkAttachmentRow }> = (props
 );
 
 const AttachmentDetail: Component<{ rows: readonly DockerNetworkAttachmentRow[] }> = (props) => {
-  const [attachmentSearch, setAttachmentSearch] = createSignal('');
-  const [attachmentFilter, setAttachmentFilter] = createSignal<AttachmentStatusFilter>('all');
   const [showAll, setShowAll] = createSignal(false);
-  const counts = createMemo(() => attachmentStatusCounts(props.rows));
-  const filterOptions = createMemo(() => [
-    {
-      value: 'all',
-      label: filterOptionLabel('All', counts().all),
-      ariaLabel: 'All',
-      title: 'All attached containers',
-    },
-    {
-      value: 'attention',
-      label: filterOptionLabel('Attention', counts().attention),
-      ariaLabel: 'Attention',
-      title: 'Containers that need review',
-    },
-    {
-      value: 'running',
-      label: filterOptionLabel('Running', counts().running),
-      ariaLabel: 'Running',
-      title: 'Running containers',
-    },
-    {
-      value: 'other',
-      label: filterOptionLabel('Other', counts().other),
-      ariaLabel: 'Other',
-      title: 'Stopped, paused, or unknown containers',
-    },
-  ]);
-  const filteredRows = createMemo(() => {
-    const needle = attachmentSearch().trim().toLowerCase();
-    return props.rows.filter((row) => {
-      if (!attachmentFilterMatches(row, attachmentFilter())) return false;
-      if (!needle) return true;
-      return row.searchText.includes(needle);
-    });
+  const tableState = createPlatformTableFilterState<DockerNetworkAttachmentRow, AttachmentStatusFilter>({
+    resources: () => [...props.rows],
+    initialStatus: 'all',
+    filter: filterAttachmentRows,
   });
   const visibleRows = createMemo(() =>
-    showAll() ? filteredRows() : filteredRows().slice(0, ATTACHMENT_DETAIL_ROW_LIMIT),
+    showAll() ? tableState.filtered() : tableState.filtered().slice(0, ATTACHMENT_DETAIL_ROW_LIMIT),
   );
   const groupedRows = createMemo(() =>
     ATTACHMENT_GROUPS.map((group) => ({
@@ -240,26 +215,20 @@ const AttachmentDetail: Component<{ rows: readonly DockerNetworkAttachmentRow[] 
     })).filter((group) => group.rows.length > 0),
   );
   const hiddenRowCount = createMemo(() =>
-    Math.max(filteredRows().length - visibleRows().length, 0),
+    Math.max(tableState.filtered().length - visibleRows().length, 0),
   );
-  const activeFilterCount = createMemo(() => {
-    let count = 0;
-    if (attachmentSearch().trim()) count += 1;
-    if (attachmentFilter() !== 'all') count += 1;
-    return count;
-  });
   const filteredSummary = createMemo(() => {
-    if (activeFilterCount() === 0) return attachmentCountLabel(props.rows.length);
-    return `${attachmentPlainCountLabel(filteredRows().length)} of ${attachmentPlainCountLabel(
-      props.rows.length,
+    if (!tableState.hasActiveFilters()) return attachmentCountLabel(tableState.total());
+    return `${attachmentPlainCountLabel(tableState.visible())} of ${attachmentPlainCountLabel(
+      tableState.total(),
     )}`;
   });
   const setSearch = (value: string) => {
-    setAttachmentSearch(value);
+    tableState.setSearch(value);
     setShowAll(false);
   };
-  const setFilter = (value: string) => {
-    setAttachmentFilter(value as AttachmentStatusFilter);
+  const setStatus = (value: AttachmentStatusFilter) => {
+    tableState.setStatus(value);
     setShowAll(false);
   };
 
@@ -277,26 +246,27 @@ const AttachmentDetail: Component<{ rows: readonly DockerNetworkAttachmentRow[] 
           </div>
         }
       >
-        <div class="mb-3 grid gap-2 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
-          <SearchInput
-            value={attachmentSearch}
-            onChange={setSearch}
-            placeholder="Search attached containers"
-            title="Search attached containers"
-            inputClass="py-1.5 text-xs"
-            clearOnFocusedEscape
-          />
-          <FilterSegmentedControl
-            value={attachmentFilter()}
-            onChange={setFilter}
-            options={filterOptions()}
-            aria-label="Attached container status"
-            class="justify-start xl:justify-end"
+        <div class="mb-3">
+          <PlatformTableToolbar
+            search={tableState.search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search attached containers"
+            status={tableState.status()}
+            onStatusChange={setStatus}
+            statusOptions={ATTACHMENT_STATUS_FILTER_OPTIONS}
+            visible={tableState.visible()}
+            total={tableState.total()}
+            rowNoun="containers"
+            hasActiveFilters={tableState.hasActiveFilters()}
+            onResetFilters={() => {
+              tableState.resetFilters();
+              setShowAll(false);
+            }}
           />
         </div>
 
         <Show
-          when={filteredRows().length > 0}
+          when={tableState.filtered().length > 0}
           fallback={
             <div class="rounded border border-border bg-surface px-3 py-2 text-[11px] text-muted">
               No attached containers match current filters.
@@ -326,10 +296,10 @@ const AttachmentDetail: Component<{ rows: readonly DockerNetworkAttachmentRow[] 
                 class="w-full rounded border border-border bg-surface px-3 py-2 text-xs font-medium text-base-content hover:bg-surface-hover"
                 onClick={() => setShowAll(true)}
               >
-                Show all {attachmentPlainCountLabel(filteredRows().length)}
+                Show all {attachmentPlainCountLabel(tableState.filtered().length)}
               </button>
             </Show>
-            <Show when={showAll() && filteredRows().length > ATTACHMENT_DETAIL_ROW_LIMIT}>
+            <Show when={showAll() && tableState.filtered().length > ATTACHMENT_DETAIL_ROW_LIMIT}>
               <button
                 type="button"
                 class="w-full rounded border border-border bg-surface px-3 py-2 text-xs font-medium text-base-content hover:bg-surface-hover"

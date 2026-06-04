@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -153,6 +154,46 @@ func TestDiskUnmarshalRPM(t *testing.T) {
 			}
 			if disk.RPM != tc.expected {
 				t.Fatalf("rpm: got %d, want %d", disk.RPM, tc.expected)
+			}
+		})
+	}
+}
+
+func TestParseTagColorMap(t *testing.T) {
+	tests := []struct {
+		name     string
+		tagStyle string
+		expected map[string]string
+	}{
+		{
+			name:     "parses documented proxmox background and text color format",
+			tagStyle: "color-map=Production:000000:FFFFFF;staging:ffaa00:101010,ordering=config",
+			expected: map[string]string{
+				"production": "#000000",
+				"staging":    "#ffaa00",
+			},
+		},
+		{
+			name:     "parses legacy single-color entries with leading hash",
+			tagStyle: "ordering=config,color-map=backup:#ABCDEF;ops:123456",
+			expected: map[string]string{
+				"backup": "#abcdef",
+				"ops":    "#123456",
+			},
+		},
+		{
+			name:     "ignores invalid color tokens",
+			tagStyle: "color-map=good:00ff00;bad:zzzzzz;also-bad:12345",
+			expected: map[string]string{
+				"good": "#00ff00",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ParseTagColorMap(tc.tagStyle); !reflect.DeepEqual(got, tc.expected) {
+				t.Fatalf("ParseTagColorMap() = %#v, want %#v", got, tc.expected)
 			}
 		})
 	}

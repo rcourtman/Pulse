@@ -253,7 +253,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.25.9'
+          go-version-file: go.mod
           cache: true
 
       - name: Run backend tests
@@ -484,7 +484,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.25.9'
+          go-version-file: go.mod
           cache: true
 
       - name: Build Pulse Docker image for integration tests
@@ -583,7 +583,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.25.9'
+          go-version-file: go.mod
           cache: true
 
       - name: Set up Node.js
@@ -1008,7 +1008,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.25.9'
+          go-version-file: go.mod
           cache: true
 
       - name: Install Syft

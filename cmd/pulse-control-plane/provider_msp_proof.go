@@ -153,8 +153,8 @@ func newProviderMSPProofRuntimeFromConfig(cfg *cloudcp.CPConfig) (*providerMSPPr
 	if cfg == nil {
 		return nil, fmt.Errorf("control plane config is required")
 	}
-	if !cfg.IsProviderHostedMSP() {
-		return nil, fmt.Errorf("provider MSP proof requires CP_CONTROL_PLANE_MODE=%s", cloudcp.ControlPlaneModeProviderHostedMSP)
+	if !cfg.IsMSPControlPlane() {
+		return nil, fmt.Errorf("provider MSP proof requires CP_CONTROL_PLANE_MODE=%s or %s", cloudcp.ControlPlaneModeProviderHostedMSP, cloudcp.ControlPlaneModePulseHostedMSP)
 	}
 	if err := os.MkdirAll(cfg.TenantsDir(), 0o755); err != nil {
 		return nil, fmt.Errorf("create tenants dir: %w", err)

@@ -243,6 +243,13 @@ Stripe-free and avoids a cloud-control-plane report data path across clients.
    into each tenant container, but it must not collect report data or render
    PDFs in the control plane. Tenant-local reporting and tenant-local licensing
    decide whether that configured brand appears.
+   `pulse_hosted_msp` is the Pulse-operated form of the same Stripe-free MSP
+   control-plane family, not the public Pulse-hosted SaaS checkout path. It
+   must share the license-backed MSP plan source, workspace limit policy,
+   disabled public signup and Stripe billing routes, isolated tenant runtime
+   networks, tenant-local report branding, and provider MSP operator commands
+   with `provider_hosted_msp` while preserving its own control-plane mode value
+   for status, backup manifests, and operational audit.
 10. `internal/cloudcp/provider_msp_backup.go` shared with `deployment-installability`: provider-hosted MSP backup is both a cloud-paid license/account/runtime continuity boundary and a deployment-installability recovery artifact boundary.
     License-backed provider MSP backups must include the signed MSP license
     file as a recovery artifact while exposing only license metadata in command

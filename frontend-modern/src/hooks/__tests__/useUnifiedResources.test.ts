@@ -180,6 +180,7 @@ describe('useUnifiedResources', () => {
       },
       activeAlerts: [],
       recentlyResolved: [],
+      pveTagColors: {},
       resources: [wsResource],
       lastUpdate: 0,
     });

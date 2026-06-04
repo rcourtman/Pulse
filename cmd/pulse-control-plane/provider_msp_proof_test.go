@@ -65,6 +65,22 @@ func TestProviderMSPProofRequiresLicenseBackedPlanSourceByDefault(t *testing.T) 
 	}
 }
 
+func TestProviderMSPProofRuntimeAcceptsPulseHostedMSPMode(t *testing.T) {
+	t.Setenv("DOCKER_HOST", "unix:///tmp/pulse-provider-msp-proof-missing-docker.sock")
+	t.Setenv("DOCKER_TLS_VERIFY", "")
+	t.Setenv("DOCKER_CERT_PATH", "")
+
+	cfg := testProviderMSPProofConfig(t)
+	cfg.ControlPlaneMode = cloudcp.ControlPlaneModePulseHostedMSP
+	cfg.BaseURL = "https://acme.msp.pulserelay.pro"
+
+	rt, err := newProviderMSPProofRuntimeFromConfig(cfg)
+	if err != nil {
+		t.Fatalf("newProviderMSPProofRuntimeFromConfig: %v", err)
+	}
+	defer rt.close()
+}
+
 func TestProviderMSPProofExercisesWorkspaceInstallHandoffAndIsolation(t *testing.T) {
 	t.Setenv("DOCKER_HOST", "unix:///tmp/pulse-provider-msp-proof-missing-docker.sock")
 	t.Setenv("DOCKER_TLS_VERIFY", "")

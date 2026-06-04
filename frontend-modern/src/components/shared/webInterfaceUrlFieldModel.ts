@@ -1,7 +1,7 @@
 import { getDiscoverySuggestedURLFallback } from '@/utils/discoveryPresentation';
 
 export interface WebInterfaceUrlFieldProps {
-  metadataKind: 'guest' | 'agent';
+  metadataKind: 'guest' | 'agent' | 'docker';
   metadataId?: string;
   targetLabel?: string;
   title?: string;

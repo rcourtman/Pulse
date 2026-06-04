@@ -18,11 +18,22 @@ vi.mock('@/api/agentMetadata', () => ({
   },
 }));
 
+vi.mock('@/api/dockerMetadata', () => ({
+  DockerMetadataAPI: {
+    getMetadata: vi.fn(async () => ({ id: 'docker-host-1:container:container-1', customUrl: '' })),
+    updateMetadata: vi.fn(async () => ({
+      id: 'docker-host-1:container:container-1',
+      customUrl: '',
+    })),
+  },
+}));
+
 vi.mock('@/utils/clipboard', () => ({
   copyToClipboard: vi.fn(async () => true),
 }));
 
 import { AgentMetadataAPI } from '@/api/agentMetadata';
+import { DockerMetadataAPI } from '@/api/dockerMetadata';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import { copyToClipboard } from '@/utils/clipboard';
 import { getDiscoveryProvenanceTitle } from '@/utils/discoveryPresentation';
@@ -43,6 +54,7 @@ describe('WebInterfaceUrlField', () => {
 
     expect(webInterfaceUrlFieldStateSource).toContain('GuestMetadataAPI.getMetadata');
     expect(webInterfaceUrlFieldStateSource).toContain('AgentMetadataAPI.updateMetadata');
+    expect(webInterfaceUrlFieldStateSource).toContain('DockerMetadataAPI.updateMetadata');
     expect(webInterfaceUrlFieldStateSource).toContain('createSignal');
     expect(webInterfaceUrlFieldStateSource).toContain('copyToClipboard');
     expect(webInterfaceUrlFieldStateSource).toContain(
@@ -96,6 +108,30 @@ describe('WebInterfaceUrlField', () => {
       expect(AgentMetadataAPI.updateMetadata).toHaveBeenCalledWith('host-1', {
         customUrl: 'https://pve1.local:8006',
       });
+    });
+  });
+
+  it('saves a Docker container URL through Docker metadata API', async () => {
+    render(() => (
+      <WebInterfaceUrlField
+        metadataKind="docker"
+        metadataId="docker-host-1:container:container-1"
+        targetLabel="container"
+        customUrl=""
+      />
+    ));
+
+    const input = await screen.findByPlaceholderText('https://198.51.100.100:8080');
+    fireEvent.input(input, { target: { value: 'https://app.internal:9443' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(DockerMetadataAPI.updateMetadata).toHaveBeenCalledWith(
+        'docker-host-1:container:container-1',
+        {
+          customUrl: 'https://app.internal:9443',
+        },
+      );
     });
   });
 

@@ -175,6 +175,12 @@ TLS floor in the dynamic config.
    dry-run restore into a separate target data dir, dry-run failed-workspace
    recovery, remove proof workspaces when requested, and report final
    operational status.
+   The packaged provider MSP compose bundle defaults to
+   `CP_CONTROL_PLANE_MODE=provider_hosted_msp`, but must allow
+   `pulse_hosted_msp` as an operator override for Pulse-operated MSP stacks
+   without forking the deployment artifact. Both modes use the same
+   `provider-msp` command group, license-backed proof path, isolated client
+   runtime containers, and runtime URL shape `https://<client-id>.${DOMAIN}/`.
    `deploy/provider-msp/run-install-proof.sh` is the compose-level operator
    wrapper for that rehearsal. It must validate the provider `.env` and compose
    config, require a reachable Docker daemon, optionally pull the pinned
@@ -514,9 +520,9 @@ TLS floor in the dynamic config.
    rollback target, exact GA date, and exact v5 end-of-support date aligned
    across release notes, upgrade guidance, support policy, promotion records,
    and release-promotion resolver proof before workflow dispatch. For the
-   2026-06-03 cutover candidate, that packet is
+   2026-06-04 cutover candidate, that packet is
    `promoted_from_tag=v6.0.0-rc.6`, `rollback_version=v5.1.34`,
-   `ga_date=2026-06-03`, and `v5_eos_date=2026-09-01`.
+   `ga_date=2026-06-04`, and `v5_eos_date=2026-09-02`.
    That stable cut must also move the repo-root Docker compose default and
    `scripts/install-docker.sh` fallback from the final RC image tag to the
    stable `6.0.0` image tag in the same commit as `VERSION=6.0.0`.

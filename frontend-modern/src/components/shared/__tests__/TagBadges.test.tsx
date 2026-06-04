@@ -3,11 +3,12 @@ import { render, screen, cleanup, fireEvent } from '@solidjs/testing-library';
 
 // ── Hoisted mocks ──────────────────────────────────────────────────────
 
-const { darkModeMock, showTooltipMock, hideTooltipMock } = vi.hoisted(() => {
+const { darkModeMock, showTooltipMock, hideTooltipMock, pveTagColors } = vi.hoisted(() => {
   const darkModeMock = vi.fn(() => false);
   const showTooltipMock = vi.fn();
   const hideTooltipMock = vi.fn();
-  return { darkModeMock, showTooltipMock, hideTooltipMock };
+  const pveTagColors = { web: '#112233' };
+  return { darkModeMock, showTooltipMock, hideTooltipMock, pveTagColors };
 });
 
 // ── Module mocks ───────────────────────────────────────────────────────
@@ -21,15 +22,25 @@ vi.mock('@/components/shared/Tooltip', () => ({
   hideTooltip: hideTooltipMock,
 }));
 
-const getTagColorWithSpecialMock = vi.fn((_tag: string, isDark: boolean) => ({
-  bg: isDark ? 'rgb(30, 30, 30)' : 'rgb(200, 200, 200)',
-  text: isDark ? 'rgb(240, 240, 240)' : 'rgb(20, 20, 20)',
-  border: isDark ? 'rgb(80, 80, 80)' : 'rgb(150, 150, 150)',
+vi.mock('@/stores/websocket-global', () => ({
+  getGlobalWebSocketStore: () => ({
+    state: {
+      pveTagColors,
+    },
+  }),
 }));
+
+const getTagColorWithSpecialMock = vi.fn(
+  (_tag: string, isDark: boolean, _colorMap?: Record<string, string>) => ({
+    bg: isDark ? 'rgb(30, 30, 30)' : 'rgb(200, 200, 200)',
+    text: isDark ? 'rgb(240, 240, 240)' : 'rgb(20, 20, 20)',
+    border: isDark ? 'rgb(80, 80, 80)' : 'rgb(150, 150, 150)',
+  }),
+);
 
 vi.mock('@/utils/tagColors', () => ({
   getTagColorWithSpecial: (...args: unknown[]) =>
-    getTagColorWithSpecialMock(...(args as [string, boolean])),
+    getTagColorWithSpecialMock(...(args as [string, boolean, Record<string, string> | undefined])),
 }));
 
 import { TagBadges } from '../TagBadges';
@@ -141,14 +152,14 @@ describe('TagBadges', () => {
     it('calls getTagColorWithSpecial with isDark=false in light mode', () => {
       darkModeMock.mockReturnValue(false);
       render(() => <TagBadges tags={['web']} />);
-      expect(getTagColorWithSpecialMock).toHaveBeenCalledWith('web', false);
+      expect(getTagColorWithSpecialMock).toHaveBeenCalledWith('web', false, pveTagColors);
       const dot = getTagDots()[0];
       expect(getTagDotFill(dot)).toBe('rgb(200, 200, 200)');
     });
 
     it('calls getTagColorWithSpecial with isDark=true when isDarkMode prop is true', () => {
       render(() => <TagBadges tags={['web']} isDarkMode={true} />);
-      expect(getTagColorWithSpecialMock).toHaveBeenCalledWith('web', true);
+      expect(getTagColorWithSpecialMock).toHaveBeenCalledWith('web', true, pveTagColors);
       const dot = getTagDots()[0];
       expect(getTagDotFill(dot)).toBe('rgb(30, 30, 30)');
     });
@@ -156,7 +167,7 @@ describe('TagBadges', () => {
     it('uses dark mode signal when isDarkMode prop is not set', () => {
       darkModeMock.mockReturnValue(true);
       render(() => <TagBadges tags={['db']} />);
-      expect(getTagColorWithSpecialMock).toHaveBeenCalledWith('db', true);
+      expect(getTagColorWithSpecialMock).toHaveBeenCalledWith('db', true, pveTagColors);
       const dot = getTagDots()[0];
       expect(getTagDotFill(dot)).toBe('rgb(30, 30, 30)');
     });
@@ -164,7 +175,7 @@ describe('TagBadges', () => {
     it('isDarkMode=false overrides dark mode signal', () => {
       darkModeMock.mockReturnValue(true);
       render(() => <TagBadges tags={['web']} isDarkMode={false} />);
-      expect(getTagColorWithSpecialMock).toHaveBeenCalledWith('web', false);
+      expect(getTagColorWithSpecialMock).toHaveBeenCalledWith('web', false, pveTagColors);
       const dot = getTagDots()[0];
       expect(getTagDotFill(dot)).toBe('rgb(200, 200, 200)');
     });

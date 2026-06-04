@@ -77,29 +77,18 @@ ssh -i /path/to/key root@node "cat /sys/class/thermal/thermal_zone0/temp"
 
 ## Legacy Cleanup (If Upgrading)
 
-If you still have the old sensor proxy installed from prior releases, remove it from each **Proxmox host** (not the Pulse container):
+If you still have the old sensor proxy installed from prior releases, remove it from each **Proxmox host** (not the Pulse container) with the supported cleanup helper:
 
 ```bash
-# Stop and disable all sensor-proxy systemd units
-sudo systemctl disable --now pulse-sensor-proxy pulse-sensor-proxy-selfheal.timer pulse-sensor-proxy-selfheal.service pulse-sensor-cleanup.path pulse-sensor-cleanup.service 2>/dev/null
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/uninstall-sensor-proxy.sh | \
+  sudo bash -s -- --uninstall --purge
+```
 
-# Remove systemd unit files
-sudo rm -f /etc/systemd/system/pulse-sensor-proxy.service
-sudo rm -f /etc/systemd/system/pulse-sensor-proxy-selfheal.timer
-sudo rm -f /etc/systemd/system/pulse-sensor-proxy-selfheal.service
-sudo rm -f /etc/systemd/system/pulse-sensor-cleanup.service
-sudo rm -f /etc/systemd/system/pulse-sensor-cleanup.path
-sudo systemctl daemon-reload
+If you also want to remove the old `pulse-monitor@pam` API user and tokens before re-adding the node, include `--remove-proxmox-access`:
 
-# Remove sensor-proxy files
-sudo rm -rf /opt/pulse/sensor-proxy
-sudo rm -rf /etc/pulse-sensor-proxy
-sudo rm -rf /var/lib/pulse-sensor-proxy
-sudo rm -rf /var/log/pulse/sensor-proxy
-sudo rm -rf /run/pulse-sensor-proxy
-
-# Optional: remove sensor-proxy SSH keys from authorized_keys
-sudo sed -i '/# pulse-managed-key$/d;/# pulse-proxy-key$/d' /root/.ssh/authorized_keys
+```bash
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/uninstall-sensor-proxy.sh | \
+  sudo bash -s -- --uninstall --purge --remove-proxmox-access
 ```
 
 Reinstalling or upgrading the Pulse container does **not** remove the sensor proxy from the host — they are separate installations. If you skip this cleanup, the selfheal timer will keep running and may generate recurring `TASK ERROR` entries in the Proxmox task log.

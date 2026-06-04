@@ -22,6 +22,7 @@ type ControlPlaneMode string
 
 const (
 	ControlPlaneModePulseHosted         ControlPlaneMode = "pulse_hosted"
+	ControlPlaneModePulseHostedMSP      ControlPlaneMode = "pulse_hosted_msp"
 	ControlPlaneModeProviderHostedMSP   ControlPlaneMode = "provider_hosted_msp"
 	defaultProviderHostedMSPPlanVersion                  = "msp_starter"
 	ProviderMSPPlanSourceLicenseFile                     = "license_file"
@@ -106,8 +107,12 @@ func (c *CPConfig) IsProviderHostedMSP() bool {
 	return c != nil && c.ControlPlaneMode == ControlPlaneModeProviderHostedMSP
 }
 
+func (c *CPConfig) IsMSPControlPlane() bool {
+	return c != nil && isMSPControlPlaneMode(c.ControlPlaneMode)
+}
+
 func (c *CPConfig) UsesStripeBilling() bool {
-	return c != nil && !c.IsProviderHostedMSP()
+	return c != nil && !c.IsMSPControlPlane()
 }
 
 // LoadConfig loads control plane configuration from environment variables.
@@ -184,7 +189,7 @@ func LoadConfig() (*CPConfig, error) {
 	providerMSPPlanSource := ProviderMSPPlanSourceEnvFallback
 	providerMSPLicenseID := ""
 	providerMSPLicenseEmail := ""
-	if controlPlaneMode == ControlPlaneModeProviderHostedMSP && providerMSPLicenseFile != "" {
+	if isMSPControlPlaneMode(controlPlaneMode) && providerMSPLicenseFile != "" {
 		resolvedPlan, licenseID, licenseEmail, err := resolveProviderMSPPlanFromLicenseFile(providerMSPLicenseFile)
 		if err != nil {
 			return nil, fmt.Errorf("resolve provider MSP license: %w", err)
@@ -344,30 +349,30 @@ func (c *CPConfig) validate() error {
 	if c.Environment != "development" && c.Environment != "staging" && c.Environment != "production" {
 		return fmt.Errorf("CP_ENV must be one of development, staging, production (got %q)", c.Environment)
 	}
-	if c.ControlPlaneMode != ControlPlaneModePulseHosted && c.ControlPlaneMode != ControlPlaneModeProviderHostedMSP {
-		return fmt.Errorf("CP_CONTROL_PLANE_MODE must be one of %s, %s (got %q)", ControlPlaneModePulseHosted, ControlPlaneModeProviderHostedMSP, c.ControlPlaneMode)
+	if !isKnownControlPlaneMode(c.ControlPlaneMode) {
+		return fmt.Errorf("CP_CONTROL_PLANE_MODE must be one of %s, %s, %s (got %q)", ControlPlaneModePulseHosted, ControlPlaneModeProviderHostedMSP, ControlPlaneModePulseHostedMSP, c.ControlPlaneMode)
 	}
 	if c.Environment == "production" && c.AllowDockerlessProvisioning {
 		return fmt.Errorf("CP_ALLOW_DOCKERLESS_PROVISIONING must be false in production")
 	}
-	if c.IsProviderHostedMSP() {
+	if c.IsMSPControlPlane() {
 		if strings.TrimSpace(c.StripeWebhookSecret) != "" {
-			return fmt.Errorf("STRIPE_WEBHOOK_SECRET must not be configured when CP_CONTROL_PLANE_MODE=%s", ControlPlaneModeProviderHostedMSP)
+			return fmt.Errorf("STRIPE_WEBHOOK_SECRET must not be configured when CP_CONTROL_PLANE_MODE=%s", c.ControlPlaneMode)
 		}
 		if strings.TrimSpace(c.StripeAPIKey) != "" {
-			return fmt.Errorf("STRIPE_API_KEY must not be configured when CP_CONTROL_PLANE_MODE=%s", ControlPlaneModeProviderHostedMSP)
+			return fmt.Errorf("STRIPE_API_KEY must not be configured when CP_CONTROL_PLANE_MODE=%s", c.ControlPlaneMode)
 		}
 		if c.PublicCloudSignupEnabled {
-			return fmt.Errorf("CP_PUBLIC_CLOUD_SIGNUP_ENABLED must be false when CP_CONTROL_PLANE_MODE=%s", ControlPlaneModeProviderHostedMSP)
+			return fmt.Errorf("CP_PUBLIC_CLOUD_SIGNUP_ENABLED must be false when CP_CONTROL_PLANE_MODE=%s", c.ControlPlaneMode)
 		}
 		if strings.TrimSpace(c.CloudMSPStarterPriceID) != "" || strings.TrimSpace(c.CloudMSPGrowthPriceID) != "" || strings.TrimSpace(c.CloudMSPScalePriceID) != "" {
-			return fmt.Errorf("CP_MSP_*_PRICE_ID must not be configured when CP_CONTROL_PLANE_MODE=%s", ControlPlaneModeProviderHostedMSP)
+			return fmt.Errorf("CP_MSP_*_PRICE_ID must not be configured when CP_CONTROL_PLANE_MODE=%s", c.ControlPlaneMode)
 		}
 		if strings.TrimSpace(c.TrialActivationPrivateKey) == "" {
-			return fmt.Errorf("CP_TRIAL_ACTIVATION_PRIVATE_KEY is required when CP_CONTROL_PLANE_MODE=%s", ControlPlaneModeProviderHostedMSP)
+			return fmt.Errorf("CP_TRIAL_ACTIVATION_PRIVATE_KEY is required when CP_CONTROL_PLANE_MODE=%s", c.ControlPlaneMode)
 		}
 		if c.Environment == "production" && strings.TrimSpace(c.ProviderMSPLicenseFile) == "" {
-			return fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE is required in production when CP_CONTROL_PLANE_MODE=%s", ControlPlaneModeProviderHostedMSP)
+			return fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE is required in production when CP_CONTROL_PLANE_MODE=%s", c.ControlPlaneMode)
 		}
 		if !strings.HasPrefix(strings.ToLower(c.ProviderMSPPlanVersion), "msp_") {
 			return fmt.Errorf("CP_PROVIDER_MSP_PLAN_VERSION must be a canonical MSP plan version, got %q", c.ProviderMSPPlanVersion)
@@ -505,10 +510,30 @@ func normalizeControlPlaneMode(raw string) ControlPlaneMode {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "", "pulse_hosted", "pulse-hosted", "pulse_cloud", "pulse-cloud", "cloud":
 		return ControlPlaneModePulseHosted
+	case "pulse_hosted_msp", "pulse-hosted-msp", "pulse_msp", "pulse-msp", "hosted_msp", "hosted-msp":
+		return ControlPlaneModePulseHostedMSP
 	case "provider_hosted_msp", "provider-hosted-msp", "provider_msp", "provider-msp", "msp_provider", "msp-provider":
 		return ControlPlaneModeProviderHostedMSP
 	default:
 		return ControlPlaneMode(strings.ToLower(strings.TrimSpace(raw)))
+	}
+}
+
+func isKnownControlPlaneMode(mode ControlPlaneMode) bool {
+	switch mode {
+	case ControlPlaneModePulseHosted, ControlPlaneModeProviderHostedMSP, ControlPlaneModePulseHostedMSP:
+		return true
+	default:
+		return false
+	}
+}
+
+func isMSPControlPlaneMode(mode ControlPlaneMode) bool {
+	switch mode {
+	case ControlPlaneModeProviderHostedMSP, ControlPlaneModePulseHostedMSP:
+		return true
+	default:
+		return false
 	}
 }
 

@@ -57,7 +57,16 @@ If you reset auth (for example by deleting `.env`), Pulse may require a bootstra
 
 ### Sensor proxy removal
 
-The `pulse-sensor-proxy` from v4 is no longer needed — temperature monitoring is now handled by the unified agent. If you had the sensor proxy installed on your Proxmox hosts, remove it **on each host** after upgrading. See the [Legacy Cleanup](TEMPERATURE_MONITORING.md#legacy-cleanup-if-upgrading) section in the temperature monitoring docs for the full cleanup commands.
+The `pulse-sensor-proxy` from v4 is no longer needed — temperature monitoring is now handled by the unified agent. If you had the sensor proxy installed on your Proxmox hosts, remove it **on each host** after upgrading:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/uninstall-sensor-proxy.sh | \
+  sudo bash -s -- --uninstall --purge
+```
+
+If you deleted the old node from Pulse and want the cleanup to also remove the old `pulse-monitor@pam` API user and tokens before reinstalling, add `--remove-proxmox-access`.
+
+See the [Legacy Cleanup](TEMPERATURE_MONITORING.md#legacy-cleanup-if-upgrading) section in the temperature monitoring docs for the full cleanup details.
 
 Skipping this step will leave a selfheal timer running on the host that generates recurring `TASK ERROR` entries in the Proxmox task log.
 

@@ -182,7 +182,7 @@ func (m *Monitor) applyStorageFallbackAndRecordNodeMetrics(
 	for i := range modelNodes {
 		currentDiskSource := nodeDiskSources[modelNodes[i].Name]
 		if disk, exists := storageFallback[modelNodes[i].Name]; exists &&
-			(modelNodes[i].Disk.Total == 0 || currentDiskSource == "" || currentDiskSource == "nodes-endpoint") {
+			(modelNodes[i].Disk.Total == 0 || currentDiskSource == "") {
 			modelNodes[i].Disk = disk
 			log.Debug().
 				Str("node", modelNodes[i].Name).

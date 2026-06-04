@@ -101,6 +101,23 @@ func TestBootstrapProviderMSPIsIdempotentForExistingMSPAccount(t *testing.T) {
 	}
 }
 
+func TestBootstrapProviderMSPAcceptsPulseHostedMSPMode(t *testing.T) {
+	cfg := testProviderMSPBootstrapConfig(t)
+	cfg.ControlPlaneMode = ControlPlaneModePulseHostedMSP
+	cfg.BaseURL = "https://acme.msp.pulserelay.pro"
+
+	result, err := BootstrapProviderMSP(context.Background(), cfg, ProviderMSPBootstrapOptions{
+		AccountName: "Acme MSP",
+		OwnerEmail:  "owner@example.com",
+	})
+	if err != nil {
+		t.Fatalf("BootstrapProviderMSP: %v", err)
+	}
+	if result.WorkspaceLimit != 15 {
+		t.Fatalf("WorkspaceLimit = %d, want 15", result.WorkspaceLimit)
+	}
+}
+
 func TestBootstrapProviderMSPRejectsPulseHostedMode(t *testing.T) {
 	cfg := testProviderMSPBootstrapConfig(t)
 	cfg.ControlPlaneMode = ControlPlaneModePulseHosted

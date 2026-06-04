@@ -26,6 +26,7 @@ export interface State {
   recentlyResolved: ResolvedAlert[];
   lastUpdate: number;
   temperatureMonitoringEnabled?: boolean;
+  pveTagColors: Record<string, string>;
   // Unified resources (canonical resource model)
   resources: Resource[];
 }

@@ -33,7 +33,7 @@ type Deps struct {
 }
 
 func publicCloudSignupPath(cfg *CPConfig) string {
-	if cfg != nil && cfg.IsProviderHostedMSP() {
+	if cfg != nil && cfg.IsMSPControlPlane() {
 		return ""
 	}
 	if cfg != nil && cfg.PublicCloudSignupEnabled {
@@ -56,7 +56,7 @@ func runtimeStatus(cfg *CPConfig) admin.RuntimeStatus {
 	status := admin.RuntimeStatus{
 		ControlPlaneMode: string(cfg.ControlPlaneMode),
 	}
-	if cfg.IsProviderHostedMSP() {
+	if cfg.IsMSPControlPlane() {
 		status.ProviderMSPPlanVersion = providerMSPPlanVersion(cfg)
 		status.ProviderMSPPlanSource = cfg.ProviderMSPPlanSource
 		if limit, known := pkglicensing.WorkspaceLimitForPlan(status.ProviderMSPPlanVersion); known {
@@ -246,7 +246,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	// Workspace management (session + account-membership authenticated)
 	listTenants := account.HandleListTenants(deps.Registry)
 	workspaceLimitPolicy := account.WorkspaceLimitPolicy{}
-	if deps.Config.IsProviderHostedMSP() {
+	if deps.Config.IsMSPControlPlane() {
 		workspaceLimitPolicy.ProviderHostedMSP = true
 		workspaceLimitPolicy.ProviderMSPPlanVersion = providerMSPPlanVersion(deps.Config)
 	}

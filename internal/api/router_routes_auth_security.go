@@ -25,6 +25,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 	// API routes
 	r.mux.HandleFunc("/api/health", r.handleHealth)
 	r.mux.HandleFunc("/api/state", r.handleState)
+	r.mux.HandleFunc("/api/state/summary", r.handleStateSummary)
 	r.mux.HandleFunc("/api/version", r.handleVersion)
 	r.mux.HandleFunc("/api/security/validate-bootstrap-token", r.handleValidateBootstrapToken)
 	// Security routes

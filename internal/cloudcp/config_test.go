@@ -467,6 +467,12 @@ func setProviderHostedMSPEnv(t *testing.T) {
 	setTrialSigningEnv(t)
 }
 
+func setPulseHostedMSPEnv(t *testing.T) {
+	t.Helper()
+	setProviderHostedMSPEnv(t)
+	t.Setenv("CP_CONTROL_PLANE_MODE", "pulse_hosted_msp")
+}
+
 func writeProviderMSPLicenseForTest(t *testing.T, tier pkglicensing.Tier, planVersion string) string {
 	t.Helper()
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
@@ -520,6 +526,58 @@ func TestLoadConfig_ProviderHostedMSPDoesNotRequireStripe(t *testing.T) {
 	}
 	if cfg.ProviderMSPPlanSource != ProviderMSPPlanSourceEnvFallback {
 		t.Fatalf("ProviderMSPPlanSource = %q, want %q", cfg.ProviderMSPPlanSource, ProviderMSPPlanSourceEnvFallback)
+	}
+}
+
+func TestLoadConfig_PulseHostedMSPUsesStripeFreeMSPStack(t *testing.T) {
+	setPulseHostedMSPEnv(t)
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.ControlPlaneMode != ControlPlaneModePulseHostedMSP {
+		t.Fatalf("ControlPlaneMode = %q, want %q", cfg.ControlPlaneMode, ControlPlaneModePulseHostedMSP)
+	}
+	if !cfg.IsMSPControlPlane() {
+		t.Fatal("IsMSPControlPlane = false, want true")
+	}
+	if cfg.IsProviderHostedMSP() {
+		t.Fatal("IsProviderHostedMSP = true, want false for Pulse-hosted MSP")
+	}
+	if cfg.UsesStripeBilling() {
+		t.Fatal("UsesStripeBilling = true, want false")
+	}
+	if cfg.ProviderMSPPlanVersion != "msp_starter" {
+		t.Fatalf("ProviderMSPPlanVersion = %q, want msp_starter", cfg.ProviderMSPPlanVersion)
+	}
+}
+
+func TestLoadConfig_PulseHostedMSPUsesSignedLicenseFilePlan(t *testing.T) {
+	setPulseHostedMSPEnv(t)
+	t.Setenv("CP_ENV", "production")
+	t.Setenv("CP_PROVIDER_MSP_PLAN_VERSION", "msp_starter")
+	t.Setenv("CP_PROVIDER_MSP_LICENSE_FILE", writeProviderMSPLicenseForTest(t, pkglicensing.TierMSP, "msp_scale"))
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.ProviderMSPPlanVersion != "msp_scale" {
+		t.Fatalf("ProviderMSPPlanVersion = %q, want msp_scale", cfg.ProviderMSPPlanVersion)
+	}
+	if cfg.ProviderMSPPlanSource != ProviderMSPPlanSourceLicenseFile {
+		t.Fatalf("ProviderMSPPlanSource = %q, want %q", cfg.ProviderMSPPlanSource, ProviderMSPPlanSourceLicenseFile)
+	}
+}
+
+func TestNormalizeControlPlaneMode_PulseHostedMSPAliases(t *testing.T) {
+	for _, raw := range []string{"pulse_hosted_msp", "pulse-hosted-msp", "pulse_msp", "pulse-msp", "hosted_msp", "hosted-msp"} {
+		t.Run(raw, func(t *testing.T) {
+			if got := normalizeControlPlaneMode(raw); got != ControlPlaneModePulseHostedMSP {
+				t.Fatalf("normalizeControlPlaneMode(%q) = %q, want %q", raw, got, ControlPlaneModePulseHostedMSP)
+			}
+		})
 	}
 }
 
@@ -583,6 +641,19 @@ func TestLoadConfig_ProviderHostedMSPRejectsStripeConfig(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+func TestLoadConfig_PulseHostedMSPRejectsStripeConfig(t *testing.T) {
+	setPulseHostedMSPEnv(t)
+	t.Setenv("STRIPE_API_KEY", "sk_test_123")
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatal("expected error when STRIPE_API_KEY is configured")
+	}
+	if !strings.Contains(err.Error(), "must not be configured") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

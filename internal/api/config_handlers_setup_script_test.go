@@ -300,7 +300,11 @@ func TestPVESetupScript_ConfiguresPulseMonitorRoleSafely(t *testing.T) {
 
 	// Privileges must be comma-separated for pveum, and generated tokens must stay privilege-separated.
 	wantSnippets := []string{
-		`TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 1 2>&1)`,
+		`extract_pve_token_value()`,
+		`create_pve_token()`,
+		`pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 1 --output-format json`,
+		`pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 1 2>&1`,
+		`TOKEN_VALUE=$(extract_pve_token_value "$TOKEN_OUTPUT")`,
 		`pveum aclmod / -user pulse-monitor@pve -role PVEAuditor`,
 		`pveum aclmod / -token "$PULSE_TOKEN_ID" -role PVEAuditor`,
 		`PRIV_STRING="$(IFS=,; echo "${EXTRA_PRIVS[*]}")"`,
@@ -315,6 +319,91 @@ func TestPVESetupScript_ConfiguresPulseMonitorRoleSafely(t *testing.T) {
 	}
 	if containsString(script, `--privsep 0`) {
 		t.Fatalf("expected generated PVE token to remain privilege-separated, got: %s", truncate(script, 900))
+	}
+}
+
+func TestPVESetupScript_HardensTokenValueExtraction(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handlers := newTestConfigHandlers(t, cfg)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/setup-script?type=pve&host=http://sentinel-host:8006&pulse_url=http://sentinel-url:7656&setup_token=deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef", nil)
+	rr := httptest.NewRecorder()
+
+	handlers.HandleSetupScript(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d (%s)", rr.Code, rr.Body.String())
+	}
+
+	script := rr.Body.String()
+	wantSnippets := []string{
+		`extract_json_string_field()`,
+		`sed -n 's/.*"'"$field_name"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'`,
+		`awk -F'[|│]'`,
+		`unknown option|unknown command|no such option|unable to parse option|output-format`,
+	}
+	for _, snippet := range wantSnippets {
+		if !containsString(script, snippet) {
+			t.Fatalf("expected generated script to contain:\n%s\n\nGot (first 1200 chars):\n%s", snippet, truncate(script, 1200))
+		}
+	}
+
+	jsonCreate := strings.Index(script, `pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 1 --output-format json`)
+	legacyCreate := strings.Index(script, `pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 1 2>&1`)
+	if jsonCreate < 0 || legacyCreate < 0 || jsonCreate > legacyCreate {
+		t.Fatalf("generated script must try JSON token output before legacy output fallback")
+	}
+	if containsString(script, `grep "│ value" | awk -F'│'`) {
+		t.Fatalf("expected hardened token parser to replace the old grep/awk single-shape extraction")
+	}
+}
+
+func TestPVESetupScript_PrefersGuestAgentPrivileges(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handlers := newTestConfigHandlers(t, cfg)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/setup-script?type=pve&host=http://sentinel-host:8006&pulse_url=http://sentinel-url:7656&setup_token=deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef", nil)
+	rr := httptest.NewRecorder()
+
+	handlers.HandleSetupScript(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d (%s)", rr.Code, rr.Body.String())
+	}
+
+	script := rr.Body.String()
+	wantSnippets := []string{
+		`local HAS_VM_GUEST_AGENT_FILE_READ=false`,
+		`pveum role add TestGuestAgentFileRead -privs VM.GuestAgent.FileRead 2>/dev/null`,
+		`if [ "$HAS_VM_GUEST_AGENT_AUDIT" = true ]; then`,
+		`EXTRA_PRIVS+=("VM.GuestAgent.Audit")`,
+		`if [ "$HAS_VM_GUEST_AGENT_FILE_READ" = true ]; then`,
+		`EXTRA_PRIVS+=("VM.GuestAgent.FileRead")`,
+		`elif [ "$HAS_VM_MONITOR" = true ]; then`,
+		`EXTRA_PRIVS+=("VM.Monitor")`,
+	}
+	for _, snippet := range wantSnippets {
+		if !containsString(script, snippet) {
+			t.Fatalf("expected generated script to contain:\n%s\n\nGot (first 900 chars):\n%s", snippet, truncate(script, 900))
+		}
+	}
+
+	guestBranch := strings.Index(script, `if [ "$HAS_VM_GUEST_AGENT_AUDIT" = true ]; then`)
+	monitorBranch := strings.Index(script, `elif [ "$HAS_VM_MONITOR" = true ]; then`)
+	if guestBranch < 0 || monitorBranch < 0 || guestBranch > monitorBranch {
+		t.Fatalf("generated script must prefer VM.GuestAgent.* privileges before VM.Monitor")
 	}
 }
 

@@ -58,6 +58,51 @@ func TestRegisterRoutes_StatusIncludesProviderMSPRuntime(t *testing.T) {
 	}
 }
 
+func TestRegisterRoutes_StatusIncludesPulseHostedMSPRuntime(t *testing.T) {
+	dir := t.TempDir()
+	reg, err := registry.NewTenantRegistry(dir)
+	if err != nil {
+		t.Fatalf("NewTenantRegistry: %v", err)
+	}
+	t.Cleanup(func() { _ = reg.Close() })
+
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, &Deps{
+		Config: &CPConfig{
+			DataDir:                dir,
+			AdminKey:               "test-admin-key",
+			BaseURL:                "https://example-msp.msp.pulserelay.pro",
+			ControlPlaneMode:       ControlPlaneModePulseHostedMSP,
+			ProviderMSPPlanVersion: "msp_scale",
+			ProviderMSPPlanSource:  ProviderMSPPlanSourceLicenseFile,
+		},
+		Registry: reg,
+		Version:  "test",
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/status", nil)
+	req.Header.Set("X-Admin-Key", "test-admin-key")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /status status=%d, want %d (body=%q)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode /status payload: %v", err)
+	}
+	if payload["control_plane_mode"] != string(ControlPlaneModePulseHostedMSP) {
+		t.Fatalf("control_plane_mode = %#v", payload["control_plane_mode"])
+	}
+	if payload["provider_msp_plan_version"] != "msp_scale" {
+		t.Fatalf("provider_msp_plan_version = %#v", payload["provider_msp_plan_version"])
+	}
+	if payload["provider_msp_workspace_limit"] != float64(40) {
+		t.Fatalf("provider_msp_workspace_limit = %#v", payload["provider_msp_workspace_limit"])
+	}
+}
+
 func TestRegisterRoutes_AccountAndTenantMethodDispatch(t *testing.T) {
 	dir := t.TempDir()
 	reg, err := registry.NewTenantRegistry(dir)
@@ -383,45 +428,49 @@ func TestRegisterRoutes_PublicCloudSignupRoutesDisabledByDefault(t *testing.T) {
 	}
 }
 
-func TestRegisterRoutes_ProviderHostedMSPDisablesPulseHostedBillingRoutes(t *testing.T) {
-	dir := t.TempDir()
-	reg, err := registry.NewTenantRegistry(dir)
-	if err != nil {
-		t.Fatalf("NewTenantRegistry: %v", err)
-	}
-	t.Cleanup(func() { _ = reg.Close() })
+func TestRegisterRoutes_MSPControlPlaneDisablesPulseHostedBillingRoutes(t *testing.T) {
+	for _, mode := range []ControlPlaneMode{ControlPlaneModeProviderHostedMSP, ControlPlaneModePulseHostedMSP} {
+		t.Run(string(mode), func(t *testing.T) {
+			dir := t.TempDir()
+			reg, err := registry.NewTenantRegistry(dir)
+			if err != nil {
+				t.Fatalf("NewTenantRegistry: %v", err)
+			}
+			t.Cleanup(func() { _ = reg.Close() })
 
-	mux := http.NewServeMux()
-	RegisterRoutes(mux, &Deps{
-		Config: &CPConfig{
-			DataDir:                  dir,
-			AdminKey:                 "test-admin-key",
-			BaseURL:                  "https://msp.example.com",
-			ControlPlaneMode:         ControlPlaneModeProviderHostedMSP,
-			PublicCloudSignupEnabled: true,
-			ProviderMSPPlanVersion:   "msp_growth",
-		},
-		Registry: reg,
-		Version:  "test",
-	})
+			mux := http.NewServeMux()
+			RegisterRoutes(mux, &Deps{
+				Config: &CPConfig{
+					DataDir:                  dir,
+					AdminKey:                 "test-admin-key",
+					BaseURL:                  "https://msp.example.com",
+					ControlPlaneMode:         mode,
+					PublicCloudSignupEnabled: true,
+					ProviderMSPPlanVersion:   "msp_growth",
+				},
+				Registry: reg,
+				Version:  "test",
+			})
 
-	for _, tc := range []struct {
-		method string
-		path   string
-	}{
-		{method: http.MethodPost, path: "/api/stripe/webhook"},
-		{method: http.MethodGet, path: "/api/portal/billing"},
-		{method: http.MethodGet, path: "/signup"},
-		{method: http.MethodGet, path: "/cloud/signup"},
-		{method: http.MethodPost, path: "/api/public/signup"},
-		{method: http.MethodGet, path: "/cloud/msp/signup"},
-		{method: http.MethodPost, path: "/api/public/msp/signup"},
-	} {
-		req := httptest.NewRequest(tc.method, tc.path, nil)
-		rec := httptest.NewRecorder()
-		mux.ServeHTTP(rec, req)
-		if rec.Code != http.StatusNotFound {
-			t.Fatalf("%s %s status=%d, want %d", tc.method, tc.path, rec.Code, http.StatusNotFound)
-		}
+			for _, tc := range []struct {
+				method string
+				path   string
+			}{
+				{method: http.MethodPost, path: "/api/stripe/webhook"},
+				{method: http.MethodGet, path: "/api/portal/billing"},
+				{method: http.MethodGet, path: "/signup"},
+				{method: http.MethodGet, path: "/cloud/signup"},
+				{method: http.MethodPost, path: "/api/public/signup"},
+				{method: http.MethodGet, path: "/cloud/msp/signup"},
+				{method: http.MethodPost, path: "/api/public/msp/signup"},
+			} {
+				req := httptest.NewRequest(tc.method, tc.path, nil)
+				rec := httptest.NewRecorder()
+				mux.ServeHTTP(rec, req)
+				if rec.Code != http.StatusNotFound {
+					t.Fatalf("%s %s status=%d, want %d", tc.method, tc.path, rec.Code, http.StatusNotFound)
+				}
+			}
+		})
 	}
 }

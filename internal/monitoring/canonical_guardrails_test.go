@@ -670,7 +670,8 @@ func TestProxmoxGuestMemoryFallbackUsesInstanceScopedCachesAndAgentMeminfo(t *te
 			"func (m *Monitor) getVMAgentMemAvailable(ctx context.Context, client PVEClientInterface, instanceName, node string, vmid int) (uint64, error) {",
 			"requestCtx, cancel := context.WithTimeout(ctx, vmAgentMemRequestTTL)",
 			"ttl := vmAgentMemCacheTTL",
-			"ttl = vmAgentMemNegativeTTL",
+			"ttl = m.vmAgentMemNegativeCacheTTL(instanceName, node, vmid)",
+			"vmAgentMemNegativeKnownGuestTTL = 30 * time.Second",
 		},
 		"guest_memory_sources.go": {
 			"func shouldPreferGuestAgentMemAvailable(status *proxmox.VMStatus, memTotal uint64) bool {",
@@ -795,9 +796,11 @@ func TestProxmoxGuestMemoryCarryForwardUsesCanonicalSnapshotStability(t *testing
 			"Notes:          snapshotNotes,",
 		},
 		"monitor_polling_vm.go": {
-			`prevSnapshot := m.previousGuestSnapshot(instanceName, "qemu", n.Node, vm.VMID)`,
-			"memUsed, memorySource, snapshotNotes := stabilizeGuestLowTrustMemory(",
-			"Notes:          snapshotNotes,",
+			"prevVMByID := prevGuests.vmsByID",
+			"m.pollNodeVMsWithClusterResourceBuilder(ctx, instanceName, n.Node, vms, client, prevVMByID, vmIDToHostAgent)",
+		},
+		"monitor_pve_node_vm_builder.go": {
+			"return m.collectClusterVMResources(ctx, instanceName, resources, client, prevVMByID, vmIDToHostAgent), templateSubjects",
 		},
 	}
 
@@ -828,8 +831,7 @@ func TestProxmoxGuestDiskCarryForwardUsesCanonicalStabilityHelper(t *testing.T) 
 			"return nil, classifyGuestAgentDiskStatusError(err), false",
 		},
 		"monitor_polling_vm.go": {
-			"diskStatusReason = classifyGuestAgentDiskStatusError(err)",
-			"diskTotal, diskUsed, diskFree, diskUsage, individualDisks, diskStatusReason = stabilizeGuestLowTrustDisk(",
+			"m.pollNodeVMsWithClusterResourceBuilder(ctx, instanceName, n.Node, vms, client, prevVMByID, vmIDToHostAgent)",
 		},
 	}
 
@@ -859,8 +861,8 @@ func TestProxmoxGuestDiskInventoryPrefersCanonicalLinkedHostAgentSource(t *testi
 			`Msg("QEMU disk: preferring linked Pulse host agent disk inventory")`,
 		},
 		"monitor_polling_vm.go": {
-			"preferLinkedHostAgentDiskInventory(",
-			`Msg("QEMU disk: preferring linked Pulse host agent disk inventory")`,
+			"vmIDToHostAgent := prevGuests.hostAgentsByVMID",
+			"m.pollNodeVMsWithClusterResourceBuilder(ctx, instanceName, n.Node, vms, client, prevVMByID, vmIDToHostAgent)",
 		},
 	}
 
@@ -960,8 +962,10 @@ func TestBackupOrphanDetectionUsesCanonicalInventoryReadinessScope(t *testing.T)
 		"monitor_pve_guest_poll.go": {
 			"m.updatePVEBackupTemplateSubjectsFromClusterResources(instanceName, resources)",
 		},
+		"monitor_pve_node_vm_builder.go": {
+			`pveBackupTemplateSubjectKey(instanceName, "qemu", node, vm.VMID)`,
+		},
 		"monitor_polling_vm.go": {
-			`pveBackupTemplateSubjectKey(instanceName, "qemu", n.Node, vm.VMID)`,
 			`m.updatePVEBackupTemplateSubjectsForType(instanceName, "qemu", qemuTemplateSubjects)`,
 		},
 		"monitor_polling_containers.go": {
@@ -1500,7 +1504,7 @@ func TestProxmoxNodeDiskFallbackPrefersCanonicalSystemStorage(t *testing.T) {
 		},
 		"monitor_pve_storage.go": {
 			"rank, ok := preferredNodeDiskFallbackRank(storage)",
-			`(modelNodes[i].Disk.Total == 0 || currentDiskSource == "" || currentDiskSource == "nodes-endpoint")`,
+			`(modelNodes[i].Disk.Total == 0 || currentDiskSource == "")`,
 		},
 	}
 
@@ -1520,10 +1524,10 @@ func TestProxmoxNodeDiskFallbackPrefersCanonicalSystemStorage(t *testing.T) {
 
 func TestProxmoxGuestPollersCarryPoolIntoCanonicalModels(t *testing.T) {
 	requiredSnippets := map[string][]string{
-		"monitor_pve_guest_builders.go": {"Pool:     strings.TrimSpace(res.Pool)"},
-		"monitor_pve_guest_lxc.go":      {"Pool:     strings.TrimSpace(res.Pool)"},
-		"monitor_polling_vm.go":         {"Pool:     strings.TrimSpace(vm.Pool)"},
-		"monitor_polling_containers.go": {"Pool:     strings.TrimSpace(container.Pool)"},
+		"monitor_pve_guest_builders.go":  {"Pool:     strings.TrimSpace(res.Pool)"},
+		"monitor_pve_guest_lxc.go":       {"Pool:     strings.TrimSpace(res.Pool)"},
+		"monitor_pve_node_vm_builder.go": {"Pool:      vm.Pool"},
+		"monitor_polling_containers.go":  {"Pool:     strings.TrimSpace(container.Pool)"},
 	}
 
 	for file, snippets := range requiredSnippets {
@@ -1569,9 +1573,8 @@ func TestProxmoxGuestAgentContinuityUsesCanonicalEvidenceAndRetryPaths(t *testin
 		},
 		"monitor_polling_vm.go": {
 			"prevVMByID := prevGuests.vmsByID",
-			"guestAgentAvailable := vm.Status == \"running\" &&",
-			"m.hasRecentGuestMetadataEvidence(instanceName, n.Node, vm.VMID, now)",
-			"if guestAgentAvailable && diskTotal > 0 {",
+			"vmIDToHostAgent := prevGuests.hostAgentsByVMID",
+			"m.pollNodeVMsWithClusterResourceBuilder(ctx, instanceName, n.Node, vms, client, prevVMByID, vmIDToHostAgent)",
 		},
 	}
 

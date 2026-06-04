@@ -1,6 +1,7 @@
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
 import { AgentMetadataAPI } from '@/api/agentMetadata';
+import { DockerMetadataAPI } from '@/api/dockerMetadata';
 import { copyToClipboard } from '@/utils/clipboard';
 import { dispatchResourceMetadataChanged } from '@/utils/resourceMetadataEvents';
 import {
@@ -79,6 +80,10 @@ export function useWebInterfaceUrlFieldState(props: WebInterfaceUrlFieldProps) {
       const metadata = await AgentMetadataAPI.getMetadata(id);
       return metadata?.customUrl ?? '';
     }
+    if (props.metadataKind === 'docker') {
+      const metadata = await DockerMetadataAPI.getMetadata(id);
+      return metadata?.customUrl ?? '';
+    }
     const metadata = await GuestMetadataAPI.getMetadata(id);
     return metadata?.customUrl ?? '';
   };
@@ -86,6 +91,10 @@ export function useWebInterfaceUrlFieldState(props: WebInterfaceUrlFieldProps) {
   const updateMetadataUrl = async (id: string, value: string) => {
     if (props.metadataKind === 'agent') {
       await AgentMetadataAPI.updateMetadata(id, { customUrl: value });
+      return;
+    }
+    if (props.metadataKind === 'docker') {
+      await DockerMetadataAPI.updateMetadata(id, { customUrl: value });
       return;
     }
     await GuestMetadataAPI.updateMetadata(id, { customUrl: value });

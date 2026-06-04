@@ -64,8 +64,8 @@ These do not qualify as v5 maintenance work:
 
 The first stable `v6.0.0` release must publish this exact notice:
 
-> Pulse v5 entered maintenance-only support on 2026-06-03. I will ship only
+> Pulse v5 entered maintenance-only support on 2026-06-04. I will ship only
 > critical security, data-loss, licensing or billing blocker, installer or
 > updater failure, and safe migration blocker fixes for existing v5 users until
-> 2026-09-01. After 2026-09-01, Pulse v5 is end-of-support and new fixes land
+> 2026-09-02. After 2026-09-02, Pulse v5 is end-of-support and new fixes land
 > on v6 unless I publish an explicit exception.

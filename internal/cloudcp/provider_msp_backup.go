@@ -132,8 +132,8 @@ func CreateProviderMSPBackup(ctx context.Context, cfg *CPConfig, outputPath stri
 	if cfg == nil {
 		return nil, fmt.Errorf("control plane config is required")
 	}
-	if !cfg.IsProviderHostedMSP() {
-		return nil, fmt.Errorf("provider MSP backup requires CP_CONTROL_PLANE_MODE=%s", ControlPlaneModeProviderHostedMSP)
+	if !cfg.IsMSPControlPlane() {
+		return nil, fmt.Errorf("provider MSP backup requires CP_CONTROL_PLANE_MODE=%s or %s", ControlPlaneModeProviderHostedMSP, ControlPlaneModePulseHostedMSP)
 	}
 	if cfg.UsesStripeBilling() {
 		return nil, fmt.Errorf("provider MSP backup is unavailable for Stripe-backed control planes")
@@ -967,8 +967,8 @@ func validateProviderMSPBackupManifest(manifest ProviderMSPBackupManifest) error
 	if manifest.Version != ProviderMSPBackupManifestVersion {
 		return fmt.Errorf("unsupported provider MSP backup manifest version %q", manifest.Version)
 	}
-	if manifest.ControlPlaneMode != string(ControlPlaneModeProviderHostedMSP) {
-		return fmt.Errorf("backup control_plane_mode = %q, want %q", manifest.ControlPlaneMode, ControlPlaneModeProviderHostedMSP)
+	if !isMSPControlPlaneMode(ControlPlaneMode(manifest.ControlPlaneMode)) {
+		return fmt.Errorf("backup control_plane_mode = %q, want %q or %q", manifest.ControlPlaneMode, ControlPlaneModeProviderHostedMSP, ControlPlaneModePulseHostedMSP)
 	}
 	if strings.TrimSpace(manifest.PlanVersion) == "" {
 		return fmt.Errorf("backup manifest is missing plan_version")
