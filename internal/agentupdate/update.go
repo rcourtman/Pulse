@@ -80,6 +80,7 @@ var (
 	restartProcessFn             = restartProcess
 	execCommandContextFn         = exec.CommandContext
 	osExecutableFn               = os.Executable
+	osArgsFn                     = func() []string { return os.Args }
 	evalSymlinksFn               = filepath.EvalSymlinks
 	createTempFn                 = os.CreateTemp
 	chmodFn                      = os.Chmod
@@ -628,11 +629,37 @@ func (u *Updater) validatePulseURL() error {
 
 // performUpdate downloads and installs the new agent binary.
 func (u *Updater) performUpdate(ctx context.Context) error {
-	execPath, err := osExecutableFn()
+	execPath, err := resolveExecutablePath()
 	if err != nil {
-		return fmt.Errorf("failed to get executable path: %w", err)
+		return err
 	}
 	return u.performUpdateWithExecPath(ctx, execPath)
+}
+
+// resolveExecutablePath returns the running binary's path, falling back to an
+// absolute os.Args[0] when os.Executable() fails or returns empty. This happens
+// on FreeBSD/OPNsense, where without the fallback the agent cannot self-update
+// (#1457).
+func resolveExecutablePath() (string, error) {
+	execPath, err := osExecutableFn()
+	if err == nil && strings.TrimSpace(execPath) != "" {
+		return execPath, nil
+	}
+
+	args := osArgsFn()
+	if len(args) > 0 {
+		candidate := strings.TrimSpace(args[0])
+		if filepath.IsAbs(candidate) {
+			if info, statErr := os.Stat(candidate); statErr == nil && !info.IsDir() {
+				return candidate, nil
+			}
+		}
+	}
+
+	if err == nil {
+		err = errors.New("empty executable path")
+	}
+	return "", fmt.Errorf("failed to get executable path: %w", err)
 }
 
 func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string) error {

@@ -1,6 +1,7 @@
 package agentupdate
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -518,4 +519,50 @@ func TestConstants(t *testing.T) {
 	if downloadTimeout != 5*time.Minute {
 		t.Errorf("downloadTimeout = %v, want 5m", downloadTimeout)
 	}
+}
+
+func TestResolveExecutablePath(t *testing.T) {
+	origExec := osExecutableFn
+	origArgs := osArgsFn
+	t.Cleanup(func() {
+		osExecutableFn = origExec
+		osArgsFn = origArgs
+	})
+
+	t.Run("returns os.Executable when available", func(t *testing.T) {
+		osExecutableFn = func() (string, error) { return "/usr/local/bin/pulse-agent", nil }
+		osArgsFn = func() []string { return []string{"argv0"} }
+		got, err := resolveExecutablePath()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "/usr/local/bin/pulse-agent" {
+			t.Fatalf("got %q", got)
+		}
+	})
+
+	t.Run("falls back to absolute argv0 when os.Executable is empty", func(t *testing.T) {
+		dir := t.TempDir()
+		bin := filepath.Join(dir, "pulse-agent")
+		if err := os.WriteFile(bin, []byte("x"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		osExecutableFn = func() (string, error) { return "", nil }
+		osArgsFn = func() []string { return []string{bin} }
+		got, err := resolveExecutablePath()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != bin {
+			t.Fatalf("got %q, want %q", got, bin)
+		}
+	})
+
+	t.Run("errors when neither source is usable", func(t *testing.T) {
+		osExecutableFn = func() (string, error) { return "", errors.New("boom") }
+		osArgsFn = func() []string { return []string{"relative-arg"} }
+		if _, err := resolveExecutablePath(); err == nil {
+			t.Fatal("expected error")
+		}
+	})
 }
