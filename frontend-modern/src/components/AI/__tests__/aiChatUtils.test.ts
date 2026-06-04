@@ -46,6 +46,18 @@ describe('aiChatUtils', () => {
       expect(grouped.get('openai')?.map((m) => m.id)).toEqual(['openai:gpt-4o']);
       expect(grouped.get('anthropic')?.map((m) => m.id)).toEqual(['claude-3-5-sonnet']);
     });
+
+    it('prefers the server-supplied provider over the id heuristic (#1320)', () => {
+      const models: ModelInfo[] = [
+        // Opaque ids that the id heuristic cannot attribute, but with provider set.
+        { id: 'llama3-8b', name: 'Llama 3 8B', provider: 'ollama' },
+        { id: 'qwen3.5-27b', name: 'Qwen', provider: 'ollama' },
+      ];
+
+      const grouped = utils.groupModelsByProvider(models);
+      expect(grouped.get('ollama')?.length).toBe(2);
+      expect(grouped.has('llama3-8b')).toBe(false);
+    });
   });
 
   describe('sanitizeThinking', () => {

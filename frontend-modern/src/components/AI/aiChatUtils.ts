@@ -9,7 +9,9 @@ export function groupModelsByProvider(models: ModelInfo[]): Map<string, ModelInf
   const grouped = new Map<string, ModelInfo[]>();
 
   for (const model of models) {
-    const provider = getProviderFromModelId(model.id);
+    // Prefer the server-supplied provider; fall back to the id heuristic for
+    // models that predate the field or have an opaque id (#1320).
+    const provider = model.provider?.trim() || getProviderFromModelId(model.id);
     const existing = grouped.get(provider) || [];
     existing.push(model);
     grouped.set(provider, existing);
