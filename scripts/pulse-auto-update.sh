@@ -259,11 +259,35 @@ resolve_install_script_url() {
 }
 
 # Perform the update
+wait_for_service_active() {
+    local service_name=$1
+    local timeout_seconds="${2:-20}"
+    local elapsed=0
+
+    while (( elapsed < timeout_seconds )); do
+        if systemctl is-active --quiet "$service_name" 2>/dev/null; then
+            return 0
+        fi
+        sleep 1
+        ((elapsed += 1))
+    done
+
+    return 1
+}
+
 perform_update() {
     local new_version=$1
     local service_name=$(detect_service_name)
     local installer_tmp=""
     local signature_tmp=""
+
+    # Capture whether Pulse was running before the update so we can guarantee it
+    # comes back up afterwards (#1323: auto-update could leave it stopped on
+    # unprivileged LXC where the installer's restart silently fails).
+    local service_was_active="false"
+    if systemctl is-active --quiet "$service_name" 2>/dev/null; then
+        service_was_active="true"
+    fi
 
     # Refuse to install a prerelease via the unattended updater. The stable
     # channel must never cross onto a tag like v6.0.0-rc.2, even if every
@@ -341,10 +365,40 @@ perform_update() {
         local installed_version=$(get_current_version)
         if [[ "$installed_version" == "$new_version" ]]; then
             log info "Version verified: $installed_version"
-            
+
+            # If Pulse was running before the update, make sure it is running
+            # again. On unprivileged LXC the installer's restart can silently
+            # fail, leaving Pulse stopped (#1323).
+            if [[ "$service_was_active" == "true" ]]; then
+                if ! wait_for_service_active "$service_name" 20; then
+                    log warn "Pulse service is not active after update, attempting one explicit start"
+                    systemctl start "$service_name" || true
+                fi
+
+                if ! wait_for_service_active "$service_name" 20; then
+                    log error "Pulse service did not come back up after update"
+
+                    log info "Restoring from backup"
+                    if [[ -f "$backup_dir/pulse" ]]; then
+                        if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
+                            cp -f "$backup_dir/pulse" "$INSTALL_DIR/bin/pulse"
+                        else
+                            cp -f "$backup_dir/pulse" "$INSTALL_DIR/pulse"
+                        fi
+                    fi
+                    if [[ -f "$backup_dir/VERSION" ]]; then
+                        cp -f "$backup_dir/VERSION" "$INSTALL_DIR/VERSION"
+                    fi
+
+                    systemctl restart "$service_name" || true
+                    rm -rf "$backup_dir"
+                    return 1
+                fi
+            fi
+
             # Clean up backup
             rm -rf "$backup_dir"
-            
+
             return 0
         else
             log error "Version mismatch after update. Expected: $new_version, Got: $installed_version"
@@ -452,5 +506,7 @@ main() {
     log info "Auto-update check completed"
 }
 
-# Run main function
-main "$@"
+# Run main function (skipped when the script is sourced, e.g. by tests).
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi
