@@ -49,14 +49,19 @@ describe('aiChatUtils', () => {
 
     it('prefers the server-supplied provider over the id heuristic (#1320)', () => {
       const models: ModelInfo[] = [
-        // Opaque ids that the id heuristic cannot attribute, but with provider set.
-        { id: 'llama3-8b', name: 'Llama 3 8B', provider: 'ollama' },
-        { id: 'qwen3.5-27b', name: 'Qwen', provider: 'ollama' },
+        // The id heuristic would MIS-detect these (gpt -> openai, claude ->
+        // anthropic); the server-supplied provider must win.
+        { id: 'gpt-oss-20b', name: 'GPT-OSS 20B', provider: 'ollama' },
+        { id: 'my-claude-clone', name: 'Clone', provider: 'ollama' },
       ];
 
       const grouped = utils.groupModelsByProvider(models);
-      expect(grouped.get('ollama')?.length).toBe(2);
-      expect(grouped.has('llama3-8b')).toBe(false);
+      expect(grouped.get('ollama')?.map((m) => m.id).sort()).toEqual([
+        'gpt-oss-20b',
+        'my-claude-clone',
+      ]);
+      expect(grouped.has('openai')).toBe(false);
+      expect(grouped.has('anthropic')).toBe(false);
     });
   });
 

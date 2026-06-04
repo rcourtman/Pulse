@@ -250,14 +250,15 @@ describe('patrolFormat', () => {
 
     it('prefers the server-supplied provider over the id prefix (#1320)', () => {
       const models = [
-        // Opaque id (no recognizable provider prefix) but an explicit provider.
-        { id: 'llama3-8b', name: 'Llama 3 8B', provider: 'ollama' },
-        { id: 'qwen3.5-27b', name: 'Qwen', provider: 'ollama' },
+        // The id prefix/heuristic would mis-group these; provider must win.
+        { id: 'gpt-oss-20b', name: 'GPT-OSS 20B', provider: 'ollama' },
+        { id: 'my-claude-clone', name: 'Clone', provider: 'ollama' },
       ];
 
       const groups = groupModelsByProvider(models);
       expect(groups.get('ollama')).toHaveLength(2);
-      expect(groups.has('llama3-8b')).toBe(false);
+      expect(groups.has('gpt-oss-20b')).toBe(false);
+      expect(groups.has('my-claude-clone')).toBe(false);
     });
   });
 });
