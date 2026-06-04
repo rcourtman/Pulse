@@ -860,7 +860,14 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 			Host: node.Host,
 			Type: "pve",
 		}
-		monitorConnected, hasMonitorStatus := diagnosticsMonitorConnectionStatus(r.monitor, "pve-"+node.Name)
+		// GetConnectionStatuses keys by name, falling back to host when the
+		// configured name is empty; mirror that so the merge is not a silent
+		// no-op for unnamed instances.
+		pveKeyName := node.Name
+		if strings.TrimSpace(pveKeyName) == "" {
+			pveKeyName = node.Host
+		}
+		monitorConnected, hasMonitorStatus := diagnosticsMonitorConnectionStatus(r.monitor, "pve-"+pveKeyName)
 
 		// Determine auth method (sanitized - don't expose actual values)
 		if node.TokenName != "" && node.TokenValue != "" {
@@ -933,7 +940,11 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 			Name: pbsNode.Name,
 			Host: pbsNode.Host,
 		}
-		monitorConnected, hasMonitorStatus := diagnosticsMonitorConnectionStatus(r.monitor, "pbs-"+pbsNode.Name)
+		pbsKeyName := pbsNode.Name
+		if strings.TrimSpace(pbsKeyName) == "" {
+			pbsKeyName = pbsNode.Host
+		}
+		monitorConnected, hasMonitorStatus := diagnosticsMonitorConnectionStatus(r.monitor, "pbs-"+pbsKeyName)
 
 		testCfg := pbs.ClientConfig{
 			Host:        pbsNode.Host,

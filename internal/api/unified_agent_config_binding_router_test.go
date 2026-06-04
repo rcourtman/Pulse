@@ -46,3 +46,30 @@ func TestUnifiedAgentConfigUsesTokenBindingInRouter(t *testing.T) {
 		}
 	}
 }
+
+// Regression for #1254: canReadConfig accepts agent:report, but a report-only
+// token that is NOT bound to any host must still be rejected (404 from token
+// binding, not 200) — verified at the full router level.
+func TestUnifiedAgentConfigReportScopeUnboundReturnsNotFound(t *testing.T) {
+	rawToken := "host-report-unbound-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentReport}, nil)
+	record.ID = "token-unbound"
+
+	cfg := newTestConfigWithTokens(t, record)
+
+	state := models.NewState()
+	state.UpsertHost(models.Host{ID: "host-1", TokenID: "token-other"})
+	monitor := &monitoring.Monitor{}
+	setUnexportedField(t, monitor, "state", state)
+
+	router := NewRouter(cfg, monitor, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/host-1/config", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for an unbound report-only token, got %d", rec.Code)
+	}
+}
