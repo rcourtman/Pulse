@@ -2174,6 +2174,11 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 	customFields := convertWebhookCustomFields(webhook.CustomFields)
 	data := n.prepareWebhookData(alert, customFields)
 
+	// Carry the configured mention into the resolved payload too, matching the
+	// firing/grouped paths so a configured @everyone/@channel is not dropped on
+	// resolved notifications (#1118).
+	data.Mention = webhook.Mention
+
 	// Override fields for resolved context
 	data.Event = "resolved"
 	data.ResolvedAt = resolvedAt.Format(time.RFC3339)

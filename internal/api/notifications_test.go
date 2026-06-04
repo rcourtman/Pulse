@@ -357,6 +357,7 @@ func TestNotificationHandlers(t *testing.T) {
 				Name:    "Test Webhook",
 				URL:     "https://example.com",
 				Headers: map[string]string{"Authorization": "Bearer token"},
+				Mention: "@everyone",
 			},
 		}
 		mockManager.On("GetWebhooks").Return(webhooks).Once()
@@ -370,6 +371,7 @@ func TestNotificationHandlers(t *testing.T) {
 		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		assert.Equal(t, 1, len(resp))
 		assert.Equal(t, "wh1", resp[0]["id"])
+		assert.Equal(t, "@everyone", resp[0]["mention"])
 		headers := resp[0]["headers"].(map[string]interface{})
 		assert.Equal(t, "***REDACTED***", headers["Authorization"])
 	})

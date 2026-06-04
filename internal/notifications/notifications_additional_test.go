@@ -266,6 +266,90 @@ func TestSendResolvedWebhookHTTP(t *testing.T) {
 	}
 }
 
+func TestSendResolvedWebhookIncludesMention(t *testing.T) {
+	cases := []struct {
+		service  string
+		assertFn func(t *testing.T, payload map[string]any)
+	}{
+		{
+			service: "discord",
+			assertFn: func(t *testing.T, payload map[string]any) {
+				if payload["content"] != "@everyone" {
+					t.Fatalf("expected discord resolved mention in content, got %v", payload["content"])
+				}
+			},
+		},
+		{
+			service: "slack",
+			assertFn: func(t *testing.T, payload map[string]any) {
+				text, _ := payload["text"].(string)
+				if !strings.HasPrefix(text, "@everyone ") {
+					t.Fatalf("expected slack resolved text to start with mention, got %q", text)
+				}
+			},
+		},
+		{
+			service: "mattermost",
+			assertFn: func(t *testing.T, payload map[string]any) {
+				text, _ := payload["text"].(string)
+				if !strings.HasPrefix(text, "@everyone\n\n") {
+					t.Fatalf("expected mattermost resolved text to start with mention, got %q", text)
+				}
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.service, func(t *testing.T) {
+			var gotBody []byte
+			server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body, _ := io.ReadAll(r.Body)
+				gotBody = body
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			defer server.Close()
+
+			manager := NewNotificationManager("")
+			defer manager.Stop()
+			manager.webhookClient = server.Client()
+			if err := manager.UpdateAllowedPrivateCIDRs("127.0.0.1/32"); err != nil {
+				t.Fatalf("allowlist: %v", err)
+			}
+
+			alertList := []*alerts.Alert{{
+				ID:           "a1",
+				Type:         "cpu",
+				Level:        alerts.AlertLevelWarning,
+				ResourceID:   "vm100",
+				ResourceName: "web-server",
+				Node:         "pve1",
+				Message:      "CPU usage high",
+				Value:        95,
+				Threshold:    90,
+				StartTime:    time.Now().Add(-5 * time.Minute),
+			}}
+
+			webhook := WebhookConfig{
+				Name:    tc.service + "-test",
+				URL:     server.URL + "/" + tc.service,
+				Enabled: true,
+				Service: tc.service,
+				Mention: "@everyone",
+			}
+
+			if err := manager.sendResolvedWebhook(webhook, alertList, time.Now()); err != nil {
+				t.Fatalf("sendResolvedWebhook error: %v", err)
+			}
+
+			var payload map[string]any
+			if err := json.Unmarshal(gotBody, &payload); err != nil {
+				t.Fatalf("unmarshal payload: %v (body=%s)", err, gotBody)
+			}
+			tc.assertFn(t, payload)
+		})
+	}
+}
+
 func TestSendResolvedWebhookNtfySingleAlert(t *testing.T) {
 	var gotMethod string
 	var gotBody string

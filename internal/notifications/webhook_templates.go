@@ -52,6 +52,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 			}`,
 			ResolvedPayloadTemplate: `{
 				"username": "Pulse Monitoring",
+				{{if .Mention}}"content": "{{.Mention | jsonString}}",{{end}}
 				"embeds": [{
 					"title": "Resolved: {{.ResourceName | jsonString}}",
 					"description": "{{.Message | jsonString}}",
@@ -151,8 +152,15 @@ func GetWebhookTemplates() []WebhookTemplate {
 				]
 			}`,
 			ResolvedPayloadTemplate: `{
-				"text": "Resolved: {{.ResourceName | jsonString}}",
+				"text": "{{if .Mention}}{{.Mention | jsonString}} {{end}}Resolved: {{.ResourceName | jsonString}}",
 				"blocks": [
+					{{if .Mention}}{
+						"type": "section",
+						"text": {
+							"type": "mrkdwn",
+							"text": "{{.Mention | jsonString}}"
+						}
+					},{{end}}
 					{
 						"type": "header",
 						"text": {
@@ -235,6 +243,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 				"@context": "http://schema.org/extensions",
 				"themeColor": "2DC72D",
 				"summary": "Resolved: {{.ResourceName | jsonString}}",
+				{{if .Mention}}"text": "{{.Mention | jsonString}}",{{end}}
 				"sections": [{
 					"activityTitle": "Resolved: {{.ResourceName | jsonString}}",
 					"activitySubtitle": "{{.Message | jsonString}}",
@@ -512,7 +521,7 @@ View in Pulse: {{.Instance}}`,
 			ResolvedPayloadTemplate: `{
 				"username": "Pulse Monitoring",
 				"icon_url": "https://raw.githubusercontent.com/rcourtman/Pulse/main/frontend-modern/public/android-chrome-192x192.png",
-				"text": ":white_check_mark: **RESOLVED**\n\n**{{.ResourceName | jsonString}}** on **{{.Node | jsonString}}**\n\n{{.Message | jsonString}}\n\n| Detail | Value |\n|:-------|:------|\n| Resource | {{.ResourceName | jsonString}} |\n| Node | {{.Node | jsonString}} |\n| Type | {{.Type | title | jsonString}} |\n| Duration | {{.Duration | jsonString}} |\n| Resolved At | {{.ResolvedAt | jsonString}} |\n| Alert Identifier | {{.ID | jsonString}} |"
+				"text": "{{if .Mention}}{{.Mention | jsonString}}\n\n{{end}}:white_check_mark: **RESOLVED**\n\n**{{.ResourceName | jsonString}}** on **{{.Node | jsonString}}**\n\n{{.Message | jsonString}}\n\n| Detail | Value |\n|:-------|:------|\n| Resource | {{.ResourceName | jsonString}} |\n| Node | {{.Node | jsonString}} |\n| Type | {{.Type | title | jsonString}} |\n| Duration | {{.Duration | jsonString}} |\n| Resolved At | {{.ResolvedAt | jsonString}} |\n| Alert Identifier | {{.ID | jsonString}} |"
 			}`,
 			Instructions: "1. In Mattermost, go to Integrations > Incoming Webhooks\n2. Create a new webhook and select the channel\n3. Copy the webhook URL and paste it here\n\nNote: This template uses Markdown formatting which is fully supported by Mattermost.",
 		},

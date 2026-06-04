@@ -318,6 +318,11 @@ func (h *NotificationHandlers) GetWebhooks(w http.ResponseWriter, r *http.Reques
 			whMap["template"] = webhook.Template
 		}
 
+		// Include the configured mention so the UI can render it after reload (#1118)
+		if webhook.Mention != "" {
+			whMap["mention"] = webhook.Mention
+		}
+
 		maskedWebhooks[i] = whMap
 	}
 
