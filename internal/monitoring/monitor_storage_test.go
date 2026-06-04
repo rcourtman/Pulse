@@ -572,3 +572,54 @@ func TestPollStorageWithNodesUsesClusterStoragePoolFallback(t *testing.T) {
 		t.Fatalf("expected cluster pool fallback to attach rpool, got %#v", monitor.state.Storage[0].ZFSPool)
 	}
 }
+
+func TestPollStorageWithNodesOptimizedAttachesZFSPoolForDirStorageOnDatasetPath(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	monitor := &Monitor{
+		state:          &models.State{},
+		metricsHistory: NewMetricsHistory(16, time.Hour),
+		alertManager:   alerts.NewManager(),
+	}
+	t.Cleanup(func() {
+		monitor.alertManager.Stop()
+	})
+
+	storage := proxmox.Storage{
+		Storage:   "local",
+		Type:      "dir",
+		Path:      "/rpool/data",
+		Content:   "images",
+		Active:    1,
+		Enabled:   1,
+		Shared:    0,
+		Total:     1000,
+		Used:      250,
+		Available: 750,
+	}
+
+	client := &fakeStorageClient{
+		allStorage: []proxmox.Storage{storage},
+		storageByNode: map[string][]proxmox.Storage{
+			"node1": {storage},
+		},
+		zfsPoolsByNode: map[string][]proxmox.ZFSPoolInfo{
+			"node1": {
+				{Name: "rpool", Size: 1000, Alloc: 250, Free: 750, Frag: 1, Dedup: 1.0, Health: "ONLINE"},
+			},
+		},
+	}
+
+	nodes := []proxmox.Node{{Node: "node1", Status: "online"}}
+	monitor.pollStorageWithNodes(context.Background(), "inst1", client, nodes)
+
+	if len(monitor.state.Storage) != 1 {
+		t.Fatalf("expected 1 storage entry, got %d", len(monitor.state.Storage))
+	}
+	if monitor.state.Storage[0].ZFSPool == nil {
+		t.Fatal("expected dir storage on ZFS dataset path to have ZFS pool attached")
+	}
+	if monitor.state.Storage[0].ZFSPool.Name != "rpool" {
+		t.Fatalf("ZFS pool name = %q, want rpool", monitor.state.Storage[0].ZFSPool.Name)
+	}
+}
