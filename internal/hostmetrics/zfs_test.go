@@ -666,6 +666,14 @@ func TestBestZFSMountpoints(t *testing.T) {
 			want: map[string]string{"rpool": "/"},
 		},
 		{
+			name: "root mountpoint beats pool root mounted elsewhere",
+			datasets: []zfsDatasetUsage{
+				{Pool: "rpool", Dataset: "rpool", Mountpoint: "/mnt/storage"},
+				{Pool: "rpool", Dataset: "rpool/ROOT/pve-1", Mountpoint: "/"},
+			},
+			want: map[string]string{"rpool": "/"},
+		},
+		{
 			name: "skip empty pool",
 			datasets: []zfsDatasetUsage{
 				{Pool: "", Dataset: "orphan", Mountpoint: "/orphan"},
@@ -723,39 +731,39 @@ func TestZfsMountpointScore(t *testing.T) {
 		want int
 	}{
 		{
-			name: "root dataset gets score 0",
-			ds:   zfsDatasetUsage{Dataset: "tank", Mountpoint: "/tank"},
+			name: "root mountpoint gets score 0",
+			ds:   zfsDatasetUsage{Dataset: "rpool/ROOT/ubuntu", Mountpoint: "/"},
 			want: 0,
 		},
 		{
-			name: "child dataset at root mountpoint",
-			ds:   zfsDatasetUsage{Dataset: "rpool/ROOT/ubuntu", Mountpoint: "/"},
-			want: 1, // path empty after trim("/"), returns 1
+			name: "root dataset mounted elsewhere gets score 1",
+			ds:   zfsDatasetUsage{Dataset: "tank", Mountpoint: "/tank"},
+			want: 1,
 		},
 		{
 			name: "child dataset shallow path",
 			ds:   zfsDatasetUsage{Dataset: "tank/data", Mountpoint: "/data"},
-			want: 1, // path="data" has 0 slashes, 1+0=1
+			want: 2, // non-root mountpoints rank after / and pool root datasets
 		},
 		{
 			name: "child dataset deep path",
 			ds:   zfsDatasetUsage{Dataset: "tank/a/b/c", Mountpoint: "/a/b/c"},
-			want: 3, // path="a/b/c" has 2 slashes, 1+2=3
+			want: 4, // path="a/b/c" has 2 slashes, 2+2=4
 		},
 		{
 			name: "empty dataset falls through to path scoring",
 			ds:   zfsDatasetUsage{Dataset: "", Mountpoint: "/tank"},
-			want: 1, // empty dataset passes first check, path="tank" has 0 slashes, 1+0=1
+			want: 2, // empty dataset passes first check, path="tank" has 0 slashes, 2+0=2
 		},
 		{
 			name: "trailing slash stripped from mountpoint",
 			ds:   zfsDatasetUsage{Dataset: "tank/data", Mountpoint: "/data/"},
-			want: 1, // path="data" has 0 slashes, 1+0=1
+			want: 2, // path="data" has 0 slashes, 2+0=2
 		},
 		{
 			name: "very deep mountpoint",
 			ds:   zfsDatasetUsage{Dataset: "tank/deep", Mountpoint: "/a/b/c/d/e"},
-			want: 5, // path="a/b/c/d/e" has 4 slashes, 1+4=5
+			want: 6, // path="a/b/c/d/e" has 4 slashes, 2+4=6
 		},
 	}
 
