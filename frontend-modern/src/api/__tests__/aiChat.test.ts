@@ -59,6 +59,16 @@ describe('AIChatAPI', () => {
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/sessions');
   });
 
+  it('normalizes a null sessions payload to an empty array (#1149)', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce(null);
+    await expect(AIChatAPI.listSessions()).resolves.toEqual([]);
+  });
+
+  it('normalizes a non-array sessions payload to an empty array (#1149)', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({ error: 'boom' });
+    await expect(AIChatAPI.listSessions()).resolves.toEqual([]);
+  });
+
   it('clears read timeout timers when chat stream reads complete', async () => {
     const read = vi.fn().mockResolvedValueOnce({ done: true, value: undefined });
     const releaseLock = vi.fn();

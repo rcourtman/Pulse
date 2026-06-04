@@ -155,9 +155,12 @@ export class AIChatAPI {
     return apiFetchJSON(`${this.baseUrl}/status`) as Promise<AIStatus>;
   }
 
-  // List all chat sessions
+  // List all chat sessions. Normalizes a null/non-array payload (e.g. a server
+  // error body) to an empty array so callers can rely on array semantics and do
+  // not crash on .length/.some()/.map() (#1149).
   static async listSessions(): Promise<ChatSession[]> {
-    return apiFetchJSON(`${this.baseUrl}/sessions`) as Promise<ChatSession[]>;
+    const value = await apiFetchJSON(`${this.baseUrl}/sessions`);
+    return Array.isArray(value) ? (value as ChatSession[]) : [];
   }
 
   // Create a new session
