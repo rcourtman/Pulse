@@ -331,3 +331,22 @@ func TestMergeNVMeTempsIntoDisks_OriginalSliceUnchanged(t *testing.T) {
 		t.Errorf("original disk temperature was modified: got %d, want 0", original[0].Temperature)
 	}
 }
+
+func TestNormalizeSMARTDeviceIdentifier(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"sdd [scsi]", "sdd"},
+		{"/dev/sdd [scsi]", "sdd"},
+		{"/dev/nvme0n1", "nvme0n1"},
+		{"sda", "sda"},
+		{"  sdb [ata]  ", "sdb"},
+		{"", ""},
+	}
+	for _, tc := range cases {
+		if got := normalizeSMARTDeviceIdentifier(tc.in); got != tc.want {
+			t.Errorf("normalizeSMARTDeviceIdentifier(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
