@@ -728,6 +728,12 @@ func (h *AIHandler) clearApprovalStore() {
 func (h *AIHandler) Start(ctx context.Context, monitor *monitoring.Monitor) error {
 	log.Info().Msg("AIHandler.Start called")
 	aiCfg := h.loadAIConfig(ctx)
+	return h.startWithConfig(ctx, monitor, aiCfg)
+}
+
+// startWithConfig starts the AI service with an already-loaded config so callers
+// such as Restart do not re-read (and risk racing) the config a second time.
+func (h *AIHandler) startWithConfig(ctx context.Context, monitor *monitoring.Monitor, aiCfg *config.AIConfig) error {
 	if aiCfg == nil {
 		log.Info().Msg("AI config is nil, AI is disabled")
 		return nil
@@ -825,7 +831,7 @@ func (h *AIHandler) Restart(ctx context.Context) error {
 			m, _ = mtm.GetMonitor("default")
 		}
 
-		return h.Start(ctx, m)
+		return h.startWithConfig(ctx, m, newCfg)
 	}
 
 	if !svc.IsRunning() {
@@ -841,8 +847,8 @@ func (h *AIHandler) Restart(ctx context.Context) error {
 			m, _ = mtm.GetMonitor("default")
 		}
 
-		// Reuse start logic
-		return h.Start(ctx, m)
+		// Reuse start logic with the already-loaded config (avoid a second load)
+		return h.startWithConfig(ctx, m, newCfg)
 	}
 
 	if err := svc.Restart(ctx, newCfg); err != nil {
