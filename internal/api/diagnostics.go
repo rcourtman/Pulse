@@ -795,6 +795,33 @@ func writeDiagnosticsResponse(w http.ResponseWriter, diag DiagnosticsInfo, cache
 	}
 }
 
+// diagnosticsMonitorConnectionStatus looks up the live monitor connection state
+// for a node by its connection-status key (e.g. "pve-<name>"/"pbs-<name>").
+func diagnosticsMonitorConnectionStatus(m *monitoring.Monitor, key string) (bool, bool) {
+	if m == nil || strings.TrimSpace(key) == "" {
+		return false, false
+	}
+	statuses := m.GetConnectionStatuses()
+	connected, ok := statuses[key]
+	return connected, ok
+}
+
+// mergeDiagnosticsConnection prevents a transient diagnostics-probe failure from
+// reporting an instance as disconnected when the long-running monitor connection
+// still reports it connected.
+func mergeDiagnosticsConnection(probeConnected bool, probeError string, monitorConnected bool, hasMonitorStatus bool) (bool, string) {
+	if probeConnected {
+		return true, probeError
+	}
+	if !hasMonitorStatus || !monitorConnected {
+		return false, probeError
+	}
+	if strings.TrimSpace(probeError) == "" {
+		return true, ""
+	}
+	return true, "Live diagnostics probe failed, but the monitor still reports this instance connected: " + probeError
+}
+
 func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 	diag := EmptyDiagnosticsInfo()
 
@@ -833,6 +860,7 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 			Host: node.Host,
 			Type: "pve",
 		}
+		monitorConnected, hasMonitorStatus := diagnosticsMonitorConnectionStatus(r.monitor, "pve-"+node.Name)
 
 		// Determine auth method (sanitized - don't expose actual values)
 		if node.TokenName != "" && node.TokenValue != "" {
@@ -860,12 +888,14 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 			nodeDiag.Connected = false
 			nodeDiag.Error = "Failed to initialize connection"
 			log.Error().Err(err).Str("node", node.Name).Msg("Diagnostics: Proxmox client init failed")
+			nodeDiag.Connected, nodeDiag.Error = mergeDiagnosticsConnection(nodeDiag.Connected, nodeDiag.Error, monitorConnected, hasMonitorStatus)
 		} else {
 			nodes, err := client.GetNodes(ctx)
 			if err != nil {
 				nodeDiag.Connected = false
 				nodeDiag.Error = "Failed to connect to Proxmox API"
 				log.Error().Err(err).Str("node", node.Name).Msg("Diagnostics: Proxmox API connection failed")
+				nodeDiag.Connected, nodeDiag.Error = mergeDiagnosticsConnection(nodeDiag.Connected, nodeDiag.Error, monitorConnected, hasMonitorStatus)
 			} else {
 				nodeDiag.Connected = true
 
@@ -903,6 +933,7 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 			Name: pbsNode.Name,
 			Host: pbsNode.Host,
 		}
+		monitorConnected, hasMonitorStatus := diagnosticsMonitorConnectionStatus(r.monitor, "pbs-"+pbsNode.Name)
 
 		testCfg := pbs.ClientConfig{
 			Host:        pbsNode.Host,
@@ -919,11 +950,13 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 			pbsDiag.Connected = false
 			pbsDiag.Error = "Failed to initialize connection"
 			log.Error().Err(err).Str("pbs", pbsNode.Name).Msg("Diagnostics: PBS client init failed")
+			pbsDiag.Connected, pbsDiag.Error = mergeDiagnosticsConnection(pbsDiag.Connected, pbsDiag.Error, monitorConnected, hasMonitorStatus)
 		} else {
 			if version, err := client.GetVersion(ctx); err != nil {
 				pbsDiag.Connected = false
 				pbsDiag.Error = "Connection established but version check failed"
 				log.Error().Err(err).Str("pbs", pbsNode.Name).Msg("Diagnostics: PBS version check failed")
+				pbsDiag.Connected, pbsDiag.Error = mergeDiagnosticsConnection(pbsDiag.Connected, pbsDiag.Error, monitorConnected, hasMonitorStatus)
 			} else {
 				pbsDiag.Connected = true
 				pbsDiag.Details = &PBSDetails{Version: version.Version}

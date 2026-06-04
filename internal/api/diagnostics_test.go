@@ -765,3 +765,36 @@ func TestResolveGroupName(t *testing.T) {
 		})
 	}
 }
+
+func TestMergeDiagnosticsConnection(t *testing.T) {
+	cases := []struct {
+		name             string
+		probeConnected   bool
+		probeError       string
+		monitorConnected bool
+		hasMonitorStatus bool
+		wantConnected    bool
+		wantErrContains  string
+	}{
+		{"probe connected stays connected", true, "", false, false, true, ""},
+		{"probe failed but monitor connected", false, "timeout", true, true, true, "monitor still reports"},
+		{"probe failed and no monitor status", false, "timeout", false, false, false, "timeout"},
+		{"probe failed and monitor disconnected", false, "timeout", false, true, false, "timeout"},
+		{"probe failed empty error, monitor connected", false, "", true, true, true, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotConnected, gotErr := mergeDiagnosticsConnection(tc.probeConnected, tc.probeError, tc.monitorConnected, tc.hasMonitorStatus)
+			if gotConnected != tc.wantConnected {
+				t.Fatalf("connected = %v, want %v", gotConnected, tc.wantConnected)
+			}
+			if tc.wantErrContains == "" {
+				if gotErr != "" {
+					t.Fatalf("expected empty error, got %q", gotErr)
+				}
+			} else if !strings.Contains(gotErr, tc.wantErrContains) {
+				t.Fatalf("error %q does not contain %q", gotErr, tc.wantErrContains)
+			}
+		})
+	}
+}
