@@ -70,7 +70,9 @@ func TestRestart_StartIfServiceMissing(t *testing.T) {
 	})
 
 	aiCfg := &config.AIConfig{Enabled: true}
-	mockPersist.On("LoadAIConfig").Return(aiCfg, nil).Twice()
+	// Restart loads the config once and passes it to startWithConfig, so the
+	// start path no longer re-loads it (the point of the fix). One load total.
+	mockPersist.On("LoadAIConfig").Return(aiCfg, nil).Once()
 	mockSvc.On("Start", mock.Anything).Return(nil)
 
 	err := h.Restart(context.Background())
