@@ -952,3 +952,28 @@ func TestSanitizeDockerHostSuffix_UnicodeRunes(t *testing.T) {
 		t.Errorf("got %q, want %q", result, expected)
 	}
 }
+
+func TestFindMatchingDockerHost_RejectsConflictingPhysicalIdentity(t *testing.T) {
+	t.Parallel()
+
+	hosts := []models.DockerHost{
+		{
+			ID:        "host1",
+			AgentID:   "agent-1",
+			TokenID:   "token-1",
+			MachineID: "machine-1",
+			Hostname:  "hostname-1",
+		},
+	}
+
+	// Same agentID + token, but the report comes from a physically different
+	// machine — it must NOT be collapsed into the existing host (#1366).
+	report := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{ID: "agent-1"},
+		Host:  agentsdocker.HostInfo{MachineID: "machine-2", Hostname: "hostname-2"},
+	}
+
+	if _, ok := findMatchingDockerHost(dockerHostViewsForTest(hosts), report, &config.APITokenRecord{ID: "token-1"}); ok {
+		t.Fatal("expected no match when the report's physical identity conflicts with the existing host")
+	}
+}

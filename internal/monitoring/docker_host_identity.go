@@ -87,6 +87,9 @@ func findMatchingDockerHost(hosts []*unifiedresources.DockerHostView, report age
 
 			existingToken := strings.TrimSpace(host.TokenID())
 			if tokenID == "" || existingToken == tokenID {
+				if dockerHostIdentityConflicts(host, report) {
+					continue
+				}
 				return host, true
 			}
 		}
@@ -145,6 +148,46 @@ func findMatchingDockerHost(hosts []*unifiedresources.DockerHostView, report age
 	}
 
 	return nil, false
+}
+
+// dockerHostIdentityConflicts reports whether an incoming report is clearly from
+// a different physical/swarm node than the existing Docker host record, so a
+// shared token+agentID reused from another node is not collapsed into one host.
+func dockerHostIdentityConflicts(existing *unifiedresources.DockerHostView, report agentsdocker.Report) bool {
+	if existing == nil {
+		return false
+	}
+
+	existingMachineID := strings.TrimSpace(existing.MachineID())
+	reportMachineID := strings.TrimSpace(report.Host.MachineID)
+	if existingMachineID != "" && reportMachineID != "" && existingMachineID != reportMachineID {
+		return true
+	}
+
+	existingSwarmNodeID := ""
+	if sw := existing.Swarm(); sw != nil {
+		existingSwarmNodeID = strings.TrimSpace(sw.NodeID)
+	}
+	reportSwarmNodeID := ""
+	if report.Host.Swarm != nil {
+		reportSwarmNodeID = strings.TrimSpace(report.Host.Swarm.NodeID)
+	}
+	if existingSwarmNodeID != "" && reportSwarmNodeID != "" && existingSwarmNodeID != reportSwarmNodeID {
+		return true
+	}
+
+	// Without stronger stable IDs, a hostname change is ambiguous and should not
+	// be treated as the same reporting host automatically.
+	existingHostname := strings.TrimSpace(existing.Hostname())
+	reportHostname := strings.TrimSpace(report.Host.Hostname)
+	if existingMachineID == "" && reportMachineID == "" &&
+		existingSwarmNodeID == "" && reportSwarmNodeID == "" &&
+		existingHostname != "" && reportHostname != "" &&
+		!unifiedresources.HostnamesEquivalent(existingHostname, reportHostname) {
+		return true
+	}
+
+	return false
 }
 
 func dockerHostStableID(host *unifiedresources.DockerHostView) string {
