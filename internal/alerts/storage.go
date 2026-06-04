@@ -155,6 +155,13 @@ func (m *Manager) SyncStorageAlertsForInstance(instanceName string, storages []m
 		if !isStorageInventoryAlert(alert) {
 			continue
 		}
+		// Ceph pool storage alerts (id "<instance>-ceph-pool-<name>") are raised
+		// and cleared by the separate Ceph poll path, and Ceph pools are not in
+		// the `storages` inventory passed here. Never clear them, or they would
+		// flap (cleared every storage poll, re-raised every Ceph poll).
+		if strings.Contains(alert.ResourceID, "-ceph-pool-") {
+			continue
+		}
 		if _, exists := validResourceIDs[strings.TrimSpace(alert.ResourceID)]; exists {
 			continue
 		}

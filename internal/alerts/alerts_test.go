@@ -17377,6 +17377,38 @@ func TestSyncStorageAlertsForInstance(t *testing.T) {
 			t.Fatal("expected alias-keyed ceph storage alert to be preserved")
 		}
 	})
+
+	t.Run("never clears ceph pool alerts absent from the storage inventory", func(t *testing.T) {
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		// A ceph pool usage alert (raised by the separate Ceph poll path). Ceph
+		// pools are not part of the storage inventory passed to the sweep, so
+		// without the guard this would be cleared here and re-raised by the Ceph
+		// poll every cycle (flapping).
+		m.activeAlerts["pve1-ceph-pool-data-usage"] = &Alert{
+			ID:         "pve1-ceph-pool-data-usage",
+			Type:       "usage",
+			ResourceID: "pve1-ceph-pool-data",
+			Instance:   "pve1",
+			Metadata: map[string]interface{}{
+				"resourceType": "storage",
+			},
+		}
+		m.mu.Unlock()
+
+		// Inventory has a different, unrelated storage; the ceph pool is absent.
+		m.SyncStorageAlertsForInstance("pve1", []models.Storage{
+			{ID: "pve1-node1-local", Name: "local", Instance: "pve1"},
+		})
+
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+
+		if _, exists := m.activeAlerts["pve1-ceph-pool-data-usage"]; !exists {
+			t.Fatal("expected ceph pool alert to be preserved (managed by the ceph poll path, not this sweep)")
+		}
+	})
 }
 
 func TestDispatchAlert(t *testing.T) {
