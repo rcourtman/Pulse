@@ -88,7 +88,17 @@ type alertSchedulePresence struct {
 }
 
 type alertScheduleFieldPresence struct {
-	NotifyOnResolve *bool `json:"notifyOnResolve"`
+	Cooldown        *int                           `json:"cooldown"`
+	MaxAlertsHour   *int                           `json:"maxAlertsHour"`
+	NotifyOnResolve *bool                          `json:"notifyOnResolve"`
+	Grouping        *alertScheduleGroupingPresence `json:"grouping"`
+}
+
+type alertScheduleGroupingPresence struct {
+	Enabled *bool `json:"enabled"`
+	Window  *int  `json:"window"`
+	ByNode  *bool `json:"byNode"`
+	ByGuest *bool `json:"byGuest"`
 }
 
 type resolvedConfigPersistencePaths struct {
@@ -927,7 +937,15 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 					Disk:   &alerts.HysteresisThreshold{Trigger: 90, Clear: 85},
 				},
 				Schedule: alerts.ScheduleConfig{
+					Cooldown:        5,
+					MaxAlertsHour:   10,
 					NotifyOnResolve: true,
+					Grouping: alerts.GroupingConfig{
+						Enabled: true,
+						Window:  30,
+						ByNode:  true,
+						ByGuest: false,
+					},
 				},
 				StorageDefault: alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
 				TimeThresholds: map[string]int{
@@ -973,15 +991,48 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 		config.Enabled = true
 	}
 
-	// Load-specific: NotifyOnResolve defaults to true (send recovery notifications).
-	// Since bool zero-value is false, we check raw JSON to distinguish
-	// "missing field" (old configs) from "explicitly set to false".
-	if !config.Schedule.NotifyOnResolve {
-		var presence alertSchedulePresence
-		// Ignore error here as we've already unmarshaled successfully above.
-		if json.Unmarshal(data, &presence) == nil {
-			if presence.Schedule == nil || presence.Schedule.NotifyOnResolve == nil {
-				config.Schedule.NotifyOnResolve = true
+	// Load-specific: back-fill legacy alert schedule defaults for configs saved
+	// before these fields existed (pre-5.1.12). Because Go unmarshals a missing
+	// field to its zero value, we probe the raw JSON to distinguish "field
+	// absent" (apply default) from "explicitly set to 0/false" (preserve it).
+	defaultSchedule := alerts.ScheduleConfig{
+		Cooldown:        5,
+		MaxAlertsHour:   10,
+		NotifyOnResolve: true,
+		Grouping: alerts.GroupingConfig{
+			Enabled: true,
+			Window:  30,
+			ByNode:  true,
+			ByGuest: false,
+		},
+	}
+	var presence alertSchedulePresence
+	// Ignore error here as we've already unmarshaled successfully above.
+	if json.Unmarshal(data, &presence) == nil {
+		sched := presence.Schedule
+		if sched == nil || sched.Cooldown == nil {
+			config.Schedule.Cooldown = defaultSchedule.Cooldown
+		}
+		if sched == nil || sched.MaxAlertsHour == nil {
+			config.Schedule.MaxAlertsHour = defaultSchedule.MaxAlertsHour
+		}
+		if sched == nil || sched.NotifyOnResolve == nil {
+			config.Schedule.NotifyOnResolve = defaultSchedule.NotifyOnResolve
+		}
+		if sched == nil || sched.Grouping == nil {
+			config.Schedule.Grouping = defaultSchedule.Grouping
+		} else {
+			if sched.Grouping.Enabled == nil {
+				config.Schedule.Grouping.Enabled = defaultSchedule.Grouping.Enabled
+			}
+			if sched.Grouping.Window == nil {
+				config.Schedule.Grouping.Window = defaultSchedule.Grouping.Window
+			}
+			if sched.Grouping.ByNode == nil {
+				config.Schedule.Grouping.ByNode = defaultSchedule.Grouping.ByNode
+			}
+			if sched.Grouping.ByGuest == nil {
+				config.Schedule.Grouping.ByGuest = defaultSchedule.Grouping.ByGuest
 			}
 		}
 	}
