@@ -393,6 +393,16 @@ Or use the helper script:
 scripts/eval/run_model_matrix.sh
 ```
 
+Run the resource-context Assistant handoff eval against a live resource:
+```
+EVAL_RESOURCE_CONTEXT_ID=delly:delly:101 \
+EVAL_RESOURCE_CONTEXT_NAME=homeassistant \
+EVAL_RESOURCE_CONTEXT_TYPE=system-container \
+EVAL_RESOURCE_CONTEXT_NODE=delly \
+EVAL_RESOURCE_CONTEXT_FORBIDDEN="/mnt/pve/finance-db,/var/lib/homeassistant,literal-provider-token-123" \
+go run ./cmd/eval -scenario resource-context -url http://127.0.0.1:7655 -user admin -pass "$PULSE_EVAL_PASS"
+```
+
 <!-- MODEL_MATRIX_START -->
 | Model | Smoke | Read-only | Time (matrix) | Tokens (matrix) | Last run (UTC) |
 | --- | --- | --- | --- | --- | --- |

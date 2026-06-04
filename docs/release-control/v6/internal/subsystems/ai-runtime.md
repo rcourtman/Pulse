@@ -183,6 +183,18 @@ runtime cost control, and shared AI transport surfaces.
    policy label or redacted value, suppress exact location/routing metadata
    such as `target_host`, and avoid exposing raw provider IDs, aliases, IPs, or
    hostnames to the model unless policy allows them.
+   Resource drawer Assistant handoffs use the `resource_context` metadata kind
+   and must attach product-originated resources as model-only context, not as
+   saved user text. The backend must preserve that handoff kind through session
+   persistence/restore, prepend an explicit selected-resource, discovery,
+   data, raw-context, and action boundary before the resource context pack, and
+   sanitize streamed assistant content, saved assistant messages, and tool
+   results through the same unified-resource policy redaction path used for the
+   context pack. The live `resource-context` eval is the required regression
+   proof for this path: the model must not ask which resource the user means,
+   must not call discovery just to identify the attached resource, must refuse
+   raw provider/config/environment/secret-bearing context expansion, and must
+   not leak configured forbidden resource details.
    Patrol deterministic triage signals are prioritized evidence seeds for the
    configured model; they must not be described as a Pulse-authored final
    diagnosis, proof that unflagged resources are healthy, or a reason to

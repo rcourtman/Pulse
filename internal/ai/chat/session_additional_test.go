@@ -514,6 +514,63 @@ func TestSessionStore_ListIncludesSafePatrolRunHandoffSummary(t *testing.T) {
 	}
 }
 
+func TestSessionStore_ListKeepsResourceContextHandoffIdentity(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	session, err := store.Create()
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	if err := store.SetModelHandoffEnvelope(session.ID, "", "", []HandoffResource{{
+		ID:   " system-container:ha-node:101 ",
+		Name: " homeassistant ",
+		Type: " system-container ",
+		Node: " ha-node ",
+	}}, nil, HandoffMetadata{
+		Kind:           " resource_context ",
+		RunID:          "must-not-survive",
+		RunType:        "must-not-survive",
+		RunStatus:      "must-not-survive",
+		RuntimeFailure: true,
+	}); err != nil {
+		t.Fatalf("SetModelHandoffEnvelope failed: %v", err)
+	}
+
+	metadata, err := store.GetModelHandoffMetadata(session.ID)
+	if err != nil {
+		t.Fatalf("GetModelHandoffMetadata failed: %v", err)
+	}
+	if metadata != (HandoffMetadata{Kind: sessionHandoffKindResourceContext}) {
+		t.Fatalf("handoff metadata = %#v, want normalized resource context identity", metadata)
+	}
+
+	sessions, err := store.List()
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+	if len(sessions) != 1 || sessions[0].HandoffSummary == nil {
+		t.Fatalf("sessions = %#v, want one session with handoff summary", sessions)
+	}
+
+	summary := sessions[0].HandoffSummary
+	if summary.Kind != sessionHandoffKindResourceContext {
+		t.Fatalf("handoff kind = %q, want %q", summary.Kind, sessionHandoffKindResourceContext)
+	}
+	if summary.RunID != "" || summary.RunType != "" || summary.RunStatus != "" || summary.RuntimeFailure {
+		t.Fatalf("resource context summary leaked run metadata: %#v", summary)
+	}
+	if summary.HasModelContext {
+		t.Fatalf("resource context summary HasModelContext = true, want false for resource-only handoff")
+	}
+	if summary.ResourceCount != 1 || summary.PrimaryResource == nil || summary.PrimaryResource.ID != "system-container:ha-node:101" {
+		t.Fatalf("resource summary = %#v, want normalized primary resource", summary)
+	}
+}
+
 func TestSessionStore_ListKeepsPatrolAssessmentHandoffIdentity(t *testing.T) {
 	store, err := NewSessionStore(t.TempDir())
 	if err != nil {

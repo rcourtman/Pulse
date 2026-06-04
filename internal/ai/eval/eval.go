@@ -155,12 +155,33 @@ type StepMention struct {
 	Node string `json:"node,omitempty"`
 }
 
+// StepHandoffResource mirrors the chat request's product-originated resource
+// handoff without importing the chat package into the eval harness.
+type StepHandoffResource struct {
+	ID   string `json:"id,omitempty"`
+	Name string `json:"name,omitempty"`
+	Type string `json:"type,omitempty"`
+	Node string `json:"node,omitempty"`
+}
+
+// StepHandoffMetadata mirrors the chat request's browser-safe handoff metadata.
+type StepHandoffMetadata struct {
+	Kind           string `json:"kind,omitempty"`
+	RunID          string `json:"run_id,omitempty"`
+	RunType        string `json:"run_type,omitempty"`
+	RunStatus      string `json:"run_status,omitempty"`
+	RuntimeFailure bool   `json:"runtime_failure,omitempty"`
+}
+
 // Step defines a single step in an eval scenario
 type Step struct {
 	Name             string
 	Prompt           string
 	Mentions         []StepMention // optional structured mentions
-	AutonomousMode   *bool         // optional per-step autonomous override
+	HandoffContext   string
+	HandoffResources []StepHandoffResource
+	HandoffMetadata  StepHandoffMetadata
+	AutonomousMode   *bool // optional per-step autonomous override
 	Assertions       []Assertion
 	ApprovalDecision ApprovalDecision
 	ApprovalReason   string
@@ -329,6 +350,15 @@ func (r *Runner) executeStepOnceWithClient(step Step, sessionID string, client *
 	if len(step.Mentions) > 0 {
 		reqBody["mentions"] = step.Mentions
 	}
+	if strings.TrimSpace(step.HandoffContext) != "" {
+		reqBody["handoff_context"] = step.HandoffContext
+	}
+	if len(step.HandoffResources) > 0 {
+		reqBody["handoff_resources"] = step.HandoffResources
+	}
+	if !stepHandoffMetadataEmpty(step.HandoffMetadata) {
+		reqBody["handoff_metadata"] = step.HandoffMetadata
+	}
 	if step.AutonomousMode != nil {
 		reqBody["autonomous_mode"] = *step.AutonomousMode
 	}
@@ -391,6 +421,14 @@ func (r *Runner) runPreflight() StepResult {
 		result.Success = false
 	}
 	return result
+}
+
+func stepHandoffMetadataEmpty(metadata StepHandoffMetadata) bool {
+	return strings.TrimSpace(metadata.Kind) == "" &&
+		strings.TrimSpace(metadata.RunID) == "" &&
+		strings.TrimSpace(metadata.RunType) == "" &&
+		strings.TrimSpace(metadata.RunStatus) == "" &&
+		!metadata.RuntimeFailure
 }
 
 func (r *Runner) shouldRetryStep(result *StepResult, step Step) (bool, string) {

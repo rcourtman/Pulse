@@ -22,6 +22,8 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
             "Pulse supplies context, tools, safety gates, approval state, and audit trails",
             content,
         )
+        self.assertIn("go run ./cmd/eval -scenario resource-context", content)
+        self.assertIn("EVAL_RESOURCE_CONTEXT_FORBIDDEN", content)
         self.assertIn("Pulse does not convert them into Pulse-authored findings", content)
         self.assertNotIn("successful remediations (incident memory)", content)
         self.assertNotIn("**Incident memory**", content)
@@ -33,6 +35,7 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         self.assertNotIn("Deterministic Signal Detection", content)
         self.assertNotIn("active_alert", content)
         self.assertNotIn("auto-recovery", content)
+        self.assertNotIn('EVAL_RESOURCE_CONTEXT_FORBIDDEN="/mnt/pve/finance-db,/var/lib/homeassistant,secret"', content)
         self.assertNotRegex(content, r"(?i)understands resources before you ask")
 
 

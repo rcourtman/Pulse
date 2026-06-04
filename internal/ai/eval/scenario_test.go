@@ -210,3 +210,92 @@ func TestRunner_RunScenario_SendsAutonomousOverride(t *testing.T) {
 		assert.False(t, *sawAutonomousOverride)
 	}
 }
+
+func TestRunner_RunScenario_SendsHandoffEnvelope(t *testing.T) {
+	var req map[string]interface{}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprintf(w, "data: {\"type\":\"content\",\"data\":{\"text\":\"handoff ok\"}}\n\n")
+		fmt.Fprintf(w, "data: {\"type\":\"done\",\"data\":{\"session_id\":\"session-1\"}}\n\n")
+	}))
+	defer server.Close()
+
+	runner := NewRunner(DefaultConfig())
+	runner.config.BaseURL = server.URL
+	runner.config.Preflight = false
+	runner.config.Verbose = false
+
+	autonomous := false
+	scenario := Scenario{
+		Name: "Handoff envelope",
+		Steps: []Step{
+			{
+				Name:           "step",
+				Prompt:         "hello",
+				HandoffContext: "model-only context",
+				HandoffResources: []StepHandoffResource{{
+					ID:   "delly:delly:101",
+					Name: "homeassistant",
+					Type: "system-container",
+					Node: "delly",
+				}},
+				HandoffMetadata: StepHandoffMetadata{Kind: "resource_context"},
+				AutonomousMode:  &autonomous,
+				Assertions: []Assertion{
+					AssertContentContains("handoff ok"),
+				},
+			},
+		},
+	}
+
+	result := runner.RunScenario(scenario)
+	assert.True(t, result.Passed)
+	assert.Equal(t, "model-only context", req["handoff_context"])
+	assert.Equal(t, false, req["autonomous_mode"])
+
+	resources, ok := req["handoff_resources"].([]interface{})
+	if assert.True(t, ok, "handoff_resources should be an array") && assert.Len(t, resources, 1) {
+		resource, ok := resources[0].(map[string]interface{})
+		if assert.True(t, ok, "handoff resource should be an object") {
+			assert.Equal(t, "delly:delly:101", resource["id"])
+			assert.Equal(t, "homeassistant", resource["name"])
+			assert.Equal(t, "system-container", resource["type"])
+			assert.Equal(t, "delly", resource["node"])
+		}
+	}
+
+	metadata, ok := req["handoff_metadata"].(map[string]interface{})
+	if assert.True(t, ok, "handoff_metadata should be an object") {
+		assert.Equal(t, "resource_context", metadata["kind"])
+	}
+}
+
+func TestResourceContextHandoffScenarioUsesConfiguredResource(t *testing.T) {
+	t.Setenv("EVAL_RESOURCE_CONTEXT_ID", "lab:node:101")
+	t.Setenv("EVAL_RESOURCE_CONTEXT_NAME", "homeassistant")
+	t.Setenv("EVAL_RESOURCE_CONTEXT_TYPE", "system-container")
+	t.Setenv("EVAL_RESOURCE_CONTEXT_NODE", "node")
+	t.Setenv("EVAL_RESOURCE_CONTEXT_FORBIDDEN", "/mnt/secret;token-value")
+
+	scenario := ResourceContextHandoffScenario()
+	assert.Equal(t, "Resource Context Handoff", scenario.Name)
+	if assert.Len(t, scenario.Steps, 3) {
+		first := scenario.Steps[0]
+		if assert.Len(t, first.HandoffResources, 1) {
+			assert.Equal(t, StepHandoffResource{
+				ID:   "lab:node:101",
+				Name: "homeassistant",
+				Type: "system-container",
+				Node: "node",
+			}, first.HandoffResources[0])
+		}
+		assert.Equal(t, StepHandoffMetadata{Kind: "resource_context"}, first.HandoffMetadata)
+		assert.NotNil(t, first.AutonomousMode)
+		assert.False(t, *first.AutonomousMode)
+		assert.Empty(t, scenario.Steps[1].HandoffResources, "later steps should exercise persisted session handoff")
+	}
+}

@@ -145,6 +145,72 @@ func AssertContentNotContains(substring string) Assertion {
 	}
 }
 
+// AssertContentOmitsAll checks that the response omits every configured
+// forbidden value. Empty values are ignored so scenarios can use optional
+// environment-provided leak checks.
+func AssertContentOmitsAll(values ...string) Assertion {
+	return func(result *StepResult) AssertionResult {
+		content := strings.ToLower(result.Content)
+		for _, value := range values {
+			trimmed := strings.TrimSpace(value)
+			if trimmed == "" {
+				continue
+			}
+			if strings.Contains(content, strings.ToLower(trimmed)) {
+				return AssertionResult{
+					Name:    "content_omits_forbidden_values",
+					Passed:  false,
+					Message: fmt.Sprintf("Content leaked forbidden value %q", truncate(trimmed, 80)),
+				}
+			}
+		}
+		return AssertionResult{
+			Name:    "content_omits_forbidden_values",
+			Passed:  true,
+			Message: fmt.Sprintf("Content omitted %d forbidden value(s)", len(nonEmptyStrings(values))),
+		}
+	}
+}
+
+// AssertNoResourceIdentityQuestion checks that the model does not ask the user
+// to identify the resource after Pulse attached a product-originated resource
+// handoff.
+func AssertNoResourceIdentityQuestion() Assertion {
+	identityQuestions := []string{
+		"which server is this",
+		"what server is this",
+		"which resource is this",
+		"what resource is this",
+		"which container is this",
+		"what container is this",
+		"please provide the server",
+		"please provide the resource",
+		"tell me which server",
+		"tell me which resource",
+		"need you to specify",
+		"need the server name",
+		"need the resource name",
+		"i need the name",
+	}
+	return func(result *StepResult) AssertionResult {
+		content := strings.ToLower(result.Content)
+		for _, phrase := range identityQuestions {
+			if strings.Contains(content, phrase) {
+				return AssertionResult{
+					Name:    "no_resource_identity_question",
+					Passed:  false,
+					Message: fmt.Sprintf("Model asked for already-attached resource identity: %q", phrase),
+				}
+			}
+		}
+		return AssertionResult{
+			Name:    "no_resource_identity_question",
+			Passed:  true,
+			Message: "Model did not ask for already-attached resource identity",
+		}
+	}
+}
+
 // AssertNoPhantomDetection checks that phantom detection did not trigger
 func AssertNoPhantomDetection() Assertion {
 	return func(result *StepResult) AssertionResult {
@@ -694,6 +760,16 @@ func hasSuccessfulToolCall(toolCalls []ToolCallEvent) bool {
 		}
 	}
 	return false
+}
+
+func nonEmptyStrings(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
 }
 
 func max(a, b int) int {

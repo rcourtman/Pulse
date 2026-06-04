@@ -154,7 +154,8 @@ func NormalizeHandoffMetadata(metadata HandoffMetadata) HandoffMetadata {
 	case sessionHandoffKindPatrolAssessment,
 		sessionHandoffKindPatrolConfigurationFailure,
 		sessionHandoffKindPatrolFinding,
-		sessionHandoffKindPatrolRun:
+		sessionHandoffKindPatrolRun,
+		sessionHandoffKindResourceContext:
 	default:
 		return HandoffMetadata{}
 	}
@@ -248,6 +249,7 @@ const (
 	sessionHandoffKindPatrolConfigurationFailure = "patrol_configuration_failure"
 	sessionHandoffKindPatrolFinding              = "patrol_finding"
 	sessionHandoffKindPatrolRun                  = "patrol_run"
+	sessionHandoffKindResourceContext            = "resource_context"
 	sessionHandoffKindScopedContext              = "scoped_context"
 )
 

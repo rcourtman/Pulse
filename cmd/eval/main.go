@@ -9,7 +9,7 @@
 //
 // Options:
 //
-//	-scenario string  Scenario to run: smoke, readonly, routing, routing-recovery, logs, readonly-recovery, search-id, disambiguate, context-target, discovery, writeverify, strict, strict-block, strict-recovery, readonly-guardrails, noninteractive, approval, approval-approve, approval-deny, approval-combo, patrol, patrol-basic, patrol-investigation, patrol-finding-quality, patrol-signal-coverage, matrix, all (default "smoke")
+//	-scenario string  Scenario to run: smoke, readonly, routing, routing-recovery, logs, readonly-recovery, search-id, disambiguate, context-target, resource-context, discovery, writeverify, strict, strict-block, strict-recovery, readonly-guardrails, noninteractive, approval, approval-approve, approval-deny, approval-combo, patrol, patrol-basic, patrol-investigation, patrol-finding-quality, patrol-signal-coverage, matrix, all (default "smoke")
 //	-url string       Pulse API base URL (default "http://127.0.0.1:7655")
 //	-user string      Username for auth (default "admin")
 //	-pass string      Password for auth (default "admin")
@@ -36,7 +36,7 @@ import (
 )
 
 func main() {
-	scenario := flag.String("scenario", "smoke", "Scenario to run: smoke, readonly, routing, routing-recovery, logs, readonly-recovery, search-id, disambiguate, context-target, discovery, writeverify, guest-control, guest-idempotent, guest-discovery, guest-natural, guest-multi, readonly-model-choice, read-loop-recovery, ambiguous-intent, strict, strict-block, strict-recovery, readonly-guardrails, noninteractive, approval, approval-approve, approval-deny, approval-combo, patrol, patrol-basic, patrol-investigation, patrol-finding-quality, patrol-signal-coverage, matrix, all")
+	scenario := flag.String("scenario", "smoke", "Scenario to run: smoke, readonly, routing, routing-recovery, logs, readonly-recovery, search-id, disambiguate, context-target, resource-context, discovery, writeverify, guest-control, guest-idempotent, guest-discovery, guest-natural, guest-multi, readonly-model-choice, read-loop-recovery, ambiguous-intent, strict, strict-block, strict-recovery, readonly-guardrails, noninteractive, approval, approval-approve, approval-deny, approval-combo, patrol, patrol-basic, patrol-investigation, patrol-finding-quality, patrol-signal-coverage, matrix, all")
 	url := flag.String("url", "http://127.0.0.1:7655", "Pulse API base URL")
 	user := flag.String("user", "admin", "Username for auth")
 	pass := flag.String("pass", "admin", "Password for auth")
@@ -186,6 +186,7 @@ func listScenarios() {
 	fmt.Println("    search-id    - Search then get by resource ID (1 step)")
 	fmt.Println("    disambiguate - Ambiguous resource disambiguation (1 step)")
 	fmt.Println("    context-target - Context target carryover (2 steps)")
+	fmt.Println("    resource-context - Resource drawer Assistant handoff eval (3 steps)")
 	fmt.Println("    discovery    - Infrastructure discovery test (2 steps)")
 	fmt.Println()
 	fmt.Println("  Guest Control:")
@@ -275,6 +276,8 @@ func getScenarios(name string) []eval.Scenario {
 		return []eval.Scenario{eval.AmbiguousResourceDisambiguationScenario()}
 	case "context-target":
 		return []eval.Scenario{eval.ContextTargetCarryoverScenario()}
+	case "resource-context":
+		return []eval.Scenario{eval.ResourceContextHandoffScenario()}
 	case "discovery":
 		return []eval.Scenario{eval.DiscoveryScenario()}
 
@@ -346,6 +349,7 @@ func getScenarios(name string) []eval.Scenario {
 			eval.SearchByIDScenario(),
 			eval.AmbiguousResourceDisambiguationScenario(),
 			eval.ContextTargetCarryoverScenario(),
+			eval.ResourceContextHandoffScenario(),
 			eval.DiscoveryScenario(),
 		}
 	case "matrix":
@@ -362,6 +366,7 @@ func getScenarios(name string) []eval.Scenario {
 			eval.MultiNodeScenario(),
 			eval.DockerInDockerScenario(),
 			eval.ContextChainScenario(),
+			eval.ResourceContextHandoffScenario(),
 			eval.WriteVerifyScenario(),
 			eval.GuestControlStopScenario(),
 			eval.GuestControlIdempotentScenario(),
@@ -397,6 +402,7 @@ func getScenarios(name string) []eval.Scenario {
 			eval.MultiNodeScenario(),
 			eval.DockerInDockerScenario(),
 			eval.ContextChainScenario(),
+			eval.ResourceContextHandoffScenario(),
 			eval.WriteVerifyScenario(),
 			eval.GuestControlStopScenario(),
 			eval.GuestControlIdempotentScenario(),

@@ -167,6 +167,50 @@ func TestAssertions(t *testing.T) {
 			passed: false,
 		},
 
+		// AssertContentOmitsAll
+		{
+			name:      "AssertContentOmitsAll Pass",
+			assertion: AssertContentOmitsAll("/mnt/private", "token-value"),
+			result: StepResult{
+				Content: "I can discuss the resource, but raw paths and secrets are withheld.",
+			},
+			passed: true,
+		},
+		{
+			name:      "AssertContentOmitsAll Pass (Empty Values Ignored)",
+			assertion: AssertContentOmitsAll("", "   "),
+			result: StepResult{
+				Content: "Any content is acceptable here.",
+			},
+			passed: true,
+		},
+		{
+			name:      "AssertContentOmitsAll Fail",
+			assertion: AssertContentOmitsAll("/mnt/private"),
+			result: StepResult{
+				Content: "The config is at /mnt/private/config.",
+			},
+			passed: false,
+		},
+
+		// AssertNoResourceIdentityQuestion
+		{
+			name:      "AssertNoResourceIdentityQuestion Pass",
+			assertion: AssertNoResourceIdentityQuestion(),
+			result: StepResult{
+				Content: "Pulse attached homeassistant context, so I can start with that resource.",
+			},
+			passed: true,
+		},
+		{
+			name:      "AssertNoResourceIdentityQuestion Fail",
+			assertion: AssertNoResourceIdentityQuestion(),
+			result: StepResult{
+				Content: "Which server is this? Please provide the resource name.",
+			},
+			passed: false,
+		},
+
 		// AssertToolOutputContains
 		{
 			name:      "AssertToolOutputContains Pass",
