@@ -350,6 +350,11 @@ func (h *UnifiedAgentHandlers) canReadConfig(record *config.APITokenRecord) bool
 		return true
 	}
 	return record.HasScope(config.ScopeAgentConfigRead) ||
+		// Older host/docker-agent tokens may only carry agent:report (legacy
+		// host-agent:report). Allow them to keep fetching their own config via
+		// token binding — resolveConfigAgent below restricts a report-only token
+		// to the host it is bound to.
+		record.HasScope(config.ScopeAgentReport) ||
 		record.HasScope(config.ScopeAgentManage) ||
 		record.HasScope(config.ScopeSettingsWrite)
 }

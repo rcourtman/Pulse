@@ -340,8 +340,10 @@ func TestHandleConfigMissingConfigScope(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/"+hostID+"/config", nil)
 	attachAPITokenRecord(req, &config.APITokenRecord{
-		ID:     "token-other",
-		Scopes: []string{config.ScopeAgentReport},
+		ID: "token-other",
+		// monitoring:read genuinely lacks config-read access (agent:report is
+		// now accepted via token binding, so it would not exercise this path).
+		Scopes: []string{config.ScopeMonitoringRead},
 	})
 
 	rec := httptest.NewRecorder()
@@ -349,6 +351,42 @@ func TestHandleConfigMissingConfigScope(t *testing.T) {
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	}
+}
+
+// TestHandleConfigAllowsBoundAgentReportScope verifies that a legacy
+// report-only token (agent:report / host-agent:report) can still fetch its own
+// config via token binding — it resolves to the host bound to the token, not
+// the requested agentID. Regression guard for #1254.
+func TestHandleConfigAllowsBoundAgentReportScope(t *testing.T) {
+	t.Parallel()
+
+	handler := newUnifiedAgentHandlerForTests(t, models.Host{
+		ID:      "host-1",
+		TokenID: "token-expected",
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/other-host/config", nil)
+	attachAPITokenRecord(req, &config.APITokenRecord{
+		ID:     "token-expected",
+		Scopes: []string{config.ScopeAgentReport},
+	})
+
+	rec := httptest.NewRecorder()
+	handler.HandleConfig(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var resp struct {
+		AgentID string `json:"agentId"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.AgentID != "host-1" {
+		t.Fatalf("expected agent id %q, got %q", "host-1", resp.AgentID)
 	}
 }
 
