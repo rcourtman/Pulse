@@ -144,6 +144,7 @@ type ModelInfo struct {
 	Description string `json:"description,omitempty"`
 	CreatedAt   int64  `json:"created_at,omitempty"`
 	Notable     bool   `json:"notable"` // Whether this is a "latest and greatest" model
+	Provider    string `json:"provider,omitempty"`
 }
 
 // Provider defines the interface for AI providers

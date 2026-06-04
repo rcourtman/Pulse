@@ -247,5 +247,17 @@ describe('patrolFormat', () => {
       const groups = groupModelsByProvider(models);
       expect(groups.get('no-provider')).toHaveLength(1);
     });
+
+    it('prefers the server-supplied provider over the id prefix (#1320)', () => {
+      const models = [
+        // Opaque id (no recognizable provider prefix) but an explicit provider.
+        { id: 'llama3-8b', name: 'Llama 3 8B', provider: 'ollama' },
+        { id: 'qwen3.5-27b', name: 'Qwen', provider: 'ollama' },
+      ];
+
+      const groups = groupModelsByProvider(models);
+      expect(groups.get('ollama')).toHaveLength(2);
+      expect(groups.has('llama3-8b')).toBe(false);
+    });
   });
 });

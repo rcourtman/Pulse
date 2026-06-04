@@ -29,6 +29,9 @@ export interface ModelInfo {
   description?: string;
   is_default?: boolean;
   notable?: boolean;
+  // Authoritative provider for this model, supplied by the server. Preferred
+  // over deriving the provider from the (possibly opaque) model id (#1320).
+  provider?: string;
 }
 
 export interface AISettings {

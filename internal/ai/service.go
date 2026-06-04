@@ -4644,6 +4644,7 @@ func prefixProviderModels(providerName string, models []providers.ModelInfo) []p
 			Description: description,
 			CreatedAt:   m.CreatedAt,
 			Notable:     m.Notable,
+			Provider:    providerName,
 		})
 	}
 	return prefixed

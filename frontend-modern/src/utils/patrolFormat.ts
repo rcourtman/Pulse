@@ -6,6 +6,7 @@ interface ModelInfo {
   name: string;
   description?: string;
   notable?: boolean;
+  provider?: string;
 }
 
 interface PartialRunRecord {
@@ -175,7 +176,9 @@ export function formatPatrolRuntimeFailureSummary(input: {
 export function groupModelsByProvider(models: ModelInfo[]): Map<string, ModelInfo[]> {
   const groups = new Map<string, ModelInfo[]>();
   for (const model of models) {
-    const [provider] = model.id.split(':');
+    // Prefer the server-supplied provider; fall back to the id prefix for
+    // models that predate the provider field or have an opaque id (#1320).
+    const provider = model.provider?.trim() || model.id.split(':')[0];
     if (!groups.has(provider)) {
       groups.set(provider, []);
     }
