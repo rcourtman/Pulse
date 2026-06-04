@@ -4517,6 +4517,16 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 	resourceTypeRaw := strings.TrimSpace(resourceType)
 	resourceType = canonicalQueryResourceType(resourceType)
 
+	if isCurrentResourceReference(resourceID) || isCurrentResourceReference(resourceTypeRaw) {
+		resource, err := e.resolveCurrentResource()
+		if err != nil {
+			return NewErrorResult(err), nil
+		}
+		resourceType = canonicalQueryTypeForResolvedResource(resource)
+		resourceTypeRaw = resourceType
+		resourceID = canonicalQueryIDForResolvedResource(resource)
+	}
+
 	if resourceType == "" {
 		return NewErrorResult(fmt.Errorf("resource_type is required")), nil
 	}

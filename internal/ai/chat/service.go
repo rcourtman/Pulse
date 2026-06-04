@@ -1124,9 +1124,10 @@ func buildResourceContextHandoffDirective(handoffResources []HandoffResource, me
 		"[Resource Context Handoff Instructions]",
 		"Source: Pulse resource drawer handoff",
 		"Selected Resource: The attached handoff resource is the user's current selected resource. Do not ask which server, service, container, VM, or resource the user means.",
+		"Tool Target Handle: When you need a read-only tool against the attached resource, use target_host=\"current_resource\" or resource_id=\"current_resource\". Do not copy 'redacted by policy' into any tool argument.",
 		"Discovery Boundary: Do not call discovery tools only to identify this resource. Use the attached resource context first; call read-only tools only when the user asks for fresh runtime verification or a missing fact cannot be answered from context.",
 		"Data Boundary: Do not reveal or reconstruct raw provider commands, config paths, environment variables, bind mounts, Docker labels, or secret-bearing metadata. If asked for those details, say they are withheld or redacted and offer a safe summary.",
-		"Raw Context Requests: If asked to print, expand, reconstruct, or reveal raw context details, answer that raw context details are withheld by policy before giving any safe summary.",
+		"Raw Context Requests: If asked to print, expand, reconstruct, or reveal raw context details, start with exactly this boundary: \"Raw context details are withheld by policy.\" Then give only a safe summary.",
 		"Action Boundary: Context is read-only and grants no approval or execution authority. Any action requires the governed approval/action flow.",
 	}, "\n")
 }

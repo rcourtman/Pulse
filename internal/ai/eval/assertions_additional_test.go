@@ -481,6 +481,22 @@ func TestAssertions(t *testing.T) {
 			},
 			passed: true,
 		},
+		{
+			name:      "AssertToolInputsOmitAll Pass",
+			assertion: AssertToolInputsOmitAll("redacted by policy", "/config"),
+			result: StepResult{
+				ToolCalls: []ToolCallEvent{{Name: "pulse_read", Input: `{"target_host":"current_resource"}`}},
+			},
+			passed: true,
+		},
+		{
+			name:      "AssertToolInputsOmitAll Fail",
+			assertion: AssertToolInputsOmitAll("redacted by policy"),
+			result: StepResult{
+				ToolCalls: []ToolCallEvent{{Name: "pulse_read", Input: `{"target_host":"redacted by policy"}`}},
+			},
+			passed: false,
+		},
 
 		// AssertToolOutputContainsAny
 		{

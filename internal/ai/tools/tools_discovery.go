@@ -245,6 +245,15 @@ func (e *PulseToolExecutor) normalizeDiscoveryResourceRequest(args map[string]in
 	resourceTypeRaw, _ := args["resource_type"].(string)
 	resourceID, _ := args["resource_id"].(string)
 	targetID, _ := args["target_id"].(string)
+	if isCurrentResourceReference(resourceID) || isCurrentResourceReference(resourceTypeRaw) || isCurrentResourceReference(targetID) {
+		resource, err := e.resolveCurrentResource()
+		if err != nil {
+			return discoveryResourceRequest{}, NewErrorResult(err), false
+		}
+		resourceTypeRaw = canonicalQueryTypeForResolvedResource(resource)
+		resourceID = canonicalQueryIDForResolvedResource(resource)
+		targetID = firstNonEmptyString(resource.GetNode(), resource.GetTargetHost(), resource.GetAgentID())
+	}
 	if isUnsupportedDiscoveryLegacyResourceTypeToken(resourceTypeRaw) {
 		return discoveryResourceRequest{}, NewErrorResult(fmt.Errorf("unsupported resource_type %q", strings.TrimSpace(resourceTypeRaw))), false
 	}

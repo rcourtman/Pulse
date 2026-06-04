@@ -186,7 +186,7 @@ func listScenarios() {
 	fmt.Println("    search-id    - Search then get by resource ID (1 step)")
 	fmt.Println("    disambiguate - Ambiguous resource disambiguation (1 step)")
 	fmt.Println("    context-target - Context target carryover (2 steps)")
-	fmt.Println("    resource-context - Resource drawer Assistant handoff eval (3 steps)")
+	fmt.Println("    resource-context - Resource drawer Assistant handoff eval (4 steps)")
 	fmt.Println("    discovery    - Infrastructure discovery test (2 steps)")
 	fmt.Println()
 	fmt.Println("  Guest Control:")

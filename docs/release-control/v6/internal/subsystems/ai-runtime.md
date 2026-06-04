@@ -187,14 +187,19 @@ runtime cost control, and shared AI transport surfaces.
    and must attach product-originated resources as model-only context, not as
    saved user text. The backend must preserve that handoff kind through session
    persistence/restore, prepend an explicit selected-resource, discovery,
-   data, raw-context, and action boundary before the resource context pack, and
-   sanitize streamed assistant content, saved assistant messages, and tool
-   results through the same unified-resource policy redaction path used for the
-   context pack. The live `resource-context` eval is the required regression
-   proof for this path: the model must not ask which resource the user means,
-   must not call discovery just to identify the attached resource, must refuse
-   raw provider/config/environment/secret-bearing context expansion, and must
-   not leak configured forbidden resource details.
+   tool-target-handle, data, raw-context, and action boundary before the
+   resource context pack, and sanitize streamed assistant content, saved
+   assistant messages, and tool results through the same unified-resource
+   policy redaction path used for the context pack. The only model-facing tool
+   target for an attached redacted resource is `current_resource`; read,
+   query-get, and discovery tools resolve that handle server-side against the
+   session-selected resource and must not treat `redacted by policy` as a raw
+   infrastructure identifier. The live `resource-context` eval is the required
+   regression proof for this path: the model must not ask which resource the
+   user means, must not call discovery just to identify the attached resource,
+   must use the safe handle for scoped reads, must refuse raw
+   provider/config/environment/secret-bearing context expansion, and must not
+   leak configured forbidden resource details in content or tool inputs.
    Patrol deterministic triage signals are prioritized evidence seeds for the
    configured model; they must not be described as a Pulse-authored final
    diagnosis, proof that unflagged resources are healthy, or a reason to

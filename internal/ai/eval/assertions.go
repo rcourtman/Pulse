@@ -597,6 +597,33 @@ func AssertAnyToolInputContains(toolName, substring string) Assertion {
 	}
 }
 
+// AssertToolInputsOmitAll checks that no tool input contains forbidden values.
+func AssertToolInputsOmitAll(values ...string) Assertion {
+	return func(result *StepResult) AssertionResult {
+		for _, tc := range result.ToolCalls {
+			input := strings.ToLower(tc.Input)
+			for _, value := range values {
+				trimmed := strings.TrimSpace(value)
+				if trimmed == "" {
+					continue
+				}
+				if strings.Contains(input, strings.ToLower(trimmed)) {
+					return AssertionResult{
+						Name:    "tool_inputs_omit_forbidden_values",
+						Passed:  false,
+						Message: fmt.Sprintf("Tool '%s' input leaked forbidden value %q", tc.Name, truncate(trimmed, 80)),
+					}
+				}
+			}
+		}
+		return AssertionResult{
+			Name:    "tool_inputs_omit_forbidden_values",
+			Passed:  true,
+			Message: fmt.Sprintf("Tool inputs omitted %d forbidden value(s)", len(nonEmptyStrings(values))),
+		}
+	}
+}
+
 // AssertAnyToolInputContainsAny checks that any tool input contains any of the substrings.
 // If toolName is empty, any tool input is considered.
 func AssertAnyToolInputContainsAny(toolName string, substrings ...string) Assertion {

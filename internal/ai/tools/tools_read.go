@@ -16,7 +16,7 @@ func (e *PulseToolExecutor) registerReadTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
 			Name:        "pulse_read",
-			Description: `Execute read-only operations on infrastructure (exec, file, find, tail, logs). Rejects write commands. Use target_host for agent-routed reads, or resource_id for API-backed native resource logs such as supported TrueNAS app-containers.`,
+			Description: `Execute read-only operations on infrastructure (exec, file, find, tail, logs). Rejects write commands. Use target_host for agent-routed reads, or resource_id for API-backed native resource logs such as supported TrueNAS app-containers. When Pulse has attached resource context, use target_host="current_resource" or resource_id="current_resource" for the attached resource instead of copying redacted identifiers.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -27,11 +27,11 @@ func (e *PulseToolExecutor) registerReadTools() {
 					},
 					"target_host": {
 						Type:        "string",
-						Description: "For agent-routed reads: hostname to read from (host, system container name, or VM name)",
+						Description: "For agent-routed reads: hostname to read from (host, system container name, VM name, or current_resource for the attached resource)",
 					},
 					"resource_id": {
 						Type:        "string",
-						Description: "For native API-backed resource logs: discovered resource name or canonical resource ID from pulse_query",
+						Description: "For native API-backed resource logs, or current_resource for the attached resource: discovered resource name or canonical resource ID from pulse_query",
 					},
 					"command": {
 						Type:        "string",
@@ -111,14 +111,23 @@ func (e *PulseToolExecutor) executeRead(ctx context.Context, args map[string]int
 func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	command, _ := args["command"].(string)
 	targetHost, _ := args["target_host"].(string)
+	resourceRef, _ := args["resource_id"].(string)
 	dockerContainer, legacyContainerArg := resolveContainerArg(args)
 
 	if command == "" {
 		return NewErrorResult(fmt.Errorf("command is required for exec action")), nil
 	}
+	if strings.TrimSpace(targetHost) == "" && isCurrentResourceReference(resourceRef) {
+		targetHost = resourceRef
+	}
 	if targetHost == "" {
 		return NewErrorResult(fmt.Errorf("target_host is required")), nil
 	}
+	resolvedTargetHost, err := e.resolveCurrentResourceCommandTarget(targetHost)
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
+	targetHost = resolvedTargetHost
 	if legacyContainerArg {
 		return NewErrorResult(fmt.Errorf("app_container is no longer supported; use app-container")), nil
 	}
@@ -246,14 +255,23 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 func (e *PulseToolExecutor) executeReadFile(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	path, _ := args["path"].(string)
 	targetHost, _ := args["target_host"].(string)
+	resourceRef, _ := args["resource_id"].(string)
 	dockerContainer, legacyContainerArg := resolveContainerArg(args)
 
 	if path == "" {
 		return NewErrorResult(fmt.Errorf("path is required for file action")), nil
 	}
+	if strings.TrimSpace(targetHost) == "" && isCurrentResourceReference(resourceRef) {
+		targetHost = resourceRef
+	}
 	if targetHost == "" {
 		return NewErrorResult(fmt.Errorf("target_host is required")), nil
 	}
+	resolvedTargetHost, err := e.resolveCurrentResourceCommandTarget(targetHost)
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
+	targetHost = resolvedTargetHost
 	if legacyContainerArg {
 		return NewErrorResult(fmt.Errorf("app_container is no longer supported; use app-container")), nil
 	}
@@ -273,13 +291,22 @@ func (e *PulseToolExecutor) executeReadFind(ctx context.Context, args map[string
 	pattern, _ := args["pattern"].(string)
 	path, _ := args["path"].(string)
 	targetHost, _ := args["target_host"].(string)
+	resourceRef, _ := args["resource_id"].(string)
 
 	if pattern == "" && path == "" {
 		return NewErrorResult(fmt.Errorf("pattern or path is required for find action")), nil
 	}
+	if strings.TrimSpace(targetHost) == "" && isCurrentResourceReference(resourceRef) {
+		targetHost = resourceRef
+	}
 	if targetHost == "" {
 		return NewErrorResult(fmt.Errorf("target_host is required")), nil
 	}
+	resolvedTargetHost, err := e.resolveCurrentResourceCommandTarget(targetHost)
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
+	targetHost = resolvedTargetHost
 
 	// Use pattern if provided, otherwise use path as the pattern
 	searchPattern := pattern
@@ -312,6 +339,7 @@ func (e *PulseToolExecutor) executeReadFind(ctx context.Context, args map[string
 func (e *PulseToolExecutor) executeReadTail(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	path, _ := args["path"].(string)
 	targetHost, _ := args["target_host"].(string)
+	resourceRef, _ := args["resource_id"].(string)
 	lines := intArg(args, "lines", 100)
 	grepPattern, _ := args["grep"].(string)
 	dockerContainer, legacyContainerArg := resolveContainerArg(args)
@@ -319,9 +347,17 @@ func (e *PulseToolExecutor) executeReadTail(ctx context.Context, args map[string
 	if path == "" {
 		return NewErrorResult(fmt.Errorf("path is required for tail action")), nil
 	}
+	if strings.TrimSpace(targetHost) == "" && isCurrentResourceReference(resourceRef) {
+		targetHost = resourceRef
+	}
 	if targetHost == "" {
 		return NewErrorResult(fmt.Errorf("target_host is required")), nil
 	}
+	resolvedTargetHost, err := e.resolveCurrentResourceCommandTarget(targetHost)
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
+	targetHost = resolvedTargetHost
 	if legacyContainerArg {
 		return NewErrorResult(fmt.Errorf("app_container is no longer supported; use app-container")), nil
 	}
@@ -374,12 +410,33 @@ func (e *PulseToolExecutor) executeReadLogs(ctx context.Context, args map[string
 		lines = 100
 	}
 
+	if isCurrentResourceReference(resourceRef) {
+		resource, err := e.resolveCurrentResource()
+		if err != nil {
+			return NewErrorResult(err), nil
+		}
+		if canonicalQueryTypeForResolvedResource(resource) == "app-container" {
+			resourceID := canonicalQueryIDForResolvedResource(resource)
+			return e.executeNativeAppContainerReadLogs(ctx, resourceID, container, lines)
+		}
+		resolvedTargetHost, err := e.commandTargetForResolvedResource(resource)
+		if err != nil {
+			return NewErrorResult(err), nil
+		}
+		targetHost = resolvedTargetHost
+		resourceRef = ""
+	}
 	if resourceRef != "" {
 		return e.executeNativeAppContainerReadLogs(ctx, resourceRef, container, lines)
 	}
 	if targetHost == "" {
 		return NewErrorResult(fmt.Errorf("target_host is required when resource_id is not provided")), nil
 	}
+	resolvedTargetHost, err := e.resolveCurrentResourceCommandTarget(targetHost)
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
+	targetHost = resolvedTargetHost
 
 	var command string
 

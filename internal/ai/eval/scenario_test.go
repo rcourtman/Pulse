@@ -283,7 +283,7 @@ func TestResourceContextHandoffScenarioUsesConfiguredResource(t *testing.T) {
 
 	scenario := ResourceContextHandoffScenario()
 	assert.Equal(t, "Resource Context Handoff", scenario.Name)
-	if assert.Len(t, scenario.Steps, 3) {
+	if assert.Len(t, scenario.Steps, 4) {
 		first := scenario.Steps[0]
 		if assert.Len(t, first.HandoffResources, 1) {
 			assert.Equal(t, StepHandoffResource{

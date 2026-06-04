@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -37,6 +39,118 @@ func (s *stubAppContainerReadProvider) ReadLogs(_ context.Context, req AppContai
 	}
 	result := *s.result
 	return &result, nil
+}
+
+func newCurrentResourceSystemContainerExecutor(t *testing.T, agentSrv AgentServer) *PulseToolExecutor {
+	t.Helper()
+
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestRecords(unifiedresources.SourceProxmox, []unifiedresources.IngestRecord{{
+		SourceID: "delly:delly:101",
+		Resource: unifiedresources.Resource{
+			ID:     "system-container-homeassistant",
+			Type:   unifiedresources.ResourceTypeSystemContainer,
+			Name:   "homeassistant",
+			Status: unifiedresources.StatusOnline,
+			Proxmox: &unifiedresources.ProxmoxData{
+				SourceID: "delly:delly:101",
+				NodeName: "delly",
+				Instance: "delly",
+				VMID:     101,
+			},
+		},
+	}})
+	provider := &registryUnifiedQueryProvider{ResourceRegistry: registry}
+	reg, ok := CanonicalHandoffResourceRegistration(provider, "delly:delly:101", "homeassistant", "system-container", "delly")
+	require.True(t, ok, "expected system-container handoff registration")
+
+	resolved := &mockResolvedContext{
+		resources:    make(map[string]ResolvedResourceInfo),
+		aliases:      make(map[string]ResolvedResourceInfo),
+		lastAccessed: make(map[string]time.Time),
+	}
+	resolved.AddResolvedResource(reg)
+	resource, ok := resolved.GetResolvedResourceByAlias("homeassistant")
+	require.True(t, ok, "expected homeassistant alias in resolved context")
+	resolved.MarkExplicitAccess(resource.GetResourceID())
+
+	exec := NewPulseToolExecutor(ExecutorConfig{
+		AgentServer: agentSrv,
+		ReadState:   registry,
+	})
+	exec.SetResolvedContext(resolved)
+	return exec
+}
+
+func TestExecuteReadExec_CurrentResourceHandleRoutesToAttachedSystemContainer(t *testing.T) {
+	t.Setenv("PULSE_STRICT_RESOLUTION", "true")
+
+	agentSrv := &mockAgentServer{}
+	agentSrv.On("GetConnectedAgents").Return([]agentexec.ConnectedAgent{
+		{AgentID: "agent-delly", Hostname: "delly"},
+	}).Maybe()
+	agentSrv.On("ExecuteCommand", mock.Anything, "agent-delly", mock.MatchedBy(func(payload agentexec.ExecuteCommandPayload) bool {
+		return payload.TargetType == "container" &&
+			payload.TargetID == "101" &&
+			payload.Command == "cat /etc/hostname"
+	})).Return(&agentexec.CommandResultPayload{
+		Stdout:   "homeassistant\n",
+		ExitCode: 0,
+	}, nil).Once()
+
+	exec := newCurrentResourceSystemContainerExecutor(t, agentSrv)
+	result, err := exec.executeReadExec(context.Background(), map[string]interface{}{
+		"action":      "exec",
+		"target_host": "current_resource",
+		"command":     "cat /etc/hostname",
+	})
+	require.NoError(t, err)
+	assert.False(t, result.IsError)
+	require.NotEmpty(t, result.Content)
+	assert.Contains(t, result.Content[0].Text, "homeassistant")
+	agentSrv.AssertExpectations(t)
+}
+
+func TestExecuteReadExec_RedactedPolicyTargetUsesAttachedCurrentResource(t *testing.T) {
+	t.Setenv("PULSE_STRICT_RESOLUTION", "true")
+
+	agentSrv := &mockAgentServer{}
+	agentSrv.On("GetConnectedAgents").Return([]agentexec.ConnectedAgent{
+		{AgentID: "agent-delly", Hostname: "delly"},
+	}).Maybe()
+	agentSrv.On("ExecuteCommand", mock.Anything, "agent-delly", mock.MatchedBy(func(payload agentexec.ExecuteCommandPayload) bool {
+		return payload.TargetType == "container" &&
+			payload.TargetID == "101" &&
+			payload.Command == "cat /etc/hostname"
+	})).Return(&agentexec.CommandResultPayload{
+		Stdout:   "homeassistant\n",
+		ExitCode: 0,
+	}, nil).Once()
+
+	exec := newCurrentResourceSystemContainerExecutor(t, agentSrv)
+	result, err := exec.executeReadExec(context.Background(), map[string]interface{}{
+		"action":      "exec",
+		"target_host": "redacted by policy",
+		"command":     "cat /etc/hostname",
+	})
+	require.NoError(t, err)
+	assert.False(t, result.IsError)
+	require.NotEmpty(t, result.Content)
+	assert.Contains(t, result.Content[0].Text, "homeassistant")
+	agentSrv.AssertExpectations(t)
+}
+
+func TestExecuteGetResource_CurrentResourceHandleUsesAttachedResource(t *testing.T) {
+	exec := newCurrentResourceSystemContainerExecutor(t, nil)
+
+	result, err := exec.executeGetResource(context.Background(), map[string]interface{}{
+		"resource_id": "current_resource",
+	})
+	require.NoError(t, err)
+	assert.False(t, result.IsError)
+	require.NotEmpty(t, result.Content)
+	assert.Contains(t, result.Content[0].Text, "homeassistant")
+	assert.NotContains(t, result.Content[0].Text, "not_found")
 }
 
 func TestPulseToolExecutor_ExecuteReadLogs_Fallbacks(t *testing.T) {
