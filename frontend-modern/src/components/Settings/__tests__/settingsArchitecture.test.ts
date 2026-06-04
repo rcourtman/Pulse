@@ -37,6 +37,7 @@ import infrastructureInstallerSectionSource from '../InfrastructureInstallerSect
 import infrastructureOperationsModelSource from '../infrastructureOperationsModel.tsx?raw';
 import infrastructureSourceManagerSource from '../InfrastructureSourceManager.tsx?raw';
 import infrastructureSourcePickerSource from '../InfrastructureSourcePicker.tsx?raw';
+import discoverySettingsFormSource from '../DiscoverySettingsForm.tsx?raw';
 import availabilitySettingsPanelSource from '../AvailabilitySettingsPanel.tsx?raw';
 import availabilitySettingsModelSource from '../availabilitySettingsModel.ts?raw';
 import infrastructureWorkspaceModelSource from '../infrastructureWorkspaceModel.ts?raw';
@@ -601,7 +602,9 @@ describe('settings architecture guardrails', () => {
     expect(updateInstallGuideSource).toContain('UpdateReadinessPanel');
     expect(updateInstallGuideSource).toContain("props.updatePlan?.readiness?.status === 'blocked'");
     expect(updateInstallGuideSource).toContain('Install blocked');
-    expect(updateInstallGuideSource).toContain('disabled={props.isInstalling || readinessBlocked()}');
+    expect(updateInstallGuideSource).toContain(
+      'disabled={props.isInstalling || readinessBlocked()}',
+    );
   });
 
   it('keeps infrastructure on a source-manager landing with route-backed dialogs', () => {
@@ -658,6 +661,11 @@ describe('settings architecture guardrails', () => {
     // Discovery owns an explicit status/action band inside Connected systems
     // so manual scans are observable without opening the settings dialog.
     expect(infrastructureSourceManagerSource).toContain('Run discovery');
+    // Scan scope choices must be full-row controls; a narrow native radio input
+    // regressed the custom subnet path into a hard-to-click target.
+    expect(discoverySettingsFormSource).toContain('role="radiogroup"');
+    expect(discoverySettingsFormSource).toContain('role="radio"');
+    expect(discoverySettingsFormSource).toContain('selectDiscoveryMode');
     expect(infrastructureSourceManagerSource).toContain('Discovery settings');
     expect(monitoredSystemImpactPreviewSource).toContain('getMonitoredSystemImpactPreviewTitle');
     expect(monitoredSystemImpactPreviewSource).toContain(

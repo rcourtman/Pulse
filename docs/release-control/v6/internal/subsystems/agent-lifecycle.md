@@ -422,6 +422,11 @@ Its copy must describe only the platform APIs represented by the LAN discovery
 candidate model, and it must not imply TrueNAS, VMware, Docker, Kubernetes, or
 agent command discovery when this source-manager path cannot surface those
 candidates.
+The `DiscoverySettingsForm.tsx` scan-scope selector must make automatic versus
+custom subnet selection a full-row operator control, not a narrow or hidden
+input target; common subnet chips and the custom subnet field must share the
+same environment-override and in-flight-save lock semantics as the scan-scope
+selector.
 Reported agent-backed host profiles must be visible at the source-manager
 grouping level without changing the canonical connection type: an Unraid agent
 row stays `agent` internally, but the connected-systems table groups it under

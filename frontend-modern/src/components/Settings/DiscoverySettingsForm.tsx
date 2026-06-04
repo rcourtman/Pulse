@@ -22,6 +22,28 @@ export const DiscoverySettingsForm: Component<DiscoverySettingsFormProps> = (pro
   const autoModePresentation = getNetworkDiscoveryModePresentation('auto');
   const customModePresentation = getNetworkDiscoveryModePresentation('custom');
   const subnetPresentation = () => getNetworkDiscoverySubnetPresentation(props.discoveryMode());
+  const scanScopeLocked = () =>
+    Boolean(props.envOverrides().discoverySubnet || props.savingDiscoverySettings());
+  const scanScopeOptionClass = (mode: 'auto' | 'custom') =>
+    `flex w-full items-start gap-3 rounded-md border p-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+      props.discoveryMode() === mode
+        ? 'border-blue-200 bg-blue-50 dark:border-blue-700 dark:bg-blue-900'
+        : scanScopeLocked()
+          ? 'border-transparent'
+          : 'border-transparent hover:border-border'
+    }`;
+  const scanScopeIndicatorClass = (mode: 'auto' | 'custom') =>
+    `mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors sm:h-4 sm:w-4 ${
+      props.discoveryMode() === mode
+        ? 'border-blue-600 bg-blue-600 dark:border-blue-400 dark:bg-blue-500'
+        : 'border-slate-300 bg-surface'
+    }`;
+  const selectDiscoveryMode = (mode: 'auto' | 'custom') => {
+    if (scanScopeLocked() || props.discoveryMode() === mode) {
+      return;
+    }
+    void props.handleDiscoveryModeChange(mode);
+  };
 
   return (
     <div class="space-y-5">
@@ -90,66 +112,52 @@ export const DiscoverySettingsForm: Component<DiscoverySettingsFormProps> = (pro
               <legend class="text-xs font-medium text-base-content">
                 {sectionPresentation().scanScopeLabel}
               </legend>
-              <div class="space-y-2">
-                <label
-                  class={`flex items-start gap-3 rounded-md border p-2 transition-colors ${
-                    props.discoveryMode() === 'auto'
-                      ? 'border-blue-200 bg-blue-50 dark:border-blue-700 dark:bg-blue-900'
-                      : 'border-transparent hover:border-border'
-                  }`}
+              <div
+                class="space-y-2"
+                role="radiogroup"
+                aria-label={sectionPresentation().scanScopeLabel}
+              >
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={props.discoveryMode() === 'auto'}
+                  disabled={scanScopeLocked()}
+                  onClick={() => selectDiscoveryMode('auto')}
+                  class={scanScopeOptionClass('auto')}
                 >
-                  <input
-                    type="radio"
-                    name="discoveryMode"
-                    value="auto"
-                    checked={props.discoveryMode() === 'auto'}
-                    onChange={async () => {
-                      if (props.discoveryMode() !== 'auto') {
-                        await props.handleDiscoveryModeChange('auto');
-                      }
-                    }}
-                    disabled={
-                      props.envOverrides().discoverySubnet || props.savingDiscoverySettings()
-                    }
-                    class="mt-1 h-5 w-5 border-slate-300 text-blue-600 focus:ring-blue-500 sm:h-4 sm:w-4"
-                  />
+                  <span class={scanScopeIndicatorClass('auto')} aria-hidden="true">
+                    <Show when={props.discoveryMode() === 'auto'}>
+                      <span class="h-2 w-2 rounded-full bg-white" />
+                    </Show>
+                  </span>
                   <div class="space-y-1">
                     <p class="text-sm font-medium text-base-content">
                       {autoModePresentation.label}
                     </p>
                     <p class="text-xs text-muted">{autoModePresentation.description}</p>
                   </div>
-                </label>
+                </button>
 
-                <label
-                  class={`flex items-start gap-3 rounded-md border p-2 transition-colors ${
-                    props.discoveryMode() === 'custom'
-                      ? 'border-blue-200 bg-blue-50 dark:border-blue-700 dark:bg-blue-900'
-                      : 'border-transparent hover:border-border'
-                  }`}
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={props.discoveryMode() === 'custom'}
+                  disabled={scanScopeLocked()}
+                  onClick={() => selectDiscoveryMode('custom')}
+                  class={scanScopeOptionClass('custom')}
                 >
-                  <input
-                    type="radio"
-                    name="discoveryMode"
-                    value="custom"
-                    checked={props.discoveryMode() === 'custom'}
-                    onChange={() => {
-                      if (props.discoveryMode() !== 'custom') {
-                        void props.handleDiscoveryModeChange('custom');
-                      }
-                    }}
-                    disabled={
-                      props.envOverrides().discoverySubnet || props.savingDiscoverySettings()
-                    }
-                    class="mt-1 h-5 w-5 border-slate-300 text-blue-600 focus:ring-blue-500 sm:h-4 sm:w-4"
-                  />
+                  <span class={scanScopeIndicatorClass('custom')} aria-hidden="true">
+                    <Show when={props.discoveryMode() === 'custom'}>
+                      <span class="h-2 w-2 rounded-full bg-white" />
+                    </Show>
+                  </span>
                   <div class="space-y-1">
                     <p class="text-sm font-medium text-base-content">
                       {customModePresentation.label}
                     </p>
                     <p class="text-xs text-muted">{customModePresentation.description}</p>
                   </div>
-                </label>
+                </button>
 
                 <Show when={props.discoveryMode() === 'custom'}>
                   <div class="flex flex-wrap items-center gap-2 pl-9 pr-2">
@@ -170,7 +178,7 @@ export const DiscoverySettingsForm: Component<DiscoverySettingsFormProps> = (pro
                                 : 'border-border text-base-content hover:border-blue-400 hover:bg-blue-50 dark:hover:border-blue-500 dark:hover:bg-blue-900'
                             }`}
                             onClick={async () => {
-                              if (props.envOverrides().discoverySubnet) {
+                              if (scanScopeLocked()) {
                                 return;
                               }
                               let selections = [...currentSelections];
@@ -194,9 +202,9 @@ export const DiscoverySettingsForm: Component<DiscoverySettingsFormProps> = (pro
                               props.setDiscoverySubnetError(undefined);
                               await props.commitDiscoverySubnet(updatedValue);
                             }}
-                            disabled={props.envOverrides().discoverySubnet}
+                            disabled={scanScopeLocked()}
                             classList={{
-                              'cursor-not-allowed opacity-60': props.envOverrides().discoverySubnet,
+                              'cursor-not-allowed opacity-60': scanScopeLocked(),
                             }}
                           >
                             {preset}
