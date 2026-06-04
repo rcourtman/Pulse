@@ -4,7 +4,8 @@ import { ThinkingBlock } from './ThinkingBlock';
 import { ToolExecutionBlock } from './ToolExecutionBlock';
 import { ApprovalCard } from './ApprovalCard';
 import { QuestionCard } from './QuestionCard';
-import type { ChatMessage, PendingApproval, PendingQuestion, StreamDisplayEvent } from './types';
+import { groupStreamEventsForDisplay } from './streamEventGrouping';
+import type { ChatMessage, PendingApproval, PendingQuestion } from './types';
 import {
   AI_CHAT_ASSISTANT_MESSAGE_LABEL,
   AI_CHAT_CONTEXT_USED_LABEL,
@@ -33,59 +34,13 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
 
   const hasStreamEvents = () => props.message.streamEvents && props.message.streamEvents.length > 0;
 
-  // Group stream events for cleaner rendering
-  // Combine consecutive content events, separate thinking, tools, and approvals
-  const groupedEvents = createMemo(() => {
-    const events = props.message.streamEvents || [];
-    const grouped: StreamDisplayEvent[] = [];
-
-    for (const evt of events) {
-      // Thinking events are kept separate
-      if (evt.type === 'thinking') {
-        grouped.push(evt);
-        continue;
-      }
-
-      // Tool events are kept separate
-      if (evt.type === 'tool') {
-        grouped.push(evt);
-        continue;
-      }
-
-      // Pending tool events are kept separate
-      if (evt.type === 'pending_tool') {
-        grouped.push(evt);
-        continue;
-      }
-
-      // Approval events are kept separate
-      if (evt.type === 'approval') {
-        grouped.push(evt);
-        continue;
-      }
-
-      // Question events are kept separate
-      if (evt.type === 'question') {
-        grouped.push(evt);
-        continue;
-      }
-
-      // Content events can be merged with previous content
-      if (evt.type === 'content' && evt.content) {
-        const lastIdx = grouped.length - 1;
-        if (lastIdx >= 0 && grouped[lastIdx].type === 'content') {
-          grouped[lastIdx] = {
-            ...grouped[lastIdx],
-            content: (grouped[lastIdx].content || '') + evt.content,
-          };
-        } else {
-          grouped.push(evt);
-        }
-      }
-    }
-
-    return grouped;
-  });
+  // Group stream events into display blocks. Content and reasoning each collapse
+  // into a single block even when a reasoning model interleaves them, so the
+  // answer stays a coherent markdown document instead of fragmenting into
+  // whitespace-trimmed pieces. See groupStreamEventsForDisplay for the rationale.
+  const groupedEvents = createMemo(() =>
+    groupStreamEventsForDisplay(props.message.streamEvents || []),
+  );
 
   const contextTools = createMemo(() => {
     const events = props.message.streamEvents || [];

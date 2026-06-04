@@ -528,9 +528,12 @@ describe('MessageItem', () => {
       expect(proseBlocks[0].innerHTML).toContain('Hello world!');
     });
 
-    it('does not merge content events separated by other event types', () => {
+    it('merges content into one block across interleaved thinking events', () => {
+      // Reasoning models reached via gateways like OpenRouter interleave
+      // reasoning and answer tokens. Thinking must not fragment the answer into
+      // separate markdown blocks, or whitespace and table structure are lost.
       const events: StreamDisplayEvent[] = [
-        { type: 'content', content: 'Part 1' },
+        { type: 'content', content: 'Part 1 ' },
         { type: 'thinking', thinking: 'hmm...' },
         { type: 'content', content: 'Part 2' },
       ];
@@ -543,7 +546,8 @@ describe('MessageItem', () => {
       ));
 
       const proseBlocks = container.querySelectorAll('.prose');
-      expect(proseBlocks.length).toBe(2);
+      expect(proseBlocks.length).toBe(1);
+      expect(proseBlocks[0].innerHTML).toContain('Part 1 Part 2');
     });
 
     it('ignores content events with empty content', () => {
