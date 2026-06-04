@@ -279,7 +279,10 @@ export const useAppRuntimeState = () => {
       updateSystemSettingsFromResponse(systemSettings);
       applyServerThemeIfAllowed(systemSettings.theme);
       setHasLoadedServerTheme(true);
-      layoutStore.loadFromServer();
+      // Apply the server's canonical full-width mode using the settings we just
+      // fetched, so it is honored after auth even if a stale localStorage
+      // preference exists (#1130) — loadFromServer() would short-circuit on it.
+      layoutStore.applyServerMode(systemSettings.fullWidthMode);
     } catch (error) {
       logger.error('Failed to load system settings from server', error);
       markSystemSettingsLoadedWithDefaults();
