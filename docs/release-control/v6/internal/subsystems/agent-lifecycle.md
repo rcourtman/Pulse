@@ -106,6 +106,11 @@ uses minimal Docker summary commands rather than unbounded guest scraping. A
 local `--enable-docker=false` or `PULSE_ENABLE_DOCKER=false` remains a hard
 Unified Agent opt-out that auto-detection and remote profile settings cannot
 reverse.
+Proxmox workload actions may use the parent node `pulse-agent` only when the
+shared `/api/resources` payload carries a backend-authored Proxmox workload
+target linked to that node agent. Suppressing an inside-guest install cue for
+that case means governed actions have a node-agent path; it must not be
+presented as proof that a guest-local agent is installed.
 
 1. `frontend-modern/src/api/agentProfiles.ts` shared with `api-contracts`: the agent profiles frontend client is both an agent lifecycle control surface and a canonical API payload contract boundary.
 2. `frontend-modern/src/api/nodes.ts` shared with `api-contracts`: the shared Proxmox node client is both an agent lifecycle setup/install control surface and a canonical API payload contract boundary.

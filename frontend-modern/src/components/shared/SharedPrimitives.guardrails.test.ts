@@ -37,6 +37,7 @@ import searchInputEnhancementsModelSource from '@/components/shared/searchInputE
 import searchInputModelSource from '@/components/shared/searchInputModel.ts?raw';
 import statusBadgeSource from '@/components/shared/StatusBadge.tsx?raw';
 import statusBadgeModelSource from '@/components/shared/statusBadgeModel.ts?raw';
+import discoveryReadinessBadgeSource from '@/components/shared/DiscoveryReadinessBadge.tsx?raw';
 import subtabsSource from '@/components/shared/Subtabs.tsx?raw';
 import toggleSource from '@/components/shared/Toggle.tsx?raw';
 import toggleModelSource from '@/components/shared/toggleModel.ts?raw';
@@ -722,6 +723,18 @@ describe('shared primitive guardrails', () => {
     expect(statusBadgeModelSource).toContain('getStatusBadgeLabel');
     expect(statusBadgeModelSource).toContain('getStatusBadgeTitle');
     expect(statusBadgeModelSource).toContain("labelEnabled ?? 'Enabled'");
+  });
+
+  it('keeps discovery readiness badges presentation-only and accessible', () => {
+    expect(discoveryReadinessBadgeSource).toContain(
+      "import type { DiscoveryReadinessPresentation } from '@/utils/resourceDiscoveryReadiness'",
+    );
+    expect(discoveryReadinessBadgeSource).toContain("aria-label={presentation()?.title");
+    expect(discoveryReadinessBadgeSource).toContain('title={presentation()?.title}');
+    expect(discoveryReadinessBadgeSource).toContain('aria-hidden="true"');
+    expect(discoveryReadinessBadgeSource).not.toContain('fetch(');
+    expect(discoveryReadinessBadgeSource).not.toContain('localStorage');
+    expect(discoveryReadinessBadgeSource).not.toContain('innerHTML');
   });
 
   it('routes settings info callouts through CalloutCard', () => {

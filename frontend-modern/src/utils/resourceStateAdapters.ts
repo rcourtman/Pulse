@@ -152,7 +152,14 @@ const mergePlatformData = (
     }
   }
 
-  for (const key of ['storage', 'physicalDisk', 'ceph', 'metrics', 'discoveryTarget']) {
+  for (const key of [
+    'storage',
+    'physicalDisk',
+    'ceph',
+    'metrics',
+    'discoveryTarget',
+    'discoveryReadiness',
+  ]) {
     const nested = mergeRecord(asRecord(incoming[key]), asRecord(existing[key]));
     if (nested) {
       merged[key] = nested;
@@ -679,6 +686,7 @@ export const mergeCanonicalResource = (incoming: Resource, existing?: Resource):
       incoming.platformType ?? existingCanonical.platformType,
     ),
     discoveryTarget: incoming.discoveryTarget ?? existingCanonical.discoveryTarget,
+    discoveryReadiness: incoming.discoveryReadiness ?? existingCanonical.discoveryReadiness,
     metricsTarget: incoming.metricsTarget ?? existingCanonical.metricsTarget,
     canonicalIdentity: mergeCanonicalIdentity(
       incoming.canonicalIdentity,

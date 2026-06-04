@@ -65,6 +65,75 @@ describe('useColumnVisibility', () => {
     });
   });
 
+  it('hides newly default-hidden columns once for existing user preferences', async () => {
+    window.localStorage.setItem(storageKey, JSON.stringify(['ip']));
+
+    let disposeRoot: (() => void) | undefined;
+    let visibility:
+      | ReturnType<typeof useColumnVisibility>
+      | undefined;
+
+    createRoot((dispose) => {
+      disposeRoot = dispose;
+      const columns: ColumnDef[] = [
+        { id: 'name', label: 'Name' },
+        { id: 'type', label: 'Type', toggleable: true, defaultHidden: true },
+        { id: 'ip', label: 'IP', toggleable: true },
+        { id: 'aiContext', label: 'AI Context', toggleable: true, defaultHidden: true },
+      ];
+
+      visibility = useColumnVisibility(
+        storageKey,
+        columns,
+        ['ip'],
+        undefined,
+        {},
+        ['aiContext'],
+      );
+
+      expect(visibility.hiddenColumns()).toEqual(['ip', 'aiContext']);
+      expect(visibility.visibleColumns().map((col) => col.id)).toEqual(['name', 'type']);
+    });
+
+    await Promise.resolve();
+    expect(window.localStorage.getItem(storageKey)).toBe(JSON.stringify(['ip', 'aiContext']));
+    expect(window.localStorage.getItem(`${storageKey}:default-hidden-applied`)).toBe(
+      JSON.stringify(['aiContext']),
+    );
+
+    visibility?.show('aiContext');
+    await Promise.resolve();
+    expect(window.localStorage.getItem(storageKey)).toBe(JSON.stringify(['ip']));
+    disposeRoot?.();
+
+    createRoot((dispose) => {
+      const columns: ColumnDef[] = [
+        { id: 'name', label: 'Name' },
+        { id: 'type', label: 'Type', toggleable: true, defaultHidden: true },
+        { id: 'ip', label: 'IP', toggleable: true },
+        { id: 'aiContext', label: 'AI Context', toggleable: true, defaultHidden: true },
+      ];
+
+      const remounted = useColumnVisibility(
+        storageKey,
+        columns,
+        ['ip'],
+        undefined,
+        {},
+        ['aiContext'],
+      );
+
+      expect(remounted.hiddenColumns()).toEqual(['ip']);
+      expect(remounted.visibleColumns().map((col) => col.id)).toEqual([
+        'name',
+        'type',
+        'aiContext',
+      ]);
+
+      dispose();
+    });
+  });
+
   it('resets back to the canonical default-hidden set', () => {
     createRoot((dispose) => {
       const columns: ColumnDef[] = [

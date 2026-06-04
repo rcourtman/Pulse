@@ -73,11 +73,12 @@ const (
 	agentContextTrustDiscovered      = "discovered"
 	agentContextTrustUserTaught      = "user-taught"
 
-	agentContextSourceUnifiedResource = "unified-resource"
-	agentContextSourceResourceStore   = "resource-store"
-	agentContextSourceOperatorState   = "operator-state"
-	agentContextSourcePatrol          = "patrol"
-	agentContextSourceActionAudit     = "action-audit"
+	agentContextSourceUnifiedResource  = "unified-resource"
+	agentContextSourceResourceStore    = "resource-store"
+	agentContextSourceServiceDiscovery = "service-discovery"
+	agentContextSourceOperatorState    = "operator-state"
+	agentContextSourcePatrol           = "patrol"
+	agentContextSourceActionAudit      = "action-audit"
 )
 
 // BuildResourceContextSections returns the canonical resource context
@@ -324,6 +325,7 @@ func buildAgentRuntimeContextSection(resource unified.Resource, now time.Time) S
 		addAgentContextFact(&section.Facts, "Discovery resource", unified.ResourcePolicyRedactedValue(resource.DiscoveryTarget.ResourceID, policy, unified.ResourceRedactionPlatformID, unified.ResourceRedactionAlias), agentContextSourceUnifiedResource, agentContextTrustPulseAuthored, observedAt)
 		addAgentContextFact(&section.Facts, "Discovery hostname", unified.ResourcePolicyRedactedValue(resource.DiscoveryTarget.Hostname, policy, unified.ResourceRedactionHostname), agentContextSourceUnifiedResource, agentContextTrustPulseAuthored, observedAt)
 	}
+	addDiscoveryReadinessFacts(&section.Facts, resource, now)
 
 	addMetricsFacts(&section.Facts, resource, observedAt)
 	addAgentDataFacts(&section.Facts, resource, observedAt)
@@ -426,6 +428,43 @@ func buildAgentRecentChangesContextSection(resource unified.Resource, store unif
 		addAgentContextFact(&section.Facts, fmt.Sprintf("Change %d", i+1), formatAgentResourceChangeFact(change, resource), agentContextSourceResourceStore, agentContextTrustRuntimeObserved, observedAt)
 	}
 	return section
+}
+
+func addDiscoveryReadinessFacts(facts *[]Fact, resource unified.Resource, now time.Time) {
+	if resource.DiscoveryReadiness == nil {
+		return
+	}
+	readiness := *resource.DiscoveryReadiness
+	observedAt := readiness.ObservedAt
+	addAgentContextFact(facts, "Discovery readiness", formatDiscoveryReadinessFact(readiness), agentContextSourceServiceDiscovery, agentContextTrustPulseAuthored, observedAt)
+	if readiness.ServiceName != "" {
+		addAgentContextFact(facts, "Discovered service", unified.ResourcePolicyRedactedValue(readiness.ServiceName, resource.Policy, unified.ResourceRedactionHostname, unified.ResourceRedactionAlias), agentContextSourceServiceDiscovery, agentContextTrustDiscovered, observedAt)
+	}
+	addAgentContextFact(facts, "Discovery category", readiness.ServiceCategory, agentContextSourceServiceDiscovery, agentContextTrustDiscovered, observedAt)
+	addAgentContextCountFact(facts, "Discovery facts", readiness.FactCount, agentContextSourceServiceDiscovery, agentContextTrustDiscovered, observedAt)
+	if readiness.Confidence > 0 {
+		addAgentContextFact(facts, "Discovery confidence", fmt.Sprintf("%.0f%%", readiness.Confidence*100), agentContextSourceServiceDiscovery, agentContextTrustDiscovered, observedAt)
+	}
+	if readiness.StaleAfterSeconds > 0 {
+		addAgentContextFact(facts, "Discovery stale after", fmt.Sprintf("%ds", readiness.StaleAfterSeconds), agentContextSourceServiceDiscovery, agentContextTrustPulseAuthored, &now)
+	}
+}
+
+func formatDiscoveryReadinessFact(readiness unified.ResourceDiscoveryReadiness) string {
+	parts := []string{string(readiness.State)}
+	if readiness.Reason != "" {
+		parts = append(parts, readiness.Reason)
+	}
+	if readiness.ObservedAt != nil && !readiness.ObservedAt.IsZero() {
+		parts = append(parts, "observed="+readiness.ObservedAt.UTC().Format(time.RFC3339))
+	}
+	if readiness.AgeSeconds > 0 {
+		parts = append(parts, fmt.Sprintf("age=%ds", readiness.AgeSeconds))
+	}
+	if readiness.StaleAfterSeconds > 0 {
+		parts = append(parts, fmt.Sprintf("staleAfter=%ds", readiness.StaleAfterSeconds))
+	}
+	return strings.Join(parts, "; ")
 }
 
 func addMetricsFacts(facts *[]Fact, resource unified.Resource, observedAt *time.Time) {

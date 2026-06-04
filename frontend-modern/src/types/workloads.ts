@@ -1,5 +1,5 @@
 import type { VM, Container, DockerContainerUpdateStatus } from './api';
-import type { ResourceDiscoveryTarget } from './resource';
+import type { ResourceDiscoveryReadiness, ResourceDiscoveryTarget } from './resource';
 
 export type WorkloadType = 'vm' | 'system-container' | 'app-container' | 'pod';
 export type WorkloadContainerViewMode = 'container' | 'system-container' | 'app-container';
@@ -32,6 +32,7 @@ export type WorkloadGuest = (VM | Container) & {
   // Canonical discovery ownership. API-backed platforms such as TrueNAS should
   // only expose Discovery when the unified resource contract supplies a target.
   discoveryTarget?: ResourceDiscoveryTarget;
+  discoveryReadiness?: ResourceDiscoveryReadiness;
   // vSphere placement context surfaced in the workload drawer's vSphere
   // card. Only populated for resources with platformScopes containing
   // `vmware-vsphere`. Kept narrow on purpose — operational state like

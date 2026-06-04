@@ -218,6 +218,11 @@ describe('workloadTopology', () => {
         type: 'vm',
         workloadType: 'vm',
         node: 'pve1',
+        discoveryTarget: {
+          resourceType: 'vm',
+          agentId: 'agent-pve1',
+          resourceId: '103',
+        },
       });
 
       expect(getDiscoveryHostIdForWorkload(docker)).toBe('docker-host-1');
@@ -230,7 +235,7 @@ describe('workloadTopology', () => {
       expect(getDiscoveryHostIdForWorkload(k8s)).toBe('k8s-agent-1');
       expect(getDiscoveryResourceIdForWorkload(k8s)).toBe('pod-uid-1');
 
-      expect(getDiscoveryHostIdForWorkload(vm)).toBe('pve1');
+      expect(getDiscoveryHostIdForWorkload(vm)).toBe('agent-pve1');
       expect(getDiscoveryResourceIdForWorkload(vm)).toBe('103');
     });
   });

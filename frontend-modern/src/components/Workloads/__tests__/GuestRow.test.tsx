@@ -859,8 +859,8 @@ describe('GuestRow', () => {
 describe('GUEST_COLUMNS', () => {
   it('has the expected number of columns', () => {
     // name, runtime, type, info, vmid, cpu, memory, disk, ip, uptime, node,
-    // image, namespace, context, backup, tags, os, netIo, diskIo, update
-    expect(GUEST_COLUMNS.length).toBe(20);
+    // image, namespace, context, aiContext, backup, tags, os, netIo, diskIo, update
+    expect(GUEST_COLUMNS.length).toBe(21);
   });
 
   it('has name as the first column', () => {
@@ -887,6 +887,7 @@ describe('GUEST_COLUMNS', () => {
     expect(toggleableIds).toContain('ip');
     expect(toggleableIds).toContain('uptime');
     expect(toggleableIds).toContain('node');
+    expect(toggleableIds).toContain('aiContext');
     expect(toggleableIds).toContain('backup');
     expect(toggleableIds).toContain('tags');
     expect(toggleableIds).toContain('os');
@@ -898,6 +899,7 @@ describe('GUEST_COLUMNS', () => {
     const nameColumn = GUEST_COLUMNS.find((column) => column.id === 'name');
     const runtimeColumn = GUEST_COLUMNS.find((column) => column.id === 'runtime');
     const typeColumn = GUEST_COLUMNS.find((column) => column.id === 'type');
+    const aiContextColumn = GUEST_COLUMNS.find((column) => column.id === 'aiContext');
     const netIoColumn = GUEST_COLUMNS.find((column) => column.id === 'netIo');
     const diskIoColumn = GUEST_COLUMNS.find((column) => column.id === 'diskIo');
     const updateColumn = GUEST_COLUMNS.find((column) => column.id === 'update');
@@ -909,6 +911,8 @@ describe('GUEST_COLUMNS', () => {
     expect(runtimeColumn?.minWidth).toBe('96px');
     expect(runtimeColumn?.maxWidth).toBe('112px');
     expect(typeColumn?.width).toBe('60px');
+    expect(aiContextColumn?.defaultHidden).toBe(true);
+    expect(aiContextColumn?.width).toBe('92px');
     expect(netIoColumn?.width).toBe('170px');
     expect(netIoColumn?.minWidth).toBe('170px');
     expect(diskIoColumn?.width).toBe('170px');
@@ -950,6 +954,7 @@ describe('GUEST_COLUMNS', () => {
       'memory',
       'disk',
       'uptime',
+      'aiContext',
       'backup',
     ]);
 
@@ -968,7 +973,7 @@ describe('GUEST_COLUMNS', () => {
         'compact',
         compactColumns.map((column) => column.id),
       ),
-    ).toEqual({ width: '27.6596%' });
+    ).toEqual({ width: '25.2427%' });
   });
 
   it('normalizes compact widths for workload view modes with different column sets', () => {
@@ -976,9 +981,17 @@ describe('GUEST_COLUMNS', () => {
     const compactPodColumns = getWorkloadVisibleColumnsForLayout(podColumns, 'compact');
     const compactPodColumnIds = compactPodColumns.map((column) => column.id);
 
-    expect(compactPodColumnIds).toEqual(['name', 'cpu', 'memory', 'image', 'namespace', 'context']);
+    expect(compactPodColumnIds).toEqual([
+      'name',
+      'cpu',
+      'memory',
+      'image',
+      'namespace',
+      'context',
+      'aiContext',
+    ]);
     expect(getGuestColumnWidthStyle('name', false, 'compact', compactPodColumnIds)).toEqual({
-      width: '27.3684%',
+      width: '25%',
     });
   });
 
@@ -1033,6 +1046,12 @@ describe('VIEW_MODE_COLUMNS', () => {
 
   it('all mode includes info column (merged identifier)', () => {
     expect(VIEW_MODE_COLUMNS.all!.has('info')).toBe(true);
+  });
+
+  it('all view modes expose the hidden AI Context column', () => {
+    for (const [, cols] of Object.entries(VIEW_MODE_COLUMNS)) {
+      if (cols) expect(cols.has('aiContext')).toBe(true);
+    }
   });
 
   it('all mode does not include vmid (uses info instead)', () => {

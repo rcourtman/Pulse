@@ -58,6 +58,80 @@ func TestCoalescePresentationHostResourcesMergesSplitRuntimeAndPlatformHost(t *t
 	}
 }
 
+func TestCoalescePresentationHostResourcesRedirectsProxmoxChildrenToAgentBackedParent(t *testing.T) {
+	now := time.Date(2026, 5, 22, 10, 30, 0, 0, time.UTC)
+	proxmoxParentID := "agent-proxmox-delly"
+	resources := []Resource{
+		{
+			ID:       proxmoxParentID,
+			Type:     ResourceTypeAgent,
+			Name:     "delly",
+			Status:   StatusOnline,
+			LastSeen: now,
+			Sources:  []DataSource{SourceProxmox},
+			Identity: ResourceIdentity{Hostnames: []string{"delly"}},
+			Proxmox: &ProxmoxData{
+				SourceID:    "homelab-delly",
+				NodeName:    "delly",
+				ClusterName: "homelab",
+				Instance:    "delly",
+			},
+		},
+		{
+			ID:       "system-container-grafana",
+			Type:     ResourceTypeSystemContainer,
+			Name:     "grafana",
+			Status:   StatusOnline,
+			LastSeen: now,
+			ParentID: &proxmoxParentID,
+			Sources:  []DataSource{SourceProxmox},
+			Identity: ResourceIdentity{Hostnames: []string{"grafana"}},
+			Proxmox: &ProxmoxData{
+				SourceID:    "delly:delly:124",
+				NodeName:    "delly",
+				ClusterName: "homelab",
+				Instance:    "delly",
+				VMID:        124,
+			},
+		},
+		{
+			ID:       "agent-runtime-delly",
+			Type:     ResourceTypeAgent,
+			Name:     "delly",
+			Status:   StatusOnline,
+			LastSeen: now.Add(time.Second),
+			Sources:  []DataSource{SourceAgent},
+			Identity: ResourceIdentity{Hostnames: []string{"delly"}},
+			Agent: &AgentData{
+				AgentID:  "agent-machine-delly",
+				Hostname: "delly",
+			},
+		},
+	}
+
+	coalesced := CoalescePresentationHostResources(resources)
+	if len(coalesced) != 2 {
+		t.Fatalf("expected merged parent plus child, got %d: %#v", len(coalesced), coalesced)
+	}
+
+	var child *Resource
+	for i := range coalesced {
+		if coalesced[i].ID == "system-container-grafana" {
+			child = &coalesced[i]
+			break
+		}
+	}
+	if child == nil {
+		t.Fatal("expected grafana child in coalesced resources")
+	}
+	if child.ParentID == nil || *child.ParentID != "agent-runtime-delly" {
+		t.Fatalf("expected child parent agent-runtime-delly, got %+v", child.ParentID)
+	}
+	if child.Proxmox == nil || child.Proxmox.LinkedAgentID != "agent-machine-delly" {
+		t.Fatalf("expected child linked agent agent-machine-delly, got %+v", child.Proxmox)
+	}
+}
+
 func TestCoalescePresentationHostResourcesDoesNotMergeRuntimeOnlyNameCollision(t *testing.T) {
 	now := time.Date(2026, 5, 22, 10, 30, 0, 0, time.UTC)
 	resources := []Resource{

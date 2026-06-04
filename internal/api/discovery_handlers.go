@@ -10,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	mockfixtures "github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
+	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 )
@@ -40,6 +41,33 @@ func NewDiscoveryHandlers(service *servicediscovery.Service, cfg *config.Config)
 // SetService sets the discovery service (used for late initialization after routes are registered).
 func (h *DiscoveryHandlers) SetService(service *servicediscovery.Service) {
 	h.service = service
+}
+
+// DiscoveryReadinessForResource implements the unified resource readiness
+// provider used by resource and agent-context endpoints.
+func (h *DiscoveryHandlers) DiscoveryReadinessForResource(resource unified.Resource, now time.Time) unified.ResourceDiscoveryReadiness {
+	target := resource.DiscoveryTarget
+	if h == nil {
+		return servicediscovery.DiscoveryReadinessUnavailableForTarget(target, now, "Discovery handlers are not configured.")
+	}
+	if h.service != nil {
+		return h.service.DiscoveryReadinessForResource(resource, now)
+	}
+	if target == nil {
+		return servicediscovery.DiscoveryReadinessForTarget(nil, nil, nil, servicediscovery.DefaultConfig().MaxDiscoveryAge, now)
+	}
+	if _, ok := servicediscovery.DiscoveryResourceTypeForTarget(target); !ok {
+		return servicediscovery.DiscoveryReadinessForTarget(target, nil, nil, servicediscovery.DefaultConfig().MaxDiscoveryAge, now)
+	}
+	if mockfixtures.IsMockEnabled() {
+		resourceType, ok := servicediscovery.DiscoveryResourceTypeForTarget(target)
+		if !ok {
+			return servicediscovery.DiscoveryReadinessForTarget(target, nil, nil, servicediscovery.DefaultConfig().MaxDiscoveryAge, now)
+		}
+		discovery := mockDiscoveryFixtureByResource(resourceType, target.AgentID, target.ResourceID)
+		return servicediscovery.DiscoveryReadinessForTarget(target, discovery, nil, servicediscovery.DefaultConfig().MaxDiscoveryAge, now)
+	}
+	return servicediscovery.DiscoveryReadinessUnavailableForTarget(target, now, "Discovery service is not configured.")
 }
 
 // SetAIConfigProvider sets the AI config provider for showing AI provider info.

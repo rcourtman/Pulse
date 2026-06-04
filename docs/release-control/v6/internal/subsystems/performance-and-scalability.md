@@ -181,7 +181,10 @@ regression protection.
    canonical workload identity and Discovery coordinates from already-loaded row
    data, but it must not fetch the agent resource-context bundle or hydrate rich
    Assistant context while a row is merely rendered, expanded, filtered, sorted,
-   or windowed.
+   or windowed. The same bounded-row rule applies to workload action-agent
+   readiness: drawer rendering may read an already-loaded `discoveryTarget` and
+   local agent fields, but it must not infer Proxmox action ownership by
+   scanning nodes, fetching discovery, or probing agents during render.
    The `/api/version.agentUpdateTargetVersion` projection follows that same
    rule: it may mirror the cached deployable agent target exposed to agents,
    but it must not inspect attached agents, download artifacts, or resolve

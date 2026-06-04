@@ -19,6 +19,12 @@ const resource: Resource = {
     agentId: 'agent:pve-1',
     resourceId: 'homeassistant',
   },
+  discoveryReadiness: {
+    state: 'fresh',
+    source: 'service-discovery',
+    serviceName: 'Home Assistant',
+    factCount: 5,
+  },
 };
 
 describe('buildResourceAssistantContext', () => {
@@ -41,5 +47,11 @@ describe('buildResourceAssistantContext', () => {
     expect(context.briefing?.detailLines).toContain('Resource ID: app-container:homeassistant');
     expect(context.briefing?.detailLines).toContain('Parent: ha-lxc');
     expect(context.briefing?.detailLines).toContain('Discovery: app-container:homeassistant');
+    expect(context.briefing?.detailLines).toContain(
+      'Discovery data: Discovery fresh, service Home Assistant, 5 facts',
+    );
+    expect(context.briefing?.statusLabel).toBe(
+      'Read-only context attached · Discovery fresh',
+    );
   });
 });

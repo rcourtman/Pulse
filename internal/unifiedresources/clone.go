@@ -21,6 +21,7 @@ func cloneResource(in *Resource) Resource {
 
 	out := *in
 	out.DiscoveryTarget = cloneDiscoveryTarget(in.DiscoveryTarget)
+	out.DiscoveryReadiness = cloneResourceDiscoveryReadiness(in.DiscoveryReadiness)
 	out.MetricsTarget = cloneMetricsTarget(in.MetricsTarget)
 	out.PlatformScopes = cloneStringSlice(in.PlatformScopes)
 	out.Sources = cloneDataSourceSlice(in.Sources)
@@ -73,6 +74,15 @@ func cloneDiscoveryTarget(in *DiscoveryTarget) *DiscoveryTarget {
 		return nil
 	}
 	out := *in
+	return &out
+}
+
+func cloneResourceDiscoveryReadiness(in *ResourceDiscoveryReadiness) *ResourceDiscoveryReadiness {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.ObservedAt = cloneTimePtr(in.ObservedAt)
 	return &out
 }
 

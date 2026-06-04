@@ -24,12 +24,12 @@ func CoalescePresentationHostResourcesWithExclusions(
 	for len(coalesced) < len(resources) {
 		next := coalescePresentationHostResourcesOnce(coalesced, excluded)
 		if len(next) == len(coalesced) {
-			return next
+			return refreshPresentationProxmoxChildActionAgents(next)
 		}
 		resources = coalesced
 		coalesced = next
 	}
-	return coalesced
+	return refreshPresentationProxmoxChildActionAgents(coalesced)
 }
 
 func coalescePresentationHostResourcesOnce(
@@ -42,6 +42,7 @@ func coalescePresentationHostResourcesOnce(
 
 	coalesced := make([]Resource, 0, len(resources))
 	indexByHostKey := make(map[string]int, len(resources))
+	parentRedirects := make(map[string]string)
 	for _, resource := range resources {
 		resource.Type = CanonicalResourceType(resource.Type)
 		hostKey := presentationHostMergeKey(resource)
@@ -66,10 +67,66 @@ func coalescePresentationHostResourcesOnce(
 			coalesced = append(coalesced, resource)
 			continue
 		}
-		coalesced[existingIndex] = mergePresentationHostResources(existing, resource)
+		merged := mergePresentationHostResources(existing, resource)
+		coalesced[existingIndex] = merged
+		addPresentationParentRedirect(parentRedirects, existing.ID, merged.ID)
+		addPresentationParentRedirect(parentRedirects, resource.ID, merged.ID)
 	}
 
+	applyPresentationParentRedirects(coalesced, parentRedirects)
 	return coalesced
+}
+
+func addPresentationParentRedirect(redirects map[string]string, fromID, toID string) {
+	fromID = CanonicalResourceID(strings.TrimSpace(fromID))
+	toID = CanonicalResourceID(strings.TrimSpace(toID))
+	if fromID == "" || toID == "" || fromID == toID {
+		return
+	}
+	redirects[fromID] = toID
+}
+
+func applyPresentationParentRedirects(resources []Resource, redirects map[string]string) {
+	if len(redirects) == 0 {
+		return
+	}
+	for i := range resources {
+		if resources[i].ParentID == nil {
+			continue
+		}
+		parentID := CanonicalResourceID(strings.TrimSpace(*resources[i].ParentID))
+		if redirectedID := redirects[parentID]; redirectedID != "" {
+			resources[i].ParentID = &redirectedID
+		}
+	}
+}
+
+func refreshPresentationProxmoxChildActionAgents(resources []Resource) []Resource {
+	parentByID := make(map[string]int, len(resources))
+	for i := range resources {
+		resourceID := CanonicalResourceID(strings.TrimSpace(resources[i].ID))
+		if resourceID != "" {
+			parentByID[resourceID] = i
+		}
+	}
+
+	for i := range resources {
+		switch CanonicalResourceType(resources[i].Type) {
+		case ResourceTypeVM, ResourceTypeSystemContainer:
+		default:
+			continue
+		}
+		if resources[i].Proxmox == nil || resources[i].ParentID == nil {
+			continue
+		}
+		parentID := CanonicalResourceID(strings.TrimSpace(*resources[i].ParentID))
+		parentIndex, ok := parentByID[parentID]
+		if !ok {
+			continue
+		}
+		attachLinkedAgentID(resources[i].Proxmox, linkedAgentIDFromResource(&resources[parentIndex]))
+	}
+	return resources
 }
 
 func presentationHostMergeKey(resource Resource) string {

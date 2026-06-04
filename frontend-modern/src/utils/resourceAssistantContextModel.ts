@@ -1,5 +1,9 @@
 import type { AIChatContext } from '@/stores/aiChat';
-import type { Resource, ResourceDiscoveryTarget } from '@/types/resource';
+import type { Resource, ResourceDiscoveryReadiness, ResourceDiscoveryTarget } from '@/types/resource';
+import {
+  formatDiscoveryReadinessBriefingLine,
+  getDiscoveryReadinessPresentation,
+} from '@/utils/resourceDiscoveryReadiness';
 import {
   getPreferredResourceDisplayName,
   getPrimaryResourceIdentity,
@@ -18,6 +22,7 @@ export interface ResourceAssistantContextTarget {
   parentName?: string;
   primaryIdentity?: string;
   discoveryTarget?: ResourceDiscoveryTarget | null;
+  discoveryReadiness?: ResourceDiscoveryReadiness | null;
 }
 
 export const buildResourceAssistantContextForTarget = (
@@ -25,6 +30,11 @@ export const buildResourceAssistantContextForTarget = (
 ): AIChatContext => {
   const displayName = target.name || target.id;
   const subjectParts = compact([target.type, target.status, target.technology]);
+  const readinessPresentation = getDiscoveryReadinessPresentation(
+    target.discoveryReadiness,
+    Boolean(target.discoveryTarget),
+  );
+  const readinessLine = formatDiscoveryReadinessBriefingLine(target.discoveryReadiness);
   const detailLines = compact([
     `Resource ID: ${target.id}`,
     target.primaryIdentity && target.primaryIdentity !== target.id
@@ -34,6 +44,7 @@ export const buildResourceAssistantContextForTarget = (
     target.discoveryTarget
       ? `Discovery: ${target.discoveryTarget.resourceType}:${target.discoveryTarget.resourceId}`
       : '',
+    readinessLine,
   ]);
 
   return {
@@ -49,7 +60,9 @@ export const buildResourceAssistantContextForTarget = (
       sourceLabel: 'Pulse resource context',
       title: displayName,
       subject: subjectParts.join(' / '),
-      statusLabel: 'Read-only context attached',
+      statusLabel: readinessPresentation
+        ? `Read-only context attached · ${readinessPresentation.statusLabel}`
+        : 'Read-only context attached',
       detailLines,
       safetyNote: 'Approval required before any action.',
     },
@@ -79,4 +92,5 @@ export const buildResourceAssistantContext = (resource: Resource): AIChatContext
     parentName: resource.parentName,
     primaryIdentity: getPrimaryResourceIdentity(resource),
     discoveryTarget: resource.discoveryTarget,
+    discoveryReadiness: resource.discoveryReadiness,
   });

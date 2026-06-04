@@ -19,6 +19,17 @@ func TestBuildResourceContextSectionsAppliesRedactionTrustAndFreshness(t *testin
 	resource := sensitiveTestResource(now, observedAt)
 	resource.ParentID = &parentID
 	resource.ParentName = "prod-node"
+	resource.DiscoveryReadiness = &unified.ResourceDiscoveryReadiness{
+		State:             unified.ResourceDiscoveryReadinessFresh,
+		Source:            "service-discovery",
+		ObservedAt:        &observedAt,
+		AgeSeconds:        60,
+		StaleAfterSeconds: int64((30 * 24 * time.Hour).Seconds()),
+		FactCount:         4,
+		ServiceName:       "finance-db.internal",
+		ServiceCategory:   "database",
+		Confidence:        0.84,
+	}
 	resource.Proxmox = &unified.ProxmoxData{
 		NodeName:        "prod-node",
 		ClusterName:     "prod-west",
@@ -94,6 +105,19 @@ func TestBuildResourceContextSectionsAppliesRedactionTrustAndFreshness(t *testin
 		if fact.Value != unified.ResourcePolicyRedactedLabel || !fact.Redacted {
 			t.Fatalf("%s fact = %#v, want redacted by policy", label, fact)
 		}
+	}
+	readiness := requireFact(t, runtime, "Discovery readiness")
+	if readiness.Source != agentContextSourceServiceDiscovery || readiness.TrustTier != agentContextTrustPulseAuthored {
+		t.Fatalf("readiness provenance = source %q trust %q", readiness.Source, readiness.TrustTier)
+	}
+	if !strings.Contains(readiness.Value, "fresh") || !strings.Contains(readiness.Value, "staleAfter=") {
+		t.Fatalf("readiness value = %q", readiness.Value)
+	}
+	if service := requireFact(t, runtime, "Discovered service"); service.Value != unified.ResourcePolicyRedactedLabel || !service.Redacted {
+		t.Fatalf("discovered service fact = %#v, want redacted by policy", service)
+	}
+	if factCount := requireFact(t, runtime, "Discovery facts"); factCount.Value != "4" || factCount.TrustTier != agentContextTrustDiscovered {
+		t.Fatalf("discovery facts = %#v, want discovered count", factCount)
 	}
 	if risk := requireFact(t, runtime, "Risk summary"); !strings.Contains(risk.Value, unified.ResourcePolicyRedactedLabel) {
 		t.Fatalf("risk summary = %q, want redacted label", risk.Value)

@@ -197,9 +197,15 @@ runtime cost control, and shared AI transport surfaces.
    infrastructure identifier. The live `resource-context` eval is the required
    regression proof for this path: the model must not ask which resource the
    user means, must not call discovery just to identify the attached resource,
-   must use the safe handle for scoped reads, must refuse raw
+   must report attached discovery readiness from context without a discovery
+   tool call, must use the safe handle for scoped reads, must refuse raw
    provider/config/environment/secret-bearing context expansion, and must not
    leak configured forbidden resource details in content or tool inputs.
+   Resource-context model packs and drawer handoff briefings must carry the
+   canonical discovery readiness state (`fresh`, `stale`, `missing`, `running`,
+   `failed`, `unavailable`, or `unsupported`) with provenance and freshness
+   metadata so Assistant can explain whether it is grounded in current
+   discovery data before choosing any tool.
    Patrol deterministic triage signals are prioritized evidence seeds for the
    configured model; they must not be described as a Pulse-authored final
    diagnosis, proof that unflagged resources are healthy, or a reason to

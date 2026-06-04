@@ -159,6 +159,13 @@ API surface. Docker node and Swarm node aliases may normalize to the
 canonical `docker-swarm-node` token, and Swarm secret/config aliases may
 normalize to `docker-secret` and `docker-config`, but unsupported legacy aliases
 should continue to fail closed instead of silently widening platform queries.
+For Proxmox-authored VM and system-container resources, `/api/resources`
+also owns the workload action/discovery target coordinates. The payload may
+emit `discoveryTarget` for those workloads only when unified resources has
+linked the Proxmox node parent to a stable Pulse agent ID; `agentId` is that
+linked agent ID, not the Proxmox node display name. Clients must not infer a
+Proxmox workload action target from `node` plus `vmid` when the backend omits
+that target.
 
 Discovery read endpoints are a canonical API payload boundary even when Pulse
 is running in mock mode. `/api/discovery`, typed discovery detail/progress

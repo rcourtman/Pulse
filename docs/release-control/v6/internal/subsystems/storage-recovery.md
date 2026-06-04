@@ -198,7 +198,11 @@ API boundary when it helps explain protected workloads or storage-adjacent
 services, including mock-mode config/data/log path examples. That context is
 read-only evidence: it must not become a storage/recovery-owned command path,
 secret source, restore entitlement, or frontend-only fixture separate from the
-canonical `/api/discovery` payload.
+canonical `/api/discovery` payload. For Proxmox VM and system-container
+resources, a node-agent-backed workload `discoveryTarget` is shared API and
+unified-resource evidence only; storage/recovery consumers may use it to reach
+the canonical discovery/action path, but must not treat it as backup
+visibility, restore authority, or storage-local command ownership.
 The agent resource-context endpoint follows the same adjacent-evidence rule for
 storage/recovery consumers: bounded context sections, provenance, redactions,
 and recent action counts may help explain a workload or protected service, but

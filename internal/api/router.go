@@ -708,6 +708,9 @@ func (r *Router) setupRoutes() {
 	// AI-powered infrastructure discovery handlers
 	// Note: The actual service is wired up later via SetDiscoveryService
 	r.discoveryHandlers = NewDiscoveryHandlers(nil, r.config)
+	if r.resourceHandlers != nil {
+		r.resourceHandlers.SetDiscoveryReadinessProvider(r.discoveryHandlers)
+	}
 
 	// Wire license checker for Pro feature gating (AI Patrol, Alert Analysis, Auto-Fix)
 	r.aiSettingsHandler.SetLicenseHandlers(r.licenseHandlers)
@@ -1576,6 +1579,9 @@ func (r *Router) SetConfig(cfg *config.Config) {
 func (r *Router) SetDiscoveryService(svc *servicediscovery.Service) {
 	if r.discoveryHandlers != nil {
 		r.discoveryHandlers.SetService(svc)
+	}
+	if r.resourceHandlers != nil && r.discoveryHandlers != nil {
+		r.resourceHandlers.SetDiscoveryReadinessProvider(r.discoveryHandlers)
 	}
 
 	// Wire up WebSocket hub for progress broadcasting

@@ -258,6 +258,67 @@ func TestResourceListUsesUnifiedSeedProvider(t *testing.T) {
 	}
 }
 
+func TestResourceListAttachesDiscoveryReadiness(t *testing.T) {
+	now := time.Date(2026, 6, 4, 11, 0, 0, 0, time.UTC)
+	observedAt := now.Add(-5 * time.Minute)
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{
+			{
+				ID:        "agent:node-a",
+				Type:      unified.ResourceTypeAgent,
+				Name:      "node-a",
+				Status:    unified.StatusOnline,
+				LastSeen:  now,
+				UpdatedAt: now,
+				Sources:   []unified.DataSource{unified.SourceAgent},
+				Agent: &unified.AgentData{
+					AgentID:  "node-a",
+					Hostname: "node-a",
+				},
+			},
+		},
+	})
+	h.SetDiscoveryReadinessProvider(staticResourceDiscoveryReadinessProvider{
+		byResource: map[string]unified.ResourceDiscoveryReadiness{
+			"agent:node-a": {
+				State:       unified.ResourceDiscoveryReadinessStale,
+				Source:      "service-discovery",
+				ObservedAt:  &observedAt,
+				AgeSeconds:  int64((31 * 24 * time.Hour).Seconds()),
+				ServiceName: "Node services",
+				FactCount:   3,
+			},
+		},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
+	h.HandleListResources(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected 1 resource, got %d", len(resp.Data))
+	}
+	readiness := resp.Data[0].DiscoveryReadiness
+	if readiness == nil {
+		t.Fatal("expected discoveryReadiness in resource payload")
+	}
+	if readiness.State != unified.ResourceDiscoveryReadinessStale {
+		t.Fatalf("readiness state = %q, want stale", readiness.State)
+	}
+	if readiness.ResourceType != "agent" || readiness.TargetID != "node-a" || readiness.ResourceID != "node-a" {
+		t.Fatalf("readiness target = %+v, want agent/node-a/node-a", readiness)
+	}
+}
+
 func TestResourceListUsesDeterministicNameTieBreakers(t *testing.T) {
 	now := time.Date(2026, 4, 11, 0, 0, 0, 0, time.UTC)
 	cfg := &config.Config{DataPath: t.TempDir()}
@@ -1948,6 +2009,51 @@ func TestBuildDiscoveryTargetKubernetesPrefersAgentID(t *testing.T) {
 				t.Fatalf("resourceID = %q, want %q", target.ResourceID, tt.wantResourceID)
 			}
 		})
+	}
+}
+
+func TestBuildDiscoveryTargetProxmoxGuestUsesLinkedNodeAgentID(t *testing.T) {
+	target := buildDiscoveryTarget(unified.Resource{
+		ID:   "system-container:source:grafana",
+		Type: unified.ResourceTypeSystemContainer,
+		Name: "grafana",
+		Proxmox: &unified.ProxmoxData{
+			NodeName:      "delly",
+			VMID:          124,
+			LinkedAgentID: "agent-delly",
+		},
+	})
+
+	if target == nil {
+		t.Fatal("expected discovery target")
+	}
+	if target.ResourceType != "system-container" {
+		t.Fatalf("resource type = %q, want system-container", target.ResourceType)
+	}
+	if target.AgentID != "agent-delly" {
+		t.Fatalf("agentID = %q, want agent-delly", target.AgentID)
+	}
+	if target.ResourceID != "124" {
+		t.Fatalf("resourceID = %q, want 124", target.ResourceID)
+	}
+	if target.Hostname != "grafana" {
+		t.Fatalf("hostname = %q, want grafana", target.Hostname)
+	}
+}
+
+func TestBuildDiscoveryTargetProxmoxGuestRequiresLinkedNodeAgentID(t *testing.T) {
+	target := buildDiscoveryTarget(unified.Resource{
+		ID:   "vm:source:db",
+		Type: unified.ResourceTypeVM,
+		Name: "db",
+		Proxmox: &unified.ProxmoxData{
+			NodeName: "delly",
+			VMID:     101,
+		},
+	})
+
+	if target != nil {
+		t.Fatalf("expected no discovery target without linked agent, got %+v", target)
 	}
 }
 

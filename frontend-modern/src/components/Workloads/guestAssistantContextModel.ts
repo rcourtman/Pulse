@@ -41,5 +41,6 @@ export const buildGuestAssistantContext = (guest: WorkloadGuest): AIChatContext 
     parentName: guest.node,
     primaryIdentity: guest.id,
     discoveryTarget,
+    discoveryReadiness: guest.discoveryReadiness,
   });
 };

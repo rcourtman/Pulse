@@ -12,9 +12,11 @@ import { getContainerRuntimeBadgeForRuntime } from '@/utils/resourceBadgePresent
 import {
   getCanonicalWorkloadId,
   getWorkloadMetricsKind,
+  hasDiscoverySupportForWorkload,
   isDockerManagedAppContainer,
   resolveWorkloadType,
 } from '@/utils/workloads';
+import { getDiscoveryReadinessPresentation } from '@/utils/resourceDiscoveryReadiness';
 import { getWorkloadTypeBadge } from '@/components/shared/workloadTypeBadges';
 
 import {
@@ -92,6 +94,12 @@ export function useGuestRowState(props: GuestRowProps) {
   const namespace = createMemo(() => props.guest.namespace?.trim() ?? '');
   const contextLabel = createMemo(() => props.guest.contextLabel?.trim() ?? '');
   const clusterName = createMemo(() => props.guest.clusterName?.trim() ?? '');
+  const discoveryReadinessPresentation = createMemo(() =>
+    getDiscoveryReadinessPresentation(
+      props.guest.discoveryReadiness,
+      hasDiscoverySupportForWorkload(props.guest),
+    ),
+  );
   const isPveWorkload = createMemo(() => {
     const type = workloadType();
     return type === 'vm' || type === 'system-container';
@@ -275,6 +283,7 @@ export function useGuestRowState(props: GuestRowProps) {
     diskAnomaly,
     diskIOEmphasis,
     diskPercent,
+    discoveryReadinessPresentation,
     diskRead,
     diskThresholds,
     diskWrite,

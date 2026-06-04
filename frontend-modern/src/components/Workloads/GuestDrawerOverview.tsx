@@ -4,8 +4,10 @@ import { TerminalSquare } from 'lucide-solid';
 import { formatDiscoveryAge } from '@/api/discovery';
 import { buildInfrastructureOnboardingPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { DiscoveryProvenanceMarker } from '@/components/shared/DiscoveryProvenanceMarker';
+import { DiscoveryReadinessBadge } from '@/components/shared/DiscoveryReadinessBadge';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import type { DiscoveryIdentifiedSummary } from '@/utils/discoveryPresentation';
+import type { DiscoveryReadinessPresentation } from '@/utils/resourceDiscoveryReadiness';
 import { formatBytes, formatUptime } from '@/utils/format';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 
@@ -14,6 +16,7 @@ import { getGuestDrawerMemoryRows, isGuestDrawerVM } from './guestDrawerModel';
 import {
   IN_GUEST_AGENT_INSTALL_ACTION_LABEL,
   IN_GUEST_AGENT_INSTALL_TITLE,
+  WORKLOAD_ACTION_AGENT_LABEL,
 } from './workloadAgentReadiness';
 
 import type { GuestDrawerProps } from './guestDrawerModel';
@@ -28,6 +31,7 @@ interface GuestDrawerOverviewProps {
   hasFilesystemDetails: boolean;
   hasNetworkInterfaces: boolean;
   hasOsInfo: boolean;
+  hasWorkloadActionAgent: boolean;
   showInGuestAgentInstallCue: boolean;
   ipAddresses: string[];
   networkInterfaces: NonNullable<GuestDrawerProps['guest']['networkInterfaces']>;
@@ -41,7 +45,9 @@ interface GuestDrawerOverviewProps {
   } | null;
   diskThresholds?: MetricDisplayThresholds | null;
   discoveryIdentifiedSummary?: DiscoveryIdentifiedSummary | null;
+  discoveryReadinessPresentation?: DiscoveryReadinessPresentation | null;
   webInterfaceTargetLabel: string;
+  workloadActionAgentTitle: string;
 }
 
 export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
@@ -126,6 +132,29 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
             </div>
           )}
         </Show>
+        <Show when={props.discoveryReadinessPresentation}>
+          {(presentation) => (
+            <div class="rounded border border-border bg-surface p-3 shadow-sm">
+              <div class="flex items-center justify-between gap-2 mb-2">
+                <h3 class="truncate text-[11px] font-medium uppercase tracking-wide text-base-content">
+                  AI Context
+                </h3>
+                <DiscoveryReadinessBadge presentation={presentation()} compact />
+              </div>
+              <div class="space-y-1.5 text-[11px]">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-muted">Discovery</span>
+                  <span class="font-medium text-base-content truncate ml-2">
+                    {presentation().shortLabel}
+                  </span>
+                </div>
+                <Show when={presentation().detail}>
+                  <p class="text-[10px] leading-4 text-muted">{presentation().detail}</p>
+                </Show>
+              </div>
+            </div>
+          )}
+        </Show>
         <div class="rounded border border-border bg-surface p-3 shadow-sm">
           <h3 class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
             System
@@ -153,15 +182,26 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
             </Show>
             <Show when={props.hasAgentInfo}>
               <div class="flex items-center justify-between">
-                <span class="text-muted">Agent</span>
+                <span class="text-muted">Guest agent</span>
                 <span class="font-medium text-base-content truncate ml-2" title={props.agentTitle}>
                   {props.agentLabel}
                 </span>
               </div>
             </Show>
+            <Show when={props.hasWorkloadActionAgent}>
+              <div class="flex items-center justify-between">
+                <span class="text-muted">Actions</span>
+                <span
+                  class="font-medium text-base-content truncate ml-2"
+                  title={props.workloadActionAgentTitle}
+                >
+                  {WORKLOAD_ACTION_AGENT_LABEL}
+                </span>
+              </div>
+            </Show>
             <Show when={props.showInGuestAgentInstallCue}>
               <div class="flex items-center justify-between gap-2">
-                <span class="text-muted">Agent</span>
+                <span class="text-muted">Actions</span>
                 <a
                   href={buildInfrastructureOnboardingPath('agent')}
                   class="inline-flex items-center gap-1 text-right text-[11px] font-semibold text-amber-700 underline-offset-2 hover:underline dark:text-amber-300"

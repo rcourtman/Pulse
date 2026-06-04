@@ -76,6 +76,39 @@ func (p *countingApprovalsProvider) PendingApprovalCountsByResource(orgID string
 	return p.staticApprovalsProvider.PendingApprovalCountsByResource(orgID)
 }
 
+type staticResourceDiscoveryReadinessProvider struct {
+	byResource map[string]unified.ResourceDiscoveryReadiness
+}
+
+func (p staticResourceDiscoveryReadinessProvider) DiscoveryReadinessForResource(resource unified.Resource, now time.Time) unified.ResourceDiscoveryReadiness {
+	if readiness, ok := p.byResource[unified.CanonicalResourceID(resource.ID)]; ok {
+		if readiness.GeneratedAt.IsZero() {
+			readiness.GeneratedAt = now
+		}
+		if readiness.ResourceType == "" && resource.DiscoveryTarget != nil {
+			readiness.ResourceType = resource.DiscoveryTarget.ResourceType
+		}
+		if readiness.TargetID == "" && resource.DiscoveryTarget != nil {
+			readiness.TargetID = resource.DiscoveryTarget.AgentID
+		}
+		if readiness.ResourceID == "" && resource.DiscoveryTarget != nil {
+			readiness.ResourceID = resource.DiscoveryTarget.ResourceID
+		}
+		return readiness
+	}
+	readiness := unified.ResourceDiscoveryReadiness{
+		State:       unified.ResourceDiscoveryReadinessMissing,
+		Source:      "service-discovery",
+		GeneratedAt: now,
+	}
+	if resource.DiscoveryTarget != nil {
+		readiness.ResourceType = resource.DiscoveryTarget.ResourceType
+		readiness.TargetID = resource.DiscoveryTarget.AgentID
+		readiness.ResourceID = resource.DiscoveryTarget.ResourceID
+	}
+	return readiness
+}
+
 // agentContextFixtureHandlers wires a ResourceHandlers around a
 // pre-built unified-resource seed (using the same
 // `resourceUnifiedSeedProvider` pattern from resources_test.go) plus
@@ -231,6 +264,75 @@ func TestHandleAgentResourceContext_BundlesIdentityOperatorStateAndFindings(t *t
 	}
 }
 
+func TestHandleAgentResourceContext_IncludesDiscoveryReadiness(t *testing.T) {
+	observedAt := time.Date(2026, 6, 4, 10, 30, 0, 0, time.UTC)
+	resourceID := "vm:node-a:101"
+	h, _ := agentContextFixtureHandlersForResource(t, unified.Resource{
+		ID:        resourceID,
+		Type:      unified.ResourceTypeVM,
+		Name:      "homeassistant",
+		Status:    unified.StatusOnline,
+		LastSeen:  observedAt,
+		UpdatedAt: observedAt,
+		Proxmox: &unified.ProxmoxData{
+			NodeName:      "node-a",
+			VMID:          101,
+			LinkedAgentID: "agent-a",
+		},
+	})
+	h.resources.SetDiscoveryReadinessProvider(staticResourceDiscoveryReadinessProvider{
+		byResource: map[string]unified.ResourceDiscoveryReadiness{
+			resourceID: {
+				State:             unified.ResourceDiscoveryReadinessFresh,
+				Source:            "service-discovery",
+				ObservedAt:        &observedAt,
+				AgeSeconds:        120,
+				StaleAfterSeconds: int64((30 * 24 * time.Hour).Seconds()),
+				FactCount:         7,
+				ServiceName:       "Home Assistant",
+				ServiceCategory:   "home_automation",
+				Confidence:        0.91,
+			},
+		},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/resource-context/"+resourceID, nil)
+	h.HandleResourceContext(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200; got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var bundle AgentResourceContext
+	if err := json.Unmarshal(rec.Body.Bytes(), &bundle); err != nil {
+		t.Fatalf("unmarshal bundle: %v", err)
+	}
+	if bundle.DiscoveryReadiness == nil || bundle.DiscoveryReadiness.State != unified.ResourceDiscoveryReadinessFresh {
+		t.Fatalf("discovery readiness = %+v, want fresh", bundle.DiscoveryReadiness)
+	}
+
+	runtimeSection, ok := findAgentContextSection(bundle.ContextSections, "runtime")
+	if !ok {
+		t.Fatal("runtime section missing")
+	}
+	readinessFact, ok := findAgentContextFact(runtimeSection, "Discovery readiness")
+	if !ok {
+		t.Fatal("Discovery readiness fact missing")
+	}
+	if !strings.Contains(readinessFact.Value, "fresh") || !strings.Contains(readinessFact.Value, "staleAfter=") {
+		t.Fatalf("readiness fact value = %q", readinessFact.Value)
+	}
+	if readinessFact.Source != "service-discovery" || readinessFact.TrustTier != "pulse-authored" {
+		t.Fatalf("readiness fact provenance = source %q trust %q", readinessFact.Source, readinessFact.TrustTier)
+	}
+	serviceFact, ok := findAgentContextFact(runtimeSection, "Discovered service")
+	if !ok || serviceFact.TrustTier != "discovered" {
+		t.Fatalf("discovered service fact = %+v", serviceFact)
+	}
+	if serviceFact.Value != "Home Assistant" && serviceFact.Value != unified.ResourcePolicyRedactedLabel {
+		t.Fatalf("discovered service value = %q, want service name or policy redaction", serviceFact.Value)
+	}
+}
+
 func TestHandleAgentResourceContext_ResolvesSourceIDReference(t *testing.T) {
 	h, _ := agentContextFixtureHandlersForResource(t, unified.Resource{
 		ID:         "system-container-6adaf34f529d241a",
@@ -270,6 +372,81 @@ func TestHandleAgentResourceContext_ResolvesSourceIDReference(t *testing.T) {
 	}
 	if bundle.ResourceName != "homeassistant" || bundle.ResourceType != "system-container" {
 		t.Fatalf("bundle resource = %s/%s, want homeassistant/system-container", bundle.ResourceName, bundle.ResourceType)
+	}
+}
+
+func TestHandleAgentResourceContext_UsesLinkedNodeAgentForProxmoxGuestDiscovery(t *testing.T) {
+	parentID := "agent-delly"
+	resources := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	resources.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: time.Now()},
+		resources: []unified.Resource{
+			{
+				ID:     parentID,
+				Type:   unified.ResourceTypeAgent,
+				Name:   "delly",
+				Status: unified.StatusOnline,
+				Sources: []unified.DataSource{
+					unified.SourceAgent,
+				},
+				Agent: &unified.AgentData{
+					AgentID:  "agent-delly",
+					Hostname: "delly",
+				},
+			},
+			{
+				ID:       "system-container-homeassistant",
+				Type:     unified.ResourceTypeSystemContainer,
+				Name:     "homeassistant",
+				Status:   unified.StatusOnline,
+				ParentID: &parentID,
+				Sources: []unified.DataSource{
+					unified.SourceProxmox,
+				},
+				Proxmox: &unified.ProxmoxData{
+					SourceID:      "delly:delly:101",
+					NodeName:      "delly",
+					Instance:      "delly",
+					VMID:          101,
+					ContainerType: "lxc",
+				},
+			},
+		},
+	})
+	resources.SetDiscoveryReadinessProvider(staticResourceDiscoveryReadinessProvider{})
+	h := NewAgentContextHandler(resources)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/resource-context/delly:delly:101", nil)
+	h.HandleResourceContext(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200; got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var bundle AgentResourceContext
+	if err := json.Unmarshal(rec.Body.Bytes(), &bundle); err != nil {
+		t.Fatalf("unmarshal bundle: %v", err)
+	}
+	if bundle.CanonicalID != "system-container-homeassistant" {
+		t.Fatalf("canonical id = %q, want system-container-homeassistant", bundle.CanonicalID)
+	}
+	if bundle.DiscoveryReadiness == nil {
+		t.Fatal("expected discovery readiness in context bundle")
+	}
+	if bundle.DiscoveryReadiness.State != unified.ResourceDiscoveryReadinessMissing {
+		t.Fatalf("readiness state = %q, want missing", bundle.DiscoveryReadiness.State)
+	}
+	if bundle.DiscoveryReadiness.ResourceType != "system-container" ||
+		bundle.DiscoveryReadiness.TargetID != "agent-delly" ||
+		bundle.DiscoveryReadiness.ResourceID != "101" {
+		t.Fatalf("readiness target mismatch: %+v", bundle.DiscoveryReadiness)
+	}
+	runtime, ok := findAgentContextSection(bundle.ContextSections, "runtime")
+	if !ok {
+		t.Fatalf("expected runtime section in context bundle: %+v", bundle.ContextSections)
+	}
+	if _, ok := findAgentContextFact(runtime, "Discovery readiness"); !ok {
+		t.Fatalf("runtime section must include discovery readiness fact: %+v", runtime.Facts)
 	}
 }
 

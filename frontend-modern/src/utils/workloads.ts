@@ -235,15 +235,6 @@ export const resolveDiscoveryTargetForWorkload = (
     const resourceId = (match?.[1] || rawId).trim();
     return agentId && resourceId ? { resourceType: 'pod', agentId, resourceId } : null;
   }
-  if (
-    (type === 'vm' || type === 'system-container') &&
-    Number.isFinite(guest.vmid) &&
-    guest.vmid > 0
-  ) {
-    const agentId = (guest.node || '').trim();
-    const resourceId = String(guest.vmid);
-    return agentId ? { resourceType: type, agentId, resourceId } : null;
-  }
   return null;
 };
 

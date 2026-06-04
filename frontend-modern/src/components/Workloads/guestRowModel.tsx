@@ -1,4 +1,5 @@
 import type { JSX } from 'solid-js';
+import BrainCircuitIcon from 'lucide-solid/icons/brain-circuit';
 
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import type { SummaryGroupMemberInteractionState } from '@/components/shared/summaryCardInteraction';
@@ -36,6 +37,7 @@ const WORKLOAD_COLUMN_MIN_LAYOUT: Record<string, WorkloadTableLayoutMode> = {
   image: 'compact',
   namespace: 'compact',
   context: 'compact',
+  aiContext: 'compact',
   update: 'compact',
   ip: 'wide',
   node: 'wide',
@@ -291,6 +293,16 @@ export const GUEST_COLUMNS: ColumnDef[] = [
     kind: 'text',
   },
   {
+    id: 'aiContext',
+    label: 'AI Context',
+    icon: <BrainCircuitIcon class="w-3.5 h-3.5 block" aria-hidden="true" />,
+    width: '92px',
+    minWidth: '84px',
+    toggleable: true,
+    defaultHidden: true,
+    kind: 'badge',
+  },
+  {
     id: 'backup',
     label: 'Backup',
     icon: (
@@ -399,6 +411,7 @@ const GUEST_COLUMN_RESPONSIVE_WEIGHTS: Record<
     image: 18,
     namespace: 11,
     context: 13,
+    aiContext: 9,
     update: 10,
   },
 };
@@ -505,6 +518,7 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
     'uptime',
     'node',
     'backup',
+    'aiContext',
     'tags',
     'os',
     'diskIo',
@@ -520,6 +534,7 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
     'uptime',
     'node',
     'backup',
+    'aiContext',
     'tags',
     'os',
     'diskIo',
@@ -535,6 +550,7 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
     'uptime',
     'node',
     'backup',
+    'aiContext',
     'tags',
     'os',
     'diskIo',
@@ -556,6 +572,7 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
     'os',
     'image',
     'context',
+    'aiContext',
     'update',
     'diskIo',
     'netIo',
@@ -569,10 +586,11 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
     'uptime',
     'image',
     'context',
+    'aiContext',
     'tags',
     'update',
     'diskIo',
     'netIo',
   ]),
-  pod: new Set(['name', 'cpu', 'memory', 'image', 'namespace', 'context']),
+  pod: new Set(['name', 'cpu', 'memory', 'image', 'namespace', 'context', 'aiContext']),
 };

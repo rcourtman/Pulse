@@ -142,6 +142,25 @@ function makeGuest(overrides: Partial<WorkloadGuest> = {}): WorkloadGuest {
   } as WorkloadGuest;
 }
 
+function makeGuestWithDiscoveryTarget(overrides: Partial<WorkloadGuest> = {}): WorkloadGuest {
+  return makeGuest({
+    discoveryTarget: {
+      resourceType: 'vm',
+      agentId: 'agent-node1',
+      resourceId: '100',
+    },
+    ...overrides,
+  });
+}
+
+function getDiscoveryPanel(): HTMLElement {
+  const panel = screen.getByTestId('discovery-tab').closest('[style*="overflow-anchor"]');
+  if (!(panel instanceof HTMLElement)) {
+    throw new Error('Discovery tab panel not found');
+  }
+  return panel;
+}
+
 const makeHistoryPoints = (base: number) => [
   { timestamp: 1, value: base, min: base, max: base },
   { timestamp: 2, value: base + 5, min: base + 5, max: base + 5 },
@@ -194,6 +213,11 @@ describe('GuestDrawer', () => {
         workloadType: 'system-container',
         platformType: 'proxmox',
         status: 'running',
+        discoveryTarget: {
+          resourceType: 'system-container',
+          agentId: 'agent-pve-a',
+          resourceId: '101',
+        },
       });
 
       render(() => <GuestDrawer guest={guest} onClose={vi.fn()} />);
@@ -274,10 +298,10 @@ describe('GuestDrawer', () => {
 
   describe('tab switching', () => {
     it('renders Overview and Discovery tabs', () => {
-      render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
-      expect(screen.getByText('Overview')).toBeInTheDocument();
-      expect(screen.getByText('History')).toBeInTheDocument();
-      expect(screen.getByText('Discovery')).toBeInTheDocument();
+      render(() => <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />);
+      expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'History' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Discovery' })).toBeInTheDocument();
     });
 
     it('hides Discovery when the workload has no canonical discovery target', () => {
@@ -302,7 +326,9 @@ describe('GuestDrawer', () => {
     });
 
     it('starts on the Overview tab (discovery content hidden)', () => {
-      const { container } = render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
+      const { container } = render(() => (
+        <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />
+      ));
       const panels = container.querySelectorAll('[style*="overflow-anchor"]');
       expect(panels[0]).not.toHaveClass('hidden');
       expect(panels[1]).toHaveClass('hidden');
@@ -331,7 +357,7 @@ describe('GuestDrawer', () => {
         suggested_url_source_detail: 'detected 3000/tcp',
       } as unknown as import('@/types/discovery').ResourceDiscovery);
 
-      render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
+      render(() => <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />);
 
       await waitFor(() => {
         expect(screen.getByText('Identified Service')).toBeInTheDocument();
@@ -349,7 +375,7 @@ describe('GuestDrawer', () => {
 
     it('hides the Identified Service card when the discovery record is null or empty', async () => {
       discoveryApiMocks.getDiscovery.mockResolvedValueOnce(null);
-      render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
+      render(() => <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />);
       await waitFor(() => {
         expect(discoveryApiMocks.getDiscovery).toHaveBeenCalled();
       });
@@ -394,7 +420,7 @@ describe('GuestDrawer', () => {
         suggested_url_diagnostic: 'no host or IP candidate available',
       } as unknown as import('@/types/discovery').ResourceDiscovery);
 
-      render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
+      render(() => <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />);
 
       await waitFor(() => {
         expect(discoveryApiMocks.getDiscovery).toHaveBeenCalled();
@@ -410,22 +436,24 @@ describe('GuestDrawer', () => {
 
       render(() => (
         <Suspense fallback={<div data-testid="parent-suspense-fallback">Loading page</div>}>
-          <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />
+          <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />
         </Suspense>
       ));
 
       expect(screen.queryByTestId('parent-suspense-fallback')).toBeNull();
       expect(screen.getByText('Overview')).toBeInTheDocument();
       expect(screen.getByText('History')).toBeInTheDocument();
-      expect(screen.getByText('Discovery')).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Discovery' })).toBeInTheDocument();
     });
 
     it('switches to Discovery tab on click', async () => {
-      const { container } = render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
-      await fireEvent.click(screen.getByText('Discovery'));
+      const { container } = render(() => (
+        <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />
+      ));
+      await fireEvent.click(screen.getByRole('tab', { name: 'Discovery' }));
       const panels = container.querySelectorAll('[style*="overflow-anchor"]');
       expect(panels[0]).toHaveClass('hidden');
-      expect(panels[1]).not.toHaveClass('hidden');
+      expect(getDiscoveryPanel()).not.toHaveClass('hidden');
     });
 
     it('renders persistent metric charts on the History tab', async () => {
@@ -504,12 +532,14 @@ describe('GuestDrawer', () => {
     });
 
     it('switches back to Overview tab', async () => {
-      const { container } = render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
-      await fireEvent.click(screen.getByText('Discovery'));
-      await fireEvent.click(screen.getByText('Overview'));
+      const { container } = render(() => (
+        <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />
+      ));
+      await fireEvent.click(screen.getByRole('tab', { name: 'Discovery' }));
+      await fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
       const panels = container.querySelectorAll('[style*="overflow-anchor"]');
       expect(panels[0]).not.toHaveClass('hidden');
-      expect(panels[1]).toHaveClass('hidden');
+      expect(getDiscoveryPanel()).toHaveClass('hidden');
     });
   });
 
@@ -548,7 +578,7 @@ describe('GuestDrawer', () => {
       render(() => (
         <GuestDrawer guest={makeGuest({ agentVersion: '5.2.0', type: 'qemu' })} onClose={vi.fn()} />
       ));
-      expect(screen.getByText('Agent')).toBeInTheDocument();
+      expect(screen.getByText('Guest agent')).toBeInTheDocument();
       expect(screen.getByText('QEMU 5.2.0')).toBeInTheDocument();
     });
 
@@ -556,7 +586,7 @@ describe('GuestDrawer', () => {
       render(() => (
         <GuestDrawer guest={makeGuest({ agentVersion: '1.0.0', type: 'lxc' })} onClose={vi.fn()} />
       ));
-      expect(screen.getByText('Agent')).toBeInTheDocument();
+      expect(screen.getByText('Guest agent')).toBeInTheDocument();
       expect(screen.getByText('1.0.0')).toBeInTheDocument();
     });
 
@@ -564,11 +594,37 @@ describe('GuestDrawer', () => {
       render(() => (
         <GuestDrawer guest={makeGuest({ agentVersion: undefined })} onClose={vi.fn()} />
       ));
-      expect(screen.getByText('Agent')).toBeInTheDocument();
+      expect(screen.getByText('Actions')).toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'Add agent for AI actions' })).toHaveAttribute(
         'href',
         '/settings/infrastructure?add=agent',
       );
+    });
+
+    it('shows connected node agent actions when the workload has an explicit action target', () => {
+      render(() => (
+        <GuestDrawer
+          guest={makeGuest({
+            agentVersion: undefined,
+            node: 'delly',
+            type: 'lxc',
+            workloadType: 'system-container',
+            discoveryTarget: {
+              resourceType: 'system-container',
+              agentId: 'agent-delly',
+              resourceId: '124',
+            },
+          })}
+          onClose={vi.fn()}
+        />
+      ));
+
+      expect(screen.getByText('Actions')).toBeInTheDocument();
+      expect(screen.getByText('Node agent connected')).toHaveAttribute(
+        'title',
+        'Discovery and governed actions use the Pulse Agent connected to delly.',
+      );
+      expect(screen.queryByRole('link', { name: 'Add agent for AI actions' })).toBeNull();
     });
 
     it('hides agent guidance for app containers without an in-guest agent target', () => {
@@ -582,7 +638,8 @@ describe('GuestDrawer', () => {
           onClose={vi.fn()}
         />
       ));
-      expect(screen.queryByText('Agent')).not.toBeInTheDocument();
+      expect(screen.queryByText('Guest agent')).not.toBeInTheDocument();
+      expect(screen.queryByText('Actions')).not.toBeInTheDocument();
     });
 
     it('hides agent guidance when the parent node is offline', () => {
@@ -950,14 +1007,33 @@ describe('GuestDrawer', () => {
     it('passes correct resourceType and agentId for VM', () => {
       render(() => (
         <GuestDrawer
-          guest={makeGuest({ type: 'qemu', node: 'pve1', vmid: 101 })}
+          guest={makeGuest({
+            type: 'qemu',
+            node: 'pve1',
+            vmid: 101,
+            discoveryTarget: {
+              resourceType: 'vm',
+              agentId: 'agent-pve1',
+              resourceId: '101',
+            },
+          })}
           onClose={vi.fn()}
         />
       ));
       expect(screen.getByTestId('disc-resource-type').textContent).toBe('vm');
-      expect(screen.getByTestId('disc-agent-id').textContent).toBe('pve1');
+      expect(screen.getByTestId('disc-agent-id').textContent).toBe('agent-pve1');
       expect(screen.getByTestId('disc-resource-id').textContent).toBe('101');
       expect(screen.getByTestId('disc-manual-run-action').textContent).toBe('true');
+    });
+
+    it('does not infer a Proxmox workload discovery target from the node name', () => {
+      render(() => (
+        <GuestDrawer
+          guest={makeGuest({ type: 'qemu', node: 'pve1', vmid: 101 })}
+          onClose={vi.fn()}
+        />
+      ));
+      expect(screen.queryByTestId('discovery-tab')).toBeNull();
     });
 
     it('passes correct resourceType and agentId for app-container', () => {
@@ -1017,7 +1093,7 @@ describe('GuestDrawer', () => {
           onClose={vi.fn()}
         />
       ));
-      expect(screen.getByText('Discovery')).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Discovery' })).toBeInTheDocument();
       expect(screen.getByTestId('disc-resource-type').textContent).toBe('app-container');
       expect(screen.getByTestId('disc-agent-id').textContent).toBe('truenas-helper');
       expect(screen.getByTestId('disc-resource-id').textContent).toBe('nextcloud');
@@ -1042,12 +1118,21 @@ describe('GuestDrawer', () => {
     it('passes system-container as resourceType for LXC', () => {
       render(() => (
         <GuestDrawer
-          guest={makeGuest({ type: 'lxc', node: 'pve2', vmid: 200 })}
+          guest={makeGuest({
+            type: 'lxc',
+            node: 'pve2',
+            vmid: 200,
+            discoveryTarget: {
+              resourceType: 'system-container',
+              agentId: 'agent-pve2',
+              resourceId: '200',
+            },
+          })}
           onClose={vi.fn()}
         />
       ));
       expect(screen.getByTestId('disc-resource-type').textContent).toBe('system-container');
-      expect(screen.getByTestId('disc-agent-id').textContent).toBe('pve2');
+      expect(screen.getByTestId('disc-agent-id').textContent).toBe('agent-pve2');
       expect(screen.getByTestId('disc-resource-id').textContent).toBe('200');
     });
   });

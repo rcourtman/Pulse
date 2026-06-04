@@ -218,6 +218,30 @@ func TestNoDirectStateAccessForMigratedResources(t *testing.T) {
 	}
 }
 
+func TestProxmoxWorkloadActionTargetsStayBackendAuthored(t *testing.T) {
+	apiSource, err := os.ReadFile(filepath.Join("..", "api", "resources.go"))
+	if err != nil {
+		t.Fatalf("read api resources source: %v", err)
+	}
+	api := string(apiSource)
+	if !strings.Contains(api, "hostID := proxmoxLinkedAgentID(resource.Proxmox)") {
+		t.Fatal("Proxmox workload discovery targets must use the linked node agent ID")
+	}
+	if strings.Contains(api, "hostID := strings.TrimSpace(resource.Proxmox.NodeName)") {
+		t.Fatal("Proxmox workload discovery targets must not use node display names as agent IDs")
+	}
+
+	frontendSource, err := os.ReadFile(filepath.Join("..", "..", "frontend-modern", "src", "utils", "workloads.ts"))
+	if err != nil {
+		t.Fatalf("read frontend workload source: %v", err)
+	}
+	frontend := string(frontendSource)
+	if strings.Contains(frontend, "const agentId = (guest.node || '').trim();") &&
+		strings.Contains(frontend, "const resourceId = String(guest.vmid);") {
+		t.Fatal("frontend workload mapping must not infer Proxmox action targets from node plus VMID")
+	}
+}
+
 func TestDockerSwarmEvidenceGuardStaysInAdapter(t *testing.T) {
 	data, err := os.ReadFile("adapters.go")
 	if err != nil {

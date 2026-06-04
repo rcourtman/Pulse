@@ -164,6 +164,12 @@ controls as normal product settings.
     must keep normal API auth, resource-policy redaction, and inside-guest
     runtime collection limits intact rather than expanding what collectors are
     allowed to gather.
+11. Change Agent context, discovery-readiness, or action-related route wiring
+    through `internal/api/router.go` without weakening the existing
+    `RequireAuth` and scope checks, resource-policy redaction pass, or
+    read-only Agent-context boundary. Router glue may connect providers, but
+    it must not become an alternate command path, raw provider-command path,
+    config path, environment path, or secret-bearing metadata path.
 
 ## Forbidden Paths
 

@@ -295,8 +295,25 @@ describe('getDiscoveryResourceTypeForWorkload', () => {
       type: 'vm',
       node: 'pve1',
       vmid: 101,
+      discoveryTarget: {
+        resourceType: 'vm' as const,
+        agentId: 'agent-pve1',
+        resourceId: '101',
+      },
     };
     expect(getDiscoveryResourceTypeForWorkload(guest)).toBe('vm');
+  });
+
+  it('does not infer Proxmox workload discovery ownership from the node name', () => {
+    const guest = {
+      id: 'vm:pve1:101',
+      instance: 'cluster-a',
+      workloadType: 'vm' as const,
+      type: 'vm',
+      node: 'pve1',
+      vmid: 101,
+    };
+    expect(getDiscoveryResourceTypeForWorkload(guest)).toBeNull();
   });
 
   it('returns the canonical discovery resource type for Docker-managed app-container workloads', () => {

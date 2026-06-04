@@ -14,6 +14,7 @@ import {
   getDiscoveryIdentifiedSummary,
   getDiscoveryLoadingState,
 } from '@/utils/discoveryPresentation';
+import { getDiscoveryReadinessPresentation } from '@/utils/resourceDiscoveryReadiness';
 import type { DisplayMetricType } from '@/utils/metricThresholds';
 import {
   getCanonicalWorkloadId,
@@ -42,7 +43,11 @@ import {
   type GuestDrawerTab,
 } from './guestDrawerModel';
 import { buildGuestAssistantContext } from './guestAssistantContextModel';
-import { shouldShowInGuestAgentInstallCue } from './workloadAgentReadiness';
+import {
+  getWorkloadActionAgentTitle,
+  hasExplicitWorkloadActionAgent,
+  shouldShowInGuestAgentInstallCue,
+} from './workloadAgentReadiness';
 
 interface GuestDiscoverySourceKey {
   type: DiscoveryResourceType;
@@ -85,6 +90,8 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
   const agentLabel = createMemo(() => getGuestDrawerAgentLabel(props.guest));
   const agentTitle = createMemo(() => getGuestDrawerAgentTitle(props.guest));
   const hasAgentInfo = createMemo(() => agentLabel().length > 0);
+  const hasWorkloadActionAgent = createMemo(() => hasExplicitWorkloadActionAgent(props.guest));
+  const workloadActionAgentTitle = createMemo(() => getWorkloadActionAgentTitle(props.guest));
   const showInGuestAgentInstallCue = createMemo(() =>
     shouldShowInGuestAgentInstallCue(props.guest, props.parentNodeOnline !== false),
   );
@@ -134,6 +141,9 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
   });
   const discoveryIdentifiedSummary = createMemo(() =>
     getDiscoveryIdentifiedSummary(discoveryRecord.value()),
+  );
+  const discoveryReadinessPresentation = createMemo(() =>
+    getDiscoveryReadinessPresentation(props.guest.discoveryReadiness, hasDiscoverySupport()),
   );
 
   const switchTab = (tab: GuestDrawerTab) => {
@@ -187,6 +197,7 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
     agentContextCopied,
     discoveryAgentId,
     discoveryIdentifiedSummary,
+    discoveryReadinessPresentation,
     discoveryLoadingState: getDiscoveryLoadingState(),
     discoveryResourceId,
     discoveryResourceType,
@@ -199,6 +210,7 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
     hasHistorySupport,
     hasNetworkInterfaces,
     hasOsInfo,
+    hasWorkloadActionAgent,
     historyTarget,
     historyRange,
     ipAddresses,
@@ -207,6 +219,7 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
     osName,
     osVersion,
     showInGuestAgentInstallCue,
+    workloadActionAgentTitle,
     assistantAvailable,
     openAssistantForGuest,
     copyAgentContext,

@@ -4,6 +4,7 @@ import MessageSquareIcon from 'lucide-solid/icons/message-square';
 import XIcon from 'lucide-solid/icons/x';
 import { DiscoveryTab } from '../Discovery/DiscoveryTab';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
+import { DiscoveryReadinessBadge } from '@/components/shared/DiscoveryReadinessBadge';
 import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { getGuestDrawerHistoryFallbackMetrics, type GuestDrawerProps } from './guestDrawerModel';
@@ -22,6 +23,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     discoveryAgentId,
     discoveryIdentifiedSummary,
     discoveryLoadingState,
+    discoveryReadinessPresentation,
     discoveryResourceId,
     discoveryResourceType,
     diskThresholds,
@@ -32,6 +34,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     hasHistorySupport,
     hasNetworkInterfaces,
     hasOsInfo,
+    hasWorkloadActionAgent,
     historyRange,
     historyTarget,
     ipAddresses,
@@ -45,6 +48,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     showInGuestAgentInstallCue,
     switchTab,
     webInterfaceTargetLabel,
+    workloadActionAgentTitle,
   } = useGuestDrawerState(props);
   const headingId = () => `guest-drawer-heading-${guestId()}`;
   const historyFallbackMetrics = createMemo(() =>
@@ -96,6 +100,16 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
           </button>
         </div>
       </div>
+      <Show when={discoveryReadinessPresentation()}>
+        {(presentation) => (
+          <div class="flex items-center gap-2 text-xs text-muted">
+            <DiscoveryReadinessBadge presentation={presentation()} />
+            <span class="truncate" title={presentation().detail || presentation().title}>
+              {presentation().detail || presentation().statusLabel}
+            </span>
+          </div>
+        )}
+      </Show>
       <Subtabs
         class="mb-1"
         ariaLabel="Guest drawer sections"
@@ -138,8 +152,11 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
           backupPresentation={backupPresentation()}
           diskThresholds={diskThresholds()}
           discoveryIdentifiedSummary={discoveryIdentifiedSummary()}
+          discoveryReadinessPresentation={discoveryReadinessPresentation()}
+          hasWorkloadActionAgent={hasWorkloadActionAgent()}
           showInGuestAgentInstallCue={showInGuestAgentInstallCue()}
           webInterfaceTargetLabel={webInterfaceTargetLabel()}
+          workloadActionAgentTitle={workloadActionAgentTitle()}
         />
       </div>
 

@@ -1635,6 +1635,9 @@ func TestResourceRegistry_IngestSnapshotParentsClusterNamedProxmoxGuestsToMerged
 	if vms[0].ParentName == "" {
 		t.Fatal("expected vm parent name to be derived")
 	}
+	if vms[0].Proxmox == nil || vms[0].Proxmox.LinkedAgentID != "host-1" {
+		t.Fatalf("expected vm linked agent host-1, got %+v", vms[0].Proxmox)
+	}
 
 	containers := rr.ListByType(ResourceTypeSystemContainer)
 	if len(containers) != 1 {
@@ -1643,6 +1646,9 @@ func TestResourceRegistry_IngestSnapshotParentsClusterNamedProxmoxGuestsToMerged
 	if containers[0].ParentID == nil || *containers[0].ParentID != parentID {
 		t.Fatalf("expected container parent %q, got %+v", parentID, containers[0].ParentID)
 	}
+	if containers[0].Proxmox == nil || containers[0].Proxmox.LinkedAgentID != "host-1" {
+		t.Fatalf("expected container linked agent host-1, got %+v", containers[0].Proxmox)
+	}
 
 	parent, ok := rr.Get(parentID)
 	if !ok {
@@ -1650,6 +1656,168 @@ func TestResourceRegistry_IngestSnapshotParentsClusterNamedProxmoxGuestsToMerged
 	}
 	if parent.ChildCount != 2 {
 		t.Fatalf("expected parent child count 2, got %d", parent.ChildCount)
+	}
+}
+
+func TestResourceRegistry_ManualNodeMergeRewritesProxmoxGuestParentAndActionAgent(t *testing.T) {
+	store := NewMemoryStore()
+	if err := store.AddLink(ResourceLink{
+		ResourceA: "agent-old-proxmox-node",
+		ResourceB: "agent-current",
+		PrimaryID: "agent-current",
+	}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+	rr := NewRegistry(store)
+	now := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
+	staleParentID := "agent-old-proxmox-node"
+
+	rr.IngestResources([]Resource{
+		{
+			ID:       staleParentID,
+			Type:     ResourceTypeAgent,
+			Name:     "delly",
+			Status:   "online",
+			LastSeen: now,
+			Sources:  []DataSource{SourceProxmox},
+			SourceStatus: map[DataSource]SourceStatus{
+				SourceProxmox: {Status: "online", LastSeen: now},
+			},
+			Proxmox: &ProxmoxData{
+				SourceID:    "homelab-delly",
+				NodeName:    "delly",
+				ClusterName: "homelab",
+				Instance:    "delly",
+			},
+		},
+		{
+			ID:       "agent-current",
+			Type:     ResourceTypeAgent,
+			Name:     "delly",
+			Status:   "online",
+			LastSeen: now,
+			Sources:  []DataSource{SourceAgent},
+			SourceStatus: map[DataSource]SourceStatus{
+				SourceAgent: {Status: "online", LastSeen: now},
+			},
+			Agent: &AgentData{
+				AgentID:  "agent-delly",
+				Hostname: "delly",
+			},
+		},
+		{
+			ID:       "system-container-grafana",
+			Type:     ResourceTypeSystemContainer,
+			Name:     "grafana",
+			Status:   "online",
+			LastSeen: now,
+			ParentID: &staleParentID,
+			Sources:  []DataSource{SourceProxmox},
+			SourceStatus: map[DataSource]SourceStatus{
+				SourceProxmox: {Status: "online", LastSeen: now},
+			},
+			Proxmox: &ProxmoxData{
+				SourceID:    "delly:delly:124",
+				NodeName:    "delly",
+				ClusterName: "homelab",
+				Instance:    "delly",
+				VMID:        124,
+			},
+		},
+	})
+
+	containers := rr.ListByType(ResourceTypeSystemContainer)
+	if len(containers) != 1 {
+		t.Fatalf("expected 1 container, got %d", len(containers))
+	}
+	if containers[0].ParentID == nil || *containers[0].ParentID != "agent-current" {
+		t.Fatalf("expected container parent agent-current, got %+v", containers[0].ParentID)
+	}
+	if containers[0].ParentName != "delly" {
+		t.Fatalf("expected container parent name delly, got %q", containers[0].ParentName)
+	}
+	if containers[0].Proxmox == nil || containers[0].Proxmox.LinkedAgentID != "agent-delly" {
+		t.Fatalf("expected container linked agent agent-delly, got %+v", containers[0].Proxmox)
+	}
+}
+
+func TestResourceRegistry_ProxmoxGuestParentPrefersAgentBackedNodeDuplicate(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
+
+	rr.IngestResources([]Resource{
+		{
+			ID:       "agent-current",
+			Type:     ResourceTypeAgent,
+			Name:     "delly",
+			Status:   "online",
+			LastSeen: now,
+			Sources:  []DataSource{SourceAgent, SourceProxmox},
+			SourceStatus: map[DataSource]SourceStatus{
+				SourceAgent:   {Status: "online", LastSeen: now},
+				SourceProxmox: {Status: "online", LastSeen: now},
+			},
+			Agent: &AgentData{
+				AgentID:  "agent-delly",
+				Hostname: "delly",
+			},
+			Proxmox: &ProxmoxData{
+				SourceID:    "homelab-delly",
+				NodeName:    "delly",
+				ClusterName: "homelab",
+				Instance:    "delly",
+			},
+		},
+		{
+			ID:       "agent-old-proxmox-node",
+			Type:     ResourceTypeAgent,
+			Name:     "delly",
+			Status:   "online",
+			LastSeen: now,
+			Sources:  []DataSource{SourceProxmox},
+			SourceStatus: map[DataSource]SourceStatus{
+				SourceProxmox: {Status: "online", LastSeen: now},
+			},
+			Proxmox: &ProxmoxData{
+				SourceID:    "homelab-delly",
+				NodeName:    "delly",
+				ClusterName: "homelab",
+				Instance:    "delly",
+			},
+		},
+	})
+	rr.IngestRecords(SourceProxmox, []IngestRecord{
+		{
+			SourceID:       "delly:delly:124",
+			ParentSourceID: "homelab-delly",
+			Resource: Resource{
+				Type:     ResourceTypeSystemContainer,
+				Name:     "grafana",
+				Status:   "online",
+				LastSeen: now,
+				Proxmox: &ProxmoxData{
+					SourceID:    "delly:delly:124",
+					NodeName:    "delly",
+					ClusterName: "homelab",
+					Instance:    "delly",
+					VMID:        124,
+				},
+			},
+			Identity: ResourceIdentity{
+				Hostnames: []string{"grafana"},
+			},
+		},
+	})
+
+	containers := rr.ListByType(ResourceTypeSystemContainer)
+	if len(containers) != 1 {
+		t.Fatalf("expected 1 container, got %d", len(containers))
+	}
+	if containers[0].ParentID == nil || *containers[0].ParentID != "agent-current" {
+		t.Fatalf("expected container parent agent-current, got %+v", containers[0].ParentID)
+	}
+	if containers[0].Proxmox == nil || containers[0].Proxmox.LinkedAgentID != "agent-delly" {
+		t.Fatalf("expected container linked agent agent-delly, got %+v", containers[0].Proxmox)
 	}
 }
 

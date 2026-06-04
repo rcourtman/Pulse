@@ -32,6 +32,13 @@ type ResourceHandlers struct {
 	tenantStateProvider TenantStateProvider
 	actionExecutor      ActionExecutor
 	actionCompleted     func(unified.ActionAuditRecord)
+	discoveryReadiness  ResourceDiscoveryReadinessProvider
+}
+
+// ResourceDiscoveryReadinessProvider projects service-discovery state onto a
+// unified resource without coupling the resource API to discovery storage.
+type ResourceDiscoveryReadinessProvider interface {
+	DiscoveryReadinessForResource(resource unified.Resource, now time.Time) unified.ResourceDiscoveryReadiness
 }
 
 type registrySeed struct {
@@ -102,6 +109,12 @@ func (h *ResourceHandlers) SetActionCompletedPublisher(publisher func(unified.Ac
 	h.actionCompleted = publisher
 }
 
+// SetDiscoveryReadinessProvider wires the canonical discovery-readiness
+// projection onto resource responses and Assistant context packs.
+func (h *ResourceHandlers) SetDiscoveryReadinessProvider(provider ResourceDiscoveryReadinessProvider) {
+	h.discoveryReadiness = provider
+}
+
 // SetSupplementalRecordsProvider configures additional records for a source.
 func (h *ResourceHandlers) SetSupplementalRecordsProvider(source unified.DataSource, provider SupplementalRecordsProvider) {
 	h.supplementalMu.Lock()
@@ -148,6 +161,7 @@ func (h *ResourceHandlers) HandleListResources(w http.ResponseWriter, r *http.Re
 
 	paged, meta := paginate(resources, filters.page, filters.limit)
 	attachDiscoveryTargets(paged)
+	h.attachDiscoveryReadinesses(paged, time.Now().UTC())
 	attachMetricsTargets(paged, registry)
 	paged = unified.RefreshCanonicalMetadataSlice(paged)
 	pruneResourcesForListResponse(paged)
@@ -281,6 +295,7 @@ func (h *ResourceHandlers) HandleGetResource(w http.ResponseWriter, r *http.Requ
 
 	resourceCopy := *resource
 	attachDiscoveryTarget(&resourceCopy)
+	h.attachDiscoveryReadiness(&resourceCopy, time.Now().UTC())
 	attachMetricsTarget(&resourceCopy, registry)
 	unified.RefreshCanonicalMetadata(&resourceCopy)
 	resourceCopy.Type = resourceContractType(resourceCopy)
@@ -297,19 +312,28 @@ func presentationResourcesFromRegistry(registry *unified.ResourceRegistry) []uni
 }
 
 func presentationResourceByID(registry *unified.ResourceRegistry, resourceID string) (*unified.Resource, bool) {
-	resourceID = unified.CanonicalResourceID(resourceID)
-	if resourceID == "" || registry == nil {
-		return nil, false
+	resource, _, ok := presentationResourceByReference(registry, resourceID)
+	return resource, ok
+}
+
+func presentationResourceByReference(registry *unified.ResourceRegistry, ref string) (*unified.Resource, string, bool) {
+	ref = unified.CanonicalResourceID(ref)
+	if ref == "" || registry == nil {
+		return nil, "", false
 	}
 
+	rawResource, resolvedID, ok := registry.GetByReference(ref)
+	if !ok {
+		return nil, "", false
+	}
 	for _, resource := range presentationResourcesFromRegistry(registry) {
-		if unified.CanonicalResourceID(resource.ID) == resourceID {
+		if unified.CanonicalResourceID(resource.ID) == resolvedID {
 			resourceCopy := resource
-			return &resourceCopy, true
+			return &resourceCopy, resolvedID, true
 		}
 	}
 
-	return registry.Get(resourceID)
+	return rawResource, resolvedID, true
 }
 
 type resourceFacetCountsResponse = unified.ResourceFacetCounts
@@ -504,6 +528,8 @@ func (h *ResourceHandlers) HandleGetChildren(w http.ResponseWriter, r *http.Requ
 	}
 
 	children := registry.GetChildren(path)
+	attachDiscoveryTargets(children)
+	h.attachDiscoveryReadinesses(children, time.Now().UTC())
 	children = unified.RefreshCanonicalMetadataSlice(children)
 	applyResourceContractTypes(children)
 	w.Header().Set("Content-Type", "application/json")
@@ -2023,7 +2049,29 @@ func attachDiscoveryTarget(resource *unified.Resource) {
 	if resource == nil {
 		return
 	}
-	resource.DiscoveryTarget = buildDiscoveryTarget(*resource)
+	if target := buildDiscoveryTarget(*resource); target != nil {
+		resource.DiscoveryTarget = target
+	}
+}
+
+func (h *ResourceHandlers) attachDiscoveryReadinesses(resources []unified.Resource, now time.Time) {
+	if h == nil || h.discoveryReadiness == nil {
+		return
+	}
+	for i := range resources {
+		h.attachDiscoveryReadiness(&resources[i], now)
+	}
+}
+
+func (h *ResourceHandlers) attachDiscoveryReadiness(resource *unified.Resource, now time.Time) {
+	if h == nil || h.discoveryReadiness == nil || resource == nil {
+		return
+	}
+	readiness := h.discoveryReadiness.DiscoveryReadinessForResource(*resource, now)
+	if readiness.State == "" {
+		return
+	}
+	resource.DiscoveryReadiness = &readiness
 }
 
 func attachMetricsTargets(resources []unified.Resource, registry *unified.ResourceRegistry) {
@@ -2211,7 +2259,7 @@ func proxmoxGuestDiscoveryTarget(resource unified.Resource, resourceType string)
 		return nil
 	}
 	resourceID := strconv.Itoa(resource.Proxmox.VMID)
-	hostID := strings.TrimSpace(resource.Proxmox.NodeName)
+	hostID := proxmoxLinkedAgentID(resource.Proxmox)
 	if hostID == "" || resourceID == "" {
 		return nil
 	}

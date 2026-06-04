@@ -11354,6 +11354,67 @@ func TestContract_ResourceListPolicyMetadata(t *testing.T) {
 	}
 }
 
+func TestContract_ProxmoxWorkloadDiscoveryTargetUsesLinkedNodeAgent(t *testing.T) {
+	now := time.Date(2026, 6, 4, 20, 0, 0, 0, time.UTC)
+	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unifiedresources.Resource{
+			{
+				ID:       "system-container:grafana",
+				Type:     unifiedresources.ResourceTypeSystemContainer,
+				Name:     "grafana",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+				Sources:  []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+				Proxmox: &unifiedresources.ProxmoxData{
+					NodeName:      "delly",
+					VMID:          124,
+					LinkedAgentID: "agent-delly",
+				},
+			},
+			{
+				ID:       "system-container:unlinked",
+				Type:     unifiedresources.ResourceTypeSystemContainer,
+				Name:     "unlinked",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+				Sources:  []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+				Proxmox: &unifiedresources.ProxmoxData{
+					NodeName: "delly",
+					VMID:     125,
+				},
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=system-container", nil)
+	rec := httptest.NewRecorder()
+	h.HandleListResources(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	resourcesByID := make(map[string]unifiedresources.Resource, len(resp.Data))
+	for _, resource := range resp.Data {
+		resourcesByID[resource.ID] = resource
+	}
+	linkedTarget := resourcesByID["system-container:grafana"].DiscoveryTarget
+	if linkedTarget == nil {
+		t.Fatal("expected linked Proxmox workload discovery target")
+	}
+	if linkedTarget.AgentID != "agent-delly" || linkedTarget.ResourceID != "124" {
+		t.Fatalf("linked discovery target = %+v, want agent-delly/124", linkedTarget)
+	}
+	if target := resourcesByID["system-container:unlinked"].DiscoveryTarget; target != nil {
+		t.Fatalf("expected unlinked Proxmox workload to omit discovery target, got %+v", target)
+	}
+}
+
 func TestContract_ResourceListUsesDeterministicNameTieBreakers(t *testing.T) {
 	now := time.Date(2026, 4, 11, 0, 0, 0, 0, time.UTC)
 	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
@@ -14408,15 +14469,11 @@ func TestContract_AgentResourceContextEndpointSurfacesStableShape(t *testing.T) 
 	}
 	src := string(source)
 	// Always-array initialization for the iteration-safe contract.
-	if !strings.Contains(src, "ActiveFindings:   []AgentResourceFindingSnapshot{},") {
+	if !regexp.MustCompile(`ActiveFindings:\s+\[\]AgentResourceFindingSnapshot\{\},`).MatchString(src) {
 		t.Error("activeFindings must default to an empty slice, not nil — agents iterate without nil-checks")
 	}
-	if !strings.Contains(src, "RecentActions:    []AgentResourceActionSummary{},") {
+	if !regexp.MustCompile(`RecentActions:\s+\[\]AgentResourceActionSummary\{\},`).MatchString(src) {
 		t.Error("recentActions must default to an empty slice, not nil")
-	}
-	// Field-presence branching contract for operatorState.
-	if !strings.Contains(src, "OperatorState    *AgentResourceOperatorState    `json:\"operatorState,omitempty\"`") {
-		t.Error("operatorState must be omitempty so absent entries surface as missing field")
 	}
 	// Server-computed maintenance-active flag — server pre-computes so
 	// agents don't re-evaluate timestamps client-side.
@@ -14431,19 +14488,44 @@ func TestContract_AgentResourceContextEndpointSurfacesStableShape(t *testing.T) 
 	// pendingApprovals must initialize as an empty slice so agents
 	// iterate without nil-checking — same iteration-safe contract
 	// as activeFindings and recentActions.
-	if !strings.Contains(src, "PendingApprovals: []AgentResourceApprovalSummary{}") {
+	if !regexp.MustCompile(`PendingApprovals:\s+\[\]AgentResourceApprovalSummary\{\},`).MatchString(src) {
 		t.Error("pendingApprovals must default to an empty slice, not nil — agents iterate without nil-checks")
 	}
-	if !strings.Contains(src, "ContextSections:  []AgentResourceContextSection{}") {
+	if !regexp.MustCompile(`ContextSections:\s+\[\]AgentResourceContextSection\{\},`).MatchString(src) {
 		t.Error("contextSections must default to an empty slice, not nil — resource-aware agents iterate without nil-checks")
 	}
-	// Pending approvals must reuse the AgentResourceApprovalSummary
-	// shape so the bundle and approval.pending SSE events stay in
-	// the same vocabulary.
-	if !strings.Contains(src, "PendingApprovals []AgentResourceApprovalSummary `json:\"pendingApprovals\"`") {
+
+	contextType := reflect.TypeOf(AgentResourceContext{})
+	operatorStateField, ok := contextType.FieldByName("OperatorState")
+	if !ok {
+		t.Fatal("AgentResourceContext must carry OperatorState")
+	}
+	if operatorStateField.Type != reflect.TypeOf((*AgentResourceOperatorState)(nil)) ||
+		operatorStateField.Tag.Get("json") != "operatorState,omitempty" {
+		t.Error("operatorState must be an omitempty pointer so absent entries surface as a missing field")
+	}
+	discoveryReadinessField, ok := contextType.FieldByName("DiscoveryReadiness")
+	if !ok {
+		t.Fatal("AgentResourceContext must carry DiscoveryReadiness")
+	}
+	if discoveryReadinessField.Type != reflect.TypeOf((*AgentResourceDiscoveryReadiness)(nil)) ||
+		discoveryReadinessField.Tag.Get("json") != "discoveryReadiness,omitempty" {
+		t.Error("discoveryReadiness must be an omitempty pointer to the shared resource readiness projection")
+	}
+	pendingApprovalsField, ok := contextType.FieldByName("PendingApprovals")
+	if !ok {
+		t.Fatal("AgentResourceContext must carry PendingApprovals")
+	}
+	if pendingApprovalsField.Type != reflect.TypeOf([]AgentResourceApprovalSummary{}) ||
+		pendingApprovalsField.Tag.Get("json") != "pendingApprovals" {
 		t.Error("AgentResourceContext must carry PendingApprovals as a stable []AgentResourceApprovalSummary field")
 	}
-	if !strings.Contains(src, "ContextSections  []AgentResourceContextSection  `json:\"contextSections\"`") {
+	contextSectionsField, ok := contextType.FieldByName("ContextSections")
+	if !ok {
+		t.Fatal("AgentResourceContext must carry ContextSections")
+	}
+	if contextSectionsField.Type != reflect.TypeOf([]AgentResourceContextSection{}) ||
+		contextSectionsField.Tag.Get("json") != "contextSections" {
 		t.Error("AgentResourceContext must carry ContextSections as a stable []AgentResourceContextSection field")
 	}
 	if !strings.Contains(src, "type AgentResourceContextRedaction = agentcontext.Redaction") ||

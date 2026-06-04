@@ -828,4 +828,37 @@ describe('resourceStateAdapters nodeFromResource', () => {
     );
     expect(agent.agent?.unraid?.risk?.reasons?.[0]?.code).toBe('unraid_no_parity');
   });
+
+  it('preserves discovery readiness when merging realtime resource snapshots', () => {
+    const [resource] = mergeCanonicalResourceSnapshot(
+      [
+        {
+          id: 'system-container-homeassistant',
+          type: 'system-container',
+          name: 'homeassistant',
+          displayName: 'homeassistant',
+          platformId: '101',
+          platformType: 'proxmox-pve',
+          sourceType: 'api',
+          status: 'online',
+          lastSeen: Date.now(),
+          discoveryReadiness: {
+            state: 'missing',
+            reason: 'Discovery has not run for this resource.',
+            resourceType: 'system-container',
+            targetId: 'agent-delly',
+            resourceId: '101',
+            generatedAt: '2026-06-04T15:00:00Z',
+          },
+        } as Resource,
+      ],
+      [],
+    );
+
+    expect(resource.discoveryReadiness).toMatchObject({
+      state: 'missing',
+      targetId: 'agent-delly',
+      resourceId: '101',
+    });
+  });
 });

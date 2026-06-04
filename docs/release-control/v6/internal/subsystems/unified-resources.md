@@ -187,6 +187,26 @@ action, finding, and context-pack lookups. Resource drawer and workload drawer
 Assistant handoffs may pass stable source IDs such as Proxmox
 `instance:node:vmid`, but they must not expose generated registry IDs as the
 browser-side contract or rebuild alias matching in frontend code.
+Proxmox VM and system-container action/discovery ownership is derived from the
+canonical parent node resource, not from guest-local heuristics. When the
+registry or presentation coalescer merges a Proxmox-only node row with an
+agent-backed node row, Proxmox children must be reparented to the displayed
+agent-backed resource and their `ProxmoxData.LinkedAgentID` must inherit the
+parent Pulse agent ID. That linked agent ID is the only source for Proxmox
+workload `discoveryTarget.agentId`; node names and VMIDs alone are not enough
+to authorize browser action targets.
+
+Service-discovery readiness is a unified-resource payload contract, not a
+drawer-local decoration. Resource list/detail payloads that expose a
+`discoveryTarget` must also carry the backend-authored `discoveryReadiness`
+projection when the discovery owner is available. That projection is
+metadata-only (`fresh`, `stale`, `missing`, `running`, `failed`, `unavailable`,
+or `unsupported`, with provenance, generated/observed freshness, target
+coordinates, optional service/category, and bounded fact count) and must not
+include raw command output, provider commands, environment variables, config
+paths, or secret-bearing metadata. Workload and resource drawers, Assistant
+handoffs, and optional table columns consume this field instead of inferring
+freshness from independent discovery reads.
 Across platform/runtime pages, workflow tabs are evidence-gated from the
 canonical model that owns their rows. `Overview` is the stable landing tab;
 supporting tabs appear only when their native inventory or signal exists, and

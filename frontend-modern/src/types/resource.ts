@@ -161,6 +161,33 @@ export interface ResourceDiscoveryTarget {
   hostname?: string;
 }
 
+export type ResourceDiscoveryReadinessState =
+  | 'fresh'
+  | 'stale'
+  | 'missing'
+  | 'running'
+  | 'failed'
+  | 'unavailable'
+  | 'unsupported';
+
+export interface ResourceDiscoveryReadiness {
+  state: ResourceDiscoveryReadinessState;
+  reason?: string;
+  source?: string;
+  resourceType?: string;
+  targetId?: string;
+  resourceId?: string;
+  discoveryId?: string;
+  observedAt?: string;
+  generatedAt?: string;
+  ageSeconds?: number;
+  staleAfterSeconds?: number;
+  factCount?: number;
+  serviceName?: string;
+  serviceCategory?: string;
+  confidence?: number;
+}
+
 export interface ResourceCanonicalIdentity {
   displayName?: string;
   hostname?: string;
@@ -1336,6 +1363,7 @@ export interface Resource {
 
   // Canonical discovery request coordinates from backend
   discoveryTarget?: ResourceDiscoveryTarget;
+  discoveryReadiness?: ResourceDiscoveryReadiness;
 
   // Metrics history query coordinates from backend
   metricsTarget?: ResourceMetricsTarget;

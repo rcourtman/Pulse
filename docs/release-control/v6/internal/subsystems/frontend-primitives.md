@@ -174,6 +174,15 @@ update-plan readiness verdict inline with the update action, and a blocked
 readiness status must make automatic install visibly unavailable until the
 blocking check is resolved.
 
+`frontend-modern/src/components/shared/DiscoveryReadinessBadge.tsx` is the
+shared presentation primitive for discovery freshness/readiness indicators.
+It may render the canonical presentation model from
+`frontend-modern/src/utils/resourceDiscoveryReadiness.ts`, but it must remain
+presentational: no local storage, network reads, discovery fetches, or
+resource-target inference belongs inside the badge. Workload rows, drawers,
+and Assistant handoff surfaces must share that primitive instead of inventing
+local freshness chips.
+
 Platform page subnavigation is a shared frontend primitive. Docker / Podman
 and Kubernetes platform pages may add native API-backed sections, but the tabs
 must use `PlatformSectionTabs`, canonical table alignment helpers, and shared

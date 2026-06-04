@@ -55,6 +55,40 @@ const normalizePersistedColumnIds = (
   return { ids, migrated };
 };
 
+const defaultHiddenMigrationStorageKey = (storageKey: string): string =>
+  `${storageKey}:default-hidden-applied`;
+
+const readAppliedDefaultHiddenMigrations = (
+  storageKey: string,
+  persistedIdAliases: Record<string, string>,
+): string[] => {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    const raw = window.localStorage.getItem(defaultHiddenMigrationStorageKey(storageKey));
+    if (raw === null) return [];
+    return normalizePersistedColumnIds(JSON.parse(raw), persistedIdAliases).ids;
+  } catch {
+    return [];
+  }
+};
+
+const persistAppliedDefaultHiddenMigrations = (
+  storageKey: string,
+  ids: string[],
+): void => {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.localStorage.setItem(
+      defaultHiddenMigrationStorageKey(storageKey),
+      JSON.stringify(Array.from(new Set(ids))),
+    );
+  } catch {
+    // localStorage may be full or unavailable; the hidden-column preference still works.
+  }
+};
+
 /**
  * Hook for managing column visibility with persistence.
  *
@@ -67,6 +101,8 @@ const normalizePersistedColumnIds = (
  * @param defaultHidden - Optional array of column IDs to hide by default (only used if no user preference exists)
  * @param relevantColumns - Optional reactive accessor returning the set of column IDs relevant to the current view.
  *   When non-null, columns not in the set are excluded from visibleColumns and availableToggles.
+ * @param defaultHiddenMigrationIds - New default-hidden columns that should be hidden once for users with
+ *   existing preferences. After the user shows the column, the migration marker prevents re-hiding it.
  */
 export function useColumnVisibility(
   storageKey: string,
@@ -74,6 +110,7 @@ export function useColumnVisibility(
   defaultHidden: string[] = [],
   relevantColumns?: Accessor<Set<string> | null>,
   persistedIdAliases: Record<string, string> = {},
+  defaultHiddenMigrationIds: string[] = [],
 ) {
   const defaultHiddenFromColumns = columns
     .filter((c) => c.defaultHidden)
@@ -87,6 +124,25 @@ export function useColumnVisibility(
   const hasUserPreference =
     typeof window !== 'undefined' && window.localStorage.getItem(storageKey) !== null;
   let persistedIdsMigrated = false;
+  const appliedDefaultHiddenMigrations = hasUserPreference
+    ? readAppliedDefaultHiddenMigrations(storageKey, persistedIdAliases)
+    : [];
+  const pendingDefaultHiddenMigrations = hasUserPreference
+    ? Array.from(
+        new Set(
+          defaultHiddenMigrationIds
+            .map((id) => id.trim())
+            .filter(
+              (id) =>
+                id &&
+                effectiveDefaultHidden.includes(id) &&
+                toggleableIds.includes(id) &&
+                !appliedDefaultHiddenMigrations.includes(id),
+            ),
+        ),
+      )
+    : [];
+  let defaultHiddenMigrationsPersisted = false;
 
   // Persist hidden columns to localStorage
   // Use defaultHidden only if no user preference exists yet
@@ -100,6 +156,11 @@ export function useColumnVisibility(
           const parsed = JSON.parse(str);
           const normalized = normalizePersistedColumnIds(parsed, persistedIdAliases);
           persistedIdsMigrated = normalized.migrated;
+          for (const id of pendingDefaultHiddenMigrations) {
+            if (normalized.ids.includes(id)) continue;
+            normalized.ids.push(id);
+            persistedIdsMigrated = true;
+          }
           return normalized.ids;
         } catch {
           return [];
@@ -109,8 +170,19 @@ export function useColumnVisibility(
   );
 
   createEffect(() => {
-    if (!hasUserPreference || !persistedIdsMigrated) return;
+    const hasUnpersistedDefaultHiddenMigrations =
+      pendingDefaultHiddenMigrations.length > 0 && !defaultHiddenMigrationsPersisted;
+    if (!hasUserPreference || (!persistedIdsMigrated && !hasUnpersistedDefaultHiddenMigrations)) {
+      return;
+    }
     persistedIdsMigrated = false;
+    if (hasUnpersistedDefaultHiddenMigrations) {
+      defaultHiddenMigrationsPersisted = true;
+      persistAppliedDefaultHiddenMigrations(storageKey, [
+        ...appliedDefaultHiddenMigrations,
+        ...pendingDefaultHiddenMigrations,
+      ]);
+    }
     setHiddenColumns([...hiddenColumns()]);
   });
 

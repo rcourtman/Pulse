@@ -190,6 +190,8 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     workloadColumns,
     defaultHiddenColumnIds,
     relevantColumns,
+    {},
+    ['aiContext'],
   );
 
   const visibleColumns = columnVisibility.visibleColumns;
