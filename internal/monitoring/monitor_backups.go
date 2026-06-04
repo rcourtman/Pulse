@@ -698,6 +698,39 @@ func (m *Monitor) calculateBackupOperationTimeout(instanceName string) time.Dura
 	return timeout
 }
 
+// pollPVEBackupsAndSnapshots runs the two backup-inventory scans under a shared
+// bounded budget, then polls guest snapshots on the parent context so they get
+// their own independent budget. A slow storage/backup scan can no longer starve
+// snapshot discovery by exhausting the shared timeout before snapshots run.
+func (m *Monitor) pollPVEBackupsAndSnapshots(parentCtx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string, timeout time.Duration) {
+	if parentCtx == nil {
+		parentCtx = context.Background()
+	}
+
+	backupCtx, cancel := context.WithTimeout(parentCtx, timeout)
+
+	// Poll backup tasks
+	m.pollBackupTasks(backupCtx, instanceName, client)
+
+	// Poll storage backups - pass nodes to avoid duplicate API calls
+	m.pollStorageBackupsWithNodes(backupCtx, instanceName, client, nodes, nodeEffectiveStatus)
+
+	backupErr := backupCtx.Err()
+	cancel()
+
+	if backupErr != nil && parentCtx.Err() == nil {
+		log.Warn().
+			Str("instance", instanceName).
+			Err(backupErr).
+			Msg("Backup storage polling budget was exhausted before guest snapshot polling; continuing snapshots with their own bounded poll budget")
+	}
+
+	// Snapshots are independent backup inventory. Passing parentCtx (no deadline)
+	// lets pollGuestSnapshots establish its own bounded budget instead of
+	// inheriting an already-exhausted backup deadline and skipping entirely.
+	m.pollGuestSnapshots(parentCtx, instanceName, client)
+}
+
 // pollGuestSnapshots polls snapshots for all VMs and containers
 func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, client PVEClientInterface) {
 	log.Debug().Str("instance", instanceName).Msg("polling guest snapshots")
@@ -1776,17 +1809,7 @@ func (m *Monitor) pollPVEBackupsAsync(
 				parentCtx = context.Background()
 			}
 
-			backupCtx, cancel := context.WithTimeout(parentCtx, timeout)
-			defer cancel()
-
-			// Poll backup tasks
-			m.pollBackupTasks(backupCtx, inst, pveClient)
-
-			// Poll storage backups - pass nodes to avoid duplicate API calls
-			m.pollStorageBackupsWithNodes(backupCtx, inst, pveClient, nodes, nodeEffectiveStatus)
-
-			// Poll guest snapshots
-			m.pollGuestSnapshots(backupCtx, inst, pveClient)
+			m.pollPVEBackupsAndSnapshots(parentCtx, inst, pveClient, nodes, nodeEffectiveStatus, timeout)
 
 			duration := time.Since(startTime)
 			log.Info().
