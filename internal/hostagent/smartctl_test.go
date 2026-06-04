@@ -505,6 +505,29 @@ Current Temperature:                    39 C
 	}
 }
 
+func TestParseSMARTOutputParsesCurrentDriveTemperature(t *testing.T) {
+	// OPNsense/pfSense smartctl emits "Current Drive Temperature" rather than
+	// "Current Temperature"; both must parse.
+	output := []byte(`
+=== START OF INFORMATION SECTION ===
+Device Model:     WDC WD40EFRX
+Serial Number:    WD-456
+SMART overall-health self-assessment test result: PASSED
+Current Drive Temperature:     41 C
+`)
+
+	result, err := parseSMARTOutput(output, smartctlTarget{Path: "/dev/ada0"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected result")
+	}
+	if result.Temperature != 41 {
+		t.Fatalf("expected 'Current Drive Temperature' to parse as 41, got %#v", result)
+	}
+}
+
 func TestMatchesDeviceExclude(t *testing.T) {
 	tests := []struct {
 		name       string

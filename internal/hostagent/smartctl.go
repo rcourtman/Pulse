@@ -201,7 +201,7 @@ type smartTextFallback struct {
 
 var (
 	smartTextTempAttributeRE = regexp.MustCompile(`^\s*(190|194)\s+\S+.*-\s+(\d{1,3})\b`)
-	smartTextCurrentTempRE   = regexp.MustCompile(`(?i)^current temperature:\s*(\d{1,3})\b`)
+	smartTextCurrentTempRE   = regexp.MustCompile(`(?i)^current(?: drive)? temperature:\s*(\d{1,3})\b`)
 	smartTextTemperatureRE   = regexp.MustCompile(`(?i)^temperature:\s*(\d{1,3})\b`)
 )
 
