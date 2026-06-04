@@ -2733,8 +2733,72 @@ func canonicalHandoffUnifiedResource(provider UnifiedResourceProvider, resourceI
 			return resource, normalizedType, true
 		}
 	}
+	if resource, ok := findCanonicalHandoffResourceByAnyType(provider, refs...); ok {
+		return resource, string(unifiedresources.ContractResourceType(resource)), true
+	}
 
 	return unifiedresources.Resource{}, normalizedType, false
+}
+
+var canonicalHandoffFallbackResourceTypes = []unifiedresources.ResourceType{
+	unifiedresources.ResourceTypeAgent,
+	unifiedresources.ResourceTypeVM,
+	unifiedresources.ResourceTypeSystemContainer,
+	unifiedresources.ResourceTypeAppContainer,
+	unifiedresources.ResourceTypeDockerService,
+	unifiedresources.ResourceTypeDockerImage,
+	unifiedresources.ResourceTypeDockerVolume,
+	unifiedresources.ResourceTypeDockerNetwork,
+	unifiedresources.ResourceTypeDockerTask,
+	unifiedresources.ResourceTypeDockerSwarmNode,
+	unifiedresources.ResourceTypeDockerSecret,
+	unifiedresources.ResourceTypeDockerConfig,
+	unifiedresources.ResourceTypeK8sCluster,
+	unifiedresources.ResourceTypeK8sNode,
+	unifiedresources.ResourceTypePod,
+	unifiedresources.ResourceTypeK8sDeployment,
+	unifiedresources.ResourceTypeK8sReplicaSet,
+	unifiedresources.ResourceTypeK8sNamespace,
+	unifiedresources.ResourceTypeK8sService,
+	unifiedresources.ResourceTypeK8sStatefulSet,
+	unifiedresources.ResourceTypeK8sDaemonSet,
+	unifiedresources.ResourceTypeK8sJob,
+	unifiedresources.ResourceTypeK8sCronJob,
+	unifiedresources.ResourceTypeK8sIngress,
+	unifiedresources.ResourceTypeK8sEndpointSlice,
+	unifiedresources.ResourceTypeK8sNetworkPolicy,
+	unifiedresources.ResourceTypeK8sPV,
+	unifiedresources.ResourceTypeK8sPVC,
+	unifiedresources.ResourceTypeK8sStorageClass,
+	unifiedresources.ResourceTypeK8sConfigMap,
+	unifiedresources.ResourceTypeK8sSecret,
+	unifiedresources.ResourceTypeK8sServiceAccount,
+	unifiedresources.ResourceTypeK8sRole,
+	unifiedresources.ResourceTypeK8sClusterRole,
+	unifiedresources.ResourceTypeK8sRoleBinding,
+	unifiedresources.ResourceTypeK8sClusterRoleBinding,
+	unifiedresources.ResourceTypeK8sResourceQuota,
+	unifiedresources.ResourceTypeK8sLimitRange,
+	unifiedresources.ResourceTypeK8sPDB,
+	unifiedresources.ResourceTypeK8sHPA,
+	unifiedresources.ResourceTypeK8sEvent,
+	unifiedresources.ResourceTypeStorage,
+	unifiedresources.ResourceTypeNetwork,
+	unifiedresources.ResourceTypePBS,
+	unifiedresources.ResourceTypePMG,
+	unifiedresources.ResourceTypeCeph,
+	unifiedresources.ResourceTypePhysicalDisk,
+	unifiedresources.ResourceTypeNetworkShare,
+	unifiedresources.ResourceTypeNetworkEndpoint,
+}
+
+func findCanonicalHandoffResourceByAnyType(provider UnifiedResourceProvider, refs ...string) (unifiedresources.Resource, bool) {
+	for _, resourceType := range canonicalHandoffFallbackResourceTypes {
+		if resource, ok := findCanonicalResourceByReference(provider.GetByType(resourceType), refs...); ok {
+			return resource, true
+		}
+	}
+	return unifiedresources.Resource{}, false
 }
 
 // CanonicalHandoffResourceRegistration resolves a product-originated resource
@@ -2877,6 +2941,9 @@ func canonicalGuestSearchCandidates(kind string, resource unifiedresources.Resou
 	candidates = append(candidates, resource.Tags...)
 
 	if resource.Proxmox != nil && resource.Proxmox.VMID > 0 {
+		if sourceID := strings.TrimSpace(resource.Proxmox.SourceID); sourceID != "" {
+			candidates = append(candidates, sourceID)
+		}
 		vmid := strconv.Itoa(resource.Proxmox.VMID)
 		switch strings.TrimSpace(kind) {
 		case "vm":

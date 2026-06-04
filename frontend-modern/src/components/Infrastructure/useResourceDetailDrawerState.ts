@@ -1,12 +1,18 @@
 import { createEffect, createSignal } from 'solid-js';
+import { AgentContextAPI } from '@/api/agentContext';
 import type { Resource } from '@/types/resource';
 import type { HistoryTimeRange } from '@/api/charts';
 import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from '@/components/Workloads/guestDrawerModel';
+import { aiChatStore } from '@/stores/aiChat';
+import { notificationStore } from '@/stores/notifications';
 import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
 import { isPulseAgentPlatformResource } from '@/utils/agentResources';
+import { copyToClipboard } from '@/utils/clipboard';
+import { formatAgentResourceContextForClipboard } from '@/utils/agentContextPresentation';
 import { useResourceDetailDrawerDockerActionsState } from './useResourceDetailDrawerDockerActionsState';
 import { useResourceDetailDrawerHistoryState } from './useResourceDetailDrawerHistoryState';
 import { useResourceDetailDrawerDerivedState } from './useResourceDetailDrawerDerivedState';
+import { buildResourceAssistantContext } from '@/utils/resourceAssistantContextModel';
 import type { ResourceDetailDrawerPresentation } from './resourceDetailDrawerPresentation';
 
 type DrawerTab =
@@ -35,6 +41,8 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
   );
   const [debugEnabled] = createLocalStorageBooleanSignal(STORAGE_KEYS.DEBUG_MODE, false);
   const [copied, setCopied] = createSignal(false);
+  const [copyingAgentContext, setCopyingAgentContext] = createSignal(false);
+  const [agentContextCopied, setAgentContextCopied] = createSignal(false);
   const [showReportModal, setShowReportModal] = createSignal(false);
   const [showHistoryFilters, setShowHistoryFilters] = createSignal(false);
   const [showAccessContext, setShowAccessContext] = createSignal(
@@ -113,6 +121,35 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
     }
   };
 
+  const assistantAvailable = () => aiChatStore.enabled === true;
+
+  const openAssistantForResource = () => {
+    if (!assistantAvailable()) return;
+    aiChatStore.open(buildResourceAssistantContext(resource));
+  };
+
+  const copyAgentContext = async () => {
+    if (copyingAgentContext()) return;
+    setCopyingAgentContext(true);
+    setAgentContextCopied(false);
+
+    try {
+      const context = await AgentContextAPI.getResourceContext(resource.id);
+      const copiedContext = await copyToClipboard(formatAgentResourceContextForClipboard(context));
+      if (!copiedContext) {
+        throw new Error('Clipboard unavailable');
+      }
+      setAgentContextCopied(true);
+      notificationStore.success('Resource context copied.');
+      setTimeout(() => setAgentContextCopied(false), 2000);
+    } catch {
+      notificationStore.error('Unable to copy resource context.');
+      setAgentContextCopied(false);
+    } finally {
+      setCopyingAgentContext(false);
+    }
+  };
+
   return {
     activeTab,
     setActiveTab,
@@ -120,6 +157,8 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
     setMetricsHistoryRange,
     debugEnabled,
     copied,
+    copyingAgentContext,
+    agentContextCopied,
     showReportModal,
     setShowReportModal,
     showHistoryFilters,
@@ -147,6 +186,9 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
     ...history,
     ...derived,
     ...dockerActions,
+    assistantAvailable,
+    openAssistantForResource,
+    copyAgentContext,
     handleCopyJson,
   };
 };

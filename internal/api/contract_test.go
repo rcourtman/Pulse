@@ -14434,11 +14434,21 @@ func TestContract_AgentResourceContextEndpointSurfacesStableShape(t *testing.T) 
 	if !strings.Contains(src, "PendingApprovals: []AgentResourceApprovalSummary{}") {
 		t.Error("pendingApprovals must default to an empty slice, not nil — agents iterate without nil-checks")
 	}
+	if !strings.Contains(src, "ContextSections:  []AgentResourceContextSection{}") {
+		t.Error("contextSections must default to an empty slice, not nil — resource-aware agents iterate without nil-checks")
+	}
 	// Pending approvals must reuse the AgentResourceApprovalSummary
 	// shape so the bundle and approval.pending SSE events stay in
 	// the same vocabulary.
 	if !strings.Contains(src, "PendingApprovals []AgentResourceApprovalSummary `json:\"pendingApprovals\"`") {
 		t.Error("AgentResourceContext must carry PendingApprovals as a stable []AgentResourceApprovalSummary field")
+	}
+	if !strings.Contains(src, "ContextSections  []AgentResourceContextSection  `json:\"contextSections\"`") {
+		t.Error("AgentResourceContext must carry ContextSections as a stable []AgentResourceContextSection field")
+	}
+	if !strings.Contains(src, "type AgentResourceContextRedaction = agentcontext.Redaction") ||
+		!strings.Contains(src, "type AgentResourceContextFact = agentcontext.Fact") {
+		t.Error("AgentResourceContext context sections must expose the shared typed fact and redaction metadata")
 	}
 }
 

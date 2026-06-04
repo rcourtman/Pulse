@@ -176,6 +176,12 @@ regression protection.
    process version once, but they must not add per-request release lookups,
    filesystem walks, or other heavy work just to compute whether an attached
    agent is current.
+   Workload drawer Assistant and context-copy entries are also click-triggered
+   boundaries. Rendering `GuestDrawer` and `useGuestDrawerState` may derive
+   canonical workload identity and Discovery coordinates from already-loaded row
+   data, but it must not fetch the agent resource-context bundle or hydrate rich
+   Assistant context while a row is merely rendered, expanded, filtered, sorted,
+   or windowed.
    The `/api/version.agentUpdateTargetVersion` projection follows that same
    rule: it may mirror the cached deployable agent target exposed to agents,
    but it must not inspect attached agents, download artifacts, or resolve

@@ -199,6 +199,12 @@ services, including mock-mode config/data/log path examples. That context is
 read-only evidence: it must not become a storage/recovery-owned command path,
 secret source, restore entitlement, or frontend-only fixture separate from the
 canonical `/api/discovery` payload.
+The agent resource-context endpoint follows the same adjacent-evidence rule for
+storage/recovery consumers: bounded context sections, provenance, redactions,
+and recent action counts may help explain a workload or protected service, but
+they must not create restore authority, backup visibility, storage-local
+approval policy, or a bypass around the API-owned action and recovery
+contracts.
 Storage and recovery may also consume unified-resource TrueNAS app and VM
 metadata, TrueNAS native service metadata, plus TrueNAS network-share metadata,
 as read-only workload, system, and storage-access context when explaining

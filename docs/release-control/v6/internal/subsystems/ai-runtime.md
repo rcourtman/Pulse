@@ -552,7 +552,14 @@ runtime cost control, and shared AI transport surfaces.
     references through the canonical unified-resource provider before querying
     timeline changes, with raw handoff IDs used only as a compatibility fallback.
     Those timeline facts remain read-only explanation context and do not grant
-    action authority. The runtime may also persist structured pending-action and
+    action authority. Assistant runtime must also treat the shared
+    `internal/agentcontext` resource context pack as the canonical rich
+    resource-grounding substrate for product-originated resource handoffs:
+    runtime/discovery, topology, safety, policy, and recent-change facts are
+    hydrated as model-only context from canonical unified resources and the
+    resource store, carry provenance/freshness/redaction metadata, and must not
+    include raw command output, provider config, environment values, mount paths,
+    label maps, or secret-bearing metadata. The runtime may also persist structured pending-action and
     approval references from the same investigation record as
     model-context metadata, and the API handoff builder may recover the current
     live Patrol investigation-fix approval by finding ID when the durable record
@@ -658,6 +665,11 @@ runtime cost control, and shared AI transport surfaces.
     The Assistant drawer may also render an attached context briefing for that
     handoff, but the briefing is runtime context visibility only: it must not
     mutate chat control settings, execute tools, or reveal raw command payloads.
+    Resource-drawer Assistant entries use that same briefing path with
+    `handoff_metadata.kind=resource_context`, a structured `handoff_resources`
+    reference, and `autonomous_mode:false`; they must not prefill or submit a
+    browser-authored prompt, and any rich resource facts must be hydrated by the
+    backend context-pack path rather than reconstructed in the browser.
     Safe route-owned briefing actions may render as app links when the handoff
     includes an `actionHref`, but those links are navigation guidance only and
     do not grant tool execution or approval authority.

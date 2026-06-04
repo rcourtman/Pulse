@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
@@ -592,6 +593,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	s.mu.RLock()
 	handoffResourceProvider := s.unifiedResourceProvider
 	s.mu.RUnlock()
+	handoffContext = mergeHandoffResourceContextPack(handoffContext, handoffResources, handoffResourceProvider, s.actionAuditStore, time.Now())
 	handoffContext = mergeHandoffResourcePolicyContext(handoffContext, handoffResources, handoffResourceProvider)
 	handoffContext = mergeHandoffResourceStateContext(handoffContext, handoffResources, handoffResourceProvider)
 	handoffContext = mergeHandoffResourceRelationshipContext(handoffContext, handoffResources, handoffResourceProvider)
@@ -1007,6 +1009,39 @@ func mergeHandoffResourcePolicyContext(handoffContext string, handoffResources [
 	default:
 		return strings.TrimSpace(handoffContext) + "\n\n" + policyContext
 	}
+}
+
+func mergeHandoffResourceContextPack(handoffContext string, handoffResources []HandoffResource, provider tools.UnifiedResourceProvider, store unifiedresources.ResourceStore, now time.Time) string {
+	contextPack := buildHandoffResourceContextPack(handoffResources, provider, store, now)
+	switch {
+	case strings.TrimSpace(handoffContext) == "":
+		return contextPack
+	case contextPack == "":
+		return strings.TrimSpace(handoffContext)
+	default:
+		return strings.TrimSpace(handoffContext) + "\n\n" + contextPack
+	}
+}
+
+func buildHandoffResourceContextPack(handoffResources []HandoffResource, provider tools.UnifiedResourceProvider, store unifiedresources.ResourceStore, now time.Time) string {
+	resources := canonicalHandoffResources(handoffResources, provider)
+	if len(resources) == 0 {
+		return ""
+	}
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+
+	blocks := make([]string, 0, len(resources))
+	for _, resource := range resources {
+		sections := agentcontext.BuildResourceContextSections(resource, store, agentcontext.BuildOptions{
+			GeneratedAt: now.UTC(),
+		})
+		if contextText := agentcontext.FormatSectionsForModelContext(resource, sections); contextText != "" {
+			blocks = append(blocks, contextText)
+		}
+	}
+	return strings.Join(blocks, "\n\n")
 }
 
 func buildHandoffResourcePolicyContext(handoffResources []HandoffResource, provider tools.UnifiedResourceProvider) string {

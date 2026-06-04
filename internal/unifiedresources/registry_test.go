@@ -66,6 +66,43 @@ func TestMemoryStore_RecordActionAuditAppliesRedaction(t *testing.T) {
 	}
 }
 
+func TestResourceRegistry_GetByReferenceResolvesSourceIDAndCanonicalAlias(t *testing.T) {
+	rr := NewRegistry(nil)
+	rr.IngestRecords(SourceProxmox, []IngestRecord{{
+		SourceID: "delly:delly:101",
+		Resource: Resource{
+			Type: ResourceTypeSystemContainer,
+			Name: "homeassistant",
+		},
+	}})
+	rr.IngestResources([]Resource{{
+		ID:   "agent-host-1",
+		Type: ResourceTypeAgent,
+		Name: "delly",
+		Agent: &AgentData{
+			AgentID:  "machine-1",
+			Hostname: "delly.local",
+		},
+	}})
+
+	resource, resolvedID, ok := rr.GetByReference("delly:delly:101")
+	if !ok {
+		t.Fatal("expected Proxmox source ID to resolve")
+	}
+	wantID := SourceSpecificID(ResourceTypeSystemContainer, SourceProxmox, "delly:delly:101")
+	if resolvedID != wantID || resource.ID != wantID {
+		t.Fatalf("source reference resolved to id=%q resource=%q, want %q", resolvedID, resource.ID, wantID)
+	}
+
+	resource, resolvedID, ok = rr.GetByReference("machine-1")
+	if !ok {
+		t.Fatal("expected canonical alias to resolve")
+	}
+	if resolvedID != "agent-host-1" || resource.ID != "agent-host-1" {
+		t.Fatalf("alias reference resolved to id=%q resource=%q, want agent-host-1", resolvedID, resource.ID)
+	}
+}
+
 func TestResourceRegistry_ListByType(t *testing.T) {
 	rr := NewRegistry(nil)
 

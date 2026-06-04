@@ -1,4 +1,7 @@
 import { Component, Show, Suspense, createMemo } from 'solid-js';
+import CopyIcon from 'lucide-solid/icons/copy';
+import MessageSquareIcon from 'lucide-solid/icons/message-square';
+import XIcon from 'lucide-solid/icons/x';
 import { DiscoveryTab } from '../Discovery/DiscoveryTab';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
@@ -13,7 +16,9 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     activeTab,
     agentLabel,
     agentTitle,
+    agentContextCopied,
     backupPresentation,
+    copyingAgentContext,
     discoveryAgentId,
     discoveryIdentifiedSummary,
     discoveryLoadingState,
@@ -33,6 +38,9 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     guestOsSummary,
     networkInterfaces,
     normalizedTags,
+    assistantAvailable,
+    copyAgentContext,
+    openAssistantForGuest,
     setHistoryRange,
     showInGuestAgentInstallCue,
     switchTab,
@@ -47,12 +55,47 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
 
   return (
     <section class="space-y-3" aria-labelledby={headingId()}>
-      <DrawerSubjectHeading
-        headingId={headingId()}
-        title={props.guest.name}
-        statusVariant={headerIndicator().variant}
-        statusLabel={headerIndicator().label}
-      />
+      <div class="flex items-start justify-between gap-3">
+        <DrawerSubjectHeading
+          headingId={headingId()}
+          title={props.guest.name}
+          statusVariant={headerIndicator().variant}
+          statusLabel={headerIndicator().label}
+        />
+        <div class="flex shrink-0 items-center gap-1.5">
+          <Show when={assistantAvailable()}>
+            <button
+              type="button"
+              onClick={() => openAssistantForGuest()}
+              class="inline-flex h-8 items-center gap-1.5 rounded border border-border bg-surface px-2 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              title={`Ask Pulse Assistant about ${props.guest.name}`}
+              aria-label={`Ask Pulse Assistant about ${props.guest.name}`}
+            >
+              <MessageSquareIcon class="h-4 w-4" aria-hidden="true" />
+              <span class="hidden sm:inline">Ask</span>
+            </button>
+          </Show>
+          <button
+            type="button"
+            onClick={() => void copyAgentContext()}
+            disabled={copyingAgentContext()}
+            class="inline-flex h-8 items-center gap-1.5 rounded border border-border bg-surface px-2 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-wait disabled:opacity-60"
+            title={`Copy Pulse context for ${props.guest.name}`}
+            aria-label={`Copy Pulse context for ${props.guest.name}`}
+          >
+            <CopyIcon class="h-4 w-4" aria-hidden="true" />
+            <span class="hidden sm:inline">{agentContextCopied() ? 'Copied' : 'Copy'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => props.onClose()}
+            class="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            aria-label="Close guest drawer"
+          >
+            <XIcon class="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
       <Subtabs
         class="mb-1"
         ariaLabel="Guest drawer sections"

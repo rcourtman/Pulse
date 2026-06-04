@@ -179,6 +179,14 @@ workload, service, storage, configuration, policy, and event object rows belong
 in their workflow tabs. If a future Overview repeats a detailed table, the
 owning workflow must be retired or the Overview content must be reduced to
 aggregate signal.
+Product-originated resource references may arrive as registered unified
+resource IDs, source-specific IDs, or canonical identity aliases. The
+unified-resource registry owns resolving those references through
+`GetByReference`, returning the registered resource ID for downstream store,
+action, finding, and context-pack lookups. Resource drawer and workload drawer
+Assistant handoffs may pass stable source IDs such as Proxmox
+`instance:node:vmid`, but they must not expose generated registry IDs as the
+browser-side contract or rebuild alias matching in frontend code.
 Across platform/runtime pages, workflow tabs are evidence-gated from the
 canonical model that owns their rows. `Overview` is the stable landing tab;
 supporting tabs appear only when their native inventory or signal exists, and

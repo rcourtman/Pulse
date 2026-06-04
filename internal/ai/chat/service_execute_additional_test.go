@@ -670,6 +670,9 @@ func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
 	if strings.Contains(stored[0].Content, "Resource State Context") {
 		t.Fatalf("stored user message should not include resource state context: %q", stored[0].Content)
 	}
+	if strings.Contains(stored[0].Content, "Resource Context Pack") {
+		t.Fatalf("stored user message should not include resource context pack: %q", stored[0].Content)
+	}
 	storedFindingID, err := store.GetModelHandoffFindingID("sess-handoff")
 	if err != nil {
 		t.Fatalf("GetModelHandoffFindingID failed: %v", err)
@@ -699,6 +702,12 @@ func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
 	}
 	if !strings.Contains(modelUserContent, "[Resource State Context]") {
 		t.Fatalf("model user content missing resource state context: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "[Resource Context Pack]") {
+		t.Fatalf("model user content missing shared resource context pack: %q", modelUserContent)
+	}
+	if !strings.Contains(modelUserContent, "Context Pack Boundary: Resource context facts are read-only") {
+		t.Fatalf("model user content missing shared context-pack boundary: %q", modelUserContent)
 	}
 	if !strings.Contains(modelUserContent, "Resource State Status: warning") {
 		t.Fatalf("model user content missing current resource status: %q", modelUserContent)
@@ -759,6 +768,102 @@ func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
 	}
 	if strings.Contains(modelUserContent, "internal-restart-handler") || strings.Contains(modelUserContent, "raw provider endpoint unavailable") {
 		t.Fatalf("model user content leaked raw provider execution detail: %q", modelUserContent)
+	}
+}
+
+func TestBuildHandoffResourceContextPackUsesSharedDiscoverySections(t *testing.T) {
+	now := time.Date(2026, 5, 6, 14, 0, 0, 0, time.UTC)
+	parentID := "agent:pve-1"
+	provider := handoffUnifiedProvider{resources: map[unifiedresources.ResourceType][]unifiedresources.Resource{
+		unifiedresources.ResourceTypeAppContainer: {{
+			ID:         "app-container:homeassistant",
+			Type:       unifiedresources.ResourceTypeAppContainer,
+			Name:       "homeassistant",
+			Status:     unifiedresources.StatusOnline,
+			Technology: "docker",
+			UpdatedAt:  now.Add(-1 * time.Minute),
+			ParentID:   &parentID,
+			ParentName: "ha-lxc",
+			DiscoveryTarget: &unifiedresources.DiscoveryTarget{
+				ResourceType: "app-container",
+				AgentID:      "agent:pve-1",
+				ResourceID:   "homeassistant",
+				Hostname:     "homeassistant.local",
+			},
+			Docker: &unifiedresources.DockerData{
+				Runtime:        "docker",
+				RuntimeVersion: "27.0",
+				ContainerState: "running",
+				Health:         "healthy",
+				Ports: []unifiedresources.DockerPortMeta{
+					{PrivatePort: 8123, PublicPort: 8123, Protocol: "tcp"},
+				},
+				Mounts: []unifiedresources.DockerMountMeta{
+					{Source: "/srv/homeassistant/secret-config", Destination: "/config", RW: true},
+				},
+				Labels: map[string]string{
+					"com.example.env": "TOKEN=should-not-leak",
+				},
+			},
+			Capabilities: []unifiedresources.ResourceCapability{{
+				Name:                 "restart_container",
+				MinimumApprovalLevel: unifiedresources.ApprovalAdmin,
+				Platform:             "docker",
+				Params: []unifiedresources.CapabilityParam{{
+					Name:         "token",
+					IsSensitive:  true,
+					DefaultValue: "secret-token",
+				}},
+			}},
+		}},
+	}}
+	store := unifiedresources.NewMemoryStore()
+	if err := store.RecordChange(unifiedresources.ResourceChange{
+		ID:            "change-ha-restart",
+		ResourceID:    "app-container:homeassistant",
+		ObservedAt:    now.Add(-30 * time.Second),
+		Kind:          unifiedresources.ChangeRestart,
+		From:          "running",
+		To:            "restarted",
+		SourceType:    unifiedresources.SourcePulseDiff,
+		SourceAdapter: unifiedresources.AdapterDocker,
+		Confidence:    unifiedresources.ConfidenceHigh,
+		Reason:        "container restarted after update",
+	}); err != nil {
+		t.Fatalf("RecordChange failed: %v", err)
+	}
+
+	contextText := buildHandoffResourceContextPack([]HandoffResource{{
+		ID:   "app-container:homeassistant",
+		Name: "homeassistant",
+		Type: "app-container",
+		Node: "ha-lxc",
+	}}, provider, store, now)
+
+	for _, expected := range []string{
+		"[Resource Context Pack]",
+		"Resource Context: homeassistant (app-container)",
+		"Context Section: Runtime and Discovery",
+		"Context Fact: Runtime and Discovery / Ports: 8123:8123/tcp",
+		"Context Fact: Runtime and Discovery / Mounts: 1",
+		"Context Fact: Safety and Operations / Capability 1: restart_container; approval=admin; platform=docker; 1 sensitive params hidden",
+		"Context Fact: Recent Changes / Change 1: restart; running -> restarted; reason=container restarted after update",
+		"Context Pack Boundary: Resource context facts are read-only",
+	} {
+		if !strings.Contains(contextText, expected) {
+			t.Fatalf("resource context pack missing %q: %q", expected, contextText)
+		}
+	}
+
+	for _, forbidden := range []string{
+		"/srv/homeassistant/secret-config",
+		"/config",
+		"TOKEN=should-not-leak",
+		"secret-token",
+	} {
+		if strings.Contains(contextText, forbidden) {
+			t.Fatalf("resource context pack leaked raw unsafe detail %q: %q", forbidden, contextText)
+		}
 	}
 }
 

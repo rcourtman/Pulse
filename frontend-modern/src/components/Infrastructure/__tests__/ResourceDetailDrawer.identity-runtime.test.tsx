@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, waitFor, within } from '@solidjs/testing-library';
 
 import type { Resource } from '@/types/resource';
+import { aiChatStore } from '@/stores/aiChat';
 import {
   ResourceDetailDrawer,
   getSpecializedTabAvailabilityMessage,
@@ -9,6 +10,10 @@ import {
 
 const wsState = vi.hoisted(() => ({ pmg: [] as any[] }));
 const reconnectSpy = vi.hoisted(() => vi.fn());
+const getResourceContextMock = vi.hoisted(() => vi.fn());
+const copyToClipboardMock = vi.hoisted(() => vi.fn());
+const notificationSuccessMock = vi.hoisted(() => vi.fn());
+const notificationErrorMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/contexts/appRuntime', () => ({
   useWebSocket: () => ({
@@ -80,6 +85,23 @@ vi.mock('@/api/ai', () => ({
   },
 }));
 
+vi.mock('@/api/agentContext', () => ({
+  AgentContextAPI: {
+    getResourceContext: getResourceContextMock,
+  },
+}));
+
+vi.mock('@/utils/clipboard', () => ({
+  copyToClipboard: copyToClipboardMock,
+}));
+
+vi.mock('@/stores/notifications', () => ({
+  notificationStore: {
+    success: notificationSuccessMock,
+    error: notificationErrorMock,
+  },
+}));
+
 class ResizeObserverMock {
   constructor(_callback: ResizeObserverCallback) {}
   observe() {}
@@ -105,7 +127,86 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
   ...overrides,
 });
 
+afterEach(() => {
+  aiChatStore.setEnabled(false);
+  getResourceContextMock.mockReset();
+  copyToClipboardMock.mockReset();
+  notificationSuccessMock.mockReset();
+  notificationErrorMock.mockReset();
+});
+
 describe('ResourceDetailDrawer runtime and identity cards', () => {
+  it('opens Pulse Assistant with a resource-scoped handoff from the drawer header', () => {
+    aiChatStore.setEnabled(true);
+    const openSpy = vi.spyOn(aiChatStore, 'open');
+    const resource = baseResource({
+      type: 'app-container',
+      displayName: 'Home Assistant',
+      technology: 'docker',
+      parentName: 'ha-lxc',
+      discoveryTarget: {
+        resourceType: 'app-container',
+        agentId: 'agent:pve-1',
+        resourceId: 'homeassistant',
+      },
+    });
+
+    const { getByRole } = render(() => <ResourceDetailDrawer resource={resource} />);
+
+    fireEvent.click(getByRole('button', { name: 'Ask Pulse Assistant about Home Assistant' }));
+
+    expect(openSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetType: 'resource',
+        targetId: 'resource-1',
+        autonomousMode: false,
+        handoffResources: [
+          {
+            id: 'resource-1',
+            name: 'Home Assistant',
+            type: 'app-container',
+            node: 'ha-lxc',
+          },
+        ],
+        handoffMetadata: { kind: 'resource_context' },
+      }),
+    );
+    openSpy.mockRestore();
+  });
+
+  it('copies the canonical agent resource context from the drawer header', async () => {
+    getResourceContextMock.mockResolvedValue({
+      canonicalId: 'resource-1',
+      resourceType: 'agent',
+      resourceName: 'host-1',
+      activeFindings: [],
+      pendingApprovals: [],
+      recentActions: [],
+      generatedAt: '2026-05-06T14:00:00Z',
+      contextSections: [
+        {
+          id: 'identity',
+          title: 'Identity',
+          source: 'unified-resource',
+          trustTier: 'pulse-authored',
+          generatedAt: '2026-05-06T14:00:00Z',
+          facts: [{ label: 'Display name', value: 'host-1' }],
+        },
+      ],
+    });
+    copyToClipboardMock.mockResolvedValue(true);
+
+    const { getByRole } = render(() => <ResourceDetailDrawer resource={baseResource({})} />);
+
+    fireEvent.click(getByRole('button', { name: 'Copy Pulse context for host-1' }));
+
+    await waitFor(() => {
+      expect(getResourceContextMock).toHaveBeenCalledWith('resource-1');
+      expect(copyToClipboardMock).toHaveBeenCalledWith(expect.stringContaining('host-1'));
+      expect(notificationSuccessMock).toHaveBeenCalledWith('Resource context copied.');
+    });
+  });
+
   it('renders a unified summary shell without repeating healthy source status', () => {
     const resource = baseResource({
       platformData: {

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -154,6 +155,23 @@ type AgentResourceOperatorState struct {
 	MaintenanceWindowActive bool `json:"maintenanceWindowActive"`
 }
 
+// AgentResourceContextFact is a bounded, typed fact in the richer
+// agent-consumable context pack. Values come from Pulse-owned runtime
+// state only; raw command output, config files, environment variables,
+// and secret-bearing metadata do not belong here.
+type AgentResourceContextFact = agentcontext.Fact
+
+// AgentResourceContextRedaction records why a context section withheld
+// a field. It gives agents and UI inspectors a visible safety boundary
+// without leaking the underlying value.
+type AgentResourceContextRedaction = agentcontext.Redaction
+
+// AgentResourceContextSection groups related facts with one
+// provenance/freshness envelope. Additive sections make the context
+// pack useful to Assistant and external MCP clients without breaking
+// older clients that parse the original top-level fields.
+type AgentResourceContextSection = agentcontext.Section
+
 // AgentResourceContext is the bundled, agent-consumable situated
 // picture of a resource. One read returns:
 //   - core identity (canonical id, type, name)
@@ -161,6 +179,9 @@ type AgentResourceOperatorState struct {
 //   - active findings (lightweight snapshot of the seven-question schema)
 //   - recent action attempts (including refused dispatches with their
 //     stable error tokens)
+//   - additive context sections with provenance, freshness, and
+//     redaction metadata for richer Assistant and external-agent
+//     grounding
 //
 // The endpoint trades coverage for shape: an agent gets enough to
 // reason about the next move without chaining several calls. Deeper
@@ -175,6 +196,7 @@ type AgentResourceContext struct {
 	ActiveFindings   []AgentResourceFindingSnapshot `json:"activeFindings"`
 	PendingApprovals []AgentResourceApprovalSummary `json:"pendingApprovals"`
 	RecentActions    []AgentResourceActionSummary   `json:"recentActions"`
+	ContextSections  []AgentResourceContextSection  `json:"contextSections"`
 	GeneratedAt      time.Time                      `json:"generatedAt"`
 }
 
@@ -287,7 +309,7 @@ func (h *AgentContextHandler) HandleResourceContext(w http.ResponseWriter, r *ht
 		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
-	resource, ok := registry.Get(resourceID)
+	resource, resourceID, ok := registry.GetByReference(resourceID)
 	if !ok {
 		writeJSONError(w, http.StatusNotFound, "resource_not_found",
 			"No resource is registered with this canonical id.")
@@ -308,6 +330,7 @@ func (h *AgentContextHandler) HandleResourceContext(w http.ResponseWriter, r *ht
 		ActiveFindings:   []AgentResourceFindingSnapshot{},
 		PendingApprovals: []AgentResourceApprovalSummary{},
 		RecentActions:    []AgentResourceActionSummary{},
+		ContextSections:  []AgentResourceContextSection{},
 		GeneratedAt:      time.Now().UTC(),
 	}
 
@@ -353,10 +376,38 @@ func (h *AgentContextHandler) HandleResourceContext(w http.ResponseWriter, r *ht
 		}
 	}
 
+	bundle.ContextSections = buildAgentResourceContextSections(*resource, store, bundle)
+
 	redactAgentResourceContextCommandsForRequest(&bundle, r)
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(bundle)
+}
+
+func buildAgentResourceContextSections(resource unified.Resource, store unified.ResourceStore, bundle AgentResourceContext) []AgentResourceContextSection {
+	return agentcontext.BuildResourceContextSections(resource, store, agentcontext.BuildOptions{
+		GeneratedAt:          bundle.GeneratedAt,
+		OperatorState:        agentResourceOperatorStateForContext(bundle.OperatorState),
+		ActiveFindingCount:   len(bundle.ActiveFindings),
+		PendingApprovalCount: len(bundle.PendingApprovals),
+		RecentActionCount:    len(bundle.RecentActions),
+	})
+}
+
+func agentResourceOperatorStateForContext(state *AgentResourceOperatorState) *agentcontext.OperatorState {
+	if state == nil {
+		return nil
+	}
+	return &agentcontext.OperatorState{
+		IntentionallyOffline:    state.IntentionallyOffline,
+		NeverAutoRemediate:      state.NeverAutoRemediate,
+		MaintenanceWindowActive: state.MaintenanceWindowActive,
+		MaintenanceStartAt:      state.MaintenanceStartAt,
+		MaintenanceEndAt:        state.MaintenanceEndAt,
+		Criticality:             state.Criticality,
+		NotePresent:             strings.TrimSpace(state.Note) != "",
+		SetAt:                   state.SetAt,
+	}
 }
 
 // extractAgentResourceContextID parses the canonical resource ID out of

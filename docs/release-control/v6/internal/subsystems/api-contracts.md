@@ -109,6 +109,7 @@ product API routes free of maintainer commercial analytics.
 69. `frontend-modern/src/api/aiChat.ts`
 70. `frontend-modern/src/api/patrol.ts`
 71. `internal/api/agent_exec_token_binding.go`
+72. `internal/agentcontext/`
 
 ## Shared Boundaries
 
@@ -2009,6 +2010,15 @@ view and the doorbell speak the same vocabulary on probe outcomes;
 action and verification command/note text follows the same stable-marker
 redaction rule as action-audit readback, while stable status/error
 prefixes remain verbatim.
+The same response also carries additive `contextSections`, built by the
+shared `internal/agentcontext` package, with stable fact/redaction objects,
+source, trust-tier, observed-at, and generated-at metadata. Those sections are
+the canonical rich resource context pack for Assistant, MCP/tool clients, and
+copy/export consumers: they may expose bounded Pulse-authored or
+Pulse-observed runtime/discovery, topology, safety, policy, and recent-change
+facts, but must not expose raw command output, provider config, environment
+values, unbounded metadata maps, bind-mount paths, label values, or secret-like
+capability parameters.
 The shape is intentionally narrower than the full internal types
 so agents see a stable agent-paradigm contract, decoupled from
 internal type evolution.
@@ -2952,7 +2962,11 @@ references used to seed canonical approval and action-audit refresh.
 `handoff_metadata` is the browser-safe identity envelope for restoring saved
 product handoffs, currently including Patrol run kind, run ID, safe run
 type/status, a runtime-failure boolean rather than runtime failure detail, and
-bounded resource/action counts when available. Frontend-visible Patrol
+bounded resource/action counts when available. Resource drawer handoffs use
+`handoff_metadata.kind=resource_context` with a structured `handoff_resources`
+reference and no browser-authored prompt or model text; the backend chat
+runtime must hydrate the shared resource context pack from canonical resources
+instead of trusting the browser to serialize rich context. Frontend-visible Patrol
 assessment briefings must not render recommendation fields as separate title,
 reason, route-action facts, or prompt chips; the configured model owns those
 decisions from the structured handoff metadata and bounded chat context.

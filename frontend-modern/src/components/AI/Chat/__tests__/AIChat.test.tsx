@@ -72,26 +72,27 @@ const {
     error: vi.fn(),
   };
 
-	  const emptyChatContext = () => ({
-	    targetType: undefined,
-	    targetId: undefined,
-	    findingId: undefined,
-	    autonomousMode: undefined,
-	    context: undefined,
+  const emptyChatContext = () => ({
+    targetType: undefined,
+    targetId: undefined,
+    findingId: undefined,
+    autonomousMode: undefined,
+    context: undefined,
     briefing: undefined,
     handoffContext: undefined,
     handoffResources: undefined,
     handoffActions: undefined,
+    handoffMetadata: undefined,
   });
 
-	  const mockAiChatStore = {
-	    isOpenSignal: vi.fn(() => true),
-	    context: emptyChatContext() as {
-	      targetType?: string;
-	      targetId?: string;
-	      findingId?: string;
-	      autonomousMode?: boolean;
-	      context?: Record<string, unknown>;
+  const mockAiChatStore = {
+    isOpenSignal: vi.fn(() => true),
+    context: emptyChatContext() as {
+      targetType?: string;
+      targetId?: string;
+      findingId?: string;
+      autonomousMode?: boolean;
+      context?: Record<string, unknown>;
       handoffContext?: string;
       handoffResources?: Array<{
         id: string;
@@ -104,6 +105,13 @@ const {
         approvalId?: string;
         approvalStatus?: string;
       }>;
+      handoffMetadata?: {
+        kind?: string;
+        runId?: string;
+        runType?: string;
+        runStatus?: string;
+        runtimeFailure?: boolean;
+      };
       briefing?: {
         sourceLabel: string;
         title: string;
@@ -132,6 +140,7 @@ const {
         handoffContext: _handoffContext,
         handoffResources: _handoffResources,
         handoffActions: _handoffActions,
+        handoffMetadata: _handoffMetadata,
         ...rest
       } = mockAiChatStore.context;
       mockAiChatStore.context = rest;
@@ -398,8 +407,7 @@ describe('AIChat', () => {
         briefing: {
           sourceLabel: 'Pulse Patrol',
           title: 'Patrol configuration failure attached',
-          subject:
-            'patrol_autonomy_pro_required: Investigation and auto-fix require Pulse Pro.',
+          subject: 'patrol_autonomy_pro_required: Investigation and auto-fix require Pulse Pro.',
           statusLabel: 'HTTP 402 · model_unsupported_tools',
           detailLines: ['Provider: openrouter'],
           evidence: ['Command: sensitive or command detail withheld'],
@@ -416,6 +424,47 @@ describe('AIChat', () => {
       expect(context).toHaveTextContent('Provider: openrouter');
       expect(context).toHaveTextContent('Command: sensitive or command detail withheld');
       expect(context).toHaveTextContent('Approval required before any action.');
+    });
+
+    it('renders resource context handoff details without prompt text injection', () => {
+      mockAiChatStore.context = {
+        targetType: 'resource',
+        autonomousMode: false,
+        handoffResources: [
+          {
+            id: 'app-container:homeassistant',
+            name: 'Home Assistant',
+            type: 'app-container',
+            node: 'ha-lxc',
+          },
+        ],
+        handoffMetadata: {
+          kind: 'resource_context',
+        },
+        briefing: {
+          sourceLabel: 'Pulse resource context',
+          title: 'Home Assistant',
+          subject: 'app-container / online / docker',
+          statusLabel: 'Read-only context attached',
+          detailLines: [
+            'Resource ID: app-container:homeassistant',
+            'Parent: ha-lxc',
+            'Discovery: app-container:homeassistant',
+          ],
+          safetyNote: 'Approval required before any action.',
+        },
+      };
+
+      renderChat();
+
+      const context = screen.getByLabelText('Assistant context');
+      expect(context).toHaveTextContent('Pulse resource context');
+      expect(context).toHaveTextContent('Home Assistant');
+      expect(context).toHaveTextContent('app-container / online / docker');
+      expect(context).toHaveTextContent('Resource ID: app-container:homeassistant');
+      expect(context).toHaveTextContent('Parent: ha-lxc');
+      expect(context).toHaveTextContent('Approval required before any action.');
+      expect(context).not.toHaveTextContent('[Resource Context Pack]');
     });
 
     it('renders Patrol run handoff details without replacing the attached headline', () => {

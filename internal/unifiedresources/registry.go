@@ -1058,6 +1058,98 @@ func (rr *ResourceRegistry) Get(id string) (*Resource, bool) {
 	return &clone, true
 }
 
+// GetByReference resolves a resource by its canonical resource ID, a unique
+// source-specific ID, or a canonical identity alias. It returns the registered
+// resource ID alongside the cloned resource so callers can keep downstream
+// store lookups on the canonical registry identity.
+func (rr *ResourceRegistry) GetByReference(ref string) (*Resource, string, bool) {
+	rr.mu.RLock()
+	defer rr.mu.RUnlock()
+
+	ref = CanonicalResourceID(ref)
+	if ref == "" {
+		return nil, "", false
+	}
+
+	if r := rr.resources[ref]; r != nil {
+		clone := cloneResource(r)
+		return &clone, ref, true
+	}
+
+	for _, resolvedID := range []string{
+		rr.uniqueSourceResourceIDLocked(ref),
+		rr.uniqueCanonicalIdentityResourceIDLocked(ref),
+	} {
+		if resolvedID == "" {
+			continue
+		}
+		if r := rr.resources[resolvedID]; r != nil {
+			clone := cloneResource(r)
+			return &clone, resolvedID, true
+		}
+	}
+
+	return nil, "", false
+}
+
+func (rr *ResourceRegistry) uniqueSourceResourceIDLocked(sourceID string) string {
+	sourceID = normalizeSourceID(sourceID)
+	if sourceID == "" {
+		return ""
+	}
+
+	matches := map[string]struct{}{}
+	for _, mapping := range rr.bySource {
+		if resourceID := mapping[sourceID]; resourceID != "" {
+			matches[resourceID] = struct{}{}
+		}
+	}
+	return uniqueResourceIDMatch(matches)
+}
+
+func (rr *ResourceRegistry) uniqueCanonicalIdentityResourceIDLocked(ref string) string {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return ""
+	}
+
+	matches := map[string]struct{}{}
+	for resourceID, resource := range rr.resources {
+		if resourceMatchesCanonicalIdentityReference(resource, ref) {
+			matches[resourceID] = struct{}{}
+		}
+	}
+	return uniqueResourceIDMatch(matches)
+}
+
+func resourceMatchesCanonicalIdentityReference(resource *Resource, ref string) bool {
+	if resource == nil || resource.Canonical == nil {
+		return false
+	}
+
+	canonical := resource.Canonical
+	candidates := append([]string{
+		canonical.PrimaryID,
+		canonical.PlatformID,
+	}, canonical.Aliases...)
+	for _, candidate := range candidates {
+		if strings.EqualFold(strings.TrimSpace(candidate), ref) {
+			return true
+		}
+	}
+	return false
+}
+
+func uniqueResourceIDMatch(matches map[string]struct{}) string {
+	if len(matches) != 1 {
+		return ""
+	}
+	for resourceID := range matches {
+		return resourceID
+	}
+	return ""
+}
+
 // SourceTargets returns the source-specific IDs that map to the provided resource ID.
 func (rr *ResourceRegistry) SourceTargets(resourceID string) []SourceTarget {
 	rr.mu.RLock()

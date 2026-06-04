@@ -82,24 +82,45 @@ func (p *countingApprovalsProvider) PendingApprovalCountsByResource(orgID string
 // the agent context handler with a findings-provider stub. The seed
 // provider bypasses the snapshot → unified adapter, letting us stage
 // exactly the resource the test expects to see in the bundle.
-func agentContextFixtureHandlers(t *testing.T, resourceID string) (*AgentContextHandler, *staticFindingsProvider) {
+func agentContextFixtureHandlersForResource(t *testing.T, resource unified.Resource) (*AgentContextHandler, *staticFindingsProvider) {
 	t.Helper()
 	cfg := &config.Config{DataPath: t.TempDir()}
 	resources := NewResourceHandlers(cfg)
 	resources.SetStateProvider(resourceUnifiedSeedProvider{
-		snapshot: models.StateSnapshot{LastUpdate: time.Now()},
-		resources: []unified.Resource{
-			{
-				ID:   resourceID,
-				Type: "vm",
-				Name: "db-01",
-			},
-		},
+		snapshot:  models.StateSnapshot{LastUpdate: time.Now()},
+		resources: []unified.Resource{resource},
 	})
 	provider := &staticFindingsProvider{byResource: map[string][]AgentResourceFindingSnapshot{}}
 	h := NewAgentContextHandler(resources)
 	h.SetFindingsProvider(provider)
 	return h, provider
+}
+
+func agentContextFixtureHandlers(t *testing.T, resourceID string) (*AgentContextHandler, *staticFindingsProvider) {
+	t.Helper()
+	return agentContextFixtureHandlersForResource(t, unified.Resource{
+		ID:   resourceID,
+		Type: "vm",
+		Name: "db-01",
+	})
+}
+
+func findAgentContextSection(sections []AgentResourceContextSection, id string) (AgentResourceContextSection, bool) {
+	for _, section := range sections {
+		if section.ID == id {
+			return section, true
+		}
+	}
+	return AgentResourceContextSection{}, false
+}
+
+func findAgentContextFact(section AgentResourceContextSection, label string) (AgentResourceContextFact, bool) {
+	for _, fact := range section.Facts {
+		if fact.Label == label {
+			return fact, true
+		}
+	}
+	return AgentResourceContextFact{}, false
 }
 
 func TestHandleAgentResourceContext_BundlesIdentityOperatorStateAndFindings(t *testing.T) {
@@ -199,6 +220,258 @@ func TestHandleAgentResourceContext_BundlesIdentityOperatorStateAndFindings(t *t
 	// Generated timestamp populated so agents can age the data.
 	if bundle.GeneratedAt.IsZero() {
 		t.Error("GeneratedAt must be populated")
+	}
+	if len(bundle.ContextSections) == 0 {
+		t.Fatal("contextSections must be populated for resource-aware agents")
+	}
+	if section, ok := findAgentContextSection(bundle.ContextSections, "identity"); !ok {
+		t.Fatal("identity context section missing")
+	} else if section.Source == "" || section.TrustTier == "" || section.GeneratedAt.IsZero() {
+		t.Fatalf("identity section must carry provenance and freshness metadata: %+v", section)
+	}
+}
+
+func TestHandleAgentResourceContext_ResolvesSourceIDReference(t *testing.T) {
+	h, _ := agentContextFixtureHandlersForResource(t, unified.Resource{
+		ID:         "system-container-6adaf34f529d241a",
+		Type:       unified.ResourceTypeSystemContainer,
+		Technology: "lxc",
+		Name:       "homeassistant",
+		Status:     unified.StatusOnline,
+		Sources:    []unified.DataSource{unified.SourceProxmox},
+		Proxmox: &unified.ProxmoxData{
+			SourceID:      "delly:delly:101",
+			NodeName:      "delly",
+			Instance:      "delly",
+			VMID:          101,
+			ContainerType: "lxc",
+		},
+		DiscoveryTarget: &unified.DiscoveryTarget{
+			ResourceType: "system-container",
+			AgentID:      "delly",
+			ResourceID:   "101",
+			Hostname:     "homeassistant",
+		},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/resource-context/delly:delly:101", nil)
+	h.HandleResourceContext(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200; got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var bundle AgentResourceContext
+	if err := json.Unmarshal(rec.Body.Bytes(), &bundle); err != nil {
+		t.Fatalf("unmarshal bundle: %v", err)
+	}
+	if bundle.CanonicalID != "system-container-6adaf34f529d241a" {
+		t.Fatalf("canonical id = %q, want registered unified resource id", bundle.CanonicalID)
+	}
+	if bundle.ResourceName != "homeassistant" || bundle.ResourceType != "system-container" {
+		t.Fatalf("bundle resource = %s/%s, want homeassistant/system-container", bundle.ResourceName, bundle.ResourceType)
+	}
+}
+
+func TestHandleAgentResourceContext_ContextSectionsIncludeRuntimeTopologyAndRecentChanges(t *testing.T) {
+	now := time.Now().UTC()
+	parentID := "agent:pve1"
+	h, _ := agentContextFixtureHandlersForResource(t, unified.Resource{
+		ID:         "app-container:homeassistant",
+		Type:       unified.ResourceTypeAppContainer,
+		Name:       "homeassistant",
+		Status:     unified.StatusOnline,
+		Technology: "docker",
+		LastSeen:   now.Add(-time.Minute),
+		UpdatedAt:  now,
+		ParentID:   &parentID,
+		ParentName: "ha-lxc",
+		DiscoveryTarget: &unified.DiscoveryTarget{
+			ResourceType: "app-container",
+			AgentID:      "agent:pve1",
+			ResourceID:   "homeassistant",
+			Hostname:     "homeassistant.local",
+		},
+		Docker: &unified.DockerData{
+			Runtime:        "docker",
+			RuntimeVersion: "27.0",
+			ContainerState: "running",
+			Health:         "healthy",
+			RestartCount:   2,
+			Image:          "ghcr.io/home-assistant/home-assistant:stable",
+			Ports: []unified.DockerPortMeta{
+				{PrivatePort: 8123, PublicPort: 8123, Protocol: "tcp"},
+			},
+			Mounts: []unified.DockerMountMeta{
+				{Source: "/srv/homeassistant/secret-config", Destination: "/config", RW: true},
+			},
+			Labels: map[string]string{
+				"com.example.env": "TOKEN=should-not-leak",
+			},
+		},
+		Relationships: []unified.ResourceRelationship{
+			{
+				SourceID:   "app-container:homeassistant",
+				TargetID:   "agent:pve1",
+				Type:       unified.RelRunsOn,
+				Confidence: 0.95,
+				Active:     true,
+				Discoverer: "docker_adapter",
+				ObservedAt: now.Add(-2 * time.Minute),
+				LastSeenAt: now.Add(-time.Minute),
+				Metadata:   map[string]any{"raw": "metadata is intentionally summarized only"},
+			},
+		},
+		Capabilities: []unified.ResourceCapability{
+			{
+				Name:                 "restart_container",
+				MinimumApprovalLevel: unified.ApprovalAdmin,
+				Platform:             "docker",
+				Params: []unified.CapabilityParam{
+					{Name: "token", IsSensitive: true},
+				},
+			},
+		},
+	})
+	store, err := h.resources.getStore("default")
+	if err != nil {
+		t.Fatalf("getStore: %v", err)
+	}
+	if err := store.RecordChange(unified.ResourceChange{
+		ID:            "change-ha-restart",
+		ResourceID:    "app-container:homeassistant",
+		ObservedAt:    now.Add(-30 * time.Second),
+		Kind:          unified.ChangeRestart,
+		From:          "running",
+		To:            "restarted",
+		SourceType:    unified.SourcePulseDiff,
+		SourceAdapter: unified.AdapterDocker,
+		Confidence:    unified.ConfidenceHigh,
+		Reason:        "container restarted after update",
+	}); err != nil {
+		t.Fatalf("RecordChange: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/resource-context/app-container:homeassistant", nil)
+	h.HandleResourceContext(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200; got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var bundle AgentResourceContext
+	if err := json.Unmarshal(rec.Body.Bytes(), &bundle); err != nil {
+		t.Fatalf("unmarshal bundle: %v", err)
+	}
+
+	runtimeSection, ok := findAgentContextSection(bundle.ContextSections, "runtime")
+	if !ok {
+		t.Fatalf("runtime section missing from context pack: %+v", bundle.ContextSections)
+	}
+	if fact, ok := findAgentContextFact(runtimeSection, "Ports"); !ok || !strings.Contains(fact.Value, "8123:8123/tcp") {
+		t.Fatalf("runtime ports fact missing or wrong: %+v", fact)
+	}
+	if fact, ok := findAgentContextFact(runtimeSection, "Mounts"); !ok || fact.Value != "1" {
+		t.Fatalf("runtime must include mount count without path values; got %+v", fact)
+	}
+
+	topologySection, ok := findAgentContextSection(bundle.ContextSections, "topology")
+	if !ok {
+		t.Fatal("topology section missing from context pack")
+	}
+	if fact, ok := findAgentContextFact(topologySection, "Relationship 1"); !ok || !strings.Contains(fact.Value, "runs_on") || !strings.Contains(fact.Value, "metadata present") {
+		t.Fatalf("relationship fact missing bounded topology summary: %+v", fact)
+	}
+
+	safetySection, ok := findAgentContextSection(bundle.ContextSections, "safety")
+	if !ok {
+		t.Fatal("safety section missing from context pack")
+	}
+	if fact, ok := findAgentContextFact(safetySection, "Capability 1"); !ok || !strings.Contains(fact.Value, "1 sensitive params hidden") {
+		t.Fatalf("capability fact must hide sensitive params: %+v", fact)
+	}
+
+	changesSection, ok := findAgentContextSection(bundle.ContextSections, "recent_changes")
+	if !ok {
+		t.Fatal("recent_changes section missing from context pack")
+	}
+	if fact, ok := findAgentContextFact(changesSection, "Change 1"); !ok || !strings.Contains(fact.Value, "container restarted after update") {
+		t.Fatalf("recent change fact missing canonical timeline context: %+v", fact)
+	}
+
+	body := rec.Body.String()
+	for _, forbidden := range []string{"/srv/homeassistant/secret-config", "TOKEN=should-not-leak", "metadata is intentionally summarized only"} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("context pack leaked raw unsafe detail %q in body: %s", forbidden, body)
+		}
+	}
+}
+
+func TestHandleAgentResourceContext_ContextSectionsApplyPolicyRedactions(t *testing.T) {
+	h, _ := agentContextFixtureHandlersForResource(t, unified.Resource{
+		ID:        "storage:dataset-1",
+		Type:      unified.ResourceTypeStorage,
+		Name:      "dataset-1",
+		Status:    unified.StatusOnline,
+		LastSeen:  time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+		Policy: &unified.ResourcePolicy{
+			Sensitivity: unified.ResourceSensitivitySensitive,
+			Routing: unified.ResourceRoutingPolicy{
+				Scope: unified.ResourceRoutingScopeLocalOnly,
+				Redact: []unified.ResourceRedactionHint{
+					unified.ResourceRedactionHostname,
+					unified.ResourceRedactionPath,
+					unified.ResourceRedactionPlatformID,
+				},
+			},
+		},
+		AISafeSummary: "storage resource; status online; local-only context",
+		DiscoveryTarget: &unified.DiscoveryTarget{
+			ResourceType: "storage",
+			AgentID:      "agent-secret-id",
+			ResourceID:   "storage-secret-id",
+			Hostname:     "secret-storage.local",
+		},
+		Storage: &unified.StorageMeta{
+			Type:        "zfs",
+			Path:        "/mnt/secret-dataset",
+			RiskSummary: "secret-storage.local has elevated writes",
+		},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/resource-context/storage:dataset-1", nil)
+	h.HandleResourceContext(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200; got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var bundle AgentResourceContext
+	if err := json.Unmarshal(rec.Body.Bytes(), &bundle); err != nil {
+		t.Fatalf("unmarshal bundle: %v", err)
+	}
+
+	runtimeSection, ok := findAgentContextSection(bundle.ContextSections, "runtime")
+	if !ok {
+		t.Fatal("runtime section missing")
+	}
+	for _, label := range []string{"Discovery hostname", "Storage path"} {
+		fact, ok := findAgentContextFact(runtimeSection, label)
+		if !ok {
+			t.Fatalf("%s fact missing", label)
+		}
+		if fact.Value != unified.ResourcePolicyRedactedLabel || !fact.Redacted {
+			t.Fatalf("%s must be explicitly redacted by policy; got %+v", label, fact)
+		}
+	}
+	policySection, ok := findAgentContextSection(bundle.ContextSections, "policy")
+	if !ok || len(policySection.Redactions) == 0 {
+		t.Fatalf("policy section must explain redactions; got %+v", policySection)
+	}
+	body := rec.Body.String()
+	for _, forbidden := range []string{"secret-storage.local", "/mnt/secret-dataset"} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("context pack leaked policy-redacted value %q in body: %s", forbidden, body)
+		}
 	}
 }
 

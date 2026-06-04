@@ -67,6 +67,7 @@ const MODEL_SESSION_STORAGE_KEY = 'pulse:ai_chat_models_by_session';
 const DEFAULT_SESSION_KEY = '__default__';
 const AI_CHAT_MIN_DOCKED_VIEWPORT_WIDTH = 1200;
 const STRUCTURED_PATROL_CONTEXT_TARGETS = new Set(['patrol-configuration', 'patrol-run']);
+const STRUCTURED_RESOURCE_CONTEXT_HANDOFF_KINDS = new Set(['resource_context']);
 
 interface AIChatProps {
   onClose: () => void;
@@ -80,6 +81,10 @@ const pluralizeCount = (count: number, singular: string, plural: string) =>
 
 const shouldShowStructuredPatrolContext = (targetType: string | undefined) =>
   STRUCTURED_PATROL_CONTEXT_TARGETS.has(targetType ?? '');
+
+const shouldShowStructuredBriefingContext = (context: AIChatContext) =>
+  shouldShowStructuredPatrolContext(context.targetType) ||
+  STRUCTURED_RESOURCE_CONTEXT_HANDOFF_KINDS.has(context.handoffMetadata?.kind ?? '');
 
 const isPatrolFindingSessionHandoff = (summary: ChatSessionHandoffSummary) =>
   summary.kind === 'patrol_finding' || Boolean(summary.finding_id);
@@ -515,7 +520,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
     const title = briefing.title?.trim() ?? '';
     const subject = briefing.subject?.trim() ?? '';
-    if (shouldShowStructuredPatrolContext(aiChatStore.context.targetType)) {
+    if (shouldShowStructuredBriefingContext(aiChatStore.context)) {
       return title || subject || 'Context attached';
     }
     if (subject && /attached|briefing/i.test(title)) {
@@ -527,7 +532,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const contextBriefingDetailLines = createMemo(() => {
     const briefing = contextBriefing();
     if (!briefing) return [];
-    if (!shouldShowStructuredPatrolContext(aiChatStore.context.targetType)) return [];
+    if (!shouldShowStructuredBriefingContext(aiChatStore.context)) return [];
 
     const seen = new Set<string>();
     const lines: string[] = [];

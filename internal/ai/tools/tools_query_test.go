@@ -242,6 +242,46 @@ func (p *registryUnifiedQueryProvider) GetByType(t unifiedresources.ResourceType
 	return p.ListByType(t)
 }
 
+func TestCanonicalHandoffUnifiedResourceFallsBackAcrossResourceTypes(t *testing.T) {
+	provider := &stubUnifiedResourceProvider{resources: []unifiedresources.Resource{{
+		ID:     "k8s-cluster:prod",
+		Type:   unifiedresources.ResourceTypeK8sCluster,
+		Name:   "prod-cluster",
+		Status: unifiedresources.StatusOnline,
+	}}}
+
+	resource, ok := CanonicalHandoffUnifiedResource(provider, "k8s-cluster:prod", "prod-cluster", "k8s-cluster", "")
+	if !ok {
+		t.Fatal("expected k8s cluster handoff to resolve by canonical resource id")
+	}
+	if resource.ID != "k8s-cluster:prod" || resource.Type != unifiedresources.ResourceTypeK8sCluster {
+		t.Fatalf("resolved resource = %+v, want k8s-cluster:prod", resource)
+	}
+}
+
+func TestCanonicalHandoffUnifiedResourceResolvesProxmoxSourceID(t *testing.T) {
+	provider := &stubUnifiedResourceProvider{resources: []unifiedresources.Resource{{
+		ID:     "system-container-6adaf34f529d241a",
+		Type:   unifiedresources.ResourceTypeSystemContainer,
+		Name:   "homeassistant",
+		Status: unifiedresources.StatusOnline,
+		Proxmox: &unifiedresources.ProxmoxData{
+			SourceID: "delly:delly:101",
+			NodeName: "delly",
+			Instance: "delly",
+			VMID:     101,
+		},
+	}}}
+
+	resource, ok := CanonicalHandoffUnifiedResource(provider, "delly:delly:101", "", "system-container", "delly")
+	if !ok {
+		t.Fatal("expected Proxmox source ID handoff to resolve")
+	}
+	if resource.ID != "system-container-6adaf34f529d241a" {
+		t.Fatalf("resolved resource id = %q, want system-container-6adaf34f529d241a", resource.ID)
+	}
+}
+
 func newTrueNASUnifiedQueryProvider(t *testing.T) *registryUnifiedQueryProvider {
 	t.Helper()
 

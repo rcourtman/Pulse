@@ -223,6 +223,12 @@ text unless they also hold action execution scope. Lifecycle UI and agents may
 use those redacted events as doorbells or status summaries, but they must fetch
 governed detail through the approval/action surfaces and must not treat a
 monitoring-readable event stream as command disclosure or execution authority.
+The resource-context endpoint's additive context sections are the same
+read-only boundary: lifecycle consumers, MCP adapters, and external agents may
+use their bounded facts, provenance, freshness, and explicit redaction metadata
+to understand a resource, but those sections must not be expanded into
+provider-local config, raw discovery command output, environment values,
+secret-like metadata, install-token scope, or command authority.
 Discovery context exposed by `/api/discovery` is similarly API-owned
 observability context, not lifecycle command authority. Lifecycle and
 infrastructure setup surfaces may display service versions, config paths,
