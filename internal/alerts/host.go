@@ -27,16 +27,29 @@ func stripHostResourcePrefix(resourceID string) string {
 }
 
 func hostDisplayName(host models.Host) string {
+	base := "Agent"
 	if name := strings.TrimSpace(host.DisplayName); name != "" {
-		return name
+		base = name
+	} else if name := strings.TrimSpace(host.Hostname); name != "" {
+		base = name
+	} else if host.ID != "" {
+		base = host.ID
 	}
-	if name := strings.TrimSpace(host.Hostname); name != "" {
-		return name
+
+	// When a host agent is linked to a Proxmox node/VM/container, qualify its
+	// name so its alerts are not confused with the linked resource's alerts.
+	if strings.TrimSpace(host.LinkedNodeID) != "" ||
+		strings.TrimSpace(host.LinkedVMID) != "" ||
+		strings.TrimSpace(host.LinkedContainerID) != "" {
+		if strings.EqualFold(base, "Agent") {
+			return "Host Agent"
+		}
+		if !strings.Contains(strings.ToLower(base), "host agent") {
+			return fmt.Sprintf("%s (Host Agent)", base)
+		}
 	}
-	if host.ID != "" {
-		return host.ID
-	}
-	return "Agent"
+
+	return base
 }
 
 func hostInstanceName(host models.Host) string {
@@ -316,7 +329,7 @@ func (m *Manager) CheckHost(host models.Host) {
 
 					// Use specific resource ID for the disk: hostID/disk-temp:device
 					tempResourceID := fmt.Sprintf("%s/disk_temp:%s", hostResourceID(host.ID), sanitizeHostComponent(disk.Device))
-					tempResourceName := fmt.Sprintf("%s (%s Temp)", host.DisplayName, disk.Device)
+					tempResourceName := fmt.Sprintf("%s (%s Temp)", hostDisplayName(host), disk.Device)
 
 					diskTempMetadata := cloneMetadata(baseMetadata)
 					diskTempMetadata["metric"] = "diskTemperature"

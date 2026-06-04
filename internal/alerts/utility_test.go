@@ -710,6 +710,33 @@ func TestHostDisplayName(t *testing.T) {
 			},
 			want: "Server Name",
 		},
+		{
+			name: "linked host agent display name is qualified",
+			host: models.Host{
+				ID:          "id-123",
+				DisplayName: "Hamster",
+				LinkedVMID:  "Main:node1:101",
+			},
+			want: "Hamster (Host Agent)",
+		},
+		{
+			name: "linked host agent hostname fallback is qualified",
+			host: models.Host{
+				ID:                "id-123",
+				Hostname:          "proxmoxn3",
+				LinkedContainerID: "Main:node1:102",
+			},
+			want: "proxmoxn3 (Host Agent)",
+		},
+		{
+			name: "existing host agent suffix is not duplicated",
+			host: models.Host{
+				ID:           "id-123",
+				DisplayName:  "Hamster (Host Agent)",
+				LinkedNodeID: "Main-node1",
+			},
+			want: "Hamster (Host Agent)",
+		},
 	}
 
 	for _, tc := range tests {
