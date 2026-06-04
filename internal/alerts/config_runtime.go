@@ -28,6 +28,7 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 	alertconfig.NormalizeStorageDefaults(&config)
 	alertconfig.NormalizeDockerDefaults(&config)
 	alertconfig.NormalizePMGDefaults(&config)
+	alertconfig.NormalizePBSDefaults(&config)
 	alertconfig.NormalizeSnapshotDefaults(&config)
 	alertconfig.NormalizeBackupDefaults(&config)
 	alertconfig.NormalizeNodeDefaults(&config)

@@ -158,6 +158,32 @@ func NormalizePMGDefaults(config *AlertConfig) {
 	}
 }
 
+// NormalizePBSDefaults ensures PBS server threshold defaults exist.
+// Trigger=0 is allowed and means "disable alerting for this metric".
+func NormalizePBSDefaults(config *AlertConfig) {
+	if config.PBSDefaults.CPU == nil || config.PBSDefaults.CPU.Trigger < 0 {
+		config.PBSDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	} else if config.PBSDefaults.CPU.Trigger == 0 {
+		config.PBSDefaults.CPU.Clear = 0
+	} else if config.PBSDefaults.CPU.Clear <= 0 {
+		config.PBSDefaults.CPU.Clear = config.PBSDefaults.CPU.Trigger - 5
+		if config.PBSDefaults.CPU.Clear <= 0 {
+			config.PBSDefaults.CPU.Clear = 75
+		}
+	}
+
+	if config.PBSDefaults.Memory == nil || config.PBSDefaults.Memory.Trigger < 0 {
+		config.PBSDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
+	} else if config.PBSDefaults.Memory.Trigger == 0 {
+		config.PBSDefaults.Memory.Clear = 0
+	} else if config.PBSDefaults.Memory.Clear <= 0 {
+		config.PBSDefaults.Memory.Clear = config.PBSDefaults.Memory.Trigger - 5
+		if config.PBSDefaults.Memory.Clear <= 0 {
+			config.PBSDefaults.Memory.Clear = 80
+		}
+	}
+}
+
 func NormalizeSnapshotDefaults(config *AlertConfig) {
 	if config.SnapshotDefaults.WarningDays < 0 {
 		config.SnapshotDefaults.WarningDays = 0
@@ -519,6 +545,8 @@ func ValidateHysteresisThresholds(config *AlertConfig) {
 	EnsureValidHysteresis(config.NodeDefaults.CPU, "node.cpu")
 	EnsureValidHysteresis(config.NodeDefaults.Memory, "node.memory")
 	EnsureValidHysteresis(config.NodeDefaults.Temperature, "node.temperature")
+	EnsureValidHysteresis(config.PBSDefaults.CPU, "pbs.cpu")
+	EnsureValidHysteresis(config.PBSDefaults.Memory, "pbs.memory")
 	EnsureValidHysteresis(&config.StorageDefault, "storage")
 	EnsureValidHysteresis(config.KubernetesDefaults.CPU, "kubernetes.cpu")
 	EnsureValidHysteresis(config.KubernetesDefaults.Memory, "kubernetes.memory")

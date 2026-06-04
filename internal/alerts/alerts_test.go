@@ -3029,6 +3029,65 @@ func TestNormalizeStorageDefaultsPreservesZeroTrigger(t *testing.T) {
 
 // TestNormalizeNodeDefaultsTemperaturePreservesZeroTrigger verifies that setting
 // NodeDefaults.Temperature threshold to 0 is preserved to disable temperature alerting.
+func TestNormalizePBSDefaultsPreservesZeroTrigger(t *testing.T) {
+	t.Run("nil PBSDefaults get factory defaults", func(t *testing.T) {
+		m := newTestManager(t)
+
+		cfg := AlertConfig{
+			Enabled:     true,
+			PBSDefaults: ThresholdConfig{},
+		}
+
+		m.UpdateConfig(cfg)
+
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+
+		if m.config.PBSDefaults.CPU == nil {
+			t.Fatal("CPU defaults should be set")
+		}
+		if m.config.PBSDefaults.CPU.Trigger != 80 {
+			t.Errorf("CPU trigger = %v, want 80", m.config.PBSDefaults.CPU.Trigger)
+		}
+		if m.config.PBSDefaults.Memory == nil {
+			t.Fatal("Memory defaults should be set")
+		}
+		if m.config.PBSDefaults.Memory.Trigger != 85 {
+			t.Errorf("Memory trigger = %v, want 85", m.config.PBSDefaults.Memory.Trigger)
+		}
+	})
+
+	t.Run("Trigger=0 preserved to disable alerting", func(t *testing.T) {
+		m := newTestManager(t)
+
+		cfg := AlertConfig{
+			Enabled: true,
+			PBSDefaults: ThresholdConfig{
+				CPU:    &HysteresisThreshold{Trigger: 99, Clear: 94},
+				Memory: &HysteresisThreshold{Trigger: 0, Clear: 50},
+			},
+		}
+
+		m.UpdateConfig(cfg)
+
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+
+		if m.config.PBSDefaults.CPU.Trigger != 99 {
+			t.Errorf("CPU trigger = %v, want 99", m.config.PBSDefaults.CPU.Trigger)
+		}
+		if m.config.PBSDefaults.Memory == nil {
+			t.Fatal("Memory threshold should be preserved")
+		}
+		if m.config.PBSDefaults.Memory.Trigger != 0 {
+			t.Errorf("Memory trigger = %v, want 0", m.config.PBSDefaults.Memory.Trigger)
+		}
+		if m.config.PBSDefaults.Memory.Clear != 0 {
+			t.Errorf("Memory clear = %v, want 0", m.config.PBSDefaults.Memory.Clear)
+		}
+	})
+}
+
 func TestNormalizeNodeDefaultsTemperaturePreservesZeroTrigger(t *testing.T) {
 	// t.Parallel()
 
