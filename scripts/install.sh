@@ -1082,10 +1082,20 @@ append_qnap_autorun_block() {
 
 # Pulse Agent bootstrap begin
 (
-    while [ ! -x "${wrapper_script}" ]; do
-        sleep 5
+    _pulse_wrapper="${wrapper_script}"
+    _pulse_log="/var/log/${AGENT_NAME}.log"
+    _pulse_waited=0
+    _pulse_wait_max=1800
+    while [ ! -x "\$_pulse_wrapper" ] && [ "\$_pulse_waited" -lt "\$_pulse_wait_max" ]; do
+        sleep 2
+        _pulse_waited=\$((_pulse_waited + 2))
     done
-    "${wrapper_script}" >> /var/log/${AGENT_NAME}.log 2>&1 &
+    if [ -x "\$_pulse_wrapper" ]; then
+        [ "\$_pulse_waited" -gt 0 ] && echo "\$(date '+%Y-%m-%d %H:%M:%S') [pulse-agent-autorun] data volume available after \${_pulse_waited}s" >> "\$_pulse_log"
+        "\$_pulse_wrapper" >> "\$_pulse_log" 2>&1
+    else
+        echo "\$(date '+%Y-%m-%d %H:%M:%S') [pulse-agent-autorun] timed out after \${_pulse_wait_max}s waiting for \$_pulse_wrapper" >> "\$_pulse_log"
+    fi
 ) >> /var/log/${AGENT_NAME}.log 2>&1 &
 # Pulse Agent bootstrap end
 
