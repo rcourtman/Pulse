@@ -235,6 +235,73 @@ func TestPollStorageWithNodesOptimizedRecordsMetricsAndAlerts(t *testing.T) {
 	}
 }
 
+func TestPollStorageWithNodesOptimizedClearsStaleStorageAlertsWhenIdentityChanges(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	monitor := &Monitor{
+		state:          &models.State{},
+		metricsHistory: NewMetricsHistory(16, time.Hour),
+		alertManager:   alerts.NewManager(),
+	}
+	t.Cleanup(func() {
+		monitor.alertManager.Stop()
+	})
+
+	cfg := monitor.alertManager.GetConfig()
+	cfg.MinimumDelta = 0
+	if cfg.TimeThresholds == nil {
+		cfg.TimeThresholds = make(map[string]int)
+	}
+	cfg.TimeThresholds["storage"] = 0
+	cfg.StorageDefault = alerts.HysteresisThreshold{Trigger: 80, Clear: 70}
+	monitor.alertManager.UpdateConfig(cfg)
+
+	nodes := []proxmox.Node{{Node: "node1", Status: "online"}}
+
+	hasStorageAlert := func(resourceID string) bool {
+		for _, alert := range monitor.alertManager.GetActiveAlerts() {
+			if alert.ResourceID == resourceID {
+				return true
+			}
+		}
+		return false
+	}
+
+	oldStorage := proxmox.Storage{
+		Storage: "local", Type: "dir", Content: "images",
+		Active: 1, Enabled: 1, Shared: 0,
+		Total: 1000, Used: 900, Available: 100,
+	}
+	oldClient := &fakeStorageClient{
+		allStorage:    []proxmox.Storage{oldStorage},
+		storageByNode: map[string][]proxmox.Storage{"node1": {oldStorage}},
+	}
+	monitor.pollStorageWithNodes(context.Background(), "inst1", oldClient, nodes)
+
+	if !hasStorageAlert("inst1-node1-local") {
+		t.Fatal("expected initial storage usage alert to be active")
+	}
+
+	// Next poll: "local" is gone and replaced by a below-threshold "rootfs".
+	newStorage := proxmox.Storage{
+		Storage: "rootfs", Type: "dir", Content: "images",
+		Active: 1, Enabled: 1, Shared: 0,
+		Total: 1000, Used: 200, Available: 800,
+	}
+	newClient := &fakeStorageClient{
+		allStorage:    []proxmox.Storage{newStorage},
+		storageByNode: map[string][]proxmox.Storage{"node1": {newStorage}},
+	}
+	monitor.pollStorageWithNodes(context.Background(), "inst1", newClient, nodes)
+
+	if hasStorageAlert("inst1-node1-local") {
+		t.Fatal("expected stale storage usage alert to be cleared after storage identity changed")
+	}
+	if hasStorageAlert("inst1-node1-rootfs") {
+		t.Fatal("expected no usage alert for replacement storage below threshold")
+	}
+}
+
 func TestPollStorageWithNodesSynthesizesSharedClusterOnlyStorage(t *testing.T) {
 	monitor := &Monitor{
 		state: models.NewState(),

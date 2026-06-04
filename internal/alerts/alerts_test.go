@@ -17162,6 +17162,164 @@ func TestCheckStorageComprehensive(t *testing.T) {
 	})
 }
 
+func TestSyncStorageAlertsForInstance(t *testing.T) {
+	t.Run("clears missing storage alerts while preserving other alert types", func(t *testing.T) {
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["inst1-node1-old-usage"] = &Alert{
+			ID:         "inst1-node1-old-usage",
+			Type:       "usage",
+			ResourceID: "inst1-node1-old",
+			Instance:   "inst1",
+			Metadata: map[string]interface{}{
+				"resourceType": "Storage",
+			},
+		}
+		m.activeAlerts["storage-offline-inst1-node1-old"] = &Alert{
+			ID:         "storage-offline-inst1-node1-old",
+			Type:       "offline",
+			ResourceID: "inst1-node1-old",
+			Instance:   "inst1",
+			Metadata: map[string]interface{}{
+				"resourceType": "storage",
+			},
+		}
+		m.activeAlerts["zfs-device-inst1-node1-old-sda"] = &Alert{
+			ID:         "zfs-device-inst1-node1-old-sda",
+			Type:       "zfs-device",
+			ResourceID: "inst1-node1-old",
+			Instance:   "inst1",
+		}
+		m.activeAlerts["inst1:vm:100-cpu"] = &Alert{
+			ID:         "inst1:vm:100-cpu",
+			Type:       "cpu",
+			ResourceID: "inst1:vm:100",
+			Instance:   "inst1",
+			Metadata: map[string]interface{}{
+				"resourceType": "VM",
+			},
+		}
+		m.mu.Unlock()
+
+		m.SyncStorageAlertsForInstance("inst1", []models.Storage{
+			{
+				ID:       "inst1-node1-new",
+				Name:     "new-storage",
+				Instance: "inst1",
+			},
+		})
+
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+
+		if _, exists := m.activeAlerts["inst1-node1-old-usage"]; exists {
+			t.Fatal("expected stale storage usage alert to be cleared")
+		}
+		if _, exists := m.activeAlerts["storage-offline-inst1-node1-old"]; exists {
+			t.Fatal("expected stale storage offline alert to be cleared")
+		}
+		if _, exists := m.activeAlerts["zfs-device-inst1-node1-old-sda"]; exists {
+			t.Fatal("expected stale zfs device alert to be cleared")
+		}
+		if _, exists := m.activeAlerts["inst1:vm:100-cpu"]; !exists {
+			t.Fatal("expected non-storage alert to be preserved")
+		}
+	})
+
+	t.Run("preserves current storage and zfs device alerts", func(t *testing.T) {
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["inst1-node1-rpool-usage"] = &Alert{
+			ID:         "inst1-node1-rpool-usage",
+			Type:       "usage",
+			ResourceID: "inst1-node1-rpool",
+			Instance:   "inst1",
+			Metadata: map[string]interface{}{
+				"resourceType": "Storage",
+			},
+		}
+		m.activeAlerts["storage-offline-inst1-node1-rpool"] = &Alert{
+			ID:         "storage-offline-inst1-node1-rpool",
+			Type:       "offline",
+			ResourceID: "inst1-node1-rpool",
+			Instance:   "inst1",
+			Metadata: map[string]interface{}{
+				"resourceType": "storage",
+			},
+		}
+		m.activeAlerts["zfs-device-inst1-node1-rpool-sda"] = &Alert{
+			ID:         "zfs-device-inst1-node1-rpool-sda",
+			Type:       "zfs-device",
+			ResourceID: "inst1-node1-rpool",
+			Instance:   "inst1",
+		}
+		m.mu.Unlock()
+
+		m.SyncStorageAlertsForInstance("inst1", []models.Storage{
+			{
+				ID:       "inst1-node1-rpool",
+				Name:     "rpool",
+				Instance: "inst1",
+				ZFSPool: &models.ZFSPool{
+					Name: "rpool",
+					Devices: []models.ZFSDevice{
+						{Name: "sda", State: "ONLINE"},
+					},
+				},
+			},
+		})
+
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+
+		if _, exists := m.activeAlerts["inst1-node1-rpool-usage"]; !exists {
+			t.Fatal("expected current storage usage alert to remain active")
+		}
+		if _, exists := m.activeAlerts["storage-offline-inst1-node1-rpool"]; !exists {
+			t.Fatal("expected current storage offline alert to remain active")
+		}
+		if _, exists := m.activeAlerts["zfs-device-inst1-node1-rpool-sda"]; !exists {
+			t.Fatal("expected current zfs device alert to remain active")
+		}
+	})
+
+	t.Run("preserves alerts keyed under ceph alias ids", func(t *testing.T) {
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		m.activeAlerts["agent:pve1-ceph-pool-data-usage"] = &Alert{
+			ID:         "agent:pve1-ceph-pool-data-usage",
+			Type:       "usage",
+			ResourceID: "agent:pve1-ceph-pool-data",
+			Instance:   "pve1",
+			Metadata: map[string]interface{}{
+				"resourceType": "Storage",
+			},
+		}
+		m.mu.Unlock()
+
+		// The current inventory lists the pool under its canonical id but
+		// carries the agent-sourced id as an alias.
+		m.SyncStorageAlertsForInstance("pve1", []models.Storage{
+			{
+				ID:       "pve1-ceph-pool-data",
+				Name:     "ceph-pool-data",
+				Instance: "pve1",
+				AliasIDs: []string{"agent:pve1-ceph-pool-data"},
+			},
+		})
+
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+
+		if _, exists := m.activeAlerts["agent:pve1-ceph-pool-data-usage"]; !exists {
+			t.Fatal("expected alias-keyed ceph storage alert to be preserved")
+		}
+	})
+}
+
 func TestDispatchAlert(t *testing.T) {
 	// t.Parallel()
 

@@ -110,6 +110,81 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 	}
 }
 
+// SyncStorageAlertsForInstance clears storage-related alerts whose underlying
+// storage is no longer in the current inventory for an instance. This handles a
+// storage disappearing or changing identity between polls; without it the alert
+// stays visible until the generic multi-day stale-alert cleanup fires.
+//
+// Matching is by alert ResourceID (every v6 storage alert sets ResourceID =
+// storage.ID, regardless of the composite alert-state key) so it is robust to
+// the alert-key format. The sweep is conservative: it only touches alerts the
+// instance owns that are recognised as storage-inventory alerts, and a live
+// storage keeps its alert because its ResourceID is in the valid set. Ceph pool
+// alias IDs are treated as valid so a deduped multi-source pool keeps its alert.
+func (m *Manager) SyncStorageAlertsForInstance(instanceName string, storages []models.Storage) {
+	instanceName = strings.TrimSpace(instanceName)
+	if instanceName == "" {
+		return
+	}
+
+	validResourceIDs := make(map[string]struct{}, len(storages)*2)
+	for _, storage := range storages {
+		if strings.TrimSpace(storage.Instance) != instanceName {
+			continue
+		}
+		if id := strings.TrimSpace(storage.ID); id != "" {
+			validResourceIDs[id] = struct{}{}
+		}
+		for _, aliasID := range storage.AliasIDs {
+			if id := strings.TrimSpace(aliasID); id != "" {
+				validResourceIDs[id] = struct{}{}
+			}
+		}
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for alertID, alert := range m.activeAlerts {
+		if alert == nil {
+			continue
+		}
+		if strings.TrimSpace(alert.Instance) != instanceName {
+			continue
+		}
+		if !isStorageInventoryAlert(alert) {
+			continue
+		}
+		if _, exists := validResourceIDs[strings.TrimSpace(alert.ResourceID)]; exists {
+			continue
+		}
+		m.clearAlertNoLock(alertID)
+	}
+}
+
+// isStorageInventoryAlert reports whether an alert belongs to the storage
+// inventory, so it should be cleared when its storage leaves the inventory.
+// Gated on the storage resourceType metadata that v6 stamps on storage alerts
+// plus the ZFS pool/offline alert types; anything else is left untouched.
+func isStorageInventoryAlert(alert *Alert) bool {
+	if alert == nil {
+		return false
+	}
+
+	if alert.Metadata != nil {
+		if resourceType, ok := alert.Metadata["resourceType"].(string); ok && strings.EqualFold(strings.TrimSpace(resourceType), "storage") {
+			return true
+		}
+	}
+
+	switch alert.Type {
+	case "storage", "usage", "zfs-pool-state", "zfs-pool-errors", "zfs-device", "offline":
+		return true
+	}
+
+	return false
+}
+
 func (m *Manager) clearStorageAliasAlerts(storage models.Storage) {
 	for i, resourceID := range storageAlertResourceIDs(storage) {
 		if i == 0 {

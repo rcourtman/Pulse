@@ -652,6 +652,10 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 		}
 	}
 
+	if m.alertManager != nil {
+		m.alertManager.SyncStorageAlertsForInstance(storageInstanceName, allStorage)
+	}
+
 	if !cephDetected {
 		for _, storage := range allStorage {
 			if isCephStorageType(storage.Type) {
