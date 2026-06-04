@@ -272,6 +272,20 @@ func TestClusterEndpointEffectiveURL(t *testing.T) {
 		t.Fatalf("override IP preference = %q, want %q", got, "https://192.168.1.10:8006")
 	}
 
+	// #1199: a cluster-level fingerprint (passed as hasFingerprint=true) must NOT
+	// force IP routing for a member endpoint that has no per-endpoint fingerprint;
+	// hostname routing must be preserved so TLS validation still works.
+	endpoint = config.ClusterEndpoint{Host: "node.local", IP: "10.0.0.1"}
+	if got := clusterEndpointEffectiveURL(endpoint, true, true); got != "https://node.local:8006" {
+		t.Fatalf("cluster-level fingerprint must not force IP routing for a fingerprint-less endpoint, got %q", got)
+	}
+
+	// A per-endpoint fingerprint still allows IP routing under verifySSL.
+	endpoint.Fingerprint = "endpoint-fp"
+	if got := clusterEndpointEffectiveURL(endpoint, true, false); got != "https://10.0.0.1:8006" {
+		t.Fatalf("per-endpoint fingerprint should allow IP routing, got %q", got)
+	}
+
 	endpoint = config.ClusterEndpoint{}
 	if got := clusterEndpointEffectiveURL(endpoint, true, false); got != "" {
 		t.Fatalf("empty endpoint = %q, want empty", got)

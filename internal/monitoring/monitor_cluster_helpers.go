@@ -107,12 +107,15 @@ func ensureClusterEndpointURL(raw string) string {
 	return "https://" + net.JoinHostPort(value, "8006")
 }
 
-func clusterEndpointEffectiveURL(endpoint config.ClusterEndpoint, verifySSL bool, hasFingerprint bool) string {
-	// When TLS hostname verification is required (VerifySSL=true and no fingerprint),
-	// prefer hostname over IP to ensure certificate CN/SAN validation works correctly.
-	// When TLS is not verified (VerifySSL=false) or a fingerprint is provided (which
-	// bypasses hostname checks), prefer IP to reduce DNS lookups (refs #620).
-	requiresHostnameForTLS := verifySSL && !hasFingerprint
+func clusterEndpointEffectiveURL(endpoint config.ClusterEndpoint, verifySSL bool, _ bool) string {
+	// A fingerprint only applies to the specific endpoint it was captured from.
+	// The primary node's (cluster-level) fingerprint must not be treated as valid
+	// for every cluster member, otherwise we route to per-node IPs while pinning
+	// the wrong certificate. So derive this strictly from the endpoint's own
+	// fingerprint and ignore any cluster-level value the caller passed. Refs: #1199
+	// (and #620 for why a fingerprint lets us prefer IP to reduce DNS lookups).
+	hasEndpointFingerprint := strings.TrimSpace(endpoint.Fingerprint) != ""
+	requiresHostnameForTLS := verifySSL && !hasEndpointFingerprint
 
 	// Use EffectiveIP() which prefers user-specified IPOverride over auto-discovered IP
 	effectiveIP := endpoint.EffectiveIP()
