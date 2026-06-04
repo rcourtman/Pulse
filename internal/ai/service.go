@@ -1752,22 +1752,36 @@ func (s *Service) createPatrolProviderForModel(modelStr string) (providers.Strea
 // It uses a single-turn, no-tools call for efficiency.
 func (s *Service) QuickAnalysis(ctx context.Context, req QuickAnalysisRequest) (string, error) {
 	s.mu.RLock()
-	provider := s.provider
+	defaultProvider := s.provider
 	cfg := s.cfg
 	costStore := s.costStore
 	s.mu.RUnlock()
 
+	if cfg == nil || !cfg.Enabled {
+		return "", fmt.Errorf("Pulse Assistant is not enabled or configured")
+	}
+
+	// Use the configured patrol model and create a provider for that exact model,
+	// so quick patrol analysis goes to the selected Patrol provider instead of
+	// whichever default provider the service booted with (#1360).
+	model := ""
+	if cfg.PatrolModel != "" {
+		model = cfg.PatrolModel
+	}
+	provider := defaultProvider
+	if model != "" {
+		if modelProvider, err := providers.NewForModel(cfg, model); err == nil {
+			provider = modelProvider
+		} else {
+			log.Debug().Err(err).Str("model", model).Msg("Could not create provider for patrol quick analysis, using default")
+		}
+	}
 	if provider == nil {
 		return "", fmt.Errorf("Pulse Assistant is not enabled or configured")
 	}
 
-	// Use a fast model for quick analysis if available
-	model := ""
-	if cfg != nil && cfg.PatrolModel != "" {
-		model = cfg.PatrolModel
-	}
 	sanitizerModel := model
-	if sanitizerModel == "" && cfg != nil {
+	if sanitizerModel == "" {
 		sanitizerModel = cfg.GetChatModel()
 	}
 
