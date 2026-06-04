@@ -276,6 +276,98 @@ func TestCollectSwarmDataFromManager(t *testing.T) {
 			t.Fatalf("expected services only on task error")
 		}
 	})
+
+	t.Run("node scope uses local task counts for services", func(t *testing.T) {
+		agent := &Agent{
+			docker: &fakeDockerClient{
+				serviceListFn: func(_ context.Context, _ dockerServiceListOptions) ([]swarmtypes.Service, error) {
+					return []swarmtypes.Service{
+						{
+							ID:   "svc1",
+							Spec: swarmtypes.ServiceSpec{Annotations: swarmtypes.Annotations{Name: "alpha"}},
+							ServiceStatus: &swarmtypes.ServiceStatus{
+								DesiredTasks:   4,
+								RunningTasks:   3,
+								CompletedTasks: 1,
+							},
+						},
+						{
+							ID:   "svc2",
+							Spec: swarmtypes.ServiceSpec{Annotations: swarmtypes.Annotations{Name: "beta"}},
+							ServiceStatus: &swarmtypes.ServiceStatus{
+								DesiredTasks: 2,
+								RunningTasks: 2,
+							},
+						},
+					}, nil
+				},
+				taskListFn: func(_ context.Context, _ dockerTaskListOptions) ([]swarmtypes.Task, error) {
+					return []swarmtypes.Task{
+						{
+							ID:           "task1",
+							ServiceID:    "svc1",
+							DesiredState: swarmtypes.TaskStateRunning,
+							Status:       swarmtypes.TaskStatus{State: swarmtypes.TaskStateRunning},
+						},
+						{
+							ID:           "task2",
+							ServiceID:    "svc1",
+							DesiredState: swarmtypes.TaskStateRunning,
+							Status:       swarmtypes.TaskStatus{State: swarmtypes.TaskStatePreparing},
+						},
+					}, nil
+				},
+			},
+		}
+
+		info := systemtypes.Info{Swarm: swarmtypes.Info{NodeID: "node1"}}
+
+		services, tasks, err := agent.collectSwarmDataFromManager(context.Background(), info, swarmScopeNode, nil, true, true)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(tasks) != 2 {
+			t.Fatalf("expected 2 local tasks, got %d", len(tasks))
+		}
+		if len(services) != 1 {
+			t.Fatalf("expected only local services, got %d", len(services))
+		}
+		if services[0].ID != "svc1" {
+			t.Fatalf("expected local service svc1, got %+v", services[0])
+		}
+		if services[0].DesiredTasks != 2 || services[0].RunningTasks != 1 || services[0].CompletedTasks != 0 {
+			t.Fatalf("expected node-local task counts, got %+v", services[0])
+		}
+	})
+
+	t.Run("node scope drops services when no local runtime tasks remain", func(t *testing.T) {
+		agent := &Agent{
+			docker: &fakeDockerClient{
+				serviceListFn: func(_ context.Context, _ dockerServiceListOptions) ([]swarmtypes.Service, error) {
+					return []swarmtypes.Service{
+						{ID: "svc1", Spec: swarmtypes.ServiceSpec{Annotations: swarmtypes.Annotations{Name: "alpha"}}},
+						{ID: "svc2", Spec: swarmtypes.ServiceSpec{Annotations: swarmtypes.Annotations{Name: "beta"}}},
+					}, nil
+				},
+				taskListFn: func(_ context.Context, _ dockerTaskListOptions) ([]swarmtypes.Task, error) {
+					return []swarmtypes.Task{}, nil
+				},
+			},
+		}
+
+		info := systemtypes.Info{Swarm: swarmtypes.Info{NodeID: "node1"}}
+
+		services, tasks, err := agent.collectSwarmDataFromManager(context.Background(), info, swarmScopeNode, nil, true, true)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(tasks) != 0 {
+			t.Fatalf("expected no local tasks, got %d", len(tasks))
+		}
+		if len(services) != 0 {
+			t.Fatalf("expected no node-scoped services without local tasks, got %d", len(services))
+		}
+	})
 }
 
 func TestMapSwarmNode(t *testing.T) {

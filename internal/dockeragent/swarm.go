@@ -340,19 +340,42 @@ func (a *Agent) collectSwarmDataFromManager(ctx context.Context, info systemtype
 		}
 
 		if scope == swarmScopeNode && includeServices && len(services) > 0 {
-			used := make(map[string]struct{}, len(tasks))
+			// Compute node-local task counts from the (already node-filtered) task
+			// list, so a node-scoped view reports this node's task counts rather
+			// than the cluster-wide ServiceStatus, and drops services that have no
+			// tasks on this node instead of keeping them all.
+			countsByService := make(map[string]agentsdocker.Service, len(services))
 			for _, task := range tasks {
-				// Only count running tasks - ignore shutdown/historical tasks
-				if task.ServiceID != "" && strings.ToLower(task.DesiredState) == "running" {
-					used[task.ServiceID] = struct{}{}
+				if task.ServiceID == "" {
+					continue
 				}
+
+				counts := countsByService[task.ServiceID]
+				counts.ID = task.ServiceID
+				if task.ServiceName != "" {
+					counts.Name = task.ServiceName
+				}
+				counts.DesiredTasks++
+				if strings.EqualFold(task.CurrentState, "running") {
+					counts.RunningTasks++
+				}
+				if isTaskCompletedState(task.CurrentState) {
+					counts.CompletedTasks++
+				}
+				countsByService[task.ServiceID] = counts
 			}
 
 			filtered := services[:0]
 			for _, svc := range services {
-				if _, ok := used[svc.ID]; ok || len(used) == 0 {
-					filtered = append(filtered, svc)
+				counts, ok := countsByService[svc.ID]
+				if !ok {
+					continue
 				}
+
+				svc.DesiredTasks = counts.DesiredTasks
+				svc.RunningTasks = counts.RunningTasks
+				svc.CompletedTasks = counts.CompletedTasks
+				filtered = append(filtered, svc)
 			}
 			services = filtered
 		}
