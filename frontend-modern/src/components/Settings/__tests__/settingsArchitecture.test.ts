@@ -655,8 +655,8 @@ describe('settings architecture guardrails', () => {
     // the page header) to 'Connected systems' which describes the card
     // content distinctly.
     expect(infrastructureSourceManagerSource).toContain('Connected systems');
-    // Discovery actions are now icon-only ghost buttons; the human copy
-    // still lives in their title and aria-label attributes.
+    // Discovery owns an explicit status/action band inside Connected systems
+    // so manual scans are observable without opening the settings dialog.
     expect(infrastructureSourceManagerSource).toContain('Run discovery');
     expect(infrastructureSourceManagerSource).toContain('Discovery settings');
     expect(monitoredSystemImpactPreviewSource).toContain('getMonitoredSystemImpactPreviewTitle');

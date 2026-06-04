@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { InfrastructureSourceManager } from '../InfrastructureSourceManager';
 import {
@@ -113,12 +113,79 @@ describe('InfrastructureSourceManager setup summary', () => {
 
     expect(screen.queryByRole('button', { name: /^Monitor endpoint$/i })).toBeNull();
     expect(onAddSourceStep).not.toHaveBeenCalled();
+    const discovery = screen.getByRole('region', { name: /^Network discovery$/i });
+    expect(within(discovery).getByText('Ready to scan configured networks')).toBeInTheDocument();
+    expect(
+      within(discovery).getByText(
+        /Run discovery to look for unattached Proxmox VE, Proxmox Backup Server, and Proxmox Mail Gateway APIs/i,
+      ),
+    ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /^Run discovery$/i }));
+    fireEvent.click(within(discovery).getByRole('button', { name: /^Run discovery$/i }));
     expect(onRunDiscovery).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: /^Discovery settings$/i }));
+    fireEvent.click(within(discovery).getByRole('button', { name: /^Discovery settings$/i }));
     expect(onOpenDiscoverySettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps manual discovery observable while a scan is running', () => {
+    const onRunDiscovery = vi.fn();
+
+    render(() => (
+      <InfrastructureSourceManager
+        rows={() => []}
+        discoveredNodes={() => []}
+        discoveryEnabled
+        discoveryScanStatus={() => ({
+          scanning: true,
+          subnet: '10.0.0.0/24',
+          lastScanStartedAt: Date.now(),
+        })}
+        readOnly={false}
+        onRunDiscovery={onRunDiscovery}
+      />
+    ));
+
+    const discovery = screen.getByRole('region', { name: /^Network discovery$/i });
+    expect(within(discovery).getByText('Scanning configured networks')).toBeInTheDocument();
+    expect(
+      within(discovery).getByText(
+        /Pulse is scanning 10\.0\.0\.0\/24 for Proxmox VE, Proxmox Backup Server, and Proxmox Mail Gateway APIs/i,
+      ),
+    ).toBeInTheDocument();
+    expect(within(discovery).getByRole('button', { name: /^Scanning\.\.\.$/i })).toBeDisabled();
+  });
+
+  it('keeps discovered candidates in the discovery monitor instead of hiding them in the table', () => {
+    const onReviewDiscoveredSource = vi.fn();
+    const candidate = {
+      ip: '10.0.0.55',
+      port: 8006,
+      type: 'pve' as const,
+      version: '8.2.2',
+      hostname: 'discovered-pve.lab',
+    };
+
+    render(() => (
+      <InfrastructureSourceManager
+        rows={() => []}
+        discoveredNodes={() => [candidate]}
+        discoveryEnabled
+        discoveryScanStatus={() => ({ scanning: false, lastResultAt: Date.now() })}
+        readOnly={false}
+        onReviewDiscoveredSource={onReviewDiscoveredSource}
+      />
+    ));
+
+    const discovery = screen.getByRole('region', { name: /^Network discovery$/i });
+    expect(within(discovery).getByText('1 candidate ready to review')).toBeInTheDocument();
+    expect(
+      within(discovery).getByText(/Review and add credentials before Pulse starts monitoring it/i),
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(discovery).getByRole('button', { name: /^Review candidate$/i }));
+    expect(onReviewDiscoveredSource).toHaveBeenCalledWith(candidate);
+    expect(screen.getByText('discovered-pve.lab')).toBeInTheDocument();
   });
 
   it('keeps setup status compact while preserving row-level attention signals', () => {

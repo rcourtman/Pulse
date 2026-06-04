@@ -413,6 +413,15 @@ compact: `Add infrastructure` remains the obvious action, the setup summary is
 one short status strip, and detailed governance/fleet state stays in the
 systems table rows or deeper fleet surfaces instead of expanding into duplicate
 explanatory bands above the table.
+Network discovery is the exception because manual scans are an operator command
+whose progress must be observable in the source manager. `InfrastructureSourceManager.tsx`
+must keep one explicit Network discovery band above the setup summary that
+shows the current enabled/scanning/error/result state, scan scope, last scan
+metadata, and review action for discovered candidates before anything is added.
+Its copy must describe only the platform APIs represented by the LAN discovery
+candidate model, and it must not imply TrueNAS, VMware, Docker, Kubernetes, or
+agent command discovery when this source-manager path cannot surface those
+candidates.
 Reported agent-backed host profiles must be visible at the source-manager
 grouping level without changing the canonical connection type: an Unraid agent
 row stays `agent` internally, but the connected-systems table groups it under

@@ -644,6 +644,7 @@ describe('InfrastructureWorkspace', () => {
   it('routes discovery actions from the manager and shows discovered candidates in the matching platform group', async () => {
     const triggerDiscoveryScan = vi.fn();
     renderWorkspace({
+      discoveryEnabled: () => true,
       discoveredNodes: () => [
         {
           ip: '10.0.0.55',
@@ -663,8 +664,12 @@ describe('InfrastructureWorkspace', () => {
       name: /Infrastructure setup summary/i,
     });
     expect(within(readiness).getByText('1 to review')).toBeInTheDocument();
-    expect(within(readiness).getByText(/1 candidate discovered and waiting/i)).toBeInTheDocument();
-    fireEvent.click(within(readiness).getByRole('button', { name: /Review candidate/i }));
+    const discovery = screen.getByRole('region', { name: /Network discovery/i });
+    expect(within(discovery).getByText('1 candidate ready to review')).toBeInTheDocument();
+    expect(
+      within(discovery).getByText(/Review and add credentials before Pulse starts monitoring it/i),
+    ).toBeInTheDocument();
+    fireEvent.click(within(discovery).getByRole('button', { name: /Review candidate/i }));
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=pve', {
       scroll: false,
     });

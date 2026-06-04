@@ -663,14 +663,15 @@ not a replacement status card, CTA band, or page-local nested card.
    and local edit flows stay single-purpose instead of stacking multiple
    page-level workspaces at once.
    The source-manager landing now also owns the explicit discovery strip for
-   that destination. `InfrastructureSourceManager.tsx` may expose a compact
-   discovery status line plus `Run discovery` and `Discovery settings`
-   actions from the shared landing shell, but it must not start a network scan
-   just because the page rendered. New-source admission belongs on the table's
-   per-platform `Add` actions or the compact first-run/readiness actions rather
-   than in the discovery strip, and the direct address-probe utility may appear
-   as first-run setup guidance while header discovery actions remain dedicated
-   to saved network scanning.
+   that destination. `InfrastructureSourceManager.tsx` exposes one Network
+   discovery status/action band from the shared landing shell with scan state,
+   saved scope, last result metadata, errors, `Run discovery`, `Discovery
+   settings`, and candidate review when discovered sources are waiting. It must
+   not start a network scan just because the page rendered. New-source
+   admission belongs on the table's per-platform `Add` actions, the compact
+   first-run/readiness actions, or the discovery band's explicit review action,
+   and the direct address-probe utility may appear as first-run setup guidance
+   instead of a second saved-network-scan command.
    Discovered API-backed candidates stay visible in the same platform-group
    table as configured sources, using the existing tree/table hierarchy
    instead of spawning a second discovery-only page or card stack.

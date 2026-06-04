@@ -6740,7 +6740,7 @@
     },
     {
       "id": "agent-native-continuous-discovery-findings",
-      "summary": "Track the agent-native reconciliation loop beyond one-shot LAN discovery: continuous discovery should surface newly detected, unconfigured infrastructure candidates as durable findings that agents can investigate, plan, approve, and resolve by validating credentials and adding the source through the canonical provisioning capabilities.",
+      "summary": "Track the agent-native reconciliation loop beyond one-shot LAN discovery: manual and continuous discovery should keep scan state, scope, results, and candidate review visible from Connected systems, and newly detected unconfigured infrastructure candidates should become durable findings that agents can investigate, plan, approve, and resolve by validating credentials and adding the source through the canonical provisioning capabilities.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-05-28",

@@ -8,7 +8,7 @@ import {
   type Accessor,
   type Component,
 } from 'solid-js';
-import { Cpu, Plus, RotateCw, Search, SlidersHorizontal } from 'lucide-solid';
+import { AlertTriangle, Cpu, Plus, RotateCw, Search, SlidersHorizontal } from 'lucide-solid';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import {
   Table,
@@ -65,14 +65,18 @@ const inlineButtonClass =
 // to an existing platform without competing with the primary CTA.
 const addSectionButtonClass =
   'inline-flex items-center justify-center gap-1 rounded px-2 py-0.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/30';
-const utilityToolbarButtonClass =
-  'inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-transparent px-2.5 py-2 text-sm font-medium text-muted transition-colors hover:border-border hover:bg-surface hover:text-base-content disabled:cursor-not-allowed disabled:opacity-60';
 const workspacePrimaryButtonClass =
   'inline-flex min-h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60';
 const workspaceSecondaryButtonClass =
   'inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60';
+const discoveryPrimaryButtonClass =
+  'inline-flex min-h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60';
+const discoverySecondaryButtonClass =
+  'inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60';
 const discoveryRowClass =
   'border-b border-border-subtle bg-blue-50/30 hover:bg-blue-50/40 dark:bg-blue-950/10 dark:hover:bg-blue-950/20';
+const discoveryScanTargetLabel =
+  'Proxmox VE, Proxmox Backup Server, and Proxmox Mail Gateway APIs';
 // The system column shows just the name on a single line. The OS / version
 // (standalone) or cluster identity (cluster) descriptor that used to sit on a
 // second line moves into the name's hover title, so every row stays one line
@@ -121,6 +125,21 @@ const formatRelativeTimestamp = (value?: number): string | undefined => {
   if (hr < 24) return `${hr}h ago`;
   const days = Math.floor(hr / 24);
   return `${days}d ago`;
+};
+
+const discoverySubnetLabel = (status: DiscoveryScanStatus): string => {
+  const subnet = status.subnet?.trim();
+  if (!subnet || subnet.toLowerCase() === 'auto') {
+    return 'auto-detected networks';
+  }
+  return subnet;
+};
+
+const discoveryErrorSummary = (errors?: readonly string[]): string | undefined => {
+  const normalized = (errors ?? []).map((error) => error.trim()).filter(Boolean);
+  if (normalized.length === 0) return undefined;
+  if (normalized.length === 1) return normalized[0];
+  return `${normalized.length} scan issues reported`;
 };
 
 const discoveredServerName = (server: DiscoveredServer): string =>
@@ -417,17 +436,47 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     if (lastResult) return `Last scan ${lastResult}`;
     return props.discoveryEnabled ? 'Ready to scan' : 'Discovery off';
   });
-  const setupConfidenceAction = createMemo<SetupConfidenceAction>(() => {
-    const discoveredCandidates = props.discoveredNodes();
-    if (discoveredCandidates.length > 0 && props.onReviewDiscoveredSource) {
-      return {
-        kind: 'review',
-        label: discoveredCandidates.length === 1 ? 'Review candidate' : 'Review first candidate',
-        detail: `${formatCount(discoveredCandidates.length, 'candidate')} discovered and waiting to be attached to the infrastructure model.`,
-        onClick: () => props.onReviewDiscoveredSource?.(discoveredCandidates[0]),
-      };
+  const discoveryMonitorTitle = createMemo(() => {
+    const status = props.discoveryScanStatus();
+    if (status.scanning) return 'Scanning configured networks';
+    if (discoveredCandidateCount() > 0) {
+      return `${formatCount(discoveredCandidateCount(), 'candidate')} ready to review`;
     }
-
+    if (!props.discoveryEnabled) return 'Discovery is off';
+    if (discoveryErrorSummary(status.errors)) return 'Last discovery scan needs attention';
+    if (lastDiscoveryResultText()) return 'No new candidates from the last scan';
+    return 'Ready to scan configured networks';
+  });
+  const discoveryMonitorDetail = createMemo(() => {
+    const status = props.discoveryScanStatus();
+    const subnet = discoverySubnetLabel(status);
+    const errors = discoveryErrorSummary(status.errors);
+    if (status.scanning) {
+      return `Pulse is scanning ${subnet} for ${discoveryScanTargetLabel}. Candidates appear below for review before anything is added.`;
+    }
+    if (discoveredCandidateCount() > 0) {
+      return `${formatCount(discoveredCandidateCount(), 'candidate')} found on ${subnet}. Review and add credentials before Pulse starts monitoring it.`;
+    }
+    if (!props.discoveryEnabled) {
+      return `Enable discovery to scan configured networks for ${discoveryScanTargetLabel}.`;
+    }
+    if (errors) {
+      return errors;
+    }
+    if (lastDiscoveryResultText()) {
+      return `Last scan checked ${subnet} ${lastDiscoveryResultText()} and found no unattached platform APIs.`;
+    }
+    return `Run discovery to look for unattached ${discoveryScanTargetLabel} on the configured networks.`;
+  });
+  const discoveryMonitorMeta = createMemo(() => {
+    const status = props.discoveryScanStatus();
+    if (status.scanning && status.lastScanStartedAt) {
+      return `Started ${formatRelativeTimestamp(status.lastScanStartedAt) ?? 'just now'}`;
+    }
+    if (lastDiscoveryResultText()) return `Last scan ${lastDiscoveryResultText()}`;
+    return props.discoveryEnabled ? 'No scan has run yet' : 'Disabled';
+  });
+  const setupConfidenceAction = createMemo<SetupConfidenceAction>(() => {
     if (connectedSystemCount() === 0) {
       return {
         kind: 'add',
@@ -452,8 +501,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       return {
         kind: 'scan',
         label: props.discoveryScanStatus().scanning ? 'Scanning networks' : 'Scan networks',
-        detail:
-          'Run discovery to check whether more platform APIs are waiting on the configured networks.',
+        detail: `Run discovery to check whether more ${discoveryScanTargetLabel} are waiting on the configured networks.`,
         onClick: props.onRunDiscovery,
         disabled: props.discoveryScanStatus().scanning,
       };
@@ -542,38 +590,6 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
               Add infrastructure
             </button>
           </Show>
-          {/* Discovery actions stay utility-tier but must remain explicit:
-              manual scans are an operator command, not an icon-hunt. */}
-          <div class="ml-auto flex flex-wrap items-center gap-1">
-            <Show when={props.onRunDiscovery}>
-              <button
-                type="button"
-                onClick={props.onRunDiscovery}
-                disabled={props.discoveryScanStatus().scanning}
-                class={utilityToolbarButtonClass}
-                title="Scan configured networks for reachable Proxmox VE, TrueNAS, PBS, PMG, and VMware vCenter endpoints. Discovered candidates appear here for review before they are added."
-              >
-                <RotateCw
-                  class={`h-4 w-4 ${props.discoveryScanStatus().scanning ? 'animate-spin' : ''}`}
-                />
-                <span>
-                  {props.discoveryScanStatus().scanning ? 'Scanning...' : 'Run discovery'}
-                </span>
-              </button>
-            </Show>
-
-            <Show when={props.onOpenDiscoverySettings}>
-              <button
-                type="button"
-                onClick={props.onOpenDiscoverySettings}
-                class={utilityToolbarButtonClass}
-                title="Configure which networks and ports Pulse scans for platform APIs, and how often."
-              >
-                <SlidersHorizontal class="h-4 w-4" />
-                <span>Discovery settings</span>
-              </button>
-            </Show>
-          </div>
         </div>
       </div>
     </Show>
@@ -594,6 +610,89 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
         <Plus class="h-4 w-4" />
       </Show>
     </>
+  );
+
+  const discoveryMonitorBand = () => (
+    <section
+      aria-label="Network discovery"
+      aria-live="polite"
+      class="border-b border-border bg-surface px-4 py-3"
+    >
+      <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div class="min-w-0 flex-1">
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="flex items-center gap-2 text-sm font-semibold text-base-content">
+              <Search class="h-4 w-4 text-blue-600 dark:text-blue-300" aria-hidden="true" />
+              Network discovery
+            </div>
+            <span
+              class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                props.discoveryScanStatus().scanning
+                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-200'
+                  : discoveryErrorSummary(props.discoveryScanStatus().errors)
+                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200'
+                    : props.discoveryEnabled
+                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200'
+                      : 'bg-surface-alt text-muted'
+              }`}
+            >
+              {discoveryMonitorTitle()}
+            </span>
+            <span class="text-xs text-muted">{discoveryMonitorMeta()}</span>
+          </div>
+          <p class="mt-1 max-w-4xl text-xs leading-5 text-muted">{discoveryMonitorDetail()}</p>
+          <Show when={discoveryErrorSummary(props.discoveryScanStatus().errors)}>
+            {(summary) => (
+              <div class="mt-2 flex items-start gap-2 text-xs text-amber-800 dark:text-amber-200">
+                <AlertTriangle class="mt-0.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+                <span>{summary()}</span>
+              </div>
+            )}
+          </Show>
+        </div>
+
+        <Show when={!props.readOnly}>
+          <div class="flex flex-wrap gap-2 lg:justify-end">
+            <Show when={props.onRunDiscovery}>
+              <button
+                type="button"
+                onClick={props.onRunDiscovery}
+                disabled={props.discoveryScanStatus().scanning || !props.discoveryEnabled}
+                class={discoveryPrimaryButtonClass}
+                title={`Scan configured networks for reachable ${discoveryScanTargetLabel}. Discovered candidates appear here for review before they are added.`}
+              >
+                <RotateCw
+                  class={`h-4 w-4 ${props.discoveryScanStatus().scanning ? 'animate-spin' : ''}`}
+                  aria-hidden="true"
+                />
+                {props.discoveryScanStatus().scanning ? 'Scanning...' : 'Run discovery'}
+              </button>
+            </Show>
+            <Show when={props.onOpenDiscoverySettings}>
+              <button
+                type="button"
+                onClick={props.onOpenDiscoverySettings}
+                class={discoverySecondaryButtonClass}
+                title={`Configure which networks Pulse scans for ${discoveryScanTargetLabel}.`}
+              >
+                <SlidersHorizontal class="h-4 w-4" aria-hidden="true" />
+                Discovery settings
+              </button>
+            </Show>
+            <Show when={discoveredCandidateCount() > 0 && props.onReviewDiscoveredSource}>
+              <button
+                type="button"
+                onClick={() => props.onReviewDiscoveredSource?.(props.discoveredNodes()[0])}
+                class={discoverySecondaryButtonClass}
+              >
+                <Search class="h-4 w-4" aria-hidden="true" />
+                {discoveredCandidateCount() === 1 ? 'Review candidate' : 'Review first candidate'}
+              </button>
+            </Show>
+          </div>
+        </Show>
+      </div>
+    </section>
   );
 
   const setupSummaryBand = () => (
@@ -666,6 +765,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     <div ref={layoutContainerRef} class="min-w-0">
       <SettingsPanel title="Connected systems" noPadding>
         {headerActions()}
+        {discoveryMonitorBand()}
         {setupSummaryBand()}
 
         <Show when={!useCardLayout()}>
