@@ -135,10 +135,9 @@ export const useInfrastructureInstallState = (
     if (rawSetupHandoff) {
       try {
         const parsed = JSON.parse(rawSetupHandoff) as Partial<SetupHandoffState>;
-        if (parsed.username && parsed.password && parsed.apiToken) {
+        if (parsed.username && parsed.apiToken) {
           setSetupHandoff({
             username: parsed.username,
-            password: parsed.password,
             apiToken: parsed.apiToken,
             createdAt: parsed.createdAt,
           });
@@ -204,7 +203,7 @@ Web Login:
 ----------
 URL: ${baseUrl}
 Username: ${handoff.username}
-Password: ${handoff.password}
+Password: shown once on the setup completion screen and not stored here. If you didn't save it, change it from Settings → Security → Change password.
 
 Admin API Token:
 ----------------

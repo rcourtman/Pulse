@@ -52,7 +52,7 @@ describe('SecurityStep', () => {
     vi.unstubAllGlobals();
   });
 
-  it('generates and persists first-run credentials before entering the completion handoff', async () => {
+  it('hands off username and token but never persists the plaintext password', async () => {
     const updateState = vi.fn();
     const onComplete = vi.fn();
 
@@ -88,6 +88,8 @@ describe('SecurityStep', () => {
     expect(body.apiToken).toHaveLength(48);
     expect(body.setupToken).toBe('bootstrap-token');
     expect(setApiTokenMock).toHaveBeenCalledWith(body.apiToken);
+    // The password is kept in in-memory wizard state so the completion screen
+    // can show it once for the user to save.
     expect(updateState).toHaveBeenCalledWith({
       username: 'admin',
       password: body.password,
@@ -104,9 +106,12 @@ describe('SecurityStep', () => {
     };
     expect(storedHandoff).toMatchObject({
       username: 'admin',
-      password: body.password,
       apiToken: body.apiToken,
     });
+    // The plaintext admin password must never be written to browser storage
+    // (code-scanning finding). It lives only in in-memory wizard state and is
+    // shown once on the completion screen.
+    expect(storedHandoff.password).toBeUndefined();
     expect(storedHandoff.createdAt).toEqual(expect.any(String));
     expect(onComplete).toHaveBeenCalledOnce();
     expect(showErrorMock).not.toHaveBeenCalled();

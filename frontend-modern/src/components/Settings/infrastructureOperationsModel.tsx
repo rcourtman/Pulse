@@ -15,7 +15,6 @@ export type InstallProfile = 'auto' | 'docker' | 'kubernetes' | 'proxmox-pve' | 
 
 export type SetupHandoffState = {
   username: string;
-  password: string;
   apiToken: string;
   createdAt?: string;
 };

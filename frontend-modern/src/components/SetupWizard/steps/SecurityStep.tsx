@@ -92,11 +92,15 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
 
       if (typeof window !== 'undefined') {
         try {
+          // Persist only the username and admin API token for the
+          // infrastructure-onboarding handoff. The plaintext admin password is
+          // deliberately NOT written to browser storage (code-scanning finding):
+          // it is shown once on the completion screen from in-memory wizard
+          // state, which is where the user is told to save it.
           sessionStorage.setItem(
             STORAGE_KEYS.SETUP_HANDOFF,
             JSON.stringify({
               username: username(),
-              password: finalPassword,
               apiToken: token,
               createdAt: new Date().toISOString(),
             }),

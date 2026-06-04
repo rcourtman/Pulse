@@ -192,20 +192,12 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                     unlock without another setup step.
                   </Show>
                 </p>
-                <div class="grid gap-3 sm:grid-cols-3">
+                <div class="grid gap-3 sm:grid-cols-2">
                   <div class="rounded-md border border-emerald-200 bg-white px-3 py-2 dark:border-emerald-800 dark:bg-emerald-950">
                     <div class="text-[11px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
                       Username
                     </div>
                     <div class="mt-1 font-mono text-sm text-base-content">{handoff().username}</div>
-                  </div>
-                  <div class="rounded-md border border-emerald-200 bg-white px-3 py-2 dark:border-emerald-800 dark:bg-emerald-950">
-                    <div class="text-[11px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-                      Password
-                    </div>
-                    <div class="mt-1 break-all font-mono text-sm text-base-content">
-                      {handoff().password}
-                    </div>
                   </div>
                   <div class="rounded-md border border-emerald-200 bg-white px-3 py-2 dark:border-emerald-800 dark:bg-emerald-950">
                     <div class="text-[11px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
@@ -216,20 +208,12 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                     </div>
                   </div>
                 </div>
+                <p class="text-xs text-emerald-800 dark:text-emerald-200">
+                  Your admin password was shown once on the setup screen and isn't stored here. If
+                  you didn't save it, change it from Settings → Security → Change password.
+                </p>
               </div>
               <div class="flex flex-wrap gap-2 lg:w-64 lg:flex-col">
-                <button
-                  type="button"
-                  onClick={() =>
-                    void state.copySetupHandoffField(
-                      handoff().password,
-                      'Copied first-run password.',
-                    )
-                  }
-                  class="inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100 dark:hover:bg-emerald-800"
-                >
-                  Copy password
-                </button>
                 <button
                   type="button"
                   onClick={() =>
