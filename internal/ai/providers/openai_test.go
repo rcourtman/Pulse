@@ -94,6 +94,57 @@ func TestOpenAIClient_ChatStream_Success(t *testing.T) {
 	assert.True(t, doneCalled)
 }
 
+// TestOpenAIClient_ChatStream_OpenRouterReasoning guards the OpenRouter reasoning
+// path. OpenRouter (and other OpenAI-compatible gateways) stream chain-of-thought
+// in the "reasoning" delta field rather than DeepSeek's "reasoning_content". A
+// reasoning model routed via OpenRouter must surface those tokens as live thinking
+// events; previously they were dropped, leaving the user with a long dead pause.
+func TestOpenAIClient_ChatStream_OpenRouterReasoning(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+
+		events := []string{
+			`{"id":"gen-1","choices":[{"delta":{"reasoning":"Let me "}}]}`,
+			`{"id":"gen-1","choices":[{"delta":{"reasoning":"think."}}]}`,
+			`{"id":"gen-1","choices":[{"delta":{"content":"Answer"}}]}`,
+			`{"id":"gen-1","choices":[{"delta":{},"finish_reason":"stop"}]}`,
+			`[DONE]`,
+		}
+		for _, event := range events {
+			fmt.Fprintf(w, "data: %s\n\n", event)
+			w.(http.Flusher).Flush()
+			time.Sleep(5 * time.Millisecond)
+		}
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("sk-test", "deepseek/deepseek-v4-pro", server.URL, 0)
+
+	var thinking, content string
+	var doneCalled bool
+	callback := func(event StreamEvent) {
+		switch event.Type {
+		case "thinking":
+			if data, ok := event.Data.(ThinkingEvent); ok {
+				thinking += data.Text
+			}
+		case "content":
+			if data, ok := event.Data.(ContentEvent); ok {
+				content += data.Text
+			}
+		case "done":
+			doneCalled = true
+		}
+	}
+
+	err := client.ChatStream(context.Background(), ChatRequest{Messages: []Message{{Role: "user", Content: "Hi"}}}, callback)
+	require.NoError(t, err)
+	assert.Equal(t, "Let me think.", thinking, "OpenRouter 'reasoning' deltas should surface as thinking events")
+	assert.Equal(t, "Answer", content)
+	assert.True(t, doneCalled)
+}
+
 func TestOpenAIClient_ChatStream_ToolCall(t *testing.T) {
 	// Mock tool call stream
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

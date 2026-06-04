@@ -142,7 +142,8 @@ type openaiChoice struct {
 type openaiRespMsg struct {
 	Role             string           `json:"role"`
 	Content          string           `json:"content,omitempty"`
-	ReasoningContent string           `json:"reasoning_content,omitempty"` // DeepSeek thinking mode
+	ReasoningContent string           `json:"reasoning_content,omitempty"` // DeepSeek direct thinking mode
+	Reasoning        string           `json:"reasoning,omitempty"`         // OpenRouter / OpenAI-compatible gateways
 	ToolCalls        []openaiToolCall `json:"tool_calls,omitempty"`
 }
 
@@ -438,17 +439,23 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 
 	choice := openaiResp.Choices[0]
 
-	// For DeepSeek reasoner, the actual content may be in reasoning_content
-	// when content is empty (it shows the "thinking" but that's the full response)
+	// Reasoning models expose chain-of-thought separately: DeepSeek's direct API
+	// in "reasoning_content", OpenRouter and other gateways in "reasoning".
+	reasoning := choice.Message.ReasoningContent
+	if reasoning == "" {
+		reasoning = choice.Message.Reasoning
+	}
+
+	// When a reasoner returns no visible content, fall back to the reasoning text
+	// so the turn still carries the model's output instead of an empty string.
 	contentToUse := choice.Message.Content
-	if contentToUse == "" && choice.Message.ReasoningContent != "" {
-		// DeepSeek reasoner puts output in reasoning_content
-		contentToUse = choice.Message.ReasoningContent
+	if contentToUse == "" && reasoning != "" {
+		contentToUse = reasoning
 	}
 
 	result := &ChatResponse{
 		Content:          contentToUse,
-		ReasoningContent: choice.Message.ReasoningContent, // DeepSeek thinking mode
+		ReasoningContent: reasoning, // surfaced as the turn's thinking
 		Model:            openaiResp.Model,
 		StopReason:       choice.FinishReason,
 		InputTokens:      openaiResp.Usage.PromptTokens,
@@ -557,10 +564,17 @@ type openaiStreamChoice struct {
 }
 
 type openaiStreamDelta struct {
-	Role             string                `json:"role,omitempty"`
-	Content          string                `json:"content,omitempty"`
-	ReasoningContent string                `json:"reasoning_content,omitempty"`
-	ToolCalls        []openaiToolCallDelta `json:"tool_calls,omitempty"`
+	Role    string `json:"role,omitempty"`
+	Content string `json:"content,omitempty"`
+	// ReasoningContent carries reasoning tokens on DeepSeek's direct API.
+	ReasoningContent string `json:"reasoning_content,omitempty"`
+	// Reasoning carries reasoning tokens on OpenRouter and other OpenAI-compatible
+	// gateways, which normalize chain-of-thought into "reasoning" rather than
+	// DeepSeek's "reasoning_content". Without this, reasoning models routed via
+	// OpenRouter stream their thinking into a field Pulse never read, so the user
+	// saw a long dead pause instead of a live thinking stream.
+	Reasoning string                `json:"reasoning,omitempty"`
+	ToolCalls []openaiToolCallDelta `json:"tool_calls,omitempty"`
 }
 
 type openaiToolCallDelta struct {
@@ -830,11 +844,18 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 				})
 			}
 
-			// Reasoning content (DeepSeek)
-			if delta.ReasoningContent != "" {
+			// Reasoning tokens. DeepSeek's direct API uses "reasoning_content";
+			// OpenRouter and other OpenAI-compatible gateways use "reasoning".
+			// A provider emits one or the other, so surface whichever is present.
+			if reasoning := delta.ReasoningContent; reasoning != "" {
 				callback(StreamEvent{
 					Type: "thinking",
-					Data: ThinkingEvent{Text: delta.ReasoningContent},
+					Data: ThinkingEvent{Text: reasoning},
+				})
+			} else if reasoning := delta.Reasoning; reasoning != "" {
+				callback(StreamEvent{
+					Type: "thinking",
+					Data: ThinkingEvent{Text: reasoning},
 				})
 			}
 
