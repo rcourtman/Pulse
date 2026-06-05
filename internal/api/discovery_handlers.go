@@ -579,8 +579,10 @@ func (h *DiscoveryHandlers) HandleTriggerDiscovery(w http.ResponseWriter, r *htt
 		Force:        reqBody.Force,
 	}
 
-	// If hostname not provided, use target ID as a fallback.
-	if req.Hostname == "" {
+	// If hostname not provided for host-agent discovery, use target ID as a
+	// fallback. Workloads should resolve their own display name from state so a
+	// parent node is not mistaken for the workload endpoint.
+	if req.Hostname == "" && resourceType == servicediscovery.ResourceTypeAgent {
 		req.Hostname = targetID
 	}
 

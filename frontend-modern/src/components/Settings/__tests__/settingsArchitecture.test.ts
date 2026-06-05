@@ -344,8 +344,19 @@ describe('settings architecture guardrails', () => {
     expect(aiSettingsStateSource).toContain('discoveryRunRunning');
     expect(aiRuntimeControlsSectionSource).toContain('state.handleRunDiscoveryRefresh()');
     expect(aiRuntimeControlsSectionSource).toContain('Run discovery now');
+    expect(aiRuntimeControlsSectionSource).toContain('Auto ${state.form.discoveryIntervalHours}h');
+    expect(aiRuntimeControlsSectionSource).toContain('Manual only');
     expect(aiRuntimeControlsSectionSource).toContain(
-      'Runs a one-time workload discovery refresh without changing the schedule.',
+      'Automatic workload scans will run at this interval.',
+    );
+    expect(aiRuntimeControlsSectionSource).toContain(
+      'Automatic workload scans are off. Only manual refreshes will run.',
+    );
+    expect(aiRuntimeControlsSectionSource).toContain(
+      'Runs the pending workload sweep used by the schedule.',
+    );
+    expect(aiRuntimeControlsSectionSource).toContain(
+      'Manual-only mode: runs the pending workload sweep once without enabling recurring scans.',
     );
     expect(aiRuntimeControlsSectionSource).not.toContain("fetch('/api/discovery/run");
   });

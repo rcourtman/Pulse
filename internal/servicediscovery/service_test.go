@@ -293,6 +293,8 @@ func readStateFromSnapshot(snap StateSnapshot) unifiedresources.ReadState {
 			Node:        vm.Node,
 			Status:      vm.Status,
 			Instance:    vm.Instance,
+			OSName:      vm.OSName,
+			OSVersion:   vm.OSVersion,
 			IPAddresses: vm.IPAddresses,
 		})
 	}
@@ -304,6 +306,9 @@ func readStateFromSnapshot(snap StateSnapshot) unifiedresources.ReadState {
 			Node:        ct.Node,
 			Status:      ct.Status,
 			Instance:    ct.Instance,
+			OSTemplate:  ct.OSTemplate,
+			OSName:      ct.OSName,
+			IsOCI:       ct.IsOCI,
 			IPAddresses: ct.IPAddresses,
 		})
 	}
@@ -1872,6 +1877,183 @@ func TestService_DiscoverResource_URLSuggestionDiagnostics(t *testing.T) {
 	}
 	if discovery.SuggestedURLDiagnostic != "no host or IP candidate available" {
 		t.Fatalf("expected URL suggestion diagnostic, got %q", discovery.SuggestedURLDiagnostic)
+	}
+}
+
+func TestService_DiscoverResource_InfersESPHomeLXCFromStateName(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	state := StateSnapshot{
+		Containers: []Container{
+			{
+				VMID:       102,
+				Name:       "esphome",
+				Node:       "pve1",
+				Status:     "running",
+				OSTemplate: "debian-12-standard",
+			},
+		},
+	}
+
+	service := NewService(store, nil, DefaultConfig())
+	service.SetReadState(readStateFromSnapshot(state))
+	service.SetAIAnalyzer(&stubAnalyzer{
+		response: `{"service_type":"unknown","service_name":"Unknown Container","service_version":"","category":"unknown","cli_access":"pct exec 102 -- /bin/bash","facts":[],"config_paths":[],"data_paths":[],"log_paths":[],"ports":[],"confidence":0,"reasoning":"metadata was inconclusive"}`,
+	})
+
+	discovery, err := service.DiscoverResource(context.Background(), DiscoveryRequest{
+		ResourceType: ResourceTypeSystemContainer,
+		TargetID:     "pve1",
+		ResourceID:   "102",
+		Force:        true,
+	})
+	if err != nil {
+		t.Fatalf("DiscoverResource error: %v", err)
+	}
+	if discovery.ServiceType != "esphome" {
+		t.Fatalf("expected service type esphome, got %q", discovery.ServiceType)
+	}
+	if discovery.ServiceName != "ESPHome" {
+		t.Fatalf("expected service name ESPHome, got %q", discovery.ServiceName)
+	}
+	if discovery.Category != CategoryHomeAuto {
+		t.Fatalf("expected home automation category, got %q", discovery.Category)
+	}
+	if discovery.Hostname != "esphome" {
+		t.Fatalf("expected hostname from LXC state name, got %q", discovery.Hostname)
+	}
+	if discovery.SuggestedURL != "http://esphome:6052" {
+		t.Fatalf("expected ESPHome dashboard suggestion, got %q", discovery.SuggestedURL)
+	}
+	if discovery.SuggestedURLDiagnostic != "" {
+		t.Fatalf("expected no URL diagnostic, got %q", discovery.SuggestedURLDiagnostic)
+	}
+	if discovery.Confidence < 0.85 {
+		t.Fatalf("expected deterministic confidence floor, got %v", discovery.Confidence)
+	}
+}
+
+func TestService_GetDiscovery_RepairsCachedESPHomeUnknownResult(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	state := StateSnapshot{
+		Containers: []Container{
+			{VMID: 102, Name: "esphome", Node: "pve1", Status: "running"},
+		},
+	}
+	id := MakeResourceID(ResourceTypeSystemContainer, "pve1", "102")
+	if err := store.Save(&ResourceDiscovery{
+		ID:                       id,
+		ResourceType:             ResourceTypeSystemContainer,
+		TargetID:                 "pve1",
+		ResourceID:               "102",
+		ServiceType:              "unknown",
+		ServiceName:              "Unknown Service",
+		Category:                 CategoryUnknown,
+		Confidence:               0,
+		SuggestedURLDiagnostic:   "no host or IP candidate available",
+		CLIAccessVersion:         CLIAccessVersion,
+		FingerprintSchemaVersion: FingerprintSchemaVersion,
+	}); err != nil {
+		t.Fatalf("Save error: %v", err)
+	}
+
+	service := NewService(store, nil, DefaultConfig())
+	service.SetReadState(readStateFromSnapshot(state))
+
+	discovery, err := service.GetDiscoveryByResource(ResourceTypeSystemContainer, "pve1", "102")
+	if err != nil {
+		t.Fatalf("GetDiscoveryByResource error: %v", err)
+	}
+	if discovery == nil {
+		t.Fatalf("expected cached discovery")
+	}
+	if discovery.ServiceType != "esphome" || discovery.ServiceName != "ESPHome" {
+		t.Fatalf("expected repaired ESPHome identity, got type=%q name=%q", discovery.ServiceType, discovery.ServiceName)
+	}
+	if discovery.SuggestedURL != "http://esphome:6052" {
+		t.Fatalf("expected repaired ESPHome URL, got %q", discovery.SuggestedURL)
+	}
+	if discovery.SuggestedURLDiagnostic != "" {
+		t.Fatalf("expected repaired URL diagnostic to be cleared, got %q", discovery.SuggestedURLDiagnostic)
+	}
+}
+
+func TestService_RunManualDiscoveryRefreshRepairsFreshUnknownKnownService(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	state := StateSnapshot{
+		Containers: []Container{
+			{VMID: 102, Name: "esphome", Node: "pve1", Status: "running"},
+		},
+	}
+	service := NewService(store, nil, DefaultConfig())
+	service.SetReadState(readStateFromSnapshot(state))
+	service.SetCommandScanningEnabled(true)
+	analyzer := &stubAnalyzer{
+		response: `{"service_type":"unknown","service_name":"Unknown Service","service_version":"","category":"unknown","cli_access":"pct exec 102 -- /bin/bash","facts":[],"config_paths":[],"data_paths":[],"log_paths":[],"ports":[],"confidence":0,"reasoning":"metadata was inconclusive"}`,
+	}
+	service.SetAIAnalyzer(analyzer)
+
+	service.collectFingerprints(context.Background())
+	id := MakeResourceID(ResourceTypeSystemContainer, "pve1", "102")
+	fp, err := store.GetFingerprint(id)
+	if err != nil {
+		t.Fatalf("GetFingerprint error: %v", err)
+	}
+	if fp == nil {
+		t.Fatalf("expected LXC fingerprint")
+	}
+	if err := store.Save(&ResourceDiscovery{
+		ID:                       id,
+		ResourceType:             ResourceTypeSystemContainer,
+		TargetID:                 "pve1",
+		ResourceID:               "102",
+		Hostname:                 "esphome",
+		ServiceType:              "unknown",
+		ServiceName:              "Unknown Service",
+		Category:                 CategoryUnknown,
+		Confidence:               0,
+		Fingerprint:              fp.Hash,
+		FingerprintedAt:          fp.GeneratedAt,
+		FingerprintSchemaVersion: fp.SchemaVersion,
+		CLIAccessVersion:         CLIAccessVersion,
+	}); err != nil {
+		t.Fatalf("Save discovery error: %v", err)
+	}
+
+	summary, err := service.RunManualDiscoveryRefresh(context.Background())
+	if err != nil {
+		t.Fatalf("RunManualDiscoveryRefresh error: %v", err)
+	}
+	if summary.CandidateCount != 1 || summary.DiscoveredCount != 1 || summary.FailedCount != 0 {
+		t.Fatalf("expected one repaired candidate, got %+v", summary)
+	}
+	if analyzer.calls != 1 {
+		t.Fatalf("expected one analyzer call, got %d", analyzer.calls)
+	}
+
+	discovery, err := store.Get(id)
+	if err != nil {
+		t.Fatalf("Get discovery error: %v", err)
+	}
+	if discovery.ServiceType != "esphome" || discovery.ServiceName != "ESPHome" {
+		t.Fatalf("expected stored repaired ESPHome discovery, got type=%q name=%q", discovery.ServiceType, discovery.ServiceName)
+	}
+	if discovery.SuggestedURL != "http://esphome:6052" {
+		t.Fatalf("expected stored ESPHome URL, got %q", discovery.SuggestedURL)
 	}
 }
 

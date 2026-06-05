@@ -498,9 +498,11 @@ describe('AISettings workload discovery persistence', () => {
     renderComponent();
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Workload Discovery 24h/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /Workload Discovery Auto 24h/i }),
+      ).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole('button', { name: /Workload Discovery 24h/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Workload Discovery Auto 24h/i }));
     const intervalSelect = screen.getByLabelText('Scan Interval');
     expect(intervalSelect).toHaveValue('24');
 
@@ -532,10 +534,10 @@ describe('AISettings workload discovery persistence', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole('button', { name: /Workload Discovery Manual/i }),
+        screen.getByRole('button', { name: /Workload Discovery Manual only/i }),
       ).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole('button', { name: /Workload Discovery Manual/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Workload Discovery Manual only/i }));
     fireEvent.click(screen.getByRole('button', { name: /Run discovery now/i }));
 
     await waitFor(() => {
@@ -596,15 +598,15 @@ describe('AISettings workload discovery persistence', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole('button', { name: /Workload Discovery Manual/i }),
+        screen.getByRole('button', { name: /Workload Discovery Manual only/i }),
       ).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole('button', { name: /Workload Discovery Manual/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Workload Discovery Manual only/i }));
     fireEvent.click(screen.getByRole('button', { name: /Run discovery now/i }));
 
     await waitFor(() => {
       expect(notificationInfoMock).toHaveBeenCalledWith(
-        'Discovery refresh finished: no new, changed, or stale workloads.',
+        'Discovery refresh finished: no new, changed, stale, or repairable workloads.',
       );
     });
   });

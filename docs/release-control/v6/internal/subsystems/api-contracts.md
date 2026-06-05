@@ -175,6 +175,13 @@ summary response shapes used by the live discovery service. Live service data
 remains primary when a service is configured; mock fixtures may supplement or
 stand in for that data only in mock mode, and they must not expose raw command
 output or bypass the normal non-admin redaction path.
+Forced discovery trigger requests must preserve workload identity at the API
+boundary. `POST /api/discovery/{type}/{target}/{id}` may use the route target
+as a hostname fallback only for host-agent discovery; VM, system-container,
+Docker, and Kubernetes workload triggers must leave hostname empty unless the
+caller supplied one so the discovery service resolves the workload name and
+endpoint from canonical resource state instead of mistaking the parent node for
+the workload endpoint.
 
 Source-specific backup artifact routes are canonical API payload boundaries.
 `/api/backups/pve` owns Proxmox VE task, storage-archive, and guest-snapshot

@@ -662,14 +662,23 @@ func (s *Service) runDiscoveryRefresh(ctx context.Context, mode string) (Discove
 	if err != nil {
 		return summary, fmt.Errorf("fetch stale resources: %w", err)
 	}
+	repairableResources, err := s.getKnownServiceRepairCandidates()
+	if err != nil {
+		return summary, fmt.Errorf("fetch repairable discoveries: %w", err)
+	}
 
-	candidates := make(map[string]struct{}, len(changedResources)+len(staleResources))
+	candidates := make(map[string]struct{}, len(changedResources)+len(staleResources)+len(repairableResources))
 	for _, id := range changedResources {
 		if strings.TrimSpace(id) != "" {
 			candidates[id] = struct{}{}
 		}
 	}
 	for _, id := range staleResources {
+		if strings.TrimSpace(id) != "" {
+			candidates[id] = struct{}{}
+		}
+	}
+	for _, id := range repairableResources {
 		if strings.TrimSpace(id) != "" {
 			candidates[id] = struct{}{}
 		}
@@ -695,8 +704,9 @@ func (s *Service) runDiscoveryRefresh(ctx context.Context, mode string) (Discove
 		Str("mode", mode).
 		Int("changed", len(changedResources)).
 		Int("stale", len(staleResources)).
+		Int("repairable", len(repairableResources)).
 		Int("total", len(resourceIDs)).
-		Msg("Running discovery refresh for changed/stale resources")
+		Msg("Running discovery refresh for changed, stale, or repairable resources")
 
 	for _, id := range resourceIDs {
 		if ctx.Err() != nil {
@@ -717,7 +727,6 @@ func (s *Service) runDiscoveryRefresh(ctx context.Context, mode string) (Discove
 			ResourceType: resourceType,
 			ResourceID:   resourceID,
 			TargetID:     targetID,
-			Hostname:     targetID,
 		})
 		if err != nil {
 			summary.FailedCount++
@@ -738,6 +747,74 @@ func (s *Service) runDiscoveryRefresh(ctx context.Context, mode string) (Discove
 		Msg("Discovery refresh completed")
 
 	return summary, nil
+}
+
+func (s *Service) getKnownServiceRepairCandidates() ([]string, error) {
+	discoveries, err := s.store.List()
+	if err != nil {
+		return nil, fmt.Errorf("list discoveries for repair scan: %w", err)
+	}
+
+	var candidates []string
+	for _, discovery := range discoveries {
+		if discovery == nil {
+			continue
+		}
+		req := discoveryRequestForStoredDiscovery(discovery)
+		if req.ResourceType == "" || req.TargetID == "" || req.ResourceID == "" {
+			continue
+		}
+		if s.discoveryNeedsKnownServiceRepair(discovery, req) {
+			candidates = append(candidates, discovery.ID)
+		}
+	}
+	return candidates, nil
+}
+
+func discoveryRequestForStoredDiscovery(discovery *ResourceDiscovery) DiscoveryRequest {
+	if discovery == nil {
+		return DiscoveryRequest{}
+	}
+
+	req := DiscoveryRequest{
+		ResourceType: discovery.ResourceType,
+		TargetID:     canonicalDiscoveryTargetID(discovery),
+		ResourceID:   discovery.ResourceID,
+		Hostname:     discovery.Hostname,
+	}
+	if req.ResourceType != "" && req.TargetID != "" && req.ResourceID != "" {
+		return req
+	}
+
+	resourceType, targetID, resourceID, err := ParseResourceID(discovery.ID)
+	if err != nil {
+		return req
+	}
+	if req.ResourceType == "" {
+		req.ResourceType = resourceType
+	}
+	if req.TargetID == "" {
+		req.TargetID = targetID
+	}
+	if req.ResourceID == "" {
+		req.ResourceID = resourceID
+	}
+	return req
+}
+
+func (s *Service) discoveryNeedsKnownServiceRepair(discovery *ResourceDiscovery, req DiscoveryRequest) bool {
+	if discovery == nil {
+		return false
+	}
+
+	var metadata map[string]any
+	if s.hasStateAccess() {
+		metadata = s.getResourceMetadata(req)
+		if req.Hostname == "" {
+			req.Hostname = stringMetadataValue(metadata, "name", "hostname", "display_name")
+		}
+	}
+	return knownServiceIdentityWouldImprove(discovery, req, metadata, discovery.RawCommandOutput)
 }
 
 // getSnapshot returns the current infrastructure state from ReadState.
@@ -778,7 +855,10 @@ func (s *Service) snapshotFromReadState(rs unifiedresources.ReadState) StateSnap
 			Node:        v.Node(),
 			Status:      string(v.Status()),
 			Instance:    v.Instance(),
+			OSName:      v.OSName(),
+			OSVersion:   v.OSVersion(),
 			IPAddresses: v.IPAddresses(),
+			Template:    v.Template(),
 		})
 	}
 
@@ -792,7 +872,11 @@ func (s *Service) snapshotFromReadState(rs unifiedresources.ReadState) StateSnap
 			Node:        v.Node(),
 			Status:      string(v.Status()),
 			Instance:    v.Instance(),
+			OSTemplate:  v.OSTemplate(),
+			OSName:      v.OSName(),
+			IsOCI:       v.IsOCI(),
 			IPAddresses: v.IPAddresses(),
+			Template:    v.Template(),
 		})
 	}
 
@@ -1592,6 +1676,9 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 	} else if time.Since(existing.DiscoveredAt) > s.maxDiscoveryAge {
 		needsDiscovery = true
 		reason = "discovery too old"
+	} else if s.discoveryNeedsKnownServiceRepair(existing, req) {
+		needsDiscovery = true
+		reason = "known service identity repair"
 	}
 
 	// Return cached discovery if still valid
@@ -1671,6 +1758,9 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 	// Add metadata if available
 	if s.hasStateAccess() {
 		analysisReq.Metadata = s.getResourceMetadata(req)
+		if analysisReq.Hostname == "" {
+			analysisReq.Hostname = stringMetadataValue(analysisReq.Metadata, "name", "hostname", "display_name")
+		}
 	}
 
 	// Build prompt and analyze
@@ -1709,7 +1799,7 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 	}
 
 	// Resolve hostname from metadata if not provided in request
-	hostname := req.Hostname
+	hostname := analysisReq.Hostname
 	if hostname == "" && analysisReq.Metadata != nil {
 		if name, ok := analysisReq.Metadata["name"].(string); ok && name != "" {
 			hostname = name
@@ -1790,6 +1880,7 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 			discovery.DiscoveredAt = existing.DiscoveredAt
 		}
 	}
+	applyKnownServiceIdentity(discovery, req, analysisReq.Metadata, analysisReq.CommandOutputs)
 
 	// Suggest web interface URL based on service type and external IP.
 	// If no URL can be inferred, capture diagnostics for logs and UI.
@@ -1956,6 +2047,12 @@ func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
 				metadata["name"] = c.Name
 				metadata["status"] = c.Status
 				metadata["vmid"] = c.VMID
+				metadata["os_template"] = c.OSTemplate
+				metadata["os_name"] = c.OSName
+				metadata["is_oci"] = c.IsOCI
+				if len(c.Tags) > 0 {
+					metadata["tags"] = c.Tags
+				}
 				break
 			}
 		}
@@ -1965,6 +2062,11 @@ func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
 				metadata["name"] = vm.Name
 				metadata["status"] = vm.Status
 				metadata["vmid"] = vm.VMID
+				metadata["os_name"] = vm.OSName
+				metadata["os_version"] = vm.OSVersion
+				if len(vm.Tags) > 0 {
+					metadata["tags"] = vm.Tags
+				}
 				break
 			}
 		}
@@ -1973,6 +2075,7 @@ func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
 			if host.AgentID == requestTargetID || host.Hostname == requestTargetID {
 				for _, c := range host.Containers {
 					if c.Name == req.ResourceID {
+						metadata["name"] = c.Name
 						metadata["image"] = c.Image
 						metadata["status"] = c.Status
 						// Filter sensitive labels before sending to AI
@@ -2006,6 +2109,21 @@ func (s *Service) getResourceMetadata(req DiscoveryRequest) map[string]any {
 	return metadata
 }
 
+func stringMetadataValue(metadata map[string]any, keys ...string) string {
+	for _, key := range keys {
+		value, ok := metadata[key]
+		if !ok {
+			continue
+		}
+		if text, ok := value.(string); ok {
+			if trimmed := strings.TrimSpace(text); trimmed != "" {
+				return trimmed
+			}
+		}
+	}
+	return ""
+}
+
 // getResourceExternalIP retrieves the external IP address for a resource from the state.
 // For system containers/VMs, this is the first IP from the Proxmox guest agent.
 // For Docker containers, this is the Docker host's IP/hostname.
@@ -2023,6 +2141,9 @@ func (s *Service) getResourceExternalIP(req DiscoveryRequest) string {
 				if len(c.IPAddresses) > 0 {
 					return c.IPAddresses[0]
 				}
+				if candidate := firstResourceHostnameCandidate(req.ResourceID, requestTargetID, c.Name, req.Hostname); candidate != "" {
+					return candidate
+				}
 				return ""
 			}
 		}
@@ -2031,6 +2152,9 @@ func (s *Service) getResourceExternalIP(req DiscoveryRequest) string {
 			if fmt.Sprintf("%d", vm.VMID) == req.ResourceID && vm.Node == requestTargetID {
 				if len(vm.IPAddresses) > 0 {
 					return vm.IPAddresses[0]
+				}
+				if candidate := firstResourceHostnameCandidate(req.ResourceID, requestTargetID, vm.Name, req.Hostname); candidate != "" {
+					return candidate
 				}
 				return ""
 			}
@@ -2051,12 +2175,18 @@ func (s *Service) getResourceExternalIP(req DiscoveryRequest) string {
 				if len(vm.IPAddresses) > 0 {
 					return vm.IPAddresses[0]
 				}
+				if candidate := firstResourceHostnameCandidate(req.ResourceID, requestTargetID, vm.Name, req.Hostname); candidate != "" {
+					return candidate
+				}
 			}
 		}
 		for _, c := range snap.Containers {
 			if fmt.Sprintf("%d", c.VMID) == requestTargetID || c.Name == requestTargetID {
 				if len(c.IPAddresses) > 0 {
 					return c.IPAddresses[0]
+				}
+				if candidate := firstResourceHostnameCandidate(req.ResourceID, requestTargetID, c.Name, req.Hostname); candidate != "" {
+					return candidate
 				}
 			}
 		}
@@ -2098,6 +2228,21 @@ func isURLHostCandidate(value string) bool {
 		return false
 	}
 	return true
+}
+
+func firstResourceHostnameCandidate(resourceID, targetID string, candidates ...string) string {
+	resourceID = strings.TrimSpace(resourceID)
+	targetID = strings.TrimSpace(targetID)
+	for _, candidate := range candidates {
+		trimmed := strings.TrimSpace(candidate)
+		if trimmed == "" || trimmed == resourceID || trimmed == targetID {
+			continue
+		}
+		if isURLHostCandidate(trimmed) {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func formatURLSuggestionDiagnostic(primaryCode, primaryDetail, fallbackCode, fallbackDetail string) string {
@@ -2756,7 +2901,60 @@ func (s *Service) upgradeCLIAccessIfNeeded(d *ResourceDiscovery) {
 		upgraded = true
 	}
 
+	req := discoveryRequestForStoredDiscovery(d)
+	var metadata map[string]any
+	if s.hasStateAccess() {
+		metadata = s.getResourceMetadata(req)
+		if req.Hostname == "" {
+			req.Hostname = stringMetadataValue(metadata, "name", "hostname", "display_name")
+		}
+	}
+	if changed, _ := applyKnownServiceIdentity(d, req, metadata, d.RawCommandOutput); changed {
+		upgraded = true
+	}
+	if s.refreshSuggestedURLFromState(d, req) {
+		upgraded = true
+	}
+
 	_ = upgraded // Suppress unused variable warning if logging is disabled
+}
+
+func (s *Service) refreshSuggestedURLFromState(d *ResourceDiscovery, req DiscoveryRequest) bool {
+	if d == nil || d.SuggestedURL != "" || !s.hasStateAccess() {
+		return false
+	}
+
+	externalIP := s.getResourceExternalIP(req)
+	if externalIP == "" {
+		return false
+	}
+
+	url, code, detail := suggestWebURLWithReason(d, externalIP)
+	if url == "" {
+		url, code, detail = s.suggestHostManagementURLWithReason(req, externalIP)
+	}
+	if url == "" {
+		return false
+	}
+
+	changed := false
+	if d.SuggestedURL != url {
+		d.SuggestedURL = url
+		changed = true
+	}
+	if d.SuggestedURLSourceCode != code {
+		d.SuggestedURLSourceCode = code
+		changed = true
+	}
+	if d.SuggestedURLSourceDetail != detail {
+		d.SuggestedURLSourceDetail = detail
+		changed = true
+	}
+	if d.SuggestedURLDiagnostic != "" {
+		d.SuggestedURLDiagnostic = ""
+		changed = true
+	}
+	return changed
 }
 
 // lookupHostnameFromState finds the hostname/name for a resource from state

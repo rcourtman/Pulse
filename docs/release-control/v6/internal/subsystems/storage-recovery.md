@@ -473,6 +473,12 @@ recovery scope, or a storage/recovery-owned secret source.
    commands, adjacent storage/recovery surfaces must also inherit the
    API/runtime gate: `settings:write` plus enabled Discovery are required
    before command-backed refresh, and `monitoring:write` remains insufficient.
+   If the shared discovery boundary repairs a fresh unknown workload record
+   into a known service identity and endpoint candidate from canonical resource
+   metadata, stored facts, or safe command evidence, storage and recovery may
+   consume the repaired context only as read-only explanation; that repair does
+   not create backup visibility, restore authority, storage ownership, or a
+   recovery-local endpoint contract.
    That same adjacent `internal/api/` boundary also keeps public hosted signup
    commercial-only: storage and recovery surfaces must not infer tenant
    existence, email issuance, or readiness from `/api/public/signup` response

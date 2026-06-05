@@ -50,6 +50,15 @@ func TestSuggestWebURL(t *testing.T) {
 			wantURL: "http://192.168.1.100:8123",
 		},
 		{
+			name: "esphome dashboard",
+			discovery: &ResourceDiscovery{
+				ServiceType: "esphome",
+				Category:    CategoryHomeAuto,
+			},
+			hostIP:  "192.168.1.60",
+			wantURL: "http://192.168.1.60:6052",
+		},
+		{
 			name: "service type with underscores (normalized)",
 			discovery: &ResourceDiscovery{
 				ServiceType: "home_assistant",

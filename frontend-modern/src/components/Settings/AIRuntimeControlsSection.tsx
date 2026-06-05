@@ -56,8 +56,8 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
             <Show when={state.form.discoveryEnabled}>
               <span class="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded">
                 {state.form.discoveryIntervalHours > 0
-                  ? `${state.form.discoveryIntervalHours}h`
-                  : 'Manual'}
+                  ? `Auto ${state.form.discoveryIntervalHours}h`
+                  : 'Manual only'}
               </span>
             </Show>
             <Show when={!state.form.discoveryEnabled}>
@@ -118,17 +118,19 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
                 </FormSelect>
                 <p class="text-[10px] text-muted ml-32 pl-3">
                   {state.form.discoveryIntervalHours === 0
-                    ? 'Workload discovery runs only when you click "Run discovery now" here or "Run Discovery" on a resource'
-                    : 'Workload discovery will automatically re-scan resources at this interval'}
+                    ? 'Automatic workload scans are off. Only manual refreshes will run.'
+                    : 'Automatic workload scans will run at this interval.'}
                 </p>
               </div>
             </Show>
 
             <div class="flex flex-col gap-2 rounded border border-border bg-surface-alt px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
               <p class="text-[10px] text-muted sm:flex-1">
-                {state.form.discoveryEnabled
-                  ? 'Runs the new, changed, and stale workload sweep used by the schedule.'
-                  : 'Runs a one-time workload discovery refresh without changing the schedule.'}
+                {state.form.discoveryEnabled && state.form.discoveryIntervalHours > 0
+                  ? 'Runs the pending workload sweep used by the schedule.'
+                  : state.form.discoveryEnabled
+                    ? 'Manual-only mode: runs the pending workload sweep once without enabling recurring scans.'
+                    : 'Runs a one-time workload discovery refresh without changing the schedule.'}
               </p>
               <button
                 type="button"

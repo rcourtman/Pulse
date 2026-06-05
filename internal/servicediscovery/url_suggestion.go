@@ -36,6 +36,8 @@ var webServiceDefaults = map[string]webServiceDefault{
 	// Home Automation
 	"home-assistant": {8123, "http", ""},
 	"homeassistant":  {8123, "http", ""},
+	"esphome":        {6052, "http", ""},
+	"esp-home":       {6052, "http", ""},
 	"openhab":        {8080, "http", ""},
 	"domoticz":       {8080, "http", ""},
 	"node-red":       {1880, "http", ""},

@@ -1012,7 +1012,9 @@ export const useAISettingsState = () => {
           `Discovery refresh finished: ${result.discovered_count} refreshed, ${result.failed_count} failed.`,
         );
       } else if (result.candidate_count === 0) {
-        notificationStore.info('Discovery refresh finished: no new, changed, or stale workloads.');
+        notificationStore.info(
+          'Discovery refresh finished: no new, changed, stale, or repairable workloads.',
+        );
       } else {
         notificationStore.success(
           `Discovery refresh finished: ${result.discovered_count} workload${result.discovered_count === 1 ? '' : 's'} refreshed.`,

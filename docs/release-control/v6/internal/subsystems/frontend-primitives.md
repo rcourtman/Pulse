@@ -974,7 +974,12 @@ not a replacement status card, CTA band, or page-local nested card.
     The same workload-discovery settings section must expose a manual
     "Run discovery now" action wired through `/api/discovery/run` when
     workload discovery is enabled in manual-only mode, while resource-drawer
-    discovery remains the forced single-resource refresh path.
+    discovery remains the forced single-resource refresh path. The collapsed
+    section and run-action copy must make automatic scheduling visible by
+    distinguishing `Auto <interval>`, `Manual only`, and `Off`, and the run
+    action must describe whether it is executing the scheduled sweep or a
+    one-off manual-only sweep rather than implying recurring scans were
+    enabled.
     Assistant-only controls inside the shared shell, such
     as execution permissions and session maintenance, must stay explicitly
     labeled as Pulse Assistant controls, while Patrol schedule and autonomy

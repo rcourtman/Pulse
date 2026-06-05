@@ -8886,6 +8886,28 @@ func TestContract_DiscoveryCommandScanRoutesRequireSettingsWrite(t *testing.T) {
 	}
 }
 
+func TestContract_WorkloadDiscoveryTriggerLeavesHostnameForServiceResolution(t *testing.T) {
+	source, err := os.ReadFile(filepath.Clean("discovery_handlers.go"))
+	if err != nil {
+		t.Fatalf("read discovery handlers: %v", err)
+	}
+	text := string(source)
+
+	for _, required := range []string{
+		"Hostname:     reqBody.Hostname",
+		"resourceType == servicediscovery.ResourceTypeAgent",
+		"req.Hostname = targetID",
+		"Workloads should resolve their own display name from state",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("discovery trigger lost workload hostname contract marker %q", required)
+		}
+	}
+	if strings.Contains(text, "if req.Hostname == \"\" {\n\t\treq.Hostname = targetID") {
+		t.Fatal("discovery trigger must not use the route target as a generic workload hostname fallback")
+	}
+}
+
 func TestContract_AutoRegisterRequestJSONSnapshot(t *testing.T) {
 	payload := AutoRegisterRequest{
 		Type:       "pve",

@@ -902,6 +902,11 @@ profile and assignment columns, but embedded table framing must route through
    lifecycle surfaces may expose the controls, but route-level authority must
    require `settings:write` plus the Discovery enablement gate, not
    `monitoring:write`, enrollment state, or any fleet lifecycle shortcut.
+   Forced workload discovery also remains API/service-owned for endpoint
+   identity: lifecycle surfaces must not fill a Proxmox parent node or agent
+   name into workload trigger hostnames when the operator did not provide one,
+   because the discovery service resolves VM and system-container names from
+   canonical state before suggesting URLs or classifying known services.
     The editor's probe step calls the aggregator probe endpoint and
     dispatches the detected or manually-selected type into a credential
     slot; it must not bypass the probe endpoint or fabricate probe
