@@ -194,6 +194,41 @@ func TestClassifyPatrolRuntimeFailureOmitsRawProviderEvidence(t *testing.T) {
 	}
 }
 
+func TestClassifyProviderConnectionFailureUsesNeutralProviderCopy(t *testing.T) {
+	diagnostic := ClassifyProviderConnectionFailure(errors.New(`Ollama returned status 500: raw upstream body`))
+
+	if diagnostic.Summary != "Provider connection issue" {
+		t.Fatalf("unexpected summary %q", diagnostic.Summary)
+	}
+	if diagnostic.Cause != PatrolFailureCauseProviderConnection {
+		t.Fatalf("unexpected cause %q", diagnostic.Cause)
+	}
+	for _, field := range []string{diagnostic.Title, diagnostic.Description, diagnostic.Recommendation} {
+		if strings.Contains(field, "Patrol") {
+			t.Fatalf("provider diagnostic leaked Patrol copy: %q", field)
+		}
+	}
+	if !strings.Contains(diagnostic.Description, "this provider") {
+		t.Fatalf("expected provider-specific description, got %q", diagnostic.Description)
+	}
+}
+
+func TestClassifyProviderConnectionFailureKeepsSafeModelUnavailableCopy(t *testing.T) {
+	diagnostic := ClassifyProviderConnectionFailure(errors.New(`connected to Ollama but model "qwen3.5:2b" is not available; found: qwen3.5:4b`))
+
+	if diagnostic.Summary != "Selected model unavailable" {
+		t.Fatalf("unexpected summary %q", diagnostic.Summary)
+	}
+	if diagnostic.Cause != PatrolFailureCauseModelUnavailable {
+		t.Fatalf("unexpected cause %q", diagnostic.Cause)
+	}
+	for _, field := range []string{diagnostic.Description, diagnostic.Recommendation} {
+		if strings.Contains(field, "Patrol") || strings.Contains(field, "qwen3.5") {
+			t.Fatalf("provider diagnostic leaked scoped or raw detail: %q", field)
+		}
+	}
+}
+
 func TestPatrolRuntimeFailureFromErrorRedactsSecretLikeDetail(t *testing.T) {
 	failure := patrolRuntimeFailureFromError(errors.New(`request failed: Get "https://generativelanguage.googleapis.com/v1beta/models?key=AIzaSy-secret-token": Authorization: Bearer sk-live-secret {"api_key":"sk-json-secret"} https://user:pass@example.test/v1`))
 

@@ -11,6 +11,8 @@ import {
 import { unwrap } from 'solid-js/store';
 import SendIcon from 'lucide-solid/icons/send';
 import SquareIcon from 'lucide-solid/icons/square';
+import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
+import SettingsIcon from 'lucide-solid/icons/settings';
 import XIcon from 'lucide-solid/icons/x';
 import { AIAPI } from '@/api/ai';
 import { AIChatAPI, type ChatSession, type ChatSessionHandoffSummary } from '@/api/aiChat';
@@ -35,15 +37,23 @@ import {
   AI_CHAT_NEW_SESSION_BUTTON_TITLE,
   AI_CHAT_NEW_SESSION_MENU_LABEL,
   AI_CHAT_NEW_SESSION_SHORT_LABEL,
+  AI_CHAT_PROVIDER_READINESS_RETRY_LABEL,
+  AI_CHAT_PROVIDER_READINESS_SETTINGS_HREF,
+  AI_CHAT_PROVIDER_READINESS_SETTINGS_LABEL,
   AI_CHAT_SESSION_MENU_TITLE,
   AI_CHAT_SESSION_EMPTY_STATE,
   getAIChatEmptyStatePresentation,
+  getAIChatProviderReadinessPresentation,
 } from '@/utils/aiChatPresentation';
 import {
   getAIChatControlLevelPresentation,
   normalizeAIControlLevel,
   type AIControlLevel,
 } from '@/utils/aiControlLevelPresentation';
+import {
+  getAIProviderDisplayName,
+  getProviderFromModelId,
+} from '@/utils/aiProviderPresentation';
 import { getCachedUnifiedResources } from '@/hooks/useUnifiedResources';
 import type { Resource } from '@/types/resource';
 import { isAppContainerDiscoveryResourceType } from '@/utils/discoveryTarget';
@@ -70,6 +80,18 @@ const DEFAULT_SESSION_KEY = '__default__';
 const AI_CHAT_MIN_DOCKED_VIEWPORT_WIDTH = 1200;
 const STRUCTURED_PATROL_CONTEXT_TARGETS = new Set(['patrol-configuration', 'patrol-run']);
 const STRUCTURED_RESOURCE_CONTEXT_HANDOFF_KINDS = new Set(['resource_context']);
+
+type ChatProviderReadinessStatus = 'idle' | 'checking' | 'ready' | 'error';
+
+interface ChatProviderReadinessState {
+  status: ChatProviderReadinessStatus;
+  provider: string;
+  model?: string;
+  message?: string;
+  summary?: string;
+  recommendation?: string;
+  action?: string;
+}
 
 interface AIChatProps {
   onClose: () => void;
@@ -299,6 +321,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
   let sessionButtonRef: HTMLButtonElement | undefined;
   const [defaultModel, setDefaultModel] = createSignal('');
   const [chatOverrideModel, setChatOverrideModel] = createSignal('');
+  const [providerReadiness, setProviderReadiness] = createSignal<ChatProviderReadinessState>({
+    status: 'idle',
+    provider: '',
+  });
+  const [providerReadinessRetryNonce, setProviderReadinessRetryNonce] = createSignal(0);
   const [controlLevel, setControlLevel] = createSignal<AIControlLevel>('read_only');
   const [showControlMenu, setShowControlMenu] = createSignal(false);
   const [controlSaving, setControlSaving] = createSignal(false);
@@ -403,6 +430,76 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const match = aiRuntimeModels().find((model) => model.id === override);
     return match ? match.name || match.id.split(':').pop() || match.id : override;
   });
+
+  const selectedChatModel = createMemo(() => {
+    const selected = chat.model().trim();
+    return selected || defaultModel().trim();
+  });
+
+  const selectedChatProvider = createMemo(() => {
+    const model = selectedChatModel();
+    if (!model) return '';
+    const match = aiRuntimeModels().find((candidate) => candidate.id === model);
+    return match?.provider?.trim() || getProviderFromModelId(model);
+  });
+
+  const providerReadinessPresentation = createMemo(() => {
+    const readiness = providerReadiness();
+    if (!readiness.provider || readiness.status === 'idle' || readiness.status === 'ready') {
+      return null;
+    }
+    return getAIChatProviderReadinessPresentation({
+      status: readiness.status === 'checking' ? 'checking' : 'error',
+      providerLabel: getAIProviderDisplayName(readiness.provider),
+      message: readiness.message,
+      summary: readiness.summary,
+      recommendation: readiness.recommendation,
+    });
+  });
+
+  let providerReadinessRequestId = 0;
+  let lastProviderReadinessKey = '';
+
+  const refreshSelectedProviderReadiness = async (provider: string, model: string) => {
+    const requestId = ++providerReadinessRequestId;
+    setProviderReadiness({
+      status: 'checking',
+      provider,
+      model,
+    });
+
+    try {
+      const result = await AIAPI.testProvider(provider, model);
+      if (requestId !== providerReadinessRequestId) return;
+      setProviderReadiness({
+        status: result.success ? 'ready' : 'error',
+        provider: result.provider || provider,
+        model: result.model,
+        message: result.message,
+        summary: result.summary,
+        recommendation: result.recommendation,
+        action: result.action,
+      });
+    } catch (error) {
+      if (requestId !== providerReadinessRequestId) return;
+      logger.error('[AIChat] Failed to check selected provider readiness:', error);
+      setProviderReadiness({
+        status: 'error',
+        provider,
+        model,
+        message: 'Provider check failed',
+        summary: 'Pulse could not verify the selected provider before this chat sends work.',
+        recommendation:
+          'Check provider settings and network reachability, then retry the provider check.',
+        action: 'open_provider_settings',
+      });
+    }
+  };
+
+  const retrySelectedProviderReadiness = () => {
+    setProviderReadinessRetryNonce((value) => value + 1);
+    focusComposer();
+  };
 
   const isOverlayLayout = createMemo(() => width() < AI_CHAT_MIN_DOCKED_VIEWPORT_WIDTH);
   const rootClassName = createMemo(() => {
@@ -634,6 +731,35 @@ export const AIChat: Component<AIChatProps> = (props) => {
       return;
     }
     void initializeWhenOpen();
+  });
+
+  createEffect(() => {
+    const open = isOpen();
+    const model = selectedChatModel().trim();
+    const provider = selectedChatProvider().trim();
+    const retryNonce = providerReadinessRetryNonce();
+
+    if (!open) {
+      providerReadinessRequestId += 1;
+      lastProviderReadinessKey = '';
+      setProviderReadiness({ status: 'idle', provider: '' });
+      return;
+    }
+
+    if (!provider || !model) {
+      providerReadinessRequestId += 1;
+      lastProviderReadinessKey = '';
+      setProviderReadiness({ status: 'idle', provider: '' });
+      return;
+    }
+
+    const key = `${provider}:${model}:${retryNonce}`;
+    if (key === lastProviderReadinessKey) {
+      return;
+    }
+
+    lastProviderReadinessKey = key;
+    void refreshSelectedProviderReadiness(provider, model);
   });
 
   // Click outside handler to close all dropdowns
@@ -1506,6 +1632,60 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 </button>
               </div>
             </div>
+          </Show>
+
+          <Show when={providerReadinessPresentation()}>
+            {(presentation) => (
+              <section
+                class={`border-b px-4 py-2.5 text-[11px] ${
+                  presentation().tone === 'checking'
+                    ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200'
+                    : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100'
+                }`}
+                aria-label="Assistant provider status"
+              >
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div class="flex min-w-0 items-start gap-2.5">
+                    <span
+                      class={`mt-1 h-2 w-2 flex-shrink-0 rounded-full ${
+                        presentation().tone === 'checking'
+                          ? 'bg-blue-500 dark:bg-blue-300'
+                          : 'bg-amber-500 dark:bg-amber-300'
+                      }`}
+                    />
+                    <div class="min-w-0">
+                      <div class="font-semibold text-base-content">{presentation().title}</div>
+                      <div class="mt-0.5 leading-5">{presentation().body}</div>
+                      <Show when={presentation().recommendation}>
+                        {(recommendation) => (
+                          <div class="mt-0.5 leading-5">{recommendation()}</div>
+                        )}
+                      </Show>
+                    </div>
+                  </div>
+                  <Show when={providerReadiness().status === 'error'}>
+                    <div class="flex flex-shrink-0 items-center gap-2 sm:justify-end">
+                      <button
+                        type="button"
+                        onClick={retrySelectedProviderReadiness}
+                        class="inline-flex items-center gap-1.5 rounded-md border border-current/20 bg-surface px-2 py-1 text-[10px] font-medium text-base-content hover:bg-surface-hover"
+                        aria-label="Retry provider check"
+                      >
+                        <RefreshCwIcon class="h-3.5 w-3.5" />
+                        <span>{AI_CHAT_PROVIDER_READINESS_RETRY_LABEL}</span>
+                      </button>
+                      <a
+                        href={AI_CHAT_PROVIDER_READINESS_SETTINGS_HREF}
+                        class="inline-flex items-center gap-1.5 rounded-md border border-current/20 bg-surface px-2 py-1 text-[10px] font-medium text-base-content hover:bg-surface-hover"
+                      >
+                        <SettingsIcon class="h-3.5 w-3.5" />
+                        <span>{AI_CHAT_PROVIDER_READINESS_SETTINGS_LABEL}</span>
+                      </a>
+                    </div>
+                  </Show>
+                </div>
+              </section>
+            )}
           </Show>
 
           {/* Discovery hint - show when discovery is disabled */}

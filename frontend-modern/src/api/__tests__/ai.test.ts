@@ -212,6 +212,12 @@ describe('AIAPI', () => {
       method: 'POST',
     });
 
+    await AIAPI.testProvider('deepseek', 'deepseek:deepseek-v4-pro');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/test/deepseek', {
+      method: 'POST',
+      body: JSON.stringify({ model: 'deepseek:deepseek-v4-pro' }),
+    });
+
     await AIAPI.getRemediationPlan('plan/1?x=1');
     expect(apiFetchJSONMock).toHaveBeenCalledWith(
       '/api/ai/remediation/plan?plan_id=plan%2F1%3Fx%3D1',
@@ -228,17 +234,16 @@ describe('AIAPI', () => {
     });
   });
 
-  it('returns provider preflight diagnostics without narrowing the API payload', async () => {
+  it('returns provider diagnostics without narrowing the API payload', async () => {
     const diagnostic = {
       success: false,
       message: 'Provider authentication issue',
       provider: 'openrouter',
       model: 'openrouter:deepseek/deepseek-r1',
       cause: 'provider_auth',
-      summary:
-        'Pulse Patrol cannot analyze your infrastructure because the provider rejected the configured credentials or account access.',
+      summary: 'The provider rejected the configured credentials or account access.',
       recommendation:
-        'Check the API key or provider authentication in Patrol provider settings, then rerun Patrol.',
+        'Check the API key or provider authentication in Assistant and Patrol settings, then retry.',
       action: 'open_provider_settings',
     };
     apiFetchJSONMock.mockResolvedValueOnce(diagnostic as any);

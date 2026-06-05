@@ -41,6 +41,12 @@ const {
       autonomous_mode: false,
       discovery_enabled: true,
     }),
+    testProvider: vi.fn().mockResolvedValue({
+      success: true,
+      message: 'Connection successful',
+      provider: 'openai',
+      model: 'openai:gpt-4',
+    }),
     updateSettings: vi.fn().mockResolvedValue({ control_level: 'controlled' }),
   };
 
@@ -305,6 +311,12 @@ beforeEach(() => {
     autonomous_mode: false,
     discovery_enabled: true,
   });
+  mockAIAPI.testProvider.mockResolvedValue({
+    success: true,
+    message: 'Connection successful',
+    provider: 'openai',
+    model: 'openai:gpt-4',
+  });
   mockAIChatAPI.getStatus.mockResolvedValue({ running: true });
   mockAIChatAPI.listSessions.mockResolvedValue([]);
   Element.prototype.scrollIntoView = vi.fn();
@@ -347,6 +359,106 @@ describe('AIChat', () => {
     it('renders the ModelSelector child component', () => {
       renderChat();
       expect(screen.getByTestId('model-selector')).toBeInTheDocument();
+    });
+
+    it('checks the selected provider and shows a readiness issue before the first send', async () => {
+      mockAIAPI.getSettings.mockResolvedValue({
+        model: 'deepseek:deepseek-v4-pro',
+        chat_model: '',
+        control_level: 'read_only',
+        autonomous_mode: false,
+        discovery_enabled: true,
+      });
+      mockAIAPI.testProvider.mockResolvedValueOnce({
+        success: false,
+        message: 'Provider connection issue',
+        provider: 'deepseek',
+        model: 'deepseek:deepseek-v4-pro',
+        cause: 'provider_connection',
+        summary: 'Pulse could not maintain a healthy connection to this provider.',
+        recommendation: 'Check provider reachability, base URL, firewall or proxy rules.',
+        action: 'open_provider_settings',
+      });
+
+      renderChat();
+
+      await waitFor(() => {
+        expect(mockAIAPI.testProvider).toHaveBeenCalledWith('deepseek', 'deepseek:deepseek-v4-pro');
+        expect(screen.getByLabelText('Assistant provider status')).toHaveTextContent(
+          'DeepSeek provider issue',
+        );
+      });
+      expect(screen.getByLabelText('Assistant provider status')).toHaveTextContent(
+        'Pulse could not maintain a healthy connection to this provider.',
+      );
+      expect(screen.getByRole('link', { name: /Open settings/ })).toHaveAttribute(
+        'href',
+        '/settings/system-ai',
+      );
+    });
+
+    it('rechecks provider readiness from the drawer status banner', async () => {
+      mockAIAPI.getSettings.mockResolvedValue({
+        model: 'deepseek:deepseek-v4-pro',
+        chat_model: '',
+        control_level: 'read_only',
+        autonomous_mode: false,
+        discovery_enabled: true,
+      });
+      mockAIAPI.testProvider
+        .mockResolvedValueOnce({
+          success: false,
+          message: 'Provider connection issue',
+          provider: 'deepseek',
+          model: 'deepseek:deepseek-v4-pro',
+          cause: 'provider_connection',
+          summary: 'Pulse could not maintain a healthy connection to this provider.',
+          recommendation: 'Check provider reachability.',
+          action: 'open_provider_settings',
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          message: 'Connection successful',
+          provider: 'deepseek',
+          model: 'deepseek:deepseek-v4-pro',
+        });
+
+      renderChat();
+
+      await waitFor(() => {
+        expect(screen.getByText('DeepSeek provider issue')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Retry provider check' }));
+
+      await waitFor(() => {
+        expect(mockAIAPI.testProvider).toHaveBeenCalledTimes(2);
+        expect(screen.queryByLabelText('Assistant provider status')).not.toBeInTheDocument();
+      });
+    });
+
+    it('checks the explicitly selected chat model provider instead of the default provider', async () => {
+      mockChat.model.mockReturnValue('openrouter:anthropic/claude-sonnet-4.5');
+      mockAIAPI.getSettings.mockResolvedValue({
+        model: 'deepseek:deepseek-v4-pro',
+        chat_model: '',
+        control_level: 'read_only',
+        autonomous_mode: false,
+        discovery_enabled: true,
+      });
+
+      renderChat();
+
+      await waitFor(() => {
+        expect(mockAIAPI.testProvider).toHaveBeenCalledWith(
+          'openrouter',
+          'openrouter:anthropic/claude-sonnet-4.5',
+        );
+      });
+      expect(mockAIAPI.testProvider).not.toHaveBeenCalledWith(
+        'deepseek',
+        'deepseek:deepseek-v4-pro',
+      );
     });
 
     it('renders the compact composer send control', () => {

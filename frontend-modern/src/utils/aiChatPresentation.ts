@@ -20,6 +20,9 @@ export const AI_CHAT_QUESTION_CARD_TITLE = 'Pulse Assistant needs your input';
 export const AI_CHAT_QUESTION_CARD_PLACEHOLDER = 'Type your answer...';
 export const AI_CHAT_ASSISTANT_MESSAGE_LABEL = 'Pulse Assistant';
 export const AI_CHAT_CONTEXT_USED_LABEL = 'Context used';
+export const AI_CHAT_PROVIDER_READINESS_SETTINGS_HREF = '/settings/system-ai';
+export const AI_CHAT_PROVIDER_READINESS_SETTINGS_LABEL = 'Open settings';
+export const AI_CHAT_PROVIDER_READINESS_RETRY_LABEL = 'Retry';
 
 export interface AIChatEmptyStateBriefingInput {
   sourceLabel?: string;
@@ -30,6 +33,15 @@ export interface AIChatEmptyStateBriefingInput {
 export interface AIChatEmptyStatePresentation {
   subtitle?: string;
   title: string;
+}
+
+export type AIChatProviderReadinessStatus = 'checking' | 'error';
+
+export interface AIChatProviderReadinessPresentation {
+  body: string;
+  recommendation?: string;
+  title: string;
+  tone: AIChatProviderReadinessStatus;
 }
 
 export function getAIChatLauncherTitle(contextName?: unknown) {
@@ -59,5 +71,35 @@ export function getAIChatEmptyStatePresentation(args: {
   return {
     title: AI_CHAT_EMPTY_STATE_TITLE,
     subtitle: AI_CHAT_EMPTY_STATE_SUBTITLE,
+  };
+}
+
+export function getAIChatProviderReadinessPresentation(args: {
+  message?: string;
+  providerLabel?: string;
+  recommendation?: string;
+  status: AIChatProviderReadinessStatus;
+  summary?: string;
+}): AIChatProviderReadinessPresentation {
+  const providerLabel = args.providerLabel?.trim() || 'Selected';
+  if (args.status === 'checking') {
+    return {
+      tone: 'checking',
+      title: `Checking ${providerLabel} provider`,
+      body: 'Pulse is verifying the selected provider before this chat sends work.',
+    };
+  }
+
+  const body =
+    args.summary?.trim() ||
+    args.message?.trim() ||
+    'Pulse could not verify the selected provider before this chat sends work.';
+  const recommendation = args.recommendation?.trim() || undefined;
+
+  return {
+    tone: 'error',
+    title: `${providerLabel} provider issue`,
+    body,
+    recommendation,
   };
 }

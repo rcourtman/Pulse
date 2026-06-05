@@ -444,12 +444,19 @@ payload shape change when the portal presents compact client rows.
     structured diagnostic envelope: `success`, `message`, optional `model`,
     `cause`, `summary`, `recommendation`, and `action`, plus `provider` on the
     provider-specific endpoint.
+    The provider-specific endpoint may accept an optional JSON request body
+    with `model` so Assistant can test the exact selected chat model; when that
+    field carries an explicit provider prefix it must match the route provider
+    instead of silently testing a different provider's model.
     Failure payloads must use the AI runtime's Patrol failure-cause vocabulary
-    and safe remediation text instead of returning raw upstream provider errors,
-    while still leaving those raw details available only to server logs or
-    redacted governed internal Patrol evidence. The frontend API client and
-    settings shell must treat this payload as the canonical provider health
-    contract rather than parsing free-form provider error strings.
+    and safe remediation text instead of returning raw upstream provider errors.
+    General `/api/ai/test*` payloads use neutral provider diagnostic copy for
+    Assistant and settings readiness; Patrol-specific wording is reserved for
+    Patrol preflight, Patrol findings, and Patrol run records. Raw details stay
+    available only to server logs or redacted governed internal Patrol
+    evidence. The frontend API client, settings shell, and Assistant drawer
+    must treat this payload as the canonical provider health contract rather
+    than parsing free-form provider error strings.
 35. `internal/api/ai_intelligence_handlers.go` shared with `ai-runtime`: AI intelligence handlers are both an AI runtime control surface and a canonical API payload contract boundary.
 36. `internal/api/config_setup_handlers.go` shared with `agent-lifecycle`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
     That same shared boundary also owns reachable-host selection truth for canonical Proxmox registration: runtime callers may propose ordered `candidateHosts`, but the API contract must persist and echo the first candidate Pulse can actually reach instead of freezing the caller's rejected first preference into the stored node endpoint.

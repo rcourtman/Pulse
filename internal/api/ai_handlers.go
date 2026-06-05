@@ -3044,7 +3044,7 @@ func (h *AISettingsHandler) HandleTestAIConnection(w http.ResponseWriter, r *htt
 	cfg := h.GetAIService(r.Context()).GetConfig()
 	err := h.GetAIService(r.Context()).TestConnection(ctx)
 	if err != nil {
-		diagnostic := ai.ClassifyPatrolRuntimeFailure(err)
+		diagnostic := ai.ClassifyProviderConnectionFailure(err)
 		testResult.Success = false
 		testResult.Message = diagnostic.Summary
 		testResult.Cause = string(diagnostic.Cause)
@@ -3079,6 +3079,10 @@ type aiProviderTestResponse struct {
 	Action         string `json:"action,omitempty"`
 }
 
+type aiProviderTestRequest struct {
+	Model string `json:"model,omitempty"`
+}
+
 func newAIProviderTestResponse(provider string) aiProviderTestResponse {
 	return aiProviderTestResponse{Provider: provider}
 }
@@ -3089,14 +3093,14 @@ func newAIProviderTestNotConfiguredResponse(provider string) aiProviderTestRespo
 		Message:        "Provider not configured",
 		Provider:       provider,
 		Cause:          string(ai.PatrolFailureCauseProviderNotConfigured),
-		Summary:        "Pulse Patrol cannot test this provider because it is not configured for the current Assistant & Patrol settings.",
-		Recommendation: "Open Assistant & Patrol provider settings, configure the provider credentials or base URL, choose a Patrol model, and run provider preflight again.",
+		Summary:        "Pulse cannot test this provider because it is not configured for the current Assistant and Patrol settings.",
+		Recommendation: "Open Assistant and Patrol provider settings, configure the provider credentials or base URL, choose a model, and retry.",
 		Action:         "open_provider_settings",
 	}
 }
 
 func newAIProviderTestFailureResponse(provider, model string, err error) aiProviderTestResponse {
-	diagnostic := ai.ClassifyPatrolRuntimeFailure(err)
+	diagnostic := ai.ClassifyProviderConnectionFailure(err)
 	return aiProviderTestResponse{
 		Success:        false,
 		Message:        diagnostic.Summary,
@@ -3139,6 +3143,26 @@ func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	var body aiProviderTestRequest
+	if r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, `{"error":"Invalid JSON body"}`, http.StatusBadRequest)
+			return
+		}
+	}
+	requestedModel := config.NormalizeQuickstartModelString(body.Model)
+	if len(requestedModel) > 256 {
+		http.Error(w, `{"error":"Model id too long"}`, http.StatusBadRequest)
+		return
+	}
+	if requestedModel != "" && strings.Contains(requestedModel, ":") {
+		modelProvider, _ := config.ParseModelString(requestedModel)
+		if modelProvider != provider {
+			http.Error(w, `{"error":"Model provider does not match test provider"}`, http.StatusBadRequest)
+			return
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
@@ -3165,14 +3189,18 @@ func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Re
 	}
 
 	// Create provider and test connection
-	model, err := ai.ResolvePreferredModelForProvider(ctx, cfg, provider)
-	if err != nil {
-		testResult = newAIProviderTestFailureResponse(provider, "", err)
-		log.Error().Err(err).Str("provider", provider).Msg("AI provider model resolution failed")
-		if err := utils.WriteJSONResponse(w, testResult); err != nil {
-			log.Error().Err(err).Msg("failed to write provider test response")
+	model := requestedModel
+	if model == "" {
+		var err error
+		model, err = ai.ResolvePreferredModelForProvider(ctx, cfg, provider)
+		if err != nil {
+			testResult = newAIProviderTestFailureResponse(provider, "", err)
+			log.Error().Err(err).Str("provider", provider).Msg("AI provider model resolution failed")
+			if err := utils.WriteJSONResponse(w, testResult); err != nil {
+				log.Error().Err(err).Msg("failed to write provider test response")
+			}
+			return
 		}
-		return
 	}
 
 	testProvider, err := providers.NewForProvider(cfg, provider, model)

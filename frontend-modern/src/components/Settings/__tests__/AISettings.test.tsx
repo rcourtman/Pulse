@@ -759,7 +759,7 @@ describe('AISettings provider save failure context', () => {
         provider === 'openrouter' ? 'Provider authentication issue' : `${provider} reachable`,
       recommendation:
         provider === 'openrouter'
-          ? 'Check the API key or provider authentication in Patrol provider settings, then rerun Patrol.'
+          ? 'Check the API key or provider authentication in Assistant and Patrol settings, then retry.'
           : undefined,
       cause: provider === 'openrouter' ? 'provider_auth' : undefined,
       provider,

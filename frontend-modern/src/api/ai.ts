@@ -50,9 +50,11 @@ export class AIAPI {
   }
 
   // Test a specific provider connection
-  static async testProvider(provider: string): Promise<AIProviderTestResult> {
+  static async testProvider(provider: string, model?: string): Promise<AIProviderTestResult> {
+    const body = model?.trim() ? JSON.stringify({ model: model.trim() }) : undefined;
     return apiFetchJSON(`${this.baseUrl}/ai/test/${encodeURIComponent(provider)}`, {
       method: 'POST',
+      ...(body ? { body } : {}),
     }) as Promise<AIProviderTestResult>;
   }
 

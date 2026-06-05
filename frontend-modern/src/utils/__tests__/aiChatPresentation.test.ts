@@ -12,9 +12,13 @@ import {
   AI_CHAT_MODEL_SELECTOR_EMPTY_STATE,
   AI_CHAT_NEW_SESSION_MENU_LABEL,
   AI_CHAT_NEW_SESSION_SHORT_LABEL,
+  AI_CHAT_PROVIDER_READINESS_RETRY_LABEL,
+  AI_CHAT_PROVIDER_READINESS_SETTINGS_HREF,
+  AI_CHAT_PROVIDER_READINESS_SETTINGS_LABEL,
   AI_CHAT_QUESTION_CARD_TITLE,
   AI_CHAT_SESSION_EMPTY_STATE,
   AI_CHAT_SESSION_MENU_TITLE,
+  getAIChatProviderReadinessPresentation,
   getAIChatLauncherTitle,
   getAIChatEmptyStatePresentation,
 } from '@/utils/aiChatPresentation';
@@ -42,6 +46,9 @@ describe('aiChatPresentation', () => {
     expect(AI_CHAT_QUESTION_CARD_TITLE).toBe('Pulse Assistant needs your input');
     expect(AI_CHAT_ASSISTANT_MESSAGE_LABEL).toBe('Pulse Assistant');
     expect(AI_CHAT_CONTEXT_USED_LABEL).toBe('Context used');
+    expect(AI_CHAT_PROVIDER_READINESS_SETTINGS_HREF).toBe('/settings/system-ai');
+    expect(AI_CHAT_PROVIDER_READINESS_SETTINGS_LABEL).toBe('Open settings');
+    expect(AI_CHAT_PROVIDER_READINESS_RETRY_LABEL).toBe('Retry');
   });
 
   it('builds canonical launcher titles without implying a keyboard shortcut', () => {
@@ -64,5 +71,28 @@ describe('aiChatPresentation', () => {
       title: 'Context attached',
       subtitle: 'Pulse Patrol · Patrol assessment attached · Coverage incomplete',
     });
+  });
+
+  it('builds neutral provider readiness presentation copy for Assistant checks', () => {
+    expect(
+      getAIChatProviderReadinessPresentation({
+        status: 'error',
+        providerLabel: 'DeepSeek',
+        summary: 'Pulse could not maintain a healthy connection to this provider.',
+        recommendation: 'Check provider reachability.',
+      }),
+    ).toEqual({
+      tone: 'error',
+      title: 'DeepSeek provider issue',
+      body: 'Pulse could not maintain a healthy connection to this provider.',
+      recommendation: 'Check provider reachability.',
+    });
+
+    expect(
+      getAIChatProviderReadinessPresentation({
+        status: 'checking',
+        providerLabel: 'OpenRouter',
+      }).title,
+    ).toBe('Checking OpenRouter provider');
   });
 });

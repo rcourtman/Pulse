@@ -126,6 +126,72 @@ func ClassifyPatrolRuntimeFailure(err error) PatrolRuntimeFailureDiagnostic {
 	}
 }
 
+func ClassifyProviderConnectionFailure(err error) PatrolRuntimeFailureDiagnostic {
+	failure := patrolRuntimeFailureFromError(err)
+	diagnostic := PatrolRuntimeFailureDiagnostic{
+		Title:          "Provider connection issue",
+		Summary:        "Provider connection issue",
+		Cause:          failure.Cause,
+		Description:    "Pulse could not maintain a healthy connection to this provider.",
+		Recommendation: "Check provider reachability, base URL, firewall or proxy rules, and provider availability, then retry.",
+	}
+
+	switch failure.Cause {
+	case PatrolFailureCauseMalformedToolHistory:
+		diagnostic.Title = "Provider conversation state issue"
+		diagnostic.Summary = "Provider conversation state issue"
+		diagnostic.Description = "The provider rejected the conversation structure used by Pulse."
+		diagnostic.Recommendation = "Start a new assistant session and retry. If the issue persists, restart Pulse and report the selected provider and model."
+	case PatrolFailureCauseToolChoiceRejected:
+		diagnostic.Title = "Provider rejected tool-choice request"
+		diagnostic.Summary = "Provider rejected tool-choice request"
+		diagnostic.Description = "Pulse reached the provider, but the provider rejected a tool-choice transport setting."
+		diagnostic.Recommendation = "Retry with automatic tool selection, or switch to a provider route with reliable tool-call support."
+	case PatrolFailureCauseNoToolCapableEndpoint:
+		diagnostic.Title = "No tool-capable provider endpoint available"
+		diagnostic.Summary = "No tool-capable provider endpoint available"
+		diagnostic.Description = "Pulse reached the provider, but the provider reports no available endpoint with tool support for the selected model."
+		diagnostic.Recommendation = "Review provider routing and privacy filters, broaden allowed providers, or switch to a model with broader tool support."
+	case PatrolFailureCauseModelUnsupportedTools:
+		diagnostic.Title = "Selected model does not support tools"
+		diagnostic.Summary = "Selected model does not support tools"
+		diagnostic.Description = "Pulse reached the provider, but the selected model or routed endpoint rejected tool calling."
+		diagnostic.Recommendation = "Choose a model or provider route that supports tool calling for governed Assistant and Patrol workflows."
+	case PatrolFailureCauseModelUnavailable:
+		diagnostic.Title = "Selected model unavailable"
+		diagnostic.Summary = "Selected model unavailable"
+		diagnostic.Description = "The selected model is not available from this provider path."
+		diagnostic.Recommendation = "Choose one of the models currently returned by the provider, then retry."
+	case PatrolFailureCauseContextWindowTooSmall:
+		diagnostic.Title = "Selected model context window too small"
+		diagnostic.Summary = "Selected model context window too small"
+		diagnostic.Description = "The provider rejected the request because the selected model could not fit the current context."
+		diagnostic.Recommendation = "Choose a model with a larger context window or retry with a narrower request."
+	case PatrolFailureCauseProviderBilling:
+		diagnostic.Title = "Provider billing or quota issue"
+		diagnostic.Summary = "Provider billing or quota issue"
+		diagnostic.Description = "The provider rejected the request for billing or quota reasons."
+		diagnostic.Recommendation = "Resolve the billing or quota issue with your provider, or switch to a different provider or model."
+	case PatrolFailureCauseProviderRateLimited:
+		diagnostic.Title = "Provider rate limited"
+		diagnostic.Summary = "Provider rate limited"
+		diagnostic.Description = "The provider is rate limiting requests for this account or model."
+		diagnostic.Recommendation = "Wait for the provider rate limit to reset, increase provider limits, or switch to another model."
+	case PatrolFailureCauseProviderAuth:
+		diagnostic.Title = "Provider authentication issue"
+		diagnostic.Summary = "Provider authentication issue"
+		diagnostic.Description = "The provider rejected the configured credentials or account access."
+		diagnostic.Recommendation = "Check the API key or provider authentication in Assistant and Patrol settings, then retry."
+	case PatrolFailureCauseProviderNotConfigured, PatrolFailureCauseModelNotSelected, PatrolFailureCauseModelProviderUnconfigured, PatrolFailureCauseAssistantDisabled, PatrolFailureCauseSettingsPersistence:
+		diagnostic.Title = "Provider not ready"
+		diagnostic.Summary = "Provider not ready"
+		diagnostic.Description = "Pulse cannot test this provider because the provider runtime is not ready."
+		diagnostic.Recommendation = "Open Assistant and Patrol provider settings, complete provider configuration, verify the selected model, and retry."
+	}
+
+	return diagnostic
+}
+
 func patrolRuntimeFailureFromError(err error) patrolRuntimeFailure {
 	raw := ""
 	if err != nil {
