@@ -166,9 +166,8 @@ runtime cost control, and shared AI transport surfaces.
    provider defaults. That same-model gateway planning must remain catalog-free
    and may continue to the next configured provider if the gateway attempt also
    fails before visible output. Once visible output has streamed, Pulse must
-   not silently switch
-   providers for that turn; the error belongs to the visible attempt and is
-   surfaced through normal failed-turn recovery. Assistant
+   not silently switch providers for that turn; the error belongs to the visible
+   attempt and is surfaced through normal failed-turn recovery. Assistant
    completion events must carry the effective model route that actually
    completed the turn, and the drawer must update the in-flight transcript row
    when `provider_fallback` names the next route so message labels, cost
@@ -207,7 +206,8 @@ runtime cost control, and shared AI transport surfaces.
    rendering before changing Pulse behavior; parity means adapting the proven
    interaction model, not guessing from screenshots or observed behavior alone.
    Streamed provider startup must be bounded by the configured Assistant request
-   timeout and the OpenAI-compatible SSE response-header guard; transient
+   timeout, the OpenAI-compatible SSE response-header guard, and the first SSE
+   body-read guard adapted from OpenCode's provider `wrapSSE` source; transient
    startup failures may retry once before surfacing failed-turn recovery, but a
    stalled route must not leave the user in an opaque first-token wait for the
    full provider timeout.

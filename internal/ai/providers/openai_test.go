@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -36,6 +37,27 @@ func (b *readOnceEOFBody) Read(p []byte) (int, error) {
 }
 
 func (b *readOnceEOFBody) Close() error {
+	return nil
+}
+
+type blockingReadCloser struct {
+	closed chan struct{}
+	once   sync.Once
+}
+
+func newBlockingReadCloser() *blockingReadCloser {
+	return &blockingReadCloser{closed: make(chan struct{})}
+}
+
+func (b *blockingReadCloser) Read([]byte) (int, error) {
+	<-b.closed
+	return 0, io.ErrClosedPipe
+}
+
+func (b *blockingReadCloser) Close() error {
+	b.once.Do(func() {
+		close(b.closed)
+	})
 	return nil
 }
 
@@ -134,11 +156,41 @@ func TestNewOpenAIClient_BoundsStreamResponseHeaderTimeout(t *testing.T) {
 	transport, ok := client.streamClient.Transport.(*http.Transport)
 	require.True(t, ok)
 	assert.Equal(t, openaiStreamResponseHeaderTimeout, transport.ResponseHeaderTimeout)
+	assert.Equal(t, openaiStreamFirstEventTimeout, client.streamFirstEventTimeout)
 
 	shortTimeoutClient := NewOpenAIClient("sk-test", "gpt-4", "https://api.openai.com/v1", 2*time.Second)
 	shortTransport, ok := shortTimeoutClient.streamClient.Transport.(*http.Transport)
 	require.True(t, ok)
 	assert.Equal(t, 2*time.Second, shortTransport.ResponseHeaderTimeout)
+	assert.Equal(t, 2*time.Second, shortTimeoutClient.streamFirstEventTimeout)
+}
+
+func TestOpenAIClient_ChatStream_TimesOutWaitingForFirstStreamEvent(t *testing.T) {
+	body := newBlockingReadCloser()
+	client := NewOpenAIClient("sk-test", "gpt-4", "https://example.invalid/v1", time.Second)
+	client.streamFirstEventTimeout = 10 * time.Millisecond
+	client.streamClient = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+				Body:       body,
+			}, nil
+		}),
+	}
+
+	started := time.Now()
+	var eventCount int
+	err := client.ChatStream(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+	}, func(StreamEvent) {
+		eventCount++
+	})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "stream first event timed out")
+	assert.Less(t, time.Since(started), 200*time.Millisecond)
+	assert.Equal(t, 0, eventCount)
 }
 
 // TestOpenAIClient_ChatStream_OpenRouterReasoning guards the OpenRouter reasoning
