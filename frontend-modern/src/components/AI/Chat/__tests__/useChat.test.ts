@@ -842,6 +842,32 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('retracts compacted internal prose when a split tool-call leak completes', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('how many devices in this');
+      const fire = getFireEvent();
+      const compacted =
+        "I'llcheckthedevicenodesinsidethecontainertoanswerthat.Letmecounttheentriesin/devandlisttheblockdevices.";
+
+      fire({ type: 'content', data: compacted });
+      expect(chat.messages().find((m) => m.role === 'assistant')?.content).toBe(compacted);
+
+      fire({
+        type: 'content',
+        data: 'pulse_read(target_host="current_resource", command="ls /dev | wc -l")',
+      });
+      fire({ type: 'content', data: 'raw arguments that should stay hidden' });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.content).toBe('');
+      expect(assistant.content).not.toContain('pulse_read');
+      expect(assistant.content).not.toContain('raw arguments');
+      expect(assistant.streamEvents?.filter((e) => e.type === 'content')).toEqual([]);
+      dispose();
+    });
+
     it('resumes visible content after a governed tool boundary clears a raw leak', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));

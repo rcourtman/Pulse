@@ -251,6 +251,53 @@ export function useChat(options: UseChatOptions = {}) {
     return `${existing} ${content}`;
   };
 
+  const appendTextAfterBoundary = (existing: string, content: string): string => {
+    if (!existing || !content) {
+      return existing + content;
+    }
+    if (/\s$/.test(existing) || /^\s|^[,.;:!?)]/.test(content)) {
+      return existing + content;
+    }
+    return `${existing} ${content}`;
+  };
+
+  const replaceCurrentAssistantOutputSegment = (
+    msg: ChatMessage,
+    previousVisibleText: string,
+    replacementText: string,
+  ): ChatMessage => {
+    const events = msg.streamEvents || [];
+    let boundaryIndex = -1;
+    for (let i = events.length - 1; i >= 0; i -= 1) {
+      if (events[i].type !== 'content' && events[i].type !== 'thinking') {
+        boundaryIndex = i;
+        break;
+      }
+    }
+
+    const retainedEvents = [
+      ...events.slice(0, boundaryIndex + 1),
+      ...events.slice(boundaryIndex + 1).filter((evt) => evt.type !== 'content'),
+    ];
+    const streamEvents = replacementText
+      ? [...retainedEvents, { type: 'content' as const, content: replacementText }]
+      : retainedEvents;
+
+    let content = msg.content || '';
+    if (previousVisibleText && content.endsWith(previousVisibleText)) {
+      content = content.slice(0, -previousVisibleText.length);
+    }
+    content = replacementText
+      ? appendTextAfterBoundary(content, replacementText)
+      : content.trimEnd();
+
+    return {
+      ...msg,
+      content,
+      streamEvents,
+    };
+  };
+
   // Process stream events
   const extractText = (value: unknown): string => {
     if (typeof value === 'string') return value;
@@ -444,12 +491,20 @@ export function useChat(options: UseChatOptions = {}) {
               if (visible.stripped) {
                 suppressedRawContentMessageIds.add(assistantId);
               }
-              if (!visible.text) return msg;
+              const baseMsg =
+                visible.replacementText !== undefined
+                  ? replaceCurrentAssistantOutputSegment(
+                      msg,
+                      visible.previousVisibleText || '',
+                      visible.replacementText,
+                    )
+                  : msg;
+              if (!visible.text) return baseMsg;
               // Add to streamEvents for chronological display
-              const updated = addStreamEvent(msg, { type: 'content', content: visible.text });
+              const updated = addStreamEvent(baseMsg, { type: 'content', content: visible.text });
               return {
                 ...updated,
-                content: appendMessageContent(msg, visible.text),
+                content: appendMessageContent(baseMsg, visible.text),
               };
             }
 

@@ -36,6 +36,15 @@ describe('stripAssistantOutputArtifacts', () => {
     expect(result.stripped).toBe(true);
   });
 
+  it('suppresses compacted internal prose before raw function-call leaks', () => {
+    const result = stripAssistantOutputArtifacts(
+      'I\'llcheckthedevicenodesinsidethecontainertoanswerthat.Letmecounttheentriesin/devandlisttheblockdevices.pulse_read(target_host="current_resource", command="lsblk")',
+    );
+
+    expect(result.text).toBe('');
+    expect(result.stripped).toBe(true);
+  });
+
   it('leaves ordinary prose and unrelated function calls alone', () => {
     expect(stripAssistantOutputArtifacts('Call helper(target="x") in the example.')).toEqual({
       text: 'Call helper(target="x") in the example.',
@@ -58,6 +67,29 @@ describe('stripAssistantOutputArtifacts', () => {
     ).toEqual({
       text: '',
       stripped: true,
+    });
+    expect(flushPendingAssistantOutputText(state)).toBe('');
+  });
+
+  it('asks callers to replace already emitted compacted prose when a split leak completes', () => {
+    const state = createAssistantOutputArtifactStreamState();
+    const first =
+      "I'llcheckthedevicenodesinsidethecontainertoanswerthat.Letmecounttheentriesin/devandlisttheblockdevices.";
+
+    expect(appendVisibleTextBeforeAssistantOutputArtifacts(state, first)).toEqual({
+      text: first,
+      stripped: false,
+    });
+    expect(
+      appendVisibleTextBeforeAssistantOutputArtifacts(
+        state,
+        'pulse_read(target_host="current_resource", command="lsblk")',
+      ),
+    ).toEqual({
+      text: '',
+      stripped: true,
+      previousVisibleText: first,
+      replacementText: '',
     });
     expect(flushPendingAssistantOutputText(state)).toBe('');
   });

@@ -72,6 +72,11 @@ func TestCleanToolCallArtifacts(t *testing.T) {
 			"I will check that now.",
 		},
 		{
+			"plain function leak with compacted internal prelude",
+			"I'llcheckthedevicenodesinsidethecontainertoanswerthat.Letmecounttheentriesin/devandlisttheblockdevices.pulse_read(target_host=\"current_resource\", command=\"lsblk\")",
+			"",
+		},
+		{
 			"plain function leak only no prose",
 			"pulse_read(target_host=\"current_resource\", command=\"lsblk\")",
 			"",
@@ -187,5 +192,48 @@ func TestAppendVisibleContentBeforeToolLeak(t *testing.T) {
 	}
 	if builder.String() != "Let me check. " || pending != "" {
 		t.Fatalf("builder should not append leaked call suffix, got builder=%q pending=%q", builder.String(), pending)
+	}
+}
+
+func TestAppendVisibleContentBeforeToolLeak_DropsCompactedPrelude(t *testing.T) {
+	var builder strings.Builder
+	var pending string
+
+	delta, leakFound := appendVisibleContentBeforeToolLeak(
+		&builder,
+		&pending,
+		"I'llcheckthedevicenodesinsidethecontainertoanswerthat.Letmecounttheentriesin/devandlisttheblockdevices.pulse_read(target_host=\"current_resource\", command=\"lsblk\")",
+	)
+	if !leakFound {
+		t.Fatal("expected compacted raw function call to be detected")
+	}
+	if delta != "" || builder.String() != "" || pending != "" {
+		t.Fatalf("compacted prelude should be suppressed, got delta=%q builder=%q pending=%q", delta, builder.String(), pending)
+	}
+}
+
+func TestAppendVisibleContentBeforeToolLeak_ClearsCompactedPreludeWhenSplit(t *testing.T) {
+	var builder strings.Builder
+	var pending string
+
+	first := "I'llcheckthedevicenodesinsidethecontainertoanswerthat.Letmecounttheentriesin/devandlisttheblockdevices."
+	delta, leakFound := appendVisibleContentBeforeToolLeak(&builder, &pending, first)
+	if leakFound {
+		t.Fatal("first compacted chunk should not be classified as a tool leak by itself")
+	}
+	if delta != first || builder.String() != first {
+		t.Fatalf("unexpected first compacted delta=%q builder=%q", delta, builder.String())
+	}
+
+	delta, leakFound = appendVisibleContentBeforeToolLeak(
+		&builder,
+		&pending,
+		"pulse_read(target_host=\"current_resource\", command=\"lsblk\")",
+	)
+	if !leakFound {
+		t.Fatal("expected split compacted raw function call to be detected")
+	}
+	if delta != "" || builder.String() != "" || pending != "" {
+		t.Fatalf("compacted prelude should be cleared after split leak, got delta=%q builder=%q pending=%q", delta, builder.String(), pending)
 	}
 }

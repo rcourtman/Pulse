@@ -3,6 +3,7 @@ package chat
 import (
 	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 )
@@ -77,7 +78,11 @@ func cleanToolCallArtifacts(content string) string {
 	}
 
 	if idx := toolCallArtifactIndex(content); idx >= 0 {
-		content = strings.TrimSpace(content[:idx])
+		prefix := strings.TrimSpace(content[:idx])
+		if isCompactedToolPrelude(prefix) {
+			return ""
+		}
+		content = prefix
 	}
 
 	return content
@@ -161,8 +166,20 @@ func appendVisibleContentBeforeToolLeak(
 	}
 
 	if idx > len(existing) {
+		if isCompactedToolPrelude(candidate[:idx]) {
+			builder.Reset()
+			if pending != nil {
+				*pending = ""
+			}
+			return "", true
+		}
 		visibleDelta, _ = splitTrailingPotentialToolNamePrefix(candidate[len(existing):idx])
 		builder.WriteString(visibleDelta)
+	} else if isCompactedToolPrelude(candidate[:idx]) {
+		builder.Reset()
+		if pending != nil {
+			*pending = ""
+		}
 	}
 	return visibleDelta, true
 }
@@ -201,6 +218,32 @@ func splitTrailingPotentialToolNamePrefix(content string) (visible string, held 
 		return content[:start], token
 	}
 	return content, ""
+}
+
+func isCompactedToolPrelude(content string) bool {
+	trimmed := strings.TrimSpace(content)
+	if trimmed == "" {
+		return false
+	}
+
+	letters := 0
+	whitespace := 0
+	for _, ch := range trimmed {
+		if unicode.IsLetter(ch) {
+			letters++
+		}
+		if unicode.IsSpace(ch) {
+			whitespace++
+		}
+	}
+
+	if letters < 16 {
+		return false
+	}
+	if whitespace == 0 {
+		return true
+	}
+	return letters >= 48 && whitespace <= 1
 }
 
 // findJSONToolCallLeak returns the byte offset to strip from when a plain-JSON

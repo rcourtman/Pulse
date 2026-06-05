@@ -49,7 +49,11 @@ export function stripAssistantOutputArtifacts(content: string): {
   if (idx < 0) {
     return { text: content, stripped: false };
   }
-  return { text: content.slice(0, idx).trimEnd(), stripped: true };
+  const visiblePrefix = content.slice(0, idx).trim();
+  return {
+    text: isCompactedToolPrelude(visiblePrefix) ? '' : visiblePrefix,
+    stripped: true,
+  };
 }
 
 export function appendVisibleTextBeforeAssistantOutputArtifacts(
@@ -58,6 +62,8 @@ export function appendVisibleTextBeforeAssistantOutputArtifacts(
 ): {
   text: string;
   stripped: boolean;
+  previousVisibleText?: string;
+  replacementText?: string;
 } {
   if (!content && !state.pendingText) {
     return { text: '', stripped: false };
@@ -77,6 +83,17 @@ export function appendVisibleTextBeforeAssistantOutputArtifacts(
   }
 
   const safeText = candidate.slice(0, idx).trimEnd();
+  if (isCompactedToolPrelude(safeText)) {
+    const previousVisibleText = state.visibleText;
+    state.visibleText = '';
+    state.pendingText = '';
+    return {
+      text: '',
+      stripped: true,
+      previousVisibleText,
+      replacementText: '',
+    };
+  }
   const visibleDelta = safeText.length > existing.length ? safeText.slice(existing.length) : '';
   state.visibleText = safeText;
   state.pendingText = '';
@@ -179,4 +196,24 @@ function isKnownAssistantToolNamePrefix(prefix: string): boolean {
     /^pulse_[a-zA-Z0-9_]*$/.test(prefix) ||
     /^patrol_[a-zA-Z0-9_]*$/.test(prefix)
   );
+}
+
+function isCompactedToolPrelude(content: string): boolean {
+  const trimmed = content.trim();
+  if (!trimmed) return false;
+
+  let letters = 0;
+  let whitespace = 0;
+  for (const char of trimmed) {
+    if (/\p{L}/u.test(char)) {
+      letters += 1;
+    }
+    if (/\s/.test(char)) {
+      whitespace += 1;
+    }
+  }
+
+  if (letters < 16) return false;
+  if (whitespace === 0) return true;
+  return letters >= 48 && whitespace <= 1;
 }

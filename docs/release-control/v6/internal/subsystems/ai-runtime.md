@@ -174,7 +174,10 @@ runtime cost control, and shared AI transport surfaces.
    approval, or question blocks; if a provider emits `pulse_*` / `patrol_*`
    calls, DSML, XML/function-call envelopes, or JSON tool-call shapes as text
    content, the chat runtime must strip them before streaming, persistence, and
-   frontend rendering. Completed tool rows in the drawer may show compact tool
+   frontend rendering. Compacted no-whitespace internal prelude text attached
+   to a leaked tool invocation is part of that same artifact and must be
+   suppressed or retracted from the current stream segment instead of rendered
+   as assistant prose. Completed tool rows in the drawer may show compact tool
    name, action summary, status, and an explicit details affordance, but raw
    tool input/output JSON must not render in the default transcript. Token
    accounting and other provider metadata remain runtime/accounting data, not
