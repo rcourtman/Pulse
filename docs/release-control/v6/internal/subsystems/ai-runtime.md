@@ -1206,6 +1206,11 @@ context, and browser session ID immediately, leave the model selection intact,
 and avoid adding empty conversations to the session list; the next submitted
 message materializes the durable session through the stream-owned cold-start
 contract above.
+The drawer must also stay composer-first: when Assistant opens, starts a blank
+conversation, or loads an existing session, the textarea is registered with the
+shared `aiChatStore` focus owner and focused without requiring an extra click.
+Global shell shortcuts may use that store focus boundary, but drawer-local code
+must not fork a second input-focus registry.
 
 The AI transport files are shared with `api-contracts`, not delegated away to
 it. `frontend-modern/src/api/ai.ts`,

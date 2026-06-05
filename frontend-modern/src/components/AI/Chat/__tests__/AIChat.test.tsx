@@ -129,6 +129,7 @@ const {
       const { findingId: _findingId, ...rest } = mockAiChatStore.context;
       mockAiChatStore.context = rest;
     }),
+    registerInput: vi.fn(),
     clearRequestHandoffPayload: vi.fn(() => {
       const {
         handoffContext: _handoffContext,
@@ -326,6 +327,16 @@ describe('AIChat', () => {
     it('renders the input textarea', () => {
       renderChat();
       expect(screen.getByPlaceholderText('Ask about your infrastructure...')).toBeInTheDocument();
+    });
+
+    it('registers and focuses the composer when opened', async () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+
+      await waitFor(() => {
+        expect(mockAiChatStore.registerInput).toHaveBeenCalledWith(textarea);
+        expect(document.activeElement).toBe(textarea);
+      });
     });
 
     it('renders the ChatMessages child component', () => {
@@ -797,6 +808,19 @@ describe('AIChat', () => {
       });
     });
 
+    it('returns focus to the composer after starting a blank conversation', async () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+      textarea.blur();
+
+      fireEvent.click(screen.getByText('New'));
+
+      await waitFor(() => {
+        expect(mockChat.newSession).toHaveBeenCalledTimes(1);
+        expect(document.activeElement).toBe(textarea);
+      });
+    });
+
     it('keeps scoped handoff context when starting a new session fails', async () => {
       mockChat.newSession.mockResolvedValueOnce(null);
       mockAiChatStore.context = {
@@ -889,6 +913,29 @@ describe('AIChat', () => {
       });
       fireEvent.click(screen.getByText('Session One'));
       expect(mockChat.loadSession).toHaveBeenCalledWith('s1');
+    });
+
+    it('returns focus to the composer after loading a session', async () => {
+      mockAIChatAPI.listSessions.mockResolvedValue([
+        { id: 's1', title: 'Session One', created_at: '', updated_at: '', message_count: 5 },
+      ]);
+      renderChat();
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+
+      await waitFor(() => {
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalled();
+      });
+      textarea.blur();
+      fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
+      await waitFor(() => {
+        expect(screen.getByText('Session One')).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByText('Session One'));
+
+      await waitFor(() => {
+        expect(mockChat.loadSession).toHaveBeenCalledWith('s1');
+        expect(document.activeElement).toBe(textarea);
+      });
     });
 
     it('restores safe Patrol handoff state from a loaded session summary', async () => {

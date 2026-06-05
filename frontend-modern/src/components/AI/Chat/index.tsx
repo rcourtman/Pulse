@@ -325,6 +325,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [accumulatedMentions, setAccumulatedMentions] = createSignal<MentionResource[]>([]);
   let textareaRef: HTMLTextAreaElement | undefined;
 
+  const focusComposer = () => {
+    queueMicrotask(() => {
+      textareaRef?.focus();
+    });
+  };
+
   const resizeTextarea = () => {
     if (!textareaRef) return;
     textareaRef.style.height = 'auto';
@@ -627,6 +633,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
   // Click outside handler to close all dropdowns
   onMount(() => {
+    aiChatStore.registerInput?.(textareaRef ?? null);
+    focusComposer();
+
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       // Only close if click is outside dropdown containers
@@ -640,7 +649,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
       }
     };
     document.addEventListener('click', handleClickOutside);
-    onCleanup(() => document.removeEventListener('click', handleClickOutside));
+    onCleanup(() => {
+      document.removeEventListener('click', handleClickOutside);
+      aiChatStore.registerInput?.(null);
+    });
   });
 
   const mentionStatusRank = (status?: string) => {
@@ -1061,6 +1073,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (!started) return;
     aiChatStore.clearContext?.();
     setShowSessions(false);
+    focusComposer();
   };
 
   const handleToggleSessions = async () => {
@@ -1101,6 +1114,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       aiChatStore.clearContext?.();
     }
     setShowSessions(false);
+    focusComposer();
   };
 
   // Delete session
