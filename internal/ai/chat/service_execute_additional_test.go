@@ -431,6 +431,7 @@ func TestService_ExecuteStream_FallsBackWhenPrimaryProviderFailsBeforeVisibleOut
 	var content strings.Builder
 	var errorEvents int
 	var fallbackEvents int
+	var doneModel string
 	err = service.ExecuteStream(context.Background(), ExecuteRequest{
 		SessionID: "fallback-before-visible-output",
 		Prompt:    "reply",
@@ -452,6 +453,12 @@ func TestService_ExecuteStream_FallsBackWhenPrimaryProviderFailsBeforeVisibleOut
 			if data.Phase == "provider_fallback" {
 				fallbackEvents++
 			}
+		case "done":
+			var data DoneData
+			if err := json.Unmarshal(event.Data, &data); err != nil {
+				t.Fatalf("unmarshal done: %v", err)
+			}
+			doneModel = data.Model
 		}
 	})
 	if err != nil {
@@ -465,6 +472,9 @@ func TestService_ExecuteStream_FallsBackWhenPrimaryProviderFailsBeforeVisibleOut
 	}
 	if fallbackEvents != 1 {
 		t.Fatalf("fallback workflow events = %d, want 1", fallbackEvents)
+	}
+	if doneModel != "gemini:gemini-test" {
+		t.Fatalf("done model = %q, want fallback model", doneModel)
 	}
 
 	messages, err := store.GetMessages("fallback-before-visible-output")

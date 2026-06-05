@@ -942,6 +942,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	// Send done event with token usage for this request.
 	doneData, _ := json.Marshal(DoneData{
 		SessionID:    session.ID,
+		Model:        selectedModel,
 		InputTokens:  loop.GetTotalInputTokens(),
 		OutputTokens: loop.GetTotalOutputTokens(),
 	})
@@ -2304,6 +2305,7 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 	// Send done event
 	doneData, _ := json.Marshal(DoneData{
 		SessionID:    session.ID,
+		Model:        patrolModel,
 		InputTokens:  tempLoop.GetTotalInputTokens(),
 		OutputTokens: tempLoop.GetTotalOutputTokens(),
 	})

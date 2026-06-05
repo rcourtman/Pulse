@@ -448,7 +448,10 @@ payload shape change when the portal presents compact client rows.
     create-session request. The generated frontend union, stream parser tests,
     and backend JSON snapshot proof must stay in lockstep with that payload;
     `done.session_id` and `question.session_id` remain compatibility payloads,
-    not the primary cold-session creation contract.
+    not the primary cold-session creation contract. Assistant `done` events
+    must also carry the effective `model` route that completed the stream so
+    provider fallback, transcript labels, retries, and model-route recovery stay
+    tied to the actual responding provider rather than the failed request route.
 34. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
     Provider test responses from `/api/ai/test` and provider-specific
     `/api/ai/test/{provider}` preflight responses must return one safe

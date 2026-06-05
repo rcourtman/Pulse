@@ -934,6 +934,34 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('updates the in-flight message model when provider fallback starts', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() =>
+        useChat({ sessionId: 's', model: 'openrouter:openai/gpt-4o-mini' }),
+      );
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+
+      fire({
+        type: 'workflow_state',
+        data: {
+          phase: 'provider_fallback',
+          message: 'OpenRouter did not start a response; trying Gemini.',
+          failed_model: 'openrouter:openai/gpt-4o-mini',
+          next_model: 'gemini:gemini-3.1-flash-lite',
+        },
+      });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.model).toBe('gemini:gemini-3.1-flash-lite');
+      expect(assistant.workflowStatus).toEqual({
+        phase: 'provider_fallback',
+        message: 'OpenRouter did not start a response; trying Gemini.',
+      });
+      dispose();
+    });
+
     it('processes tool_start events', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
@@ -1238,10 +1266,18 @@ describe('useChat', () => {
       const fire = getFireEvent();
 
       fire({ type: 'content', data: 'response' });
-      fire({ type: 'done', data: { input_tokens: 100, output_tokens: 50 } });
+      fire({
+        type: 'done',
+        data: {
+          model: 'gemini:gemini-3.1-flash-lite',
+          input_tokens: 100,
+          output_tokens: 50,
+        },
+      });
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.isStreaming).toBe(false);
+      expect(assistant.model).toBe('gemini:gemini-3.1-flash-lite');
       expect(assistant.tokens).toEqual({ input: 100, output: 50 });
       expect(assistant.pendingTools).toHaveLength(0);
       dispose();

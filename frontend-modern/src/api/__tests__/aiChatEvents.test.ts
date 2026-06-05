@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import aiChatEventsSource from '@/api/generated/aiChatEvents.ts?raw';
 import type {
   AIChatStreamEvent,
+  DoneData,
   SessionData,
   WorkflowStateData,
 } from '@/api/generated/aiChatEvents';
@@ -37,5 +38,18 @@ describe('AI chat stream event contract', () => {
     expect(event.data.next_model).toBe('deepseek:deepseek-v4-pro');
     expect(aiChatEventsSource).toContain('failed_model?: string');
     expect(aiChatEventsSource).toContain('next_model?: string');
+  });
+
+  it('exposes the effective completion model on done events', () => {
+    const done: DoneData = {
+      session_id: 'sess-stream',
+      model: 'deepseek:deepseek-v4-pro',
+      input_tokens: 904,
+      output_tokens: 30,
+    };
+    const event: AIChatStreamEvent = { type: 'done', data: done };
+
+    expect(event.data?.model).toBe('deepseek:deepseek-v4-pro');
+    expect(aiChatEventsSource).toContain('model?: string');
   });
 });

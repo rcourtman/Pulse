@@ -55,6 +55,7 @@ export interface ContentData {
 
 export interface DoneData {
   session_id?: string;
+  model?: string;
   input_tokens?: number;
   output_tokens?: number;
 }

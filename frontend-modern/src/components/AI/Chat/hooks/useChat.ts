@@ -321,6 +321,20 @@ export function useChat(options: UseChatOptions = {}) {
     };
   };
 
+  const extractCompletedModel = (data: unknown): string => {
+    if (!data || typeof data !== 'object') return '';
+    const record = data as Record<string, unknown>;
+    const modelRoute = record.model ?? record.model_route ?? record.modelRoute;
+    return typeof modelRoute === 'string' ? modelRoute.trim() : '';
+  };
+
+  const extractWorkflowNextModel = (data: unknown): string => {
+    if (!data || typeof data !== 'object') return '';
+    const record = data as Record<string, unknown>;
+    const nextModel = record.next_model ?? record.nextModel;
+    return typeof nextModel === 'string' ? nextModel.trim() : '';
+  };
+
   const extractErrorMessage = (data: unknown): string => {
     if (typeof data === 'string') return data;
     if (data && typeof data === 'object') {
@@ -519,7 +533,13 @@ export function useChat(options: UseChatOptions = {}) {
 
             case 'workflow_state': {
               const workflowStatus = extractWorkflowStatus(event.data);
-              return workflowStatus ? { ...msg, workflowStatus } : msg;
+              const nextModel = extractWorkflowNextModel(event.data);
+              if (!workflowStatus && !nextModel) return msg;
+              return {
+                ...msg,
+                ...(workflowStatus ? { workflowStatus } : {}),
+                ...(nextModel ? { model: nextModel } : {}),
+              };
             }
 
             case 'tool_start': {
@@ -791,10 +811,12 @@ export function useChat(options: UseChatOptions = {}) {
                   }
                 : msg;
               const tokens = extractTokens(event.data);
+              const completedModel = extractCompletedModel(event.data);
               if (tokens && (tokens.input > 0 || tokens.output > 0)) {
                 return {
                   ...flushedMsg,
                   isStreaming: false,
+                  ...(completedModel ? { model: completedModel } : {}),
                   pendingTools: [],
                   tokens,
                   workflowStatus: undefined,
@@ -803,6 +825,7 @@ export function useChat(options: UseChatOptions = {}) {
               return {
                 ...flushedMsg,
                 isStreaming: false,
+                ...(completedModel ? { model: completedModel } : {}),
                 pendingTools: [],
                 workflowStatus: undefined,
               };

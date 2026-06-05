@@ -359,6 +359,7 @@ type ErrorData struct {
 // DoneData is the data for "done" events
 type DoneData struct {
 	SessionID    string `json:"session_id,omitempty"`
+	Model        string `json:"model,omitempty"`
 	InputTokens  int    `json:"input_tokens,omitempty"`
 	OutputTokens int    `json:"output_tokens,omitempty"`
 }
