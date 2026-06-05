@@ -147,6 +147,25 @@ runtime cost control, and shared AI transport surfaces.
    startup failures may retry once before surfacing failed-turn recovery, but a
    stalled route must not leave the user in an opaque first-token wait for the
    full provider timeout.
+   Assistant turn tool exposure is backend-owned runtime behavior, not a
+   provider whim or frontend polish concern. Normal diagnostic, log, command,
+   repair, and governed-action prompts keep the full governed tool manifest so
+   the selected model owns investigation and action choice inside Pulse policy.
+   Direct text turns such as exact-reply diagnostics must withhold tools and
+   use a scoped system prompt that does not advertise unavailable tools.
+   Inventory, count, overview, and status prompts that only need canonical
+   Pulse resource state must expose the canonical query/clarification path
+   instead of shell/read/control tools, so prompts like "how many devices in
+   this" route toward Pulse inventory rather than `/dev` inspection. Those
+   count/overview turns may prefetch a bounded canonical inventory summary
+   before the model request and then withhold tools so the first visible answer
+   is fast and cannot drift into shell inspection. If a query-only turn still
+   reaches a model-owned `pulse_query` topology call, omitting `summary_only`
+   must default to summary-only before execution; detailed topology remains
+   available in the full governed path or when the model explicitly asks for
+   detail. The system prompt for a turn must describe only the tools actually
+   offered to the provider for that turn; generic tool-governance prose must not
+   name tools hidden from the current manifest.
    Restored Assistant sessions must hydrate saved assistant content and
    persisted tool calls into the same transcript event shape used by live
    streams so switching sessions does not hide prior tool evidence or collapse

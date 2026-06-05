@@ -759,9 +759,25 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	}
 
 	// Run agentic loop
-	filteredTools := s.toolsForExecutionMode(autonomousMode, false)
+	hasModelHandoffContext := handoffContext != "" ||
+		len(handoffResources) > 0 ||
+		len(handoffActions) > 0 ||
+		handoffFindingID != "" ||
+		!handoffMetadataEmpty(handoffMetadata)
+	assistantToolScope := assistantToolScopeForPrompt(req.Prompt, hasModelHandoffContext)
+	if assistantToolScope == assistantTurnToolScopeQueryOnly {
+		if summaryContext := s.prefetchAssistantInventorySummaryContext(ctx, baseExecutor); summaryContext != "" {
+			injectHandoffContextIntoLatestUserMessage(messages, summaryContext)
+			assistantToolScope = assistantTurnToolScopeTextOnly
+			log.Debug().
+				Str("session_id", session.ID).
+				Msg("[ChatService] Prefetched canonical inventory summary for query-only Assistant turn")
+		}
+	}
+	filteredTools := s.toolsForAssistantTurnWithScope(assistantToolScope, autonomousMode, false)
 	if resourceContextTurnIsContextOnly(req.Prompt, handoffResources, handoffMetadata) {
 		filteredTools = []providers.Tool{}
+		assistantToolScope = assistantTurnToolScopeTextOnly
 		log.Debug().
 			Str("session_id", session.ID).
 			Msg("[ChatService] Withholding tools for context-only resource handoff turn")
@@ -819,10 +835,11 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		// concurrent sessions and provider fallback attempts. This prevents race
 		// conditions where ExecuteStream calls overwrite each other's FSM,
 		// knowledge accumulator, autonomous mode, budget checker, and provider info.
-		systemPrompt := s.buildSystemPrompt()
+		systemPrompt := s.buildSystemPromptForOfferedTools(filteredTools)
 		loop := NewAgenticLoop(attemptProvider, executor, systemPrompt)
 		loop.SetOrgID(s.orgID)
 		loop.SetAutonomousMode(autonomousMode)
+		loop.SetPreferSummaryOnlyQueries(assistantToolScope == assistantTurnToolScopeQueryOnly)
 		loop.SetRequestSanitizer(modelboundary.RequestSanitizerForModel(attempt.Model, unifiedResourceProvider))
 		loop.SetSuppressProviderErrorEvents(true)
 		loop.SetSessionFSM(sessionFSM)
@@ -951,6 +968,29 @@ func injectHandoffContextIntoLatestUserMessage(messages []Message, handoffContex
 		messages[idx].Content = contextText + "\n\n---\nUser message: " + userText
 		return
 	}
+}
+
+func (s *Service) prefetchAssistantInventorySummaryContext(ctx context.Context, executor *tools.PulseToolExecutor) string {
+	if executor == nil {
+		return ""
+	}
+	result, err := executor.ExecuteTool(ctx, "pulse_query", map[string]interface{}{
+		"action":       "topology",
+		"summary_only": true,
+	})
+	if err != nil || result.IsError {
+		log.Debug().
+			Err(err).
+			Bool("tool_error", result.IsError).
+			Msg("[ChatService] Unable to prefetch Assistant inventory summary")
+		return ""
+	}
+	resultText := strings.TrimSpace(FormatToolResult(result))
+	if resultText == "" {
+		return ""
+	}
+	return "Pulse inventory summary from current canonical resource state. Use this context to answer the user's count, overview, or status question. Do not claim shell inspection or host command execution.\n" +
+		truncateToolResultForModel(resultText)
 }
 
 func sanitizeHandoffContextForResourcePolicy(handoffContext string, handoffResources []HandoffResource, provider tools.UnifiedResourceProvider) string {
@@ -3041,9 +3081,17 @@ func (s *Service) applyChatContextSettings() {
 // selection remains model-owned; Pulse enforces safety after a model choice via
 // tool policy, approvals, and FSM verification gates.
 func (s *Service) buildSystemPrompt() string {
+	return s.buildSystemPromptWithToolGovernance(s.buildToolGovernancePromptSection())
+}
+
+func (s *Service) buildSystemPromptForOfferedTools(offeredTools []providers.Tool) string {
+	return s.buildSystemPromptWithToolGovernance(s.buildToolGovernancePromptSectionForOfferedTools(offeredTools))
+}
+
+func (s *Service) buildSystemPromptWithToolGovernance(toolGovernance string) string {
 	return `You are Pulse AI, a knowledgeable infrastructure assistant. You pair-program with the user on their homelab and infrastructure tasks.
 
-` + s.buildToolGovernancePromptSection() + `
+` + toolGovernance + `
 
 ## INFRASTRUCTURE TOPOLOGY
 - Resources are organized hierarchically: nodes → VMs/containers → Docker containers
@@ -3058,14 +3106,14 @@ func (s *Service) buildSystemPrompt() string {
 - Bind mount mappings may be available in Pulse discovery context or tools when needed
 
 ## TOOL SELECTION
-- Tool action modes and approval policies are generated from Pulse's tool registry. Treat that manifest as the source of truth for whether a tool is read-only, mixed, or write-capable.
-- pulse_control and pulse_file_edit are WRITE tools — they change infrastructure state.
-- pulse_docker, pulse_kubernetes, pulse_alerts, and pulse_knowledge are MIXED tools — their read subactions are safe, but their write or decision-recording subactions require the governed path described in the manifest.
+- Tool action modes and approval policies are generated from Pulse's tool registry. Treat the available-tool manifest for this turn as the source of truth for which tools exist and whether each tool is read-only, mixed, or write-capable.
+- Use only tools that are explicitly offered in this turn's available-tool manifest.
+- Write tools change infrastructure state. Mixed tools may include read subactions and write or decision-recording subactions; follow the governed path described in the manifest.
 - Not every VM or container supports control. Some API-backed platforms are read-only even when the resource type is "vm" or "system-container".
 - Write tools are allowed only when the user explicitly asks you to perform an action.
 - Status checks and monitoring are read-oriented; do not change state unless the user asked for a state change.
-- If you are missing critical information (target, risky choice, preference), pulse_question is available for structured clarification.
-- pulse_question is not available in autonomous mode; proceed with safe defaults and clearly state assumptions instead.
+- If a structured clarification tool is offered and you are missing critical information (target, risky choice, preference), use it.
+- If no structured clarification tool is offered, ask for missing information in normal assistant text.
 - Missing target information is not a safe default. In autonomous mode, ask for the missing target in normal assistant text instead of attempting a tool call with current_resource or another placeholder.
 
 ## HOW TO RESPOND
@@ -3088,6 +3136,42 @@ You are like a colleague doing pair programming on infrastructure tasks. Tool ca
 }
 
 func (s *Service) buildToolGovernancePromptSection() string {
+	return s.buildToolGovernancePromptSectionForOfferedToolNames(nil)
+}
+
+func (s *Service) buildToolGovernancePromptSectionForOfferedTools(offeredTools []providers.Tool) string {
+	offeredNames := make(map[string]bool, len(offeredTools))
+	orderedOfferedNames := make([]string, 0, len(offeredTools))
+	for _, tool := range offeredTools {
+		name := strings.TrimSpace(tool.Name)
+		if name == "" || offeredNames[name] {
+			continue
+		}
+		offeredNames[name] = true
+		orderedOfferedNames = append(orderedOfferedNames, name)
+	}
+	return s.buildToolGovernancePromptSectionForOfferedToolNames(orderedOfferedNames)
+}
+
+func (s *Service) buildToolGovernancePromptSectionForOfferedToolNames(orderedOfferedNames []string) string {
+	offeredFilter := map[string]bool(nil)
+	if orderedOfferedNames != nil {
+		offeredFilter = make(map[string]bool, len(orderedOfferedNames))
+		for _, name := range orderedOfferedNames {
+			if trimmed := strings.TrimSpace(name); trimmed != "" {
+				offeredFilter[trimmed] = true
+			}
+		}
+	}
+
+	if offeredFilter != nil && len(offeredFilter) == 0 {
+		return strings.Join([]string{
+			"## AVAILABLE TOOL GOVERNANCE",
+			"No Pulse tools are offered for this turn. Answer directly from the user's message and safe conversation context.",
+			"Do not claim to inspect infrastructure, run commands, or use Pulse data unless that evidence is already present in the conversation.",
+		}, "\n")
+	}
+
 	manifest := []tools.ToolGovernanceDescriptor(nil)
 	if s != nil && s.executor != nil {
 		manifest = s.executor.ListToolGovernance()
@@ -3099,7 +3183,11 @@ func (s *Service) buildToolGovernancePromptSection() string {
 	var b strings.Builder
 	b.WriteString("## AVAILABLE TOOL GOVERNANCE\n")
 	b.WriteString("This manifest is generated from Pulse's governed tool registry. Use only tools that are actually offered by the provider for the current turn.\n")
+	emitted := make(map[string]bool, len(manifest))
 	for _, tool := range manifest {
+		if offeredFilter != nil && !offeredFilter[tool.Name] {
+			continue
+		}
 		mode := tool.ActionMode
 		if mode == "" {
 			mode = tools.ToolActionRead
@@ -3117,8 +3205,22 @@ func (s *Service) buildToolGovernancePromptSection() string {
 		} else {
 			b.WriteString(fmt.Sprintf("- %s: mode=%s; approval=%s\n", tool.Name, mode, policy))
 		}
+		emitted[tool.Name] = true
 	}
-	b.WriteString("- pulse_question: mode=interactive; approval=user answer required; asks the user for missing information using a structured prompt in interactive chat only.\n")
+
+	if offeredFilter == nil || offeredFilter[pulseQuestionToolName] {
+		b.WriteString("- pulse_question: mode=interactive; approval=user answer required; asks the user for missing information using a structured prompt in interactive chat only.\n")
+		emitted[pulseQuestionToolName] = true
+	}
+	if offeredFilter != nil {
+		for _, name := range orderedOfferedNames {
+			if emitted[name] {
+				continue
+			}
+			b.WriteString(fmt.Sprintf("- %s: mode=read; approval=no approval required; Offered by Pulse for this turn.\n", name))
+			emitted[name] = true
+		}
+	}
 	return strings.TrimRight(b.String(), "\n")
 }
 
@@ -3358,6 +3460,259 @@ func (s *Service) toolsForExecutionMode(autonomousMode bool, patrolMode bool) []
 		Msg("[toolsForExecutionMode] Exposing governed tool manifest")
 
 	return filtered
+}
+
+type assistantTurnToolScope string
+
+const (
+	assistantTurnToolScopeFull      assistantTurnToolScope = "full"
+	assistantTurnToolScopeQueryOnly assistantTurnToolScope = "query-only"
+	assistantTurnToolScopeTextOnly  assistantTurnToolScope = "text-only"
+)
+
+func (s *Service) toolsForAssistantTurn(prompt string, autonomousMode bool, patrolMode bool, hasModelContext bool) []providers.Tool {
+	scope := assistantToolScopeForPrompt(prompt, hasModelContext)
+	return s.toolsForAssistantTurnWithScope(scope, autonomousMode, patrolMode)
+}
+
+func (s *Service) toolsForAssistantTurnWithScope(scope assistantTurnToolScope, autonomousMode bool, patrolMode bool) []providers.Tool {
+	fullTools := s.toolsForExecutionMode(autonomousMode, patrolMode)
+	if patrolMode {
+		return fullTools
+	}
+
+	switch scope {
+	case assistantTurnToolScopeTextOnly:
+		log.Debug().
+			Str("tool_scope", string(scope)).
+			Bool("autonomous", autonomousMode).
+			Msg("[toolsForAssistantTurn] Withholding tools for direct text turn")
+		return []providers.Tool{}
+	case assistantTurnToolScopeQueryOnly:
+		allowed := map[string]bool{"pulse_query": true}
+		if !autonomousMode {
+			allowed[pulseQuestionToolName] = true
+		}
+		filtered := filterProviderToolsByName(fullTools, allowed)
+		log.Debug().
+			Str("tool_scope", string(scope)).
+			Int("tool_manifest_count", len(filtered)).
+			Bool("autonomous", autonomousMode).
+			Msg("[toolsForAssistantTurn] Scoped Assistant turn to canonical query tools")
+		return filtered
+	default:
+		return fullTools
+	}
+}
+
+func filterProviderToolsByName(providerTools []providers.Tool, allowed map[string]bool) []providers.Tool {
+	if len(providerTools) == 0 || len(allowed) == 0 {
+		return []providers.Tool{}
+	}
+	filtered := make([]providers.Tool, 0, len(providerTools))
+	for _, tool := range providerTools {
+		if allowed[tool.Name] {
+			filtered = append(filtered, tool)
+		}
+	}
+	return filtered
+}
+
+func assistantToolScopeForPrompt(prompt string, hasModelContext bool) assistantTurnToolScope {
+	if hasModelContext {
+		return assistantTurnToolScopeFull
+	}
+	normalized := normalizeAssistantToolRoutingPrompt(prompt)
+	if normalized == "" {
+		return assistantTurnToolScopeTextOnly
+	}
+	if assistantPromptRequestsDirectText(normalized) {
+		return assistantTurnToolScopeTextOnly
+	}
+	if assistantPromptNeedsFullToolManifest(normalized) {
+		return assistantTurnToolScopeFull
+	}
+	if assistantPromptIsInventoryQuery(normalized) {
+		return assistantTurnToolScopeQueryOnly
+	}
+	if assistantPromptLooksConversational(normalized) {
+		return assistantTurnToolScopeTextOnly
+	}
+	return assistantTurnToolScopeFull
+}
+
+func normalizeAssistantToolRoutingPrompt(prompt string) string {
+	normalized := strings.ToLower(strings.TrimSpace(prompt))
+	if normalized == "" {
+		return ""
+	}
+	replacer := strings.NewReplacer(
+		"\n", " ",
+		"\r", " ",
+		"\t", " ",
+		".", " ",
+		",", " ",
+		";", " ",
+		":", " ",
+		"!", " ",
+		"?", " ",
+		"(", " ",
+		")", " ",
+		"[", " ",
+		"]", " ",
+		"{", " ",
+		"}", " ",
+		"\"", " ",
+		"'", " ",
+	)
+	return " " + strings.Join(strings.Fields(replacer.Replace(normalized)), " ") + " "
+}
+
+func assistantPromptRequestsDirectText(normalized string) bool {
+	return assistantPromptContainsAny(normalized, []string{
+		" reply exactly ",
+		" respond exactly ",
+		" answer exactly ",
+		" say exactly ",
+		" output exactly ",
+		" print exactly ",
+		" echo exactly ",
+		" repeat exactly ",
+		" just say ",
+		" say only ",
+		" reply only ",
+		" respond only ",
+	})
+}
+
+func assistantPromptNeedsFullToolManifest(normalized string) bool {
+	return assistantPromptContainsAny(normalized, []string{
+		" run ",
+		" execute ",
+		" command ",
+		" shell ",
+		" terminal ",
+		" ssh ",
+		" log ",
+		" logs ",
+		" journal ",
+		" tail ",
+		" grep ",
+		" cat ",
+		" file ",
+		" path ",
+		" inspect ",
+		" troubleshoot ",
+		" diagnose ",
+		" investigate ",
+		" fix ",
+		" repair ",
+		" restart ",
+		" start ",
+		" stop ",
+		" shutdown ",
+		" reboot ",
+		" delete ",
+		" remove ",
+		" edit ",
+		" change ",
+		" configure ",
+		" create ",
+		" install ",
+		" update ",
+		" upgrade ",
+		" deploy ",
+		" scale ",
+		" backup ",
+		" restore ",
+		" snapshot ",
+		" approve ",
+		" deny ",
+		" cpu ",
+		" memory ",
+		" disk ",
+		" temperature ",
+		" latency ",
+		" error ",
+		" errors ",
+	})
+}
+
+func assistantPromptIsInventoryQuery(normalized string) bool {
+	hasInventoryNoun := assistantPromptContainsAny(normalized, []string{
+		" device ",
+		" devices ",
+		" resource ",
+		" resources ",
+		" system ",
+		" systems ",
+		" node ",
+		" nodes ",
+		" workload ",
+		" workloads ",
+		" vm ",
+		" vms ",
+		" container ",
+		" containers ",
+		" lxc ",
+		" lxcs ",
+		" host ",
+		" hosts ",
+		" service ",
+		" services ",
+		" cluster ",
+		" clusters ",
+	})
+	if !hasInventoryNoun {
+		return false
+	}
+	return assistantPromptContainsAny(normalized, []string{
+		" how many ",
+		" count ",
+		" counts ",
+		" total ",
+		" totals ",
+		" list ",
+		" show ",
+		" overview ",
+		" status ",
+		" running ",
+		" stopped ",
+		" online ",
+		" offline ",
+		" what is in ",
+		" what s in ",
+		" what are in ",
+		" what do i have ",
+	})
+}
+
+func assistantPromptLooksConversational(normalized string) bool {
+	trimmed := strings.TrimSpace(normalized)
+	if trimmed == "" {
+		return true
+	}
+	if assistantPromptContainsAny(normalized, []string{
+		" hello ",
+		" hi ",
+		" hey ",
+		" thanks ",
+		" thank you ",
+		" who are you ",
+		" what can you do ",
+	}) {
+		return true
+	}
+	return len(strings.Fields(trimmed)) <= 3
+}
+
+func assistantPromptContainsAny(normalized string, needles []string) bool {
+	for _, needle := range needles {
+		if strings.Contains(normalized, needle) {
+			return true
+		}
+	}
+	return false
 }
 
 // filterToolsForPatrol applies explicit Patrol subsystem scope settings. It

@@ -180,6 +180,25 @@ func toolStartKey(id, name string) string {
 	return strings.TrimSpace(name)
 }
 
+func normalizeSummaryOnlyPulseQueryInput(prefer bool, name string, input map[string]interface{}) map[string]interface{} {
+	if !prefer || name != "pulse_query" || len(input) == 0 {
+		return input
+	}
+	action, _ := input["action"].(string)
+	if strings.ToLower(strings.TrimSpace(action)) != "topology" {
+		return input
+	}
+	if _, exists := input["summary_only"]; exists {
+		return input
+	}
+	normalized := make(map[string]interface{}, len(input)+1)
+	for key, value := range input {
+		normalized[key] = value
+	}
+	normalized["summary_only"] = true
+	return normalized
+}
+
 func emitToolStartEvent(callback StreamCallback, id, name string, input map[string]interface{}) {
 	if callback == nil {
 		return
@@ -378,6 +397,10 @@ type AgenticLoop struct {
 	// emitting a stream error event. The chat service uses this to try another
 	// configured provider before the browser sees a failed first attempt.
 	suppressProviderErrorEvents bool
+
+	// Query-only count/overview turns should not let a provider accidentally
+	// expand a topology request into the full infrastructure tree.
+	preferSummaryOnlyQueries bool
 }
 
 // NewAgenticLoop creates a new agentic loop
@@ -419,6 +442,12 @@ func (a *AgenticLoop) SetSuppressProviderErrorEvents(suppress bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.suppressProviderErrorEvents = suppress
+}
+
+func (a *AgenticLoop) SetPreferSummaryOnlyQueries(prefer bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.preferSummaryOnlyQueries = prefer
 }
 
 // SetOrgID sets the org scope used when validating approval decisions.
@@ -511,6 +540,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		providerName := a.providerName
 		modelName := a.modelName
 		requestSanitizer := a.requestSanitizer
+		preferSummaryOnlyQueries := a.preferSummaryOnlyQueries
 		a.mu.Unlock()
 
 		// Record telemetry for loop iteration
@@ -754,6 +784,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 						if data.Name == pulseQuestionToolName {
 							return
 						}
+						data.Input = normalizeSummaryOnlyPulseQueryInput(preferSummaryOnlyQueries, data.Name, data.Input)
 						key := toolStartKey(data.ID, data.Name)
 						if len(data.Input) == 0 {
 							if key != "" {
@@ -783,6 +814,11 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					if data, ok := event.Data.(providers.DoneEvent); ok {
 						attemptSawDone = true
 						toolCalls = data.ToolCalls
+						if preferSummaryOnlyQueries {
+							for i := range toolCalls {
+								toolCalls[i].Input = normalizeSummaryOnlyPulseQueryInput(true, toolCalls[i].Name, toolCalls[i].Input)
+							}
+						}
 						a.totalInputTokens += data.InputTokens
 						a.totalOutputTokens += data.OutputTokens
 						log.Info().

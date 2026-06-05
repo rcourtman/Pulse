@@ -580,7 +580,7 @@ func TestService_ExecuteStream_InteractiveChatLetsModelChooseTools(t *testing.T)
 	workflowEvents := 0
 	err = service.ExecuteStream(context.Background(), ExecuteRequest{
 		SessionID: "interactive-chat-model-choice",
-		Prompt:    "test",
+		Prompt:    "show me the logs for vm 100",
 	}, func(event StreamEvent) {
 		switch event.Type {
 		case "explore_status":
@@ -600,6 +600,60 @@ func TestService_ExecuteStream_InteractiveChatLetsModelChooseTools(t *testing.T)
 	}
 	if workflowEvents != 0 {
 		t.Fatalf("did not expect synthetic workflow events before model choice, got %d", workflowEvents)
+	}
+}
+
+func TestService_ExecuteStream_InventoryCountPrefetchesSummaryWithoutTools(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	var capturedReq providers.ChatRequest
+	provider := &stubServiceProvider{
+		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			capturedReq = req
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: "You have 0 resources."},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{InputTokens: 1, OutputTokens: 1},
+			})
+			return nil
+		},
+	}
+
+	service := NewService(Config{
+		AIConfig:      &config.AIConfig{ControlLevel: config.ControlLevelControlled},
+		StateProvider: &mockStateProvider{},
+		AgentServer:   &mockAgentServer{},
+	})
+	service.sessions = store
+	service.provider = provider
+	service.started = true
+
+	err = service.ExecuteStream(context.Background(), ExecuteRequest{
+		SessionID: "inventory-count-fast-path",
+		Prompt:    "how many devices in this",
+	}, func(event StreamEvent) {})
+	if err != nil {
+		t.Fatalf("ExecuteStream failed: %v", err)
+	}
+	if len(capturedReq.Tools) != 0 {
+		t.Fatalf("expected prefetched inventory count turn to withhold tools, got %d", len(capturedReq.Tools))
+	}
+	if len(capturedReq.Messages) == 0 {
+		t.Fatal("expected provider request messages")
+	}
+	lastMessage := capturedReq.Messages[len(capturedReq.Messages)-1].Content
+	if !strings.Contains(lastMessage, "Pulse inventory summary from current canonical resource state") {
+		t.Fatalf("expected prefetched inventory summary context, got %q", lastMessage)
+	}
+	if !strings.Contains(lastMessage, "User message: how many devices in this") {
+		t.Fatalf("expected original user message to remain visible to the model, got %q", lastMessage)
 	}
 }
 
