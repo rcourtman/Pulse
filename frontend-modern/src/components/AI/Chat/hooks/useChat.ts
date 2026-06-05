@@ -137,6 +137,14 @@ export function useChat(options: UseChatOptions = {}) {
     removeQueuedMessages(new Set([item.messageId]));
   };
 
+  const takeQueuedFollowUp = (id: string): QueuedFollowUp | undefined => {
+    const item = queuedFollowUps().find((entry) => entry.id === id);
+    if (!item) return undefined;
+    setQueuedFollowUps((prev) => prev.filter((entry) => entry.id !== id));
+    removeQueuedMessages(new Set([item.messageId]));
+    return item;
+  };
+
   const clearQueuedFollowUps = () => {
     const messageIds = new Set(queuedFollowUps().map((entry) => entry.messageId));
     setQueuedFollowUps([]);
@@ -1035,6 +1043,7 @@ export function useChat(options: UseChatOptions = {}) {
     retryMessage,
     stop,
     cancelQueuedFollowUp,
+    takeQueuedFollowUp,
     clearQueuedFollowUps,
     clearMessages,
     loadSession,

@@ -85,6 +85,7 @@ describe('useChat', () => {
       expect(typeof chat.retryMessage).toBe('function');
       expect(typeof chat.stop).toBe('function');
       expect(typeof chat.cancelQueuedFollowUp).toBe('function');
+      expect(typeof chat.takeQueuedFollowUp).toBe('function');
       expect(typeof chat.clearQueuedFollowUps).toBe('function');
       expect(typeof chat.clearMessages).toBe('function');
       expect(typeof chat.loadSession).toBe('function');
@@ -477,6 +478,48 @@ describe('useChat', () => {
       const queued = chat.queuedFollowUps()[0];
       chat.cancelQueuedFollowUp(queued.id);
 
+      expect(chat.queuedFollowUpCount()).toBe(0);
+      expect(chat.messages().some((message) => message.content === 'second')).toBe(false);
+
+      resolveFirst();
+      await first;
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(mockChat).toHaveBeenCalledTimes(1);
+      dispose();
+    });
+
+    it('takes a queued follow-up for composer editing before it is sent', async () => {
+      let resolveFirst!: () => void;
+      mockChat.mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveFirst = resolve;
+          }),
+      );
+
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'sess' }));
+      const first = chat.sendMessage('first');
+      await new Promise((r) => setTimeout(r, 0));
+
+      await chat.sendMessage(
+        'second',
+        [{ id: 'vm-1', name: 'web-1', type: 'vm', node: 'pve-1' }],
+        'finding-1',
+        { autonomousMode: false, handoffContext: 'scoped context' },
+      );
+
+      const queued = chat.queuedFollowUps()[0];
+      const taken = chat.takeQueuedFollowUp(queued.id);
+
+      expect(taken).toMatchObject({
+        id: queued.id,
+        messageId: queued.messageId,
+        prompt: 'second',
+        mentions: [{ id: 'vm-1', name: 'web-1', type: 'vm', node: 'pve-1' }],
+        findingId: 'finding-1',
+        sendOptions: { autonomousMode: false, handoffContext: 'scoped context' },
+      });
       expect(chat.queuedFollowUpCount()).toBe(0);
       expect(chat.messages().some((message) => message.content === 'second')).toBe(false);
 

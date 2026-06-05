@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, afterEach, beforeAll, beforeEach } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import type { ChatMessage, ModelInfo } from '../types';
+import type { QueuedFollowUp } from '../hooks/useChat';
 
 // ── Hoisted mocks (vi.mock factories reference these) ──────────────────────
 
@@ -20,11 +21,12 @@ const {
     sessionId: vi.fn(() => ''),
     model: vi.fn(() => ''),
     setModel: vi.fn(),
-    queuedFollowUps: vi.fn(() => []),
+    queuedFollowUps: vi.fn((): QueuedFollowUp[] => []),
     queuedFollowUpCount: vi.fn(() => 0),
     sendMessage: vi.fn().mockResolvedValue(true),
     stop: vi.fn(),
     cancelQueuedFollowUp: vi.fn(),
+    takeQueuedFollowUp: vi.fn((): QueuedFollowUp | undefined => undefined),
     clearQueuedFollowUps: vi.fn(),
     clearMessages: vi.fn(),
     loadSession: vi.fn().mockResolvedValue(true),
@@ -318,6 +320,7 @@ beforeEach(() => {
   mockChat.queuedFollowUps.mockReturnValue([]);
   mockChat.queuedFollowUpCount.mockReturnValue(0);
   mockChat.sendMessage.mockResolvedValue(true);
+  mockChat.takeQueuedFollowUp.mockReturnValue(undefined);
   mockByType.mockReturnValue([]);
   mockResources.mockReturnValue([]);
   mockWebSocketState.resources = [];
@@ -1070,15 +1073,103 @@ describe('AIChat', () => {
 
     it('shows queued follow-up count and clears queued follow-ups', () => {
       mockChat.queuedFollowUpCount.mockReturnValue(2);
+      mockChat.queuedFollowUps.mockReturnValue([
+        {
+          id: 'queued-1',
+          messageId: 'msg-queued-1',
+          prompt: 'first queued prompt',
+          timestamp: new Date(),
+        },
+        {
+          id: 'queued-2',
+          messageId: 'msg-queued-2',
+          prompt: 'second queued prompt',
+          timestamp: new Date(),
+        },
+      ]);
       renderChat();
 
       expect(screen.getByRole('status', { name: 'Queued follow-up messages' })).toHaveTextContent(
         '2 follow-ups queued',
       );
+      expect(screen.getByText('first queued prompt')).toBeInTheDocument();
+      expect(screen.getByText('second queued prompt')).toBeInTheDocument();
 
       fireEvent.click(screen.getByRole('button', { name: 'Clear queued follow-up messages' }));
 
       expect(mockChat.clearQueuedFollowUps).toHaveBeenCalledTimes(1);
+    });
+
+    it('removes an individual queued follow-up', () => {
+      mockChat.queuedFollowUpCount.mockReturnValue(1);
+      mockChat.queuedFollowUps.mockReturnValue([
+        {
+          id: 'queued-1',
+          messageId: 'msg-queued-1',
+          prompt: 'remove this queued prompt',
+          timestamp: new Date(),
+        },
+      ]);
+      renderChat();
+
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: 'Remove queued follow-up: remove this queued prompt',
+        }),
+      );
+
+      expect(mockChat.cancelQueuedFollowUp).toHaveBeenCalledWith('queued-1');
+    });
+
+    it('loads an individual queued follow-up into the composer for editing', () => {
+      mockChat.queuedFollowUpCount.mockReturnValue(1);
+      mockChat.queuedFollowUps.mockReturnValue([
+        {
+          id: 'queued-1',
+          messageId: 'msg-queued-1',
+          prompt: 'edit this queued prompt',
+          timestamp: new Date(),
+        },
+      ]);
+      mockChat.takeQueuedFollowUp.mockReturnValue({
+        id: 'queued-1',
+        messageId: 'msg-queued-1',
+        prompt: 'edit this queued prompt',
+        mentions: [{ id: 'vm-1', name: 'web-1', type: 'vm', node: 'pve-1' }],
+        findingId: 'finding-1',
+        sendOptions: {
+          autonomousMode: false,
+          handoffContext: 'scoped context',
+        },
+        timestamp: new Date(),
+      });
+
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: 'Edit queued follow-up: edit this queued prompt',
+        }),
+      );
+
+      expect(mockChat.takeQueuedFollowUp).toHaveBeenCalledWith('queued-1');
+      expect(textarea.value).toBe('edit this queued prompt');
+
+      fireEvent.input(textarea, { target: { value: 'edited queued prompt' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(mockChat.sendMessage).toHaveBeenCalledWith(
+        'edited queued prompt',
+        [{ id: 'vm-1', name: 'web-1', type: 'vm', node: 'pve-1' }],
+        'finding-1',
+        {
+          autonomousMode: false,
+          handoffContext: 'scoped context',
+        },
+      );
     });
   });
 

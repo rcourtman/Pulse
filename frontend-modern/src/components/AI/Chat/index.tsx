@@ -12,6 +12,7 @@ import { unwrap } from 'solid-js/store';
 import SendIcon from 'lucide-solid/icons/send';
 import SquareIcon from 'lucide-solid/icons/square';
 import ClockIcon from 'lucide-solid/icons/clock';
+import PencilIcon from 'lucide-solid/icons/pencil';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import XIcon from 'lucide-solid/icons/x';
@@ -71,7 +72,7 @@ import {
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
-import { useChat, type SendMessageOptions } from './hooks/useChat';
+import { useChat, type QueuedFollowUp, type SendMessageOptions } from './hooks/useChat';
 import { ChatMessages } from './ChatMessages';
 import { ModelSelector } from './ModelSelector';
 import { MentionAutocomplete, type MentionResource } from './MentionAutocomplete';
@@ -394,6 +395,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const isOpen = aiChatStore.isOpenSignal;
   const { width } = useBreakpoint();
   const [input, setInput] = createSignal('');
+  const [editingQueuedFollowUp, setEditingQueuedFollowUp] = createSignal<QueuedFollowUp | null>(
+    null,
+  );
   const [sessions, setSessions] = createSignal<ChatSession[]>([]);
   const [showSessions, setShowSessions] = createSignal(false);
   const [sessionDropdownPosition, setSessionDropdownPosition] = createSignal({ top: 0, right: 0 });
@@ -495,6 +499,36 @@ export const AIChat: Component<AIChatProps> = (props) => {
     model: initialModelSelections[DEFAULT_SESSION_KEY] || '',
     onConversationChanged: refreshSessions,
   });
+
+  const queuedFollowUpPreview = (prompt: string) => {
+    const firstLine = prompt
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find((line) => line.length > 0);
+    return firstLine || 'Queued follow-up';
+  };
+
+  const restoreQueuedMentions = (mentions?: QueuedFollowUp['mentions']) => {
+    setAccumulatedMentions(
+      (mentions || []).map((mention) => ({
+        id: mention.id,
+        label: mention.name,
+        type: mention.type,
+        node: mention.node,
+      })),
+    );
+  };
+
+  const editQueuedFollowUp = (id: string) => {
+    const queued = chat.takeQueuedFollowUp(id);
+    if (!queued) return;
+    setEditingQueuedFollowUp(queued);
+    setInput(queued.prompt);
+    restoreQueuedMentions(queued.mentions);
+    setMentionActive(false);
+    focusComposer();
+    queueMicrotask(resizeTextarea);
+  };
 
   const defaultModelLabel = createMemo(() => {
     const fallback = defaultModel().trim();
@@ -1198,22 +1232,27 @@ export const AIChat: Component<AIChatProps> = (props) => {
         : undefined;
     // Pass findingId from context on the first message, clear after success
     const ctx = aiChatStore.context;
-    const findingId = ctx.findingId;
-    const sendOptions: SendMessageOptions = {};
-    if (typeof ctx.autonomousMode === 'boolean') {
-      sendOptions.autonomousMode = ctx.autonomousMode;
-    }
-    if (ctx.handoffContext && ctx.handoffContext.trim()) {
-      sendOptions.handoffContext = ctx.handoffContext;
-    }
-    if (ctx.handoffResources && ctx.handoffResources.length > 0) {
-      sendOptions.handoffResources = ctx.handoffResources;
-    }
-    if (ctx.handoffActions && ctx.handoffActions.length > 0) {
-      sendOptions.handoffActions = ctx.handoffActions;
-    }
-    if (ctx.handoffMetadata) {
-      sendOptions.handoffMetadata = ctx.handoffMetadata;
+    const queuedDraft = editingQueuedFollowUp();
+    const findingId = queuedDraft ? queuedDraft.findingId : ctx.findingId;
+    const sendOptions: SendMessageOptions = queuedDraft?.sendOptions
+      ? { ...queuedDraft.sendOptions }
+      : {};
+    if (!queuedDraft) {
+      if (typeof ctx.autonomousMode === 'boolean') {
+        sendOptions.autonomousMode = ctx.autonomousMode;
+      }
+      if (ctx.handoffContext && ctx.handoffContext.trim()) {
+        sendOptions.handoffContext = ctx.handoffContext;
+      }
+      if (ctx.handoffResources && ctx.handoffResources.length > 0) {
+        sendOptions.handoffResources = ctx.handoffResources;
+      }
+      if (ctx.handoffActions && ctx.handoffActions.length > 0) {
+        sendOptions.handoffActions = ctx.handoffActions;
+      }
+      if (ctx.handoffMetadata) {
+        sendOptions.handoffMetadata = ctx.handoffMetadata;
+      }
     }
     const hasSendOptions =
       typeof sendOptions.autonomousMode === 'boolean' ||
@@ -1231,10 +1270,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
       Boolean(ctx.handoffMetadata);
     sendPromise.then((ok) => {
       if (!ok) return;
-      if (findingId) {
+      setEditingQueuedFollowUp(null);
+      if (!queuedDraft && findingId) {
         aiChatStore.clearFindingId?.();
       }
-      if (hasRequestHandoffPayload) {
+      if (!queuedDraft && hasRequestHandoffPayload) {
         aiChatStore.clearRequestHandoffPayload?.();
       }
     });
@@ -1325,6 +1365,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const handleNewConversation = async () => {
     const started = await chat.newSession();
     if (!started) return;
+    setEditingQueuedFollowUp(null);
     aiChatStore.clearContext?.();
     setShowSessions(false);
     focusComposer();
@@ -1361,6 +1402,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const session = sessions().find((candidate) => candidate.id === sessionId);
     const loaded = await chat.loadSession(sessionId);
     if (!loaded) return;
+    setEditingQueuedFollowUp(null);
     const restoredContext = buildSessionHandoffContext(session);
     if (restoredContext) {
       aiChatStore.setContext(restoredContext);
@@ -1381,6 +1423,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       updateStoredModel(sessionId, '');
       if (chat.sessionId() === sessionId) {
         chat.clearMessages();
+        setEditingQueuedFollowUp(null);
       }
     } catch (_error) {
       notificationStore.error('Failed to delete session');
@@ -1999,26 +2042,61 @@ export const AIChat: Component<AIChatProps> = (props) => {
           <div class="border-t border-border bg-surface px-4 py-3">
             <Show when={chat.queuedFollowUpCount() > 0}>
               <div
-                class="mb-2 flex min-h-8 items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-blue-800 shadow-sm dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200"
+                class="mb-2 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-blue-800 shadow-sm dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200"
                 role="status"
                 aria-label="Queued follow-up messages"
               >
-                <ClockIcon class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                <span class="min-w-0 flex-1 truncate text-xs font-medium">
-                  {pluralizeCount(chat.queuedFollowUpCount(), 'follow-up', 'follow-ups')} queued
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    chat.clearQueuedFollowUps();
-                    focusComposer();
-                  }}
-                  class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-900 dark:text-blue-200 dark:hover:bg-blue-900/50"
-                  title="Clear queued follow-ups"
-                  aria-label="Clear queued follow-up messages"
-                >
-                  <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                </button>
+                <div class="flex min-h-7 items-center gap-2">
+                  <ClockIcon class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span class="min-w-0 flex-1 truncate text-xs font-medium">
+                    {pluralizeCount(chat.queuedFollowUpCount(), 'follow-up', 'follow-ups')} queued
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      chat.clearQueuedFollowUps();
+                      focusComposer();
+                    }}
+                    class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-900 dark:text-blue-200 dark:hover:bg-blue-900/50"
+                    title="Clear queued follow-ups"
+                    aria-label="Clear queued follow-up messages"
+                  >
+                    <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                </div>
+                <div class="mt-1 max-h-24 space-y-1 overflow-y-auto">
+                  <For each={chat.queuedFollowUps()}>
+                    {(queued) => {
+                      const preview = () => queuedFollowUpPreview(queued.prompt);
+                      return (
+                        <div class="flex min-h-7 items-center gap-2 rounded-md bg-white/70 px-2 py-1 text-xs text-blue-900 dark:bg-blue-900/30 dark:text-blue-100">
+                          <span class="min-w-0 flex-1 truncate">{preview()}</span>
+                          <button
+                            type="button"
+                            onClick={() => editQueuedFollowUp(queued.id)}
+                            class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60"
+                            title="Edit queued follow-up"
+                            aria-label={`Edit queued follow-up: ${preview()}`}
+                          >
+                            <PencilIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              chat.cancelQueuedFollowUp(queued.id);
+                              focusComposer();
+                            }}
+                            class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60"
+                            title="Remove queued follow-up"
+                            aria-label={`Remove queued follow-up: ${preview()}`}
+                          >
+                            <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                          </button>
+                        </div>
+                      );
+                    }}
+                  </For>
+                </div>
               </div>
             </Show>
             <form

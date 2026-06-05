@@ -85,8 +85,9 @@ runtime cost control, and shared AI transport surfaces.
    Follow-up sends during an active Assistant response are chat-runtime queue
    state by default. The drawer must accept and echo the user's follow-up as a
    queued user turn without aborting or replacing the active model stream, must
-   show the queued count as composer-adjacent status, and must drain queued
-   turns in order only after the active stream becomes idle. Stop is the
+   show an itemized composer-adjacent queue with per-follow-up edit/remove
+   controls plus clear-all, and must drain queued turns in order only after the
+   active stream becomes idle. Stop is the
    explicit interruption path: it must abort the active stream, clear queued
    follow-ups and pending tool/approval/question affordances, preserve any
    partial model text, return focus to the composer, and render a neutral
