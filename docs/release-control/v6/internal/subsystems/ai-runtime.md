@@ -1200,6 +1200,12 @@ chat runtime binds its active session from that stream event, with `done` and
 payloads, rather than issuing a separate `/api/ai/sessions` preflight before
 the first user message. Explicit session-management actions may still create a
 session through the session endpoint.
+The Assistant drawer's `New` action is a local blank-conversation reset, not a
+backend session creation. It must clear the active transcript, scoped handoff
+context, and browser session ID immediately, leave the model selection intact,
+and avoid adding empty conversations to the session list; the next submitted
+message materializes the durable session through the stream-owned cold-start
+contract above.
 
 The AI transport files are shared with `api-contracts`, not delegated away to
 it. `frontend-modern/src/api/ai.ts`,

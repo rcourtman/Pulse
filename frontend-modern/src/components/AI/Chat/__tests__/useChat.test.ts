@@ -1198,14 +1198,7 @@ describe('useChat', () => {
   // newSession
   // ──────────────────────────────────────────────
   describe('newSession', () => {
-    it('creates session and clears messages', async () => {
-      mockCreateSession.mockResolvedValue({
-        id: 'new-sess-99',
-        title: '',
-        created_at: '',
-        updated_at: '',
-        message_count: 0,
-      });
+    it('starts a blank conversation without precreating a backend session', async () => {
       mockChat.mockResolvedValue(undefined);
       const onConversationChanged = vi.fn();
 
@@ -1216,22 +1209,11 @@ describe('useChat', () => {
 
       const session = await chat.newSession();
 
-      expect(session).toBeDefined();
-      expect(session!.id).toBe('new-sess-99');
-      expect(chat.sessionId()).toBe('new-sess-99');
+      expect(session).toBe(true);
+      expect(mockCreateSession).not.toHaveBeenCalled();
+      expect(chat.sessionId()).toBe('');
       expect(chat.messages()).toEqual([]);
-      expect(onConversationChanged).toHaveBeenCalledTimes(2);
-      dispose();
-    });
-
-    it('returns null on failure and notifies', async () => {
-      mockCreateSession.mockRejectedValue(new Error('fail'));
-
-      const { value: chat, dispose } = withRoot(() => useChat());
-      const session = await chat.newSession();
-
-      expect(session).toBeNull();
-      expect(mockNotifyError).toHaveBeenCalledWith('Failed to create session');
+      expect(onConversationChanged).toHaveBeenCalledTimes(1);
       dispose();
     });
   });

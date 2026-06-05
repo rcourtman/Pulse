@@ -24,13 +24,7 @@ const {
     stop: vi.fn(),
     clearMessages: vi.fn(),
     loadSession: vi.fn().mockResolvedValue(true),
-    newSession: vi.fn().mockResolvedValue({
-      id: 'new-sess',
-      title: '',
-      created_at: '',
-      updated_at: '',
-      message_count: 0,
-    }),
+    newSession: vi.fn().mockResolvedValue(true),
     updateApproval: vi.fn(),
     addToolResult: vi.fn(),
     updateQuestion: vi.fn(),
@@ -777,7 +771,7 @@ describe('AIChat', () => {
   // ── Session management ───────────────────────────────────────────────
 
   describe('session management', () => {
-    it('creates a new session on New button click', async () => {
+    it('starts a blank conversation on New button click', async () => {
       renderChat();
       fireEvent.click(screen.getByText('New'));
       await waitFor(() => {

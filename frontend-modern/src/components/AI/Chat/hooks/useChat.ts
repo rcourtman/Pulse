@@ -670,20 +670,13 @@ export function useChat(options: UseChatOptions = {}) {
     }
   };
 
-  // Create new session
-  const newSession = async () => {
+  // Start a blank conversation. The durable backend session is created by the
+  // next chat stream so the UI does not create empty server-side sessions.
+  const newSession = async (): Promise<boolean> => {
     void cancelActiveRequest(false);
-    try {
-      const session = await AIChatAPI.createSession();
-      setSessionId(session.id);
-      setMessages([]);
-      await notifyConversationChanged();
-      return session;
-    } catch (error) {
-      logger.error('[useChat] Failed to create session:', error);
-      notificationStore.error('Failed to create session');
-      return null;
-    }
+    setSessionId('');
+    setMessages([]);
+    return true;
   };
 
   // Update pending approval state (e.g., to mark as executing or remove)

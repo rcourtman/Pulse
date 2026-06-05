@@ -1057,8 +1057,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
   // New conversation
   const handleNewConversation = async () => {
-    const session = await chat.newSession();
-    if (!session) return;
+    const started = await chat.newSession();
+    if (!started) return;
     aiChatStore.clearContext?.();
     setShowSessions(false);
   };
