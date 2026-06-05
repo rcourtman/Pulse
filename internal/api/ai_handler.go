@@ -2545,6 +2545,7 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 
 	// Stream from AI chat service
 	serviceSentDone := false
+	serviceSentError := false
 	err := svc.ExecuteStream(ctx, chat.ExecuteRequest{
 		Prompt:           req.Prompt,
 		SessionID:        req.SessionID,
@@ -2559,14 +2560,18 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	}, func(event chat.StreamEvent) {
 		if event.Type == "done" {
 			serviceSentDone = true
+		} else if event.Type == "error" {
+			serviceSentError = true
 		}
 		writeEvent(event)
 	})
 
 	if err != nil {
 		log.Error().Err(err).Msg("Chat stream error")
-		errData, _ := json.Marshal(chat.ErrorData{Message: "An error occurred while processing your request"})
-		writeEvent(chat.StreamEvent{Type: "error", Data: errData})
+		if !serviceSentError {
+			errData, _ := json.Marshal(chat.ErrorData{Message: "An error occurred while processing your request"})
+			writeEvent(chat.StreamEvent{Type: "error", Data: errData})
+		}
 	}
 
 	// Send done

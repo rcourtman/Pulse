@@ -1883,6 +1883,32 @@ func TestHandleChat_Error(t *testing.T) {
 	// ExecuteStream error happens after headers are sent, so w.Code might be 200
 	// but the error is returned.
 	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "An error occurred while processing your request")
+	assert.Equal(t, 1, strings.Count(w.Body.String(), `"type":"error"`))
+}
+
+func TestHandleChat_DoesNotDuplicateServiceError(t *testing.T) {
+	cfg := &config.Config{}
+	h := newTestAIHandler(cfg, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.On("ExecuteStream", mock.Anything, mock.Anything, mock.Anything).Return(assert.AnError).Run(func(args mock.Arguments) {
+		callback := args.Get(2).(chat.StreamCallback)
+		errData, _ := json.Marshal(chat.ErrorData{Message: "The AI provider rejected the credentials. Check your AI provider API key in Settings."})
+		callback(chat.StreamEvent{Type: "error", Data: errData})
+	})
+
+	body := `{"prompt": "hi"}`
+	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.HandleChat(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	response := w.Body.String()
+	assert.Contains(t, response, "The AI provider rejected the credentials")
+	assert.NotContains(t, response, "An error occurred while processing your request")
+	assert.Equal(t, 1, strings.Count(response, `"type":"error"`))
 }
 
 func TestHandleChat_BindsExecutionToRequestContext(t *testing.T) {
