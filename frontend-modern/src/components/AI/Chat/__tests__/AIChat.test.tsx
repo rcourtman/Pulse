@@ -1065,6 +1065,42 @@ describe('AIChat', () => {
       expect(textarea.value).toBe('');
     });
 
+    it('restores the submitted draft when send returns false', async () => {
+      mockChat.sendMessage.mockResolvedValue(false);
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+
+      fireEvent.input(textarea, { target: { value: 'do not lose this draft' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(textarea.value).toBe('');
+      await waitFor(() => expect(textarea.value).toBe('do not lose this draft'));
+      expect(document.activeElement).toBe(textarea);
+    });
+
+    it('does not overwrite a newer draft when a failed send resolves late', async () => {
+      let resolveSend!: (ok: boolean) => void;
+      mockChat.sendMessage.mockReturnValue(
+        new Promise<boolean>((resolve) => {
+          resolveSend = resolve;
+        }),
+      );
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+
+      fireEvent.input(textarea, { target: { value: 'first draft' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+      fireEvent.input(textarea, { target: { value: 'new draft while waiting' } });
+
+      resolveSend(false);
+
+      await waitFor(() => expect(textarea.value).toBe('new draft while waiting'));
+    });
+
     it('allows newlines with Shift+Enter', () => {
       renderChat();
       const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');

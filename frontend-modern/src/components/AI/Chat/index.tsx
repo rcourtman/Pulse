@@ -1386,15 +1386,30 @@ export const AIChat: Component<AIChatProps> = (props) => {
     setMentionResources(dedupeMentionResources(mentionCandidates));
   });
 
+  const restoreFailedSubmitDraft = (draft: string, mentions: MentionResource[]) => {
+    if (input().trim() || accumulatedMentions().length > 0) {
+      return;
+    }
+    setInput(draft);
+    setAccumulatedMentions(cloneMentions(mentions));
+    setMentionActive(false);
+    queueMicrotask(() => {
+      resizeTextarea();
+      focusComposer();
+    });
+  };
+
   // Handle submit
   const handleSubmit = () => {
-    const prompt = input().trim();
+    const submittedInput = input();
+    const prompt = submittedInput.trim();
     if (!prompt) return;
     if (providerReadinessHasBlockingError()) {
       focusComposer();
       return;
     }
     const mentions = accumulatedMentions();
+    const submittedMentions = cloneMentions(mentions);
     const mentionsForAPI =
       mentions.length > 0
         ? mentions.map((mention) => ({
@@ -1444,16 +1459,24 @@ export const AIChat: Component<AIChatProps> = (props) => {
       Boolean(ctx.handoffResources?.length) ||
       Boolean(ctx.handoffActions?.length) ||
       Boolean(ctx.handoffMetadata);
-    sendPromise.then((ok) => {
-      if (!ok) return;
-      setEditingQueuedFollowUp(null);
-      if (!queuedDraft && findingId) {
-        aiChatStore.clearFindingId?.();
-      }
-      if (!queuedDraft && hasRequestHandoffPayload) {
-        aiChatStore.clearRequestHandoffPayload?.();
-      }
-    });
+    sendPromise
+      .then((ok) => {
+        if (!ok) {
+          restoreFailedSubmitDraft(submittedInput, submittedMentions);
+          return;
+        }
+        setEditingQueuedFollowUp(null);
+        if (!queuedDraft && findingId) {
+          aiChatStore.clearFindingId?.();
+        }
+        if (!queuedDraft && hasRequestHandoffPayload) {
+          aiChatStore.clearRequestHandoffPayload?.();
+        }
+      })
+      .catch((error) => {
+        logger.warn('[AIChat] Failed to send Assistant message:', error);
+        restoreFailedSubmitDraft(submittedInput, submittedMentions);
+      });
     setInput('');
     setAccumulatedMentions([]);
     setMentionActive(false);
