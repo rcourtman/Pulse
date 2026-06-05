@@ -128,6 +128,11 @@ runtime cost control, and shared AI transport surfaces.
    notable model/provider before falling back to the general model selector.
    Retry remains available, but it must not be the only visible action when a
    failed Assistant turn is shown.
+   Streamed provider startup must be bounded by the configured Assistant request
+   timeout and the OpenAI-compatible SSE response-header guard; transient
+   startup failures may retry once before surfacing failed-turn recovery, but a
+   stalled route must not leave the user in an opaque first-token wait for the
+   full provider timeout.
    Restored Assistant sessions must hydrate saved assistant content and
    persisted tool calls into the same transcript event shape used by live
    streams so switching sessions does not hide prior tool evidence or collapse

@@ -16,11 +16,14 @@ import (
 )
 
 const (
-	openaiAPIURL         = "https://api.openai.com/v1/chat/completions"
-	openaiMaxRetries     = 3
-	openaiInitialBackoff = 2 * time.Second
-	openrouterRefererURL = "https://pulse.app"
-	openrouterAppTitle   = "Pulse"
+	openaiAPIURL                      = "https://api.openai.com/v1/chat/completions"
+	openaiMaxRetries                  = 3
+	openaiInitialBackoff              = 2 * time.Second
+	openaiStreamMaxRetries            = 1
+	openaiStreamInitialBackoff        = 1 * time.Second
+	openaiStreamResponseHeaderTimeout = 12 * time.Second
+	openrouterRefererURL              = "https://pulse.app"
+	openrouterAppTitle                = "Pulse"
 	// OpenRouter preflights affordability against the requested maximum
 	// completion budget. Leaving it unset can make small chat turns reserve a
 	// model-scale default and fail against per-key total limits.
@@ -30,10 +33,12 @@ const (
 // OpenAIClient implements the Provider interface for OpenAI's API
 // Also works with OpenAI-compatible APIs like DeepSeek
 type OpenAIClient struct {
-	apiKey  string
-	model   string
-	baseURL string
-	client  *http.Client
+	apiKey         string
+	model          string
+	baseURL        string
+	requestTimeout time.Duration
+	client         *http.Client
+	streamClient   *http.Client
 }
 
 // NewOpenAIClient creates a new OpenAI API client
@@ -71,13 +76,46 @@ func NewOpenAIClient(apiKey, model, baseURL string, timeout time.Duration) *Open
 		timeout = 300 * time.Second // Default 5 minutes
 	}
 	return &OpenAIClient{
-		apiKey:  apiKey,
-		model:   model,
-		baseURL: baseURL,
-		client: &http.Client{
-			Timeout: timeout,
-		},
+		apiKey:         apiKey,
+		model:          model,
+		baseURL:        baseURL,
+		requestTimeout: timeout,
+		client:         &http.Client{Timeout: timeout},
+		streamClient:   newOpenAIStreamHTTPClient(timeout),
 	}
+}
+
+func newOpenAIStreamHTTPClient(timeout time.Duration) *http.Client {
+	client := &http.Client{}
+	if transport, ok := http.DefaultTransport.(*http.Transport); ok {
+		transport = transport.Clone()
+		transport.ResponseHeaderTimeout = boundedOpenAIStreamResponseHeaderTimeout(timeout)
+		client.Transport = transport
+	}
+	return client
+}
+
+func boundedOpenAIStreamResponseHeaderTimeout(timeout time.Duration) time.Duration {
+	if timeout > 0 && timeout < openaiStreamResponseHeaderTimeout {
+		return timeout
+	}
+	return openaiStreamResponseHeaderTimeout
+}
+
+func isRetryableOpenAIStreamStartupError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := strings.ToLower(err.Error())
+	return strings.Contains(errStr, "connection reset") ||
+		strings.Contains(errStr, "connection refused") ||
+		strings.Contains(errStr, "eof")
+}
+
+func isRetryableOpenAIStreamStatus(statusCode int) bool {
+	return statusCode == http.StatusBadGateway ||
+		statusCode == http.StatusServiceUnavailable ||
+		statusCode == http.StatusGatewayTimeout
 }
 
 // Name returns the provider name
@@ -766,32 +804,86 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL, bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+	streamCtx := ctx
+	var cancelStream context.CancelFunc
+	if c.requestTimeout > 0 {
+		streamCtx, cancelStream = context.WithTimeout(ctx, c.requestTimeout)
+		defer cancelStream()
 	}
 
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
-	httpReq.Header.Set("Accept", "text/event-stream")
-	c.applyProviderHeaders(httpReq)
+	var resp *http.Response
+	var lastErr error
+	streamClient := c.streamClient
+	if streamClient == nil {
+		streamClient = c.client
+	}
 
-	resp, err := c.client.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
+	for attempt := 0; attempt <= openaiStreamMaxRetries; attempt++ {
+		if attempt > 0 {
+			backoff := openaiStreamInitialBackoff * time.Duration(1<<(attempt-1))
+			log.Warn().
+				Int("attempt", attempt).
+				Dur("backoff", backoff).
+				Str("last_error", lastErr.Error()).
+				Msg("Retrying OpenAI/DeepSeek stream startup after transient error")
+
+			backoffTimer := time.NewTimer(backoff)
+			select {
+			case <-streamCtx.Done():
+				if !backoffTimer.Stop() {
+					select {
+					case <-backoffTimer.C:
+					default:
+					}
+				}
+				return streamCtx.Err()
+			case <-backoffTimer.C:
+			}
+		}
+
+		httpReq, err := http.NewRequestWithContext(streamCtx, "POST", c.baseURL, bytes.NewReader(body))
+		if err != nil {
+			return fmt.Errorf("failed to create request: %w", err)
+		}
+
+		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+		httpReq.Header.Set("Accept", "text/event-stream")
+		c.applyProviderHeaders(httpReq)
+
+		resp, err = streamClient.Do(httpReq)
+		if err != nil {
+			if isRetryableOpenAIStreamStartupError(err) {
+				lastErr = fmt.Errorf("connection error: %w", err)
+				continue
+			}
+			return fmt.Errorf("request failed: %w", err)
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			lastErr = nil
+			break
+		}
+
+		respBody, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		var errResp openaiError
+		errMsg := string(respBody)
+		if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
+			errMsg = errResp.Error.Message
+		}
+		errMsg = appendRateLimitInfo(errMsg, resp)
+		lastErr = fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
+		if isRetryableOpenAIStreamStatus(resp.StatusCode) {
+			continue
+		}
+		return lastErr
+	}
+
+	if lastErr != nil {
+		return fmt.Errorf("request failed after %d stream retries: %w", openaiStreamMaxRetries, lastErr)
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		var errResp openaiError
-		if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
-			errMsg := appendRateLimitInfo(errResp.Error.Message, resp)
-			return fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
-		}
-		errMsg := appendRateLimitInfo(string(respBody), resp)
-		return fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
-	}
 
 	// Parse SSE stream
 	reader := resp.Body

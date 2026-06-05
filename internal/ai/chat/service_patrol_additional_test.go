@@ -91,6 +91,41 @@ func TestService_CreateProviderForModel(t *testing.T) {
 	}
 }
 
+func TestService_CreateProviderForModel_UsesConfiguredRequestTimeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(1500 * time.Millisecond)
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: [DONE]\n"))
+	}))
+	defer server.Close()
+
+	svc := &Service{
+		cfg: &config.AIConfig{
+			OpenAIAPIKey:          "sk-test",
+			OpenAIBaseURL:         server.URL,
+			RequestTimeoutSeconds: 1,
+		},
+	}
+
+	provider, err := svc.createProviderForModel("openai:gpt-4")
+	if err != nil {
+		t.Fatalf("expected openai provider: %v", err)
+	}
+
+	start := time.Now()
+	err = provider.ChatStream(context.Background(), providers.ChatRequest{
+		Messages: []providers.Message{{Role: "user", Content: "Hi"}},
+	}, func(providers.StreamEvent) {})
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("expected configured request timeout to bound streamed provider startup")
+	}
+	if elapsed >= 1400*time.Millisecond {
+		t.Fatalf("expected configured timeout near 1s, took %s", elapsed)
+	}
+}
+
 func TestService_CreateProviderForModel_OllamaUsesConfiguredBasicAuth(t *testing.T) {
 	versionHits := 0
 	tagsHits := 0

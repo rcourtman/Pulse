@@ -94,6 +94,53 @@ func TestOpenAIClient_ChatStream_Success(t *testing.T) {
 	assert.True(t, doneCalled)
 }
 
+func TestOpenAIClient_ChatStream_RetriesTransientStartupError(t *testing.T) {
+	client := NewOpenAIClient("sk-test", "gpt-4", "https://example.invalid/v1", 0)
+	attempts := 0
+	client.streamClient = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			attempts++
+			if attempts == 1 {
+				return nil, io.ErrUnexpectedEOF
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+				Body: io.NopCloser(strings.NewReader(
+					"data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n" +
+						"data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n" +
+						"data: [DONE]\n",
+				)),
+			}, nil
+		}),
+	}
+
+	var content string
+	err := client.ChatStream(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+	}, func(event StreamEvent) {
+		if event.Type == "content" {
+			content += event.Data.(ContentEvent).Text
+		}
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, 2, attempts)
+	assert.Equal(t, "ok", content)
+}
+
+func TestNewOpenAIClient_BoundsStreamResponseHeaderTimeout(t *testing.T) {
+	client := NewOpenAIClient("sk-test", "gpt-4", "https://api.openai.com/v1", 0)
+	transport, ok := client.streamClient.Transport.(*http.Transport)
+	require.True(t, ok)
+	assert.Equal(t, openaiStreamResponseHeaderTimeout, transport.ResponseHeaderTimeout)
+
+	shortTimeoutClient := NewOpenAIClient("sk-test", "gpt-4", "https://api.openai.com/v1", 2*time.Second)
+	shortTransport, ok := shortTimeoutClient.streamClient.Transport.(*http.Transport)
+	require.True(t, ok)
+	assert.Equal(t, 2*time.Second, shortTransport.ResponseHeaderTimeout)
+}
+
 // TestOpenAIClient_ChatStream_OpenRouterReasoning guards the OpenRouter reasoning
 // path. OpenRouter (and other OpenAI-compatible gateways) stream chain-of-thought
 // in the "reasoning" delta field rather than DeepSeek's "reasoning_content". A
@@ -148,7 +195,7 @@ func TestOpenAIClient_ChatStream_OpenRouterReasoning(t *testing.T) {
 func TestOpenAIClient_ChatStream_OpenRouterDefaultsCompletionBudget(t *testing.T) {
 	var captured openaiStreamRequest
 	client := NewOpenAIClient("sk-test", "openrouter:deepseek/deepseek-v4-pro", "https://openrouter.ai/api/v1", 0)
-	client.client = &http.Client{
+	client.streamClient = &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 			if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
 				return nil, err
@@ -177,7 +224,7 @@ func TestOpenAIClient_ChatStream_OpenRouterDefaultsCompletionBudget(t *testing.T
 func TestOpenAIClient_ChatStream_OpenAIDoesNotDefaultCompletionBudget(t *testing.T) {
 	var captured openaiStreamRequest
 	client := NewOpenAIClient("sk-test", "gpt-4", "https://api.openai.com/v1", 0)
-	client.client = &http.Client{
+	client.streamClient = &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 			if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
 				return nil, err
@@ -297,7 +344,7 @@ func TestOpenAIClient_ChatStream_ToolCallEOFWithBufferedDone(t *testing.T) {
 	}, "\n")
 
 	client := NewOpenAIClient("sk-test", "gpt-4", "https://example.invalid/v1", 0)
-	client.client = &http.Client{
+	client.streamClient = &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusOK,
@@ -339,7 +386,7 @@ func TestOpenAIClient_ChatStream_EOFWithoutDoneFinalizesToolCalls(t *testing.T) 
 	}, "\n")
 
 	client := NewOpenAIClient("sk-test", "gpt-4", "https://example.invalid/v1", 0)
-	client.client = &http.Client{
+	client.streamClient = &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusOK,
@@ -376,7 +423,7 @@ func TestOpenAIClient_ChatStream_EOFWithoutDoneRejectsIncompleteToolCall(t *test
 	}, "\n")
 
 	client := NewOpenAIClient("sk-test", "gpt-4", "https://example.invalid/v1", 0)
-	client.client = &http.Client{
+	client.streamClient = &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusOK,
@@ -407,7 +454,7 @@ func TestOpenAIClient_ChatStream_EOFWithoutDoneFinalizesStopResponse(t *testing.
 	}, "\n")
 
 	client := NewOpenAIClient("sk-test", "gpt-4", "https://example.invalid/v1", 0)
-	client.client = &http.Client{
+	client.streamClient = &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusOK,

@@ -2263,7 +2263,7 @@ func (s *Service) createProviderForModel(modelStr string) (providers.StreamingPr
 	providerName := parts[0]
 	modelName := parts[1]
 
-	timeout := 5 * time.Minute
+	timeout := s.cfg.GetRequestTimeout()
 
 	switch providerName {
 	case "anthropic":
