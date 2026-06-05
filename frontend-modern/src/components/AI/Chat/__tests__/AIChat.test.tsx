@@ -513,6 +513,78 @@ describe('AIChat', () => {
       );
     });
 
+    it('falls back to another configured provider after equivalent routes have already failed', async () => {
+      const openRouterFailure: ChatMessage = {
+        id: 'assistant-error-openrouter',
+        role: 'assistant',
+        content: '',
+        error: 'The AI provider rejected the credentials. Check your AI provider API key in Settings.',
+        timestamp: new Date('2026-06-05T10:00:00Z'),
+        model: 'openrouter:deepseek/deepseek-v4-pro',
+      };
+      const deepSeekFailure: ChatMessage = {
+        id: 'assistant-error-deepseek',
+        role: 'assistant',
+        content: '',
+        error:
+          'Pulse could not reach the AI provider endpoint. Check the selected provider URL and network connection, then retry.',
+        timestamp: new Date('2026-06-05T10:01:00Z'),
+        model: 'deepseek:deepseek-v4-pro',
+      };
+      mockChat.model.mockReturnValue('deepseek:deepseek-v4-pro');
+      mockChat.messages.mockReturnValue([openRouterFailure, deepSeekFailure]);
+      mockAIAPI.getSettings.mockResolvedValue({
+        model: 'deepseek:deepseek-v4-pro',
+        chat_model: '',
+        control_level: 'read_only',
+        autonomous_mode: false,
+        discovery_enabled: true,
+        configured_providers: ['deepseek', 'openrouter', 'openai'],
+      });
+      mockAIAPI.getModels.mockResolvedValue({
+        models: [
+          {
+            id: 'deepseek:deepseek-v4-pro',
+            name: 'DeepSeek V4 Pro',
+            provider: 'deepseek',
+            notable: true,
+          },
+          {
+            id: 'openrouter:deepseek/deepseek-v4-pro',
+            name: 'DeepSeek: DeepSeek V4 Pro',
+            provider: 'openrouter',
+            notable: true,
+          },
+          {
+            id: 'openai:gpt-4o',
+            name: 'GPT-4o',
+            provider: 'openai',
+            notable: true,
+          },
+        ],
+      });
+
+      renderChat();
+
+      await waitFor(() => {
+        expect(mockAIAPI.getModels).toHaveBeenCalled();
+      });
+
+      const props = mockChatMessagesProps[mockChatMessagesProps.length - 1];
+      const alternative = props.getModelRouteAlternative?.(deepSeekFailure);
+
+      expect(alternative).toMatchObject({
+        id: 'openai:gpt-4o',
+        provider: 'openai',
+        providerLabel: 'OpenAI',
+      });
+
+      props.onUseModelRoute?.(alternative!.id, deepSeekFailure.id);
+
+      expect(mockChat.setModel).toHaveBeenCalledWith('openai:gpt-4o');
+      expect(mockChat.retryMessage).toHaveBeenCalledWith('assistant-error-deepseek');
+    });
+
     it('checks the selected provider and shows a readiness issue before the first send', async () => {
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'deepseek:deepseek-v4-pro',

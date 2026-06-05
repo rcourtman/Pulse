@@ -172,6 +172,8 @@ const resolveRuntimeModelProvider = (
 ): string => model.provider?.trim() || getProviderFromModelId(model.id);
 
 const findProviderReadinessAlternative = (args: {
+  avoidProviders?: string[];
+  avoidModelIds?: string[];
   configuredProviders?: string[];
   models: RuntimeModelInfo[];
   selectedModel: string;
@@ -187,8 +189,10 @@ const findProviderReadinessAlternative = (args: {
   const configuredProviderOrder = new Map(
     configuredProviders.map((provider, index) => [provider, index]),
   );
+  const avoidProviders = new Set((args.avoidProviders ?? []).map((provider) => provider.trim()));
+  const avoidModelIds = new Set((args.avoidModelIds ?? []).map((modelId) => modelId.trim()));
 
-  const candidates = args.models
+  const sortedCandidates = args.models
     .map((model) => {
       const provider = resolveRuntimeModelProvider(model).trim();
       return { model, provider };
@@ -197,10 +201,13 @@ const findProviderReadinessAlternative = (args: {
       if (!provider || provider === selectedProvider || model.id === args.selectedModel) {
         return false;
       }
+      if (avoidProviders.has(provider) || avoidModelIds.has(model.id)) {
+        return false;
+      }
       if (configuredProviderOrder.size > 0 && !configuredProviderOrder.has(provider)) {
         return false;
       }
-      return normalizeComparableModelKey(model.id) === selectedKey;
+      return true;
     })
     .sort((left, right) => {
       const leftProviderOrder =
@@ -211,12 +218,18 @@ const findProviderReadinessAlternative = (args: {
       if (Boolean(left.model.notable) !== Boolean(right.model.notable)) {
         return right.model.notable ? 1 : -1;
       }
+      if (Boolean(left.model.is_default) !== Boolean(right.model.is_default)) {
+        return right.model.is_default ? 1 : -1;
+      }
       return formatAIModelRouteLabel(left.model).localeCompare(
         formatAIModelRouteLabel(right.model),
       );
     });
 
-  const candidate = candidates[0];
+  const candidate =
+    sortedCandidates.find(
+      ({ model }) => normalizeComparableModelKey(model.id) === selectedKey,
+    ) || sortedCandidates[0];
   if (!candidate) return null;
 
   return {
@@ -743,10 +756,33 @@ export const AIChat: Component<AIChatProps> = (props) => {
     return match?.provider?.trim() || getProviderFromModelId(normalized);
   };
 
+  const failedModelRouteHistory = createMemo(() => {
+    const modelIds = new Set<string>();
+    const providers = new Set<string>();
+
+    for (const message of chat.messages()) {
+      const modelId = message.error && message.model?.trim();
+      if (!modelId) continue;
+      modelIds.add(modelId);
+      const provider = providerForModelRoute(modelId);
+      if (provider) providers.add(provider);
+    }
+
+    return {
+      modelIds: Array.from(modelIds),
+      providers: Array.from(providers),
+    };
+  });
+
   const modelRouteAlternativeFor = (modelId: string): ModelRouteRecoveryOption | null => {
     const normalized = modelId.trim();
     if (!normalized) return null;
+    const failedHistory = failedModelRouteHistory();
     return findProviderReadinessAlternative({
+      avoidModelIds: failedHistory.modelIds.filter((failedModelId) => failedModelId !== normalized),
+      avoidProviders: failedHistory.providers.filter(
+        (failedProvider) => failedProvider !== providerForModelRoute(normalized),
+      ),
       configuredProviders: aiRuntimeSettings()?.configured_providers,
       models: aiRuntimeModels(),
       selectedModel: normalized,
