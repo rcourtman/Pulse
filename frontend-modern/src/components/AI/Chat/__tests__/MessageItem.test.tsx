@@ -527,7 +527,7 @@ describe('MessageItem', () => {
       ));
 
       expect(
-        screen.getByText('Planning governed action and safety checks before execution.'),
+        screen.getByText('Planning governed action and safety checks before execution. · pulse exec'),
       ).toBeInTheDocument();
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
     });
@@ -543,7 +543,7 @@ describe('MessageItem', () => {
             streamEvents: [{ type: 'content', content: 'Partial answer' }],
             workflowStatus: {
               phase: 'provider_start',
-              message: 'Waiting for OpenRouter to start responding.',
+              message: 'Sent request to OpenRouter; waiting for the first token.',
             },
           })}
           {...makeHandlers()}
@@ -551,7 +551,7 @@ describe('MessageItem', () => {
       ));
 
       expect(screen.getByText('Partial answer')).toBeInTheDocument();
-      expect(screen.getByText('Waiting for OpenRouter to start responding.')).toBeInTheDocument();
+      expect(screen.getByText('Sent request to OpenRouter; waiting for the first token.')).toBeInTheDocument();
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
     });
 

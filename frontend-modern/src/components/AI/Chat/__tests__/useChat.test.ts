@@ -897,7 +897,11 @@ describe('useChat', () => {
       );
       expect(assistant.content).not.toContain('pulse_read');
       expect(assistant.content).not.toContain('raw arguments');
-      expect(assistant.streamEvents?.map((e) => e.type)).toEqual(['content', 'tool', 'content']);
+      expect(assistant.streamEvents?.map((e) => e.type)).toEqual([
+        'content',
+        'tool',
+        'content',
+      ]);
       dispose();
     });
 
@@ -929,12 +933,14 @@ describe('useChat', () => {
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.content).toBe('');
       expect(assistant.streamEvents).toEqual([]);
-      expect(assistant.workflowStatus).toEqual({
-        phase: 'plan',
-        message: 'Planning governed action and safety checks before execution.',
-        state: 'READING',
-        tool: 'pulse_exec',
-      });
+      expect(assistant.workflowStatus).toEqual(
+        expect.objectContaining({
+          phase: 'plan',
+          message: 'Planning governed action and safety checks before execution.',
+          state: 'READING',
+          tool: 'pulse_exec',
+        }),
+      );
       dispose();
     });
 
@@ -959,11 +965,83 @@ describe('useChat', () => {
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.model).toBe('gemini:gemini-3.1-flash-lite');
-      expect(assistant.workflowStatus).toEqual({
-        phase: 'provider_fallback',
-        message: 'OpenRouter did not start a response; trying Gemini.',
-      });
+      expect(assistant.workflowStatus).toEqual(
+        expect.objectContaining({
+          phase: 'provider_fallback',
+          message: 'OpenRouter did not start a response; trying Gemini.',
+        }),
+      );
       dispose();
+    });
+
+    it('paces rapid workflow progress as one replacing live status', async () => {
+      vi.useFakeTimers();
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      try {
+        await chat.sendMessage('hi');
+        const fire = getFireEvent();
+
+        fire({
+          type: 'workflow_state',
+          data: {
+            phase: 'context',
+            message: 'Reading current Pulse inventory with pulse_query.',
+            tool: 'pulse_query',
+          },
+        });
+        fire({
+          type: 'workflow_state',
+          data: {
+            phase: 'context',
+            message: 'Built compact inventory context for the model.',
+            tool: 'pulse_query',
+          },
+        });
+        fire({
+          type: 'workflow_state',
+          data: {
+            phase: 'provider_start',
+            message: 'Sent request to OpenRouter; waiting for the first token.',
+          },
+        });
+
+        let assistant = chat.messages().find((m) => m.role === 'assistant')!;
+        expect(assistant.streamEvents).toEqual([]);
+        expect(assistant.workflowStatus).toEqual(
+          expect.objectContaining({
+            message: 'Reading current Pulse inventory with pulse_query.',
+          }),
+        );
+
+        await vi.advanceTimersByTimeAsync(449);
+        assistant = chat.messages().find((m) => m.role === 'assistant')!;
+        expect(assistant.workflowStatus).toEqual(
+          expect.objectContaining({
+            message: 'Reading current Pulse inventory with pulse_query.',
+          }),
+        );
+
+        await vi.advanceTimersByTimeAsync(1);
+        assistant = chat.messages().find((m) => m.role === 'assistant')!;
+        expect(assistant.workflowStatus).toEqual(
+          expect.objectContaining({
+            message: 'Built compact inventory context for the model.',
+          }),
+        );
+
+        await vi.advanceTimersByTimeAsync(450);
+        assistant = chat.messages().find((m) => m.role === 'assistant')!;
+        expect(assistant.workflowStatus).toEqual(
+          expect.objectContaining({
+            message: 'Sent request to OpenRouter; waiting for the first token.',
+          }),
+        );
+      } finally {
+        dispose();
+        vi.useRealTimers();
+      }
     });
 
     it('clears workflow progress when visible answer content starts streaming', async () => {
@@ -977,7 +1055,7 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'provider_start',
-          message: 'Waiting for OpenRouter to start responding.',
+          message: 'Sent request to OpenRouter; waiting for the first token.',
         },
       });
       fire({ type: 'content', data: 'Here is the answer.' });
@@ -1433,7 +1511,7 @@ describe('useChat', () => {
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       const types = assistant.streamEvents!.map((e) => e.type);
-      // Content, pending_tool, content (thinking is retained internally, not rendered)
+      // Content, pending_tool, content. Thinking is retained internally, not rendered.
       expect(types).toEqual(['content', 'pending_tool', 'content']);
       dispose();
     });

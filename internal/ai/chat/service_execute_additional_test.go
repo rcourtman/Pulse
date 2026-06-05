@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -451,7 +452,7 @@ func TestService_ExecuteStream_EmitsProviderStartupBeforeProviderCall(t *testing
 		}
 		if data.Phase == "provider_start" {
 			providerStartSeen.Store(true)
-			if data.Message != "Waiting for OpenRouter to start responding." {
+			if data.Message != "Sent request to OpenRouter; waiting for the first token." {
 				t.Fatalf("provider_start message = %q", data.Message)
 			}
 		}
@@ -506,7 +507,7 @@ func TestService_ExecuteStream_EmitsSessionBeforeInventoryPrefetch(t *testing.T)
 			if err := json.Unmarshal(event.Data, &data); err != nil {
 				t.Fatalf("unmarshal workflow state: %v", err)
 			}
-			if data.Phase == "context" && data.Message == "Reading current Pulse inventory." {
+			if data.Phase == "context" && data.Message == "Reading current Pulse inventory with pulse_query." {
 				inventoryProgressSeen.Store(true)
 			}
 		}
@@ -945,6 +946,143 @@ func TestService_ExecuteStream_InventoryCountPrefetchesSummaryWithoutTools(t *te
 	}
 	if !strings.Contains(lastMessage, "User message: how many devices in this") {
 		t.Fatalf("expected original user message to remain visible to the model, got %q", lastMessage)
+	}
+}
+
+func TestService_ExecuteStream_PrefetchedInventoryIncludesCompleteTopologyDetail(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	var capturedReq providers.ChatRequest
+	provider := &stubServiceProvider{
+		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			capturedReq = req
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: "Inventory breakdown ready."},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{InputTokens: 1, OutputTokens: 1},
+			})
+			return nil
+		},
+	}
+
+	state := models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID:       "node1",
+			Name:     "node1",
+			Instance: "pve1",
+			Status:   "online",
+		}},
+		VMs: []models.VM{{
+			ID:       "qemu/pve1/node1/100",
+			Name:     "vm1",
+			VMID:     100,
+			Instance: "pve1",
+			Status:   "running",
+			Node:     "node1",
+		}},
+	}
+	for i := 1; i <= 13; i++ {
+		status := "running"
+		if i == 1 {
+			status = "stopped"
+		}
+		state.Containers = append(state.Containers, models.Container{
+			ID:       fmt.Sprintf("lxc/pve1/node1/%d", 200+i),
+			Name:     fmt.Sprintf("ct%d", i),
+			VMID:     200 + i,
+			Instance: "pve1",
+			Status:   status,
+			Node:     "node1",
+		})
+	}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(state)
+	service := NewService(Config{
+		AIConfig:      &config.AIConfig{ChatModel: "openai:gpt-4o", ControlLevel: config.ControlLevelControlled},
+		StateProvider: &mockStateProvider{state: state},
+		ReadState:     unifiedresources.NewMonitorAdapter(registry),
+		AgentServer:   &mockAgentServer{},
+	})
+	service.sessions = store
+	service.provider = provider
+	service.unifiedResourceProvider = handoffUnifiedProvider{resources: map[unifiedresources.ResourceType][]unifiedresources.Resource{
+		unifiedresources.ResourceTypeVM: {{
+			ID:       "vm-100",
+			Type:     unifiedresources.ResourceTypeVM,
+			Name:     "vm1",
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"vm1"}},
+			Proxmox:  &unifiedresources.ProxmoxData{VMID: 100, NodeName: "node1"},
+		}},
+		unifiedresources.ResourceTypeSystemContainer: {{
+			ID:       "ct-201",
+			Type:     unifiedresources.ResourceTypeSystemContainer,
+			Name:     "ct1",
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"ct1"}},
+			Proxmox:  &unifiedresources.ProxmoxData{VMID: 201, NodeName: "node1"},
+		}, {
+			ID:       "ct-213",
+			Type:     unifiedresources.ResourceTypeSystemContainer,
+			Name:     "ct13",
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"ct13"}},
+			Proxmox:  &unifiedresources.ProxmoxData{VMID: 213, NodeName: "node1"},
+		}},
+	}}
+	service.started = true
+
+	err = service.ExecuteStream(context.Background(), ExecuteRequest{
+		SessionID: "inventory-detail-fast-path",
+		Prompt:    "give me a detailed inventory breakdown by node",
+	}, func(event StreamEvent) {})
+	if err != nil {
+		t.Fatalf("ExecuteStream failed: %v", err)
+	}
+	if len(capturedReq.Tools) != 0 {
+		t.Fatalf("expected prefetched inventory detail turn to withhold tools, got %d", len(capturedReq.Tools))
+	}
+	if len(capturedReq.Messages) == 0 {
+		t.Fatal("expected provider request messages")
+	}
+	lastMessage := capturedReq.Messages[len(capturedReq.Messages)-1].Content
+	for _, want := range []string{
+		"per-node and workload detail",
+		"answer_label fields are UI-visible inventory labels",
+		"Do not shorten answer_label values",
+		"includes every Proxmox node, VM, system container",
+		`"proxmox":{"nodes":[`,
+		`"nodes":[`,
+		`"answer_label":"Node node1"`,
+		`"name":"node1"`,
+		`"vms":[`,
+		`"answer_label":"VM 100 vm1"`,
+		`"name":"vm1"`,
+		`"containers":[`,
+		`"answer_label":"CT 201 ct1"`,
+		`"name":"ct1"`,
+		`"answer_label":"CT 213 ct13"`,
+		`"name":"ct13"`,
+		"User message: give me a detailed inventory breakdown by node",
+	} {
+		if !strings.Contains(lastMessage, want) {
+			t.Fatalf("expected prefetched inventory context to contain %q, got %q", want, lastMessage)
+		}
+	}
+	for _, forbidden := range []string{
+		`"policy":`,
+		`"ai_safe_summary"`,
+		`"routing":`,
+		`"sensitivity":`,
+		`redacted`,
+	} {
+		if strings.Contains(lastMessage, forbidden) {
+			t.Fatalf("expected prefetched inventory context to omit policy metadata %q, got %q", forbidden, lastMessage)
+		}
 	}
 }
 

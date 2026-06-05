@@ -6767,11 +6767,11 @@
     {
       "id": "codex-lane-followup-architecture-post-rc-canonicalization",
       "agent_id": "codex",
-      "summary": "Improve Assistant frontend in-flight progress and session ergonomics toward OpenCode parity",
+      "summary": "Improve Assistant inventory context and OpenCode-style activity flow",
       "target_id": "v6-product-lane-expansion",
       "claimed_at": "2026-06-05T21:57:48Z",
-      "heartbeat_at": "2026-06-05T21:57:48Z",
-      "expires_at": "2026-06-05T23:57:48Z",
+      "heartbeat_at": "2026-06-05T23:04:17Z",
+      "expires_at": "2026-06-06T01:04:17Z",
       "work_item": {
         "kind": "lane-followup",
         "id": "architecture-post-rc-canonicalization"

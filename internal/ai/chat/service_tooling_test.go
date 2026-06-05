@@ -179,6 +179,28 @@ func TestToolsForAssistantTurn_InventoryCountUsesQueryOnly(t *testing.T) {
 	}
 }
 
+func TestToolsForAssistantTurn_InventoryBreakdownUsesQueryOnly(t *testing.T) {
+	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
+		StateProvider: fakeStateProvider{},
+		AgentServer:   fakeAgentServer{},
+		ReadState:     &fakeCanonicalReadState{},
+		ControlLevel:  tools.ControlLevelControlled,
+	})
+
+	svc := &Service{executor: exec}
+	toolsList := svc.toolsForAssistantTurn("give me a detailed inventory breakdown by node", false, false, false)
+	set := toolNameSet(toolsList)
+
+	if !set["pulse_query"] {
+		t.Fatalf("expected inventory breakdown prompt to expose pulse_query, got %#v", set)
+	}
+	for _, blocked := range []string{"pulse_read", "pulse_control", "pulse_file_edit", "pulse_docker"} {
+		if set[blocked] {
+			t.Fatalf("expected inventory breakdown prompt not to expose %s, got %#v", blocked, set)
+		}
+	}
+}
+
 func TestToolsForAssistantTurn_ActionAndDiagnosticsKeepFullManifest(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
 		StateProvider: fakeStateProvider{},
@@ -257,6 +279,9 @@ func TestBuildSystemPrompt_DoesNotClaimGenericVMControl(t *testing.T) {
 	}
 	if !strings.Contains(prompt, "pulse_kubernetes") {
 		t.Fatalf("expected system prompt to include the governed Kubernetes tool contract, got %q", prompt)
+	}
+	if !strings.Contains(prompt, "Do not use emoji, warning icons, or decorative symbols") {
+		t.Fatalf("expected system prompt to keep Assistant formatting operational, got %q", prompt)
 	}
 }
 

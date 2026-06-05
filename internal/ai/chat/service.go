@@ -759,12 +759,15 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		len(handoffActions) > 0 ||
 		handoffFindingID != "" ||
 		!handoffMetadataEmpty(handoffMetadata)
+	modelBoundaryAllowedInventoryContext := ""
 	assistantToolScope := assistantToolScopeForPrompt(req.Prompt, hasModelHandoffContext)
 	if assistantToolScope == assistantTurnToolScopeQueryOnly {
-		emitWorkflowState(streamCallback, "context", "Reading current Pulse inventory.", "", "pulse_query")
-		if summaryContext := s.prefetchAssistantInventorySummaryContext(ctx, baseExecutor); summaryContext != "" {
+		emitWorkflowState(streamCallback, "context", "Reading current Pulse inventory with pulse_query.", "", "pulse_query")
+		if summaryContext := s.prefetchAssistantInventoryTopologyContext(ctx, baseExecutor); summaryContext != "" {
+			modelBoundaryAllowedInventoryContext = summaryContext
 			injectHandoffContextIntoLatestUserMessage(messages, summaryContext)
 			assistantToolScope = assistantTurnToolScopeTextOnly
+			emitWorkflowState(streamCallback, "context_ready", "Built compact inventory context for the model.", "", "pulse_query")
 			log.Debug().
 				Str("session_id", session.ID).
 				Msg("[ChatService] Prefetched canonical inventory summary for query-only Assistant turn")
@@ -830,7 +833,11 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		loop.SetOrgID(s.orgID)
 		loop.SetAutonomousMode(autonomousMode)
 		loop.SetPreferSummaryOnlyQueries(assistantToolScope == assistantTurnToolScopeQueryOnly)
-		loop.SetRequestSanitizer(modelboundary.RequestSanitizerForModel(attempt.Model, unifiedResourceProvider))
+		sanitizerOptions := []modelboundary.RequestSanitizerOption{}
+		if modelBoundaryAllowedInventoryContext != "" {
+			sanitizerOptions = append(sanitizerOptions, modelboundary.AllowResourcePolicyText(modelBoundaryAllowedInventoryContext))
+		}
+		loop.SetRequestSanitizer(modelboundary.RequestSanitizerForModel(attempt.Model, unifiedResourceProvider, sanitizerOptions...))
 		loop.SetSuppressProviderErrorEvents(true)
 		loop.SetSessionFSM(sessionFSM)
 		loop.SetKnowledgeAccumulator(ka)
@@ -849,7 +856,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		emitWorkflowState(
 			streamCallback,
 			"provider_start",
-			fmt.Sprintf("Waiting for %s to start responding.", providerLabelForAttempt(attempt)),
+			fmt.Sprintf("Sent request to %s; waiting for the first token.", providerLabelForAttempt(attempt)),
 			sessionFSMState(sessionFSM),
 			"",
 		)
@@ -968,13 +975,26 @@ func injectHandoffContextIntoLatestUserMessage(messages []Message, handoffContex
 	}
 }
 
-func (s *Service) prefetchAssistantInventorySummaryContext(ctx context.Context, executor *tools.PulseToolExecutor) string {
+func (s *Service) prefetchAssistantInventoryTopologyContext(ctx context.Context, executor *tools.PulseToolExecutor) string {
+	if contextText := strings.TrimSpace(s.prefetchAssistantInventoryTopologyContextFromReadState()); contextText != "" {
+		return assistantInventoryTopologyContextPreamble(contextText) + "\n" +
+			truncateToolResultForModel(contextText)
+	}
 	if executor == nil {
 		return ""
 	}
 	result, err := executor.ExecuteTool(ctx, "pulse_query", map[string]interface{}{
-		"action":       "topology",
-		"summary_only": true,
+		"action":                          "topology",
+		"summary_only":                    false,
+		"max_proxmox_nodes":               0,
+		"max_vms_per_node":                0,
+		"max_containers_per_node":         0,
+		"max_docker_hosts":                0,
+		"max_docker_containers_per_host":  0,
+		"max_k8s_clusters":                0,
+		"max_k8s_nodes_per_cluster":       0,
+		"max_k8s_deployments_per_cluster": 0,
+		"max_k8s_pods_per_cluster":        0,
 	})
 	if err != nil || result.IsError {
 		log.Debug().
@@ -987,8 +1007,490 @@ func (s *Service) prefetchAssistantInventorySummaryContext(ctx context.Context, 
 	if resultText == "" {
 		return ""
 	}
-	return "Pulse inventory summary from current canonical resource state. Use this context to answer the user's count, overview, or status question. Do not claim shell inspection or host command execution.\n" +
-		truncateToolResultForModel(resultText)
+	contextText := resultText
+	var topology tools.TopologyResponse
+	if err := json.Unmarshal([]byte(resultText), &topology); err == nil {
+		if inventoryText, marshalErr := marshalAssistantInventoryTopologyContext(topology.NormalizeCollections()); marshalErr == nil && strings.TrimSpace(inventoryText) != "" {
+			contextText = inventoryText
+		}
+	}
+	return assistantInventoryTopologyContextPreamble(contextText) + "\n" +
+		truncateToolResultForModel(contextText)
+}
+
+func (s *Service) prefetchAssistantInventoryTopologyContextFromReadState() string {
+	if s == nil || s.readState == nil {
+		return ""
+	}
+	contextText, err := marshalAssistantInventoryTopologyContextFromReadState(s.readState)
+	if err != nil {
+		log.Debug().Err(err).Msg("[ChatService] Unable to prefetch Assistant inventory context from ReadState")
+		return ""
+	}
+	return strings.TrimSpace(contextText)
+}
+
+func marshalAssistantInventoryTopologyContextFromReadState(rs unifiedresources.ReadState) (string, error) {
+	if rs == nil {
+		return "", nil
+	}
+
+	context := assistantInventoryTopologyContext{
+		Proxmox:    assistantInventoryProxmoxTopology{Nodes: []assistantInventoryProxmoxNode{}},
+		Docker:     assistantInventoryDockerTopology{Hosts: []assistantInventoryDockerHost{}},
+		Kubernetes: assistantInventoryKubernetesTopology{Clusters: []assistantInventoryKubernetesCluster{}},
+	}
+	nodeMap := make(map[string]*assistantInventoryProxmoxNode)
+	ensureNode := func(name, status string) *assistantInventoryProxmoxNode {
+		name = firstNonEmptyString(name, "unknown")
+		key := strings.ToLower(name)
+		if existing := nodeMap[key]; existing != nil {
+			if existing.Status == "" || existing.Status == "unknown" {
+				existing.Status = firstNonEmptyString(status, existing.Status, "unknown")
+			}
+			return existing
+		}
+		node := &assistantInventoryProxmoxNode{
+			AnswerLabel:    assistantInventoryNodeAnswerLabel(name),
+			Name:           name,
+			Status:         firstNonEmptyString(status, "unknown"),
+			VMs:            []assistantInventoryWorkload{},
+			Containers:     []assistantInventoryWorkload{},
+			VMCount:        0,
+			ContainerCount: 0,
+		}
+		nodeMap[key] = node
+		return node
+	}
+
+	for _, node := range rs.Nodes() {
+		if node == nil {
+			continue
+		}
+		context.Summary.TotalNodes++
+		ensureNode(firstNonEmptyString(node.NodeName(), node.Name()), string(node.Status()))
+	}
+	for _, vm := range rs.VMs() {
+		if vm == nil {
+			continue
+		}
+		context.Summary.TotalVMs++
+		if statusIsRunningOrOnline(string(vm.Status())) {
+			context.Summary.RunningVMs++
+		}
+		node := ensureNode(vm.Node(), "unknown")
+		node.VMCount++
+		name := strings.TrimSpace(vm.Name())
+		node.VMs = append(node.VMs, assistantInventoryWorkload{
+			AnswerLabel:   assistantInventoryGuestAnswerLabel("VM", vm.VMID(), name),
+			VMID:          vm.VMID(),
+			Name:          name,
+			Status:        string(vm.Status()),
+			CPUPercent:    vm.CPUPercent(),
+			MemoryPercent: vm.MemoryPercent(),
+		})
+	}
+	for _, container := range rs.Containers() {
+		if container == nil {
+			continue
+		}
+		context.Summary.TotalSystemContainers++
+		if statusIsRunningOrOnline(string(container.Status())) {
+			context.Summary.RunningContainers++
+		}
+		node := ensureNode(container.Node(), "unknown")
+		node.ContainerCount++
+		name := strings.TrimSpace(container.Name())
+		node.Containers = append(node.Containers, assistantInventoryWorkload{
+			AnswerLabel:   assistantInventoryGuestAnswerLabel("CT", container.VMID(), name),
+			VMID:          container.VMID(),
+			Name:          name,
+			Status:        string(container.Status()),
+			CPUPercent:    container.CPUPercent(),
+			MemoryPercent: container.MemoryPercent(),
+		})
+	}
+
+	for _, node := range nodeMap {
+		context.Proxmox.Nodes = append(context.Proxmox.Nodes, *node)
+	}
+	sort.Slice(context.Proxmox.Nodes, func(i, j int) bool {
+		return strings.ToLower(context.Proxmox.Nodes[i].Name) < strings.ToLower(context.Proxmox.Nodes[j].Name)
+	})
+	for i := range context.Proxmox.Nodes {
+		sort.Slice(context.Proxmox.Nodes[i].VMs, func(a, b int) bool {
+			return context.Proxmox.Nodes[i].VMs[a].VMID < context.Proxmox.Nodes[i].VMs[b].VMID
+		})
+		sort.Slice(context.Proxmox.Nodes[i].Containers, func(a, b int) bool {
+			return context.Proxmox.Nodes[i].Containers[a].VMID < context.Proxmox.Nodes[i].Containers[b].VMID
+		})
+	}
+
+	if len(context.Proxmox.Nodes) == 0 &&
+		context.Summary.TotalVMs == 0 &&
+		context.Summary.TotalSystemContainers == 0 {
+		return "", nil
+	}
+	encoded, err := json.Marshal(context)
+	if err != nil {
+		return "", err
+	}
+	return string(encoded), nil
+}
+
+func marshalAssistantInventoryTopologyContext(topology tools.TopologyResponse) (string, error) {
+	context := assistantInventoryTopologyContext{
+		Summary: topology.Summary,
+		Proxmox: assistantInventoryProxmoxTopology{
+			Nodes: make([]assistantInventoryProxmoxNode, 0, len(topology.Proxmox.Nodes)),
+		},
+		Docker: assistantInventoryDockerTopology{
+			Hosts: make([]assistantInventoryDockerHost, 0, len(topology.Docker.Hosts)),
+		},
+		Kubernetes: assistantInventoryKubernetesTopology{
+			Clusters: make([]assistantInventoryKubernetesCluster, 0, len(topology.Kubernetes.Clusters)),
+		},
+	}
+	for _, node := range topology.Proxmox.Nodes {
+		nodeContext := assistantInventoryProxmoxNode{
+			AnswerLabel:    assistantInventoryNodeAnswerLabel(node.Name),
+			Name:           node.Name,
+			Status:         node.Status,
+			AgentConnected: node.AgentConnected,
+			CanExecute:     node.CanExecute,
+			VMCount:        node.VMCount,
+			ContainerCount: node.ContainerCount,
+			VMs:            make([]assistantInventoryWorkload, 0, len(node.VMs)),
+			Containers:     make([]assistantInventoryWorkload, 0, len(node.Containers)),
+		}
+		for _, vm := range node.VMs {
+			nodeContext.VMs = append(nodeContext.VMs, assistantInventoryWorkload{
+				AnswerLabel:   assistantInventoryGuestAnswerLabel("VM", vm.VMID, vm.Name),
+				VMID:          vm.VMID,
+				Name:          vm.Name,
+				Status:        vm.Status,
+				CPUPercent:    vm.CPU,
+				MemoryPercent: vm.Memory,
+			})
+		}
+		for _, container := range node.Containers {
+			nodeContext.Containers = append(nodeContext.Containers, assistantInventoryWorkload{
+				AnswerLabel:   assistantInventoryGuestAnswerLabel("CT", container.VMID, container.Name),
+				VMID:          container.VMID,
+				Name:          container.Name,
+				Status:        container.Status,
+				CPUPercent:    container.CPU,
+				MemoryPercent: container.Memory,
+			})
+		}
+		context.Proxmox.Nodes = append(context.Proxmox.Nodes, nodeContext)
+	}
+	for _, host := range topology.Docker.Hosts {
+		hostContext := assistantInventoryDockerHost{
+			AnswerLabel:    firstNonEmptyString(host.DisplayName, host.Hostname),
+			Hostname:       host.Hostname,
+			DisplayName:    host.DisplayName,
+			AgentConnected: host.AgentConnected,
+			CanExecute:     host.CanExecute,
+			ContainerCount: host.ContainerCount,
+			RunningCount:   host.RunningCount,
+			Containers:     make([]assistantInventoryAppContainer, 0, len(host.Containers)),
+		}
+		for _, container := range host.Containers {
+			hostContext.Containers = append(hostContext.Containers, assistantInventoryAppContainer{
+				AnswerLabel: firstNonEmptyString(container.Name, container.ID),
+				ID:          container.ID,
+				Name:        container.Name,
+				State:       container.State,
+				Health:      container.Health,
+			})
+		}
+		context.Docker.Hosts = append(context.Docker.Hosts, hostContext)
+	}
+	for _, cluster := range topology.Kubernetes.Clusters {
+		clusterContext := assistantInventoryKubernetesCluster{
+			AnswerLabel:     firstNonEmptyString(cluster.Name, cluster.ID),
+			Name:            cluster.Name,
+			ID:              cluster.ID,
+			Status:          cluster.Status,
+			NodeCount:       cluster.NodeCount,
+			DeploymentCount: cluster.DeploymentCount,
+			PodCount:        cluster.PodCount,
+			Nodes:           make([]assistantInventoryKubernetesNode, 0, len(cluster.Nodes)),
+			Deployments:     make([]assistantInventoryKubernetesDeployment, 0, len(cluster.Deployments)),
+			Pods:            make([]assistantInventoryKubernetesPod, 0, len(cluster.Pods)),
+		}
+		for _, node := range cluster.Nodes {
+			clusterContext.Nodes = append(clusterContext.Nodes, assistantInventoryKubernetesNode{
+				AnswerLabel:   node.Name,
+				Name:          node.Name,
+				Status:        node.Status,
+				Ready:         node.Ready,
+				Roles:         node.Roles,
+				CPUPercent:    node.CPU,
+				MemoryPercent: node.Memory,
+			})
+		}
+		for _, deployment := range cluster.Deployments {
+			clusterContext.Deployments = append(clusterContext.Deployments, assistantInventoryKubernetesDeployment{
+				AnswerLabel:     deployment.Name,
+				Name:            deployment.Name,
+				Namespace:       deployment.Namespace,
+				Status:          deployment.Status,
+				DesiredReplicas: deployment.DesiredReplicas,
+				ReadyReplicas:   deployment.ReadyReplicas,
+			})
+		}
+		for _, pod := range cluster.Pods {
+			clusterContext.Pods = append(clusterContext.Pods, assistantInventoryKubernetesPod{
+				AnswerLabel: pod.Name,
+				Name:        pod.Name,
+				Namespace:   pod.Namespace,
+				Status:      pod.Status,
+				Restarts:    pod.Restarts,
+				OwnerKind:   pod.OwnerKind,
+				OwnerName:   pod.OwnerName,
+			})
+		}
+		context.Kubernetes.Clusters = append(context.Kubernetes.Clusters, clusterContext)
+	}
+
+	encoded, err := json.Marshal(context)
+	if err != nil {
+		return "", err
+	}
+	return string(encoded), nil
+}
+
+type assistantInventoryTopologyContext struct {
+	Proxmox    assistantInventoryProxmoxTopology    `json:"proxmox"`
+	Docker     assistantInventoryDockerTopology     `json:"docker"`
+	Kubernetes assistantInventoryKubernetesTopology `json:"kubernetes"`
+	Summary    tools.TopologySummary                `json:"summary"`
+}
+
+type assistantInventoryProxmoxTopology struct {
+	Nodes []assistantInventoryProxmoxNode `json:"nodes"`
+}
+
+type assistantInventoryDockerTopology struct {
+	Hosts []assistantInventoryDockerHost `json:"hosts"`
+}
+
+type assistantInventoryKubernetesTopology struct {
+	Clusters []assistantInventoryKubernetesCluster `json:"clusters"`
+}
+
+type assistantInventoryProxmoxNode struct {
+	AnswerLabel    string                       `json:"answer_label"`
+	Name           string                       `json:"name"`
+	Status         string                       `json:"status"`
+	AgentConnected bool                         `json:"agent_connected,omitempty"`
+	CanExecute     bool                         `json:"can_execute,omitempty"`
+	VMCount        int                          `json:"vm_count"`
+	ContainerCount int                          `json:"container_count"`
+	VMs            []assistantInventoryWorkload `json:"vms"`
+	Containers     []assistantInventoryWorkload `json:"containers"`
+}
+
+type assistantInventoryWorkload struct {
+	AnswerLabel   string  `json:"answer_label"`
+	VMID          int     `json:"vmid"`
+	Name          string  `json:"name"`
+	Status        string  `json:"status"`
+	CPUPercent    float64 `json:"cpu_percent,omitempty"`
+	MemoryPercent float64 `json:"memory_percent,omitempty"`
+}
+
+type assistantInventoryDockerHost struct {
+	AnswerLabel    string                           `json:"answer_label"`
+	Hostname       string                           `json:"hostname"`
+	DisplayName    string                           `json:"display_name,omitempty"`
+	AgentConnected bool                             `json:"agent_connected,omitempty"`
+	CanExecute     bool                             `json:"can_execute,omitempty"`
+	ContainerCount int                              `json:"container_count"`
+	RunningCount   int                              `json:"running_count"`
+	Containers     []assistantInventoryAppContainer `json:"containers"`
+}
+
+type assistantInventoryAppContainer struct {
+	AnswerLabel string `json:"answer_label"`
+	ID          string `json:"id,omitempty"`
+	Name        string `json:"name"`
+	State       string `json:"state"`
+	Health      string `json:"health,omitempty"`
+}
+
+type assistantInventoryKubernetesCluster struct {
+	AnswerLabel     string                                   `json:"answer_label"`
+	Name            string                                   `json:"name"`
+	ID              string                                   `json:"id,omitempty"`
+	Status          string                                   `json:"status"`
+	NodeCount       int                                      `json:"node_count"`
+	DeploymentCount int                                      `json:"deployment_count"`
+	PodCount        int                                      `json:"pod_count"`
+	Nodes           []assistantInventoryKubernetesNode       `json:"nodes"`
+	Deployments     []assistantInventoryKubernetesDeployment `json:"deployments"`
+	Pods            []assistantInventoryKubernetesPod        `json:"pods"`
+}
+
+type assistantInventoryKubernetesNode struct {
+	AnswerLabel   string   `json:"answer_label"`
+	Name          string   `json:"name"`
+	Status        string   `json:"status"`
+	Ready         bool     `json:"ready"`
+	Roles         []string `json:"roles"`
+	CPUPercent    float64  `json:"cpu_percent,omitempty"`
+	MemoryPercent float64  `json:"memory_percent,omitempty"`
+}
+
+type assistantInventoryKubernetesDeployment struct {
+	AnswerLabel     string `json:"answer_label"`
+	Name            string `json:"name"`
+	Namespace       string `json:"namespace"`
+	Status          string `json:"status"`
+	DesiredReplicas int32  `json:"desired_replicas,omitempty"`
+	ReadyReplicas   int32  `json:"ready_replicas,omitempty"`
+}
+
+type assistantInventoryKubernetesPod struct {
+	AnswerLabel string `json:"answer_label"`
+	Name        string `json:"name"`
+	Namespace   string `json:"namespace"`
+	Status      string `json:"status"`
+	Restarts    int    `json:"restarts,omitempty"`
+	OwnerKind   string `json:"owner_kind,omitempty"`
+	OwnerName   string `json:"owner_name,omitempty"`
+}
+
+func assistantInventoryTopologyContextPreamble(resultText string) string {
+	var lines []string
+	lines = append(lines,
+		"Pulse inventory summary from current canonical resource state, including per-node and workload detail where available.",
+		"Use this context to answer the user's count, overview, status, list, or inventory-breakdown question. Do not claim shell inspection or host command execution.",
+		"The answer_label fields are UI-visible inventory labels. Copy answer_label exactly when listing nodes, VMs, system containers, Docker containers, Kubernetes nodes, deployments, or pods.",
+		"Do not shorten answer_label values or substitute generic labels like Node 1, VM 100, or CT 101 when an answer_label is available.",
+		"Do not include raw secrets, config values, IP addresses, routing metadata, provider internals, or shell command claims in the answer.",
+	)
+
+	var topology tools.TopologyResponse
+	if err := json.Unmarshal([]byte(resultText), &topology); err != nil {
+		lines = append(lines, "Completeness: The topology detail could not be counted before the model request; if the payload is marked TRUNCATED, say which details may be omitted instead of claiming every workload is listed.")
+		return strings.Join(lines, "\n")
+	}
+	topology = topology.NormalizeCollections()
+	included := assistantInventoryIncludedTopologyCounts(topology)
+	complete := !toolResultWouldTruncateForModel(resultText) &&
+		included.proxmoxNodes >= topology.Summary.TotalNodes &&
+		included.vms >= topology.Summary.TotalVMs &&
+		included.systemContainers >= topology.Summary.TotalSystemContainers &&
+		included.dockerHosts >= topology.Summary.TotalDockerHosts &&
+		included.dockerContainers >= topology.Summary.TotalDockerContainers &&
+		included.k8sClusters >= topology.Summary.TotalK8sClusters &&
+		included.k8sNodes >= topology.Summary.TotalK8sNodes &&
+		included.k8sDeployments >= topology.Summary.TotalK8sDeployments &&
+		included.k8sPods >= topology.Summary.TotalK8sPods
+	if complete {
+		lines = append(lines, "Completeness: The topology detail below includes every Proxmox node, VM, system container, Docker host/container, and Kubernetes resource currently visible in Pulse.")
+	} else {
+		lines = append(lines, fmt.Sprintf("Completeness: The topology detail below may be capped or context-truncated. Included detail counts are nodes=%d/%d, VMs=%d/%d, system_containers=%d/%d, docker_hosts=%d/%d, docker_containers=%d/%d, k8s_clusters=%d/%d, k8s_nodes=%d/%d, k8s_deployments=%d/%d, k8s_pods=%d/%d. If included counts do not match totals or a TRUNCATED marker appears, say what may be omitted instead of claiming every workload is listed.",
+			included.proxmoxNodes,
+			topology.Summary.TotalNodes,
+			included.vms,
+			topology.Summary.TotalVMs,
+			included.systemContainers,
+			topology.Summary.TotalSystemContainers,
+			included.dockerHosts,
+			topology.Summary.TotalDockerHosts,
+			included.dockerContainers,
+			topology.Summary.TotalDockerContainers,
+			included.k8sClusters,
+			topology.Summary.TotalK8sClusters,
+			included.k8sNodes,
+			topology.Summary.TotalK8sNodes,
+			included.k8sDeployments,
+			topology.Summary.TotalK8sDeployments,
+			included.k8sPods,
+			topology.Summary.TotalK8sPods,
+		))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func assistantInventoryNodeAnswerLabel(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "Node unknown"
+	}
+	return "Node " + name
+}
+
+func assistantInventoryGuestAnswerLabel(kind string, id int, name string) string {
+	kind = strings.TrimSpace(kind)
+	name = strings.TrimSpace(name)
+	prefix := kind
+	if id > 0 {
+		prefix = fmt.Sprintf("%s %d", kind, id)
+	}
+	if name == "" {
+		return prefix
+	}
+	return prefix + " " + name
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func statusIsRunningOrOnline(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "running", "online", "ready", "healthy":
+		return true
+	default:
+		return false
+	}
+}
+
+type assistantInventoryTopologyCounts struct {
+	proxmoxNodes     int
+	vms              int
+	systemContainers int
+	dockerHosts      int
+	dockerContainers int
+	k8sClusters      int
+	k8sNodes         int
+	k8sDeployments   int
+	k8sPods          int
+}
+
+func assistantInventoryIncludedTopologyCounts(topology tools.TopologyResponse) assistantInventoryTopologyCounts {
+	counts := assistantInventoryTopologyCounts{
+		proxmoxNodes: len(topology.Proxmox.Nodes),
+		dockerHosts:  len(topology.Docker.Hosts),
+		k8sClusters:  len(topology.Kubernetes.Clusters),
+	}
+	for _, node := range topology.Proxmox.Nodes {
+		counts.vms += len(node.VMs)
+		counts.systemContainers += len(node.Containers)
+	}
+	for _, host := range topology.Docker.Hosts {
+		counts.dockerContainers += len(host.Containers)
+	}
+	for _, cluster := range topology.Kubernetes.Clusters {
+		counts.k8sNodes += len(cluster.Nodes)
+		counts.k8sDeployments += len(cluster.Deployments)
+		counts.k8sPods += len(cluster.Pods)
+	}
+	return counts
+}
+
+func toolResultWouldTruncateForModel(text string) bool {
+	return MaxToolResultCharsLimit > 0 && len(text) > MaxToolResultCharsLimit
 }
 
 func sanitizeHandoffContextForResourcePolicy(handoffContext string, handoffResources []HandoffResource, provider tools.UnifiedResourceProvider) string {
@@ -3153,6 +3655,8 @@ You are like a colleague doing pair programming on infrastructure tasks. Tool ca
 
 5. BE DIRECT: Acknowledge mistakes or complications honestly. If something won't work as the user expects, say so clearly.
 
+6. KEEP FORMATTING CLEAN: Use concise headings, bullets, and tables where they help. Do not use emoji, warning icons, or decorative symbols in normal operational answers unless the user explicitly asks for that tone.
+
 ## TASK COMPLETION
 - After successful control actions, respond once you have enough evidence to explain the result.
 - If a tool call is blocked, treat the result as a policy boundary, not a tool-routing instruction.
@@ -3686,6 +4190,8 @@ func assistantPromptIsInventoryQuery(normalized string) bool {
 		" services ",
 		" cluster ",
 		" clusters ",
+		" inventory ",
+		" inventories ",
 	})
 	if !hasInventoryNoun {
 		return false
@@ -3698,6 +4204,11 @@ func assistantPromptIsInventoryQuery(normalized string) bool {
 		" totals ",
 		" list ",
 		" show ",
+		" inventory ",
+		" breakdown ",
+		" detail ",
+		" details ",
+		" detailed ",
 		" overview ",
 		" status ",
 		" running ",

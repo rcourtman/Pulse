@@ -67,7 +67,10 @@ runtime cost control, and shared AI transport surfaces.
    OpenRouter preflights affordability against the requested maximum completion
    budget, so leaving the field unset can make tiny chat turns reserve a
    model-scale output default and fail against per-key total limits despite the
-   account having credit. The provider boundary owns this request-shape fix;
+   account having credit. That bounded default must still be high enough for
+   normal detailed Assistant answers such as inventory breakdowns; provider
+   request shaping must not make an ordinary answer finish mid-sentence. The
+   provider boundary owns this request-shape fix;
    UI code must not work around it with route-specific retry copy. If the
    provider still rejects the request because the requested completion budget
    exceeds the key limit, the Assistant error message must name that key-limit
@@ -191,6 +194,10 @@ runtime cost control, and shared AI transport surfaces.
    progress, not answer content; once visible assistant text, tool progress,
    approvals, or questions begin, stale workflow text must clear so the row does
    not keep saying it is waiting on a phase that has already been superseded.
+   OpenCode-parity Assistant UX work must reference OpenCode's actual source
+   implementation for message parts, tool-state mutation, and progress
+   rendering before changing Pulse behavior; parity means adapting the proven
+   interaction model, not guessing from screenshots or observed behavior alone.
    Streamed provider startup must be bounded by the configured Assistant request
    timeout and the OpenAI-compatible SSE response-header guard; transient
    startup failures may retry once before surfacing failed-turn recovery, but a
@@ -202,19 +209,46 @@ runtime cost control, and shared AI transport surfaces.
    the selected model owns investigation and action choice inside Pulse policy.
    Direct text turns such as exact-reply diagnostics must withhold tools and
    use a scoped system prompt that does not advertise unavailable tools.
-   Inventory, count, overview, and status prompts that only need canonical
-   Pulse resource state must expose the canonical query/clarification path
-   instead of shell/read/control tools, so prompts like "how many devices in
-   this" route toward Pulse inventory rather than `/dev` inspection. Those
-   count/overview turns may prefetch a bounded canonical inventory summary
-   before the model request and then withhold tools so the first visible answer
-   is fast and cannot drift into shell inspection. If a query-only turn still
-   reaches a model-owned `pulse_query` topology call, omitting `summary_only`
-   must default to summary-only before execution; detailed topology remains
-   available in the full governed path or when the model explicitly asks for
-   detail. The system prompt for a turn must describe only the tools actually
-   offered to the provider for that turn; generic tool-governance prose must not
-   name tools hidden from the current manifest.
+   Inventory, count, overview, status, list, and breakdown prompts that only
+   need canonical Pulse resource state must expose the canonical
+   query/clarification path instead of shell/read/control tools, so prompts
+   like "how many devices in this" and "give me an inventory breakdown by node"
+   route toward Pulse inventory rather than `/dev` inspection. Those query-only
+   turns may prefetch canonical topology context before the model request,
+   including aggregate counts plus per-node and workload detail where available,
+   and then withhold tools so the first visible answer is fast and cannot drift
+   into shell inspection. The prefetch contract must tell the provider whether
+   the topology detail is complete or context-truncated, and should pass a
+   compact user-visible inventory payload rather than raw governed tool JSON so
+   policy metadata cannot cause providers to hide ordinary topology labels.
+   The compact payload must include exact `answer_label` fields for nodes and
+   workloads; the provider-facing instruction must tell the model to copy those
+   labels exactly instead of substituting generic labels like `Node 1`, `VM
+   100`, or `CT 101`. For external model routes, only this exact
+   Pulse-generated compact inventory context may bypass resource-label text
+   redaction; operator prompts, handoff text, tool payloads, raw IDs, IPs,
+   config, and secret-like text remain governed by the model-bound sanitizer.
+   The normal inventory fast-path prompt must not seed provider output with
+   redaction vocabulary; raw secrets, config values, IP addresses, routing
+   metadata, provider internals, and shell command claims remain out of scope
+   for normal inventory answers. The Assistant transcript should show compact
+   activity as work happens: local context reads, governed tool names, provider
+   routing, fallback, and first-token waiting must appear as a replacing live
+   status/header status rather than a dead-looking wait state or a dumped list
+   of transient phases. Hide or collapse unsafe details and bulky outputs, but
+   do not hide the fact that Pulse is running a local read, invoking a governed
+   tool, or waiting on a provider. If a query-only
+   turn still reaches a model-owned `pulse_query` topology call, omitting
+   `summary_only` must default to summary-only before execution; detailed
+   topology remains available in the full governed path or when the model
+   explicitly asks for detail. Assistant answer style should stay operational
+   and must not use emoji, warning icons, or decorative symbols unless the user
+   explicitly asks for that tone.
+   The system prompt for a turn must describe only the tools actually offered to the
+   provider for that turn; generic tool-governance prose must not name tools
+   hidden from the current manifest. Deterministic provider-request capture is
+   the primary proof harness for this fast path; live OpenRouter/browser checks
+   are final smoke tests, not the iteration loop.
    Restored Assistant sessions must hydrate saved assistant content and
    persisted tool calls into the same transcript event shape used by live
    streams so switching sessions does not hide prior tool evidence or collapse

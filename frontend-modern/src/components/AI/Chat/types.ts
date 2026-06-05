@@ -113,6 +113,7 @@ export interface WorkflowStatus {
   message: string;
   state?: string;
   tool?: string;
+  startedAt?: number;
 }
 
 export interface ChatMessageRequestContext {

@@ -30,10 +30,18 @@ import type {
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
 type AssistantInterruption = NonNullable<ChatMessage['interruption']>;
-const INITIAL_ASSISTANT_WORKFLOW_STATUS: WorkflowStatus = {
+const WORKFLOW_STATUS_MIN_DWELL_MS = 450;
+
+const createInitialAssistantWorkflowStatus = (): WorkflowStatus => ({
   phase: 'request_start',
   message: 'Preparing Pulse context.',
-};
+  startedAt: Date.now(),
+});
+
+interface WorkflowStatusQueue {
+  statuses: WorkflowStatus[];
+  timer: number | undefined;
+}
 
 export interface UseChatOptions {
   sessionId?: string;
@@ -90,6 +98,8 @@ export function useChat(options: UseChatOptions = {}) {
   let isDrainingQueuedFollowUps = false;
   const suppressedRawContentMessageIds = new Set<string>();
   const outputArtifactStreamStates = new Map<string, AssistantOutputArtifactStreamState>();
+  const workflowStatusQueues = new Map<string, WorkflowStatusQueue>();
+  const lastDisplayedWorkflowStatuses = new Map<string, WorkflowStatus>();
 
   const outputArtifactStateFor = (assistantId: string) => {
     let state = outputArtifactStreamStates.get(assistantId);
@@ -107,6 +117,90 @@ export function useChat(options: UseChatOptions = {}) {
   const clearSuppressedOutputBoundary = (assistantId: string) => {
     suppressedRawContentMessageIds.delete(assistantId);
     clearOutputArtifactState(assistantId);
+  };
+
+  const workflowStatusesMatch = (a?: WorkflowStatus, b?: WorkflowStatus) =>
+    !!a &&
+    !!b &&
+    (a.phase || '') === (b.phase || '') &&
+    a.message === b.message &&
+    (a.state || '') === (b.state || '') &&
+    (a.tool || '') === (b.tool || '');
+
+  const clearWorkflowStatusQueue = (assistantId: string) => {
+    const queue = workflowStatusQueues.get(assistantId);
+    if (queue?.timer !== undefined) {
+      window.clearTimeout(queue.timer);
+    }
+    workflowStatusQueues.delete(assistantId);
+    lastDisplayedWorkflowStatuses.delete(assistantId);
+  };
+
+  const clearAllWorkflowStatusQueues = () => {
+    for (const assistantId of workflowStatusQueues.keys()) {
+      clearWorkflowStatusQueue(assistantId);
+    }
+    lastDisplayedWorkflowStatuses.clear();
+  };
+
+  const setAssistantWorkflowStatus = (
+    assistantId: string,
+    requestId: number,
+    workflowStatus: WorkflowStatus,
+  ) => {
+    if (requestId !== activeRequestId) return;
+    lastDisplayedWorkflowStatuses.set(assistantId, workflowStatus);
+    setMessages((prev) =>
+      prev.map((msg) => (msg.id === assistantId ? { ...msg, workflowStatus } : msg)),
+    );
+  };
+
+  const drainWorkflowStatusQueue = (assistantId: string, requestId: number) => {
+    const queue = workflowStatusQueues.get(assistantId);
+    if (!queue) return;
+
+    const nextStatus = queue.statuses.shift();
+    if (!nextStatus) {
+      queue.timer = undefined;
+      return;
+    }
+
+    setAssistantWorkflowStatus(assistantId, requestId, nextStatus);
+    queue.timer = window.setTimeout(() => {
+      if (requestId !== activeRequestId) {
+        clearWorkflowStatusQueue(assistantId);
+        return;
+      }
+      const currentQueue = workflowStatusQueues.get(assistantId);
+      if (!currentQueue) return;
+      currentQueue.timer = undefined;
+      if (currentQueue.statuses.length > 0) {
+        drainWorkflowStatusQueue(assistantId, requestId);
+      }
+    }, WORKFLOW_STATUS_MIN_DWELL_MS);
+  };
+
+  const enqueueWorkflowStatus = (
+    assistantId: string,
+    requestId: number,
+    workflowStatus: WorkflowStatus,
+  ) => {
+    let queue = workflowStatusQueues.get(assistantId);
+    if (!queue) {
+      queue = { statuses: [], timer: undefined };
+      workflowStatusQueues.set(assistantId, queue);
+    }
+
+    const lastQueuedStatus = queue.statuses[queue.statuses.length - 1];
+    const lastDisplayedStatus = lastDisplayedWorkflowStatuses.get(assistantId);
+    if (workflowStatusesMatch(lastQueuedStatus || lastDisplayedStatus, workflowStatus)) {
+      return;
+    }
+
+    queue.statuses.push(workflowStatus);
+    if (queue.timer === undefined) {
+      drainWorkflowStatusQueue(assistantId, requestId);
+    }
   };
 
   const abortBackendSession = (targetSessionId: string): Promise<void> | null => {
@@ -137,6 +231,7 @@ export function useChat(options: UseChatOptions = {}) {
       abortControllerRef = null;
     }
     activeRequestId += 1;
+    clearAllWorkflowStatusQueues();
 
     setMessages((prev) =>
       prev.map((msg) =>
@@ -190,6 +285,7 @@ export function useChat(options: UseChatOptions = {}) {
 
   // Cleanup on unmount
   onCleanup(() => {
+    clearAllWorkflowStatusQueues();
     void cancelActiveRequest();
   });
 
@@ -363,6 +459,7 @@ export function useChat(options: UseChatOptions = {}) {
       phase: phase || undefined,
       state: state || undefined,
       tool: tool || undefined,
+      startedAt: Date.now(),
     };
   };
 
@@ -490,6 +587,22 @@ export function useChat(options: UseChatOptions = {}) {
       applyStreamSessionId(extractSessionId(event.data));
     }
 
+    if (event.type === 'workflow_state') {
+      const workflowStatus = extractWorkflowStatus(event.data);
+      const nextModel = extractWorkflowNextModel(event.data);
+      if (!workflowStatus && !nextModel) return;
+
+      if (nextModel) {
+        setMessages((prev) =>
+          prev.map((msg) => (msg.id === assistantId ? { ...msg, model: nextModel } : msg)),
+        );
+      }
+      if (workflowStatus) {
+        enqueueWorkflowStatus(assistantId, requestId, workflowStatus);
+      }
+      return;
+    }
+
     setMessages((prev) =>
       prev.map((msg) => {
         if (msg.id !== assistantId) return msg;
@@ -497,6 +610,7 @@ export function useChat(options: UseChatOptions = {}) {
         try {
           switch (event.type) {
             case 'content': {
+              clearWorkflowStatusQueue(assistantId);
               if (suppressedRawContentMessageIds.has(assistantId)) {
                 return msg;
               }
@@ -536,18 +650,8 @@ export function useChat(options: UseChatOptions = {}) {
               };
             }
 
-            case 'workflow_state': {
-              const workflowStatus = extractWorkflowStatus(event.data);
-              const nextModel = extractWorkflowNextModel(event.data);
-              if (!workflowStatus && !nextModel) return msg;
-              return {
-                ...msg,
-                ...(workflowStatus ? { workflowStatus } : {}),
-                ...(nextModel ? { model: nextModel } : {}),
-              };
-            }
-
             case 'tool_start': {
+              clearWorkflowStatusQueue(assistantId);
               clearSuppressedOutputBoundary(assistantId);
               const data = (event.data || {}) as {
                 id?: string;
@@ -586,6 +690,7 @@ export function useChat(options: UseChatOptions = {}) {
             }
 
             case 'tool_end': {
+              clearWorkflowStatusQueue(assistantId);
               clearSuppressedOutputBoundary(assistantId);
               const data = event.data as {
                 id?: string;
@@ -690,6 +795,7 @@ export function useChat(options: UseChatOptions = {}) {
             }
 
             case 'approval_needed': {
+              clearWorkflowStatusQueue(assistantId);
               clearSuppressedOutputBoundary(assistantId);
               const data = event.data as {
                 command: string;
@@ -772,6 +878,7 @@ export function useChat(options: UseChatOptions = {}) {
             }
 
             case 'question': {
+              clearWorkflowStatusQueue(assistantId);
               clearSuppressedOutputBoundary(assistantId);
               const data = event.data as { question_id: string; questions: Array<any> };
 
@@ -808,6 +915,7 @@ export function useChat(options: UseChatOptions = {}) {
             }
 
             case 'done': {
+              clearWorkflowStatusQueue(assistantId);
               const pendingText = suppressedRawContentMessageIds.has(assistantId)
                 ? ''
                 : flushPendingAssistantOutputText(outputArtifactStateFor(assistantId));
@@ -841,6 +949,7 @@ export function useChat(options: UseChatOptions = {}) {
             }
 
             case 'error': {
+              clearWorkflowStatusQueue(assistantId);
               clearSuppressedOutputBoundary(assistantId);
               const errorMsg = extractErrorMessage(event.data);
               // Keep any content streamed before the failure; surface the error
@@ -931,6 +1040,7 @@ export function useChat(options: UseChatOptions = {}) {
 
     const assistantId = generateId();
     const requestModel = effectiveModelRoute();
+    const initialWorkflowStatus = createInitialAssistantWorkflowStatus();
     const streamingMessage: ChatMessage = {
       id: assistantId,
       role: 'assistant',
@@ -941,8 +1051,9 @@ export function useChat(options: UseChatOptions = {}) {
       pendingTools: [],
       toolCalls: [],
       streamEvents: [],
-      workflowStatus: INITIAL_ASSISTANT_WORKFLOW_STATUS,
+      workflowStatus: initialWorkflowStatus,
     };
+    lastDisplayedWorkflowStatuses.set(assistantId, initialWorkflowStatus);
 
     if (options?.queuedMessageId) {
       setMessages((prev) => [
@@ -1002,7 +1113,9 @@ export function useChat(options: UseChatOptions = {}) {
 
       setMessages((prev) =>
         prev.map((msg) =>
-          msg.id === assistantId ? { ...msg, isStreaming: false, error: errorMessage } : msg,
+          msg.id === assistantId
+            ? { ...msg, isStreaming: false, workflowStatus: undefined, error: errorMessage }
+            : msg,
         ),
       );
       await notifyConversationChanged();
@@ -1065,6 +1178,7 @@ export function useChat(options: UseChatOptions = {}) {
   // Clear messages and reset session (for starting fresh)
   const clearMessages = () => {
     void cancelActiveRequest();
+    clearAllWorkflowStatusQueues();
     setQueuedFollowUps([]);
     setMessages([]);
     setSessionId(''); // Clear session so next message creates a new one
@@ -1073,6 +1187,7 @@ export function useChat(options: UseChatOptions = {}) {
   // Load session messages
   const loadSession = async (id: string): Promise<boolean> => {
     void cancelActiveRequest();
+    clearAllWorkflowStatusQueues();
     setQueuedFollowUps([]);
     try {
       const msgs = await AIChatAPI.getMessages(id);
@@ -1107,6 +1222,7 @@ export function useChat(options: UseChatOptions = {}) {
   // next chat stream so the UI does not create empty server-side sessions.
   const newSession = async (): Promise<boolean> => {
     void cancelActiveRequest();
+    clearAllWorkflowStatusQueues();
     setQueuedFollowUps([]);
     setSessionId('');
     setMessages([]);

@@ -26,8 +26,10 @@ const (
 	openrouterAppTitle                = "Pulse"
 	// OpenRouter preflights affordability against the requested maximum
 	// completion budget. Leaving it unset can make small chat turns reserve a
-	// model-scale default and fail against per-key total limits.
-	openrouterDefaultMaxCompletionTokens = 1024
+	// model-scale default and fail against per-key total limits. Keep this high
+	// enough for normal detailed Assistant answers; 1024 cuts off ordinary
+	// inventory breakdowns mid-sentence.
+	openrouterDefaultMaxCompletionTokens = 4096
 )
 
 // OpenAIClient implements the Provider interface for OpenAI's API

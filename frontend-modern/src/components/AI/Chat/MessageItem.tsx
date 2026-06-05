@@ -1,4 +1,14 @@
-import { Component, Show, For, Switch, Match, createMemo, createSignal } from 'solid-js';
+import {
+  Component,
+  Show,
+  For,
+  Switch,
+  Match,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+} from 'solid-js';
 import CheckIcon from 'lucide-solid/icons/check';
 import CircleAlertIcon from 'lucide-solid/icons/circle-alert';
 import ClockIcon from 'lucide-solid/icons/clock';
@@ -18,6 +28,7 @@ import type {
   PendingApproval,
   PendingQuestion,
   StreamDisplayEvent,
+  WorkflowStatus,
 } from './types';
 import {
   AI_CHAT_ASSISTANT_MESSAGE_LABEL,
@@ -109,7 +120,31 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     !props.message.content.trim() &&
     !hasRenderableStreamEvents() &&
     !props.message.error;
-  const workflowStatusText = createMemo(() => props.message.workflowStatus?.message?.trim() || '');
+  const [statusNow, setStatusNow] = createSignal(Date.now());
+  createEffect(() => {
+    const status = props.message.workflowStatus;
+    if (!props.message.isStreaming || !status?.startedAt) return;
+    setStatusNow(Date.now());
+    const interval = window.setInterval(() => setStatusNow(Date.now()), 1000);
+    onCleanup(() => window.clearInterval(interval));
+  });
+  const formatWorkflowStatus = (status?: WorkflowStatus, includeElapsed = false) => {
+    const message = status?.message?.trim();
+    if (!message) return '';
+    const tool = status?.tool?.trim();
+    const toolSuffix = tool && !message.includes(tool) ? ` · ${formatIdentifierLabel(tool)}` : '';
+    let elapsedSuffix = '';
+    if (includeElapsed && status?.startedAt) {
+      const elapsedSeconds = Math.max(0, Math.floor((statusNow() - status.startedAt) / 1000));
+      if (elapsedSeconds >= 2) {
+        elapsedSuffix = ` (${elapsedSeconds}s)`;
+      }
+    }
+    return `${message}${toolSuffix}${elapsedSuffix}`;
+  };
+  const workflowStatusText = createMemo(() =>
+    formatWorkflowStatus(props.message.workflowStatus, true),
+  );
   const inlineStreamingStatusText = createMemo(() => {
     return workflowStatusText() || 'Thinking...';
   });
