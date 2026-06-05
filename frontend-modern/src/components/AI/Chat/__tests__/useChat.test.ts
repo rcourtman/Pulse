@@ -661,6 +661,12 @@ describe('useChat', () => {
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.content).toBe('');
       expect(assistant.streamEvents).toEqual([]);
+      expect(assistant.workflowStatus).toEqual({
+        phase: 'plan',
+        message: 'Planning governed action and safety checks before execution.',
+        state: 'READING',
+        tool: 'pulse_exec',
+      });
       dispose();
     });
 

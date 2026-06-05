@@ -17,6 +17,7 @@ import type {
   PendingApproval,
   PendingQuestion,
   PendingTool,
+  WorkflowStatus,
 } from '../types';
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
@@ -182,6 +183,24 @@ export function useChat(options: UseChatOptions = {}) {
     return '';
   };
 
+  const extractWorkflowStatus = (data: unknown): WorkflowStatus | null => {
+    if (!data || typeof data !== 'object') return null;
+    const record = data as Record<string, unknown>;
+    const message = typeof record.message === 'string' ? record.message.trim() : '';
+    if (!message) return null;
+
+    const phase = typeof record.phase === 'string' ? record.phase.trim() : '';
+    const state = typeof record.state === 'string' ? record.state.trim() : '';
+    const tool = typeof record.tool === 'string' ? record.tool.trim() : '';
+
+    return {
+      message,
+      phase: phase || undefined,
+      state: state || undefined,
+      tool: tool || undefined,
+    };
+  };
+
   const extractSessionId = (data: unknown): string => {
     if (!data || typeof data !== 'object') return '';
     const record = data as Record<string, unknown>;
@@ -237,6 +256,11 @@ export function useChat(options: UseChatOptions = {}) {
                 ...updated,
                 thinking: (msg.thinking || '') + thinking,
               };
+            }
+
+            case 'workflow_state': {
+              const workflowStatus = extractWorkflowStatus(event.data);
+              return workflowStatus ? { ...msg, workflowStatus } : msg;
             }
 
             case 'tool_start': {
@@ -494,9 +518,9 @@ export function useChat(options: UseChatOptions = {}) {
             case 'done': {
               const tokens = extractTokens(event.data);
               if (tokens && (tokens.input > 0 || tokens.output > 0)) {
-                return { ...msg, isStreaming: false, pendingTools: [], tokens };
+                return { ...msg, isStreaming: false, pendingTools: [], tokens, workflowStatus: undefined };
               }
-              return { ...msg, isStreaming: false, pendingTools: [] };
+              return { ...msg, isStreaming: false, pendingTools: [], workflowStatus: undefined };
             }
 
             case 'error': {
@@ -507,6 +531,7 @@ export function useChat(options: UseChatOptions = {}) {
                 ...msg,
                 isStreaming: false,
                 pendingTools: [],
+                workflowStatus: undefined,
                 error: errorMsg || 'Request failed',
               };
             }

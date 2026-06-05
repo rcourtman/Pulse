@@ -102,6 +102,13 @@ export interface StreamDisplayEvent {
   question?: PendingQuestion; // For question events
 }
 
+export interface WorkflowStatus {
+  phase?: string;
+  message: string;
+  state?: string;
+  tool?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -118,6 +125,7 @@ export interface ChatMessage {
   tokens?: { input: number; output: number };
   toolCalls?: ToolExecution[];
   isStreaming?: boolean;
+  workflowStatus?: WorkflowStatus;
   pendingTools?: PendingTool[];
   pendingApprovals?: PendingApproval[];
   pendingQuestions?: PendingQuestion[];

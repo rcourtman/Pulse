@@ -1190,7 +1190,10 @@ Assistant chat must not render Pulse-authored explore pre-pass cards or
 internal workflow-state cards as assistant output. The user-facing stream is
 model text, model thinking where supported, model-selected tool calls, governed
 approval requests, and model questions; internal runtime telemetry stays out of
-the chat transcript.
+the chat transcript. The browser runtime may keep the latest `workflow_state`
+message on the in-flight assistant turn only as drawer status text while waiting
+for model content, so provider/session progress is visible without turning
+runtime telemetry into transcript content.
 Cold-start Assistant chat session creation is also stream-owned. Ordinary first
 messages may call `/api/ai/chat` without a `session_id`; `chat.Service.ExecuteStream`
 must create or resolve the durable session before provider execution and emit a

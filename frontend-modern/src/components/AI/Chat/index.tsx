@@ -603,6 +603,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
       return { type: 'tool', text: `Running ${toolName}...` };
     }
 
+    const workflowMessage = lastMessage.workflowStatus?.message.trim();
+    if (lastMessage.isStreaming && !lastMessage.content.trim() && workflowMessage) {
+      return { type: 'thinking', text: workflowMessage };
+    }
+
     const isWaitingForFirstToken =
       lastMessage.isStreaming &&
       !lastMessage.content.trim() &&

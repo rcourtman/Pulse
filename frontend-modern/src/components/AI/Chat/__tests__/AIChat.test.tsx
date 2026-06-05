@@ -2134,6 +2134,32 @@ describe('AIChat', () => {
       expect(screen.queryByText('Generating response...')).not.toBeInTheDocument();
     });
 
+    it('shows workflow progress while the assistant turn waits for the first token', () => {
+      mockChat.isLoading.mockReturnValue(true);
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'msg-1',
+          role: 'assistant' as const,
+          content: '',
+          timestamp: new Date(),
+          isStreaming: true,
+          streamEvents: [],
+          workflowStatus: {
+            phase: 'plan',
+            message: 'Planning governed action and safety checks before execution.',
+            state: 'READING',
+            tool: 'pulse_exec',
+          },
+        },
+      ]);
+      renderChat();
+      expect(
+        screen.getByText('Planning governed action and safety checks before execution.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
+      expect(screen.queryByText('Generating response...')).not.toBeInTheDocument();
+    });
+
     it('shows tool status when assistant has pending tools', () => {
       mockChat.isLoading.mockReturnValue(true);
       mockChat.messages.mockReturnValue([
