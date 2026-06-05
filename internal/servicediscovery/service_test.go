@@ -280,6 +280,50 @@ func TestService_DiscoverResource_ProgressDescribesModelAnalysisNotAssistantChat
 	}
 }
 
+func TestService_DiscoverResource_AbstainsWithoutCommandEvidence(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	// Command scanning is enabled with a scanner, but the scan yields nothing
+	// (nil executor → no command output) — mirroring a host agent that rejects
+	// exec. The stub returns a fully fabricated Pi-hole identity. The service
+	// must abstain: the analyzer must NOT be called and the fabrication must NOT
+	// be adopted. Guards the metadata-only hallucination bug where an ESPHome LXC
+	// was "identified" as Pi-hole at 0.95 confidence.
+	service := NewService(store, NewDeepScanner(nil), DefaultConfig())
+	service.SetCommandScanningEnabled(true)
+	analyzer := &stubAnalyzer{
+		response: `{"service_type":"pi-hole","service_name":"Pi-hole","confidence":0.95,"facts":[{"key":"core_version","value":"5.18.2","source":"pihole -v"}],"config_paths":["/etc/pihole/"],"reasoning":"identified Pi-hole"}`,
+	}
+	service.SetAIAnalyzer(analyzer)
+
+	d, err := service.DiscoverResource(context.Background(), DiscoveryRequest{
+		ResourceType: ResourceTypeSystemContainer,
+		TargetID:     "delly",
+		ResourceID:   "102",
+		Hostname:     "esphome",
+		Force:        true,
+	})
+	if err != nil {
+		t.Fatalf("DiscoverResource error: %v", err)
+	}
+	if d == nil {
+		t.Fatal("expected a discovery result")
+	}
+	if analyzer.calls != 0 {
+		t.Fatalf("analyzer must not be called without command evidence; got %d calls", analyzer.calls)
+	}
+	if d.ServiceName == "Pi-hole" || d.ServiceType == "pi-hole" {
+		t.Fatalf("must not adopt fabricated identity, got type=%q name=%q", d.ServiceType, d.ServiceName)
+	}
+	if !strings.Contains(d.AIReasoning, "Pulse Commands") {
+		t.Fatalf("reasoning should guide enabling Pulse Commands, got %q", d.AIReasoning)
+	}
+}
+
 // readStateFromSnapshot builds a ReadState backed by a ResourceRegistry
 // from a local servicediscovery StateSnapshot. This lets tests populate
 // state using the familiar local types while exercising the ReadState path.

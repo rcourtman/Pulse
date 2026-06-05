@@ -1763,39 +1763,62 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 		}
 	}
 
-	// Build prompt and analyze
-	prompt := s.buildDeepAnalysisPrompt(analysisReq)
+	// When a resource type relies on command-execution evidence but the scan
+	// produced none (e.g. the host agent has "Pulse Commands" disabled), do NOT
+	// ask the model to identify the service. With only metadata it confabulates
+	// confident, false identities — inventing facts with fabricated command
+	// sources (a metadata-only scan once "identified" Pi-hole inside an ESPHome
+	// LXC at 0.95 confidence). Abstain instead; deterministic metadata identity
+	// is still applied below via applyKnownServiceIdentity.
+	// Abstain only when a command scan was actually attempted (scanner present
+	// and command scanning enabled) for a workload that needs command evidence,
+	// yet produced no output — i.e. we expected to look inside the workload and
+	// couldn't (e.g. the host agent rejected exec). In that state the model has
+	// nothing real to go on and confabulates; "not determined" is the honest
+	// answer. Deployments without command scanning keep the metadata-only path.
+	commandScanAttempted := s.scanner != nil && s.IsCommandScanningEnabled()
+	metadataOnly := resourceIdentityNeedsCommandEvidence(req.ResourceType) &&
+		commandScanAttempted &&
+		len(analysisReq.CommandOutputs) == 0
 
-	// Broadcast progress: AI analysis starting
-	s.broadcastProgress(&DiscoveryProgress{
-		ResourceID:      resourceID,
-		Status:          DiscoveryStatusRunning,
-		CurrentStep:     "Analyzing discovery evidence with the selected model...",
-		PercentComplete: 75,
-	})
+	var result *AIAnalysisResponse
+	if metadataOnly {
+		result = metadataOnlyDiscoveryAbstention()
+	} else {
+		// Build prompt and analyze
+		prompt := s.buildDeepAnalysisPrompt(analysisReq)
 
-	analyzeCtx, cancel := context.WithTimeout(ctx, s.aiAnalysisTimeout)
-	defer cancel()
+		// Broadcast progress: AI analysis starting
+		s.broadcastProgress(&DiscoveryProgress{
+			ResourceID:      resourceID,
+			Status:          DiscoveryStatusRunning,
+			CurrentStep:     "Analyzing discovery evidence with the selected model...",
+			PercentComplete: 75,
+		})
 
-	response, err := analyzer.AnalyzeForDiscovery(analyzeCtx, prompt)
-	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			inProg.err = fmt.Errorf("AI analysis timed out after %s", s.aiAnalysisTimeout)
+		analyzeCtx, cancel := context.WithTimeout(ctx, s.aiAnalysisTimeout)
+		defer cancel()
+
+		response, err := analyzer.AnalyzeForDiscovery(analyzeCtx, prompt)
+		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				inProg.err = fmt.Errorf("AI analysis timed out after %s", s.aiAnalysisTimeout)
+				return nil, inProg.err
+			}
+			inProg.err = fmt.Errorf("AI analysis failed: %w", err)
 			return nil, inProg.err
 		}
-		inProg.err = fmt.Errorf("AI analysis failed: %w", err)
-		return nil, inProg.err
-	}
 
-	result := s.parseAIResponse(response)
-	if result == nil {
-		// Truncate response for error message
-		truncated := response
-		if len(truncated) > 500 {
-			truncated = truncated[:500] + "..."
+		result = s.parseAIResponse(response)
+		if result == nil {
+			// Truncate response for error message
+			truncated := response
+			if len(truncated) > 500 {
+				truncated = truncated[:500] + "..."
+			}
+			inProg.err = fmt.Errorf("failed to parse AI response: %s", truncated)
+			return nil, inProg.err
 		}
-		inProg.err = fmt.Errorf("failed to parse AI response: %s", truncated)
-		return nil, inProg.err
 	}
 
 	// Resolve hostname from metadata if not provided in request
@@ -1857,8 +1880,10 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 					Msg("Parsed Docker bind mounts from on-demand discovery")
 			}
 		}
-	} else if scanError != nil {
-		// Add note to reasoning when we couldn't run commands
+	} else if scanError != nil && !metadataOnly {
+		// Add note to reasoning when we couldn't run commands. Skipped when we
+		// abstained (metadataOnly), since the abstention reasoning already
+		// explains the missing-commands state without duplication.
 		metadataNote := "[Note: Discovery was limited to metadata-only analysis because command execution was unavailable. "
 		if strings.Contains(scanError.Error(), "no connected agent") {
 			metadataNote += "To enable full discovery with command execution, ensure the host agent has 'Pulse Commands' enabled in Settings → Infrastructure.]"
@@ -2602,6 +2627,38 @@ Respond with ONLY valid JSON.`, strings.Join(sections, "\n\n"))
 }
 
 // parseAIResponse parses the AI's JSON response.
+// resourceIdentityNeedsCommandEvidence reports whether a resource type's service
+// identity must come from inside the workload (command output) rather than from
+// its own metadata. Workloads (containers and VMs) qualify; host agents do not —
+// they are identified from their own rich metadata, so metadata-only analysis is
+// legitimate for them. Used to decide when to abstain rather than let the model
+// fabricate an identity with no command evidence.
+func resourceIdentityNeedsCommandEvidence(rt ResourceType) bool {
+	switch rt {
+	case ResourceTypeSystemContainer,
+		ResourceTypeVM,
+		ResourceTypeDocker,
+		ResourceTypeDockerSystemContainer,
+		ResourceTypeDockerVM,
+		ResourceTypeK8s:
+		return true
+	default:
+		return false
+	}
+}
+
+// metadataOnlyDiscoveryAbstention returns an empty, zero-confidence analysis
+// used when discovery has no command-execution evidence. It deliberately carries
+// no service identity, facts, paths, or ports so the UI shows "not determined"
+// instead of a fabricated guess. CLIAccess is left empty so the platform-correct
+// access command is generated downstream rather than invented by the model.
+func metadataOnlyDiscoveryAbstention() *AIAnalysisResponse {
+	return &AIAnalysisResponse{
+		Confidence: 0,
+		Reasoning:  "Discovery could not run commands on this resource, so its service was not identified. Enable \"Pulse Commands\" for the host agent (Settings → Infrastructure) to run real discovery instead of guessing.",
+	}
+}
+
 func (s *Service) parseAIResponse(response string) *AIAnalysisResponse {
 	log.Debug().Str("raw_response", response).Msg("discovery raw response")
 	payload, ok := jsonresponse.ExtractObject(response)
