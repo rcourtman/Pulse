@@ -448,7 +448,7 @@ describe('AIChat', () => {
       expect(document.activeElement).toBe(textarea);
     });
 
-    it('keeps user input queued while a selected provider issue is unresolved', async () => {
+    it('sends user input while a selected provider issue is unresolved', async () => {
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'deepseek:deepseek-v4-pro',
         chat_model: '',
@@ -475,15 +475,19 @@ describe('AIChat', () => {
       ) as HTMLTextAreaElement;
       fireEvent.input(textarea, { target: { value: 'summarize the cluster' } });
 
-      expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Send message' })).not.toBeDisabled();
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
-      expect(mockChat.sendMessage).not.toHaveBeenCalled();
-      expect(textarea.value).toBe('summarize the cluster');
+      expect(mockChat.sendMessage).toHaveBeenCalledWith(
+        'summarize the cluster',
+        undefined,
+        undefined,
+      );
+      expect(textarea.value).toBe('');
       expect(document.activeElement).toBe(textarea);
     });
 
-    it('keeps user input queued when the readiness issue reports a provider-qualified model', async () => {
+    it('sends user input when the readiness issue reports a provider-qualified model', async () => {
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'gpt-4',
         chat_model: '',
@@ -510,11 +514,15 @@ describe('AIChat', () => {
       ) as HTMLTextAreaElement;
       fireEvent.input(textarea, { target: { value: 'summarize the cluster' } });
 
-      expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Send message' })).not.toBeDisabled();
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
-      expect(mockChat.sendMessage).not.toHaveBeenCalled();
-      expect(textarea.value).toBe('summarize the cluster');
+      expect(mockChat.sendMessage).toHaveBeenCalledWith(
+        'summarize the cluster',
+        undefined,
+        undefined,
+      );
+      expect(textarea.value).toBe('');
       expect(document.activeElement).toBe(textarea);
     });
 

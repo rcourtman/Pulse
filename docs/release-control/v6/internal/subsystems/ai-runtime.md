@@ -71,17 +71,20 @@ runtime cost control, and shared AI transport surfaces.
    key-management links must not be streamed or persisted as chat-visible
    assistant output.
    Assistant provider readiness is part of that same request flow: when the
-   drawer opens or the selected chat model changes, the frontend must verify
-   the selected provider/model through `/api/ai/test/{provider}` before the
-   next user send. That check must use neutral provider diagnostic copy owned
-   by `internal/ai/`, not Patrol runtime-finding wording, and the drawer may
-   surface the result as actionable retry/settings status plus same-model
-   configured-provider alternatives without converting it into
+   drawer opens or the selected chat model changes, the frontend must start a
+   background verification of the selected provider/model through
+   `/api/ai/test/{provider}`. That check must use neutral provider diagnostic
+   copy owned by `internal/ai/`, not Patrol runtime-finding wording, and the
+   drawer may surface the result as actionable retry/settings status plus
+   same-model configured-provider alternatives without converting it into
    assistant-authored output. Provider checking is a background diagnostic and
    must not delay the user's first useful chat turn; a confirmed selected-route
-   provider error must keep typed text and focus while blocking dispatch until
-   the route is rechecked successfully or the operator chooses a ready
-   alternative.
+   provider error must keep typed text and focus without blocking normal chat
+   dispatch. If the operator sends while that warning is still visible, the
+   send path owns the attempt and any retryable provider failure is handled as
+   a normal failed turn with draft restoration. Same-model configured-provider
+   alternatives remain one-click route changes, not required preconditions for
+   sending.
    Follow-up sends during an active Assistant response are chat-runtime queue
    state by default. The drawer must accept and echo the user's follow-up as a
    queued user turn without aborting or replacing the active model stream, must

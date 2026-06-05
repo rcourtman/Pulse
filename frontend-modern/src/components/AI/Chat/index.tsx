@@ -754,23 +754,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
     });
   });
 
-  const providerReadinessMatchesSelection = (readiness: ChatProviderReadinessState) => {
-    const selectedProvider = selectedChatProvider().trim();
-    const selectedModel = selectedChatModel().trim();
-    if (!selectedProvider || !selectedModel) return false;
-    if (readiness.provider.trim() !== selectedProvider) return false;
-    return (
-      !readiness.model ||
-      normalizeComparableModelKey(readiness.model) === normalizeComparableModelKey(selectedModel)
-    );
-  };
-
-  const providerReadinessHasBlockingError = createMemo(() => {
-    const readiness = providerReadiness();
-    if (readiness.status !== 'error') return false;
-    return providerReadinessMatchesSelection(readiness);
-  });
-
   let providerReadinessRequestId = 0;
   let lastProviderReadinessKey = '';
 
@@ -1404,10 +1387,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const submittedInput = input();
     const prompt = submittedInput.trim();
     if (!prompt) return;
-    if (providerReadinessHasBlockingError()) {
-      focusComposer();
-      return;
-    }
     const mentions = accumulatedMentions();
     const submittedMentions = cloneMentions(mentions);
     const mentionsForAPI =
@@ -2363,7 +2342,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   </Show>
                   <button
                     type="submit"
-                    disabled={!input().trim() || providerReadinessHasBlockingError()}
+                    disabled={!input().trim()}
                     class="flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45"
                     title={chat.isLoading() ? 'Queue follow-up' : 'Send'}
                     aria-label={chat.isLoading() ? 'Queue follow-up' : 'Send message'}
