@@ -332,6 +332,28 @@ export function useChat(options: UseChatOptions = {}) {
     return Object.keys(sendOptions).length > 0 ? sendOptions : undefined;
   };
 
+  const buildPersistedStreamEvents = (
+    content: string,
+    toolCalls?: ToolExecution[],
+  ): StreamDisplayEvent[] | undefined => {
+    const events: StreamDisplayEvent[] = [];
+    if (content.trim()) {
+      events.push({ type: 'content', content });
+    }
+    for (const tool of toolCalls || []) {
+      events.push({
+        type: 'tool',
+        tool: {
+          name: tool.name || 'unknown',
+          input: tool.input || '{}',
+          output: tool.output || '',
+          success: tool.success ?? true,
+        },
+      });
+    }
+    return events.length > 0 ? events : undefined;
+  };
+
   const applyStreamSessionId = (streamSessionId: string) => {
     if (!streamSessionId) return;
     const previousSessionId = sessionId();
@@ -898,13 +920,20 @@ export function useChat(options: UseChatOptions = {}) {
     try {
       const msgs = await AIChatAPI.getMessages(id);
       setMessages(
-        msgs.map((m) => ({
-          id: m.id,
-          role: m.role,
-          content: m.content,
-          timestamp: new Date(m.timestamp),
-          toolCalls: m.tool_calls,
-        })),
+        msgs.map((m) => {
+          const toolCalls = m.tool_calls || [];
+          const streamEvents =
+            m.role === 'assistant' ? buildPersistedStreamEvents(m.content, toolCalls) : undefined;
+          return {
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            timestamp: new Date(m.timestamp),
+            model: m.model,
+            toolCalls,
+            streamEvents,
+          };
+        }),
       );
       setSessionId(id);
       return true;

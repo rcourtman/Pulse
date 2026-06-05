@@ -1431,7 +1431,54 @@ describe('useChat', () => {
       expect(msgs[0].role).toBe('user');
       expect(msgs[0].content).toBe('hello');
       expect(msgs[1].toolCalls).toHaveLength(1);
+      expect(msgs[1].streamEvents).toEqual([
+        { type: 'content', content: 'hi there' },
+        {
+          type: 'tool',
+          tool: { name: 'test', input: '{}', output: 'ok', success: true },
+        },
+      ]);
       expect(msgs[1].timestamp).toBeInstanceOf(Date);
+      dispose();
+    });
+
+    it('hydrates saved assistant tool calls into visible transcript events', async () => {
+      mockGetMessages.mockResolvedValue([
+        {
+          id: 'msg-1',
+          role: 'assistant',
+          content: 'I checked the resource.',
+          timestamp: '2024-01-01T00:00:01Z',
+          model: 'openai:gpt-4',
+          tool_calls: [
+            {
+              name: 'pulse_read',
+              input: '{"target":"vm-100"}',
+              output: 'Resource is running',
+              success: true,
+            },
+          ],
+        },
+      ]);
+
+      const { value: chat, dispose } = withRoot(() => useChat());
+      await chat.loadSession('sess-42');
+
+      const assistant = chat.messages()[0];
+      expect(assistant.model).toBe('openai:gpt-4');
+      expect(assistant.content).toBe('I checked the resource.');
+      expect(assistant.streamEvents).toEqual([
+        { type: 'content', content: 'I checked the resource.' },
+        {
+          type: 'tool',
+          tool: {
+            name: 'pulse_read',
+            input: '{"target":"vm-100"}',
+            output: 'Resource is running',
+            success: true,
+          },
+        },
+      ]);
       dispose();
     });
 

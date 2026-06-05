@@ -104,6 +104,10 @@ runtime cost control, and shared AI transport surfaces.
    structured mentions, finding id, approval override, handoff resources,
    handoff actions, and handoff metadata, but must not reconstruct scoped
    context from prompt history or saved transcript prose.
+   Restored Assistant sessions must hydrate saved assistant content and
+   persisted tool calls into the same transcript event shape used by live
+   streams so switching sessions does not hide prior tool evidence or collapse
+   the resumed conversation into a text-only transcript.
    Assistant output hygiene is part of the same boundary: provider reasoning
    and raw serialized tool-call artifacts must never render as assistant
    transcript prose. Reasoning/thinking deltas may update neutral progress
