@@ -51,10 +51,12 @@ import {
   type AIControlLevel,
 } from '@/utils/aiControlLevelPresentation';
 import {
+  formatAIModelRouteLabel,
   getAIProviderDisplayName,
   getProviderFromModelId,
 } from '@/utils/aiProviderPresentation';
 import { getCachedUnifiedResources } from '@/hooks/useUnifiedResources';
+import type { ModelInfo as RuntimeModelInfo } from '@/types/ai';
 import type { Resource } from '@/types/resource';
 import { isAppContainerDiscoveryResourceType } from '@/utils/discoveryTarget';
 import {
@@ -93,6 +95,13 @@ interface ChatProviderReadinessState {
   action?: string;
 }
 
+interface ChatProviderReadinessAlternative {
+  id: string;
+  label: string;
+  provider: string;
+  providerLabel: string;
+}
+
 interface AIChatProps {
   onClose: () => void;
 }
@@ -102,6 +111,72 @@ const compactText = (items: Array<string | undefined>): string[] =>
 
 const pluralizeCount = (count: number, singular: string, plural: string) =>
   `${count} ${count === 1 ? singular : plural}`;
+
+const normalizeComparableModelKey = (modelId: string): string => {
+  const trimmed = modelId.trim().toLowerCase();
+  if (!trimmed) return '';
+  const providerSeparator = trimmed.indexOf(':');
+  const withoutProvider = providerSeparator > 0 ? trimmed.slice(providerSeparator + 1) : trimmed;
+  const routeTail = withoutProvider.split('/').pop() || withoutProvider;
+  return routeTail.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+};
+
+const resolveRuntimeModelProvider = (
+  model: Pick<RuntimeModelInfo, 'id'> & Partial<Pick<RuntimeModelInfo, 'provider'>>,
+): string => model.provider?.trim() || getProviderFromModelId(model.id);
+
+const findProviderReadinessAlternative = (args: {
+  configuredProviders?: string[];
+  models: RuntimeModelInfo[];
+  selectedModel: string;
+  selectedProvider: string;
+}): ChatProviderReadinessAlternative | null => {
+  const selectedKey = normalizeComparableModelKey(args.selectedModel);
+  const selectedProvider = args.selectedProvider.trim();
+  if (!selectedKey || !selectedProvider) return null;
+
+  const configuredProviders = (args.configuredProviders ?? [])
+    .map((provider) => provider.trim())
+    .filter(Boolean);
+  const configuredProviderOrder = new Map(
+    configuredProviders.map((provider, index) => [provider, index]),
+  );
+
+  const candidates = args.models
+    .map((model) => {
+      const provider = resolveRuntimeModelProvider(model).trim();
+      return { model, provider };
+    })
+    .filter(({ model, provider }) => {
+      if (!provider || provider === selectedProvider || model.id === args.selectedModel) {
+        return false;
+      }
+      if (configuredProviderOrder.size > 0 && !configuredProviderOrder.has(provider)) {
+        return false;
+      }
+      return normalizeComparableModelKey(model.id) === selectedKey;
+    })
+    .sort((left, right) => {
+      const leftProviderOrder = configuredProviderOrder.get(left.provider) ?? Number.MAX_SAFE_INTEGER;
+      const rightProviderOrder =
+        configuredProviderOrder.get(right.provider) ?? Number.MAX_SAFE_INTEGER;
+      if (leftProviderOrder !== rightProviderOrder) return leftProviderOrder - rightProviderOrder;
+      if (Boolean(left.model.notable) !== Boolean(right.model.notable)) {
+        return right.model.notable ? 1 : -1;
+      }
+      return formatAIModelRouteLabel(left.model).localeCompare(formatAIModelRouteLabel(right.model));
+    });
+
+  const candidate = candidates[0];
+  if (!candidate) return null;
+
+  return {
+    id: candidate.model.id,
+    label: formatAIModelRouteLabel(candidate.model),
+    provider: candidate.provider,
+    providerLabel: getAIProviderDisplayName(candidate.provider),
+  };
+};
 
 const shouldShowStructuredPatrolContext = (targetType: string | undefined) =>
   STRUCTURED_PATROL_CONTEXT_TARGETS.has(targetType ?? '');
@@ -457,6 +532,17 @@ export const AIChat: Component<AIChatProps> = (props) => {
     });
   });
 
+  const providerReadinessAlternative = createMemo(() => {
+    const readiness = providerReadiness();
+    if (readiness.status !== 'error') return null;
+    return findProviderReadinessAlternative({
+      configuredProviders: aiRuntimeSettings()?.configured_providers,
+      models: aiRuntimeModels(),
+      selectedModel: selectedChatModel(),
+      selectedProvider: selectedChatProvider(),
+    });
+  });
+
   let providerReadinessRequestId = 0;
   let lastProviderReadinessKey = '';
 
@@ -580,6 +666,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const selectModel = (modelId: string) => {
     chat.setModel(modelId);
     updateStoredModel(chat.sessionId(), modelId);
+  };
+
+  const switchToProviderReadinessAlternative = () => {
+    const alternative = providerReadinessAlternative();
+    if (!alternative) return;
+    selectModel(alternative.id);
+    focusComposer();
   };
 
   createEffect(() => {
@@ -1664,7 +1757,20 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     </div>
                   </div>
                   <Show when={providerReadiness().status === 'error'}>
-                    <div class="flex flex-shrink-0 items-center gap-2 sm:justify-end">
+                    <div class="flex flex-wrap items-center gap-2 sm:justify-end">
+                      <Show when={providerReadinessAlternative()}>
+                        {(alternative) => (
+                          <button
+                            type="button"
+                            onClick={switchToProviderReadinessAlternative}
+                            class="inline-flex max-w-[11rem] items-center gap-1.5 rounded-md border border-current/20 bg-surface px-2 py-1 text-[10px] font-medium text-base-content hover:bg-surface-hover"
+                            aria-label={`Use ${alternative().providerLabel} provider route`}
+                            title={alternative().label}
+                          >
+                            <span class="truncate">Use {alternative().providerLabel}</span>
+                          </button>
+                        )}
+                      </Show>
                       <button
                         type="button"
                         onClick={retrySelectedProviderReadiness}

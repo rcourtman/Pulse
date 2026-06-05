@@ -136,4 +136,5 @@ export interface ModelInfo {
   name: string;
   description?: string;
   notable?: boolean;
+  provider?: string;
 }

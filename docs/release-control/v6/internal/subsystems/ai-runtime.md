@@ -75,8 +75,9 @@ runtime cost control, and shared AI transport surfaces.
    the selected provider/model through `/api/ai/test/{provider}` before the
    next user send. That check must use neutral provider diagnostic copy owned
    by `internal/ai/`, not Patrol runtime-finding wording, and the drawer may
-   surface the result as actionable settings/retry status without converting
-   it into assistant-authored output or disabling model-owned chat by default.
+   surface the result as actionable retry/settings status plus same-model
+   configured-provider alternatives without converting it into
+   assistant-authored output or disabling model-owned chat by default.
 4. Add or change Patrol, alert-analysis, or remediation transport through `internal/api/ai_handlers.go`, `internal/api/ai_intelligence_handlers.go`, and `frontend-modern/src/api/patrol.ts`
    Provider preflight diagnostics returned from `internal/api/ai_handlers.go`
    must reuse the Patrol runtime failure classifier in `internal/ai/` and

@@ -397,6 +397,63 @@ describe('AIChat', () => {
       );
     });
 
+    it('offers an equivalent configured-provider route when the selected provider fails', async () => {
+      mockAIAPI.getSettings.mockResolvedValue({
+        model: 'deepseek:deepseek-v4-pro',
+        chat_model: '',
+        control_level: 'read_only',
+        autonomous_mode: false,
+        discovery_enabled: true,
+        configured_providers: ['deepseek', 'openrouter'],
+      });
+      mockAIAPI.getModels.mockResolvedValue({
+        models: [
+          {
+            id: 'deepseek:deepseek-v4-pro',
+            name: 'DeepSeek V4 Pro',
+            provider: 'deepseek',
+            notable: true,
+          },
+          {
+            id: 'openrouter:deepseek/deepseek-v4-pro',
+            name: 'DeepSeek: DeepSeek V4 Pro',
+            provider: 'openrouter',
+            notable: true,
+          },
+          {
+            id: 'openai:gpt-5.5',
+            name: 'GPT-5.5',
+            provider: 'openai',
+            notable: true,
+          },
+        ],
+      });
+      mockAIAPI.testProvider.mockResolvedValueOnce({
+        success: false,
+        message: 'Provider connection issue',
+        provider: 'deepseek',
+        model: 'deepseek:deepseek-v4-pro',
+        cause: 'provider_connection',
+        summary: 'Pulse could not maintain a healthy connection to this provider.',
+        recommendation: 'Check provider reachability.',
+        action: 'open_provider_settings',
+      });
+
+      renderChat();
+
+      const switchButton = await screen.findByRole('button', {
+        name: 'Use OpenRouter provider route',
+      });
+      expect(switchButton).toHaveTextContent('Use OpenRouter');
+
+      fireEvent.click(switchButton);
+
+      expect(mockChat.setModel).toHaveBeenCalledWith('openrouter:deepseek/deepseek-v4-pro');
+      expect(document.activeElement).toBe(
+        screen.getByPlaceholderText('Ask about your infrastructure...'),
+      );
+    });
+
     it('rechecks provider readiness from the drawer status banner', async () => {
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'deepseek:deepseek-v4-pro',
