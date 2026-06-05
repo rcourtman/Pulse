@@ -122,9 +122,9 @@ runtime cost control, and shared AI transport surfaces.
    provider route to a configured gateway or alternate model without losing the
    draft or creating a parallel picker. When the same model is available through
    another configured provider route, the failed turn must offer that route as a
-   direct one-click action before falling back to the general model selector.
-   Retry remains available, but it must not be the only visible action when a
-   failed Assistant turn is shown.
+   direct one-click route-and-retry action before falling back to the general
+   model selector. Retry remains available, but it must not be the only visible
+   action when a failed Assistant turn is shown.
    Restored Assistant sessions must hydrate saved assistant content and
    persisted tool calls into the same transcript event shape used by live
    streams so switching sessions does not hide prior tool evidence or collapse

@@ -21,7 +21,7 @@ const {
     messages: ChatMessage[];
     onChangeModel?: () => void;
     getModelRouteAlternative?: (message: ChatMessage) => ModelRouteRecoveryOption | null;
-    onUseModelRoute?: (modelId: string) => void;
+    onUseModelRoute?: (modelId: string, messageId?: string) => void;
   }> = [];
   const mockChat = {
     messages: vi.fn((): ChatMessage[] => []),
@@ -32,6 +32,7 @@ const {
     queuedFollowUps: vi.fn((): QueuedFollowUp[] => []),
     queuedFollowUpCount: vi.fn(() => 0),
     sendMessage: vi.fn().mockResolvedValue(true),
+    retryMessage: vi.fn(),
     stop: vi.fn(),
     cancelQueuedFollowUp: vi.fn(),
     takeQueuedFollowUp: vi.fn((): QueuedFollowUp | undefined => undefined),
@@ -193,11 +194,12 @@ vi.mock('../ChatMessages', () => ({
     emptyState?: { title: string; subtitle?: string };
     onChangeModel?: () => void;
     getModelRouteAlternative?: (message: ChatMessage) => ModelRouteRecoveryOption | null;
-    onUseModelRoute?: (modelId: string) => void;
+    onUseModelRoute?: (modelId: string, messageId?: string) => void;
   }) => {
-    const routeAlternative = () => {
+    const routeRecovery = () => {
       const failedMessage = props.messages.find((message) => message.error);
-      return failedMessage ? props.getModelRouteAlternative?.(failedMessage) : null;
+      const alternative = failedMessage ? props.getModelRouteAlternative?.(failedMessage) : null;
+      return failedMessage && alternative ? { alternative, failedMessage } : null;
     };
     mockChatMessagesProps.push(props);
     return (
@@ -215,14 +217,16 @@ vi.mock('../ChatMessages', () => ({
         >
           Change model
         </button>
-        <Show when={routeAlternative()}>
-          {(alternative) => (
+        <Show when={routeRecovery()}>
+          {(recovery) => (
             <button
               type="button"
               data-testid="mock-use-model-route"
-              onClick={() => props.onUseModelRoute?.(alternative().id)}
+              onClick={() =>
+                props.onUseModelRoute?.(recovery().alternative.id, recovery().failedMessage.id)
+              }
             >
-              Use {alternative().providerLabel}
+              Retry via {recovery().alternative.providerLabel}
             </button>
           )}
         </Show>
@@ -433,7 +437,7 @@ describe('AIChat', () => {
       });
     });
 
-    it('switches a failed turn to an equivalent configured-provider route', async () => {
+    it('switches a failed turn to an equivalent configured-provider route and retries it', async () => {
       mockChat.model.mockReturnValue('deepseek:deepseek-v4-pro');
       mockChat.messages.mockReturnValue([
         {
@@ -476,6 +480,7 @@ describe('AIChat', () => {
       fireEvent.click(await screen.findByTestId('mock-use-model-route'));
 
       expect(mockChat.setModel).toHaveBeenCalledWith('openrouter:deepseek/deepseek-v4-pro');
+      expect(mockChat.retryMessage).toHaveBeenCalledWith('assistant-error-1');
       expect(document.activeElement).toBe(
         screen.getByPlaceholderText('Ask about your infrastructure...'),
       );

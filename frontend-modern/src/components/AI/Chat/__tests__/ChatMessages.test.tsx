@@ -20,7 +20,7 @@ let capturedMessageItemProps: Array<{
   onSkipQuestion: (questionId: string) => void;
   onChangeModel?: () => void;
   modelRouteAlternative?: ModelRouteRecoveryOption | null;
-  onUseModelRoute?: (modelId: string) => void;
+  onUseModelRoute?: (modelId: string, messageId?: string) => void;
 }> = [];
 
 vi.mock('../MessageItem', () => ({
@@ -35,7 +35,7 @@ vi.mock('../MessageItem', () => ({
     onSkipQuestion: (questionId: string) => void;
     onChangeModel?: () => void;
     modelRouteAlternative?: ModelRouteRecoveryOption | null;
-    onUseModelRoute?: (modelId: string) => void;
+    onUseModelRoute?: (modelId: string, messageId?: string) => void;
   }) => {
     capturedMessageItemProps.push(props);
     return (

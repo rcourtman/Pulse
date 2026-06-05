@@ -900,8 +900,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
     return modelRouteAlternativeFor(message.model || selectedChatModel());
   };
 
-  const switchToModelRoute = (modelId: string) => {
+  const switchToModelRoute = (modelId: string, failedMessageId?: string) => {
     selectModel(modelId);
+    if (failedMessageId) {
+      chat.retryMessage(failedMessageId);
+    }
     focusComposer();
   };
 

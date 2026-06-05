@@ -37,7 +37,7 @@ interface MessageItemProps {
   onRetry?: (messageId: string) => void;
   onChangeModel?: () => void;
   modelRouteAlternative?: ModelRouteRecoveryOption | null;
-  onUseModelRoute?: (modelId: string) => void;
+  onUseModelRoute?: (modelId: string, messageId?: string) => void;
 }
 
 const markdownClass =
@@ -298,13 +298,15 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                         {(alternative) => (
                           <button
                             type="button"
-                            onClick={() => props.onUseModelRoute?.(alternative().id)}
-                            aria-label={`Use ${alternative().providerLabel} provider route`}
+                            onClick={() =>
+                              props.onUseModelRoute?.(alternative().id, props.message.id)
+                            }
+                            aria-label={`Retry via ${alternative().providerLabel} provider route`}
                             title={alternative().label}
-                            class="inline-flex max-w-[11rem] items-center gap-1.5 rounded-md border border-red-300 bg-white/80 px-2 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 dark:border-red-800 dark:bg-red-950/20 dark:text-red-300 dark:hover:bg-red-900/40"
+                            class="inline-flex max-w-[14rem] items-center gap-1.5 rounded-md border border-red-300 bg-white/80 px-2 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 dark:border-red-800 dark:bg-red-950/20 dark:text-red-300 dark:hover:bg-red-900/40"
                           >
                             <CpuIcon class="h-3.5 w-3.5" />
-                            <span class="truncate">Use {alternative().providerLabel}</span>
+                            <span class="truncate">Retry via {alternative().providerLabel}</span>
                           </button>
                         )}
                       </Show>

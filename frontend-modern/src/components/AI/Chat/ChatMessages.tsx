@@ -22,7 +22,7 @@ interface ChatMessagesProps {
   onRetry?: (messageId: string) => void;
   onChangeModel?: () => void;
   getModelRouteAlternative?: (message: ChatMessage) => ModelRouteRecoveryOption | null;
-  onUseModelRoute?: (modelId: string) => void;
+  onUseModelRoute?: (modelId: string, messageId?: string) => void;
   // Dashboard props
   recentSessions?: ChatSession[];
   onLoadSession?: (sessionId: string) => void;

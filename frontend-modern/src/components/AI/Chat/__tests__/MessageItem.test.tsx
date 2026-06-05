@@ -172,12 +172,15 @@ describe('MessageItem', () => {
       expect(alert).toBeInTheDocument();
       expect(alert.textContent).toContain('billing or quota reasons');
 
-      const useOpenRouter = screen.getByRole('button', {
-        name: 'Use OpenRouter provider route',
+      const retryViaOpenRouter = screen.getByRole('button', {
+        name: 'Retry via OpenRouter provider route',
       });
-      expect(useOpenRouter).toHaveTextContent('Use OpenRouter');
-      fireEvent.click(useOpenRouter);
-      expect(onUseModelRoute).toHaveBeenCalledWith('openrouter:deepseek/deepseek-v4-pro');
+      expect(retryViaOpenRouter).toHaveTextContent('Retry via OpenRouter');
+      fireEvent.click(retryViaOpenRouter);
+      expect(onUseModelRoute).toHaveBeenCalledWith(
+        'openrouter:deepseek/deepseek-v4-pro',
+        'msg-1',
+      );
 
       const changeModel = screen.getByRole('button', { name: /change model/i });
       fireEvent.click(changeModel);
