@@ -177,11 +177,14 @@ runtime cost control, and shared AI transport surfaces.
    frontend rendering. Compacted no-whitespace internal prelude text attached
    to a leaked tool invocation is part of that same artifact and must be
    suppressed or retracted from the current stream segment instead of rendered
-   as assistant prose. Completed tool rows in the drawer may show compact tool
-   name, action summary, status, and an explicit details affordance, but raw
-   tool input/output JSON must not render in the default transcript. Token
-   accounting and other provider metadata remain runtime/accounting data, not
-   normal transcript prose.
+   as assistant prose. Drawer-level loading/progress status must not duplicate
+   transcript output once assistant content, governed tool progress, approvals,
+   questions, errors, or restored tool evidence are already visible; progress
+   stays in the transcript row that owns the active turn. Completed tool rows
+   in the drawer may show compact tool name, action summary, status, and an
+   explicit details affordance, but raw tool input/output JSON must not render
+   in the default transcript. Token accounting and other provider metadata
+   remain runtime/accounting data, not normal transcript prose.
 4. Add or change Patrol, alert-analysis, or remediation transport through `internal/api/ai_handlers.go`, `internal/api/ai_intelligence_handlers.go`, and `frontend-modern/src/api/patrol.ts`
    Provider preflight diagnostics returned from `internal/api/ai_handlers.go`
    must reuse the Patrol runtime failure classifier in `internal/ai/` and

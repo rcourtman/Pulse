@@ -518,7 +518,8 @@ describe('AIChat', () => {
         id: 'assistant-error-openrouter',
         role: 'assistant',
         content: '',
-        error: 'The AI provider rejected the credentials. Check your AI provider API key in Settings.',
+        error:
+          'The AI provider rejected the credentials. Check your AI provider API key in Settings.',
         timestamp: new Date('2026-06-05T10:00:00Z'),
         model: 'openrouter:deepseek/deepseek-v4-pro',
       };
@@ -2925,6 +2926,7 @@ describe('AIChat', () => {
       ]);
       renderChat();
       expect(screen.queryByText('Running get nodes...')).not.toBeInTheDocument();
+      expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
     });
 
     it('does not duplicate status in the footer when assistant content is streaming', () => {
@@ -2941,6 +2943,23 @@ describe('AIChat', () => {
       renderChat();
       expect(screen.queryByText('Generating response...')).not.toBeInTheDocument();
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
+    });
+
+    it('does not fall back to thinking when loading outlives visible assistant content', () => {
+      mockChat.isLoading.mockReturnValue(true);
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'msg-1',
+          role: 'assistant' as const,
+          content: 'UI_PARITY_OK',
+          timestamp: new Date(),
+          isStreaming: false,
+          streamEvents: [{ type: 'content', content: 'UI_PARITY_OK' }],
+        },
+      ]);
+      renderChat();
+      expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
+      expect(screen.queryByText('Generating response...')).not.toBeInTheDocument();
     });
 
     it('keeps queued follow-up status without duplicating active assistant streaming status', () => {

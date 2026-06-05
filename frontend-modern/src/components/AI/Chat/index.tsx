@@ -227,9 +227,8 @@ const findProviderReadinessAlternative = (args: {
     });
 
   const candidate =
-    sortedCandidates.find(
-      ({ model }) => normalizeComparableModelKey(model.id) === selectedKey,
-    ) || sortedCandidates[0];
+    sortedCandidates.find(({ model }) => normalizeComparableModelKey(model.id) === selectedKey) ||
+    sortedCandidates[0];
   if (!candidate) return null;
 
   return {
@@ -1059,6 +1058,36 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }),
   );
 
+  const assistantHasVisibleTranscriptOutput = (message: ChatMessage) => {
+    if (message.role !== 'assistant') return false;
+    if ((message.content || '').trim() || message.error) return true;
+    if (
+      message.pendingTools?.length ||
+      message.pendingApprovals?.length ||
+      message.pendingQuestions?.length ||
+      message.toolCalls?.length
+    ) {
+      return true;
+    }
+
+    return (message.streamEvents || []).some((event) => {
+      switch (event.type) {
+        case 'content':
+          return !!event.content?.trim();
+        case 'tool':
+          return !!event.tool;
+        case 'pending_tool':
+          return !!event.pendingTool;
+        case 'approval':
+          return !!event.approval;
+        case 'question':
+          return !!event.question;
+        default:
+          return false;
+      }
+    });
+  };
+
   // Compute current status for display
   const currentStatus = createMemo(() => {
     if (!chat.isLoading()) return null;
@@ -1068,6 +1097,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
       .reverse()
       .find((message) => message.role === 'assistant' && message.isStreaming);
     if (activeAssistant) {
+      return null;
+    }
+
+    const lastAssistant = [...messages].reverse().find((message) => message.role === 'assistant');
+    if (lastAssistant && assistantHasVisibleTranscriptOutput(lastAssistant)) {
       return null;
     }
 
