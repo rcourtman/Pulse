@@ -636,6 +636,12 @@ recovery scope, or a storage/recovery-owned secret source.
     their Patrol conclusion and bounded evidence as investigation context, but
     must not reinterpret the briefing as backup recency, restore support,
     Patrol-authored remediation guidance, or storage-local action authority.
+    Saved Assistant message history exposed by the shared AI endpoints follows
+    that same adjacent boundary. Storage and recovery surfaces may consume only
+    the API-owned client-safe transcript projection; hidden provider reasoning,
+    raw `pulse_*` / `patrol_*` tool-call prose, token accounting text, and
+    provider thinking text are not recovery evidence, backup freshness, restore
+    eligibility, storage-local approval state, or recovery execution authority.
     That same adjacent `internal/api/` boundary still carries Patrol-run
     execution identity. Storage and recovery may observe shared Patrol
     transport through `internal/api/chat_service_adapter.go`, but they must not

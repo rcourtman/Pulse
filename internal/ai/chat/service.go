@@ -2422,7 +2422,14 @@ func (s *Service) GetMessages(ctx context.Context, sessionID string) ([]Message,
 		return nil, fmt.Errorf("service not started")
 	}
 
-	return sessions.GetMessages(sessionID)
+	messages, err := sessions.GetMessages(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range messages {
+		messages[i] = messages[i].ClientSafe()
+	}
+	return messages, nil
 }
 
 // GetModelHandoffFindingID returns the session-scoped finding reference used to

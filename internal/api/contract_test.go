@@ -573,6 +573,56 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 	}
 }
 
+func TestContract_AssistantMessageHistoryUsesClientSafeProjection(t *testing.T) {
+	handlerSource, err := os.ReadFile(filepath.Clean("ai_handler.go"))
+	if err != nil {
+		t.Fatalf("read ai_handler.go: %v", err)
+	}
+	serviceSource, err := os.ReadFile(filepath.Clean("../ai/chat/service.go"))
+	if err != nil {
+		t.Fatalf("read chat service: %v", err)
+	}
+	typesSource, err := os.ReadFile(filepath.Clean("../ai/chat/types.go"))
+	if err != nil {
+		t.Fatalf("read chat types: %v", err)
+	}
+
+	handlerText := string(handlerSource)
+	for _, required := range []string{
+		"func (h *AIHandler) HandleMessages(w http.ResponseWriter, r *http.Request, sessionID string)",
+		"messages[i] = messages[i].ClientSafe()",
+		"json.NewEncoder(w).Encode(messages)",
+	} {
+		if !strings.Contains(handlerText, required) {
+			t.Fatalf("Assistant message-history handler must encode client-safe transcript projection: missing %q", required)
+		}
+	}
+
+	serviceText := string(serviceSource)
+	for _, required := range []string{
+		"func (s *Service) GetMessages(ctx context.Context, sessionID string) ([]Message, error)",
+		"messages[i] = messages[i].ClientSafe()",
+	} {
+		if !strings.Contains(serviceText, required) {
+			t.Fatalf("chat service message-history reads must return client-safe transcript projection: missing %q", required)
+		}
+	}
+
+	typesText := string(typesSource)
+	for _, required := range []string{
+		"func (m Message) ClientSafe() Message",
+		"m = m.NormalizeCollections()",
+		`if strings.EqualFold(m.Role, "assistant")`,
+		"m.Content = cleanToolCallArtifacts(m.Content)",
+		`m.ReasoningContent = ""`,
+		"return m",
+	} {
+		if !strings.Contains(typesText, required) {
+			t.Fatalf("chat message client-safe projection must strip hidden reasoning and raw tool-call prose: missing %q", required)
+		}
+	}
+}
+
 func TestContract_InvestigateAlertIsApprovalBound(t *testing.T) {
 	source, err := os.ReadFile(filepath.Clean("ai_handlers.go"))
 	if err != nil {

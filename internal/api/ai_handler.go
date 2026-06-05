@@ -2620,7 +2620,7 @@ func (h *AIHandler) HandleMessages(w http.ResponseWriter, r *http.Request, sessi
 		}
 	}
 	for i := range messages {
-		messages[i] = messages[i].NormalizeCollections()
+		messages[i] = messages[i].ClientSafe()
 	}
 
 	w.Header().Set("Content-Type", "application/json")

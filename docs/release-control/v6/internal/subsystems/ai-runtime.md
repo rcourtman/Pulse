@@ -107,7 +107,13 @@ runtime cost control, and shared AI transport surfaces.
    Restored Assistant sessions must hydrate saved assistant content and
    persisted tool calls into the same transcript event shape used by live
    streams so switching sessions does not hide prior tool evidence or collapse
-   the resumed conversation into a text-only transcript.
+   the resumed conversation into a text-only transcript. Saved Assistant
+   message history is part of that same output contract: service reads and
+   `GET /api/ai/sessions/{id}/messages` must return a client-safe projection
+   that normalizes collection fields, strips `reasoning_content`, and sanitizes
+   stored assistant prose before the browser restores a transcript. Provider
+   reasoning may remain in runtime-only history for model continuity, but it
+   must not serialize through public session history or resumed drawer state.
    The empty Assistant drawer may surface recent non-empty sessions as direct
    resume actions using the backend session list already owned by the drawer;
    it must not create a parallel recent-chat store or product-authored prompt

@@ -285,6 +285,19 @@ func TestService_SessionWrappers(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, msgs) // Initially empty
 
+	require.NoError(t, service.sessions.AddMessage(session.ID, Message{
+		Role:             "assistant",
+		Content:          "I will inspect the device nodes.\npulse_read(target_host=\"current_resource\", command=\"ls /dev | wc -l\")",
+		ReasoningContent: "We need to inspect the user's prompt before answering.",
+	}))
+	msgs, err = service.GetMessages(ctx, session.ID)
+	require.NoError(t, err)
+	require.Len(t, msgs, 1)
+	assert.Equal(t, "I will inspect the device nodes.", msgs[0].Content)
+	assert.Empty(t, msgs[0].ReasoningContent)
+	assert.NotContains(t, msgs[0].Content, "pulse_read")
+	assert.NotContains(t, msgs[0].Content, "target_host")
+
 	// List Sessions
 	list, err := service.ListSessions(ctx)
 	require.NoError(t, err)

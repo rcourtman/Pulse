@@ -459,7 +459,14 @@ func TestHandleMessages(t *testing.T) {
 	h.defaultService = mockSvc
 
 	mockSvc.On("IsRunning").Return(true)
-	messages := []chat.Message{{Role: "user", Content: "hello"}}
+	messages := []chat.Message{
+		{Role: "user", Content: "hello"},
+		{
+			Role:             "assistant",
+			Content:          "I will inspect the device nodes.\npulse_read(target_host=\"current_resource\", command=\"lsblk\")",
+			ReasoningContent: "We need to inspect the user's prompt before answering.",
+		},
+	}
 	mockSvc.On("GetMessages", mock.Anything, "s1").Return(messages, nil)
 
 	req := httptest.NewRequest("GET", "/api/ai/sessions/s1/messages", nil)
@@ -469,6 +476,11 @@ func TestHandleMessages(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), `"tool_calls":[]`)
+	assert.Contains(t, w.Body.String(), "I will inspect the device nodes.")
+	assert.NotContains(t, w.Body.String(), "reasoning_content")
+	assert.NotContains(t, w.Body.String(), "inspect the user's prompt")
+	assert.NotContains(t, w.Body.String(), "pulse_read")
+	assert.NotContains(t, w.Body.String(), "target_host")
 }
 
 func TestHandleChat_NotRunning(t *testing.T) {

@@ -67,6 +67,18 @@ func (m Message) NormalizeCollections() Message {
 	return m
 }
 
+// ClientSafe returns the browser/API-facing view of a stored chat message.
+// Runtime history may retain provider reasoning for model continuity, but
+// user-facing history must not serialize hidden reasoning or raw tool-call text.
+func (m Message) ClientSafe() Message {
+	m = m.NormalizeCollections()
+	if strings.EqualFold(m.Role, "assistant") {
+		m.Content = cleanToolCallArtifacts(m.Content)
+	}
+	m.ReasoningContent = ""
+	return m
+}
+
 // ToolCall represents a tool invocation
 type ToolCall struct {
 	ID               string                 `json:"id"`

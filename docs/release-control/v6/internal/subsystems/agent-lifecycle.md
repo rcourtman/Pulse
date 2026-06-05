@@ -213,7 +213,12 @@ lifecycle evidence only; lifecycle surfaces must not treat approval as
 implicit command execution or define a parallel execution handoff. Assistant
 handoffs that recover a live Patrol approval by finding ID are still AI/runtime
 review context only; agent lifecycle surfaces must not treat that recovered
-approval reference as an agent command grant or host-execution shortcut. When a
+approval reference as an agent command grant or host-execution shortcut.
+Assistant session-history reads from the shared AI endpoints are likewise
+API-owned browser-safe projections: lifecycle surfaces, MCP adapters, and
+agents must not depend on `reasoning_content`, raw `pulse_*` / `patrol_*`
+tool-call prose, token accounting text, or assistant transcript prose as an
+agent command grant, install-token disclosure, or host-execution shortcut. When a
 planned resource capability is actually executed from an agent-lifecycle
 surface, that handoff must route through `POST /api/actions/{id}/execute` so
 the API-owned action audit records `executing` before dispatch and the

@@ -425,6 +425,15 @@ payload shape change when the portal presents compact client rows.
     stored rich handoff envelope with a partial metadata-only envelope, and the
     handler must not ask the browser to resend resource context that the chat
     runtime can rehydrate from the stored selected-resource envelope.
+    Assistant message-history payloads are part of the same browser-safe
+    projection boundary: `GET /api/ai/sessions/{id}/messages` must encode only
+    messages passed through `chat.Message.ClientSafe()`. Collection fields stay
+    stable for clients, but hidden provider `reasoning_content`, raw
+    `pulse_*` / `patrol_*` tool-call prose, DSML/XML/function-call envelopes,
+    JSON tool-call text, token accounting strings, and provider thinking text
+    must not serialize into API history. Runtime history may retain provider
+    reasoning for model continuity, but restored drawer state must expose only
+    visible assistant prose plus governed structured tool evidence.
     Chat stream events are generated from `internal/ai/chat` payload structs
     into `frontend-modern/src/api/generated/aiChatEvents.ts`; that generated
     union must not include the retired `explore_status` pre-pass event. Runtime
