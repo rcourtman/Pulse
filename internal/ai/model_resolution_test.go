@@ -14,14 +14,14 @@ func TestSelectRecommendedProviderModel_PrefersNotable(t *testing.T) {
 	t.Parallel()
 
 	selected, ok := SelectRecommendedProviderModel([]providers.ModelInfo{
-		{ID: "provider:older-fast", Name: "Older Fast", CreatedAt: 100},
-		{ID: "provider:flagship", Name: "Flagship", CreatedAt: 50, Notable: true},
+		{ID: "provider/older-fast", Name: "Older Fast", CreatedAt: 100},
+		{ID: "provider/flagship", Name: "Flagship", CreatedAt: 50, Notable: true},
 	})
 	if !ok {
 		t.Fatal("expected a model selection")
 	}
-	if selected.ID != "provider:flagship" {
-		t.Fatalf("selected model = %q, want %q", selected.ID, "provider:flagship")
+	if selected.ID != "provider/flagship" {
+		t.Fatalf("selected model = %q, want %q", selected.ID, "provider/flagship")
 	}
 }
 
@@ -52,6 +52,47 @@ func TestSelectRecommendedProviderModel_UsesLexicalTiebreak(t *testing.T) {
 	}
 	if selected.ID != "provider:alpha" {
 		t.Fatalf("selected model = %q, want %q", selected.ID, "provider:alpha")
+	}
+}
+
+func TestSelectRecommendedProviderModel_PrefersChatRouteOverSpecializedCatalogEntry(t *testing.T) {
+	t.Parallel()
+
+	selected, ok := SelectRecommendedProviderModel([]providers.ModelInfo{
+		{
+			ID:        "nvidia/nemotron-3.5-content-safety:free",
+			Name:      "NVIDIA: Nemotron 3.5 Content Safety",
+			CreatedAt: 300,
+			Notable:   true,
+		},
+		{
+			ID:        "openai/gpt-4o-mini",
+			Name:      "GPT-4o mini",
+			CreatedAt: 100,
+		},
+		{
+			ID:        "anthropic/claude-sonnet-4.5",
+			Name:      "Claude Sonnet 4.5",
+			CreatedAt: 200,
+		},
+	})
+	if !ok {
+		t.Fatal("expected a model selection")
+	}
+	if selected.ID != "anthropic/claude-sonnet-4.5" {
+		t.Fatalf("selected model = %q, want %q", selected.ID, "anthropic/claude-sonnet-4.5")
+	}
+}
+
+func TestSelectRecommendedProviderModel_IgnoresSpecializedOnlyCatalog(t *testing.T) {
+	t.Parallel()
+
+	_, ok := SelectRecommendedProviderModel([]providers.ModelInfo{
+		{ID: "openai/text-embedding-3-large", Name: "Text Embedding 3 Large", CreatedAt: 200, Notable: true},
+		{ID: "openai/omni-moderation-latest", Name: "Omni Moderation", CreatedAt: 300, Notable: true},
+	})
+	if ok {
+		t.Fatal("expected no recommendation from a specialized-only catalog")
 	}
 }
 
