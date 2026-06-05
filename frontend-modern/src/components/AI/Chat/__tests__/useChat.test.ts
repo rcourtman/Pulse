@@ -265,6 +265,72 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('retryMessage preserves mentions, finding handoff, and scoped send options', async () => {
+      mockChat.mockRejectedValueOnce(new Error('server error')).mockResolvedValueOnce(undefined);
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'sess' }));
+
+      await chat.sendMessage(
+        'check this resource',
+        [{ id: 'vm-100', name: 'web-1', type: 'vm', node: 'pve-1' }],
+        'finding-42',
+        {
+          autonomousMode: false,
+          handoffContext: '[Patrol Finding Context]\nFinding ID: finding-42',
+          handoffResources: [
+            {
+              id: 'vm-100',
+              name: 'web-1',
+              type: 'vm',
+              node: 'pve-1',
+            },
+          ],
+          handoffActions: [
+            {
+              findingId: 'finding-42',
+              approvalId: 'approval-1',
+              approvalStatus: 'pending',
+            },
+          ],
+          handoffMetadata: {
+            kind: 'patrol_finding',
+          },
+        },
+      );
+
+      const failed = chat.messages().find((m) => m.role === 'assistant');
+      expect(failed?.error).toContain('server error');
+
+      chat.retryMessage(failed!.id);
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(mockChat).toHaveBeenCalledTimes(2);
+      const retryCall = mockChat.mock.calls[1];
+      expect(retryCall[0]).toBe('check this resource');
+      expect(retryCall[5]).toEqual([{ id: 'vm-100', name: 'web-1', type: 'vm', node: 'pve-1' }]);
+      expect(retryCall[6]).toBe('finding-42');
+      expect(retryCall[7]).toBe(false);
+      expect(retryCall[8]).toBe('[Patrol Finding Context]\nFinding ID: finding-42');
+      expect(retryCall[9]).toEqual([
+        {
+          id: 'vm-100',
+          name: 'web-1',
+          type: 'vm',
+          node: 'pve-1',
+        },
+      ]);
+      expect(retryCall[10]).toEqual([
+        {
+          findingId: 'finding-42',
+          approvalId: 'approval-1',
+          approvalStatus: 'pending',
+        },
+      ]);
+      expect(retryCall[11]).toEqual({
+        kind: 'patrol_finding',
+      });
+      dispose();
+    });
+
     it('handles AbortError silently (returns false, no notification)', async () => {
       const abortError = new Error('Aborted');
       abortError.name = 'AbortError';

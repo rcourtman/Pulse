@@ -19,6 +19,7 @@ import type {
   PendingQuestion,
   PendingTool,
   WorkflowStatus,
+  ChatMessageRequestContext,
 } from '../types';
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
@@ -255,6 +256,80 @@ export function useChat(options: UseChatOptions = {}) {
     const record = data as Record<string, unknown>;
     const id = record.id ?? record.session_id;
     return typeof id === 'string' ? id.trim() : '';
+  };
+
+  const cloneMentions = (mentions?: ChatMention[]): ChatMention[] | undefined =>
+    mentions?.map((mention) => ({ ...mention }));
+
+  const cloneSendOptions = (
+    sendOptions?: SendMessageOptions,
+  ): ChatMessageRequestContext | undefined => {
+    if (!sendOptions) return undefined;
+
+    const requestContext: ChatMessageRequestContext = {};
+    if (typeof sendOptions.autonomousMode === 'boolean') {
+      requestContext.autonomousMode = sendOptions.autonomousMode;
+    }
+    if (sendOptions.handoffContext) {
+      requestContext.handoffContext = sendOptions.handoffContext;
+    }
+    if (sendOptions.handoffResources?.length) {
+      requestContext.handoffResources = sendOptions.handoffResources.map((resource) => ({
+        ...resource,
+      }));
+    }
+    if (sendOptions.handoffActions?.length) {
+      requestContext.handoffActions = sendOptions.handoffActions.map((action) => ({ ...action }));
+    }
+    if (sendOptions.handoffMetadata) {
+      requestContext.handoffMetadata = { ...sendOptions.handoffMetadata };
+    }
+
+    return Object.keys(requestContext).length > 0 ? requestContext : undefined;
+  };
+
+  const buildRequestContext = (
+    mentions?: ChatMention[],
+    findingId?: string,
+    sendOptions?: SendMessageOptions,
+  ): ChatMessageRequestContext | undefined => {
+    const requestContext: ChatMessageRequestContext = {
+      ...(cloneSendOptions(sendOptions) || {}),
+    };
+    const clonedMentions = cloneMentions(mentions);
+    if (clonedMentions?.length) {
+      requestContext.mentions = clonedMentions;
+    }
+    if (findingId) {
+      requestContext.findingId = findingId;
+    }
+
+    return Object.keys(requestContext).length > 0 ? requestContext : undefined;
+  };
+
+  const sendOptionsFromRequestContext = (
+    request?: ChatMessageRequestContext,
+  ): SendMessageOptions | undefined => {
+    if (!request) return undefined;
+
+    const sendOptions: SendMessageOptions = {};
+    if (typeof request.autonomousMode === 'boolean') {
+      sendOptions.autonomousMode = request.autonomousMode;
+    }
+    if (request.handoffContext) {
+      sendOptions.handoffContext = request.handoffContext;
+    }
+    if (request.handoffResources?.length) {
+      sendOptions.handoffResources = request.handoffResources.map((resource) => ({ ...resource }));
+    }
+    if (request.handoffActions?.length) {
+      sendOptions.handoffActions = request.handoffActions.map((action) => ({ ...action }));
+    }
+    if (request.handoffMetadata) {
+      sendOptions.handoffMetadata = { ...request.handoffMetadata };
+    }
+
+    return Object.keys(sendOptions).length > 0 ? sendOptions : undefined;
   };
 
   const applyStreamSessionId = (streamSessionId: string) => {
@@ -633,6 +708,7 @@ export function useChat(options: UseChatOptions = {}) {
       content: trimmedPrompt,
       timestamp,
       delivery: 'queued',
+      request: buildRequestContext(mentions, findingId, sendOptions),
     };
 
     const queuedFollowUp: QueuedFollowUp = {
@@ -674,6 +750,7 @@ export function useChat(options: UseChatOptions = {}) {
       role: 'user',
       content: trimmedPrompt,
       timestamp: new Date(),
+      request: buildRequestContext(mentions, findingId, sendOptions),
     };
 
     const assistantId = generateId();
@@ -1026,9 +1103,15 @@ export function useChat(options: UseChatOptions = {}) {
     if (userIdx < 0) return;
     const prompt = msgs[userIdx].content;
     if (!prompt.trim()) return;
+    const request = msgs[userIdx].request;
     const removeIds = new Set([msgs[userIdx].id, assistantMessageId]);
     setMessages((prev) => prev.filter((m) => !removeIds.has(m.id)));
-    void sendMessage(prompt);
+    void sendMessage(
+      prompt,
+      cloneMentions(request?.mentions),
+      request?.findingId,
+      sendOptionsFromRequestContext(request),
+    );
   };
 
   return {

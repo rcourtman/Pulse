@@ -99,6 +99,11 @@ runtime cost control, and shared AI transport surfaces.
    replay one-shot finding handoff, approval, autonomous-mode, or other scoped
    send options. Scoped context replay remains owned by explicit session
    handoff metadata or queued follow-up edit state.
+   Failed-turn retry is part of that same local chat-runtime boundary: a
+   retryable in-memory assistant error may replay the original user turn's
+   structured mentions, finding id, approval override, handoff resources,
+   handoff actions, and handoff metadata, but must not reconstruct scoped
+   context from prompt history or saved transcript prose.
    Assistant output hygiene is part of the same boundary: provider reasoning
    and raw serialized tool-call artifacts must never render as assistant
    transcript prose. Reasoning/thinking deltas may update neutral progress

@@ -1,4 +1,10 @@
 // Chat component types
+import type {
+  ChatHandoffAction,
+  ChatHandoffMetadata,
+  ChatHandoffResource,
+  ChatMention,
+} from '@/api/aiChat';
 
 export interface ToolExecution {
   name: string;
@@ -109,11 +115,22 @@ export interface WorkflowStatus {
   tool?: string;
 }
 
+export interface ChatMessageRequestContext {
+  mentions?: ChatMention[];
+  findingId?: string;
+  autonomousMode?: boolean;
+  handoffContext?: string;
+  handoffResources?: ChatHandoffResource[];
+  handoffActions?: ChatHandoffAction[];
+  handoffMetadata?: ChatHandoffMetadata;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   delivery?: 'sent' | 'queued';
+  request?: ChatMessageRequestContext;
   interruption?: 'stopped' | 'replaced';
   // Clean, user-facing error for a failed turn. Rendered as a distinct error
   // block (not as answer content) so partial streamed content is preserved and
