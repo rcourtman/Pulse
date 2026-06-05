@@ -1735,16 +1735,44 @@ func (s *Store) runRetention() {
 			Int64("deleted", totalDeleted).
 			Dur("duration", time.Since(start)).
 			Msg("Metrics retention cleanup completed")
+	}
 
-		// Reclaim disk space from deleted rows. Without this, the database
-		// file never shrinks — a setup with 50+ resources can bloat to 5GB+
-		// while only holding ~60MB of live data.
-		if _, err := s.db.Exec(`PRAGMA incremental_vacuum(5000)`); err != nil {
+	// Reclaim freed pages every cycle, even in an hour where nothing was
+	// deleted, so a pre-existing freelist backlog still drains over time.
+	s.reclaimFreePages()
+}
+
+// maxReclaimPages bounds how many freed SQLite pages reclaimFreePages returns
+// to the OS per retention cycle (~50k pages * 4KiB ≈ 200MiB). A large backlog
+// is drained over several hourly cycles instead of holding the write lock for
+// minutes at once, while steady-state freelists (well under the cap) drain
+// fully every cycle.
+const maxReclaimPages = 50000
+
+// reclaimFreePages returns freed pages to the OS. auto_vacuum is INCREMENTAL,
+// so deleted-row pages sit on the freelist until reclaimed here. A previous
+// fixed 5000-page batch could not keep up on busy instances: when an hourly
+// retention pass frees more pages than the batch reclaims, the freelist grows
+// net-positive every cycle and the database file bloats unboundedly (5GB+ of
+// free pages over ~60MB of live data) even though row retention is working.
+// Draining proportionally to the freelist, capped, fixes that.
+func (s *Store) reclaimFreePages() {
+	var freelist int64
+	if err := s.db.QueryRow(`PRAGMA freelist_count`).Scan(&freelist); err != nil {
+		log.Debug().Err(err).Msg("Failed to read freelist_count")
+		freelist = maxReclaimPages // fall back to a bounded reclaim
+	}
+	if freelist > 0 {
+		pages := freelist
+		if pages > maxReclaimPages {
+			pages = maxReclaimPages
+		}
+		if _, err := s.db.Exec(fmt.Sprintf(`PRAGMA incremental_vacuum(%d)`, pages)); err != nil {
 			log.Debug().Err(err).Msg("Incremental vacuum failed")
 		}
-		if _, err := s.db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
-			log.Debug().Err(err).Msg("WAL checkpoint failed")
-		}
+	}
+	if _, err := s.db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+		log.Debug().Err(err).Msg("WAL checkpoint failed")
 	}
 }
 

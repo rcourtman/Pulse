@@ -914,7 +914,15 @@ durable storage. Any future change that reduces that batching headroom, makes
 WAL checkpoints more aggressive again, reopens duplicate-write failures, or
 removes the metrics DB path/cadence controls must re-prove the metrics-store
 hot path with the owned store tests rather than assuming the earlier vacuum
-fixes are sufficient.
+fixes are sufficient. Retention must also return freed SQLite pages to the OS
+proportionally to the current freelist, bounded per cycle, and on every
+retention cycle rather than only when that cycle deleted rows: a fixed small
+incremental-vacuum batch lets the freelist outpace reclaim on busy instances,
+so `metrics.db` bloats to GBs of free pages over tens of MB of live data even
+while row retention works correctly. The reclaim stays a once-per-cycle bounded
+operation (it skips the checkpoint entirely when the freelist is empty) so WAL
+cadence is not made more aggressive, and `TestStoreRetentionReclaimsFreePages`
+guards that a pre-existing backlog drains and the file shrinks.
 contract instead of inventing an infrastructure-local summary filter branch.
 For shared line charts on that hot path, the shared sparkline primitive may
 isolate the selected series inside the existing render budget, but that

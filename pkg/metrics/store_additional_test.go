@@ -828,3 +828,81 @@ func TestStoreQueryMetricTypesBatchFiltersMetricTypes(t *testing.T) {
 		t.Fatalf("expected metric filter to exclude memory for agent-2, got %+v", result["agent-2"])
 	}
 }
+
+// TestStoreRetentionReclaimsFreePages guards the fix for unbounded metrics.db
+// growth. A pre-existing freelist backlog must drain on a normal retention pass
+// even in an hour where nothing new was deleted. The previous code reclaimed
+// only when that cycle deleted rows, and only 5000 pages at a time, so on busy
+// instances the freelist outpaced reclaim and the file bloated to GBs over
+// ~60MB of live data. Reclaiming every cycle, proportional to the freelist,
+// returns the freed pages to the OS so the file shrinks.
+func TestStoreRetentionReclaimsFreePages(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig(dir)
+	cfg.DBPath = filepath.Join(dir, "metrics-reclaim.db")
+	cfg.RetentionRaw = time.Minute
+	cfg.FlushInterval = time.Hour
+
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore returned error: %v", err)
+	}
+	defer store.Close()
+
+	// Build a freelist backlog: insert many rows (kept unique by timestamp) then
+	// delete them directly, so the rows are already gone before runRetention.
+	tx, err := store.db.Begin()
+	if err != nil {
+		t.Fatalf("begin tx: %v", err)
+	}
+	stmt, err := tx.Prepare(`INSERT INTO metrics (resource_type, resource_id, metric_type, value, timestamp, tier) VALUES ('vm', 'vm-101', 'cpu', 1.0, ?, 'raw')`)
+	if err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+	base := time.Now().Add(-72 * time.Hour).Unix()
+	for i := 0; i < 20000; i++ {
+		if _, err := stmt.Exec(base + int64(i)); err != nil {
+			t.Fatalf("insert: %v", err)
+		}
+	}
+	stmt.Close()
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	if _, err := store.db.Exec(`DELETE FROM metrics`); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if _, err := store.db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+		t.Fatalf("checkpoint: %v", err)
+	}
+
+	var freelistBefore, pagesBefore int64
+	if err := store.db.QueryRow(`PRAGMA freelist_count`).Scan(&freelistBefore); err != nil {
+		t.Fatalf("freelist before: %v", err)
+	}
+	if err := store.db.QueryRow(`PRAGMA page_count`).Scan(&pagesBefore); err != nil {
+		t.Fatalf("page_count before: %v", err)
+	}
+	if freelistBefore == 0 {
+		t.Fatalf("test precondition failed: expected a freelist backlog, got 0 free pages")
+	}
+
+	// Nothing to prune this cycle (table is already empty), but the backlog must
+	// still be reclaimed. The old code skipped reclaim entirely when nothing was
+	// deleted, so the file would not shrink and this would fail.
+	store.runRetention()
+
+	var freelistAfter, pagesAfter int64
+	if err := store.db.QueryRow(`PRAGMA freelist_count`).Scan(&freelistAfter); err != nil {
+		t.Fatalf("freelist after: %v", err)
+	}
+	if err := store.db.QueryRow(`PRAGMA page_count`).Scan(&pagesAfter); err != nil {
+		t.Fatalf("page_count after: %v", err)
+	}
+	if pagesAfter >= pagesBefore {
+		t.Fatalf("expected database file to shrink after reclaim: pages before=%d after=%d (freelist %d -> %d)", pagesBefore, pagesAfter, freelistBefore, freelistAfter)
+	}
+	if freelistAfter >= freelistBefore {
+		t.Fatalf("expected freelist to shrink after reclaim: %d -> %d", freelistBefore, freelistAfter)
+	}
+}
