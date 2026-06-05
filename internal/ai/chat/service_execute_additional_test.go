@@ -677,6 +677,94 @@ func TestService_ExecuteStream_FallsBackWhenPrimaryProviderFailsBeforeVisibleOut
 	}
 }
 
+func TestService_ExecuteStream_FallsBackToSameModelOpenRouterGatewayBeforeDefaults(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	primary := &stubServiceProvider{
+		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			return errors.New("dial tcp: i/o timeout")
+		},
+	}
+	fallback := &stubServiceProvider{
+		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: "OPENROUTER_OK"},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{InputTokens: 1, OutputTokens: 2},
+			})
+			return nil
+		},
+	}
+
+	service := NewService(Config{
+		AIConfig: &config.AIConfig{
+			ChatModel:        "deepseek:deepseek-v4-pro",
+			OpenRouterAPIKey: "sk-or-test",
+			DeepSeekAPIKey:   "deepseek-test",
+		},
+		StateProvider: &mockStateProvider{},
+	})
+	service.sessions = store
+	service.provider = primary
+	service.providerFactory = func(model string) (providers.StreamingProvider, error) {
+		if model == "openrouter:deepseek/deepseek-v4-pro" {
+			return fallback, nil
+		}
+		return nil, errors.New("unexpected model " + model)
+	}
+	service.started = true
+
+	var content strings.Builder
+	var fallbackNextModel string
+	var doneModel string
+	err = service.ExecuteStream(context.Background(), ExecuteRequest{
+		SessionID: "fallback-to-openrouter-same-model",
+		Prompt:    "reply",
+	}, func(event StreamEvent) {
+		switch event.Type {
+		case "content":
+			var data ContentData
+			if err := json.Unmarshal(event.Data, &data); err != nil {
+				t.Fatalf("unmarshal content: %v", err)
+			}
+			content.WriteString(data.Text)
+		case "workflow_state":
+			var data WorkflowStateData
+			if err := json.Unmarshal(event.Data, &data); err != nil {
+				t.Fatalf("unmarshal workflow state: %v", err)
+			}
+			if data.Phase == "provider_fallback" {
+				fallbackNextModel = data.NextModel
+			}
+		case "done":
+			var data DoneData
+			if err := json.Unmarshal(event.Data, &data); err != nil {
+				t.Fatalf("unmarshal done: %v", err)
+			}
+			doneModel = data.Model
+		}
+	})
+	if err != nil {
+		t.Fatalf("ExecuteStream failed: %v", err)
+	}
+	if got := content.String(); got != "OPENROUTER_OK" {
+		t.Fatalf("content = %q, want OpenRouter fallback response", got)
+	}
+	if fallbackNextModel != "openrouter:deepseek/deepseek-v4-pro" {
+		t.Fatalf("fallback next model = %q, want same-model OpenRouter route", fallbackNextModel)
+	}
+	if doneModel != "openrouter:deepseek/deepseek-v4-pro" {
+		t.Fatalf("done model = %q, want same-model OpenRouter route", doneModel)
+	}
+}
+
 func TestService_ChatProviderAttemptsUsesStableFallbackModelsWithoutLiveCatalog(t *testing.T) {
 	service := &Service{}
 	cfg := &config.AIConfig{
@@ -705,6 +793,49 @@ func TestService_ChatProviderAttemptsUsesStableFallbackModelsWithoutLiveCatalog(
 	want := []string{
 		"openrouter:qwen/qwen3.7-plus",
 		"deepseek:deepseek-v4-flash",
+		"gemini:gemini-3.1-flash-lite",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("attempt models = %#v, want %#v", got, want)
+	}
+	if attempts[0].Provider == nil {
+		t.Fatal("primary attempt should reuse the configured provider")
+	}
+	for i, attempt := range attempts[1:] {
+		if attempt.Provider != nil {
+			t.Fatalf("fallback attempt %d should be lazy provider creation", i+1)
+		}
+	}
+}
+
+func TestService_ChatProviderAttemptsPrefersSameModelOpenRouterGatewayFallback(t *testing.T) {
+	service := &Service{}
+	cfg := &config.AIConfig{
+		ChatModel:        "deepseek:deepseek-v4-pro",
+		DiscoveryModel:   "gemini:gemini-3.1-flash-lite",
+		OpenRouterAPIKey: "sk-or-test",
+		DeepSeekAPIKey:   "deepseek-test",
+		GeminiAPIKey:     "gemini-test",
+	}
+
+	attempts, err := service.chatProviderAttempts(
+		context.Background(),
+		cfg,
+		"deepseek:deepseek-v4-pro",
+		"deepseek:deepseek-v4-pro",
+		&stubServiceProvider{},
+	)
+	if err != nil {
+		t.Fatalf("chatProviderAttempts failed: %v", err)
+	}
+
+	got := make([]string, 0, len(attempts))
+	for _, attempt := range attempts {
+		got = append(got, attempt.Model)
+	}
+	want := []string{
+		"deepseek:deepseek-v4-pro",
+		"openrouter:deepseek/deepseek-v4-pro",
 		"gemini:gemini-3.1-flash-lite",
 	}
 	if !reflect.DeepEqual(got, want) {

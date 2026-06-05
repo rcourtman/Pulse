@@ -2853,6 +2853,7 @@ func (s *Service) chatProviderAttempts(_ context.Context, cfg *config.AIConfig, 
 	var attempts []chatProviderAttempt
 	var primaryErr error
 	seen := make(map[string]struct{})
+	seenProviders := make(map[string]struct{})
 	addAttempt := func(model string, provider providers.StreamingProvider) {
 		model = strings.TrimSpace(model)
 		if model == "" && provider == nil {
@@ -2866,6 +2867,9 @@ func (s *Service) chatProviderAttempts(_ context.Context, cfg *config.AIConfig, 
 			return
 		}
 		seen[key] = struct{}{}
+		if attemptProvider, _ := config.ParseModelString(model); attemptProvider != "" {
+			seenProviders[attemptProvider] = struct{}{}
+		}
 		attempts = append(attempts, chatProviderAttempt{Model: model, Provider: provider})
 	}
 
@@ -2890,8 +2894,14 @@ func (s *Service) chatProviderAttempts(_ context.Context, cfg *config.AIConfig, 
 	}
 
 	primaryProvider, _ := config.ParseModelString(primaryModel)
+	if gatewayModel, ok := modelresolution.OpenRouterEquivalentChatModel(cfg, primaryModel); ok {
+		addAttempt(gatewayModel, nil)
+	}
 	for _, providerName := range cfg.GetConfiguredProviders() {
 		if providerName == primaryProvider {
+			continue
+		}
+		if _, ok := seenProviders[providerName]; ok {
 			continue
 		}
 		model := chatFallbackModelForProvider(cfg, providerName)

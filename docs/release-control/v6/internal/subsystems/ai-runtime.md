@@ -149,18 +149,26 @@ runtime cost control, and shared AI transport surfaces.
    provider/model route. This fallback must use chat-suitable model resolution
    from `internal/ai/modelresolution`, skipping obvious non-chat endpoints such
    as realtime, audio, moderation, embedding, and content-safety catalog
-	   entries. Fallback planning must not block the selected provider's first
-	   attempt on live catalog reads for every other configured provider; the hot
-	   path may queue only explicit provider preferences or stable provider defaults
-	   and defer fallback provider construction until the selected route actually
-	   fails before visible output. Primary interactive chat model resolution is
-	   governed by that same hot-path rule: it must use the explicit configured
-	   chat route or a stable provider default without calling provider model
-	   catalogs before the selected stream starts. Catalog-backed recommendation
-	   belongs to settings/model-list flows, not `/api/ai/chat` first-response
-	   startup. Once visible output has streamed, Pulse must not silently switch
-	   providers for that turn; the error belongs to the visible attempt and is
-	   surfaced through normal failed-turn recovery. Assistant
+   entries. Fallback planning must not block the selected provider's first
+   attempt on live catalog reads for every other configured provider; the hot
+   path may queue only explicit provider preferences or stable provider defaults
+   and defer fallback provider construction until the selected route actually
+   fails before visible output. Primary interactive chat model resolution is
+   governed by that same hot-path rule: it must use the explicit configured
+   chat route or a stable provider default without calling provider model
+   catalogs before the selected stream starts. Catalog-backed recommendation
+   belongs to settings/model-list flows, not `/api/ai/chat` first-response
+   startup. When the selected direct-provider route fails before visible output
+   and OpenRouter is configured, fallback planning should first try the same
+   vendor/model through the OpenRouter route where a deterministic gateway id
+   can be formed, such as `deepseek:deepseek-v4-pro` to
+   `openrouter:deepseek/deepseek-v4-pro`, before falling back to unrelated
+   provider defaults. That same-model gateway planning must remain catalog-free
+   and may continue to the next configured provider if the gateway attempt also
+   fails before visible output. Once visible output has streamed, Pulse must
+   not silently switch
+   providers for that turn; the error belongs to the visible attempt and is
+   surfaced through normal failed-turn recovery. Assistant
    completion events must carry the effective model route that actually
    completed the turn, and the drawer must update the in-flight transcript row
    when `provider_fallback` names the next route so message labels, cost

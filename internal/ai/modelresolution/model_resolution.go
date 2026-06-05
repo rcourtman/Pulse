@@ -111,6 +111,50 @@ func ResolveConfiguredChatProviderModelOffline(cfg *config.AIConfig, provider st
 	return "", fmt.Errorf("no chat model configured for %s provider", provider)
 }
 
+// OpenRouterEquivalentChatModel maps a configured direct-provider chat model to
+// the same vendor/model route through OpenRouter when that gateway is configured.
+// It never calls a live model catalog; unsupported gateway routes simply fail as
+// normal provider attempts and the chat fallback planner can continue.
+func OpenRouterEquivalentChatModel(cfg *config.AIConfig, model string) (string, bool) {
+	if cfg == nil || !cfg.HasProvider(config.AIProviderOpenRouter) {
+		return "", false
+	}
+	provider, modelName := config.ParseModelString(strings.TrimSpace(model))
+	modelName = strings.TrimSpace(modelName)
+	if provider == "" || modelName == "" {
+		return "", false
+	}
+	if provider == config.AIProviderOpenRouter ||
+		provider == config.AIProviderOllama ||
+		provider == config.AIProviderQuickstart {
+		return "", false
+	}
+	openRouterOwner := openRouterOwnerForProvider(provider)
+	if openRouterOwner == "" {
+		return "", false
+	}
+	candidate := config.FormatModelString(config.AIProviderOpenRouter, openRouterOwner+"/"+strings.TrimPrefix(modelName, openRouterOwner+"/"))
+	if !IsModelUsableForChatWithConfig(cfg, candidate) {
+		return "", false
+	}
+	return candidate, true
+}
+
+func openRouterOwnerForProvider(provider string) string {
+	switch strings.TrimSpace(provider) {
+	case config.AIProviderAnthropic:
+		return "anthropic"
+	case config.AIProviderOpenAI:
+		return "openai"
+	case config.AIProviderDeepSeek:
+		return "deepseek"
+	case config.AIProviderGemini:
+		return "google"
+	default:
+		return ""
+	}
+}
+
 // ResolvePreferredModelForProvider returns the best model to use for the requested
 // provider. Explicit provider-scoped selections win; otherwise Pulse resolves a
 // recommended model from the provider's live catalog.

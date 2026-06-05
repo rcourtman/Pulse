@@ -6767,11 +6767,11 @@
     {
       "id": "codex-lane-followup-architecture-post-rc-canonicalization",
       "agent_id": "codex",
-      "summary": "Improve Assistant inventory context and OpenCode-style activity flow",
+      "summary": "Add same-model OpenRouter fallback for Assistant provider route failures",
       "target_id": "v6-product-lane-expansion",
       "claimed_at": "2026-06-05T21:57:48Z",
-      "heartbeat_at": "2026-06-05T23:04:17Z",
-      "expires_at": "2026-06-06T01:04:17Z",
+      "heartbeat_at": "2026-06-05T23:22:05Z",
+      "expires_at": "2026-06-06T01:22:05Z",
       "work_item": {
         "kind": "lane-followup",
         "id": "architecture-post-rc-canonicalization"
