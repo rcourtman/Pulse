@@ -1,6 +1,9 @@
 package chat
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestCleanToolCallArtifacts(t *testing.T) {
 	tests := []struct {
@@ -58,6 +61,21 @@ func TestCleanToolCallArtifacts(t *testing.T) {
 			"{\"name\": \"pulse_query\", \"parameters\": {\"action\":\"get\"}}",
 			"",
 		},
+		{
+			"plain function leak: pulse_read",
+			"Let me inspect the device nodes.\npulse_read(target_host=\"current_resource\", command=\"ls /dev | wc -l\")",
+			"Let me inspect the device nodes.",
+		},
+		{
+			"plain function leak inline after prose",
+			"I will check that now. pulse_read(target_host=\"current_resource\", command=\"lsblk\")",
+			"I will check that now.",
+		},
+		{
+			"plain function leak only no prose",
+			"pulse_read(target_host=\"current_resource\", command=\"lsblk\")",
+			"",
+		},
 		// Negative: unrelated JSON the user might share — no "name" field
 		// matching an allowlisted tool, so the sanitiser leaves it alone.
 		{
@@ -81,6 +99,11 @@ func TestCleanToolCallArtifacts(t *testing.T) {
 			"edge: tool name as substring in prose",
 			"You can call the pulse_query tool to look up resources.",
 			"You can call the pulse_query tool to look up resources.",
+		},
+		{
+			"negative: unknown function-style call",
+			"Call helper(target_host=\"current_resource\") in the example.",
+			"Call helper(target_host=\"current_resource\") in the example.",
 		},
 	}
 
@@ -122,9 +145,12 @@ func TestContainsToolCallMarker(t *testing.T) {
 		{"json leak pulse_query", "{\"name\": \"pulse_query\", \"parameters\": {}}", true},
 		{"json leak pulse_discovery", "prose\n{\"name\": \"pulse_discovery\", \"parameters\": {}}", true},
 		{"json leak with code-fence", "answer\n```json\n{\"name\": \"pulse_query\"}", true},
+		{"plain function leak pulse_read", "pulse_read(target_host=\"current_resource\", command=\"lsblk\")", true},
+		{"plain function leak after prose", "text. pulse_read(target_host=\"current_resource\")", true},
 		{"json non-tool name", "{\"name\": \"frobnicate\", \"parameters\": {}}", false},
 		{"json unrelated object", "{\"foo\": \"bar\"}", false},
 		{"tool name as prose substring", "the pulse_query tool is useful", false},
+		{"unknown function-style call", "helper(target_host=\"current_resource\")", false},
 	}
 
 	for _, tt := range tests {
@@ -134,5 +160,32 @@ func TestContainsToolCallMarker(t *testing.T) {
 				t.Errorf("containsToolCallMarker(%q) = %v, want %v", tt.input, got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestAppendVisibleContentBeforeToolLeak(t *testing.T) {
+	var builder strings.Builder
+	var pending string
+	delta, leakFound := appendVisibleContentBeforeToolLeak(&builder, &pending, "Let me check. pu")
+	if leakFound {
+		t.Fatal("partial tool name should not be treated as a leak yet")
+	}
+	if delta != "Let me check. " || builder.String() != "Let me check. " || pending != "pu" {
+		t.Fatalf("unexpected first delta=%q builder=%q pending=%q", delta, builder.String(), pending)
+	}
+
+	delta, leakFound = appendVisibleContentBeforeToolLeak(
+		&builder,
+		&pending,
+		"lse_read(target_host=\"current_resource\", command=\"lsblk\")",
+	)
+	if !leakFound {
+		t.Fatal("expected split plain function call to be detected")
+	}
+	if delta != "" {
+		t.Fatalf("expected no visible delta once split call completed, got %q", delta)
+	}
+	if builder.String() != "Let me check. " || pending != "" {
+		t.Fatalf("builder should not append leaked call suffix, got builder=%q pending=%q", builder.String(), pending)
 	}
 }

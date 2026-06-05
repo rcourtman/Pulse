@@ -10,6 +10,7 @@ import {
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { normalizeChatToolName } from '@/utils/chatIdentifiers';
+import { stripAssistantOutputArtifacts } from '../assistantOutputHygiene';
 import type {
   ChatMessage,
   ToolExecution,
@@ -57,6 +58,7 @@ export function useChat(options: UseChatOptions = {}) {
   let abortControllerRef: AbortController | null = null;
   let activeRequestId = 0;
   let pendingBackendAbort: Promise<void> | null = null;
+  const suppressedRawContentMessageIds = new Set<string>();
 
   const abortBackendSession = (targetSessionId: string): Promise<void> | null => {
     const normalizedSessionId = targetSessionId.trim();
@@ -240,24 +242,30 @@ export function useChat(options: UseChatOptions = {}) {
         try {
           switch (event.type) {
             case 'content': {
+              if (suppressedRawContentMessageIds.has(assistantId)) {
+                return msg;
+              }
               const content = extractText(event.data);
               if (!content) return msg;
+              const visible = stripAssistantOutputArtifacts(content);
+              if (visible.stripped) {
+                suppressedRawContentMessageIds.add(assistantId);
+              }
+              if (!visible.text) return msg;
               const existing = msg.content || '';
               // Add to streamEvents for chronological display
-              const updated = addStreamEvent(msg, { type: 'content', content });
+              const updated = addStreamEvent(msg, { type: 'content', content: visible.text });
               return {
                 ...updated,
-                content: existing + content,
+                content: existing + visible.text,
               };
             }
 
             case 'thinking': {
               const thinking = extractText(event.data);
               if (!thinking) return msg;
-              // Add thinking to streamEvents
-              const updated = addStreamEvent(msg, { type: 'thinking', thinking });
               return {
-                ...updated,
+                ...msg,
                 thinking: (msg.thinking || '') + thinking,
               };
             }
@@ -268,6 +276,7 @@ export function useChat(options: UseChatOptions = {}) {
             }
 
             case 'tool_start': {
+              suppressedRawContentMessageIds.delete(assistantId);
               const data = (event.data || {}) as {
                 id?: string;
                 name?: string;
@@ -304,6 +313,7 @@ export function useChat(options: UseChatOptions = {}) {
             }
 
             case 'tool_end': {
+              suppressedRawContentMessageIds.delete(assistantId);
               const data = event.data as {
                 id?: string;
                 name: string;
@@ -406,6 +416,7 @@ export function useChat(options: UseChatOptions = {}) {
             }
 
             case 'approval_needed': {
+              suppressedRawContentMessageIds.delete(assistantId);
               const data = event.data as {
                 command: string;
                 tool_id: string;
@@ -486,6 +497,7 @@ export function useChat(options: UseChatOptions = {}) {
             }
 
             case 'question': {
+              suppressedRawContentMessageIds.delete(assistantId);
               const data = event.data as { question_id: string; questions: Array<any> };
 
               const pendingQuestion: PendingQuestion = {
@@ -520,14 +532,22 @@ export function useChat(options: UseChatOptions = {}) {
             }
 
             case 'done': {
+              suppressedRawContentMessageIds.delete(assistantId);
               const tokens = extractTokens(event.data);
               if (tokens && (tokens.input > 0 || tokens.output > 0)) {
-                return { ...msg, isStreaming: false, pendingTools: [], tokens, workflowStatus: undefined };
+                return {
+                  ...msg,
+                  isStreaming: false,
+                  pendingTools: [],
+                  tokens,
+                  workflowStatus: undefined,
+                };
               }
               return { ...msg, isStreaming: false, pendingTools: [], workflowStatus: undefined };
             }
 
             case 'error': {
+              suppressedRawContentMessageIds.delete(assistantId);
               const errorMsg = extractErrorMessage(event.data);
               // Keep any content streamed before the failure; surface the error
               // as a distinct, recoverable block rather than overwriting the answer.
@@ -603,11 +623,7 @@ export function useChat(options: UseChatOptions = {}) {
     // event, avoiding a separate preflight request before first token.
     let currentSessionId = sessionId();
 
-    if (
-      backendAbortBeforeNextSend &&
-      abortedSessionId &&
-      currentSessionId === abortedSessionId
-    ) {
+    if (backendAbortBeforeNextSend && abortedSessionId && currentSessionId === abortedSessionId) {
       await backendAbortBeforeNextSend;
       if (requestId !== activeRequestId) {
         return false;
@@ -654,9 +670,7 @@ export function useChat(options: UseChatOptions = {}) {
 
       setMessages((prev) =>
         prev.map((msg) =>
-          msg.id === assistantId
-            ? { ...msg, isStreaming: false, error: errorMessage }
-            : msg,
+          msg.id === assistantId ? { ...msg, isStreaming: false, error: errorMessage } : msg,
         ),
       );
       await notifyConversationChanged();

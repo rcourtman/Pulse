@@ -474,9 +474,9 @@ describe('MessageItem', () => {
   });
 
   describe('stream events rendering', () => {
-    it('renders thinking blocks from stream events', () => {
+    it('does not render raw thinking from stream events', () => {
       const events: StreamDisplayEvent[] = [
-        { type: 'thinking', thinking: 'Let me analyze this...' },
+        { type: 'thinking', thinking: 'We need to inspect the user prompt before answering.' },
       ];
 
       render(() => (
@@ -486,22 +486,30 @@ describe('MessageItem', () => {
         />
       ));
 
-      expect(screen.getByTestId('thinking-block')).toBeInTheDocument();
-      expect(screen.getByText('Let me analyze this...')).toBeInTheDocument();
+      expect(screen.queryByTestId('thinking-block')).not.toBeInTheDocument();
+      expect(screen.queryByText(/inspect the user prompt/i)).not.toBeInTheDocument();
     });
 
-    it('passes isStreaming to ThinkingBlock', () => {
-      const events: StreamDisplayEvent[] = [{ type: 'thinking', thinking: 'Thinking...' }];
+    it('keeps the neutral first-token indicator when only thinking has streamed', () => {
+      const events: StreamDisplayEvent[] = [
+        { type: 'thinking', thinking: 'Hidden reasoning should not be visible.' },
+      ];
 
       render(() => (
         <MessageItem
-          message={makeMessage({ role: 'assistant', streamEvents: events, isStreaming: true })}
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            streamEvents: events,
+            isStreaming: true,
+            pendingTools: [],
+          })}
           {...makeHandlers()}
         />
       ));
 
-      const block = screen.getByTestId('thinking-block');
-      expect(block.getAttribute('data-streaming')).toBe('true');
+      expect(screen.getByText('Thinking...')).toBeInTheDocument();
+      expect(screen.queryByText(/Hidden reasoning/i)).not.toBeInTheDocument();
     });
 
     it('renders tool execution blocks', () => {
@@ -575,6 +583,29 @@ describe('MessageItem', () => {
       expect(prose!.innerHTML).toContain('<p>Here is the analysis</p>');
     });
 
+    it('strips serialized tool-call text from content blocks', () => {
+      const events: StreamDisplayEvent[] = [
+        {
+          type: 'content',
+          content:
+            'I will inspect the device nodes.\npulse_read(target_host="current_resource", command="lsblk")',
+        },
+      ];
+
+      const { container } = render(() => (
+        <MessageItem
+          message={makeMessage({ role: 'assistant', streamEvents: events })}
+          {...makeHandlers()}
+        />
+      ));
+
+      const prose = container.querySelector('.prose');
+      expect(prose).toBeInTheDocument();
+      expect(prose!.innerHTML).toContain('I will inspect the device nodes.');
+      expect(prose!.innerHTML).not.toContain('pulse_read');
+      expect(screen.queryByText(/target_host/)).not.toBeInTheDocument();
+    });
+
     it('renders pending_tool events as empty fragments (no visible output)', () => {
       const events: StreamDisplayEvent[] = [
         {
@@ -644,30 +675,26 @@ describe('MessageItem', () => {
         { type: 'content', content: 'Step 2' },
       ];
 
-      render(() => (
+      const { container } = render(() => (
         <MessageItem
           message={makeMessage({ role: 'assistant', streamEvents: events })}
           {...makeHandlers()}
         />
       ));
 
-      expect(screen.getByTestId('thinking-block')).toBeInTheDocument();
+      expect(screen.queryByTestId('thinking-block')).not.toBeInTheDocument();
       expect(screen.getByTestId('tool-execution-block')).toBeInTheDocument();
 
-      // Verify DOM order: thinking → content(Step 1) → tool → content(Step 2)
-      const contentArea = screen.getByTestId('thinking-block').parentElement!;
+      // Verify DOM order: content(Step 1) → tool → content(Step 2). Thinking is hidden.
       const allBlocks = Array.from(
-        contentArea.querySelectorAll(
-          '[data-testid="thinking-block"], .prose, [data-testid="tool-execution-block"]',
-        ),
+        container.querySelectorAll('.prose, [data-testid="tool-execution-block"]'),
       );
-      expect(allBlocks.length).toBe(4); // thinking + 2 prose + 1 tool
-      expect(allBlocks[0].getAttribute('data-testid')).toBe('thinking-block');
-      expect(allBlocks[1].classList.contains('prose')).toBe(true);
-      expect(allBlocks[1].innerHTML).toContain('Step 1');
-      expect(allBlocks[2].getAttribute('data-testid')).toBe('tool-execution-block');
-      expect(allBlocks[3].classList.contains('prose')).toBe(true);
-      expect(allBlocks[3].innerHTML).toContain('Step 2');
+      expect(allBlocks.length).toBe(3);
+      expect(allBlocks[0].classList.contains('prose')).toBe(true);
+      expect(allBlocks[0].innerHTML).toContain('Step 1');
+      expect(allBlocks[1].getAttribute('data-testid')).toBe('tool-execution-block');
+      expect(allBlocks[2].classList.contains('prose')).toBe(true);
+      expect(allBlocks[2].innerHTML).toContain('Step 2');
     });
   });
 
@@ -752,10 +779,8 @@ describe('MessageItem', () => {
       expect(prose!.innerHTML).toContain('Fallback text');
     });
 
-    it('suppresses fallback content when streamEvents is non-empty but all events are non-renderable', () => {
+    it('uses fallback content when streamEvents are present but all events are non-renderable', () => {
       // All content events have empty content (falsy), so nothing renders from them.
-      // But hasStreamEvents() is true because the array is non-empty,
-      // so the fallback content path is also suppressed.
       const events: StreamDisplayEvent[] = [
         { type: 'content', content: '' },
         { type: 'content', content: '' },
@@ -765,18 +790,16 @@ describe('MessageItem', () => {
         <MessageItem
           message={makeMessage({
             role: 'assistant',
-            content: 'Fallback that should NOT appear',
+            content: 'Fallback answer text',
             streamEvents: events,
           })}
           {...makeHandlers()}
         />
       ));
 
-      // No prose blocks rendered (empty content events are skipped by groupedEvents)
       const proseBlocks = container.querySelectorAll('.prose');
-      expect(proseBlocks.length).toBe(0);
-      // Fallback is also suppressed because hasStreamEvents() is true
-      expect(screen.queryByText('Fallback that should NOT appear')).not.toBeInTheDocument();
+      expect(proseBlocks.length).toBe(1);
+      expect(proseBlocks[0].innerHTML).toContain('Fallback answer text');
     });
 
     it('handles undefined stream events (uses fallback content)', () => {
@@ -793,6 +816,24 @@ describe('MessageItem', () => {
 
       const prose = container.querySelector('.prose');
       expect(prose!.innerHTML).toContain('Regular content');
+    });
+
+    it('strips serialized tool-call text from fallback content', () => {
+      const { container } = render(() => (
+        <MessageItem
+          message={makeMessage({
+            streamEvents: undefined,
+            content:
+              'I will inspect the device nodes.\npulse_read(target_host="current_resource", command="lsblk")',
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      const prose = container.querySelector('.prose');
+      expect(prose).toBeInTheDocument();
+      expect(prose!.innerHTML).toContain('I will inspect the device nodes.');
+      expect(prose!.innerHTML).not.toContain('pulse_read');
     });
   });
 

@@ -521,6 +521,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		var contentBuilder strings.Builder
 		var thinkingBuilder strings.Builder
 		var toolCalls []providers.ToolCall
+		var suppressLeakedToolContent bool
+		var pendingVisibleContent string
 
 		log.Debug().
 			Str("session_id", sessionID).
@@ -542,22 +544,21 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				case "content":
 					if data, ok := event.Data.(providers.ContentEvent); ok {
 						attemptEmittedVisibleEvents = true
-						// Check for tool call marker leakage - if detected, stop streaming this chunk.
-						// These markers indicate the model is outputting internal tool call
-						// formatting instead of using the proper tool calling API.
-						if containsToolCallMarker(data.Text) {
-							// Don't append or stream this content
+						if suppressLeakedToolContent {
 							return
 						}
-						// Also check if the accumulated content already has the marker
-						// (in case it arrived in a previous chunk)
-						if containsToolCallMarker(contentBuilder.String()) {
+						visibleText, leakFound := appendVisibleContentBeforeToolLeak(&contentBuilder, &pendingVisibleContent, data.Text)
+						if visibleText != "" {
+							jsonData, _ := json.Marshal(ContentData{Text: visibleText})
+							callback(StreamEvent{Type: "content", Data: jsonData})
+						}
+						if leakFound {
+							// The model started serializing an internal tool call as
+							// assistant prose instead of using the structured tool_calls
+							// channel. Stop forwarding the rest of this provider turn.
+							suppressLeakedToolContent = true
 							return
 						}
-						contentBuilder.WriteString(data.Text)
-						// Forward to callback - send ContentData struct
-						jsonData, _ := json.Marshal(ContentData{Text: data.Text})
-						callback(StreamEvent{Type: "content", Data: jsonData})
 					}
 
 				case "thinking":
@@ -663,6 +664,13 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			}
 			err = effectiveErr
 			break
+		}
+
+		if err == nil && !suppressLeakedToolContent {
+			if visibleText := flushPendingVisibleContent(&contentBuilder, &pendingVisibleContent); visibleText != "" {
+				jsonData, _ := json.Marshal(ContentData{Text: visibleText})
+				callback(StreamEvent{Type: "content", Data: jsonData})
+			}
 		}
 
 		log.Debug().

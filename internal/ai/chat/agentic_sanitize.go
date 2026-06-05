@@ -11,6 +11,21 @@ import (
 // These patterns catch tool call markup that leaks into content when models are
 // told not to use tools but still see tool definitions.
 var (
+	dsmlMarkers = []string{
+		"<｜DSML｜",    // Unicode single pipe (opening)
+		"</｜DSML｜",   // Unicode single pipe (closing)
+		"<｜｜DSML｜｜",  // Unicode double pipe (opening) — deepseek-v4-flash
+		"</｜｜DSML｜｜", // Unicode double pipe (closing)
+		"<||DSML||",  // ASCII double pipe (opening)
+		"</||DSML||", // ASCII double pipe (closing)
+		"<|DSML|",    // ASCII single pipe (opening)
+		"</|DSML|",   // ASCII single pipe (closing)
+		"<｜/DSML｜",   // Alternative Unicode closing
+		"<｜｜/DSML｜｜", // Alternative Unicode double-pipe closing
+		"<|/DSML|",   // Alternative ASCII closing
+		"<||/DSML||", // Alternative ASCII double-pipe closing
+	}
+
 	// XML-style tool call envelopes: <tool_call>...</tool_call>, <tool_calls>...</tool_calls>,
 	// <function_call>...</function_call>, <function_calls>...</function_calls>
 	xmlToolCallRe = regexp.MustCompile(`(?s)</?(?:tool_calls?|function_calls?)>`)
@@ -44,6 +59,12 @@ var (
 	jsonToolCallRe = regexp.MustCompile(
 		`(?:^|\n)[ \t]*(?:` + "```" + `[ \t]*(?:json|JSON)?[ \t]*\n?[ \t]*)?\{[ \t\n]*"name"[ \t]*:[ \t]*"([a-zA-Z_][a-zA-Z0-9_]*)"`,
 	)
+
+	// Plain function-style tool-call leak: some models emit
+	// pulse_read(target_host="...", command="...") as assistant content
+	// instead of a structured tool call. Gate on canonical tool names so a
+	// random prose function call is not stripped.
+	plainFunctionToolCallRe = regexp.MustCompile(`(?:^|[^a-zA-Z0-9_])([a-zA-Z_][a-zA-Z0-9_]*)[ \t\r\n]*\(`)
 )
 
 // cleanToolCallArtifacts removes LLM-internal tool call format leakage from content.
@@ -55,56 +76,7 @@ func cleanToolCallArtifacts(content string) string {
 		return content
 	}
 
-	// Fast-path: DeepSeek DSML markers (literal string checks, no regex needed).
-	// Includes both single- and double-pipe variants — deepseek-v4-flash
-	// emits the double-pipe form ("<｜｜DSML｜｜tool_calls>"). The single-pipe
-	// list alone left the double-pipe form unsanitised, so users saw the
-	// raw DSML in chat as the assistant's "final response."
-	dsmlMarkers := []string{
-		"<｜DSML｜",    // Unicode single pipe (opening)
-		"</｜DSML｜",   // Unicode single pipe (closing)
-		"<｜｜DSML｜｜",  // Unicode double pipe (opening) — deepseek-v4-flash
-		"</｜｜DSML｜｜", // Unicode double pipe (closing)
-		"<|DSML|",    // ASCII single pipe (opening)
-		"</|DSML|",   // ASCII single pipe (closing)
-		"<||DSML||",  // ASCII double pipe (opening)
-		"</||DSML||", // ASCII double pipe (closing)
-		"<｜/DSML｜",   // Alternative Unicode closing
-		"<｜｜/DSML｜｜", // Alternative Unicode double-pipe closing
-		"<|/DSML|",   // Alternative ASCII closing
-		"<||/DSML||", // Alternative ASCII double-pipe closing
-	}
-
-	for _, marker := range dsmlMarkers {
-		if idx := strings.Index(content, marker); idx >= 0 {
-			content = strings.TrimSpace(content[:idx])
-		}
-	}
-
-	// Backstop regex catches arbitrary pipe-count variants the fast-path
-	// list above might miss as new model behaviours surface.
-	if loc := dsmlRe.FindStringIndex(content); loc != nil {
-		content = strings.TrimSpace(content[:loc[0]])
-	}
-
-	// Structural patterns: XML-style envelopes
-	if loc := xmlToolCallRe.FindStringIndex(content); loc != nil {
-		content = strings.TrimSpace(content[:loc[0]])
-	}
-
-	// Pipe-delimited markers
-	if loc := pipeMarkerRe.FindStringIndex(content); loc != nil {
-		content = strings.TrimSpace(content[:loc[0]])
-	}
-
-	// MiniMax-style markers
-	if loc := minimaxMarkerRe.FindStringIndex(content); loc != nil {
-		content = strings.TrimSpace(content[:loc[0]])
-	}
-
-	// Plain-JSON tool-call leak from weak local models (qwen2.5 small).
-	// Allowlist-gated to avoid stripping legitimate user JSON.
-	if idx := findJSONToolCallLeak(content); idx >= 0 {
+	if idx := toolCallArtifactIndex(content); idx >= 0 {
 		content = strings.TrimSpace(content[:idx])
 	}
 
@@ -114,40 +86,121 @@ func cleanToolCallArtifacts(content string) string {
 // containsToolCallMarker checks if content contains any known LLM-internal tool call markers.
 // Used during streaming to detect when to stop forwarding content chunks.
 func containsToolCallMarker(content string) bool {
-	// Fast-path: DeepSeek DSML literal checks. Covers single- and
-	// double-pipe variants. deepseek-v4-flash uses double-pipe; older
-	// deepseek variants use single. Both leak into content as text
-	// rather than going through the tool-call channel.
-	dsmlMarkers := []string{
-		"<｜DSML｜",   // Unicode single pipe
-		"<｜｜DSML｜｜", // Unicode double pipe (deepseek-v4-flash)
-		"<|DSML|",   // ASCII single pipe
-		"<||DSML||", // ASCII double pipe
+	return toolCallArtifactIndex(content) >= 0
+}
+
+// toolCallArtifactIndex returns the byte offset of the first known tool-call
+// artifact in content, or -1 if no artifact is present.
+func toolCallArtifactIndex(content string) int {
+	if content == "" {
+		return -1
 	}
-	for _, marker := range dsmlMarkers {
-		if strings.Contains(content, marker) {
-			return true
+
+	first := -1
+	record := func(idx int) {
+		if idx < 0 {
+			return
+		}
+		if first < 0 || idx < first {
+			first = idx
 		}
 	}
 
-	// Structural patterns
-	if dsmlRe.MatchString(content) {
-		return true
-	}
-	if xmlToolCallRe.MatchString(content) {
-		return true
-	}
-	if pipeMarkerRe.MatchString(content) {
-		return true
-	}
-	if minimaxMarkerRe.MatchString(content) {
-		return true
-	}
-	if findJSONToolCallLeak(content) >= 0 {
-		return true
+	for _, marker := range dsmlMarkers {
+		if idx := strings.Index(content, marker); idx >= 0 {
+			record(idx)
+		}
 	}
 
-	return false
+	if loc := dsmlRe.FindStringIndex(content); loc != nil {
+		record(loc[0])
+	}
+	if loc := xmlToolCallRe.FindStringIndex(content); loc != nil {
+		record(loc[0])
+	}
+	if loc := pipeMarkerRe.FindStringIndex(content); loc != nil {
+		record(loc[0])
+	}
+	if loc := minimaxMarkerRe.FindStringIndex(content); loc != nil {
+		record(loc[0])
+	}
+	record(findJSONToolCallLeak(content))
+	record(findPlainFunctionToolCallLeak(content))
+
+	return first
+}
+
+func appendVisibleContentBeforeToolLeak(
+	builder *strings.Builder,
+	pending *string,
+	text string,
+) (visibleDelta string, leakFound bool) {
+	if text == "" && (pending == nil || *pending == "") {
+		return "", false
+	}
+
+	pendingText := ""
+	if pending != nil {
+		pendingText = *pending
+		*pending = ""
+	}
+	text = pendingText + text
+
+	existing := builder.String()
+	candidate := existing + text
+	idx := toolCallArtifactIndex(candidate)
+	if idx < 0 {
+		visible, held := splitTrailingPotentialToolNamePrefix(text)
+		if visible != "" {
+			builder.WriteString(visible)
+		}
+		if pending != nil {
+			*pending = held
+		}
+		return visible, false
+	}
+
+	if idx > len(existing) {
+		visibleDelta, _ = splitTrailingPotentialToolNamePrefix(candidate[len(existing):idx])
+		builder.WriteString(visibleDelta)
+	}
+	return visibleDelta, true
+}
+
+func flushPendingVisibleContent(builder *strings.Builder, pending *string) string {
+	if pending == nil || *pending == "" {
+		return ""
+	}
+	visible := *pending
+	*pending = ""
+	builder.WriteString(visible)
+	return visible
+}
+
+func splitTrailingPotentialToolNamePrefix(content string) (visible string, held string) {
+	if content == "" {
+		return "", ""
+	}
+
+	start := len(content)
+	for start > 0 {
+		ch := content[start-1]
+		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' {
+			start--
+			continue
+		}
+		break
+	}
+
+	if start == len(content) {
+		return content, ""
+	}
+
+	token := content[start:]
+	if tools.IsKnownToolNamePrefix(token) {
+		return content[:start], token
+	}
+	return content, ""
 }
 
 // findJSONToolCallLeak returns the byte offset to strip from when a plain-JSON
@@ -168,6 +221,23 @@ func findJSONToolCallLeak(content string) int {
 		name := content[m[2]:m[3]]
 		if tools.IsKnownToolName(name) {
 			return m[0]
+		}
+	}
+	return -1
+}
+
+func findPlainFunctionToolCallLeak(content string) int {
+	if content == "" {
+		return -1
+	}
+	matches := plainFunctionToolCallRe.FindAllStringSubmatchIndex(content, -1)
+	for _, m := range matches {
+		if len(m) < 4 || m[2] < 0 || m[3] < 0 {
+			continue
+		}
+		name := content[m[2]:m[3]]
+		if tools.IsKnownToolName(name) {
+			return m[2]
 		}
 	}
 	return -1

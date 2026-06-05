@@ -74,6 +74,8 @@ func (a *AgenticLoop) ensureFinalTextResponse(
 	}
 
 	var summaryBuilder strings.Builder
+	var suppressLeakedToolContent bool
+	var pendingVisibleContent string
 
 	// Keep this bounded so a stuck provider stream doesn't drag the whole request.
 	summaryCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
@@ -83,9 +85,17 @@ func (a *AgenticLoop) ensureFinalTextResponse(
 		switch event.Type {
 		case "content":
 			if data, ok := event.Data.(providers.ContentEvent); ok {
-				summaryBuilder.WriteString(data.Text)
-				jsonData, _ := json.Marshal(ContentData{Text: data.Text})
-				callback(StreamEvent{Type: "content", Data: jsonData})
+				if suppressLeakedToolContent {
+					return
+				}
+				visibleText, leakFound := appendVisibleContentBeforeToolLeak(&summaryBuilder, &pendingVisibleContent, data.Text)
+				if visibleText != "" {
+					jsonData, _ := json.Marshal(ContentData{Text: visibleText})
+					callback(StreamEvent{Type: "content", Data: jsonData})
+				}
+				if leakFound {
+					suppressLeakedToolContent = true
+				}
 			}
 		case "done":
 			if data, ok := event.Data.(providers.DoneEvent); ok {
@@ -94,6 +104,13 @@ func (a *AgenticLoop) ensureFinalTextResponse(
 			}
 		}
 	})
+
+	if summaryErr == nil && !suppressLeakedToolContent {
+		if visibleText := flushPendingVisibleContent(&summaryBuilder, &pendingVisibleContent); visibleText != "" {
+			jsonData, _ := json.Marshal(ContentData{Text: visibleText})
+			callback(StreamEvent{Type: "content", Data: jsonData})
+		}
+	}
 
 	if summaryErr == nil && summaryBuilder.Len() > 0 {
 		summaryMsg := Message{

@@ -588,8 +588,7 @@ describe('useChat', () => {
       expect(assistant.thinking).toBe('Let me think...');
 
       const thinkingEvents = assistant.streamEvents?.filter((e) => e.type === 'thinking') ?? [];
-      expect(thinkingEvents).toHaveLength(1);
-      expect(thinkingEvents[0].thinking).toBe('Let me think...');
+      expect(thinkingEvents).toHaveLength(0);
       dispose();
     });
 
@@ -633,6 +632,58 @@ describe('useChat', () => {
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.content).toBe('');
+      dispose();
+    });
+
+    it('strips serialized Pulse tool calls from streamed content', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('how many devices in this');
+      const fire = getFireEvent();
+
+      fire({
+        type: 'content',
+        data: 'I will inspect the device nodes.\npulse_read(target_host="current_resource", command="ls /dev | wc -l")',
+      });
+      fire({ type: 'content', data: 'raw arguments that should stay hidden' });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.content).toBe('I will inspect the device nodes.');
+      expect(assistant.content).not.toContain('pulse_read');
+      expect(assistant.content).not.toContain('raw arguments');
+      expect(assistant.streamEvents?.filter((e) => e.type === 'content')).toEqual([
+        { type: 'content', content: 'I will inspect the device nodes.' },
+      ]);
+      dispose();
+    });
+
+    it('resumes visible content after a governed tool boundary clears a raw leak', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('how many devices in this');
+      const fire = getFireEvent();
+
+      fire({
+        type: 'content',
+        data: 'I will inspect the device nodes.\npulse_read(target_host="current_resource", command="ls /dev | wc -l")',
+      });
+      fire({ type: 'content', data: 'raw arguments that should stay hidden' });
+      fire({ type: 'tool_start', data: { id: 'tool-1', name: 'pulse_read', input: 'exec' } });
+      fire({
+        type: 'tool_end',
+        data: { id: 'tool-1', name: 'pulse_read', input: 'exec', output: '42', success: true },
+      });
+      fire({ type: 'content', data: 'There are 42 device entries.' });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.content).toBe(
+        'I will inspect the device nodes.There are 42 device entries.',
+      );
+      expect(assistant.content).not.toContain('pulse_read');
+      expect(assistant.content).not.toContain('raw arguments');
+      expect(assistant.streamEvents?.map((e) => e.type)).toEqual(['content', 'tool', 'content']);
       dispose();
     });
 
@@ -1088,8 +1139,8 @@ describe('useChat', () => {
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       const types = assistant.streamEvents!.map((e) => e.type);
-      // Thinking, content, pending_tool, content (new content after non-content breaks merging)
-      expect(types).toEqual(['thinking', 'content', 'pending_tool', 'content']);
+      // Content, pending_tool, content (thinking is retained internally, not rendered)
+      expect(types).toEqual(['content', 'pending_tool', 'content']);
       dispose();
     });
   });

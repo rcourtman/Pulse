@@ -5,12 +5,12 @@ import CopyIcon from 'lucide-solid/icons/copy';
 import RotateCcwIcon from 'lucide-solid/icons/rotate-ccw';
 import SparklesIcon from 'lucide-solid/icons/sparkles';
 import { renderMarkdown } from '../aiChatUtils';
-import { ThinkingBlock } from './ThinkingBlock';
 import { ToolExecutionBlock } from './ToolExecutionBlock';
 import { ApprovalCard } from './ApprovalCard';
 import { QuestionCard } from './QuestionCard';
+import { stripAssistantOutputArtifacts } from './assistantOutputHygiene';
 import { groupStreamEventsForDisplay } from './streamEventGrouping';
-import type { ChatMessage, PendingApproval, PendingQuestion } from './types';
+import type { ChatMessage, PendingApproval, PendingQuestion, StreamDisplayEvent } from './types';
 import {
   AI_CHAT_ASSISTANT_MESSAGE_LABEL,
   AI_CHAT_CONTEXT_USED_LABEL,
@@ -41,15 +41,28 @@ const markdownClass =
 export const MessageItem: Component<MessageItemProps> = (props) => {
   const isUser = () => props.message.role === 'user';
 
-  const hasStreamEvents = () => props.message.streamEvents && props.message.streamEvents.length > 0;
-
-  // Group stream events into display blocks. Content and reasoning each collapse
-  // into a single block even when a reasoning model interleaves them, so the
-  // answer stays a coherent markdown document instead of fragmenting into
+  // Group stream events into display blocks. Content collapses into a single
+  // block even when a reasoning model interleaves hidden thinking deltas, so
+  // the answer stays a coherent markdown document instead of fragmenting into
   // whitespace-trimmed pieces. See groupStreamEventsForDisplay for the rationale.
   const groupedEvents = createMemo(() =>
     groupStreamEventsForDisplay(props.message.streamEvents || []),
   );
+  const isRenderableStreamEvent = (evt: StreamDisplayEvent) => {
+    switch (evt.type) {
+      case 'content':
+        return !!stripAssistantOutputArtifacts(evt.content || '').text;
+      case 'tool':
+        return !!evt.tool;
+      case 'approval':
+        return !!evt.approval;
+      case 'question':
+        return !!evt.question;
+      default:
+        return false;
+    }
+  };
+  const hasRenderableStreamEvents = () => groupedEvents().some(isRenderableStreamEvent);
 
   const contextTools = createMemo(() => {
     const events = props.message.streamEvents || [];
@@ -63,6 +76,8 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
 
     return Array.from(names);
   });
+  const visibleMessageContent = () =>
+    stripAssistantOutputArtifacts(props.message.content || '').text;
 
   // Check if currently streaming content (no tools pending, still streaming)
   const isStreamingText = () =>
@@ -71,7 +86,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
   const isWaitingForFirstToken = () =>
     isStreamingText() &&
     !props.message.content.trim() &&
-    !hasStreamEvents() &&
+    !hasRenderableStreamEvents() &&
     !props.message.error;
   const interruptionLabel = createMemo(() => {
     switch (props.message.interruption) {
@@ -86,9 +101,9 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
 
   // Copy-to-clipboard for a completed assistant answer.
   const [copied, setCopied] = createSignal(false);
-  const canCopy = () => !props.message.isStreaming && !!props.message.content?.trim();
+  const canCopy = () => !props.message.isStreaming && !!visibleMessageContent().trim();
   const copyMessage = async () => {
-    const text = props.message.content || '';
+    const text = visibleMessageContent();
     try {
       await navigator.clipboard?.writeText(text);
       setCopied(true);
@@ -159,18 +174,10 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
               </Show>
 
               {/* Stream events - chronological display */}
-              <Show when={hasStreamEvents()}>
+              <Show when={hasRenderableStreamEvents()}>
                 <For each={groupedEvents()}>
                   {(evt) => (
                     <Switch>
-                      {/* Thinking block */}
-                      <Match when={evt.type === 'thinking' && evt.thinking}>
-                        <ThinkingBlock
-                          content={evt.thinking || ''}
-                          isStreaming={props.message.isStreaming}
-                        />
-                      </Match>
-
                       <Match when={evt.type === 'pending_tool' && evt.pendingTool}>
                         <></>
                       </Match>
@@ -187,11 +194,18 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                       </Match>
 
                       {/* Content/text block */}
-                      <Match when={evt.type === 'content' && evt.content}>
+                      <Match
+                        when={
+                          evt.type === 'content' &&
+                          stripAssistantOutputArtifacts(evt.content || '').text
+                        }
+                      >
                         <div
                           class={markdownClass}
                           // eslint-disable-next-line solid/no-innerhtml
-                          innerHTML={renderMarkdown(evt.content || '')}
+                          innerHTML={renderMarkdown(
+                            stripAssistantOutputArtifacts(evt.content || '').text,
+                          )}
                         />
                       </Match>
 
@@ -220,11 +234,11 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
               </Show>
 
               {/* Fallback */}
-              <Show when={props.message.content && !hasStreamEvents()}>
+              <Show when={visibleMessageContent() && !hasRenderableStreamEvents()}>
                 <div
                   class={markdownClass}
                   // eslint-disable-next-line solid/no-innerhtml
-                  innerHTML={renderMarkdown(props.message.content)}
+                  innerHTML={renderMarkdown(visibleMessageContent())}
                 />
               </Show>
 

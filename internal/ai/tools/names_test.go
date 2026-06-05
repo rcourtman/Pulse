@@ -45,3 +45,34 @@ func TestIsKnownToolNameRejectsUnknown(t *testing.T) {
 		}
 	}
 }
+
+func TestIsKnownToolNamePrefix(t *testing.T) {
+	cases := []string{
+		"p",
+		"pulse_",
+		"pulse_re",
+		"pulse_read",
+		"patrol_",
+		"patrol_report",
+	}
+	for _, prefix := range cases {
+		if !IsKnownToolNamePrefix(prefix) {
+			t.Errorf("IsKnownToolNamePrefix(%q) = false, want true", prefix)
+		}
+	}
+}
+
+func TestIsKnownToolNamePrefixRejectsUnknown(t *testing.T) {
+	cases := []string{
+		"",
+		"x",
+		"Pulse_",
+		"helper",
+		"pulse_unknown_tool",
+	}
+	for _, prefix := range cases {
+		if IsKnownToolNamePrefix(prefix) {
+			t.Errorf("IsKnownToolNamePrefix(%q) = true, want false", prefix)
+		}
+	}
+}
