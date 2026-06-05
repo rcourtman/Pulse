@@ -818,6 +818,66 @@ describe('AIChat', () => {
       );
     });
 
+    it('uses a configured-provider route automatically when sending after a selected provider failure', async () => {
+      mockAIAPI.getSettings.mockResolvedValue({
+        model: 'deepseek:deepseek-v4-pro',
+        chat_model: '',
+        control_level: 'read_only',
+        autonomous_mode: false,
+        discovery_enabled: true,
+        configured_providers: ['deepseek', 'openrouter'],
+      });
+      mockAIAPI.getModels.mockResolvedValue({
+        models: [
+          {
+            id: 'deepseek:deepseek-v4-pro',
+            name: 'DeepSeek V4 Pro',
+            provider: 'deepseek',
+            notable: true,
+          },
+          {
+            id: 'openrouter:deepseek/deepseek-v4-pro',
+            name: 'DeepSeek: DeepSeek V4 Pro',
+            provider: 'openrouter',
+            notable: true,
+          },
+        ],
+      });
+      mockAIAPI.testProvider.mockResolvedValueOnce({
+        success: false,
+        message: 'Provider connection issue',
+        provider: 'deepseek',
+        model: 'deepseek:deepseek-v4-pro',
+        cause: 'provider_connection',
+        summary: 'Pulse could not maintain a healthy connection to this provider.',
+        recommendation: 'Check provider reachability.',
+        action: 'open_provider_settings',
+      });
+
+      renderChat();
+
+      await screen.findByRole('button', {
+        name: 'Use OpenRouter provider route',
+      });
+
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+      fireEvent.input(textarea, { target: { value: 'summarize the cluster' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(mockChat.setModel).toHaveBeenCalledWith('openrouter:deepseek/deepseek-v4-pro');
+      expect(mockChat.sendMessage).toHaveBeenCalledWith(
+        'summarize the cluster',
+        undefined,
+        undefined,
+      );
+      expect(mockChat.setModel.mock.invocationCallOrder[0]).toBeLessThan(
+        mockChat.sendMessage.mock.invocationCallOrder[0],
+      );
+      expect(textarea.value).toBe('');
+    });
+
     it('rechecks provider readiness from the drawer status banner', async () => {
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'deepseek:deepseek-v4-pro',

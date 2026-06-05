@@ -957,6 +957,23 @@ export const AIChat: Component<AIChatProps> = (props) => {
     switchToModelRoute(alternative.id);
   };
 
+  const selectProviderReadinessAlternativeForSend = () => {
+    const readiness = providerReadiness();
+    if (readiness.status !== 'error') return null;
+
+    const currentProvider = selectedChatProvider().trim();
+    const failedProvider = readiness.provider.trim();
+    if (failedProvider && currentProvider && failedProvider !== currentProvider) {
+      return null;
+    }
+
+    const alternative = providerReadinessAlternative();
+    if (!alternative) return null;
+
+    selectModel(alternative.id);
+    return alternative;
+  };
+
   createEffect(() => {
     const sessionId = chat.sessionId();
     const storedModel = getStoredModel(sessionId);
@@ -1538,6 +1555,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
       Boolean(sendOptions.handoffResources?.length) ||
       Boolean(sendOptions.handoffActions?.length) ||
       Boolean(sendOptions.handoffMetadata);
+    selectProviderReadinessAlternativeForSend();
+
     const sendPromise = hasSendOptions
       ? chat.sendMessage(prompt, mentionsForAPI, findingId, sendOptions)
       : chat.sendMessage(prompt, mentionsForAPI, findingId);

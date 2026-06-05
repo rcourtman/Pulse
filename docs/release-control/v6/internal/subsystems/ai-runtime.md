@@ -90,11 +90,14 @@ runtime cost control, and shared AI transport surfaces.
    assistant-authored output. Provider checking is a background diagnostic and
    must not delay the user's first useful chat turn; a confirmed selected-route
    provider error must keep typed text and focus without blocking normal chat
-   dispatch. If the operator sends while that warning is still visible, the
-   send path owns the attempt and any retryable provider failure is handled as
-   a normal failed turn with draft restoration. Same-model configured-provider
-   alternatives remain one-click route changes, not required preconditions for
-   sending.
+   dispatch. If a same-model configured-provider alternative is available when
+   the operator sends while that warning is still visible, the drawer must
+   promote that route before dispatching the turn instead of knowingly sending
+   through the broken provider again. When no configured alternative is
+   available, the send path owns the attempt and any retryable provider failure
+   is handled as a normal failed turn with draft restoration. Same-model
+   configured-provider alternatives remain one-click route changes as well as
+   send-time recovery choices, not required preconditions for typing or sending.
    Follow-up sends during an active Assistant response are chat-runtime queue
    state by default. The drawer must accept and echo the user's follow-up as a
    queued user turn without aborting or replacing the active model stream, must
