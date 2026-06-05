@@ -191,6 +191,22 @@ func TestSessionStore_ModelHandoffContextLifecycle(t *testing.T) {
 	if len(reloadedActions) != 1 || reloadedActions[0].ApprovalID != "approval-123" {
 		t.Fatalf("reloaded handoff actions = %#v, want persisted approval reference", reloadedActions)
 	}
+	envelopeContext, envelopeResources, envelopeActions, envelopeMetadata, err := reloadedStore.GetModelHandoffEnvelope(session.ID)
+	if err != nil {
+		t.Fatalf("GetModelHandoffEnvelope after reload failed: %v", err)
+	}
+	if envelopeContext != strings.TrimSpace(handoffContext) {
+		t.Fatalf("envelope context = %q, want %q", envelopeContext, strings.TrimSpace(handoffContext))
+	}
+	if len(envelopeResources) != 1 || envelopeResources[0].ID != "vm-100" {
+		t.Fatalf("envelope resources = %#v, want persisted VM reference", envelopeResources)
+	}
+	if len(envelopeActions) != 1 || envelopeActions[0].ApprovalID != "approval-123" {
+		t.Fatalf("envelope actions = %#v, want persisted approval reference", envelopeActions)
+	}
+	if envelopeMetadata != (HandoffMetadata{}) {
+		t.Fatalf("envelope metadata = %#v, want empty metadata", envelopeMetadata)
+	}
 
 	if err := store.SetModelHandoffResources(session.ID, nil); err != nil {
 		t.Fatalf("SetModelHandoffResources clear failed: %v", err)

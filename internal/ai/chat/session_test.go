@@ -216,6 +216,103 @@ func TestSessionStoreMigratesLegacySessionFileOnWrite(t *testing.T) {
 	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
+func TestSessionStoreEnsureSessionUsesDirectLegacyFileWithoutFullScan(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	require.NoError(t, err)
+
+	now := time.Now().UTC().Round(time.Second)
+	legacy := sessionData{
+		ID:        "legacy-direct-session",
+		Title:     "direct legacy title",
+		Messages:  []Message{},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	payload, err := json.MarshalIndent(legacy, "", "  ")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(store.dataDir, legacy.ID+".json"), payload, 0600))
+
+	session, err := store.EnsureSession(legacy.ID)
+	require.NoError(t, err)
+	assert.Equal(t, legacy.ID, session.ID)
+	assert.Equal(t, legacy.Title, session.Title)
+}
+
+func TestSessionStoreListDoesNotHoldStoreMutex(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	require.NoError(t, err)
+
+	_, err = store.Create()
+	require.NoError(t, err)
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := store.List()
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("List blocked on the session store mutex")
+	}
+}
+
+func TestSessionStoreEnsureSessionDoesNotScanIndirectLegacyFilesForNewSession(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	require.NoError(t, err)
+
+	targetID := "new-chat-session"
+	now := time.Now().UTC().Round(time.Second)
+	indirectLegacy := sessionData{
+		ID:        targetID,
+		Title:     "should not be loaded during create",
+		Messages:  []Message{},
+		CreatedAt: now.Add(-time.Hour),
+		UpdatedAt: now.Add(-time.Hour),
+	}
+	payload, err := json.MarshalIndent(indirectLegacy, "", "  ")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(store.dataDir, "unrelated-legacy-name.json"), payload, 0600))
+
+	session, err := store.EnsureSession(targetID)
+	require.NoError(t, err)
+	assert.Equal(t, targetID, session.ID)
+	assert.Empty(t, session.Title)
+	assert.True(t, session.CreatedAt.After(indirectLegacy.CreatedAt))
+
+	canonicalPath, err := store.sessionPath(targetID)
+	require.NoError(t, err)
+	_, err = os.Stat(canonicalPath)
+	require.NoError(t, err)
+}
+
+func TestSessionStoreGetStillFindsIndirectLegacySession(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	require.NoError(t, err)
+
+	now := time.Now().UTC().Round(time.Second)
+	legacy := sessionData{
+		ID:        "indirect-legacy-session",
+		Title:     "indirect legacy title",
+		Messages:  []Message{},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	payload, err := json.MarshalIndent(legacy, "", "  ")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(store.dataDir, "legacy-file-with-old-name.json"), payload, 0600))
+
+	session, err := store.Get(legacy.ID)
+	require.NoError(t, err)
+	assert.Equal(t, legacy.ID, session.ID)
+	assert.Equal(t, legacy.Title, session.Title)
+}
+
 func TestSessionStoreSessionPathUsesOpaqueHashedLeaf(t *testing.T) {
 	store, err := NewSessionStore(t.TempDir())
 	require.NoError(t, err)

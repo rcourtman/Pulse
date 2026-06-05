@@ -534,6 +534,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	if !req.SuppressSessionEvent {
 		sessionData, _ := json.Marshal(SessionData{ID: session.ID})
 		streamCallback(StreamEvent{Type: "session", Data: sessionData})
+		emitWorkflowState(streamCallback, "prepare", "Preparing Pulse context.", "", "")
 	}
 
 	handoffContext := strings.TrimSpace(req.HandoffContext)
@@ -559,29 +560,14 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to persist model handoff envelope")
 		}
 	} else {
-		storedHandoffResources, err := sessions.GetModelHandoffResources(session.ID)
+		storedContext, storedResources, storedActions, storedMetadata, err := sessions.GetModelHandoffEnvelope(session.ID)
 		if err != nil {
-			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to load model handoff resources")
+			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to load model handoff envelope")
 		} else {
-			handoffResources = storedHandoffResources
-		}
-		storedHandoffActions, err := sessions.GetModelHandoffActions(session.ID)
-		if err != nil {
-			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to load model handoff actions")
-		} else {
-			handoffActions = storedHandoffActions
-		}
-		storedHandoffContext, err := sessions.GetModelHandoffContext(session.ID)
-		if err != nil {
-			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to load model handoff context")
-		} else {
-			handoffContext = storedHandoffContext
-		}
-		storedHandoffMetadata, err := sessions.GetModelHandoffMetadata(session.ID)
-		if err != nil {
-			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to load model handoff metadata")
-		} else {
-			handoffMetadata = NormalizeHandoffMetadata(storedHandoffMetadata)
+			handoffContext = storedContext
+			handoffResources = storedResources
+			handoffActions = storedActions
+			handoffMetadata = NormalizeHandoffMetadata(storedMetadata)
 		}
 	}
 
@@ -645,7 +631,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	s.mu.RUnlock()
 
 	if cfgSnapshot != nil {
-		if resolved, resolveErr := modelresolution.ResolveConfiguredChatModel(ctx, cfgSnapshot); resolveErr == nil {
+		if resolved, resolveErr := modelresolution.ResolveConfiguredChatModelOffline(cfgSnapshot); resolveErr == nil {
 			configuredModel = strings.TrimSpace(resolved)
 		} else {
 			configuredModel = strings.TrimSpace(cfgSnapshot.GetChatModel())
@@ -775,6 +761,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		!handoffMetadataEmpty(handoffMetadata)
 	assistantToolScope := assistantToolScopeForPrompt(req.Prompt, hasModelHandoffContext)
 	if assistantToolScope == assistantTurnToolScopeQueryOnly {
+		emitWorkflowState(streamCallback, "context", "Reading current Pulse inventory.", "", "pulse_query")
 		if summaryContext := s.prefetchAssistantInventorySummaryContext(ctx, baseExecutor); summaryContext != "" {
 			injectHandoffContextIntoLatestUserMessage(messages, summaryContext)
 			assistantToolScope = assistantTurnToolScopeTextOnly
@@ -859,6 +846,13 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		if req.MaxTurns > 0 {
 			loop.SetMaxTurns(req.MaxTurns)
 		}
+		emitWorkflowState(
+			streamCallback,
+			"provider_start",
+			fmt.Sprintf("Waiting for %s to start responding.", providerLabelForAttempt(attempt)),
+			sessionFSMState(sessionFSM),
+			"",
+		)
 
 		log.Debug().
 			Str("session_id", session.ID).
@@ -2353,7 +2347,7 @@ type chatProviderAttempt struct {
 	Provider providers.StreamingProvider
 }
 
-func (s *Service) chatProviderAttempts(ctx context.Context, cfg *config.AIConfig, primaryModel, configuredModel string, configuredProvider providers.StreamingProvider) ([]chatProviderAttempt, error) {
+func (s *Service) chatProviderAttempts(_ context.Context, cfg *config.AIConfig, primaryModel, configuredModel string, configuredProvider providers.StreamingProvider) ([]chatProviderAttempt, error) {
 	var attempts []chatProviderAttempt
 	var primaryErr error
 	seen := make(map[string]struct{})
@@ -2398,18 +2392,32 @@ func (s *Service) chatProviderAttempts(ctx context.Context, cfg *config.AIConfig
 		if providerName == primaryProvider {
 			continue
 		}
-		model, err := modelresolution.ResolveConfiguredChatProviderModel(ctx, cfg, providerName)
-		if err != nil || strings.TrimSpace(model) == "" {
+		model := chatFallbackModelForProvider(cfg, providerName)
+		if strings.TrimSpace(model) == "" {
 			log.Debug().
-				Err(err).
 				Str("provider", providerName).
-				Msg("[ChatService] Skipping provider fallback candidate with no resolved model")
+				Msg("[ChatService] Skipping provider fallback candidate with no stable chat model")
 			continue
 		}
 		addAttempt(model, nil)
 	}
 
 	return attempts, primaryErr
+}
+
+func chatFallbackModelForProvider(cfg *config.AIConfig, provider string) string {
+	if cfg == nil {
+		return ""
+	}
+	if preferred := strings.TrimSpace(cfg.GetPreferredModelForProvider(provider)); preferred != "" &&
+		modelresolution.IsModelUsableForChatWithConfig(cfg, preferred) {
+		return preferred
+	}
+	if fallback := strings.TrimSpace(config.DefaultModelForProvider(provider)); fallback != "" &&
+		modelresolution.IsModelUsableForChatWithConfig(cfg, fallback) {
+		return fallback
+	}
+	return ""
 }
 
 func chatStreamEventBlocksProviderFallback(event StreamEvent) bool {
@@ -2476,6 +2484,17 @@ func providerLabel(provider string) string {
 	default:
 		return provider
 	}
+}
+
+func providerLabelForAttempt(attempt chatProviderAttempt) string {
+	provider := ""
+	if strings.TrimSpace(attempt.Model) != "" {
+		provider, _ = config.ParseModelString(strings.TrimSpace(attempt.Model))
+	}
+	if strings.TrimSpace(provider) == "" {
+		return "the selected provider"
+	}
+	return providerLabel(provider)
 }
 
 func (s *Service) createPatrolProviderForModel(modelStr string) (providers.StreamingProvider, error) {
@@ -3045,14 +3064,14 @@ func (s *Service) createProvider() (providers.StreamingProvider, error) {
 		return s.createProviderForModel(chatModel)
 	}
 
-	chatModel, err := modelresolution.ResolveConfiguredChatModel(context.Background(), s.cfg)
+	chatModel, err := modelresolution.ResolveConfiguredChatModelOffline(s.cfg)
 	if err != nil {
 		return nil, err
 	}
 	if chatModel == "" {
 		return nil, fmt.Errorf("no chat model configured")
 	}
-	if strings.TrimSpace(s.cfg.ChatModel) == "" || !modelresolution.IsModelUsableWithConfig(s.cfg, s.cfg.GetChatModel()) {
+	if strings.TrimSpace(s.cfg.ChatModel) == "" || !modelresolution.IsModelUsableForChatWithConfig(s.cfg, s.cfg.GetChatModel()) {
 		s.cfg.ChatModel = chatModel
 	}
 

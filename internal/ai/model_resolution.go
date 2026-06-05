@@ -21,6 +21,12 @@ func ResolveConfiguredChatModel(ctx context.Context, cfg *config.AIConfig) (stri
 	return modelresolution.ResolveConfiguredChatModel(ctx, cfg)
 }
 
+// ResolveConfiguredChatModelOffline returns the effective chat-suitable model
+// without calling provider model catalogs.
+func ResolveConfiguredChatModelOffline(cfg *config.AIConfig) (string, error) {
+	return modelresolution.ResolveConfiguredChatModelOffline(cfg)
+}
+
 // ResolvePreferredModelForProvider returns the best model to use for the requested
 // provider. Explicit provider-scoped selections win; otherwise Pulse resolves a
 // recommended model from the provider's live catalog.
@@ -37,6 +43,12 @@ func ResolveConfiguredProviderModel(ctx context.Context, cfg *config.AIConfig, p
 // configured provider.
 func ResolveConfiguredChatProviderModel(ctx context.Context, cfg *config.AIConfig, provider string) (string, error) {
 	return modelresolution.ResolveConfiguredChatProviderModel(ctx, cfg, provider)
+}
+
+// ResolveConfiguredChatProviderModelOffline resolves a chat-suitable model for
+// the requested provider without calling provider model catalogs.
+func ResolveConfiguredChatProviderModelOffline(cfg *config.AIConfig, provider string) (string, error) {
+	return modelresolution.ResolveConfiguredChatProviderModelOffline(cfg, provider)
 }
 
 // SelectRecommendedProviderModel picks the current best candidate from a provider's

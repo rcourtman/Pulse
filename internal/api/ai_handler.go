@@ -2459,13 +2459,20 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 	}
 
-	streamSessionID := strings.TrimSpace(req.SessionID)
+	requestSessionID := strings.TrimSpace(req.SessionID)
+	requestSuppliedSessionID := requestSessionID != ""
+	streamSessionID := requestSessionID
 	if streamSessionID == "" {
 		streamSessionID = uuid.NewString()
 	}
 	req.SessionID = streamSessionID
 	sessionData, _ := json.Marshal(chat.SessionData{ID: streamSessionID})
 	writeEvent(chat.StreamEvent{Type: "session", Data: sessionData})
+	prepareData, _ := json.Marshal(chat.WorkflowStateData{
+		Phase:   "prepare",
+		Message: "Preparing Pulse context.",
+	})
+	writeEvent(chat.StreamEvent{Type: "workflow_state", Data: prepareData})
 
 	// Convert API mentions to chat mentions
 	var chatMentions []chat.StructuredMention
@@ -2497,16 +2504,16 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	requestHandoffResources := handoffResources
 	requestHandoffActions := handoffActions
 	findingID := strings.TrimSpace(req.FindingID)
-	if findingID == "" && strings.TrimSpace(req.SessionID) != "" {
-		if storedFindingID, err := svc.GetModelHandoffFindingID(ctx, req.SessionID); err != nil {
-			log.Debug().Err(err).Str("session_id", req.SessionID).Msg("Unable to load stored Assistant finding handoff reference")
+	if findingID == "" && requestSuppliedSessionID {
+		if storedFindingID, err := svc.GetModelHandoffFindingID(ctx, requestSessionID); err != nil {
+			log.Debug().Err(err).Str("session_id", requestSessionID).Msg("Unable to load stored Assistant finding handoff reference")
 		} else {
 			findingID = strings.TrimSpace(storedFindingID)
 		}
 	}
-	if findingID == "" && handoffMetadata == (chat.HandoffMetadata{}) && strings.TrimSpace(req.SessionID) != "" {
-		if storedMetadata, err := svc.GetModelHandoffMetadata(ctx, req.SessionID); err != nil {
-			log.Debug().Err(err).Str("session_id", req.SessionID).Msg("Unable to load stored Assistant handoff metadata")
+	if findingID == "" && handoffMetadata == (chat.HandoffMetadata{}) && requestSuppliedSessionID {
+		if storedMetadata, err := svc.GetModelHandoffMetadata(ctx, requestSessionID); err != nil {
+			log.Debug().Err(err).Str("session_id", requestSessionID).Msg("Unable to load stored Assistant handoff metadata")
 		} else {
 			storedMetadata = chat.NormalizeHandoffMetadata(storedMetadata)
 			if storedMetadata.Kind == "patrol_run" {
@@ -2539,9 +2546,9 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if !findingResolved {
-			if sessionID := strings.TrimSpace(req.SessionID); sessionID != "" {
-				if err := svc.ClearModelHandoffContext(ctx, sessionID); err != nil {
-					log.Debug().Err(err).Str("session_id", sessionID).Str("finding_id", findingID).Msg("Unable to clear stale Assistant finding handoff context")
+			if requestSuppliedSessionID {
+				if err := svc.ClearModelHandoffContext(ctx, requestSessionID); err != nil {
+					log.Debug().Err(err).Str("session_id", requestSessionID).Str("finding_id", findingID).Msg("Unable to clear stale Assistant finding handoff context")
 				}
 			}
 			findingID = ""

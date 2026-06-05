@@ -601,6 +601,10 @@ func TestHandleChat_EmitsSessionBeforeExecuteStream(t *testing.T) {
 		if !strings.Contains(w.Body.String(), `"type":"session"`) {
 			t.Fatal("session event was not written before ExecuteStream")
 		}
+		if !strings.Contains(w.Body.String(), `"type":"workflow_state"`) ||
+			!strings.Contains(w.Body.String(), `"Preparing Pulse context."`) {
+			t.Fatal("prepare workflow event was not written before ExecuteStream")
+		}
 		callback := args.Get(2).(chat.StreamCallback)
 		contentData, _ := json.Marshal(chat.ContentData{Text: "hello"})
 		callback(chat.StreamEvent{Type: "content", Data: contentData})
@@ -613,9 +617,13 @@ func TestHandleChat_EmitsSessionBeforeExecuteStream(t *testing.T) {
 
 	response := w.Body.String()
 	sessionIndex := strings.Index(response, `"type":"session"`)
+	prepareIndex := strings.Index(response, `"Preparing Pulse context."`)
 	contentIndex := strings.Index(response, `"type":"content"`)
 	if sessionIndex < 0 {
 		t.Fatal("response missing session event")
+	}
+	if prepareIndex < 0 {
+		t.Fatal("response missing prepare workflow event")
 	}
 	if contentIndex < 0 {
 		t.Fatal("response missing content event")
@@ -623,7 +631,39 @@ func TestHandleChat_EmitsSessionBeforeExecuteStream(t *testing.T) {
 	if sessionIndex > contentIndex {
 		t.Fatalf("session event appeared after content event: %s", response)
 	}
+	if prepareIndex > contentIndex {
+		t.Fatalf("prepare workflow event appeared after content event: %s", response)
+	}
 	assert.Equal(t, 1, strings.Count(response, `"type":"session"`))
+	assert.Equal(t, 1, strings.Count(response, `"type":"workflow_state"`))
+}
+
+func TestHandleChat_DoesNotLoadStoredHandoffForGeneratedSession(t *testing.T) {
+	cfg := &config.Config{}
+	h := newTestAIHandler(cfg, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.On("GetModelHandoffFindingID", mock.Anything, mock.Anything).Return("", nil).Maybe()
+	mockSvc.On("GetModelHandoffMetadata", mock.Anything, mock.Anything).Return(chat.HandoffMetadata{}, nil).Maybe()
+	mockSvc.On(
+		"ExecuteStream",
+		mock.Anything,
+		mock.MatchedBy(func(req chat.ExecuteRequest) bool {
+			return strings.TrimSpace(req.SessionID) != "" && req.SuppressSessionEvent
+		}),
+		mock.Anything,
+	).Return(nil)
+
+	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(`{"prompt": "hi"}`))
+	w := httptest.NewRecorder()
+
+	h.HandleChat(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	mockSvc.AssertNotCalled(t, "GetModelHandoffFindingID", mock.Anything, mock.Anything)
+	mockSvc.AssertNotCalled(t, "GetModelHandoffMetadata", mock.Anything, mock.Anything)
 }
 
 func TestHandleChat_UsesClientSafeStreamProjection(t *testing.T) {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"sync/atomic"
@@ -25,9 +27,11 @@ type stubServiceProvider struct {
 }
 
 type sessionAwareStateProvider struct {
-	readSeen          *atomic.Bool
-	sessionSeen       *atomic.Bool
-	readBeforeSession *atomic.Bool
+	readSeen                    *atomic.Bool
+	sessionSeen                 *atomic.Bool
+	inventoryProgressSeen       *atomic.Bool
+	readBeforeSession           *atomic.Bool
+	readBeforeInventoryProgress *atomic.Bool
 }
 
 func (p sessionAwareStateProvider) ReadSnapshot() models.StateSnapshot {
@@ -36,6 +40,9 @@ func (p sessionAwareStateProvider) ReadSnapshot() models.StateSnapshot {
 	}
 	if p.sessionSeen != nil && !p.sessionSeen.Load() && p.readBeforeSession != nil {
 		p.readBeforeSession.Store(true)
+	}
+	if p.inventoryProgressSeen != nil && !p.inventoryProgressSeen.Load() && p.readBeforeInventoryProgress != nil {
+		p.readBeforeInventoryProgress.Store(true)
 	}
 	return models.StateSnapshot{}
 }
@@ -399,6 +406,67 @@ func TestService_ExecuteStream_Success(t *testing.T) {
 	}
 }
 
+func TestService_ExecuteStream_EmitsProviderStartupBeforeProviderCall(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	var providerStartSeen atomic.Bool
+	var providerCalledBeforeStart atomic.Bool
+	provider := &stubServiceProvider{
+		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			if !providerStartSeen.Load() {
+				providerCalledBeforeStart.Store(true)
+			}
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: "hello"},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{InputTokens: 1, OutputTokens: 1},
+			})
+			return nil
+		},
+	}
+	service := NewService(Config{
+		AIConfig: &config.AIConfig{ChatModel: "openrouter:qwen/qwen3.7-plus"},
+	})
+	service.sessions = store
+	service.provider = provider
+	service.started = true
+
+	err = service.ExecuteStream(context.Background(), ExecuteRequest{
+		SessionID: "sess-provider-start",
+		Prompt:    "hello",
+	}, func(event StreamEvent) {
+		if event.Type != "workflow_state" {
+			return
+		}
+		var data WorkflowStateData
+		if err := json.Unmarshal(event.Data, &data); err != nil {
+			t.Fatalf("unmarshal workflow state: %v", err)
+		}
+		if data.Phase == "provider_start" {
+			providerStartSeen.Store(true)
+			if data.Message != "Waiting for OpenRouter to start responding." {
+				t.Fatalf("provider_start message = %q", data.Message)
+			}
+		}
+	})
+	if err != nil {
+		t.Fatalf("ExecuteStream failed: %v", err)
+	}
+	if !providerStartSeen.Load() {
+		t.Fatal("provider_start workflow event was not emitted")
+	}
+	if providerCalledBeforeStart.Load() {
+		t.Fatal("provider was called before provider_start workflow event reached the stream")
+	}
+}
+
 func TestService_ExecuteStream_EmitsSessionBeforeInventoryPrefetch(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewSessionStore(tmpDir)
@@ -407,15 +475,19 @@ func TestService_ExecuteStream_EmitsSessionBeforeInventoryPrefetch(t *testing.T)
 	}
 
 	var sessionSeen atomic.Bool
+	var inventoryProgressSeen atomic.Bool
 	var stateReadSeen atomic.Bool
 	var stateReadBeforeSession atomic.Bool
+	var stateReadBeforeInventoryProgress atomic.Bool
 	provider := &stubServiceProvider{}
 	service := NewService(Config{
 		AIConfig: &config.AIConfig{ChatModel: "openai:test"},
 		StateProvider: sessionAwareStateProvider{
-			readSeen:          &stateReadSeen,
-			sessionSeen:       &sessionSeen,
-			readBeforeSession: &stateReadBeforeSession,
+			readSeen:                    &stateReadSeen,
+			sessionSeen:                 &sessionSeen,
+			inventoryProgressSeen:       &inventoryProgressSeen,
+			readBeforeSession:           &stateReadBeforeSession,
+			readBeforeInventoryProgress: &stateReadBeforeInventoryProgress,
 		},
 	})
 	service.sessions = store
@@ -429,6 +501,15 @@ func TestService_ExecuteStream_EmitsSessionBeforeInventoryPrefetch(t *testing.T)
 		if event.Type == "session" {
 			sessionSeen.Store(true)
 		}
+		if event.Type == "workflow_state" {
+			var data WorkflowStateData
+			if err := json.Unmarshal(event.Data, &data); err != nil {
+				t.Fatalf("unmarshal workflow state: %v", err)
+			}
+			if data.Phase == "context" && data.Message == "Reading current Pulse inventory." {
+				inventoryProgressSeen.Store(true)
+			}
+		}
 	})
 	if err != nil {
 		t.Fatalf("ExecuteStream failed: %v", err)
@@ -439,8 +520,14 @@ func TestService_ExecuteStream_EmitsSessionBeforeInventoryPrefetch(t *testing.T)
 	if !stateReadSeen.Load() {
 		t.Fatal("inventory prefetch did not read state")
 	}
+	if !inventoryProgressSeen.Load() {
+		t.Fatal("inventory progress event was not emitted")
+	}
 	if stateReadBeforeSession.Load() {
 		t.Fatal("inventory prefetch read state before the browser-visible session event")
+	}
+	if stateReadBeforeInventoryProgress.Load() {
+		t.Fatal("inventory prefetch read state before the inventory progress event")
 	}
 }
 
@@ -589,6 +676,93 @@ func TestService_ExecuteStream_FallsBackWhenPrimaryProviderFailsBeforeVisibleOut
 	}
 }
 
+func TestService_ChatProviderAttemptsUsesStableFallbackModelsWithoutLiveCatalog(t *testing.T) {
+	service := &Service{}
+	cfg := &config.AIConfig{
+		ChatModel:        "openrouter:qwen/qwen3.7-plus",
+		DiscoveryModel:   "gemini:gemini-3.1-flash-lite",
+		OpenRouterAPIKey: "sk-or-test",
+		GeminiAPIKey:     "gemini-test",
+		DeepSeekAPIKey:   "deepseek-test",
+	}
+
+	attempts, err := service.chatProviderAttempts(
+		context.Background(),
+		cfg,
+		"openrouter:qwen/qwen3.7-plus",
+		"openrouter:qwen/qwen3.7-plus",
+		&stubServiceProvider{},
+	)
+	if err != nil {
+		t.Fatalf("chatProviderAttempts failed: %v", err)
+	}
+
+	got := make([]string, 0, len(attempts))
+	for _, attempt := range attempts {
+		got = append(got, attempt.Model)
+	}
+	want := []string{
+		"openrouter:qwen/qwen3.7-plus",
+		"deepseek:deepseek-v4-flash",
+		"gemini:gemini-3.1-flash-lite",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("attempt models = %#v, want %#v", got, want)
+	}
+	if attempts[0].Provider == nil {
+		t.Fatal("primary attempt should reuse the configured provider")
+	}
+	for i, attempt := range attempts[1:] {
+		if attempt.Provider != nil {
+			t.Fatalf("fallback attempt %d should be lazy provider creation", i+1)
+		}
+	}
+}
+
+func TestService_ExecuteStream_UsesStableChatDefaultWithoutLiveCatalog(t *testing.T) {
+	var catalogCalls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/models") {
+			catalogCalls.Add(1)
+		}
+		http.Error(w, "model catalog should not be called during chat startup", http.StatusTeapot)
+	}))
+	t.Cleanup(server.Close)
+
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	service := NewService(Config{
+		AIConfig: &config.AIConfig{
+			OpenAIAPIKey:  "sk-test",
+			OpenAIBaseURL: server.URL + "/v1",
+		},
+	})
+	service.sessions = store
+	service.providerFactory = func(model string) (providers.StreamingProvider, error) {
+		if want := config.DefaultModelForProvider(config.AIProviderOpenAI); model != want {
+			return nil, errors.New("unexpected model " + model)
+		}
+		return &stubServiceProvider{}, nil
+	}
+	service.provider = nil
+	service.started = true
+
+	err = service.ExecuteStream(context.Background(), ExecuteRequest{
+		SessionID: "stable-chat-default-no-catalog",
+		Prompt:    "hello",
+	}, func(StreamEvent) {})
+	if err != nil {
+		t.Fatalf("ExecuteStream failed: %v", err)
+	}
+	if calls := catalogCalls.Load(); calls != 0 {
+		t.Fatalf("chat startup called provider model catalog %d times", calls)
+	}
+}
+
 func TestService_ExecuteStream_DoesNotFallbackAfterVisibleProviderOutput(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewSessionStore(tmpDir)
@@ -688,7 +862,7 @@ func TestService_ExecuteStream_InteractiveChatLetsModelChooseTools(t *testing.T)
 	service.started = true
 
 	exploreEvents := 0
-	workflowEvents := 0
+	unexpectedWorkflowEvents := 0
 	err = service.ExecuteStream(context.Background(), ExecuteRequest{
 		SessionID: "interactive-chat-model-choice",
 		Prompt:    "show me the logs for vm 100",
@@ -697,7 +871,13 @@ func TestService_ExecuteStream_InteractiveChatLetsModelChooseTools(t *testing.T)
 		case "explore_status":
 			exploreEvents++
 		case "workflow_state":
-			workflowEvents++
+			var data WorkflowStateData
+			if err := json.Unmarshal(event.Data, &data); err != nil {
+				t.Fatalf("unmarshal workflow state: %v", err)
+			}
+			if data.Phase != "prepare" && data.Phase != "provider_start" {
+				unexpectedWorkflowEvents++
+			}
 		}
 	})
 	if err != nil {
@@ -709,8 +889,8 @@ func TestService_ExecuteStream_InteractiveChatLetsModelChooseTools(t *testing.T)
 	if exploreEvents != 0 {
 		t.Fatalf("did not expect Pulse-owned explore events before model choice, got %d", exploreEvents)
 	}
-	if workflowEvents != 0 {
-		t.Fatalf("did not expect synthetic workflow events before model choice, got %d", workflowEvents)
+	if unexpectedWorkflowEvents != 0 {
+		t.Fatalf("did not expect Pulse-owned workflow events before model choice, got %d", unexpectedWorkflowEvents)
 	}
 }
 

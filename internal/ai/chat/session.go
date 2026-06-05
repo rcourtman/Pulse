@@ -2,6 +2,7 @@ package chat
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -347,6 +348,8 @@ func modelContextHandoffSummary(modelContext *sessionModelContext) *SessionHando
 
 const maxSessionIDLength = 128
 
+var errSessionNotFound = errors.New("session not found")
+
 // NewSessionStore creates a new session store
 func NewSessionStore(dataDir string) (*SessionStore, error) {
 	sessionsDir := filepath.Join(dataDir, "ai_sessions")
@@ -371,9 +374,31 @@ func (s *SessionStore) sessionPath(id string) (string, error) {
 	return securityutil.JoinStorageLeaf(s.dataDir, securityutil.HashedStorageName(id)+".json")
 }
 
+func (s *SessionStore) directLegacySessionPath(id string) (string, error) {
+	if err := validateSessionID(id); err != nil {
+		return "", err
+	}
+	return securityutil.JoinStorageLeaf(s.dataDir, id+".json")
+}
+
 func (s *SessionStore) findLegacySessionPath(id string) (string, error) {
 	if err := validateSessionID(id); err != nil {
 		return "", err
+	}
+	canonicalPath, err := s.sessionPath(id)
+	if err != nil {
+		return "", err
+	}
+	directPath, err := s.directLegacySessionPath(id)
+	if err != nil {
+		return "", err
+	}
+	if directPath != canonicalPath {
+		if _, err := os.Stat(directPath); err == nil {
+			return directPath, nil
+		} else if err != nil && !os.IsNotExist(err) {
+			return "", fmt.Errorf("failed to stat legacy session path: %w", err)
+		}
 	}
 	canonicalName := securityutil.HashedStorageName(id) + ".json"
 	entries, err := os.ReadDir(s.dataDir)
@@ -414,9 +439,6 @@ func (s *SessionStore) findLegacySessionPath(id string) (string, error) {
 
 // List returns all sessions, sorted by updated_at descending
 func (s *SessionStore) List() ([]Session, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	entries, err := os.ReadDir(s.dataDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read sessions directory: %w", err)
@@ -883,6 +905,27 @@ func (s *SessionStore) GetModelHandoffActions(id string) ([]HandoffAction, error
 	return normalizeHandoffActions(data.ModelContext.HandoffActions), nil
 }
 
+// GetModelHandoffEnvelope returns the persisted model-only handoff fields in
+// one read. Send paths use this instead of several independent metadata reads
+// so large stores do not pay repeated session-file I/O before the model starts.
+func (s *SessionStore) GetModelHandoffEnvelope(id string) (string, []HandoffResource, []HandoffAction, HandoffMetadata, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	data, err := s.readSessionFast(id)
+	if err != nil {
+		return "", nil, nil, HandoffMetadata{}, err
+	}
+	if data.ModelContext == nil {
+		return "", nil, nil, HandoffMetadata{}, nil
+	}
+	return strings.TrimSpace(data.ModelContext.HandoffContext),
+		normalizeHandoffResources(data.ModelContext.HandoffResources),
+		normalizeHandoffActions(data.ModelContext.HandoffActions),
+		NormalizeHandoffMetadata(data.ModelContext.HandoffMetadata),
+		nil
+}
+
 func (s *SessionStore) clearModelHandoffContextLocked(id string) error {
 	data, err := s.readSession(id)
 	if err != nil {
@@ -926,22 +969,44 @@ func (s *SessionStore) UpdateLastMessage(id string, msg Message) error {
 	return s.writeSession(*data)
 }
 
-// readSession reads a session from disk (caller must hold lock)
+// readSession reads a session from disk (caller must hold lock).
 func (s *SessionStore) readSession(id string) (*sessionData, error) {
+	return s.readSessionWithLegacyScan(id, true)
+}
+
+// readSessionFast reads canonical sessions and direct <id>.json legacy sessions
+// without scanning the full session directory. Use it on create/send hot paths
+// where a missing session usually means "create a new one".
+func (s *SessionStore) readSessionFast(id string) (*sessionData, error) {
+	return s.readSessionWithLegacyScan(id, false)
+}
+
+func (s *SessionStore) readSessionWithLegacyScan(id string, allowLegacyScan bool) (*sessionData, error) {
 	path, err := s.sessionPath(id)
 	if err != nil {
 		return nil, err
 	}
 	file, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		legacyPath, legacyErr := s.findLegacySessionPath(id)
-		if legacyErr != nil {
-			return nil, legacyErr
+		directLegacyPath, directLegacyErr := s.directLegacySessionPath(id)
+		if directLegacyErr != nil {
+			return nil, directLegacyErr
 		}
-		if legacyPath == "" {
-			return nil, fmt.Errorf("session not found: %s", id)
+		if directLegacyPath != path {
+			file, err = os.ReadFile(directLegacyPath)
 		}
-		file, err = os.ReadFile(legacyPath)
+		if os.IsNotExist(err) && allowLegacyScan {
+			legacyPath, legacyErr := s.findLegacySessionPath(id)
+			if legacyErr != nil {
+				return nil, legacyErr
+			}
+			if legacyPath != "" && legacyPath != directLegacyPath {
+				file, err = os.ReadFile(legacyPath)
+			}
+		}
+		if os.IsNotExist(err) {
+			return nil, sessionNotFoundError(id)
+		}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to read session: %w", err)
@@ -976,10 +1041,35 @@ func (s *SessionStore) writeSession(data sessionData) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(path, file, 0600); err != nil {
+
+	tmpFile, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-")
+	if err != nil {
+		return fmt.Errorf("failed to create session temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	cleanupTemp := true
+	defer func() {
+		if cleanupTemp {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+
+	if err := tmpFile.Chmod(0600); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("failed to secure session temp file: %w", err)
+	}
+	if _, err := tmpFile.Write(file); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("failed to write session temp file: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close session temp file: %w", err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
 		return fmt.Errorf("failed to write session: %w", err)
 	}
-	if legacyPath, err := s.findLegacySessionPath(data.ID); err == nil && legacyPath != "" && legacyPath != path {
+	cleanupTemp = false
+	if legacyPath, err := s.directLegacySessionPath(data.ID); err == nil && legacyPath != "" && legacyPath != path {
 		_ = os.Remove(legacyPath)
 	}
 
@@ -1025,33 +1115,57 @@ func (s *SessionStore) EnsureSession(id string) (*Session, error) {
 		return nil, err
 	}
 
-	session, err := s.Get(id)
-	if err != nil {
-		// Session doesn't exist, create it with the specified ID
-		s.mu.Lock()
-		defer s.mu.Unlock()
-
-		now := time.Now()
-		data := sessionData{
-			ID:        id,
-			Title:     "",
-			Messages:  []Message{},
-			CreatedAt: now,
-			UpdatedAt: now,
-		}
-
-		if err := s.writeSession(data); err != nil {
-			return nil, err
-		}
-
+	s.mu.RLock()
+	data, err := s.readSessionFast(id)
+	s.mu.RUnlock()
+	if err == nil {
 		return &Session{
 			ID:        data.ID,
+			Title:     data.Title,
 			CreatedAt: data.CreatedAt,
 			UpdatedAt: data.UpdatedAt,
 		}, nil
 	}
+	if !errors.Is(err, errSessionNotFound) {
+		return nil, err
+	}
 
-	return session, nil
+	// Session doesn't exist, create it with the specified ID. Re-check under the
+	// write lock so concurrent callers do not race into duplicate writes.
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	data, err = s.readSessionFast(id)
+	if err == nil {
+		return &Session{
+			ID:        data.ID,
+			Title:     data.Title,
+			CreatedAt: data.CreatedAt,
+			UpdatedAt: data.UpdatedAt,
+		}, nil
+	}
+	if !errors.Is(err, errSessionNotFound) {
+		return nil, err
+	}
+
+	now := time.Now()
+	data = &sessionData{
+		ID:        id,
+		Title:     "",
+		Messages:  []Message{},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	if err := s.writeSession(*data); err != nil {
+		return nil, err
+	}
+
+	return &Session{
+		ID:        data.ID,
+		CreatedAt: data.CreatedAt,
+		UpdatedAt: data.UpdatedAt,
+	}, nil
 }
 
 func validateSessionID(id string) error {
@@ -1071,6 +1185,10 @@ func validateSessionID(id string) error {
 		return fmt.Errorf("invalid session id: only letters, numbers, '-' and '_' are allowed")
 	}
 	return nil
+}
+
+func sessionNotFoundError(id string) error {
+	return fmt.Errorf("%w: %s", errSessionNotFound, id)
 }
 
 // GetResolvedContext returns the resolved context for a session, creating one if needed

@@ -442,13 +442,17 @@ payload shape change when the portal presents compact client rows.
     `thinking` payloads and serialized tool-call prose cannot cross the API
     boundary. Browser Assistant output is owned by the AI runtime presentation
     contract rather than by API-client event typing.
-    Cold Assistant streams must include a typed `session` event backed by
-    `internal/ai/chat.SessionData` as soon as the HTTP SSE writer is ready and
-    before backend handoff recovery, model resolution, provider fallback
-    planning, context prefetch, inventory reads, or user-visible provider output
-    so the frontend can bind the backend-created session without a separate
-    create-session request. The generated frontend union, stream parser tests,
-    and backend JSON snapshot proof must stay in lockstep with that payload;
+	    Cold Assistant streams must include a typed `session` event backed by
+	    `internal/ai/chat.SessionData` as soon as the HTTP SSE writer is ready and
+	    an immediate neutral `workflow_state` preparation event before backend
+	    handoff recovery, model resolution, provider fallback planning, context
+	    prefetch, inventory reads, or user-visible provider output so the frontend
+	    can bind the backend-created session and show live progress without a
+	    separate create-session request. That cold-stream model resolution must use
+	    explicit configured chat routes or stable provider defaults without waiting
+	    on provider model catalogs; `/api/ai/models` and settings responses own
+	    catalog-backed recommendation, not the first-response chat stream. The generated frontend union, stream parser
+	    tests, and backend JSON snapshot proof must stay in lockstep with that payload;
     `done.session_id` and `question.session_id` remain compatibility payloads,
     not the primary cold-session creation contract. Assistant `done` events
     must also carry the effective `model` route that completed the stream so
@@ -3012,6 +3016,13 @@ overrides. Dashboard Pulse Brief and other scoped handoffs may include
 execution for that exchange, but the transport must treat the field as a
 request override only and must not mutate the user's persistent AI control
 setting.
+That same chat transport boundary owns new-session anchoring. When the request
+omits `session_id`, the handler may generate and stream a session ID
+immediately so the browser can anchor the visible turn, but that generated ID is
+not evidence of a persisted conversation. Stored finding or handoff recovery may
+run only for a client-supplied existing `session_id`; generated IDs must enter
+the chat service directly and let the service create the session without first
+probing persisted handoff metadata or legacy session files.
 The same chat payload boundary now carries scoped product handoff context:
 `handoff_context` is bounded model-only text, `handoff_resources` are structured
 resource references used to seed canonical resource-policy, state, relationship,

@@ -57,6 +57,60 @@ func ResolveConfiguredChatModel(ctx context.Context, cfg *config.AIConfig) (stri
 	return ResolveConfiguredChatProviderModel(ctx, cfg, configuredProviders[0])
 }
 
+// ResolveConfiguredChatModelOffline returns the effective chat model without
+// calling a provider catalog. Interactive chat uses this path so first-token
+// latency is controlled by the selected provider stream, not a preflight
+// /models request.
+func ResolveConfiguredChatModelOffline(cfg *config.AIConfig) (string, error) {
+	if cfg == nil {
+		return "", fmt.Errorf("Pulse Assistant config is nil")
+	}
+
+	explicit := strings.TrimSpace(cfg.GetChatModel())
+	if explicit != "" && IsModelUsableForChatWithConfig(cfg, explicit) {
+		return explicit, nil
+	}
+	if explicit != "" {
+		provider, _ := config.ParseModelString(explicit)
+		if provider != "" && cfg.HasProvider(provider) && provider != config.AIProviderQuickstart {
+			return ResolveConfiguredChatProviderModelOffline(cfg, provider)
+		}
+	}
+
+	configuredProviders := cfg.GetConfiguredProviders()
+	if len(configuredProviders) == 0 {
+		return "", fmt.Errorf("no provider configured")
+	}
+
+	return ResolveConfiguredChatProviderModelOffline(cfg, configuredProviders[0])
+}
+
+// ResolveConfiguredChatProviderModelOffline resolves a chat-suitable model for
+// a configured provider using only explicit config and stable provider defaults.
+func ResolveConfiguredChatProviderModelOffline(cfg *config.AIConfig, provider string) (string, error) {
+	if cfg == nil {
+		return "", fmt.Errorf("Pulse Assistant config is nil")
+	}
+
+	provider = strings.TrimSpace(provider)
+	if provider == "" {
+		return "", fmt.Errorf("provider is required")
+	}
+	if provider == config.AIProviderQuickstart {
+		return "", fmt.Errorf("quickstart provider is retired; configure a provider API key or Ollama")
+	}
+	if !cfg.HasProvider(provider) {
+		return "", fmt.Errorf("%s provider is not configured", provider)
+	}
+	if preferred := strings.TrimSpace(cfg.GetPreferredModelForProvider(provider)); preferred != "" && modelUsableWithConfig(cfg, preferred, true) {
+		return preferred, nil
+	}
+	if fallback := strings.TrimSpace(config.DefaultModelForProvider(provider)); fallback != "" && modelUsableWithConfig(cfg, fallback, true) {
+		return fallback, nil
+	}
+	return "", fmt.Errorf("no chat model configured for %s provider", provider)
+}
+
 // ResolvePreferredModelForProvider returns the best model to use for the requested
 // provider. Explicit provider-scoped selections win; otherwise Pulse resolves a
 // recommended model from the provider's live catalog.

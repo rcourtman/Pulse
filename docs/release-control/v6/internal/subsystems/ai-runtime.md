@@ -146,13 +146,23 @@ runtime cost control, and shared AI transport surfaces.
    provider/model route. This fallback must use chat-suitable model resolution
    from `internal/ai/modelresolution`, skipping obvious non-chat endpoints such
    as realtime, audio, moderation, embedding, and content-safety catalog
-   entries. Once visible output has streamed, Pulse must not silently switch
-   providers for that turn; the error belongs to the visible attempt and is
-   surfaced through normal failed-turn recovery. Assistant completion events
-   must carry the effective model route that actually completed the turn, and
-   the drawer must update the in-flight transcript row when `provider_fallback`
-   names the next route so message labels, cost context, retry decisions, and
-   model-route recovery do not continue to point at the failed provider.
+	   entries. Fallback planning must not block the selected provider's first
+	   attempt on live catalog reads for every other configured provider; the hot
+	   path may queue only explicit provider preferences or stable provider defaults
+	   and defer fallback provider construction until the selected route actually
+	   fails before visible output. Primary interactive chat model resolution is
+	   governed by that same hot-path rule: it must use the explicit configured
+	   chat route or a stable provider default without calling provider model
+	   catalogs before the selected stream starts. Catalog-backed recommendation
+	   belongs to settings/model-list flows, not `/api/ai/chat` first-response
+	   startup. Once visible output has streamed, Pulse must not silently switch
+	   providers for that turn; the error belongs to the visible attempt and is
+	   surfaced through normal failed-turn recovery. Assistant
+   completion events must carry the effective model route that actually
+   completed the turn, and the drawer must update the in-flight transcript row
+   when `provider_fallback` names the next route so message labels, cost
+   context, retry decisions, and model-route recovery do not continue to point
+   at the failed provider.
    Interactive Assistant streams must establish the session ID and emit the
    `session` event once as soon as the HTTP SSE writer is ready, before finding
    handoff recovery, model resolution, provider fallback planning,
@@ -161,6 +171,18 @@ runtime cost control, and shared AI transport surfaces.
    that same session ID while suppressing duplicate session events. This keeps
    the drawer's visible turn anchored while backend preparation continues and
    prevents simple prompts from appearing stuck in an opaque thinking state.
+   Stored finding or handoff recovery is eligible only for a session ID supplied
+   by the browser as an existing conversation. A session ID generated at the
+   HTTP stream boundary for a new turn must not trigger persisted handoff
+   lookups or legacy session discovery before the service creates the session,
+   because that turns a new prompt into a large-history storage scan before
+   the runtime can even report progress.
+   After the stream is anchored, pre-model work must keep emitting neutral
+   `workflow_state` progress for the long phases that can otherwise look dead:
+   context preparation, bounded canonical inventory reads for count/overview
+   turns, and selected-provider startup. These events are runtime progress, not
+   Assistant-authored analysis, and they must not become keyword routers,
+   explore pre-passes, or instructions that choose the model's next action.
    Streamed provider startup must be bounded by the configured Assistant request
    timeout and the OpenAI-compatible SSE response-header guard; transient
    startup failures may retry once before surfacing failed-turn recovery, but a
@@ -199,6 +221,12 @@ runtime cost control, and shared AI transport surfaces.
    stream events must render inline as compact running rows in the assistant
    turn instead of disappearing until completion or relying only on the
    drawer-level status bar.
+   Assistant session listing is a history-browsing path, not a send-path lock.
+   The session store must not hold its shared mutex while scanning and parsing
+   every persisted session file for `/api/ai/sessions`; writes must remain
+   atomically readable through temp-file plus rename so a large recent-session
+   list cannot block `EnsureSession`, `AddMessage`, or stored handoff reads on
+   a new prompt.
    The empty Assistant drawer may surface recent non-empty sessions as direct
    resume actions using the backend session list already owned by the drawer;
    it must not create a parallel recent-chat store or product-authored prompt
