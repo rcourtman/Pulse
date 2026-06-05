@@ -668,6 +668,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   // Chat hook
   const chat = useChat({
     model: initialModelSelections[DEFAULT_SESSION_KEY] || '',
+    defaultModel: () => defaultModel().trim(),
     onConversationChanged: refreshSessions,
   });
 
@@ -727,6 +728,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const match = aiRuntimeModels().find((candidate) => candidate.id === model);
     return match?.provider?.trim() || getProviderFromModelId(model);
   });
+
+  const formatChatMessageModelRoute = (modelId: string) => {
+    const normalized = modelId.trim();
+    if (!normalized) return '';
+    const match = aiRuntimeModels().find((candidate) => candidate.id === normalized);
+    return match ? formatAIModelRouteLabel(match) : formatAIModelRouteLabel(normalized);
+  };
 
   const providerForModelRoute = (modelId: string) => {
     const normalized = modelId.trim();
@@ -2169,6 +2177,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
             onSkipQuestion={handleSkipQuestion}
             onRetry={(messageId) => chat.retryMessage(messageId)}
             onChangeModel={openModelSelectorFromError}
+            getModelRouteLabel={formatChatMessageModelRoute}
             getModelRouteAlternative={getFailedTurnModelRouteAlternative}
             onUseModelRoute={switchToModelRoute}
             recentSessions={sessions()

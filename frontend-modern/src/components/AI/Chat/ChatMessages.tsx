@@ -21,6 +21,7 @@ interface ChatMessagesProps {
   onSkipQuestion: (messageId: string, questionId: string) => void;
   onRetry?: (messageId: string) => void;
   onChangeModel?: () => void;
+  getModelRouteLabel?: (modelId: string) => string;
   getModelRouteAlternative?: (message: ChatMessage) => ModelRouteRecoveryOption | null;
   onUseModelRoute?: (modelId: string, messageId?: string) => void;
   // Dashboard props
@@ -155,6 +156,7 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
             onSkipQuestion={(questionId) => props.onSkipQuestion(message.id, questionId)}
             onRetry={props.onRetry}
             onChangeModel={props.onChangeModel}
+            getModelRouteLabel={props.getModelRouteLabel}
             modelRouteAlternative={props.getModelRouteAlternative?.(message)}
             onUseModelRoute={props.onUseModelRoute}
           />

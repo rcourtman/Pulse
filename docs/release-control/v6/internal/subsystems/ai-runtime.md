@@ -180,7 +180,10 @@ runtime cost control, and shared AI transport surfaces.
    `openrouter:deepseek/...` must render with an explicit `via OpenRouter`
    label in the shared picker, System AI settings status, and inherited default
    descriptions unless the server-supplied model name already carries that
-   route. Direct provider models must not gain a gateway label.
+   route. Assistant transcript rows must carry and render the effective model
+   route that produced each live or restored response so route recovery and
+   mixed-provider sessions remain auditable. Direct provider models must not
+   gain a gateway label.
 7. Keep AI chat presentation helpers aligned through `frontend-modern/src/components/AI/Chat/` and the shared `frontend-modern/src/utils/textPresentation.ts`
 8. Keep assistant drawer context, session, and org-switch reset state aligned through the shared `frontend-modern/src/stores/aiChat.ts` boundary instead of letting `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, or feature callers fork their own assistant shell state
    That shared drawer ownership also covers passive resource reads while the

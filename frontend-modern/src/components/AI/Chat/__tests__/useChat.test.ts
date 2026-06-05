@@ -193,6 +193,23 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('uses the configured default model route for the request and assistant turn', async () => {
+      mockChat.mockResolvedValue(undefined);
+
+      const { value: chat, dispose } = withRoot(() =>
+        useChat({ defaultModel: () => 'deepseek:deepseek-v4-pro' }),
+      );
+      await chat.sendMessage('hello');
+
+      expect(mockChat).toHaveBeenCalledOnce();
+      expect(mockChat.mock.calls[0][2]).toBe('deepseek:deepseek-v4-pro');
+      expect(chat.messages()[1]).toMatchObject({
+        role: 'assistant',
+        model: 'deepseek:deepseek-v4-pro',
+      });
+      dispose();
+    });
+
     it('reuses existing session', async () => {
       mockChat.mockResolvedValue(undefined);
 

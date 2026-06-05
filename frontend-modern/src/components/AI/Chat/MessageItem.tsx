@@ -23,6 +23,7 @@ import {
   AI_CHAT_ASSISTANT_MESSAGE_LABEL,
   AI_CHAT_CONTEXT_USED_LABEL,
 } from '@/utils/aiChatPresentation';
+import { formatAIModelRouteLabel } from '@/utils/aiProviderPresentation';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
 
 interface MessageItemProps {
@@ -36,6 +37,7 @@ interface MessageItemProps {
   onSkipQuestion: (questionId: string) => void;
   onRetry?: (messageId: string) => void;
   onChangeModel?: () => void;
+  getModelRouteLabel?: (modelId: string) => string;
   modelRouteAlternative?: ModelRouteRecoveryOption | null;
   onUseModelRoute?: (modelId: string, messageId?: string) => void;
 }
@@ -90,6 +92,11 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
   });
   const visibleMessageContent = () =>
     stripAssistantOutputArtifacts(props.message.content || '').text;
+  const messageModelLabel = () => {
+    const model = props.message.model?.trim();
+    if (!model) return '';
+    return props.getModelRouteLabel?.(model) || formatAIModelRouteLabel(model);
+  };
 
   // Check if currently streaming content (no tools pending, still streaming)
   const isStreamingText = () =>
@@ -161,8 +168,13 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
               <span class="text-xs font-semibold text-base-content">
                 {AI_CHAT_ASSISTANT_MESSAGE_LABEL}
               </span>
-              <Show when={props.message.model && !props.message.isStreaming}>
-                <span class="text-[10px] text-muted font-mono">{props.message.model}</span>
+              <Show when={messageModelLabel() && !props.message.isStreaming}>
+                <span
+                  class="truncate rounded border border-border-subtle bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted"
+                  title={props.message.model}
+                >
+                  {messageModelLabel()}
+                </span>
               </Show>
               <Show when={canCopy()}>
                 <button

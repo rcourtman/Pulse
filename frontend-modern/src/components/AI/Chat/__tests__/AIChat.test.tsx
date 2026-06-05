@@ -20,6 +20,7 @@ const {
   const mockChatMessagesProps: Array<{
     messages: ChatMessage[];
     onChangeModel?: () => void;
+    getModelRouteLabel?: (modelId: string) => string;
     getModelRouteAlternative?: (message: ChatMessage) => ModelRouteRecoveryOption | null;
     onUseModelRoute?: (modelId: string, messageId?: string) => void;
   }> = [];
@@ -193,6 +194,7 @@ vi.mock('../ChatMessages', () => ({
     messages: ChatMessage[];
     emptyState?: { title: string; subtitle?: string };
     onChangeModel?: () => void;
+    getModelRouteLabel?: (modelId: string) => string;
     getModelRouteAlternative?: (message: ChatMessage) => ModelRouteRecoveryOption | null;
     onUseModelRoute?: (modelId: string, messageId?: string) => void;
   }) => {
@@ -434,6 +436,31 @@ describe('AIChat', () => {
 
       await waitFor(() => {
         expect(screen.getByTestId('model-selector')).toHaveAttribute('data-open-request', '1');
+      });
+    });
+
+    it('passes catalog-grade model route labels to transcript rows', async () => {
+      mockAIAPI.getModels.mockResolvedValue({
+        models: [
+          {
+            id: 'openrouter:deepseek/deepseek-v4-pro',
+            name: 'DeepSeek: DeepSeek V4 Pro',
+            provider: 'openrouter',
+            notable: true,
+          },
+        ],
+      });
+
+      renderChat();
+
+      await waitFor(() => {
+        expect(mockAIAPI.getModels).toHaveBeenCalled();
+      });
+      await waitFor(() => {
+        const props = mockChatMessagesProps[mockChatMessagesProps.length - 1];
+        expect(props?.getModelRouteLabel?.('openrouter:deepseek/deepseek-v4-pro')).toBe(
+          'DeepSeek: DeepSeek V4 Pro via OpenRouter',
+        );
       });
     });
 

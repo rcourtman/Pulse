@@ -321,6 +321,26 @@ describe('MessageItem', () => {
       expect(screen.getByText('Pulse Assistant')).toBeInTheDocument();
     });
 
+    it('renders completed assistant model routes with provider labels', () => {
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            content: 'Done.',
+            model: 'openrouter:deepseek/deepseek-v4-pro',
+          })}
+          getModelRouteLabel={(modelId) =>
+            modelId === 'openrouter:deepseek/deepseek-v4-pro'
+              ? 'DeepSeek: DeepSeek V4 Pro via OpenRouter'
+              : modelId
+          }
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(screen.getByText('DeepSeek: DeepSeek V4 Pro via OpenRouter')).toBeInTheDocument();
+    });
+
     it('does not use right-alignment for assistant messages', () => {
       const { container } = render(() => (
         <MessageItem message={makeMessage({ role: 'assistant' })} {...makeHandlers()} />

@@ -34,6 +34,7 @@ type AssistantInterruption = NonNullable<ChatMessage['interruption']>;
 export interface UseChatOptions {
   sessionId?: string;
   model?: string;
+  defaultModel?: () => string;
   onConversationChanged?: () => void | Promise<void>;
 }
 
@@ -62,6 +63,12 @@ export function useChat(options: UseChatOptions = {}) {
   const [sessionId, setSessionId] = createSignal(options.sessionId || '');
   const [model, setModel] = createSignal(options.model || '');
   const [queuedFollowUps, setQueuedFollowUps] = createSignal<QueuedFollowUp[]>([]);
+
+  const effectiveModelRoute = () => {
+    const selected = model().trim();
+    if (selected) return selected;
+    return options.defaultModel?.().trim() || '';
+  };
 
   const notifyConversationChanged = async () => {
     if (!options.onConversationChanged) return;
@@ -836,11 +843,13 @@ export function useChat(options: UseChatOptions = {}) {
     };
 
     const assistantId = generateId();
+    const requestModel = effectiveModelRoute();
     const streamingMessage: ChatMessage = {
       id: assistantId,
       role: 'assistant',
       content: '',
       timestamp: new Date(),
+      model: requestModel || undefined,
       isStreaming: true,
       pendingTools: [],
       toolCalls: [],
@@ -872,7 +881,7 @@ export function useChat(options: UseChatOptions = {}) {
       await AIChatAPI.chat(
         trimmedPrompt,
         currentSessionId || undefined,
-        model() || undefined,
+        requestModel || undefined,
         (event: StreamEvent) => {
           processEvent(assistantId, requestId, event);
         },
