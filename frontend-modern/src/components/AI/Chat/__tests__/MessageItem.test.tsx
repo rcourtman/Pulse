@@ -146,6 +146,7 @@ describe('MessageItem', () => {
   describe('error block', () => {
     it('renders a distinct error block with the message and a retry button', () => {
       const onRetry = vi.fn();
+      const onChangeModel = vi.fn();
       render(() => (
         <MessageItem
           message={makeMessage({
@@ -155,12 +156,17 @@ describe('MessageItem', () => {
           })}
           {...makeHandlers()}
           onRetry={onRetry}
+          onChangeModel={onChangeModel}
         />
       ));
 
       const alert = screen.getByRole('alert');
       expect(alert).toBeInTheDocument();
       expect(alert.textContent).toContain('billing or quota reasons');
+
+      const changeModel = screen.getByRole('button', { name: /change model/i });
+      fireEvent.click(changeModel);
+      expect(onChangeModel).toHaveBeenCalledTimes(1);
 
       const retry = screen.getByRole('button', { name: /try again/i });
       fireEvent.click(retry);

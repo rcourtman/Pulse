@@ -109,22 +109,34 @@ describe('ToolExecutionBlock', () => {
     expect(screen.getByText('ls -la')).toBeInTheDocument();
   });
 
-  it('truncates input longer than 60 chars', () => {
+  it('truncates input summaries longer than 28 chars', () => {
     const longInput = 'A'.repeat(70);
     render(() => <ToolExecutionBlock tool={makeTool({ input: longInput })} />);
-    expect(screen.getByText('A'.repeat(60) + '...')).toBeInTheDocument();
+    expect(screen.getByText('A'.repeat(28))).toBeInTheDocument();
   });
 
-  it('shows "{}" when input is empty', () => {
-    render(() => <ToolExecutionBlock tool={makeTool({ input: '' })} />);
-    expect(screen.getByText('{}')).toBeInTheDocument();
+  it('summarizes JSON action input without showing raw JSON by default', () => {
+    render(() => (
+      <ToolExecutionBlock
+        tool={makeTool({
+          name: 'query',
+          input: '{"action":"topology","include":"all","summary_only":true}',
+          output: '{"summary":{"total_nodes":3}}',
+        })}
+      />
+    ));
+
+    expect(screen.getByText('topology')).toBeInTheDocument();
+    expect(screen.queryByText(/summary_only/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/total_nodes/)).not.toBeInTheDocument();
   });
 
   // --- Output display ---
 
-  it('shows output when non-empty', () => {
+  it('does not show output by default when non-empty', () => {
     render(() => <ToolExecutionBlock tool={makeTool({ output: 'hello world' })} />);
-    expect(screen.getByText('hello world')).toBeInTheDocument();
+    expect(screen.queryByText('hello world')).not.toBeInTheDocument();
+    expect(screen.getByText('Details')).toBeInTheDocument();
   });
 
   it('hides output that is only whitespace', () => {
@@ -142,90 +154,42 @@ describe('ToolExecutionBlock', () => {
     expect(container.querySelector('pre')).toBeNull();
   });
 
-  it('shows last 3 lines by default when output has more lines', () => {
-    const output = 'line1\nline2\nline3\nline4\nline5';
-    render(() => <ToolExecutionBlock tool={makeTool({ output })} />);
-    const pre = screen.getByText(/line5/);
-    expect(pre.textContent).toContain('...');
-    expect(pre.textContent).toContain('line3');
-    expect(pre.textContent).toContain('line4');
-    expect(pre.textContent).toContain('line5');
-  });
-
-  it('shows all lines when 3 or fewer non-empty lines', () => {
-    const output = 'line1\nline2\nline3';
-    render(() => <ToolExecutionBlock tool={makeTool({ output })} />);
-    const pre = screen.getByText(/line1/);
-    expect(pre.textContent).not.toContain('...');
-  });
-
   // --- Expand/collapse behavior ---
 
-  it('shows "Show full output" button when output has more than 3 lines', () => {
+  it('shows a details button when raw input or output is available', () => {
     const output = 'l1\nl2\nl3\nl4\nl5';
     render(() => <ToolExecutionBlock tool={makeTool({ output })} />);
-    expect(screen.getByText('Show full output')).toBeInTheDocument();
+    expect(screen.getByText('Details')).toBeInTheDocument();
   });
 
-  it('does not show expand button when output has 3 or fewer lines', () => {
-    const output = 'l1\nl2\nl3';
-    render(() => <ToolExecutionBlock tool={makeTool({ output })} />);
-    expect(screen.queryByText('Show full output')).toBeNull();
+  it('does not show a details button when there are no details', () => {
+    render(() => <ToolExecutionBlock tool={makeTool({ input: '', output: '' })} />);
+    expect(screen.queryByText('Details')).toBeNull();
   });
 
-  it('shows full output when "Show full output" button is clicked', async () => {
+  it('shows raw input and output when details are opened', async () => {
     const output = 'line1\nline2\nline3\nline4\nline5';
-    render(() => <ToolExecutionBlock tool={makeTool({ output })} />);
-    const btn = screen.getByText('Show full output');
+    render(() => (
+      <ToolExecutionBlock tool={makeTool({ input: '{"action":"list"}', output })} />
+    ));
+    const btn = screen.getByText('Details');
     fireEvent.click(btn);
-    // After expanding, the button should say "Show less"
-    expect(screen.getByText('Show less')).toBeInTheDocument();
-    // And full output should be visible
-    const pre = screen.getByText(/line1/);
-    expect(pre.textContent).toContain('line1');
-    expect(pre.textContent).toContain('line5');
+
+    expect(screen.getByText('Hide details')).toBeInTheDocument();
+    expect(screen.getByText('Input')).toBeInTheDocument();
+    expect(screen.getByText('Output')).toBeInTheDocument();
+    expect(screen.getByText('{"action":"list"}')).toBeInTheDocument();
+    expect(screen.getByText(/line1/).textContent).toContain('line5');
   });
 
-  it('collapses back when "Show less" is clicked', async () => {
+  it('hides raw details when toggled closed', async () => {
     const output = 'line1\nline2\nline3\nline4\nline5';
     render(() => <ToolExecutionBlock tool={makeTool({ output })} />);
-    fireEvent.click(screen.getByText('Show full output'));
-    expect(screen.getByText('Show less')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Show less'));
-    expect(screen.getByText('Show full output')).toBeInTheDocument();
-  });
-
-  it('clicking header row toggles output when has more lines', async () => {
-    const output = 'l1\nl2\nl3\nl4\nl5';
-    const { container } = render(() => <ToolExecutionBlock tool={makeTool({ output })} />);
-    // The header row has cursor-pointer class when collapsible
-    const header = container.querySelector('.cursor-pointer');
-    expect(header).not.toBeNull();
-    fireEvent.click(header!);
-    expect(screen.getByText('Show less')).toBeInTheDocument();
-  });
-
-  it('header row is not clickable when output has 3 or fewer lines', () => {
-    const output = 'l1\nl2';
-    const { container } = render(() => <ToolExecutionBlock tool={makeTool({ output })} />);
-    expect(container.querySelector('.cursor-pointer')).toBeNull();
-  });
-
-  // --- Expand chevron icon ---
-
-  it('renders expand chevron SVG when output is collapsible', () => {
-    const output = 'l1\nl2\nl3\nl4';
-    const { container } = render(() => <ToolExecutionBlock tool={makeTool({ output })} />);
-    const svg = container.querySelector('svg');
-    expect(svg).not.toBeNull();
-  });
-
-  it('rotates chevron when expanded', async () => {
-    const output = 'l1\nl2\nl3\nl4';
-    const { container } = render(() => <ToolExecutionBlock tool={makeTool({ output })} />);
-    fireEvent.click(screen.getByText('Show full output'));
-    const svg = container.querySelector('svg');
-    expect(svg?.classList.contains('rotate-180')).toBe(true);
+    fireEvent.click(screen.getByText('Details'));
+    expect(screen.getByText('Hide details')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Hide details'));
+    expect(screen.getByText('Details')).toBeInTheDocument();
+    expect(screen.queryByText(/line1/)).not.toBeInTheDocument();
   });
 
   // --- Edge cases ---
@@ -248,20 +212,19 @@ describe('ToolExecutionBlock', () => {
     // hasOutput returns false when output contains "not available"
     expect(container.querySelector('pre')).toBeNull();
     // The expand button should also not appear since output section is hidden
-    expect(screen.queryByText('Show full output')).toBeNull();
+    expect(screen.getByText('Details')).toBeInTheDocument();
   });
 
-  it('does not truncate input at exactly 60 chars', () => {
-    const input60 = 'X'.repeat(60);
-    render(() => <ToolExecutionBlock tool={makeTool({ input: input60 })} />);
-    // Exactly 60 chars should NOT be truncated (condition is > 60)
-    expect(screen.getByText(input60)).toBeInTheDocument();
+  it('does not truncate input summaries at exactly 28 chars', () => {
+    const input28 = 'X'.repeat(28);
+    render(() => <ToolExecutionBlock tool={makeTool({ input: input28 })} />);
+    expect(screen.getByText(input28)).toBeInTheDocument();
   });
 
-  it('truncates input at 61 chars', () => {
-    const input61 = 'Y'.repeat(61);
-    render(() => <ToolExecutionBlock tool={makeTool({ input: input61 })} />);
-    expect(screen.getByText('Y'.repeat(60) + '...')).toBeInTheDocument();
+  it('truncates input summaries at 29 chars', () => {
+    const input29 = 'Y'.repeat(29);
+    render(() => <ToolExecutionBlock tool={makeTool({ input: input29 })} />);
+    expect(screen.getByText('Y'.repeat(28))).toBeInTheDocument();
   });
 });
 
@@ -295,16 +258,9 @@ describe('PendingToolBlock', () => {
     expect(screen.getByText('custom op')).toBeInTheDocument();
   });
 
-  it('falls through to fallback for pulse_get_storage_config (not mapped in pending)', () => {
-    // PendingToolBlock does NOT have pulse_get_storage_config mapped unlike ToolExecutionBlock
-    // Fallback: strip pulse_, replace underscores, truncate to 12 → "get storage "
-    const { container } = render(() => (
-      <PendingToolBlock tool={makePending({ name: 'pulse_get_storage_config' })} />
-    ));
-    // Use container query since getByText trims trailing whitespace
-    const label = container.querySelector('span.uppercase');
-    expect(label).not.toBeNull();
-    expect(label!.textContent).toBe('get storage ');
+  it('maps pulse_get_storage_config consistently while pending', () => {
+    render(() => <PendingToolBlock tool={makePending({ name: 'pulse_get_storage_config' })} />);
+    expect(screen.getByText('storage cfg')).toBeInTheDocument();
   });
 
   // --- Input display ---
@@ -314,22 +270,33 @@ describe('PendingToolBlock', () => {
     expect(screen.getByText('df -h')).toBeInTheDocument();
   });
 
-  it('truncates input longer than 50 chars', () => {
+  it('truncates input summaries longer than 28 chars', () => {
     const longInput = 'B'.repeat(55);
     render(() => <PendingToolBlock tool={makePending({ input: longInput })} />);
-    expect(screen.getByText('B'.repeat(50) + '...')).toBeInTheDocument();
+    expect(screen.getByText('B'.repeat(28))).toBeInTheDocument();
   });
 
-  it('does not truncate input at exactly 50 chars', () => {
-    const input50 = 'C'.repeat(50);
-    render(() => <PendingToolBlock tool={makePending({ input: input50 })} />);
-    expect(screen.getByText(input50)).toBeInTheDocument();
+  it('does not truncate input summaries at exactly 28 chars', () => {
+    const input28 = 'C'.repeat(28);
+    render(() => <PendingToolBlock tool={makePending({ input: input28 })} />);
+    expect(screen.getByText(input28)).toBeInTheDocument();
   });
 
-  it('truncates input at 51 chars', () => {
-    const input51 = 'D'.repeat(51);
-    render(() => <PendingToolBlock tool={makePending({ input: input51 })} />);
-    expect(screen.getByText('D'.repeat(50) + '...')).toBeInTheDocument();
+  it('truncates input summaries at 29 chars', () => {
+    const input29 = 'D'.repeat(29);
+    render(() => <PendingToolBlock tool={makePending({ input: input29 })} />);
+    expect(screen.getByText('D'.repeat(28))).toBeInTheDocument();
+  });
+
+  it('summarizes JSON action input without showing raw JSON', () => {
+    render(() => (
+      <PendingToolBlock
+        tool={makePending({ name: 'query', input: '{"action":"topology","include":"all"}' })}
+      />
+    ));
+
+    expect(screen.getByText('topology')).toBeInTheDocument();
+    expect(screen.queryByText(/include/)).not.toBeInTheDocument();
   });
 
   // --- Spinner ---
@@ -355,7 +322,7 @@ describe('PendingToolsList', () => {
     render(() => <PendingToolsList tools={tools} />);
     expect(screen.getByText('cmd1')).toBeInTheDocument();
     expect(screen.getByText('url1')).toBeInTheDocument();
-    expect(screen.getByText('{}')).toBeInTheDocument();
+    expect(screen.getByText('request')).toBeInTheDocument();
   });
 
   it('collapses when more than 3 tools, showing first 2', () => {

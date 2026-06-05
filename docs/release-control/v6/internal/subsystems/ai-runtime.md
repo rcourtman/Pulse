@@ -117,6 +117,11 @@ runtime cost control, and shared AI transport surfaces.
    structured mentions, finding id, approval override, handoff resources,
    handoff actions, and handoff metadata, but must not reconstruct scoped
    context from prompt history or saved transcript prose.
+   Failed-turn recovery must also expose model-route switching through the
+   existing drawer model selector so operators can move from a blocked direct
+   provider route to a configured gateway or alternate model without losing the
+   draft or creating a parallel picker. Retry remains available, but it must not
+   be the only visible action when a failed Assistant turn is shown.
    Restored Assistant sessions must hydrate saved assistant content and
    persisted tool calls into the same transcript event shape used by live
    streams so switching sessions does not hide prior tool evidence or collapse
@@ -143,8 +148,11 @@ runtime cost control, and shared AI transport surfaces.
    approval, or question blocks; if a provider emits `pulse_*` / `patrol_*`
    calls, DSML, XML/function-call envelopes, or JSON tool-call shapes as text
    content, the chat runtime must strip them before streaming, persistence, and
-   frontend rendering. Token accounting and other provider metadata remain
-   runtime/accounting data, not normal transcript prose.
+   frontend rendering. Completed tool rows in the drawer may show compact tool
+   name, action summary, status, and an explicit details affordance, but raw
+   tool input/output JSON must not render in the default transcript. Token
+   accounting and other provider metadata remain runtime/accounting data, not
+   normal transcript prose.
 4. Add or change Patrol, alert-analysis, or remediation transport through `internal/api/ai_handlers.go`, `internal/api/ai_intelligence_handlers.go`, and `frontend-modern/src/api/patrol.ts`
    Provider preflight diagnostics returned from `internal/api/ai_handlers.go`
    must reuse the Patrol runtime failure classifier in `internal/ai/` and

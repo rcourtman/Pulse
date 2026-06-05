@@ -14,7 +14,11 @@ const {
   mockByType,
   mockResources,
   mockWebSocketState,
+  mockChatMessagesProps,
 } = vi.hoisted(() => {
+  const mockChatMessagesProps: Array<{
+    onChangeModel?: () => void;
+  }> = [];
   const mockChat = {
     messages: vi.fn((): ChatMessage[] => []),
     isLoading: vi.fn(() => false),
@@ -169,6 +173,7 @@ const {
     mockByType,
     mockResources,
     mockWebSocketState,
+    mockChatMessagesProps,
   };
 });
 
@@ -182,24 +187,36 @@ vi.mock('../ChatMessages', () => ({
   ChatMessages: (props: {
     messages: ChatMessage[];
     emptyState?: { title: string; subtitle?: string };
-  }) => (
-    <div data-testid="chat-messages" data-msg-count={props.messages.length}>
-      {props.emptyState?.title && (
-        <span data-testid="empty-state-title">{props.emptyState.title}</span>
-      )}
-      {props.emptyState?.subtitle && (
-        <span data-testid="empty-state-subtitle">{props.emptyState.subtitle}</span>
-      )}
-    </div>
-  ),
+    onChangeModel?: () => void;
+  }) => {
+    mockChatMessagesProps.push(props);
+    return (
+      <div data-testid="chat-messages" data-msg-count={props.messages.length}>
+        {props.emptyState?.title && (
+          <span data-testid="empty-state-title">{props.emptyState.title}</span>
+        )}
+        {props.emptyState?.subtitle && (
+          <span data-testid="empty-state-subtitle">{props.emptyState.subtitle}</span>
+        )}
+        <button
+          type="button"
+          data-testid="mock-change-model"
+          onClick={() => props.onChangeModel?.()}
+        >
+          Change model
+        </button>
+      </div>
+    );
+  },
 }));
 
 vi.mock('../ModelSelector', () => ({
-  ModelSelector: (props: { selectedModel: string; models: ModelInfo[] }) => (
+  ModelSelector: (props: { selectedModel: string; models: ModelInfo[]; openRequest?: number }) => (
     <div
       data-testid="model-selector"
       data-selected={props.selectedModel}
       data-count={props.models.length}
+      data-open-request={String(props.openRequest || 0)}
     />
   ),
 }));
@@ -305,6 +322,7 @@ async function waitForProviderCheckSettled() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockChatMessagesProps.length = 0;
   setViewportWidth(1440);
   resetAIRuntimeState();
   mockAiChatStore.isOpenSignal.mockReturnValue(true);
@@ -380,6 +398,18 @@ describe('AIChat', () => {
     it('renders the ModelSelector child component', () => {
       renderChat();
       expect(screen.getByTestId('model-selector')).toBeInTheDocument();
+    });
+
+    it('opens the model selector from failed-turn recovery', async () => {
+      renderChat();
+
+      expect(screen.getByTestId('model-selector')).toHaveAttribute('data-open-request', '0');
+
+      fireEvent.click(screen.getByTestId('mock-change-model'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('model-selector')).toHaveAttribute('data-open-request', '1');
+      });
     });
 
     it('checks the selected provider and shows a readiness issue before the first send', async () => {

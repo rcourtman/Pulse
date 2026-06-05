@@ -7,123 +7,111 @@ interface ToolExecutionBlockProps {
   tool: ToolExecution;
 }
 
+const getToolLabel = (name: string) => {
+  if (name === 'run_command' || name === 'pulse_run_command') return 'cmd';
+  if (name === 'fetch_url' || name === 'pulse_fetch_url') return 'fetch';
+  if (name === 'get_infrastructure_state' || name === 'pulse_get_infrastructure_state')
+    return 'infra';
+  if (name === 'get_active_alerts' || name === 'pulse_get_active_alerts') return 'alerts';
+  if (name === 'get_metrics_history' || name === 'pulse_get_metrics_history') return 'metrics';
+  if (name === 'get_baselines' || name === 'pulse_get_baselines') return 'baselines';
+  if (name === 'get_patterns' || name === 'pulse_get_patterns') return 'patterns';
+  if (name === 'get_disk_health' || name === 'pulse_get_disk_health') return 'disks';
+  if (name === 'get_storage' || name === 'pulse_get_storage') return 'storage';
+  if (name === 'pulse_get_storage_config') return 'storage cfg';
+  if (name === 'get_resource_details' || name === 'pulse_get_resource_details') return 'resource';
+  if (name.includes('finding')) return 'finding';
+  return formatIdentifierLabel(name, { stripPrefix: 'pulse_', maxLength: 12 });
+};
+
+const parseToolInputSummary = (input: string) => {
+  const trimmed = input.trim();
+  if (!trimmed) return '';
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const record = parsed as Record<string, unknown>;
+      if (typeof record.action === 'string' && record.action.trim()) {
+        return formatIdentifierLabel(record.action, { maxLength: 28 });
+      }
+      if (typeof record.command === 'string' && record.command.trim()) {
+        return formatIdentifierLabel(record.command, { maxLength: 28 });
+      }
+      return 'request';
+    }
+  } catch {
+    return formatIdentifierLabel(trimmed, { maxLength: 28 });
+  }
+
+  return 'request';
+};
+
+const hasReadableToolOutput = (output: string) => {
+  const trimmed = output.trim();
+  return trimmed.length > 0 && !trimmed.toLowerCase().includes('not available');
+};
+
 /**
  * ToolExecutionBlock - Displays completed tool executions in a compact terminal-like style.
  */
 export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) => {
-  const [showOutput, setShowOutput] = createSignal(false); // Collapsed by default like Claude Code
+  const [showDetails, setShowDetails] = createSignal(false);
 
-  // Get display name for tool
-  const toolLabel = createMemo(() => {
-    const name = props.tool.name;
-    if (name === 'run_command' || name === 'pulse_run_command') return 'cmd';
-    if (name === 'fetch_url' || name === 'pulse_fetch_url') return 'fetch';
-    if (name === 'get_infrastructure_state' || name === 'pulse_get_infrastructure_state')
-      return 'infra';
-    if (name === 'get_active_alerts' || name === 'pulse_get_active_alerts') return 'alerts';
-    if (name === 'get_metrics_history' || name === 'pulse_get_metrics_history') return 'metrics';
-    if (name === 'get_baselines' || name === 'pulse_get_baselines') return 'baselines';
-    if (name === 'get_patterns' || name === 'pulse_get_patterns') return 'patterns';
-    if (name === 'get_disk_health' || name === 'pulse_get_disk_health') return 'disks';
-    if (name === 'get_storage' || name === 'pulse_get_storage') return 'storage';
-    if (name === 'pulse_get_storage_config') return 'storage cfg';
-    if (name === 'get_resource_details' || name === 'pulse_get_resource_details') return 'resource';
-    if (name.includes('finding')) return 'finding';
-    return formatIdentifierLabel(name, { stripPrefix: 'pulse_', maxLength: 12 });
-  });
-
-  // Check if output is non-empty and interesting
-  const hasOutput = createMemo(() => {
-    const output = props.tool.output || '';
-    return output.trim().length > 0 && !output.includes('not available');
-  });
-
-  // Show only last few lines by default, full output when expanded
-  const displayOutput = createMemo(() => {
-    const output = props.tool.output || '';
-    if (showOutput()) {
-      // Show full output when expanded
-      return output;
-    }
-    // Show last 3 lines by default
-    const lines = output.split('\n').filter((line) => line.trim());
-    if (lines.length <= 3) {
-      return output.trim();
-    }
-    const lastLines = lines.slice(-3).join('\n');
-    return '...\n' + lastLines;
-  });
-
-  const hasMoreOutput = createMemo(() => {
-    const output = props.tool.output || '';
-    const lines = output.split('\n').filter((line) => line.trim());
-    return lines.length > 3;
-  });
+  const toolLabel = createMemo(() => getToolLabel(props.tool.name));
+  const inputSummary = createMemo(() => parseToolInputSummary(props.tool.input || ''));
+  const hasInput = createMemo(() => (props.tool.input || '').trim().length > 0);
+  const hasOutput = createMemo(() => hasReadableToolOutput(props.tool.output || ''));
+  const hasDetails = createMemo(() => hasInput() || hasOutput());
 
   const statusIcon = () => (props.tool.success ? '✓' : '✗');
+  const statusLabel = () => (props.tool.success ? 'completed' : 'failed');
 
   return (
     <div class="my-1 font-mono text-[11px]">
-      {/* Compact single-line header */}
-      <div
-        class={`flex items-center gap-1.5 px-2 py-1 rounded ${
-          hasMoreOutput() ? 'cursor-pointer hover:bg-surface-hover' : ''
-        } ${showOutput() ? 'bg-surface-alt' : ''}`}
-        onClick={() => hasMoreOutput() && setShowOutput(!showOutput())}
-      >
-        {/* Status icon */}
+      <div class="flex items-center gap-1.5 rounded px-2 py-1">
         <span class={`${getToolCallResultTextClass(props.tool.success)} font-bold`}>
           {statusIcon()}
         </span>
 
-        {/* Tool label */}
         <span class="text-muted uppercase text-[9px] font-medium tracking-wider min-w-[50px]">
           {toolLabel()}
         </span>
 
-        {/* Command/input - truncated */}
-        <code class="text-base-content truncate flex-1">
-          {(props.tool.input || '').length > 60
-            ? (props.tool.input || '').substring(0, 60) + '...'
-            : props.tool.input || '{}'}
-        </code>
+        <span class="min-w-0 flex-1 truncate text-base-content">{inputSummary()}</span>
+        <span class="text-[10px] text-muted">{statusLabel()}</span>
 
-        {/* Expand indicator if has more output */}
-        <Show when={hasMoreOutput()}>
-          <svg
-            class={`w-3 h-3 text-slate-400 transition-transform ${showOutput() ? 'rotate-180' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+        <Show when={hasDetails()}>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              setShowDetails(!showDetails());
+            }}
+            class="rounded px-1.5 py-0.5 text-[9px] font-medium text-muted hover:bg-surface-hover hover:text-base-content"
           >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M19 9l-7 7-7-7"
-            />
-          </svg>
+            {showDetails() ? 'Hide details' : 'Details'}
+          </button>
         </Show>
       </div>
 
-      {/* Output - always show last few lines, expandable for full output */}
-      <Show when={hasOutput()}>
+      <Show when={showDetails() && hasDetails()}>
         <div class="ml-4 mt-1 mb-2 pl-2 border-l-2 border-border overflow-hidden">
-          <pre
-            class={`text-[10px] text-muted whitespace-pre-wrap break-all leading-relaxed overflow-y-auto overflow-x-hidden bg-surface-alt rounded p-2 ${showOutput() ? 'max-h-64' : 'max-h-20'}`}
-          >
-            {displayOutput()}
-          </pre>
-          <Show when={hasMoreOutput()}>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowOutput(!showOutput());
-              }}
-              class="mt-1 text-[9px] text-muted hover:text-base-content hover:underline"
-            >
-              {showOutput() ? 'Show less' : 'Show full output'}
-            </button>
+          <Show when={hasInput()}>
+            <div class="mb-1 text-[9px] font-semibold uppercase tracking-wide text-muted">
+              Input
+            </div>
+            <pre class="mb-2 max-h-32 overflow-y-auto overflow-x-hidden rounded bg-surface-alt p-2 text-[10px] leading-relaxed text-muted whitespace-pre-wrap break-all">
+              {(props.tool.input || '').trim()}
+            </pre>
+          </Show>
+          <Show when={hasOutput()}>
+            <div class="mb-1 text-[9px] font-semibold uppercase tracking-wide text-muted">
+              Output
+            </div>
+            <pre class="max-h-64 overflow-y-auto overflow-x-hidden rounded bg-surface-alt p-2 text-[10px] leading-relaxed text-muted whitespace-pre-wrap break-all">
+              {(props.tool.output || '').trim()}
+            </pre>
           </Show>
         </div>
       </Show>
@@ -139,22 +127,8 @@ interface PendingToolBlockProps {
 }
 
 export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
-  const toolLabel = createMemo(() => {
-    const name = props.tool.name;
-    if (name === 'run_command' || name === 'pulse_run_command') return 'cmd';
-    if (name === 'fetch_url' || name === 'pulse_fetch_url') return 'fetch';
-    if (name === 'get_infrastructure_state' || name === 'pulse_get_infrastructure_state')
-      return 'infra';
-    if (name === 'get_active_alerts' || name === 'pulse_get_active_alerts') return 'alerts';
-    if (name === 'get_metrics_history' || name === 'pulse_get_metrics_history') return 'metrics';
-    if (name === 'get_baselines' || name === 'pulse_get_baselines') return 'baselines';
-    if (name === 'get_patterns' || name === 'pulse_get_patterns') return 'patterns';
-    if (name === 'get_disk_health' || name === 'pulse_get_disk_health') return 'disks';
-    if (name === 'get_storage' || name === 'pulse_get_storage') return 'storage';
-    if (name === 'get_resource_details' || name === 'pulse_get_resource_details') return 'resource';
-    if (name.includes('finding')) return 'finding';
-    return formatIdentifierLabel(name, { stripPrefix: 'pulse_', maxLength: 12 });
-  });
+  const toolLabel = createMemo(() => getToolLabel(props.tool.name));
+  const inputSummary = createMemo(() => parseToolInputSummary(props.tool.input || ''));
 
   return (
     <div class="my-0.5 font-mono text-[11px] flex items-center gap-1.5 px-2 py-1 rounded bg-surface-alt border border-border">
@@ -177,12 +151,7 @@ export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
         {toolLabel()}
       </span>
 
-      {/* Command - truncated */}
-      <code class="text-base-content truncate flex-1">
-        {props.tool.input.length > 50
-          ? props.tool.input.substring(0, 50) + '...'
-          : props.tool.input}
-      </code>
+      <span class="text-base-content truncate flex-1">{inputSummary()}</span>
     </div>
   );
 };

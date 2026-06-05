@@ -451,6 +451,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [showSessions, setShowSessions] = createSignal(false);
   const [sessionDropdownPosition, setSessionDropdownPosition] = createSignal({ top: 0, right: 0 });
   let sessionButtonRef: HTMLButtonElement | undefined;
+  const [modelSelectorOpenRequest, setModelSelectorOpenRequest] = createSignal(0);
   const [defaultModel, setDefaultModel] = createSignal('');
   const [chatOverrideModel, setChatOverrideModel] = createSignal('');
   const [providerReadiness, setProviderReadiness] = createSignal<ChatProviderReadinessState>({
@@ -707,14 +708,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const fallback = defaultModel().trim();
     if (!fallback) return '';
     const match = aiRuntimeModels().find((model) => model.id === fallback);
-    return match ? match.name || match.id.split(':').pop() || match.id : fallback;
+    return match ? formatAIModelRouteLabel(match) : fallback;
   });
 
   const chatOverrideLabel = createMemo(() => {
     const override = chatOverrideModel().trim();
     if (!override) return '';
     const match = aiRuntimeModels().find((model) => model.id === override);
-    return match ? match.name || match.id.split(':').pop() || match.id : override;
+    return match ? formatAIModelRouteLabel(match) : override;
   });
 
   const selectedChatModel = createMemo(() => {
@@ -877,6 +878,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const selectModel = (modelId: string) => {
     chat.setModel(modelId);
     updateStoredModel(chat.sessionId(), modelId);
+  };
+
+  const openModelSelectorFromError = () => {
+    setModelSelectorOpenRequest((value) => value + 1);
   };
 
   const switchToProviderReadinessAlternative = () => {
@@ -1764,6 +1769,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 chatOverrideLabel={chatOverrideLabel()}
                 isLoading={aiRuntimeModelsLoading()}
                 error={aiRuntimeModelsError()}
+                openRequest={modelSelectorOpenRequest()}
                 onModelSelect={selectModel}
                 onRefresh={() => loadModels(true)}
               />
@@ -2139,6 +2145,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
             onAnswerQuestion={handleAnswerQuestion}
             onSkipQuestion={handleSkipQuestion}
             onRetry={(messageId) => chat.retryMessage(messageId)}
+            onChangeModel={openModelSelectorFromError}
             recentSessions={sessions()
               .filter((s) => s.id !== chat.sessionId() && s.message_count > 0)
               .slice(0, 3)}

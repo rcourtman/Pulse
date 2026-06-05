@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { ModelSelector } from '../ModelSelector';
 import type { ModelInfo } from '../types';
 
@@ -51,6 +52,26 @@ describe('ModelSelector', () => {
     ));
 
     expect(screen.getByText('Claude Sonnet 4')).toBeInTheDocument();
+  });
+
+  it('keeps gateway-routed selected model labels distinct', () => {
+    render(() => (
+      <ModelSelector
+        models={[
+          ...SAMPLE_MODELS,
+          makeModel({
+            id: 'openrouter:deepseek/deepseek-v4-pro',
+            name: 'DeepSeek: DeepSeek V4 Pro',
+            provider: 'openrouter',
+            notable: true,
+          }),
+        ]}
+        selectedModel="openrouter:deepseek/deepseek-v4-pro"
+        onModelSelect={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByText('DeepSeek: DeepSeek V4 Pro via OpenRouter')).toBeInTheDocument();
   });
 
   it('shows "Default" when no model is selected', () => {
@@ -112,6 +133,32 @@ describe('ModelSelector', () => {
 
     // Dropdown is now open — search input visible
     expect(screen.getByPlaceholderText('Search or enter model ID')).toBeInTheDocument();
+  });
+
+  it('opens dropdown and focuses search when an external recovery action requests it', async () => {
+    const [openRequest, setOpenRequest] = createSignal(0);
+    render(() => (
+      <>
+        <button type="button" onClick={() => setOpenRequest((value) => value + 1)}>
+          Recovery action
+        </button>
+        <ModelSelector
+          models={SAMPLE_MODELS}
+          selectedModel=""
+          openRequest={openRequest()}
+          onModelSelect={vi.fn()}
+        />
+      </>
+    ));
+
+    expect(screen.queryByPlaceholderText('Search or enter model ID')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Recovery action' }));
+
+    const searchInput = await screen.findByPlaceholderText('Search or enter model ID');
+    await waitFor(() => {
+      expect(document.activeElement).toBe(searchInput);
+    });
   });
 
   it('closes dropdown when toggled again', () => {

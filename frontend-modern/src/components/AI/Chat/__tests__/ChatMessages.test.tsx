@@ -13,6 +13,7 @@ let capturedMessageItemProps: Array<{
     answers: Array<{ id: string; value: string }>,
   ) => void;
   onSkipQuestion: (questionId: string) => void;
+  onChangeModel?: () => void;
 }> = [];
 
 vi.mock('../MessageItem', () => ({
@@ -25,6 +26,7 @@ vi.mock('../MessageItem', () => ({
       answers: Array<{ id: string; value: string }>,
     ) => void;
     onSkipQuestion: (questionId: string) => void;
+    onChangeModel?: () => void;
   }) => {
     capturedMessageItemProps.push(props);
     return (
@@ -314,6 +316,20 @@ describe('ChatMessages', () => {
       propsForMsg!.onSkipQuestion('q-77');
 
       expect(handlers.onSkipQuestion).toHaveBeenCalledWith('msg-5', 'q-77');
+    });
+
+    it('forwards onChangeModel unchanged for failed-turn recovery', () => {
+      const onChangeModel = vi.fn();
+      render(() => (
+        <ChatMessages
+          messages={[makeMessage({ id: 'msg-model', role: 'assistant', error: 'failed' })]}
+          {...makeHandlers()}
+          onChangeModel={onChangeModel}
+        />
+      ));
+
+      const propsForMsg = capturedMessageItemProps.find((p) => p.message.id === 'msg-model');
+      expect(propsForMsg?.onChangeModel).toBe(onChangeModel);
     });
 
     it('forwards correct message.id when multiple messages exist', () => {

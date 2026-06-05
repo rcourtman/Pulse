@@ -1,7 +1,19 @@
-import { Component, For, Show, createSignal, createMemo, onMount, onCleanup } from 'solid-js';
+import {
+  Component,
+  For,
+  Show,
+  createEffect,
+  createSignal,
+  createMemo,
+  onMount,
+  onCleanup,
+} from 'solid-js';
 import { getProviderFromModelId, groupModelsByProvider } from '../aiChatUtils';
 import { SearchField } from '@/components/shared/SearchField';
-import { getAIProviderDisplayName } from '@/utils/aiProviderPresentation';
+import {
+  formatAIModelRouteLabel,
+  getAIProviderDisplayName,
+} from '@/utils/aiProviderPresentation';
 import { AI_CHAT_MODEL_SELECTOR_EMPTY_STATE } from '@/utils/aiChatPresentation';
 import type { ModelInfo } from './types';
 
@@ -13,6 +25,7 @@ export interface ModelSelectorProps {
   chatOverrideLabel?: string;
   isLoading?: boolean;
   error?: string;
+  openRequest?: number;
   onModelSelect: (modelId: string) => void;
   onRefresh?: () => void;
 }
@@ -27,6 +40,8 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
   const [searchQuery, setSearchQuery] = createSignal('');
   const [dropdownPosition, setDropdownPosition] = createSignal({ top: 0, right: 0 });
   let buttonRef: HTMLButtonElement | undefined;
+  let searchInputRef: HTMLInputElement | undefined;
+  let lastOpenRequest = props.openRequest || 0;
 
   // Filter models by notable status (show only recent/notable models by default)
   const notableFilteredModels = createMemo(() => {
@@ -81,10 +96,13 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
   };
 
   const handleToggle = () => {
-    if (!isOpen()) {
+    if (isOpen()) {
+      setIsOpen(false);
+    } else {
       updateDropdownPosition();
+      setIsOpen(true);
+      queueMicrotask(() => searchInputRef?.focus());
     }
-    setIsOpen(!isOpen());
   };
 
   const handleSelect = (modelId: string) => {
@@ -92,6 +110,18 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
     setIsOpen(false);
     setSearchQuery('');
   };
+
+  createEffect(() => {
+    const request = props.openRequest || 0;
+    if (request <= 0 || request === lastOpenRequest) return;
+    lastOpenRequest = request;
+    queueMicrotask(() => {
+      updateDropdownPosition();
+      setSearchQuery('');
+      setIsOpen(true);
+      queueMicrotask(() => searchInputRef?.focus());
+    });
+  });
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key !== 'Enter') return;
@@ -110,7 +140,7 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
       return props.defaultModelLabel || 'Default';
     }
     const match = props.models.find((model) => model.id === selected);
-    if (match) return match.name || match.id.split(':').pop() || match.id;
+    if (match) return formatAIModelRouteLabel(match);
     return selected;
   });
 
@@ -203,6 +233,9 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
               placeholder="Search or enter model ID"
               class="flex-1"
               inputClass="py-1.5 text-xs focus:ring-blue-400"
+              inputRef={(el) => {
+                searchInputRef = el;
+              }}
             />
             <Show when={props.onRefresh}>
               <button
@@ -297,7 +330,7 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
                       >
                         <div class="flex items-center gap-1.5">
                           <span class="font-medium text-base-content">
-                            {model.name || model.id.split(':').pop() || model.id}
+                            {formatAIModelRouteLabel(model)}
                           </span>
                         </div>
                         <Show when={model.description}>

@@ -3,6 +3,7 @@ import CheckIcon from 'lucide-solid/icons/check';
 import CircleAlertIcon from 'lucide-solid/icons/circle-alert';
 import ClockIcon from 'lucide-solid/icons/clock';
 import CopyIcon from 'lucide-solid/icons/copy';
+import CpuIcon from 'lucide-solid/icons/cpu';
 import RotateCcwIcon from 'lucide-solid/icons/rotate-ccw';
 import SparklesIcon from 'lucide-solid/icons/sparkles';
 import { renderMarkdown } from '../aiChatUtils';
@@ -28,6 +29,7 @@ interface MessageItemProps {
   ) => void;
   onSkipQuestion: (questionId: string) => void;
   onRetry?: (messageId: string) => void;
+  onChangeModel?: () => void;
 }
 
 const markdownClass =
@@ -277,16 +279,28 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                   <CircleAlertIcon class="mt-0.5 h-4 w-4 shrink-0 text-red-500 dark:text-red-400" />
                   <div class="flex-1 min-w-0">
                     <p class="text-sm text-red-700 dark:text-red-300">{props.message.error}</p>
-                    <Show when={props.onRetry}>
-                      <button
-                        type="button"
-                        onClick={() => props.onRetry?.(props.message.id)}
-                        class="mt-2 inline-flex items-center gap-1.5 rounded-md border border-red-300 dark:border-red-800 px-2 py-1 text-xs font-medium text-red-700 dark:text-red-300 transition-colors hover:bg-red-100 dark:hover:bg-red-900/40"
-                      >
-                        <RotateCcwIcon class="h-3.5 w-3.5" />
-                        Try again
-                      </button>
-                    </Show>
+                    <div class="mt-2 flex flex-wrap gap-1.5">
+                      <Show when={props.onChangeModel}>
+                        <button
+                          type="button"
+                          onClick={() => props.onChangeModel?.()}
+                          class="inline-flex items-center gap-1.5 rounded-md border border-red-300 bg-white/80 px-2 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 dark:border-red-800 dark:bg-red-950/20 dark:text-red-300 dark:hover:bg-red-900/40"
+                        >
+                          <CpuIcon class="h-3.5 w-3.5" />
+                          Change model
+                        </button>
+                      </Show>
+                      <Show when={props.onRetry}>
+                        <button
+                          type="button"
+                          onClick={() => props.onRetry?.(props.message.id)}
+                          class="inline-flex items-center gap-1.5 rounded-md border border-red-300 px-2 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-900/40"
+                        >
+                          <RotateCcwIcon class="h-3.5 w-3.5" />
+                          Try again
+                        </button>
+                      </Show>
+                    </div>
                   </div>
                 </div>
               </Show>
