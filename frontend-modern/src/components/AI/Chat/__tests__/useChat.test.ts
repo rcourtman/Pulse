@@ -180,6 +180,10 @@ describe('useChat', () => {
         content: '',
         isStreaming: true,
         pendingTools: [],
+        workflowStatus: {
+          phase: 'request_start',
+          message: 'Preparing Pulse context.',
+        },
       });
       expect(mockCreateSession).not.toHaveBeenCalled();
       expect(mockChat).toHaveBeenCalledOnce();
@@ -959,6 +963,50 @@ describe('useChat', () => {
         phase: 'provider_fallback',
         message: 'OpenRouter did not start a response; trying Gemini.',
       });
+      dispose();
+    });
+
+    it('clears workflow progress when visible answer content starts streaming', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+
+      fire({
+        type: 'workflow_state',
+        data: {
+          phase: 'provider_start',
+          message: 'Waiting for OpenRouter to start responding.',
+        },
+      });
+      fire({ type: 'content', data: 'Here is the answer.' });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.content).toBe('Here is the answer.');
+      expect(assistant.workflowStatus).toBeUndefined();
+      dispose();
+    });
+
+    it('clears workflow progress when a governed tool block starts', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+
+      fire({
+        type: 'workflow_state',
+        data: {
+          phase: 'context',
+          message: 'Reading Pulse inventory.',
+        },
+      });
+      fire({ type: 'tool_start', data: { id: 'tool-1', name: 'get_logs', input: '{}' } });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.workflowStatus).toBeUndefined();
+      expect(assistant.pendingTools).toHaveLength(1);
       dispose();
     });
 

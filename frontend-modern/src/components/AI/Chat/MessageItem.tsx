@@ -109,10 +109,12 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     !props.message.content.trim() &&
     !hasRenderableStreamEvents() &&
     !props.message.error;
+  const workflowStatusText = createMemo(() => props.message.workflowStatus?.message?.trim() || '');
   const inlineStreamingStatusText = createMemo(() => {
-    const workflowMessage = props.message.workflowStatus?.message?.trim();
-    return workflowMessage || 'Thinking...';
+    return workflowStatusText() || 'Thinking...';
   });
+  const shouldShowHeaderWorkflowStatus = () =>
+    props.message.isStreaming && !isWaitingForFirstToken() && !!workflowStatusText();
   const interruptionLabel = createMemo(() => {
     switch (props.message.interruption) {
       case 'replaced':
@@ -170,16 +172,26 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
           </div>
 
           <div class="min-w-0 flex-1">
-            <div class="mb-2 flex min-h-7 items-center gap-2">
-              <span class="text-xs font-semibold text-base-content">
+            <div class="mb-2 flex min-h-7 min-w-0 items-center gap-2">
+              <span class="shrink-0 text-xs font-semibold text-base-content">
                 {AI_CHAT_ASSISTANT_MESSAGE_LABEL}
               </span>
-              <Show when={messageModelLabel() && !props.message.isStreaming}>
+              <Show when={messageModelLabel()}>
                 <span
-                  class="truncate rounded border border-border-subtle bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted"
+                  class="max-w-[12rem] truncate rounded border border-border-subtle bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted"
                   title={props.message.model}
                 >
                   {messageModelLabel()}
+                </span>
+              </Show>
+              <Show when={shouldShowHeaderWorkflowStatus()}>
+                <span
+                  class="inline-flex min-w-0 max-w-[18rem] items-center gap-1.5 rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200"
+                  title={workflowStatusText()}
+                  aria-live="polite"
+                >
+                  <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500 animate-pulse" />
+                  <span class="truncate">{workflowStatusText()}</span>
                 </span>
               </Show>
               <Show when={canCopy()}>

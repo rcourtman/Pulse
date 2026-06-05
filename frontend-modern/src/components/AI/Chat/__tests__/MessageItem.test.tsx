@@ -388,7 +388,7 @@ describe('MessageItem', () => {
       expect(screen.getByText('claude-3.5-sonnet')).toBeInTheDocument();
     });
 
-    it('does not show model name when message is streaming', () => {
+    it('keeps the active model route visible while streaming', () => {
       render(() => (
         <MessageItem
           message={makeMessage({
@@ -400,7 +400,7 @@ describe('MessageItem', () => {
         />
       ));
 
-      expect(screen.queryByText('claude-3.5-sonnet')).not.toBeInTheDocument();
+      expect(screen.getByText('claude-3.5-sonnet')).toBeInTheDocument();
     });
 
     it('does not show model name when model is not provided', () => {
@@ -529,6 +529,29 @@ describe('MessageItem', () => {
       expect(
         screen.getByText('Planning governed action and safety checks before execution.'),
       ).toBeInTheDocument();
+      expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
+    });
+
+    it('shows current workflow progress in the assistant header after visible content starts', () => {
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            content: 'Partial answer',
+            isStreaming: true,
+            pendingTools: [],
+            streamEvents: [{ type: 'content', content: 'Partial answer' }],
+            workflowStatus: {
+              phase: 'provider_start',
+              message: 'Waiting for OpenRouter to start responding.',
+            },
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(screen.getByText('Partial answer')).toBeInTheDocument();
+      expect(screen.getByText('Waiting for OpenRouter to start responding.')).toBeInTheDocument();
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
     });
 

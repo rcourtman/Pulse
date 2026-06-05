@@ -6763,7 +6763,21 @@
   ],
   "coverage_gaps": [],
   "candidate_lanes": [],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "codex-lane-followup-architecture-post-rc-canonicalization",
+      "agent_id": "codex",
+      "summary": "Improve Assistant frontend in-flight progress and session ergonomics toward OpenCode parity",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-06-05T21:57:48Z",
+      "heartbeat_at": "2026-06-05T21:57:48Z",
+      "expires_at": "2026-06-05T23:57:48Z",
+      "work_item": {
+        "kind": "lane-followup",
+        "id": "architecture-post-rc-canonicalization"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

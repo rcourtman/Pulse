@@ -183,6 +183,14 @@ runtime cost control, and shared AI transport surfaces.
    turns, and selected-provider startup. These events are runtime progress, not
    Assistant-authored analysis, and they must not become keyword routers,
    explore pre-passes, or instructions that choose the model's next action.
+   The drawer transcript owns visible in-flight progress for the active turn:
+   a new assistant row must start with a neutral local preparation status until
+   stream progress arrives, must show the current effective model route while
+   the turn is still streaming, and must render late workflow progress in the
+   assistant row instead of only in drawer chrome. Workflow status is live
+   progress, not answer content; once visible assistant text, tool progress,
+   approvals, or questions begin, stale workflow text must clear so the row does
+   not keep saying it is waiting on a phase that has already been superseded.
    Streamed provider startup must be bounded by the configured Assistant request
    timeout and the OpenAI-compatible SSE response-header guard; transient
    startup failures may retry once before surfacing failed-turn recovery, but a

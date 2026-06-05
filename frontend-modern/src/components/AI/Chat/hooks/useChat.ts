@@ -30,6 +30,10 @@ import type {
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
 type AssistantInterruption = NonNullable<ChatMessage['interruption']>;
+const INITIAL_ASSISTANT_WORKFLOW_STATUS: WorkflowStatus = {
+  phase: 'request_start',
+  message: 'Preparing Pulse context.',
+};
 
 export interface UseChatOptions {
   sessionId?: string;
@@ -519,6 +523,7 @@ export function useChat(options: UseChatOptions = {}) {
               return {
                 ...updated,
                 content: appendMessageContent(baseMsg, visible.text),
+                workflowStatus: undefined,
               };
             }
 
@@ -575,6 +580,7 @@ export function useChat(options: UseChatOptions = {}) {
 
               return {
                 ...updated,
+                workflowStatus: undefined,
                 pendingTools: [...(msg.pendingTools || []), pendingTool],
               };
             }
@@ -676,6 +682,7 @@ export function useChat(options: UseChatOptions = {}) {
               return {
                 ...msg,
                 streamEvents: updatedEvents,
+                workflowStatus: undefined,
                 pendingTools: updatedPending,
                 pendingApprovals: updatedApprovals,
                 toolCalls: [...(msg.toolCalls || []), newToolCall],
@@ -759,6 +766,7 @@ export function useChat(options: UseChatOptions = {}) {
 
               return {
                 ...updated,
+                workflowStatus: undefined,
                 pendingApprovals: [...(msg.pendingApprovals || []), approval],
               };
             }
@@ -794,6 +802,7 @@ export function useChat(options: UseChatOptions = {}) {
 
               return {
                 ...updated,
+                workflowStatus: undefined,
                 pendingQuestions: [...(msg.pendingQuestions || []), pendingQuestion],
               };
             }
@@ -932,6 +941,7 @@ export function useChat(options: UseChatOptions = {}) {
       pendingTools: [],
       toolCalls: [],
       streamEvents: [],
+      workflowStatus: INITIAL_ASSISTANT_WORKFLOW_STATUS,
     };
 
     if (options?.queuedMessageId) {
