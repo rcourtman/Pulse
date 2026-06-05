@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strings"
 	"sync/atomic"
@@ -379,6 +380,167 @@ func TestService_ExecuteStream_Success(t *testing.T) {
 	}
 	if len(messages) < 2 {
 		t.Fatalf("expected at least 2 messages, got %d", len(messages))
+	}
+}
+
+func TestService_ExecuteStream_FallsBackWhenPrimaryProviderFailsBeforeVisibleOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	primary := &stubServiceProvider{
+		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			return errors.New("API error (401): unauthorized")
+		},
+	}
+	fallback := &stubServiceProvider{
+		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: "PULSE_OK"},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{InputTokens: 1, OutputTokens: 2},
+			})
+			return nil
+		},
+	}
+
+	service := NewService(Config{
+		AIConfig: &config.AIConfig{
+			ChatModel:        "openrouter:openai/gpt-4o-mini",
+			DiscoveryModel:   "gemini:gemini-test",
+			OpenRouterAPIKey: "sk-or-test",
+			GeminiAPIKey:     "gemini-test",
+		},
+		StateProvider: &mockStateProvider{},
+	})
+	service.sessions = store
+	service.provider = primary
+	service.providerFactory = func(model string) (providers.StreamingProvider, error) {
+		if model == "gemini:gemini-test" {
+			return fallback, nil
+		}
+		return nil, errors.New("unexpected model " + model)
+	}
+	service.started = true
+
+	var content strings.Builder
+	var errorEvents int
+	var fallbackEvents int
+	err = service.ExecuteStream(context.Background(), ExecuteRequest{
+		SessionID: "fallback-before-visible-output",
+		Prompt:    "reply",
+	}, func(event StreamEvent) {
+		switch event.Type {
+		case "content":
+			var data ContentData
+			if err := json.Unmarshal(event.Data, &data); err != nil {
+				t.Fatalf("unmarshal content: %v", err)
+			}
+			content.WriteString(data.Text)
+		case "error":
+			errorEvents++
+		case "workflow_state":
+			var data WorkflowStateData
+			if err := json.Unmarshal(event.Data, &data); err != nil {
+				t.Fatalf("unmarshal workflow state: %v", err)
+			}
+			if data.Phase == "provider_fallback" {
+				fallbackEvents++
+			}
+		}
+	})
+	if err != nil {
+		t.Fatalf("ExecuteStream failed: %v", err)
+	}
+	if got := content.String(); got != "PULSE_OK" {
+		t.Fatalf("content = %q, want fallback response", got)
+	}
+	if errorEvents != 0 {
+		t.Fatalf("expected hidden primary failure without client error event, got %d", errorEvents)
+	}
+	if fallbackEvents != 1 {
+		t.Fatalf("fallback workflow events = %d, want 1", fallbackEvents)
+	}
+
+	messages, err := store.GetMessages("fallback-before-visible-output")
+	if err != nil {
+		t.Fatalf("GetMessages failed: %v", err)
+	}
+	for _, msg := range messages {
+		if strings.Contains(msg.Content, "unauthorized") {
+			t.Fatalf("stored messages leaked hidden provider error: %#v", messages)
+		}
+	}
+}
+
+func TestService_ExecuteStream_DoesNotFallbackAfterVisibleProviderOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	primary := &stubServiceProvider{
+		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: "partial"},
+			})
+			return errors.New("API error (503): upstream unavailable")
+		},
+	}
+	fallbackCalled := false
+
+	service := NewService(Config{
+		AIConfig: &config.AIConfig{
+			ChatModel:        "openrouter:openai/gpt-4o-mini",
+			DiscoveryModel:   "gemini:gemini-test",
+			OpenRouterAPIKey: "sk-or-test",
+			GeminiAPIKey:     "gemini-test",
+		},
+		StateProvider: &mockStateProvider{},
+	})
+	service.sessions = store
+	service.provider = primary
+	service.providerFactory = func(model string) (providers.StreamingProvider, error) {
+		fallbackCalled = true
+		return &stubServiceProvider{}, nil
+	}
+	service.started = true
+
+	var content strings.Builder
+	var errorEvents int
+	err = service.ExecuteStream(context.Background(), ExecuteRequest{
+		SessionID: "no-fallback-after-visible-output",
+		Prompt:    "reply",
+	}, func(event StreamEvent) {
+		switch event.Type {
+		case "content":
+			var data ContentData
+			if err := json.Unmarshal(event.Data, &data); err != nil {
+				t.Fatalf("unmarshal content: %v", err)
+			}
+			content.WriteString(data.Text)
+		case "error":
+			errorEvents++
+		}
+	})
+	if err == nil {
+		t.Fatal("expected provider error after visible output")
+	}
+	if got := content.String(); got != "partial" {
+		t.Fatalf("content = %q, want primary partial output only", got)
+	}
+	if errorEvents != 1 {
+		t.Fatalf("error events = %d, want 1", errorEvents)
+	}
+	if fallbackCalled {
+		t.Fatal("fallback provider should not be called after visible primary output")
 	}
 }
 

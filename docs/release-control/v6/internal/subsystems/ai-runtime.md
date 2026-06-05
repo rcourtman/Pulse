@@ -128,6 +128,17 @@ runtime cost control, and shared AI transport surfaces.
    notable model/provider before falling back to the general model selector.
    Retry remains available, but it must not be the only visible action when a
    failed Assistant turn is shown.
+   Provider recovery before visible output is backend-owned chat-runtime
+   behavior. When a selected route fails before streaming content, tool
+   progress, approval, or question events, `internal/ai/chat` may try the next
+   configured provider/model route in the same user turn and must emit a
+   `provider_fallback` workflow-state event that identifies the failed and next
+   provider/model route. This fallback must use chat-suitable model resolution
+   from `internal/ai/modelresolution`, skipping obvious non-chat endpoints such
+   as realtime, audio, moderation, embedding, and content-safety catalog
+   entries. Once visible output has streamed, Pulse must not silently switch
+   providers for that turn; the error belongs to the visible attempt and is
+   surfaced through normal failed-turn recovery.
    Streamed provider startup must be bounded by the configured Assistant request
    timeout and the OpenAI-compatible SSE response-header guard; transient
    startup failures may retry once before surfacing failed-turn recovery, but a

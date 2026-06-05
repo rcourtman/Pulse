@@ -243,10 +243,14 @@ type ThinkingData struct {
 
 // WorkflowStateData is the data for "workflow_state" events.
 type WorkflowStateData struct {
-	Phase   string `json:"phase"`           // investigate | clarify | plan | approve | execute | verify | complete
-	Message string `json:"message"`         // Human-readable status text for the UI
-	State   string `json:"state,omitempty"` // Backend workflow state, when available
-	Tool    string `json:"tool,omitempty"`  // Tool associated with this transition
+	Phase          string `json:"phase"`                     // investigate | clarify | plan | approve | execute | verify | complete
+	Message        string `json:"message"`                   // Human-readable status text for the UI
+	State          string `json:"state,omitempty"`           // Backend workflow state, when available
+	Tool           string `json:"tool,omitempty"`            // Tool associated with this transition
+	FailedProvider string `json:"failed_provider,omitempty"` // Provider that failed before visible output
+	FailedModel    string `json:"failed_model,omitempty"`    // Model that failed before visible output
+	NextProvider   string `json:"next_provider,omitempty"`   // Provider selected for the fallback attempt
+	NextModel      string `json:"next_model,omitempty"`      // Model selected for the fallback attempt
 }
 
 // SessionData is the data for "session" events emitted once the backend has

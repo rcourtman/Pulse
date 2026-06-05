@@ -373,6 +373,11 @@ type AgenticLoop struct {
 
 	// Request sanitizer applied immediately before model-bound transport.
 	requestSanitizer func(providers.ChatRequest) providers.ChatRequest
+
+	// When true, provider terminal errors are returned to the caller without
+	// emitting a stream error event. The chat service uses this to try another
+	// configured provider before the browser sees a failed first attempt.
+	suppressProviderErrorEvents bool
 }
 
 // NewAgenticLoop creates a new agentic loop
@@ -410,6 +415,12 @@ func (a *AgenticLoop) SetRequestSanitizer(fn func(providers.ChatRequest) provide
 	a.requestSanitizer = fn
 }
 
+func (a *AgenticLoop) SetSuppressProviderErrorEvents(suppress bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.suppressProviderErrorEvents = suppress
+}
+
 // SetOrgID sets the org scope used when validating approval decisions.
 func (a *AgenticLoop) SetOrgID(orgID string) {
 	a.mu.Lock()
@@ -440,6 +451,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	// before calling ExecuteWithTools, and this avoids races with concurrent sessions.
 	a.mu.Lock()
 	maxTurns := a.maxTurns
+	suppressProviderErrorEvents := a.suppressProviderErrorEvents
 	a.aborted[sessionID] = false
 	a.mu.Unlock()
 	defer func() {
@@ -828,17 +840,19 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				continue
 			}
 
-			if len(attemptErrorMessages) > 0 {
-				// Defer emitting error events until retries are exhausted so transient
-				// provider blips don't leak to the client stream. Sanitize so raw
-				// provider JSON/URLs never reach the user.
-				jsonData, _ := json.Marshal(ErrorData{Message: sanitizeProviderStreamErrorForUser(attemptErrorMessages[0])})
-				callback(StreamEvent{Type: "error", Data: jsonData})
-			} else {
-				// Transport-level failures may not include an explicit provider error event.
-				// Emit a fallback error so clients can render a clear failure state.
-				jsonData, _ := json.Marshal(ErrorData{Message: fallbackProviderStreamErrorMessage(effectiveErr)})
-				callback(StreamEvent{Type: "error", Data: jsonData})
+			if !suppressProviderErrorEvents {
+				if len(attemptErrorMessages) > 0 {
+					// Defer emitting error events until retries are exhausted so transient
+					// provider blips don't leak to the client stream. Sanitize so raw
+					// provider JSON/URLs never reach the user.
+					jsonData, _ := json.Marshal(ErrorData{Message: sanitizeProviderStreamErrorForUser(attemptErrorMessages[0])})
+					callback(StreamEvent{Type: "error", Data: jsonData})
+				} else {
+					// Transport-level failures may not include an explicit provider error event.
+					// Emit a fallback error so clients can render a clear failure state.
+					jsonData, _ := json.Marshal(ErrorData{Message: fallbackProviderStreamErrorMessage(effectiveErr)})
+					callback(StreamEvent{Type: "error", Data: jsonData})
+				}
 			}
 			err = effectiveErr
 			break

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import aiChatEventsSource from '@/api/generated/aiChatEvents.ts?raw';
-import type { AIChatStreamEvent, SessionData } from '@/api/generated/aiChatEvents';
+import type {
+  AIChatStreamEvent,
+  SessionData,
+  WorkflowStateData,
+} from '@/api/generated/aiChatEvents';
 
 describe('AI chat stream event contract', () => {
   it('does not expose the retired explore pre-pass stream event', () => {
@@ -15,5 +19,23 @@ describe('AI chat stream event contract', () => {
     expect(event.data.id).toBe('sess-stream');
     expect(aiChatEventsSource).toContain('export interface SessionData');
     expect(aiChatEventsSource).toContain("type: 'session'");
+  });
+
+  it('exposes provider fallback metadata on workflow state events', () => {
+    const workflow: WorkflowStateData = {
+      phase: 'provider_fallback',
+      message: 'OpenRouter did not start a response; trying DeepSeek.',
+      state: 'provider_fallback',
+      failed_provider: 'openrouter',
+      failed_model: 'openrouter:qwen/qwen3.7-plus',
+      next_provider: 'deepseek',
+      next_model: 'deepseek:deepseek-v4-pro',
+    };
+    const event: AIChatStreamEvent = { type: 'workflow_state', data: workflow };
+
+    expect(event.data.failed_model).toBe('openrouter:qwen/qwen3.7-plus');
+    expect(event.data.next_model).toBe('deepseek:deepseek-v4-pro');
+    expect(aiChatEventsSource).toContain('failed_model?: string');
+    expect(aiChatEventsSource).toContain('next_model?: string');
   });
 });

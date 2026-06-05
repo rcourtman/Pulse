@@ -10599,12 +10599,15 @@ func TestContract_ChatStreamEventJSONSnapshots(t *testing.T) {
 		{
 			name: "workflow_state",
 			event: mustStreamEvent(t, "workflow_state", chat.WorkflowStateData{
-				Phase:   "plan",
-				Message: "Planning governed action and safety checks before execution.",
-				State:   "READING",
-				Tool:    "pulse_exec",
+				Phase:          "provider_fallback",
+				Message:        "OpenRouter did not start a response; trying DeepSeek.",
+				State:          "provider_fallback",
+				FailedProvider: "openrouter",
+				FailedModel:    "openrouter:qwen/qwen3.7-plus",
+				NextProvider:   "deepseek",
+				NextModel:      "deepseek:deepseek-v4-pro",
 			}),
-			want: `{"type":"workflow_state","data":{"phase":"plan","message":"Planning governed action and safety checks before execution.","state":"READING","tool":"pulse_exec"}}`,
+			want: `{"type":"workflow_state","data":{"phase":"provider_fallback","message":"OpenRouter did not start a response; trying DeepSeek.","state":"provider_fallback","failed_provider":"openrouter","failed_model":"openrouter:qwen/qwen3.7-plus","next_provider":"deepseek","next_model":"deepseek:deepseek-v4-pro"}}`,
 		},
 		{
 			name: "tool_start",

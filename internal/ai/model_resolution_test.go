@@ -84,6 +84,30 @@ func TestSelectRecommendedProviderModel_PrefersChatRouteOverSpecializedCatalogEn
 	}
 }
 
+func TestSelectRecommendedProviderModel_IgnoresRealtimeCatalogEntry(t *testing.T) {
+	t.Parallel()
+
+	selected, ok := SelectRecommendedProviderModel([]providers.ModelInfo{
+		{
+			ID:        "gpt-realtime-2",
+			Name:      "GPT Realtime 2",
+			CreatedAt: 300,
+			Notable:   true,
+		},
+		{
+			ID:        "gpt-4o",
+			Name:      "GPT-4o",
+			CreatedAt: 100,
+		},
+	})
+	if !ok {
+		t.Fatal("expected a model selection")
+	}
+	if selected.ID != "gpt-4o" {
+		t.Fatalf("selected model = %q, want %q", selected.ID, "gpt-4o")
+	}
+}
+
 func TestSelectRecommendedProviderModel_IgnoresSpecializedOnlyCatalog(t *testing.T) {
 	t.Parallel()
 
@@ -93,6 +117,34 @@ func TestSelectRecommendedProviderModel_IgnoresSpecializedOnlyCatalog(t *testing
 	})
 	if ok {
 		t.Fatal("expected no recommendation from a specialized-only catalog")
+	}
+}
+
+func TestResolveConfiguredChatProviderModel_SkipsSpecializedPreferredModel(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"id":"gpt-realtime-2","name":"GPT Realtime 2","created":300},{"id":"gpt-4o","name":"GPT-4o","created":100}]}`))
+	}))
+	t.Cleanup(server.Close)
+
+	cfg := &config.AIConfig{
+		Enabled:       true,
+		OpenAIAPIKey:  "sk-test",
+		OpenAIBaseURL: server.URL + "/v1",
+		ChatModel:     "openai:gpt-realtime-2",
+	}
+
+	got, err := ResolveConfiguredChatProviderModel(context.Background(), cfg, config.AIProviderOpenAI)
+	if err != nil {
+		t.Fatalf("ResolveConfiguredChatProviderModel() error = %v", err)
+	}
+	if want := "openai:gpt-4o"; got != want {
+		t.Fatalf("ResolveConfiguredChatProviderModel() = %q, want %q", got, want)
 	}
 }
 

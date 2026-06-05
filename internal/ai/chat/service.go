@@ -15,6 +15,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/modelboundary"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/modelresolution"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -617,25 +618,30 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	handoffContext = sanitizeHandoffContextForResourcePolicy(handoffContext, handoffResources, handoffResourceProvider)
 	injectHandoffContextIntoLatestUserMessage(messages, handoffContext)
 
-	// Determine which model/loop to use for this request.
-	selectedModel := ""
+	// Determine which model/provider attempts to use for this request.
+	cfgSnapshot := (*config.AIConfig)(nil)
 	configuredModel := ""
 	overrideModel := strings.TrimSpace(req.Model)
-	var executor *tools.PulseToolExecutor
+	var baseExecutor *tools.PulseToolExecutor
+	var configuredProvider providers.StreamingProvider
 	autonomousMode := false
 	effectiveControlLevel := tools.ControlLevelReadOnly
 	s.mu.RLock()
-	baseExecutor := s.executor
+	cfgSnapshot = s.cfg
+	baseExecutor = s.executor
+	configuredProvider = s.provider
 	unifiedResourceProvider := s.unifiedResourceProvider
 	autonomousMode = s.autonomousMode
 	effectiveControlLevel = s.effectiveControlLevelLocked()
-	if s.cfg != nil {
-		configuredModel = strings.TrimSpace(s.cfg.GetChatModel())
-	}
 	s.mu.RUnlock()
-	if baseExecutor != nil {
-		executor = baseExecutor.Clone()
-		executor.SetControlLevel(effectiveControlLevel)
+
+	if cfgSnapshot != nil {
+		if resolved, resolveErr := modelresolution.ResolveConfiguredChatModel(ctx, cfgSnapshot); resolveErr == nil {
+			configuredModel = strings.TrimSpace(resolved)
+		} else {
+			configuredModel = strings.TrimSpace(cfgSnapshot.GetChatModel())
+			log.Warn().Err(resolveErr).Msg("[ChatService] Unable to resolve configured chat model")
+		}
 	}
 	s.hydrateHandoffResources(session.ID, handoffResources, sessions, unifiedResourceProvider)
 
@@ -645,43 +651,22 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		autonomousMode = *req.AutonomousMode
 	}
 	effectiveControlLevel = controlLevelForRequestAutonomousMode(effectiveControlLevel, req.AutonomousMode)
-	if executor != nil {
-		executor.SetControlLevel(effectiveControlLevel)
-		executor.SetAutonomousMode(autonomousMode)
-	}
-	selectedModel = configuredModel
+	selectedModel := configuredModel
 	if overrideModel != "" {
 		selectedModel = overrideModel
 	}
-	// Create a per-request AgenticLoop to ensure complete isolation between
-	// concurrent sessions. This prevents race conditions where concurrent
-	// ExecuteStream calls would overwrite each other's FSM, knowledge accumulator,
-	// autonomous mode, budget checker, and provider info on a shared loop.
-	var loop *AgenticLoop
-	if overrideModel != "" && overrideModel != configuredModel {
-		provider, err := s.createProviderForModel(overrideModel)
-		if err != nil {
-			return fmt.Errorf("failed to create provider for model override %q: %w", overrideModel, err)
+
+	attempts, initialProviderErr := s.chatProviderAttempts(ctx, cfgSnapshot, selectedModel, configuredModel, configuredProvider)
+	if len(attempts) == 0 {
+		if initialProviderErr != nil {
+			return initialProviderErr
 		}
-		systemPrompt := s.buildSystemPrompt()
-		loop = NewAgenticLoop(provider, executor, systemPrompt)
-		loop.SetOrgID(s.orgID)
-	} else {
-		// Create a fresh loop with the configured provider for this request
-		s.mu.RLock()
-		provider := s.provider
-		s.mu.RUnlock()
-		if provider == nil {
-			return fmt.Errorf("provider not initialized")
-		}
-		systemPrompt := s.buildSystemPrompt()
-		loop = NewAgenticLoop(provider, executor, systemPrompt)
-		loop.SetOrgID(s.orgID)
+		return fmt.Errorf("provider not initialized")
 	}
-	loop.SetAutonomousMode(autonomousMode)
-	loop.SetRequestSanitizer(modelboundary.RequestSanitizerForModel(selectedModel, unifiedResourceProvider))
-	s.registerActiveLoop(session.ID, loop)
-	defer s.unregisterActiveLoop(session.ID, loop)
+	initialFallbackModel := ""
+	if initialProviderErr != nil {
+		initialFallbackModel = attempts[0].Model
+	}
 
 	// Proactively gather context for mentioned resources
 	s.mu.RLock()
@@ -757,14 +742,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 
 	// Set session-scoped resolved context on executor for resource validation.
 	// This ensures tools can only operate on resources discovered in this session.
-	if executor != nil {
-		resolvedCtx := sessions.GetResolvedContext(session.ID)
-		executor.SetResolvedContext(resolvedCtx)
-		log.Debug().
-			Str("session_id", session.ID).
-			Int("resolved_resources", len(resolvedCtx.Resources)).
-			Msg("[ChatService] Set resolved context on executor")
-	}
+	resolvedCtx := sessions.GetResolvedContext(session.ID)
 
 	// Shared session state for the selected model's turn.
 	sessionFSM := sessions.GetSessionFSM(session.ID)
@@ -793,57 +771,12 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		Int("tools_count", len(filteredTools)).
 		Msg("[ChatService] Prepared governed tool manifest, starting agentic loop")
 
-	// Set session-scoped FSM on agentic loop for workflow enforcement
-	// This ensures structural guarantees: discover before write, verify after write
-	loop.SetSessionFSM(sessionFSM)
-
-	// Set session-scoped knowledge accumulator for fact extraction across turns.
-	// For user chat, this persists across messages so facts accumulate during a conversation.
-	loop.SetKnowledgeAccumulator(ka)
-
-	log.Debug().
-		Str("session_id", session.ID).
-		Str("fsm_state", string(sessionFSM.State)).
-		Bool("wrote_this_episode", sessionFSM.WroteThisEpisode).
-		Msg("[ChatService] Set session FSM on agentic loop")
-
-	// Set mid-run budget checker if configured
-	if s.budgetChecker != nil {
-		loop.SetBudgetChecker(s.budgetChecker)
-	}
-
-	// Set provider info for telemetry
-	if selectedModel != "" {
-		parts := strings.SplitN(selectedModel, ":", 2)
-		if len(parts) == 2 {
-			loop.SetProviderInfo(parts[0], parts[1])
-		}
-	}
-
-	// Override max turns if the caller specified one (e.g. investigations use 15).
-	// Reset after the call to avoid affecting concurrent sessions on the shared loop.
-	if req.MaxTurns > 0 {
-		loop.SetMaxTurns(req.MaxTurns)
-		defer loop.SetMaxTurns(MaxAgenticTurns)
-	}
-
-	// Apply per-request autonomous mode to the loop. For investigation requests
-	// with AutonomousMode set, this uses the per-request value instead of
-	// mutating shared service state from concurrent goroutines.
-	loop.SetAutonomousMode(autonomousMode)
-
 	streamCallback := callback
 	if streamCallback == nil {
 		streamCallback = func(StreamEvent) {}
 	}
 	wrappedCallback := func(event StreamEvent) {
 		event = sanitizeStreamEventForHandoffResourcePolicy(event, handoffResources, handoffResourceProvider)
-		if event.Type == "question" {
-			var data QuestionData
-			if err := json.Unmarshal(event.Data, &data); err == nil && data.QuestionID != "" {
-				s.registerQuestionLoop(data.QuestionID, loop)
-			}
-		}
 		var ok bool
 		event, ok = event.ClientSafe()
 		if !ok {
@@ -853,33 +786,129 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	}
 	sessionData, _ := json.Marshal(SessionData{ID: session.ID})
 	streamCallback(StreamEvent{Type: "session", Data: sessionData})
+	if initialFallbackModel != "" {
+		emitChatProviderFallback(streamCallback, selectedModel, initialFallbackModel)
+	}
 
-	resultMessages, err := loop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, wrappedCallback)
-	resultMessages = sanitizeMessagesForHandoffResourcePolicy(resultMessages, handoffResources, handoffResourceProvider)
+	runAttempt := func(attempt chatProviderAttempt) ([]Message, *AgenticLoop, bool, error) {
+		attemptProvider := attempt.Provider
+		if attemptProvider == nil {
+			if strings.TrimSpace(attempt.Model) == "" {
+				return nil, nil, false, fmt.Errorf("no chat model configured")
+			}
+			var providerErr error
+			attemptProvider, providerErr = s.createProviderForModel(attempt.Model)
+			if providerErr != nil {
+				return nil, nil, false, fmt.Errorf("failed to create provider for model %q: %w", attempt.Model, providerErr)
+			}
+		}
 
-	log.Debug().
-		Str("session_id", session.ID).
-		Int("result_messages", len(resultMessages)).
-		Err(err).
-		Msg("[ChatService] Agentic loop returned")
+		var executor *tools.PulseToolExecutor
+		if baseExecutor != nil {
+			executor = baseExecutor.Clone()
+			executor.SetControlLevel(effectiveControlLevel)
+			executor.SetAutonomousMode(autonomousMode)
+			executor.SetResolvedContext(resolvedCtx)
+			log.Debug().
+				Str("session_id", session.ID).
+				Int("resolved_resources", len(resolvedCtx.Resources)).
+				Msg("[ChatService] Set resolved context on executor")
+		}
 
-	// Record cost regardless of error — the operator was billed for
-	// whatever tokens the loop consumed before terminating. Without
-	// this, every user chat turn was invisible in the AI usage
-	// dashboard despite chat being the bulk of token spend.
-	// ExecutePatrolStream uses a separate tempLoop and its caller
-	// (patrol_ai.go) records cost via its own helper, so no double-
-	// recording on the patrol-via-chat path.
-	s.recordChatTurnCost(loop, selectedModel)
+		// Create a per-attempt AgenticLoop to ensure complete isolation between
+		// concurrent sessions and provider fallback attempts. This prevents race
+		// conditions where ExecuteStream calls overwrite each other's FSM,
+		// knowledge accumulator, autonomous mode, budget checker, and provider info.
+		systemPrompt := s.buildSystemPrompt()
+		loop := NewAgenticLoop(attemptProvider, executor, systemPrompt)
+		loop.SetOrgID(s.orgID)
+		loop.SetAutonomousMode(autonomousMode)
+		loop.SetRequestSanitizer(modelboundary.RequestSanitizerForModel(attempt.Model, unifiedResourceProvider))
+		loop.SetSuppressProviderErrorEvents(true)
+		loop.SetSessionFSM(sessionFSM)
+		loop.SetKnowledgeAccumulator(ka)
+		if s.budgetChecker != nil {
+			loop.SetBudgetChecker(s.budgetChecker)
+		}
+		if attempt.Model != "" {
+			parts := strings.SplitN(attempt.Model, ":", 2)
+			if len(parts) == 2 {
+				loop.SetProviderInfo(parts[0], parts[1])
+			}
+		}
+		if req.MaxTurns > 0 {
+			loop.SetMaxTurns(req.MaxTurns)
+		}
 
-	if err != nil {
+		log.Debug().
+			Str("session_id", session.ID).
+			Str("fsm_state", string(sessionFSM.State)).
+			Bool("wrote_this_episode", sessionFSM.WroteThisEpisode).
+			Str("model", attempt.Model).
+			Msg("[ChatService] Set session FSM on agentic loop")
+
+		attemptVisible := false
+		attemptCallback := func(event StreamEvent) {
+			if event.Type == "question" {
+				var data QuestionData
+				if err := json.Unmarshal(event.Data, &data); err == nil && data.QuestionID != "" {
+					s.registerQuestionLoop(data.QuestionID, loop)
+				}
+			}
+			if chatStreamEventBlocksProviderFallback(event) {
+				attemptVisible = true
+			}
+			wrappedCallback(event)
+		}
+
+		s.registerActiveLoop(session.ID, loop)
+		resultMessages, err := loop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, attemptCallback)
+		s.unregisterActiveLoop(session.ID, loop)
+		resultMessages = sanitizeMessagesForHandoffResourcePolicy(resultMessages, handoffResources, handoffResourceProvider)
+		s.recordChatTurnCost(loop, attempt.Model)
+
+		log.Debug().
+			Str("session_id", session.ID).
+			Str("model", attempt.Model).
+			Int("result_messages", len(resultMessages)).
+			Err(err).
+			Msg("[ChatService] Agentic loop returned")
+
+		return resultMessages, loop, attemptVisible, err
+	}
+
+	var resultMessages []Message
+	var loop *AgenticLoop
+	var streamErr error
+	for attemptIndex, attempt := range attempts {
+		var attemptVisible bool
+		resultMessages, loop, attemptVisible, streamErr = runAttempt(attempt)
+		if streamErr == nil {
+			selectedModel = attempt.Model
+			break
+		}
+		if attemptVisible || attemptIndex == len(attempts)-1 || ctx.Err() != nil {
+			emitChatProviderError(streamCallback, streamErr)
+			break
+		}
+		nextAttempt := attempts[attemptIndex+1]
+		log.Warn().
+			Err(streamErr).
+			Str("failed_model", attempt.Model).
+			Str("fallback_model", nextAttempt.Model).
+			Str("session_id", session.ID).
+			Msg("[ChatService] Provider failed before visible output; trying configured fallback provider")
+		emitChatProviderFallback(streamCallback, attempt.Model, nextAttempt.Model)
+	}
+
+	if streamErr != nil {
 		// Still save any messages we got
 		for _, msg := range resultMessages {
 			if saveErr := sessions.AddMessage(session.ID, msg); saveErr != nil {
 				log.Warn().Err(saveErr).Msg("failed to save message after error")
 			}
 		}
-		return err
+		return streamErr
 	}
 
 	// Save result messages
@@ -2274,6 +2303,136 @@ func (s *Service) createProviderForModel(modelStr string) (providers.StreamingPr
 	return streamingProvider, nil
 }
 
+type chatProviderAttempt struct {
+	Model    string
+	Provider providers.StreamingProvider
+}
+
+func (s *Service) chatProviderAttempts(ctx context.Context, cfg *config.AIConfig, primaryModel, configuredModel string, configuredProvider providers.StreamingProvider) ([]chatProviderAttempt, error) {
+	var attempts []chatProviderAttempt
+	var primaryErr error
+	seen := make(map[string]struct{})
+	addAttempt := func(model string, provider providers.StreamingProvider) {
+		model = strings.TrimSpace(model)
+		if model == "" && provider == nil {
+			return
+		}
+		key := model
+		if key == "" {
+			key = fmt.Sprintf("__provider_%d", len(attempts))
+		}
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		attempts = append(attempts, chatProviderAttempt{Model: model, Provider: provider})
+	}
+
+	primaryModel = strings.TrimSpace(primaryModel)
+	configuredModel = strings.TrimSpace(configuredModel)
+	if primaryModel == "" {
+		if configuredProvider != nil {
+			addAttempt("", configuredProvider)
+		} else {
+			primaryErr = fmt.Errorf("no chat model configured")
+		}
+	} else {
+		provider := configuredProvider
+		if primaryModel != configuredModel {
+			provider = nil
+		}
+		addAttempt(primaryModel, provider)
+	}
+
+	if cfg == nil {
+		return attempts, primaryErr
+	}
+
+	primaryProvider, _ := config.ParseModelString(primaryModel)
+	for _, providerName := range cfg.GetConfiguredProviders() {
+		if providerName == primaryProvider {
+			continue
+		}
+		model, err := modelresolution.ResolveConfiguredChatProviderModel(ctx, cfg, providerName)
+		if err != nil || strings.TrimSpace(model) == "" {
+			log.Debug().
+				Err(err).
+				Str("provider", providerName).
+				Msg("[ChatService] Skipping provider fallback candidate with no resolved model")
+			continue
+		}
+		addAttempt(model, nil)
+	}
+
+	return attempts, primaryErr
+}
+
+func chatStreamEventBlocksProviderFallback(event StreamEvent) bool {
+	switch strings.ToLower(strings.TrimSpace(event.Type)) {
+	case "approval_needed", "content", "question", "tool_end", "tool_start":
+		return true
+	default:
+		return false
+	}
+}
+
+func emitChatProviderFallback(callback StreamCallback, failedModel, nextModel string) {
+	if callback == nil {
+		return
+	}
+	failedProvider := ""
+	if strings.TrimSpace(failedModel) != "" {
+		failedProvider, _ = config.ParseModelString(strings.TrimSpace(failedModel))
+	}
+	nextProvider := ""
+	if strings.TrimSpace(nextModel) != "" {
+		nextProvider, _ = config.ParseModelString(strings.TrimSpace(nextModel))
+	}
+	if strings.TrimSpace(failedProvider) == "" {
+		failedProvider = "selected provider"
+	}
+	if strings.TrimSpace(nextProvider) == "" {
+		nextProvider = "another configured provider"
+	}
+	data, _ := json.Marshal(WorkflowStateData{
+		Phase:          "provider_fallback",
+		Message:        fmt.Sprintf("%s did not start a response; trying %s.", providerLabel(failedProvider), providerLabel(nextProvider)),
+		State:          "provider_fallback",
+		FailedProvider: failedProvider,
+		FailedModel:    strings.TrimSpace(failedModel),
+		NextProvider:   nextProvider,
+		NextModel:      strings.TrimSpace(nextModel),
+	})
+	callback(StreamEvent{Type: "workflow_state", Data: data})
+}
+
+func emitChatProviderError(callback StreamCallback, err error) {
+	if callback == nil {
+		return
+	}
+	data, _ := json.Marshal(ErrorData{Message: fallbackProviderStreamErrorMessage(err)})
+	callback(StreamEvent{Type: "error", Data: data})
+}
+
+func providerLabel(provider string) string {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case config.AIProviderAnthropic:
+		return "Anthropic"
+	case config.AIProviderOpenAI:
+		return "OpenAI"
+	case config.AIProviderOpenRouter:
+		return "OpenRouter"
+	case config.AIProviderDeepSeek:
+		return "DeepSeek"
+	case config.AIProviderGemini:
+		return "Gemini"
+	case config.AIProviderOllama:
+		return "Ollama"
+	default:
+		return provider
+	}
+}
+
 func (s *Service) createPatrolProviderForModel(modelStr string) (providers.StreamingProvider, error) {
 	if s.patrolProviderFactory != nil {
 		return s.patrolProviderFactory(modelStr)
@@ -2833,12 +2992,42 @@ func (s *Service) createProvider() (providers.StreamingProvider, error) {
 		return nil, fmt.Errorf("no Pulse Assistant config")
 	}
 
-	chatModel := s.cfg.GetChatModel()
+	if s.providerFactory != nil {
+		chatModel := chatModelForInjectedProviderFactory(s.cfg)
+		if chatModel == "" {
+			return nil, fmt.Errorf("no chat model configured")
+		}
+		return s.createProviderForModel(chatModel)
+	}
+
+	chatModel, err := modelresolution.ResolveConfiguredChatModel(context.Background(), s.cfg)
+	if err != nil {
+		return nil, err
+	}
 	if chatModel == "" {
 		return nil, fmt.Errorf("no chat model configured")
 	}
+	if strings.TrimSpace(s.cfg.ChatModel) == "" || !modelresolution.IsModelUsableWithConfig(s.cfg, s.cfg.GetChatModel()) {
+		s.cfg.ChatModel = chatModel
+	}
 
 	return s.createProviderForModel(chatModel)
+}
+
+func chatModelForInjectedProviderFactory(cfg *config.AIConfig) string {
+	if cfg == nil {
+		return ""
+	}
+	for _, candidate := range []string{
+		cfg.GetChatModel(),
+		cfg.GetModel(),
+		config.DefaultModelForProvider(config.AIProviderOpenAI),
+	} {
+		if model := strings.TrimSpace(candidate); model != "" {
+			return model
+		}
+	}
+	return ""
 }
 
 func (s *Service) applyChatContextSettings() {

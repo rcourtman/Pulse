@@ -112,6 +112,10 @@ export interface WorkflowStateData {
   message: string;
   state?: string;
   tool?: string;
+  failed_provider?: string;
+  failed_model?: string;
+  next_provider?: string;
+  next_model?: string;
 }
 
 export type AIChatStreamEvent =

@@ -886,6 +886,15 @@ the canonical monitored-system blocked payload.
    and the Patrol route-shell destination itself, so the thin page shell at `frontend-modern/src/pages/AIIntelligence.tsx` may continue to bridge the shared AI-runtime payload boundary while exposing `/patrol` as the canonical product route and keeping retired `/ai` browser entry points unregistered
    and the Patrol route-shell accessibility boundary, so brand icons in `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx` stay decorative when the same heading already exposes visible Patrol text, preventing duplicate accessible names such as `Pulse Patrol Patrol`
 9. Route frontend API-client parsed error propagation, API-error-status fallback handling, allowed-status handling, custom status-specific error handling, command-trigger success envelope handling, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, stream event consumption, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
+   Assistant chat stream workflow-state payloads are part of this same
+   frontend API-client boundary. `workflow_state` events must keep `phase`,
+   `message`, `state`, and `tool` stable, and provider fallback transitions may
+   additionally carry `failed_provider`, `failed_model`, `next_provider`, and
+   `next_model` so diagnostics can identify the exact route change without
+   expanding the visible operator message. The generated
+   `frontend-modern/src/api/generated/aiChatEvents.ts` type must stay derived
+   from `internal/ai/chat/types.go` through `scripts/generate-types.go`, and
+   frontend API tests must pin any new generated SSE fields.
    That same shared org-management client boundary now owns target-consent
    sharing semantics across `frontend-modern/src/api/orgs.ts`,
    `internal/api/org_handlers.go`, and the shared org route wiring. Cross-org

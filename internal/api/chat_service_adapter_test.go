@@ -13,13 +13,18 @@ import (
 // Mock implementation of chat.StateProvider
 type mockChatStateProvider struct{}
 
+func configuredOllamaChatTestConfig() *config.AIConfig {
+	return &config.AIConfig{
+		ChatModel:     "ollama:llama3",
+		OllamaBaseURL: config.DefaultOllamaBaseURL,
+	}
+}
+
 func TestChatServiceAdapter_CreateSession(t *testing.T) {
 	// Setup real chat service with minimal config
 	cfg := chat.Config{
-		DataDir: t.TempDir(),
-		AIConfig: &config.AIConfig{
-			ChatModel: "ollama:llama3",
-		},
+		DataDir:  t.TempDir(),
+		AIConfig: configuredOllamaChatTestConfig(),
 	}
 	realSvc := chat.NewService(cfg)
 	require.NoError(t, realSvc.Start(context.Background()))
@@ -37,10 +42,8 @@ func TestChatServiceAdapter_CreateSession(t *testing.T) {
 func TestChatServiceAdapter_GetMessages(t *testing.T) {
 	// Setup real chat service
 	cfg := chat.Config{
-		DataDir: t.TempDir(),
-		AIConfig: &config.AIConfig{
-			ChatModel: "ollama:llama3",
-		},
+		DataDir:  t.TempDir(),
+		AIConfig: configuredOllamaChatTestConfig(),
 	}
 	realSvc := chat.NewService(cfg)
 	require.NoError(t, realSvc.Start(context.Background()))
@@ -95,13 +98,13 @@ func TestChatServiceAdapter_GetMessages(t *testing.T) {
 func TestChatServiceAdapter_ReloadConfig(t *testing.T) {
 	cfg := chat.Config{
 		DataDir:  t.TempDir(),
-		AIConfig: &config.AIConfig{ChatModel: "ollama:llama3"},
+		AIConfig: configuredOllamaChatTestConfig(),
 	}
 	realSvc := chat.NewService(cfg)
 	require.NoError(t, realSvc.Start(context.Background()))
 	adapter := &chatServiceAdapter{svc: realSvc}
 
-	newCfg := &config.AIConfig{ChatModel: "ollama:llama3"}
+	newCfg := configuredOllamaChatTestConfig()
 	err := adapter.ReloadConfig(context.Background(), newCfg)
 	require.NoError(t, err)
 }
