@@ -138,6 +138,10 @@ runtime cost control, and shared AI transport surfaces.
    stored assistant prose before the browser restores a transcript. Provider
    reasoning may remain in runtime-only history for model continuity, but it
    must not serialize through public session history or resumed drawer state.
+   Pending tool progress is part of the same transcript contract: pending tool
+   stream events must render inline as compact running rows in the assistant
+   turn instead of disappearing until completion or relying only on the
+   drawer-level status bar.
    The empty Assistant drawer may surface recent non-empty sessions as direct
    resume actions using the backend session list already owned by the drawer;
    it must not create a parallel recent-chat store or product-authored prompt

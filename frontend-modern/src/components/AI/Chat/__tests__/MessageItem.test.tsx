@@ -13,6 +13,11 @@ vi.mock('../ThinkingBlock', () => ({
 }));
 
 vi.mock('../ToolExecutionBlock', () => ({
+  PendingToolBlock: (props: { tool: { name: string; input: string } }) => (
+    <div data-testid="pending-tool-block" data-tool-name={props.tool.name}>
+      {props.tool.input}
+    </div>
+  ),
   ToolExecutionBlock: (props: {
     tool: { name: string; input: string; output: string; success: boolean };
   }) => (
@@ -651,11 +656,11 @@ describe('MessageItem', () => {
       expect(screen.queryByText(/target_host/)).not.toBeInTheDocument();
     });
 
-    it('renders pending_tool events as empty fragments (no visible output)', () => {
+    it('renders pending_tool events as inline running tool rows', () => {
       const events: StreamDisplayEvent[] = [
         {
           type: 'pending_tool',
-          pendingTool: { id: 'pt-1', name: 'run_command', input: '{}' },
+          pendingTool: { id: 'pt-1', name: 'run_command', input: '{"command":"ls /dev"}' },
         },
       ];
 
@@ -666,7 +671,10 @@ describe('MessageItem', () => {
         />
       ));
 
-      // pending_tool renders <></> (empty fragment) - no tool block visible
+      expect(screen.getByTestId('pending-tool-block')).toHaveAttribute(
+        'data-tool-name',
+        'run_command',
+      );
       expect(screen.queryByTestId('tool-execution-block')).not.toBeInTheDocument();
     });
 

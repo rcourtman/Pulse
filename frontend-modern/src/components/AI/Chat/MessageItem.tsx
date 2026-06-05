@@ -7,7 +7,7 @@ import CpuIcon from 'lucide-solid/icons/cpu';
 import RotateCcwIcon from 'lucide-solid/icons/rotate-ccw';
 import SparklesIcon from 'lucide-solid/icons/sparkles';
 import { renderMarkdown } from '../aiChatUtils';
-import { ToolExecutionBlock } from './ToolExecutionBlock';
+import { PendingToolBlock, ToolExecutionBlock } from './ToolExecutionBlock';
 import { ApprovalCard } from './ApprovalCard';
 import { QuestionCard } from './QuestionCard';
 import { stripAssistantOutputArtifacts } from './assistantOutputHygiene';
@@ -68,6 +68,8 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
         return !!stripAssistantOutputArtifacts(evt.content || '').text;
       case 'tool':
         return !!evt.tool;
+      case 'pending_tool':
+        return !!evt.pendingTool;
       case 'approval':
         return !!evt.approval;
       case 'question':
@@ -218,7 +220,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                   {(evt) => (
                     <Switch>
                       <Match when={evt.type === 'pending_tool' && evt.pendingTool}>
-                        <></>
+                        <PendingToolBlock tool={evt.pendingTool!} />
                       </Match>
 
                       <Match when={evt.type === 'tool' && evt.tool}>
