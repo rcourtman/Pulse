@@ -23,9 +23,23 @@ func isCurrentResourceReference(value string) bool {
 	}
 }
 
+// IsCurrentResourceReference reports whether a tool argument is one of the
+// session-scoped placeholders that must resolve through attached resource
+// context before execution.
+func IsCurrentResourceReference(value string) bool {
+	return isCurrentResourceReference(value)
+}
+
+// ValidateCurrentResourceAvailable checks whether the session currently has a
+// single attached resource that can satisfy current_resource placeholders.
+func (e *PulseToolExecutor) ValidateCurrentResourceAvailable() error {
+	_, err := e.resolveCurrentResource()
+	return err
+}
+
 func (e *PulseToolExecutor) resolveCurrentResource() (ResolvedResourceInfo, error) {
 	if e == nil || e.resolvedContext == nil {
-		return nil, fmt.Errorf("%s is unavailable because no resource context is attached", currentResourceHandle)
+		return nil, fmt.Errorf("%s is unavailable because no Pulse resource context is attached to this chat turn", currentResourceHandle)
 	}
 
 	recentIDs := e.resolvedContext.GetRecentlyAccessedResources(currentResourceSelectionWindow)
@@ -50,11 +64,11 @@ func (e *PulseToolExecutor) resolveCurrentResource() (ResolvedResourceInfo, erro
 
 	switch len(resolved) {
 	case 0:
-		return nil, fmt.Errorf("%s is unavailable because no single attached resource is selected", currentResourceHandle)
+		return nil, fmt.Errorf("%s is unavailable because no single attached resource is selected in this chat turn", currentResourceHandle)
 	case 1:
 		return resolved[0], nil
 	default:
-		return nil, fmt.Errorf("%s is ambiguous because multiple resources were recently selected; use pulse_query get for the intended resource first", currentResourceHandle)
+		return nil, fmt.Errorf("%s is ambiguous because multiple resources were recently selected; ask which host, VM, container, app, or storage resource the user means", currentResourceHandle)
 	}
 }
 
@@ -116,7 +130,7 @@ func resolvedResourceKindMatchesLocation(resource ResolvedResourceInfo, locType 
 
 func (e *PulseToolExecutor) commandTargetForResolvedResource(resource ResolvedResourceInfo) (string, error) {
 	if resource == nil {
-		return "", fmt.Errorf("%s is unavailable because no resource context is attached", currentResourceHandle)
+		return "", fmt.Errorf("%s is unavailable because no Pulse resource context is attached to this chat turn", currentResourceHandle)
 	}
 
 	candidates := append([]string(nil), resource.GetAliases()...)

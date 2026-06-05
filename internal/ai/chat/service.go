@@ -2861,6 +2861,7 @@ func (s *Service) buildSystemPrompt() string {
 - target_host specifies where commands run (host name, container name, or VM name)
 - Commands execute inside the target: target_host="homepage-docker" runs inside that container
 - For Docker containers inside system containers: target the container, then use docker commands
+- The placeholder current_resource is valid only when this turn includes a Pulse resource-context handoff that explicitly says an attached resource is selected. If no attached resource context is present, do not use target_host="current_resource" or resource_id="current_resource"; ask which host, VM, container, app, or storage resource the user means, or use read-only query/search tools to identify an explicit target first.
 
 ## DOCKER BIND MOUNTS
 - Container files are often mapped to host paths via bind mounts
@@ -2876,6 +2877,7 @@ func (s *Service) buildSystemPrompt() string {
 - Status checks and monitoring are read-oriented; do not change state unless the user asked for a state change.
 - If you are missing critical information (target, risky choice, preference), pulse_question is available for structured clarification.
 - pulse_question is not available in autonomous mode; proceed with safe defaults and clearly state assumptions instead.
+- Missing target information is not a safe default. In autonomous mode, ask for the missing target in normal assistant text instead of attempting a tool call with current_resource or another placeholder.
 
 ## HOW TO RESPOND
 You are like a colleague doing pair programming on infrastructure tasks. Tool calls are your internal investigation — the user sees your final synthesized response.

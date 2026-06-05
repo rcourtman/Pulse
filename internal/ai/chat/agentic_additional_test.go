@@ -531,3 +531,89 @@ func TestAgenticLoop_DoesNotAutoRecoverStructuredToolCall(t *testing.T) {
 		t.Fatalf("unexpected final response: %+v", results[2])
 	}
 }
+
+func TestAgenticLoop_HidesUnavailableCurrentResourceToolCall(t *testing.T) {
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	provider := &stubStreamingProvider{}
+	loop := NewAgenticLoop(provider, executor, "prompt")
+
+	var events []StreamEvent
+	callCount := 0
+	provider.chatStream = func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		callCount++
+		switch callCount {
+		case 1:
+			callback(providers.StreamEvent{
+				Type: "tool_start",
+				Data: providers.ToolStartEvent{
+					ID:   "call-read-dev",
+					Name: "pulse_read",
+				},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{
+					ToolCalls: []providers.ToolCall{{
+						ID:   "call-read-dev",
+						Name: "pulse_read",
+						Input: map[string]interface{}{
+							"action":      "exec",
+							"target_host": "current_resource",
+							"command":     "ls /dev | wc -l",
+						},
+					}},
+				},
+			})
+		case 2:
+			if len(req.Messages) != 3 {
+				t.Fatalf("expected user, assistant tool call, and hidden tool result, got %d messages", len(req.Messages))
+			}
+			toolResult := req.Messages[2].ToolResult
+			if toolResult == nil || !toolResult.IsError {
+				t.Fatalf("expected hidden current_resource tool result error, got %+v", toolResult)
+			}
+			if !strings.Contains(toolResult.Content, "CURRENT_RESOURCE_UNAVAILABLE") {
+				t.Fatalf("expected current resource block marker, got %q", toolResult.Content)
+			}
+			if !strings.Contains(toolResult.Content, "Ask which host, VM, container, app, or storage resource") {
+				t.Fatalf("expected model-facing recovery instruction, got %q", toolResult.Content)
+			}
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: "Which host, VM, container, app, or storage resource should I check?"},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{},
+			})
+		default:
+			t.Fatalf("unexpected provider call %d", callCount)
+		}
+		return nil
+	}
+
+	results, err := loop.Execute(context.Background(), "current-resource-hidden-block", []Message{{Role: "user", Content: "how many devices in this"}}, func(event StreamEvent) {
+		events = append(events, event)
+	})
+	if err != nil {
+		t.Fatalf("expected hidden current_resource recovery turn, got %v", err)
+	}
+	if callCount != 2 {
+		t.Fatalf("expected recovery turn after hidden current_resource block, got %d provider calls", callCount)
+	}
+	for _, event := range events {
+		switch event.Type {
+		case "tool_start", "tool_end":
+			t.Fatalf("current_resource placeholder block should not emit visible tool event: %+v", event)
+		}
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected only final assistant message to be session-visible, got %d: %+v", len(results), results)
+	}
+	if len(results[0].ToolCalls) != 0 || results[0].ToolResult != nil {
+		t.Fatalf("expected hidden placeholder call to be absent from session-visible messages, got %+v", results[0])
+	}
+	if !strings.Contains(results[0].Content, "Which host") {
+		t.Fatalf("expected assistant to ask for target, got %q", results[0].Content)
+	}
+}

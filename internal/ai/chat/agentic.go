@@ -94,6 +94,122 @@ func fallbackProviderStreamErrorMessage(err error) string {
 	return sanitizeProviderStreamErrorForUser(err.Error())
 }
 
+func currentResourceUnavailableToolResult(err error) string {
+	reason := "current_resource is unavailable because no single attached Pulse resource is selected in this chat turn"
+	if err != nil && strings.TrimSpace(err.Error()) != "" {
+		reason = strings.TrimSpace(err.Error())
+	}
+	return fmt.Sprintf(
+		"CURRENT_RESOURCE_UNAVAILABLE: %s. Ask which host, VM, container, app, or storage resource the user means before calling resource-targeted tools. Do not retry this tool with current_resource until the user provides or opens a specific resource context.",
+		reason,
+	)
+}
+
+func toolInputContainsCurrentResourceReference(value interface{}) bool {
+	switch v := value.(type) {
+	case nil:
+		return false
+	case string:
+		return tools.IsCurrentResourceReference(v)
+	case map[string]interface{}:
+		for _, child := range v {
+			if toolInputContainsCurrentResourceReference(child) {
+				return true
+			}
+		}
+	case []interface{}:
+		for _, child := range v {
+			if toolInputContainsCurrentResourceReference(child) {
+				return true
+			}
+		}
+	case []string:
+		for _, child := range v {
+			if tools.IsCurrentResourceReference(child) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (a *AgenticLoop) currentResourcePlaceholderBlock(tc providers.ToolCall) (string, bool) {
+	if !toolInputContainsCurrentResourceReference(tc.Input) {
+		return "", false
+	}
+	if a == nil || a.executor == nil {
+		return currentResourceUnavailableToolResult(nil), true
+	}
+	if err := a.executor.ValidateCurrentResourceAvailable(); err != nil {
+		return currentResourceUnavailableToolResult(err), true
+	}
+	return "", false
+}
+
+func removeToolCallFromResultMessages(messages []Message, toolUseID string) []Message {
+	toolUseID = strings.TrimSpace(toolUseID)
+	if toolUseID == "" {
+		return messages
+	}
+	for idx := len(messages) - 1; idx >= 0; idx-- {
+		if len(messages[idx].ToolCalls) == 0 {
+			continue
+		}
+		filtered := messages[idx].ToolCalls[:0]
+		for _, tc := range messages[idx].ToolCalls {
+			if strings.TrimSpace(tc.ID) != toolUseID {
+				filtered = append(filtered, tc)
+			}
+		}
+		if len(filtered) == len(messages[idx].ToolCalls) {
+			continue
+		}
+		messages[idx].ToolCalls = filtered
+		if len(messages[idx].ToolCalls) == 0 && strings.TrimSpace(messages[idx].Content) == "" && messages[idx].ToolResult == nil {
+			return append(messages[:idx], messages[idx+1:]...)
+		}
+		return messages
+	}
+	return messages
+}
+
+func toolStartKey(id, name string) string {
+	if key := strings.TrimSpace(id); key != "" {
+		return key
+	}
+	return strings.TrimSpace(name)
+}
+
+func emitToolStartEvent(callback StreamCallback, id, name string, input map[string]interface{}) {
+	if callback == nil {
+		return
+	}
+	inputStr, rawInput := formatToolInputForFrontend(name, input, false)
+	jsonData, _ := json.Marshal(ToolStartData{
+		ID:       id,
+		Name:     name,
+		Input:    inputStr,
+		RawInput: rawInput,
+	})
+	callback(StreamEvent{Type: "tool_start", Data: jsonData})
+}
+
+func emitToolEndEvent(callback StreamCallback, id, name string, input map[string]interface{}, output string, success bool) {
+	if callback == nil {
+		return
+	}
+	inputStr, rawInput := formatToolInputForFrontend(name, input, true)
+	jsonData, _ := json.Marshal(ToolEndData{
+		ID:       id,
+		Name:     name,
+		Input:    inputStr,
+		RawInput: rawInput,
+		Output:   output,
+		Success:  success,
+	})
+	callback(StreamEvent{Type: "tool_end", Data: jsonData})
+}
+
 // sanitizeProviderStreamErrorForUser turns a raw provider/transport error into a
 // clean, human message safe to render in the chat. Upstream errors (especially
 // from OpenAI-compatible gateways like OpenRouter) embed raw JSON bodies and
@@ -542,6 +658,41 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		var toolCalls []providers.ToolCall
 		var suppressLeakedToolContent bool
 		var pendingVisibleContent string
+		visibleToolStarts := make(map[string]bool)
+		deferredToolStarts := make(map[string]providers.ToolStartEvent)
+		suppressedToolStarts := make(map[string]bool)
+		emitDeferredToolStart := func(tc providers.ToolCall) {
+			key := toolStartKey(tc.ID, tc.Name)
+			if key == "" || visibleToolStarts[key] || suppressedToolStarts[key] {
+				return
+			}
+			if _, ok := deferredToolStarts[key]; !ok {
+				return
+			}
+			emitToolStartEvent(callback, tc.ID, tc.Name, tc.Input)
+			visibleToolStarts[key] = true
+		}
+		emitCurrentResourceBlock := func(tc providers.ToolCall, blockMsg string) {
+			key := toolStartKey(tc.ID, tc.Name)
+			if key != "" && visibleToolStarts[key] {
+				emitToolEndEvent(callback, tc.ID, tc.Name, tc.Input, blockMsg, false)
+				resultMessages = append(resultMessages, Message{
+					ID:        uuid.New().String(),
+					Role:      "user",
+					Timestamp: time.Now(),
+					ToolResult: &ToolResult{
+						ToolUseID: tc.ID,
+						Content:   blockMsg,
+						IsError:   true,
+					},
+				})
+				return
+			}
+			if key != "" {
+				suppressedToolStarts[key] = true
+			}
+			resultMessages = removeToolCallFromResultMessages(resultMessages, tc.ID)
+		}
 
 		log.Debug().
 			Str("session_id", sessionID).
@@ -587,21 +738,33 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 				case "tool_start":
 					if data, ok := event.Data.(providers.ToolStartEvent); ok {
-						attemptEmittedVisibleEvents = true
 						// pulse_question is rendered as a dedicated "question" card; suppress tool UI events.
 						if data.Name == pulseQuestionToolName {
 							return
 						}
-						// Format input for frontend display
-						// For control tools, show a human-readable summary instead of raw JSON to avoid "hallucination" look
-						inputStr, rawInput := formatToolInputForFrontend(data.Name, data.Input, false)
-						jsonData, _ := json.Marshal(ToolStartData{
-							ID:       data.ID,
-							Name:     data.Name,
-							Input:    inputStr,
-							RawInput: rawInput,
-						})
-						callback(StreamEvent{Type: "tool_start", Data: jsonData})
+						key := toolStartKey(data.ID, data.Name)
+						if len(data.Input) == 0 {
+							if key != "" {
+								deferredToolStarts[key] = data
+							}
+							return
+						}
+						if blockMsg, blocked := a.currentResourcePlaceholderBlock(providers.ToolCall{ID: data.ID, Name: data.Name, Input: data.Input}); blocked {
+							log.Warn().
+								Str("tool", data.Name).
+								Str("id", data.ID).
+								Str("reason", blockMsg).
+								Msg("[AgenticLoop] Suppressed invalid current_resource tool_start before user-visible execution")
+							if key != "" {
+								suppressedToolStarts[key] = true
+							}
+							return
+						}
+						attemptEmittedVisibleEvents = true
+						if key != "" {
+							visibleToolStarts[key] = true
+						}
+						emitToolStartEvent(callback, data.ID, data.Name, data.Input)
 					}
 
 				case "done":
@@ -882,6 +1045,25 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 				toolKind := ClassifyToolCall(tc.Name, tc.Input)
 
+				if blockMsg, blocked := a.currentResourcePlaceholderBlock(tc); blocked {
+					log.Warn().
+						Str("tool", tc.Name).
+						Str("id", tc.ID).
+						Str("reason", blockMsg).
+						Msg("[AgenticLoop] Blocked invalid current_resource tool call before interactive-set execution")
+
+					emitCurrentResourceBlock(tc, blockMsg)
+					providerMessages = append(providerMessages, providers.Message{
+						Role: "user",
+						ToolResult: &providers.ToolResult{
+							ToolUseID: tc.ID,
+							Content:   truncateToolResultForModel(blockMsg),
+							IsError:   true,
+						},
+					})
+					continue
+				}
+
 				// FSM enforcement still applies (even if we're skipping execution).
 				if fsm != nil {
 					if fsmErr := fsm.CanExecuteTool(toolKind, tc.Name); fsmErr != nil {
@@ -900,16 +1082,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 							}
 						}
 
-						inputStr, rawInput := formatToolInputForFrontend(tc.Name, tc.Input, true)
-						jsonData, _ := json.Marshal(ToolEndData{
-							ID:       tc.ID,
-							Name:     tc.Name,
-							Input:    inputStr,
-							RawInput: rawInput,
-							Output:   fsmErr.Error(),
-							Success:  false,
-						})
-						callback(StreamEvent{Type: "tool_end", Data: jsonData})
+						emitDeferredToolStart(tc)
+						emitToolEndEvent(callback, tc.ID, tc.Name, tc.Input, fsmErr.Error(), false)
 
 						toolResultMsg := Message{
 							ID:        uuid.New().String(),
@@ -940,16 +1114,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				if recentCallCounts[callKey] > maxIdenticalCalls {
 					loopMsg := fmt.Sprintf("LOOP_DETECTED: You have called %s with the same arguments %d times. This call is blocked. Try a different tool or approach.", tc.Name, recentCallCounts[callKey])
 
-					inputStr, rawInput := formatToolInputForFrontend(tc.Name, tc.Input, true)
-					jsonData, _ := json.Marshal(ToolEndData{
-						ID:       tc.ID,
-						Name:     tc.Name,
-						Input:    inputStr,
-						RawInput: rawInput,
-						Output:   loopMsg,
-						Success:  false,
-					})
-					callback(StreamEvent{Type: "tool_end", Data: jsonData})
+					emitDeferredToolStart(tc)
+					emitToolEndEvent(callback, tc.ID, tc.Name, tc.Input, loopMsg, false)
 
 					toolResultMsg := Message{
 						ID:        uuid.New().String(),
@@ -977,16 +1143,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				if tc.Name != pulseQuestionToolName {
 					skipMsg := fmt.Sprintf("SKIPPED: %s was requested this turn. Wait for the user's answer, then re-issue this tool call with the clarified inputs.", pulseQuestionToolName)
 
-					inputStr, rawInput := formatToolInputForFrontend(tc.Name, tc.Input, true)
-					jsonData, _ := json.Marshal(ToolEndData{
-						ID:       tc.ID,
-						Name:     tc.Name,
-						Input:    inputStr,
-						RawInput: rawInput,
-						Output:   skipMsg,
-						Success:  false,
-					})
-					callback(StreamEvent{Type: "tool_end", Data: jsonData})
+					emitDeferredToolStart(tc)
+					emitToolEndEvent(callback, tc.ID, tc.Name, tc.Input, skipMsg, false)
 
 					toolResultMsg := Message{
 						ID:        uuid.New().String(),
@@ -1067,6 +1225,26 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 			// === FSM ENFORCEMENT GATE 1: Check if tool is allowed in current state ===
 			toolKind := ClassifyToolCall(tc.Name, tc.Input)
+
+			if blockMsg, blocked := a.currentResourcePlaceholderBlock(tc); blocked {
+				log.Warn().
+					Str("tool", tc.Name).
+					Str("id", tc.ID).
+					Str("reason", blockMsg).
+					Msg("[AgenticLoop] Blocked invalid current_resource tool call before execution")
+
+				emitCurrentResourceBlock(tc, blockMsg)
+				providerMessages = append(providerMessages, providers.Message{
+					Role: "user",
+					ToolResult: &providers.ToolResult{
+						ToolUseID: tc.ID,
+						Content:   truncateToolResultForModel(blockMsg),
+						IsError:   true,
+					},
+				})
+				continue
+			}
+
 			if fsm != nil {
 				if fsmErr := fsm.CanExecuteTool(toolKind, tc.Name); fsmErr != nil {
 					log.Warn().
@@ -1093,14 +1271,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					}
 
 					// Send tool_end event with error
-					jsonData, _ := json.Marshal(ToolEndData{
-						ID:      tc.ID,
-						Name:    tc.Name,
-						Input:   "",
-						Output:  fsmErr.Error(),
-						Success: false,
-					})
-					callback(StreamEvent{Type: "tool_end", Data: jsonData})
+					emitDeferredToolStart(tc)
+					emitToolEndEvent(callback, tc.ID, tc.Name, tc.Input, fsmErr.Error(), false)
 
 					// Create tool result message with the error
 					toolResultMsg := Message{
@@ -1142,14 +1314,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 				loopMsg := fmt.Sprintf("LOOP_DETECTED: You have called %s with the same arguments %d times. This call is blocked. Try a different tool or approach.", tc.Name, recentCallCounts[callKey])
 
-				jsonData, _ := json.Marshal(ToolEndData{
-					ID:      tc.ID,
-					Name:    tc.Name,
-					Input:   "",
-					Output:  loopMsg,
-					Success: false,
-				})
-				callback(StreamEvent{Type: "tool_end", Data: jsonData})
+				emitDeferredToolStart(tc)
+				emitToolEndEvent(callback, tc.ID, tc.Name, tc.Input, loopMsg, false)
 
 				toolResultMsg := Message{
 					ID:        uuid.New().String(),
@@ -1183,6 +1349,9 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		// Cap concurrency at 4 to avoid overwhelming infrastructure.
 		execResults := make([]parallelToolResult, len(pendingExec))
 		if len(pendingExec) > 0 {
+			for _, pe := range pendingExec {
+				emitDeferredToolStart(pe.tc)
+			}
 			executeMessage := "Running infrastructure checks."
 			workflowTool := pendingExec[0].tc.Name
 			for _, pe := range pendingExec {
