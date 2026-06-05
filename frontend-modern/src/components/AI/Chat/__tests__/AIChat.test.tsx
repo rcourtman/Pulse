@@ -283,6 +283,18 @@ function setViewportWidth(width: number) {
   window.dispatchEvent(new Event('resize'));
 }
 
+async function waitForComposerSendReady() {
+  await waitFor(() => {
+    expect(mockAIAPI.testProvider).toHaveBeenCalled();
+  });
+  await waitFor(() => {
+    expect(screen.queryByText('Checking OpenAI provider')).not.toBeInTheDocument();
+  });
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: 'Send message' })).not.toBeDisabled();
+  });
+}
+
 // ── Setup / teardown ───────────────────────────────────────────────────────
 
 beforeEach(() => {
@@ -395,6 +407,102 @@ describe('AIChat', () => {
         'href',
         '/settings/system-ai',
       );
+    });
+
+    it('keeps user input queued while the selected provider check is still running', async () => {
+      mockAIAPI.getSettings.mockResolvedValue({
+        model: 'openai:gpt-4',
+        chat_model: '',
+        control_level: 'read_only',
+        autonomous_mode: false,
+        discovery_enabled: true,
+      });
+      mockAIAPI.testProvider.mockReturnValue(new Promise(() => {}));
+
+      renderChat();
+
+      await screen.findByText('Checking OpenAI provider');
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+      fireEvent.input(textarea, { target: { value: 'summarize the cluster' } });
+
+      expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+      expect(textarea.value).toBe('summarize the cluster');
+      expect(document.activeElement).toBe(textarea);
+    });
+
+    it('keeps user input queued while a selected provider issue is unresolved', async () => {
+      mockAIAPI.getSettings.mockResolvedValue({
+        model: 'deepseek:deepseek-v4-pro',
+        chat_model: '',
+        control_level: 'read_only',
+        autonomous_mode: false,
+        discovery_enabled: true,
+      });
+      mockAIAPI.testProvider.mockResolvedValueOnce({
+        success: false,
+        message: 'Provider connection issue',
+        provider: 'deepseek',
+        model: 'deepseek:deepseek-v4-pro',
+        cause: 'provider_connection',
+        summary: 'Pulse could not maintain a healthy connection to this provider.',
+        recommendation: 'Check provider reachability.',
+        action: 'open_provider_settings',
+      });
+
+      renderChat();
+
+      await screen.findByText('DeepSeek provider issue');
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+      fireEvent.input(textarea, { target: { value: 'summarize the cluster' } });
+
+      expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+      expect(textarea.value).toBe('summarize the cluster');
+      expect(document.activeElement).toBe(textarea);
+    });
+
+    it('keeps user input queued when the readiness issue reports a provider-qualified model', async () => {
+      mockAIAPI.getSettings.mockResolvedValue({
+        model: 'gpt-4',
+        chat_model: '',
+        control_level: 'read_only',
+        autonomous_mode: false,
+        discovery_enabled: true,
+      });
+      mockAIAPI.testProvider.mockResolvedValueOnce({
+        success: false,
+        message: 'Selected model unavailable',
+        provider: 'openai',
+        model: 'openai:gpt-4',
+        cause: 'model_unavailable',
+        summary: 'Pulse could not find the selected model on this provider route.',
+        recommendation: 'Choose another OpenAI model.',
+        action: 'open_provider_settings',
+      });
+
+      renderChat();
+
+      await screen.findByText('OpenAI provider issue');
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+      fireEvent.input(textarea, { target: { value: 'summarize the cluster' } });
+
+      expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+      expect(textarea.value).toBe('summarize the cluster');
+      expect(document.activeElement).toBe(textarea);
     });
 
     it('offers an equivalent configured-provider route when the selected provider fails', async () => {
@@ -1966,6 +2074,7 @@ describe('AIChat', () => {
         expect(textarea.value).toBe('@redacted by policy ');
       });
 
+      await waitForComposerSendReady();
       fireEvent.keyDown(textarea, { key: 'Enter' });
       expect(mockChat.sendMessage).toHaveBeenCalledWith(
         '@redacted by policy',
@@ -2171,6 +2280,7 @@ describe('AIChat', () => {
 
       const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
       fireEvent.input(textarea, { target: { value: 'what happened here?' } });
+      await waitForComposerSendReady();
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
       expect(mockChat.sendMessage).toHaveBeenCalledWith(
@@ -2251,6 +2361,7 @@ describe('AIChat', () => {
       expect(mockAiChatStore.context.briefing?.title).toBe('Patrol finding on web-server');
 
       fireEvent.input(textarea, { target: { value: 'what changed next?' } });
+      await waitForComposerSendReady();
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
       await waitFor(() => {
