@@ -21,6 +21,7 @@ import type {
 } from '../types';
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
+type AssistantInterruption = NonNullable<ChatMessage['interruption']>;
 
 export interface UseChatOptions {
   sessionId?: string;
@@ -75,7 +76,7 @@ export function useChat(options: UseChatOptions = {}) {
     return promise;
   };
 
-  const cancelActiveRequest = (markStopped: boolean): Promise<void> | null => {
+  const cancelActiveRequest = (interruption?: AssistantInterruption): Promise<void> | null => {
     const hasActiveRequest = isLoading() || abortControllerRef !== null;
     if (!hasActiveRequest) return null;
 
@@ -92,8 +93,11 @@ export function useChat(options: UseChatOptions = {}) {
           ? {
               ...msg,
               isStreaming: false,
-              content: markStopped ? msg.content || '(Stopped)' : msg.content,
+              interruption,
               pendingTools: [],
+              pendingApprovals: [],
+              pendingQuestions: [],
+              workflowStatus: undefined,
             }
           : msg,
       ),
@@ -105,12 +109,12 @@ export function useChat(options: UseChatOptions = {}) {
 
   // Cleanup on unmount
   onCleanup(() => {
-    void cancelActiveRequest(false);
+    void cancelActiveRequest();
   });
 
   // Stop/cancel current request
   const stop = () => {
-    void cancelActiveRequest(true);
+    void cancelActiveRequest('stopped');
   };
 
   // Helper to add stream event for chronological display
@@ -565,7 +569,7 @@ export function useChat(options: UseChatOptions = {}) {
     // run after it registers.
     if (isLoading()) {
       logger.debug('[useChat] Aborting current stream to send new message');
-      backendAbortBeforeNextSend = cancelActiveRequest(false);
+      backendAbortBeforeNextSend = cancelActiveRequest('replaced');
     }
 
     // Echo the user's message before any network work. Cold sessions can spend
@@ -667,14 +671,14 @@ export function useChat(options: UseChatOptions = {}) {
 
   // Clear messages and reset session (for starting fresh)
   const clearMessages = () => {
-    void cancelActiveRequest(false);
+    void cancelActiveRequest();
     setMessages([]);
     setSessionId(''); // Clear session so next message creates a new one
   };
 
   // Load session messages
   const loadSession = async (id: string): Promise<boolean> => {
-    void cancelActiveRequest(false);
+    void cancelActiveRequest();
     try {
       const msgs = await AIChatAPI.getMessages(id);
       setMessages(
@@ -698,7 +702,7 @@ export function useChat(options: UseChatOptions = {}) {
   // Start a blank conversation. The durable backend session is created by the
   // next chat stream so the UI does not create empty server-side sessions.
   const newSession = async (): Promise<boolean> => {
-    void cancelActiveRequest(false);
+    void cancelActiveRequest();
     setSessionId('');
     setMessages([]);
     return true;

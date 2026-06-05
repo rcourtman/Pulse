@@ -73,6 +73,16 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     !props.message.content.trim() &&
     !hasStreamEvents() &&
     !props.message.error;
+  const interruptionLabel = createMemo(() => {
+    switch (props.message.interruption) {
+      case 'replaced':
+        return 'Stopped when you sent the next message';
+      case 'stopped':
+        return 'Stopped';
+      default:
+        return '';
+    }
+  });
 
   // Copy-to-clipboard for a completed assistant answer.
   const [copied, setCopied] = createSignal(false);
@@ -216,6 +226,15 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                   // eslint-disable-next-line solid/no-innerhtml
                   innerHTML={renderMarkdown(props.message.content)}
                 />
+              </Show>
+
+              <Show when={interruptionLabel()}>
+                <div
+                  class="mt-2 inline-flex items-center gap-1.5 rounded-md border border-border-subtle bg-surface-alt px-2 py-1 text-[11px] font-medium text-muted"
+                  role="status"
+                >
+                  <span>{interruptionLabel()}</span>
+                </div>
               </Show>
 
               {/* Error block - distinct, recoverable */}

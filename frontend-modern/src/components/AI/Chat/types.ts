@@ -113,6 +113,7 @@ export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  interruption?: 'stopped' | 'replaced';
   // Clean, user-facing error for a failed turn. Rendered as a distinct error
   // block (not as answer content) so partial streamed content is preserved and
   // the failure is unmistakable and recoverable.

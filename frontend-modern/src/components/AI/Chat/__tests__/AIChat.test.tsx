@@ -920,6 +920,16 @@ describe('AIChat', () => {
       expect(mockChat.stop).toHaveBeenCalledTimes(1);
     });
 
+    it('returns focus to the composer after stopping a response', async () => {
+      mockChat.isLoading.mockReturnValue(true);
+      renderChat();
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+
+      fireEvent.click(screen.getByTitle('Stop'));
+
+      await waitFor(() => expect(document.activeElement).toBe(textarea));
+    });
+
     it('submits via form submit button click', () => {
       renderChat();
       const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
@@ -927,6 +937,16 @@ describe('AIChat', () => {
       const submitBtn = screen.getByTitle('Send');
       fireEvent.click(submitBtn);
       expect(mockChat.sendMessage).toHaveBeenCalledWith('test query', undefined, undefined);
+    });
+
+    it('returns focus to the composer after submit button click', async () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+      fireEvent.input(textarea, { target: { value: 'test query' } });
+
+      fireEvent.click(screen.getByTitle('Send'));
+
+      await waitFor(() => expect(document.activeElement).toBe(textarea));
     });
   });
 

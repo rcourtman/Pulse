@@ -401,6 +401,8 @@ describe('useChat', () => {
       const msgs = chat.messages();
       const firstAssistant = msgs.find((m) => m.role === 'assistant');
       expect(firstAssistant?.isStreaming).toBe(false);
+      expect(firstAssistant?.interruption).toBe('replaced');
+      expect(firstAssistant?.content).toBe('');
       dispose();
     });
 
@@ -485,7 +487,8 @@ describe('useChat', () => {
       expect(chat.isLoading()).toBe(false);
       const assistant = chat.messages().find((message) => message.role === 'assistant');
       expect(assistant).toMatchObject({
-        content: '(Stopped)',
+        content: '',
+        interruption: 'stopped',
         isStreaming: false,
       });
       dispose();
@@ -1111,7 +1114,8 @@ describe('useChat', () => {
       expect(chat.isLoading()).toBe(false);
       const assistant = chat.messages().find((m) => m.role === 'assistant');
       expect(assistant?.isStreaming).toBe(false);
-      expect(assistant?.content).toBe('(Stopped)');
+      expect(assistant?.content).toBe('');
+      expect(assistant?.interruption).toBe('stopped');
       dispose();
     });
 
@@ -1134,6 +1138,7 @@ describe('useChat', () => {
 
       const assistant = chat.messages().find((m) => m.role === 'assistant');
       expect(assistant?.content).toBe('partial response');
+      expect(assistant?.interruption).toBe('stopped');
       dispose();
     });
   });

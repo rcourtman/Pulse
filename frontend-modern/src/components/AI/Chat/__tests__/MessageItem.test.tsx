@@ -175,6 +175,62 @@ describe('MessageItem', () => {
     });
   });
 
+  describe('interruption marker', () => {
+    it('renders a neutral stopped marker without treating it as answer content', () => {
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            interruption: 'stopped',
+            isStreaming: false,
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      const marker = screen.getByRole('status');
+      expect(marker).toHaveTextContent('Stopped');
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /copy message/i })).not.toBeInTheDocument();
+    });
+
+    it('renders a replacement marker when a new user message interrupts the old turn', () => {
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            interruption: 'replaced',
+            isStreaming: false,
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Stopped when you sent the next message',
+      );
+    });
+
+    it('keeps partial content visible before the stopped marker', () => {
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            content: 'Partial answer',
+            interruption: 'stopped',
+            isStreaming: false,
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(screen.getByText('Partial answer')).toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent('Stopped');
+    });
+  });
+
   describe('copy button', () => {
     it('copies the message content when clicked', () => {
       const writeText = vi.fn().mockResolvedValue(undefined);

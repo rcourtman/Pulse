@@ -78,6 +78,12 @@ runtime cost control, and shared AI transport surfaces.
    surface the result as actionable retry/settings status plus same-model
    configured-provider alternatives without converting it into
    assistant-authored output or disabling model-owned chat by default.
+   Operator interruption is likewise chat-runtime state: Stop and replacement
+   sends must abort the active stream, clear pending tool/approval/question
+   affordances, preserve any partial model text, return focus to the composer,
+   and render a neutral transcript marker rather than persisting synthetic
+   assistant answer text or surfacing the interruption as a retryable provider
+   failure.
 4. Add or change Patrol, alert-analysis, or remediation transport through `internal/api/ai_handlers.go`, `internal/api/ai_intelligence_handlers.go`, and `frontend-modern/src/api/patrol.ts`
    Provider preflight diagnostics returned from `internal/api/ai_handlers.go`
    must reuse the Patrol runtime failure classifier in `internal/ai/` and

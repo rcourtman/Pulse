@@ -1212,6 +1212,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     setInput('');
     setAccumulatedMentions([]);
     setMentionActive(false);
+    focusComposer();
   };
 
   // Handle input change with @ mention detection
@@ -2006,7 +2007,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   <Show when={chat.isLoading()}>
                     <button
                       type="button"
-                      onClick={chat.stop}
+                      onClick={() => {
+                        chat.stop();
+                        focusComposer();
+                      }}
                       class="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-surface text-base-content shadow-sm transition-colors hover:bg-surface-hover"
                       title="Stop"
                       aria-label="Stop response"
