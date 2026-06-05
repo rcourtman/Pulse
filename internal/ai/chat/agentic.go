@@ -85,32 +85,80 @@ func sessionFSMState(fsm *SessionFSM) string {
 	return string(fsm.State)
 }
 
+const defaultProviderStreamErrorMessage = "AI response stream interrupted before completion. Please retry."
+
 func fallbackProviderStreamErrorMessage(err error) string {
-	const defaultMessage = "AI response stream interrupted before completion. Please retry."
 	if err == nil {
-		return defaultMessage
+		return defaultProviderStreamErrorMessage
 	}
+	return sanitizeProviderStreamErrorForUser(err.Error())
+}
 
-	msg := strings.TrimSpace(err.Error())
+// sanitizeProviderStreamErrorForUser turns a raw provider/transport error into a
+// clean, human message safe to render in the chat. Upstream errors (especially
+// from OpenAI-compatible gateways like OpenRouter) embed raw JSON bodies and
+// dashboard URLs — e.g. a 402 carries the provider's billing JSON and a
+// workspace-key link. Those must never reach the user: they are unreadable and
+// can leak provider routing and key fragments. Known classes map to actionable
+// messages; anything else has its JSON/URL payload stripped before display.
+func sanitizeProviderStreamErrorForUser(msg string) string {
+	msg = strings.TrimSpace(msg)
 	if msg == "" {
-		return defaultMessage
+		return defaultProviderStreamErrorMessage
 	}
 
-	msgLower := strings.ToLower(msg)
+	lower := strings.ToLower(msg)
 	switch {
-	case strings.Contains(msgLower, "context canceled"):
+	case strings.Contains(lower, "context canceled"):
 		return "AI response was canceled before completion."
-	case strings.Contains(msgLower, "timeout"),
-		strings.Contains(msgLower, "timed out"),
-		strings.Contains(msgLower, "deadline exceeded"):
+	case strings.Contains(lower, "timeout"),
+		strings.Contains(lower, "timed out"),
+		strings.Contains(lower, "deadline exceeded"):
 		return "AI response timed out before completion. Please retry."
+	case strings.Contains(lower, "402"),
+		strings.Contains(lower, "more credits"),
+		strings.Contains(lower, "insufficient"),
+		strings.Contains(lower, "quota"),
+		strings.Contains(lower, "billing"),
+		strings.Contains(lower, "payment required"):
+		return "The AI provider rejected the request for billing or quota reasons. Check your provider credits or token limit, then retry."
+	case strings.Contains(lower, "401"),
+		strings.Contains(lower, "403"),
+		strings.Contains(lower, "unauthorized"),
+		strings.Contains(lower, "invalid api key"),
+		strings.Contains(lower, "authentication"):
+		return "The AI provider rejected the credentials. Check your AI provider API key in Settings."
+	case strings.Contains(lower, "429"),
+		strings.Contains(lower, "rate limit"),
+		strings.Contains(lower, "too many requests"):
+		return "The AI provider is rate limiting requests. Wait a moment, then retry."
 	}
 
-	const maxLen = 220
-	if len(msg) > maxLen {
-		msg = msg[:maxLen] + "..."
+	cleaned := stripProviderErrorPayload(msg)
+	if cleaned == "" {
+		return "The AI provider returned an error. Please retry."
 	}
-	return "AI response stream interrupted: " + msg
+	return "AI response stream interrupted: " + cleaned
+}
+
+// stripProviderErrorPayload removes any embedded JSON body or URL so raw
+// provider payloads and links never surface in the chat, keeping just the
+// leading human-readable summary (e.g. "API error (500)").
+func stripProviderErrorPayload(msg string) string {
+	cut := len(msg)
+	if i := strings.Index(msg, "{"); i >= 0 && i < cut {
+		cut = i
+	}
+	if i := strings.Index(strings.ToLower(msg), "http"); i >= 0 && i < cut {
+		cut = i
+	}
+	cleaned := strings.TrimRight(strings.TrimSpace(msg[:cut]), " :-")
+
+	const maxLen = 160
+	if len(cleaned) > maxLen {
+		cleaned = cleaned[:maxLen] + "..."
+	}
+	return cleaned
 }
 
 func (a *AgenticLoop) executeToolSafely(ctx context.Context, name string, input map[string]interface{}) (result tools.CallToolResult, err error) {
@@ -577,8 +625,9 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 			if len(attemptErrorMessages) > 0 {
 				// Defer emitting error events until retries are exhausted so transient
-				// provider blips don't leak to the client stream.
-				jsonData, _ := json.Marshal(ErrorData{Message: attemptErrorMessages[0]})
+				// provider blips don't leak to the client stream. Sanitize so raw
+				// provider JSON/URLs never reach the user.
+				jsonData, _ := json.Marshal(ErrorData{Message: sanitizeProviderStreamErrorForUser(attemptErrorMessages[0])})
 				callback(StreamEvent{Type: "error", Data: jsonData})
 			} else {
 				// Transport-level failures may not include an explicit provider error event.
