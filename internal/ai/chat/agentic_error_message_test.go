@@ -18,10 +18,16 @@ func TestSanitizeProviderStreamErrorForUser(t *testing.T) {
 		wantAbsent  []string
 	}{
 		{
-			name:        "billing 402 maps to a clean actionable message",
+			name:        "OpenRouter key budget 402 maps to a clean actionable message",
 			in:          openRouter402,
+			wantContain: "completion budget exceeds the provider key limit",
+			wantAbsent:  []string{"{", "http", "max_tokens", "402", "openrouter.ai", "can only afford"},
+		},
+		{
+			name:        "generic billing 402 stays on billing and quota",
+			in:          `API error (402): Payment required for this provider`,
 			wantContain: "billing or quota",
-			wantAbsent:  []string{"{", "http", "max_tokens", "402", "openrouter.ai"},
+			wantAbsent:  []string{"402", "payment required"},
 		},
 		{
 			name:        "auth error",

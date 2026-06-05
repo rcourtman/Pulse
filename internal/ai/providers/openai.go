@@ -21,6 +21,10 @@ const (
 	openaiInitialBackoff = 2 * time.Second
 	openrouterRefererURL = "https://pulse.app"
 	openrouterAppTitle   = "Pulse"
+	// OpenRouter preflights affordability against the requested maximum
+	// completion budget. Leaving it unset can make small chat turns reserve a
+	// model-scale default and fail against per-key total limits.
+	openrouterDefaultMaxCompletionTokens = 1024
 )
 
 // OpenAIClient implements the Provider interface for OpenAI's API
@@ -189,6 +193,16 @@ func (c *OpenAIClient) applyProviderHeaders(req *http.Request) {
 	req.Header.Set("X-Title", openrouterAppTitle)
 }
 
+func (c *OpenAIClient) requestMaxTokens(req ChatRequest) int {
+	if req.MaxTokens > 0 {
+		return req.MaxTokens
+	}
+	if c.isOpenRouter() {
+		return openrouterDefaultMaxCompletionTokens
+	}
+	return 0
+}
+
 // requiresMaxCompletionTokens returns true for models that need max_completion_tokens instead of max_tokens
 // Per OpenAI docs, o1/o3/o4 reasoning models require max_completion_tokens; max_tokens will error.
 func (c *OpenAIClient) requiresMaxCompletionTokens(model string) bool {
@@ -290,11 +304,11 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 
 	// Use max_completion_tokens for all OpenAI models (newer API, backward compatible)
 	// DeepSeek still uses max_tokens
-	if req.MaxTokens > 0 {
+	if maxTokens := c.requestMaxTokens(req); maxTokens > 0 {
 		if c.isDeepSeek() {
-			openaiReq.MaxTokens = req.MaxTokens
+			openaiReq.MaxTokens = maxTokens
 		} else {
-			openaiReq.MaxCompletionTokens = req.MaxTokens
+			openaiReq.MaxCompletionTokens = maxTokens
 		}
 	}
 
@@ -710,11 +724,11 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		},
 	}
 
-	if req.MaxTokens > 0 {
+	if maxTokens := c.requestMaxTokens(req); maxTokens > 0 {
 		if c.isDeepSeek() {
-			openaiReq.MaxTokens = req.MaxTokens
+			openaiReq.MaxTokens = maxTokens
 		} else {
-			openaiReq.MaxCompletionTokens = req.MaxTokens
+			openaiReq.MaxCompletionTokens = maxTokens
 		}
 	}
 

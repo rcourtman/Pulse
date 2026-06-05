@@ -2384,6 +2384,11 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		if clientDisconnected.Load() {
 			return
 		}
+		var ok bool
+		event, ok = event.ClientSafe()
+		if !ok {
+			return
+		}
 		data, err := json.Marshal(event)
 		if err != nil {
 			return

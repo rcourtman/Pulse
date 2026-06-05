@@ -145,6 +145,92 @@ func TestOpenAIClient_ChatStream_OpenRouterReasoning(t *testing.T) {
 	assert.True(t, doneCalled)
 }
 
+func TestOpenAIClient_ChatStream_OpenRouterDefaultsCompletionBudget(t *testing.T) {
+	var captured openaiStreamRequest
+	client := NewOpenAIClient("sk-test", "openrouter:deepseek/deepseek-v4-pro", "https://openrouter.ai/api/v1", 0)
+	client.client = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
+				return nil, err
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+				Body: io.NopCloser(strings.NewReader(
+					"data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n" +
+						"data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1}}\n" +
+						"data: [DONE]\n",
+				)),
+			}, nil
+		}),
+	}
+
+	err := client.ChatStream(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+	}, func(StreamEvent) {})
+
+	require.NoError(t, err)
+	assert.Equal(t, openrouterDefaultMaxCompletionTokens, captured.MaxCompletionTokens)
+	assert.Zero(t, captured.MaxTokens)
+}
+
+func TestOpenAIClient_ChatStream_OpenAIDoesNotDefaultCompletionBudget(t *testing.T) {
+	var captured openaiStreamRequest
+	client := NewOpenAIClient("sk-test", "gpt-4", "https://api.openai.com/v1", 0)
+	client.client = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
+				return nil, err
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+				Body: io.NopCloser(strings.NewReader(
+					"data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n" +
+						"data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1}}\n" +
+						"data: [DONE]\n",
+				)),
+			}, nil
+		}),
+	}
+
+	err := client.ChatStream(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+	}, func(StreamEvent) {})
+
+	require.NoError(t, err)
+	assert.Zero(t, captured.MaxCompletionTokens)
+	assert.Zero(t, captured.MaxTokens)
+}
+
+func TestOpenAIClient_Chat_OpenRouterDefaultsCompletionBudget(t *testing.T) {
+	var captured openaiRequest
+	client := NewOpenAIClient("sk-test", "openrouter:deepseek/deepseek-v4-pro", "https://openrouter.ai/api/v1", 0)
+	client.client = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
+				return nil, err
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body: io.NopCloser(strings.NewReader(
+					`{"id":"chatcmpl-1","model":"deepseek/deepseek-v4-pro","choices":[{"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`,
+				)),
+			}, nil
+		}),
+	}
+
+	resp, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "ok", resp.Content)
+	assert.Equal(t, openrouterDefaultMaxCompletionTokens, captured.MaxCompletionTokens)
+	assert.Zero(t, captured.MaxTokens)
+}
+
 func TestOpenAIClient_ChatStream_ToolCall(t *testing.T) {
 	// Mock tool call stream
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

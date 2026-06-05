@@ -111,6 +111,36 @@ type StreamEvent struct {
 	Data json.RawMessage `json:"data,omitempty"`
 }
 
+// ClientSafe returns the browser/API-facing view of a stream event. Provider
+// reasoning may be retained inside the runtime, but raw thinking deltas must
+// not cross the client boundary.
+func (e StreamEvent) ClientSafe() (StreamEvent, bool) {
+	switch strings.ToLower(strings.TrimSpace(e.Type)) {
+	case "thinking":
+		return StreamEvent{}, false
+	case "content":
+		if len(e.Data) == 0 {
+			return e, true
+		}
+		var data ContentData
+		if err := json.Unmarshal(e.Data, &data); err != nil {
+			return e, true
+		}
+		data.Text = cleanToolCallArtifacts(data.Text)
+		if data.Text == "" {
+			return StreamEvent{}, false
+		}
+		jsonData, err := json.Marshal(data)
+		if err != nil {
+			return StreamEvent{}, false
+		}
+		e.Data = jsonData
+		return e, true
+	default:
+		return e, true
+	}
+}
+
 // StreamCallback is called for each streaming event
 type StreamCallback func(event StreamEvent)
 

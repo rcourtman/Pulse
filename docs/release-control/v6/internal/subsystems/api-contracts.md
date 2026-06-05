@@ -438,8 +438,10 @@ payload shape change when the portal presents compact client rows.
     into `frontend-modern/src/api/generated/aiChatEvents.ts`; that generated
     union must not include the retired `explore_status` pre-pass event. Runtime
     workflow telemetry may remain a transport event, but browser Assistant
-    output is owned by the AI runtime presentation contract rather than by
-    API-client event typing.
+    streams must use `chat.StreamEvent.ClientSafe()` so raw provider
+    `thinking` payloads and serialized tool-call prose cannot cross the API
+    boundary. Browser Assistant output is owned by the AI runtime presentation
+    contract rather than by API-client event typing.
     Cold Assistant streams must include a typed `session` event backed by
     `internal/ai/chat.SessionData` before user-visible provider output so the
     frontend can bind the backend-created session without a separate

@@ -119,6 +119,8 @@ func sanitizeProviderStreamErrorForUser(msg string) string {
 		return "The AI provider endpoint is not configured correctly. Check the selected provider URL in Settings, then retry."
 	case isProviderTransportError(lower):
 		return "Pulse could not reach the AI provider endpoint. Check the selected provider URL and network connection, then retry."
+	case isProviderCompletionBudgetLimitError(lower):
+		return "The AI provider rejected the request because the requested completion budget exceeds the provider key limit. Increase the key limit, lower the completion budget, or choose another provider."
 	case strings.Contains(lower, "402"),
 		strings.Contains(lower, "more credits"),
 		strings.Contains(lower, "insufficient"),
@@ -143,6 +145,23 @@ func sanitizeProviderStreamErrorForUser(msg string) string {
 		return "The AI provider returned an error. Please retry."
 	}
 	return "AI response stream interrupted: " + cleaned
+}
+
+func isProviderCompletionBudgetLimitError(lower string) bool {
+	hasCompletionBudgetField := strings.Contains(lower, "max_tokens") ||
+		strings.Contains(lower, "max completion tokens") ||
+		strings.Contains(lower, "completion budget") ||
+		strings.Contains(lower, "completion tokens")
+	hasAffordabilitySignal := strings.Contains(lower, "requested up to") ||
+		strings.Contains(lower, "can only afford") ||
+		strings.Contains(lower, "more credits") ||
+		strings.Contains(lower, "insufficient") ||
+		strings.Contains(lower, "key limit") ||
+		strings.Contains(lower, "total limit") ||
+		strings.Contains(lower, "token limit")
+	return hasCompletionBudgetField && hasAffordabilitySignal ||
+		strings.Contains(lower, "fewer max tokens") ||
+		strings.Contains(lower, "fewer completion tokens")
 }
 
 func isProviderEndpointConfigurationError(lower string) bool {
@@ -563,11 +582,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 				case "thinking":
 					if data, ok := event.Data.(providers.ThinkingEvent); ok {
-						attemptEmittedVisibleEvents = true
 						thinkingBuilder.WriteString(data.Text)
-						// Forward to callback - send ThinkingData struct
-						jsonData, _ := json.Marshal(ThinkingData{Text: data.Text})
-						callback(StreamEvent{Type: "thinking", Data: jsonData})
 					}
 
 				case "tool_start":

@@ -844,6 +844,11 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 				s.registerQuestionLoop(data.QuestionID, loop)
 			}
 		}
+		var ok bool
+		event, ok = event.ClientSafe()
+		if !ok {
+			return
+		}
 		streamCallback(event)
 	}
 	sessionData, _ := json.Marshal(SessionData{ID: session.ID})

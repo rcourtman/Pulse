@@ -10720,6 +10720,55 @@ func TestContract_ChatStreamEventJSONSnapshots(t *testing.T) {
 	}
 }
 
+func TestContract_AssistantChatStreamUsesClientSafeProjection(t *testing.T) {
+	handlerSource, err := os.ReadFile(filepath.Clean("ai_handler.go"))
+	if err != nil {
+		t.Fatalf("read ai_handler.go: %v", err)
+	}
+	serviceSource, err := os.ReadFile(filepath.Clean("../ai/chat/service.go"))
+	if err != nil {
+		t.Fatalf("read chat service: %v", err)
+	}
+	typesSource, err := os.ReadFile(filepath.Clean("../ai/chat/types.go"))
+	if err != nil {
+		t.Fatalf("read chat types: %v", err)
+	}
+
+	handlerText := string(handlerSource)
+	for _, required := range []string{
+		"func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request)",
+		"event, ok = event.ClientSafe()",
+		"json.Marshal(event)",
+	} {
+		if !strings.Contains(handlerText, required) {
+			t.Fatalf("Assistant chat SSE handler must encode client-safe stream projection: missing %q", required)
+		}
+	}
+
+	serviceText := string(serviceSource)
+	for _, required := range []string{
+		"func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callback StreamCallback) error",
+		"event, ok = event.ClientSafe()",
+		"streamCallback(event)",
+	} {
+		if !strings.Contains(serviceText, required) {
+			t.Fatalf("chat service stream boundary must return client-safe stream events: missing %q", required)
+		}
+	}
+
+	typesText := string(typesSource)
+	for _, required := range []string{
+		"func (e StreamEvent) ClientSafe() (StreamEvent, bool)",
+		`case "thinking":`,
+		"return StreamEvent{}, false",
+		"data.Text = cleanToolCallArtifacts(data.Text)",
+	} {
+		if !strings.Contains(typesText, required) {
+			t.Fatalf("chat stream client-safe projection must drop thinking and raw tool-call prose: missing %q", required)
+		}
+	}
+}
+
 func TestContract_PushNotificationJSONSnapshots(t *testing.T) {
 	cases := []struct {
 		name    string

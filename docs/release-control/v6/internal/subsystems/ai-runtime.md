@@ -62,6 +62,16 @@ runtime cost control, and shared AI transport surfaces.
    the Ollama `keep_alive` request field. An empty configured value means
    Pulse omits `keep_alive` so the Ollama server default applies.
 3. Add or change Pulse Assistant request flow through `internal/api/ai_handler.go`, `frontend-modern/src/api/ai.ts`, and `frontend-modern/src/api/aiChat.ts`
+   OpenRouter-routed Assistant chat requests must set a bounded default
+   completion budget when the runtime request does not specify `MaxTokens`.
+   OpenRouter preflights affordability against the requested maximum completion
+   budget, so leaving the field unset can make tiny chat turns reserve a
+   model-scale output default and fail against per-key total limits despite the
+   account having credit. The provider boundary owns this request-shape fix;
+   UI code must not work around it with route-specific retry copy. If the
+   provider still rejects the request because the requested completion budget
+   exceeds the key limit, the Assistant error message must name that key-limit
+   condition without exposing raw provider JSON, URLs, or key identifiers.
    Assistant stream provider failures emitted through chat must be classified
    in `internal/ai/chat` before callback events reach the frontend. Endpoint
    configuration/URL errors, provider reachability/transport failures, auth,
@@ -123,15 +133,18 @@ runtime cost control, and shared AI transport surfaces.
    shortcut path.
    Assistant output hygiene is part of the same boundary: provider reasoning
    and raw serialized tool-call artifacts must never render as assistant
-   transcript prose. Reasoning/thinking deltas may update neutral progress
-   state, but visible answer blocks and copyable message text must exclude the
-   reasoning body. Pulse tool invocations must surface only through governed
-   `tool_start` / `tool_end`, approval, or question blocks; if a provider emits
-   `pulse_*` / `patrol_*` calls, DSML, XML/function-call envelopes, or JSON
-   tool-call shapes as text content, the chat runtime must strip them before
-   streaming, persistence, and frontend rendering. Token accounting and other
-   provider metadata remain runtime/accounting data, not normal transcript
-   prose.
+   transcript prose or serialize into client-facing chat streams. Browser-bound
+   Assistant stream events must pass through `chat.StreamEvent.ClientSafe()`;
+   provider `thinking` chunks are runtime-only and may be retained internally
+   for model continuity, but they are dropped before the browser/API boundary.
+   Neutral progress comes from the active stream state, workflow status, or
+   governed tool/question/approval events, not from a reasoning body. Pulse tool
+   invocations must surface only through governed `tool_start` / `tool_end`,
+   approval, or question blocks; if a provider emits `pulse_*` / `patrol_*`
+   calls, DSML, XML/function-call envelopes, or JSON tool-call shapes as text
+   content, the chat runtime must strip them before streaming, persistence, and
+   frontend rendering. Token accounting and other provider metadata remain
+   runtime/accounting data, not normal transcript prose.
 4. Add or change Patrol, alert-analysis, or remediation transport through `internal/api/ai_handlers.go`, `internal/api/ai_intelligence_handlers.go`, and `frontend-modern/src/api/patrol.ts`
    Provider preflight diagnostics returned from `internal/api/ai_handlers.go`
    must reuse the Patrol runtime failure classifier in `internal/ai/` and

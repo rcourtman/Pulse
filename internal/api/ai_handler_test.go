@@ -540,6 +540,37 @@ func TestHandleChat_Success(t *testing.T) {
 	assert.Contains(t, w.Header().Get("Content-Type"), "text/event-stream")
 }
 
+func TestHandleChat_UsesClientSafeStreamProjection(t *testing.T) {
+	cfg := &config.Config{}
+	h := newTestAIHandler(cfg, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.On("ExecuteStream", mock.Anything, mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+		callback := args.Get(2).(chat.StreamCallback)
+		thinkingData, _ := json.Marshal(chat.ThinkingData{Text: "private provider reasoning pulse_read(target_host=\"current_resource\")"})
+		callback(chat.StreamEvent{Type: "thinking", Data: thinkingData})
+		contentData, _ := json.Marshal(chat.ContentData{
+			Text: "I will inspect the device nodes.\npulse_read(target_host=\"current_resource\", command=\"lsblk\")",
+		})
+		callback(chat.StreamEvent{Type: "content", Data: contentData})
+	})
+
+	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(`{"prompt": "hi"}`))
+	w := httptest.NewRecorder()
+
+	h.HandleChat(w, req)
+
+	body := w.Body.String()
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, body, "I will inspect the device nodes.")
+	assert.NotContains(t, body, `"type":"thinking"`)
+	assert.NotContains(t, body, "private provider reasoning")
+	assert.NotContains(t, body, "pulse_read")
+	assert.NotContains(t, body, "target_host")
+}
+
 func TestHandleChat_PreservesCanonicalMentionTypes(t *testing.T) {
 	cfg := &config.Config{}
 	h := newTestAIHandler(cfg, nil, nil)

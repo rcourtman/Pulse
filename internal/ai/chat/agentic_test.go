@@ -106,6 +106,45 @@ func TestAgenticLoop(t *testing.T) {
 		assert.Equal(t, "Hi there!", eventContent.Text)
 	})
 
+	t.Run("Execute Retains Reasoning Internally Without Streaming It", func(t *testing.T) {
+		mockProvider := &MockProvider{}
+		loop := NewAgenticLoop(mockProvider, executor, "You are a helper")
+		ctx := context.Background()
+		sessionID := "thinking-session"
+		messages := []Message{{Role: "user", Content: "Hello"}}
+
+		mockProvider.On("ChatStream", mock.Anything, mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+			callback := args.Get(2).(providers.StreamCallback)
+			callback(providers.StreamEvent{
+				Type: "thinking",
+				Data: providers.ThinkingEvent{Text: "private provider reasoning"},
+			})
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: "Hi there!"},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{},
+			})
+		})
+
+		var events []StreamEvent
+		results, err := loop.Execute(ctx, sessionID, messages, func(event StreamEvent) {
+			events = append(events, event)
+		})
+
+		assert.NoError(t, err)
+		require.Len(t, results, 1)
+		assert.Equal(t, "private provider reasoning", results[0].ReasoningContent)
+		for _, event := range events {
+			assert.NotEqual(t, "thinking", event.Type)
+			assert.NotContains(t, string(event.Data), "private provider reasoning")
+		}
+		require.Len(t, events, 1)
+		assert.Equal(t, "content", events[0].Type)
+	})
+
 	t.Run("Execute with Tool Call", func(t *testing.T) {
 		mockProvider := &MockProvider{}
 		loop := NewAgenticLoop(mockProvider, executor, "You are a helper")
