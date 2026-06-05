@@ -83,6 +83,10 @@ export interface QuestionOption {
   description?: string;
 }
 
+export interface SessionData {
+  id: string;
+}
+
 export interface ThinkingData {
   text: string;
 }
@@ -111,6 +115,7 @@ export interface WorkflowStateData {
 }
 
 export type AIChatStreamEvent =
+  | { type: 'session'; data: SessionData }
   | { type: 'content'; data: ContentData }
   | { type: 'thinking'; data: ThinkingData }
   | { type: 'workflow_state'; data: WorkflowStateData }

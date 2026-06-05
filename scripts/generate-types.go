@@ -38,6 +38,7 @@ func main() {
 		reflect.TypeOf(chat.ContentData{}),
 		reflect.TypeOf(chat.ThinkingData{}),
 		reflect.TypeOf(chat.WorkflowStateData{}),
+		reflect.TypeOf(chat.SessionData{}),
 		reflect.TypeOf(chat.ToolStartData{}),
 		reflect.TypeOf(chat.ToolEndData{}),
 		reflect.TypeOf(chat.ApprovalPlanData{}),
@@ -71,6 +72,7 @@ func main() {
 
 	// Stream event union matches internal/api/contract_test.go snapshots.
 	buf.WriteString("export type AIChatStreamEvent =\n")
+	buf.WriteString("  | { type: 'session'; data: SessionData }\n")
 	buf.WriteString("  | { type: 'content'; data: ContentData }\n")
 	buf.WriteString("  | { type: 'thinking'; data: ThinkingData }\n")
 	buf.WriteString("  | { type: 'workflow_state'; data: WorkflowStateData }\n")

@@ -123,16 +123,27 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('creates session when none exists and sends message', async () => {
-      mockCreateSession.mockResolvedValue({ id: 'new-sess' });
-      mockChat.mockResolvedValue(undefined);
+    it('streams cold messages without precreating a session and binds the stream session', async () => {
+      mockChat.mockImplementation(
+        (
+          _prompt: string,
+          _session: string | undefined,
+          _model: string | undefined,
+          onEvent: (event: StreamEvent) => void,
+        ) => {
+          onEvent({ type: 'session', data: { id: 'new-sess' } } as StreamEvent);
+          return Promise.resolve();
+        },
+      );
       const onConversationChanged = vi.fn();
 
       const { value: chat, dispose } = withRoot(() => useChat({ onConversationChanged }));
       const result = await chat.sendMessage('hello');
 
       expect(result).toBe(true);
-      expect(mockCreateSession).toHaveBeenCalledOnce();
+      expect(mockCreateSession).not.toHaveBeenCalled();
+      expect(mockChat).toHaveBeenCalledOnce();
+      expect(mockChat.mock.calls[0][1]).toBeUndefined();
       expect(chat.sessionId()).toBe('new-sess');
       expect(onConversationChanged).toHaveBeenCalledTimes(2);
 
@@ -145,14 +156,13 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('shows a pending assistant turn before cold-session creation finishes', async () => {
-      let resolveSession!: (value: { id: string }) => void;
-      mockCreateSession.mockReturnValue(
-        new Promise((resolve) => {
-          resolveSession = resolve;
+    it('starts the cold chat stream immediately with a pending assistant turn', async () => {
+      let resolveChat!: () => void;
+      mockChat.mockReturnValue(
+        new Promise<void>((resolve) => {
+          resolveChat = resolve;
         }),
       );
-      mockChat.mockResolvedValue(undefined);
 
       const { value: chat, dispose } = withRoot(() => useChat());
       const result = chat.sendMessage('test');
@@ -166,12 +176,13 @@ describe('useChat', () => {
         isStreaming: true,
         pendingTools: [],
       });
-      expect(mockChat).not.toHaveBeenCalled();
+      expect(mockCreateSession).not.toHaveBeenCalled();
+      expect(mockChat).toHaveBeenCalledOnce();
+      expect(mockChat.mock.calls[0][1]).toBeUndefined();
 
-      resolveSession({ id: 'new-sess' });
+      resolveChat();
       await result;
 
-      expect(chat.sessionId()).toBe('new-sess');
       expect(chat.messages()).toHaveLength(2);
       expect(chat.messages()[1].role).toBe('assistant');
       dispose();
@@ -189,21 +200,23 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('returns false and notifies on session creation failure', async () => {
-      mockCreateSession.mockRejectedValue(new Error('network error'));
+    it('handles cold chat API error without precreating a session', async () => {
+      mockChat.mockRejectedValue(new Error('server error'));
 
       const { value: chat, dispose } = withRoot(() => useChat());
       const result = await chat.sendMessage('hello');
 
       expect(result).toBe(false);
-      expect(mockNotifyError).toHaveBeenCalledWith('Failed to create chat session');
+      expect(mockCreateSession).not.toHaveBeenCalled();
+      expect(mockNotifyError).toHaveBeenCalledWith('server error');
       expect(chat.messages()).toHaveLength(2);
       expect(chat.messages()[0]).toMatchObject({ role: 'user', content: 'hello' });
       expect(chat.messages()[1]).toMatchObject({
         role: 'assistant',
-        error: 'Could not start a chat session. Check your connection and try again.',
+        error: 'server error',
         isStreaming: false,
       });
+      expect(chat.sessionId()).toBe('');
       expect(chat.isLoading()).toBe(false);
       dispose();
     });
@@ -478,12 +491,25 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('stop during cold-session creation prevents the deferred chat call', async () => {
-      let resolveSession!: (value: { id: string }) => void;
-      mockCreateSession.mockReturnValue(
-        new Promise((resolve) => {
-          resolveSession = resolve;
-        }),
+    it('stop during cold stream prevents deferred session binding', async () => {
+      let capturedSignal: AbortSignal | undefined;
+      let fireEvent!: TestStreamDispatch;
+      const abortError = new Error('Aborted');
+      abortError.name = 'AbortError';
+      mockChat.mockImplementation(
+        (
+          _prompt: string,
+          _session: string | undefined,
+          _model: string | undefined,
+          onEvent: (event: StreamEvent) => void,
+          signal?: AbortSignal,
+        ) => {
+          capturedSignal = signal;
+          fireEvent = (event) => dispatchTestStreamEvent(onEvent, event);
+          return new Promise<void>((_resolve, reject) => {
+            signal?.addEventListener('abort', () => reject(abortError));
+          });
+        },
       );
 
       const { value: chat, dispose } = withRoot(() => useChat());
@@ -491,10 +517,11 @@ describe('useChat', () => {
 
       expect(chat.isLoading()).toBe(true);
       chat.stop();
-      resolveSession({ id: 'late-session' });
+      fireEvent({ type: 'session', data: { id: 'late-session' } });
 
       await expect(send).resolves.toBe(false);
-      expect(mockChat).not.toHaveBeenCalled();
+      expect(capturedSignal?.aborted).toBe(true);
+      expect(mockAbortSession).not.toHaveBeenCalled();
       expect(chat.sessionId()).toBe('');
       expect(chat.isLoading()).toBe(false);
       dispose();

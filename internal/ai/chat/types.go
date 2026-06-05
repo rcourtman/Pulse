@@ -207,6 +207,12 @@ type WorkflowStateData struct {
 	Tool    string `json:"tool,omitempty"`  // Tool associated with this transition
 }
 
+// SessionData is the data for "session" events emitted once the backend has
+// created or resolved the durable chat session for a stream.
+type SessionData struct {
+	ID string `json:"id"`
+}
+
 // ToolStartData is the data for "tool_start" events
 type ToolStartData struct {
 	ID       string `json:"id"`

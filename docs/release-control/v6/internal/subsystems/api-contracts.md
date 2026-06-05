@@ -431,6 +431,13 @@ payload shape change when the portal presents compact client rows.
     workflow telemetry may remain a transport event, but browser Assistant
     output is owned by the AI runtime presentation contract rather than by
     API-client event typing.
+    Cold Assistant streams must include a typed `session` event backed by
+    `internal/ai/chat.SessionData` before user-visible provider output so the
+    frontend can bind the backend-created session without a separate
+    create-session request. The generated frontend union, stream parser tests,
+    and backend JSON snapshot proof must stay in lockstep with that payload;
+    `done.session_id` and `question.session_id` remain compatibility payloads,
+    not the primary cold-session creation contract.
 34. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
     Provider test responses from `/api/ai/test` and provider-specific
     `/api/ai/test/{provider}` preflight responses must return one safe

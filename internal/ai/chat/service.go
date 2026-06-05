@@ -846,9 +846,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		}
 		streamCallback(event)
 	}
-	sessionData, _ := json.Marshal(struct {
-		ID string `json:"id"`
-	}{ID: session.ID})
+	sessionData, _ := json.Marshal(SessionData{ID: session.ID})
 	streamCallback(StreamEvent{Type: "session", Data: sessionData})
 
 	resultMessages, err := loop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, wrappedCallback)

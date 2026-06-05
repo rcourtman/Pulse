@@ -10533,6 +10533,13 @@ func TestContract_ChatStreamEventJSONSnapshots(t *testing.T) {
 		want  string
 	}{
 		{
+			name: "session",
+			event: mustStreamEvent(t, "session", chat.SessionData{
+				ID: "session-1",
+			}),
+			want: `{"type":"session","data":{"id":"session-1"}}`,
+		},
+		{
 			name: "content",
 			event: mustStreamEvent(t, "content", chat.ContentData{
 				Text: "hello",

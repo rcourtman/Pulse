@@ -351,9 +351,7 @@ func TestService_ExecuteStream_Success(t *testing.T) {
 			doneCount++
 		}
 		if event.Type == "session" {
-			var data struct {
-				ID string `json:"id"`
-			}
+			var data SessionData
 			if err := json.Unmarshal(event.Data, &data); err != nil {
 				t.Fatalf("unmarshal session event: %v", err)
 			}

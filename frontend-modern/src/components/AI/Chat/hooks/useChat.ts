@@ -182,8 +182,33 @@ export function useChat(options: UseChatOptions = {}) {
     return '';
   };
 
+  const extractSessionId = (data: unknown): string => {
+    if (!data || typeof data !== 'object') return '';
+    const record = data as Record<string, unknown>;
+    const id = record.id ?? record.session_id;
+    return typeof id === 'string' ? id.trim() : '';
+  };
+
+  const applyStreamSessionId = (streamSessionId: string) => {
+    if (!streamSessionId) return;
+    const previousSessionId = sessionId();
+    if (previousSessionId === streamSessionId) return;
+    setSessionId(streamSessionId);
+    if (!previousSessionId) {
+      void notifyConversationChanged();
+    }
+  };
+
   const processEvent = (assistantId: string, requestId: number, event: StreamEvent) => {
     if (requestId !== activeRequestId) return;
+
+    if (event.type === 'session') {
+      applyStreamSessionId(extractSessionId(event.data));
+      return;
+    }
+    if (event.type === 'done' || event.type === 'question') {
+      applyStreamSessionId(extractSessionId(event.data));
+    }
 
     setMessages((prev) =>
       prev.map((msg) => {
@@ -544,38 +569,10 @@ export function useChat(options: UseChatOptions = {}) {
     setIsLoading(true);
     const requestId = ++activeRequestId;
 
-    // Ensure we have a session for conversation continuity
-    // Without this, every message creates a new session and loses context
+    // Existing sessions preserve conversation continuity. Cold chats let the
+    // backend create the session inside the stream and bind via the session SSE
+    // event, avoiding a separate preflight request before first token.
     let currentSessionId = sessionId();
-    if (!currentSessionId) {
-      try {
-        const session = await AIChatAPI.createSession();
-        if (requestId !== activeRequestId) {
-          return false;
-        }
-        currentSessionId = session.id;
-        setSessionId(currentSessionId);
-        void notifyConversationChanged();
-        logger.debug('[useChat] Created new session', { sessionId: currentSessionId });
-      } catch (error) {
-        logger.error('[useChat] Failed to create session:', error);
-        notificationStore.error('Failed to create chat session');
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === assistantId
-              ? {
-                  ...msg,
-                  error: 'Could not start a chat session. Check your connection and try again.',
-                  isStreaming: false,
-                  pendingTools: [],
-                }
-              : msg,
-          ),
-        );
-        setIsLoading(false);
-        return false;
-      }
-    }
 
     if (
       backendAbortBeforeNextSend &&
@@ -594,7 +591,7 @@ export function useChat(options: UseChatOptions = {}) {
     try {
       await AIChatAPI.chat(
         prompt,
-        currentSessionId,
+        currentSessionId || undefined,
         model() || undefined,
         (event: StreamEvent) => {
           processEvent(assistantId, requestId, event);
