@@ -109,6 +109,10 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     !props.message.content.trim() &&
     !hasRenderableStreamEvents() &&
     !props.message.error;
+  const inlineStreamingStatusText = createMemo(() => {
+    const workflowMessage = props.message.workflowStatus?.message?.trim();
+    return workflowMessage || 'Thinking...';
+  });
   const interruptionLabel = createMemo(() => {
     switch (props.message.interruption) {
       case 'replaced':
@@ -210,7 +214,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                       style="animation-delay: 240ms"
                     />
                   </span>
-                  <span>Thinking...</span>
+                  <span>{inlineStreamingStatusText()}</span>
                 </div>
               </Show>
 

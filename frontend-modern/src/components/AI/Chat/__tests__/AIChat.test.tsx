@@ -2869,7 +2869,7 @@ describe('AIChat', () => {
       expect(screen.getByText('Thinking...')).toBeInTheDocument();
     });
 
-    it('shows "Thinking..." while the assistant turn waits for the first token', () => {
+    it('does not duplicate first-token status in the footer once an assistant turn exists', () => {
       mockChat.isLoading.mockReturnValue(true);
       mockChat.messages.mockReturnValue([
         {
@@ -2882,11 +2882,11 @@ describe('AIChat', () => {
         },
       ]);
       renderChat();
-      expect(screen.getByText('Thinking...')).toBeInTheDocument();
+      expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
       expect(screen.queryByText('Generating response...')).not.toBeInTheDocument();
     });
 
-    it('shows workflow progress while the assistant turn waits for the first token', () => {
+    it('does not duplicate workflow progress in the footer once an assistant turn exists', () => {
       mockChat.isLoading.mockReturnValue(true);
       mockChat.messages.mockReturnValue([
         {
@@ -2906,13 +2906,13 @@ describe('AIChat', () => {
       ]);
       renderChat();
       expect(
-        screen.getByText('Planning governed action and safety checks before execution.'),
-      ).toBeInTheDocument();
+        screen.queryByText('Planning governed action and safety checks before execution.'),
+      ).not.toBeInTheDocument();
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
       expect(screen.queryByText('Generating response...')).not.toBeInTheDocument();
     });
 
-    it('shows tool status when assistant has pending tools', () => {
+    it('does not duplicate pending tool status in the footer once an assistant turn exists', () => {
       mockChat.isLoading.mockReturnValue(true);
       mockChat.messages.mockReturnValue([
         {
@@ -2924,10 +2924,10 @@ describe('AIChat', () => {
         },
       ]);
       renderChat();
-      expect(screen.getByText('Running get nodes...')).toBeInTheDocument();
+      expect(screen.queryByText('Running get nodes...')).not.toBeInTheDocument();
     });
 
-    it('shows "Generating response..." when assistant is streaming', () => {
+    it('does not duplicate status in the footer when assistant content is streaming', () => {
       mockChat.isLoading.mockReturnValue(true);
       mockChat.messages.mockReturnValue([
         {
@@ -2939,10 +2939,11 @@ describe('AIChat', () => {
         },
       ]);
       renderChat();
-      expect(screen.getByText('Generating response...')).toBeInTheDocument();
+      expect(screen.queryByText('Generating response...')).not.toBeInTheDocument();
+      expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
     });
 
-    it('tracks the active assistant status when a queued user turn is the last message', () => {
+    it('keeps queued follow-up status without duplicating active assistant streaming status', () => {
       mockChat.isLoading.mockReturnValue(true);
       mockChat.queuedFollowUpCount.mockReturnValue(1);
       mockChat.messages.mockReturnValue([
@@ -2962,7 +2963,7 @@ describe('AIChat', () => {
         },
       ]);
       renderChat();
-      expect(screen.getByText('Generating response...')).toBeInTheDocument();
+      expect(screen.queryByText('Generating response...')).not.toBeInTheDocument();
       expect(screen.getByText('1 follow-up queued')).toBeInTheDocument();
     });
 

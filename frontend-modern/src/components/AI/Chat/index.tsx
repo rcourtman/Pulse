@@ -1064,38 +1064,17 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (!chat.isLoading()) return null;
 
     const messages = chat.messages();
-    const lastMessage =
-      [...messages]
-        .reverse()
-        .find((message) => message.role === 'assistant' && message.isStreaming) ||
-      messages[messages.length - 1];
+    const activeAssistant = [...messages]
+      .reverse()
+      .find((message) => message.role === 'assistant' && message.isStreaming);
+    if (activeAssistant) {
+      return null;
+    }
+
+    const lastMessage = messages[messages.length - 1];
 
     if (!lastMessage || lastMessage.role !== 'assistant') {
       return { type: 'thinking', text: 'Thinking...' };
-    }
-
-    if (lastMessage.pendingTools && lastMessage.pendingTools.length > 0) {
-      const tool = lastMessage.pendingTools[0];
-      const toolName = formatIdentifierLabel(tool.name, { stripPrefix: 'pulse_' });
-      return { type: 'tool', text: `Running ${toolName}...` };
-    }
-
-    const workflowMessage = lastMessage.workflowStatus?.message.trim();
-    if (lastMessage.isStreaming && !lastMessage.content.trim() && workflowMessage) {
-      return { type: 'thinking', text: workflowMessage };
-    }
-
-    const isWaitingForFirstToken =
-      lastMessage.isStreaming &&
-      !lastMessage.content.trim() &&
-      (!lastMessage.streamEvents || lastMessage.streamEvents.length === 0);
-
-    if (isWaitingForFirstToken) {
-      return { type: 'thinking', text: 'Thinking...' };
-    }
-
-    if (lastMessage.isStreaming) {
-      return { type: 'generating', text: 'Generating response...' };
     }
 
     return { type: 'thinking', text: 'Thinking...' };

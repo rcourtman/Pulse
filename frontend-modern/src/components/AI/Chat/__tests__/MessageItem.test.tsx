@@ -506,6 +506,32 @@ describe('MessageItem', () => {
       expect(container.querySelector('.animate-pulse')).not.toBeInTheDocument();
     });
 
+    it('shows workflow progress inline before content arrives', () => {
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            isStreaming: true,
+            pendingTools: [],
+            streamEvents: [],
+            workflowStatus: {
+              phase: 'plan',
+              message: 'Planning governed action and safety checks before execution.',
+              state: 'READING',
+              tool: 'pulse_exec',
+            },
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(
+        screen.getByText('Planning governed action and safety checks before execution.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
+    });
+
     it('does not show cursor when streaming but there are pending tools', () => {
       const { container } = render(() => (
         <MessageItem
