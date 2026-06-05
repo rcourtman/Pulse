@@ -1760,16 +1760,19 @@ func (s *Store) reclaimFreePages() {
 	var freelist int64
 	if err := s.db.QueryRow(`PRAGMA freelist_count`).Scan(&freelist); err != nil {
 		log.Debug().Err(err).Msg("Failed to read freelist_count")
-		freelist = maxReclaimPages // fall back to a bounded reclaim
+		return
 	}
-	if freelist > 0 {
-		pages := freelist
-		if pages > maxReclaimPages {
-			pages = maxReclaimPages
-		}
-		if _, err := s.db.Exec(fmt.Sprintf(`PRAGMA incremental_vacuum(%d)`, pages)); err != nil {
-			log.Debug().Err(err).Msg("Incremental vacuum failed")
-		}
+	if freelist == 0 {
+		// Nothing to reclaim: skip the checkpoint too so steady-state WAL
+		// cadence is no more aggressive than before this drained every cycle.
+		return
+	}
+	pages := freelist
+	if pages > maxReclaimPages {
+		pages = maxReclaimPages
+	}
+	if _, err := s.db.Exec(fmt.Sprintf(`PRAGMA incremental_vacuum(%d)`, pages)); err != nil {
+		log.Debug().Err(err).Msg("Incremental vacuum failed")
 	}
 	if _, err := s.db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
 		log.Debug().Err(err).Msg("WAL checkpoint failed")
