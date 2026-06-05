@@ -150,6 +150,13 @@ export interface ChatMessage {
   pendingQuestions?: PendingQuestion[];
 }
 
+export interface ModelRouteRecoveryOption {
+  id: string;
+  label: string;
+  provider: string;
+  providerLabel: string;
+}
+
 export interface ModelInfo {
   id: string;
   name: string;

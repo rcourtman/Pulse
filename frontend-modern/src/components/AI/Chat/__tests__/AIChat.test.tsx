@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, afterEach, beforeAll, beforeEach } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import type { ChatMessage, ModelInfo } from '../types';
+import { Show } from 'solid-js';
+import type { ChatMessage, ModelInfo, ModelRouteRecoveryOption } from '../types';
 import type { QueuedFollowUp } from '../hooks/useChat';
 
 // ── Hoisted mocks (vi.mock factories reference these) ──────────────────────
@@ -17,7 +18,10 @@ const {
   mockChatMessagesProps,
 } = vi.hoisted(() => {
   const mockChatMessagesProps: Array<{
+    messages: ChatMessage[];
     onChangeModel?: () => void;
+    getModelRouteAlternative?: (message: ChatMessage) => ModelRouteRecoveryOption | null;
+    onUseModelRoute?: (modelId: string) => void;
   }> = [];
   const mockChat = {
     messages: vi.fn((): ChatMessage[] => []),
@@ -188,7 +192,13 @@ vi.mock('../ChatMessages', () => ({
     messages: ChatMessage[];
     emptyState?: { title: string; subtitle?: string };
     onChangeModel?: () => void;
+    getModelRouteAlternative?: (message: ChatMessage) => ModelRouteRecoveryOption | null;
+    onUseModelRoute?: (modelId: string) => void;
   }) => {
+    const routeAlternative = () => {
+      const failedMessage = props.messages.find((message) => message.error);
+      return failedMessage ? props.getModelRouteAlternative?.(failedMessage) : null;
+    };
     mockChatMessagesProps.push(props);
     return (
       <div data-testid="chat-messages" data-msg-count={props.messages.length}>
@@ -205,6 +215,17 @@ vi.mock('../ChatMessages', () => ({
         >
           Change model
         </button>
+        <Show when={routeAlternative()}>
+          {(alternative) => (
+            <button
+              type="button"
+              data-testid="mock-use-model-route"
+              onClick={() => props.onUseModelRoute?.(alternative().id)}
+            >
+              Use {alternative().providerLabel}
+            </button>
+          )}
+        </Show>
       </div>
     );
   },
@@ -410,6 +431,54 @@ describe('AIChat', () => {
       await waitFor(() => {
         expect(screen.getByTestId('model-selector')).toHaveAttribute('data-open-request', '1');
       });
+    });
+
+    it('switches a failed turn to an equivalent configured-provider route', async () => {
+      mockChat.model.mockReturnValue('deepseek:deepseek-v4-pro');
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'assistant-error-1',
+          role: 'assistant',
+          content: '',
+          error:
+            'Pulse could not reach the AI provider endpoint. Check the selected provider URL and network connection, then retry.',
+          timestamp: new Date('2026-06-05T10:00:00Z'),
+          model: 'deepseek:deepseek-v4-pro',
+        },
+      ]);
+      mockAIAPI.getSettings.mockResolvedValue({
+        model: 'deepseek:deepseek-v4-pro',
+        chat_model: '',
+        control_level: 'read_only',
+        autonomous_mode: false,
+        discovery_enabled: true,
+        configured_providers: ['deepseek', 'openrouter'],
+      });
+      mockAIAPI.getModels.mockResolvedValue({
+        models: [
+          {
+            id: 'deepseek:deepseek-v4-pro',
+            name: 'DeepSeek V4 Pro',
+            provider: 'deepseek',
+            notable: true,
+          },
+          {
+            id: 'openrouter:deepseek/deepseek-v4-pro',
+            name: 'DeepSeek: DeepSeek V4 Pro',
+            provider: 'openrouter',
+            notable: true,
+          },
+        ],
+      });
+
+      renderChat();
+
+      fireEvent.click(await screen.findByTestId('mock-use-model-route'));
+
+      expect(mockChat.setModel).toHaveBeenCalledWith('openrouter:deepseek/deepseek-v4-pro');
+      expect(document.activeElement).toBe(
+        screen.getByPlaceholderText('Ask about your infrastructure...'),
+      );
     });
 
     it('checks the selected provider and shows a readiness issue before the first send', async () => {

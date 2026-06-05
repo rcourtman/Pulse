@@ -1,7 +1,12 @@
 import { Component, Show, For, createEffect, createMemo } from 'solid-js';
 import { MessageItem } from './MessageItem';
 import type { ChatSession } from '@/api/aiChat';
-import type { ChatMessage, PendingApproval, PendingQuestion } from './types';
+import type {
+  ChatMessage,
+  ModelRouteRecoveryOption,
+  PendingApproval,
+  PendingQuestion,
+} from './types';
 import { humanizeToken } from '@/utils/textPresentation';
 
 interface ChatMessagesProps {
@@ -16,6 +21,8 @@ interface ChatMessagesProps {
   onSkipQuestion: (messageId: string, questionId: string) => void;
   onRetry?: (messageId: string) => void;
   onChangeModel?: () => void;
+  getModelRouteAlternative?: (message: ChatMessage) => ModelRouteRecoveryOption | null;
+  onUseModelRoute?: (modelId: string) => void;
   // Dashboard props
   recentSessions?: ChatSession[];
   onLoadSession?: (sessionId: string) => void;
@@ -148,6 +155,8 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
             onSkipQuestion={(questionId) => props.onSkipQuestion(message.id, questionId)}
             onRetry={props.onRetry}
             onChangeModel={props.onChangeModel}
+            modelRouteAlternative={props.getModelRouteAlternative?.(message)}
+            onUseModelRoute={props.onUseModelRoute}
           />
         )}
       </For>

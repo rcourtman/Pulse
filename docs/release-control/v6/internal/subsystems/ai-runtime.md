@@ -120,8 +120,11 @@ runtime cost control, and shared AI transport surfaces.
    Failed-turn recovery must also expose model-route switching through the
    existing drawer model selector so operators can move from a blocked direct
    provider route to a configured gateway or alternate model without losing the
-   draft or creating a parallel picker. Retry remains available, but it must not
-   be the only visible action when a failed Assistant turn is shown.
+   draft or creating a parallel picker. When the same model is available through
+   another configured provider route, the failed turn must offer that route as a
+   direct one-click action before falling back to the general model selector.
+   Retry remains available, but it must not be the only visible action when a
+   failed Assistant turn is shown.
    Restored Assistant sessions must hydrate saved assistant content and
    persisted tool calls into the same transcript event shape used by live
    streams so switching sessions does not hide prior tool evidence or collapse

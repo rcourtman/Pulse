@@ -1,7 +1,12 @@
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { ChatMessages } from '../ChatMessages';
-import type { ChatMessage, PendingApproval, PendingQuestion } from '../types';
+import type {
+  ChatMessage,
+  ModelRouteRecoveryOption,
+  PendingApproval,
+  PendingQuestion,
+} from '../types';
 
 // Capture callback props passed to MessageItem so we can invoke them in tests
 let capturedMessageItemProps: Array<{
@@ -14,6 +19,8 @@ let capturedMessageItemProps: Array<{
   ) => void;
   onSkipQuestion: (questionId: string) => void;
   onChangeModel?: () => void;
+  modelRouteAlternative?: ModelRouteRecoveryOption | null;
+  onUseModelRoute?: (modelId: string) => void;
 }> = [];
 
 vi.mock('../MessageItem', () => ({
@@ -27,6 +34,8 @@ vi.mock('../MessageItem', () => ({
     ) => void;
     onSkipQuestion: (questionId: string) => void;
     onChangeModel?: () => void;
+    modelRouteAlternative?: ModelRouteRecoveryOption | null;
+    onUseModelRoute?: (modelId: string) => void;
   }) => {
     capturedMessageItemProps.push(props);
     return (
@@ -330,6 +339,37 @@ describe('ChatMessages', () => {
 
       const propsForMsg = capturedMessageItemProps.find((p) => p.message.id === 'msg-model');
       expect(propsForMsg?.onChangeModel).toBe(onChangeModel);
+    });
+
+    it('forwards message-specific route recovery options for failed turns', () => {
+      const routeAlternative: ModelRouteRecoveryOption = {
+        id: 'openrouter:deepseek/deepseek-v4-pro',
+        label: 'DeepSeek: DeepSeek V4 Pro via OpenRouter',
+        provider: 'openrouter',
+        providerLabel: 'OpenRouter',
+      };
+      const getModelRouteAlternative = vi.fn(() => routeAlternative);
+      const onUseModelRoute = vi.fn();
+      const failedMessage = makeMessage({
+        id: 'msg-route',
+        role: 'assistant',
+        error: 'failed',
+      });
+      render(() => (
+        <ChatMessages
+          messages={[failedMessage]}
+          {...makeHandlers()}
+          getModelRouteAlternative={getModelRouteAlternative}
+          onUseModelRoute={onUseModelRoute}
+        />
+      ));
+
+      const propsForMsg = capturedMessageItemProps.find((p) => p.message.id === 'msg-route');
+      const forwardedAlternative = propsForMsg?.modelRouteAlternative;
+
+      expect(getModelRouteAlternative).toHaveBeenCalledWith(failedMessage);
+      expect(forwardedAlternative).toBe(routeAlternative);
+      expect(propsForMsg?.onUseModelRoute).toBe(onUseModelRoute);
     });
 
     it('forwards correct message.id when multiple messages exist', () => {

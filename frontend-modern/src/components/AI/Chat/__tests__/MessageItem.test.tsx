@@ -147,6 +147,7 @@ describe('MessageItem', () => {
     it('renders a distinct error block with the message and a retry button', () => {
       const onRetry = vi.fn();
       const onChangeModel = vi.fn();
+      const onUseModelRoute = vi.fn();
       render(() => (
         <MessageItem
           message={makeMessage({
@@ -157,12 +158,26 @@ describe('MessageItem', () => {
           {...makeHandlers()}
           onRetry={onRetry}
           onChangeModel={onChangeModel}
+          modelRouteAlternative={{
+            id: 'openrouter:deepseek/deepseek-v4-pro',
+            label: 'DeepSeek: DeepSeek V4 Pro via OpenRouter',
+            provider: 'openrouter',
+            providerLabel: 'OpenRouter',
+          }}
+          onUseModelRoute={onUseModelRoute}
         />
       ));
 
       const alert = screen.getByRole('alert');
       expect(alert).toBeInTheDocument();
       expect(alert.textContent).toContain('billing or quota reasons');
+
+      const useOpenRouter = screen.getByRole('button', {
+        name: 'Use OpenRouter provider route',
+      });
+      expect(useOpenRouter).toHaveTextContent('Use OpenRouter');
+      fireEvent.click(useOpenRouter);
+      expect(onUseModelRoute).toHaveBeenCalledWith('openrouter:deepseek/deepseek-v4-pro');
 
       const changeModel = screen.getByRole('button', { name: /change model/i });
       fireEvent.click(changeModel);

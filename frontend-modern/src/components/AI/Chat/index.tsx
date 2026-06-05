@@ -76,7 +76,12 @@ import { useChat, type QueuedFollowUp, type SendMessageOptions } from './hooks/u
 import { ChatMessages } from './ChatMessages';
 import { ModelSelector } from './ModelSelector';
 import { MentionAutocomplete, type MentionResource } from './MentionAutocomplete';
-import type { PendingApproval, PendingQuestion } from './types';
+import type {
+  ChatMessage,
+  ModelRouteRecoveryOption,
+  PendingApproval,
+  PendingQuestion,
+} from './types';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
 
 const MODEL_SESSION_STORAGE_KEY = 'pulse:ai_chat_models_by_session';
@@ -97,13 +102,6 @@ interface ChatProviderReadinessState {
   summary?: string;
   recommendation?: string;
   action?: string;
-}
-
-interface ChatProviderReadinessAlternative {
-  id: string;
-  label: string;
-  provider: string;
-  providerLabel: string;
 }
 
 interface PromptHistoryEntry {
@@ -178,7 +176,7 @@ const findProviderReadinessAlternative = (args: {
   models: RuntimeModelInfo[];
   selectedModel: string;
   selectedProvider: string;
-}): ChatProviderReadinessAlternative | null => {
+}): ModelRouteRecoveryOption | null => {
   const selectedKey = normalizeComparableModelKey(args.selectedModel);
   const selectedProvider = args.selectedProvider.trim();
   if (!selectedKey || !selectedProvider) return null;
@@ -730,6 +728,24 @@ export const AIChat: Component<AIChatProps> = (props) => {
     return match?.provider?.trim() || getProviderFromModelId(model);
   });
 
+  const providerForModelRoute = (modelId: string) => {
+    const normalized = modelId.trim();
+    if (!normalized) return '';
+    const match = aiRuntimeModels().find((candidate) => candidate.id === normalized);
+    return match?.provider?.trim() || getProviderFromModelId(normalized);
+  };
+
+  const modelRouteAlternativeFor = (modelId: string): ModelRouteRecoveryOption | null => {
+    const normalized = modelId.trim();
+    if (!normalized) return null;
+    return findProviderReadinessAlternative({
+      configuredProviders: aiRuntimeSettings()?.configured_providers,
+      models: aiRuntimeModels(),
+      selectedModel: normalized,
+      selectedProvider: providerForModelRoute(normalized),
+    });
+  };
+
   const providerReadinessPresentation = createMemo(() => {
     const readiness = providerReadiness();
     if (!readiness.provider || readiness.status === 'idle' || readiness.status === 'ready') {
@@ -747,12 +763,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const providerReadinessAlternative = createMemo(() => {
     const readiness = providerReadiness();
     if (readiness.status !== 'error') return null;
-    return findProviderReadinessAlternative({
-      configuredProviders: aiRuntimeSettings()?.configured_providers,
-      models: aiRuntimeModels(),
-      selectedModel: selectedChatModel(),
-      selectedProvider: selectedChatProvider(),
-    });
+    return modelRouteAlternativeFor(selectedChatModel());
   });
 
   let providerReadinessRequestId = 0;
@@ -884,11 +895,20 @@ export const AIChat: Component<AIChatProps> = (props) => {
     setModelSelectorOpenRequest((value) => value + 1);
   };
 
+  const getFailedTurnModelRouteAlternative = (message: ChatMessage) => {
+    if (!message.error) return null;
+    return modelRouteAlternativeFor(message.model || selectedChatModel());
+  };
+
+  const switchToModelRoute = (modelId: string) => {
+    selectModel(modelId);
+    focusComposer();
+  };
+
   const switchToProviderReadinessAlternative = () => {
     const alternative = providerReadinessAlternative();
     if (!alternative) return;
-    selectModel(alternative.id);
-    focusComposer();
+    switchToModelRoute(alternative.id);
   };
 
   createEffect(() => {
@@ -2146,6 +2166,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
             onSkipQuestion={handleSkipQuestion}
             onRetry={(messageId) => chat.retryMessage(messageId)}
             onChangeModel={openModelSelectorFromError}
+            getModelRouteAlternative={getFailedTurnModelRouteAlternative}
+            onUseModelRoute={switchToModelRoute}
             recentSessions={sessions()
               .filter((s) => s.id !== chat.sessionId() && s.message_count > 0)
               .slice(0, 3)}

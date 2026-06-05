@@ -12,7 +12,13 @@ import { ApprovalCard } from './ApprovalCard';
 import { QuestionCard } from './QuestionCard';
 import { stripAssistantOutputArtifacts } from './assistantOutputHygiene';
 import { groupStreamEventsForDisplay } from './streamEventGrouping';
-import type { ChatMessage, PendingApproval, PendingQuestion, StreamDisplayEvent } from './types';
+import type {
+  ChatMessage,
+  ModelRouteRecoveryOption,
+  PendingApproval,
+  PendingQuestion,
+  StreamDisplayEvent,
+} from './types';
 import {
   AI_CHAT_ASSISTANT_MESSAGE_LABEL,
   AI_CHAT_CONTEXT_USED_LABEL,
@@ -30,6 +36,8 @@ interface MessageItemProps {
   onSkipQuestion: (questionId: string) => void;
   onRetry?: (messageId: string) => void;
   onChangeModel?: () => void;
+  modelRouteAlternative?: ModelRouteRecoveryOption | null;
+  onUseModelRoute?: (modelId: string) => void;
 }
 
 const markdownClass =
@@ -280,6 +288,26 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                   <div class="flex-1 min-w-0">
                     <p class="text-sm text-red-700 dark:text-red-300">{props.message.error}</p>
                     <div class="mt-2 flex flex-wrap gap-1.5">
+                      <Show
+                        when={
+                          props.modelRouteAlternative && props.onUseModelRoute
+                            ? props.modelRouteAlternative
+                            : null
+                        }
+                      >
+                        {(alternative) => (
+                          <button
+                            type="button"
+                            onClick={() => props.onUseModelRoute?.(alternative().id)}
+                            aria-label={`Use ${alternative().providerLabel} provider route`}
+                            title={alternative().label}
+                            class="inline-flex max-w-[11rem] items-center gap-1.5 rounded-md border border-red-300 bg-white/80 px-2 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 dark:border-red-800 dark:bg-red-950/20 dark:text-red-300 dark:hover:bg-red-900/40"
+                          >
+                            <CpuIcon class="h-3.5 w-3.5" />
+                            <span class="truncate">Use {alternative().providerLabel}</span>
+                          </button>
+                        )}
+                      </Show>
                       <Show when={props.onChangeModel}>
                         <button
                           type="button"
