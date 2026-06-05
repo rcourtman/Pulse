@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { ChatMessages } from '../ChatMessages';
 import type { ChatMessage, PendingApproval, PendingQuestion } from '../types';
 
@@ -117,6 +117,78 @@ describe('ChatMessages', () => {
 
       expect(screen.queryByText('Welcome')).not.toBeInTheDocument();
       expect(screen.queryByText('Try asking')).not.toBeInTheDocument();
+    });
+
+    it('shows recent sessions as resume actions in the empty state', () => {
+      const onLoadSession = vi.fn();
+      render(() => (
+        <ChatMessages
+          messages={[]}
+          {...makeHandlers()}
+          emptyState={{ title: 'Ask about your infrastructure' }}
+          recentSessions={[
+            {
+              id: 'session-1',
+              title: 'Storage follow-up',
+              created_at: '',
+              updated_at: '',
+              message_count: 4,
+              handoff_summary: {
+                kind: 'patrol_finding',
+                finding_id: 'finding-1',
+                has_model_context: true,
+              },
+            },
+            {
+              id: 'session-2',
+              title: 'Router question',
+              created_at: '',
+              updated_at: '',
+              message_count: 1,
+            },
+          ]}
+          onLoadSession={onLoadSession}
+        />
+      ));
+
+      expect(screen.getByLabelText('Recent Assistant sessions')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Resume Storage follow-up' })).toHaveTextContent(
+        '4 messages',
+      );
+      expect(screen.getByRole('button', { name: 'Resume Storage follow-up' })).toHaveTextContent(
+        'Patrol Finding',
+      );
+      expect(screen.getByRole('button', { name: 'Resume Router question' })).toHaveTextContent(
+        '1 message',
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Resume Storage follow-up' }));
+      expect(onLoadSession).toHaveBeenCalledWith('session-1');
+    });
+
+    it('does not show recent session resume actions when messages are present', () => {
+      render(() => (
+        <ChatMessages
+          messages={[makeMessage()]}
+          {...makeHandlers()}
+          emptyState={{ title: 'Ask about your infrastructure' }}
+          recentSessions={[
+            {
+              id: 'session-1',
+              title: 'Storage follow-up',
+              created_at: '',
+              updated_at: '',
+              message_count: 4,
+            },
+          ]}
+          onLoadSession={vi.fn()}
+        />
+      ));
+
+      expect(screen.queryByLabelText('Recent Assistant sessions')).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Resume Storage follow-up' }),
+      ).not.toBeInTheDocument();
     });
   });
 

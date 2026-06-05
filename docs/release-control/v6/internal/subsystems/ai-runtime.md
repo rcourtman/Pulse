@@ -108,6 +108,10 @@ runtime cost control, and shared AI transport surfaces.
    persisted tool calls into the same transcript event shape used by live
    streams so switching sessions does not hide prior tool evidence or collapse
    the resumed conversation into a text-only transcript.
+   The empty Assistant drawer may surface recent non-empty sessions as direct
+   resume actions using the backend session list already owned by the drawer;
+   it must not create a parallel recent-chat store or product-authored prompt
+   shortcut path.
    Assistant output hygiene is part of the same boundary: provider reasoning
    and raw serialized tool-call artifacts must never render as assistant
    transcript prose. Reasoning/thinking deltas may update neutral progress
