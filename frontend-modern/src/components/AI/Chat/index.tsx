@@ -11,6 +11,7 @@ import {
 import { unwrap } from 'solid-js/store';
 import SendIcon from 'lucide-solid/icons/send';
 import SquareIcon from 'lucide-solid/icons/square';
+import ClockIcon from 'lucide-solid/icons/clock';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import XIcon from 'lucide-solid/icons/x';
@@ -157,14 +158,17 @@ const findProviderReadinessAlternative = (args: {
       return normalizeComparableModelKey(model.id) === selectedKey;
     })
     .sort((left, right) => {
-      const leftProviderOrder = configuredProviderOrder.get(left.provider) ?? Number.MAX_SAFE_INTEGER;
+      const leftProviderOrder =
+        configuredProviderOrder.get(left.provider) ?? Number.MAX_SAFE_INTEGER;
       const rightProviderOrder =
         configuredProviderOrder.get(right.provider) ?? Number.MAX_SAFE_INTEGER;
       if (leftProviderOrder !== rightProviderOrder) return leftProviderOrder - rightProviderOrder;
       if (Boolean(left.model.notable) !== Boolean(right.model.notable)) {
         return right.model.notable ? 1 : -1;
       }
-      return formatAIModelRouteLabel(left.model).localeCompare(formatAIModelRouteLabel(right.model));
+      return formatAIModelRouteLabel(left.model).localeCompare(
+        formatAIModelRouteLabel(right.model),
+      );
     });
 
   const candidate = candidates[0];
@@ -798,7 +802,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (!chat.isLoading()) return null;
 
     const messages = chat.messages();
-    const lastMessage = messages[messages.length - 1];
+    const lastMessage =
+      [...messages]
+        .reverse()
+        .find((message) => message.role === 'assistant' && message.isStreaming) ||
+      messages[messages.length - 1];
 
     if (!lastMessage || lastMessage.role !== 'assistant') {
       return { type: 'thinking', text: 'Thinking...' };
@@ -1772,9 +1780,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       <div class="font-semibold text-base-content">{presentation().title}</div>
                       <div class="mt-0.5 leading-5">{presentation().body}</div>
                       <Show when={presentation().recommendation}>
-                        {(recommendation) => (
-                          <div class="mt-0.5 leading-5">{recommendation()}</div>
-                        )}
+                        {(recommendation) => <div class="mt-0.5 leading-5">{recommendation()}</div>}
                       </Show>
                     </div>
                   </div>
@@ -1991,6 +1997,30 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
           {/* Input */}
           <div class="border-t border-border bg-surface px-4 py-3">
+            <Show when={chat.queuedFollowUpCount() > 0}>
+              <div
+                class="mb-2 flex min-h-8 items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-blue-800 shadow-sm dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200"
+                role="status"
+                aria-label="Queued follow-up messages"
+              >
+                <ClockIcon class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span class="min-w-0 flex-1 truncate text-xs font-medium">
+                  {pluralizeCount(chat.queuedFollowUpCount(), 'follow-up', 'follow-ups')} queued
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    chat.clearQueuedFollowUps();
+                    focusComposer();
+                  }}
+                  class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-900 dark:text-blue-200 dark:hover:bg-blue-900/50"
+                  title="Clear queued follow-ups"
+                  aria-label="Clear queued follow-up messages"
+                >
+                  <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              </div>
+            </Show>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -2043,8 +2073,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     type="submit"
                     disabled={!input().trim() || providerReadinessHasBlockingError()}
                     class="flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45"
-                    title="Send"
-                    aria-label="Send message"
+                    title={chat.isLoading() ? 'Queue follow-up' : 'Send'}
+                    aria-label={chat.isLoading() ? 'Queue follow-up' : 'Send message'}
                   >
                     <SendIcon class="h-4 w-4" />
                   </button>

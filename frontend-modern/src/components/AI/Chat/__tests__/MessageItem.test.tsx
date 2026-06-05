@@ -125,6 +125,22 @@ describe('MessageItem', () => {
       const p = screen.getByText('raw text here');
       expect(p.tagName).toBe('P');
     });
+
+    it('renders queued user messages with a status marker', () => {
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'user',
+            content: 'follow up after this',
+            delivery: 'queued',
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(screen.getByText('follow up after this')).toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent('Queued');
+    });
   });
 
   describe('error block', () => {

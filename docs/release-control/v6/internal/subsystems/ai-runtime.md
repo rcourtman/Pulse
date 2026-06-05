@@ -82,12 +82,16 @@ runtime cost control, and shared AI transport surfaces.
    provider error must keep typed text and focus while blocking dispatch until
    the route is rechecked successfully or the operator chooses a ready
    alternative.
-   Operator interruption is likewise chat-runtime state: Stop and replacement
-   sends must abort the active stream, clear pending tool/approval/question
-   affordances, preserve any partial model text, return focus to the composer,
-   and render a neutral transcript marker rather than persisting synthetic
-   assistant answer text or surfacing the interruption as a retryable provider
-   failure.
+   Follow-up sends during an active Assistant response are chat-runtime queue
+   state by default. The drawer must accept and echo the user's follow-up as a
+   queued user turn without aborting or replacing the active model stream, must
+   show the queued count as composer-adjacent status, and must drain queued
+   turns in order only after the active stream becomes idle. Stop is the
+   explicit interruption path: it must abort the active stream, clear queued
+   follow-ups and pending tool/approval/question affordances, preserve any
+   partial model text, return focus to the composer, and render a neutral
+   transcript marker rather than persisting synthetic assistant answer text or
+   surfacing the interruption as a retryable provider failure.
    Assistant output hygiene is part of the same boundary: provider reasoning
    and raw serialized tool-call artifacts must never render as assistant
    transcript prose. Reasoning/thinking deltas may update neutral progress

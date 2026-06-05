@@ -20,8 +20,12 @@ const {
     sessionId: vi.fn(() => ''),
     model: vi.fn(() => ''),
     setModel: vi.fn(),
+    queuedFollowUps: vi.fn(() => []),
+    queuedFollowUpCount: vi.fn(() => 0),
     sendMessage: vi.fn().mockResolvedValue(true),
     stop: vi.fn(),
+    cancelQueuedFollowUp: vi.fn(),
+    clearQueuedFollowUps: vi.fn(),
     clearMessages: vi.fn(),
     loadSession: vi.fn().mockResolvedValue(true),
     newSession: vi.fn().mockResolvedValue(true),
@@ -311,6 +315,8 @@ beforeEach(() => {
   mockChat.isLoading.mockReturnValue(false);
   mockChat.sessionId.mockReturnValue('');
   mockChat.model.mockReturnValue('');
+  mockChat.queuedFollowUps.mockReturnValue([]);
+  mockChat.queuedFollowUpCount.mockReturnValue(0);
   mockChat.sendMessage.mockResolvedValue(true);
   mockByType.mockReturnValue([]);
   mockResources.mockReturnValue([]);
@@ -977,13 +983,14 @@ describe('AIChat', () => {
       expect(mockChat.sendMessage).not.toHaveBeenCalled();
     });
 
-    it('sends a replacement message when chat is loading', () => {
+    it('queues a follow-up message when chat is loading', () => {
       mockChat.isLoading.mockReturnValue(true);
       renderChat();
       const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
       fireEvent.input(textarea, { target: { value: 'hello' } });
       fireEvent.keyDown(textarea, { key: 'Enter' });
       expect(mockChat.sendMessage).toHaveBeenCalledWith('hello', undefined, undefined);
+      expect(textarea).toHaveValue('');
     });
 
     it('clears input after successful submit', () => {
@@ -1022,7 +1029,7 @@ describe('AIChat', () => {
       mockChat.isLoading.mockReturnValue(true);
       renderChat();
       expect(screen.getByTitle('Stop')).toBeInTheDocument();
-      expect(screen.getByTitle('Send')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Queue follow-up' })).toBeInTheDocument();
     });
 
     it('calls chat.stop when stop button is clicked', () => {
@@ -1059,6 +1066,19 @@ describe('AIChat', () => {
       fireEvent.click(screen.getByTitle('Send'));
 
       await waitFor(() => expect(document.activeElement).toBe(textarea));
+    });
+
+    it('shows queued follow-up count and clears queued follow-ups', () => {
+      mockChat.queuedFollowUpCount.mockReturnValue(2);
+      renderChat();
+
+      expect(screen.getByRole('status', { name: 'Queued follow-up messages' })).toHaveTextContent(
+        '2 follow-ups queued',
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Clear queued follow-up messages' }));
+
+      expect(mockChat.clearQueuedFollowUps).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -2492,6 +2512,30 @@ describe('AIChat', () => {
       ]);
       renderChat();
       expect(screen.getByText('Generating response...')).toBeInTheDocument();
+    });
+
+    it('tracks the active assistant status when a queued user turn is the last message', () => {
+      mockChat.isLoading.mockReturnValue(true);
+      mockChat.queuedFollowUpCount.mockReturnValue(1);
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'msg-1',
+          role: 'assistant' as const,
+          content: 'partial response',
+          timestamp: new Date(),
+          isStreaming: true,
+        },
+        {
+          id: 'msg-2',
+          role: 'user' as const,
+          content: 'follow up',
+          timestamp: new Date(),
+          delivery: 'queued',
+        },
+      ]);
+      renderChat();
+      expect(screen.getByText('Generating response...')).toBeInTheDocument();
+      expect(screen.getByText('1 follow-up queued')).toBeInTheDocument();
     });
 
     it('shows no status indicator when not loading', () => {

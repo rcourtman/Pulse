@@ -38,12 +38,23 @@ export interface SendMessageOptions {
   handoffMetadata?: ChatHandoffMetadata;
 }
 
+export interface QueuedFollowUp {
+  id: string;
+  messageId: string;
+  prompt: string;
+  mentions?: ChatMention[];
+  findingId?: string;
+  sendOptions?: SendMessageOptions;
+  timestamp: Date;
+}
+
 export function useChat(options: UseChatOptions = {}) {
   // Core state
   const [messages, setMessages] = createSignal<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = createSignal(false);
   const [sessionId, setSessionId] = createSignal(options.sessionId || '');
   const [model, setModel] = createSignal(options.model || '');
+  const [queuedFollowUps, setQueuedFollowUps] = createSignal<QueuedFollowUp[]>([]);
 
   const notifyConversationChanged = async () => {
     if (!options.onConversationChanged) return;
@@ -58,6 +69,7 @@ export function useChat(options: UseChatOptions = {}) {
   let abortControllerRef: AbortController | null = null;
   let activeRequestId = 0;
   let pendingBackendAbort: Promise<void> | null = null;
+  let isDrainingQueuedFollowUps = false;
   const suppressedRawContentMessageIds = new Set<string>();
 
   const abortBackendSession = (targetSessionId: string): Promise<void> | null => {
@@ -109,6 +121,28 @@ export function useChat(options: UseChatOptions = {}) {
     return abortBackendSession(targetSessionId);
   };
 
+  const removeQueuedMessages = (messageIds: Set<string>) => {
+    if (messageIds.size === 0) return;
+    setMessages((prev) =>
+      prev.filter(
+        (msg) => !(msg.role === 'user' && msg.delivery === 'queued' && messageIds.has(msg.id)),
+      ),
+    );
+  };
+
+  const cancelQueuedFollowUp = (id: string) => {
+    const item = queuedFollowUps().find((entry) => entry.id === id);
+    if (!item) return;
+    setQueuedFollowUps((prev) => prev.filter((entry) => entry.id !== id));
+    removeQueuedMessages(new Set([item.messageId]));
+  };
+
+  const clearQueuedFollowUps = () => {
+    const messageIds = new Set(queuedFollowUps().map((entry) => entry.messageId));
+    setQueuedFollowUps([]);
+    removeQueuedMessages(messageIds);
+  };
+
   // Cleanup on unmount
   onCleanup(() => {
     void cancelActiveRequest();
@@ -116,6 +150,7 @@ export function useChat(options: UseChatOptions = {}) {
 
   // Stop/cancel current request
   const stop = () => {
+    clearQueuedFollowUps();
     void cancelActiveRequest('stopped');
   };
 
@@ -571,34 +606,65 @@ export function useChat(options: UseChatOptions = {}) {
     );
   };
 
-  // Send a message - allows sending mid-stream (aborts current response like Pulse AI TUI)
-  const sendMessage = async (
+  const queueFollowUp = (
     prompt: string,
     mentions?: ChatMention[],
     findingId?: string,
     sendOptions?: SendMessageOptions,
+  ) => {
+    const trimmedPrompt = prompt.trim();
+    if (!trimmedPrompt) return false;
+
+    const id = generateId();
+    const messageId = generateId();
+    const timestamp = new Date();
+
+    const queuedUserMessage: ChatMessage = {
+      id: messageId,
+      role: 'user',
+      content: trimmedPrompt,
+      timestamp,
+      delivery: 'queued',
+    };
+
+    const queuedFollowUp: QueuedFollowUp = {
+      id,
+      messageId,
+      prompt: trimmedPrompt,
+      mentions,
+      findingId,
+      sendOptions,
+      timestamp,
+    };
+
+    setMessages((prev) => [...prev, queuedUserMessage]);
+    setQueuedFollowUps((prev) => [...prev, queuedFollowUp]);
+    logger.debug('[useChat] Queued follow-up while assistant response is streaming', {
+      queuedFollowUpId: id,
+    });
+    return true;
+  };
+
+  const startMessageSend = async (
+    prompt: string,
+    mentions?: ChatMention[],
+    findingId?: string,
+    sendOptions?: SendMessageOptions,
+    options?: {
+      queuedMessageId?: string;
+      drainAfter?: boolean;
+    },
   ): Promise<boolean> => {
-    if (!prompt.trim()) return false;
-
-    let backendAbortBeforeNextSend: Promise<void> | null = null;
-    const abortedSessionId = sessionId();
-
-    // If already streaming, abort the current request first.
-    // The UI is updated immediately; the next backend stream waits only when it
-    // would reuse the same session, so the abort endpoint cannot cancel the new
-    // run after it registers.
-    if (isLoading()) {
-      logger.debug('[useChat] Aborting current stream to send new message');
-      backendAbortBeforeNextSend = cancelActiveRequest('replaced');
-    }
+    const trimmedPrompt = prompt.trim();
+    if (!trimmedPrompt) return false;
 
     // Echo the user's message before any network work. Cold sessions can spend
     // noticeable time creating the server-side session; the chat surface should
     // still feel immediate.
     const userMessage: ChatMessage = {
-      id: generateId(),
+      id: options?.queuedMessageId || generateId(),
       role: 'user',
-      content: prompt,
+      content: trimmedPrompt,
       timestamp: new Date(),
     };
 
@@ -614,28 +680,30 @@ export function useChat(options: UseChatOptions = {}) {
       streamEvents: [],
     };
 
-    setMessages((prev) => [...prev, userMessage, streamingMessage]);
+    if (options?.queuedMessageId) {
+      setMessages((prev) => [
+        ...prev.map((msg) =>
+          msg.id === options.queuedMessageId ? { ...msg, delivery: 'sent' as const } : msg,
+        ),
+        streamingMessage,
+      ]);
+    } else {
+      setMessages((prev) => [...prev, userMessage, streamingMessage]);
+    }
     setIsLoading(true);
     const requestId = ++activeRequestId;
 
     // Existing sessions preserve conversation continuity. Cold chats let the
     // backend create the session inside the stream and bind via the session SSE
     // event, avoiding a separate preflight request before first token.
-    let currentSessionId = sessionId();
-
-    if (backendAbortBeforeNextSend && abortedSessionId && currentSessionId === abortedSessionId) {
-      await backendAbortBeforeNextSend;
-      if (requestId !== activeRequestId) {
-        return false;
-      }
-    }
+    const currentSessionId = sessionId();
 
     const abortController = new AbortController();
     abortControllerRef = abortController;
 
     try {
       await AIChatAPI.chat(
-        prompt,
+        trimmedPrompt,
         currentSessionId || undefined,
         model() || undefined,
         (event: StreamEvent) => {
@@ -679,13 +747,61 @@ export function useChat(options: UseChatOptions = {}) {
       if (requestId === activeRequestId) {
         abortControllerRef = null;
         setIsLoading(false);
+        if (options?.drainAfter !== false) {
+          queueMicrotask(() => {
+            void drainQueuedFollowUps();
+          });
+        }
       }
     }
+  };
+
+  async function drainQueuedFollowUps() {
+    if (isDrainingQueuedFollowUps || isLoading()) return;
+
+    isDrainingQueuedFollowUps = true;
+    try {
+      while (!isLoading()) {
+        const next = queuedFollowUps()[0];
+        if (!next) return;
+
+        setQueuedFollowUps((prev) => prev.filter((entry) => entry.id !== next.id));
+        await startMessageSend(next.prompt, next.mentions, next.findingId, next.sendOptions, {
+          queuedMessageId: next.messageId,
+          drainAfter: false,
+        });
+      }
+    } finally {
+      isDrainingQueuedFollowUps = false;
+    }
+
+    if (queuedFollowUps().length > 0 && !isLoading()) {
+      queueMicrotask(() => {
+        void drainQueuedFollowUps();
+      });
+    }
+  }
+
+  // Send a message. While an assistant response is active, accept the user's
+  // follow-up immediately and queue it behind the current turn instead of
+  // replacing or aborting the stream.
+  const sendMessage = async (
+    prompt: string,
+    mentions?: ChatMention[],
+    findingId?: string,
+    sendOptions?: SendMessageOptions,
+  ): Promise<boolean> => {
+    if (!prompt.trim()) return false;
+    if (isLoading()) {
+      return queueFollowUp(prompt, mentions, findingId, sendOptions);
+    }
+    return startMessageSend(prompt, mentions, findingId, sendOptions);
   };
 
   // Clear messages and reset session (for starting fresh)
   const clearMessages = () => {
     void cancelActiveRequest();
+    setQueuedFollowUps([]);
     setMessages([]);
     setSessionId(''); // Clear session so next message creates a new one
   };
@@ -693,6 +809,7 @@ export function useChat(options: UseChatOptions = {}) {
   // Load session messages
   const loadSession = async (id: string): Promise<boolean> => {
     void cancelActiveRequest();
+    setQueuedFollowUps([]);
     try {
       const msgs = await AIChatAPI.getMessages(id);
       setMessages(
@@ -717,6 +834,7 @@ export function useChat(options: UseChatOptions = {}) {
   // next chat stream so the UI does not create empty server-side sessions.
   const newSession = async (): Promise<boolean> => {
     void cancelActiveRequest();
+    setQueuedFollowUps([]);
     setSessionId('');
     setMessages([]);
     return true;
@@ -869,14 +987,14 @@ export function useChat(options: UseChatOptions = {}) {
   // Useful for sending follow-up messages after approvals
   const waitForIdle = (timeoutMs = 30000): Promise<boolean> => {
     return new Promise((resolve) => {
-      if (!isLoading()) {
+      if (!isLoading() && queuedFollowUps().length === 0 && !isDrainingQueuedFollowUps) {
         resolve(true);
         return;
       }
 
       const startTime = Date.now();
       const checkInterval = setInterval(() => {
-        if (!isLoading()) {
+        if (!isLoading() && queuedFollowUps().length === 0 && !isDrainingQueuedFollowUps) {
           clearInterval(checkInterval);
           resolve(true);
         } else if (Date.now() - startTime > timeoutMs) {
@@ -911,9 +1029,13 @@ export function useChat(options: UseChatOptions = {}) {
     sessionId,
     model,
     setModel,
+    queuedFollowUps,
+    queuedFollowUpCount: () => queuedFollowUps().length,
     sendMessage,
     retryMessage,
     stop,
+    cancelQueuedFollowUp,
+    clearQueuedFollowUps,
     clearMessages,
     loadSession,
     newSession,

@@ -79,9 +79,13 @@ describe('useChat', () => {
       expect(chat.isLoading()).toBe(false);
       expect(chat.sessionId()).toBe('');
       expect(chat.model()).toBe('');
+      expect(chat.queuedFollowUps()).toEqual([]);
+      expect(chat.queuedFollowUpCount()).toBe(0);
       expect(typeof chat.sendMessage).toBe('function');
       expect(typeof chat.retryMessage).toBe('function');
       expect(typeof chat.stop).toBe('function');
+      expect(typeof chat.cancelQueuedFollowUp).toBe('function');
+      expect(typeof chat.clearQueuedFollowUps).toBe('function');
       expect(typeof chat.clearMessages).toBe('function');
       expect(typeof chat.loadSession).toBe('function');
       expect(typeof chat.newSession).toBe('function');
@@ -352,66 +356,10 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('aborts current stream when sending mid-stream', async () => {
-      // First call: capture signal so we can verify it was aborted
-      let capturedSignal: AbortSignal | undefined;
-      const abortError = new Error('Aborted');
-      abortError.name = 'AbortError';
-      mockAbortSession.mockResolvedValue(undefined);
-
-      mockChat
-        .mockImplementationOnce(
-          (
-            _p: string,
-            _s: string,
-            _m: string | undefined,
-            _onEvent: (e: StreamEvent) => void,
-            signal?: AbortSignal,
-          ) => {
-            capturedSignal = signal;
-            // Simulate the abort path: when aborted, reject with AbortError
-            return new Promise<void>((_resolve, reject) => {
-              signal?.addEventListener('abort', () => reject(abortError));
-            });
-          },
-        )
-        .mockResolvedValueOnce(undefined);
-
-      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'sess' }));
-
-      // Start first message (will hang until aborted)
-      const p1 = chat.sendMessage('first');
-      await new Promise((r) => setTimeout(r, 10));
-
-      expect(chat.isLoading()).toBe(true);
-
-      // Send second message which should abort the first
-      const p2 = chat.sendMessage('second');
-
-      // First call should have been aborted
-      expect(capturedSignal?.aborted).toBe(true);
-      expect(mockAbortSession).toHaveBeenCalledWith('sess');
-
-      const result1 = await p1;
-      expect(result1).toBe(false); // Aborted → returns false
-
-      await p2;
-
-      // First assistant message should be marked non-streaming after abort
-      const msgs = chat.messages();
-      const firstAssistant = msgs.find((m) => m.role === 'assistant');
-      expect(firstAssistant?.isStreaming).toBe(false);
-      expect(firstAssistant?.interruption).toBe('replaced');
-      expect(firstAssistant?.content).toBe('');
-      dispose();
-    });
-
-    it('keeps replacement send loading state isolated from the aborted request', async () => {
+    it('queues follow-up sends mid-stream without aborting the active response', async () => {
       let firstSignal: AbortSignal | undefined;
+      let resolveFirst!: () => void;
       let resolveSecond!: () => void;
-      const abortError = new Error('Aborted');
-      abortError.name = 'AbortError';
-      mockAbortSession.mockResolvedValue(undefined);
 
       mockChat
         .mockImplementationOnce(
@@ -423,10 +371,8 @@ describe('useChat', () => {
             signal?: AbortSignal,
           ) => {
             firstSignal = signal;
-            return new Promise<void>((_resolve, reject) => {
-              signal?.addEventListener('abort', () => {
-                queueMicrotask(() => reject(abortError));
-              });
+            return new Promise<void>((resolve) => {
+              resolveFirst = resolve;
             });
           },
         )
@@ -441,17 +387,104 @@ describe('useChat', () => {
       const first = chat.sendMessage('first');
       await new Promise((r) => setTimeout(r, 0));
 
-      const second = chat.sendMessage('second');
+      const queued = await chat.sendMessage('second');
+
+      expect(queued).toBe(true);
+      expect(firstSignal?.aborted).toBe(false);
+      expect(mockAbortSession).not.toHaveBeenCalled();
+      expect(mockChat).toHaveBeenCalledTimes(1);
+      expect(chat.queuedFollowUpCount()).toBe(1);
+
+      const queuedUser = chat.messages().find((message) => message.content === 'second');
+      expect(queuedUser).toMatchObject({
+        role: 'user',
+        delivery: 'queued',
+      });
+
+      resolveFirst();
+      await first;
       await new Promise((r) => setTimeout(r, 0));
 
-      expect(firstSignal?.aborted).toBe(true);
-      await expect(first).resolves.toBe(false);
+      expect(mockChat).toHaveBeenCalledTimes(2);
+      expect(mockChat.mock.calls[1][0]).toBe('second');
+      expect(chat.queuedFollowUpCount()).toBe(0);
+      expect(chat.messages().find((message) => message.content === 'second')).toMatchObject({
+        delivery: 'sent',
+      });
       expect(chat.isLoading()).toBe(true);
-      expect(chat.messages().filter((message) => message.role === 'assistant')).toHaveLength(2);
 
       resolveSecond();
-      await second;
+      await new Promise((r) => setTimeout(r, 0));
       expect(chat.isLoading()).toBe(false);
+      dispose();
+    });
+
+    it('preserves queued follow-up order and drains one turn at a time', async () => {
+      const resolvers: Array<() => void> = [];
+      mockChat.mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            resolvers.push(resolve);
+          }),
+      );
+
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'sess' }));
+      const first = chat.sendMessage('first');
+      await new Promise((r) => setTimeout(r, 0));
+
+      await chat.sendMessage('second');
+      await chat.sendMessage('third');
+
+      expect(mockChat).toHaveBeenCalledTimes(1);
+      expect(chat.queuedFollowUpCount()).toBe(2);
+
+      resolvers[0]();
+      await first;
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(mockChat).toHaveBeenCalledTimes(2);
+      expect(mockChat.mock.calls[1][0]).toBe('second');
+      expect(chat.queuedFollowUpCount()).toBe(1);
+
+      resolvers[1]();
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(mockChat).toHaveBeenCalledTimes(3);
+      expect(mockChat.mock.calls[2][0]).toBe('third');
+      expect(chat.queuedFollowUpCount()).toBe(0);
+
+      resolvers[2]();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(chat.isLoading()).toBe(false);
+      dispose();
+    });
+
+    it('cancels a queued follow-up before it is sent', async () => {
+      let resolveFirst!: () => void;
+      mockChat.mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveFirst = resolve;
+          }),
+      );
+
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'sess' }));
+      const first = chat.sendMessage('first');
+      await new Promise((r) => setTimeout(r, 0));
+
+      await chat.sendMessage('second');
+
+      const queued = chat.queuedFollowUps()[0];
+      chat.cancelQueuedFollowUp(queued.id);
+
+      expect(chat.queuedFollowUpCount()).toBe(0);
+      expect(chat.messages().some((message) => message.content === 'second')).toBe(false);
+
+      resolveFirst();
+      await first;
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(mockChat).toHaveBeenCalledTimes(1);
       dispose();
     });
 
@@ -1192,6 +1225,39 @@ describe('useChat', () => {
       expect(assistant?.interruption).toBe('stopped');
       dispose();
     });
+
+    it('clears queued follow-ups when stopping the active response', async () => {
+      const abortError = new Error('Aborted');
+      abortError.name = 'AbortError';
+      mockChat.mockImplementation(
+        (
+          _p: string,
+          _s: string,
+          _m: string | undefined,
+          _onEvent: (e: StreamEvent) => void,
+          signal?: AbortSignal,
+        ) =>
+          new Promise<void>((_resolve, reject) => {
+            signal?.addEventListener('abort', () => reject(abortError));
+          }),
+      );
+
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+      const send = chat.sendMessage('hello');
+      await new Promise((r) => setTimeout(r, 0));
+
+      await chat.sendMessage('queued follow-up');
+      expect(chat.queuedFollowUpCount()).toBe(1);
+      expect(chat.messages().some((message) => message.delivery === 'queued')).toBe(true);
+
+      chat.stop();
+      await expect(send).resolves.toBe(false);
+
+      expect(chat.queuedFollowUpCount()).toBe(0);
+      expect(chat.messages().some((message) => message.delivery === 'queued')).toBe(false);
+      expect(mockChat).toHaveBeenCalledTimes(1);
+      dispose();
+    });
   });
 
   // ──────────────────────────────────────────────
@@ -1209,6 +1275,23 @@ describe('useChat', () => {
 
       expect(chat.messages()).toEqual([]);
       expect(chat.sessionId()).toBe('');
+      dispose();
+    });
+
+    it('clears queued follow-ups', async () => {
+      mockChat.mockImplementation(() => new Promise(() => {}));
+
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'sess-1' }));
+      void chat.sendMessage('active');
+      await new Promise((r) => setTimeout(r, 0));
+      await chat.sendMessage('queued');
+
+      expect(chat.queuedFollowUpCount()).toBe(1);
+
+      chat.clearMessages();
+
+      expect(chat.queuedFollowUpCount()).toBe(0);
+      expect(chat.messages()).toEqual([]);
       dispose();
     });
   });
@@ -1240,6 +1323,25 @@ describe('useChat', () => {
       expect(msgs[0].content).toBe('hello');
       expect(msgs[1].toolCalls).toHaveLength(1);
       expect(msgs[1].timestamp).toBeInstanceOf(Date);
+      dispose();
+    });
+
+    it('clears queued follow-ups before loading another session', async () => {
+      mockChat.mockImplementation(() => new Promise(() => {}));
+      mockGetMessages.mockResolvedValue([]);
+
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'sess-1' }));
+      void chat.sendMessage('active');
+      await new Promise((r) => setTimeout(r, 0));
+      await chat.sendMessage('queued');
+
+      expect(chat.queuedFollowUpCount()).toBe(1);
+
+      const loaded = await chat.loadSession('sess-2');
+
+      expect(loaded).toBe(true);
+      expect(chat.queuedFollowUpCount()).toBe(0);
+      expect(chat.messages()).toEqual([]);
       dispose();
     });
 
@@ -1276,6 +1378,24 @@ describe('useChat', () => {
       expect(chat.sessionId()).toBe('');
       expect(chat.messages()).toEqual([]);
       expect(onConversationChanged).toHaveBeenCalledTimes(1);
+      dispose();
+    });
+
+    it('clears queued follow-ups when starting a blank conversation', async () => {
+      mockChat.mockImplementation(() => new Promise(() => {}));
+
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'old' }));
+      void chat.sendMessage('active');
+      await new Promise((r) => setTimeout(r, 0));
+      await chat.sendMessage('queued');
+
+      expect(chat.queuedFollowUpCount()).toBe(1);
+
+      await chat.newSession();
+
+      expect(chat.queuedFollowUpCount()).toBe(0);
+      expect(chat.sessionId()).toBe('');
+      expect(chat.messages()).toEqual([]);
       dispose();
     });
   });

@@ -1,6 +1,7 @@
 import { Component, Show, For, Switch, Match, createMemo, createSignal } from 'solid-js';
 import CheckIcon from 'lucide-solid/icons/check';
 import CircleAlertIcon from 'lucide-solid/icons/circle-alert';
+import ClockIcon from 'lucide-solid/icons/clock';
 import CopyIcon from 'lucide-solid/icons/copy';
 import RotateCcwIcon from 'lucide-solid/icons/rotate-ccw';
 import SparklesIcon from 'lucide-solid/icons/sparkles';
@@ -40,6 +41,7 @@ const markdownClass =
  */
 export const MessageItem: Component<MessageItemProps> = (props) => {
   const isUser = () => props.message.role === 'user';
+  const isQueuedUserMessage = () => isUser() && props.message.delivery === 'queued';
 
   // Group stream events into display blocks. Content collapses into a single
   // block even when a reasoning model interleaves hidden thinking deltas, so
@@ -117,8 +119,23 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     <div class={`${isUser() ? 'flex justify-end' : ''} mb-4`}>
       {/* User message - compact bubble */}
       <Show when={isUser()}>
-        <div class="max-w-[85%] px-4 py-2.5 rounded-md rounded-br-sm bg-blue-600 text-white shadow-sm">
+        <div
+          class={`max-w-[85%] px-4 py-2.5 rounded-md rounded-br-sm shadow-sm ${
+            isQueuedUserMessage()
+              ? 'border border-blue-200 bg-blue-50 text-blue-950 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100'
+              : 'bg-blue-600 text-white'
+          }`}
+        >
           <p class="text-sm whitespace-pre-wrap">{props.message.content}</p>
+          <Show when={isQueuedUserMessage()}>
+            <div
+              class="mt-1.5 flex items-center justify-end gap-1 text-[11px] font-medium text-blue-700 dark:text-blue-300"
+              role="status"
+            >
+              <ClockIcon class="h-3 w-3" aria-hidden="true" />
+              <span>Queued</span>
+            </div>
+          </Show>
         </div>
       </Show>
 
