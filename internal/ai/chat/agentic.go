@@ -115,6 +115,10 @@ func sanitizeProviderStreamErrorForUser(msg string) string {
 		strings.Contains(lower, "timed out"),
 		strings.Contains(lower, "deadline exceeded"):
 		return "AI response timed out before completion. Please retry."
+	case isProviderEndpointConfigurationError(lower):
+		return "The AI provider endpoint is not configured correctly. Check the selected provider URL in Settings, then retry."
+	case isProviderTransportError(lower):
+		return "Pulse could not reach the AI provider endpoint. Check the selected provider URL and network connection, then retry."
 	case strings.Contains(lower, "402"),
 		strings.Contains(lower, "more credits"),
 		strings.Contains(lower, "insufficient"),
@@ -139,6 +143,28 @@ func sanitizeProviderStreamErrorForUser(msg string) string {
 		return "The AI provider returned an error. Please retry."
 	}
 	return "AI response stream interrupted: " + cleaned
+}
+
+func isProviderEndpointConfigurationError(lower string) bool {
+	return strings.Contains(lower, `post ""`) ||
+		strings.Contains(lower, `get ""`) ||
+		strings.Contains(lower, "unsupported protocol scheme") ||
+		strings.Contains(lower, "missing protocol scheme") ||
+		strings.Contains(lower, "no host in request url") ||
+		strings.Contains(lower, "invalid url") ||
+		strings.Contains(lower, "failed to create request")
+}
+
+func isProviderTransportError(lower string) bool {
+	return strings.Contains(lower, "connection refused") ||
+		strings.Contains(lower, "connection reset") ||
+		strings.Contains(lower, "dial tcp") ||
+		strings.Contains(lower, "no such host") ||
+		strings.Contains(lower, "network is unreachable") ||
+		strings.Contains(lower, "proxyconnect") ||
+		strings.Contains(lower, "tls handshake") ||
+		strings.Contains(lower, "certificate") ||
+		strings.Contains(lower, "x509")
 }
 
 // stripProviderErrorPayload removes any embedded JSON body or URL so raw

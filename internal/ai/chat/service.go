@@ -2280,7 +2280,7 @@ func (s *Service) createProviderForModel(modelStr string) (providers.StreamingPr
 		if s.cfg.DeepSeekAPIKey == "" {
 			return nil, fmt.Errorf("DeepSeek API key not configured")
 		}
-		return providers.NewOpenAIClient(s.cfg.DeepSeekAPIKey, modelName, "https://api.deepseek.com", timeout), nil
+		return providers.NewOpenAIClient(s.cfg.DeepSeekAPIKey, modelName, s.cfg.GetBaseURLForProvider(config.AIProviderDeepSeek), timeout), nil
 	case "gemini":
 		if s.cfg.GeminiAPIKey == "" {
 			return nil, fmt.Errorf("Gemini API key not configured")

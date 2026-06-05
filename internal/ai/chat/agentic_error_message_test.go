@@ -41,6 +41,24 @@ func TestSanitizeProviderStreamErrorForUser(t *testing.T) {
 			wantContain: "timed out",
 		},
 		{
+			name:        "empty provider endpoint",
+			in:          `request failed: Post "": unsupported protocol scheme ""`,
+			wantContain: "endpoint is not configured correctly",
+			wantAbsent:  []string{`post`, `request failed`, `unsupported protocol`, `""`},
+		},
+		{
+			name:        "malformed provider endpoint",
+			in:          `failed to create request: parse "://bad": missing protocol scheme`,
+			wantContain: "endpoint is not configured correctly",
+			wantAbsent:  []string{`failed to create request`, `missing protocol`, `://bad`},
+		},
+		{
+			name:        "provider endpoint unreachable",
+			in:          `request failed: Post "https://api.example.invalid/v1/chat/completions": dial tcp: lookup api.example.invalid: no such host`,
+			wantContain: "could not reach",
+			wantAbsent:  []string{`post`, `request failed`, `https://`, `dial tcp`, `no such host`},
+		},
+		{
 			name:        "canceled",
 			in:          "context canceled",
 			wantContain: "canceled",

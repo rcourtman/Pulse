@@ -62,6 +62,14 @@ runtime cost control, and shared AI transport surfaces.
    the Ollama `keep_alive` request field. An empty configured value means
    Pulse omits `keep_alive` so the Ollama server default applies.
 3. Add or change Pulse Assistant request flow through `internal/api/ai_handler.go`, `frontend-modern/src/api/ai.ts`, and `frontend-modern/src/api/aiChat.ts`
+   Assistant stream provider failures emitted through chat must be classified
+   in `internal/ai/chat` before callback events reach the frontend. Endpoint
+   configuration/URL errors, provider reachability/transport failures, auth,
+   quota/billing, rate-limit, timeout, and cancellation states must render as
+   operator-facing Settings or retry guidance. Raw Go transport strings,
+   provider JSON bodies, request URLs, request methods, dashboard links, and
+   key-management links must not be streamed or persisted as chat-visible
+   assistant output.
 4. Add or change Patrol, alert-analysis, or remediation transport through `internal/api/ai_handlers.go`, `internal/api/ai_intelligence_handlers.go`, and `frontend-modern/src/api/patrol.ts`
    Provider preflight diagnostics returned from `internal/api/ai_handlers.go`
    must reuse the Patrol runtime failure classifier in `internal/ai/` and

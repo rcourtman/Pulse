@@ -582,6 +582,11 @@ func TestOpenAIClient_Configuration(t *testing.T) {
 			expected: "https://openrouter.ai/api/v1/chat/completions",
 		},
 		{
+			name:     "DeepSeek Default Full URL",
+			baseURL:  "https://api.deepseek.com/chat/completions",
+			expected: "https://api.deepseek.com/chat/completions",
+		},
+		{
 			name:     "Root URL",
 			baseURL:  "https://my-local-llm:8080",
 			expected: "https://my-local-llm:8080/v1/chat/completions",
@@ -592,6 +597,7 @@ func TestOpenAIClient_Configuration(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client := NewOpenAIClient("key", "model", tt.baseURL, 0)
 			assert.NotNil(t, client)
+			assert.Equal(t, tt.expected, client.baseURL)
 		})
 	}
 }
