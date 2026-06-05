@@ -1,4 +1,4 @@
-import { Component, Show, For, Switch, Match, createMemo } from 'solid-js';
+import { Component, Show, For, Switch, Match, createMemo, createSignal } from 'solid-js';
 import { renderMarkdown } from '../aiChatUtils';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolExecutionBlock } from './ToolExecutionBlock';
@@ -61,6 +61,20 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     props.message.isStreaming &&
     (!props.message.pendingTools || props.message.pendingTools.length === 0);
 
+  // Copy-to-clipboard for a completed assistant answer.
+  const [copied, setCopied] = createSignal(false);
+  const canCopy = () => !props.message.isStreaming && !!props.message.content?.trim();
+  const copyMessage = async () => {
+    const text = props.message.content || '';
+    try {
+      await navigator.clipboard?.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard can be unavailable (permissions / insecure context); fail quietly.
+    }
+  };
+
   return (
     <div class={`${isUser() ? 'flex justify-end' : ''} mb-4`}>
       {/* User message - compact bubble */}
@@ -74,6 +88,36 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
       <Show when={!isUser()}>
         <div class="w-full pl-2 pr-2">
           <div class="group relative bg-surface-alt rounded-md border border-border p-5 shadow-sm transition-all hover:border-border">
+            {/* Copy answer - hover-revealed, top-right */}
+            <Show when={canCopy()}>
+              <button
+                type="button"
+                onClick={copyMessage}
+                aria-label={copied() ? 'Copied' : 'Copy message'}
+                title={copied() ? 'Copied' : 'Copy message'}
+                class="absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-md border border-border-subtle bg-surface px-1.5 py-1 text-[11px] text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content focus:opacity-100 group-hover:opacity-100"
+              >
+                <Show
+                  when={copied()}
+                  fallback={
+                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.8"
+                        d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m11.25 0a9.06 9.06 0 00-1.5-.124H15.375"
+                      />
+                    </svg>
+                  }
+                >
+                  <svg class="h-3.5 w-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                </Show>
+                {copied() ? 'Copied' : 'Copy'}
+              </button>
+            </Show>
+
             {/* Assistant indicator */}
             <div class="flex items-center gap-2.5 mb-3">
               <div class="w-6 h-6 rounded-md border border-border-subtle shadow-sm flex items-center justify-center shrink-0">

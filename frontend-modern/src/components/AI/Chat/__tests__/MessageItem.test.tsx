@@ -175,6 +175,47 @@ describe('MessageItem', () => {
     });
   });
 
+  describe('copy button', () => {
+    it('copies the message content when clicked', () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText },
+        configurable: true,
+      });
+
+      render(() => (
+        <MessageItem
+          message={makeMessage({ role: 'assistant', content: 'The cluster is healthy.' })}
+          {...makeHandlers()}
+        />
+      ));
+
+      const copy = screen.getByRole('button', { name: /copy message/i });
+      fireEvent.click(copy);
+      expect(writeText).toHaveBeenCalledWith('The cluster is healthy.');
+    });
+
+    it('does not show a copy button while streaming', () => {
+      render(() => (
+        <MessageItem
+          message={makeMessage({ role: 'assistant', content: 'partial', isStreaming: true })}
+          {...makeHandlers()}
+        />
+      ));
+      expect(screen.queryByRole('button', { name: /copy message/i })).not.toBeInTheDocument();
+    });
+
+    it('does not show a copy button when there is no content', () => {
+      render(() => (
+        <MessageItem
+          message={makeMessage({ role: 'assistant', content: '', error: 'failed' })}
+          {...makeHandlers()}
+        />
+      ));
+      expect(screen.queryByRole('button', { name: /copy message/i })).not.toBeInTheDocument();
+    });
+  });
+
   describe('assistant message rendering', () => {
     it('renders assistant indicator with label', () => {
       render(() => (
