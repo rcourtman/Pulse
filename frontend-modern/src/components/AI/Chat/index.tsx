@@ -9,6 +9,8 @@ import {
   createEffect,
 } from 'solid-js';
 import { unwrap } from 'solid-js/store';
+import SendIcon from 'lucide-solid/icons/send';
+import SquareIcon from 'lucide-solid/icons/square';
 import XIcon from 'lucide-solid/icons/x';
 import { AIAPI } from '@/api/ai';
 import { AIChatAPI, type ChatSession, type ChatSessionHandoffSummary } from '@/api/aiChat';
@@ -323,6 +325,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [accumulatedMentions, setAccumulatedMentions] = createSignal<MentionResource[]>([]);
   let textareaRef: HTMLTextAreaElement | undefined;
 
+  const resizeTextarea = () => {
+    if (!textareaRef) return;
+    textareaRef.style.height = 'auto';
+    textareaRef.style.height = `${Math.min(textareaRef.scrollHeight, 160)}px`;
+  };
+
   const loadModelSelections = (): Record<string, string> => {
     try {
       const raw = localStorage.getItem(MODEL_SESSION_STORAGE_KEY);
@@ -393,7 +401,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const isOverlayLayout = createMemo(() => width() < AI_CHAT_MIN_DOCKED_VIEWPORT_WIDTH);
   const rootClassName = createMemo(() => {
     if (isOverlayLayout()) {
-      return `fixed inset-y-0 right-0 z-50 flex h-full w-full flex-col bg-surface transition-transform duration-300 sm:w-[480px] sm:max-w-[calc(100vw-1rem)] ${
+      return `fixed inset-y-0 right-0 z-50 flex h-full w-full flex-col bg-surface transition-transform duration-300 sm:w-[560px] sm:max-w-[calc(100vw-1rem)] ${
         isOpen()
           ? 'translate-x-0 overflow-visible border-l border-border shadow-2xl'
           : 'translate-x-full overflow-hidden border-l-0'
@@ -402,7 +410,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
     return `relative flex h-full flex-shrink-0 flex-col bg-surface transition-all duration-300 ${
       isOpen()
-        ? 'w-full overflow-visible border-l border-border sm:w-[480px]'
+        ? 'w-full overflow-visible border-l border-border sm:w-[560px]'
         : 'w-0 overflow-hidden border-l-0'
     }`;
   });
@@ -589,11 +597,25 @@ export const AIChat: Component<AIChatProps> = (props) => {
       return { type: 'tool', text: `Running ${toolName}...` };
     }
 
+    const isWaitingForFirstToken =
+      lastMessage.isStreaming &&
+      !lastMessage.content.trim() &&
+      (!lastMessage.streamEvents || lastMessage.streamEvents.length === 0);
+
+    if (isWaitingForFirstToken) {
+      return { type: 'thinking', text: 'Thinking...' };
+    }
+
     if (lastMessage.isStreaming) {
       return { type: 'generating', text: 'Generating response...' };
     }
 
     return { type: 'thinking', text: 'Thinking...' };
+  });
+
+  createEffect(() => {
+    input();
+    queueMicrotask(resizeTextarea);
   });
 
   createEffect(() => {
@@ -961,6 +983,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const handleInputChange = (e: InputEvent & { currentTarget: HTMLTextAreaElement }) => {
     const value = e.currentTarget.value;
     setInput(value);
+    resizeTextarea();
 
     const cursorPos = e.currentTarget.selectionStart || 0;
     const textBeforeCursor = value.slice(0, cursorPos);
@@ -1641,79 +1664,68 @@ export const AIChat: Component<AIChatProps> = (props) => {
           </Show>
 
           {/* Input */}
-          <div class="border-t border-border p-4 bg-surface">
+          <div class="border-t border-border bg-surface px-4 py-3">
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 handleSubmit();
               }}
-              class="flex gap-2 relative"
+              class="relative"
             >
-              <div class="flex-1 relative">
+              <div
+                class={`relative flex min-h-[56px] items-end rounded-lg border bg-surface-alt shadow-sm transition-colors ${
+                  mentionActive()
+                    ? 'border-blue-400 ring-2 ring-blue-500/20'
+                    : 'border-border focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20'
+                }`}
+              >
                 <textarea
                   ref={textareaRef}
                   value={input()}
                   onInput={handleInputChange}
                   onKeyDown={handleKeyDown}
                   placeholder={AI_CHAT_INPUT_PLACEHOLDER}
-                  rows={2}
-                  class="w-full px-4 py-3 text-sm rounded-md border border-border bg-surface text-base-content placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  rows={1}
+                  class="max-h-40 min-h-[54px] flex-1 resize-none bg-transparent px-3.5 py-3.5 pr-14 text-sm leading-5 text-base-content placeholder-slate-400 focus:outline-none"
                 />
                 <div data-mention-autocomplete>
                   <MentionAutocomplete
                     query={mentionQuery()}
                     resources={mentionResources()}
-                    position={{ top: 60, left: 0 }}
+                    position={{ top: 58, left: 0 }}
                     onSelect={handleMentionSelect}
                     onClose={() => setMentionActive(false)}
                     visible={mentionActive()}
                   />
                 </div>
-              </div>
-              <div class="flex gap-1.5 self-stretch">
-                <Show
-                  when={!chat.isLoading()}
-                  fallback={
-                    <button
-                      type="button"
-                      onClick={chat.stop}
-                      class="px-4 flex items-center justify-center border border-border hover:bg-surface-alt text-base-content rounded-md transition-colors shadow-sm"
-                      title="Stop"
-                    >
-                      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                        <rect x="6" y="6" width="12" height="12" rx="1" />
-                      </svg>
-                    </button>
-                  }
-                >
-                  <button
-                    type="submit"
-                    disabled={!input().trim()}
-                    class="px-4 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
-                    title="Send"
+                <div class="absolute bottom-2 right-2">
+                  <Show
+                    when={!chat.isLoading()}
+                    fallback={
+                      <button
+                        type="button"
+                        onClick={chat.stop}
+                        class="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-surface text-base-content shadow-sm transition-colors hover:bg-surface-hover"
+                        title="Stop"
+                        aria-label="Stop response"
+                      >
+                        <SquareIcon class="h-4 w-4" />
+                      </button>
+                    }
                   >
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                      />
-                    </svg>
-                  </button>
-                </Show>
+                    <button
+                      type="submit"
+                      disabled={!input().trim()}
+                      class="flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45"
+                      title="Send"
+                      aria-label="Send message"
+                    >
+                      <SendIcon class="h-4 w-4" />
+                    </button>
+                  </Show>
+                </div>
               </div>
             </form>
-            <div class="flex items-center justify-center gap-3 mt-2 text-[10px] text-muted">
-              <span>
-                <kbd class="font-sans px-1 rounded bg-surface-alt border border-border">Enter</kbd>{' '}
-                to send
-              </span>
-              <span class="text-muted">&middot;</span>
-              <span>
-                <span class="font-semibold text-muted">@</span> to mention resources
-              </span>
-            </div>
           </div>
         </Show>
       </div>

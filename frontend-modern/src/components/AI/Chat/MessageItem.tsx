@@ -1,4 +1,9 @@
 import { Component, Show, For, Switch, Match, createMemo, createSignal } from 'solid-js';
+import CheckIcon from 'lucide-solid/icons/check';
+import CircleAlertIcon from 'lucide-solid/icons/circle-alert';
+import CopyIcon from 'lucide-solid/icons/copy';
+import RotateCcwIcon from 'lucide-solid/icons/rotate-ccw';
+import SparklesIcon from 'lucide-solid/icons/sparkles';
 import { renderMarkdown } from '../aiChatUtils';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolExecutionBlock } from './ToolExecutionBlock';
@@ -24,11 +29,14 @@ interface MessageItemProps {
   onRetry?: (messageId: string) => void;
 }
 
+const markdownClass =
+  'text-sm prose prose-slate prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-2 prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-md prose-pre:text-xs prose-pre:border prose-pre:border-slate-800 prose-code:text-blue-700 dark:prose-code:text-blue-300 prose-code:bg-blue-50 dark:prose-code:bg-blue-900 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:font-mono prose-code:text-[0.9em] prose-code:border prose-code:border-blue-100 dark:prose-code:border-blue-800 prose-code:before:content-none prose-code:after:content-none prose-headings:font-semibold prose-hr:border-slate-200 dark:prose-hr:border-slate-700 prose-ul:my-2 prose-ol:my-2 prose-li:my-1';
+
 /**
  * MessageItem - Renders a single message in the chat.
  *
  * User messages: Compact, right-aligned bubble
- * Assistant messages: Full-width, terminal-like with clear sections
+ * Assistant messages: Full-width transcript rows with clear sections
  */
 export const MessageItem: Component<MessageItemProps> = (props) => {
   const isUser = () => props.message.role === 'user';
@@ -60,6 +68,11 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
   const isStreamingText = () =>
     props.message.isStreaming &&
     (!props.message.pendingTools || props.message.pendingTools.length === 0);
+  const isWaitingForFirstToken = () =>
+    isStreamingText() &&
+    !props.message.content.trim() &&
+    !hasStreamEvents() &&
+    !props.message.error;
 
   // Copy-to-clipboard for a completed assistant answer.
   const [copied, setCopied] = createSignal(false);
@@ -84,69 +97,57 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
         </div>
       </Show>
 
-      {/* Assistant message - card style */}
+      {/* Assistant message */}
       <Show when={!isUser()}>
-        <div class="w-full pl-2 pr-2">
-          <div class="group relative bg-surface-alt rounded-md border border-border p-5 shadow-sm transition-all hover:border-border">
-            {/* Copy answer - hover-revealed, top-right */}
-            <Show when={canCopy()}>
-              <button
-                type="button"
-                onClick={copyMessage}
-                aria-label={copied() ? 'Copied' : 'Copy message'}
-                title={copied() ? 'Copied' : 'Copy message'}
-                class="absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-md border border-border-subtle bg-surface px-1.5 py-1 text-[11px] text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content focus:opacity-100 group-hover:opacity-100"
-              >
-                <Show
-                  when={copied()}
-                  fallback={
-                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="1.8"
-                        d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m11.25 0a9.06 9.06 0 00-1.5-.124H15.375"
-                      />
-                    </svg>
-                  }
-                >
-                  <svg class="h-3.5 w-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.5 12.75l6 6 9-13.5" />
-                  </svg>
-                </Show>
-                {copied() ? 'Copied' : 'Copy'}
-              </button>
-            </Show>
+        <div class="group flex w-full min-w-0 gap-3 px-1 py-2">
+          <div class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-surface-alt text-blue-600 shadow-sm dark:text-blue-400">
+            <SparklesIcon class="h-3.5 w-3.5" />
+          </div>
 
-            {/* Assistant indicator */}
-            <div class="flex items-center gap-2.5 mb-3">
-              <div class="w-6 h-6 rounded-md border border-border-subtle shadow-sm flex items-center justify-center shrink-0">
-                <svg
-                  class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+          <div class="min-w-0 flex-1">
+            <div class="mb-2 flex min-h-7 items-center gap-2">
+              <span class="text-xs font-semibold text-base-content">
+                {AI_CHAT_ASSISTANT_MESSAGE_LABEL}
+              </span>
+              <Show when={props.message.model && !props.message.isStreaming}>
+                <span class="text-[10px] text-muted font-mono">{props.message.model}</span>
+              </Show>
+              <Show when={canCopy()}>
+                <button
+                  type="button"
+                  onClick={copyMessage}
+                  aria-label={copied() ? 'Copied' : 'Copy message'}
+                  title={copied() ? 'Copied' : 'Copy message'}
+                  class="ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content focus:opacity-100 group-hover:opacity-100"
                 >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="1.5"
-                    d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"
-                  />
-                </svg>
-              </div>
-              <div class="flex items-baseline gap-2">
-                <span class="text-xs font-semibold text-base-content">
-                  {AI_CHAT_ASSISTANT_MESSAGE_LABEL}
-                </span>
-                <Show when={props.message.model && !props.message.isStreaming}>
-                  <span class="text-[10px] text-muted font-mono">{props.message.model}</span>
-                </Show>
-              </div>
+                  <Show
+                    when={copied()}
+                    fallback={<CopyIcon class="h-3.5 w-3.5" aria-hidden="true" />}
+                  >
+                    <CheckIcon class="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />
+                  </Show>
+                </button>
+              </Show>
             </div>
 
-            {/* Main content area */}
-            <div class="pl-1">
+            <div>
+              <Show when={isWaitingForFirstToken()}>
+                <div class="flex items-center gap-2 py-1 text-sm text-muted">
+                  <span class="flex gap-1" aria-hidden="true">
+                    <span class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-bounce" />
+                    <span
+                      class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-bounce"
+                      style="animation-delay: 120ms"
+                    />
+                    <span
+                      class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-bounce"
+                      style="animation-delay: 240ms"
+                    />
+                  </span>
+                  <span>Thinking...</span>
+                </div>
+              </Show>
+
               {/* Stream events - chronological display */}
               <Show when={hasStreamEvents()}>
                 <For each={groupedEvents()}>
@@ -178,7 +179,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                       {/* Content/text block */}
                       <Match when={evt.type === 'content' && evt.content}>
                         <div
-                          class="text-sm prose prose-slate prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-2 prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-md prose-pre:text-xs prose-pre:border prose-pre:border-slate-800 prose-code:text-blue-700 dark:prose-code:text-blue-300 prose-code:bg-blue-50 dark:prose-code:bg-blue-900 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:font-mono prose-code:text-[0.9em] prose-code:border prose-code:border-blue-100 dark:prose-code:border-blue-800 prose-code:before:content-none prose-code:after:content-none prose-headings:font-semibold prose-headings:tracking-tight prose-hr:border-slate-200 dark:prose-hr:border-slate-700 prose-ul:my-2 prose-ol:my-2 prose-li:my-1"
+                          class={markdownClass}
                           // eslint-disable-next-line solid/no-innerhtml
                           innerHTML={renderMarkdown(evt.content || '')}
                         />
@@ -211,7 +212,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
               {/* Fallback */}
               <Show when={props.message.content && !hasStreamEvents()}>
                 <div
-                  class="text-sm prose prose-slate prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-2 prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-md prose-pre:text-xs prose-pre:border prose-pre:border-slate-800 prose-code:text-blue-700 dark:prose-code:text-blue-300 prose-code:bg-blue-50 dark:prose-code:bg-blue-900 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:font-mono prose-code:text-[0.9em] prose-code:border prose-code:border-blue-100 dark:prose-code:border-blue-800 prose-code:before:content-none prose-code:after:content-none prose-headings:font-semibold prose-headings:tracking-tight prose-hr:border-slate-200 dark:prose-hr:border-slate-700 prose-ul:my-2 prose-ol:my-2 prose-li:my-1"
+                  class={markdownClass}
                   // eslint-disable-next-line solid/no-innerhtml
                   innerHTML={renderMarkdown(props.message.content)}
                 />
@@ -223,19 +224,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                   class="mt-2 flex items-start gap-2.5 rounded-md border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-3 py-2.5"
                   role="alert"
                 >
-                  <svg
-                    class="w-4 h-4 mt-0.5 shrink-0 text-red-500 dark:text-red-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="1.8"
-                      d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"
-                    />
-                  </svg>
+                  <CircleAlertIcon class="mt-0.5 h-4 w-4 shrink-0 text-red-500 dark:text-red-400" />
                   <div class="flex-1 min-w-0">
                     <p class="text-sm text-red-700 dark:text-red-300">{props.message.error}</p>
                     <Show when={props.onRetry}>
@@ -244,19 +233,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                         onClick={() => props.onRetry?.(props.message.id)}
                         class="mt-2 inline-flex items-center gap-1.5 rounded-md border border-red-300 dark:border-red-800 px-2 py-1 text-xs font-medium text-red-700 dark:text-red-300 transition-colors hover:bg-red-100 dark:hover:bg-red-900/40"
                       >
-                        <svg
-                          class="w-3.5 h-3.5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M16.023 9.348h4.992V4.356M2.985 19.644v-4.992h4.992m-4.875 0a8.25 8.25 0 0013.803 3.7l3.181-3.182m-16.991-3.7a8.25 8.25 0 0113.803-3.7l3.181 3.182"
-                          />
-                        </svg>
+                        <RotateCcwIcon class="h-3.5 w-3.5" />
                         Try again
                       </button>
                     </Show>
@@ -265,13 +242,13 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
               </Show>
 
               {/* Streaming cursor */}
-              <Show when={isStreamingText()}>
+              <Show when={isStreamingText() && !isWaitingForFirstToken()}>
                 <span class="inline-block w-1.5 h-4 ml-0.5 align-middle bg-blue-500 dark:bg-blue-400 animate-pulse rounded-full" />
               </Show>
 
               <Show when={!props.message.isStreaming && contextTools().length > 0}>
                 <div class="mt-4 pt-3 border-t border-border-subtle flex flex-wrap gap-2">
-                  <span class="text-[10px] uppercase font-semibold text-muted tracking-wider">
+                  <span class="text-[10px] uppercase font-semibold text-muted">
                     {AI_CHAT_CONTEXT_USED_LABEL}
                   </span>
                   <div class="flex flex-wrap gap-1.5">

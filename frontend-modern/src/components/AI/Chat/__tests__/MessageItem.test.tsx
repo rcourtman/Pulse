@@ -381,6 +381,25 @@ describe('MessageItem', () => {
       expect(cursor).not.toBeInTheDocument();
     });
 
+    it('shows the first-token thinking indicator before content arrives', () => {
+      const { container } = render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            isStreaming: true,
+            pendingTools: [],
+            streamEvents: [],
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(screen.getByText('Thinking...')).toBeInTheDocument();
+      expect(container.querySelector('.animate-bounce')).toBeInTheDocument();
+      expect(container.querySelector('.animate-pulse')).not.toBeInTheDocument();
+    });
+
     it('does not show cursor when streaming but there are pending tools', () => {
       const { container } = render(() => (
         <MessageItem
@@ -488,14 +507,14 @@ describe('MessageItem', () => {
     it('renders content blocks via markdown', () => {
       const events: StreamDisplayEvent[] = [{ type: 'content', content: 'Here is the analysis' }];
 
-      const { container } = render(() => (
+      render(() => (
         <MessageItem
           message={makeMessage({ role: 'assistant', streamEvents: events })}
           {...makeHandlers()}
         />
       ));
 
-      const prose = container.querySelector('.prose');
+      const prose = screen.getByText('Here is the analysis').closest('.prose');
       expect(prose).toBeInTheDocument();
       expect(prose!.innerHTML).toContain('<p>Here is the analysis</p>');
     });
@@ -569,7 +588,7 @@ describe('MessageItem', () => {
         { type: 'content', content: 'Step 2' },
       ];
 
-      const { container } = render(() => (
+      render(() => (
         <MessageItem
           message={makeMessage({ role: 'assistant', streamEvents: events })}
           {...makeHandlers()}
@@ -580,7 +599,7 @@ describe('MessageItem', () => {
       expect(screen.getByTestId('tool-execution-block')).toBeInTheDocument();
 
       // Verify DOM order: thinking → content(Step 1) → tool → content(Step 2)
-      const contentArea = container.querySelector('.pl-1')!;
+      const contentArea = screen.getByTestId('thinking-block').parentElement!;
       const allBlocks = Array.from(
         contentArea.querySelectorAll(
           '[data-testid="thinking-block"], .prose, [data-testid="tool-execution-block"]',

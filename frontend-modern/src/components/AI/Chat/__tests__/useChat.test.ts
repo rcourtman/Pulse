@@ -142,7 +142,7 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('echoes the user message before cold-session creation finishes', async () => {
+    it('shows a pending assistant turn before cold-session creation finishes', async () => {
       let resolveSession!: (value: { id: string }) => void;
       mockCreateSession.mockReturnValue(
         new Promise((resolve) => {
@@ -155,8 +155,14 @@ describe('useChat', () => {
       const result = chat.sendMessage('test');
 
       expect(chat.isLoading()).toBe(true);
-      expect(chat.messages()).toHaveLength(1);
+      expect(chat.messages()).toHaveLength(2);
       expect(chat.messages()[0]).toMatchObject({ role: 'user', content: 'test' });
+      expect(chat.messages()[1]).toMatchObject({
+        role: 'assistant',
+        content: '',
+        isStreaming: true,
+        pendingTools: [],
+      });
       expect(mockChat).not.toHaveBeenCalled();
 
       resolveSession({ id: 'new-sess' });

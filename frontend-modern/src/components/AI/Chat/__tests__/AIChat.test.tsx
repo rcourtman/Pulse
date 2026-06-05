@@ -344,10 +344,9 @@ describe('AIChat', () => {
       expect(screen.getByTestId('model-selector')).toBeInTheDocument();
     });
 
-    it('renders keyboard hint text', () => {
+    it('renders the compact composer send control', () => {
       renderChat();
-      expect(screen.getByText('to send')).toBeInTheDocument();
-      expect(screen.getByText('to mention resources')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Send message' })).toBeInTheDocument();
     });
 
     it('renders attached context briefing without raw command text', () => {
@@ -2074,6 +2073,23 @@ describe('AIChat', () => {
       mockChat.messages.mockReturnValue([]);
       renderChat();
       expect(screen.getByText('Thinking...')).toBeInTheDocument();
+    });
+
+    it('shows "Thinking..." while the assistant turn waits for the first token', () => {
+      mockChat.isLoading.mockReturnValue(true);
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'msg-1',
+          role: 'assistant' as const,
+          content: '',
+          timestamp: new Date(),
+          isStreaming: true,
+          streamEvents: [],
+        },
+      ]);
+      renderChat();
+      expect(screen.getByText('Thinking...')).toBeInTheDocument();
+      expect(screen.queryByText('Generating response...')).not.toBeInTheDocument();
     });
 
     it('shows tool status when assistant has pending tools', () => {

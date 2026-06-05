@@ -487,7 +487,20 @@ export function useChat(options: UseChatOptions = {}) {
       content: prompt,
       timestamp: new Date(),
     };
-    setMessages((prev) => [...prev, userMessage]);
+
+    const assistantId = generateId();
+    const streamingMessage: ChatMessage = {
+      id: assistantId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date(),
+      isStreaming: true,
+      pendingTools: [],
+      toolCalls: [],
+      streamEvents: [],
+    };
+
+    setMessages((prev) => [...prev, userMessage, streamingMessage]);
     setIsLoading(true);
 
     // Ensure we have a session for conversation continuity
@@ -503,37 +516,24 @@ export function useChat(options: UseChatOptions = {}) {
       } catch (error) {
         logger.error('[useChat] Failed to create session:', error);
         notificationStore.error('Failed to create chat session');
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: generateId(),
-            role: 'assistant',
-            content: '',
-            error: 'Could not start a chat session. Check your connection and try again.',
-            timestamp: new Date(),
-            isStreaming: false,
-          },
-        ]);
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantId
+              ? {
+                  ...msg,
+                  error: 'Could not start a chat session. Check your connection and try again.',
+                  isStreaming: false,
+                  pendingTools: [],
+                }
+              : msg,
+          ),
+        );
         setIsLoading(false);
         return false;
       }
     }
 
     abortControllerRef = new AbortController();
-
-    // Create streaming assistant message
-    const assistantId = generateId();
-    const streamingMessage: ChatMessage = {
-      id: assistantId,
-      role: 'assistant',
-      content: '',
-      timestamp: new Date(),
-      isStreaming: true,
-      pendingTools: [],
-      toolCalls: [],
-      streamEvents: [],
-    };
-    setMessages((prev) => [...prev, streamingMessage]);
 
     try {
       await AIChatAPI.chat(
