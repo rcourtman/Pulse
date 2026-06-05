@@ -310,14 +310,6 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                   </div>
                 </div>
               </Show>
-
-              <Show when={props.message.tokens && !props.message.isStreaming}>
-                <div class="mt-1 flex justify-end">
-                  <span class="text-[9px] text-muted font-mono">
-                    {props.message.tokens!.input} in · {props.message.tokens!.output} out
-                  </span>
-                </div>
-              </Show>
             </div>
           </div>
         </div>

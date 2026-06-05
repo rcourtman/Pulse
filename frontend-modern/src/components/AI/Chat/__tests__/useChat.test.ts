@@ -800,6 +800,31 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('strips serialized Pulse tool calls split across streamed content deltas', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('how many devices in this');
+      const fire = getFireEvent();
+
+      fire({ type: 'content', data: 'I will check pu' });
+      fire({
+        type: 'content',
+        data: 'lse_read(target_host="current_resource", command="ls /dev | wc -l")',
+      });
+      fire({ type: 'content', data: 'raw arguments that should stay hidden' });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.content).toBe('I will check ');
+      expect(assistant.content).not.toContain('pulse_read');
+      expect(assistant.content).not.toContain('target_host');
+      expect(assistant.content).not.toContain('raw arguments');
+      expect(assistant.streamEvents?.filter((e) => e.type === 'content')).toEqual([
+        { type: 'content', content: 'I will check ' },
+      ]);
+      dispose();
+    });
+
     it('resumes visible content after a governed tool boundary clears a raw leak', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
@@ -821,7 +846,7 @@ describe('useChat', () => {
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.content).toBe(
-        'I will inspect the device nodes.There are 42 device entries.',
+        'I will inspect the device nodes. There are 42 device entries.',
       );
       expect(assistant.content).not.toContain('pulse_read');
       expect(assistant.content).not.toContain('raw arguments');

@@ -120,7 +120,9 @@ runtime cost control, and shared AI transport surfaces.
    `tool_start` / `tool_end`, approval, or question blocks; if a provider emits
    `pulse_*` / `patrol_*` calls, DSML, XML/function-call envelopes, or JSON
    tool-call shapes as text content, the chat runtime must strip them before
-   streaming, persistence, and frontend rendering.
+   streaming, persistence, and frontend rendering. Token accounting and other
+   provider metadata remain runtime/accounting data, not normal transcript
+   prose.
 4. Add or change Patrol, alert-analysis, or remediation transport through `internal/api/ai_handlers.go`, `internal/api/ai_intelligence_handlers.go`, and `frontend-modern/src/api/patrol.ts`
    Provider preflight diagnostics returned from `internal/api/ai_handlers.go`
    must reuse the Patrol runtime failure classifier in `internal/ai/` and

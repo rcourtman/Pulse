@@ -3,10 +3,14 @@ const RAW_TOOL_MARKERS = [
   '</｜DSML｜',
   '<｜｜DSML｜｜',
   '</｜｜DSML｜｜',
+  '<｜/DSML｜',
+  '<｜｜/DSML｜｜',
   '<|DSML|',
   '</|DSML|',
   '<||DSML||',
   '</||DSML||',
+  '<|/DSML|',
+  '<||/DSML||',
   '<tool_call',
   '</tool_call',
   '<tool_calls',
@@ -21,9 +25,21 @@ const RAW_TOOL_MARKERS = [
 ];
 
 const jsonToolCallLeakRe =
-  /(?:^|\n)[ \t]*(?:```[ \t]*(?:json|JSON)?[ \t]*\n?[ \t]*)?\{[ \t\n]*"name"[ \t]*:[ \t]*"((?:pulse|patrol)_[a-zA-Z0-9_]*)"/;
-const functionToolCallLeakRe = /(?:^|[^a-zA-Z0-9_])((?:pulse|patrol)_[a-zA-Z0-9_]*)[ \t\r\n]*\(/;
+  /(?:^|\n)[ \t]*(?:```[ \t]*(?:json|JSON)?[ \t]*\n?[ \t]*)?\{[ \t\n]*"name"[ \t]*:[ \t]*"([a-zA-Z_][a-zA-Z0-9_]*)"/g;
+const functionToolCallLeakRe = /(?:^|[^a-zA-Z0-9_])([a-zA-Z_][a-zA-Z0-9_]*)[ \t\r\n]*\(/g;
 const minimaxToolCallLeakRe = /^minimax:tool_call\b/m;
+
+export interface AssistantOutputArtifactStreamState {
+  visibleText: string;
+  pendingText: string;
+}
+
+export function createAssistantOutputArtifactStreamState(): AssistantOutputArtifactStreamState {
+  return {
+    visibleText: '',
+    pendingText: '',
+  };
+}
 
 export function stripAssistantOutputArtifacts(content: string): {
   text: string;
@@ -34,6 +50,47 @@ export function stripAssistantOutputArtifacts(content: string): {
     return { text: content, stripped: false };
   }
   return { text: content.slice(0, idx).trimEnd(), stripped: true };
+}
+
+export function appendVisibleTextBeforeAssistantOutputArtifacts(
+  state: AssistantOutputArtifactStreamState,
+  content: string,
+): {
+  text: string;
+  stripped: boolean;
+} {
+  if (!content && !state.pendingText) {
+    return { text: '', stripped: false };
+  }
+
+  const text = state.pendingText + content;
+  state.pendingText = '';
+
+  const existing = state.visibleText;
+  const candidate = existing + text;
+  const idx = assistantOutputArtifactIndex(candidate);
+  if (idx < 0) {
+    const { visible, held } = splitTrailingPotentialToolNamePrefix(text);
+    state.visibleText += visible;
+    state.pendingText = held;
+    return { text: visible, stripped: false };
+  }
+
+  const safeText = candidate.slice(0, idx).trimEnd();
+  const visibleDelta = safeText.length > existing.length ? safeText.slice(existing.length) : '';
+  state.visibleText = safeText;
+  state.pendingText = '';
+  return { text: visibleDelta, stripped: true };
+}
+
+export function flushPendingAssistantOutputText(state: AssistantOutputArtifactStreamState): string {
+  if (!state.pendingText) {
+    return '';
+  }
+  const text = state.pendingText;
+  state.pendingText = '';
+  state.visibleText += text;
+  return text;
 }
 
 function assistantOutputArtifactIndex(content: string): number {
@@ -51,15 +108,8 @@ function assistantOutputArtifactIndex(content: string): number {
     record(content.indexOf(marker));
   }
 
-  const jsonMatch = jsonToolCallLeakRe.exec(content);
-  if (jsonMatch) {
-    record(jsonMatch.index);
-  }
-
-  const functionMatch = functionToolCallLeakRe.exec(content);
-  if (functionMatch?.[1]) {
-    record(functionMatch.index + functionMatch[0].lastIndexOf(functionMatch[1]));
-  }
+  record(findJSONToolCallLeak(content));
+  record(findFunctionToolCallLeak(content));
 
   const minimaxMatch = minimaxToolCallLeakRe.exec(content);
   if (minimaxMatch) {
@@ -67,4 +117,66 @@ function assistantOutputArtifactIndex(content: string): number {
   }
 
   return first;
+}
+
+function findJSONToolCallLeak(content: string): number {
+  for (const match of content.matchAll(jsonToolCallLeakRe)) {
+    const name = match[1] || '';
+    if (isAssistantToolLikeName(name)) {
+      return match.index ?? -1;
+    }
+  }
+  return -1;
+}
+
+function findFunctionToolCallLeak(content: string): number {
+  for (const match of content.matchAll(functionToolCallLeakRe)) {
+    const name = match[1] || '';
+    if (isAssistantToolLikeName(name)) {
+      return (match.index ?? 0) + match[0].lastIndexOf(name);
+    }
+  }
+  return -1;
+}
+
+function splitTrailingPotentialToolNamePrefix(content: string): {
+  visible: string;
+  held: string;
+} {
+  if (!content) {
+    return { visible: '', held: '' };
+  }
+
+  let start = content.length;
+  while (start > 0 && isToolNameCharacter(content[start - 1])) {
+    start -= 1;
+  }
+
+  if (start === content.length) {
+    return { visible: content, held: '' };
+  }
+
+  const token = content.slice(start);
+  if (isKnownAssistantToolNamePrefix(token)) {
+    return { visible: content.slice(0, start), held: token };
+  }
+  return { visible: content, held: '' };
+}
+
+function isToolNameCharacter(char: string): boolean {
+  return /[a-zA-Z0-9_]/.test(char);
+}
+
+function isAssistantToolLikeName(name: string): boolean {
+  return /^(?:pulse|patrol)_[a-zA-Z0-9_]+$/.test(name);
+}
+
+function isKnownAssistantToolNamePrefix(prefix: string): boolean {
+  if (!prefix) return false;
+  return (
+    'pulse_'.startsWith(prefix) ||
+    'patrol_'.startsWith(prefix) ||
+    /^pulse_[a-zA-Z0-9_]*$/.test(prefix) ||
+    /^patrol_[a-zA-Z0-9_]*$/.test(prefix)
+  );
 }

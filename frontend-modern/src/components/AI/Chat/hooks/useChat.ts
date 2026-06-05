@@ -10,7 +10,13 @@ import {
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { normalizeChatToolName } from '@/utils/chatIdentifiers';
-import { stripAssistantOutputArtifacts } from '../assistantOutputHygiene';
+import {
+  appendVisibleTextBeforeAssistantOutputArtifacts,
+  createAssistantOutputArtifactStreamState,
+  flushPendingAssistantOutputText,
+  stripAssistantOutputArtifacts,
+  type AssistantOutputArtifactStreamState,
+} from '../assistantOutputHygiene';
 import type {
   ChatMessage,
   ToolExecution,
@@ -72,6 +78,25 @@ export function useChat(options: UseChatOptions = {}) {
   let pendingBackendAbort: Promise<void> | null = null;
   let isDrainingQueuedFollowUps = false;
   const suppressedRawContentMessageIds = new Set<string>();
+  const outputArtifactStreamStates = new Map<string, AssistantOutputArtifactStreamState>();
+
+  const outputArtifactStateFor = (assistantId: string) => {
+    let state = outputArtifactStreamStates.get(assistantId);
+    if (!state) {
+      state = createAssistantOutputArtifactStreamState();
+      outputArtifactStreamStates.set(assistantId, state);
+    }
+    return state;
+  };
+
+  const clearOutputArtifactState = (assistantId: string) => {
+    outputArtifactStreamStates.delete(assistantId);
+  };
+
+  const clearSuppressedOutputBoundary = (assistantId: string) => {
+    suppressedRawContentMessageIds.delete(assistantId);
+    clearOutputArtifactState(assistantId);
+  };
 
   const abortBackendSession = (targetSessionId: string): Promise<void> | null => {
     const normalizedSessionId = targetSessionId.trim();
@@ -199,6 +224,24 @@ export function useChat(options: UseChatOptions = {}) {
       ...msg,
       streamEvents: [...events, event],
     };
+  };
+
+  const appendMessageContent = (msg: ChatMessage, content: string): string => {
+    const existing = msg.content || '';
+    if (!existing || !content) {
+      return existing + content;
+    }
+
+    const events = msg.streamEvents || [];
+    const lastEvent = events[events.length - 1];
+    if (!lastEvent || lastEvent.type === 'content') {
+      return existing + content;
+    }
+
+    if (/\s$/.test(existing) || /^\s|^[,.;:!?)]/.test(content)) {
+      return existing + content;
+    }
+    return `${existing} ${content}`;
   };
 
   // Process stream events
@@ -387,17 +430,19 @@ export function useChat(options: UseChatOptions = {}) {
               }
               const content = extractText(event.data);
               if (!content) return msg;
-              const visible = stripAssistantOutputArtifacts(content);
+              const visible = appendVisibleTextBeforeAssistantOutputArtifacts(
+                outputArtifactStateFor(assistantId),
+                content,
+              );
               if (visible.stripped) {
                 suppressedRawContentMessageIds.add(assistantId);
               }
               if (!visible.text) return msg;
-              const existing = msg.content || '';
               // Add to streamEvents for chronological display
               const updated = addStreamEvent(msg, { type: 'content', content: visible.text });
               return {
                 ...updated,
-                content: existing + visible.text,
+                content: appendMessageContent(msg, visible.text),
               };
             }
 
@@ -416,7 +461,7 @@ export function useChat(options: UseChatOptions = {}) {
             }
 
             case 'tool_start': {
-              suppressedRawContentMessageIds.delete(assistantId);
+              clearSuppressedOutputBoundary(assistantId);
               const data = (event.data || {}) as {
                 id?: string;
                 name?: string;
@@ -453,7 +498,7 @@ export function useChat(options: UseChatOptions = {}) {
             }
 
             case 'tool_end': {
-              suppressedRawContentMessageIds.delete(assistantId);
+              clearSuppressedOutputBoundary(assistantId);
               const data = event.data as {
                 id?: string;
                 name: string;
@@ -556,7 +601,7 @@ export function useChat(options: UseChatOptions = {}) {
             }
 
             case 'approval_needed': {
-              suppressedRawContentMessageIds.delete(assistantId);
+              clearSuppressedOutputBoundary(assistantId);
               const data = event.data as {
                 command: string;
                 tool_id: string;
@@ -637,7 +682,7 @@ export function useChat(options: UseChatOptions = {}) {
             }
 
             case 'question': {
-              suppressedRawContentMessageIds.delete(assistantId);
+              clearSuppressedOutputBoundary(assistantId);
               const data = event.data as { question_id: string; questions: Array<any> };
 
               const pendingQuestion: PendingQuestion = {
@@ -672,22 +717,37 @@ export function useChat(options: UseChatOptions = {}) {
             }
 
             case 'done': {
+              const pendingText = suppressedRawContentMessageIds.has(assistantId)
+                ? ''
+                : flushPendingAssistantOutputText(outputArtifactStateFor(assistantId));
               suppressedRawContentMessageIds.delete(assistantId);
+              clearOutputArtifactState(assistantId);
+              const flushedMsg = pendingText
+                ? {
+                    ...addStreamEvent(msg, { type: 'content', content: pendingText }),
+                    content: appendMessageContent(msg, pendingText),
+                  }
+                : msg;
               const tokens = extractTokens(event.data);
               if (tokens && (tokens.input > 0 || tokens.output > 0)) {
                 return {
-                  ...msg,
+                  ...flushedMsg,
                   isStreaming: false,
                   pendingTools: [],
                   tokens,
                   workflowStatus: undefined,
                 };
               }
-              return { ...msg, isStreaming: false, pendingTools: [], workflowStatus: undefined };
+              return {
+                ...flushedMsg,
+                isStreaming: false,
+                pendingTools: [],
+                workflowStatus: undefined,
+              };
             }
 
             case 'error': {
-              suppressedRawContentMessageIds.delete(assistantId);
+              clearSuppressedOutputBoundary(assistantId);
               const errorMsg = extractErrorMessage(event.data);
               // Keep any content streamed before the failure; surface the error
               // as a distinct, recoverable block rather than overwriting the answer.
@@ -922,12 +982,14 @@ export function useChat(options: UseChatOptions = {}) {
       setMessages(
         msgs.map((m) => {
           const toolCalls = m.tool_calls || [];
+          const content =
+            m.role === 'assistant' ? stripAssistantOutputArtifacts(m.content).text : m.content;
           const streamEvents =
-            m.role === 'assistant' ? buildPersistedStreamEvents(m.content, toolCalls) : undefined;
+            m.role === 'assistant' ? buildPersistedStreamEvents(content, toolCalls) : undefined;
           return {
             id: m.id,
             role: m.role,
-            content: m.content,
+            content,
             timestamp: new Date(m.timestamp),
             model: m.model,
             toolCalls,

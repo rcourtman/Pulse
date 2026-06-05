@@ -374,28 +374,13 @@ describe('MessageItem', () => {
   });
 
   describe('token display', () => {
-    it('shows token counts when tokens are provided and not streaming', () => {
+    it('keeps token counts out of the visible transcript', () => {
       render(() => (
         <MessageItem
           message={makeMessage({
             role: 'assistant',
             tokens: { input: 500, output: 200 },
             isStreaming: false,
-          })}
-          {...makeHandlers()}
-        />
-      ));
-
-      expect(screen.getByText('500 in · 200 out')).toBeInTheDocument();
-    });
-
-    it('does not show token counts when streaming', () => {
-      render(() => (
-        <MessageItem
-          message={makeMessage({
-            role: 'assistant',
-            tokens: { input: 500, output: 200 },
-            isStreaming: true,
           })}
           {...makeHandlers()}
         />
