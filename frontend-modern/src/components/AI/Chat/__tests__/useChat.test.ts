@@ -7,6 +7,7 @@ vi.mock('@/api/aiChat', () => ({
     createSession: vi.fn(),
     chat: vi.fn(),
     getMessages: vi.fn(),
+    abortSession: vi.fn(),
     answerQuestion: vi.fn(),
   },
 }));
@@ -35,6 +36,7 @@ import { notificationStore } from '@/stores/notifications';
 const mockCreateSession = AIChatAPI.createSession as ReturnType<typeof vi.fn>;
 const mockChat = AIChatAPI.chat as ReturnType<typeof vi.fn>;
 const mockGetMessages = AIChatAPI.getMessages as ReturnType<typeof vi.fn>;
+const mockAbortSession = AIChatAPI.abortSession as ReturnType<typeof vi.fn>;
 const mockAnswerQuestion = AIChatAPI.answerQuestion as ReturnType<typeof vi.fn>;
 const mockNotifyError = notificationStore.error as ReturnType<typeof vi.fn>;
 
@@ -64,6 +66,7 @@ function withRoot<T>(fn: () => T): { value: T; dispose: () => void } {
 describe('useChat', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mockAbortSession.mockResolvedValue(undefined);
   });
 
   // ──────────────────────────────────────────────
@@ -341,6 +344,7 @@ describe('useChat', () => {
       let capturedSignal: AbortSignal | undefined;
       const abortError = new Error('Aborted');
       abortError.name = 'AbortError';
+      mockAbortSession.mockResolvedValue(undefined);
 
       mockChat
         .mockImplementationOnce(
@@ -373,6 +377,7 @@ describe('useChat', () => {
 
       // First call should have been aborted
       expect(capturedSignal?.aborted).toBe(true);
+      expect(mockAbortSession).toHaveBeenCalledWith('sess');
 
       const result1 = await p1;
       expect(result1).toBe(false); // Aborted → returns false
@@ -383,6 +388,115 @@ describe('useChat', () => {
       const msgs = chat.messages();
       const firstAssistant = msgs.find((m) => m.role === 'assistant');
       expect(firstAssistant?.isStreaming).toBe(false);
+      dispose();
+    });
+
+    it('keeps replacement send loading state isolated from the aborted request', async () => {
+      let firstSignal: AbortSignal | undefined;
+      let resolveSecond!: () => void;
+      const abortError = new Error('Aborted');
+      abortError.name = 'AbortError';
+      mockAbortSession.mockResolvedValue(undefined);
+
+      mockChat
+        .mockImplementationOnce(
+          (
+            _p: string,
+            _s: string,
+            _m: string | undefined,
+            _onEvent: (e: StreamEvent) => void,
+            signal?: AbortSignal,
+          ) => {
+            firstSignal = signal;
+            return new Promise<void>((_resolve, reject) => {
+              signal?.addEventListener('abort', () => {
+                queueMicrotask(() => reject(abortError));
+              });
+            });
+          },
+        )
+        .mockImplementationOnce(
+          () =>
+            new Promise<void>((resolve) => {
+              resolveSecond = resolve;
+            }),
+        );
+
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'sess' }));
+      const first = chat.sendMessage('first');
+      await new Promise((r) => setTimeout(r, 0));
+
+      const second = chat.sendMessage('second');
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(firstSignal?.aborted).toBe(true);
+      await expect(first).resolves.toBe(false);
+      expect(chat.isLoading()).toBe(true);
+      expect(chat.messages().filter((message) => message.role === 'assistant')).toHaveLength(2);
+
+      resolveSecond();
+      await second;
+      expect(chat.isLoading()).toBe(false);
+      dispose();
+    });
+
+    it('stop aborts the browser stream and backend session', async () => {
+      let capturedSignal: AbortSignal | undefined;
+      const abortError = new Error('Aborted');
+      abortError.name = 'AbortError';
+      mockAbortSession.mockResolvedValue(undefined);
+      mockChat.mockImplementation(
+        (
+          _p: string,
+          _s: string,
+          _m: string | undefined,
+          _onEvent: (e: StreamEvent) => void,
+          signal?: AbortSignal,
+        ) => {
+          capturedSignal = signal;
+          return new Promise<void>((_resolve, reject) => {
+            signal?.addEventListener('abort', () => reject(abortError));
+          });
+        },
+      );
+
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'sess' }));
+      const send = chat.sendMessage('hello');
+      await new Promise((r) => setTimeout(r, 0));
+
+      chat.stop();
+      await expect(send).resolves.toBe(false);
+
+      expect(capturedSignal?.aborted).toBe(true);
+      expect(mockAbortSession).toHaveBeenCalledWith('sess');
+      expect(chat.isLoading()).toBe(false);
+      const assistant = chat.messages().find((message) => message.role === 'assistant');
+      expect(assistant).toMatchObject({
+        content: '(Stopped)',
+        isStreaming: false,
+      });
+      dispose();
+    });
+
+    it('stop during cold-session creation prevents the deferred chat call', async () => {
+      let resolveSession!: (value: { id: string }) => void;
+      mockCreateSession.mockReturnValue(
+        new Promise((resolve) => {
+          resolveSession = resolve;
+        }),
+      );
+
+      const { value: chat, dispose } = withRoot(() => useChat());
+      const send = chat.sendMessage('cold start');
+
+      expect(chat.isLoading()).toBe(true);
+      chat.stop();
+      resolveSession({ id: 'late-session' });
+
+      await expect(send).resolves.toBe(false);
+      expect(mockChat).not.toHaveBeenCalled();
+      expect(chat.sessionId()).toBe('');
+      expect(chat.isLoading()).toBe(false);
       dispose();
     });
   });

@@ -53,24 +53,63 @@ export function useChat(options: UseChatOptions = {}) {
 
   // Abort controller for canceling requests
   let abortControllerRef: AbortController | null = null;
+  let activeRequestId = 0;
+  let pendingBackendAbort: Promise<void> | null = null;
 
-  // Cleanup on unmount
-  onCleanup(() => {
-    if (abortControllerRef) abortControllerRef.abort();
-  });
+  const abortBackendSession = (targetSessionId: string): Promise<void> | null => {
+    const normalizedSessionId = targetSessionId.trim();
+    if (!normalizedSessionId) return null;
 
-  // Stop/cancel current request
-  const stop = () => {
+    const promise = AIChatAPI.abortSession(normalizedSessionId)
+      .catch((error) => {
+        logger.warn('[useChat] Failed to abort chat session:', error);
+      })
+      .finally(() => {
+        if (pendingBackendAbort === promise) {
+          pendingBackendAbort = null;
+        }
+      });
+
+    pendingBackendAbort = promise;
+    return promise;
+  };
+
+  const cancelActiveRequest = (markStopped: boolean): Promise<void> | null => {
+    const hasActiveRequest = isLoading() || abortControllerRef !== null;
+    if (!hasActiveRequest) return null;
+
+    const targetSessionId = sessionId();
     if (abortControllerRef) {
       abortControllerRef.abort();
       abortControllerRef = null;
     }
+    activeRequestId += 1;
+
     setMessages((prev) =>
       prev.map((msg) =>
-        msg.isStreaming ? { ...msg, isStreaming: false, content: msg.content || '(Stopped)' } : msg,
+        msg.isStreaming
+          ? {
+              ...msg,
+              isStreaming: false,
+              content: markStopped ? msg.content || '(Stopped)' : msg.content,
+              pendingTools: [],
+            }
+          : msg,
       ),
     );
     setIsLoading(false);
+
+    return abortBackendSession(targetSessionId);
+  };
+
+  // Cleanup on unmount
+  onCleanup(() => {
+    void cancelActiveRequest(false);
+  });
+
+  // Stop/cancel current request
+  const stop = () => {
+    void cancelActiveRequest(true);
   };
 
   // Helper to add stream event for chronological display
@@ -143,7 +182,9 @@ export function useChat(options: UseChatOptions = {}) {
     return '';
   };
 
-  const processEvent = (assistantId: string, event: StreamEvent) => {
+  const processEvent = (assistantId: string, requestId: number, event: StreamEvent) => {
+    if (requestId !== activeRequestId) return;
+
     setMessages((prev) =>
       prev.map((msg) => {
         if (msg.id !== assistantId) return msg;
@@ -465,17 +506,16 @@ export function useChat(options: UseChatOptions = {}) {
   ): Promise<boolean> => {
     if (!prompt.trim()) return false;
 
-    // If already streaming, abort the current request first
-    if (isLoading() && abortControllerRef) {
+    let backendAbortBeforeNextSend: Promise<void> | null = null;
+    const abortedSessionId = sessionId();
+
+    // If already streaming, abort the current request first.
+    // The UI is updated immediately; the next backend stream waits only when it
+    // would reuse the same session, so the abort endpoint cannot cancel the new
+    // run after it registers.
+    if (isLoading()) {
       logger.debug('[useChat] Aborting current stream to send new message');
-      abortControllerRef.abort();
-      abortControllerRef = null;
-      // Mark any streaming messages as stopped
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.isStreaming ? { ...msg, isStreaming: false, pendingTools: [] } : msg,
-        ),
-      );
+      backendAbortBeforeNextSend = cancelActiveRequest(false);
     }
 
     // Echo the user's message before any network work. Cold sessions can spend
@@ -502,6 +542,7 @@ export function useChat(options: UseChatOptions = {}) {
 
     setMessages((prev) => [...prev, userMessage, streamingMessage]);
     setIsLoading(true);
+    const requestId = ++activeRequestId;
 
     // Ensure we have a session for conversation continuity
     // Without this, every message creates a new session and loses context
@@ -509,6 +550,9 @@ export function useChat(options: UseChatOptions = {}) {
     if (!currentSessionId) {
       try {
         const session = await AIChatAPI.createSession();
+        if (requestId !== activeRequestId) {
+          return false;
+        }
         currentSessionId = session.id;
         setSessionId(currentSessionId);
         void notifyConversationChanged();
@@ -533,7 +577,19 @@ export function useChat(options: UseChatOptions = {}) {
       }
     }
 
-    abortControllerRef = new AbortController();
+    if (
+      backendAbortBeforeNextSend &&
+      abortedSessionId &&
+      currentSessionId === abortedSessionId
+    ) {
+      await backendAbortBeforeNextSend;
+      if (requestId !== activeRequestId) {
+        return false;
+      }
+    }
+
+    const abortController = new AbortController();
+    abortControllerRef = abortController;
 
     try {
       await AIChatAPI.chat(
@@ -541,9 +597,9 @@ export function useChat(options: UseChatOptions = {}) {
         currentSessionId,
         model() || undefined,
         (event: StreamEvent) => {
-          processEvent(assistantId, event);
+          processEvent(assistantId, requestId, event);
         },
-        abortControllerRef?.signal,
+        abortController.signal,
         mentions,
         findingId,
         sendOptions?.autonomousMode,
@@ -552,9 +608,15 @@ export function useChat(options: UseChatOptions = {}) {
         sendOptions?.handoffActions,
         sendOptions?.handoffMetadata,
       );
+      if (requestId !== activeRequestId) {
+        return false;
+      }
       await notifyConversationChanged();
       return true;
     } catch (error) {
+      if (requestId !== activeRequestId) {
+        return false;
+      }
       if (error instanceof Error && error.name === 'AbortError') {
         logger.debug('[useChat] Request aborted');
         return false;
@@ -574,19 +636,23 @@ export function useChat(options: UseChatOptions = {}) {
       await notifyConversationChanged();
       return false;
     } finally {
-      abortControllerRef = null;
-      setIsLoading(false);
+      if (requestId === activeRequestId) {
+        abortControllerRef = null;
+        setIsLoading(false);
+      }
     }
   };
 
   // Clear messages and reset session (for starting fresh)
   const clearMessages = () => {
+    void cancelActiveRequest(false);
     setMessages([]);
     setSessionId(''); // Clear session so next message creates a new one
   };
 
   // Load session messages
   const loadSession = async (id: string): Promise<boolean> => {
+    void cancelActiveRequest(false);
     try {
       const msgs = await AIChatAPI.getMessages(id);
       setMessages(
@@ -609,6 +675,7 @@ export function useChat(options: UseChatOptions = {}) {
 
   // Create new session
   const newSession = async () => {
+    void cancelActiveRequest(false);
     try {
       const session = await AIChatAPI.createSession();
       setSessionId(session.id);

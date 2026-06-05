@@ -919,7 +919,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
   // Handle submit
   const handleSubmit = () => {
-    if (chat.isLoading()) return;
     const prompt = input().trim();
     if (!prompt) return;
     const mentions = accumulatedMentions();
@@ -1686,7 +1685,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   onKeyDown={handleKeyDown}
                   placeholder={AI_CHAT_INPUT_PLACEHOLDER}
                   rows={1}
-                  class="max-h-40 min-h-[54px] flex-1 resize-none bg-transparent px-3.5 py-3.5 pr-14 text-sm leading-5 text-base-content placeholder-slate-400 focus:outline-none"
+                  class="max-h-40 min-h-[54px] flex-1 resize-none bg-transparent px-3.5 py-3.5 pr-24 text-sm leading-5 text-base-content placeholder-slate-400 focus:outline-none"
                 />
                 <div data-mention-autocomplete>
                   <MentionAutocomplete
@@ -1698,31 +1697,27 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     visible={mentionActive()}
                   />
                 </div>
-                <div class="absolute bottom-2 right-2">
-                  <Show
-                    when={!chat.isLoading()}
-                    fallback={
-                      <button
-                        type="button"
-                        onClick={chat.stop}
-                        class="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-surface text-base-content shadow-sm transition-colors hover:bg-surface-hover"
-                        title="Stop"
-                        aria-label="Stop response"
-                      >
-                        <SquareIcon class="h-4 w-4" />
-                      </button>
-                    }
-                  >
+                <div class="absolute bottom-2 right-2 flex items-center gap-1.5">
+                  <Show when={chat.isLoading()}>
                     <button
-                      type="submit"
-                      disabled={!input().trim()}
-                      class="flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45"
-                      title="Send"
-                      aria-label="Send message"
+                      type="button"
+                      onClick={chat.stop}
+                      class="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-surface text-base-content shadow-sm transition-colors hover:bg-surface-hover"
+                      title="Stop"
+                      aria-label="Stop response"
                     >
-                      <SendIcon class="h-4 w-4" />
+                      <SquareIcon class="h-4 w-4" />
                     </button>
                   </Show>
+                  <button
+                    type="submit"
+                    disabled={!input().trim()}
+                    class="flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45"
+                    title="Send"
+                    aria-label="Send message"
+                  >
+                    <SendIcon class="h-4 w-4" />
+                  </button>
                 </div>
               </div>
             </form>

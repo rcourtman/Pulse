@@ -691,13 +691,13 @@ describe('AIChat', () => {
       expect(mockChat.sendMessage).not.toHaveBeenCalled();
     });
 
-    it('does not send when chat is loading', () => {
+    it('sends a replacement message when chat is loading', () => {
       mockChat.isLoading.mockReturnValue(true);
       renderChat();
       const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
       fireEvent.input(textarea, { target: { value: 'hello' } });
       fireEvent.keyDown(textarea, { key: 'Enter' });
-      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+      expect(mockChat.sendMessage).toHaveBeenCalledWith('hello', undefined, undefined);
     });
 
     it('clears input after successful submit', () => {
@@ -736,6 +736,7 @@ describe('AIChat', () => {
       mockChat.isLoading.mockReturnValue(true);
       renderChat();
       expect(screen.getByTitle('Stop')).toBeInTheDocument();
+      expect(screen.getByTitle('Send')).toBeInTheDocument();
     });
 
     it('calls chat.stop when stop button is clicked', () => {
