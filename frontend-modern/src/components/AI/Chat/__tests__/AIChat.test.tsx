@@ -690,6 +690,37 @@ describe('AIChat', () => {
       expect(document.activeElement).toBe(textarea);
     });
 
+    it('switches from a failed stored route to the configured chat model', async () => {
+      mockChat.model.mockReturnValue('openrouter:deepseek/deepseek-v4-pro');
+      mockAIAPI.getSettings.mockResolvedValue({
+        model: 'deepseek:deepseek-v4-pro',
+        chat_model: 'gemini:gemini-3.1-flash-lite',
+        control_level: 'read_only',
+        autonomous_mode: false,
+        discovery_enabled: true,
+      });
+      mockAIAPI.testProvider.mockResolvedValueOnce({
+        success: false,
+        message: 'Provider authentication issue',
+        provider: 'openrouter',
+        model: 'openrouter:deepseek/deepseek-v4-pro',
+        cause: 'provider_auth',
+        summary: 'The provider rejected the configured credentials or account access.',
+        recommendation: 'Check the API key or provider authentication.',
+        action: 'open_provider_settings',
+      });
+
+      renderChat();
+
+      await waitFor(() => {
+        expect(mockAIAPI.testProvider).toHaveBeenCalledWith(
+          'openrouter',
+          'openrouter:deepseek/deepseek-v4-pro',
+        );
+        expect(mockChat.setModel).toHaveBeenCalledWith('gemini:gemini-3.1-flash-lite');
+      });
+    });
+
     it('sends user input when the readiness issue reports a provider-qualified model', async () => {
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'gpt-4',

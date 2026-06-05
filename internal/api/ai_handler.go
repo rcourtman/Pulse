@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -78,6 +79,22 @@ type AIService interface {
 	SetAppContainerReadProvider(provider chat.MCPAppContainerReadProvider)
 	UpdateControlSettings(cfg *config.AIConfig)
 	GetBaseURL() string
+}
+
+type aiServiceRuntimeConfigReader interface {
+	GetConfig() *config.AIConfig
+}
+
+func aiChatRuntimeConfigDigest(cfg *config.AIConfig) [sha256.Size]byte {
+	payload, err := json.Marshal(cfg)
+	if err != nil {
+		payload = []byte(fmt.Sprintf("%#v", cfg))
+	}
+	return sha256.Sum256(payload)
+}
+
+func aiChatRuntimeConfigChanged(current, latest *config.AIConfig) bool {
+	return aiChatRuntimeConfigDigest(current) != aiChatRuntimeConfigDigest(latest)
 }
 
 type patrolRunHandoffProvider func(context.Context, string) (airuntime.PatrolRunRecord, bool)
@@ -421,6 +438,7 @@ func (h *AIHandler) GetService(ctx context.Context) AIService {
 			if strings.TrimSpace(GetOrgID(defaultCtx)) == "" {
 				defaultCtx = context.WithValue(context.Background(), OrgIDContextKey, "default")
 			}
+			h.syncServiceConfig(defaultCtx, svc)
 			h.applyServiceInitializer(defaultCtx, svc)
 		}
 		return svc
@@ -431,6 +449,7 @@ func (h *AIHandler) GetService(ctx context.Context) AIService {
 	h.servicesMu.RUnlock()
 
 	if exists {
+		h.syncServiceConfig(ctx, svc)
 		h.applyServiceInitializer(ctx, svc)
 		return svc
 	}
@@ -440,6 +459,7 @@ func (h *AIHandler) GetService(ctx context.Context) AIService {
 
 	// Double check
 	if svc, exists = h.services[orgID]; exists {
+		h.syncServiceConfig(ctx, svc)
 		return svc
 	}
 
@@ -450,6 +470,41 @@ func (h *AIHandler) GetService(ctx context.Context) AIService {
 		h.services[orgID] = svc
 	}
 	return svc
+}
+
+func (h *AIHandler) syncServiceConfig(ctx context.Context, svc AIService) {
+	if h == nil || svc == nil {
+		return
+	}
+	reader, ok := svc.(aiServiceRuntimeConfigReader)
+	if !ok {
+		return
+	}
+	if !svc.IsRunning() {
+		return
+	}
+
+	currentCfg := reader.GetConfig()
+	latestCfg := h.loadAIConfig(ctx)
+	if latestCfg == nil || !latestCfg.Enabled {
+		if currentCfg != nil && currentCfg.Enabled {
+			if err := svc.Stop(ctx); err != nil {
+				log.Warn().Err(err).Msg("Failed to stop AI chat service after persisted Assistant config became disabled")
+			}
+		}
+		return
+	}
+	if !aiChatRuntimeConfigChanged(currentCfg, latestCfg) {
+		return
+	}
+
+	if err := svc.Restart(ctx, latestCfg); err != nil {
+		log.Warn().Err(err).Msg("Failed to synchronize AI chat service with persisted Assistant config")
+		return
+	}
+	log.Info().
+		Str("model", config.NormalizeQuickstartModelString(latestCfg.GetChatModel())).
+		Msg("AI chat service synchronized with persisted Assistant config")
 }
 
 // RemoveTenantService stops and removes the AI service for a specific tenant.

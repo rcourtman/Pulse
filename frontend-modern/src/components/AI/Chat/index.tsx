@@ -1142,6 +1142,31 @@ export const AIChat: Component<AIChatProps> = (props) => {
     void refreshSelectedProviderReadiness(provider, model);
   });
 
+  createEffect(() => {
+    const readiness = providerReadiness();
+    const override = chatOverrideModel().trim();
+    if (!isOpen() || readiness.status !== 'error' || !override) {
+      return;
+    }
+
+    const current = selectedChatModel().trim();
+    if (!current || current === override) {
+      return;
+    }
+
+    const failedProvider = readiness.provider.trim();
+    const currentProvider = providerForModelRoute(current);
+    const overrideProvider = providerForModelRoute(override);
+    if (failedProvider && currentProvider !== failedProvider) {
+      return;
+    }
+    if (failedProvider && overrideProvider === failedProvider) {
+      return;
+    }
+
+    selectModel(override);
+  });
+
   // Click outside handler to close all dropdowns
   onMount(() => {
     setPromptHistory(loadPromptHistory());

@@ -534,12 +534,63 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 }
 
 // TestConnection validates the API key by listing models
-// This avoids dependencies on specific model names which may get deprecated
 func (c *OpenAIClient) TestConnection(ctx context.Context) error {
+	if c.isOpenRouter() {
+		if err := c.testOpenRouterKey(ctx); err != nil {
+			return fmt.Errorf("openrouter test connection failed: %w", err)
+		}
+		return nil
+	}
 	if _, err := c.ListModels(ctx); err != nil {
 		return fmt.Errorf("openai test connection failed: %w", err)
 	}
 	return nil
+}
+
+func (c *OpenAIClient) testOpenRouterKey(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, "GET", c.openrouterKeyEndpoint(), nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set("Accept", "application/json")
+	c.applyProviderHeaders(req)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		var errResp openaiError
+		errMsg := string(respBody)
+		if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
+			errMsg = errResp.Error.Message
+		}
+		errMsg = appendRateLimitInfo(errMsg, resp)
+		return fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
+	}
+	return nil
+}
+
+func (c *OpenAIClient) openrouterKeyEndpoint() string {
+	u, err := url.Parse(c.baseURL)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return "https://openrouter.ai/api/v1/key"
+	}
+
+	path := u.Path
+	if strings.HasSuffix(path, "/chat/completions") {
+		path = strings.TrimSuffix(path, "/chat/completions") + "/key"
+	} else if strings.HasSuffix(path, "/v1") {
+		path = path + "/key"
+	} else {
+		path = "/api/v1/key"
+	}
+	return u.Scheme + "://" + u.Host + path
 }
 
 func (c *OpenAIClient) modelsEndpoint() string {

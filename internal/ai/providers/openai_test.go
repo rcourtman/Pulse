@@ -796,6 +796,53 @@ func TestOpenAIClient_ListModels_OpenRouterReturnsCatalog(t *testing.T) {
 	assert.Equal(t, "meta-llama/llama-3.3-70b-instruct", models[2].ID)
 }
 
+func TestOpenAIClient_TestConnection_OpenRouterValidatesCurrentKey(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/v1/key", r.URL.Path)
+		assert.Equal(t, "Bearer sk-test", r.Header.Get("Authorization"))
+		assert.Equal(t, "https://pulse.app", r.Header.Get("HTTP-Referer"))
+		assert.Equal(t, "Pulse", r.Header.Get("X-Title"))
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": map[string]interface{}{
+				"label":           "sk-or-v1-test",
+				"limit_remaining": 10,
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("sk-test", "openai/gpt-4o-mini", server.URL, 0)
+	client.baseURL = strings.TrimSuffix(server.URL, "/") + "/api/v1/chat/completions#openrouter.ai"
+
+	require.NoError(t, client.TestConnection(context.Background()))
+}
+
+func TestOpenAIClient_TestConnection_OpenRouterRejectsUnauthenticatedKey(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/v1/key", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_ = json.NewEncoder(w).Encode(openaiError{
+			Error: openaiErrorDetail{
+				Message: "Missing Authentication header",
+				Code:    "401",
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("", "openai/gpt-4o-mini", server.URL, 0)
+	client.baseURL = strings.TrimSuffix(server.URL, "/") + "/api/v1/chat/completions#openrouter.ai"
+
+	err := client.TestConnection(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "openrouter test connection failed")
+	assert.Contains(t, err.Error(), "Missing Authentication header")
+}
+
 func TestOpenAIClient_Chat_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v1/chat/completions", r.URL.Path)

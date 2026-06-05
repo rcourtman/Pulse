@@ -89,6 +89,10 @@ func TestService_CreateProviderForModel(t *testing.T) {
 	if _, err := svc.createProviderForModel("deepseek:deepseek-chat"); err != nil {
 		t.Fatalf("expected deepseek provider: %v", err)
 	}
+	svc.cfg.OpenRouterAPIKey = "sk-or-test"
+	if _, err := svc.createProviderForModel("openrouter:deepseek/deepseek-v4-pro"); err != nil {
+		t.Fatalf("expected openrouter provider: %v", err)
+	}
 }
 
 func TestService_CreateProviderForModel_UsesConfiguredRequestTimeout(t *testing.T) {

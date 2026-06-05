@@ -28,6 +28,15 @@ type MockAIService struct {
 	mock.Mock
 }
 
+type syncingMockAIService struct {
+	MockAIService
+	cfg *config.AIConfig
+}
+
+func (m *syncingMockAIService) GetConfig() *config.AIConfig {
+	return m.cfg
+}
+
 func (m *MockAIService) Start(ctx context.Context) error {
 	args := m.Called(ctx)
 	return args.Error(0)
@@ -352,6 +361,39 @@ func TestGetService(t *testing.T) {
 	h := newTestAIHandler(nil, nil, nil)
 	h.defaultService = mockSvc
 	assert.Equal(t, mockSvc, h.GetService(context.Background()))
+}
+
+func TestGetService_RestartsRunningServiceWhenPersistedConfigChanges(t *testing.T) {
+	staleCfg := &config.AIConfig{
+		Enabled:          true,
+		ChatModel:        "openrouter:deepseek/deepseek-v4-pro",
+		OpenRouterAPIKey: "stale-openrouter-key",
+	}
+	freshCfg := &config.AIConfig{
+		Enabled:          true,
+		ChatModel:        "openrouter:deepseek/deepseek-v4-pro",
+		OpenRouterAPIKey: "fresh-openrouter-key",
+	}
+
+	mockPersist := new(MockAIPersistence)
+	mockPersist.dataDir = t.TempDir()
+	mockPersist.On("LoadAIConfig").Return(freshCfg, nil).Once()
+
+	mockSvc := &syncingMockAIService{cfg: staleCfg}
+	mockSvc.On("IsRunning").Return(true).Once()
+	mockSvc.On("Restart", mock.Anything, freshCfg).Run(func(mock.Arguments) {
+		mockSvc.cfg = freshCfg
+	}).Return(nil).Once()
+
+	h := newTestAIHandler(nil, mockPersist, nil)
+	h.defaultService = mockSvc
+
+	got := h.GetService(context.Background())
+
+	assert.Equal(t, mockSvc, got)
+	assert.Equal(t, freshCfg, mockSvc.GetConfig())
+	mockSvc.AssertExpectations(t)
+	mockPersist.AssertExpectations(t)
 }
 
 func TestGetAIConfig(t *testing.T) {

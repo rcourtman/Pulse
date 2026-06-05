@@ -2263,42 +2263,15 @@ func (s *Service) createProviderForModel(modelStr string) (providers.StreamingPr
 	providerName := parts[0]
 	modelName := parts[1]
 
-	timeout := s.cfg.GetRequestTimeout()
-
-	switch providerName {
-	case "anthropic":
-		if s.cfg.AnthropicAPIKey == "" {
-			return nil, fmt.Errorf("Anthropic API key not configured")
-		}
-		return providers.NewAnthropicClient(s.cfg.AnthropicAPIKey, modelName, timeout), nil
-	case "openai":
-		if s.cfg.OpenAIAPIKey == "" {
-			return nil, fmt.Errorf("OpenAI API key not configured")
-		}
-		return providers.NewOpenAIClient(s.cfg.OpenAIAPIKey, modelName, s.cfg.OpenAIBaseURL, timeout), nil
-	case "openrouter":
-		if s.cfg.OpenRouterAPIKey == "" {
-			return nil, fmt.Errorf("OpenRouter API key not configured")
-		}
-		return providers.NewOpenAIClient(s.cfg.OpenRouterAPIKey, modelName, s.cfg.GetBaseURLForProvider(config.AIProviderOpenRouter), timeout), nil
-	case "deepseek":
-		if s.cfg.DeepSeekAPIKey == "" {
-			return nil, fmt.Errorf("DeepSeek API key not configured")
-		}
-		return providers.NewOpenAIClient(s.cfg.DeepSeekAPIKey, modelName, s.cfg.GetBaseURLForProvider(config.AIProviderDeepSeek), timeout), nil
-	case "gemini":
-		if s.cfg.GeminiAPIKey == "" {
-			return nil, fmt.Errorf("Gemini API key not configured")
-		}
-		return providers.NewGeminiClient(s.cfg.GeminiAPIKey, modelName, "", timeout), nil
-	case "ollama":
-		baseURL := s.cfg.GetBaseURLForProvider(config.AIProviderOllama)
-		return providers.NewOllamaClientWithKeepAlive(modelName, baseURL, s.cfg.OllamaUsername, s.cfg.OllamaPassword, s.cfg.GetOllamaKeepAlive(), timeout)
-	case config.AIProviderQuickstart:
-		return nil, fmt.Errorf("quickstart provider is retired; configure a provider API key or Ollama")
-	default:
-		return nil, fmt.Errorf("unsupported provider: %s", providerName)
+	provider, err := providers.NewForProvider(s.cfg, providerName, modelName)
+	if err != nil {
+		return nil, err
 	}
+	streamingProvider, ok := provider.(providers.StreamingProvider)
+	if !ok {
+		return nil, fmt.Errorf("provider %s does not support streaming chat", providerName)
+	}
+	return streamingProvider, nil
 }
 
 func (s *Service) createPatrolProviderForModel(modelStr string) (providers.StreamingProvider, error) {
