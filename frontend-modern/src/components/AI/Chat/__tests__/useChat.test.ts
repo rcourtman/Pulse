@@ -77,6 +77,7 @@ describe('useChat', () => {
       expect(chat.sessionId()).toBe('');
       expect(chat.model()).toBe('');
       expect(typeof chat.sendMessage).toBe('function');
+      expect(typeof chat.retryMessage).toBe('function');
       expect(typeof chat.stop).toBe('function');
       expect(typeof chat.clearMessages).toBe('function');
       expect(typeof chat.loadSession).toBe('function');
@@ -191,7 +192,7 @@ describe('useChat', () => {
       expect(chat.messages()[0]).toMatchObject({ role: 'user', content: 'hello' });
       expect(chat.messages()[1]).toMatchObject({
         role: 'assistant',
-        content: 'Error: Failed to create chat session',
+        error: 'Could not start a chat session. Check your connection and try again.',
         isStreaming: false,
       });
       expect(chat.isLoading()).toBe(false);
@@ -207,12 +208,33 @@ describe('useChat', () => {
       expect(result).toBe(false);
       expect(mockNotifyError).toHaveBeenCalledWith('server error');
 
-      // Assistant message should have error content
+      // Assistant message should carry the error in its dedicated error field
       const msgs = chat.messages();
       const assistant = msgs.find((m) => m.role === 'assistant');
-      expect(assistant?.content).toContain('Error: server error');
+      expect(assistant?.error).toContain('server error');
       expect(assistant?.isStreaming).toBe(false);
       expect(chat.isLoading()).toBe(false);
+      dispose();
+    });
+
+    it('retryMessage drops the failed turn and re-sends the prompt', async () => {
+      mockChat.mockRejectedValueOnce(new Error('server error'));
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'sess' }));
+      await chat.sendMessage('hello');
+
+      const failed = chat.messages().find((m) => m.role === 'assistant');
+      expect(failed?.error).toContain('server error');
+      expect(chat.messages()).toHaveLength(2);
+
+      mockChat.mockResolvedValueOnce(undefined);
+      chat.retryMessage(failed!.id);
+      await new Promise((r) => setTimeout(r, 0));
+
+      const msgs = chat.messages();
+      // The failed user+assistant pair is replaced by a single clean attempt.
+      expect(msgs.filter((m) => m.role === 'user')).toHaveLength(1);
+      expect(msgs.some((m) => m.error)).toBe(false);
+      expect(mockChat).toHaveBeenCalledTimes(2);
       dispose();
     });
 
@@ -848,7 +870,7 @@ describe('useChat', () => {
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.isStreaming).toBe(false);
-      expect(assistant.content).toBe('Error: Rate limited');
+      expect(assistant.error).toBe('Rate limited');
       expect(assistant.pendingTools).toHaveLength(0);
       dispose();
     });
@@ -863,7 +885,7 @@ describe('useChat', () => {
       fire({ type: 'error', data: 'Something went wrong' });
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
-      expect(assistant.content).toBe('Error: Something went wrong');
+      expect(assistant.error).toBe('Something went wrong');
       dispose();
     });
 
@@ -877,7 +899,7 @@ describe('useChat', () => {
       fire({ type: 'error', data: null });
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
-      expect(assistant.content).toBe('Error: Request failed');
+      expect(assistant.error).toBe('Request failed');
       dispose();
     });
 

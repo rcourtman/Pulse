@@ -1547,6 +1547,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
             onSkip={handleSkip}
             onAnswerQuestion={handleAnswerQuestion}
             onSkipQuestion={handleSkipQuestion}
+            onRetry={(messageId) => chat.retryMessage(messageId)}
             recentSessions={sessions()
               .filter((s) => s.id !== chat.sessionId() && s.message_count > 0)
               .slice(0, 3)}

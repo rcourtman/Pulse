@@ -106,6 +106,10 @@ export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  // Clean, user-facing error for a failed turn. Rendered as a distinct error
+  // block (not as answer content) so partial streamed content is preserved and
+  // the failure is unmistakable and recoverable.
+  error?: string;
   thinking?: string;
   thinkingChunks?: string[];
   streamEvents?: StreamDisplayEvent[];

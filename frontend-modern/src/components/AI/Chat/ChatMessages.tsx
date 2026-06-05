@@ -13,6 +13,7 @@ interface ChatMessagesProps {
     answers: Array<{ id: string; value: string }>,
   ) => void;
   onSkipQuestion: (messageId: string, questionId: string) => void;
+  onRetry?: (messageId: string) => void;
   // Dashboard props
   recentSessions?: ChatSession[];
   onLoadSession?: (sessionId: string) => void;
@@ -91,6 +92,7 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
               props.onAnswerQuestion(message.id, question, answers)
             }
             onSkipQuestion={(questionId) => props.onSkipQuestion(message.id, questionId)}
+            onRetry={props.onRetry}
           />
         )}
       </For>

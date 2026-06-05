@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, render, screen, fireEvent } from '@solidjs/testing-library';
 import { MessageItem } from '../MessageItem';
 import type { ChatMessage, PendingApproval, PendingQuestion, StreamDisplayEvent } from '../types';
 
@@ -124,6 +124,54 @@ describe('MessageItem', () => {
       // User messages use a plain <p> tag, not innerHTML with markdown
       const p = screen.getByText('raw text here');
       expect(p.tagName).toBe('P');
+    });
+  });
+
+  describe('error block', () => {
+    it('renders a distinct error block with the message and a retry button', () => {
+      const onRetry = vi.fn();
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            error: 'The AI provider rejected the request for billing or quota reasons.',
+          })}
+          {...makeHandlers()}
+          onRetry={onRetry}
+        />
+      ));
+
+      const alert = screen.getByRole('alert');
+      expect(alert).toBeInTheDocument();
+      expect(alert.textContent).toContain('billing or quota reasons');
+
+      const retry = screen.getByRole('button', { name: /try again/i });
+      fireEvent.click(retry);
+      expect(onRetry).toHaveBeenCalledWith('msg-1');
+    });
+
+    it('does not show a retry button when no onRetry handler is provided', () => {
+      render(() => (
+        <MessageItem
+          message={makeMessage({ role: 'assistant', content: '', error: 'Something failed.' })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+    });
+
+    it('renders no error block when there is no error', () => {
+      render(() => (
+        <MessageItem
+          message={makeMessage({ role: 'assistant', content: 'All good.' })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
   });
 

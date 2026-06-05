@@ -435,11 +435,13 @@ export function useChat(options: UseChatOptions = {}) {
 
             case 'error': {
               const errorMsg = extractErrorMessage(event.data);
+              // Keep any content streamed before the failure; surface the error
+              // as a distinct, recoverable block rather than overwriting the answer.
               return {
                 ...msg,
                 isStreaming: false,
                 pendingTools: [],
-                content: `Error: ${errorMsg || 'Request failed'}`,
+                error: errorMsg || 'Request failed',
               };
             }
 
@@ -506,7 +508,8 @@ export function useChat(options: UseChatOptions = {}) {
           {
             id: generateId(),
             role: 'assistant',
-            content: 'Error: Failed to create chat session',
+            content: '',
+            error: 'Could not start a chat session. Check your connection and try again.',
             timestamp: new Date(),
             isStreaming: false,
           },
@@ -564,7 +567,7 @@ export function useChat(options: UseChatOptions = {}) {
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === assistantId
-            ? { ...msg, isStreaming: false, content: `Error: ${errorMessage}` }
+            ? { ...msg, isStreaming: false, error: errorMessage }
             : msg,
         ),
       );
@@ -785,6 +788,23 @@ export function useChat(options: UseChatOptions = {}) {
     });
   };
 
+  // Retry a failed assistant turn: drop the failed assistant message and the
+  // user prompt that triggered it from the view, then re-send that prompt so the
+  // conversation shows a single clean attempt instead of a dead-end error.
+  const retryMessage = (assistantMessageId: string) => {
+    const msgs = messages();
+    const idx = msgs.findIndex((m) => m.id === assistantMessageId);
+    if (idx < 0) return;
+    let userIdx = idx - 1;
+    while (userIdx >= 0 && msgs[userIdx].role !== 'user') userIdx--;
+    if (userIdx < 0) return;
+    const prompt = msgs[userIdx].content;
+    if (!prompt.trim()) return;
+    const removeIds = new Set([msgs[userIdx].id, assistantMessageId]);
+    setMessages((prev) => prev.filter((m) => !removeIds.has(m.id)));
+    void sendMessage(prompt);
+  };
+
   return {
     messages,
     isLoading,
@@ -792,6 +812,7 @@ export function useChat(options: UseChatOptions = {}) {
     model,
     setModel,
     sendMessage,
+    retryMessage,
     stop,
     clearMessages,
     loadSession,

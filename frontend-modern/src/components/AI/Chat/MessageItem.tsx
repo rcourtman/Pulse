@@ -21,6 +21,7 @@ interface MessageItemProps {
     answers: Array<{ id: string; value: string }>,
   ) => void;
   onSkipQuestion: (questionId: string) => void;
+  onRetry?: (messageId: string) => void;
 }
 
 /**
@@ -170,6 +171,53 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                   // eslint-disable-next-line solid/no-innerhtml
                   innerHTML={renderMarkdown(props.message.content)}
                 />
+              </Show>
+
+              {/* Error block - distinct, recoverable */}
+              <Show when={props.message.error}>
+                <div
+                  class="mt-2 flex items-start gap-2.5 rounded-md border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-3 py-2.5"
+                  role="alert"
+                >
+                  <svg
+                    class="w-4 h-4 mt-0.5 shrink-0 text-red-500 dark:text-red-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="1.8"
+                      d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"
+                    />
+                  </svg>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-sm text-red-700 dark:text-red-300">{props.message.error}</p>
+                    <Show when={props.onRetry}>
+                      <button
+                        type="button"
+                        onClick={() => props.onRetry?.(props.message.id)}
+                        class="mt-2 inline-flex items-center gap-1.5 rounded-md border border-red-300 dark:border-red-800 px-2 py-1 text-xs font-medium text-red-700 dark:text-red-300 transition-colors hover:bg-red-100 dark:hover:bg-red-900/40"
+                      >
+                        <svg
+                          class="w-3.5 h-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M16.023 9.348h4.992V4.356M2.985 19.644v-4.992h4.992m-4.875 0a8.25 8.25 0 0013.803 3.7l3.181-3.182m-16.991-3.7a8.25 8.25 0 0113.803-3.7l3.181 3.182"
+                          />
+                        </svg>
+                        Try again
+                      </button>
+                    </Show>
+                  </div>
+                </div>
               </Show>
 
               {/* Streaming cursor */}
