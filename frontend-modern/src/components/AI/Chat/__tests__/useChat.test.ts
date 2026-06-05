@@ -897,11 +897,7 @@ describe('useChat', () => {
       );
       expect(assistant.content).not.toContain('pulse_read');
       expect(assistant.content).not.toContain('raw arguments');
-      expect(assistant.streamEvents?.map((e) => e.type)).toEqual([
-        'content',
-        'tool',
-        'content',
-      ]);
+      expect(assistant.streamEvents?.map((e) => e.type)).toEqual(['content', 'tool', 'content']);
       dispose();
     });
 
@@ -974,74 +970,59 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('paces rapid workflow progress as one replacing live status', async () => {
-      vi.useFakeTimers();
+    it('replaces rapid workflow progress immediately as one live status', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
 
-      try {
-        await chat.sendMessage('hi');
-        const fire = getFireEvent();
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
 
-        fire({
-          type: 'workflow_state',
-          data: {
-            phase: 'context',
-            message: 'Reading current Pulse inventory with pulse_query.',
-            tool: 'pulse_query',
-          },
-        });
-        fire({
-          type: 'workflow_state',
-          data: {
-            phase: 'context',
-            message: 'Built compact inventory context for the model.',
-            tool: 'pulse_query',
-          },
-        });
-        fire({
-          type: 'workflow_state',
-          data: {
-            phase: 'provider_start',
-            message: 'Sent request to OpenRouter; waiting for the first token.',
-          },
-        });
+      fire({
+        type: 'workflow_state',
+        data: {
+          phase: 'context',
+          message: 'Reading current Pulse inventory with pulse_query.',
+          tool: 'pulse_query',
+        },
+      });
+      let assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.streamEvents).toEqual([]);
+      expect(assistant.workflowStatus).toEqual(
+        expect.objectContaining({
+          message: 'Reading current Pulse inventory with pulse_query.',
+        }),
+      );
 
-        let assistant = chat.messages().find((m) => m.role === 'assistant')!;
-        expect(assistant.streamEvents).toEqual([]);
-        expect(assistant.workflowStatus).toEqual(
-          expect.objectContaining({
-            message: 'Reading current Pulse inventory with pulse_query.',
-          }),
-        );
+      fire({
+        type: 'workflow_state',
+        data: {
+          phase: 'context',
+          message: 'Built compact inventory context for the model.',
+          tool: 'pulse_query',
+        },
+      });
+      assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.workflowStatus).toEqual(
+        expect.objectContaining({
+          message: 'Built compact inventory context for the model.',
+        }),
+      );
 
-        await vi.advanceTimersByTimeAsync(449);
-        assistant = chat.messages().find((m) => m.role === 'assistant')!;
-        expect(assistant.workflowStatus).toEqual(
-          expect.objectContaining({
-            message: 'Reading current Pulse inventory with pulse_query.',
-          }),
-        );
+      fire({
+        type: 'workflow_state',
+        data: {
+          phase: 'provider_start',
+          message: 'Sent request to OpenRouter; waiting for the first token.',
+        },
+      });
+      assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.workflowStatus).toEqual(
+        expect.objectContaining({
+          message: 'Sent request to OpenRouter; waiting for the first token.',
+        }),
+      );
 
-        await vi.advanceTimersByTimeAsync(1);
-        assistant = chat.messages().find((m) => m.role === 'assistant')!;
-        expect(assistant.workflowStatus).toEqual(
-          expect.objectContaining({
-            message: 'Built compact inventory context for the model.',
-          }),
-        );
-
-        await vi.advanceTimersByTimeAsync(450);
-        assistant = chat.messages().find((m) => m.role === 'assistant')!;
-        expect(assistant.workflowStatus).toEqual(
-          expect.objectContaining({
-            message: 'Sent request to OpenRouter; waiting for the first token.',
-          }),
-        );
-      } finally {
-        dispose();
-        vi.useRealTimers();
-      }
+      dispose();
     });
 
     it('clears workflow progress when visible answer content starts streaming', async () => {

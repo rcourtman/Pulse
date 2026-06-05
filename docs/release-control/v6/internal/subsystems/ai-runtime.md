@@ -198,9 +198,11 @@ runtime cost control, and shared AI transport surfaces.
    stream progress arrives, must show the current effective model route while
    the turn is still streaming, and must render late workflow progress in the
    assistant row instead of only in drawer chrome. Workflow status is live
-   progress, not answer content; once visible assistant text, tool progress,
-   approvals, or questions begin, stale workflow text must clear so the row does
-   not keep saying it is waiting on a phase that has already been superseded.
+   progress, not answer content or a delayed walkthrough; each new
+   `workflow_state` replaces the active status immediately instead of waiting
+   behind a dwell queue. Once visible assistant text, tool progress, approvals,
+   or questions begin, stale workflow text must clear so the row does not keep
+   saying it is waiting on a phase that has already been superseded.
    OpenCode-parity Assistant UX work must reference OpenCode's actual source
    implementation for message parts, tool-state mutation, and progress
    rendering before changing Pulse behavior; parity means adapting the proven
