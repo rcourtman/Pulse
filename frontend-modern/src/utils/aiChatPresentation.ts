@@ -85,15 +85,15 @@ export function getAIChatProviderReadinessPresentation(args: {
   if (args.status === 'checking') {
     return {
       tone: 'checking',
-      title: `Checking ${providerLabel} provider`,
-      body: 'Pulse is verifying the selected provider before this chat sends work.',
+      title: `Verifying ${providerLabel} provider`,
+      body: 'Pulse is checking the selected provider route in the background.',
     };
   }
 
   const body =
     args.summary?.trim() ||
     args.message?.trim() ||
-    'Pulse could not verify the selected provider before this chat sends work.';
+    'Pulse could not verify the selected provider route.';
   const recommendation = args.recommendation?.trim() || undefined;
 
   return {

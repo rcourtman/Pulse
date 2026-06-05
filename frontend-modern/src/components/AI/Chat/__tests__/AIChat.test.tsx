@@ -283,12 +283,12 @@ function setViewportWidth(width: number) {
   window.dispatchEvent(new Event('resize'));
 }
 
-async function waitForComposerSendReady() {
+async function waitForProviderCheckSettled() {
   await waitFor(() => {
     expect(mockAIAPI.testProvider).toHaveBeenCalled();
   });
   await waitFor(() => {
-    expect(screen.queryByText('Checking OpenAI provider')).not.toBeInTheDocument();
+    expect(screen.queryByText('Verifying OpenAI provider')).not.toBeInTheDocument();
   });
   await waitFor(() => {
     expect(screen.getByRole('button', { name: 'Send message' })).not.toBeDisabled();
@@ -409,7 +409,7 @@ describe('AIChat', () => {
       );
     });
 
-    it('keeps user input queued while the selected provider check is still running', async () => {
+    it('sends user input while the selected provider check is still running', async () => {
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'openai:gpt-4',
         chat_model: '',
@@ -421,17 +421,21 @@ describe('AIChat', () => {
 
       renderChat();
 
-      await screen.findByText('Checking OpenAI provider');
+      await screen.findByText('Verifying OpenAI provider');
       const textarea = screen.getByPlaceholderText(
         'Ask about your infrastructure...',
       ) as HTMLTextAreaElement;
       fireEvent.input(textarea, { target: { value: 'summarize the cluster' } });
 
-      expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Send message' })).not.toBeDisabled();
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
-      expect(mockChat.sendMessage).not.toHaveBeenCalled();
-      expect(textarea.value).toBe('summarize the cluster');
+      expect(mockChat.sendMessage).toHaveBeenCalledWith(
+        'summarize the cluster',
+        undefined,
+        undefined,
+      );
+      expect(textarea.value).toBe('');
       expect(document.activeElement).toBe(textarea);
     });
 
@@ -2074,7 +2078,7 @@ describe('AIChat', () => {
         expect(textarea.value).toBe('@redacted by policy ');
       });
 
-      await waitForComposerSendReady();
+      await waitForProviderCheckSettled();
       fireEvent.keyDown(textarea, { key: 'Enter' });
       expect(mockChat.sendMessage).toHaveBeenCalledWith(
         '@redacted by policy',
@@ -2280,7 +2284,7 @@ describe('AIChat', () => {
 
       const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
       fireEvent.input(textarea, { target: { value: 'what happened here?' } });
-      await waitForComposerSendReady();
+      await waitForProviderCheckSettled();
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
       expect(mockChat.sendMessage).toHaveBeenCalledWith(
@@ -2361,7 +2365,7 @@ describe('AIChat', () => {
       expect(mockAiChatStore.context.briefing?.title).toBe('Patrol finding on web-server');
 
       fireEvent.input(textarea, { target: { value: 'what changed next?' } });
-      await waitForComposerSendReady();
+      await waitForProviderCheckSettled();
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
       await waitFor(() => {

@@ -554,9 +554,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
     );
   };
 
-  const providerReadinessBlocksSend = createMemo(() => {
+  const providerReadinessHasBlockingError = createMemo(() => {
     const readiness = providerReadiness();
-    if (readiness.status !== 'checking' && readiness.status !== 'error') return false;
+    if (readiness.status !== 'error') return false;
     return providerReadinessMatchesSelection(readiness);
   });
 
@@ -591,7 +591,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
         provider,
         model,
         message: 'Provider check failed',
-        summary: 'Pulse could not verify the selected provider before this chat sends work.',
+        summary: 'Pulse could not verify the selected provider route.',
         recommendation:
           'Check provider settings and network reachability, then retry the provider check.',
         action: 'open_provider_settings',
@@ -1174,7 +1174,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const handleSubmit = () => {
     const prompt = input().trim();
     if (!prompt) return;
-    if (providerReadinessBlocksSend()) {
+    if (providerReadinessHasBlockingError()) {
       focusComposer();
       return;
     }
@@ -2041,7 +2041,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   </Show>
                   <button
                     type="submit"
-                    disabled={!input().trim() || providerReadinessBlocksSend()}
+                    disabled={!input().trim() || providerReadinessHasBlockingError()}
                     class="flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45"
                     title="Send"
                     aria-label="Send message"

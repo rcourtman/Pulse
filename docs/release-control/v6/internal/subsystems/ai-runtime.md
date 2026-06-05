@@ -77,10 +77,11 @@ runtime cost control, and shared AI transport surfaces.
    by `internal/ai/`, not Patrol runtime-finding wording, and the drawer may
    surface the result as actionable retry/settings status plus same-model
    configured-provider alternatives without converting it into
-   assistant-authored output. The composer must keep typed text and focus while
-   the selected provider is checking or failed, but it must not dispatch a user
-   turn until that selected provider route is ready or the operator chooses a
-   ready alternative.
+   assistant-authored output. Provider checking is a background diagnostic and
+   must not delay the user's first useful chat turn; a confirmed selected-route
+   provider error must keep typed text and focus while blocking dispatch until
+   the route is rechecked successfully or the operator chooses a ready
+   alternative.
    Operator interruption is likewise chat-runtime state: Stop and replacement
    sends must abort the active stream, clear pending tool/approval/question
    affordances, preserve any partial model text, return focus to the composer,

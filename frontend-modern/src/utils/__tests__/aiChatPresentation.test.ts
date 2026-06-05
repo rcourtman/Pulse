@@ -93,6 +93,6 @@ describe('aiChatPresentation', () => {
         status: 'checking',
         providerLabel: 'OpenRouter',
       }).title,
-    ).toBe('Checking OpenRouter provider');
+    ).toBe('Verifying OpenRouter provider');
   });
 });
