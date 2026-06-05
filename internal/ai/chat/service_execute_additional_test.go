@@ -24,6 +24,22 @@ type stubServiceProvider struct {
 	streamFn func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error
 }
 
+type sessionAwareStateProvider struct {
+	readSeen          *atomic.Bool
+	sessionSeen       *atomic.Bool
+	readBeforeSession *atomic.Bool
+}
+
+func (p sessionAwareStateProvider) ReadSnapshot() models.StateSnapshot {
+	if p.readSeen != nil {
+		p.readSeen.Store(true)
+	}
+	if p.sessionSeen != nil && !p.sessionSeen.Load() && p.readBeforeSession != nil {
+		p.readBeforeSession.Store(true)
+	}
+	return models.StateSnapshot{}
+}
+
 type recordingAgentServer struct {
 	calls atomic.Int32
 }
@@ -380,6 +396,91 @@ func TestService_ExecuteStream_Success(t *testing.T) {
 	}
 	if len(messages) < 2 {
 		t.Fatalf("expected at least 2 messages, got %d", len(messages))
+	}
+}
+
+func TestService_ExecuteStream_EmitsSessionBeforeInventoryPrefetch(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	var sessionSeen atomic.Bool
+	var stateReadSeen atomic.Bool
+	var stateReadBeforeSession atomic.Bool
+	provider := &stubServiceProvider{}
+	service := NewService(Config{
+		AIConfig: &config.AIConfig{ChatModel: "openai:test"},
+		StateProvider: sessionAwareStateProvider{
+			readSeen:          &stateReadSeen,
+			sessionSeen:       &sessionSeen,
+			readBeforeSession: &stateReadBeforeSession,
+		},
+	})
+	service.sessions = store
+	service.provider = provider
+	service.started = true
+
+	err = service.ExecuteStream(context.Background(), ExecuteRequest{
+		SessionID: "sess-early-session",
+		Prompt:    "how many devices are in this",
+	}, func(event StreamEvent) {
+		if event.Type == "session" {
+			sessionSeen.Store(true)
+		}
+	})
+	if err != nil {
+		t.Fatalf("ExecuteStream failed: %v", err)
+	}
+	if !sessionSeen.Load() {
+		t.Fatal("session event was not emitted")
+	}
+	if !stateReadSeen.Load() {
+		t.Fatal("inventory prefetch did not read state")
+	}
+	if stateReadBeforeSession.Load() {
+		t.Fatal("inventory prefetch read state before the browser-visible session event")
+	}
+}
+
+func TestService_ExecuteStream_SuppressesSessionEventWhenCallerAlreadySentIt(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	provider := &stubServiceProvider{}
+	service := NewService(Config{
+		AIConfig: &config.AIConfig{ChatModel: "openai:test"},
+	})
+	service.sessions = store
+	service.provider = provider
+	service.started = true
+
+	var sessionEvents int
+	var doneEvents int
+	err = service.ExecuteStream(context.Background(), ExecuteRequest{
+		SessionID:            "sess-session-suppressed",
+		Prompt:               "hello",
+		SuppressSessionEvent: true,
+	}, func(event StreamEvent) {
+		switch event.Type {
+		case "session":
+			sessionEvents++
+		case "done":
+			doneEvents++
+		}
+	})
+	if err != nil {
+		t.Fatalf("ExecuteStream failed: %v", err)
+	}
+	if sessionEvents != 0 {
+		t.Fatalf("session events = %d, want 0", sessionEvents)
+	}
+	if doneEvents != 1 {
+		t.Fatalf("done events = %d, want 1", doneEvents)
 	}
 }
 

@@ -443,8 +443,10 @@ payload shape change when the portal presents compact client rows.
     boundary. Browser Assistant output is owned by the AI runtime presentation
     contract rather than by API-client event typing.
     Cold Assistant streams must include a typed `session` event backed by
-    `internal/ai/chat.SessionData` before user-visible provider output so the
-    frontend can bind the backend-created session without a separate
+    `internal/ai/chat.SessionData` as soon as the HTTP SSE writer is ready and
+    before backend handoff recovery, model resolution, provider fallback
+    planning, context prefetch, inventory reads, or user-visible provider output
+    so the frontend can bind the backend-created session without a separate
     create-session request. The generated frontend union, stream parser tests,
     and backend JSON snapshot proof must stay in lockstep with that payload;
     `done.session_id` and `question.session_id` remain compatibility payloads,

@@ -634,7 +634,25 @@ export const AIChat: Component<AIChatProps> = (props) => {
     try {
       const raw = localStorage.getItem(MODEL_SESSION_STORAGE_KEY);
       const parsed = raw ? JSON.parse(raw) : {};
-      return typeof parsed === 'object' && parsed ? (parsed as Record<string, string>) : {};
+      if (!parsed || typeof parsed !== 'object') return {};
+
+      const selections: Record<string, string> = {};
+      for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+        const sessionId = key.trim();
+        const modelId = typeof value === 'string' ? value.trim() : '';
+        if (!sessionId || sessionId === DEFAULT_SESSION_KEY || !modelId) continue;
+        selections[sessionId] = modelId;
+      }
+
+      if (raw && JSON.stringify(parsed) !== JSON.stringify(selections)) {
+        if (Object.keys(selections).length > 0) {
+          localStorage.setItem(MODEL_SESSION_STORAGE_KEY, JSON.stringify(selections));
+        } else {
+          localStorage.removeItem(MODEL_SESSION_STORAGE_KEY);
+        }
+      }
+
+      return selections;
     } catch (error) {
       logger.warn('[AIChat] Failed to read stored models:', error);
       return {};
@@ -654,16 +672,19 @@ export const AIChat: Component<AIChatProps> = (props) => {
     createSignal<Record<string, string>>(initialModelSelections);
 
   const getStoredModel = (sessionId: string) => {
-    const key = sessionId || DEFAULT_SESSION_KEY;
+    const key = sessionId.trim();
+    if (!key) return '';
     return modelSelections()[key] || '';
   };
 
   const updateStoredModel = (sessionId: string, modelId: string) => {
-    const key = sessionId || DEFAULT_SESSION_KEY;
+    const key = sessionId.trim();
+    if (!key) return;
     setModelSelections((prev) => {
       const next = { ...prev };
-      if (modelId) {
-        next[key] = modelId;
+      const normalizedModel = modelId.trim();
+      if (normalizedModel) {
+        next[key] = normalizedModel;
       } else {
         delete next[key];
       }
@@ -679,7 +700,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
   // Chat hook
   const chat = useChat({
-    model: initialModelSelections[DEFAULT_SESSION_KEY] || '',
+    model: '',
     defaultModel: () => defaultModel().trim(),
     onConversationChanged: refreshSessions,
   });

@@ -582,6 +582,50 @@ func TestHandleChat_Success(t *testing.T) {
 	assert.Contains(t, w.Header().Get("Content-Type"), "text/event-stream")
 }
 
+func TestHandleChat_EmitsSessionBeforeExecuteStream(t *testing.T) {
+	cfg := &config.Config{}
+	h := newTestAIHandler(cfg, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+	w := httptest.NewRecorder()
+
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.On(
+		"ExecuteStream",
+		mock.Anything,
+		mock.MatchedBy(func(req chat.ExecuteRequest) bool {
+			return req.SessionID == "early-http-session" && req.SuppressSessionEvent
+		}),
+		mock.Anything,
+	).Return(nil).Run(func(args mock.Arguments) {
+		if !strings.Contains(w.Body.String(), `"type":"session"`) {
+			t.Fatal("session event was not written before ExecuteStream")
+		}
+		callback := args.Get(2).(chat.StreamCallback)
+		contentData, _ := json.Marshal(chat.ContentData{Text: "hello"})
+		callback(chat.StreamEvent{Type: "content", Data: contentData})
+	})
+
+	body := `{"prompt": "hi", "session_id": "early-http-session"}`
+	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body))
+
+	h.HandleChat(w, req)
+
+	response := w.Body.String()
+	sessionIndex := strings.Index(response, `"type":"session"`)
+	contentIndex := strings.Index(response, `"type":"content"`)
+	if sessionIndex < 0 {
+		t.Fatal("response missing session event")
+	}
+	if contentIndex < 0 {
+		t.Fatal("response missing content event")
+	}
+	if sessionIndex > contentIndex {
+		t.Fatalf("session event appeared after content event: %s", response)
+	}
+	assert.Equal(t, 1, strings.Count(response, `"type":"session"`))
+}
+
 func TestHandleChat_UsesClientSafeStreamProjection(t *testing.T) {
 	cfg := &config.Config{}
 	h := newTestAIHandler(cfg, nil, nil)

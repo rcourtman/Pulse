@@ -98,6 +98,13 @@ runtime cost control, and shared AI transport surfaces.
    is handled as a normal failed turn with draft restoration. Same-model
    configured-provider alternatives remain one-click route changes as well as
    send-time recovery choices, not required preconditions for typing or sending.
+   Assistant model-selection defaults are settings-owned: the drawer may persist
+   explicit model selections only for concrete session IDs, while blank-session
+   chat defaults must flow from `/api/settings/ai` `chat_model` or `model`.
+   Browser storage must not keep a hidden `__default__` model route that
+   overrides the configured chat model after the operator changes provider
+   settings; stale blank-session defaults must be ignored and cleaned on mount
+   so routes such as OpenRouter become visible and effective immediately.
    Follow-up sends during an active Assistant response are chat-runtime queue
    state by default. The drawer must accept and echo the user's follow-up as a
    queued user turn without aborting or replacing the active model stream, must
@@ -146,6 +153,14 @@ runtime cost control, and shared AI transport surfaces.
    the drawer must update the in-flight transcript row when `provider_fallback`
    names the next route so message labels, cost context, retry decisions, and
    model-route recovery do not continue to point at the failed provider.
+   Interactive Assistant streams must establish the session ID and emit the
+   `session` event once as soon as the HTTP SSE writer is ready, before finding
+   handoff recovery, model resolution, provider fallback planning,
+   handoff/context prefetch, recent-session injection, inventory summary reads,
+   tool scoping, or provider startup. The chat service then persists/ensures
+   that same session ID while suppressing duplicate session events. This keeps
+   the drawer's visible turn anchored while backend preparation continues and
+   prevents simple prompts from appearing stuck in an opaque thinking state.
    Streamed provider startup must be bounded by the configured Assistant request
    timeout and the OpenAI-compatible SSE response-header guard; transient
    startup failures may retry once before surfacing failed-turn recovery, but a

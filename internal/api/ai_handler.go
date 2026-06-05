@@ -13,6 +13,7 @@ import (
 
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	airuntime "github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
@@ -2458,6 +2459,14 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 	}
 
+	streamSessionID := strings.TrimSpace(req.SessionID)
+	if streamSessionID == "" {
+		streamSessionID = uuid.NewString()
+	}
+	req.SessionID = streamSessionID
+	sessionData, _ := json.Marshal(chat.SessionData{ID: streamSessionID})
+	writeEvent(chat.StreamEvent{Type: "session", Data: sessionData})
+
 	// Convert API mentions to chat mentions
 	var chatMentions []chat.StructuredMention
 	for _, m := range req.Mentions {
@@ -2547,16 +2556,17 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	serviceSentDone := false
 	serviceSentError := false
 	err := svc.ExecuteStream(ctx, chat.ExecuteRequest{
-		Prompt:           req.Prompt,
-		SessionID:        req.SessionID,
-		Model:            req.Model,
-		Mentions:         chatMentions,
-		FindingID:        findingID,
-		HandoffContext:   handoffContext,
-		HandoffResources: handoffResources,
-		HandoffActions:   handoffActions,
-		HandoffMetadata:  handoffMetadata,
-		AutonomousMode:   chatAutonomousModeForFindingHandoff(req.AutonomousMode, findingID, handoffContext, handoffResources, handoffActions, handoffMetadata),
+		Prompt:               req.Prompt,
+		SessionID:            req.SessionID,
+		Model:                req.Model,
+		Mentions:             chatMentions,
+		FindingID:            findingID,
+		HandoffContext:       handoffContext,
+		HandoffResources:     handoffResources,
+		HandoffActions:       handoffActions,
+		HandoffMetadata:      handoffMetadata,
+		AutonomousMode:       chatAutonomousModeForFindingHandoff(req.AutonomousMode, findingID, handoffContext, handoffResources, handoffActions, handoffMetadata),
+		SuppressSessionEvent: true,
 	}, func(event chat.StreamEvent) {
 		if event.Type == "done" {
 			serviceSentDone = true

@@ -2612,16 +2612,30 @@ describe('AIChat', () => {
       expect(localStorage.getItem('pulse:ai_chat_models_by_session')).toBe('{broken json');
     });
 
-    it('initializes useChat with stored default model', () => {
+    it('drops stale stored default model overrides on mount', () => {
       localStorage.setItem(
         'pulse:ai_chat_models_by_session',
         JSON.stringify({ __default__: 'claude-3' }),
       );
       renderChat();
-      // The component should have passed this model into useChat — we can verify
-      // the stored value persists (the component reads it at construction)
-      const stored = JSON.parse(localStorage.getItem('pulse:ai_chat_models_by_session')!);
-      expect(stored.__default__).toBe('claude-3');
+      expect(mockChat.setModel).not.toHaveBeenCalledWith('claude-3');
+      expect(localStorage.getItem('pulse:ai_chat_models_by_session')).toBeNull();
+    });
+
+    it('restores stored model choices for real sessions', async () => {
+      localStorage.setItem(
+        'pulse:ai_chat_models_by_session',
+        JSON.stringify({ 'session-1': 'openrouter:deepseek/deepseek-v4-pro' }),
+      );
+      mockChat.sessionId.mockReturnValue('session-1');
+
+      renderChat();
+
+      await waitFor(() => {
+        expect(mockChat.setModel).toHaveBeenCalledWith(
+          'openrouter:deepseek/deepseek-v4-pro',
+        );
+      });
     });
   });
 

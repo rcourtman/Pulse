@@ -527,6 +527,15 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 
 	log.Debug().Str("session_id", session.ID).Msg("[ChatService] Session ensured")
 
+	streamCallback := callback
+	if streamCallback == nil {
+		streamCallback = func(StreamEvent) {}
+	}
+	if !req.SuppressSessionEvent {
+		sessionData, _ := json.Marshal(SessionData{ID: session.ID})
+		streamCallback(StreamEvent{Type: "session", Data: sessionData})
+	}
+
 	handoffContext := strings.TrimSpace(req.HandoffContext)
 	handoffResources := normalizeHandoffResources(req.HandoffResources)
 	handoffActions := normalizeHandoffActions(req.HandoffActions)
@@ -787,10 +796,6 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		Int("tools_count", len(filteredTools)).
 		Msg("[ChatService] Prepared governed tool manifest, starting agentic loop")
 
-	streamCallback := callback
-	if streamCallback == nil {
-		streamCallback = func(StreamEvent) {}
-	}
 	wrappedCallback := func(event StreamEvent) {
 		event = sanitizeStreamEventForHandoffResourcePolicy(event, handoffResources, handoffResourceProvider)
 		var ok bool
@@ -800,8 +805,6 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		}
 		streamCallback(event)
 	}
-	sessionData, _ := json.Marshal(SessionData{ID: session.ID})
-	streamCallback(StreamEvent{Type: "session", Data: sessionData})
 	if initialFallbackModel != "" {
 		emitChatProviderFallback(streamCallback, selectedModel, initialFallbackModel)
 	}

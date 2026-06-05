@@ -223,6 +223,11 @@ type ExecuteRequest struct {
 	HandoffMetadata  HandoffMetadata     `json:"handoff_metadata,omitempty"`  // Browser-safe identity for restoring saved product handoffs.
 	MaxTurns         int                 `json:"max_turns,omitempty"`         // Override max agentic turns (0 = use default)
 	AutonomousMode   *bool               `json:"autonomous_mode,omitempty"`   // Per-request autonomous override (nil = use service default)
+
+	// SuppressSessionEvent is set by HTTP streaming callers that have already
+	// emitted the browser-visible session event before expensive handoff or
+	// provider setup work.
+	SuppressSessionEvent bool `json:"-"`
 }
 
 // QuestionAnswer represents a user's answer to a question
