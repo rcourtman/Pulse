@@ -80,8 +80,10 @@ import type { PendingApproval, PendingQuestion } from './types';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
 
 const MODEL_SESSION_STORAGE_KEY = 'pulse:ai_chat_models_by_session';
+const PROMPT_HISTORY_STORAGE_KEY = 'pulse:ai_chat_prompt_history';
 const DEFAULT_SESSION_KEY = '__default__';
 const AI_CHAT_MIN_DOCKED_VIEWPORT_WIDTH = 1200;
+const AI_CHAT_PROMPT_HISTORY_LIMIT = 100;
 const STRUCTURED_PATROL_CONTEXT_TARGETS = new Set(['patrol-configuration', 'patrol-run']);
 const STRUCTURED_RESOURCE_CONTEXT_HANDOFF_KINDS = new Set(['resource_context']);
 
@@ -104,6 +106,11 @@ interface ChatProviderReadinessAlternative {
   providerLabel: string;
 }
 
+interface PromptHistoryEntry {
+  prompt: string;
+  mentions: MentionResource[];
+}
+
 interface AIChatProps {
   onClose: () => void;
 }
@@ -113,6 +120,45 @@ const compactText = (items: Array<string | undefined>): string[] =>
 
 const pluralizeCount = (count: number, singular: string, plural: string) =>
   `${count} ${count === 1 ? singular : plural}`;
+
+const normalizePromptHistoryEntry = (value: unknown): PromptHistoryEntry | null => {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  const prompt = typeof record.prompt === 'string' ? record.prompt : '';
+  if (!prompt.trim()) return null;
+  const mentions = Array.isArray(record.mentions)
+    ? record.mentions
+        .map((mention): MentionResource | null => {
+          if (!mention || typeof mention !== 'object') return null;
+          const mentionRecord = mention as Record<string, unknown>;
+          const id = typeof mentionRecord.id === 'string' ? mentionRecord.id : '';
+          const label = typeof mentionRecord.label === 'string' ? mentionRecord.label : '';
+          const type = mentionRecord.type;
+          if (
+            !id ||
+            !label ||
+            !(
+              type === 'vm' ||
+              type === 'system-container' ||
+              type === 'app-container' ||
+              type === 'agent' ||
+              type === 'storage'
+            )
+          ) {
+            return null;
+          }
+          return {
+            id,
+            label,
+            type,
+            node: typeof mentionRecord.node === 'string' ? mentionRecord.node : undefined,
+            status: typeof mentionRecord.status === 'string' ? mentionRecord.status : undefined,
+          };
+        })
+        .filter((mention): mention is MentionResource => mention !== null)
+    : [];
+  return { prompt, mentions };
+};
 
 const normalizeComparableModelKey = (modelId: string): string => {
   const trimmed = modelId.trim().toLowerCase();
@@ -398,6 +444,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [editingQueuedFollowUp, setEditingQueuedFollowUp] = createSignal<QueuedFollowUp | null>(
     null,
   );
+  const [promptHistory, setPromptHistory] = createSignal<PromptHistoryEntry[]>([]);
+  const [promptHistoryIndex, setPromptHistoryIndex] = createSignal(-1);
+  const [savedPromptDraft, setSavedPromptDraft] = createSignal<PromptHistoryEntry | null>(null);
   const [sessions, setSessions] = createSignal<ChatSession[]>([]);
   const [showSessions, setShowSessions] = createSignal(false);
   const [sessionDropdownPosition, setSessionDropdownPosition] = createSignal({ top: 0, right: 0 });
@@ -445,6 +494,129 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (!textareaRef) return;
     textareaRef.style.height = 'auto';
     textareaRef.style.height = `${Math.min(textareaRef.scrollHeight, 160)}px`;
+  };
+
+  const cloneMentions = (mentions: MentionResource[]) =>
+    mentions.map((mention) => ({ ...mention }));
+
+  const loadPromptHistory = (): PromptHistoryEntry[] => {
+    try {
+      const raw = localStorage.getItem(PROMPT_HISTORY_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .map(normalizePromptHistoryEntry)
+        .filter((entry): entry is PromptHistoryEntry => entry !== null)
+        .slice(0, AI_CHAT_PROMPT_HISTORY_LIMIT);
+    } catch (error) {
+      logger.warn('[AIChat] Failed to read prompt history:', error);
+      return [];
+    }
+  };
+
+  const persistPromptHistory = (history: PromptHistoryEntry[]) => {
+    try {
+      localStorage.setItem(PROMPT_HISTORY_STORAGE_KEY, JSON.stringify(history));
+    } catch (error) {
+      logger.warn('[AIChat] Failed to persist prompt history:', error);
+    }
+  };
+
+  const promptHistoryEntriesEqual = (a: PromptHistoryEntry, b: PromptHistoryEntry) => {
+    if (a.prompt.trim() !== b.prompt.trim()) return false;
+    if (a.mentions.length !== b.mentions.length) return false;
+    return a.mentions.every((mention, index) => {
+      const other = b.mentions[index];
+      return (
+        other &&
+        mention.id === other.id &&
+        mention.label === other.label &&
+        mention.type === other.type &&
+        mention.node === other.node
+      );
+    });
+  };
+
+  const addPromptHistoryEntry = (prompt: string, mentions: MentionResource[]) => {
+    const trimmedPrompt = prompt.trim();
+    if (!trimmedPrompt) return;
+
+    const entry: PromptHistoryEntry = {
+      prompt: trimmedPrompt,
+      mentions: cloneMentions(mentions),
+    };
+
+    setPromptHistory((prev) => {
+      if (prev[0] && promptHistoryEntriesEqual(prev[0], entry)) return prev;
+      const next = [entry, ...prev].slice(0, AI_CHAT_PROMPT_HISTORY_LIMIT);
+      persistPromptHistory(next);
+      return next;
+    });
+  };
+
+  const resetPromptHistoryNavigation = () => {
+    setPromptHistoryIndex(-1);
+    setSavedPromptDraft(null);
+  };
+
+  const applyPromptHistoryEntry = (entry: PromptHistoryEntry, cursor: 'start' | 'end') => {
+    setInput(entry.prompt);
+    setAccumulatedMentions(cloneMentions(entry.mentions));
+    setMentionActive(false);
+    queueMicrotask(() => {
+      resizeTextarea();
+      textareaRef?.focus();
+      const nextPosition = cursor === 'start' ? 0 : entry.prompt.length;
+      textareaRef?.setSelectionRange(nextPosition, nextPosition);
+    });
+  };
+
+  const canNavigatePromptHistory = (direction: 'up' | 'down') => {
+    if (!textareaRef) return false;
+    if (textareaRef.selectionStart !== textareaRef.selectionEnd) return false;
+    const text = input();
+    const cursor = textareaRef.selectionStart ?? text.length;
+    const inHistory = promptHistoryIndex() >= 0;
+    if (inHistory) return cursor === 0 || cursor === text.length;
+    if (direction === 'up') return cursor === 0 && text.length === 0;
+    return false;
+  };
+
+  const navigatePromptHistory = (direction: 'up' | 'down') => {
+    const entries = promptHistory();
+    if (entries.length === 0) return false;
+
+    const currentIndex = promptHistoryIndex();
+    if (direction === 'up') {
+      const nextIndex = currentIndex < 0 ? 0 : Math.min(currentIndex + 1, entries.length - 1);
+      if (nextIndex === currentIndex) return false;
+      if (currentIndex < 0) {
+        setSavedPromptDraft({
+          prompt: input(),
+          mentions: cloneMentions(accumulatedMentions()),
+        });
+      }
+      setPromptHistoryIndex(nextIndex);
+      applyPromptHistoryEntry(entries[nextIndex], 'start');
+      return true;
+    }
+
+    if (currentIndex > 0) {
+      const nextIndex = currentIndex - 1;
+      setPromptHistoryIndex(nextIndex);
+      applyPromptHistoryEntry(entries[nextIndex], 'end');
+      return true;
+    }
+
+    if (currentIndex === 0) {
+      const saved = savedPromptDraft();
+      setPromptHistoryIndex(-1);
+      setSavedPromptDraft(null);
+      applyPromptHistoryEntry(saved || { prompt: '', mentions: [] }, 'end');
+      return true;
+    }
+
+    return false;
   };
 
   const loadModelSelections = (): Record<string, string> => {
@@ -522,6 +694,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const editQueuedFollowUp = (id: string) => {
     const queued = chat.takeQueuedFollowUp(id);
     if (!queued) return;
+    resetPromptHistoryNavigation();
     setEditingQueuedFollowUp(queued);
     setInput(queued.prompt);
     restoreQueuedMentions(queued.mentions);
@@ -916,6 +1089,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
   // Click outside handler to close all dropdowns
   onMount(() => {
+    setPromptHistory(loadPromptHistory());
     aiChatStore.registerInput?.(textareaRef ?? null);
     focusComposer();
 
@@ -1263,6 +1437,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const sendPromise = hasSendOptions
       ? chat.sendMessage(prompt, mentionsForAPI, findingId, sendOptions)
       : chat.sendMessage(prompt, mentionsForAPI, findingId);
+    addPromptHistoryEntry(prompt, mentions);
+    resetPromptHistoryNavigation();
     const hasRequestHandoffPayload =
       Boolean(ctx.handoffContext?.trim()) ||
       Boolean(ctx.handoffResources?.length) ||
@@ -1287,6 +1463,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
   // Handle input change with @ mention detection
   const handleInputChange = (e: InputEvent & { currentTarget: HTMLTextAreaElement }) => {
     const value = e.currentTarget.value;
+    if (promptHistoryIndex() >= 0) {
+      resetPromptHistoryNavigation();
+    }
     setInput(value);
     resizeTextarea();
 
@@ -1355,6 +1534,15 @@ export const AIChat: Component<AIChatProps> = (props) => {
       }
     }
 
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      const direction = e.key === 'ArrowUp' ? 'up' : 'down';
+      if (canNavigatePromptHistory(direction) && navigatePromptHistory(direction)) {
+        e.preventDefault();
+      }
+      return;
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
@@ -1365,6 +1553,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const handleNewConversation = async () => {
     const started = await chat.newSession();
     if (!started) return;
+    resetPromptHistoryNavigation();
     setEditingQueuedFollowUp(null);
     aiChatStore.clearContext?.();
     setShowSessions(false);
@@ -1402,6 +1591,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const session = sessions().find((candidate) => candidate.id === sessionId);
     const loaded = await chat.loadSession(sessionId);
     if (!loaded) return;
+    resetPromptHistoryNavigation();
     setEditingQueuedFollowUp(null);
     const restoredContext = buildSessionHandoffContext(session);
     if (restoredContext) {
@@ -1423,6 +1613,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       updateStoredModel(sessionId, '');
       if (chat.sessionId() === sessionId) {
         chat.clearMessages();
+        resetPromptHistoryNavigation();
         setEditingQueuedFollowUp(null);
       }
     } catch (_error) {

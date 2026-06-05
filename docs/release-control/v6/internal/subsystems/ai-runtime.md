@@ -93,6 +93,12 @@ runtime cost control, and shared AI transport surfaces.
    partial model text, return focus to the composer, and render a neutral
    transcript marker rather than persisting synthetic assistant answer text or
    surfacing the interruption as a retryable provider failure.
+   Composer prompt history is also drawer-local chat-runtime state: the drawer
+   may persist a bounded local history of submitted prompt text and structured
+   mentions for ArrowUp/ArrowDown recall, but that history must not persist or
+   replay one-shot finding handoff, approval, autonomous-mode, or other scoped
+   send options. Scoped context replay remains owned by explicit session
+   handoff metadata or queued follow-up edit state.
    Assistant output hygiene is part of the same boundary: provider reasoning
    and raw serialized tool-call artifacts must never render as assistant
    transcript prose. Reasoning/thinking deltas may update neutral progress

@@ -978,6 +978,65 @@ describe('AIChat', () => {
       expect(mockChat.sendMessage).toHaveBeenCalledWith('hello world', undefined, undefined);
     });
 
+    it('recalls submitted prompts with ArrowUp and ArrowDown from the empty composer', async () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+
+      fireEvent.input(textarea, { target: { value: 'first prompt' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+      fireEvent.input(textarea, { target: { value: 'second prompt' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      await waitFor(() => expect(textarea.value).toBe(''));
+
+      fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+      await waitFor(() => expect(textarea.value).toBe('second prompt'));
+
+      fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+      await waitFor(() => expect(textarea.value).toBe('first prompt'));
+
+      fireEvent.keyDown(textarea, { key: 'ArrowDown' });
+      await waitFor(() => expect(textarea.value).toBe('second prompt'));
+
+      fireEvent.keyDown(textarea, { key: 'ArrowDown' });
+      await waitFor(() => expect(textarea.value).toBe(''));
+    });
+
+    it('does not replace a non-empty composer draft with prompt history', () => {
+      localStorage.setItem(
+        'pulse:ai_chat_prompt_history',
+        JSON.stringify([{ prompt: 'previous prompt', mentions: [] }]),
+      );
+
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+
+      fireEvent.input(textarea, { target: { value: 'draft prompt' } });
+      fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+
+      expect(textarea.value).toBe('draft prompt');
+    });
+
+    it('loads persisted prompt history for recall', async () => {
+      localStorage.setItem(
+        'pulse:ai_chat_prompt_history',
+        JSON.stringify([{ prompt: 'persisted prompt', mentions: [] }]),
+      );
+
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+
+      fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+
+      await waitFor(() => expect(textarea.value).toBe('persisted prompt'));
+    });
+
     it('does not send an empty message', () => {
       renderChat();
       const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
