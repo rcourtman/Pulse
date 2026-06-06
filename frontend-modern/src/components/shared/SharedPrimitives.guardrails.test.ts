@@ -255,6 +255,12 @@ describe('shared primitive guardrails', () => {
     expect(aiModelPickerSource).toContain('const selectedButtonLabel = createMemo');
     expect(aiModelPickerSource).toContain('aria-label={selectedButtonLabel()}');
     expect(aiModelPickerSource).toContain("·{' '}");
+    expect(aiModelPickerSource).toContain("const CURRENT_SELECTION_LABEL = 'Current'");
+    expect(aiModelPickerSource).toContain('const CurrentSelectionBadge');
+    expect(aiModelPickerSource).toContain('const optionAriaLabel');
+    expect(aiModelPickerSource).toContain('aria-selected={isSelectedRoute(model.id)}');
+    expect(aiModelPickerSource).toContain('aria-label={optionAriaLabel(');
+    expect(aiModelPickerSource).toContain('role="option"');
     expect(aiModelPickerSource).toContain("candidate.includes('://')");
     expect(aiModelPickerSource).toContain('separator <= 0 || separator === candidate.length - 1');
     expect(aiModelPickerSource).toContain('MOBILE_BOTTOM_CLEARANCE');

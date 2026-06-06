@@ -104,6 +104,54 @@ describe('AIModelPicker', () => {
     ).toBe(button);
   });
 
+  it('marks the selected catalog row as current in the model list', () => {
+    render(() => (
+      <AIModelPicker
+        models={models}
+        selectedModel="openrouter:minimax/minimax-m2.5"
+        onModelSelect={vi.fn()}
+        title="Select shared default model"
+      />
+    ));
+
+    fireEvent.click(screen.getByTitle('Select shared default model'));
+
+    const currentOption = screen.getByRole('option', {
+      name: /MiniMax: MiniMax M2\.5 via OpenRouter.*Current/,
+    });
+    expect(currentOption).toHaveAttribute('aria-selected', 'true');
+    expect(currentOption).toHaveAttribute(
+      'aria-label',
+      'MiniMax: MiniMax M2.5 via OpenRouter, Current. Current OpenRouter model. openrouter:minimax/minimax-m2.5',
+    );
+    expect(currentOption).toHaveTextContent('Current');
+  });
+
+  it('marks the inherited default option as current when no chat route is selected', () => {
+    render(() => (
+      <AIModelPicker
+        models={models}
+        selectedModel=""
+        onModelSelect={vi.fn()}
+        defaultOption={{
+          label: 'Default',
+          description: 'Use configured default model',
+        }}
+        title="Select shared default model"
+      />
+    ));
+
+    fireEvent.click(screen.getByTitle('Select shared default model'));
+
+    const currentOption = screen.getByRole('option', { name: /Default.*Current/ });
+    expect(currentOption).toHaveAttribute('aria-selected', 'true');
+    expect(currentOption).toHaveAttribute(
+      'aria-label',
+      'Default, Current. Use configured default model',
+    );
+    expect(currentOption).toHaveTextContent('Use configured default model');
+  });
+
   it('constrains the dropdown to the available mobile viewport height', () => {
     vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(760);
     vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(850);

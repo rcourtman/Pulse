@@ -370,7 +370,16 @@ runtime cost control, and shared AI transport surfaces.
    `provider:model` routes that the backend chat stream can execute. Unknown
    recent or custom Pulse routes may survive catalog hydration only when they
    still have a valid provider/model shape; malformed route strings must not
-   become selectable chat routes.
+   become selectable chat routes. The referenced OpenCode source at commit
+   `9ed17da55ab1f7360cc0e01075f763e27fa899e9`
+   `packages/opencode/src/cli/cmd/tui/component/dialog-model.tsx` passes the
+   current structured model route into `DialogSelect` at lines 146-171, and
+   `packages/opencode/src/cli/cmd/run/footer.command.tsx` marks the current
+   direct-mode model row with a `current` footer at lines 796-804. Pulse adapts
+   that by making the shared model picker mark the selected catalog, recent,
+   override, custom, or inherited-default route as a visible `Current`
+   `role="option"` row with `aria-selected`, instead of relying on background
+   color alone.
    The referenced OpenCode source at fetched `origin/dev` commit
    `147169e9b78bdd8430800f883af6b6485e5156e4` runs ordinary follow-up
    prompts through a serial local queue in

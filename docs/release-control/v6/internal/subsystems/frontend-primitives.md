@@ -1017,7 +1017,10 @@ not a replacement status card, CTA band, or page-local nested card.
     they have a valid non-empty provider and model segment; malformed route
     strings such as empty provider/model values, URL-shaped text, whitespace,
     or path-only payloads must be dropped instead of becoming selectable model
-    routes.
+    routes. The shared picker must also mark the selected catalog, recent,
+    override, custom, or inherited-default route as the current row with
+    visible `Current` metadata and `aria-selected`; selected model state must
+    not be communicated by background color alone.
     Gateway-routed model choices must not look like direct-provider choices:
     the shared picker, System AI settings status strip, and per-surface
     inherited-default descriptions must render OpenRouter-hosted provider

@@ -77,6 +77,7 @@ const SEARCH_HEADER_HEIGHT = 52;
 const ERROR_ROW_HEIGHT = 36;
 const CUSTOM_RECENT_MODEL_DESCRIPTION = 'Recent custom model route';
 const MODEL_ROUTE_PROVIDER_RE = /^[a-z][a-z0-9_-]*$/i;
+const CURRENT_SELECTION_LABEL = 'Current';
 
 type ResolvedModelRoute = {
   id: string;
@@ -108,6 +109,24 @@ const modelRouteSecondaryId = (entry: ResolvedModelRoute) => {
   if (!model?.name || model.name === model.id) return '';
   return model.id;
 };
+
+const CurrentSelectionBadge: Component = () => (
+  <span class="shrink-0 rounded border border-blue-200 bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-blue-700 dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-200">
+    {' '}
+    {CURRENT_SELECTION_LABEL}
+    {' '}
+  </span>
+);
+
+const optionAriaLabel = (
+  label: string,
+  isSelected: boolean,
+  details: Array<string | undefined> = [],
+) =>
+  [
+    isSelected ? `${label}, ${CURRENT_SELECTION_LABEL}` : label,
+    ...details.filter((detail): detail is string => Boolean(detail?.trim())),
+  ].join('. ');
 
 function groupModelsByProvider(models: ModelInfo[]): Map<string, ModelInfo[]> {
   const grouped = new Map<string, ModelInfo[]>();
@@ -328,6 +347,11 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
     props.onModelSelect(modelId);
     closePicker();
   };
+  const isSelectedRoute = (modelId: string) => selectedModel() === modelId;
+  const optionClass = (isSelected: boolean) =>
+    `w-full px-3 py-2 text-left text-sm hover:bg-surface-hover ${
+      isSelected ? 'bg-blue-50 dark:bg-blue-900' : ''
+    }`;
 
   const handleKeyDown = (event: KeyboardEvent) => {
     if (event.key !== 'Enter') {
@@ -453,9 +477,23 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
               <button
                 type="button"
                 onClick={() => handleSelect('')}
-                class={`w-full px-3 py-2 text-left text-sm hover:bg-surface-hover ${!selectedModel() ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
+                role="option"
+                aria-selected={!selectedModel()}
+                aria-label={optionAriaLabel(
+                  props.defaultOption!.label,
+                  !selectedModel(),
+                  [props.defaultOption!.description],
+                )}
+                class={optionClass(!selectedModel())}
               >
-                <div class="font-medium text-base-content">{props.defaultOption!.label}</div>
+                <div class="flex min-w-0 items-center gap-2">
+                  <span class="min-w-0 flex-1 truncate font-medium text-base-content">
+                    {props.defaultOption!.label}
+                  </span>
+                  <Show when={!selectedModel()}>
+                    <CurrentSelectionBadge />
+                  </Show>
+                </div>
                 <Show when={props.defaultOption!.description}>
                   <div class="text-[11px] text-muted">{props.defaultOption!.description}</div>
                 </Show>
@@ -467,9 +505,21 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
                 <button
                   type="button"
                   onClick={() => handleSelect(option.id)}
-                  class={`w-full px-3 py-2 text-left text-sm hover:bg-surface-hover ${selectedModel() === option.id ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
+                  role="option"
+                  aria-selected={isSelectedRoute(option.id)}
+                  aria-label={optionAriaLabel(option.label, isSelectedRoute(option.id), [
+                    option.description,
+                  ])}
+                  class={optionClass(isSelectedRoute(option.id))}
                 >
-                  <div class="font-medium text-base-content">{option.label}</div>
+                  <div class="flex min-w-0 items-center gap-2">
+                    <span class="min-w-0 flex-1 truncate font-medium text-base-content">
+                      {option.label}
+                    </span>
+                    <Show when={isSelectedRoute(option.id)}>
+                      <CurrentSelectionBadge />
+                    </Show>
+                  </div>
                   <Show when={option.description}>
                     <div class="text-[11px] text-muted">{option.description}</div>
                   </Show>
@@ -481,9 +531,23 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
               <button
                 type="button"
                 onClick={() => handleSelect(customModelCandidate())}
-                class="w-full px-3 py-2 text-left text-sm hover:bg-surface-hover"
+                role="option"
+                aria-selected={isSelectedRoute(customModelCandidate())}
+                aria-label={optionAriaLabel(
+                  `Use "${customModelCandidate()}"`,
+                  isSelectedRoute(customModelCandidate()),
+                  [props.customModelDescription || 'Custom model ID'],
+                )}
+                class={optionClass(isSelectedRoute(customModelCandidate()))}
               >
-                <div class="font-medium text-base-content">Use "{customModelCandidate()}"</div>
+                <div class="flex min-w-0 items-center gap-2">
+                  <span class="min-w-0 flex-1 truncate font-medium text-base-content">
+                    Use "{customModelCandidate()}"
+                  </span>
+                  <Show when={isSelectedRoute(customModelCandidate())}>
+                    <CurrentSelectionBadge />
+                  </Show>
+                </div>
                 <div class="text-[11px] text-muted">
                   {props.customModelDescription || 'Custom model ID'}
                 </div>
@@ -514,9 +578,23 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
                         <button
                           type="button"
                           onClick={() => handleSelect(entry.id)}
-                          class={`w-full px-3 py-2 text-left text-sm hover:bg-surface-hover ${selectedModel() === entry.id ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
+                          role="option"
+                          aria-selected={isSelectedRoute(entry.id)}
+                          aria-label={optionAriaLabel(
+                            modelRouteLabel(entry),
+                            isSelectedRoute(entry.id),
+                            [modelRouteDescription(entry), modelRouteSecondaryId(entry)],
+                          )}
+                          class={optionClass(isSelectedRoute(entry.id))}
                         >
-                          <div class="font-medium text-base-content">{modelRouteLabel(entry)}</div>
+                          <div class="flex min-w-0 items-center gap-2">
+                            <span class="min-w-0 flex-1 truncate font-medium text-base-content">
+                              {modelRouteLabel(entry)}
+                            </span>
+                            <Show when={isSelectedRoute(entry.id)}>
+                              <CurrentSelectionBadge />
+                            </Show>
+                          </div>
                           <Show when={modelRouteDescription(entry)}>
                             <div class="line-clamp-2 text-[11px] text-muted">
                               {modelRouteDescription(entry)}
@@ -544,10 +622,25 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
                       <button
                         type="button"
                         onClick={() => handleSelect(model.id)}
-                        class={`w-full px-3 py-2 text-left text-sm hover:bg-surface-hover ${selectedModel() === model.id ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
+                        role="option"
+                        aria-selected={isSelectedRoute(model.id)}
+                        aria-label={optionAriaLabel(
+                          formatAIModelRouteLabel(model),
+                          isSelectedRoute(model.id),
+                          [
+                            model.description,
+                            model.name && model.name !== model.id ? model.id : undefined,
+                          ],
+                        )}
+                        class={optionClass(isSelectedRoute(model.id))}
                       >
-                        <div class="font-medium text-base-content">
-                          {formatAIModelRouteLabel(model)}
+                        <div class="flex min-w-0 items-center gap-2">
+                          <span class="min-w-0 flex-1 truncate font-medium text-base-content">
+                            {formatAIModelRouteLabel(model)}
+                          </span>
+                          <Show when={isSelectedRoute(model.id)}>
+                            <CurrentSelectionBadge />
+                          </Show>
                         </div>
                         <Show when={model.description}>
                           <div class="line-clamp-2 text-[11px] text-muted">{model.description}</div>

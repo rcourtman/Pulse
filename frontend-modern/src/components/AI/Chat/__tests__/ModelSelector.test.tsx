@@ -302,13 +302,10 @@ describe('ModelSelector', () => {
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
 
-    // Click the Default option (the one with "Use configured default model" text)
-    const defaultButtons = screen.getAllByRole('button');
-    const defaultOption = defaultButtons.find((btn) =>
-      btn.textContent?.includes('Use configured default model'),
-    );
-    expect(defaultOption).toBeDefined();
-    fireEvent.click(defaultOption!);
+    const defaultOption = screen.getByRole('option', {
+      name: /Default.*Use configured default model/,
+    });
+    fireEvent.click(defaultOption);
 
     expect(onModelSelect).toHaveBeenCalledWith('');
   });
