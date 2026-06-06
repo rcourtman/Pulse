@@ -114,9 +114,15 @@ import { useChat, type QueuedFollowUp, type SendMessageOptions } from './hooks/u
 import { ChatMessages } from './ChatMessages';
 import { ModelSelector } from './ModelSelector';
 import { MentionAutocomplete, type MentionResource } from './MentionAutocomplete';
+import { SlashCommandAutocomplete } from './SlashCommandAutocomplete';
 import { getAssistantActiveTurnStatus } from './activeTurnStatus';
 import { getLastAssistantAnswerText } from './assistantAnswerText';
-import { parseAssistantSlashCommand, type AssistantSlashCommandAction } from './assistantSlashCommands';
+import {
+  filterAssistantSlashCommands,
+  parseAssistantSlashCommand,
+  type AssistantSlashCommand,
+  type AssistantSlashCommandAction,
+} from './assistantSlashCommands';
 import {
   buildAssistantTranscriptFilename,
   downloadAssistantTranscriptFile,
@@ -615,6 +621,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [mentionStartIndex, setMentionStartIndex] = createSignal(0);
   const [mentionResources, setMentionResources] = createSignal<MentionResource[]>([]);
   const [accumulatedMentions, setAccumulatedMentions] = createSignal<MentionResource[]>([]);
+  const [slashCommandActive, setSlashCommandActive] = createSignal(false);
+  const [slashCommandQuery, setSlashCommandQuery] = createSignal('');
   let textareaRef: HTMLTextAreaElement | undefined;
   let transcriptFallbackTextareaRef: HTMLTextAreaElement | undefined;
   let interruptArmTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -762,6 +770,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       draft.editingQueuedFollowUp ? cloneQueuedFollowUp(draft.editingQueuedFollowUp) : null,
     );
     setMentionActive(false);
+    setSlashCommandActive(false);
     resetPromptHistoryNavigation();
     queueMicrotask(() => {
       resizeTextarea();
@@ -776,6 +785,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     setInput(entry.prompt);
     setAccumulatedMentions(cloneMentions(entry.mentions));
     setMentionActive(false);
+    setSlashCommandActive(false);
     queueMicrotask(() => {
       resizeTextarea();
       textareaRef?.focus();
@@ -1855,8 +1865,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
       const isInsideDropdown = path.some(
         (node) => node instanceof Element && Boolean(node.closest('[data-dropdown]')),
       );
+      const isInsideComposerPopup = path.some(
+        (node) =>
+          node instanceof Element &&
+          (Boolean(node.closest('[data-mention-autocomplete]')) ||
+            Boolean(node.closest('[data-slash-command-autocomplete]'))),
+      );
       // Only close if click is outside dropdown containers
-      if (!isInsideDropdown) {
+      if (!isInsideDropdown && !isInsideComposerPopup) {
         setShowSessions(false);
         setSessionRefreshLoading(false);
         resetSessionSearch();
@@ -1865,6 +1881,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
       // Close mention autocomplete when clicking outside
       if (!target.closest('[data-mention-autocomplete]') && !target.closest('textarea')) {
         setMentionActive(false);
+      }
+      if (!target.closest('[data-slash-command-autocomplete]') && !target.closest('textarea')) {
+        setSlashCommandActive(false);
       }
     };
     document.addEventListener('click', handleClickOutside);
@@ -2157,6 +2176,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     setInput(draft);
     setAccumulatedMentions(cloneMentions(mentions));
     setMentionActive(false);
+    setSlashCommandActive(false);
     queueMicrotask(() => {
       resizeTextarea();
       focusComposer();
@@ -2176,6 +2196,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
     setInput('');
     setAccumulatedMentions([]);
     setMentionActive(false);
+    setSlashCommandActive(false);
+    setSlashCommandQuery('');
     resetPromptHistoryNavigation();
     queueMicrotask(() => {
       resizeTextarea();
@@ -2230,6 +2252,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
       executeSlashCommand(slashCommand);
       return;
     }
+    setSlashCommandActive(false);
+    setSlashCommandQuery('');
     const mentions = accumulatedMentions();
     const submittedMentions = cloneMentions(mentions);
     const mentionsForAPI =
@@ -2311,7 +2335,33 @@ export const AIChat: Component<AIChatProps> = (props) => {
     setInput('');
     setAccumulatedMentions([]);
     setMentionActive(false);
+    setSlashCommandActive(false);
+    setSlashCommandQuery('');
     focusComposer();
+  };
+
+  const updateSlashCommandAutocomplete = (value: string, cursorPos: number) => {
+    const textBeforeCursor = value.slice(0, cursorPos);
+    const textAfterCursor = value.slice(cursorPos);
+
+    if (
+      textBeforeCursor.startsWith('/') &&
+      !/\s/.test(textBeforeCursor) &&
+      !textAfterCursor.trim()
+    ) {
+      const query = textBeforeCursor.slice(1);
+      setSlashCommandQuery(query);
+      const hasMatches = filterAssistantSlashCommands(query, 1).length > 0;
+      setSlashCommandActive(hasMatches);
+      if (hasMatches) {
+        setMentionActive(false);
+      }
+      return hasMatches;
+    }
+
+    setSlashCommandActive(false);
+    setSlashCommandQuery('');
+    return false;
   };
 
   // Handle input change with @ mention detection
@@ -2325,6 +2375,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
     const cursorPos = e.currentTarget.selectionStart || 0;
     const textBeforeCursor = value.slice(0, cursorPos);
+
+    if (updateSlashCommandAutocomplete(value, cursorPos)) {
+      return;
+    }
 
     // Find the last @ before cursor
     const lastAtIndex = textBeforeCursor.lastIndexOf('@');
@@ -2347,6 +2401,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
     setMentionActive(false);
   };
 
+  const handleSlashCommandSelect = (command: AssistantSlashCommand) => {
+    setSlashCommandActive(false);
+    setSlashCommandQuery('');
+    setInput(`/${command.name}`);
+    executeSlashCommand(command.action);
+  };
+
   // Handle mention selection
   const handleMentionSelect = (resource: MentionResource) => {
     const currentInput = input();
@@ -2360,6 +2421,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
     setInput(newValue);
     setMentionActive(false);
+    setSlashCommandActive(false);
+    setSlashCommandQuery('');
 
     // Accumulate the structured mention data so we can send it with the prompt
     setAccumulatedMentions((prev) => {
@@ -2384,6 +2447,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (mentionActive()) {
       if (['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes(e.key)) {
         // These are handled by MentionAutocomplete component
+        return;
+      }
+    }
+    if (slashCommandActive()) {
+      if (['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes(e.key)) {
+        // These are handled by SlashCommandAutocomplete.
         return;
       }
     }
@@ -3376,7 +3445,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
             >
               <div
                 class={`relative flex min-h-[56px] items-end rounded-lg border bg-surface-alt shadow-sm transition-colors ${
-                  mentionActive()
+                  mentionActive() || slashCommandActive()
                     ? 'border-blue-400 ring-2 ring-blue-500/20'
                     : 'border-border focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20'
                 }`}
@@ -3400,6 +3469,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     visible={mentionActive()}
                   />
                 </div>
+                <SlashCommandAutocomplete
+                  query={slashCommandQuery()}
+                  position={{ top: 58, left: 0 }}
+                  onSelect={handleSlashCommandSelect}
+                  onClose={() => setSlashCommandActive(false)}
+                  visible={slashCommandActive()}
+                />
                 <div class="absolute bottom-2 right-2 flex items-center gap-1.5">
                   <Show when={chat.isLoading()}>
                     <button

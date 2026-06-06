@@ -1576,6 +1576,62 @@ describe('AIChat', () => {
       expect(mockChat.sendMessage).toHaveBeenCalledWith('hello world', undefined, undefined);
     });
 
+    it('shows slash command suggestions and runs the selected command with Enter', async () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+
+      fireEvent.input(textarea, { target: { value: '/mo' } });
+
+      expect(screen.getByRole('listbox', { name: 'Assistant commands' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: /Run \/models/ })).toBeInTheDocument();
+
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('model-selector')).toHaveAttribute('data-open-request', '1');
+      });
+      expect(screen.queryByRole('listbox', { name: 'Assistant commands' })).not.toBeInTheDocument();
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('filters slash command suggestions by alias and runs clicked commands', async () => {
+      renderChat();
+      await waitFor(() => {
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalledWith({ limit: 30 });
+      });
+      mockAIChatAPI.listSessions.mockClear();
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+
+      fireEvent.input(textarea, { target: { value: '/res' } });
+      expect(screen.getByRole('option', { name: /Run \/sessions/ })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('option', { name: /Run \/sessions/ }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('dialog', { name: 'Pulse Assistant sessions' })).toBeInTheDocument();
+      });
+      expect(mockAIChatAPI.listSessions).toHaveBeenCalledWith({ limit: 30 });
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('closes slash command suggestions with Escape without submitting', async () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+
+      fireEvent.input(textarea, { target: { value: '/' } });
+      expect(screen.getByRole('listbox', { name: 'Assistant commands' })).toBeInTheDocument();
+
+      fireEvent.keyDown(textarea, { key: 'Escape' });
+
+      await waitFor(() => {
+        expect(screen.queryByRole('listbox', { name: 'Assistant commands' })).not.toBeInTheDocument();
+      });
+      expect(textarea.value).toBe('/');
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+    });
+
     it('runs /new locally without sending a provider prompt', async () => {
       renderChat();
       const textarea = screen.getByPlaceholderText(
@@ -1663,6 +1719,7 @@ describe('AIChat', () => {
       const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
 
       fireEvent.input(textarea, { target: { value: '/explain /dev devices' } });
+      expect(screen.queryByRole('listbox', { name: 'Assistant commands' })).not.toBeInTheDocument();
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
       expect(mockChat.sendMessage).toHaveBeenCalledWith(
