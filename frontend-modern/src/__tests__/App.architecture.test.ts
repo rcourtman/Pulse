@@ -173,6 +173,8 @@ describe('App architecture', () => {
       'if (dialogStackHasBlockingDialog() && aiChatStore.isOpenSignal()) {',
     );
     expect(appSource).toContain("if (e.key === 'Escape' && aiChatStore.isOpen) {");
+    expect(appSource).toContain('window.setTimeout(() => {');
+    expect(appSource).toContain('if (!e.defaultPrevented && aiChatStore.isOpen) {');
     expect(appSource).toContain('<AIChat onClose={() => aiChatStore.close()} />');
     expect(appSource).toContain('showOrgSwitcher={runtime.showOrgSwitcher}');
     expect(appSource).not.toContain('TrialBanner');

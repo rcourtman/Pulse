@@ -457,6 +457,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [editingQueuedFollowUp, setEditingQueuedFollowUp] = createSignal<QueuedFollowUp | null>(
     null,
   );
+  const [interruptArmed, setInterruptArmed] = createSignal(false);
   const [promptHistory, setPromptHistory] = createSignal<PromptHistoryEntry[]>([]);
   const [promptHistoryIndex, setPromptHistoryIndex] = createSignal(-1);
   const [savedPromptDraft, setSavedPromptDraft] = createSignal<PromptHistoryEntry | null>(null);
@@ -497,11 +498,29 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [mentionResources, setMentionResources] = createSignal<MentionResource[]>([]);
   const [accumulatedMentions, setAccumulatedMentions] = createSignal<MentionResource[]>([]);
   let textareaRef: HTMLTextAreaElement | undefined;
+  let interruptArmTimeout: ReturnType<typeof setTimeout> | undefined;
 
   const focusComposer = () => {
     queueMicrotask(() => {
       textareaRef?.focus();
     });
+  };
+
+  const clearInterruptArm = () => {
+    if (interruptArmTimeout) {
+      clearTimeout(interruptArmTimeout);
+      interruptArmTimeout = undefined;
+    }
+    setInterruptArmed(false);
+  };
+
+  const armKeyboardInterrupt = () => {
+    clearInterruptArm();
+    setInterruptArmed(true);
+    interruptArmTimeout = setTimeout(() => {
+      interruptArmTimeout = undefined;
+      setInterruptArmed(false);
+    }, 5000);
   };
 
   const resizeTextarea = () => {
@@ -755,6 +774,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
     defaultModel: () => defaultModel().trim(),
     onConversationChanged: refreshSessions,
   });
+
+  const stopActiveResponse = () => {
+    clearInterruptArm();
+    chat.stop();
+    focusComposer();
+  };
 
   const queuedFollowUpPreview = (prompt: string) => {
     const firstLine = prompt
@@ -1184,6 +1209,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
   });
 
   createEffect(() => {
+    if (!chat.isLoading() && interruptArmed()) {
+      clearInterruptArm();
+    }
+  });
+
+  createEffect(() => {
     const open = isOpen();
     const model = selectedChatModel().trim();
     const provider = selectedChatProvider().trim();
@@ -1259,6 +1290,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     onCleanup(() => {
       document.removeEventListener('click', handleClickOutside);
       aiChatStore.registerInput?.(null);
+      clearInterruptArm();
     });
   });
 
@@ -1710,6 +1742,18 @@ export const AIChat: Component<AIChatProps> = (props) => {
       const direction = e.key === 'ArrowUp' ? 'up' : 'down';
       if (canNavigatePromptHistory(direction) && navigatePromptHistory(direction)) {
         e.preventDefault();
+      }
+      return;
+    }
+
+    if (e.key === 'Escape' && chat.isLoading()) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (interruptArmed()) {
+        stopActiveResponse();
+      } else {
+        armKeyboardInterrupt();
+        focusComposer();
       }
       return;
     }
@@ -2516,13 +2560,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   <Show when={chat.isLoading()}>
                     <button
                       type="button"
-                      onClick={() => {
-                        chat.stop();
-                        focusComposer();
-                      }}
-                      class="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-surface text-base-content shadow-sm transition-colors hover:bg-surface-hover"
-                      title="Stop"
-                      aria-label="Stop response"
+                      onClick={stopActiveResponse}
+                      class={`flex h-9 w-9 items-center justify-center rounded-md border bg-surface text-base-content shadow-sm transition-colors hover:bg-surface-hover ${
+                        interruptArmed()
+                          ? 'border-blue-400 ring-2 ring-blue-500/30'
+                          : 'border-border'
+                      }`}
+                      title={interruptArmed() ? 'Stop response armed' : 'Stop'}
+                      aria-label={interruptArmed() ? 'Stop response armed' : 'Stop response'}
                     >
                       <SquareIcon class="h-4 w-4" />
                     </button>

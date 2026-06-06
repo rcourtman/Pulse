@@ -394,9 +394,14 @@ function App() {
     // Setup escape handling for the assistant drawer.
     onMount(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
-        // Escape to close
+        // Escape closes the drawer only after mounted drawer controls have had
+        // a chance to claim the key for local flows such as interrupt confirm.
         if (e.key === 'Escape' && aiChatStore.isOpen) {
-          aiChatStore.close();
+          window.setTimeout(() => {
+            if (!e.defaultPrevented && aiChatStore.isOpen) {
+              aiChatStore.close();
+            }
+          }, 0);
         }
       };
 

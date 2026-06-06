@@ -1476,6 +1476,22 @@ describe('AIChat', () => {
       expect(mockChat.stop).toHaveBeenCalledTimes(1);
     });
 
+    it('arms keyboard interruption on first Escape and stops on second Escape', async () => {
+      mockChat.isLoading.mockReturnValue(true);
+      renderChat();
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+
+      fireEvent.keyDown(textarea, { key: 'Escape' });
+
+      expect(mockChat.stop).not.toHaveBeenCalled();
+      expect(screen.getByTitle('Stop response armed')).toBeInTheDocument();
+
+      fireEvent.keyDown(textarea, { key: 'Escape' });
+
+      expect(mockChat.stop).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(document.activeElement).toBe(textarea));
+    });
+
     it('returns focus to the composer after stopping a response', async () => {
       mockChat.isLoading.mockReturnValue(true);
       renderChat();

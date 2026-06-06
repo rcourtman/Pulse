@@ -247,6 +247,18 @@ runtime cost control, and shared AI transport surfaces.
    those rows through the existing chat-runtime queue without aborting the
    active model stream.
    The referenced OpenCode source at fetched `origin/dev` commit
+   `09d9cf01f93798939c1284fbe974b6e1f4d2759d` registers the
+   `session.interrupt` command while a turn is non-idle in
+   `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx`, and its
+   direct-run footer implements the same two-press interrupt guard in
+   `packages/opencode/src/cli/cmd/run/footer.ts` while rendering the armed
+   state in `packages/opencode/src/cli/cmd/run/footer.view.tsx`. Pulse's
+   Assistant drawer adapts that ergonomics model by letting Escape from the
+   focused composer arm the visible Stop control first and letting the next
+   Escape confirm the same governed `chat.stop()` path as the Stop button,
+   including aborting the active stream, clearing queued follow-ups, preserving
+   partial text, and returning focus to the composer.
+   The referenced OpenCode source at fetched `origin/dev` commit
    `fa2b63f850fc0a23bec2bdff9e660450d3fe7913` keeps prompt/footer status visible
    only while the session is non-idle in
    `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx`, and maps
