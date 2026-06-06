@@ -642,6 +642,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     status: 'idle',
     provider: '',
   });
+  const [providerReadinessVisible, setProviderReadinessVisible] = createSignal(false);
   const [providerReadinessRetryNonce, setProviderReadinessRetryNonce] = createSignal(0);
   const [controlLevel, setControlLevel] = createSignal<AIControlLevel>('read_only');
   const [showControlMenu, setShowControlMenu] = createSignal(false);
@@ -1566,14 +1567,24 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
   const providerReadinessPresentation = createMemo(() => {
     const readiness = providerReadiness();
-    if (!readiness.provider || readiness.status === 'idle' || readiness.status === 'ready') {
+    const visible = providerReadinessVisible();
+    if (!readiness.provider || readiness.status === 'idle') {
       return null;
     }
-    if (readiness.status === 'checking' && !chat.isLoading()) {
+    if (readiness.status === 'ready' && !visible) {
       return null;
     }
+    if (readiness.status === 'checking' && !chat.isLoading() && !visible) {
+      return null;
+    }
+
     return getAIChatProviderReadinessPresentation({
-      status: readiness.status === 'checking' ? 'checking' : 'error',
+      status:
+        readiness.status === 'ready'
+          ? 'ready'
+          : readiness.status === 'checking'
+            ? 'checking'
+            : 'error',
       providerLabel: getAIProviderDisplayName(readiness.provider),
       message: readiness.message,
       summary: readiness.summary,
@@ -1629,6 +1640,34 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const retrySelectedProviderReadiness = () => {
     setProviderReadinessRetryNonce((value) => value + 1);
     focusComposer();
+  };
+
+  const runSelectedProviderStatusCheck = () => {
+    setShowSessions(false);
+    setSessionRefreshLoading(false);
+    resetSessionSearch();
+    setProviderReadinessVisible(true);
+
+    const model = selectedChatModel().trim();
+    const provider = selectedChatProvider().trim();
+
+    if (!provider || !model) {
+      providerReadinessRequestId += 1;
+      lastProviderReadinessKey = '';
+      setProviderReadiness({
+        status: 'error',
+        provider: provider || 'Selected',
+        model,
+        message: 'No provider route selected',
+        summary: 'Pulse does not have a selected Assistant model route to check.',
+        recommendation: 'Choose an Assistant model route, then run /status again.',
+        action: 'open_provider_settings',
+      });
+      return;
+    }
+
+    lastProviderReadinessKey = '';
+    void refreshSelectedProviderReadiness(provider, model);
   };
 
   const isOverlayLayout = createMemo(() => width() < AI_CHAT_MIN_DOCKED_VIEWPORT_WIDTH);
@@ -1970,6 +2009,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (!open) {
       providerReadinessRequestId += 1;
       lastProviderReadinessKey = '';
+      setProviderReadinessVisible(false);
       setProviderReadiness({ status: 'idle', provider: '' });
       return;
     }
@@ -1977,6 +2017,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (!provider || !model) {
       providerReadinessRequestId += 1;
       lastProviderReadinessKey = '';
+      setProviderReadinessVisible(false);
       setProviderReadiness({ status: 'idle', provider: '' });
       return;
     }
@@ -2384,6 +2425,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
         setSessionRefreshLoading(false);
         resetSessionSearch();
         setModelSelectorOpenRequest((value) => value + 1);
+        break;
+      case 'status':
+        runSelectedProviderStatusCheck();
         break;
       case 'copy':
         void copyAssistantTranscript();
@@ -3558,7 +3602,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 class={`border-b px-4 py-2.5 text-[11px] ${
                   presentation().tone === 'checking'
                     ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200'
-                    : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100'
+                    : presentation().tone === 'ready'
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-100'
+                      : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100'
                 }`}
                 aria-label="Assistant provider status"
               >
@@ -3568,18 +3614,27 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       class={`mt-1 h-2 w-2 flex-shrink-0 rounded-full ${
                         presentation().tone === 'checking'
                           ? 'bg-blue-500 dark:bg-blue-300'
-                          : 'bg-amber-500 dark:bg-amber-300'
+                          : presentation().tone === 'ready'
+                            ? 'bg-emerald-500 dark:bg-emerald-300'
+                            : 'bg-amber-500 dark:bg-amber-300'
                       }`}
                     />
                     <div class="min-w-0">
                       <div class="font-semibold text-base-content">{presentation().title}</div>
                       <div class="mt-0.5 leading-5">{presentation().body}</div>
+                      <Show when={providerReadiness().model}>
+                        {(model) => (
+                          <div class="mt-0.5 truncate text-[10px] leading-5 text-muted">
+                            Route: {formatAIModelRouteLabel(model())}
+                          </div>
+                        )}
+                      </Show>
                       <Show when={presentation().recommendation}>
                         {(recommendation) => <div class="mt-0.5 leading-5">{recommendation()}</div>}
                       </Show>
                     </div>
                   </div>
-                  <Show when={providerReadiness().status === 'error'}>
+                  <Show when={providerReadiness().status === 'error' || providerReadinessVisible()}>
                     <div class="flex flex-wrap items-center gap-2 sm:justify-end">
                       <Show when={providerReadinessAlternative()}>
                         {(alternative) => (
@@ -3597,7 +3652,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       <button
                         type="button"
                         onClick={retrySelectedProviderReadiness}
-                        class="inline-flex items-center gap-1.5 rounded-md border border-current/20 bg-surface px-2 py-1 text-[10px] font-medium text-base-content hover:bg-surface-hover"
+                        disabled={providerReadiness().status === 'checking'}
+                        class="inline-flex items-center gap-1.5 rounded-md border border-current/20 bg-surface px-2 py-1 text-[10px] font-medium text-base-content hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
                         aria-label="Retry provider check"
                       >
                         <RefreshCwIcon class="h-3.5 w-3.5" />
@@ -3610,6 +3666,17 @@ export const AIChat: Component<AIChatProps> = (props) => {
                         <SettingsIcon class="h-3.5 w-3.5" />
                         <span>{AI_CHAT_PROVIDER_READINESS_SETTINGS_LABEL}</span>
                       </a>
+                      <Show when={providerReadinessVisible()}>
+                        <button
+                          type="button"
+                          onClick={() => setProviderReadinessVisible(false)}
+                          class="inline-flex items-center gap-1.5 rounded-md border border-current/20 bg-surface px-2 py-1 text-[10px] font-medium text-base-content hover:bg-surface-hover"
+                          aria-label="Hide provider status"
+                        >
+                          <XIcon class="h-3.5 w-3.5" />
+                          <span>Hide</span>
+                        </button>
+                      </Show>
                     </div>
                   </Show>
                 </div>

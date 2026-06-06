@@ -66,7 +66,7 @@ export const AI_CHAT_PROVIDER_READINESS_SETTINGS_HREF = '/settings/system-ai';
 export const AI_CHAT_PROVIDER_READINESS_SETTINGS_LABEL = 'Open settings';
 export const AI_CHAT_PROVIDER_READINESS_RETRY_LABEL = 'Retry';
 
-export type AIChatProviderReadinessStatus = 'checking' | 'error';
+export type AIChatProviderReadinessStatus = 'checking' | 'ready' | 'error';
 
 export interface AIChatProviderReadinessPresentation {
   body: string;
@@ -96,6 +96,17 @@ export function getAIChatProviderReadinessPresentation(args: {
       tone: 'checking',
       title: `Verifying ${providerLabel} provider`,
       body: 'Pulse is checking the selected provider route in the background.',
+    };
+  }
+
+  if (args.status === 'ready') {
+    return {
+      tone: 'ready',
+      title: `${providerLabel} provider ready`,
+      body:
+        args.summary?.trim() ||
+        args.message?.trim() ||
+        'Pulse can reach the selected provider route.',
     };
   }
 

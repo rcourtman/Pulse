@@ -34,6 +34,7 @@ export type CommandPaletteAssistantActions = {
   newSession: () => void;
   sessions: () => void;
   models: () => void;
+  status: () => void;
   undo: () => void;
   redo: () => void;
 };
@@ -75,6 +76,13 @@ export function buildCommandPaletteCommands(options: {
         description: '/models',
         keywords: ['assistant', 'models', 'model', 'provider', 'openrouter', 'deepseek'],
         action: options.assistantActions.models,
+      },
+      {
+        id: 'assistant-status',
+        label: 'Check Assistant status',
+        description: '/status',
+        keywords: ['assistant', 'status', 'runtime', 'health', 'provider', 'openrouter', 'deepseek'],
+        action: options.assistantActions.status,
       },
       {
         id: 'assistant-undo-last-turn',

@@ -133,7 +133,7 @@ const {
     commandRequestSignal: vi.fn(
       (): {
         id: number;
-        action: 'new' | 'sessions' | 'models' | 'undo' | 'redo';
+        action: 'new' | 'sessions' | 'models' | 'status' | 'undo' | 'redo';
       } | null => null,
     ),
     ackCommandRequest: vi.fn(),
@@ -1711,6 +1711,55 @@ describe('AIChat', () => {
       await waitFor(() => {
         expect(screen.getByTestId('model-selector')).toHaveAttribute('data-open-request', '1');
       });
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('checks selected provider status from /status without sending a provider prompt', async () => {
+      mockAIAPI.getSettings.mockResolvedValue({
+        model: 'openrouter:deepseek/deepseek-v4-pro',
+        chat_model: '',
+        control_level: 'read_only',
+        autonomous_mode: false,
+        discovery_enabled: true,
+      });
+      mockAIAPI.testProvider.mockResolvedValue({
+        success: true,
+        message: 'Connection successful',
+        provider: 'openrouter',
+        model: 'openrouter:deepseek/deepseek-v4-pro',
+      });
+
+      renderChat();
+
+      await waitFor(() => {
+        expect(mockAIAPI.testProvider).toHaveBeenCalledWith(
+          'openrouter',
+          'openrouter:deepseek/deepseek-v4-pro',
+        );
+      });
+      expect(screen.queryByLabelText('Assistant provider status')).not.toBeInTheDocument();
+      mockAIAPI.testProvider.mockClear();
+
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+      fireEvent.input(textarea, { target: { value: '/status' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(mockAIAPI.testProvider).toHaveBeenCalledWith(
+          'openrouter',
+          'openrouter:deepseek/deepseek-v4-pro',
+        );
+      });
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Assistant provider status')).toHaveTextContent(
+          'OpenRouter provider ready',
+        );
+      });
+      const status = screen.getByLabelText('Assistant provider status');
+      expect(status).toHaveTextContent('Connection successful');
+      expect(status).toHaveTextContent('Route:');
+      expect(screen.getByRole('button', { name: 'Hide provider status' })).toBeInTheDocument();
       expect(mockChat.sendMessage).not.toHaveBeenCalled();
     });
 

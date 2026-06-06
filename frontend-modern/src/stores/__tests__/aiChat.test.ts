@@ -53,6 +53,9 @@ describe('aiChatStore', () => {
 
     aiChatStore.requestCommand('undo');
     expect(aiChatStore.commandRequest).toMatchObject({ action: 'undo' });
+
+    aiChatStore.requestCommand('status');
+    expect(aiChatStore.commandRequest).toMatchObject({ action: 'status' });
   });
 
   it('sets legacy context and clears it', () => {

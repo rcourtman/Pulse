@@ -137,5 +137,17 @@ describe('aiChatPresentation', () => {
         providerLabel: 'OpenRouter',
       }).title,
     ).toBe('Verifying OpenRouter provider');
+
+    expect(
+      getAIChatProviderReadinessPresentation({
+        status: 'ready',
+        providerLabel: 'OpenRouter',
+        message: 'Connection successful',
+      }),
+    ).toEqual({
+      tone: 'ready',
+      title: 'OpenRouter provider ready',
+      body: 'Connection successful',
+    });
   });
 });

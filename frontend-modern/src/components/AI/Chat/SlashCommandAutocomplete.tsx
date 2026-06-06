@@ -1,10 +1,13 @@
 import { For, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
+import ActivityIcon from 'lucide-solid/icons/activity';
 import ClockIcon from 'lucide-solid/icons/clock';
 import CopyIcon from 'lucide-solid/icons/copy';
 import DownloadIcon from 'lucide-solid/icons/download';
 import GitForkIcon from 'lucide-solid/icons/git-fork';
 import PlusIcon from 'lucide-solid/icons/plus';
+import Redo2Icon from 'lucide-solid/icons/redo-2';
 import SettingsIcon from 'lucide-solid/icons/settings';
+import Undo2Icon from 'lucide-solid/icons/undo-2';
 import type { AssistantSlashCommand, AssistantSlashCommandAction } from './assistantSlashCommands';
 import {
   filterAssistantSlashCommands,
@@ -27,12 +30,18 @@ const commandIcon = (action: AssistantSlashCommandAction) => {
       return <ClockIcon class="h-4 w-4" aria-hidden="true" />;
     case 'models':
       return <SettingsIcon class="h-4 w-4" aria-hidden="true" />;
+    case 'status':
+      return <ActivityIcon class="h-4 w-4" aria-hidden="true" />;
     case 'copy':
       return <CopyIcon class="h-4 w-4" aria-hidden="true" />;
     case 'export':
       return <DownloadIcon class="h-4 w-4" aria-hidden="true" />;
     case 'fork':
       return <GitForkIcon class="h-4 w-4" aria-hidden="true" />;
+    case 'undo':
+      return <Undo2Icon class="h-4 w-4" aria-hidden="true" />;
+    case 'redo':
+      return <Redo2Icon class="h-4 w-4" aria-hidden="true" />;
   }
 };
 

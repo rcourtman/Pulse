@@ -5,6 +5,7 @@ export type AssistantSlashCommandAction =
   | 'models'
   | 'new'
   | 'redo'
+  | 'status'
   | 'undo'
   | 'sessions';
 
@@ -33,6 +34,12 @@ export const ASSISTANT_SLASH_COMMANDS: AssistantSlashCommand[] = [
     aliases: ['model', 'mo'],
     action: 'models',
     description: 'Choose the model and provider route',
+  },
+  {
+    name: 'status',
+    aliases: ['runtime', 'health'],
+    action: 'status',
+    description: 'Check the selected model route',
   },
   {
     name: 'copy',
