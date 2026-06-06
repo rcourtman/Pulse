@@ -754,6 +754,7 @@ describe('useChat', () => {
         interruption: 'stopped',
         isStreaming: false,
       });
+      expect(assistant?.completedAt).toBeInstanceOf(Date);
       dispose();
     });
 
@@ -1633,6 +1634,7 @@ describe('useChat', () => {
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.isStreaming).toBe(false);
+      expect(assistant.completedAt).toBeInstanceOf(Date);
       expect(assistant.model).toBe('gemini:gemini-3.1-flash-lite');
       expect(assistant.tokens).toEqual({ input: 100, output: 50 });
       expect(assistant.pendingTools).toHaveLength(0);
@@ -1650,6 +1652,7 @@ describe('useChat', () => {
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.isStreaming).toBe(false);
+      expect(assistant.completedAt).toBeInstanceOf(Date);
       expect(assistant.tokens).toBeUndefined();
       dispose();
     });
@@ -1679,6 +1682,7 @@ describe('useChat', () => {
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.isStreaming).toBe(false);
+      expect(assistant.completedAt).toBeInstanceOf(Date);
       expect(assistant.error).toBe('Rate limited');
       expect(assistant.pendingTools).toHaveLength(0);
       dispose();

@@ -358,6 +358,41 @@ describe('MessageItem', () => {
       expect(screen.getByText('DeepSeek: DeepSeek V4 Pro via OpenRouter')).toBeInTheDocument();
     });
 
+    it('renders completed assistant turn duration without token counts', () => {
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            model: 'openrouter:deepseek/deepseek-v4-pro',
+            timestamp: new Date('2026-03-01T12:00:00Z'),
+            completedAt: new Date('2026-03-01T12:00:04Z'),
+            tokens: { input: 500, output: 200 },
+            isStreaming: false,
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(screen.getByLabelText('Turn duration 4s')).toBeInTheDocument();
+      expect(screen.queryByText('500 in · 200 out')).not.toBeInTheDocument();
+    });
+
+    it('does not show turn duration while the assistant is still streaming', () => {
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            timestamp: new Date('2026-03-01T12:00:00Z'),
+            completedAt: new Date('2026-03-01T12:00:04Z'),
+            isStreaming: true,
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(screen.queryByLabelText('Turn duration 4s')).not.toBeInTheDocument();
+    });
+
     it('does not use right-alignment for assistant messages', () => {
       const { container } = render(() => (
         <MessageItem message={makeMessage({ role: 'assistant' })} {...makeHandlers()} />

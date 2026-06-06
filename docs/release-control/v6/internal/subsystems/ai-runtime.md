@@ -600,6 +600,15 @@ runtime cost control, and shared AI transport surfaces.
    remain route-distinct: if the configured chat override resolves to the same
    route as the effective default or the already selected session model, the
    drawer must not render a duplicate override action.
+   The referenced OpenCode source at fetched `origin/dev` commit
+   `1399323b78a04229d9bfe00c7436d7f41770fda8` renders the completed assistant
+   footer in
+   `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`
+   (`AssistantMessage`) with agent, provider/model, and turn duration rather
+   than token counts. Pulse Assistant rows adapt that by keeping visible token
+   accounting out of the transcript while showing a compact completed-turn
+   duration beside the effective model label once a turn reaches `done`,
+   `error`, or user interruption.
 7. Keep AI chat presentation helpers aligned through `frontend-modern/src/components/AI/Chat/` and the shared `frontend-modern/src/utils/textPresentation.ts`
 8. Keep assistant drawer context, session, and org-switch reset state aligned through the shared `frontend-modern/src/stores/aiChat.ts` boundary instead of letting `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, or feature callers fork their own assistant shell state
    That shared drawer ownership also covers passive resource reads while the

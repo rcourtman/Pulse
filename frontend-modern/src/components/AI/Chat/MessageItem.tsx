@@ -60,6 +60,24 @@ interface MessageItemProps {
   onCancelQueued?: () => void;
 }
 
+const formatAssistantTurnDuration = (startedAt: Date, completedAt?: Date): string => {
+  if (!completedAt) return '';
+  const durationMs = completedAt.getTime() - startedAt.getTime();
+  if (!Number.isFinite(durationMs) || durationMs < 0) return '';
+  if (durationMs < 1000) return '<1s';
+
+  const totalSeconds = Math.max(1, Math.round(durationMs / 1000));
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes < 60) return seconds ? `${minutes}m ${seconds}s` : `${minutes}m`;
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+};
+
 const markdownClass =
   'text-sm prose prose-slate prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-2 prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-md prose-pre:text-xs prose-pre:border prose-pre:border-slate-800 prose-code:text-blue-700 dark:prose-code:text-blue-300 prose-code:bg-blue-50 dark:prose-code:bg-blue-900 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:font-mono prose-code:text-[0.9em] prose-code:border prose-code:border-blue-100 dark:prose-code:border-blue-800 prose-code:before:content-none prose-code:after:content-none prose-headings:font-semibold prose-hr:border-slate-200 dark:prose-hr:border-slate-700 prose-ul:my-2 prose-ol:my-2 prose-li:my-1';
 
@@ -135,6 +153,10 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     return props.getModelRouteLabel?.(model) || formatAIModelRouteLabel(model);
   };
   const messageModelLabel = () => modelRouteLabel(props.message.model);
+  const messageDurationLabel = () =>
+    props.message.isStreaming
+      ? ''
+      : formatAssistantTurnDuration(props.message.timestamp, props.message.completedAt);
 
   // Check if currently streaming content (no tools pending, still streaming)
   const isStreamingText = () =>
@@ -268,6 +290,16 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                   title={props.message.model}
                 >
                   {messageModelLabel()}
+                </span>
+              </Show>
+              <Show when={messageDurationLabel()}>
+                <span
+                  class="inline-flex shrink-0 items-center gap-1 rounded border border-border-subtle bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted"
+                  title="Turn duration"
+                  aria-label={`Turn duration ${messageDurationLabel()}`}
+                >
+                  <ClockIcon class="h-3 w-3" aria-hidden="true" />
+                  {messageDurationLabel()}
                 </span>
               </Show>
               <Show when={shouldShowHeaderWorkflowStatus()}>

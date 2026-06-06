@@ -198,6 +198,7 @@ export function useChat(options: UseChatOptions = {}) {
           ? {
               ...msg,
               isStreaming: false,
+              completedAt: new Date(),
               interruption,
               pendingTools: [],
               pendingApprovals: [],
@@ -1071,6 +1072,7 @@ export function useChat(options: UseChatOptions = {}) {
             }
 
             case 'done': {
+              const completedAt = new Date();
               const pendingText = suppressedRawContentMessageIds.has(assistantId)
                 ? ''
                 : flushPendingAssistantOutputText(outputArtifactStateFor(assistantId));
@@ -1088,6 +1090,7 @@ export function useChat(options: UseChatOptions = {}) {
                 return {
                   ...flushedMsg,
                   isStreaming: false,
+                  completedAt,
                   ...(completedModel ? { model: completedModel } : {}),
                   pendingTools: [],
                   tokens,
@@ -1097,6 +1100,7 @@ export function useChat(options: UseChatOptions = {}) {
               return {
                 ...flushedMsg,
                 isStreaming: false,
+                completedAt,
                 ...(completedModel ? { model: completedModel } : {}),
                 pendingTools: [],
                 workflowStatus: undefined,
@@ -1111,6 +1115,7 @@ export function useChat(options: UseChatOptions = {}) {
               return {
                 ...msg,
                 isStreaming: false,
+                completedAt: new Date(),
                 pendingTools: [],
                 workflowStatus: undefined,
                 error: errorMsg || 'Request failed',

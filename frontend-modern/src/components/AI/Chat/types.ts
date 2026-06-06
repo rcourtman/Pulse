@@ -148,6 +148,7 @@ export interface ChatMessage {
   thinkingChunks?: string[];
   streamEvents?: StreamDisplayEvent[];
   timestamp: Date;
+  completedAt?: Date;
   model?: string;
   tokens?: { input: number; output: number };
   toolCalls?: ToolExecution[];
