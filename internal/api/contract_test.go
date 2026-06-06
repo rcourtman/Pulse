@@ -10772,6 +10772,22 @@ func TestContract_ChatStreamEventJSONSnapshots(t *testing.T) {
 	}
 }
 
+func TestContract_LegacyAssistantStreamIdleEventJSONSnapshot(t *testing.T) {
+	event := ai.StreamEvent{
+		Type: "workflow_state",
+		Data: chat.WorkflowStateData{
+			Phase:   "stream_idle",
+			Message: chatStreamIdleProgressMessage,
+		},
+	}
+	got, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("marshal legacy Assistant stream event: %v", err)
+	}
+
+	assertJSONSnapshot(t, got, `{"type":"workflow_state","data":{"phase":"stream_idle","message":"Assistant is still working; waiting for the next stream event."}}`)
+}
+
 func TestContract_AssistantChatStreamUsesClientSafeProjection(t *testing.T) {
 	handlerSource, err := os.ReadFile(filepath.Clean("ai_handler.go"))
 	if err != nil {

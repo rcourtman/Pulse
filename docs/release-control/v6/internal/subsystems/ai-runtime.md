@@ -301,6 +301,10 @@ runtime cost control, and shared AI transport surfaces.
    reaches the browser for the governed idle interval while execution is still
    request-bound, the handler must emit a neutral `workflow_state` with phase
    `stream_idle` rather than relying only on hidden SSE comment heartbeats.
+   Legacy Assistant SSE routes that still use the older execute event envelope,
+   including `/api/ai/execute/stream` and `/api/ai/investigate-alert`, share
+   the same transport-liveness obligation while preserving their existing
+   response payload shapes.
    Comment heartbeats and visible events must share a serialized writer so a
    progress tick cannot interleave bytes with a provider/tool event. This is a
    transport liveness signal only; it must replace the active workflow status,

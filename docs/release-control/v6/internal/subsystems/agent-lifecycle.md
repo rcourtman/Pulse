@@ -1652,6 +1652,10 @@ execution mode is AI/API-owned. Request-scoped `AutonomousMode:false` and
 `RequireCommandApproval:true` on `/api/ai/investigate-alert` are Assistant
 action-governance facts, not agent install readiness, command reachability, or
 fleet-control capability signals.
+Visible `stream_idle` workflow progress on that same legacy Assistant SSE
+route, and on `/api/ai/execute/stream`, is likewise Assistant/API transport
+liveness only. It must not be reused as agent heartbeat, enrollment progress,
+installer status, command websocket liveness, or fleet freshness evidence.
 Patrol finding chat handoffs follow the same ownership split: when
 `/api/ai/chat` resolves a `finding_id` into model-only Patrol briefing,
 resource, or action context, the backend-enforced `autonomous_mode:false`

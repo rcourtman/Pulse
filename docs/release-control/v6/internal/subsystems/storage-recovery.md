@@ -571,6 +571,11 @@ recovery scope, or a storage/recovery-owned secret source.
     `RequireCommandApproval:true` are AI action-governance constraints, not
     storage/recovery restore approval, recovery freshness, or storage diagnostic
     payload semantics.
+    Visible `stream_idle` workflow progress on legacy Assistant SSE routes in
+    `internal/api/ai_handlers.go`, including direct execute and alert
+    investigation streams, is likewise Assistant/API transport liveness only,
+    not recovery acquisition progress, backup task freshness, restore readiness,
+    provider health, or storage/recovery job status.
     Patrol finding chat handoff execution controls in `internal/api/ai_handler.go`
     follow the same boundary: backend-forced `autonomous_mode:false` for
     `finding_id` handoffs with model-only Patrol briefing, resource, or action

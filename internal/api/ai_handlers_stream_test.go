@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"net/http"
 	"net/http/httptest"
@@ -40,6 +41,40 @@ func newTestAISettingsHandlerWithService(t *testing.T) *AISettingsHandler {
 	handler.defaultPersistence = persistence
 	handler.defaultAIService = ai.NewService(persistence, nil)
 	return handler
+}
+
+func withLegacyAssistantStreamIdleInterval(t *testing.T, interval time.Duration) {
+	t.Helper()
+	previous := chatStreamIdleProgressInterval
+	chatStreamIdleProgressInterval = interval
+	t.Cleanup(func() {
+		chatStreamIdleProgressInterval = previous
+	})
+}
+
+func assertLegacyAssistantStreamIdleBeforeTerminal(t *testing.T, response string) {
+	t.Helper()
+	idleIndex := strings.Index(response, `"phase":"stream_idle"`)
+	completeIndex := strings.Index(response, `"type":"complete"`)
+	doneIndex := strings.LastIndex(response, `"type":"done"`)
+	if idleIndex < 0 {
+		t.Fatalf("response missing idle progress event: %s", response)
+	}
+	if !strings.Contains(response, chatStreamIdleProgressMessage) {
+		t.Fatalf("response missing idle progress message: %s", response)
+	}
+	if completeIndex < 0 {
+		t.Fatalf("response missing complete event: %s", response)
+	}
+	if doneIndex < 0 {
+		t.Fatalf("response missing done event: %s", response)
+	}
+	if idleIndex > completeIndex {
+		t.Fatalf("idle progress appeared after complete event: %s", response)
+	}
+	if idleIndex > doneIndex {
+		t.Fatalf("idle progress appeared after done event: %s", response)
+	}
 }
 
 func TestHandleExecuteStream_LicenseRequired(t *testing.T) {
@@ -95,6 +130,40 @@ func TestHandleExecuteStream_Success(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), `"tool_calls":[]`) {
 		t.Fatalf("expected stream completion event to retain tool_calls array, got %s", rec.Body.String())
 	}
+}
+
+func TestHandleExecuteStream_EmitsIdleProgressWhileServiceIsSilent(t *testing.T) {
+	setMockModeForTest(t, true)
+	withLegacyAssistantStreamIdleInterval(t, 2*time.Millisecond)
+
+	handler := newTestAISettingsHandlerWithService(t)
+
+	body := `{"prompt":"disk usage"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleExecuteStream(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected OK, got %d", rec.Code)
+	}
+	assertLegacyAssistantStreamIdleBeforeTerminal(t, rec.Body.String())
+}
+
+func TestHandleInvestigateAlert_EmitsIdleProgressWhileServiceIsSilent(t *testing.T) {
+	setMockModeForTest(t, true)
+	withLegacyAssistantStreamIdleInterval(t, 2*time.Millisecond)
+
+	handler := newTestAISettingsHandlerWithService(t)
+
+	body := `{"alertIdentifier":"alert-1","resource_id":"node-1","resource_name":"node-1","resource_type":"agent","alert_type":"cpu","level":"warning","message":"high cpu"}`
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/investigate-alert", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleInvestigateAlert(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected OK, got %d: %s", rec.Code, rec.Body.String())
+	}
+	assertLegacyAssistantStreamIdleBeforeTerminal(t, rec.Body.String())
 }
 
 func TestAIExecuteStreamCompleteEvent_UsesCanonicalEmptyCollections(t *testing.T) {

@@ -3388,6 +3388,184 @@ func (e aiExecuteStreamCompleteEvent) NormalizeCollections() aiExecuteStreamComp
 	return e
 }
 
+type legacyAssistantSSEWriter struct {
+	w                     http.ResponseWriter
+	flusher               http.Flusher
+	rc                    *http.ResponseController
+	cancel                context.CancelFunc
+	cancelOnDisconnect    bool
+	writeMu               sync.Mutex
+	clientDisconnected    atomic.Bool
+	lastClientEventUnixMS atomic.Int64
+	terminalEventsStarted atomic.Bool
+	heartbeatDone         chan struct{}
+	heartbeatDoneClosed   atomic.Bool
+	executionDone         chan struct{}
+	executionDoneClosed   atomic.Bool
+}
+
+func newLegacyAssistantSSEWriter(w http.ResponseWriter, flusher http.Flusher, rc *http.ResponseController, cancel context.CancelFunc, cancelOnDisconnect bool) *legacyAssistantSSEWriter {
+	writer := &legacyAssistantSSEWriter{
+		w:                  w,
+		flusher:            flusher,
+		rc:                 rc,
+		cancel:             cancel,
+		cancelOnDisconnect: cancelOnDisconnect,
+		heartbeatDone:      make(chan struct{}),
+		executionDone:      make(chan struct{}),
+	}
+	writer.lastClientEventUnixMS.Store(time.Now().UnixMilli())
+	return writer
+}
+
+func (s *legacyAssistantSSEWriter) start(ctx context.Context) {
+	s.startHeartbeat(ctx)
+	s.startIdleProgress(ctx)
+}
+
+func (s *legacyAssistantSSEWriter) stop() {
+	s.closeHeartbeat()
+	s.finishExecution()
+}
+
+func (s *legacyAssistantSSEWriter) closeHeartbeat() {
+	if s.heartbeatDoneClosed.CompareAndSwap(false, true) {
+		close(s.heartbeatDone)
+	}
+}
+
+func (s *legacyAssistantSSEWriter) finishExecution() {
+	if s.executionDoneClosed.CompareAndSwap(false, true) {
+		close(s.executionDone)
+	}
+}
+
+func (s *legacyAssistantSSEWriter) disconnected() bool {
+	return s.clientDisconnected.Load()
+}
+
+func (s *legacyAssistantSSEWriter) startHeartbeat(ctx context.Context) {
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				s.writeMu.Lock()
+				if s.clientDisconnected.Load() {
+					s.writeMu.Unlock()
+					return
+				}
+				_ = s.rc.SetWriteDeadline(time.Now().Add(10 * time.Second))
+				_, err := s.w.Write([]byte(": heartbeat\n\n"))
+				if err != nil {
+					s.writeMu.Unlock()
+					s.markDisconnected()
+					return
+				}
+				s.flusher.Flush()
+				s.writeMu.Unlock()
+				log.Debug().Msg("Sent SSE heartbeat")
+			case <-s.heartbeatDone:
+				return
+			}
+		}
+	}()
+}
+
+func (s *legacyAssistantSSEWriter) startIdleProgress(ctx context.Context) {
+	if chatStreamIdleProgressInterval <= 0 {
+		return
+	}
+
+	go func() {
+		ticker := time.NewTicker(chatStreamIdleProgressInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-s.heartbeatDone:
+				return
+			case <-s.executionDone:
+				return
+			case <-ticker.C:
+				if s.clientDisconnected.Load() {
+					return
+				}
+				if s.terminalEventsStarted.Load() || s.executionDoneClosed.Load() {
+					return
+				}
+				lastEventAt := time.UnixMilli(s.lastClientEventUnixMS.Load())
+				if time.Since(lastEventAt) < chatStreamIdleProgressInterval {
+					continue
+				}
+				progressEvent := ai.StreamEvent{
+					Type: "workflow_state",
+					Data: chat.WorkflowStateData{
+						Phase:   "stream_idle",
+						Message: chatStreamIdleProgressMessage,
+					},
+				}
+				s.writePayloadIf(progressEvent, true, func() bool {
+					return !s.terminalEventsStarted.Load() && !s.executionDoneClosed.Load()
+				})
+			}
+		}
+	}()
+}
+
+func (s *legacyAssistantSSEWriter) markDisconnected() {
+	s.clientDisconnected.Store(true)
+	if s.cancelOnDisconnect && s.cancel != nil {
+		s.cancel()
+	}
+}
+
+func (s *legacyAssistantSSEWriter) writePayload(payload interface{}) bool {
+	return s.writePayloadIf(payload, true, nil)
+}
+
+func (s *legacyAssistantSSEWriter) writeTerminalPayload(payload interface{}) bool {
+	s.terminalEventsStarted.Store(true)
+	s.finishExecution()
+	return s.writePayloadIf(payload, true, nil)
+}
+
+func (s *legacyAssistantSSEWriter) writePayloadIf(payload interface{}, visible bool, shouldWrite func() bool) bool {
+	if s.clientDisconnected.Load() {
+		return false
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to marshal SSE event")
+		return false
+	}
+
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	if s.clientDisconnected.Load() {
+		return false
+	}
+	if shouldWrite != nil && !shouldWrite() {
+		return false
+	}
+	_ = s.rc.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	_, err = s.w.Write([]byte("data: " + string(data) + "\n\n"))
+	if err != nil {
+		log.Debug().Err(err).Msg("Failed to write SSE event (client may have disconnected)")
+		s.markDisconnected()
+		return false
+	}
+	s.flusher.Flush()
+	if visible {
+		s.lastClientEventUnixMS.Store(time.Now().UnixMilli())
+	}
+	return true
+}
+
 type AIKubernetesAnalyzeRequest struct {
 	ClusterID string `json:"cluster_id"`
 }
@@ -3682,52 +3860,12 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 	ctx, cancel := context.WithTimeout(context.Background(), 900*time.Second)
 	defer cancel()
 
-	// Set up heartbeat to keep connection alive during long tool executions
-	// NOTE: We don't check r.Context().Done() because Vite proxy may close
-	// the request context prematurely. We detect real disconnection via write failures.
-	heartbeatDone := make(chan struct{})
-	var clientDisconnected atomic.Bool
-	go func() {
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				// Extend write deadline before heartbeat
-				_ = rc.SetWriteDeadline(time.Now().Add(10 * time.Second))
-				// Send SSE comment as heartbeat
-				_, err := w.Write([]byte(": heartbeat\n\n"))
-				if err != nil {
-					log.Debug().Err(err).Msg("Heartbeat write failed, stopping heartbeat (AI continues)")
-					clientDisconnected.Store(true)
-					// Don't cancel the AI request - let it complete with its own timeout
-					// The SSE connection may have issues but the AI work can still finish
-					return
-				}
-				flusher.Flush()
-				log.Debug().Msg("Sent SSE heartbeat")
-			case <-heartbeatDone:
-				return
-			}
-		}
-	}()
-	defer close(heartbeatDone)
-
-	// Helper to safely write SSE events, tracking if client disconnected
-	safeWrite := func(data []byte) bool {
-		if clientDisconnected.Load() {
-			return false
-		}
-		_ = rc.SetWriteDeadline(time.Now().Add(10 * time.Second))
-		_, err := w.Write(data)
-		if err != nil {
-			log.Debug().Err(err).Msg("Failed to write SSE event (client may have disconnected)")
-			clientDisconnected.Store(true)
-			return false
-		}
-		flusher.Flush()
-		return true
-	}
+	// Keep the historical background execution behavior for this legacy route,
+	// but expose transport progress through the same visible idle event contract
+	// as /api/ai/chat.
+	streamWriter := newLegacyAssistantSSEWriter(w, flusher, rc, cancel, false)
+	streamWriter.start(ctx)
+	defer streamWriter.stop()
 
 	// Stream callback - write SSE events
 	callback := func(event ai.StreamEvent) {
@@ -3738,18 +3876,15 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 			return
 		}
 
-		data, err := json.Marshal(event)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to marshal stream event")
-			return
-		}
-
 		log.Debug().
 			Str("event_type", event.Type).
 			Msg("Streaming AI event")
 
-		// SSE format: data: <json>\n\n
-		safeWrite([]byte("data: " + string(data) + "\n\n"))
+		if event.Type == "error" {
+			streamWriter.writeTerminalPayload(event)
+			return
+		}
+		streamWriter.writePayload(event)
 	}
 
 	// Convert history from API type to service type
@@ -3767,10 +3902,9 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 
 	// Ensure we always send a final 'done' event
 	defer func() {
-		if !clientDisconnected.Load() {
+		if !streamWriter.disconnected() {
 			doneEvent := ai.StreamEvent{Type: "done"}
-			data, _ := json.Marshal(doneEvent)
-			safeWrite([]byte("data: " + string(data) + "\n\n"))
+			streamWriter.writeTerminalPayload(doneEvent)
 			log.Debug().Msg("Sent final 'done' event")
 		}
 	}()
@@ -3791,8 +3925,7 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 		log.Error().Err(err).Msg("AI streaming execution failed")
 		// Send error event — use generic message to avoid leaking internal details
 		errEvent := ai.StreamEvent{Type: "error", Data: map[string]string{"message": "AI request failed. Please try again."}}
-		data, _ := json.Marshal(errEvent)
-		safeWrite([]byte("data: " + string(data) + "\n\n"))
+		streamWriter.writeTerminalPayload(errEvent)
 		return
 	}
 
@@ -3811,8 +3944,7 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 		OutputTokens: resp.OutputTokens,
 		ToolCalls:    resp.ToolCalls,
 	}.NormalizeCollections()
-	data, _ := json.Marshal(finalEvent)
-	safeWrite([]byte("data: " + string(data) + "\n\n"))
+	streamWriter.writeTerminalPayload(finalEvent)
 	// 'done' event is sent by the defer above
 }
 
@@ -4533,61 +4665,27 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 
-	// Heartbeat routine
-	heartbeatDone := make(chan struct{})
-	var clientDisconnected atomic.Bool
-	go func() {
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				_ = rc.SetWriteDeadline(time.Now().Add(10 * time.Second))
-				_, err := w.Write([]byte(": heartbeat\n\n"))
-				if err != nil {
-					clientDisconnected.Store(true)
-					return
-				}
-				flusher.Flush()
-			case <-heartbeatDone:
-				return
-			}
-		}
-	}()
-	defer close(heartbeatDone)
-
-	safeWrite := func(data []byte) bool {
-		if clientDisconnected.Load() {
-			return false
-		}
-		_ = rc.SetWriteDeadline(time.Now().Add(10 * time.Second))
-		_, err := w.Write(data)
-		if err != nil {
-			clientDisconnected.Store(true)
-			return false
-		}
-		flusher.Flush()
-		return true
-	}
+	streamWriter := newLegacyAssistantSSEWriter(w, flusher, rc, cancel, false)
+	streamWriter.start(ctx)
+	defer streamWriter.stop()
 
 	// Stream callback
 	callback := func(event ai.StreamEvent) {
 		if event.Type == "done" {
 			return
 		}
-		data, err := json.Marshal(event)
-		if err != nil {
+		if event.Type == "error" {
+			streamWriter.writeTerminalPayload(event)
 			return
 		}
-		safeWrite([]byte("data: " + string(data) + "\n\n"))
+		streamWriter.writePayload(event)
 	}
 
 	// Execute with streaming
 	defer func() {
-		if !clientDisconnected.Load() {
+		if !streamWriter.disconnected() {
 			doneEvent := ai.StreamEvent{Type: "done"}
-			data, _ := json.Marshal(doneEvent)
-			safeWrite([]byte("data: " + string(data) + "\n\n"))
+			streamWriter.writeTerminalPayload(doneEvent)
 		}
 	}()
 
@@ -4611,8 +4709,7 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 	if err != nil {
 		log.Error().Err(err).Msg("AI alert investigation failed")
 		errEvent := ai.StreamEvent{Type: "error", Data: map[string]string{"message": "Alert investigation failed. Please try again."}}
-		data, _ := json.Marshal(errEvent)
-		safeWrite([]byte("data: " + string(data) + "\n\n"))
+		streamWriter.writeTerminalPayload(errEvent)
 		return
 	}
 
@@ -4624,8 +4721,7 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 		OutputTokens: resp.OutputTokens,
 		ToolCalls:    resp.ToolCalls,
 	}.NormalizeCollections()
-	data, _ := json.Marshal(finalEvent)
-	safeWrite([]byte("data: " + string(data) + "\n\n"))
+	streamWriter.writeTerminalPayload(finalEvent)
 
 	if alertIdentifier != "" {
 		h.GetAIService(r.Context()).RecordIncidentAnalysis(alertIdentifier, "Pulse Assistant alert investigation completed", map[string]interface{}{

@@ -547,6 +547,14 @@ payload shape change when the portal presents compact client rows.
     prove the visible stream contract, while tests may disable that pace to keep
     backend proof fast.
 34. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
+    Legacy Assistant SSE routes in this handler that still use the older
+    execute envelope, including `/api/ai/execute/stream` and
+    `/api/ai/investigate-alert`, must preserve their existing top-level
+    `complete` payload shape while sharing the governed Assistant transport
+    liveness contract: visible neutral `workflow_state` events with phase
+    `stream_idle` during silent intervals, hidden SSE comments only as
+    keepalives, serialized heartbeat/event writes, and no idle progress after
+    terminal `complete`/`error`/`done`.
     Provider test responses from `/api/ai/test` and provider-specific
     `/api/ai/test/{provider}` preflight responses must return one safe
     structured diagnostic envelope: `success`, `message`, optional `model`,

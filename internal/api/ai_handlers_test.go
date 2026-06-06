@@ -2727,6 +2727,21 @@ func TestHandleInvestigateAlert_ForcesApprovalBoundExecuteRequest(t *testing.T) 
 	require.Contains(t, text, "RequireCommandApproval: true")
 }
 
+func TestHandleInvestigateAlert_UsesVisibleIdleProgressStream(t *testing.T) {
+	setMockModeForTest(t, true)
+	withLegacyAssistantStreamIdleInterval(t, 2*time.Millisecond)
+
+	handler := newTestAISettingsHandlerWithService(t)
+
+	body := []byte(`{"alertIdentifier":"alert-1","resource_id":"node-1","resource_name":"node-1","resource_type":"agent","alert_type":"cpu","level":"warning","message":"high cpu"}`)
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/investigate-alert", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleInvestigateAlert(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assertLegacyAssistantStreamIdleBeforeTerminal(t, rec.Body.String())
+}
+
 // ========================================
 // AISettingsHandler setter method tests
 // ========================================
