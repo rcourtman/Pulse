@@ -119,10 +119,35 @@ export interface ToolCall {
 
 export type StreamEvent = AIChatStreamEvent;
 
-const AI_CHAT_STREAM_PAINT_CHECKPOINT_EXCLUDED_TYPES = new Set(['content', 'thinking']);
+const AI_CHAT_STREAM_TEXT_PAINT_CHECKPOINT_INTERVAL = 16;
+const AI_CHAT_STREAM_TEXT_EVENT_TYPES = new Set(['content', 'thinking']);
 
-export const shouldYieldAfterAIChatStreamEvent = (event: Pick<StreamEvent, 'type'>): boolean =>
-  !AI_CHAT_STREAM_PAINT_CHECKPOINT_EXCLUDED_TYPES.has(event.type);
+const isAIChatStreamTextEvent = (event: Pick<StreamEvent, 'type'>): boolean =>
+  AI_CHAT_STREAM_TEXT_EVENT_TYPES.has(event.type);
+
+export const createAIChatStreamPaintCheckpointPredicate = () => {
+  let textEventsSinceCheckpoint = 0;
+
+  return (event: Pick<StreamEvent, 'type'>): boolean => {
+    if (!isAIChatStreamTextEvent(event)) {
+      textEventsSinceCheckpoint = 0;
+      return true;
+    }
+
+    textEventsSinceCheckpoint += 1;
+    if (
+      textEventsSinceCheckpoint === 1 ||
+      textEventsSinceCheckpoint >= AI_CHAT_STREAM_TEXT_PAINT_CHECKPOINT_INTERVAL
+    ) {
+      if (textEventsSinceCheckpoint >= AI_CHAT_STREAM_TEXT_PAINT_CHECKPOINT_INTERVAL) {
+        textEventsSinceCheckpoint = 0;
+      }
+      return true;
+    }
+
+    return false;
+  };
+};
 
 export interface AIStatus {
   running: boolean;
@@ -363,7 +388,7 @@ export class AIChatAPI {
       onComplete: () => {
         onEvent({ type: 'done' });
       },
-      yieldBetweenEvents: shouldYieldAfterAIChatStreamEvent,
+      yieldBetweenEvents: createAIChatStreamPaintCheckpointPredicate(),
     });
   }
 }

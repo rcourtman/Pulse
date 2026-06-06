@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/utils/apiClient', () => ({
   apiFetchJSON: vi.fn(),
@@ -14,22 +14,72 @@ vi.mock('@/utils/logger', () => ({
   },
 }));
 
-import { AIChatAPI, shouldYieldAfterAIChatStreamEvent } from '@/api/aiChat';
+import { AIChatAPI, createAIChatStreamPaintCheckpointPredicate } from '@/api/aiChat';
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
+
+const flushMicrotasks = async () => {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await Promise.resolve();
+  }
+};
 
 describe('AIChatAPI', () => {
   const apiFetchMock = vi.mocked(apiFetch);
   const apiFetchJSONMock = vi.mocked(apiFetchJSON);
+  const originalRequestAnimationFrame = window.requestAnimationFrame;
+  const originalCancelAnimationFrame = window.cancelAnimationFrame;
 
   beforeEach(() => {
     apiFetchMock.mockReset();
     apiFetchJSONMock.mockReset();
   });
 
-  it('uses paint checkpoints for visible Assistant progress events but not text tokens', () => {
-    expect(shouldYieldAfterAIChatStreamEvent({ type: 'content' })).toBe(false);
-    expect(shouldYieldAfterAIChatStreamEvent({ type: 'thinking' })).toBe(false);
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    Object.defineProperty(window, 'requestAnimationFrame', {
+      configurable: true,
+      value: originalRequestAnimationFrame,
+    });
+    Object.defineProperty(window, 'cancelAnimationFrame', {
+      configurable: true,
+      value: originalCancelAnimationFrame,
+    });
+    vi.useRealTimers();
+  });
+
+  const installAnimationFrame = () => {
+    const requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      return window.setTimeout(() => callback(performance.now()), 16);
+    });
+    const cancelAnimationFrame = vi.fn((id: number) => window.clearTimeout(id));
+    vi.stubGlobal('requestAnimationFrame', requestAnimationFrame);
+    vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrame);
+    Object.defineProperty(window, 'requestAnimationFrame', {
+      configurable: true,
+      value: requestAnimationFrame,
+    });
+    Object.defineProperty(window, 'cancelAnimationFrame', {
+      configurable: true,
+      value: cancelAnimationFrame,
+    });
+    return requestAnimationFrame;
+  };
+
+  const advancePaintCheckpoint = async () => {
+    await vi.advanceTimersToNextTimerAsync();
+    await vi.advanceTimersToNextTimerAsync();
+    await flushMicrotasks();
+  };
+
+  it('uses immediate and periodic paint checkpoints for text while yielding every progress event', () => {
+    const shouldYield = createAIChatStreamPaintCheckpointPredicate();
+
+    expect(shouldYield({ type: 'content' })).toBe(true);
+    for (let index = 0; index < 14; index += 1) {
+      expect(shouldYield({ type: 'content' })).toBe(false);
+    }
+    expect(shouldYield({ type: 'content' })).toBe(true);
 
     for (const type of [
       'session',
@@ -41,8 +91,59 @@ describe('AIChatAPI', () => {
       'approval_needed',
       'question',
     ] as const) {
-      expect(shouldYieldAfterAIChatStreamEvent({ type })).toBe(true);
+      expect(shouldYield({ type })).toBe(true);
     }
+
+    expect(shouldYield({ type: 'thinking' })).toBe(true);
+    expect(shouldYield({ type: 'thinking' })).toBe(false);
+  });
+
+  it('lets the browser paint the first visible text delta before draining a coalesced chat chunk', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const requestAnimationFrame = installAnimationFrame();
+    const encoder = new TextEncoder();
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce({
+        done: false,
+        value: encoder.encode(
+          [
+            'data: {"type":"content","data":{"text":"First"}}',
+            '',
+            'data: {"type":"content","data":{"text":" second"}}',
+            '',
+            'data: {"type":"done"}',
+            '',
+            '',
+          ].join('\n'),
+        ),
+      })
+      .mockResolvedValueOnce({ done: true, value: undefined });
+    const releaseLock = vi.fn();
+    const onEvent = vi.fn();
+
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: {
+        getReader: () => ({ read, releaseLock }),
+      },
+    } as unknown as Response);
+
+    const streamPromise = AIChatAPI.chat('hello', undefined, undefined, onEvent);
+
+    await flushMicrotasks();
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual(['content']);
+    expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
+
+    await advancePaintCheckpoint();
+    await streamPromise;
+
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'content',
+      'content',
+      'done',
+    ]);
+    expect(releaseLock).toHaveBeenCalledTimes(1);
   });
 
   it('preserves safe handoff summaries on listed chat sessions', async () => {

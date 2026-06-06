@@ -304,12 +304,15 @@ runtime cost control, and shared AI transport surfaces.
    (`apply(event)`, line 120; `session.next.tool.input.started`, line 276;
    `session.next.tool.progress`, line 317; `session.next.tool.success`, line
    328; `session.next.tool.failed`, line 350), so Pulse's shared browser SSE
-   consumer must treat opted-in non-text Assistant progress events as paint
-   checkpoints. `frontend-modern/src/api/streaming.ts` must yield through an
+   consumer must treat opted-in Assistant progress events as paint checkpoints.
+   `frontend-modern/src/api/streaming.ts` must yield through an
    animation-frame-backed browser paint checkpoint, with a bounded timer
    fallback for inactive tabs, before draining the next opted-in event; a plain
    synchronous loop or microtask-only pause is insufficient because it can still
-   render workflow/tool steps only after a batch has already finished.
+   render workflow/tool steps only after a batch has already finished. Chat text
+   and reasoning deltas must paint immediately for the first delta in a run and
+   then periodically so coalesced provider chunks do not arrive as one burst,
+   while avoiding a frame wait for every token.
    Pulse's reducer must also keep the same keyed-part behavior: repeated
    `tool_start` or `tool_progress` events for one backend tool ID, or the same
    normalized tool name when an older server omits IDs, upsert one pending tool
@@ -505,8 +508,10 @@ runtime cost control, and shared AI transport surfaces.
    stream consumer must let the browser paint between buffered Assistant
    progress/tool/status events for chat streams instead of synchronously
    draining a coalesced `tool_start`/`tool_progress`/`tool_end` batch in one
-   JavaScript task. Ordinary content-token streaming must not be frame-throttled
-   by that progress-batch safeguard.
+   JavaScript task. Ordinary content-token streaming must also get an immediate
+   first-delta paint checkpoint and periodic checkpoints for long coalesced
+   chunks, but must not be frame-throttled on every token by that progress-batch
+   safeguard.
    The referenced OpenCode source at fetched `origin/dev` commit
    `09d9cf01f93798939c1284fbe974b6e1f4d2759d` renders tool-specific inline
    labels such as `Read <path>`, `Grep "<pattern>"`, `WebFetch <url>`, and bash

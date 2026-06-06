@@ -468,9 +468,17 @@ payload shape change when the portal presents compact client rows.
     animation-frame-backed paint checkpoint with a bounded timer fallback after
     opted-in Assistant progress/tool/status events, including events that arrive
     through separate queued stream reads rather than the same decoded HTTP
-    chunk. That pacing is an API-client consumption rule only: it must not
-    change event payload shape, event order, timeout handling, reader cleanup,
-    parse-error handling, or ordinary content-token throughput.
+    chunk. OpenCode parity is source-backed by fetched `origin/dev` commit
+    `9ed17da55ab1f7360cc0e01075f763e27fa899e9`,
+    `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`, where
+    `apply(event)` mutates typed message parts event-by-event (`apply(event)`,
+    line 120; `session.next.tool.progress`, line 317). Pulse chat text and
+    reasoning deltas must therefore get an immediate first-delta paint checkpoint
+    and bounded periodic checkpoints for long coalesced `content` / `thinking`
+    runs, without yielding after every token. That pacing is an API-client
+    consumption rule only: it must not change event payload shape, event order,
+    timeout handling, reader cleanup, parse-error handling, or ordinary
+    content-token throughput.
 	    Cold Assistant streams must include a typed `session` event backed by
 	    `internal/ai/chat.SessionData` as soon as the HTTP SSE writer is ready and
 	    an immediate neutral `workflow_state` preparation event before backend
