@@ -1344,6 +1344,84 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('keeps the provider wait visible when an idle heartbeat arrives', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+
+      fire({
+        type: 'workflow_state',
+        data: {
+          phase: 'provider_start',
+          message: 'Sent request to OpenRouter; waiting for the first token.',
+        },
+      });
+      fire({
+        type: 'workflow_state',
+        data: {
+          phase: 'stream_idle',
+          message: 'Assistant is still working; waiting for the next stream event.',
+        },
+      });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.workflowStatus).toEqual(
+        expect.objectContaining({
+          phase: 'provider_start',
+          message: 'Sent request to OpenRouter; waiting for the first token.',
+        }),
+      );
+      expect(assistant.streamEvents).toHaveLength(1);
+      expect(assistant.streamEvents?.[0]).toEqual(
+        expect.objectContaining({
+          type: 'workflow_status',
+          workflowStatus: expect.objectContaining({
+            phase: 'provider_start',
+            message: 'Sent request to OpenRouter; waiting for the first token.',
+          }),
+        }),
+      );
+
+      dispose();
+    });
+
+    it('keeps the local request-start status when an early idle heartbeat arrives', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+
+      fire({
+        type: 'workflow_state',
+        data: {
+          phase: 'stream_idle',
+          message: 'Assistant is still working; waiting for the next stream event.',
+        },
+      });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.workflowStatus).toEqual(
+        expect.objectContaining({
+          phase: 'request_start',
+          message: 'Preparing Pulse context.',
+        }),
+      );
+      expect(assistant.streamEvents).toEqual([
+        expect.objectContaining({
+          type: 'workflow_status',
+          workflowStatus: expect.objectContaining({
+            phase: 'request_start',
+            message: 'Preparing Pulse context.',
+          }),
+        }),
+      ]);
+
+      dispose();
+    });
+
     it('clears neutral workflow progress when answer content starts streaming', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));

@@ -136,6 +136,23 @@ export function useChat(options: UseChatOptions = {}) {
     (a.maxAttempts || 0) === (b.maxAttempts || 0) &&
     (a.retryAfterMs || 0) === (b.retryAfterMs || 0);
 
+  const isStreamIdleWorkflowStatus = (status?: WorkflowStatus) =>
+    status?.phase === 'stream_idle';
+
+  // stream_idle is transport liveness, not a new Assistant step.
+  const visibleWorkflowStatusForHeartbeat = (
+    current: WorkflowStatus | undefined,
+    next: WorkflowStatus,
+  ): WorkflowStatus => {
+    if (!isStreamIdleWorkflowStatus(next)) return next;
+    if (!current || isStreamIdleWorkflowStatus(current)) return next;
+
+    return {
+      ...current,
+      startedAt: current.startedAt || next.startedAt,
+    };
+  };
+
   const setAssistantWorkflowStatus = (
     assistantId: string,
     requestId: number,
@@ -146,8 +163,9 @@ export function useChat(options: UseChatOptions = {}) {
       prev.map((msg) => {
         if (msg.id !== assistantId) return msg;
         if (msg.isStreaming === false) return msg;
-        if (workflowStatusesMatch(msg.workflowStatus, workflowStatus)) return msg;
-        return { ...msg, workflowStatus };
+        const visibleStatus = visibleWorkflowStatusForHeartbeat(msg.workflowStatus, workflowStatus);
+        if (workflowStatusesMatch(msg.workflowStatus, visibleStatus)) return msg;
+        return { ...msg, workflowStatus: visibleStatus };
       }),
     );
   };
@@ -339,11 +357,12 @@ export function useChat(options: UseChatOptions = {}) {
   ): ChatMessage => {
     const events = msg.streamEvents || [];
     const now = Date.now();
+    const visibleStatus = visibleWorkflowStatusForHeartbeat(msg.workflowStatus, workflowStatus);
     const nextEvent = withStreamEventTiming(
       {
         type: 'workflow_status',
-        workflowStatus,
-        startedAt: workflowStatus.startedAt,
+        workflowStatus: visibleStatus,
+        startedAt: visibleStatus.startedAt,
         updatedAt: workflowStatus.startedAt,
       },
       now,
@@ -351,7 +370,19 @@ export function useChat(options: UseChatOptions = {}) {
     const last = events[events.length - 1];
 
     if (last?.type === 'workflow_status') {
-      if (workflowStatusesMatch(last.workflowStatus, workflowStatus)) {
+      if (workflowStatusesMatch(last.workflowStatus, visibleStatus)) {
+        if (isStreamIdleWorkflowStatus(workflowStatus)) {
+          return {
+            ...msg,
+            streamEvents: [
+              ...events.slice(0, -1),
+              {
+                ...last,
+                updatedAt: nextEvent.updatedAt || now,
+              },
+            ],
+          };
+        }
         return msg;
       }
       return {
