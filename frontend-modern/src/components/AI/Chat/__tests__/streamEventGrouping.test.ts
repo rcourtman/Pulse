@@ -58,6 +58,22 @@ describe('groupStreamEventsForDisplay', () => {
     expect(grouped[2].content).toBe('All healthy.');
   });
 
+  it('keeps content separated across a model-switch boundary', () => {
+    const modelSwitch: StreamDisplayEvent = {
+      type: 'model_switch',
+      model: 'openrouter:deepseek/deepseek-v4-pro',
+    };
+    const grouped = groupStreamEventsForDisplay([
+      content('OpenRouter was unavailable.'),
+      modelSwitch,
+      content('Trying the gateway route now.'),
+    ]);
+
+    expect(grouped.map((e) => e.type)).toEqual(['content', 'model_switch', 'content']);
+    expect(grouped[0].content).toBe('OpenRouter was unavailable.');
+    expect(grouped[2].content).toBe('Trying the gateway route now.');
+  });
+
   it('skips empty deltas', () => {
     const grouped = groupStreamEventsForDisplay([content(''), thinking(''), content('hi')]);
     expect(grouped).toHaveLength(1);

@@ -692,7 +692,12 @@ export function useChat(options: UseChatOptions = {}) {
 
       if (nextModel) {
         setMessages((prev) =>
-          prev.map((msg) => (msg.id === assistantId ? { ...msg, model: nextModel } : msg)),
+          prev.map((msg) => {
+            if (msg.id !== assistantId) return msg;
+            if ((msg.model || '').trim() === nextModel) return msg;
+            const updated = addStreamEvent(msg, { type: 'model_switch', model: nextModel });
+            return { ...updated, model: nextModel };
+          }),
         );
       }
       if (workflowStatus) {

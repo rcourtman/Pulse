@@ -99,6 +99,8 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
         return !!evt.tool;
       case 'pending_tool':
         return !!evt.pendingTool;
+      case 'model_switch':
+        return !!evt.model?.trim();
       case 'approval':
         return !!evt.approval;
       case 'question':
@@ -127,11 +129,12 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
   });
   const visibleMessageContent = () =>
     stripAssistantOutputArtifacts(props.message.content || '').text;
-  const messageModelLabel = () => {
-    const model = props.message.model?.trim();
+  const modelRouteLabel = (route?: string) => {
+    const model = route?.trim();
     if (!model) return '';
     return props.getModelRouteLabel?.(model) || formatAIModelRouteLabel(model);
   };
+  const messageModelLabel = () => modelRouteLabel(props.message.model);
 
   // Check if currently streaming content (no tools pending, still streaming)
   const isStreamingText = () =>
@@ -344,6 +347,22 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                             success: evt.tool?.success ?? true,
                           }}
                         />
+                      </Match>
+
+                      <Match when={evt.type === 'model_switch' && evt.model?.trim()}>
+                        <div
+                          class="my-2 inline-flex max-w-full items-center gap-2 rounded-md border border-border-subtle bg-surface-alt px-2.5 py-1.5 text-xs text-muted"
+                          role="status"
+                          aria-label="Assistant model route changed"
+                          title={evt.model}
+                        >
+                          <CpuIcon class="h-3.5 w-3.5 shrink-0 text-blue-500" aria-hidden="true" />
+                          <span class="shrink-0">Switched to</span>
+                          {' '}
+                          <span class="truncate font-medium text-base-content">
+                            {modelRouteLabel(evt.model)}
+                          </span>
+                        </div>
                       </Match>
 
                       {/* Content/text block */}

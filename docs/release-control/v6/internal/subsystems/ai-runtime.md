@@ -188,7 +188,14 @@ runtime cost control, and shared AI transport surfaces.
    completed the turn, and the drawer must update the in-flight transcript row
    when `provider_fallback` names the next route so message labels, cost
    context, retry decisions, and model-route recovery do not continue to point
-   at the failed provider.
+   at the failed provider. The referenced OpenCode source at fetched
+   `origin/dev` commit `1399323b78a04229d9bfe00c7436d7f41770fda8` renders
+   `ModelSwitchedMessage` as a typed transcript message and appends the
+   effective provider/model route to completed assistant turns in
+   `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`.
+   Pulse adapts that by rendering provider fallback route changes as a typed
+   `model_switch` stream row on the active assistant turn instead of hiding the
+   switch in transient status text or assistant prose.
    Interactive Assistant streams must establish the session ID and emit the
    `session` event once as soon as the HTTP SSE writer is ready, before finding
    handoff recovery, model resolution, provider fallback planning,

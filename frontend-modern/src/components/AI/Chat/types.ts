@@ -97,6 +97,7 @@ export type StreamEventType =
   | 'tool'
   | 'content'
   | 'pending_tool'
+  | 'model_switch'
   | 'approval'
   | 'question';
 
@@ -106,6 +107,7 @@ export interface StreamDisplayEvent {
   tool?: ToolExecution;
   pendingTool?: PendingTool;
   content?: string;
+  model?: string;
   toolId?: string; // Used to match pending_tool with completed tool
   approval?: PendingApproval; // For approval_needed events
   question?: PendingQuestion; // For question events

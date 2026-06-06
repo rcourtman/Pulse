@@ -1091,6 +1091,10 @@ describe('useChat', () => {
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.model).toBe('gemini:gemini-3.1-flash-lite');
+      expect(assistant.streamEvents).toContainEqual({
+        type: 'model_switch',
+        model: 'gemini:gemini-3.1-flash-lite',
+      });
       expect(assistant.workflowStatus).toEqual(
         expect.objectContaining({
           phase: 'provider_fallback',

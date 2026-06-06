@@ -626,6 +626,28 @@ describe('MessageItem', () => {
       expect(screen.queryByText(/Hidden reasoning/i)).not.toBeInTheDocument();
     });
 
+    it('renders provider fallback model switches as typed transcript status', () => {
+      const events: StreamDisplayEvent[] = [
+        { type: 'model_switch', model: 'openrouter:deepseek/deepseek-v4-pro' },
+      ];
+
+      render(() => (
+        <MessageItem
+          message={makeMessage({ role: 'assistant', streamEvents: events })}
+          getModelRouteLabel={(model) =>
+            model === 'openrouter:deepseek/deepseek-v4-pro'
+              ? 'DeepSeek V4 Pro via OpenRouter'
+              : model
+          }
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(
+        screen.getByRole('status', { name: 'Assistant model route changed' }),
+      ).toHaveTextContent('Switched to DeepSeek V4 Pro via OpenRouter');
+    });
+
     it('renders tool execution blocks', () => {
       const events: StreamDisplayEvent[] = [
         {
