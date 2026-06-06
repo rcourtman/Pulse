@@ -258,6 +258,15 @@ describe('shared primitive guardrails', () => {
     expect(aiModelPickerSource).toContain("const CURRENT_SELECTION_LABEL = 'Current'");
     expect(aiModelPickerSource).toContain('const CurrentSelectionBadge');
     expect(aiModelPickerSource).toContain('const optionAriaLabel');
+    expect(aiModelPickerSource).toContain('const displayedOptionKeys = createMemo');
+    expect(aiModelPickerSource).toContain('const currentOptionKey = createMemo');
+    expect(aiModelPickerSource).toContain('const focusInitialOption = () =>');
+    expect(aiModelPickerSource).toContain('const handleSearchKeyDown = (event: KeyboardEvent)');
+    expect(aiModelPickerSource).toContain('const handleOptionKeyDown = (');
+    expect(aiModelPickerSource).toContain('role="dialog"');
+    expect(aiModelPickerSource).toContain('role="listbox"');
+    expect(aiModelPickerSource).toContain('aria-controls={isOpen() ? `${pickerId}-listbox` : undefined}');
+    expect(aiModelPickerSource).toContain('onKeyDown={(event) => handleOptionKeyDown');
     expect(aiModelPickerSource).toContain('aria-selected={isSelectedRoute(model.id)}');
     expect(aiModelPickerSource).toContain('aria-label={optionAriaLabel(');
     expect(aiModelPickerSource).toContain('role="option"');

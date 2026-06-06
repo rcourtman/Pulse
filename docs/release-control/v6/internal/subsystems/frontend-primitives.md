@@ -1020,7 +1020,12 @@ not a replacement status card, CTA band, or page-local nested card.
     routes. The shared picker must also mark the selected catalog, recent,
     override, custom, or inherited-default route as the current row with
     visible `Current` metadata and `aria-selected`; selected model state must
-    not be communicated by background color alone.
+    not be communicated by background color alone. The model picker dropdown is
+    a named search/listbox surface: opening it must focus search, the trigger
+    must expose its owned listbox while expanded, and keyboard movement from
+    search through the option rows must support current-row focus,
+    filtered-result focus, up/down, page, home/end, and Escape return to the
+    trigger so model choice does not depend on mouse interaction.
     Gateway-routed model choices must not look like direct-provider choices:
     the shared picker, System AI settings status strip, and per-surface
     inherited-default descriptions must render OpenRouter-hosted provider

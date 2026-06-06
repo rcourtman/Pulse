@@ -4,6 +4,7 @@ import {
   Show,
   createEffect,
   createMemo,
+  createUniqueId,
   createSignal,
   onCleanup,
   onMount,
@@ -78,6 +79,7 @@ const ERROR_ROW_HEIGHT = 36;
 const CUSTOM_RECENT_MODEL_DESCRIPTION = 'Recent custom model route';
 const MODEL_ROUTE_PROVIDER_RE = /^[a-z][a-z0-9_-]*$/i;
 const CURRENT_SELECTION_LABEL = 'Current';
+const DEFAULT_OPTION_KEY = '__default__';
 
 type ResolvedModelRoute = {
   id: string;
@@ -159,6 +161,8 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
   let containerRef: HTMLDivElement | undefined;
   let buttonRef: HTMLButtonElement | undefined;
   let searchInputRef: HTMLInputElement | undefined;
+  const pickerId = createUniqueId();
+  const optionRefs = new Map<string, HTMLButtonElement>();
   let lastOpenRequest = props.openRequest || 0;
 
   const selectedModel = createMemo(() => props.selectedModel?.trim() || '');
@@ -252,6 +256,48 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
       return false;
     }
     return !props.models.some((model) => model.id === candidate);
+  });
+  const optionKeyForModel = (modelId: string) => `model:${modelId}`;
+  const optionKeyForExtra = (optionId: string) => `extra:${optionId}`;
+  const optionKeyForCustom = (modelId: string) => `custom:${modelId}`;
+  const displayedOptionKeys = createMemo(() => {
+    const keys: string[] = [];
+    if (props.defaultOption) {
+      keys.push(DEFAULT_OPTION_KEY);
+    }
+    for (const option of extraOptions()) {
+      keys.push(optionKeyForExtra(option.id));
+    }
+    if (showCustomModelOption()) {
+      keys.push(optionKeyForCustom(customModelCandidate()));
+    }
+    if (!searchQuery().trim()) {
+      for (const section of modelSections()) {
+        for (const entry of section.models) {
+          keys.push(optionKeyForModel(entry.id));
+        }
+      }
+    }
+    for (const [, providerModels] of groupModelsByProvider(filteredModels()).entries()) {
+      for (const model of providerModels) {
+        keys.push(optionKeyForModel(model.id));
+      }
+    }
+    return keys;
+  });
+  const currentOptionKey = createMemo(() => {
+    const selected = selectedModel();
+    if (!selected) {
+      return props.defaultOption ? DEFAULT_OPTION_KEY : '';
+    }
+    if (extraOptions().some((option) => option.id === selected)) {
+      return optionKeyForExtra(selected);
+    }
+    if (showCustomModelOption() && customModelCandidate() === selected) {
+      return optionKeyForCustom(selected);
+    }
+    const modelKey = optionKeyForModel(selected);
+    return displayedOptionKeys().includes(modelKey) ? modelKey : '';
   });
 
   const selectedLabel = createMemo(() => {
@@ -353,15 +399,106 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
       isSelected ? 'bg-blue-50 dark:bg-blue-900' : ''
     }`;
 
-  const handleKeyDown = (event: KeyboardEvent) => {
-    if (event.key !== 'Enter') {
+  createEffect(() => {
+    const visibleKeys = new Set(displayedOptionKeys());
+    for (const key of optionRefs.keys()) {
+      if (!visibleKeys.has(key)) {
+        optionRefs.delete(key);
+      }
+    }
+  });
+
+  const focusOptionAtIndex = (index: number) => {
+    const keys = displayedOptionKeys();
+    if (keys.length === 0) return false;
+    const nextIndex = ((index % keys.length) + keys.length) % keys.length;
+    const target = optionRefs.get(keys[nextIndex]);
+    if (!target) return false;
+    target.focus();
+    return true;
+  };
+
+  const focusInitialOption = () => {
+    const keys = displayedOptionKeys();
+    if (keys.length === 0) return false;
+    const currentKey = currentOptionKey();
+    const currentIndex = !searchQuery().trim() && currentKey ? keys.indexOf(currentKey) : -1;
+    return focusOptionAtIndex(currentIndex >= 0 ? currentIndex : 0);
+  };
+
+  const focusOptionRelativeTo = (optionKey: string, offset: number) => {
+    const keys = displayedOptionKeys();
+    const currentIndex = keys.indexOf(optionKey);
+    if (currentIndex < 0) return false;
+    let nextIndex = currentIndex + offset;
+    if (nextIndex < 0) nextIndex = keys.length - 1;
+    if (nextIndex >= keys.length) nextIndex = 0;
+    return focusOptionAtIndex(nextIndex);
+  };
+
+  const handleSearchKeyDown = (event: KeyboardEvent) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.key === 'ArrowDown' && focusInitialOption()) {
+      event.preventDefault();
       return;
     }
-    event.preventDefault();
-    const candidate = customModelCandidate();
-    if (candidate && (exactCandidateModel() || showCustomModelOption())) {
-      handleSelect(candidate);
+    if (event.key === 'ArrowUp' && focusOptionAtIndex(displayedOptionKeys().length - 1)) {
+      event.preventDefault();
+      return;
     }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const candidate = customModelCandidate();
+      if (candidate && (exactCandidateModel() || showCustomModelOption())) {
+        handleSelect(candidate);
+      }
+    }
+  };
+
+  const handleOptionKeyDown = (
+    event: KeyboardEvent & { currentTarget: HTMLButtonElement },
+    optionKey: string,
+  ) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+
+    if (event.key === 'ArrowDown' && focusOptionRelativeTo(optionKey, 1)) {
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'ArrowUp' && focusOptionRelativeTo(optionKey, -1)) {
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'PageDown' && focusOptionRelativeTo(optionKey, 10)) {
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'PageUp' && focusOptionRelativeTo(optionKey, -10)) {
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'Home' && focusOptionAtIndex(0)) {
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'End' && focusOptionAtIndex(displayedOptionKeys().length - 1)) {
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closePicker();
+      buttonRef?.focus();
+    }
+  };
+
+  const handleShowAllModelsKeyDown = (
+    event: KeyboardEvent & { currentTarget: HTMLButtonElement },
+  ) => {
+    if (event.key !== 'Escape' || event.altKey || event.ctrlKey || event.metaKey) return;
+    event.preventDefault();
+    closePicker();
+    buttonRef?.focus();
   };
 
   createEffect(() => {
@@ -409,6 +546,7 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
         disabled={props.disabled}
         aria-haspopup="listbox"
         aria-expanded={isOpen()}
+        aria-controls={isOpen() ? `${pickerId}-listbox` : undefined}
         aria-label={selectedButtonLabel()}
         class={props.buttonClass || DEFAULT_BUTTON_CLASS}
         title={props.title || 'Select model'}
@@ -435,13 +573,15 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
       <Show when={isOpen()}>
         <div
           class={`fixed overflow-hidden rounded-md border border-border bg-surface shadow-sm z-[9999] ${props.dropdownClass || DEFAULT_DROPDOWN_CLASS}`}
+          role="dialog"
+          aria-label={props.title || 'Select model'}
           style={dropdownStyle()}
         >
           <div class="flex items-center gap-2 border-b border-border px-3 py-2">
             <SearchField
               value={searchQuery()}
               onChange={setSearchQuery}
-              onKeyDown={handleKeyDown}
+              onKeyDown={handleSearchKeyDown}
               placeholder={props.searchPlaceholder || 'Search or enter model ID'}
               class="flex-1"
               inputClass="py-1.5 text-xs focus:ring-blue-400"
@@ -456,6 +596,7 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
                 disabled={props.isLoading}
                 class="rounded-md p-1.5 text-muted hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50"
                 title="Refresh models"
+                aria-label="Refresh models"
               >
                 <RefreshCwIcon class={`h-3.5 w-3.5 ${props.isLoading ? 'animate-spin' : ''}`} />
               </button>
@@ -469,14 +610,20 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
           </Show>
 
           <div
+            id={`${pickerId}-listbox`}
             class="overflow-y-auto py-1"
             role="listbox"
+            aria-label={props.title || 'Select model'}
             style={{ 'max-height': `${dropdownPosition().listMaxHeight}px` }}
           >
             <Show when={props.defaultOption}>
               <button
                 type="button"
+                ref={(button) => {
+                  optionRefs.set(DEFAULT_OPTION_KEY, button);
+                }}
                 onClick={() => handleSelect('')}
+                onKeyDown={(event) => handleOptionKeyDown(event, DEFAULT_OPTION_KEY)}
                 role="option"
                 aria-selected={!selectedModel()}
                 aria-label={optionAriaLabel(
@@ -504,7 +651,11 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
               {(option) => (
                 <button
                   type="button"
+                  ref={(button) => {
+                    optionRefs.set(optionKeyForExtra(option.id), button);
+                  }}
                   onClick={() => handleSelect(option.id)}
+                  onKeyDown={(event) => handleOptionKeyDown(event, optionKeyForExtra(option.id))}
                   role="option"
                   aria-selected={isSelectedRoute(option.id)}
                   aria-label={optionAriaLabel(option.label, isSelectedRoute(option.id), [
@@ -530,7 +681,13 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
             <Show when={showCustomModelOption()}>
               <button
                 type="button"
+                ref={(button) => {
+                  optionRefs.set(optionKeyForCustom(customModelCandidate()), button);
+                }}
                 onClick={() => handleSelect(customModelCandidate())}
+                onKeyDown={(event) =>
+                  handleOptionKeyDown(event, optionKeyForCustom(customModelCandidate()))
+                }
                 role="option"
                 aria-selected={isSelectedRoute(customModelCandidate())}
                 aria-label={optionAriaLabel(
@@ -577,7 +734,13 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
                       {(entry) => (
                         <button
                           type="button"
+                          ref={(button) => {
+                            optionRefs.set(optionKeyForModel(entry.id), button);
+                          }}
                           onClick={() => handleSelect(entry.id)}
+                          onKeyDown={(event) =>
+                            handleOptionKeyDown(event, optionKeyForModel(entry.id))
+                          }
                           role="option"
                           aria-selected={isSelectedRoute(entry.id)}
                           aria-label={optionAriaLabel(
@@ -621,7 +784,13 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
                     {(model) => (
                       <button
                         type="button"
+                        ref={(button) => {
+                          optionRefs.set(optionKeyForModel(model.id), button);
+                        }}
                         onClick={() => handleSelect(model.id)}
+                        onKeyDown={(event) =>
+                          handleOptionKeyDown(event, optionKeyForModel(model.id))
+                        }
                         role="option"
                         aria-selected={isSelectedRoute(model.id)}
                         aria-label={optionAriaLabel(
@@ -660,6 +829,7 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
                 <button
                   type="button"
                   onClick={() => setShowAllModels(!showAllModels())}
+                  onKeyDown={handleShowAllModelsKeyDown}
                   class="flex w-full items-center gap-1.5 px-3 py-2 text-left text-xs text-muted hover:bg-surface-hover hover:text-base-content"
                 >
                   <ChevronDownIcon

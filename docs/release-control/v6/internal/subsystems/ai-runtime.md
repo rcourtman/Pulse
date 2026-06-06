@@ -123,7 +123,14 @@ runtime cost control, and shared AI transport surfaces.
    selected models as structured `{ providerID, modelID }` values in
    `packages/opencode/src/cli/cmd/tui/component/dialog-model.tsx` and
    `packages/opencode/src/provider/provider.ts`, so Pulse must preserve the
-   equivalent route identity for queued and retried turns. Stop is the explicit
+   equivalent route identity for queued and retried turns. OpenCode's
+   `DialogModel` feeds current, recent, favorite, and provider model rows into
+   `DialogSelect`, while `DialogSelect` maintains a selected row and handles
+   up/down/page/home/end/return navigation; Pulse's browser model picker must
+   expose the same route identity as a labelled search/listbox surface, focus
+   search on open, move keyboard focus from search into the current or filtered
+   model row, and keep list navigation available without requiring mouse
+   clicks. Stop is the explicit
    interruption path: it must abort the active stream, clear queued follow-ups
    and pending tool/approval/question affordances, preserve any partial model
    text, return focus to the composer, and render a neutral transcript marker

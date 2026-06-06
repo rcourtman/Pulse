@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AIModelPicker } from '@/components/shared/AIModelPicker';
 import type { ModelInfo } from '@/types/ai';
@@ -150,6 +150,119 @@ describe('AIModelPicker', () => {
       'Default, Current. Use configured default model',
     );
     expect(currentOption).toHaveTextContent('Use configured default model');
+  });
+
+  it('labels the dropdown and listbox with the picker title', () => {
+    render(() => (
+      <AIModelPicker
+        models={models}
+        selectedModel="openrouter:minimax/minimax-m2.5"
+        onModelSelect={vi.fn()}
+        title="Select shared default model"
+      />
+    ));
+
+    const button = screen.getByTitle('Select shared default model');
+    fireEvent.click(button);
+
+    expect(button.getAttribute('aria-controls')?.endsWith('-listbox')).toBe(true);
+    expect(screen.getByRole('dialog', { name: 'Select shared default model' })).toBeInTheDocument();
+    expect(screen.getByRole('listbox', { name: 'Select shared default model' })).toBeInTheDocument();
+  });
+
+  it('moves keyboard focus from search through model options', async () => {
+    render(() => (
+      <AIModelPicker
+        models={models}
+        selectedModel="openrouter:minimax/minimax-m2.5"
+        onModelSelect={vi.fn()}
+        title="Select shared default model"
+      />
+    ));
+
+    fireEvent.click(screen.getByTitle('Select shared default model'));
+
+    const searchInput = screen.getByPlaceholderText('Search or enter model ID');
+    const currentOption = screen.getByRole('option', {
+      name: 'MiniMax: MiniMax M2.5 via OpenRouter, Current. Current OpenRouter model. openrouter:minimax/minimax-m2.5',
+    });
+    const nextOption = screen.getByRole('option', {
+      name: 'GPT-5.1 Mini. openai:gpt-5.1-mini',
+    });
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(searchInput);
+    });
+
+    fireEvent.keyDown(searchInput, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(currentOption);
+
+    fireEvent.keyDown(currentOption, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(nextOption);
+
+    fireEvent.keyDown(nextOption, { key: 'ArrowUp' });
+    expect(document.activeElement).toBe(currentOption);
+
+    fireEvent.keyDown(currentOption, { key: 'End' });
+    expect(document.activeElement).toBe(nextOption);
+
+    fireEvent.keyDown(nextOption, { key: 'Home' });
+    expect(document.activeElement).toBe(currentOption);
+  });
+
+  it('moves keyboard focus to the first filtered result while searching', async () => {
+    render(() => (
+      <AIModelPicker
+        models={models}
+        selectedModel="openrouter:minimax/minimax-m2.5"
+        onModelSelect={vi.fn()}
+        title="Select shared default model"
+      />
+    ));
+
+    fireEvent.click(screen.getByTitle('Select shared default model'));
+
+    const searchInput = screen.getByPlaceholderText('Search or enter model ID');
+    fireEvent.input(searchInput, { target: { value: 'legacy' } });
+    const legacyOption = screen.getByRole('option', {
+      name: 'Legacy Model V1 via OpenRouter. Older provider catalog entry. openrouter:legacy/model-v1',
+    });
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(searchInput);
+    });
+
+    fireEvent.keyDown(searchInput, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(legacyOption);
+  });
+
+  it('closes the picker and returns focus to the trigger from option Escape', async () => {
+    render(() => (
+      <AIModelPicker
+        models={models}
+        selectedModel="openrouter:minimax/minimax-m2.5"
+        onModelSelect={vi.fn()}
+        title="Select shared default model"
+      />
+    ));
+
+    const button = screen.getByTitle('Select shared default model');
+    fireEvent.click(button);
+
+    const searchInput = screen.getByPlaceholderText('Search or enter model ID');
+    const currentOption = screen.getByRole('option', {
+      name: 'MiniMax: MiniMax M2.5 via OpenRouter, Current. Current OpenRouter model. openrouter:minimax/minimax-m2.5',
+    });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(searchInput);
+    });
+    fireEvent.keyDown(searchInput, { key: 'ArrowDown' });
+
+    expect(document.activeElement).toBe(currentOption);
+    fireEvent.keyDown(currentOption, { key: 'Escape' });
+
+    expect(screen.queryByPlaceholderText('Search or enter model ID')).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(button);
   });
 
   it('constrains the dropdown to the available mobile viewport height', () => {
