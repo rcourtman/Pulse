@@ -690,7 +690,17 @@ runtime cost control, and shared AI transport surfaces.
    than token counts. Pulse Assistant rows adapt that by keeping visible token
    accounting out of the transcript while showing a compact completed-turn
    duration beside the effective model label once a turn reaches `done`,
-   `error`, or user interruption.
+   `error`, or user interruption. Runtime token usage may surface in the
+   composer chrome instead: OpenCode commit
+   `9ed17da55ab1f7360cc0e01075f763e27fa899e9`
+   `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx` derives
+   prompt usage from the last assistant message with output tokens in `Prompt`
+   lines 246-264 and renders it in the prompt footer at lines 1652-1667. Pulse
+   adapts that source-backed contract by deriving the latest completed
+   `ChatMessage.tokens` with positive output tokens and rendering only the
+   backend-proven total/input/output counts in the Assistant composer footer;
+   cost and context-limit percentages stay absent until the runtime exposes
+   those values through a governed contract.
 7. Keep AI chat presentation helpers aligned through `frontend-modern/src/components/AI/Chat/` and the shared `frontend-modern/src/utils/textPresentation.ts`
 8. Keep assistant drawer context, session, and org-switch reset state aligned through the shared `frontend-modern/src/stores/aiChat.ts` boundary instead of letting `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, or feature callers fork their own assistant shell state
    That shared drawer ownership also covers passive resource reads while the

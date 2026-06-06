@@ -37,6 +37,7 @@ import {
   AI_CHAT_DISCOVERY_HINT_TITLE,
   AI_CHAT_DRAWER_TITLE,
   AI_CHAT_INPUT_PLACEHOLDER,
+  AI_CHAT_LAST_TURN_USAGE_LABEL,
   AI_CHAT_NEW_SESSION_BUTTON_TITLE,
   AI_CHAT_NEW_SESSION_MENU_LABEL,
   AI_CHAT_NEW_SESSION_SHORT_LABEL,
@@ -129,6 +130,12 @@ interface ComposerDraftStash {
   editingQueuedFollowUp: QueuedFollowUp | null;
 }
 
+interface AssistantUsageSummary {
+  detail: string;
+  label: string;
+  title: string;
+}
+
 interface AIChatProps {
   onClose: () => void;
 }
@@ -144,6 +151,38 @@ const compactText = (items: Array<string | undefined>): string[] =>
 
 const pluralizeCount = (count: number, singular: string, plural: string) =>
   `${count} ${count === 1 ? singular : plural}`;
+
+const tokenNumberFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
+
+const normalizeAssistantTokenCount = (value: number | undefined): number => {
+  if (!Number.isFinite(value) || !value || value < 0) return 0;
+  return Math.floor(value);
+};
+
+const formatAssistantTokenCount = (count: number): string => tokenNumberFormat.format(count);
+
+const getAssistantUsageSummary = (message: ChatMessage): AssistantUsageSummary | null => {
+  if (message.role !== 'assistant' || message.isStreaming) return null;
+  const input = normalizeAssistantTokenCount(message.tokens?.input);
+  const output = normalizeAssistantTokenCount(message.tokens?.output);
+  if (output <= 0) return null;
+
+  const total = input + output;
+  const totalLabel = `${formatAssistantTokenCount(total)} ${total === 1 ? 'token' : 'tokens'}`;
+  const inputLabel = `${formatAssistantTokenCount(input)} in`;
+  const outputLabel = `${formatAssistantTokenCount(output)} out`;
+  const titleDetail = [
+    `${formatAssistantTokenCount(total)} total`,
+    `${formatAssistantTokenCount(input)} input`,
+    `${formatAssistantTokenCount(output)} output`,
+  ].join(', ');
+
+  return {
+    label: totalLabel,
+    detail: `${inputLabel} / ${outputLabel}`,
+    title: `${AI_CHAT_LAST_TURN_USAGE_LABEL}: ${titleDetail}`,
+  };
+};
 
 const normalizePromptHistoryEntry = (value: unknown): PromptHistoryEntry | null => {
   if (!value || typeof value !== 'object') return null;
@@ -1313,6 +1352,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const elapsedSeconds = Math.max(0, Math.floor((currentStatusNow() - status.startedAt) / 1000));
     if (elapsedSeconds < 2) return status.text;
     return `${status.text} (${elapsedSeconds}s)`;
+  });
+  const lastAssistantUsage = createMemo(() => {
+    const messages = chat.messages();
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const usage = getAssistantUsageSummary(messages[index]);
+      if (usage) return usage;
+    }
+    return null;
   });
 
   createEffect(() => {
@@ -2784,6 +2831,19 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 </div>
               </div>
             </form>
+            <Show when={lastAssistantUsage()}>
+              {(usage) => (
+                <div
+                  class="mt-1.5 flex min-h-4 min-w-0 items-center justify-end gap-1.5 text-[10px] font-medium text-muted"
+                  aria-label={usage().title}
+                  title={usage().title}
+                >
+                  <span class="truncate">{usage().label}</span>
+                  <span class="h-1 w-1 shrink-0 rounded-full bg-border" aria-hidden="true" />
+                  <span class="shrink-0">{usage().detail}</span>
+                </div>
+              )}
+            </Show>
           </div>
         </Show>
       </div>

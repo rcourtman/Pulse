@@ -3341,6 +3341,77 @@ describe('AIChat', () => {
     });
   });
 
+  // ── Last-turn usage footer ────────────────────────────────────────────────
+
+  describe('last-turn usage footer', () => {
+    it('shows completed assistant token usage in the composer chrome', () => {
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'asst-1',
+          role: 'assistant' as const,
+          content: 'Done.',
+          timestamp: new Date(),
+          completedAt: new Date(),
+          isStreaming: false,
+          tokens: { input: 500, output: 200 },
+        },
+      ]);
+
+      renderChat();
+
+      const usage = screen.getByLabelText(/Last assistant turn usage/);
+      expect(usage).toHaveTextContent('700 tokens');
+      expect(usage).toHaveTextContent('500 in / 200 out');
+    });
+
+    it('uses the latest completed assistant turn with output tokens', () => {
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'asst-1',
+          role: 'assistant' as const,
+          content: 'Earlier result.',
+          timestamp: new Date(),
+          completedAt: new Date(),
+          isStreaming: false,
+          tokens: { input: 100, output: 50 },
+        },
+        {
+          id: 'asst-2',
+          role: 'assistant' as const,
+          content: 'Streaming result.',
+          timestamp: new Date(),
+          isStreaming: true,
+          tokens: { input: 900, output: 800 },
+        },
+      ]);
+
+      renderChat();
+
+      const usage = screen.getByLabelText(/Last assistant turn usage/);
+      expect(usage).toHaveTextContent('150 tokens');
+      expect(usage).toHaveTextContent('100 in / 50 out');
+      expect(usage).not.toHaveTextContent('1,700 tokens');
+    });
+
+    it('does not show usage before an assistant turn has output tokens', () => {
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'asst-1',
+          role: 'assistant' as const,
+          content: '',
+          timestamp: new Date(),
+          completedAt: new Date(),
+          isStreaming: false,
+          tokens: { input: 500, output: 0 },
+        },
+      ]);
+
+      renderChat();
+
+      expect(screen.queryByLabelText(/Last assistant turn usage/)).not.toBeInTheDocument();
+    });
+  });
+
   // ── Finding ID passthrough ───────────────────────────────────────────
 
   describe('finding ID context', () => {
