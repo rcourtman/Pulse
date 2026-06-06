@@ -3585,6 +3585,57 @@ describe('AIChat', () => {
       expect(mockChat.setModel).toHaveBeenCalledWith('plain-model-name');
       expect(localStorage.getItem('pulse:ai_chat_recent_models')).toBeNull();
     });
+
+    it('cycles to the next recent model route without reordering recents', () => {
+      const recents = [
+        'openrouter:qwen/qwen3.7-plus',
+        'openrouter:deepseek/deepseek-v4-pro',
+        'gemini:gemini-3.1-flash-lite',
+      ];
+      localStorage.setItem('pulse:ai_chat_recent_models', JSON.stringify(recents));
+      mockChat.model.mockReturnValue('openrouter:qwen/qwen3.7-plus');
+
+      renderChat();
+
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: /Cycle recent Assistant model: DeepSeek: DeepSeek V4 Pro via OpenRouter/,
+        }),
+      );
+
+      expect(mockChat.setModel).toHaveBeenCalledWith('openrouter:deepseek/deepseek-v4-pro');
+      expect(localStorage.getItem('pulse:ai_chat_recent_models')).toBe(JSON.stringify(recents));
+    });
+
+    it('cycles to the first recent model route when the current model is outside recents', () => {
+      localStorage.setItem(
+        'pulse:ai_chat_recent_models',
+        JSON.stringify(['openrouter:qwen/qwen3.7-plus']),
+      );
+      mockChat.model.mockReturnValue('openai:gpt-4o');
+
+      renderChat();
+
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: /Cycle recent Assistant model: Qwen: Qwen3.7 Plus via OpenRouter/,
+        }),
+      );
+
+      expect(mockChat.setModel).toHaveBeenCalledWith('openrouter:qwen/qwen3.7-plus');
+    });
+
+    it('disables recent model cycling when the active route is the only recent route', () => {
+      localStorage.setItem(
+        'pulse:ai_chat_recent_models',
+        JSON.stringify(['openrouter:qwen/qwen3.7-plus']),
+      );
+      mockChat.model.mockReturnValue('openrouter:qwen/qwen3.7-plus');
+
+      renderChat();
+
+      expect(screen.getByRole('button', { name: 'Cycle recent Assistant model' })).toBeDisabled();
+    });
   });
 
   // ── Autonomous banner ────────────────────────────────────────────────

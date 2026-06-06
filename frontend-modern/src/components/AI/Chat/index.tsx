@@ -18,6 +18,7 @@ import DownloadIcon from 'lucide-solid/icons/download';
 import GitForkIcon from 'lucide-solid/icons/git-fork';
 import PencilIcon from 'lucide-solid/icons/pencil';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
+import RotateCwIcon from 'lucide-solid/icons/rotate-cw';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import XIcon from 'lucide-solid/icons/x';
 import BookmarkIcon from 'lucide-solid/icons/bookmark';
@@ -118,6 +119,11 @@ import { SlashCommandAutocomplete } from './SlashCommandAutocomplete';
 import { getAssistantActiveTurnStatus } from './activeTurnStatus';
 import { getLastAssistantAnswerText } from './assistantAnswerText';
 import {
+  getNextAssistantRecentModelRoute,
+  isAssistantExplicitModelRoute,
+  normalizeAssistantRecentModelRoutes,
+} from './assistantModelRoutes';
+import {
   filterAssistantSlashCommands,
   parseAssistantSlashCommand,
   type AssistantSlashCommand,
@@ -150,6 +156,7 @@ const AI_CHAT_SESSION_SEARCH_DEBOUNCE_MS = 150;
 const AI_CHAT_SESSION_SEARCH_LIMIT = 30;
 const STRUCTURED_PATROL_CONTEXT_TARGETS = new Set(['patrol-configuration', 'patrol-run']);
 const STRUCTURED_RESOURCE_CONTEXT_HANDOFF_KINDS = new Set(['resource_context']);
+const AI_CHAT_CYCLE_RECENT_MODEL_LABEL = 'Cycle recent Assistant model';
 
 type SessionPickerSection = {
   title: string;
@@ -888,16 +895,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       const raw = localStorage.getItem(MODEL_RECENT_STORAGE_KEY);
       const parsed = raw ? JSON.parse(raw) : [];
       if (!Array.isArray(parsed)) return [];
-      const seen = new Set<string>();
-      const recentModelIds: string[] = [];
-      for (const value of parsed) {
-        const modelId = typeof value === 'string' ? value.trim() : '';
-        if (!modelId || !modelId.includes(':') || seen.has(modelId)) continue;
-        seen.add(modelId);
-        recentModelIds.push(modelId);
-        if (recentModelIds.length >= AI_CHAT_RECENT_MODEL_LIMIT) break;
-      }
-      return recentModelIds;
+      return normalizeAssistantRecentModelRoutes(parsed, AI_CHAT_RECENT_MODEL_LIMIT);
     } catch (error) {
       logger.warn('[AIChat] Failed to read recent models:', error);
       return [];
@@ -920,7 +918,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
   const rememberRecentModel = (modelId: string) => {
     const normalizedModelId = modelId.trim();
-    if (!normalizedModelId || !normalizedModelId.includes(':')) return;
+    if (!isAssistantExplicitModelRoute(normalizedModelId)) return;
     setRecentModelIds((prev) => {
       const next = [
         normalizedModelId,
@@ -1564,10 +1562,30 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
   };
 
-  const selectModel = (modelId: string) => {
+  const selectModel = (modelId: string, options: { rememberRecent?: boolean } = {}) => {
     chat.setModel(modelId);
     updateStoredModel(chat.sessionId(), modelId);
-    rememberRecentModel(modelId);
+    if (options.rememberRecent !== false) {
+      rememberRecentModel(modelId);
+    }
+  };
+
+  const nextRecentModelRoute = createMemo(() =>
+    getNextAssistantRecentModelRoute({
+      currentModel: selectedChatModel(),
+      recentModelIds: recentModelIds(),
+    }),
+  );
+  const nextRecentModelRouteLabel = createMemo(() => {
+    const next = nextRecentModelRoute();
+    return next ? formatChatMessageModelRoute(next) : '';
+  });
+
+  const cycleRecentModelRoute = () => {
+    const next = nextRecentModelRoute();
+    if (!next) return;
+    selectModel(next, { rememberRecent: false });
+    focusComposer();
   };
 
   const openModelSelectorFromError = () => {
@@ -3526,6 +3544,24 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   onModelSelect={selectModel}
                   onRefresh={() => loadModels(true)}
                 />
+                <button
+                  type="button"
+                  onClick={cycleRecentModelRoute}
+                  disabled={!nextRecentModelRoute()}
+                  class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:text-base-content disabled:cursor-not-allowed disabled:opacity-45"
+                  title={
+                    nextRecentModelRouteLabel()
+                      ? `${AI_CHAT_CYCLE_RECENT_MODEL_LABEL}: ${nextRecentModelRouteLabel()}`
+                      : AI_CHAT_CYCLE_RECENT_MODEL_LABEL
+                  }
+                  aria-label={
+                    nextRecentModelRouteLabel()
+                      ? `${AI_CHAT_CYCLE_RECENT_MODEL_LABEL}: ${nextRecentModelRouteLabel()}`
+                      : AI_CHAT_CYCLE_RECENT_MODEL_LABEL
+                  }
+                >
+                  <RotateCwIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
 
                 <div class="relative" data-dropdown>
                   <button
