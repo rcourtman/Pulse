@@ -16,6 +16,10 @@ import PencilIcon from 'lucide-solid/icons/pencil';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import XIcon from 'lucide-solid/icons/x';
+import BookmarkIcon from 'lucide-solid/icons/bookmark';
+import LoaderCircleIcon from 'lucide-solid/icons/loader-circle';
+import PlusIcon from 'lucide-solid/icons/plus';
+import Trash2Icon from 'lucide-solid/icons/trash-2';
 import { AIAPI } from '@/api/ai';
 import { AIChatAPI, type ChatSession, type ChatSessionHandoffSummary } from '@/api/aiChat';
 import { SearchField } from '@/components/shared/SearchField';
@@ -101,15 +105,22 @@ import { formatIdentifierLabel } from '@/utils/textPresentation';
 
 const MODEL_SESSION_STORAGE_KEY = 'pulse:ai_chat_models_by_session';
 const MODEL_RECENT_STORAGE_KEY = 'pulse:ai_chat_recent_models';
+const SESSION_PINNED_STORAGE_KEY = 'pulse:ai_chat_pinned_sessions';
 const PROMPT_HISTORY_STORAGE_KEY = 'pulse:ai_chat_prompt_history';
 const DEFAULT_SESSION_KEY = '__default__';
 const AI_CHAT_MIN_DOCKED_VIEWPORT_WIDTH = 1200;
 const AI_CHAT_PROMPT_HISTORY_LIMIT = 100;
 const AI_CHAT_RECENT_MODEL_LIMIT = 8;
+const AI_CHAT_PINNED_SESSION_LIMIT = 30;
 const AI_CHAT_SESSION_SEARCH_DEBOUNCE_MS = 150;
 const AI_CHAT_SESSION_SEARCH_LIMIT = 30;
 const STRUCTURED_PATROL_CONTEXT_TARGETS = new Set(['patrol-configuration', 'patrol-run']);
 const STRUCTURED_RESOURCE_CONTEXT_HANDOFF_KINDS = new Set(['resource_context']);
+
+type SessionPickerSection = {
+  title: string;
+  sessions: ChatSession[];
+};
 
 type ChatProviderReadinessStatus = 'idle' | 'checking' | 'ready' | 'error';
 
@@ -873,6 +884,71 @@ export const AIChat: Component<AIChatProps> = (props) => {
     });
   };
 
+  const loadPinnedSessionIds = (): string[] => {
+    try {
+      const raw = localStorage.getItem(SESSION_PINNED_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(parsed)) return [];
+      const seen = new Set<string>();
+      const sessionIds: string[] = [];
+      for (const value of parsed) {
+        const sessionId = typeof value === 'string' ? value.trim() : '';
+        if (!sessionId || seen.has(sessionId)) continue;
+        seen.add(sessionId);
+        sessionIds.push(sessionId);
+        if (sessionIds.length >= AI_CHAT_PINNED_SESSION_LIMIT) break;
+      }
+      return sessionIds;
+    } catch (error) {
+      logger.warn('[AIChat] Failed to read pinned sessions:', error);
+      return [];
+    }
+  };
+
+  const persistPinnedSessionIds = (sessionIds: string[]) => {
+    try {
+      if (sessionIds.length > 0) {
+        localStorage.setItem(SESSION_PINNED_STORAGE_KEY, JSON.stringify(sessionIds));
+      } else {
+        localStorage.removeItem(SESSION_PINNED_STORAGE_KEY);
+      }
+    } catch (error) {
+      logger.warn('[AIChat] Failed to persist pinned sessions:', error);
+    }
+  };
+
+  const [pinnedSessionIds, setPinnedSessionIds] = createSignal<string[]>(loadPinnedSessionIds());
+
+  const isSessionPinned = (sessionId: string) => pinnedSessionIds().includes(sessionId);
+
+  const removePinnedSession = (sessionId: string) => {
+    const normalizedSessionId = sessionId.trim();
+    if (!normalizedSessionId) return;
+    setPinnedSessionIds((prev) => {
+      const next = prev.filter((candidate) => candidate !== normalizedSessionId);
+      if (next.length === prev.length) return prev;
+      persistPinnedSessionIds(next);
+      return next;
+    });
+  };
+
+  const togglePinnedSession = (sessionId: string, event: Event) => {
+    event.stopPropagation();
+    const normalizedSessionId = sessionId.trim();
+    if (!normalizedSessionId) return;
+    setPinnedSessionIds((prev) => {
+      const isPinned = prev.includes(normalizedSessionId);
+      const next = isPinned
+        ? prev.filter((candidate) => candidate !== normalizedSessionId)
+        : [
+            normalizedSessionId,
+            ...prev.filter((candidate) => candidate !== normalizedSessionId),
+          ].slice(0, AI_CHAT_PINNED_SESSION_LIMIT);
+      persistPinnedSessionIds(next);
+      return next;
+    });
+  };
+
   const getStoredModel = (sessionId: string) => {
     const key = sessionId.trim();
     if (!key) return '';
@@ -901,8 +977,71 @@ export const AIChat: Component<AIChatProps> = (props) => {
   };
 
   const normalizedSessionSearchQuery = createMemo(() => sessionSearchQuery().trim());
-  const sessionPickerSessions = createMemo(() =>
+  const rawSessionPickerSessions = createMemo(() =>
     normalizedSessionSearchQuery() ? (sessionSearchResults() ?? []) : sessions(),
+  );
+  const getSessionUpdatedTimestamp = (session: ChatSession) => {
+    const value = Date.parse(session.updated_at || '');
+    return Number.isFinite(value) ? value : 0;
+  };
+  const sortSessionsByRecency = (sessionList: ChatSession[]) =>
+    sessionList
+      .map((session, index) => ({
+        session,
+        index,
+        updatedAt: getSessionUpdatedTimestamp(session),
+      }))
+      .sort((a, b) => {
+        const recency = b.updatedAt - a.updatedAt;
+        return recency || a.index - b.index;
+      })
+      .map((entry) => entry.session);
+  const getSessionSectionTitle = (session: ChatSession) => {
+    const timestamp = getSessionUpdatedTimestamp(session);
+    if (!timestamp) return 'Recent';
+    const updatedAt = new Date(timestamp);
+    const today = new Date();
+    if (updatedAt.toDateString() === today.toDateString()) return 'Today';
+    const dateOptions: Intl.DateTimeFormatOptions = {
+      month: 'short',
+      day: 'numeric',
+    };
+    if (updatedAt.getFullYear() !== today.getFullYear()) {
+      dateOptions.year = 'numeric';
+    }
+    return updatedAt.toLocaleDateString(undefined, dateOptions);
+  };
+  const sessionPickerSections = createMemo<SessionPickerSection[]>(() => {
+    const source = rawSessionPickerSessions();
+    if (source.length === 0) return [];
+
+    const sessionMap = new Map(source.map((session) => [session.id, session]));
+    const pinnedSessions = pinnedSessionIds().flatMap((sessionId) => {
+      const session = sessionMap.get(sessionId);
+      return session ? [session] : [];
+    });
+    const pinnedSet = new Set(pinnedSessions.map((session) => session.id));
+    const remaining = sortSessionsByRecency(source.filter((session) => !pinnedSet.has(session.id)));
+    const sections: SessionPickerSection[] = [];
+
+    if (pinnedSessions.length > 0) {
+      sections.push({ title: 'Pinned', sessions: pinnedSessions });
+    }
+
+    for (const session of remaining) {
+      const title = getSessionSectionTitle(session);
+      const lastSection = sections[sections.length - 1];
+      if (lastSection && lastSection.title === title) {
+        lastSection.sessions.push(session);
+      } else {
+        sections.push({ title, sessions: [session] });
+      }
+    }
+
+    return sections;
+  });
+  const sessionPickerSessions = createMemo(() =>
+    sessionPickerSections().flatMap((section) => section.sessions),
   );
   const sessionPickerEmptyText = createMemo(() => {
     if (sessionSearchError()) return sessionSearchError();
@@ -943,7 +1082,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
   });
 
   const focusSessionOptionAtIndex = (index: number) => {
-    const session = sessionPickerSessions()[index];
+    const sessionList = sessionPickerSessions();
+    if (sessionList.length === 0) return false;
+    const nextIndex = ((index % sessionList.length) + sessionList.length) % sessionList.length;
+    const session = sessionList[nextIndex];
     if (!session) return false;
     sessionOptionRefs.get(session.id)?.focus();
     return true;
@@ -953,14 +1095,25 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const sessionList = sessionPickerSessions();
     const currentIndex = sessionList.findIndex((session) => session.id === sessionId);
     if (currentIndex < 0) return false;
-    const nextIndex = Math.min(Math.max(currentIndex + offset, 0), sessionList.length - 1);
-    return focusSessionOptionAtIndex(nextIndex);
+    return focusSessionOptionAtIndex(currentIndex + offset);
   };
 
   const handleSessionSearchKeyDown = (event: KeyboardEvent) => {
-    if (event.key !== 'ArrowDown' || event.altKey || event.ctrlKey || event.metaKey) return;
-    if (focusSessionOptionAtIndex(0)) {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.key === 'ArrowDown' && focusSessionOptionAtIndex(0)) {
       event.preventDefault();
+      return;
+    }
+    if (event.key === 'ArrowUp' && focusSessionOptionAtIndex(sessionPickerSessions().length - 1)) {
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setShowSessions(false);
+      setSessionRefreshLoading(false);
+      resetSessionSearch();
+      sessionButtonRef?.focus();
     }
   };
 
@@ -983,6 +1136,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
       return;
     }
     if (event.key === 'End' && focusSessionOptionAtIndex(sessionPickerSessions().length - 1)) {
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'PageDown' && focusSessionOptionRelativeTo(sessionId, 10)) {
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'PageUp' && focusSessionOptionRelativeTo(sessionId, -10)) {
       event.preventDefault();
       return;
     }
@@ -1545,8 +1706,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
+      const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+      const isInsideDropdown = path.some(
+        (node) => node instanceof Element && Boolean(node.closest('[data-dropdown]')),
+      );
       // Only close if click is outside dropdown containers
-      if (!target.closest('[data-dropdown]')) {
+      if (!isInsideDropdown) {
         setShowSessions(false);
         setSessionRefreshLoading(false);
         resetSessionSearch();
@@ -2106,8 +2271,33 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
   const formatSessionPickerMessageCount = (count: number) =>
     `${count} ${count === 1 ? 'message' : 'messages'}`;
+  const formatSessionPickerUpdatedAt = (session: ChatSession) => {
+    const timestamp = getSessionUpdatedTimestamp(session);
+    if (!timestamp) return '';
+    const updatedAt = new Date(timestamp);
+    const today = new Date();
+    if (updatedAt.toDateString() === today.toDateString()) {
+      return updatedAt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    }
+    return updatedAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  };
+  const isSessionCurrent = (sessionId: string) =>
+    Boolean(sessionId && chat.sessionId() === sessionId);
+  const isSessionWorking = (sessionId: string) => isSessionCurrent(sessionId) && chat.isLoading();
   const getSessionPickerOptionLabel = (session: ChatSession) =>
-    `Resume ${session.title || 'Untitled'}, ${formatSessionPickerMessageCount(session.message_count)}`;
+    [
+      `Resume ${session.title || 'Untitled'}`,
+      formatSessionPickerMessageCount(session.message_count),
+      formatSessionPickerUpdatedAt(session)
+        ? `Updated ${formatSessionPickerUpdatedAt(session)}`
+        : '',
+      isSessionCurrent(session.id) ? 'Current' : '',
+      isSessionWorking(session.id) ? 'Working' : '',
+    ]
+      .filter(Boolean)
+      .join(', ');
+  const getSessionPinLabel = (session: ChatSession) =>
+    `${isSessionPinned(session.id) ? 'Unpin' : 'Pin'} Assistant session: ${session.title || 'Untitled'}`;
   const getSessionDeleteLabel = (session: ChatSession) =>
     `Delete Assistant session: ${session.title || 'Untitled'}`;
 
@@ -2139,6 +2329,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
       setSessionSearchResults((prev) => prev?.filter((s) => s.id !== sessionId) ?? null);
       updateStoredModel(sessionId, '');
+      removePinnedSession(sessionId);
       if (chat.sessionId() === sessionId) {
         chat.clearMessages();
         resetPromptHistoryNavigation();
@@ -2274,14 +2465,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 title={AI_CHAT_NEW_SESSION_BUTTON_TITLE}
                 aria-label={AI_CHAT_NEW_SESSION_BUTTON_TITLE}
               >
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M12 4v16m8-8H4"
-                  />
-                </svg>
+                <PlusIcon class="h-3.5 w-3.5" aria-hidden="true" />
                 <span class="font-medium">{AI_CHAT_NEW_SESSION_SHORT_LABEL}</span>
               </button>
 
@@ -2299,14 +2483,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   aria-haspopup="dialog"
                   aria-expanded={showSessions()}
                 >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-                    />
-                  </svg>
+                  <ClockIcon class="h-4 w-4" aria-hidden="true" />
                 </button>
 
                 <Show when={showSessions()}>
@@ -2325,14 +2502,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       class="w-full px-3 py-2.5 text-left text-sm flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 border-b border-border"
                       aria-label={AI_CHAT_NEW_SESSION_MENU_ARIA_LABEL}
                     >
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M12 4v16m8-8H4"
-                        />
-                      </svg>
+                      <PlusIcon class="h-4 w-4" aria-hidden="true" />
                       <span class="font-medium">{AI_CHAT_NEW_SESSION_MENU_LABEL}</span>
                     </button>
 
@@ -2373,71 +2543,120 @@ export const AIChat: Component<AIChatProps> = (props) => {
                           </div>
                         }
                       >
-                        <For each={sessionPickerSessions()}>
-                          {(session) => (
-                            <div
-                              class={`group relative flex items-start gap-2 px-3 py-2.5 hover:bg-surface-hover focus-within:bg-surface-hover ${chat.sessionId() === session.id ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
-                            >
-                              <button
-                                type="button"
-                                ref={(button) => {
-                                  sessionOptionRefs.set(session.id, button);
-                                }}
-                                role="option"
-                                aria-selected={chat.sessionId() === session.id}
-                                aria-label={getSessionPickerOptionLabel(session)}
-                                class="min-w-0 flex-1 text-left focus:outline-none"
-                                onClick={() => handleLoadSession(session.id)}
-                                onKeyDown={(event) => handleSessionOptionKeyDown(event, session.id)}
-                              >
-                                <div class="text-sm font-medium truncate text-base-content">
-                                  {session.title || 'Untitled'}
-                                </div>
-                                <div class="text-xs text-muted">
-                                  {formatSessionPickerMessageCount(session.message_count)}
-                                </div>
-                                <Show when={session.handoff_summary}>
-                                  {(summary) => (
-                                    <div class="mt-1 flex max-w-full flex-wrap gap-1.5">
-                                      <span class="rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
-                                        {getSessionHandoffSourceLabel(summary())}
-                                      </span>
-                                      <span class="rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] text-muted">
-                                        {getSessionHandoffBadgeLabel(summary())}
-                                      </span>
-                                      <Show when={formatSessionHandoffStatus(summary())}>
-                                        {(status) => (
-                                          <span class="max-w-full truncate rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] text-muted">
-                                            {status()}
+                        <For each={sessionPickerSections()}>
+                          {(section) => (
+                            <>
+                              <div class="sticky top-0 z-10 border-b border-border/60 bg-surface-alt px-3 py-1.5 text-[11px] font-semibold text-muted">
+                                {section.title}
+                              </div>
+                              <For each={section.sessions}>
+                                {(session) => (
+                                  <div
+                                    class={`group relative flex items-start gap-2 px-3 py-2.5 hover:bg-surface-hover focus-within:bg-surface-hover ${
+                                      isSessionCurrent(session.id)
+                                        ? 'bg-blue-50 dark:bg-blue-900'
+                                        : ''
+                                    }`}
+                                  >
+                                    <button
+                                      type="button"
+                                      ref={(button) => {
+                                        sessionOptionRefs.set(session.id, button);
+                                      }}
+                                      role="option"
+                                      aria-selected={isSessionCurrent(session.id)}
+                                      aria-label={getSessionPickerOptionLabel(session)}
+                                      class="min-w-0 flex-1 text-left focus:outline-none"
+                                      onClick={() => handleLoadSession(session.id)}
+                                      onKeyDown={(event) =>
+                                        handleSessionOptionKeyDown(event, session.id)
+                                      }
+                                    >
+                                      <div class="flex min-w-0 items-center gap-2">
+                                        <div class="min-w-0 flex-1 truncate text-sm font-medium text-base-content">
+                                          {session.title || 'Untitled'}
+                                        </div>
+                                        <Show when={isSessionWorking(session.id)}>
+                                          <span class="inline-flex shrink-0 items-center gap-1 rounded border border-blue-200 bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-200">
+                                            <LoaderCircleIcon class="h-3 w-3 animate-spin" />
+                                            Working
                                           </span>
+                                        </Show>
+                                        <Show
+                                          when={
+                                            isSessionCurrent(session.id) &&
+                                            !isSessionWorking(session.id)
+                                          }
+                                        >
+                                          <span class="shrink-0 rounded border border-blue-200 bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-blue-700 dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-200">
+                                            Current
+                                          </span>
+                                        </Show>
+                                      </div>
+                                      <div class="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted">
+                                        <span>
+                                          {formatSessionPickerMessageCount(session.message_count)}
+                                        </span>
+                                        <Show when={formatSessionPickerUpdatedAt(session)}>
+                                          {(updatedAt) => (
+                                            <>
+                                              <span aria-hidden="true">·</span>
+                                              <span>{updatedAt()}</span>
+                                            </>
+                                          )}
+                                        </Show>
+                                      </div>
+                                      <Show when={session.handoff_summary}>
+                                        {(summary) => (
+                                          <div class="mt-1 flex max-w-full flex-wrap gap-1.5">
+                                            <span class="rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
+                                              {getSessionHandoffSourceLabel(summary())}
+                                            </span>
+                                            <span class="rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] text-muted">
+                                              {getSessionHandoffBadgeLabel(summary())}
+                                            </span>
+                                            <Show when={formatSessionHandoffStatus(summary())}>
+                                              {(status) => (
+                                                <span class="max-w-full truncate rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] text-muted">
+                                                  {status()}
+                                                </span>
+                                              )}
+                                            </Show>
+                                          </div>
                                         )}
                                       </Show>
+                                    </button>
+                                    <div class="flex shrink-0 items-center gap-1">
+                                      <button
+                                        type="button"
+                                        class={`rounded p-1 transition-opacity focus:opacity-100 hover:bg-blue-100 hover:text-blue-600 dark:hover:bg-blue-900 dark:hover:text-blue-300 ${
+                                          isSessionPinned(session.id)
+                                            ? 'opacity-100 text-blue-600 dark:text-blue-300'
+                                            : 'opacity-0 text-muted group-hover:opacity-100 group-focus-within:opacity-100'
+                                        }`}
+                                        onClick={(event) => togglePinnedSession(session.id, event)}
+                                        aria-pressed={isSessionPinned(session.id)}
+                                        aria-label={getSessionPinLabel(session)}
+                                        title={getSessionPinLabel(session)}
+                                      >
+                                        <BookmarkIcon
+                                          class={`h-3.5 w-3.5 ${isSessionPinned(session.id) ? 'fill-current' : ''}`}
+                                        />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        class="rounded p-1 text-muted opacity-0 transition-opacity hover:bg-red-100 hover:text-red-500 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-red-900"
+                                        onClick={(event) => handleDeleteSession(session.id, event)}
+                                        aria-label={getSessionDeleteLabel(session)}
+                                        title={getSessionDeleteLabel(session)}
+                                      >
+                                        <Trash2Icon class="h-3.5 w-3.5" />
+                                      </button>
                                     </div>
-                                  )}
-                                </Show>
-                              </button>
-                              <button
-                                type="button"
-                                class="flex-shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 hover:bg-red-100 dark:hover:bg-red-900 hover:text-red-500 transition-opacity"
-                                onClick={(e) => handleDeleteSession(session.id, e)}
-                                aria-label={getSessionDeleteLabel(session)}
-                                title={getSessionDeleteLabel(session)}
-                              >
-                                <svg
-                                  class="w-3.5 h-3.5"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                  />
-                                </svg>
-                              </button>
-                            </div>
+                                  </div>
+                                )}
+                              </For>
+                            </>
                           )}
                         </For>
                       </Show>

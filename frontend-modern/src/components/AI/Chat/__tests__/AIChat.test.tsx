@@ -1989,6 +1989,95 @@ describe('AIChat', () => {
 
       fireEvent.keyDown(secondOption, { key: 'Home' });
       expect(document.activeElement).toBe(firstOption);
+
+      fireEvent.keyDown(firstOption, { key: 'ArrowUp' });
+      expect(document.activeElement).toBe(secondOption);
+
+      fireEvent.keyDown(secondOption, { key: 'ArrowDown' });
+      expect(document.activeElement).toBe(firstOption);
+
+      searchInput.focus();
+      fireEvent.keyDown(searchInput, { key: 'ArrowUp' });
+      expect(document.activeElement).toBe(secondOption);
+
+      searchInput.focus();
+      fireEvent.keyDown(searchInput, { key: 'Escape' });
+      await waitFor(() => {
+        expect(
+          screen.queryByRole('dialog', { name: 'Pulse Assistant sessions' }),
+        ).not.toBeInTheDocument();
+      });
+    });
+
+    it('pins sessions above the recency groups and persists the choice', async () => {
+      mockAIChatAPI.listSessions.mockResolvedValue([
+        {
+          id: 's1',
+          title: 'Recent session',
+          created_at: '',
+          updated_at: '2026-06-06T10:00:00Z',
+          message_count: 5,
+        },
+        {
+          id: 's2',
+          title: 'Pinned session',
+          created_at: '',
+          updated_at: '2026-06-05T10:00:00Z',
+          message_count: 3,
+        },
+      ]);
+      renderChat();
+      await waitFor(() => {
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalled();
+      });
+
+      fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
+      await screen.findByText('Recent session');
+
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Pin Assistant session: Pinned session' }),
+      );
+
+      await waitFor(() => {
+        expect(localStorage.getItem('pulse:ai_chat_pinned_sessions')).toBe(JSON.stringify(['s2']));
+      });
+
+      const pinnedHeader = screen.getByText('Pinned');
+      const pinnedSession = screen.getByText('Pinned session');
+      const recentSession = screen.getByText('Recent session');
+      expect(pinnedHeader.compareDocumentPosition(pinnedSession)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+      expect(pinnedSession.compareDocumentPosition(recentSession)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Unpin Assistant session: Pinned session' }),
+      );
+      await waitFor(() => {
+        expect(localStorage.getItem('pulse:ai_chat_pinned_sessions')).toBeNull();
+      });
+    });
+
+    it('marks the current working session in the picker', async () => {
+      mockChat.sessionId.mockReturnValue('s1');
+      mockChat.isLoading.mockReturnValue(true);
+      mockAIChatAPI.listSessions.mockResolvedValue([
+        { id: 's1', title: 'Session One', created_at: '', updated_at: '', message_count: 5 },
+      ]);
+      renderChat();
+      await waitFor(() => {
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalled();
+      });
+
+      fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
+
+      const option = await screen.findByRole('option', {
+        name: 'Resume Session One, 5 messages, Current, Working',
+      });
+      expect(option).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByText('Working')).toBeInTheDocument();
     });
 
     it('searches assistant sessions from the picker', async () => {
