@@ -98,6 +98,55 @@ describe('AIChatAPI', () => {
     expect(shouldYield({ type: 'thinking' })).toBe(false);
   });
 
+  it('runs the local dev stream fixture without opening a provider request', async () => {
+    const onEvent = vi.fn();
+
+    await AIChatAPI.chat(
+      '  /fixture   devices  ',
+      undefined,
+      'openrouter:deepseek/deepseek-chat',
+      onEvent,
+    );
+
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'session',
+      'workflow_state',
+      'workflow_state',
+      'thinking',
+      'tool_start',
+      'tool_progress',
+      'tool_end',
+      'content',
+      'done',
+    ]);
+    expect(onEvent.mock.calls[1][0]).toMatchObject({
+      type: 'workflow_state',
+      data: { phase: 'request_start', message: 'Preparing Pulse context.' },
+    });
+    expect(onEvent.mock.calls[4][0]).toMatchObject({
+      type: 'tool_start',
+      data: {
+        id: 'fixture-tool-devices',
+        name: 'pulse_read',
+      },
+    });
+    expect(onEvent.mock.calls[7][0]).toMatchObject({
+      type: 'content',
+      data: {
+        text: expect.stringContaining('4,358 entries'),
+      },
+    });
+    expect(onEvent.mock.calls[8][0]).toMatchObject({
+      type: 'done',
+      data: {
+        model: 'openrouter:deepseek/deepseek-chat',
+        input_tokens: 4358,
+        output_tokens: 943,
+      },
+    });
+  });
+
   it('lets the browser paint the first visible text delta before draining a coalesced chat chunk', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const requestAnimationFrame = installAnimationFrame();

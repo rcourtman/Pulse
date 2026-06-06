@@ -385,6 +385,16 @@ runtime cost control, and shared AI transport surfaces.
    content and hidden reasoning may continue to opt out of those checkpoints so
    answer streaming remains fast, while session, workflow, model-switch, tool,
    approval, and question events remain user-visible progress checkpoints.
+   That same frontend stream boundary owns the deterministic dev/test fixture
+   used for fast Assistant UX iteration: `frontend-modern/src/api/aiChat.ts`
+   may short-circuit an explicit local fixture prompt only when
+   `import.meta.env.DEV` or test mode is active, and the fixture must emit the
+   same typed `StreamEvent` objects (`session`, `workflow_state`, `thinking`,
+   `tool_start`, `tool_progress`, `tool_end`, `content`, `done`) through the
+   normal `useChat` reducer rather than rendering a separate mock transcript.
+   This fixture is a local development primitive, not a product mode: it must
+   not bypass backend governance in production, persist as a server session, or
+   introduce any UI-only event shape that real providers cannot emit.
    Live answer text must be paced in the presentation layer, not throttled or
    mutated in the canonical stream state: appended content is revealed in short
    readable slices while the turn is streaming, and completed/restored messages

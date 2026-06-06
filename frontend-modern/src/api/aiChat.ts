@@ -3,6 +3,7 @@ import { assertAPIResponseOK } from './responseUtils';
 import { logger } from '@/utils/logger';
 import type { AIChatStreamEvent } from './generated/aiChatEvents';
 import { consumeJSONEventStream } from './streaming';
+import { maybeRunAIChatDevStreamFixture } from './aiChatDevStreamFixture';
 
 // AI Chat API - Simplified AI interface
 
@@ -365,6 +366,10 @@ export class AIChatAPI {
     handoffMetadata?: ChatHandoffMetadata,
   ): Promise<void> {
     logger.debug('[AI Chat] Starting chat stream', { prompt: prompt.substring(0, 50) });
+
+    if (await maybeRunAIChatDevStreamFixture({ prompt, model, onEvent, signal })) {
+      return;
+    }
 
     const body: Record<string, unknown> = {
       prompt,

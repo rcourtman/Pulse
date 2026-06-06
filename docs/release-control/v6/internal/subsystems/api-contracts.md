@@ -546,6 +546,17 @@ payload shape change when the portal presents compact client rows.
     fixture must pace its browser-facing status/tool/content events enough to
     prove the visible stream contract, while tests may disable that pace to keep
     backend proof fast.
+    The frontend API client may also own an explicit local dev/test Assistant
+    stream fixture at `frontend-modern/src/api/aiChatDevStreamFixture.ts` for
+    fast UX iteration against the real stream reducer. That fixture may
+    short-circuit `frontend-modern/src/api/aiChat.ts` only in Vite dev or test
+    mode, only for reserved `/fixture ...` prompts, and only by calling the
+    normal `AIChatAPI.chat` event callback with the generated
+    `AIChatStreamEvent` union (`session`, `workflow_state`, `thinking`,
+    `tool_start`, `tool_progress`, `tool_end`, `content`, `done`). It must not
+    open a backend session, mutate persisted chat history, add browser-only
+    stream event shapes, or become a production fallback for provider or VPN
+    failures.
 34. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
     Legacy Assistant SSE routes in this handler that still use the older
     execute envelope, including `/api/ai/execute/stream` and
