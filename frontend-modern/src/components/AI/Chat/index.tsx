@@ -14,6 +14,7 @@ import SquareIcon from 'lucide-solid/icons/square';
 import ClockIcon from 'lucide-solid/icons/clock';
 import CopyIcon from 'lucide-solid/icons/copy';
 import DownloadIcon from 'lucide-solid/icons/download';
+import GitForkIcon from 'lucide-solid/icons/git-fork';
 import PencilIcon from 'lucide-solid/icons/pencil';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import SettingsIcon from 'lucide-solid/icons/settings';
@@ -49,6 +50,12 @@ import {
   AI_CHAT_DISCOVERY_HINT_TITLE,
   AI_CHAT_DRAWER_TITLE,
   AI_CHAT_EXPORT_TRANSCRIPT_LABEL,
+  AI_CHAT_FORK_SESSION_EMPTY_MESSAGE,
+  AI_CHAT_FORK_SESSION_ERROR_MESSAGE,
+  AI_CHAT_FORK_SESSION_LABEL,
+  AI_CHAT_FORK_SESSION_LOAD_ERROR_MESSAGE,
+  AI_CHAT_FORK_SESSION_LOADING_MESSAGE,
+  AI_CHAT_FORK_SESSION_SUCCESS_MESSAGE,
   AI_CHAT_INPUT_PLACEHOLDER,
   AI_CHAT_LAST_TURN_USAGE_LABEL,
   AI_CHAT_NEW_SESSION_BUTTON_TITLE,
@@ -564,6 +571,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [sessionSearchLoading, setSessionSearchLoading] = createSignal(false);
   const [sessionSearchError, setSessionSearchError] = createSignal('');
   const [sessionDropdownPosition, setSessionDropdownPosition] = createSignal({ top: 0, right: 0 });
+  const [forkingSession, setForkingSession] = createSignal(false);
   let sessionButtonRef: HTMLButtonElement | undefined;
   let sessionSearchInputRef: HTMLInputElement | undefined;
   const sessionOptionRefs = new Map<string, HTMLButtonElement>();
@@ -1264,6 +1272,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
   };
 
   const hasCurrentTranscript = createMemo(() => hasAssistantTranscriptContent(chat.messages()));
+  const canForkCurrentSession = createMemo(
+    () =>
+      Boolean(chat.sessionId().trim()) &&
+      hasCurrentTranscript() &&
+      !chat.isLoading() &&
+      !forkingSession(),
+  );
 
   const buildCurrentTranscript = (generatedAt = new Date()) => {
     const sessionId = chat.sessionId().trim();
@@ -1319,6 +1334,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
       logger.error('[AIChat] Failed to export Assistant transcript:', error);
       notificationStore.error('Failed to export Assistant transcript');
     }
+  };
+
+  const upsertSession = (session: ChatSession) => {
+    setSessions((prev) => [session, ...prev.filter((candidate) => candidate.id !== session.id)]);
+    setSessionSearchResults(
+      (prev) =>
+        prev && [session, ...prev.filter((candidate) => candidate.id !== session.id)],
+    );
   };
 
   const downloadFallbackTranscript = () => {
@@ -2338,6 +2361,54 @@ export const AIChat: Component<AIChatProps> = (props) => {
     focusComposer();
   };
 
+  const handleForkSession = async () => {
+    if (forkingSession()) return;
+    const sourceSessionId = chat.sessionId().trim();
+    if (!sourceSessionId || !hasCurrentTranscript()) {
+      notificationStore.info(AI_CHAT_FORK_SESSION_EMPTY_MESSAGE, 2000);
+      return;
+    }
+    if (chat.isLoading()) {
+      notificationStore.info(AI_CHAT_FORK_SESSION_LOADING_MESSAGE, 2000);
+      return;
+    }
+
+    setForkingSession(true);
+    try {
+      const sourceModel = getStoredModel(sourceSessionId) || chat.model().trim();
+      const forkedSession = await AIChatAPI.forkSession(sourceSessionId);
+      upsertSession(forkedSession);
+      if (sourceModel) {
+        updateStoredModel(forkedSession.id, sourceModel);
+      }
+
+      const loaded = await chat.loadSession(forkedSession.id);
+      if (!loaded) {
+        notificationStore.error(AI_CHAT_FORK_SESSION_LOAD_ERROR_MESSAGE);
+        return;
+      }
+
+      resetPromptHistoryNavigation();
+      setEditingQueuedFollowUp(null);
+      const restoredContext = buildSessionHandoffContext(forkedSession);
+      if (restoredContext) {
+        aiChatStore.setContext(restoredContext);
+      } else {
+        aiChatStore.clearContext?.();
+      }
+      setShowSessions(false);
+      setSessionRefreshLoading(false);
+      resetSessionSearch();
+      notificationStore.success(AI_CHAT_FORK_SESSION_SUCCESS_MESSAGE, 2000);
+      focusComposer();
+    } catch (error) {
+      logger.error('[AIChat] Failed to fork Assistant session:', error);
+      notificationStore.error(AI_CHAT_FORK_SESSION_ERROR_MESSAGE);
+    } finally {
+      setForkingSession(false);
+    }
+  };
+
   const handleToggleSessions = async () => {
     const next = !showSessions();
     if (!next) {
@@ -2568,6 +2639,25 @@ export const AIChat: Component<AIChatProps> = (props) => {
               >
                 <PlusIcon class="h-3.5 w-3.5" aria-hidden="true" />
                 <span class="font-medium">{AI_CHAT_NEW_SESSION_SHORT_LABEL}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  void handleForkSession();
+                }}
+                disabled={!canForkCurrentSession()}
+                class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted"
+                title={AI_CHAT_FORK_SESSION_LABEL}
+                aria-label={AI_CHAT_FORK_SESSION_LABEL}
+                aria-busy={forkingSession()}
+              >
+                <Show
+                  when={forkingSession()}
+                  fallback={<GitForkIcon class="h-4 w-4" aria-hidden="true" />}
+                >
+                  <LoaderCircleIcon class="h-4 w-4 animate-spin" aria-hidden="true" />
+                </Show>
               </button>
 
               <button

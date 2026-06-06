@@ -9,6 +9,13 @@ export const AI_CHAT_NEW_SESSION_SHORT_LABEL = 'New';
 export const AI_CHAT_NEW_SESSION_BUTTON_TITLE = 'Start new Assistant session';
 export const AI_CHAT_NEW_SESSION_MENU_LABEL = 'New session';
 export const AI_CHAT_NEW_SESSION_MENU_ARIA_LABEL = 'Start new Assistant session';
+export const AI_CHAT_FORK_SESSION_LABEL = 'Fork current Assistant session';
+export const AI_CHAT_FORK_SESSION_EMPTY_MESSAGE = 'No saved Assistant session to fork';
+export const AI_CHAT_FORK_SESSION_LOADING_MESSAGE = 'Assistant is still working';
+export const AI_CHAT_FORK_SESSION_LOAD_ERROR_MESSAGE =
+  'Forked Assistant session but failed to load it';
+export const AI_CHAT_FORK_SESSION_ERROR_MESSAGE = 'Failed to fork Assistant session';
+export const AI_CHAT_FORK_SESSION_SUCCESS_MESSAGE = 'Assistant session forked';
 export const AI_CHAT_COPY_TRANSCRIPT_LABEL = 'Copy Assistant transcript';
 export const AI_CHAT_EXPORT_TRANSCRIPT_LABEL = 'Export Assistant transcript';
 export const AI_CHAT_TRANSCRIPT_FALLBACK_CLOSE_LABEL = 'Close Assistant transcript copy panel';

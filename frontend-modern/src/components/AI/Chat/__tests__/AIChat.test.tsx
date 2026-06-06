@@ -88,6 +88,13 @@ const {
       message_count: 0,
     }),
     deleteSession: vi.fn().mockResolvedValue(undefined),
+    forkSession: vi.fn().mockResolvedValue({
+      id: 'forked-session',
+      title: 'Forked session',
+      created_at: '2026-06-06T12:45:00Z',
+      updated_at: '2026-06-06T12:45:00Z',
+      message_count: 2,
+    }),
     approveCommand: vi.fn().mockResolvedValue({ approved: true, message: 'ok' }),
     denyCommand: vi.fn().mockResolvedValue({ denied: true, message: 'ok' }),
   };
@@ -415,6 +422,13 @@ beforeEach(() => {
   });
   mockAIChatAPI.getStatus.mockResolvedValue({ running: true });
   mockAIChatAPI.listSessions.mockResolvedValue([]);
+  mockAIChatAPI.forkSession.mockResolvedValue({
+    id: 'forked-session',
+    title: 'Forked session',
+    created_at: '2026-06-06T12:45:00Z',
+    updated_at: '2026-06-06T12:45:00Z',
+    message_count: 2,
+  });
   Element.prototype.scrollIntoView = vi.fn();
   localStorage.clear();
 });
@@ -435,6 +449,7 @@ describe('AIChat', () => {
     it('disables transcript actions until the current session has messages', () => {
       renderChat();
 
+      expect(screen.getByRole('button', { name: 'Fork current Assistant session' })).toBeDisabled();
       expect(screen.getByRole('button', { name: 'Copy Assistant transcript' })).toBeDisabled();
       expect(screen.getByRole('button', { name: 'Export Assistant transcript' })).toBeDisabled();
     });
@@ -2068,6 +2083,77 @@ describe('AIChat', () => {
       });
       expect(mockAiChatStore.clearContext).not.toHaveBeenCalled();
       expect(mockAiChatStore.context.findingId).toBe('finding-old');
+    });
+
+    it('forks the current saved Assistant session from the header', async () => {
+      mockChat.sessionId.mockReturnValue('source-session');
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'user-1',
+          role: 'user',
+          content: 'compare these tool outputs',
+          timestamp: new Date('2026-06-06T12:34:56Z'),
+        },
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: 'The first node has stale discovery data.',
+          timestamp: new Date('2026-06-06T12:35:01Z'),
+        },
+      ]);
+      mockChat.model.mockReturnValue('openrouter:deepseek/deepseek-chat');
+      mockAIChatAPI.listSessions.mockResolvedValue([
+        {
+          id: 'source-session',
+          title: 'Source session',
+          created_at: '2026-06-06T12:30:00Z',
+          updated_at: '2026-06-06T12:35:00Z',
+          message_count: 2,
+        },
+      ]);
+      mockAIChatAPI.forkSession.mockResolvedValue({
+        id: 'forked-session',
+        title: 'Forked session',
+        created_at: '2026-06-06T12:45:00Z',
+        updated_at: '2026-06-06T12:45:00Z',
+        message_count: 2,
+      });
+
+      renderChat();
+      fireEvent.click(screen.getByRole('button', { name: 'Fork current Assistant session' }));
+
+      await waitFor(() => {
+        expect(mockAIChatAPI.forkSession).toHaveBeenCalledWith('source-session');
+        expect(mockChat.loadSession).toHaveBeenCalledWith('forked-session');
+      });
+      expect(mockAiChatStore.clearContext).toHaveBeenCalled();
+      expect(mockNotificationStore.success).toHaveBeenCalledWith('Assistant session forked', 2000);
+      expect(JSON.parse(localStorage.getItem('pulse:ai_chat_models_by_session') || '{}')).toEqual({
+        'source-session': 'openrouter:deepseek/deepseek-chat',
+        'forked-session': 'openrouter:deepseek/deepseek-chat',
+      });
+    });
+
+    it('keeps the current session loaded when forking fails', async () => {
+      mockChat.sessionId.mockReturnValue('source-session');
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'user-1',
+          role: 'user',
+          content: 'branch from this point',
+          timestamp: new Date('2026-06-06T12:34:56Z'),
+        },
+      ]);
+      mockAIChatAPI.forkSession.mockRejectedValueOnce(new Error('fork failed'));
+
+      renderChat();
+      fireEvent.click(screen.getByRole('button', { name: 'Fork current Assistant session' }));
+
+      await waitFor(() => {
+        expect(mockAIChatAPI.forkSession).toHaveBeenCalledWith('source-session');
+      });
+      expect(mockChat.loadSession).not.toHaveBeenCalled();
+      expect(mockNotificationStore.error).toHaveBeenCalledWith('Failed to fork Assistant session');
     });
 
     it('opens session picker on click', async () => {
