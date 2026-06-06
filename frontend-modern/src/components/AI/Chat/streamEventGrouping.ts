@@ -43,9 +43,12 @@ export const groupStreamEventsForDisplay = (
       case 'thinking': {
         if (!evt.thinking) break; // skip empty deltas
         if (thinkingIdx >= 0) {
+          const current = grouped[thinkingIdx];
           grouped[thinkingIdx] = {
-            ...grouped[thinkingIdx],
-            thinking: (grouped[thinkingIdx].thinking || '') + evt.thinking,
+            ...current,
+            thinking: (current.thinking || '') + evt.thinking,
+            startedAt: current.startedAt || evt.startedAt,
+            updatedAt: evt.updatedAt || current.updatedAt,
           };
         } else {
           grouped.push({ ...evt });

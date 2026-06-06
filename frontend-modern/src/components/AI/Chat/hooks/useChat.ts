@@ -252,11 +252,17 @@ export function useChat(options: UseChatOptions = {}) {
     if (event.type === 'thinking' && events.length > 0) {
       const last = events[events.length - 1];
       if (last.type === 'thinking') {
+        const now = Date.now();
         return {
           ...msg,
           streamEvents: [
             ...events.slice(0, -1),
-            { ...last, thinking: (last.thinking || '') + (event.thinking || '') },
+            {
+              ...last,
+              thinking: (last.thinking || '') + (event.thinking || ''),
+              startedAt: last.startedAt || event.startedAt || now,
+              updatedAt: event.updatedAt || now,
+            },
           ],
         };
       }
@@ -726,7 +732,13 @@ export function useChat(options: UseChatOptions = {}) {
             case 'thinking': {
               const thinking = extractText(event.data);
               if (!thinking) return msg;
-              const updated = addStreamEvent(msg, { type: 'thinking', thinking });
+              const now = Date.now();
+              const updated = addStreamEvent(msg, {
+                type: 'thinking',
+                thinking,
+                startedAt: now,
+                updatedAt: now,
+              });
               return {
                 ...updated,
                 thinking: (msg.thinking || '') + thinking,

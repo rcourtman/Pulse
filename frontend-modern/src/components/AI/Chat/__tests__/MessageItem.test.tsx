@@ -5,8 +5,18 @@ import type { ChatMessage, PendingApproval, PendingQuestion, StreamDisplayEvent 
 
 // Mock child components to isolate MessageItem logic
 vi.mock('../ThinkingBlock', () => ({
-  ThinkingBlock: (props: { content: string; isStreaming?: boolean }) => (
-    <div data-testid="thinking-block" data-streaming={props.isStreaming}>
+  ThinkingBlock: (props: {
+    content: string;
+    isStreaming?: boolean;
+    startedAt?: number;
+    updatedAt?: number;
+  }) => (
+    <div
+      data-testid="thinking-block"
+      data-streaming={props.isStreaming}
+      data-started-at={props.startedAt}
+      data-updated-at={props.updatedAt}
+    >
       {props.isStreaming ? 'Thinking...' : 'Thinking complete'}
     </div>
   ),
@@ -840,7 +850,7 @@ describe('MessageItem', () => {
 
     it('renders mixed event types in correct DOM order', () => {
       const events: StreamDisplayEvent[] = [
-        { type: 'thinking', thinking: 'Analyzing...' },
+        { type: 'thinking', thinking: 'Analyzing...', startedAt: 1_000, updatedAt: 2_000 },
         { type: 'content', content: 'Step 1' },
         {
           type: 'tool',
@@ -857,6 +867,8 @@ describe('MessageItem', () => {
       ));
 
       expect(screen.getByTestId('thinking-block')).toHaveTextContent('Thinking complete');
+      expect(screen.getByTestId('thinking-block')).toHaveAttribute('data-started-at', '1000');
+      expect(screen.getByTestId('thinking-block')).toHaveAttribute('data-updated-at', '2000');
       expect(screen.getByTestId('tool-execution-block')).toBeInTheDocument();
 
       // Verify DOM order: thinking → content(Step 1) → tool → content(Step 2).

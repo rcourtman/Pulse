@@ -268,6 +268,16 @@ runtime cost control, and shared AI transport surfaces.
    transcript while raw command/tool output remains an explicit Details expansion
    instead of a default preview. This preserves evidence for inspection without
    letting large command output dominate the Assistant answer flow.
+   Streaming thinking rows follow the same source-anchored reasoning-display
+   contract: OpenCode commit
+   `9ed17da55ab1f7360cc0e01075f763e27fa899e9` renders reasoning through
+   `ReasoningPart`/`ReasoningHeader` in
+   `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx` and extracts only
+   provider summary metadata with `reasoningSummary` in
+   `packages/opencode/src/cli/cmd/tui/context/thinking.ts`. Pulse adapts that by
+   showing a live `Thinking:`/completed `Thought:` row with duration and optional
+   provider summary title while keeping the raw reasoning body out of the
+   transcript.
    OpenCode-parity Assistant UX work must reference OpenCode's actual source
    implementation for message parts, tool-state mutation, progress rendering,
    and model/session selection before changing Pulse behavior; parity means

@@ -363,6 +363,8 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                         <ThinkingBlock
                           content={evt.thinking || ''}
                           isStreaming={props.message.isStreaming}
+                          startedAt={evt.startedAt}
+                          updatedAt={evt.updatedAt}
                         />
                       </Match>
 

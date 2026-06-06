@@ -854,6 +854,9 @@ describe('useChat', () => {
       const thinkingEvents = assistant.streamEvents?.filter((e) => e.type === 'thinking') ?? [];
       expect(thinkingEvents).toHaveLength(1);
       expect(thinkingEvents[0].thinking).toBe('Let me think...');
+      expect(thinkingEvents[0].startedAt).toEqual(expect.any(Number));
+      expect(thinkingEvents[0].updatedAt).toEqual(expect.any(Number));
+      expect(thinkingEvents[0].updatedAt).toBeGreaterThanOrEqual(thinkingEvents[0].startedAt || 0);
       dispose();
     });
 

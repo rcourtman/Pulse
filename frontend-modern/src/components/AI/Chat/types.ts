@@ -105,6 +105,8 @@ export type StreamEventType =
 export interface StreamDisplayEvent {
   type: StreamEventType;
   thinking?: string;
+  startedAt?: number;
+  updatedAt?: number;
   tool?: ToolExecution;
   pendingTool?: PendingTool;
   content?: string;

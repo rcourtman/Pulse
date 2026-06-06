@@ -42,6 +42,22 @@ describe('groupStreamEventsForDisplay', () => {
     expect(grouped[0].type).toBe('thinking');
   });
 
+  it('preserves merged thinking activity timing', () => {
+    const grouped = groupStreamEventsForDisplay([
+      { type: 'thinking', thinking: 'A', startedAt: 1_000, updatedAt: 1_100 },
+      content('answer'),
+      { type: 'thinking', thinking: 'B', startedAt: 1_500, updatedAt: 2_500 },
+    ]);
+
+    const thinkingBlock = grouped.find((event) => event.type === 'thinking');
+    expect(thinkingBlock).toMatchObject({
+      type: 'thinking',
+      thinking: 'AB',
+      startedAt: 1_000,
+      updatedAt: 2_500,
+    });
+  });
+
   it('keeps content separated across a tool boundary so order is preserved', () => {
     const tool: StreamDisplayEvent = {
       type: 'tool',
