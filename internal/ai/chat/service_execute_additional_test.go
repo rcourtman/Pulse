@@ -18,6 +18,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mockruntime"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -404,6 +405,128 @@ func TestService_ExecuteStream_Success(t *testing.T) {
 	}
 	if len(messages) < 2 {
 		t.Fatalf("expected at least 2 messages, got %d", len(messages))
+	}
+}
+
+func TestServiceExecuteStreamMockModeStreamsToolFixtureWithoutProviderCall(t *testing.T) {
+	originalMockMode := mockruntime.IsEnabled()
+	t.Cleanup(func() { mockruntime.SetEnabled(originalMockMode) })
+	mockruntime.SetEnabled(true)
+
+	var providerFactoryCalls atomic.Int32
+	var providerStreamCalls atomic.Int32
+	provider := &stubServiceProvider{
+		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			providerStreamCalls.Add(1)
+			return errors.New("provider should not stream in mock mode")
+		},
+	}
+	service := NewService(Config{
+		AIConfig: &config.AIConfig{
+			Enabled: true,
+		},
+		StateProvider: &mockStateProvider{},
+		DataDir:       t.TempDir(),
+	})
+	service.providerFactory = func(model string) (providers.StreamingProvider, error) {
+		providerFactoryCalls.Add(1)
+		return provider, nil
+	}
+
+	ctx := context.Background()
+	if err := service.Start(ctx); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	var events []StreamEvent
+	if err := service.ExecuteStream(ctx, ExecuteRequest{
+		SessionID: "mock-fixture-session",
+		Prompt:    "show me the assistant stream",
+	}, func(event StreamEvent) {
+		events = append(events, event)
+	}); err != nil {
+		t.Fatalf("ExecuteStream failed: %v", err)
+	}
+	if got := providerFactoryCalls.Load(); got != 0 {
+		t.Fatalf("provider factory calls = %d, want 0", got)
+	}
+	if got := providerStreamCalls.Load(); got != 0 {
+		t.Fatalf("provider ChatStream calls = %d, want 0", got)
+	}
+
+	var eventTypes []string
+	for _, event := range events {
+		eventTypes = append(eventTypes, event.Type)
+	}
+	wantTypes := []string{
+		"session",
+		"workflow_state",
+		"workflow_state",
+		"tool_start",
+		"tool_progress",
+		"tool_progress",
+		"tool_end",
+		"workflow_state",
+		"content",
+		"content",
+		"content",
+		"done",
+	}
+	if !reflect.DeepEqual(eventTypes, wantTypes) {
+		t.Fatalf("event types = %#v, want %#v", eventTypes, wantTypes)
+	}
+
+	var toolStart ToolStartData
+	if err := json.Unmarshal(events[3].Data, &toolStart); err != nil {
+		t.Fatalf("unmarshal tool_start: %v", err)
+	}
+	if toolStart.ID != mockAssistantToolID || toolStart.Name != mockAssistantToolName {
+		t.Fatalf("tool_start = %#v, want mock pulse_query", toolStart)
+	}
+
+	var toolProgress ToolProgressData
+	if err := json.Unmarshal(events[4].Data, &toolProgress); err != nil {
+		t.Fatalf("unmarshal tool_progress: %v", err)
+	}
+	if toolProgress.ID != mockAssistantToolID || toolProgress.Phase != "running" {
+		t.Fatalf("tool_progress = %#v, want running mock tool", toolProgress)
+	}
+
+	var toolEnd ToolEndData
+	if err := json.Unmarshal(events[6].Data, &toolEnd); err != nil {
+		t.Fatalf("unmarshal tool_end: %v", err)
+	}
+	if toolEnd.ID != mockAssistantToolID || toolEnd.Name != mockAssistantToolName || !toolEnd.Success {
+		t.Fatalf("tool_end = %#v, want successful mock pulse_query", toolEnd)
+	}
+
+	var done DoneData
+	if err := json.Unmarshal(events[len(events)-1].Data, &done); err != nil {
+		t.Fatalf("unmarshal done: %v", err)
+	}
+	if done.SessionID != "mock-fixture-session" || done.Model != mockAssistantModelRoute {
+		t.Fatalf("done = %#v, want mock model and session", done)
+	}
+
+	messages, err := service.GetMessages(ctx, "mock-fixture-session")
+	if err != nil {
+		t.Fatalf("GetMessages failed: %v", err)
+	}
+	if len(messages) != 2 {
+		t.Fatalf("message count = %d, want user and assistant", len(messages))
+	}
+	assistantMessage := messages[1]
+	if assistantMessage.Role != "assistant" || assistantMessage.Model != mockAssistantModelRoute {
+		t.Fatalf("assistant message = %#v, want persisted mock assistant", assistantMessage)
+	}
+	if len(assistantMessage.ToolCalls) != 1 {
+		t.Fatalf("assistant tool calls = %d, want 1", len(assistantMessage.ToolCalls))
+	}
+	if assistantMessage.ToolCalls[0].Name != mockAssistantToolName {
+		t.Fatalf("assistant tool call = %#v, want mock pulse_query", assistantMessage.ToolCalls[0])
+	}
+	if assistantMessage.ToolCalls[0].Success == nil || !*assistantMessage.ToolCalls[0].Success {
+		t.Fatalf("assistant tool call success = %#v, want true", assistantMessage.ToolCalls[0].Success)
 	}
 }
 

@@ -554,6 +554,22 @@ runtime cost control, and shared AI transport surfaces.
    first-delta paint checkpoint and periodic checkpoints for long coalesced
    chunks, but must not be frame-throttled on every token by that progress-batch
    safeguard.
+   Mock-mode Assistant streaming is a canonical fixture for that same runtime
+   contract, not a frontend-only demo. When `mockmode.IsEnabled()` is true,
+   `chat.Service.createProvider` must return the internal mock Assistant
+   provider before invoking injected provider factories or configured external
+   providers, and `chat.Service.ExecuteStream` must short-circuit the user turn
+   only after the durable session is ensured and the user message is persisted.
+   The fixture must emit the same browser-facing event family used by real
+   turns: anchored `session`/prepare events from the normal entry path followed
+   by mock `workflow_state`, `tool_start`, `tool_progress`, `tool_end`,
+   response `workflow_state`, content chunks, and terminal `done`. It must also
+   persist a real assistant message with model route `pulse:mock-assistant` and
+   a successful `pulse_query` tool call so session restore, transcript tooling,
+   and stream-contract tests exercise the same backend-to-browser shape as a
+   live provider/tool turn. This fixture must not run as provider fallback in
+   non-mock mode and must not become Pulse-authored remediation or routing
+   behavior.
    The referenced OpenCode source at fetched `origin/dev` commit
    `09d9cf01f93798939c1284fbe974b6e1f4d2759d` renders tool-specific inline
    labels such as `Read <path>`, `Grep "<pattern>"`, `WebFetch <url>`, and bash

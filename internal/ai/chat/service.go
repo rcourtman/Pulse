@@ -595,6 +595,10 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		Int("message_count", len(messages)).
 		Msg("[ChatService] Got messages, calling agentic loop")
 
+	if streamMockAssistantTurnIfEnabled(sessions, session.ID, req.Prompt, streamCallback) {
+		return nil
+	}
+
 	handoffActions = refreshHandoffActionStatus(handoffActions, s.orgID, s.actionAuditStore)
 	if len(handoffActions) > 0 {
 		if err := sessions.SetModelHandoffActions(session.ID, handoffActions); err != nil {
@@ -3849,6 +3853,10 @@ func (s *Service) ExecuteCommand(ctx context.Context, command, targetHost string
 func (s *Service) createProvider() (providers.StreamingProvider, error) {
 	if s.cfg == nil {
 		return nil, fmt.Errorf("no Pulse Assistant config")
+	}
+
+	if provider, ok := mockAssistantProviderIfEnabled(); ok {
+		return provider, nil
 	}
 
 	if s.providerFactory != nil {
