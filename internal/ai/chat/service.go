@@ -121,6 +121,7 @@ type Service struct {
 	started                 bool
 	autonomousMode          bool
 	contextPrefetcher       *ContextPrefetcher
+	discoveryProvider       tools.DiscoveryProvider
 	budgetChecker           func() error // Optional mid-run budget enforcement
 	orgID                   string
 	controlLevelResolver    func(*config.AIConfig) string
@@ -650,10 +651,17 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	if overrideModel != "" {
 		selectedModel = overrideModel
 	}
+	hasModelHandoffContext := handoffContext != "" ||
+		len(handoffResources) > 0 ||
+		len(handoffActions) > 0 ||
+		handoffFindingID != "" ||
+		!handoffMetadataEmpty(handoffMetadata)
+	assistantToolScope := assistantToolScopeForPrompt(req.Prompt, hasModelHandoffContext)
 
 	// Proactively gather context for mentioned resources
 	s.mu.RLock()
 	prefetcher := s.contextPrefetcher
+	readState := s.readState
 	s.mu.RUnlock()
 
 	log.Info().
@@ -715,11 +723,13 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 				}
 			}
 		}
-
-		if !mentionsFound {
-			s.injectRecentSessionContext(session.ID, messages, sessions)
+	}
+	if assistantToolScope == assistantTurnToolScopeFull {
+		if attachPlainTextAssistantResourceContext(session.ID, messages, sessions, unifiedResourceProvider, readState, req.Prompt) {
+			mentionsFound = true
 		}
-	} else {
+	}
+	if !mentionsFound {
 		s.injectRecentSessionContext(session.ID, messages, sessions)
 	}
 
@@ -742,13 +752,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	}
 
 	// Run agentic loop
-	hasModelHandoffContext := handoffContext != "" ||
-		len(handoffResources) > 0 ||
-		len(handoffActions) > 0 ||
-		handoffFindingID != "" ||
-		!handoffMetadataEmpty(handoffMetadata)
 	modelBoundaryAllowedInventoryContext := ""
-	assistantToolScope := assistantToolScopeForPrompt(req.Prompt, hasModelHandoffContext)
 	if assistantToolScope == assistantTurnToolScopeQueryOnly {
 		emitWorkflowState(streamCallback, "context", "Reading current Pulse inventory with pulse_query.", "", "pulse_query")
 		if assistantPromptRequestsDeterministicInventoryCount(normalizeAssistantToolRoutingPrompt(req.Prompt)) {
@@ -3649,6 +3653,17 @@ func (s *Service) SetUnifiedResourceProvider(provider tools.UnifiedResourceProvi
 	}
 }
 
+func (s *Service) SetReadState(readState unifiedresources.ReadState) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.readState = readState
+	if readState != nil && s.discoveryProvider != nil {
+		s.contextPrefetcher = NewContextPrefetcher(readState, s.discoveryProvider)
+	} else {
+		s.contextPrefetcher = nil
+	}
+}
+
 func (s *Service) SetAppContainerActionProvider(provider MCPAppContainerActionProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -3668,6 +3683,7 @@ func (s *Service) SetAppContainerReadProvider(provider MCPAppContainerReadProvid
 func (s *Service) SetDiscoveryProvider(provider MCPDiscoveryProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.discoveryProvider = provider
 	if s.executor != nil {
 		s.executor.SetDiscoveryProvider(provider)
 	}
@@ -3854,7 +3870,7 @@ func (s *Service) buildSystemPromptWithToolGovernance(toolGovernance string) str
 - target_host specifies where commands run (host name, container name, or VM name)
 - Commands execute inside the target: target_host="homepage-docker" runs inside that container
 - For Docker containers inside system containers: target the container, then use docker commands
-- The placeholder current_resource is valid only when this turn includes a Pulse resource-context handoff that explicitly says an attached resource is selected. If no attached resource context is present, do not use target_host="current_resource" or resource_id="current_resource"; ask which host, VM, container, app, or storage resource the user means, or use read-only query/search tools to identify an explicit target first.
+- The placeholder current_resource is valid only when this turn includes Pulse resource context that explicitly says an attached resource is selected, either from a resource-context handoff or from Pulse backend resource-reference resolution. If no attached resource context is present, do not use target_host="current_resource" or resource_id="current_resource"; ask which host, VM, container, app, or storage resource the user means, or use read-only query/search tools to identify an explicit target first.
 
 ## DOCKER BIND MOUNTS
 - Container files are often mapped to host paths via bind mounts

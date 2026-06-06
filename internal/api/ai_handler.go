@@ -86,6 +86,10 @@ type aiServiceRuntimeConfigReader interface {
 	GetConfig() *config.AIConfig
 }
 
+type aiServiceReadStateUpdater interface {
+	SetReadState(unifiedresources.ReadState)
+}
+
 func aiChatRuntimeConfigDigest(cfg *config.AIConfig) [sha256.Size]byte {
 	payload, err := json.Marshal(cfg)
 	if err != nil {
@@ -326,8 +330,25 @@ func (h *AIHandler) SetReadState(rs unifiedresources.ReadState) {
 		return
 	}
 	h.stateMu.Lock()
-	defer h.stateMu.Unlock()
 	h.readState = rs
+	h.stateMu.Unlock()
+
+	var services []AIService
+	h.servicesMu.RLock()
+	if h.defaultService != nil {
+		services = append(services, h.defaultService)
+	}
+	for _, svc := range h.services {
+		if svc != nil {
+			services = append(services, svc)
+		}
+	}
+	h.servicesMu.RUnlock()
+	for _, svc := range services {
+		if updater, ok := svc.(aiServiceReadStateUpdater); ok {
+			updater.SetReadState(rs)
+		}
+	}
 }
 
 // SetRecoveryManager stores a recovery manager for injection into newly created chat services.

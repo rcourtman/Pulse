@@ -37,6 +37,15 @@ func (m *syncingMockAIService) GetConfig() *config.AIConfig {
 	return m.cfg
 }
 
+type readStateCapturingMockAIService struct {
+	MockAIService
+	updates []unifiedresources.ReadState
+}
+
+func (m *readStateCapturingMockAIService) SetReadState(rs unifiedresources.ReadState) {
+	m.updates = append(m.updates, rs)
+}
+
 func (m *MockAIService) Start(ctx context.Context) error {
 	args := m.Called(ctx)
 	return args.Error(0)
@@ -2326,6 +2335,28 @@ func TestGetService_MultiTenantUsesTenantReadState(t *testing.T) {
 	}
 
 	mockSvc.AssertExpectations(t)
+}
+
+func TestSetReadStatePropagatesToExistingServices(t *testing.T) {
+	h := NewAIHandler(nil, nil, nil)
+	defaultSvc := &readStateCapturingMockAIService{}
+	tenantSvc := &readStateCapturingMockAIService{}
+	h.defaultService = defaultSvc
+	h.services["acme"] = tenantSvc
+
+	readState := unifiedresources.NewRegistry(nil)
+	h.SetReadState(readState)
+
+	if len(defaultSvc.updates) != 1 || defaultSvc.updates[0] != readState {
+		t.Fatalf("default service read-state updates = %#v, want one propagated read state", defaultSvc.updates)
+	}
+	if len(tenantSvc.updates) != 1 || tenantSvc.updates[0] != readState {
+		t.Fatalf("tenant service read-state updates = %#v, want one propagated read state", tenantSvc.updates)
+	}
+	_, _, _, _, storedReadState, _ := h.stateRefs()
+	if storedReadState != readState {
+		t.Fatalf("handler stored read state = %#v, want %#v", storedReadState, readState)
+	}
 }
 
 func TestGetService_HostedTenantDoesNotAutoBootstrapQuickstartService(t *testing.T) {

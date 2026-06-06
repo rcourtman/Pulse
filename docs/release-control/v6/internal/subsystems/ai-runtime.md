@@ -654,6 +654,18 @@ runtime cost control, and shared AI transport surfaces.
    tool call, must use the safe handle for scoped reads, must refuse raw
    provider/config/environment/secret-bearing context expansion, and must not
    leak configured forbidden resource details in content or tool inputs.
+   Plain-text resource references in live read, log, verification, or
+   command-intent Assistant prompts may use the same selected-resource handle
+   only after backend-owned canonical inventory resolution proves exactly one
+   resource match, including explicit target-kind wording such as host, node,
+   VM, container, or storage when inherited node labels would otherwise collide.
+   That path must register the resource in the session resolved context, mark it
+   as explicit current-turn access, and prepend a safe resource-context directive
+   that exposes `current_resource` but not raw aliases, hostnames, platform IDs,
+   paths, or other policy-redacted labels to external providers. Ambiguous or
+   non-live prompts must fail closed to normal model clarification/query
+   behavior; this is not a prompt-keyword router and must not choose, retry, or
+   execute the model's next investigative action.
    Context-only resource handoff turns must be enforced at the tool-manifest
    boundary, not only by prompt wording: unless the operator explicitly asks for
    live runtime verification, a read attempt, or discovery execution, the

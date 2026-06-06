@@ -320,7 +320,8 @@ func TestBuildSystemPrompt_CurrentResourceRequiresResourceHandoff(t *testing.T) 
 	prompt := svc.buildSystemPrompt()
 
 	for _, expected := range []string{
-		"The placeholder current_resource is valid only when this turn includes a Pulse resource-context handoff",
+		"The placeholder current_resource is valid only when this turn includes Pulse resource context",
+		"either from a resource-context handoff or from Pulse backend resource-reference resolution",
 		"If no attached resource context is present, do not use target_host=\"current_resource\" or resource_id=\"current_resource\"",
 		"Missing target information is not a safe default.",
 		"In autonomous mode, ask for the missing target in normal assistant text instead of attempting a tool call with current_resource",
