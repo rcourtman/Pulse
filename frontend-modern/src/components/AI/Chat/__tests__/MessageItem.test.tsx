@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { cleanup, render, screen, fireEvent } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { MessageItem } from '../MessageItem';
 import type { ChatMessage, PendingApproval, PendingQuestion, StreamDisplayEvent } from '../types';
 
@@ -80,7 +81,10 @@ vi.mock('../../aiChatUtils', () => ({
   renderMarkdown: (text: string) => `<p>${text}</p>`,
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 function makeMessage(overrides?: Partial<ChatMessage>): ChatMessage {
   return {
@@ -869,6 +873,33 @@ describe('MessageItem', () => {
       const prose = screen.getByText('Here is the analysis').closest('.prose');
       expect(prose).toBeInTheDocument();
       expect(prose!.innerHTML).toContain('<p>Here is the analysis</p>');
+    });
+
+    it('paces appended streaming content instead of dumping the whole delta at once', async () => {
+      vi.useFakeTimers();
+      const [content, setContent] = createSignal('A');
+      const message = () =>
+        makeMessage({
+          role: 'assistant',
+          content: content(),
+          isStreaming: true,
+          streamEvents: [{ type: 'content', content: content() }],
+        });
+
+      const { container } = render(() => <MessageItem message={message()} {...makeHandlers()} />);
+      const prose = () => container.querySelector('.prose') as HTMLElement;
+
+      expect(prose().innerHTML).toContain('<p>A</p>');
+
+      setContent('A readable streaming answer lands over a few frames.');
+      await Promise.resolve();
+
+      expect(prose().innerHTML).toContain('<p>A</p>');
+      expect(prose().innerHTML).not.toContain('streaming answer lands');
+
+      await vi.runAllTimersAsync();
+
+      expect(prose().innerHTML).toContain('A readable streaming answer lands over a few frames.');
     });
 
     it('strips serialized tool-call text from content blocks', () => {

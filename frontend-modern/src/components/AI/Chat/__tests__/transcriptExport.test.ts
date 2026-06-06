@@ -78,7 +78,8 @@ describe('Assistant transcript export', () => {
     expect(transcript).toContain('Model: DeepSeek via OpenRouter');
     expect(transcript).toContain('[status] Checking device nodes');
     expect(transcript).toContain('[tool:read]');
-    expect(transcript).toContain('ls /dev | wc -l');
+    expect(transcript).toContain('Inspect devices on current resource');
+    expect(transcript).not.toContain('ls /dev | wc -l');
     expect(transcript).toContain('completed');
     expect(transcript).toContain('There are 4,358 entries in /dev.');
     expect(transcript).not.toContain('4358\n\n##');
@@ -90,7 +91,7 @@ describe('Assistant transcript export', () => {
         id: 'assistant-1',
         role: 'assistant',
         content:
-          "I'llcheckthedevicenodesinsidethecontainertoanswerthat.Letmecounttheentriesin/devandlisttheblockdevices.pulse_read(target_host=\"current_resource\",command=\"ls/dev|wc-l\")",
+          'I\'llcheckthedevicenodesinsidethecontainertoanswerthat.Letmecounttheentriesin/devandlisttheblockdevices.pulse_read(target_host="current_resource",command="ls/dev|wc-l")',
         thinking: 'Private chain of thought',
         timestamp,
         streamEvents: [

@@ -359,6 +359,13 @@ runtime cost control, and shared AI transport surfaces.
    content and hidden reasoning may continue to opt out of those checkpoints so
    answer streaming remains fast, while session, workflow, model-switch, tool,
    approval, and question events remain user-visible progress checkpoints.
+   Live answer text must be paced in the presentation layer, not throttled or
+   mutated in the canonical stream state: appended content is revealed in short
+   readable slices while the turn is streaming, and completed/restored messages
+   render immediately from the full stored content. This adapts OpenCode's
+   `createPacedValue` live markdown pattern in
+   `packages/ui/src/components/message-part.tsx` so Pulse feels active without
+   delaying copy/export, tool boundaries, approvals, or audit evidence.
    Completed Assistant tool rows follow the same source-anchored display policy:
    the referenced OpenCode commit
    `9ed17da55ab1f7360cc0e01075f763e27fa899e9` keeps ordinary tool activity terse

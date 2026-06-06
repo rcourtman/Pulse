@@ -83,6 +83,154 @@ const formatAssistantTurnDuration = (startedAt: Date, completedAt?: Date): strin
 const markdownClass =
   'text-sm prose prose-slate prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-2 prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-md prose-pre:text-xs prose-pre:border prose-pre:border-slate-800 prose-code:text-blue-700 dark:prose-code:text-blue-300 prose-code:bg-blue-50 dark:prose-code:bg-blue-900 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:font-mono prose-code:text-[0.9em] prose-code:border prose-code:border-blue-100 dark:prose-code:border-blue-800 prose-code:before:content-none prose-code:after:content-none prose-headings:font-semibold prose-hr:border-slate-200 dark:prose-hr:border-slate-700 prose-ul:my-2 prose-ol:my-2 prose-li:my-1';
 
+const TEXT_RENDER_PACE_MS = 24;
+const TEXT_RENDER_SNAP = /[\s.,!?;:)\]]/;
+
+const textRenderStep = (size: number) => {
+  if (size <= 12) return 2;
+  if (size <= 48) return 4;
+  if (size <= 96) return 8;
+  return Math.min(24, Math.ceil(size / 8));
+};
+
+const nextPacedTextIndex = (text: string, start: number) => {
+  const end = Math.min(text.length, start + textRenderStep(text.length - start));
+  const max = Math.min(text.length, end + 8);
+  for (let idx = end; idx < max; idx += 1) {
+    if (TEXT_RENDER_SNAP.test(text[idx] || '')) return idx + 1;
+  }
+  return end;
+};
+
+const pacedTextCache = new Map<string, string>();
+const pacedTextCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+const cancelPacedTextCleanup = (key: string) => {
+  const timer = pacedTextCleanupTimers.get(key);
+  if (!timer) return;
+  clearTimeout(timer);
+  pacedTextCleanupTimers.delete(key);
+};
+
+const deletePacedTextCache = (key: string) => {
+  cancelPacedTextCleanup(key);
+  pacedTextCache.delete(key);
+};
+
+const schedulePacedTextCleanup = (key: string) => {
+  cancelPacedTextCleanup(key);
+  pacedTextCleanupTimers.set(
+    key,
+    setTimeout(() => {
+      pacedTextCleanupTimers.delete(key);
+      pacedTextCache.delete(key);
+    }, 1000),
+  );
+};
+
+const createPacedText = (getText: () => string, live: () => boolean, cacheKey: () => string) => {
+  const initialText = getText();
+  const initialKey = cacheKey();
+  if (initialKey) {
+    cancelPacedTextCleanup(initialKey);
+  }
+  const cachedText = initialKey ? pacedTextCache.get(initialKey) : undefined;
+  const initialValue =
+    live() &&
+    cachedText &&
+    initialText.startsWith(cachedText) &&
+    cachedText.length < initialText.length
+      ? cachedText
+      : initialText;
+  const [value, setValue] = createSignal(initialValue);
+  let shown = initialValue;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+
+  if (initialKey) {
+    pacedTextCache.set(initialKey, initialValue);
+  }
+
+  const clear = () => {
+    if (!timeout) return;
+    clearTimeout(timeout);
+    timeout = undefined;
+  };
+
+  const sync = (text: string) => {
+    shown = text;
+    setValue(text);
+    const key = cacheKey();
+    if (!key) return;
+    if (live()) {
+      cancelPacedTextCleanup(key);
+      pacedTextCache.set(key, text);
+    } else {
+      deletePacedTextCache(key);
+    }
+  };
+
+  const run = () => {
+    timeout = undefined;
+    const text = getText();
+    if (!live()) {
+      sync(text);
+      return;
+    }
+    if (!text.startsWith(shown) || text.length <= shown.length) {
+      sync(text);
+      return;
+    }
+    const end = nextPacedTextIndex(text, shown.length);
+    sync(text.slice(0, end));
+    if (end < text.length) timeout = setTimeout(run, TEXT_RENDER_PACE_MS);
+  };
+
+  createEffect(() => {
+    const text = getText();
+    if (!live()) {
+      clear();
+      sync(text);
+      return;
+    }
+    if (!text.startsWith(shown) || text.length < shown.length) {
+      clear();
+      sync(text);
+      return;
+    }
+    if (text.length === shown.length || timeout) return;
+    timeout = setTimeout(run, TEXT_RENDER_PACE_MS);
+  });
+
+  onCleanup(() => {
+    clear();
+    const key = cacheKey();
+    if (key) schedulePacedTextCleanup(key);
+  });
+
+  return value;
+};
+
+const AssistantMarkdownBlock: Component<{
+  text: string;
+  streaming?: boolean;
+  paceKey: string;
+}> = (props) => {
+  const visibleText = createPacedText(
+    () => props.text,
+    () => props.streaming === true,
+    () => props.paceKey,
+  );
+
+  return (
+    <div
+      class={markdownClass}
+      aria-live={props.streaming ? 'polite' : undefined}
+      // eslint-disable-next-line solid/no-innerhtml
+      innerHTML={renderMarkdown(visibleText())}
+    />
+  );
+};
+
 /**
  * MessageItem - Renders a single message in the chat.
  *
@@ -465,12 +613,10 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                           stripAssistantOutputArtifacts(evt.content || '').text
                         }
                       >
-                        <div
-                          class={markdownClass}
-                          // eslint-disable-next-line solid/no-innerhtml
-                          innerHTML={renderMarkdown(
-                            stripAssistantOutputArtifacts(evt.content || '').text,
-                          )}
+                        <AssistantMarkdownBlock
+                          text={stripAssistantOutputArtifacts(evt.content || '').text}
+                          streaming={props.message.isStreaming}
+                          paceKey={`${props.message.id}:stream:${index()}`}
                         />
                       </Match>
 
@@ -500,10 +646,10 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
 
               {/* Fallback */}
               <Show when={visibleMessageContent() && !hasRenderableStreamEvents()}>
-                <div
-                  class={markdownClass}
-                  // eslint-disable-next-line solid/no-innerhtml
-                  innerHTML={renderMarkdown(visibleMessageContent())}
+                <AssistantMarkdownBlock
+                  text={visibleMessageContent()}
+                  streaming={props.message.isStreaming}
+                  paceKey={`${props.message.id}:fallback`}
                 />
               </Show>
 
