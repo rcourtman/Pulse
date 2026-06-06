@@ -207,6 +207,13 @@ runtime cost control, and shared AI transport surfaces.
    implementation for message parts, tool-state mutation, and progress
    rendering before changing Pulse behavior; parity means adapting the proven
    interaction model, not guessing from screenshots or observed behavior alone.
+   The referenced OpenCode source at commit
+   `f750deaa3e95098fdde5fb00305b273e43c5b2cd` mutates a single tool part from
+   `pending` input through `running` progress to completed/error in
+   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`, with tool metadata
+   updates flowing through `packages/opencode/src/session/tools.ts`. Pulse's
+   stream contract adapts that model with `tool_start`, `tool_progress`, and
+   `tool_end` events that update the same visible pending tool row in place.
    Streamed provider startup must be bounded by the configured Assistant request
    timeout, the OpenAI-compatible SSE response-header guard, and the first SSE
    body-read guard adapted from OpenCode's provider `wrapSSE` source; transient
@@ -270,9 +277,10 @@ runtime cost control, and shared AI transport surfaces.
    reasoning may remain in runtime-only history for model continuity, but it
    must not serialize through public session history or resumed drawer state.
    Pending tool progress is part of the same transcript contract: pending tool
-   stream events must render inline as compact running rows in the assistant
-   turn instead of disappearing until completion or relying only on the
-   drawer-level status bar.
+   stream events must render inline as compact rows in the assistant turn,
+   transition to `running` or `waiting` through `tool_progress`, and resolve in
+   place on `tool_end` instead of disappearing until completion or relying only
+   on the drawer-level status bar.
    Assistant session listing is a history-browsing path, not a send-path lock.
    The session store must not hold its shared mutex while scanning and parsing
    every persisted session file for `/api/ai/sessions`; writes must remain

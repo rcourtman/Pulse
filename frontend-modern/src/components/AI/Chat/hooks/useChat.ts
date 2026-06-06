@@ -262,6 +262,96 @@ export function useChat(options: UseChatOptions = {}) {
     };
   };
 
+  const normalizePendingToolStatus = (phase?: string): PendingTool['status'] => {
+    const normalized = (phase || 'running').trim().toLowerCase();
+    if (normalized === 'pending') return 'pending';
+    if (normalized === 'waiting') return 'waiting';
+    return 'running';
+  };
+
+  const updatePendingToolProgress = (
+    msg: ChatMessage,
+    data: {
+      id?: string;
+      name?: string;
+      input?: string;
+      raw_input?: string;
+      phase?: string;
+      message?: string;
+    },
+  ): ChatMessage => {
+    const normalizedName = normalizeChatToolName(data.name || '');
+    const status = normalizePendingToolStatus(data.phase);
+    const progress = data.message?.trim() || undefined;
+    const pendingTools = msg.pendingTools || [];
+
+    const matchesTool = (tool?: PendingTool, toolId?: string) => {
+      if (!tool) return false;
+      if (data.id && toolId === data.id) return true;
+      if (data.id && tool.id === data.id) return true;
+      return normalizedName !== '' && normalizeChatToolName(tool.name) === normalizedName;
+    };
+
+    const mergeTool = (tool: PendingTool): PendingTool => ({
+      ...tool,
+      name: data.name || tool.name,
+      input: data.input || tool.input,
+      rawInput: data.raw_input || tool.rawInput,
+      status,
+      progress: progress || tool.progress,
+    });
+
+    let resolvedTool: PendingTool | undefined;
+    const pendingIndex = pendingTools.findIndex((tool) => matchesTool(tool, tool.id));
+    const updatedPendingTools =
+      pendingIndex >= 0
+        ? pendingTools.map((tool, index) => {
+            if (index !== pendingIndex) return tool;
+            resolvedTool = mergeTool(tool);
+            return resolvedTool;
+          })
+        : [
+            ...pendingTools,
+            (resolvedTool = {
+              id: data.id || generateId(),
+              name: data.name || 'unknown',
+              input: data.input || '{}',
+              rawInput: data.raw_input,
+              status,
+              progress,
+            }),
+          ];
+
+    const events = msg.streamEvents || [];
+    let replacedEvent = false;
+    const updatedEvents = events.map((event) => {
+      if (event.type !== 'pending_tool' || !matchesTool(event.pendingTool, event.toolId)) {
+        return event;
+      }
+      replacedEvent = true;
+      return {
+        ...event,
+        toolId: resolvedTool?.id || event.toolId,
+        pendingTool: resolvedTool,
+      };
+    });
+
+    if (!replacedEvent && resolvedTool) {
+      updatedEvents.push({
+        type: 'pending_tool',
+        pendingTool: resolvedTool,
+        toolId: resolvedTool.id,
+      });
+    }
+
+    return {
+      ...msg,
+      streamEvents: updatedEvents,
+      workflowStatus: undefined,
+      pendingTools: updatedPendingTools,
+    };
+  };
+
   const appendMessageContent = (msg: ChatMessage, content: string): string => {
     const existing = msg.content || '';
     if (!existing || !content) {
@@ -600,6 +690,7 @@ export function useChat(options: UseChatOptions = {}) {
                 name: data.name || 'unknown',
                 input: data.input || '{}',
                 rawInput: data.raw_input,
+                status: 'pending',
               };
 
               // Add to streamEvents in chronological position
@@ -614,6 +705,22 @@ export function useChat(options: UseChatOptions = {}) {
                 workflowStatus: undefined,
                 pendingTools: [...(msg.pendingTools || []), pendingTool],
               };
+            }
+
+            case 'tool_progress': {
+              clearSuppressedOutputBoundary(assistantId);
+              const data = event.data as {
+                id?: string;
+                name?: string;
+                input?: string;
+                raw_input?: string;
+                phase?: string;
+                message?: string;
+              };
+              if (data.name === 'question' || data.name === 'Question') {
+                return msg;
+              }
+              return updatePendingToolProgress(msg, data);
             }
 
             case 'tool_end': {

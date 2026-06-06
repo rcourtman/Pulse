@@ -214,6 +214,7 @@ export interface AIExecuteResponse {
 // Streaming event types
 export type AIStreamEventType =
   | 'tool_start'
+  | 'tool_progress'
   | 'tool_end'
   | 'content'
   | 'thinking'
@@ -227,6 +228,13 @@ export type AIStreamEventType =
 export interface AIStreamToolStartData {
   name: string;
   input: string;
+}
+
+export interface AIStreamToolProgressData {
+  name: string;
+  input?: string;
+  phase?: string;
+  message?: string;
 }
 
 export interface AIStreamToolEndData {
@@ -287,6 +295,7 @@ export interface AIStreamEvent {
   data?:
     | string
     | AIStreamToolStartData
+    | AIStreamToolProgressData
     | AIStreamToolEndData
     | AIStreamCompleteData
     | AIStreamApprovalNeededData

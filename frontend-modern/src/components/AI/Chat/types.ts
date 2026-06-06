@@ -18,6 +18,8 @@ export interface PendingTool {
   name: string;
   input: string;
   rawInput?: string;
+  status?: 'pending' | 'running' | 'waiting';
+  progress?: string;
 }
 
 export interface PendingApproval {

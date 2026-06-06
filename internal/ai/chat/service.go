@@ -2934,7 +2934,7 @@ func chatFallbackModelForProvider(cfg *config.AIConfig, provider string) string 
 
 func chatStreamEventBlocksProviderFallback(event StreamEvent) bool {
 	switch strings.ToLower(strings.TrimSpace(event.Type)) {
-	case "approval_needed", "content", "question", "tool_end", "tool_start":
+	case "approval_needed", "content", "question", "tool_end", "tool_progress", "tool_start":
 		return true
 	default:
 		return false

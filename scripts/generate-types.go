@@ -40,6 +40,7 @@ func main() {
 		reflect.TypeOf(chat.WorkflowStateData{}),
 		reflect.TypeOf(chat.SessionData{}),
 		reflect.TypeOf(chat.ToolStartData{}),
+		reflect.TypeOf(chat.ToolProgressData{}),
 		reflect.TypeOf(chat.ToolEndData{}),
 		reflect.TypeOf(chat.ApprovalPlanData{}),
 		reflect.TypeOf(chat.ApprovalContextConfidenceData{}),
@@ -77,6 +78,7 @@ func main() {
 	buf.WriteString("  | { type: 'thinking'; data: ThinkingData }\n")
 	buf.WriteString("  | { type: 'workflow_state'; data: WorkflowStateData }\n")
 	buf.WriteString("  | { type: 'tool_start'; data: ToolStartData }\n")
+	buf.WriteString("  | { type: 'tool_progress'; data: ToolProgressData }\n")
 	buf.WriteString("  | { type: 'tool_end'; data: ToolEndData }\n")
 	buf.WriteString("  | { type: 'approval_needed'; data: ApprovalNeededData }\n")
 	// QuestionData is wrapped by the backend as {question_id, questions} plus session_id in some callers.

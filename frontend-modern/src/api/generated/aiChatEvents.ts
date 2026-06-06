@@ -101,6 +101,15 @@ export interface ToolEndData {
   success: boolean;
 }
 
+export interface ToolProgressData {
+  id: string;
+  name: string;
+  input?: string;
+  raw_input?: string;
+  phase?: string;
+  message?: string;
+}
+
 export interface ToolStartData {
   id: string;
   name: string;
@@ -125,9 +134,9 @@ export type AIChatStreamEvent =
   | { type: 'thinking'; data: ThinkingData }
   | { type: 'workflow_state'; data: WorkflowStateData }
   | { type: 'tool_start'; data: ToolStartData }
+  | { type: 'tool_progress'; data: ToolProgressData }
   | { type: 'tool_end'; data: ToolEndData }
   | { type: 'approval_needed'; data: ApprovalNeededData }
-  | { type: 'question'; data: (QuestionData & { session_id?: string }) }
+  | { type: 'question'; data: QuestionData & { session_id?: string } }
   | { type: 'done'; data?: DoneData }
-  | { type: 'error'; data: ErrorData }
-;
+  | { type: 'error'; data: ErrorData };

@@ -4,6 +4,7 @@ import type {
   AIChatStreamEvent,
   DoneData,
   SessionData,
+  ToolProgressData,
   WorkflowStateData,
 } from '@/api/generated/aiChatEvents';
 
@@ -38,6 +39,23 @@ describe('AI chat stream event contract', () => {
     expect(event.data.next_model).toBe('deepseek:deepseek-v4-pro');
     expect(aiChatEventsSource).toContain('failed_model?: string');
     expect(aiChatEventsSource).toContain('next_model?: string');
+  });
+
+  it('exposes live tool progress as a typed stream contract', () => {
+    const progress: ToolProgressData = {
+      id: 'tool-1',
+      name: 'pulse_query',
+      input: '{"action":"topology"}',
+      raw_input: '{"action":"topology"}',
+      phase: 'running',
+      message: 'Reading inventory.',
+    };
+    const event: AIChatStreamEvent = { type: 'tool_progress', data: progress };
+
+    expect(event.data.phase).toBe('running');
+    expect(event.data.message).toBe('Reading inventory.');
+    expect(aiChatEventsSource).toContain('export interface ToolProgressData');
+    expect(aiChatEventsSource).toContain("type: 'tool_progress'");
   });
 
   it('exposes the effective completion model on done events', () => {

@@ -67,6 +67,15 @@ func (m *MockProvider) ListModels(ctx context.Context) ([]providers.ModelInfo, e
 	return args.Get(0).([]providers.ModelInfo), args.Error(1)
 }
 
+func indexOfStreamType(types []string, target string) int {
+	for i, eventType := range types {
+		if eventType == target {
+			return i
+		}
+	}
+	return -1
+}
+
 func TestAgenticLoop(t *testing.T) {
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 
@@ -191,10 +200,25 @@ func TestAgenticLoop(t *testing.T) {
 			})
 		}).Once()
 
-		results, err := loop.Execute(ctx, sessionID, messages, func(event StreamEvent) {})
+		var streamTypes []string
+		var progressEvents []ToolProgressData
+		results, err := loop.Execute(ctx, sessionID, messages, func(event StreamEvent) {
+			streamTypes = append(streamTypes, event.Type)
+			if event.Type == "tool_progress" {
+				var data ToolProgressData
+				_ = json.Unmarshal(event.Data, &data)
+				progressEvents = append(progressEvents, data)
+			}
+		})
 		assert.NoError(t, err)
 		require.Len(t, results, 3) // assistant tool call, tool result, final response
 		assert.Equal(t, "I found 2 nodes.", results[2].Content)
+		require.Len(t, progressEvents, 1, "expected tool execution to emit a running progress event")
+		assert.Equal(t, "call_123", progressEvents[0].ID)
+		assert.Equal(t, "list_nodes", progressEvents[0].Name)
+		assert.Equal(t, "running", progressEvents[0].Phase)
+		assert.Equal(t, "Running.", progressEvents[0].Message)
+		assert.Less(t, indexOfStreamType(streamTypes, "tool_progress"), indexOfStreamType(streamTypes, "tool_end"))
 		mockProvider.AssertExpectations(t)
 	})
 

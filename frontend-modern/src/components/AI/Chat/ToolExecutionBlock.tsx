@@ -1,4 +1,8 @@
 import { Component, Show, createSignal, createMemo, For } from 'solid-js';
+import CheckCircleIcon from 'lucide-solid/icons/check-circle';
+import ClockIcon from 'lucide-solid/icons/clock';
+import LoaderCircleIcon from 'lucide-solid/icons/loader-circle';
+import XCircleIcon from 'lucide-solid/icons/x-circle';
 import type { ToolExecution, PendingTool } from './types';
 import { getToolCallResultTextClass } from '@/utils/patrolRunPresentation';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
@@ -64,15 +68,25 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
   const hasOutput = createMemo(() => hasReadableToolOutput(props.tool.output || ''));
   const hasDetails = createMemo(() => hasInput() || hasOutput());
 
-  const statusIcon = () => (props.tool.success ? '✓' : '✗');
   const statusLabel = () => (props.tool.success ? 'completed' : 'failed');
 
   return (
     <div class="my-1 font-mono text-[11px]">
       <div class="flex items-center gap-1.5 rounded px-2 py-1">
-        <span class={`${getToolCallResultTextClass(props.tool.success)} font-bold`}>
-          {statusIcon()}
-        </span>
+        <Show
+          when={props.tool.success}
+          fallback={
+            <XCircleIcon
+              class={`${getToolCallResultTextClass(props.tool.success)} h-3 w-3 shrink-0`}
+              aria-label={statusLabel()}
+            />
+          }
+        >
+          <CheckCircleIcon
+            class={`${getToolCallResultTextClass(props.tool.success)} h-3 w-3 shrink-0`}
+            aria-label={statusLabel()}
+          />
+        </Show>
 
         <span class="text-muted uppercase text-[9px] font-medium tracking-wider min-w-[50px]">
           {toolLabel()}
@@ -129,29 +143,38 @@ interface PendingToolBlockProps {
 export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
   const toolLabel = createMemo(() => getToolLabel(props.tool.name));
   const inputSummary = createMemo(() => parseToolInputSummary(props.tool.input || ''));
+  const status = createMemo(() => props.tool.status || 'pending');
+  const statusLabel = createMemo(() => {
+    if (status() === 'waiting') return 'waiting';
+    if (status() === 'running') return 'running';
+    return 'pending';
+  });
+  const progressText = createMemo(() => (props.tool.progress || '').trim());
+  const activityIconClass = createMemo(() => {
+    if (status() === 'waiting') return 'h-3 w-3 shrink-0 text-amber-500 dark:text-amber-300';
+    return 'h-3 w-3 shrink-0 animate-spin text-blue-500 dark:text-blue-400';
+  });
 
   return (
     <div class="my-0.5 font-mono text-[11px] flex items-center gap-1.5 px-2 py-1 rounded bg-surface-alt border border-border">
-      {/* Spinner */}
-      <svg
-        class="w-3 h-3 text-blue-500 dark:text-blue-400 animate-spin"
-        fill="none"
-        viewBox="0 0 24 24"
+      <Show
+        when={status() === 'waiting'}
+        fallback={<LoaderCircleIcon class={activityIconClass()} aria-label={statusLabel()} />}
       >
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" />
-        <path
-          class="opacity-75"
-          fill="currentColor"
-          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-        />
-      </svg>
+        <ClockIcon class={activityIconClass()} aria-label={statusLabel()} />
+      </Show>
 
-      {/* Tool label */}
       <span class="text-muted uppercase text-[9px] font-medium tracking-wider min-w-[50px]">
         {toolLabel()}
       </span>
 
       <span class="text-base-content truncate flex-1">{inputSummary()}</span>
+      <Show when={progressText()}>
+        <span class="hidden sm:inline-block max-w-[180px] truncate text-[10px] text-muted">
+          {progressText()}
+        </span>
+      </Show>
+      <span class="shrink-0 text-[10px] text-muted">{statusLabel()}</span>
     </div>
   );
 };

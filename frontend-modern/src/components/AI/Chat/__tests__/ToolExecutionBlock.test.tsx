@@ -80,14 +80,14 @@ describe('ToolExecutionBlock', () => {
 
   // --- Status icon ---
 
-  it('shows checkmark for successful tool', () => {
+  it('shows completed icon for successful tool', () => {
     const { container } = render(() => <ToolExecutionBlock tool={makeTool({ success: true })} />);
-    expect(container.textContent).toContain('✓');
+    expect(container.querySelector('svg[aria-label="completed"]')).not.toBeNull();
   });
 
-  it('shows cross for failed tool', () => {
+  it('shows failed icon for failed tool', () => {
     const { container } = render(() => <ToolExecutionBlock tool={makeTool({ success: false })} />);
-    expect(container.textContent).toContain('✗');
+    expect(container.querySelector('svg[aria-label="failed"]')).not.toBeNull();
   });
 
   it('applies emerald color class for success', () => {
@@ -169,9 +169,7 @@ describe('ToolExecutionBlock', () => {
 
   it('shows raw input and output when details are opened', async () => {
     const output = 'line1\nline2\nline3\nline4\nline5';
-    render(() => (
-      <ToolExecutionBlock tool={makeTool({ input: '{"action":"list"}', output })} />
-    ));
+    render(() => <ToolExecutionBlock tool={makeTool({ input: '{"action":"list"}', output })} />);
     const btn = screen.getByText('Details');
     fireEvent.click(btn);
 
@@ -299,12 +297,34 @@ describe('PendingToolBlock', () => {
     expect(screen.queryByText(/include/)).not.toBeInTheDocument();
   });
 
-  // --- Spinner ---
+  // --- Activity state ---
 
-  it('renders a spinner SVG with animate-spin class', () => {
+  it('renders a spinner SVG with animate-spin class while pending', () => {
     const { container } = render(() => <PendingToolBlock tool={makePending()} />);
     const svg = container.querySelector('svg.animate-spin');
     expect(svg).not.toBeNull();
+    expect(screen.getByText('pending')).toBeInTheDocument();
+  });
+
+  it('renders running status and compact progress text', () => {
+    render(() => (
+      <PendingToolBlock tool={makePending({ status: 'running', progress: 'Running command.' })} />
+    ));
+
+    expect(screen.getByText('running')).toBeInTheDocument();
+    expect(screen.getByText('Running command.')).toBeInTheDocument();
+  });
+
+  it('renders waiting status without a spinner', () => {
+    const { container } = render(() => (
+      <PendingToolBlock
+        tool={makePending({ status: 'waiting', progress: 'Waiting for approval.' })}
+      />
+    ));
+
+    expect(screen.getByText('waiting')).toBeInTheDocument();
+    expect(screen.getByText('Waiting for approval.')).toBeInTheDocument();
+    expect(container.querySelector('svg.animate-spin')).toBeNull();
   });
 });
 

@@ -213,6 +213,22 @@ func emitToolStartEvent(callback StreamCallback, id, name string, input map[stri
 	callback(StreamEvent{Type: "tool_start", Data: jsonData})
 }
 
+func emitToolProgressEvent(callback StreamCallback, id, name string, input map[string]interface{}, phase, message string) {
+	if callback == nil {
+		return
+	}
+	inputStr, rawInput := formatToolInputForFrontend(name, input, false)
+	jsonData, _ := json.Marshal(ToolProgressData{
+		ID:       id,
+		Name:     name,
+		Input:    inputStr,
+		RawInput: rawInput,
+		Phase:    phase,
+		Message:  message,
+	})
+	callback(StreamEvent{Type: "tool_progress", Data: jsonData})
+}
+
 func emitToolEndEvent(callback StreamCallback, id, name string, input map[string]interface{}, output string, success bool) {
 	if callback == nil {
 		return
@@ -227,6 +243,47 @@ func emitToolEndEvent(callback StreamCallback, id, name string, input map[string
 		Success:  success,
 	})
 	callback(StreamEvent{Type: "tool_end", Data: jsonData})
+}
+
+func toolExecutionProgressMessage(toolName string, input map[string]interface{}, toolKind ToolKind) string {
+	switch strings.TrimSpace(toolName) {
+	case "pulse_run_command", "run_command":
+		return "Running command."
+	case "pulse_query":
+		return "Reading inventory."
+	case "pulse_read", "read":
+		return "Reading target."
+	}
+	if isKnownGovernedWriteProgress(toolName, input, toolKind) {
+		return "Executing governed action."
+	}
+	return "Running."
+}
+
+func isKnownGovernedWriteProgress(toolName string, input map[string]interface{}, toolKind ToolKind) bool {
+	if toolKind != ToolKindWrite {
+		return false
+	}
+	action, _ := input["action"].(string)
+	action = strings.ToLower(strings.TrimSpace(action))
+	switch strings.TrimSpace(toolName) {
+	case "pulse_control", "pulse_control_guest", "pulse_control_docker":
+		return true
+	case "pulse_alerts":
+		return action == "resolve" || action == "dismiss"
+	case "pulse_docker":
+		return action == "control" || action == "update" || action == "check_updates" || action == "trigger_update"
+	case "pulse_kubernetes":
+		return action == "scale" || action == "restart" || action == "delete_pod" || action == "exec"
+	case "pulse_file_edit":
+		return action == "write" || action == "append"
+	case "pulse_knowledge":
+		return action == "remember" || action == "note" || action == "save"
+	case "patrol_report_finding", "patrol_resolve_finding":
+		return true
+	default:
+		return false
+	}
 }
 
 // sanitizeProviderStreamErrorForUser turns a raw provider/transport error into a
@@ -1401,6 +1458,14 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		if len(pendingExec) > 0 {
 			for _, pe := range pendingExec {
 				emitDeferredToolStart(pe.tc)
+				emitToolProgressEvent(
+					callback,
+					pe.tc.ID,
+					pe.tc.Name,
+					pe.tc.Input,
+					"running",
+					toolExecutionProgressMessage(pe.tc.Name, pe.tc.Input, pe.toolKind),
+				)
 			}
 			executeMessage := "Running infrastructure checks."
 			workflowTool := pendingExec[0].tc.Name
@@ -1555,6 +1620,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 						Preflight:         approvalData.Preflight,
 					})
 					emitWorkflowState(callback, "approve", "Waiting for approval before executing the planned action.", sessionFSMState(fsm), tc.Name)
+					emitToolProgressEvent(callback, tc.ID, tc.Name, tc.Input, "waiting", "Waiting for approval.")
 					callback(StreamEvent{Type: "approval_needed", Data: jsonData})
 
 					// In autonomous mode (investigations), don't wait for approval.
@@ -1591,6 +1657,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 									a.executor.RecordApprovalDecision(approvalData.ApprovalID, unifiedresources.ActionStateApproved, decision.DecidedBy, "approval granted")
 								}
 								emitWorkflowState(callback, "execute", "Approval granted. Executing the approved action.", sessionFSMState(fsm), tc.Name)
+								emitToolProgressEvent(callback, tc.ID, tc.Name, tc.Input, "running", "Executing approved action.")
 								// Re-execute the tool with approval granted
 								// Add approval_id to input so tool knows this is pre-approved
 								inputWithApproval := make(map[string]interface{})

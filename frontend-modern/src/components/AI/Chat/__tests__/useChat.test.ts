@@ -1085,6 +1085,76 @@ describe('useChat', () => {
         name: 'get_logs',
         input: '{}',
         rawInput: undefined,
+        status: 'pending',
+      });
+      dispose();
+    });
+
+    it('processes tool_progress events by updating the pending tool in place', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+
+      fire({ type: 'tool_start', data: { id: 'tool-1', name: 'get_logs', input: '{}' } });
+      fire({
+        type: 'tool_progress',
+        data: {
+          id: 'tool-1',
+          name: 'get_logs',
+          input: '{}',
+          phase: 'running',
+          message: 'Running.',
+        },
+      });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.pendingTools).toHaveLength(1);
+      expect(assistant.pendingTools![0]).toMatchObject({
+        id: 'tool-1',
+        name: 'get_logs',
+        input: '{}',
+        status: 'running',
+        progress: 'Running.',
+      });
+      const pendingToolEvents = assistant.streamEvents?.filter((e) => e.type === 'pending_tool');
+      expect(pendingToolEvents).toHaveLength(1);
+      expect(pendingToolEvents![0].pendingTool).toMatchObject({
+        id: 'tool-1',
+        status: 'running',
+        progress: 'Running.',
+      });
+      dispose();
+    });
+
+    it('creates a pending row when tool_progress arrives before tool_start', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+
+      fire({
+        type: 'tool_progress',
+        data: {
+          id: 'tool-1',
+          name: 'get_logs',
+          input: '{"action":"logs"}',
+          phase: 'running',
+          message: 'Running.',
+        },
+      });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.pendingTools).toHaveLength(1);
+      expect(assistant.streamEvents?.filter((e) => e.type === 'pending_tool')).toHaveLength(1);
+      expect(assistant.pendingTools![0]).toMatchObject({
+        id: 'tool-1',
+        name: 'get_logs',
+        input: '{"action":"logs"}',
+        status: 'running',
+        progress: 'Running.',
       });
       dispose();
     });

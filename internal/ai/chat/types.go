@@ -272,6 +272,17 @@ type ToolStartData struct {
 	RawInput string `json:"raw_input,omitempty"` // Unmodified JSON input
 }
 
+// ToolProgressData is the data for "tool_progress" events.
+// It mutates an existing pending tool row as execution starts or advances.
+type ToolProgressData struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Input    string `json:"input,omitempty"`
+	RawInput string `json:"raw_input,omitempty"`
+	Phase    string `json:"phase,omitempty"`   // pending | running | waiting
+	Message  string `json:"message,omitempty"` // Compact user-facing status text
+}
+
 // ToolEndData is the data for "tool_end" events
 type ToolEndData struct {
 	ID       string `json:"id"`

@@ -10626,6 +10626,18 @@ func TestContract_ChatStreamEventJSONSnapshots(t *testing.T) {
 			want: `{"type":"tool_start","data":{"id":"tool-1","name":"pulse_read","input":"{\"path\":\"/tmp/x.log\"}","raw_input":"{\"path\":\"/tmp/x.log\"}"}}`,
 		},
 		{
+			name: "tool_progress",
+			event: mustStreamEvent(t, "tool_progress", chat.ToolProgressData{
+				ID:       "tool-1",
+				Name:     "pulse_read",
+				Input:    `{"path":"/tmp/x.log"}`,
+				RawInput: `{"path":"/tmp/x.log"}`,
+				Phase:    "running",
+				Message:  "Reading target.",
+			}),
+			want: `{"type":"tool_progress","data":{"id":"tool-1","name":"pulse_read","input":"{\"path\":\"/tmp/x.log\"}","raw_input":"{\"path\":\"/tmp/x.log\"}","phase":"running","message":"Reading target."}}`,
+		},
+		{
 			name: "tool_end",
 			event: mustStreamEvent(t, "tool_end", chat.ToolEndData{
 				ID:       "tool-1",
