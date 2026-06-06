@@ -96,6 +96,7 @@ export interface PendingQuestion {
 // Unified event for chronological display
 export type StreamEventType =
   | 'thinking'
+  | 'workflow_status'
   | 'tool'
   | 'content'
   | 'pending_tool'
@@ -106,6 +107,7 @@ export type StreamEventType =
 export interface StreamDisplayEvent {
   type: StreamEventType;
   thinking?: string;
+  workflowStatus?: WorkflowStatus;
   startedAt?: number;
   updatedAt?: number;
   tool?: ToolExecution;

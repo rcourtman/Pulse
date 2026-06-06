@@ -204,10 +204,7 @@ describe('MessageItem', () => {
       });
       expect(retryViaOpenRouter).toHaveTextContent('Retry via OpenRouter');
       fireEvent.click(retryViaOpenRouter);
-      expect(onUseModelRoute).toHaveBeenCalledWith(
-        'openrouter:deepseek/deepseek-v4-pro',
-        'msg-1',
-      );
+      expect(onUseModelRoute).toHaveBeenCalledWith('openrouter:deepseek/deepseek-v4-pro', 'msg-1');
 
       const changeModel = screen.getByRole('button', { name: /change model/i });
       fireEvent.click(changeModel);
@@ -584,7 +581,47 @@ describe('MessageItem', () => {
       ));
 
       expect(
-        screen.getByText('Planning governed action and safety checks before execution. · pulse exec'),
+        screen.getByText('Planning governed action and safety checks before execution. · exec'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
+    });
+
+    it('shows live workflow progress as a transcript activity row', () => {
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            isStreaming: true,
+            pendingTools: [],
+            streamEvents: [
+              {
+                type: 'workflow_status',
+                workflowStatus: {
+                  phase: 'provider_retry',
+                  message: 'Provider connection failed before any output; retrying.',
+                  attempt: 2,
+                  maxAttempts: 3,
+                  retryAfterMs: 1200,
+                },
+              },
+            ],
+            workflowStatus: {
+              phase: 'provider_retry',
+              message: 'Provider connection failed before any output; retrying.',
+              attempt: 2,
+              maxAttempts: 3,
+              retryAfterMs: 1200,
+            },
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(
+        screen.getByText(
+          'Provider connection failed before any output; retrying. · attempt 2/3 · retrying in 1.2s',
+        ),
       ).toBeInTheDocument();
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
     });

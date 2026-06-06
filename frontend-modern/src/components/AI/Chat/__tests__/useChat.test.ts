@@ -1113,7 +1113,17 @@ describe('useChat', () => {
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.content).toBe('');
-      expect(assistant.streamEvents).toEqual([]);
+      expect(assistant.streamEvents).toEqual([
+        expect.objectContaining({
+          type: 'workflow_status',
+          workflowStatus: expect.objectContaining({
+            phase: 'plan',
+            message: 'Planning governed action and safety checks before execution.',
+            state: 'READING',
+            tool: 'pulse_exec',
+          }),
+        }),
+      ]);
       expect(assistant.workflowStatus).toEqual(
         expect.objectContaining({
           phase: 'plan',
@@ -1194,6 +1204,17 @@ describe('useChat', () => {
           retryAfterMs: 200,
         }),
       );
+      expect(assistant.streamEvents).toEqual([
+        expect.objectContaining({
+          type: 'workflow_status',
+          workflowStatus: expect.objectContaining({
+            phase: 'provider_retry',
+            attempt: 2,
+            maxAttempts: 2,
+            retryAfterMs: 200,
+          }),
+        }),
+      ]);
       dispose();
     });
 
@@ -1243,7 +1264,14 @@ describe('useChat', () => {
         },
       });
       let assistant = chat.messages().find((m) => m.role === 'assistant')!;
-      expect(assistant.streamEvents).toEqual([]);
+      expect(assistant.streamEvents).toEqual([
+        expect.objectContaining({
+          type: 'workflow_status',
+          workflowStatus: expect.objectContaining({
+            message: 'Reading current Pulse inventory with pulse_query.',
+          }),
+        }),
+      ]);
       expect(assistant.workflowStatus).toEqual(
         expect.objectContaining({
           message: 'Reading current Pulse inventory with pulse_query.',
@@ -1264,6 +1292,14 @@ describe('useChat', () => {
           message: 'Built compact inventory context for the model.',
         }),
       );
+      expect(assistant.streamEvents).toEqual([
+        expect.objectContaining({
+          type: 'workflow_status',
+          workflowStatus: expect.objectContaining({
+            message: 'Built compact inventory context for the model.',
+          }),
+        }),
+      ]);
 
       fire({
         type: 'workflow_state',
@@ -1278,6 +1314,14 @@ describe('useChat', () => {
           message: 'Sent request to OpenRouter; waiting for the first token.',
         }),
       );
+      expect(assistant.streamEvents).toEqual([
+        expect.objectContaining({
+          type: 'workflow_status',
+          workflowStatus: expect.objectContaining({
+            message: 'Sent request to OpenRouter; waiting for the first token.',
+          }),
+        }),
+      ]);
 
       dispose();
     });
@@ -1301,6 +1345,7 @@ describe('useChat', () => {
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.content).toBe('Here is the answer.');
       expect(assistant.workflowStatus).toBeUndefined();
+      expect(assistant.streamEvents?.map((event) => event.type)).toEqual(['content']);
       dispose();
     });
 
@@ -1323,10 +1368,11 @@ describe('useChat', () => {
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.workflowStatus).toBeUndefined();
       expect(assistant.pendingTools).toHaveLength(1);
+      expect(assistant.streamEvents?.map((event) => event.type)).toEqual(['pending_tool']);
       dispose();
     });
 
-    it('keeps late workflow progress live after typed tool evidence without adding transcript rows', async () => {
+    it('keeps late workflow progress live after typed tool evidence as one current activity row', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
 
@@ -1366,7 +1412,18 @@ describe('useChat', () => {
           message: 'Model is reasoning before responding.',
         }),
       );
-      expect(assistant.streamEvents?.map((event) => event.type)).toEqual(['tool']);
+      expect(assistant.streamEvents?.map((event) => event.type)).toEqual([
+        'tool',
+        'workflow_status',
+      ]);
+      expect(assistant.streamEvents?.[1]).toEqual(
+        expect.objectContaining({
+          workflowStatus: expect.objectContaining({
+            phase: 'model_thinking',
+            message: 'Model is reasoning before responding.',
+          }),
+        }),
+      );
       expect(assistant.toolCalls).toHaveLength(1);
       dispose();
     });

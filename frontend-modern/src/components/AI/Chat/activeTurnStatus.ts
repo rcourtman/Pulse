@@ -154,6 +154,9 @@ const thinkingStatusText = (event: StreamDisplayEvent): string => {
 };
 
 const eventActivityAt = (event: StreamDisplayEvent): number | undefined => {
+  if (event.type === 'workflow_status') {
+    return event.workflowStatus?.startedAt || event.updatedAt || event.startedAt || undefined;
+  }
   if (event.type === 'pending_tool') {
     return (
       latestPendingToolActivity(event.pendingTool) ||
@@ -222,6 +225,19 @@ const latestStreamActivityStatus = (
             type: 'thinking',
             text,
             startedAt: event.startedAt,
+            activityAt: eventActivityAt(event),
+            order: index,
+          };
+        }
+        break;
+      }
+      case 'workflow_status': {
+        const text = formatAssistantWorkflowStatus(event.workflowStatus);
+        if (text) {
+          candidate = {
+            type: event.workflowStatus?.tool ? 'tool' : 'thinking',
+            text,
+            startedAt: event.workflowStatus?.startedAt || event.startedAt,
             activityAt: eventActivityAt(event),
             order: index,
           };

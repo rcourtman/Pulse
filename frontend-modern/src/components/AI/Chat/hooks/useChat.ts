@@ -166,7 +166,10 @@ export function useChat(options: UseChatOptions = {}) {
     if (!events) return events;
     return events.filter(
       (event) =>
-        event.type !== 'pending_tool' && event.type !== 'approval' && event.type !== 'question',
+        event.type !== 'pending_tool' &&
+        event.type !== 'approval' &&
+        event.type !== 'question' &&
+        event.type !== 'workflow_status',
     );
   };
 
@@ -310,6 +313,31 @@ export function useChat(options: UseChatOptions = {}) {
     };
   };
 
+  const streamEventsWithoutWorkflowStatus = (
+    events: StreamDisplayEvent[] | undefined,
+  ): StreamDisplayEvent[] | undefined =>
+    events?.filter((event) => event.type !== 'workflow_status');
+
+  const withClearedWorkflowStatusEvent = (msg: ChatMessage): ChatMessage => {
+    const streamEvents = streamEventsWithoutWorkflowStatus(msg.streamEvents);
+    if (streamEvents === msg.streamEvents) return msg;
+    return { ...msg, streamEvents };
+  };
+
+  const withWorkflowStatusEvent = (msg: ChatMessage, workflowStatus: WorkflowStatus): ChatMessage =>
+    addStreamEvent(
+      {
+        ...msg,
+        streamEvents: streamEventsWithoutWorkflowStatus(msg.streamEvents) || [],
+      },
+      {
+        type: 'workflow_status',
+        workflowStatus,
+        startedAt: workflowStatus.startedAt,
+        updatedAt: workflowStatus.startedAt,
+      },
+    );
+
   const normalizePendingToolStatus = (phase?: string): PendingTool['status'] => {
     const normalized = (phase || 'running').trim().toLowerCase();
     if (normalized === 'pending') return 'pending';
@@ -426,7 +454,7 @@ export function useChat(options: UseChatOptions = {}) {
     return {
       ...msg,
       streamEvents: replacePendingToolStreamEvents(
-        msg.streamEvents || [],
+        streamEventsWithoutWorkflowStatus(msg.streamEvents) || [],
         resolvedTool,
         matchesTool,
         now,
@@ -505,7 +533,12 @@ export function useChat(options: UseChatOptions = {}) {
     return {
       ...msg,
       streamEvents: resolvedTool
-        ? replacePendingToolStreamEvents(msg.streamEvents || [], resolvedTool, matchesTool, now)
+        ? replacePendingToolStreamEvents(
+            streamEventsWithoutWorkflowStatus(msg.streamEvents) || [],
+            resolvedTool,
+            matchesTool,
+            now,
+          )
         : msg.streamEvents,
       workflowStatus: undefined,
       pendingTools: updatedPendingTools,
@@ -859,6 +892,13 @@ export function useChat(options: UseChatOptions = {}) {
         );
       }
       if (workflowStatus) {
+        setMessages((prev) =>
+          prev.map((msg) => {
+            if (msg.id !== assistantId) return msg;
+            if (msg.isStreaming === false) return msg;
+            return withWorkflowStatusEvent(msg, workflowStatus);
+          }),
+        );
         setAssistantWorkflowStatus(assistantId, requestId, workflowStatus);
       }
       return;
@@ -892,9 +932,10 @@ export function useChat(options: UseChatOptions = {}) {
                     )
                   : msg;
               if (!visible.text) return baseMsg;
+              const clearedMsg = withClearedWorkflowStatusEvent(baseMsg);
               // Add to streamEvents for chronological display
               const now = Date.now();
-              const updated = addStreamEvent(baseMsg, {
+              const updated = addStreamEvent(clearedMsg, {
                 type: 'content',
                 content: visible.text,
                 startedAt: now,
@@ -902,7 +943,7 @@ export function useChat(options: UseChatOptions = {}) {
               });
               return {
                 ...updated,
-                content: appendMessageContent(baseMsg, visible.text),
+                content: appendMessageContent(clearedMsg, visible.text),
                 workflowStatus: undefined,
               };
             }
@@ -911,7 +952,8 @@ export function useChat(options: UseChatOptions = {}) {
               const thinking = extractText(event.data);
               if (!thinking) return msg;
               const now = Date.now();
-              const updated = addStreamEvent(msg, {
+              const clearedMsg = withClearedWorkflowStatusEvent(msg);
+              const updated = addStreamEvent(clearedMsg, {
                 type: 'thinking',
                 thinking,
                 startedAt: now,
@@ -976,7 +1018,7 @@ export function useChat(options: UseChatOptions = {}) {
                 pendingTools: (msg.pendingTools || []).filter(
                   (tool) => !matchesTool(tool, tool.id),
                 ),
-                streamEvents: (msg.streamEvents || []).filter(
+                streamEvents: (streamEventsWithoutWorkflowStatus(msg.streamEvents) || []).filter(
                   (streamEvent) =>
                     streamEvent.type !== 'pending_tool' ||
                     !matchesTool(streamEvent.pendingTool, streamEvent.toolId),
@@ -995,7 +1037,7 @@ export function useChat(options: UseChatOptions = {}) {
                 success: boolean;
               };
               const pendingTools = msg.pendingTools || [];
-              const events = msg.streamEvents || [];
+              const events = streamEventsWithoutWorkflowStatus(msg.streamEvents) || [];
 
               const normalizedEndName = normalizeChatToolName(data.name || '');
 
@@ -1187,7 +1229,10 @@ export function useChat(options: UseChatOptions = {}) {
               }
 
               // Add to streamEvents for chronological display
-              const updated = addStreamEvent(msg, { type: 'approval', approval });
+              const updated = addStreamEvent(withClearedWorkflowStatusEvent(msg), {
+                type: 'approval',
+                approval,
+              });
 
               return {
                 ...updated,
@@ -1223,7 +1268,10 @@ export function useChat(options: UseChatOptions = {}) {
               };
 
               // Add to streamEvents for chronological display
-              const updated = addStreamEvent(msg, { type: 'question', question: pendingQuestion });
+              const updated = addStreamEvent(withClearedWorkflowStatusEvent(msg), {
+                type: 'question',
+                question: pendingQuestion,
+              });
 
               return {
                 ...updated,
@@ -1234,6 +1282,7 @@ export function useChat(options: UseChatOptions = {}) {
 
             case 'done': {
               const completedAt = new Date();
+              const terminalMsg = withClearedWorkflowStatusEvent(msg);
               const pendingText = suppressedRawContentMessageIds.has(assistantId)
                 ? ''
                 : flushPendingAssistantOutputText(outputArtifactStateFor(assistantId));
@@ -1241,15 +1290,15 @@ export function useChat(options: UseChatOptions = {}) {
               clearOutputArtifactState(assistantId);
               const flushedMsg = pendingText
                 ? {
-                    ...addStreamEvent(msg, {
+                    ...addStreamEvent(terminalMsg, {
                       type: 'content',
                       content: pendingText,
                       startedAt: Date.now(),
                       updatedAt: Date.now(),
                     }),
-                    content: appendMessageContent(msg, pendingText),
+                    content: appendMessageContent(terminalMsg, pendingText),
                   }
-                : msg;
+                : terminalMsg;
               const tokens = extractTokens(event.data);
               const completedModel = extractCompletedModel(event.data);
               if (tokens && (tokens.input > 0 || tokens.output > 0)) {
@@ -1284,16 +1333,19 @@ export function useChat(options: UseChatOptions = {}) {
             case 'error': {
               clearSuppressedOutputBoundary(assistantId);
               const errorMsg = extractErrorMessage(event.data);
+              const terminalMsg = withClearedWorkflowStatusEvent(msg);
               // Keep any content streamed before the failure; surface the error
               // as a distinct, recoverable block rather than overwriting the answer.
               return {
-                ...msg,
+                ...terminalMsg,
                 isStreaming: false,
                 completedAt: new Date(),
                 pendingTools: [],
                 pendingApprovals: [],
                 pendingQuestions: [],
-                streamEvents: streamEventsWithoutUnresolvedInteractiveRows(msg.streamEvents),
+                streamEvents: streamEventsWithoutUnresolvedInteractiveRows(
+                  terminalMsg.streamEvents,
+                ),
                 workflowStatus: undefined,
                 error: errorMsg || 'Request failed',
               };

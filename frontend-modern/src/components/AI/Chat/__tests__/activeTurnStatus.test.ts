@@ -576,6 +576,47 @@ describe('getAssistantActiveTurnStatus', () => {
     });
   });
 
+  it('surfaces the latest workflow activity row when it replaces older hidden status', () => {
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            isStreaming: true,
+            streamEvents: [
+              {
+                type: 'tool',
+                toolId: 'tool-1',
+                tool: {
+                  name: 'pulse_alerts',
+                  input: '{}',
+                  output: '11 active alerts',
+                  success: true,
+                },
+                startedAt: 1000,
+                updatedAt: 1100,
+              },
+              {
+                type: 'workflow_status',
+                workflowStatus: {
+                  phase: 'model_thinking',
+                  message: 'Model is reasoning before responding.',
+                  startedAt: 2000,
+                },
+                startedAt: 2000,
+                updatedAt: 2000,
+              },
+            ],
+          }),
+        ],
+        true,
+      ),
+    ).toEqual({
+      type: 'thinking',
+      text: 'Model is reasoning before responding.',
+      startedAt: 2000,
+    });
+  });
+
   it('ignores stale workflow status on a completed assistant turn', () => {
     expect(
       getAssistantActiveTurnStatus(

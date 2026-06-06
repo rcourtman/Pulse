@@ -1523,6 +1523,24 @@ attempts. The frontend active-turn footer renders that same typed workflow state
 as compact attempt/backoff progress, so the user sees Pulse moving through a
 retry instead of staring at an obsolete provider-wait message.
 
+Assistant workflow progress is also a live typed activity row while a turn is
+in flight, not only hidden footer state. The referenced OpenCode source at
+fetched `dev` commit `7ae856a9e97130f664f6f11fa5871a2795de9902` stores
+session status separately from message parts in
+`packages/opencode/src/cli/cmd/tui/context/sync.tsx` (`session_status`,
+`session.status` event handling) and renders a session from live messages,
+permissions, questions, and running tool parts in
+`packages/opencode/src/cli/cmd/tui/routes/session/index.tsx` (`Session`,
+`messages`, `permissions`, `questions`, foreground `ToolPart` selection, and
+`session.status` handling). Pulse adapts that source pattern with a transient
+frontend `workflow_status` display event: each incoming backend
+`workflow_state` replaces the prior workflow row, the active footer reads the
+same typed status, and visible assistant content, reasoning, tool,
+approval/question, terminal `done`, and terminal `error` events clear that row.
+The transcript therefore shows current motion while the provider is starting,
+retrying, or reasoning, but completed answers do not retain stale
+internal-progress prose.
+
 Primary nav moved to governed platform/runtime destinations on 2026-05-16 and
 was clarified on 2026-05-25 through `frontend-modern/src/App.tsx` and
 `frontend-modern/src/AppLayout.tsx`: the top of the app may expose canonical

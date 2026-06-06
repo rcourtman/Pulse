@@ -24,6 +24,7 @@ import { ApprovalCard } from './ApprovalCard';
 import { QuestionCard } from './QuestionCard';
 import { ThinkingBlock } from './ThinkingBlock';
 import { stripAssistantOutputArtifacts } from './assistantOutputHygiene';
+import { formatAssistantWorkflowStatus } from './activeTurnStatus';
 import { groupStreamEventsForDisplay } from './streamEventGrouping';
 import type {
   ChatMessage,
@@ -111,6 +112,8 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     switch (evt.type) {
       case 'thinking':
         return !!evt.thinking?.trim();
+      case 'workflow_status':
+        return !!formatAssistantWorkflowStatus(evt.workflowStatus);
       case 'content':
         return !!stripAssistantOutputArtifacts(evt.content || '').text;
       case 'tool':
@@ -185,10 +188,8 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     onCleanup(() => window.clearInterval(interval));
   });
   const formatWorkflowStatus = (status?: WorkflowStatus, includeElapsed = false) => {
-    const message = status?.message?.trim();
+    const message = formatAssistantWorkflowStatus(status);
     if (!message) return '';
-    const tool = status?.tool?.trim();
-    const toolSuffix = tool && !message.includes(tool) ? ` · ${formatIdentifierLabel(tool)}` : '';
     let elapsedSuffix = '';
     if (includeElapsed && status?.startedAt) {
       const elapsedSeconds = Math.max(0, Math.floor((statusNow() - status.startedAt) / 1000));
@@ -196,7 +197,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
         elapsedSuffix = ` (${elapsedSeconds}s)`;
       }
     }
-    return `${message}${toolSuffix}${elapsedSuffix}`;
+    return `${message}${elapsedSuffix}`;
   };
   const workflowStatusText = createMemo(() =>
     formatWorkflowStatus(props.message.workflowStatus, true),
@@ -377,6 +378,31 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                         />
                       </Match>
 
+                      <Match
+                        when={
+                          evt.type === 'workflow_status' &&
+                          formatAssistantWorkflowStatus(evt.workflowStatus)
+                        }
+                      >
+                        <div
+                          class="my-1 inline-flex max-w-full items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200"
+                          role="status"
+                          aria-live="polite"
+                          title={formatWorkflowStatus(
+                            evt.workflowStatus,
+                            props.message.isStreaming,
+                          )}
+                        >
+                          <span
+                            class="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500 animate-pulse"
+                            aria-hidden="true"
+                          />
+                          <span class="min-w-0 truncate">
+                            {formatWorkflowStatus(evt.workflowStatus, props.message.isStreaming)}
+                          </span>
+                        </div>
+                      </Match>
+
                       <Match when={evt.type === 'pending_tool' && evt.pendingTool}>
                         <PendingToolBlock tool={evt.pendingTool!} />
                       </Match>
@@ -409,8 +435,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                             when={isProviderFallbackEvent(evt)}
                             fallback={
                               <>
-                                <span class="shrink-0">Switched to</span>
-                                {' '}
+                                <span class="shrink-0">Switched to</span>{' '}
                                 <span class="truncate font-medium text-base-content">
                                   {modelRouteLabel(evt.model)}
                                 </span>
