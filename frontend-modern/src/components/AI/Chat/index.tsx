@@ -592,7 +592,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const cursor = textareaRef.selectionStart ?? text.length;
     const inHistory = promptHistoryIndex() >= 0;
     if (inHistory) return cursor === 0 || cursor === text.length;
-    if (direction === 'up') return cursor === 0 && text.length === 0;
+    if (direction === 'up') return cursor === 0;
     return false;
   };
 

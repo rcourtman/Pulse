@@ -1332,7 +1332,7 @@ describe('AIChat', () => {
       await waitFor(() => expect(textarea.value).toBe(''));
     });
 
-    it('does not replace a non-empty composer draft with prompt history', () => {
+    it('recalls prompt history from the start of a draft and restores the draft', async () => {
       localStorage.setItem(
         'pulse:ai_chat_prompt_history',
         JSON.stringify([{ prompt: 'previous prompt', mentions: [] }]),
@@ -1344,9 +1344,14 @@ describe('AIChat', () => {
       ) as HTMLTextAreaElement;
 
       fireEvent.input(textarea, { target: { value: 'draft prompt' } });
+      textarea.setSelectionRange(0, 0);
       fireEvent.keyDown(textarea, { key: 'ArrowUp' });
 
-      expect(textarea.value).toBe('draft prompt');
+      await waitFor(() => expect(textarea.value).toBe('previous prompt'));
+
+      fireEvent.keyDown(textarea, { key: 'ArrowDown' });
+
+      await waitFor(() => expect(textarea.value).toBe('draft prompt'));
     });
 
     it('loads persisted prompt history for recall', async () => {

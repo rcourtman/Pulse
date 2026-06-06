@@ -123,8 +123,14 @@ runtime cost control, and shared AI transport surfaces.
    may persist a bounded local history of submitted prompt text and structured
    mentions for ArrowUp/ArrowDown recall, but that history must not persist or
    replay one-shot finding handoff, approval, autonomous-mode, or other scoped
-   send options. Scoped context replay remains owned by explicit session
-   handoff metadata or queued follow-up edit state.
+   send options. The referenced OpenCode source at fetched `origin/dev` commit
+   `ba57718b0516c7a8670d1e820b1a24146a8b8262` binds prompt history navigation
+   in `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx` to the
+   input cursor boundary: previous history is available at the start of the
+   current draft, and next history restores the saved draft at the end. Pulse's
+   Assistant drawer follows that draft-safe recall model rather than limiting
+   history recall to an empty composer. Scoped context replay remains owned by
+   explicit session handoff metadata or queued follow-up edit state.
    Failed-turn retry is part of that same local chat-runtime boundary: a
    retryable in-memory assistant error may replay the original user turn's
    structured mentions, finding id, approval override, handoff resources,
