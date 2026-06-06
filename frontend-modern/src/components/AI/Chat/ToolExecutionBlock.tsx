@@ -23,8 +23,13 @@ const hasReadableToolOutput = (output: string) => {
   return trimmed.length > 0 && !trimmed.toLowerCase().includes('not available');
 };
 
+const ansiControlCodePattern = new RegExp(
+  String.raw`\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])`,
+  'g',
+);
+
 const stripAnsiControlCodes = (value: string) =>
-  value.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '');
+  value.replace(ansiControlCodePattern, '');
 
 const looksLikeStructuredOutput = (value: string) => {
   const trimmed = value.trim();
@@ -37,8 +42,15 @@ const looksLikeStructuredOutput = (value: string) => {
   }
 };
 
-const hasBinaryControlCharacters = (value: string) =>
-  /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(value);
+const hasBinaryControlCharacters = (value: string) => {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 8 || code === 11 || code === 12 || (code >= 14 && code <= 31)) {
+      return true;
+    }
+  }
+  return false;
+};
 
 const trimPreviewLine = (line: string, maxLength: number) => {
   const trimmed = line.trimEnd();
@@ -84,49 +96,63 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
   const hasDetails = createMemo(() => hasInput() || hasOutput());
 
   const statusLabel = () => (props.tool.success ? 'completed' : 'failed');
+  const statusPillClass = () =>
+    props.tool.success
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300'
+      : 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300';
 
   return (
-    <div class="my-1 font-mono text-[11px]">
-      <div class="flex items-center gap-1.5 rounded px-2 py-1">
-        <Show
-          when={props.tool.success}
-          fallback={
-            <XCircleIcon
-              class={`${getToolCallResultTextClass(props.tool.success)} h-3 w-3 shrink-0`}
+    <div class="my-2 overflow-hidden rounded-md border border-border-subtle bg-surface text-[11px] shadow-sm">
+      <div class="flex min-w-0 items-start gap-2 px-2.5 py-2">
+        <div class="pt-0.5">
+          <Show
+            when={props.tool.success}
+            fallback={
+              <XCircleIcon
+                class={`${getToolCallResultTextClass(props.tool.success)} h-3.5 w-3.5 shrink-0`}
+                aria-label={statusLabel()}
+              />
+            }
+          >
+            <CheckCircleIcon
+              class={`${getToolCallResultTextClass(props.tool.success)} h-3.5 w-3.5 shrink-0`}
               aria-label={statusLabel()}
             />
-          }
-        >
-          <CheckCircleIcon
-            class={`${getToolCallResultTextClass(props.tool.success)} h-3 w-3 shrink-0`}
-            aria-label={statusLabel()}
-          />
-        </Show>
+          </Show>
+        </div>
 
-        <span class="text-muted uppercase text-[9px] font-medium tracking-wider min-w-[50px]">
-          {toolLabel()}
-        </span>
-
-        <span class="min-w-0 flex-1 truncate text-base-content">{inputSummary()}</span>
-        <span class="text-[10px] text-muted">{statusLabel()}</span>
-
-        <Show when={hasDetails()}>
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              setShowDetails(!showDetails());
-            }}
-            class="rounded px-1.5 py-0.5 text-[9px] font-medium text-muted hover:bg-surface-hover hover:text-base-content"
-          >
-            {showDetails() ? 'Hide details' : 'Details'}
-          </button>
-        </Show>
+        <div class="min-w-0 flex-1">
+          <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <span class="shrink-0 font-mono text-[9px] font-semibold uppercase tracking-wider text-muted">
+              {toolLabel()}
+            </span>
+            <span
+              class={`shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-medium ${statusPillClass()}`}
+            >
+              {statusLabel()}
+            </span>
+            <Show when={hasDetails()}>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setShowDetails(!showDetails());
+                }}
+                class="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium text-muted hover:bg-surface-hover hover:text-base-content"
+              >
+                {showDetails() ? 'Hide details' : 'Details'}
+              </button>
+            </Show>
+          </div>
+          <code class="mt-1 block whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-base-content">
+            {inputSummary()}
+          </code>
+        </div>
       </div>
 
       <Show when={outputPreview()}>
         <pre
-          class="ml-[calc(0.75rem+58px)] mr-2 mb-1 max-h-24 overflow-hidden whitespace-pre-wrap break-words rounded bg-surface-alt px-2 py-1 text-[10px] leading-relaxed text-base-content"
+          class="border-t border-border-subtle bg-surface-alt px-3 py-2 font-mono text-[11px] leading-5 text-base-content whitespace-pre-wrap break-words"
           aria-label="Tool output preview"
         >
           {outputPreview()}
@@ -134,12 +160,12 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
       </Show>
 
       <Show when={showDetails() && hasDetails()}>
-        <div class="ml-4 mt-1 mb-2 pl-2 border-l-2 border-border overflow-hidden">
+        <div class="border-t border-border-subtle px-3 py-2">
           <Show when={hasInput()}>
             <div class="mb-1 text-[9px] font-semibold uppercase tracking-wide text-muted">
               Input
             </div>
-            <pre class="mb-2 max-h-32 overflow-y-auto overflow-x-hidden rounded bg-surface-alt p-2 text-[10px] leading-relaxed text-muted whitespace-pre-wrap break-all">
+            <pre class="mb-2 max-h-36 overflow-auto rounded bg-surface-alt p-2 font-mono text-[10px] leading-5 text-muted whitespace-pre-wrap break-words">
               {inputText().trim()}
             </pre>
           </Show>
@@ -147,7 +173,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
             <div class="mb-1 text-[9px] font-semibold uppercase tracking-wide text-muted">
               Output
             </div>
-            <pre class="max-h-64 overflow-y-auto overflow-x-hidden rounded bg-surface-alt p-2 text-[10px] leading-relaxed text-muted whitespace-pre-wrap break-all">
+            <pre class="max-h-72 overflow-auto rounded bg-surface-alt p-2 font-mono text-[10px] leading-5 text-muted whitespace-pre-wrap break-words">
               {outputText().trim()}
             </pre>
           </Show>
@@ -203,28 +229,35 @@ export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
   });
 
   return (
-    <div class="my-0.5 font-mono text-[11px] rounded border border-border bg-surface-alt px-2 py-1">
-      <div class="flex min-w-0 items-center gap-1.5">
-        <Show
-          when={status() === 'waiting'}
-          fallback={<LoaderCircleIcon class={activityIconClass()} aria-label={statusLabel()} />}
-        >
-          <ClockIcon class={activityIconClass()} aria-label={statusLabel()} />
-        </Show>
+    <div class="my-1 rounded-md border border-blue-200 bg-blue-50/70 px-2.5 py-2 text-[11px] dark:border-blue-900/60 dark:bg-blue-950/20">
+      <div class="flex min-w-0 items-start gap-2">
+        <div class="pt-0.5">
+          <Show
+            when={status() === 'waiting'}
+            fallback={<LoaderCircleIcon class={activityIconClass()} aria-label={statusLabel()} />}
+          >
+            <ClockIcon class={activityIconClass()} aria-label={statusLabel()} />
+          </Show>
+        </div>
 
-        <span class="text-muted uppercase text-[9px] font-medium tracking-wider min-w-[50px]">
-          {toolLabel()}
-        </span>
-
-        <span class="min-w-0 flex-1 truncate text-base-content">{inputSummary()}</span>
-        <span class="shrink-0 text-[10px] text-muted">{statusLabel()}</span>
-        <Show when={elapsedLabel()}>
-          <span class="shrink-0 text-[10px] text-muted">{elapsedLabel()}</span>
-        </Show>
+        <div class="min-w-0 flex-1">
+          <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <span class="shrink-0 font-mono text-[9px] font-semibold uppercase tracking-wider text-muted">
+              {toolLabel()}
+            </span>
+            <span class="shrink-0 text-[10px] font-medium text-muted">{statusLabel()}</span>
+            <Show when={elapsedLabel()}>
+              <span class="shrink-0 text-[10px] text-muted">{elapsedLabel()}</span>
+            </Show>
+          </div>
+          <code class="mt-1 block whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-base-content">
+            {inputSummary()}
+          </code>
+        </div>
       </div>
       <Show when={progressText()}>
-        <div class="mt-0.5 min-w-0 pl-[calc(0.75rem+56px)] text-[10px] leading-snug text-muted">
-          <span class="block truncate" title={progressText()}>
+        <div class="mt-1 min-w-0 pl-[calc(0.875rem+0.5rem)] text-[10px] leading-snug text-muted">
+          <span class="block whitespace-pre-wrap break-words" title={progressText()}>
             {progressText()}
           </span>
         </div>

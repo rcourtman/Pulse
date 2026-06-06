@@ -195,6 +195,24 @@ describe('ToolExecutionBlock', () => {
     expect(screen.queryByText(/"target_host"/)).not.toBeInTheDocument();
   });
 
+  it('wraps completed command summaries instead of truncating the visible action row', () => {
+    render(() => (
+      <ToolExecutionBlock
+        tool={makeTool({
+          name: 'pulse_read',
+          input: '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
+          output: '42',
+        })}
+      />
+    ));
+
+    const summary = screen.getByText('$ ls /dev | wc -l on current resource').closest('code');
+    expect(summary).toBeInTheDocument();
+    expect(summary?.className).toContain('whitespace-pre-wrap');
+    expect(summary?.className).toContain('break-words');
+    expect(summary?.className).not.toContain('truncate');
+  });
+
   it('renders provider-style Pulse read function input as the actual command', () => {
     render(() => (
       <ToolExecutionBlock
@@ -357,6 +375,27 @@ describe('ToolExecutionBlock', () => {
     expect(rawDetails).toContain('line5');
   });
 
+  it('keeps raw tool details readable without break-all formatting', async () => {
+    const output = 'alpha beta gamma delta epsilon';
+    const { container } = render(() => (
+      <ToolExecutionBlock
+        tool={makeTool({
+          input: '{"action":"exec","command":"ls /dev | wc -l"}',
+          output,
+        })}
+      />
+    ));
+
+    fireEvent.click(screen.getByText('Details'));
+    const detailBlocks = Array.from(container.querySelectorAll('pre'));
+    expect(detailBlocks.length).toBeGreaterThanOrEqual(2);
+    for (const block of detailBlocks) {
+      expect(block.className).toContain('whitespace-pre-wrap');
+      expect(block.className).toContain('break-words');
+      expect(block.className).not.toContain('break-all');
+    }
+  });
+
   it('hides raw details when toggled closed', async () => {
     const output = '{"value":"line1"}';
     render(() => <ToolExecutionBlock tool={makeTool({ output })} />);
@@ -508,6 +547,24 @@ describe('PendingToolBlock', () => {
     expect(screen.queryByText(/"command"/)).not.toBeInTheDocument();
   });
 
+  it('wraps pending command summaries so live tool activity stays readable', () => {
+    render(() => (
+      <PendingToolBlock
+        tool={makePending({
+          name: 'pulse_read',
+          input:
+            '{"action":"exec","target_host":"current_resource","command":"lsblk -o NAME,SIZE"}',
+        })}
+      />
+    ));
+
+    const summary = screen.getByText('$ lsblk -o NAME,SIZE on current resource').closest('code');
+    expect(summary).toBeInTheDocument();
+    expect(summary?.className).toContain('whitespace-pre-wrap');
+    expect(summary?.className).toContain('break-words');
+    expect(summary?.className).not.toContain('truncate');
+  });
+
   it('renders pending provider-style Pulse read function input as the command being prepared', () => {
     render(() => (
       <PendingToolBlock
@@ -602,6 +659,8 @@ describe('PendingToolBlock', () => {
     expect(progress).toBeInTheDocument();
     expect(progress).toHaveAttribute('title', 'Running command.');
     expect(progress.className).not.toContain('hidden');
+    expect(progress.className).toContain('break-words');
+    expect(progress.className).not.toContain('truncate');
   });
 
   it('renders waiting status without a spinner', () => {
