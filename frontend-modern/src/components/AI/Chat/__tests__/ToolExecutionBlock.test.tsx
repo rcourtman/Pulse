@@ -225,10 +225,41 @@ describe('ToolExecutionBlock', () => {
 
   // --- Output display ---
 
-  it('does not show output by default when non-empty', () => {
+  it('shows compact plain-text output by default when non-empty', () => {
     render(() => <ToolExecutionBlock tool={makeTool({ output: 'hello world' })} />);
-    expect(screen.queryByText('hello world')).not.toBeInTheDocument();
+    expect(screen.getByText('hello world')).toBeInTheDocument();
     expect(screen.getByText('Details')).toBeInTheDocument();
+  });
+
+  it('does not preview structured JSON output by default', () => {
+    render(() => (
+      <ToolExecutionBlock
+        tool={makeTool({
+          name: 'pulse_query',
+          input: '{"action":"topology"}',
+          output: '{"summary":{"total_nodes":3}}',
+        })}
+      />
+    ));
+
+    expect(screen.queryByText(/total_nodes/)).not.toBeInTheDocument();
+    expect(screen.getByText('Details')).toBeInTheDocument();
+  });
+
+  it('collapses long plain-text output previews', () => {
+    const { container } = render(() => (
+      <ToolExecutionBlock
+        tool={makeTool({
+          output: ['line 1', 'line 2', 'line 3', 'line 4', 'line 5'].join('\n'),
+        })}
+      />
+    ));
+
+    const text = container.textContent || '';
+    expect(text).toContain('line 1');
+    expect(text).toContain('line 3');
+    expect(text).not.toContain('line 5');
+    expect(text).toContain('...');
   });
 
   it('hides output that is only whitespace', () => {
@@ -261,7 +292,9 @@ describe('ToolExecutionBlock', () => {
 
   it('shows raw input and output when details are opened', async () => {
     const output = 'line1\nline2\nline3\nline4\nline5';
-    render(() => <ToolExecutionBlock tool={makeTool({ input: '{"action":"list"}', output })} />);
+    const { container } = render(() => (
+      <ToolExecutionBlock tool={makeTool({ input: '{"action":"list"}', output })} />
+    ));
     const btn = screen.getByText('Details');
     fireEvent.click(btn);
 
@@ -269,11 +302,14 @@ describe('ToolExecutionBlock', () => {
     expect(screen.getByText('Input')).toBeInTheDocument();
     expect(screen.getByText('Output')).toBeInTheDocument();
     expect(screen.getByText('{"action":"list"}')).toBeInTheDocument();
-    expect(screen.getByText(/line1/).textContent).toContain('line5');
+    const rawDetails = Array.from(container.querySelectorAll('pre'))
+      .map((pre) => pre.textContent || '')
+      .join('\n');
+    expect(rawDetails).toContain('line5');
   });
 
   it('hides raw details when toggled closed', async () => {
-    const output = 'line1\nline2\nline3\nline4\nline5';
+    const output = '{"value":"line1"}';
     render(() => <ToolExecutionBlock tool={makeTool({ output })} />);
     fireEvent.click(screen.getByText('Details'));
     expect(screen.getByText('Hide details')).toBeInTheDocument();

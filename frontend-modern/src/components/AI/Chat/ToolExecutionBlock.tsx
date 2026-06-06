@@ -249,6 +249,36 @@ const hasReadableToolOutput = (output: string) => {
   return trimmed.length > 0 && !trimmed.toLowerCase().includes('not available');
 };
 
+const looksLikeStructuredJSON = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return false;
+  if (trimmed.length > 5000) return true;
+  try {
+    JSON.parse(trimmed);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const formatToolOutputPreview = (output: string) => {
+  const normalized = output.trim().replace(/\r\n/g, '\n');
+  if (!hasReadableToolOutput(normalized) || looksLikeStructuredJSON(normalized)) return '';
+
+  const lines = normalized.split('\n');
+  const maxLines = 3;
+  const maxChars = 240;
+  let preview = lines.slice(0, maxLines).join('\n').trimEnd();
+  let truncated = lines.length > maxLines;
+
+  if (preview.length > maxChars) {
+    preview = preview.slice(0, maxChars).trimEnd();
+    truncated = true;
+  }
+
+  return truncated ? `${preview}\n...` : preview;
+};
+
 const toolValueText = (value: unknown) => {
   if (typeof value === 'string') return value;
   if (value === null || value === undefined) return '';
@@ -272,6 +302,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
   const hasInput = createMemo(() => inputText().trim().length > 0);
   const hasOutput = createMemo(() => hasReadableToolOutput(outputText()));
   const hasDetails = createMemo(() => hasInput() || hasOutput());
+  const outputPreview = createMemo(() => formatToolOutputPreview(outputText()));
 
   const statusLabel = () => (props.tool.success ? 'completed' : 'failed');
 
@@ -313,6 +344,11 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
           </button>
         </Show>
       </div>
+      <Show when={outputPreview()}>
+        <pre class="ml-[calc(0.75rem+56px)] mt-0.5 max-h-20 overflow-hidden rounded bg-surface-alt px-2 py-1 text-[10px] leading-snug text-muted whitespace-pre-wrap break-words">
+          {outputPreview()}
+        </pre>
+      </Show>
 
       <Show when={showDetails() && hasDetails()}>
         <div class="ml-4 mt-1 mb-2 pl-2 border-l-2 border-border overflow-hidden">
