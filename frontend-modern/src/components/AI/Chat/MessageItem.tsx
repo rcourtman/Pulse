@@ -22,6 +22,7 @@ import { renderMarkdown } from '../aiChatUtils';
 import { PendingToolBlock, ToolExecutionBlock } from './ToolExecutionBlock';
 import { ApprovalCard } from './ApprovalCard';
 import { QuestionCard } from './QuestionCard';
+import { ThinkingBlock } from './ThinkingBlock';
 import { stripAssistantOutputArtifacts } from './assistantOutputHygiene';
 import { groupStreamEventsForDisplay } from './streamEventGrouping';
 import type {
@@ -90,6 +91,8 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
   );
   const isRenderableStreamEvent = (evt: StreamDisplayEvent) => {
     switch (evt.type) {
+      case 'thinking':
+        return !!evt.thinking?.trim();
       case 'content':
         return !!stripAssistantOutputArtifacts(evt.content || '').text;
       case 'tool':
@@ -105,6 +108,10 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     }
   };
   const hasRenderableStreamEvents = () => groupedEvents().some(isRenderableStreamEvent);
+  const isLeadingThinkingEvent = (index: number) =>
+    groupedEvents()
+      .slice(0, index)
+      .every((evt) => evt.type === 'thinking');
 
   const contextTools = createMemo(() => {
     const events = props.message.streamEvents || [];
@@ -309,8 +316,21 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
               {/* Stream events - chronological display */}
               <Show when={hasRenderableStreamEvents()}>
                 <For each={groupedEvents()}>
-                  {(evt) => (
+                  {(evt, index) => (
                     <Switch>
+                      <Match
+                        when={
+                          evt.type === 'thinking' &&
+                          evt.thinking?.trim() &&
+                          isLeadingThinkingEvent(index())
+                        }
+                      >
+                        <ThinkingBlock
+                          content={evt.thinking || ''}
+                          isStreaming={props.message.isStreaming}
+                        />
+                      </Match>
+
                       <Match when={evt.type === 'pending_tool' && evt.pendingTool}>
                         <PendingToolBlock tool={evt.pendingTool!} />
                       </Match>

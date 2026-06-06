@@ -741,8 +741,9 @@ export function useChat(options: UseChatOptions = {}) {
             case 'thinking': {
               const thinking = extractText(event.data);
               if (!thinking) return msg;
+              const updated = addStreamEvent(msg, { type: 'thinking', thinking });
               return {
-                ...msg,
+                ...updated,
                 thinking: (msg.thinking || '') + thinking,
               };
             }

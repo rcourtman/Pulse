@@ -377,12 +377,19 @@ runtime cost control, and shared AI transport surfaces.
    `packages/opencode/src/session/message.ts`, while
    `packages/opencode/src/session/processor.ts` updates text and reasoning
    parts through `*-delta` events instead of rendering raw provider tool-call
-   syntax as assistant prose. Pulse's frontend stream reducer must preserve the
-   same user-facing invariant: visible transcript content is typed assistant
-   text or a typed Pulse tool/approval/question row. Suspicious compacted
-   provider prelude text that looks like tool-call narration must be buffered
-   until it is proven to be normal answer text or stripped when a raw tool-call
-   marker arrives; it must not flash as run-on prose such as
+   syntax as assistant prose. The referenced OpenCode source at fetched
+   `origin/dev` commit `1399323b78a04229d9bfe00c7436d7f41770fda8` renders
+   reasoning with `AssistantReasoning` and `ReasoningHeader` in
+   `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`,
+   separate from `AssistantText` and `AssistantTool`. Pulse's frontend stream
+   reducer must preserve the same user-facing invariant: visible transcript
+   content is typed assistant text, a neutral typed thinking-progress row, or a
+   typed Pulse tool/approval/question row. The thinking-progress row may expose
+   live activity state such as `Thinking...` / `Thinking complete`, but it must
+   not render raw provider reasoning text. Suspicious compacted provider
+   prelude text that looks like tool-call narration must be buffered until it is
+   proven to be normal answer text or stripped when a raw tool-call marker
+   arrives; it must not flash as run-on prose such as
    `I'llcheckthedevicenodes...` while the actual governed tool row is still
    being assembled.
    Streamed provider startup and mid-stream progress must be bounded by the

@@ -7,7 +7,7 @@ import type { ChatMessage, PendingApproval, PendingQuestion, StreamDisplayEvent 
 vi.mock('../ThinkingBlock', () => ({
   ThinkingBlock: (props: { content: string; isStreaming?: boolean }) => (
     <div data-testid="thinking-block" data-streaming={props.isStreaming}>
-      {props.content}
+      {props.isStreaming ? 'Thinking...' : 'Thinking complete'}
     </div>
   ),
 }));
@@ -587,7 +587,7 @@ describe('MessageItem', () => {
   });
 
   describe('stream events rendering', () => {
-    it('does not render raw thinking from stream events', () => {
+    it('renders neutral thinking progress without raw reasoning text', () => {
       const events: StreamDisplayEvent[] = [
         { type: 'thinking', thinking: 'We need to inspect the user prompt before answering.' },
       ];
@@ -599,11 +599,11 @@ describe('MessageItem', () => {
         />
       ));
 
-      expect(screen.queryByTestId('thinking-block')).not.toBeInTheDocument();
+      expect(screen.getByTestId('thinking-block')).toHaveTextContent('Thinking complete');
       expect(screen.queryByText(/inspect the user prompt/i)).not.toBeInTheDocument();
     });
 
-    it('keeps the neutral first-token indicator when only thinking has streamed', () => {
+    it('keeps neutral thinking progress when only thinking has streamed', () => {
       const events: StreamDisplayEvent[] = [
         { type: 'thinking', thinking: 'Hidden reasoning should not be visible.' },
       ];
@@ -622,6 +622,7 @@ describe('MessageItem', () => {
       ));
 
       expect(screen.getByText('Thinking...')).toBeInTheDocument();
+      expect(screen.getByTestId('thinking-block')).toHaveAttribute('data-streaming', 'true');
       expect(screen.queryByText(/Hidden reasoning/i)).not.toBeInTheDocument();
     });
 
@@ -798,19 +799,22 @@ describe('MessageItem', () => {
         />
       ));
 
-      expect(screen.queryByTestId('thinking-block')).not.toBeInTheDocument();
+      expect(screen.getByTestId('thinking-block')).toHaveTextContent('Thinking complete');
       expect(screen.getByTestId('tool-execution-block')).toBeInTheDocument();
 
-      // Verify DOM order: content(Step 1) → tool → content(Step 2). Thinking is hidden.
+      // Verify DOM order: thinking → content(Step 1) → tool → content(Step 2).
       const allBlocks = Array.from(
-        container.querySelectorAll('.prose, [data-testid="tool-execution-block"]'),
+        container.querySelectorAll(
+          '[data-testid="thinking-block"], .prose, [data-testid="tool-execution-block"]',
+        ),
       );
-      expect(allBlocks.length).toBe(3);
-      expect(allBlocks[0].classList.contains('prose')).toBe(true);
-      expect(allBlocks[0].innerHTML).toContain('Step 1');
-      expect(allBlocks[1].getAttribute('data-testid')).toBe('tool-execution-block');
-      expect(allBlocks[2].classList.contains('prose')).toBe(true);
-      expect(allBlocks[2].innerHTML).toContain('Step 2');
+      expect(allBlocks.length).toBe(4);
+      expect(allBlocks[0].getAttribute('data-testid')).toBe('thinking-block');
+      expect(allBlocks[1].classList.contains('prose')).toBe(true);
+      expect(allBlocks[1].innerHTML).toContain('Step 1');
+      expect(allBlocks[2].getAttribute('data-testid')).toBe('tool-execution-block');
+      expect(allBlocks[3].classList.contains('prose')).toBe(true);
+      expect(allBlocks[3].innerHTML).toContain('Step 2');
     });
   });
 
@@ -855,6 +859,7 @@ describe('MessageItem', () => {
       const proseBlocks = container.querySelectorAll('.prose');
       expect(proseBlocks.length).toBe(1);
       expect(proseBlocks[0].innerHTML).toContain('Part 1 Part 2');
+      expect(screen.queryByTestId('thinking-block')).not.toBeInTheDocument();
     });
 
     it('ignores content events with empty content', () => {

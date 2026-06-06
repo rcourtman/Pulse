@@ -851,7 +851,8 @@ describe('useChat', () => {
       expect(assistant.thinking).toBe('Let me think...');
 
       const thinkingEvents = assistant.streamEvents?.filter((e) => e.type === 'thinking') ?? [];
-      expect(thinkingEvents).toHaveLength(0);
+      expect(thinkingEvents).toHaveLength(1);
+      expect(thinkingEvents[0].thinking).toBe('Let me think...');
       dispose();
     });
 
@@ -1735,8 +1736,7 @@ describe('useChat', () => {
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       const types = assistant.streamEvents!.map((e) => e.type);
-      // Content, pending_tool, content. Thinking is retained internally, not rendered.
-      expect(types).toEqual(['content', 'pending_tool', 'content']);
+      expect(types).toEqual(['thinking', 'content', 'pending_tool', 'content']);
       dispose();
     });
   });
