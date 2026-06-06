@@ -61,6 +61,36 @@ func (b *blockingReadCloser) Close() error {
 	return nil
 }
 
+type readOnceThenBlockBody struct {
+	payload []byte
+	read    bool
+	closed  chan struct{}
+	once    sync.Once
+}
+
+func newReadOnceThenBlockBody(payload string) *readOnceThenBlockBody {
+	return &readOnceThenBlockBody{
+		payload: []byte(payload),
+		closed:  make(chan struct{}),
+	}
+}
+
+func (b *readOnceThenBlockBody) Read(p []byte) (int, error) {
+	if !b.read {
+		b.read = true
+		return copy(p, b.payload), nil
+	}
+	<-b.closed
+	return 0, io.ErrClosedPipe
+}
+
+func (b *readOnceThenBlockBody) Close() error {
+	b.once.Do(func() {
+		close(b.closed)
+	})
+	return nil
+}
+
 func TestOpenAIClient_ChatStream_Success(t *testing.T) {
 	// Mock OpenAI SSE stream
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -156,19 +186,19 @@ func TestNewOpenAIClient_BoundsStreamResponseHeaderTimeout(t *testing.T) {
 	transport, ok := client.streamClient.Transport.(*http.Transport)
 	require.True(t, ok)
 	assert.Equal(t, openaiStreamResponseHeaderTimeout, transport.ResponseHeaderTimeout)
-	assert.Equal(t, openaiStreamFirstEventTimeout, client.streamFirstEventTimeout)
+	assert.Equal(t, openaiStreamChunkTimeout, client.streamChunkTimeout)
 
 	shortTimeoutClient := NewOpenAIClient("sk-test", "gpt-4", "https://api.openai.com/v1", 2*time.Second)
 	shortTransport, ok := shortTimeoutClient.streamClient.Transport.(*http.Transport)
 	require.True(t, ok)
 	assert.Equal(t, 2*time.Second, shortTransport.ResponseHeaderTimeout)
-	assert.Equal(t, 2*time.Second, shortTimeoutClient.streamFirstEventTimeout)
+	assert.Equal(t, 2*time.Second, shortTimeoutClient.streamChunkTimeout)
 }
 
-func TestOpenAIClient_ChatStream_TimesOutWaitingForFirstStreamEvent(t *testing.T) {
+func TestOpenAIClient_ChatStream_TimesOutWaitingForFirstStreamChunk(t *testing.T) {
 	body := newBlockingReadCloser()
 	client := NewOpenAIClient("sk-test", "gpt-4", "https://example.invalid/v1", time.Second)
-	client.streamFirstEventTimeout = 10 * time.Millisecond
+	client.streamChunkTimeout = 10 * time.Millisecond
 	client.streamClient = &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 			return &http.Response{
@@ -188,9 +218,44 @@ func TestOpenAIClient_ChatStream_TimesOutWaitingForFirstStreamEvent(t *testing.T
 	})
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "stream first event timed out")
+	assert.Contains(t, err.Error(), "stream chunk timed out")
 	assert.Less(t, time.Since(started), 200*time.Millisecond)
 	assert.Equal(t, 0, eventCount)
+}
+
+func TestOpenAIClient_ChatStream_TimesOutWaitingForLaterStreamChunk(t *testing.T) {
+	body := newReadOnceThenBlockBody(`data: {"choices":[{"delta":{"content":"first"}}]}` + "\n\n")
+	client := NewOpenAIClient("sk-test", "gpt-4", "https://example.invalid/v1", time.Second)
+	client.streamChunkTimeout = 10 * time.Millisecond
+	client.streamClient = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+				Body:       body,
+			}, nil
+		}),
+	}
+
+	started := time.Now()
+	var content string
+	var doneCalled bool
+	err := client.ChatStream(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+	}, func(event StreamEvent) {
+		switch event.Type {
+		case "content":
+			content += event.Data.(ContentEvent).Text
+		case "done":
+			doneCalled = true
+		}
+	})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "stream chunk timed out")
+	assert.Less(t, time.Since(started), 200*time.Millisecond)
+	assert.Equal(t, "first", content)
+	assert.False(t, doneCalled)
 }
 
 // TestOpenAIClient_ChatStream_OpenRouterReasoning guards the OpenRouter reasoning

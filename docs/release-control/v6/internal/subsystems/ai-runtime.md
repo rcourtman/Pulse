@@ -275,12 +275,18 @@ runtime cost control, and shared AI transport surfaces.
    marker arrives; it must not flash as run-on prose such as
    `I'llcheckthedevicenodes...` while the actual governed tool row is still
    being assembled.
-   Streamed provider startup must be bounded by the configured Assistant request
-   timeout, the OpenAI-compatible SSE response-header guard, and the first SSE
-   body-read guard adapted from OpenCode's provider `wrapSSE` source; transient
-   startup failures may retry once before surfacing failed-turn recovery, but a
-   stalled route must not leave the user in an opaque first-token wait for the
-   full provider timeout.
+   Streamed provider startup and mid-stream progress must be bounded by the
+   configured Assistant request timeout, the OpenAI-compatible SSE
+   response-header guard, and the per-chunk SSE body-read guard adapted from
+   OpenCode's provider `wrapSSE` source. The referenced OpenCode source at
+   fetched `origin/dev` commit `ba57718b0516c7a8670d1e820b1a24146a8b8262`
+   wraps `text/event-stream` responses in
+   `packages/opencode/src/provider/provider.ts` so each stream read either
+   yields a chunk or aborts within the configured `chunkTimeout`, distinct from
+   the response-header timeout. Pulse's OpenAI-compatible Assistant transport
+   follows that split: transient startup failures may retry once before
+   surfacing failed-turn recovery, but a stalled route must not leave the user
+   in an opaque first-token or mid-answer wait for the full provider timeout.
    Assistant turn tool exposure is backend-owned runtime behavior, not a
    provider whim or frontend polish concern. Normal diagnostic, log, command,
    repair, and governed-action prompts keep the full governed tool manifest so

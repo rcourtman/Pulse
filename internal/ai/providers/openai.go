@@ -22,7 +22,7 @@ const (
 	openaiStreamMaxRetries            = 1
 	openaiStreamInitialBackoff        = 1 * time.Second
 	openaiStreamResponseHeaderTimeout = 12 * time.Second
-	openaiStreamFirstEventTimeout     = 12 * time.Second
+	openaiStreamChunkTimeout          = 12 * time.Second
 	openrouterRefererURL              = "https://pulse.app"
 	openrouterAppTitle                = "Pulse"
 	// OpenRouter preflights affordability against the requested maximum
@@ -42,10 +42,10 @@ type OpenAIClient struct {
 	requestTimeout time.Duration
 	client         *http.Client
 	streamClient   *http.Client
-	// OpenAI-compatible gateways can accept SSE headers and then stall before
-	// the first body chunk. Bound that gap separately from the full turn timeout
-	// so chat fallback can move before the drawer looks dead.
-	streamFirstEventTimeout time.Duration
+	// OpenAI-compatible gateways can accept SSE headers and then stall between
+	// body chunks. Bound that gap separately from the full turn timeout so chat
+	// fallback can move before the drawer looks dead.
+	streamChunkTimeout time.Duration
 }
 
 // NewOpenAIClient creates a new OpenAI API client
@@ -83,13 +83,13 @@ func NewOpenAIClient(apiKey, model, baseURL string, timeout time.Duration) *Open
 		timeout = 300 * time.Second // Default 5 minutes
 	}
 	return &OpenAIClient{
-		apiKey:                  apiKey,
-		model:                   model,
-		baseURL:                 baseURL,
-		requestTimeout:          timeout,
-		client:                  &http.Client{Timeout: timeout},
-		streamClient:            newOpenAIStreamHTTPClient(timeout),
-		streamFirstEventTimeout: boundedOpenAIStreamFirstEventTimeout(timeout),
+		apiKey:             apiKey,
+		model:              model,
+		baseURL:            baseURL,
+		requestTimeout:     timeout,
+		client:             &http.Client{Timeout: timeout},
+		streamClient:       newOpenAIStreamHTTPClient(timeout),
+		streamChunkTimeout: boundedOpenAIStreamChunkTimeout(timeout),
 	}
 }
 
@@ -110,11 +110,11 @@ func boundedOpenAIStreamResponseHeaderTimeout(timeout time.Duration) time.Durati
 	return openaiStreamResponseHeaderTimeout
 }
 
-func boundedOpenAIStreamFirstEventTimeout(timeout time.Duration) time.Duration {
-	if timeout > 0 && timeout < openaiStreamFirstEventTimeout {
+func boundedOpenAIStreamChunkTimeout(timeout time.Duration) time.Duration {
+	if timeout > 0 && timeout < openaiStreamChunkTimeout {
 		return timeout
 	}
-	return openaiStreamFirstEventTimeout
+	return openaiStreamChunkTimeout
 }
 
 type openAIStreamReadResult struct {
@@ -122,8 +122,8 @@ type openAIStreamReadResult struct {
 	err error
 }
 
-func readOpenAIStreamChunk(ctx context.Context, body io.ReadCloser, buf []byte, timeout time.Duration, enforceTimeout bool) (int, error) {
-	if !enforceTimeout || timeout <= 0 {
+func readOpenAIStreamChunk(ctx context.Context, body io.ReadCloser, buf []byte, timeout time.Duration) (int, error) {
+	if timeout <= 0 {
 		return body.Read(buf)
 	}
 
@@ -144,7 +144,7 @@ func readOpenAIStreamChunk(ctx context.Context, body io.ReadCloser, buf []byte, 
 		return 0, ctx.Err()
 	case <-timer.C:
 		_ = body.Close()
-		return 0, fmt.Errorf("stream first event timed out after %s", timeout)
+		return 0, fmt.Errorf("stream chunk timed out after %s", timeout)
 	}
 }
 
@@ -986,7 +986,6 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	reader := resp.Body
 	buf := make([]byte, 4096)
 	var pendingData string
-	firstStreamBytesSeen := false
 	toolCallBuilders := make(map[int]*openaiStreamToolCallBuilder)
 	var inputTokens, outputTokens int
 	var finishReason string
@@ -1094,9 +1093,8 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	}
 
 	for {
-		n, err := readOpenAIStreamChunk(streamCtx, reader, buf, c.streamFirstEventTimeout, !firstStreamBytesSeen)
+		n, err := readOpenAIStreamChunk(streamCtx, reader, buf, c.streamChunkTimeout)
 		if n > 0 {
-			firstStreamBytesSeen = true
 			pendingData += string(buf[:n])
 			lines := strings.Split(pendingData, "\n")
 
