@@ -742,6 +742,20 @@ runtime cost control, and shared AI transport surfaces.
    The completion metadata for that path should identify the effective route
    as `pulse:local-inventory` so the transcript label reflects Pulse-owned
    local runtime output instead of the operator's selected remote model.
+   Explicit operator tool intent is the escape hatch from this shortcut, not a
+   Pulse-authored tool choice: prompts that ask to use tools, request a
+   read-only attempt, or provide a shell/read command or path such as
+   `ls /dev | wc -l` must keep the full governed Assistant tool manifest and
+   reach the selected model/provider instead of answering from local inventory.
+   Pulse may classify that turn as full-manifest, but the selected model still
+   decides whether to call `pulse_read`, answer directly, or ask a
+   clarification. This adapts the referenced OpenCode source at fetched
+   `origin/dev` commit `4519a1da329c1a4fc384054e7203ba7d06928205`, where
+   `packages/core/src/session/message-updater.ts` mutates tool input, called,
+   progress, success, and failed states as typed session events (lines
+   247-318), by preserving the operator's explicit tool intent until Pulse can
+   stream a visible `tool_start` / `tool_progress` / `tool_end` path instead of
+   collapsing the turn into unrelated inventory prose.
    The compact payload must include exact `answer_label` fields for nodes and
    workloads; the provider-facing instruction must tell the model to copy those
    labels exactly instead of substituting generic labels like `Node 1`, `VM

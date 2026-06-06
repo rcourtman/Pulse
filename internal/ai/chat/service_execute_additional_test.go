@@ -1201,9 +1201,19 @@ func TestService_ExecuteStream_InventoryCountAnswersFromCanonicalStateWithoutPro
 	}
 
 	var providerCalled atomic.Bool
+	var capturedProviderTools []providers.Tool
 	provider := &stubServiceProvider{
 		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
 			providerCalled.Store(true)
+			capturedProviderTools = append([]providers.Tool(nil), req.Tools...)
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: "provider-backed count"},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{InputTokens: 1, OutputTokens: 1},
+			})
 			return nil
 		},
 	}
@@ -1355,6 +1365,63 @@ func TestService_ExecuteStream_InventoryCountAnswersFromCanonicalStateWithoutPro
 	}
 	if len(messages) != 2 || messages[1].Role != "assistant" || messages[1].Content != answer {
 		t.Fatalf("expected direct assistant answer to be persisted, got %#v", messages)
+	}
+
+	providerCalled.Store(false)
+	capturedProviderTools = nil
+	content.Reset()
+	doneSeen = false
+	doneModel = ""
+	countedProgressSeen = false
+	err = service.ExecuteStream(context.Background(), ExecuteRequest{
+		SessionID: "inventory-count-explicit-command",
+		Prompt:    "Use read-only tools only. On node delly, count entries in /dev with `ls /dev | wc -l`; answer with the number only.",
+	}, func(event StreamEvent) {
+		switch event.Type {
+		case "content":
+			var data ContentData
+			if err := json.Unmarshal(event.Data, &data); err != nil {
+				t.Fatalf("unmarshal explicit content: %v", err)
+			}
+			content.WriteString(data.Text)
+		case "done":
+			doneSeen = true
+			var data DoneData
+			if err := json.Unmarshal(event.Data, &data); err != nil {
+				t.Fatalf("unmarshal explicit done: %v", err)
+			}
+			doneModel = data.Model
+		case "workflow_state":
+			var data WorkflowStateData
+			if err := json.Unmarshal(event.Data, &data); err != nil {
+				t.Fatalf("unmarshal explicit workflow state: %v", err)
+			}
+			if data.Phase == "context_ready" && data.Message == "Counted current Pulse inventory." {
+				countedProgressSeen = true
+			}
+		}
+	})
+	if err != nil {
+		t.Fatalf("explicit command ExecuteStream failed: %v", err)
+	}
+	if !providerCalled.Load() {
+		t.Fatal("expected explicit command count to reach provider")
+	}
+	if !doneSeen {
+		t.Fatal("explicit command turn did not emit done")
+	}
+	if doneModel == assistantLocalInventoryModelRoute {
+		t.Fatalf("explicit command count used local inventory route %q", doneModel)
+	}
+	if countedProgressSeen {
+		t.Fatal("explicit command count should not emit deterministic local inventory progress")
+	}
+	if got := content.String(); !strings.Contains(got, "provider-backed count") {
+		t.Fatalf("expected provider-backed content, got %q", got)
+	}
+	set := toolNameSet(capturedProviderTools)
+	if !set["pulse_read"] {
+		t.Fatalf("expected explicit command count to expose pulse_read, got %#v", set)
 	}
 }
 

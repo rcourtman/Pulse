@@ -4358,7 +4358,7 @@ func assistantToolScopeForPrompt(prompt string, hasModelContext bool) assistantT
 	if normalized == "" {
 		return assistantTurnToolScopeTextOnly
 	}
-	if assistantPromptRequestsDirectText(normalized) {
+	if assistantPromptRequestsDirectText(normalized) || assistantPromptDisallowsToolUse(normalized) {
 		return assistantTurnToolScopeTextOnly
 	}
 	if assistantPromptNeedsFullToolManifest(normalized) {
@@ -4394,6 +4394,7 @@ func normalizeAssistantToolRoutingPrompt(prompt string) string {
 		"]", " ",
 		"{", " ",
 		"}", " ",
+		"`", " ",
 		"\"", " ",
 		"'", " ",
 	)
@@ -4417,7 +4418,26 @@ func assistantPromptRequestsDirectText(normalized string) bool {
 	})
 }
 
+func assistantPromptDisallowsToolUse(normalized string) bool {
+	return assistantPromptContainsAny(normalized, []string{
+		" no tools ",
+		" without tools ",
+		" without using tools ",
+		" do not use tools ",
+		" don't use tools ",
+		" dont use tools ",
+		" before using tools ",
+		" before using any tools ",
+		" before you use tools ",
+		" before calling tools ",
+		" before you call tools ",
+	})
+}
+
 func assistantPromptNeedsFullToolManifest(normalized string) bool {
+	if assistantPromptExplicitlyRequestsToolUse(normalized) || assistantPromptLooksLikeShellRead(normalized) {
+		return true
+	}
 	return assistantPromptContainsAny(normalized, []string{
 		" run ",
 		" execute ",
@@ -4471,6 +4491,80 @@ func assistantPromptNeedsFullToolManifest(normalized string) bool {
 		" latency ",
 		" error ",
 		" errors ",
+	})
+}
+
+func assistantPromptExplicitlyRequestsToolUse(normalized string) bool {
+	return assistantPromptContainsAny(normalized, []string{
+		" use tools ",
+		" use a tool ",
+		" use the tool ",
+		" use read-only tools ",
+		" use read only tools ",
+		" using read-only tools ",
+		" using read only tools ",
+		" read-only tools only ",
+		" read only tools only ",
+		" one read-only tool ",
+		" one read only tool ",
+		" call a tool ",
+		" call the tool ",
+		" call pulse_read ",
+		" pulse_read ",
+		" pulse_control ",
+		" pulse_query ",
+		" read attempt ",
+		" read-only attempt ",
+		" read only attempt ",
+		" fresh verification ",
+		" live runtime state ",
+	})
+}
+
+func assistantPromptLooksLikeShellRead(normalized string) bool {
+	shellCommands := []string{
+		" awk ",
+		" cat ",
+		" df ",
+		" docker ",
+		" du ",
+		" find ",
+		" grep ",
+		" head ",
+		" journalctl ",
+		" kubectl ",
+		" ls ",
+		" pct ",
+		" ps ",
+		" qm ",
+		" sed ",
+		" smartctl ",
+		" systemctl ",
+		" tail ",
+		" wc ",
+		" zfs ",
+		" zpool ",
+	}
+	if strings.Contains(normalized, " | ") && assistantPromptContainsAny(normalized, shellCommands) {
+		return true
+	}
+	if assistantPromptContainsAny(normalized, []string{
+		" /dev",
+		" /etc/",
+		" /proc",
+		" /sys",
+		" /var/log",
+	}) && assistantPromptContainsAny(normalized, shellCommands) {
+		return true
+	}
+	return assistantPromptContainsAny(normalized, []string{
+		" docker logs ",
+		" journalctl -",
+		" kubectl logs ",
+		" ls /",
+		" pct exec ",
+		" qm guest exec ",
+		" systemctl status ",
 	})
 }
 

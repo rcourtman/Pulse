@@ -179,6 +179,25 @@ func TestToolsForAssistantTurn_InventoryCountUsesQueryOnly(t *testing.T) {
 	}
 }
 
+func TestToolsForAssistantTurn_ExplicitCommandCountKeepsFullManifest(t *testing.T) {
+	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
+		StateProvider: fakeStateProvider{},
+		AgentServer:   fakeAgentServer{},
+		ReadState:     &fakeCanonicalReadState{},
+		ControlLevel:  tools.ControlLevelControlled,
+	})
+
+	svc := &Service{executor: exec}
+	toolsList := svc.toolsForAssistantTurn("Use read-only tools only. On node delly, count entries in /dev with `ls /dev | wc -l`; answer with the number only.", false, false, false)
+	set := toolNameSet(toolsList)
+
+	for _, required := range []string{"pulse_read", "pulse_query", pulseQuestionToolName} {
+		if !set[required] {
+			t.Fatalf("expected explicit command count prompt to expose %s, got %#v", required, set)
+		}
+	}
+}
+
 func TestToolsForAssistantTurn_InventoryBreakdownUsesQueryOnly(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
 		StateProvider: fakeStateProvider{},
