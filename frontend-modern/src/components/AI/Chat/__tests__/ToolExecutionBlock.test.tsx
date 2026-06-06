@@ -225,9 +225,9 @@ describe('ToolExecutionBlock', () => {
 
   // --- Output display ---
 
-  it('keeps plain-text output behind details by default', () => {
+  it('previews plain-text output while keeping full details available', () => {
     render(() => <ToolExecutionBlock tool={makeTool({ output: 'hello world' })} />);
-    expect(screen.queryByText('hello world')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Tool output preview')).toHaveTextContent('hello world');
     expect(screen.getByText('Details')).toBeInTheDocument();
   });
 
@@ -246,7 +246,7 @@ describe('ToolExecutionBlock', () => {
     expect(screen.getByText('Details')).toBeInTheDocument();
   });
 
-  it('does not push long plain-text output into the transcript by default', () => {
+  it('bounds long plain-text output previews without losing full details', () => {
     const { container } = render(() => (
       <ToolExecutionBlock
         tool={makeTool({
@@ -256,10 +256,28 @@ describe('ToolExecutionBlock', () => {
     ));
 
     const text = container.textContent || '';
-    expect(text).not.toContain('line 1');
-    expect(text).not.toContain('line 3');
+    expect(screen.getByLabelText('Tool output preview').textContent).toBe(
+      ['line 1', 'line 2', 'line 3', 'line 4', '...'].join('\n'),
+    );
     expect(text).not.toContain('line 5');
     expect(screen.getByText('Details')).toBeInTheDocument();
+  });
+
+  it('uses raw streamed input to summarize sparse completed Pulse read tools', () => {
+    render(() => (
+      <ToolExecutionBlock
+        tool={makeTool({
+          name: 'pulse_read',
+          input: '{}',
+          rawInput:
+            '{"action": "exec", "command": "ls /dev | wc -l", "target_host": "current_resource',
+          output: '42',
+        })}
+      />
+    ));
+
+    expect(screen.getByText('$ ls /dev | wc -l on current resource')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tool output preview')).toHaveTextContent('42');
   });
 
   it('hides output that is only whitespace', () => {

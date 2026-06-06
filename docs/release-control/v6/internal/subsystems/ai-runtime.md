@@ -456,13 +456,17 @@ runtime cost control, and shared AI transport surfaces.
    instead of exposing only internal action names such as `QUERY search`,
    `exec`, or raw JSON; raw input and full output stay available behind
    Details. The referenced OpenCode source at fetched `origin/dev` commit
-   `1399323b78a04229d9bfe00c7436d7f41770fda8` renders completed bash and
+   `9ed17da55ab1f7360cc0e01075f763e27fa899e9` renders completed bash and
    generic tool output inside the tool block and uses `collapseToolOutput` in
    `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`
-   to keep long output bounded. Pulse's completed tool rows must adapt that by
+   (`GenericTool`, lines 526-559; `Bash`, lines 701-731) to keep long output bounded.
+   Pulse's completed tool rows must adapt that by
    showing a compact plain-text output preview when it is safe and useful,
    while keeping structured JSON, unavailable output, and the full raw payload
-   behind Details.
+   behind Details. The browser implementation owner is
+   `frontend-modern/src/components/AI/Chat/ToolExecutionBlock.tsx`; completed
+   `tool_end` events preserve streamed `raw_input` for the same readable command
+   summary used while the tool is pending.
    The referenced OpenCode source at fetched `origin/dev` commit
    `fa2b63f850fc0a23bec2bdff9e660450d3fe7913` also keeps assistant text,
    reasoning, and tool invocation as typed message parts in

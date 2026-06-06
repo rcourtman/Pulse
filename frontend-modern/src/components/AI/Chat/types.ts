@@ -9,6 +9,7 @@ import type {
 export interface ToolExecution {
   name: string;
   input: string;
+  rawInput?: string;
   output: string;
   success: boolean;
 }

@@ -249,6 +249,51 @@ const hasReadableToolOutput = (output: string) => {
   return trimmed.length > 0 && !trimmed.toLowerCase().includes('not available');
 };
 
+const stripAnsiControlCodes = (value: string) =>
+  value.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '');
+
+const looksLikeStructuredOutput = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return false;
+  try {
+    JSON.parse(trimmed);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const hasBinaryControlCharacters = (value: string) =>
+  /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(value);
+
+const trimPreviewLine = (line: string, maxLength: number) => {
+  const trimmed = line.trimEnd();
+  if (trimmed.length <= maxLength) return trimmed;
+  return `${trimmed.slice(0, maxLength).trimEnd()}...`;
+};
+
+const formatOutputPreview = (output: string) => {
+  const normalized = stripAnsiControlCodes(output).replace(/\r\n/g, '\n').trim();
+  if (!hasReadableToolOutput(normalized)) return '';
+  if (looksLikeStructuredOutput(normalized)) return '';
+  if (hasBinaryControlCharacters(normalized)) return '';
+
+  const maxLines = 4;
+  const maxLineLength = 120;
+  const lines = normalized.split('\n');
+  const previewLines = lines
+    .slice(0, maxLines)
+    .map((line) => trimPreviewLine(line, maxLineLength));
+  const fullPreview = previewLines.join('\n').trim();
+  if (!fullPreview) return '';
+
+  const linesTruncated = lines.length > maxLines;
+  const charsTruncated = lines
+    .slice(0, maxLines)
+    .some((line) => line.trimEnd().length > maxLineLength);
+  return linesTruncated || charsTruncated ? `${fullPreview}\n...` : fullPreview;
+};
+
 const toolValueText = (value: unknown) => {
   if (typeof value === 'string') return value;
   if (value === null || value === undefined) return '';
@@ -268,7 +313,10 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
   const toolLabel = createMemo(() => getToolLabel(props.tool.name));
   const inputText = createMemo(() => toolValueText(props.tool.input));
   const outputText = createMemo(() => toolValueText(props.tool.output));
-  const inputSummary = createMemo(() => parseToolInputSummary(inputText(), props.tool.name));
+  const inputSummary = createMemo(() =>
+    parseToolInputSummary(inputText(), props.tool.name, props.tool.rawInput),
+  );
+  const outputPreview = createMemo(() => formatOutputPreview(outputText()));
   const hasInput = createMemo(() => inputText().trim().length > 0);
   const hasOutput = createMemo(() => hasReadableToolOutput(outputText()));
   const hasDetails = createMemo(() => hasInput() || hasOutput());
@@ -313,6 +361,15 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
           </button>
         </Show>
       </div>
+
+      <Show when={outputPreview()}>
+        <pre
+          class="ml-[calc(0.75rem+58px)] mr-2 mb-1 max-h-24 overflow-hidden whitespace-pre-wrap break-words rounded bg-surface-alt px-2 py-1 text-[10px] leading-relaxed text-base-content"
+          aria-label="Tool output preview"
+        >
+          {outputPreview()}
+        </pre>
+      </Show>
 
       <Show when={showDetails() && hasDetails()}>
         <div class="ml-4 mt-1 mb-2 pl-2 border-l-2 border-border overflow-hidden">

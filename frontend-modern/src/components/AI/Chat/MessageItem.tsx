@@ -377,6 +377,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                           tool={{
                             name: evt.tool?.name || 'unknown',
                             input: evt.tool?.input || '{}',
+                            rawInput: evt.tool?.rawInput,
                             output: evt.tool?.output || '',
                             success: evt.tool?.success ?? true,
                           }}

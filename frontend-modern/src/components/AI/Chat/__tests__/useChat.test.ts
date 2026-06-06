@@ -1375,7 +1375,14 @@ describe('useChat', () => {
       fire({ type: 'tool_start', data: { id: 'tool-1', name: 'get_logs', input: '{}' } });
       fire({
         type: 'tool_end',
-        data: { id: 'tool-1', name: 'get_logs', input: '{}', output: 'log data', success: true },
+        data: {
+          id: 'tool-1',
+          name: 'get_logs',
+          input: '{}',
+          raw_input: '{"action": "logs"',
+          output: 'log data',
+          success: true,
+        },
       });
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
@@ -1384,6 +1391,7 @@ describe('useChat', () => {
       expect(assistant.toolCalls![0]).toEqual({
         name: 'get_logs',
         input: '{}',
+        rawInput: '{"action": "logs"',
         output: 'log data',
         success: true,
       });

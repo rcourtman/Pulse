@@ -875,6 +875,7 @@ export function useChat(options: UseChatOptions = {}) {
               const newToolCall: ToolExecution = {
                 name: data.name || 'unknown',
                 input: data.input || '{}',
+                rawInput: data.raw_input,
                 output: data.output || '',
                 success: data.success ?? true,
               };
