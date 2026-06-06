@@ -14,6 +14,23 @@ const makeEventStreamResponse = (body: string) =>
     },
   }) as unknown as Response;
 
+const makeChunkedEventStreamResponse = (chunks: string[]) => {
+  const read = vi.fn();
+  for (const chunk of chunks) {
+    read.mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(chunk) });
+  }
+  read.mockResolvedValueOnce({ done: true, value: undefined });
+
+  return {
+    body: {
+      getReader: () => ({
+        read,
+        releaseLock: vi.fn(),
+      }),
+    },
+  } as unknown as Response;
+};
+
 const flushMicrotasks = async () => {
   for (let attempt = 0; attempt < 20; attempt += 1) {
     await Promise.resolve();
@@ -98,6 +115,40 @@ describe('consumeJSONEventStream', () => {
     await vi.advanceTimersByTimeAsync(1);
     await streamPromise;
     expect(events).toEqual(['content', 'tool_progress', 'done']);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('yields to the browser between matching events that arrive in separate queued reads', async () => {
+    vi.useFakeTimers();
+
+    const events: string[] = [];
+    const streamPromise = consumeJSONEventStream<{ type: string }>(
+      makeChunkedEventStreamResponse([
+        'data: {"type":"tool_start"}\n\n',
+        'data: {"type":"tool_progress"}\n\n',
+        'data: {"type":"done"}\n\n',
+      ]),
+      {
+        onEvent: (event) => {
+          events.push(event.type);
+          return event.type === 'done';
+        },
+        yieldBetweenEvents: (event) => event.type !== 'content',
+      },
+    );
+
+    await flushMicrotasks();
+    expect(events).toEqual(['tool_start']);
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await flushMicrotasks();
+    expect(events).toEqual(['tool_start', 'tool_progress']);
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await streamPromise;
+    expect(events).toEqual(['tool_start', 'tool_progress', 'done']);
     expect(vi.getTimerCount()).toBe(0);
   });
 });

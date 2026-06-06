@@ -18,9 +18,8 @@ const yieldToBrowser = () =>
 const shouldYieldAfterEvent = <T,>(
   event: T,
   options: JSONEventStreamOptions<T>,
-  hasBufferedEventAfterThisOne: boolean,
 ) => {
-  if (!hasBufferedEventAfterThisOne || !options.yieldBetweenEvents) return false;
+  if (!options.yieldBetweenEvents) return false;
   if (typeof options.yieldBetweenEvents === 'function') {
     return options.yieldBetweenEvents(event);
   }
@@ -62,11 +61,6 @@ export async function consumeJSONEventStream<T>(
     const messages = normalizedBuffer.split('\n\n');
     buffer = messages.pop() || '';
 
-    const messageHasData = (message: string) =>
-      !!message
-        .split('\n')
-        .find((line) => line.startsWith('data: ') && !!line.slice(6).trim());
-
     for (let messageIndex = 0; messageIndex < messages.length; messageIndex += 1) {
       const message = messages[messageIndex];
       if (!message.trim() || message.trim().startsWith(':')) {
@@ -90,10 +84,7 @@ export async function consumeJSONEventStream<T>(
         if (options.onEvent(event)) {
           return true;
         }
-        const hasBufferedEventAfterThisOne =
-          dataLines.slice(lineIndex + 1).some((nextLine) => !!nextLine.slice(6).trim()) ||
-          messages.slice(messageIndex + 1).some(messageHasData);
-        if (shouldYieldAfterEvent(event, options, hasBufferedEventAfterThisOne)) {
+        if (shouldYieldAfterEvent(event, options)) {
           await yieldToBrowser();
         }
       }

@@ -247,6 +247,16 @@ runtime cost control, and shared AI transport surfaces.
    Pulse's browser drawer adapts that model by keeping the transcript rows
    typed and stable while the active-turn footer remains a replacing live
    status slot for provider and workflow progress between visible parts.
+   The same OpenCode commit applies each streamed session event as its own
+   state mutation in `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`
+   (`apply(event)` and the `session.next.tool.*` cases), so Pulse's shared
+   browser SSE consumer must treat opted-in non-text Assistant progress events
+   as paint checkpoints. `frontend-modern/src/api/streaming.ts` must not drain
+   queued workflow/tool/model events from separate stream reads without yielding
+   to the browser, or the drawer will show those steps only after a batch has
+   already finished. Token content and hidden reasoning may continue to opt out
+   of those checkpoints through the caller predicate so answer streaming remains
+   fast.
    OpenCode-parity Assistant UX work must reference OpenCode's actual source
    implementation for message parts, tool-state mutation, progress rendering,
    and model/session selection before changing Pulse behavior; parity means
