@@ -567,6 +567,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [accumulatedMentions, setAccumulatedMentions] = createSignal<MentionResource[]>([]);
   let textareaRef: HTMLTextAreaElement | undefined;
   let interruptArmTimeout: ReturnType<typeof setTimeout> | undefined;
+  let composerSubmitDispatchLocked = false;
 
   const focusComposer = () => {
     queueMicrotask(() => {
@@ -1791,11 +1792,27 @@ export const AIChat: Component<AIChatProps> = (props) => {
     });
   };
 
+  const readComposerInputForSubmit = () => {
+    // Composition/IME updates can reach the textarea before the controlled signal
+    // flushes, so the live DOM value is authoritative for submit.
+    if (typeof textareaRef?.value === 'string') return textareaRef.value;
+    return input();
+  };
+
   // Handle submit
   const handleSubmit = () => {
-    const submittedInput = input();
+    if (composerSubmitDispatchLocked) return;
+
+    const submittedInput = readComposerInputForSubmit();
     const prompt = submittedInput.trim();
     if (!prompt) return;
+    composerSubmitDispatchLocked = true;
+    queueMicrotask(() => {
+      composerSubmitDispatchLocked = false;
+    });
+    if (submittedInput !== input()) {
+      setInput(submittedInput);
+    }
     const mentions = accumulatedMentions();
     const submittedMentions = cloneMentions(mentions);
     const mentionsForAPI =

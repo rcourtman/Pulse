@@ -1320,6 +1320,64 @@ describe('AIChat', () => {
       expect(mockChat.sendMessage).toHaveBeenCalledWith('hello world', undefined, undefined);
     });
 
+    it('submits the live textarea value when composition text has not reached state', () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+
+      textarea.value = '  final composed text  ';
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(mockChat.sendMessage).toHaveBeenCalledWith(
+        'final composed text',
+        undefined,
+        undefined,
+      );
+    });
+
+    it('ignores overlapping submit dispatches before the composer clear reaches the DOM', () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+      const form = textarea.closest('form');
+      expect(form).toBeTruthy();
+
+      fireEvent.input(textarea, { target: { value: 'duplicate prompt' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+      textarea.value = 'duplicate prompt';
+      fireEvent.submit(form!);
+
+      expect(mockChat.sendMessage).toHaveBeenCalledTimes(1);
+      expect(mockChat.sendMessage).toHaveBeenCalledWith(
+        'duplicate prompt',
+        undefined,
+        undefined,
+      );
+    });
+
+    it('releases the submit guard for the next intentional follow-up', async () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+
+      fireEvent.input(textarea, { target: { value: 'first prompt' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+      await Promise.resolve();
+
+      fireEvent.input(textarea, { target: { value: 'follow-up prompt' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(mockChat.sendMessage).toHaveBeenCalledTimes(2);
+      expect(mockChat.sendMessage).toHaveBeenLastCalledWith(
+        'follow-up prompt',
+        undefined,
+        undefined,
+      );
+    });
+
     it('recalls submitted prompts with ArrowUp and ArrowDown from the empty composer', async () => {
       renderChat();
       const textarea = screen.getByPlaceholderText(
@@ -1328,6 +1386,7 @@ describe('AIChat', () => {
 
       fireEvent.input(textarea, { target: { value: 'first prompt' } });
       fireEvent.keyDown(textarea, { key: 'Enter' });
+      await Promise.resolve();
       fireEvent.input(textarea, { target: { value: 'second prompt' } });
       fireEvent.keyDown(textarea, { key: 'Enter' });
 

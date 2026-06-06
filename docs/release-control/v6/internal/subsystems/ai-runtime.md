@@ -152,6 +152,18 @@ runtime cost control, and shared AI transport surfaces.
    (lines 607-610). Pulse adapts that source behavior with a drawer-local
    composer stash so normal close/reopen does not drop an unsent user thought
    or downgrade a scoped queued follow-up into a plain prompt.
+   Composer submission must read the live input buffer at submit time and
+   suppress only overlapping dispatches from the same browser interaction. The
+   referenced OpenCode source at commit
+   `9ed17da55ab1f7360cc0e01075f763e27fa899e9`
+   `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx` guards
+   `Prompt.submit()` with local `submitting` state (lines 910-924) and syncs
+   the live input `plainText` into prompt state before downstream reads
+   (lines 930-936) so double-dispatch and IME/composition races do not send a
+   stale or phantom prompt. Pulse adapts that by reading the live textarea
+   value before trimming and by using a one-dispatch composer guard that still
+   releases immediately for intentional queued follow-ups during an active
+   turn.
    Failed-turn retry is part of that same local chat-runtime boundary: a
    retryable in-memory assistant error may replay the original user turn's
    structured mentions, finding id, approval override, handoff resources,
