@@ -323,6 +323,16 @@ runtime cost control, and shared AI transport surfaces.
    useful, and keeping structured JSON, unavailable output, and the full raw
    payload behind Details. This preserves evidence for inspection without
    letting large command output dominate the Assistant answer flow.
+   Tool-row summaries are part of that same source-anchored contract, not
+   assistant prose cleanup: when provider or backend transport supplies a
+   function-style call such as `pulse_read(...)` or a friendly string backed by
+   structured raw input, Pulse must derive the visible row from the parsed tool
+   arguments and keep the raw transport form behind Details. This adapts
+   OpenCode's `ToolPart`/`InlineToolRow` rendering in
+   `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx` and the
+   `session.next.tool.input.*` mutations in
+   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`: typed tool state
+   owns the action row, while raw invocation syntax is inspection detail.
    Streaming thinking rows follow the same source-anchored reasoning-display
    contract: OpenCode commit
    `9ed17da55ab1f7360cc0e01075f763e27fa899e9` renders reasoning through

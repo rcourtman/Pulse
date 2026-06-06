@@ -119,6 +119,85 @@ const targetSuffix = (record: Record<string, unknown>) => {
   return ` on ${formatIdentifierLabel(target, { maxLength: 18 })}`;
 };
 
+const parseFunctionStyleToolInput = (input: string) => {
+  const match = /^([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([\s\S]*)\)\s*$/.exec(input.trim());
+  if (!match) return null;
+
+  const args: Record<string, unknown> = {};
+  const body = match[2] || '';
+  let index = 0;
+
+  const skipWhitespace = () => {
+    while (index < body.length && /\s/.test(body[index])) index += 1;
+  };
+
+  const parseQuotedValue = (quote: string) => {
+    index += 1;
+    let value = '';
+    while (index < body.length) {
+      const char = body[index];
+      if (char === '\\') {
+        if (index + 1 < body.length) {
+          value += body[index + 1];
+          index += 2;
+          continue;
+        }
+        return null;
+      }
+      if (char === quote) {
+        index += 1;
+        return value;
+      }
+      value += char;
+      index += 1;
+    }
+    return null;
+  };
+
+  while (index < body.length) {
+    skipWhitespace();
+    if (index >= body.length) break;
+
+    if (body[index] === ',') {
+      index += 1;
+      continue;
+    }
+
+    const keyMatch = /^[a-zA-Z_][a-zA-Z0-9_]*/.exec(body.slice(index));
+    if (!keyMatch) return null;
+    const key = keyMatch[0];
+    index += key.length;
+
+    skipWhitespace();
+    if (body[index] !== '=') return null;
+    index += 1;
+    skipWhitespace();
+
+    const quote = body[index];
+    let value: unknown;
+    if (quote === '"' || quote === "'") {
+      value = parseQuotedValue(quote);
+      if (value === null) return null;
+    } else {
+      const start = index;
+      while (index < body.length && body[index] !== ',') index += 1;
+      const rawValue = body.slice(start, index).trim();
+      if (!rawValue) return null;
+      if (rawValue === 'true') value = true;
+      else if (rawValue === 'false') value = false;
+      else if (rawValue === 'null') value = null;
+      else if (/^-?\d+(?:\.\d+)?$/.test(rawValue)) value = Number(rawValue);
+      else value = rawValue;
+    }
+
+    args[key] = value;
+    skipWhitespace();
+    if (index < body.length && body[index] !== ',') return null;
+  }
+
+  return { name: match[1], args };
+};
+
 const formatPartialRawInputSummary = (rawInput: string | undefined, toolName?: string) => {
   if (!rawInput?.trim()) return '';
 
@@ -251,43 +330,75 @@ const formatAlertsInputSummary = (record: Record<string, unknown>) => {
   return action ? formatIdentifierLabel(action, { maxLength: 28 }) : 'read alerts';
 };
 
-const parseToolInputSummary = (input: string, toolName?: string, rawInput?: string) => {
+const formatStructuredInputSummary = (
+  record: Record<string, unknown>,
+  toolName?: string,
+  rawInput?: string,
+) => {
+  if (Object.keys(record).length === 0) {
+    return formatPartialRawInputSummary(rawInput, toolName) || 'request';
+  }
+
+  const tool = normalizedToolName(toolName);
+  if (tool === 'read') {
+    return formatPulseReadInputSummary(record) || 'read resource';
+  }
+  if (tool === 'run_command' || tool === 'control') {
+    return formatCommandSummary(record) || 'run command';
+  }
+  if (tool === 'query') {
+    return formatQueryInputSummary(record);
+  }
+  if (tool === 'alerts') {
+    return formatAlertsInputSummary(record);
+  }
+  if (typeof record.action === 'string' && record.action.trim()) {
+    return formatIdentifierLabel(record.action, { maxLength: 28 });
+  }
+  if (typeof record.command === 'string' && record.command.trim()) {
+    return formatIdentifierLabel(record.command, { maxLength: 28 });
+  }
+  return 'request';
+};
+
+const parseStructuredInputSummary = (input: string, toolName?: string, rawInput?: string) => {
   const trimmed = input.trim();
-  if (!trimmed) return '';
+  if (!trimmed) return null;
 
   try {
     const parsed = JSON.parse(trimmed) as unknown;
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      const record = parsed as Record<string, unknown>;
-      if (Object.keys(record).length === 0) {
-        return formatPartialRawInputSummary(rawInput, toolName) || 'request';
-      }
-      const tool = normalizedToolName(toolName);
-      if (tool === 'read') {
-        return formatPulseReadInputSummary(record) || 'read resource';
-      }
-      if (tool === 'run_command' || tool === 'control') {
-        return formatCommandSummary(record) || 'run command';
-      }
-      if (tool === 'query') {
-        return formatQueryInputSummary(record);
-      }
-      if (tool === 'alerts') {
-        return formatAlertsInputSummary(record);
-      }
-      if (typeof record.action === 'string' && record.action.trim()) {
-        return formatIdentifierLabel(record.action, { maxLength: 28 });
-      }
-      if (typeof record.command === 'string' && record.command.trim()) {
-        return formatIdentifierLabel(record.command, { maxLength: 28 });
-      }
-      return 'request';
+      return formatStructuredInputSummary(parsed as Record<string, unknown>, toolName, rawInput);
     }
   } catch {
-    return formatIdentifierLabel(trimmed, { maxLength: 28 });
+    // Keep trying provider-style function-call input below.
   }
 
-  return 'request';
+  const functionCall = parseFunctionStyleToolInput(trimmed);
+  if (functionCall) {
+    return formatStructuredInputSummary(functionCall.args, functionCall.name, rawInput);
+  }
+
+  return null;
+};
+
+const parseToolInputSummary = (input: string, toolName?: string, rawInput?: string) => {
+  const trimmed = input.trim();
+  if (!trimmed) return '';
+
+  const directSummary = parseStructuredInputSummary(trimmed, toolName, rawInput);
+  if (directSummary) {
+    return directSummary;
+  }
+
+  if (rawInput && rawInput.trim() && rawInput.trim() !== trimmed) {
+    const rawSummary = parseStructuredInputSummary(rawInput, toolName);
+    if (rawSummary && !isPlaceholderToolInputSummary(rawSummary)) {
+      return rawSummary;
+    }
+  }
+
+  return formatIdentifierLabel(trimmed, { maxLength: 28 });
 };
 
 const hasReadableToolOutput = (output: string) => {

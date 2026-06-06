@@ -195,6 +195,21 @@ describe('ToolExecutionBlock', () => {
     expect(screen.queryByText(/"target_host"/)).not.toBeInTheDocument();
   });
 
+  it('renders provider-style Pulse read function input as the actual command', () => {
+    render(() => (
+      <ToolExecutionBlock
+        tool={makeTool({
+          name: 'pulse_read',
+          input: 'pulse_read(target_host="current_resource", command="ls /dev | wc -l")',
+          output: '42',
+        })}
+      />
+    ));
+
+    expect(screen.getByText('$ ls /dev | wc -l on current resource')).toBeInTheDocument();
+    expect(screen.queryByText(/pulse_read\(/)).not.toBeInTheDocument();
+  });
+
   it('renders Pulse read log input as a readable log action', () => {
     render(() => (
       <ToolExecutionBlock
@@ -221,6 +236,22 @@ describe('ToolExecutionBlock', () => {
     ));
 
     expect(screen.getByText('$ systemctl restart nginx on tower')).toBeInTheDocument();
+  });
+
+  it('uses structured raw input over backend command display strings', () => {
+    render(() => (
+      <ToolExecutionBlock
+        tool={makeTool({
+          name: 'pulse_run_command',
+          input: 'Running: systemctl restart nginx',
+          rawInput: '{"target_host":"tower","command":"systemctl restart nginx"}',
+          output: 'queued',
+        })}
+      />
+    ));
+
+    expect(screen.getByText('$ systemctl restart nginx on tower')).toBeInTheDocument();
+    expect(screen.queryByText('Running: systemctl restart nginx')).not.toBeInTheDocument();
   });
 
   // --- Output display ---
@@ -477,6 +508,20 @@ describe('PendingToolBlock', () => {
     expect(screen.queryByText(/"command"/)).not.toBeInTheDocument();
   });
 
+  it('renders pending provider-style Pulse read function input as the command being prepared', () => {
+    render(() => (
+      <PendingToolBlock
+        tool={makePending({
+          name: 'pulse_read',
+          input: 'pulse_read(target_host="current_resource", command="lsblk -o NAME,SIZE")',
+        })}
+      />
+    ));
+
+    expect(screen.getByText('$ lsblk -o NAME,SIZE on current resource')).toBeInTheDocument();
+    expect(screen.queryByText(/pulse_read\(/)).not.toBeInTheDocument();
+  });
+
   it('uses raw partial input while pending Pulse read command JSON is still streaming', () => {
     render(() => (
       <PendingToolBlock
@@ -505,6 +550,21 @@ describe('PendingToolBlock', () => {
     ));
 
     expect(screen.getByText('$ ls /dev |')).toBeInTheDocument();
+  });
+
+  it('uses structured raw input over pending backend command display strings', () => {
+    render(() => (
+      <PendingToolBlock
+        tool={makePending({
+          name: 'pulse_run_command',
+          input: 'Running: systemctl restart nginx',
+          rawInput: '{"target_host":"tower","command":"systemctl restart nginx"}',
+        })}
+      />
+    ));
+
+    expect(screen.getByText('$ systemctl restart nginx on tower')).toBeInTheDocument();
+    expect(screen.queryByText('Running: systemctl restart nginx')).not.toBeInTheDocument();
   });
 
   it('renders a command-specific pending label before governed command arguments arrive', () => {
