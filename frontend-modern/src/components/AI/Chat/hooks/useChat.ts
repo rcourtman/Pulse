@@ -166,10 +166,7 @@ export function useChat(options: UseChatOptions = {}) {
     if (!events) return events;
     return events.filter(
       (event) =>
-        event.type !== 'pending_tool' &&
-        event.type !== 'approval' &&
-        event.type !== 'question' &&
-        event.type !== 'workflow_status',
+        event.type !== 'pending_tool' && event.type !== 'approval' && event.type !== 'question',
     );
   };
 
@@ -313,30 +310,55 @@ export function useChat(options: UseChatOptions = {}) {
     };
   };
 
-  const streamEventsWithoutWorkflowStatus = (
-    events: StreamDisplayEvent[] | undefined,
-  ): StreamDisplayEvent[] | undefined =>
-    events?.filter((event) => event.type !== 'workflow_status');
-
-  const withClearedWorkflowStatusEvent = (msg: ChatMessage): ChatMessage => {
-    const streamEvents = streamEventsWithoutWorkflowStatus(msg.streamEvents);
-    if (streamEvents === msg.streamEvents) return msg;
-    return { ...msg, streamEvents };
+  const shouldCoalesceWorkflowStatusEvents = (previous?: WorkflowStatus, next?: WorkflowStatus) => {
+    if (!previous || !next) return false;
+    return (
+      (previous.phase || '') === (next.phase || '') &&
+      (previous.state || '') === (next.state || '') &&
+      (previous.tool || '') === (next.tool || '') &&
+      (previous.attempt || 0) === (next.attempt || 0) &&
+      (previous.maxAttempts || 0) === (next.maxAttempts || 0) &&
+      (previous.retryAfterMs || 0) === (next.retryAfterMs || 0)
+    );
   };
 
-  const withWorkflowStatusEvent = (msg: ChatMessage, workflowStatus: WorkflowStatus): ChatMessage =>
-    addStreamEvent(
-      {
-        ...msg,
-        streamEvents: streamEventsWithoutWorkflowStatus(msg.streamEvents) || [],
-      },
+  const withWorkflowStatusEvent = (
+    msg: ChatMessage,
+    workflowStatus: WorkflowStatus,
+  ): ChatMessage => {
+    const events = msg.streamEvents || [];
+    const now = Date.now();
+    const nextEvent = withStreamEventTiming(
       {
         type: 'workflow_status',
         workflowStatus,
         startedAt: workflowStatus.startedAt,
         updatedAt: workflowStatus.startedAt,
       },
+      now,
     );
+    const last = events[events.length - 1];
+
+    if (last?.type === 'workflow_status') {
+      if (workflowStatusesMatch(last.workflowStatus, workflowStatus)) {
+        return msg;
+      }
+      if (shouldCoalesceWorkflowStatusEvents(last.workflowStatus, workflowStatus)) {
+        return {
+          ...msg,
+          streamEvents: [
+            ...events.slice(0, -1),
+            {
+              ...nextEvent,
+              startedAt: last.startedAt || nextEvent.startedAt,
+            },
+          ],
+        };
+      }
+    }
+
+    return addStreamEvent(msg, nextEvent);
+  };
 
   const normalizePendingToolStatus = (phase?: string): PendingTool['status'] => {
     const normalized = (phase || 'running').trim().toLowerCase();
@@ -454,7 +476,7 @@ export function useChat(options: UseChatOptions = {}) {
     return {
       ...msg,
       streamEvents: replacePendingToolStreamEvents(
-        streamEventsWithoutWorkflowStatus(msg.streamEvents) || [],
+        msg.streamEvents || [],
         resolvedTool,
         matchesTool,
         now,
@@ -533,12 +555,7 @@ export function useChat(options: UseChatOptions = {}) {
     return {
       ...msg,
       streamEvents: resolvedTool
-        ? replacePendingToolStreamEvents(
-            streamEventsWithoutWorkflowStatus(msg.streamEvents) || [],
-            resolvedTool,
-            matchesTool,
-            now,
-          )
+        ? replacePendingToolStreamEvents(msg.streamEvents || [], resolvedTool, matchesTool, now)
         : msg.streamEvents,
       workflowStatus: undefined,
       pendingTools: updatedPendingTools,
@@ -932,10 +949,9 @@ export function useChat(options: UseChatOptions = {}) {
                     )
                   : msg;
               if (!visible.text) return baseMsg;
-              const clearedMsg = withClearedWorkflowStatusEvent(baseMsg);
               // Add to streamEvents for chronological display
               const now = Date.now();
-              const updated = addStreamEvent(clearedMsg, {
+              const updated = addStreamEvent(baseMsg, {
                 type: 'content',
                 content: visible.text,
                 startedAt: now,
@@ -943,7 +959,7 @@ export function useChat(options: UseChatOptions = {}) {
               });
               return {
                 ...updated,
-                content: appendMessageContent(clearedMsg, visible.text),
+                content: appendMessageContent(baseMsg, visible.text),
                 workflowStatus: undefined,
               };
             }
@@ -952,8 +968,7 @@ export function useChat(options: UseChatOptions = {}) {
               const thinking = extractText(event.data);
               if (!thinking) return msg;
               const now = Date.now();
-              const clearedMsg = withClearedWorkflowStatusEvent(msg);
-              const updated = addStreamEvent(clearedMsg, {
+              const updated = addStreamEvent(msg, {
                 type: 'thinking',
                 thinking,
                 startedAt: now,
@@ -1018,7 +1033,7 @@ export function useChat(options: UseChatOptions = {}) {
                 pendingTools: (msg.pendingTools || []).filter(
                   (tool) => !matchesTool(tool, tool.id),
                 ),
-                streamEvents: (streamEventsWithoutWorkflowStatus(msg.streamEvents) || []).filter(
+                streamEvents: (msg.streamEvents || []).filter(
                   (streamEvent) =>
                     streamEvent.type !== 'pending_tool' ||
                     !matchesTool(streamEvent.pendingTool, streamEvent.toolId),
@@ -1037,7 +1052,7 @@ export function useChat(options: UseChatOptions = {}) {
                 success: boolean;
               };
               const pendingTools = msg.pendingTools || [];
-              const events = streamEventsWithoutWorkflowStatus(msg.streamEvents) || [];
+              const events = msg.streamEvents || [];
 
               const normalizedEndName = normalizeChatToolName(data.name || '');
 
@@ -1229,7 +1244,7 @@ export function useChat(options: UseChatOptions = {}) {
               }
 
               // Add to streamEvents for chronological display
-              const updated = addStreamEvent(withClearedWorkflowStatusEvent(msg), {
+              const updated = addStreamEvent(msg, {
                 type: 'approval',
                 approval,
               });
@@ -1268,7 +1283,7 @@ export function useChat(options: UseChatOptions = {}) {
               };
 
               // Add to streamEvents for chronological display
-              const updated = addStreamEvent(withClearedWorkflowStatusEvent(msg), {
+              const updated = addStreamEvent(msg, {
                 type: 'question',
                 question: pendingQuestion,
               });
@@ -1282,7 +1297,6 @@ export function useChat(options: UseChatOptions = {}) {
 
             case 'done': {
               const completedAt = new Date();
-              const terminalMsg = withClearedWorkflowStatusEvent(msg);
               const pendingText = suppressedRawContentMessageIds.has(assistantId)
                 ? ''
                 : flushPendingAssistantOutputText(outputArtifactStateFor(assistantId));
@@ -1290,15 +1304,15 @@ export function useChat(options: UseChatOptions = {}) {
               clearOutputArtifactState(assistantId);
               const flushedMsg = pendingText
                 ? {
-                    ...addStreamEvent(terminalMsg, {
+                    ...addStreamEvent(msg, {
                       type: 'content',
                       content: pendingText,
                       startedAt: Date.now(),
                       updatedAt: Date.now(),
                     }),
-                    content: appendMessageContent(terminalMsg, pendingText),
+                    content: appendMessageContent(msg, pendingText),
                   }
-                : terminalMsg;
+                : msg;
               const tokens = extractTokens(event.data);
               const completedModel = extractCompletedModel(event.data);
               if (tokens && (tokens.input > 0 || tokens.output > 0)) {
@@ -1333,19 +1347,16 @@ export function useChat(options: UseChatOptions = {}) {
             case 'error': {
               clearSuppressedOutputBoundary(assistantId);
               const errorMsg = extractErrorMessage(event.data);
-              const terminalMsg = withClearedWorkflowStatusEvent(msg);
               // Keep any content streamed before the failure; surface the error
               // as a distinct, recoverable block rather than overwriting the answer.
               return {
-                ...terminalMsg,
+                ...msg,
                 isStreaming: false,
                 completedAt: new Date(),
                 pendingTools: [],
                 pendingApprovals: [],
                 pendingQuestions: [],
-                streamEvents: streamEventsWithoutUnresolvedInteractiveRows(
-                  terminalMsg.streamEvents,
-                ),
+                streamEvents: streamEventsWithoutUnresolvedInteractiveRows(msg.streamEvents),
                 workflowStatus: undefined,
                 error: errorMsg || 'Request failed',
               };

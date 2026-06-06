@@ -1248,7 +1248,7 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('replaces rapid workflow progress immediately as one live status', async () => {
+    it('coalesces same workflow activity and appends later phases as visible progress', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
 
@@ -1318,6 +1318,12 @@ describe('useChat', () => {
         expect.objectContaining({
           type: 'workflow_status',
           workflowStatus: expect.objectContaining({
+            message: 'Built compact inventory context for the model.',
+          }),
+        }),
+        expect.objectContaining({
+          type: 'workflow_status',
+          workflowStatus: expect.objectContaining({
             message: 'Sent request to OpenRouter; waiting for the first token.',
           }),
         }),
@@ -1326,7 +1332,7 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('clears workflow progress when visible answer content starts streaming', async () => {
+    it('keeps workflow progress visible when answer content starts streaming', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
 
@@ -1345,11 +1351,14 @@ describe('useChat', () => {
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.content).toBe('Here is the answer.');
       expect(assistant.workflowStatus).toBeUndefined();
-      expect(assistant.streamEvents?.map((event) => event.type)).toEqual(['content']);
+      expect(assistant.streamEvents?.map((event) => event.type)).toEqual([
+        'workflow_status',
+        'content',
+      ]);
       dispose();
     });
 
-    it('clears workflow progress when a governed tool block starts', async () => {
+    it('keeps workflow progress visible when a governed tool block starts', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
 
@@ -1368,11 +1377,14 @@ describe('useChat', () => {
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.workflowStatus).toBeUndefined();
       expect(assistant.pendingTools).toHaveLength(1);
-      expect(assistant.streamEvents?.map((event) => event.type)).toEqual(['pending_tool']);
+      expect(assistant.streamEvents?.map((event) => event.type)).toEqual([
+        'workflow_status',
+        'pending_tool',
+      ]);
       dispose();
     });
 
-    it('keeps late workflow progress live after typed tool evidence as one current activity row', async () => {
+    it('keeps late workflow progress live after typed tool evidence in chronological order', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
 
@@ -1413,10 +1425,11 @@ describe('useChat', () => {
         }),
       );
       expect(assistant.streamEvents?.map((event) => event.type)).toEqual([
+        'workflow_status',
         'tool',
         'workflow_status',
       ]);
-      expect(assistant.streamEvents?.[1]).toEqual(
+      expect(assistant.streamEvents?.[2]).toEqual(
         expect.objectContaining({
           workflowStatus: expect.objectContaining({
             phase: 'model_thinking',
@@ -1941,13 +1954,20 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('done event removes unresolved interactive stream rows', async () => {
+    it('done event removes unresolved interactive rows but keeps visible workflow activity', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
 
       await chat.sendMessage('hi');
       const fire = getFireEvent();
 
+      fire({
+        type: 'workflow_state',
+        data: {
+          phase: 'provider_start',
+          message: 'Sent request to OpenRouter; waiting for the first token.',
+        },
+      });
       fire({ type: 'content', data: 'partial response' });
       fire({ type: 'tool_start', data: { id: 'tool-1', name: 'pulse_read', input: '{}' } });
       fire({
@@ -1975,7 +1995,10 @@ describe('useChat', () => {
       expect(assistant.pendingTools).toEqual([]);
       expect(assistant.pendingApprovals).toEqual([]);
       expect(assistant.pendingQuestions).toEqual([]);
-      expect(assistant.streamEvents?.map((event) => event.type)).toEqual(['content']);
+      expect(assistant.streamEvents?.map((event) => event.type)).toEqual([
+        'workflow_status',
+        'content',
+      ]);
       dispose();
     });
 
@@ -1996,13 +2019,20 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('error event removes unresolved interactive stream rows', async () => {
+    it('error event removes unresolved interactive rows but keeps visible workflow activity', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
 
       await chat.sendMessage('hi');
       const fire = getFireEvent();
 
+      fire({
+        type: 'workflow_state',
+        data: {
+          phase: 'provider_start',
+          message: 'Sent request to OpenRouter; waiting for the first token.',
+        },
+      });
       fire({ type: 'content', data: 'partial response' });
       fire({ type: 'tool_start', data: { id: 'tool-1', name: 'pulse_read', input: '{}' } });
       fire({
@@ -2031,7 +2061,10 @@ describe('useChat', () => {
       expect(assistant.pendingTools).toEqual([]);
       expect(assistant.pendingApprovals).toEqual([]);
       expect(assistant.pendingQuestions).toEqual([]);
-      expect(assistant.streamEvents?.map((event) => event.type)).toEqual(['content']);
+      expect(assistant.streamEvents?.map((event) => event.type)).toEqual([
+        'workflow_status',
+        'content',
+      ]);
       dispose();
     });
 

@@ -651,6 +651,36 @@ describe('MessageItem', () => {
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
     });
 
+    it('keeps transcript workflow activity visible before streamed content', () => {
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            content: 'Partial answer',
+            isStreaming: true,
+            pendingTools: [],
+            streamEvents: [
+              {
+                type: 'workflow_status',
+                workflowStatus: {
+                  phase: 'provider_start',
+                  message: 'Sent request to OpenRouter; waiting for the first token.',
+                },
+              },
+              { type: 'content', content: 'Partial answer' },
+            ],
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(
+        screen.getByText('Sent request to OpenRouter; waiting for the first token.'),
+      ).toBeInTheDocument();
+      expect(screen.getByText('Partial answer')).toBeInTheDocument();
+      expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
+    });
+
     it('does not show cursor when streaming but there are pending tools', () => {
       const { container } = render(() => (
         <MessageItem
