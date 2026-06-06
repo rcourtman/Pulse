@@ -85,6 +85,7 @@ const markdownClass =
 
 const TEXT_RENDER_PACE_MS = 24;
 const TEXT_RENDER_SNAP = /[\s.,!?;:)\]]/;
+const WORKFLOW_STATUS_RENDER_PACE_MS = 420;
 
 const textRenderStep = (size: number) => {
   if (size <= 12) return 2;
@@ -126,6 +127,127 @@ const schedulePacedTextCleanup = (key: string) => {
       pacedTextCache.delete(key);
     }, 1000),
   );
+};
+
+const workflowStatusRenderKey = (status?: WorkflowStatus) =>
+  status
+    ? [
+        status?.phase || '',
+        status?.message || '',
+        status?.state || '',
+        status?.tool || '',
+        status?.attempt || 0,
+        status?.maxAttempts || 0,
+        status?.retryAfterMs || 0,
+        status?.startedAt || 0,
+      ].join('\u001f')
+    : '';
+
+const normalizeWorkflowStatusSequence = (statuses: Array<WorkflowStatus | undefined>) => {
+  const sequence: WorkflowStatus[] = [];
+  for (const status of statuses) {
+    if (!status || !formatAssistantWorkflowStatus(status)) continue;
+    const previous = sequence[sequence.length - 1];
+    if (workflowStatusRenderKey(previous) === workflowStatusRenderKey(status)) continue;
+    sequence.push(status);
+  }
+  return sequence;
+};
+
+interface PacedWorkflowStatusClock {
+  firstKey: string;
+  startedAt: number;
+}
+
+const pacedWorkflowStatusCache = new Map<string, PacedWorkflowStatusClock>();
+const pacedWorkflowStatusCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+const cancelPacedWorkflowStatusCleanup = (key: string) => {
+  const timer = pacedWorkflowStatusCleanupTimers.get(key);
+  if (!timer) return;
+  clearTimeout(timer);
+  pacedWorkflowStatusCleanupTimers.delete(key);
+};
+
+const deletePacedWorkflowStatusCache = (key: string) => {
+  cancelPacedWorkflowStatusCleanup(key);
+  pacedWorkflowStatusCache.delete(key);
+};
+
+const schedulePacedWorkflowStatusCleanup = (key: string) => {
+  cancelPacedWorkflowStatusCleanup(key);
+  pacedWorkflowStatusCleanupTimers.set(
+    key,
+    setTimeout(() => {
+      pacedWorkflowStatusCleanupTimers.delete(key);
+      pacedWorkflowStatusCache.delete(key);
+    }, 1000),
+  );
+};
+
+const createPacedWorkflowStatus = (
+  getStatuses: () => WorkflowStatus[],
+  live: () => boolean,
+  cacheKey: () => string,
+) => {
+  const [now, setNow] = createSignal(Date.now());
+  let interval: ReturnType<typeof setInterval> | undefined;
+
+  createEffect(() => {
+    const statuses = getStatuses();
+    if (!live()) {
+      if (interval) {
+        clearInterval(interval);
+        interval = undefined;
+      }
+      const key = cacheKey();
+      if (key) deletePacedWorkflowStatusCache(key);
+      return;
+    }
+
+    const key = cacheKey();
+    if (key) {
+      cancelPacedWorkflowStatusCleanup(key);
+    }
+
+    if (statuses.length > 1 && !interval) {
+      interval = setInterval(() => setNow(Date.now()), WORKFLOW_STATUS_RENDER_PACE_MS);
+    } else if (statuses.length <= 1 && interval) {
+      clearInterval(interval);
+      interval = undefined;
+    }
+  });
+
+  onCleanup(() => {
+    if (interval) {
+      clearInterval(interval);
+    }
+    const key = cacheKey();
+    if (key) schedulePacedWorkflowStatusCleanup(key);
+  });
+
+  return createMemo(() => {
+    const statuses = getStatuses();
+    if (statuses.length === 0) return undefined;
+    if (!live()) return statuses[statuses.length - 1];
+    if (statuses.length === 1) return statuses[0];
+
+    const key = cacheKey();
+    const firstKey = workflowStatusRenderKey(statuses[0]);
+    if (!key || !firstKey) return statuses[0];
+
+    const cached = pacedWorkflowStatusCache.get(key);
+    const startedAt = cached?.firstKey === firstKey ? cached.startedAt : now();
+    if (!cached || cached.firstKey !== firstKey) {
+      pacedWorkflowStatusCache.set(key, { firstKey, startedAt });
+    }
+
+    const index = Math.min(
+      statuses.length - 1,
+      Math.floor(Math.max(0, now() - startedAt) / WORKFLOW_STATUS_RENDER_PACE_MS),
+    );
+    return statuses[index] || statuses[statuses.length - 1];
+  });
 };
 
 const createPacedText = (getText: () => string, live: () => boolean, cacheKey: () => string) => {
@@ -351,9 +473,24 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
   const workflowStatusText = createMemo(() =>
     formatWorkflowStatus(props.message.workflowStatus, true),
   );
-  const inlineStreamingStatusText = createMemo(() => {
-    return workflowStatusText() || 'Thinking...';
-  });
+  const workflowStatusSequence = (status?: WorkflowStatus) =>
+    normalizeWorkflowStatusSequence([...(props.message.workflowStatusHistory || []), status]);
+  const WorkflowStatusText: Component<{
+    status?: WorkflowStatus;
+    includeElapsed?: boolean;
+    paceKey: string;
+  }> = (statusProps) => {
+    const statuses = createMemo(() => workflowStatusSequence(statusProps.status));
+    const displayedStatus = createPacedWorkflowStatus(
+      () => statuses(),
+      () => props.message.isStreaming === true,
+      () => statusProps.paceKey,
+    );
+    const text = createMemo(() =>
+      formatWorkflowStatus(displayedStatus(), statusProps.includeElapsed),
+    );
+    return <>{text()}</>;
+  };
   const shouldShowHeaderWorkflowStatus = () =>
     props.message.isStreaming &&
     !isWaitingForFirstToken() &&
@@ -469,7 +606,13 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                   aria-live="polite"
                 >
                   <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500 animate-pulse" />
-                  <span class="truncate">{workflowStatusText()}</span>
+                  <span class="truncate">
+                    <WorkflowStatusText
+                      status={props.message.workflowStatus}
+                      includeElapsed
+                      paceKey={`${props.message.id}:workflow-header`}
+                    />
+                  </span>
                 </span>
               </Show>
               <Show when={canCopy()}>
@@ -504,7 +647,15 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                       style="animation-delay: 240ms"
                     />
                   </span>
-                  <span>{inlineStreamingStatusText()}</span>
+                  <Show when={workflowStatusText()} fallback={<span>Thinking...</span>}>
+                    <span>
+                      <WorkflowStatusText
+                        status={props.message.workflowStatus}
+                        includeElapsed
+                        paceKey={`${props.message.id}:workflow-inline`}
+                      />
+                    </span>
+                  </Show>
                 </div>
               </Show>
 
@@ -548,7 +699,11 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                             aria-hidden="true"
                           />
                           <span class="min-w-0 truncate">
-                            {formatWorkflowStatus(evt.workflowStatus, props.message.isStreaming)}
+                            <WorkflowStatusText
+                              status={evt.workflowStatus}
+                              includeElapsed={props.message.isStreaming}
+                              paceKey={`${props.message.id}:workflow-row`}
+                            />
                           </span>
                         </div>
                       </Match>

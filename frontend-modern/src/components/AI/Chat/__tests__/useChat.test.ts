@@ -1340,6 +1340,12 @@ describe('useChat', () => {
           }),
         }),
       ]);
+      expect(assistant.workflowStatusHistory?.map((status) => status.message)).toEqual([
+        'Preparing Pulse context.',
+        'Reading current Pulse inventory with pulse_query.',
+        'Built compact inventory context for the model.',
+        'Sent request to OpenRouter; waiting for the first token.',
+      ]);
 
       dispose();
     });

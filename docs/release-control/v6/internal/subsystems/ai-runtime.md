@@ -299,13 +299,17 @@ runtime cost control, and shared AI transport surfaces.
    through the composer footer while transcript rows continue to render typed
    Assistant evidence. Workflow status is live
    progress, not answer content or a delayed walkthrough; each new
-   `workflow_state` replaces the active status immediately instead of waiting
-   behind a dwell queue. Once visible assistant text, tool progress, approvals,
-   or questions begin, stale workflow text must clear so the row does not keep
-   saying it is waiting on a phase that has already been superseded. Live
-   workflow and pending-tool activity must retain a per-state start timestamp
-   so the drawer can show elapsed wait/run time for long provider starts and
-   tool calls instead of repeating a timeless waiting label.
+   `workflow_state` replaces the canonical active status immediately. The
+   browser may retain a bounded in-flight presentation history of those replaced
+   labels and pace one visible workflow row through them when backend/network
+   coalescing would otherwise make the row jump straight to the last state.
+   That history must stay live-only: once visible assistant text, tool progress,
+   approvals, questions, terminal `done`, terminal `error`, or explicit Stop
+   take over, stale workflow text and the presentation history must clear so
+   the row does not keep saying it is waiting on a phase that has already been
+   superseded. Live workflow and pending-tool activity must retain a per-state
+   start timestamp so the drawer can show elapsed wait/run time for long
+   provider starts and tool calls instead of repeating a timeless waiting label.
    The referenced OpenCode source at fetched `origin/dev` commit
    `4519a1da329c1a4fc384054e7203ba7d06928205` mutates typed message parts as
    events arrive in `packages/opencode/src/cli/cmd/tui/context/sync.tsx`
@@ -366,6 +370,16 @@ runtime cost control, and shared AI transport surfaces.
    `createPacedValue` live markdown pattern in
    `packages/ui/src/components/message-part.tsx` so Pulse feels active without
    delaying copy/export, tool boundaries, approvals, or audit evidence.
+   Live workflow labels follow that same presentation-layer constraint: the
+   canonical SSE/store state remains the latest typed `workflow_state`, while a
+   bounded live-only browser history paces a single replacing activity row
+   through recent states. This adapts OpenCode's status/title motion in
+   `packages/ui/src/components/tool-status-title.tsx` and timeline thinking
+   row treatment in `packages/app/src/pages/session/message-timeline.data.ts`
+   at fetched `origin/dev` commit `4519a1da329c1a4fc384054e7203ba7d06928205`;
+   Pulse uses it only for short workflow labels, not for audit evidence,
+   approvals, tool boundaries, transcript export, or completed/restored
+   messages.
    Completed Assistant tool rows follow the same source-anchored display policy:
    the referenced OpenCode commit
    `9ed17da55ab1f7360cc0e01075f763e27fa899e9` keeps ordinary tool activity terse
@@ -1653,9 +1667,12 @@ frontend `workflow_status` display event: each incoming backend
 `workflow_state` replaces the prior workflow row, the active footer reads the
 same typed status, and visible assistant content, reasoning, tool,
 approval/question, terminal `done`, and terminal `error` events clear that row.
-The transcript therefore shows current motion while the provider is starting,
-retrying, or reasoning, but completed answers do not retain stale
-internal-progress prose.
+The frontend now also keeps a bounded live-only `workflowStatusHistory` for the
+active assistant message so one row can visibly step through bursty preparation,
+context, provider-start, retry, and fallback labels instead of showing them all
+only after the final state arrives. The transcript therefore shows current
+motion while the provider is starting, retrying, or reasoning, but completed
+answers do not retain stale internal-progress prose.
 
 Primary nav moved to governed platform/runtime destinations on 2026-05-16 and
 was clarified on 2026-05-25 through `frontend-modern/src/App.tsx` and

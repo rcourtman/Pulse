@@ -31,6 +31,7 @@ import type {
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
 type AssistantInterruption = NonNullable<ChatMessage['interruption']>;
+const WORKFLOW_STATUS_HISTORY_LIMIT = 8;
 
 const createInitialAssistantWorkflowStatus = (): WorkflowStatus => ({
   phase: 'request_start',
@@ -136,8 +137,19 @@ export function useChat(options: UseChatOptions = {}) {
     (a.maxAttempts || 0) === (b.maxAttempts || 0) &&
     (a.retryAfterMs || 0) === (b.retryAfterMs || 0);
 
-  const isStreamIdleWorkflowStatus = (status?: WorkflowStatus) =>
-    status?.phase === 'stream_idle';
+  const appendWorkflowStatusHistory = (
+    history: WorkflowStatus[] | undefined,
+    workflowStatus: WorkflowStatus,
+  ): WorkflowStatus[] => {
+    const current = history || [];
+    const previous = current[current.length - 1];
+    if (workflowStatusesMatch(previous, workflowStatus)) {
+      return current;
+    }
+    return [...current, workflowStatus].slice(-WORKFLOW_STATUS_HISTORY_LIMIT);
+  };
+
+  const isStreamIdleWorkflowStatus = (status?: WorkflowStatus) => status?.phase === 'stream_idle';
 
   // stream_idle is transport liveness, not a new Assistant step.
   const visibleWorkflowStatusForHeartbeat = (
@@ -234,6 +246,7 @@ export function useChat(options: UseChatOptions = {}) {
                 ? streamEventsWithoutTransientRows(msg.streamEvents)
                 : msg.streamEvents,
               workflowStatus: undefined,
+              workflowStatusHistory: undefined,
             }
           : msg,
       ),
@@ -381,6 +394,10 @@ export function useChat(options: UseChatOptions = {}) {
                 updatedAt: nextEvent.updatedAt || now,
               },
             ],
+            workflowStatusHistory: appendWorkflowStatusHistory(
+              msg.workflowStatusHistory,
+              visibleStatus,
+            ),
           };
         }
         return msg;
@@ -394,10 +411,17 @@ export function useChat(options: UseChatOptions = {}) {
             startedAt: nextEvent.startedAt || last.startedAt,
           },
         ],
+        workflowStatusHistory: appendWorkflowStatusHistory(
+          msg.workflowStatusHistory,
+          visibleStatus,
+        ),
       };
     }
 
-    return addStreamEvent(msg, nextEvent);
+    return {
+      ...addStreamEvent(msg, nextEvent),
+      workflowStatusHistory: appendWorkflowStatusHistory(msg.workflowStatusHistory, visibleStatus),
+    };
   };
 
   const normalizePendingToolStatus = (phase?: string): PendingTool['status'] => {
@@ -522,6 +546,7 @@ export function useChat(options: UseChatOptions = {}) {
         now,
       ),
       workflowStatus: undefined,
+      workflowStatusHistory: undefined,
       pendingTools: updatedPendingTools,
     };
   };
@@ -603,6 +628,7 @@ export function useChat(options: UseChatOptions = {}) {
           )
         : msg.streamEvents,
       workflowStatus: undefined,
+      workflowStatusHistory: undefined,
       pendingTools: updatedPendingTools,
     };
   };
@@ -1040,6 +1066,7 @@ export function useChat(options: UseChatOptions = {}) {
                 ...updated,
                 content: appendMessageContent(baseMsg, visible.text),
                 workflowStatus: undefined,
+                workflowStatusHistory: undefined,
               };
             }
 
@@ -1109,15 +1136,17 @@ export function useChat(options: UseChatOptions = {}) {
               return {
                 ...msg,
                 workflowStatus: undefined,
+                workflowStatusHistory: undefined,
                 pendingTools: (msg.pendingTools || []).filter(
                   (tool) => !matchesTool(tool, tool.id),
                 ),
-                streamEvents: (streamEventsWithoutWorkflowStatusRows(msg.streamEvents || []) || [])
-                  .filter(
-                    (streamEvent) =>
-                      streamEvent.type !== 'pending_tool' ||
-                      !matchesTool(streamEvent.pendingTool, streamEvent.toolId),
-                  ),
+                streamEvents: (
+                  streamEventsWithoutWorkflowStatusRows(msg.streamEvents || []) || []
+                ).filter(
+                  (streamEvent) =>
+                    streamEvent.type !== 'pending_tool' ||
+                    !matchesTool(streamEvent.pendingTool, streamEvent.toolId),
+                ),
               };
             }
 
@@ -1245,6 +1274,7 @@ export function useChat(options: UseChatOptions = {}) {
                 ...msg,
                 streamEvents: updatedEvents,
                 workflowStatus: undefined,
+                workflowStatusHistory: undefined,
                 pendingTools: updatedPending,
                 pendingApprovals: updatedApprovals,
                 toolCalls: [...(msg.toolCalls || []), newToolCall],
@@ -1332,6 +1362,7 @@ export function useChat(options: UseChatOptions = {}) {
               return {
                 ...updated,
                 workflowStatus: undefined,
+                workflowStatusHistory: undefined,
                 pendingApprovals: [...(msg.pendingApprovals || []), approval],
               };
             }
@@ -1371,6 +1402,7 @@ export function useChat(options: UseChatOptions = {}) {
               return {
                 ...updated,
                 workflowStatus: undefined,
+                workflowStatusHistory: undefined,
                 pendingQuestions: [...(msg.pendingQuestions || []), pendingQuestion],
               };
             }
@@ -1407,6 +1439,7 @@ export function useChat(options: UseChatOptions = {}) {
                   streamEvents: streamEventsWithoutTransientRows(flushedMsg.streamEvents),
                   tokens,
                   workflowStatus: undefined,
+                  workflowStatusHistory: undefined,
                 };
               }
               return {
@@ -1419,6 +1452,7 @@ export function useChat(options: UseChatOptions = {}) {
                 pendingQuestions: [],
                 streamEvents: streamEventsWithoutTransientRows(flushedMsg.streamEvents),
                 workflowStatus: undefined,
+                workflowStatusHistory: undefined,
               };
             }
 
@@ -1436,6 +1470,7 @@ export function useChat(options: UseChatOptions = {}) {
                 pendingQuestions: [],
                 streamEvents: streamEventsWithoutTransientRows(msg.streamEvents),
                 workflowStatus: undefined,
+                workflowStatusHistory: undefined,
                 error: errorMsg || 'Request failed',
               };
             }
@@ -1532,6 +1567,7 @@ export function useChat(options: UseChatOptions = {}) {
       toolCalls: [],
       streamEvents: [],
       workflowStatus: initialWorkflowStatus,
+      workflowStatusHistory: [initialWorkflowStatus],
     };
 
     if (options?.queuedMessageId) {
@@ -1615,6 +1651,7 @@ export function useChat(options: UseChatOptions = {}) {
                 pendingQuestions: [],
                 streamEvents: streamEventsWithoutTransientRows(msg.streamEvents),
                 workflowStatus: undefined,
+                workflowStatusHistory: undefined,
                 error: errorMessage,
               }
             : msg,

@@ -630,6 +630,63 @@ describe('MessageItem', () => {
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
     });
 
+    it('paces burst workflow activity through one live transcript row', async () => {
+      vi.useFakeTimers();
+      const workflowStatusHistory = [
+        {
+          phase: 'request_start',
+          message: 'Preparing Pulse context.',
+          startedAt: 1_000,
+        },
+        {
+          phase: 'context',
+          message: 'Reading current Pulse inventory with pulse_query.',
+          tool: 'pulse_query',
+          startedAt: 1_100,
+        },
+        {
+          phase: 'provider_start',
+          message: 'Sent request to OpenRouter; waiting for the first token.',
+          startedAt: 1_200,
+        },
+      ];
+
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            isStreaming: true,
+            pendingTools: [],
+            workflowStatusHistory,
+            streamEvents: [
+              {
+                type: 'workflow_status',
+                workflowStatus: workflowStatusHistory[2],
+              },
+            ],
+            workflowStatus: workflowStatusHistory[2],
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(screen.getByText(/Preparing Pulse context\./)).toBeInTheDocument();
+      expect(
+        screen.queryByText(/Sent request to OpenRouter; waiting for the first token\./),
+      ).not.toBeInTheDocument();
+
+      await vi.advanceTimersByTimeAsync(420);
+      expect(
+        screen.getByText(/Reading current Pulse inventory with pulse_query\./),
+      ).toBeInTheDocument();
+
+      await vi.advanceTimersByTimeAsync(420);
+      expect(
+        screen.getByText(/Sent request to OpenRouter; waiting for the first token\./),
+      ).toBeInTheDocument();
+    });
+
     it('hides stale workflow progress after visible content starts', () => {
       render(() => (
         <MessageItem

@@ -163,6 +163,7 @@ export interface ChatMessage {
   toolCalls?: ToolExecution[];
   isStreaming?: boolean;
   workflowStatus?: WorkflowStatus;
+  workflowStatusHistory?: WorkflowStatus[];
   pendingTools?: PendingTool[];
   pendingApprovals?: PendingApproval[];
   pendingQuestions?: PendingQuestion[];
