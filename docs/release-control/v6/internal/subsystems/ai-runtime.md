@@ -662,15 +662,15 @@ runtime cost control, and shared AI transport surfaces.
    parseable, then replacing that copy with the governed command/query/resource
    summary as soon as input arrives.
    The referenced OpenCode source at fetched `origin/dev` commit
-   `9ed17da55ab1f7360cc0e01075f763e27fa899e9` renders completed bash and
+   `4519a1da329c1a4fc384054e7203ba7d06928205` renders completed bash and
    generic tool output inside the tool block and uses `collapseToolOutput` in
    `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`
    (`GenericTool`, lines 526-559; `Bash`, lines 701-731) to keep long output bounded.
-   Pulse's completed tool rows must adapt that by keeping successful output
-   behind Details and only previewing failed plain-text output when the preview
-   is short enough to be actionable. Structured JSON, unavailable output,
-   successful command output, and the full raw payload stay behind Details. The
-   browser implementation owner is
+   Pulse's completed tool rows must adapt that by previewing short actionable
+   plain-text output for successful and failed tools while keeping long output
+   bounded behind Details. Structured JSON, unavailable output, truncated
+   successful output, and the full raw payload stay behind Details. The browser
+   implementation owner is
    `frontend-modern/src/components/AI/Chat/ToolExecutionBlock.tsx`; completed
    `tool_end` events preserve streamed `raw_input` for the same readable command
    summary used while the tool is pending.

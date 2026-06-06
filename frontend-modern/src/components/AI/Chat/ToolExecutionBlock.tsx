@@ -69,8 +69,6 @@ const trimPreviewLine = (line: string, maxLength: number) => {
 };
 
 const formatOutputPreview = (output: string, success: boolean) => {
-  if (success) return '';
-
   const normalized = stripAnsiControlCodes(output).replace(/\r\n/g, '\n').trim();
   if (!hasReadableToolOutput(normalized)) return '';
   if (looksLikeStructuredOutput(normalized)) return '';
@@ -87,6 +85,7 @@ const formatOutputPreview = (output: string, success: boolean) => {
   const charsTruncated = lines
     .slice(0, maxLines)
     .some((line) => line.trimEnd().length > maxLineLength);
+  if (success && (linesTruncated || charsTruncated)) return '';
   return linesTruncated || charsTruncated ? `${fullPreview}\n...` : fullPreview;
 };
 

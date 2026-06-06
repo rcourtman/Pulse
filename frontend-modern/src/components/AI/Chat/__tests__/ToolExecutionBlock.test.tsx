@@ -278,11 +278,12 @@ describe('ToolExecutionBlock', () => {
 
   // --- Output display ---
 
-  it('keeps successful plain-text output in details instead of previewing it', () => {
+  it('previews successful short plain-text output while keeping full details available', () => {
     render(() => <ToolExecutionBlock tool={makeTool({ output: 'hello world' })} />);
-    expect(screen.queryByLabelText('Tool output preview')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Tool output preview')).toHaveTextContent('hello world');
     fireEvent.click(getToolDetailsTrigger());
-    expect(screen.getByText('hello world')).toBeInTheDocument();
+    expect(screen.getByText('Output')).toBeInTheDocument();
+    expect(screen.getAllByText('hello world')).toHaveLength(2);
   });
 
   it('does not preview structured JSON output by default', () => {
@@ -339,7 +340,7 @@ describe('ToolExecutionBlock', () => {
     ));
 
     expect(screen.getByText('Inspect devices on current resource')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Tool output preview')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Tool output preview')).toHaveTextContent('42');
   });
 
   it('hides output that is only whitespace', () => {
@@ -425,15 +426,15 @@ describe('ToolExecutionBlock', () => {
   });
 
   it('toggles raw details from the keyboard on the completed tool row', async () => {
-    render(() => <ToolExecutionBlock tool={makeTool({ output: 'keyboard output' })} />);
+    render(() => <ToolExecutionBlock tool={makeTool({ output: '{"value":"keyboard output"}' })} />);
     const trigger = getToolDetailsTrigger();
     fireEvent.keyDown(trigger, { key: 'Enter' });
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByText('keyboard output')).toBeInTheDocument();
+    expect(screen.getByText('{"value":"keyboard output"}')).toBeInTheDocument();
 
     fireEvent.keyDown(trigger, { key: ' ' });
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByText('keyboard output')).not.toBeInTheDocument();
+    expect(screen.queryByText('{"value":"keyboard output"}')).not.toBeInTheDocument();
   });
 
   // --- Edge cases ---
