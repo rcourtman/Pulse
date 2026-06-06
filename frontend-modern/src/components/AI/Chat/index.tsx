@@ -116,6 +116,7 @@ import { ModelSelector } from './ModelSelector';
 import { MentionAutocomplete, type MentionResource } from './MentionAutocomplete';
 import { getAssistantActiveTurnStatus } from './activeTurnStatus';
 import { getLastAssistantAnswerText } from './assistantAnswerText';
+import { parseAssistantSlashCommand, type AssistantSlashCommandAction } from './assistantSlashCommands';
 import {
   buildAssistantTranscriptFilename,
   downloadAssistantTranscriptFile,
@@ -2169,6 +2170,47 @@ export const AIChat: Component<AIChatProps> = (props) => {
     return input();
   };
 
+  const clearLocalComposerCommand = () => {
+    stashedComposerDraft = null;
+    setEditingQueuedFollowUp(null);
+    setInput('');
+    setAccumulatedMentions([]);
+    setMentionActive(false);
+    resetPromptHistoryNavigation();
+    queueMicrotask(() => {
+      resizeTextarea();
+      focusComposer();
+    });
+  };
+
+  const executeSlashCommand = (command: AssistantSlashCommandAction) => {
+    clearLocalComposerCommand();
+
+    switch (command) {
+      case 'new':
+        void handleNewConversation();
+        break;
+      case 'sessions':
+        void handleToggleSessions();
+        break;
+      case 'models':
+        setShowSessions(false);
+        setSessionRefreshLoading(false);
+        resetSessionSearch();
+        setModelSelectorOpenRequest((value) => value + 1);
+        break;
+      case 'copy':
+        void copyAssistantTranscript();
+        break;
+      case 'export':
+        exportAssistantTranscript();
+        break;
+      case 'fork':
+        void handleForkSession();
+        break;
+    }
+  };
+
   // Handle submit
   const handleSubmit = () => {
     if (composerSubmitDispatchLocked) return;
@@ -2182,6 +2224,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
     });
     if (submittedInput !== input()) {
       setInput(submittedInput);
+    }
+    const slashCommand = parseAssistantSlashCommand(prompt);
+    if (slashCommand) {
+      executeSlashCommand(slashCommand);
+      return;
     }
     const mentions = accumulatedMentions();
     const submittedMentions = cloneMentions(mentions);

@@ -1576,6 +1576,102 @@ describe('AIChat', () => {
       expect(mockChat.sendMessage).toHaveBeenCalledWith('hello world', undefined, undefined);
     });
 
+    it('runs /new locally without sending a provider prompt', async () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+
+      fireEvent.input(textarea, { target: { value: '/new' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(mockChat.newSession).toHaveBeenCalled();
+      });
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+      await waitFor(() => expect(textarea.value).toBe(''));
+    });
+
+    it('opens Assistant sessions from /sessions without sending a provider prompt', async () => {
+      renderChat();
+      await waitFor(() => {
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalledWith({ limit: 30 });
+      });
+      mockAIChatAPI.listSessions.mockClear();
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+
+      fireEvent.input(textarea, { target: { value: '/sessions' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(screen.getByRole('dialog', { name: 'Pulse Assistant sessions' })).toBeInTheDocument();
+      });
+      expect(mockAIChatAPI.listSessions).toHaveBeenCalledWith({ limit: 30 });
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('opens the model selector from /models without sending a provider prompt', async () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+      expect(screen.getByTestId('model-selector')).toHaveAttribute('data-open-request', '0');
+
+      fireEvent.input(textarea, { target: { value: '/models' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('model-selector')).toHaveAttribute('data-open-request', '1');
+      });
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('copies the transcript from /copy without sending a provider prompt', async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText },
+        configurable: true,
+      });
+      mockChat.sessionId.mockReturnValue('session-slash-copy');
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'user-1',
+          role: 'user',
+          content: 'count devices',
+          timestamp: new Date('2026-06-06T12:34:56Z'),
+        },
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: 'There are three nodes.',
+          timestamp: new Date('2026-06-06T12:35:01Z'),
+        },
+      ]);
+      renderChat();
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+
+      fireEvent.input(textarea, { target: { value: '/copy' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(writeText).toHaveBeenCalled();
+      });
+      expect(writeText.mock.calls[0][0]).toContain('There are three nodes.');
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('sends unknown slash text as a normal Assistant prompt', () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+
+      fireEvent.input(textarea, { target: { value: '/explain /dev devices' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(mockChat.sendMessage).toHaveBeenCalledWith(
+        '/explain /dev devices',
+        undefined,
+        undefined,
+      );
+    });
+
     it('submits the live textarea value when composition text has not reached state', () => {
       renderChat();
       const textarea = screen.getByPlaceholderText(
