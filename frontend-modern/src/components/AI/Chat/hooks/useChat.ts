@@ -1134,6 +1134,19 @@ export function useChat(options: UseChatOptions = {}) {
 
     const abortController = new AbortController();
     abortControllerRef = abortController;
+    let visibleTurnCompleted = false;
+
+    const completeVisibleTurn = () => {
+      if (requestId !== activeRequestId || visibleTurnCompleted) return;
+      visibleTurnCompleted = true;
+      abortControllerRef = null;
+      setIsLoading(false);
+      if (options?.drainAfter !== false) {
+        queueMicrotask(() => {
+          void drainQueuedFollowUps();
+        });
+      }
+    };
 
     try {
       await AIChatAPI.chat(
@@ -1155,6 +1168,7 @@ export function useChat(options: UseChatOptions = {}) {
       if (requestId !== activeRequestId) {
         return false;
       }
+      completeVisibleTurn();
       await notifyConversationChanged();
       return true;
     } catch (error) {
@@ -1177,17 +1191,12 @@ export function useChat(options: UseChatOptions = {}) {
             : msg,
         ),
       );
+      completeVisibleTurn();
       await notifyConversationChanged();
       return false;
     } finally {
       if (requestId === activeRequestId) {
-        abortControllerRef = null;
-        setIsLoading(false);
-        if (options?.drainAfter !== false) {
-          queueMicrotask(() => {
-            void drainQueuedFollowUps();
-          });
-        }
+        completeVisibleTurn();
       }
     }
   };

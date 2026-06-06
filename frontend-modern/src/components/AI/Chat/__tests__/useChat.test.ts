@@ -197,6 +197,54 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('clears the visible active turn before conversation refresh finishes', async () => {
+      let resolveRefresh!: () => void;
+      let sendResolved = false;
+      mockChat.mockImplementation(
+        (
+          _prompt: string,
+          _session: string | undefined,
+          _model: string | undefined,
+          onEvent: (event: StreamEvent) => void,
+        ) => {
+          onEvent({
+            type: 'content',
+            data: { text: 'Pulse currently sees 33 compute resources.' },
+          } as StreamEvent);
+          onEvent({
+            type: 'done',
+            data: { model: 'pulse:local-inventory' },
+          } as StreamEvent);
+          return Promise.resolve();
+        },
+      );
+      const onConversationChanged = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveRefresh = resolve;
+          }),
+      );
+
+      const { value: chat, dispose } = withRoot(() => useChat({ onConversationChanged }));
+      const sendPromise = chat.sendMessage('how many devices in this').then((result) => {
+        sendResolved = true;
+        return result;
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(chat.isLoading()).toBe(false);
+      expect(chat.messages()[1]).toMatchObject({
+        isStreaming: false,
+        model: 'pulse:local-inventory',
+      });
+      expect(sendResolved).toBe(false);
+
+      resolveRefresh();
+      await expect(sendPromise).resolves.toBe(true);
+      dispose();
+    });
+
     it('uses the configured default model route for the request and assistant turn', async () => {
       mockChat.mockResolvedValue(undefined);
 

@@ -268,6 +268,17 @@ runtime cost control, and shared AI transport surfaces.
    that as an active-turn status strip: no idle diagnostics, but while a turn is
    loading it must show waiting, current tool/workflow progress, or generating
    status even when the transcript already contains an in-flight assistant row.
+   The referenced OpenCode source at fetched `origin/dev` commit
+   `09d9cf01f93798939c1284fbe974b6e1f4d2759d` resolves the direct-run wait when
+   `packages/opencode/src/cli/cmd/run/stream.transport.ts` verifies the session
+   is idle, maps `turn.idle` to an idle footer phase in
+   `packages/opencode/src/cli/cmd/run/footer.ts`, and then flushes scrollback
+   separately from later state sync. Pulse's Assistant drawer adapts that
+   completion boundary by clearing the visible active turn as soon as the chat
+   stream has processed its terminal `done` or `error` event; async
+   conversation/session-list refresh may continue afterward, but it must not
+   keep the composer footer or transcript row saying the assistant is still
+   generating.
    When multiple governed tools are pending, completed tools must not blank the
    status while another tool is still running, and the status heartbeat should
    follow the latest progressed pending tool without reordering the transcript's
