@@ -205,9 +205,24 @@ runtime cost control, and shared AI transport surfaces.
    or questions begin, stale workflow text must clear so the row does not keep
    saying it is waiting on a phase that has already been superseded.
    OpenCode-parity Assistant UX work must reference OpenCode's actual source
-   implementation for message parts, tool-state mutation, and progress
-   rendering before changing Pulse behavior; parity means adapting the proven
-   interaction model, not guessing from screenshots or observed behavior alone.
+   implementation for message parts, tool-state mutation, progress rendering,
+   and model/session selection before changing Pulse behavior; parity means
+   adapting the proven interaction model, not guessing from screenshots or
+   observed behavior alone.
+   The referenced OpenCode source at fetched `origin/dev` commit
+   `9ed17da55ab1f7360cc0e01075f763e27fa899e9` builds the model dialog from
+   provider metadata, favorites, recent models, and provider sections in
+   `packages/opencode/src/cli/cmd/tui/component/dialog-model.tsx`, keeps
+   structured `{ providerID, modelID }` current/recent/favorite state with
+   provider-catalog validation in
+   `packages/opencode/src/cli/cmd/tui/context/local.tsx`, and formats the
+   effective model label from provider/model metadata in
+   `packages/opencode/src/cli/cmd/run/variant.shared.ts`. Pulse's Assistant
+   drawer adapts that selector workflow by keeping explicit recent model routes
+   above the provider catalog, routing chat-specific default/override options
+   through the shared model picker, preserving selected older models in the
+   visible list, and accepting custom model entries only when they are explicit
+   `provider:model` routes that the backend chat stream can execute.
    The referenced OpenCode source at fetched `origin/dev` commit
    `fa2b63f850fc0a23bec2bdff9e660450d3fe7913` keeps prompt/footer status visible
    only while the session is non-idle in

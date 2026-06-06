@@ -14,7 +14,9 @@ describe('SearchField', () => {
   it('keeps search field on shell, runtime, and model owners', () => {
     expect(searchFieldSource).toContain('useSearchFieldState');
     expect(searchFieldSource).not.toContain('let inputEl: HTMLInputElement');
-    expect(searchFieldSource).not.toContain("if (props.hasTrailingControls) return 'pr-14 sm:pr-20'");
+    expect(searchFieldSource).not.toContain(
+      "if (props.hasTrailingControls) return 'pr-14 sm:pr-20'",
+    );
     expect(searchFieldSource).not.toContain("if (e.key === 'Escape'");
 
     expect(searchFieldStateSource).toContain('export function useSearchFieldState');
@@ -92,7 +94,7 @@ describe('SearchField', () => {
   });
 
   it('invokes explicit keyboard and blur handlers with the input event target', async () => {
-    const onKeyDown = vi.fn();
+    const onKeyDown = vi.fn((event: KeyboardEvent) => event.key);
     const onBlur = vi.fn();
 
     render(() => (
@@ -111,6 +113,7 @@ describe('SearchField', () => {
 
     expect(onKeyDown).toHaveBeenCalledTimes(1);
     expect(onKeyDown.mock.calls[0][0].currentTarget).toBe(input);
+    expect(onKeyDown.mock.results[0].value).toBe('Enter');
     expect(onBlur).toHaveBeenCalledTimes(1);
     expect(onBlur.mock.calls[0][0].currentTarget).toBe(input);
   });

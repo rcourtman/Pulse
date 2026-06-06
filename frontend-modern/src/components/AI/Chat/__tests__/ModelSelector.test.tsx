@@ -343,6 +343,53 @@ describe('ModelSelector', () => {
     expect(onModelSelect).toHaveBeenCalledWith('openai:gpt-4o');
   });
 
+  it('shows recent model routes before the provider catalog', () => {
+    render(() => (
+      <ModelSelector
+        models={[
+          ...SAMPLE_MODELS,
+          makeModel({
+            id: 'openrouter:deepseek/deepseek-v4-pro',
+            name: 'DeepSeek: DeepSeek V4 Pro',
+            provider: 'openrouter',
+            notable: true,
+          }),
+        ]}
+        selectedModel=""
+        recentModelIds={['openrouter:deepseek/deepseek-v4-pro', 'openai:gpt-4o']}
+        onModelSelect={vi.fn()}
+      />
+    ));
+
+    fireEvent.click(screen.getByTitle('Select model for this chat'));
+
+    const recentHeader = screen.getByText('Recent');
+    const deepSeekRecent = screen.getByText('DeepSeek: DeepSeek V4 Pro via OpenRouter');
+    const anthropicHeader = screen.getByText('Anthropic');
+    expect(
+      recentHeader.compareDocumentPosition(deepSeekRecent) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      deepSeekRecent.compareDocumentPosition(anthropicHeader) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('keeps explicit recent custom routes available when they are not in the catalog', () => {
+    render(() => (
+      <ModelSelector
+        models={SAMPLE_MODELS}
+        selectedModel=""
+        recentModelIds={['openrouter:custom/model']}
+        onModelSelect={vi.fn()}
+      />
+    ));
+
+    fireEvent.click(screen.getByTitle('Select model for this chat'));
+
+    expect(screen.getByText('Custom: Model via OpenRouter')).toBeInTheDocument();
+    expect(screen.getByText('Recent custom model route')).toBeInTheDocument();
+  });
+
   // --- Notable Model Filtering ---
 
   it('shows only notable models by default', () => {
@@ -492,17 +539,28 @@ describe('ModelSelector', () => {
     expect(screen.queryByText(/older models/)).not.toBeInTheDocument();
   });
 
-  // --- Custom Model ID ---
+  // --- Custom Model Route ---
 
-  it('shows custom model option when search query does not match any model ID', () => {
+  it('shows custom model option when an explicit route does not match any model ID', () => {
+    render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
+
+    fireEvent.click(screen.getByTitle('Select model for this chat'));
+    const searchInput = screen.getByPlaceholderText('Search or enter model ID');
+    fireEvent.input(searchInput, { target: { value: 'openrouter:custom/model' } });
+
+    expect(screen.getByText('Use "openrouter:custom/model"')).toBeInTheDocument();
+    expect(screen.getByText('Custom provider:model route')).toBeInTheDocument();
+  });
+
+  it('does not offer a custom model option for plain search terms', () => {
     render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
     const searchInput = screen.getByPlaceholderText('Search or enter model ID');
     fireEvent.input(searchInput, { target: { value: 'my-custom-model' } });
 
-    expect(screen.getByText('Use "my-custom-model"')).toBeInTheDocument();
-    expect(screen.getByText('Custom model ID')).toBeInTheDocument();
+    expect(screen.queryByText('Use "my-custom-model"')).not.toBeInTheDocument();
+    expect(screen.getByText('No matching models.')).toBeInTheDocument();
   });
 
   it('does not show custom model option when query exactly matches an existing model ID', () => {
@@ -512,7 +570,7 @@ describe('ModelSelector', () => {
     const searchInput = screen.getByPlaceholderText('Search or enter model ID');
     fireEvent.input(searchInput, { target: { value: 'anthropic:claude-sonnet-4' } });
 
-    expect(screen.queryByText('Custom model ID')).not.toBeInTheDocument();
+    expect(screen.queryByText('Custom provider:model route')).not.toBeInTheDocument();
   });
 
   it('selects custom model when clicked', () => {
@@ -523,10 +581,10 @@ describe('ModelSelector', () => {
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
     const searchInput = screen.getByPlaceholderText('Search or enter model ID');
-    fireEvent.input(searchInput, { target: { value: 'my-custom-model' } });
-    fireEvent.click(screen.getByText('Use "my-custom-model"'));
+    fireEvent.input(searchInput, { target: { value: 'openrouter:custom/model' } });
+    fireEvent.click(screen.getByText('Use "openrouter:custom/model"'));
 
-    expect(onModelSelect).toHaveBeenCalledWith('my-custom-model');
+    expect(onModelSelect).toHaveBeenCalledWith('openrouter:custom/model');
   });
 
   it('selects custom model on Enter key', () => {
@@ -537,10 +595,10 @@ describe('ModelSelector', () => {
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
     const searchInput = screen.getByPlaceholderText('Search or enter model ID');
-    fireEvent.input(searchInput, { target: { value: 'my-custom-model' } });
+    fireEvent.input(searchInput, { target: { value: 'openrouter:custom/model' } });
     fireEvent.keyDown(searchInput, { key: 'Enter' });
 
-    expect(onModelSelect).toHaveBeenCalledWith('my-custom-model');
+    expect(onModelSelect).toHaveBeenCalledWith('openrouter:custom/model');
   });
 
   it('does not submit on non-Enter keys', () => {
@@ -662,9 +720,8 @@ describe('ModelSelector', () => {
     fireEvent.click(screen.getByTitle('Select model for this chat'));
 
     // GPT-4o appears twice: in the top button label and in the dropdown list.
-    // Find the one inside the dropdown's model list (which has font-medium class in a flex container).
     const allGpt4o = screen.getAllByText('GPT-4o');
-    const dropdownEntry = allGpt4o.find((el) => el.closest('.max-h-72') !== null);
+    const dropdownEntry = allGpt4o.find((el) => el.closest('[role="listbox"]') !== null);
     expect(dropdownEntry).toBeDefined();
     const modelButton = dropdownEntry!.closest('button');
     expect(modelButton?.className).toContain('bg-blue-50');
@@ -732,7 +789,7 @@ describe('ModelSelector', () => {
     expect(screen.getByPlaceholderText('Search or enter model ID')).toBeInTheDocument();
 
     // Simulate click outside the dropdown container
-    fireEvent.click(screen.getByTestId('outside'));
+    fireEvent.mouseDown(screen.getByTestId('outside'));
 
     expect(screen.queryByPlaceholderText('Search or enter model ID')).not.toBeInTheDocument();
   });
@@ -747,11 +804,11 @@ describe('ModelSelector', () => {
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
     const searchInput = screen.getByPlaceholderText('Search or enter model ID');
-    fireEvent.input(searchInput, { target: { value: '  my-model  ' } });
+    fireEvent.input(searchInput, { target: { value: '  openrouter:custom/model  ' } });
     fireEvent.keyDown(searchInput, { key: 'Enter' });
 
     // customModelCandidate trims the search query
-    expect(onModelSelect).toHaveBeenCalledWith('my-model');
+    expect(onModelSelect).toHaveBeenCalledWith('openrouter:custom/model');
   });
 
   it('does not submit on Enter when search query is empty', () => {

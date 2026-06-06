@@ -16,6 +16,7 @@ const {
   mockResources,
   mockWebSocketState,
   mockChatMessagesProps,
+  mockModelSelectorProps,
 } = vi.hoisted(() => {
   const mockChatMessagesProps: Array<{
     messages: ChatMessage[];
@@ -23,6 +24,13 @@ const {
     getModelRouteLabel?: (modelId: string) => string;
     getModelRouteAlternative?: (message: ChatMessage) => ModelRouteRecoveryOption | null;
     onUseModelRoute?: (modelId: string, messageId?: string) => void;
+  }> = [];
+  const mockModelSelectorProps: Array<{
+    selectedModel: string;
+    models: ModelInfo[];
+    recentModelIds?: string[];
+    openRequest?: number;
+    onModelSelect?: (modelId: string) => void;
   }> = [];
   const mockChat = {
     messages: vi.fn((): ChatMessage[] => []),
@@ -180,6 +188,7 @@ const {
     mockResources,
     mockWebSocketState,
     mockChatMessagesProps,
+    mockModelSelectorProps,
   };
 });
 
@@ -238,14 +247,24 @@ vi.mock('../ChatMessages', () => ({
 }));
 
 vi.mock('../ModelSelector', () => ({
-  ModelSelector: (props: { selectedModel: string; models: ModelInfo[]; openRequest?: number }) => (
-    <div
-      data-testid="model-selector"
-      data-selected={props.selectedModel}
-      data-count={props.models.length}
-      data-open-request={String(props.openRequest || 0)}
-    />
-  ),
+  ModelSelector: (props: {
+    selectedModel: string;
+    models: ModelInfo[];
+    recentModelIds?: string[];
+    openRequest?: number;
+    onModelSelect?: (modelId: string) => void;
+  }) => {
+    mockModelSelectorProps.push(props);
+    return (
+      <div
+        data-testid="model-selector"
+        data-selected={props.selectedModel}
+        data-count={props.models.length}
+        data-open-request={String(props.openRequest || 0)}
+        data-recent-models={(props.recentModelIds || []).join('|')}
+      />
+    );
+  },
 }));
 
 vi.mock('../MentionAutocomplete', () => ({
@@ -350,6 +369,7 @@ async function waitForProviderCheckSettled() {
 beforeEach(() => {
   vi.clearAllMocks();
   mockChatMessagesProps.length = 0;
+  mockModelSelectorProps.length = 0;
   setViewportWidth(1440);
   resetAIRuntimeState();
   mockAiChatStore.isOpenSignal.mockReturnValue(true);
@@ -2637,10 +2657,56 @@ describe('AIChat', () => {
       renderChat();
 
       await waitFor(() => {
-        expect(mockChat.setModel).toHaveBeenCalledWith(
+        expect(mockChat.setModel).toHaveBeenCalledWith('openrouter:deepseek/deepseek-v4-pro');
+      });
+    });
+
+    it('passes stored recent model routes to the model selector', () => {
+      localStorage.setItem(
+        'pulse:ai_chat_recent_models',
+        JSON.stringify([
+          'openrouter:deepseek/deepseek-v4-pro',
+          'plain-model-name',
+          'openai:gpt-4o',
+          'openrouter:deepseek/deepseek-v4-pro',
+        ]),
+      );
+
+      renderChat();
+
+      expect(screen.getByTestId('model-selector')).toHaveAttribute(
+        'data-recent-models',
+        'openrouter:deepseek/deepseek-v4-pro|openai:gpt-4o',
+      );
+    });
+
+    it('records selected explicit model routes as recents', async () => {
+      renderChat();
+
+      mockModelSelectorProps[mockModelSelectorProps.length - 1].onModelSelect?.(
+        'openrouter:deepseek/deepseek-v4-pro',
+      );
+
+      expect(mockChat.setModel).toHaveBeenCalledWith('openrouter:deepseek/deepseek-v4-pro');
+      expect(localStorage.getItem('pulse:ai_chat_recent_models')).toBe(
+        JSON.stringify(['openrouter:deepseek/deepseek-v4-pro']),
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('model-selector')).toHaveAttribute(
+          'data-recent-models',
           'openrouter:deepseek/deepseek-v4-pro',
         );
       });
+    });
+
+    it('does not record non-routed model strings as recents', () => {
+      renderChat();
+
+      mockModelSelectorProps[mockModelSelectorProps.length - 1].onModelSelect?.('plain-model-name');
+
+      expect(mockChat.setModel).toHaveBeenCalledWith('plain-model-name');
+      expect(localStorage.getItem('pulse:ai_chat_recent_models')).toBeNull();
     });
   });
 
@@ -2989,9 +3055,9 @@ describe('AIChat', () => {
         },
       ]);
       renderChat();
-      expect(
-        screen.getByLabelText('Assistant active turn status'),
-      ).toHaveTextContent('Planning governed action and safety checks before execution. · exec');
+      expect(screen.getByLabelText('Assistant active turn status')).toHaveTextContent(
+        'Planning governed action and safety checks before execution. · exec',
+      );
       expect(screen.queryByText('Generating response...')).not.toBeInTheDocument();
     });
 

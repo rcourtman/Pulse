@@ -1,4 +1,13 @@
-import { Component, For, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import {
+  Component,
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  onMount,
+} from 'solid-js';
 import ChevronDownIcon from 'lucide-solid/icons/chevron-down';
 import MonitorIcon from 'lucide-solid/icons/monitor';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
@@ -16,12 +25,27 @@ type AIModelPickerDefaultOption = {
   description?: string;
 };
 
+export type AIModelPickerExtraOption = {
+  id: string;
+  label: string;
+  description?: string;
+  hidden?: boolean;
+};
+
+export type AIModelPickerModelSection = {
+  title: string;
+  modelIds: string[];
+};
+
 export interface AIModelPickerProps {
   models: ModelInfo[];
   selectedModel: string;
   onModelSelect: (modelId: string) => void;
   defaultOption?: AIModelPickerDefaultOption;
+  extraOptions?: AIModelPickerExtraOption[];
+  modelSections?: AIModelPickerModelSection[];
   emptySelectionLabel?: string;
+  selectionBadge?: string;
   title?: string;
   searchPlaceholder?: string;
   emptyState?: string;
@@ -30,6 +54,7 @@ export interface AIModelPickerProps {
   isLoading?: boolean;
   error?: string;
   onRefresh?: () => void;
+  openRequest?: number;
   align?: 'left' | 'right';
   buttonClass?: string;
   buttonLabelClass?: string;
@@ -49,6 +74,26 @@ const MOBILE_BOTTOM_CLEARANCE = 88;
 const DESKTOP_BOTTOM_CLEARANCE = 16;
 const SEARCH_HEADER_HEIGHT = 52;
 const ERROR_ROW_HEIGHT = 36;
+const CUSTOM_RECENT_MODEL_DESCRIPTION = 'Recent custom model route';
+
+type ResolvedModelRoute = {
+  id: string;
+  model?: ModelInfo;
+};
+
+const isExplicitModelRoute = (modelId: string) => modelId.includes(':');
+
+const modelRouteLabel = (entry: ResolvedModelRoute) =>
+  entry.model ? formatAIModelRouteLabel(entry.model) : formatAIModelRouteLabel(entry.id);
+
+const modelRouteDescription = (entry: ResolvedModelRoute) =>
+  entry.model?.description || (!entry.model ? CUSTOM_RECENT_MODEL_DESCRIPTION : '');
+
+const modelRouteSecondaryId = (entry: ResolvedModelRoute) => {
+  const model = entry.model;
+  if (!model?.name || model.name === model.id) return '';
+  return model.id;
+};
 
 function groupModelsByProvider(models: ModelInfo[]): Map<string, ModelInfo[]> {
   const grouped = new Map<string, ModelInfo[]>();
@@ -78,10 +123,42 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
   });
   let containerRef: HTMLDivElement | undefined;
   let buttonRef: HTMLButtonElement | undefined;
+  let searchInputRef: HTMLInputElement | undefined;
+  let lastOpenRequest = props.openRequest || 0;
 
   const selectedModel = createMemo(() => props.selectedModel?.trim() || '');
+  const modelsById = createMemo(() => new Map(props.models.map((model) => [model.id, model])));
   const notableModels = createMemo(() => props.models.filter((model) => model.notable));
   const shouldFilterToNotable = createMemo(() => notableModels().length > 0);
+  const extraOptions = createMemo(() =>
+    (props.extraOptions || []).filter((option) => option.id.trim() && !option.hidden),
+  );
+  const modelSections = createMemo(() => {
+    const seen = new Set<string>();
+    return (props.modelSections || [])
+      .map((section) => {
+        const models = section.modelIds.flatMap((modelId): ResolvedModelRoute[] => {
+          const id = modelId.trim();
+          if (!id || seen.has(id)) {
+            return [];
+          }
+          const model = modelsById().get(id);
+          if (!model && !isExplicitModelRoute(id)) {
+            return [];
+          }
+          seen.add(id);
+          return [{ id, model }];
+        });
+        return {
+          title: section.title,
+          models,
+        };
+      })
+      .filter((section) => section.models.length > 0);
+  });
+  const sectionModelIds = createMemo(
+    () => new Set(modelSections().flatMap((section) => section.models.map((model) => model.id))),
+  );
 
   const visibleUnsearchedModels = createMemo(() => {
     if (showAllModels() || !shouldFilterToNotable()) {
@@ -97,13 +174,17 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
       return 0;
     }
     const selected = selectedModel();
-    return props.models.filter((model) => !model.notable && model.id !== selected).length;
+    const sectionIds = sectionModelIds();
+    return props.models.filter(
+      (model) => !model.notable && model.id !== selected && !sectionIds.has(model.id),
+    ).length;
   });
 
   const filteredModels = createMemo(() => {
     const query = searchQuery().trim().toLowerCase();
     if (!query) {
-      return visibleUnsearchedModels();
+      const sectionIds = sectionModelIds();
+      return visibleUnsearchedModels().filter((model) => !sectionIds.has(model.id));
     }
     return props.models.filter((model) => {
       const provider = model.provider?.trim() || getProviderFromModelId(model.id);
@@ -132,7 +213,7 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
     if (!candidate) {
       return false;
     }
-    if (!candidate.includes(':')) {
+    if (!isExplicitModelRoute(candidate)) {
       return false;
     }
     return !props.models.some((model) => model.id === candidate);
@@ -186,14 +267,26 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
     setSearchQuery('');
   };
 
+  const focusSearchInput = () => {
+    queueMicrotask(() => searchInputRef?.focus());
+  };
+
+  const openPicker = () => {
+    updateDropdownPosition();
+    setSearchQuery('');
+    setIsOpen(true);
+    focusSearchInput();
+  };
+
   const handleToggle = () => {
     if (props.disabled) {
       return;
     }
     if (!isOpen()) {
-      updateDropdownPosition();
+      openPicker();
+      return;
     }
-    setIsOpen(!isOpen());
+    closePicker();
   };
 
   const handleSelect = (modelId: string) => {
@@ -211,6 +304,23 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
       handleSelect(candidate);
     }
   };
+
+  createEffect(() => {
+    const request = props.openRequest || 0;
+    if (request <= 0 || request === lastOpenRequest) {
+      return;
+    }
+    lastOpenRequest = request;
+    queueMicrotask(openPicker);
+  });
+
+  const hasVisibleListOptions = createMemo(
+    () =>
+      Boolean(props.defaultOption) ||
+      extraOptions().length > 0 ||
+      modelSections().length > 0 ||
+      showCustomModelOption(),
+  );
 
   onMount(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -245,6 +355,9 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
       >
         <MonitorIcon class="h-3.5 w-3.5 shrink-0" />
         <span class={props.buttonLabelClass || DEFAULT_LABEL_CLASS}>{selectedLabel()}</span>
+        <Show when={props.selectionBadge}>
+          <span class="text-[10px] font-normal text-muted">{props.selectionBadge}</span>
+        </Show>
         <Show when={props.isLoading}>
           <RefreshCwIcon class="h-3 w-3 shrink-0 animate-spin" />
         </Show>
@@ -264,6 +377,9 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
               placeholder={props.searchPlaceholder || 'Search or enter model ID'}
               class="flex-1"
               inputClass="py-1.5 text-xs focus:ring-blue-400"
+              inputRef={(el) => {
+                searchInputRef = el;
+              }}
             />
             <Show when={props.onRefresh}>
               <button
@@ -302,6 +418,21 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
               </button>
             </Show>
 
+            <For each={extraOptions()}>
+              {(option) => (
+                <button
+                  type="button"
+                  onClick={() => handleSelect(option.id)}
+                  class={`w-full px-3 py-2 text-left text-sm hover:bg-surface-hover ${selectedModel() === option.id ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
+                >
+                  <div class="font-medium text-base-content">{option.label}</div>
+                  <Show when={option.description}>
+                    <div class="text-[11px] text-muted">{option.description}</div>
+                  </Show>
+                </button>
+              )}
+            </For>
+
             <Show when={showCustomModelOption()}>
               <button
                 type="button"
@@ -315,10 +446,47 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
               </button>
             </Show>
 
-            <Show when={!props.isLoading && filteredModels().length === 0}>
+            <Show
+              when={
+                !props.isLoading &&
+                filteredModels().length === 0 &&
+                (Boolean(searchQuery().trim()) || !hasVisibleListOptions())
+              }
+            >
               <div class="px-3 py-4 text-center text-[11px] text-muted">
                 {props.emptyState || DEFAULT_EMPTY_STATE}
               </div>
+            </Show>
+
+            <Show when={!searchQuery().trim()}>
+              <For each={modelSections()}>
+                {(section) => (
+                  <>
+                    <div class="sticky top-0 bg-surface-alt px-3 py-1.5 text-[11px] font-semibold text-muted">
+                      {section.title}
+                    </div>
+                    <For each={section.models}>
+                      {(entry) => (
+                        <button
+                          type="button"
+                          onClick={() => handleSelect(entry.id)}
+                          class={`w-full px-3 py-2 text-left text-sm hover:bg-surface-hover ${selectedModel() === entry.id ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
+                        >
+                          <div class="font-medium text-base-content">{modelRouteLabel(entry)}</div>
+                          <Show when={modelRouteDescription(entry)}>
+                            <div class="line-clamp-2 text-[11px] text-muted">
+                              {modelRouteDescription(entry)}
+                            </div>
+                          </Show>
+                          <Show when={modelRouteSecondaryId(entry)}>
+                            {(modelId) => <div class="text-[10px] text-muted">{modelId()}</div>}
+                          </Show>
+                        </button>
+                      )}
+                    </For>
+                  </>
+                )}
+              </For>
             </Show>
 
             <For each={Array.from(groupModelsByProvider(filteredModels()).entries())}>

@@ -1004,6 +1004,12 @@ not a replacement status card, CTA band, or page-local nested card.
     plain select options. The picker must also constrain its dropdown and
     internal result list to the available viewport height so settings model
     catalogs remain usable on mobile and tablet layouts with bottom navigation.
+    Chat-owned selectors must reuse this shared picker instead of carrying a
+    parallel dropdown implementation. Recent/priority model sections, external
+    open-and-focus requests, selected older model visibility, route labels, and
+    explicit `provider:model` custom-route validation belong to the shared
+    picker so Assistant, settings, and future model-selection surfaces do not
+    drift apart.
     Gateway-routed model choices must not look like direct-provider choices:
     the shared picker, System AI settings status strip, and per-surface
     inherited-default descriptions must render OpenRouter-hosted provider
@@ -2294,7 +2300,11 @@ Escape clear/blur behavior and input-ref lifecycle, and
 `frontend-modern/src/components/shared/searchFieldModel.ts` owns clear/shortcut
 visibility rules plus trailing-control padding policy. Future search-field work
 should extend those owners instead of pushing event behavior or layout policy
-back into the shared shell.
+back into the shared shell. Forwarded keyboard and blur events must preserve
+native browser event getters while normalizing `currentTarget` and `target`;
+shared search-field wrappers must not proxy native event properties through a
+receiver that can break `KeyboardEvent`/`FocusEvent` getters in live browser
+surfaces.
 The shared search input now follows that same owner split.
 `frontend-modern/src/components/shared/SearchInput.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useSearchInputState.ts` owns input-ref

@@ -3008,6 +3008,20 @@
           ]
         },
         {
+          "id": "assistant-model-selector-workflow-tests",
+          "run": [
+            "npm",
+            "--prefix",
+            "frontend-modern",
+            "test",
+            "--",
+            "src/components/shared/__tests__/AIModelPicker.test.tsx",
+            "src/components/AI/Chat/__tests__/ModelSelector.test.tsx",
+            "src/components/AI/Chat/__tests__/AIChat.test.tsx",
+            "src/components/shared/__tests__/SearchField.test.tsx"
+          ]
+        },
+        {
           "id": "assistant-neutral-session-context-tests",
           "run": [
             "go",
@@ -3139,6 +3153,11 @@
         },
         {
           "repo": "pulse",
+          "path": "frontend-modern/src/components/AI/Chat/__tests__/ModelSelector.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/components/AI/Chat/__tests__/useChat.test.ts",
           "kind": "file"
         },
@@ -3164,6 +3183,11 @@
         },
         {
           "repo": "pulse",
+          "path": "frontend-modern/src/components/AI/Chat/ModelSelector.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/components/AI/Chat/types.ts",
           "kind": "file"
         },
@@ -3180,6 +3204,26 @@
         {
           "repo": "pulse",
           "path": "frontend-modern/src/components/Alerts/incidentAssistantHandoffModel.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/shared/__tests__/AIModelPicker.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/shared/__tests__/SearchField.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/shared/AIModelPicker.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/shared/useSearchFieldState.ts",
           "kind": "file"
         },
         {
@@ -6767,11 +6811,11 @@
     {
       "id": "codex-lane-followup-architecture-post-rc-canonicalization",
       "agent_id": "codex",
-      "summary": "Keep Assistant status on the active tool",
+      "summary": "Align Assistant model selection with OpenCode source workflow",
       "target_id": "v6-product-lane-expansion",
       "claimed_at": "2026-06-05T21:57:48Z",
-      "heartbeat_at": "2026-06-06T01:23:29Z",
-      "expires_at": "2026-06-06T03:23:29Z",
+      "heartbeat_at": "2026-06-06T01:33:49Z",
+      "expires_at": "2026-06-06T03:33:49Z",
       "work_item": {
         "kind": "lane-followup",
         "id": "architecture-post-rc-canonicalization"

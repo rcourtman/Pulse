@@ -86,10 +86,12 @@ import type {
 import { formatIdentifierLabel } from '@/utils/textPresentation';
 
 const MODEL_SESSION_STORAGE_KEY = 'pulse:ai_chat_models_by_session';
+const MODEL_RECENT_STORAGE_KEY = 'pulse:ai_chat_recent_models';
 const PROMPT_HISTORY_STORAGE_KEY = 'pulse:ai_chat_prompt_history';
 const DEFAULT_SESSION_KEY = '__default__';
 const AI_CHAT_MIN_DOCKED_VIEWPORT_WIDTH = 1200;
 const AI_CHAT_PROMPT_HISTORY_LIMIT = 100;
+const AI_CHAT_RECENT_MODEL_LIMIT = 8;
 const STRUCTURED_PATROL_CONTEXT_TARGETS = new Set(['patrol-configuration', 'patrol-run']);
 const STRUCTURED_RESOURCE_CONTEXT_HANDOFF_KINDS = new Set(['resource_context']);
 
@@ -672,6 +674,54 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [modelSelections, setModelSelections] =
     createSignal<Record<string, string>>(initialModelSelections);
 
+  const loadRecentModelIds = (): string[] => {
+    try {
+      const raw = localStorage.getItem(MODEL_RECENT_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(parsed)) return [];
+      const seen = new Set<string>();
+      const recentModelIds: string[] = [];
+      for (const value of parsed) {
+        const modelId = typeof value === 'string' ? value.trim() : '';
+        if (!modelId || !modelId.includes(':') || seen.has(modelId)) continue;
+        seen.add(modelId);
+        recentModelIds.push(modelId);
+        if (recentModelIds.length >= AI_CHAT_RECENT_MODEL_LIMIT) break;
+      }
+      return recentModelIds;
+    } catch (error) {
+      logger.warn('[AIChat] Failed to read recent models:', error);
+      return [];
+    }
+  };
+
+  const persistRecentModelIds = (modelIds: string[]) => {
+    try {
+      if (modelIds.length > 0) {
+        localStorage.setItem(MODEL_RECENT_STORAGE_KEY, JSON.stringify(modelIds));
+      } else {
+        localStorage.removeItem(MODEL_RECENT_STORAGE_KEY);
+      }
+    } catch (error) {
+      logger.warn('[AIChat] Failed to persist recent models:', error);
+    }
+  };
+
+  const [recentModelIds, setRecentModelIds] = createSignal<string[]>(loadRecentModelIds());
+
+  const rememberRecentModel = (modelId: string) => {
+    const normalizedModelId = modelId.trim();
+    if (!normalizedModelId || !normalizedModelId.includes(':')) return;
+    setRecentModelIds((prev) => {
+      const next = [
+        normalizedModelId,
+        ...prev.filter((candidate) => candidate !== normalizedModelId),
+      ].slice(0, AI_CHAT_RECENT_MODEL_LIMIT);
+      persistRecentModelIds(next);
+      return next;
+    });
+  };
+
   const getStoredModel = (sessionId: string) => {
     const key = sessionId.trim();
     if (!key) return '';
@@ -957,6 +1007,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const selectModel = (modelId: string) => {
     chat.setModel(modelId);
     updateStoredModel(chat.sessionId(), modelId);
+    rememberRecentModel(modelId);
   };
 
   const openModelSelectorFromError = () => {
@@ -1865,6 +1916,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 defaultModelLabel={defaultModelLabel()}
                 chatOverrideModel={chatOverrideModel()}
                 chatOverrideLabel={chatOverrideLabel()}
+                recentModelIds={recentModelIds()}
                 isLoading={aiRuntimeModelsLoading()}
                 error={aiRuntimeModelsError()}
                 openRequest={modelSelectorOpenRequest()}

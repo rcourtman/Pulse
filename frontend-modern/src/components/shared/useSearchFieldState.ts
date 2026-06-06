@@ -33,10 +33,10 @@ export function useSearchFieldState(options: SearchFieldStateOptions) {
     const normalizedTarget = event.target as Element;
 
     return new Proxy(event, {
-      get(eventTarget, prop, receiver) {
+      get(eventTarget, prop) {
         if (prop === 'currentTarget') return currentTarget;
         if (prop === 'target') return normalizedTarget;
-        return Reflect.get(eventTarget, prop, receiver);
+        return Reflect.get(eventTarget, prop);
       },
     });
   };

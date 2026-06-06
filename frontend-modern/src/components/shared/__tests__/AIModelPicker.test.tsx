@@ -214,4 +214,28 @@ describe('AIModelPicker', () => {
 
     expect(onModelSelect).toHaveBeenCalledWith('openrouter:minimax/minimax-m2.5');
   });
+
+  it('renders priority model sections above provider groups and removes duplicate rows', () => {
+    render(() => (
+      <AIModelPicker
+        models={models}
+        selectedModel=""
+        onModelSelect={vi.fn()}
+        title="Select shared default model"
+        modelSections={[
+          {
+            title: 'Recent',
+            modelIds: ['openrouter:minimax/minimax-m2.5', 'openrouter:custom/model'],
+          },
+        ]}
+      />
+    ));
+
+    fireEvent.click(screen.getByTitle('Select shared default model'));
+
+    expect(screen.getByText('Recent')).toBeInTheDocument();
+    expect(screen.getByText('Custom: Model via OpenRouter')).toBeInTheDocument();
+    expect(screen.getByText('Recent custom model route')).toBeInTheDocument();
+    expect(screen.getAllByText('MiniMax: MiniMax M2.5 via OpenRouter')).toHaveLength(1);
+  });
 });
