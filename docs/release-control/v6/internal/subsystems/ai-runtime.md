@@ -113,12 +113,22 @@ runtime cost control, and shared AI transport surfaces.
    queued user turn without aborting or replacing the active model stream, must
    show an itemized composer-adjacent queue with per-follow-up edit/remove
    controls plus clear-all, and must drain queued turns in order only after the
-   active stream becomes idle. Stop is the
-   explicit interruption path: it must abort the active stream, clear queued
-   follow-ups and pending tool/approval/question affordances, preserve any
-   partial model text, return focus to the composer, and render a neutral
-   transcript marker rather than persisting synthetic assistant answer text or
-   surfacing the interruption as a retryable provider failure.
+   active stream becomes idle. Queued follow-ups must snapshot the effective
+   model route at enqueue time so a later model/provider switch cannot silently
+   reroute an already-queued user turn; explicit failed-turn recovery actions
+   such as `Retry via OpenRouter` must pass their selected route as an override
+   instead of relying on ambient selector state. The referenced OpenCode source
+   at fetched `origin/dev` commit
+   `1399323b78a04229d9bfe00c7436d7f41770fda8` keeps current, recent, and
+   selected models as structured `{ providerID, modelID }` values in
+   `packages/opencode/src/cli/cmd/tui/component/dialog-model.tsx` and
+   `packages/opencode/src/provider/provider.ts`, so Pulse must preserve the
+   equivalent route identity for queued and retried turns. Stop is the explicit
+   interruption path: it must abort the active stream, clear queued follow-ups
+   and pending tool/approval/question affordances, preserve any partial model
+   text, return focus to the composer, and render a neutral transcript marker
+   rather than persisting synthetic assistant answer text or surfacing the
+   interruption as a retryable provider failure.
    Composer prompt history is also drawer-local chat-runtime state: the drawer
    may persist a bounded local history of submitted prompt text and structured
    mentions for ArrowUp/ArrowDown recall, but that history must not persist or

@@ -400,6 +400,26 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('retryMessage can override the original turn model route', async () => {
+      mockChat.mockRejectedValueOnce(new Error('server error')).mockResolvedValueOnce(undefined);
+      const { value: chat, dispose } = withRoot(() =>
+        useChat({ sessionId: 'sess', model: 'deepseek:deepseek-v4-pro' }),
+      );
+
+      await chat.sendMessage('check provider');
+
+      const failed = chat.messages().find((m) => m.role === 'assistant');
+      expect(failed?.error).toContain('server error');
+
+      chat.retryMessage(failed!.id, { model: 'openrouter:deepseek/deepseek-v4-pro' });
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(mockChat).toHaveBeenCalledTimes(2);
+      expect(mockChat.mock.calls[0][2]).toBe('deepseek:deepseek-v4-pro');
+      expect(mockChat.mock.calls[1][2]).toBe('openrouter:deepseek/deepseek-v4-pro');
+      dispose();
+    });
+
     it('handles AbortError silently (returns false, no notification)', async () => {
       const abortError = new Error('Aborted');
       abortError.name = 'AbortError';
@@ -552,6 +572,38 @@ describe('useChat', () => {
       resolveSecond();
       await new Promise((r) => setTimeout(r, 0));
       expect(chat.isLoading()).toBe(false);
+      dispose();
+    });
+
+    it('snapshots the selected model for queued follow-ups', async () => {
+      const resolvers: Array<() => void> = [];
+      mockChat.mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            resolvers.push(resolve);
+          }),
+      );
+
+      const { value: chat, dispose } = withRoot(() =>
+        useChat({ sessionId: 'sess', model: 'openrouter:qwen/qwen3.7-plus' }),
+      );
+      const first = chat.sendMessage('first');
+      await new Promise((r) => setTimeout(r, 0));
+
+      chat.setModel('openrouter:deepseek/deepseek-v4-pro');
+      await chat.sendMessage('second');
+
+      const queuedUser = chat.messages().find((message) => message.content === 'second');
+      expect(queuedUser?.request?.model).toBe('openrouter:deepseek/deepseek-v4-pro');
+
+      chat.setModel('gemini:gemini-3.1-flash-lite');
+      resolvers[0]();
+      await first;
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(mockChat).toHaveBeenCalledTimes(2);
+      expect(mockChat.mock.calls[1][0]).toBe('second');
+      expect(mockChat.mock.calls[1][2]).toBe('openrouter:deepseek/deepseek-v4-pro');
       dispose();
     });
 

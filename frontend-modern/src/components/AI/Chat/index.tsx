@@ -1047,7 +1047,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const switchToModelRoute = (modelId: string, failedMessageId?: string) => {
     selectModel(modelId);
     if (failedMessageId) {
-      chat.retryMessage(failedMessageId);
+      chat.retryMessage(failedMessageId, { model: modelId });
     }
     focusComposer();
   };
@@ -1621,13 +1621,18 @@ export const AIChat: Component<AIChatProps> = (props) => {
         sendOptions.handoffMetadata = ctx.handoffMetadata;
       }
     }
+    const routeAlternative = selectProviderReadinessAlternativeForSend();
+    if (routeAlternative) {
+      sendOptions.model = routeAlternative.id;
+    }
+
     const hasSendOptions =
+      Boolean(sendOptions.model) ||
       typeof sendOptions.autonomousMode === 'boolean' ||
       Boolean(sendOptions.handoffContext) ||
       Boolean(sendOptions.handoffResources?.length) ||
       Boolean(sendOptions.handoffActions?.length) ||
       Boolean(sendOptions.handoffMetadata);
-    selectProviderReadinessAlternativeForSend();
 
     const sendPromise = hasSendOptions
       ? chat.sendMessage(prompt, mentionsForAPI, findingId, sendOptions)

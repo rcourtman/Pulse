@@ -46,6 +46,7 @@ export interface UseChatOptions {
 }
 
 export interface SendMessageOptions {
+  model?: string;
   autonomousMode?: boolean;
   handoffContext?: string;
   handoffResources?: ChatHandoffResource[];
@@ -71,7 +72,9 @@ export function useChat(options: UseChatOptions = {}) {
   const [model, setModel] = createSignal(options.model || '');
   const [queuedFollowUps, setQueuedFollowUps] = createSignal<QueuedFollowUp[]>([]);
 
-  const effectiveModelRoute = () => {
+  const effectiveModelRoute = (sendOptions?: Pick<SendMessageOptions, 'model'>) => {
+    const explicitModel = sendOptions?.model?.trim();
+    if (explicitModel) return explicitModel;
     const selected = model().trim();
     if (selected) return selected;
     return options.defaultModel?.().trim() || '';
@@ -526,6 +529,10 @@ export function useChat(options: UseChatOptions = {}) {
     if (!sendOptions) return undefined;
 
     const requestContext: ChatMessageRequestContext = {};
+    const modelRoute = sendOptions.model?.trim();
+    if (modelRoute) {
+      requestContext.model = modelRoute;
+    }
     if (typeof sendOptions.autonomousMode === 'boolean') {
       requestContext.autonomousMode = sendOptions.autonomousMode;
     }
@@ -545,6 +552,31 @@ export function useChat(options: UseChatOptions = {}) {
     }
 
     return Object.keys(requestContext).length > 0 ? requestContext : undefined;
+  };
+
+  const snapshotSendOptions = (sendOptions?: SendMessageOptions): SendMessageOptions | undefined => {
+    const modelRoute = effectiveModelRoute(sendOptions);
+    const next: SendMessageOptions = {};
+    if (modelRoute) {
+      next.model = modelRoute;
+    }
+    if (typeof sendOptions?.autonomousMode === 'boolean') {
+      next.autonomousMode = sendOptions.autonomousMode;
+    }
+    if (sendOptions?.handoffContext) {
+      next.handoffContext = sendOptions.handoffContext;
+    }
+    if (sendOptions?.handoffResources?.length) {
+      next.handoffResources = sendOptions.handoffResources.map((resource) => ({ ...resource }));
+    }
+    if (sendOptions?.handoffActions?.length) {
+      next.handoffActions = sendOptions.handoffActions.map((action) => ({ ...action }));
+    }
+    if (sendOptions?.handoffMetadata) {
+      next.handoffMetadata = { ...sendOptions.handoffMetadata };
+    }
+
+    return Object.keys(next).length > 0 ? next : undefined;
   };
 
   const buildRequestContext = (
@@ -572,6 +604,9 @@ export function useChat(options: UseChatOptions = {}) {
     if (!request) return undefined;
 
     const sendOptions: SendMessageOptions = {};
+    if (request.model) {
+      sendOptions.model = request.model;
+    }
     if (typeof request.autonomousMode === 'boolean') {
       sendOptions.autonomousMode = request.autonomousMode;
     }
@@ -1094,6 +1129,7 @@ export function useChat(options: UseChatOptions = {}) {
     const id = generateId();
     const messageId = generateId();
     const timestamp = new Date();
+    const queuedSendOptions = snapshotSendOptions(sendOptions);
 
     const queuedUserMessage: ChatMessage = {
       id: messageId,
@@ -1101,7 +1137,7 @@ export function useChat(options: UseChatOptions = {}) {
       content: trimmedPrompt,
       timestamp,
       delivery: 'queued',
-      request: buildRequestContext(mentions, findingId, sendOptions),
+      request: buildRequestContext(mentions, findingId, queuedSendOptions),
     };
 
     const queuedFollowUp: QueuedFollowUp = {
@@ -1110,7 +1146,7 @@ export function useChat(options: UseChatOptions = {}) {
       prompt: trimmedPrompt,
       mentions,
       findingId,
-      sendOptions,
+      sendOptions: queuedSendOptions,
       timestamp,
     };
 
@@ -1135,6 +1171,9 @@ export function useChat(options: UseChatOptions = {}) {
     const trimmedPrompt = prompt.trim();
     if (!trimmedPrompt) return false;
 
+    const requestSendOptions = snapshotSendOptions(sendOptions);
+    const requestModel = requestSendOptions?.model?.trim() || '';
+
     // Echo the user's message before any network work. Cold sessions can spend
     // noticeable time creating the server-side session; the chat surface should
     // still feel immediate.
@@ -1143,11 +1182,10 @@ export function useChat(options: UseChatOptions = {}) {
       role: 'user',
       content: trimmedPrompt,
       timestamp: new Date(),
-      request: buildRequestContext(mentions, findingId, sendOptions),
+      request: buildRequestContext(mentions, findingId, requestSendOptions),
     };
 
     const assistantId = generateId();
-    const requestModel = effectiveModelRoute();
     const initialWorkflowStatus = createInitialAssistantWorkflowStatus();
     const streamingMessage: ChatMessage = {
       id: assistantId,
@@ -1207,11 +1245,11 @@ export function useChat(options: UseChatOptions = {}) {
         abortController.signal,
         mentions,
         findingId,
-        sendOptions?.autonomousMode,
-        sendOptions?.handoffContext,
-        sendOptions?.handoffResources,
-        sendOptions?.handoffActions,
-        sendOptions?.handoffMetadata,
+        requestSendOptions?.autonomousMode,
+        requestSendOptions?.handoffContext,
+        requestSendOptions?.handoffResources,
+        requestSendOptions?.handoffActions,
+        requestSendOptions?.handoffMetadata,
       );
       if (requestId !== activeRequestId) {
         return false;
@@ -1514,7 +1552,7 @@ export function useChat(options: UseChatOptions = {}) {
   // Retry a failed assistant turn: drop the failed assistant message and the
   // user prompt that triggered it from the view, then re-send that prompt so the
   // conversation shows a single clean attempt instead of a dead-end error.
-  const retryMessage = (assistantMessageId: string) => {
+  const retryMessage = (assistantMessageId: string, sendOptionOverrides?: SendMessageOptions) => {
     const msgs = messages();
     const idx = msgs.findIndex((m) => m.id === assistantMessageId);
     if (idx < 0) return;
@@ -1524,13 +1562,17 @@ export function useChat(options: UseChatOptions = {}) {
     const prompt = msgs[userIdx].content;
     if (!prompt.trim()) return;
     const request = msgs[userIdx].request;
+    const sendOptions = {
+      ...(sendOptionsFromRequestContext(request) || {}),
+      ...(sendOptionOverrides || {}),
+    };
     const removeIds = new Set([msgs[userIdx].id, assistantMessageId]);
     setMessages((prev) => prev.filter((m) => !removeIds.has(m.id)));
     void sendMessage(
       prompt,
       cloneMentions(request?.mentions),
       request?.findingId,
-      sendOptionsFromRequestContext(request),
+      Object.keys(sendOptions).length > 0 ? sendOptions : undefined,
     );
   };
 

@@ -533,7 +533,9 @@ describe('AIChat', () => {
       fireEvent.click(await screen.findByTestId('mock-use-model-route'));
 
       expect(mockChat.setModel).toHaveBeenCalledWith('openrouter:deepseek/deepseek-v4-pro');
-      expect(mockChat.retryMessage).toHaveBeenCalledWith('assistant-error-1');
+      expect(mockChat.retryMessage).toHaveBeenCalledWith('assistant-error-1', {
+        model: 'openrouter:deepseek/deepseek-v4-pro',
+      });
       expect(document.activeElement).toBe(
         screen.getByPlaceholderText('Ask about your infrastructure...'),
       );
@@ -609,7 +611,9 @@ describe('AIChat', () => {
       props.onUseModelRoute?.(alternative!.id, deepSeekFailure.id);
 
       expect(mockChat.setModel).toHaveBeenCalledWith('openai:gpt-4o');
-      expect(mockChat.retryMessage).toHaveBeenCalledWith('assistant-error-deepseek');
+      expect(mockChat.retryMessage).toHaveBeenCalledWith('assistant-error-deepseek', {
+        model: 'openai:gpt-4o',
+      });
     });
 
     it('checks the selected provider and shows a readiness issue before the first send', async () => {
@@ -902,6 +906,7 @@ describe('AIChat', () => {
         'summarize the cluster',
         undefined,
         undefined,
+        { model: 'openrouter:deepseek/deepseek-v4-pro' },
       );
       expect(mockChat.setModel.mock.invocationCallOrder[0]).toBeLessThan(
         mockChat.sendMessage.mock.invocationCallOrder[0],
