@@ -194,6 +194,7 @@ describe('ToolExecutionBlock', () => {
     ));
 
     expect(screen.getByText('Inspect devices on current resource')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tool command')).toHaveTextContent('$ ls /dev | wc -l');
     expect(screen.queryByText(/"target_host"/)).not.toBeInTheDocument();
   });
 
@@ -229,7 +230,28 @@ describe('ToolExecutionBlock', () => {
     ));
 
     expect(screen.getByText('Inspect devices on current resource')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tool command')).toHaveTextContent('$ ls /dev | wc -l');
     expect(screen.queryByText(/pulse_read\(/)).not.toBeInTheDocument();
+  });
+
+  it('redacts obvious secrets from completed read command previews', () => {
+    render(() => (
+      <ToolExecutionBlock
+        tool={makeTool({
+          name: 'pulse_read',
+          input:
+            '{"action":"exec","command":"curl -H \\"Authorization: Bearer secret-token\\" --password hunter2 https://example.local"}',
+          output: '200',
+        })}
+      />
+    ));
+
+    const preview = screen.getByLabelText('Tool command');
+    expect(preview).toHaveTextContent(
+      '$ curl -H "Authorization: Bearer [redacted-secret]" --password [redacted-secret] https://example.local',
+    );
+    expect(preview).not.toHaveTextContent('secret-token');
+    expect(preview).not.toHaveTextContent('hunter2');
   });
 
   it('renders Pulse read log input as a readable log action', () => {
@@ -340,6 +362,7 @@ describe('ToolExecutionBlock', () => {
     ));
 
     expect(screen.getByText('Inspect devices on current resource')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tool command')).toHaveTextContent('$ ls /dev | wc -l');
     expect(screen.getByLabelText('Tool output preview')).toHaveTextContent('42');
   });
 
@@ -574,6 +597,7 @@ describe('PendingToolBlock', () => {
     ));
 
     expect(screen.getByText('Inspect devices on current resource')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tool command')).toHaveTextContent('$ lsblk -o NAME,SIZE');
     expect(screen.queryByText(/"command"/)).not.toBeInTheDocument();
   });
 
@@ -608,6 +632,7 @@ describe('PendingToolBlock', () => {
     ));
 
     expect(screen.getByText('Inspect devices on current resource')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tool command')).toHaveTextContent('$ lsblk -o NAME,SIZE');
     expect(screen.queryByText(/pulse_read\(/)).not.toBeInTheDocument();
   });
 
@@ -624,6 +649,7 @@ describe('PendingToolBlock', () => {
     ));
 
     expect(screen.getByText('Inspect devices on current resource')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tool command')).toHaveTextContent('$ ls /dev | wc -l');
     expect(screen.queryByText(/"target_host"/)).not.toBeInTheDocument();
   });
 
@@ -639,6 +665,7 @@ describe('PendingToolBlock', () => {
     ));
 
     expect(screen.getByText('Inspect devices')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tool command')).toHaveTextContent('$ ls /dev |');
   });
 
   it('uses structured raw input over pending backend command display strings', () => {

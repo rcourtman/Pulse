@@ -110,6 +110,36 @@ const targetSuffix = (record: Record<string, unknown>) => {
 
 const normalizedShellCommand = (command: string) => command.replace(/\s+/g, ' ').trim();
 
+const redactShellCommandPreview = (command: string) =>
+  command
+    .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, '[redacted-secret]')
+    .replace(/(Authorization:\s*Bearer\s+)([^"'\s]+)/gi, '$1[redacted-secret]')
+    .replace(/(Bearer\s+)([A-Za-z0-9._~+/=-]{8,})/gi, '$1[redacted-secret]')
+    .replace(
+      /(--(?:api-?key|access-token|token|password|secret)(?:=|\s+))("[^"]*"|'[^']*'|[^\s]+)/gi,
+      '$1[redacted-secret]',
+    )
+    .replace(
+      /\b([A-Z0-9_]*(?:API_?KEY|ACCESS_?TOKEN|TOKEN|PASSWORD|SECRET)[A-Z0-9_]*=)("[^"]*"|'[^']*'|[^\s]+)/g,
+      '$1[redacted-secret]',
+    )
+    .replace(
+      /\b((?:api[_-]?key|apikey|access[_-]?token|token|password|secret)=)([^\s&]+)/gi,
+      '$1[redacted-secret]',
+    );
+
+const commandPreviewValue = (command: string, maxLength = 140) => {
+  const redacted = redactShellCommandPreview(normalizedShellCommand(command));
+  if (!redacted) return '';
+  if (redacted.length <= maxLength) return redacted;
+  return `${redacted.slice(0, maxLength).trimEnd()}...`;
+};
+
+const formatShellCommandPreview = (command: string) => {
+  const preview = commandPreviewValue(command);
+  return preview ? `$ ${preview}` : '';
+};
+
 const shellCommandIntentLabel = (command: string) => {
   const normalized = normalizedShellCommand(command).toLowerCase();
   if (!normalized) return '';
@@ -244,6 +274,27 @@ const parseFunctionStyleToolInput = (input: string) => {
   }
 
   return { name: match[1], args };
+};
+
+const parseStructuredInputRecord = (input: string) => {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return { record: parsed as Record<string, unknown> };
+    }
+  } catch {
+    // Keep trying provider-style function-call input below.
+  }
+
+  const functionCall = parseFunctionStyleToolInput(trimmed);
+  if (functionCall) {
+    return { name: functionCall.name, record: functionCall.args };
+  }
+
+  return null;
 };
 
 const formatPartialRawInputSummary = (rawInput: string | undefined, toolName?: string) => {
@@ -419,24 +470,9 @@ const formatStructuredInputSummary = (
 };
 
 const parseStructuredInputSummary = (input: string, toolName?: string, rawInput?: string) => {
-  const trimmed = input.trim();
-  if (!trimmed) return null;
-
-  try {
-    const parsed = JSON.parse(trimmed) as unknown;
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return formatStructuredInputSummary(parsed as Record<string, unknown>, toolName, rawInput);
-    }
-  } catch {
-    // Keep trying provider-style function-call input below.
-  }
-
-  const functionCall = parseFunctionStyleToolInput(trimmed);
-  if (functionCall) {
-    return formatStructuredInputSummary(functionCall.args, functionCall.name, rawInput);
-  }
-
-  return null;
+  const parsed = parseStructuredInputRecord(input);
+  if (!parsed) return null;
+  return formatStructuredInputSummary(parsed.record, parsed.name || toolName, rawInput);
 };
 
 export const parseToolInputSummary = (input: string, toolName?: string, rawInput?: string) => {
@@ -456,6 +492,39 @@ export const parseToolInputSummary = (input: string, toolName?: string, rawInput
   }
 
   return formatIdentifierLabel(trimmed, { maxLength: 28 });
+};
+
+const commandPreviewForRecord = (record: Record<string, unknown>, toolName?: string) => {
+  if (normalizedToolName(toolName) !== 'read') return '';
+  const command = stringField(record, ['command', 'cmd']);
+  return command ? formatShellCommandPreview(command) : '';
+};
+
+const partialCommandPreview = (input: string | undefined, toolName?: string) => {
+  if (normalizedToolName(toolName) !== 'read') return '';
+  const command = extractPartialJSONStringField(input || '', ['command', 'cmd']);
+  return command ? formatShellCommandPreview(command) : '';
+};
+
+const parseStructuredCommandPreview = (input: string, toolName?: string) => {
+  const parsed = parseStructuredInputRecord(input);
+  if (!parsed) return '';
+  return commandPreviewForRecord(parsed.record, parsed.name || toolName);
+};
+
+export const parseToolCommandPreview = (input: string, toolName?: string, rawInput?: string) => {
+  const trimmed = input.trim();
+  const directPreview = trimmed
+    ? parseStructuredCommandPreview(trimmed, toolName) || partialCommandPreview(trimmed, toolName)
+    : '';
+  if (directPreview) return directPreview;
+
+  const raw = rawInput?.trim();
+  if (raw && raw !== trimmed) {
+    return parseStructuredCommandPreview(raw, toolName) || partialCommandPreview(raw, toolName);
+  }
+
+  return '';
 };
 
 export const toolValueText = (value: unknown) => {

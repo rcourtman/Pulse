@@ -671,6 +671,18 @@ runtime cost control, and shared AI transport surfaces.
    decision) instead of exposing only internal action names such as `QUERY
    search`, `exec`, provider function calls, or raw JSON; raw input and full
    output stay available behind Details. The referenced OpenCode source at
+   fetched `origin/dev` commit
+   `06d7840d1d42c9815d2d2e45e7fa4090ca4e3577` renders Bash tool state through
+   `Bash` in
+   `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`
+   (lines 701-735), where the pending row is replaced by the concrete command
+   and completed block output keeps `$ <command>` visible above bounded output.
+   Pulse adapts that for read-style infrastructure tools by keeping the
+   operator action label as the primary row and adding a sanitized `$ ...`
+   command preview below it when the tool input carries a shell command; raw
+   provider envelopes such as `pulse_read(...)`, raw JSON, and full command
+   output remain Details-only.
+   The referenced OpenCode source at
    commit
    `9ed17da55ab1f7360cc0e01075f763e27fa899e9` also renders pending tool rows
    through `InlineTool` pending text in

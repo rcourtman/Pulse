@@ -18,6 +18,7 @@ import { getToolCallResultTextClass } from '@/utils/patrolRunPresentation';
 import {
   getToolLabel,
   isPlaceholderToolInputSummary,
+  parseToolCommandPreview,
   parseToolInputSummary,
   pendingToolActionLabel,
   pendingToolActionState,
@@ -30,6 +31,10 @@ interface ToolExecutionBlockProps {
 
 interface ToolInputSummaryProps {
   summary: string;
+}
+
+interface ToolCommandPreviewProps {
+  preview: string;
 }
 
 const hasReadableToolOutput = (output: string) => {
@@ -114,6 +119,16 @@ const ToolInputSummary: Component<ToolInputSummaryProps> = (props) => {
   );
 };
 
+const ToolCommandPreview: Component<ToolCommandPreviewProps> = (props) => (
+  <code
+    data-testid="tool-command-preview"
+    aria-label="Tool command"
+    class="mt-1 block whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-muted"
+  >
+    {props.preview}
+  </code>
+);
+
 /**
  * ToolExecutionBlock - Displays completed tool executions in a compact terminal-like style.
  */
@@ -127,6 +142,12 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
   const inputSummary = createMemo(() =>
     parseToolInputSummary(inputText(), props.tool.name, props.tool.rawInput),
   );
+  const commandPreview = createMemo(() => {
+    const preview = parseToolCommandPreview(inputText(), props.tool.name, props.tool.rawInput);
+    const summary = inputSummary().trim();
+    if (!preview || summary.startsWith('$ ') || preview === summary) return '';
+    return preview;
+  });
   const outputPreview = createMemo(() => formatOutputPreview(outputText(), props.tool.success));
   const hasInput = createMemo(() => inputText().trim().length > 0);
   const hasOutput = createMemo(() => hasReadableToolOutput(outputText()));
@@ -202,6 +223,9 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
             </Show>
           </div>
           <ToolInputSummary summary={inputSummary()} />
+          <Show when={commandPreview()}>
+            <ToolCommandPreview preview={commandPreview()} />
+          </Show>
         </div>
       </div>
 
@@ -257,6 +281,12 @@ export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
       ? pendingToolActionLabel(props.tool.name)
       : summary;
   });
+  const commandPreview = createMemo(() => {
+    const preview = parseToolCommandPreview(inputText(), props.tool.name, props.tool.rawInput);
+    const summary = inputSummary().trim();
+    if (!preview || summary.startsWith('$ ') || preview === summary) return '';
+    return preview;
+  });
   const status = createMemo(() => props.tool.status || 'pending');
   const [now, setNow] = createSignal(Date.now());
   const statusLabel = createMemo(() => {
@@ -306,6 +336,9 @@ export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
             </Show>
           </div>
           <ToolInputSummary summary={inputSummary()} />
+          <Show when={commandPreview()}>
+            <ToolCommandPreview preview={commandPreview()} />
+          </Show>
         </div>
       </div>
       <Show when={progressText()}>
