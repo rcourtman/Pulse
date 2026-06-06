@@ -3,7 +3,6 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-li
 import { Show, createSignal } from 'solid-js';
 import type { ChatMessage, ModelInfo, ModelRouteRecoveryOption } from '../types';
 import type { QueuedFollowUp } from '../hooks/useChat';
-import { WORKFLOW_STATUS_RENDER_PACE_MS } from '../workflowStatusPresentation';
 
 // ── Hoisted mocks (vi.mock factories reference these) ──────────────────────
 
@@ -4456,69 +4455,56 @@ describe('AIChat', () => {
       expect(screen.queryByText('Generating response...')).not.toBeInTheDocument();
     });
 
-    it('paces burst workflow progress in the active turn status footer', async () => {
-      vi.useFakeTimers();
-      try {
-        const [isLoading, setIsLoading] = createSignal(false);
-        const [messages, setMessages] = createSignal<ChatMessage[]>([]);
-        const workflowStatusHistory = [
-          {
-            phase: 'request_start',
-            message: 'Preparing Pulse context.',
-            startedAt: 1_000,
-          },
-          {
-            phase: 'context',
-            message: 'Reading current Pulse inventory with pulse_query.',
-            tool: 'pulse_query',
-            startedAt: 1_100,
-          },
-          {
-            phase: 'provider_start',
-            message: 'Sent request to OpenRouter; waiting for the first token.',
-            startedAt: 1_200,
-          },
-        ];
-        mockChat.isLoading.mockImplementation(() => isLoading());
-        mockChat.messages.mockImplementation(() => messages());
-        renderChat();
+    it('shows the latest burst workflow progress immediately in the active turn status footer', () => {
+      const [isLoading, setIsLoading] = createSignal(false);
+      const [messages, setMessages] = createSignal<ChatMessage[]>([]);
+      const workflowStatusHistory = [
+        {
+          phase: 'request_start',
+          message: 'Preparing Pulse context.',
+          startedAt: 1_000,
+        },
+        {
+          phase: 'context',
+          message: 'Reading current Pulse inventory with pulse_query.',
+          tool: 'pulse_query',
+          startedAt: 1_100,
+        },
+        {
+          phase: 'provider_start',
+          message: 'Sent request to OpenRouter; waiting for the first token.',
+          startedAt: 1_200,
+        },
+      ];
+      mockChat.isLoading.mockImplementation(() => isLoading());
+      mockChat.messages.mockImplementation(() => messages());
+      renderChat();
 
-        await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_RENDER_PACE_MS * 5);
-        setIsLoading(true);
-        setMessages([
-          {
-            id: 'msg-1',
-            role: 'assistant' as const,
-            content: '',
-            timestamp: new Date(),
-            isStreaming: true,
-            workflowStatusHistory,
-            workflowStatus: workflowStatusHistory[2],
-            streamEvents: [
-              {
-                type: 'workflow_status',
-                workflowStatus: workflowStatusHistory[2],
-                startedAt: 1_200,
-                updatedAt: 1_200,
-              },
-            ],
-          },
-        ]);
+      setIsLoading(true);
+      setMessages([
+        {
+          id: 'msg-1',
+          role: 'assistant' as const,
+          content: '',
+          timestamp: new Date(),
+          isStreaming: true,
+          workflowStatusHistory,
+          workflowStatus: workflowStatusHistory[2],
+          streamEvents: [
+            {
+              type: 'workflow_status',
+              workflowStatus: workflowStatusHistory[2],
+              startedAt: 1_200,
+              updatedAt: 1_200,
+            },
+          ],
+        },
+      ]);
 
-        const status = screen.getByLabelText('Assistant active turn status');
-        expect(status).toHaveTextContent('Preparing Pulse context.');
-        expect(status).not.toHaveTextContent('Sent request to OpenRouter');
-
-        await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_RENDER_PACE_MS);
-        expect(status).toHaveTextContent('Reading current Pulse inventory with pulse_query.');
-
-        await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_RENDER_PACE_MS);
-        expect(status).toHaveTextContent(
-          'Sent request to OpenRouter; waiting for the first token.',
-        );
-      } finally {
-        vi.useRealTimers();
-      }
+      const status = screen.getByLabelText('Assistant active turn status');
+      expect(status).toHaveTextContent('Sent request to OpenRouter; waiting for the first token.');
+      expect(status).not.toHaveTextContent('Preparing Pulse context.');
+      expect(status).not.toHaveTextContent('Reading current Pulse inventory with pulse_query.');
     });
 
     it('keeps pending tool progress visible in the active turn status', () => {

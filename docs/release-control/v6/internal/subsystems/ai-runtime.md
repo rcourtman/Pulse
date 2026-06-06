@@ -318,13 +318,13 @@ runtime cost control, and shared AI transport surfaces.
    Assistant evidence. Workflow status is live
    progress, not answer content or a delayed walkthrough; each new
    `workflow_state` replaces the canonical active status immediately. The
-   browser may retain a bounded in-flight presentation history of those replaced
-   labels and pace one visible workflow row through them when backend/network
-   coalescing would otherwise make the row jump straight to the last state. The
-   active-turn composer footer must use that same paced workflow-label
-   presentation when its current status is workflow-derived, so the footer does
-   not jump straight to the last coalesced preparation/provider state while the
-   transcript row is still stepping through the same live sequence.
+   browser may retain a bounded in-flight history of those replaced labels for
+   state continuity, but the live transcript row and active-turn composer
+   footer must render the latest workflow status immediately rather than
+   replaying stale preparation/provider labels after backend or network
+   coalescing. Older neutral statuses may disappear when replaced by newer
+   status, tool, reasoning, or answer evidence; that replacement is the intended
+   motion signal.
    That history must stay live-only: once visible assistant text, tool progress,
    approvals, questions, terminal `done`, terminal `error`, or explicit Stop
    take over, stale workflow text and the presentation history must clear so
@@ -403,13 +403,15 @@ runtime cost control, and shared AI transport surfaces.
    `packages/ui/src/components/message-part.tsx` so Pulse feels active without
    delaying copy/export, tool boundaries, approvals, or audit evidence.
    Live workflow labels follow that same presentation-layer constraint: the
-   canonical SSE/store state remains the latest typed `workflow_state`, while a
-   bounded live-only browser history paces a single replacing activity row
-   through recent states. This adapts OpenCode's status/title motion in
-   `packages/ui/src/components/tool-status-title.tsx` and timeline thinking
-   row treatment in `packages/app/src/pages/session/message-timeline.data.ts`
-   at fetched `origin/dev` commit `4519a1da329c1a4fc384054e7203ba7d06928205`;
-   Pulse uses it only for short workflow labels, not for audit evidence,
+   canonical SSE/store state remains the latest typed `workflow_state`, and the
+   browser must render that latest status immediately instead of replaying an
+   older live-only history. This follows the current OpenCode TUI event
+   mutation model at fetched `origin/dev` commit
+   `06d7840d1d42c9815d2d2e45e7fa4090ca4e3577`, especially
+   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`, where
+   `session.next.step.started`, text deltas, and tool progress mutate the
+   current assistant state event-by-event. Pulse uses the bounded status
+   history only to preserve reducer continuity, not to delay audit evidence,
    approvals, tool boundaries, transcript export, or completed/restored
    messages.
    Completed Assistant tool rows follow the same source-anchored display policy:
@@ -1719,14 +1721,13 @@ frontend `workflow_status` display event: each incoming backend
 same typed status, and visible assistant content, reasoning, tool,
 approval/question, terminal `done`, and terminal `error` events clear that row.
 The frontend now also keeps a bounded live-only `workflowStatusHistory` for the
-active assistant message so one row can visibly step through bursty preparation,
-context, provider-start, retry, and fallback labels instead of showing them all
-only after the final state arrives. The shared workflow-status presentation
-helper owns both the transcript row and the active-turn composer footer so the
-two live surfaces advance through the same short sequence before settling on the
-latest canonical workflow state. The transcript and footer therefore show
-current motion while the provider is starting, retrying, or reasoning, but
-completed answers do not retain stale internal-progress prose.
+active assistant message so the reducer preserves state continuity while
+backend preparation, context, provider-start, retry, and fallback labels are
+being replaced. The shared workflow-status presentation helper owns both the
+transcript row and the active-turn composer footer so the two live surfaces show
+the latest canonical workflow state immediately. The transcript and footer
+therefore show current motion while the provider is starting, retrying, or
+reasoning, but completed answers do not retain stale internal-progress prose.
 
 Primary nav moved to governed platform/runtime destinations on 2026-05-16 and
 was clarified on 2026-05-25 through `frontend-modern/src/App.tsx` and

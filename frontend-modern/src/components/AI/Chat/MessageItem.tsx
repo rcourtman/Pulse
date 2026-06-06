@@ -28,7 +28,7 @@ import { stripAssistantOutputArtifacts } from './assistantOutputHygiene';
 import { formatAssistantWorkflowStatus } from './activeTurnStatus';
 import { groupStreamEventsForDisplay } from './streamEventGrouping';
 import {
-  createPacedWorkflowStatus,
+  latestWorkflowStatus,
   normalizeWorkflowStatusSequence,
 } from './workflowStatusPresentation';
 import type {
@@ -362,14 +362,9 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
   const WorkflowStatusText: Component<{
     status?: WorkflowStatus;
     includeElapsed?: boolean;
-    paceKey: string;
   }> = (statusProps) => {
     const statuses = createMemo(() => workflowStatusSequence(statusProps.status));
-    const displayedStatus = createPacedWorkflowStatus(
-      () => statuses(),
-      () => props.message.isStreaming === true,
-      () => statusProps.paceKey,
-    );
+    const displayedStatus = createMemo(() => latestWorkflowStatus(statuses()));
     const text = createMemo(() =>
       formatWorkflowStatus(displayedStatus(), statusProps.includeElapsed),
     );
@@ -491,11 +486,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                 >
                   <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500 animate-pulse" />
                   <span class="truncate">
-                    <WorkflowStatusText
-                      status={props.message.workflowStatus}
-                      includeElapsed
-                      paceKey={`${props.message.id}:workflow-header`}
-                    />
+                    <WorkflowStatusText status={props.message.workflowStatus} includeElapsed />
                   </span>
                 </span>
               </Show>
@@ -533,11 +524,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                   </span>
                   <Show when={workflowStatusText()} fallback={<span>Thinking...</span>}>
                     <span>
-                      <WorkflowStatusText
-                        status={props.message.workflowStatus}
-                        includeElapsed
-                        paceKey={`${props.message.id}:workflow-inline`}
-                      />
+                      <WorkflowStatusText status={props.message.workflowStatus} includeElapsed />
                     </span>
                   </Show>
                 </div>
@@ -586,7 +573,6 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                             <WorkflowStatusText
                               status={evt.workflowStatus}
                               includeElapsed={props.message.isStreaming}
-                              paceKey={`${props.message.id}:workflow-row`}
                             />
                           </span>
                         </div>

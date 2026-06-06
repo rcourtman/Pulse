@@ -166,7 +166,7 @@ import {
   hasAssistantTranscriptContent,
 } from './transcriptExport';
 import {
-  createPacedWorkflowStatus,
+  latestWorkflowStatus,
   normalizeWorkflowStatusSequence,
 } from './workflowStatusPresentation';
 import type {
@@ -2023,13 +2023,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
       message.workflowStatus,
     ]);
   });
-  const displayedActiveWorkflowStatus = createPacedWorkflowStatus(
-    () => activeWorkflowStatusSequence(),
-    () => chat.isLoading() && !!activeAssistantMessage(),
-    () => {
-      const message = activeAssistantMessage();
-      return message ? `${message.id}:workflow-footer` : '';
-    },
+  const displayedActiveWorkflowStatus = createMemo(() =>
+    latestWorkflowStatus(activeWorkflowStatusSequence()),
   );
   const currentStatus = createMemo(() => {
     const status = getAssistantActiveTurnStatus(chat.messages(), chat.isLoading());

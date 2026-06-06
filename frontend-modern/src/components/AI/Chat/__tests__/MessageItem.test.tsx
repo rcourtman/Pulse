@@ -630,8 +630,7 @@ describe('MessageItem', () => {
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
     });
 
-    it('paces burst workflow activity through one live transcript row', async () => {
-      vi.useFakeTimers();
+    it('shows the latest burst workflow activity through one live transcript row', () => {
       const workflowStatusHistory = [
         {
           phase: 'request_start',
@@ -671,17 +670,10 @@ describe('MessageItem', () => {
         />
       ));
 
-      expect(screen.getByText(/Preparing Pulse context\./)).toBeInTheDocument();
+      expect(screen.queryByText(/Preparing Pulse context\./)).not.toBeInTheDocument();
       expect(
-        screen.queryByText(/Sent request to OpenRouter; waiting for the first token\./),
+        screen.queryByText(/Reading current Pulse inventory with pulse_query\./),
       ).not.toBeInTheDocument();
-
-      await vi.advanceTimersByTimeAsync(420);
-      expect(
-        screen.getByText(/Reading current Pulse inventory with pulse_query\./),
-      ).toBeInTheDocument();
-
-      await vi.advanceTimersByTimeAsync(420);
       expect(
         screen.getByText(/Sent request to OpenRouter; waiting for the first token\./),
       ).toBeInTheDocument();
