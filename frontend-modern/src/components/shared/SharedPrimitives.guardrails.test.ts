@@ -251,6 +251,10 @@ describe('shared primitive guardrails', () => {
     expect(aiModelPickerSource).toContain('(model) => !model.notable');
     expect(aiModelPickerSource).toContain('Show ${hiddenModelCount()} older models');
     expect(aiModelPickerSource).toContain('const MODEL_ROUTE_PROVIDER_RE');
+    expect(aiModelPickerSource).toContain('const selectedBadge = createMemo');
+    expect(aiModelPickerSource).toContain('const selectedButtonLabel = createMemo');
+    expect(aiModelPickerSource).toContain('aria-label={selectedButtonLabel()}');
+    expect(aiModelPickerSource).toContain("·{' '}");
     expect(aiModelPickerSource).toContain("candidate.includes('://')");
     expect(aiModelPickerSource).toContain('separator <= 0 || separator === candidate.length - 1');
     expect(aiModelPickerSource).toContain('MOBILE_BOTTOM_CLEARANCE');

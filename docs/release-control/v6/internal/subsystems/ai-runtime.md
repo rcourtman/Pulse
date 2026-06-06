@@ -763,7 +763,14 @@ runtime cost control, and shared AI transport surfaces.
    `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx` derives the
    current provider label in `Prompt` lines 196-197 and renders agent, model,
    provider, and variant metadata in the prompt footer at lines 1452-1479; the
-   session route injects that prompt through
+   model metadata row uses an explicit `·` separator before the model at line
+   1462 and before variants at line 1471, so adjacent metadata must not collapse
+   into fused labels. Pulse's shared model picker adapts that by separating
+   selected model labels from badges such as `default` in both visible text and
+   the button accessible name, so an OpenRouter default route renders as
+   `Qwen: Qwen3.7 Plus via OpenRouter · default` rather than
+   `OpenRouterdefault`.
+   The session route injects that prompt through
    `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx`
    `session_prompt` lines 1313-1333. Pulse adapts that by keeping the active
    model route selector, control-mode selector, and last-turn usage in composer

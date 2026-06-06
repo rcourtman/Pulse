@@ -1022,7 +1022,12 @@ not a replacement status card, CTA band, or page-local nested card.
     the shared picker, System AI settings status strip, and per-surface
     inherited-default descriptions must render OpenRouter-hosted provider
     models with an explicit `via OpenRouter` route label while leaving direct
-    DeepSeek/OpenAI/Anthropic/Gemini/Ollama selections unqualified.
+    DeepSeek/OpenAI/Anthropic/Gemini/Ollama selections unqualified. When a
+    selected route also carries a shared-default or override badge, the shared
+    picker owns that badge as separate metadata in both visible text and the
+    button accessible name; labels must render as `model via OpenRouter ·
+    default` instead of fusing provider and badge text such as
+    `OpenRouterdefault`.
     Platform-first top-level pages registered through
     `frontend-modern/src/App.tsx` must stay chrome-only and route through the
     canonical app shell: each per-platform surface owns navigation and sub-tab

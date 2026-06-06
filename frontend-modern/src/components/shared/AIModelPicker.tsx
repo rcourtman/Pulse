@@ -246,6 +246,12 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
     }
     return formatAIModelRouteLabel(selected);
   });
+  const selectedBadge = createMemo(() => props.selectionBadge?.trim() || '');
+  const selectedButtonLabel = createMemo(() => {
+    const label = selectedLabel();
+    const badge = selectedBadge();
+    return badge ? `${label}, ${badge}` : label;
+  });
 
   const dropdownStyle = createMemo(() => {
     const position = dropdownPosition();
@@ -379,13 +385,22 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
         disabled={props.disabled}
         aria-haspopup="listbox"
         aria-expanded={isOpen()}
+        aria-label={selectedButtonLabel()}
         class={props.buttonClass || DEFAULT_BUTTON_CLASS}
         title={props.title || 'Select model'}
       >
         <MonitorIcon class="h-3.5 w-3.5 shrink-0" />
         <span class={props.buttonLabelClass || DEFAULT_LABEL_CLASS}>{selectedLabel()}</span>
-        <Show when={props.selectionBadge}>
-          <span class="text-[10px] font-normal text-muted">{props.selectionBadge}</span>
+        <Show when={selectedBadge()}>
+          {(badge) => (
+            <>
+              <span class="text-[10px] font-normal text-muted" aria-hidden="true">
+                {' '}
+                ·{' '}
+              </span>
+              <span class="text-[10px] font-normal text-muted">{badge()}</span>
+            </>
+          )}
         </Show>
         <Show when={props.isLoading}>
           <RefreshCwIcon class="h-3 w-3 shrink-0 animate-spin" />

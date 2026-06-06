@@ -84,6 +84,26 @@ describe('AIModelPicker', () => {
     expect(screen.getByText('DeepSeek: DeepSeek V4 Pro')).toBeInTheDocument();
   });
 
+  it('separates selected model labels from selection badges in composer chrome', () => {
+    render(() => (
+      <AIModelPicker
+        models={models}
+        selectedModel=""
+        onModelSelect={vi.fn()}
+        emptySelectionLabel="Qwen: Qwen3.7 Plus via OpenRouter"
+        selectionBadge="default"
+        title="Select shared default model"
+      />
+    ));
+
+    const button = screen.getByTitle('Select shared default model');
+    expect(button.textContent).toContain('Qwen: Qwen3.7 Plus via OpenRouter · default');
+    expect(button.textContent).not.toContain('OpenRouterdefault');
+    expect(
+      screen.getByRole('button', { name: 'Qwen: Qwen3.7 Plus via OpenRouter, default' }),
+    ).toBe(button);
+  });
+
   it('constrains the dropdown to the available mobile viewport height', () => {
     vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(760);
     vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(850);
