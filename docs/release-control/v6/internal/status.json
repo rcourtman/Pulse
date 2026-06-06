@@ -2997,6 +2997,17 @@
           ]
         },
         {
+          "id": "assistant-chat-stream-json-contract-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/api",
+            "-run",
+            "TestContract_ChatStreamEventJSONSnapshots",
+            "-count=1"
+          ]
+        },
+        {
           "id": "assistant-context-prefetch-structured-mentions-tests",
           "run": [
             "go",
@@ -6811,11 +6822,11 @@
     {
       "id": "codex-lane-followup-architecture-post-rc-canonicalization",
       "agent_id": "codex",
-      "summary": "Align Assistant model selection with OpenCode source workflow",
+      "summary": "Align Assistant live tool progress with OpenCode source workflow",
       "target_id": "v6-product-lane-expansion",
       "claimed_at": "2026-06-05T21:57:48Z",
-      "heartbeat_at": "2026-06-06T01:33:49Z",
-      "expires_at": "2026-06-06T03:33:49Z",
+      "heartbeat_at": "2026-06-06T01:58:08Z",
+      "expires_at": "2026-06-06T03:58:08Z",
       "work_item": {
         "kind": "lane-followup",
         "id": "architecture-post-rc-canonicalization"

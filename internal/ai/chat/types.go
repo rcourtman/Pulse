@@ -283,6 +283,15 @@ type ToolProgressData struct {
 	Message  string `json:"message,omitempty"` // Compact user-facing status text
 }
 
+// ToolCancelData is the data for "tool_cancel" events.
+// It removes a pending tool row when a model-selected call is consumed by an
+// internal policy boundary instead of becoming user-visible tool execution.
+type ToolCancelData struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Reason string `json:"reason,omitempty"`
+}
+
 // ToolEndData is the data for "tool_end" events
 type ToolEndData struct {
 	ID       string `json:"id"`

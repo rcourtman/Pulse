@@ -723,6 +723,34 @@ export function useChat(options: UseChatOptions = {}) {
               return updatePendingToolProgress(msg, data);
             }
 
+            case 'tool_cancel': {
+              clearSuppressedOutputBoundary(assistantId);
+              const data = event.data as {
+                id?: string;
+                name?: string;
+              };
+              const normalizedName = normalizeChatToolName(data.name || '');
+              const matchesTool = (tool?: PendingTool, toolId?: string) => {
+                if (!tool) return false;
+                if (data.id && toolId === data.id) return true;
+                if (data.id && tool.id === data.id) return true;
+                return normalizedName !== '' && normalizeChatToolName(tool.name) === normalizedName;
+              };
+
+              return {
+                ...msg,
+                workflowStatus: undefined,
+                pendingTools: (msg.pendingTools || []).filter(
+                  (tool) => !matchesTool(tool, tool.id),
+                ),
+                streamEvents: (msg.streamEvents || []).filter(
+                  (streamEvent) =>
+                    streamEvent.type !== 'pending_tool' ||
+                    !matchesTool(streamEvent.pendingTool, streamEvent.toolId),
+                ),
+              };
+            }
+
             case 'tool_end': {
               clearSuppressedOutputBoundary(assistantId);
               const data = event.data as {

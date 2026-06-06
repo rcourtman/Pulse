@@ -4,6 +4,7 @@ import type {
   AIChatStreamEvent,
   DoneData,
   SessionData,
+  ToolCancelData,
   ToolProgressData,
   WorkflowStateData,
 } from '@/api/generated/aiChatEvents';
@@ -56,6 +57,19 @@ describe('AI chat stream event contract', () => {
     expect(event.data.message).toBe('Reading inventory.');
     expect(aiChatEventsSource).toContain('export interface ToolProgressData');
     expect(aiChatEventsSource).toContain("type: 'tool_progress'");
+  });
+
+  it('exposes pending tool cancellation as a typed stream contract', () => {
+    const cancel: ToolCancelData = {
+      id: 'tool-1',
+      name: 'pulse_read',
+      reason: 'current_resource unavailable',
+    };
+    const event: AIChatStreamEvent = { type: 'tool_cancel', data: cancel };
+
+    expect(event.data.reason).toBe('current_resource unavailable');
+    expect(aiChatEventsSource).toContain('export interface ToolCancelData');
+    expect(aiChatEventsSource).toContain("type: 'tool_cancel'");
   });
 
   it('exposes the effective completion model on done events', () => {

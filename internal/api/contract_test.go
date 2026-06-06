@@ -10638,6 +10638,15 @@ func TestContract_ChatStreamEventJSONSnapshots(t *testing.T) {
 			want: `{"type":"tool_progress","data":{"id":"tool-1","name":"pulse_read","input":"{\"path\":\"/tmp/x.log\"}","raw_input":"{\"path\":\"/tmp/x.log\"}","phase":"running","message":"Reading target."}}`,
 		},
 		{
+			name: "tool_cancel",
+			event: mustStreamEvent(t, "tool_cancel", chat.ToolCancelData{
+				ID:     "tool-1",
+				Name:   "pulse_read",
+				Reason: "current_resource unavailable",
+			}),
+			want: `{"type":"tool_cancel","data":{"id":"tool-1","name":"pulse_read","reason":"current_resource unavailable"}}`,
+		},
+		{
 			name: "tool_end",
 			event: mustStreamEvent(t, "tool_end", chat.ToolEndData{
 				ID:       "tool-1",

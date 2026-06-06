@@ -245,6 +245,18 @@ runtime cost control, and shared AI transport surfaces.
    stream contract adapts that model with `tool_start`, `tool_progress`, and
    `tool_end` events that update the same visible pending tool row in place.
    The referenced OpenCode source at fetched `origin/dev` commit
+   `9ed17da55ab1f7360cc0e01075f763e27fa899e9` creates a tool message part as
+   soon as tool input starts in `packages/opencode/src/session/processor.ts`,
+   mutates that part through running/completed/error states via
+   `packages/opencode/src/session/tools.ts`, and renders the same live part in
+   `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx` through
+   pending/running/completed rows. Pulse's Assistant stream must mirror that
+   timing: model-selected tools become visible when the tool name is known,
+   later argument/progress updates mutate the row, and completion replaces that
+   row rather than appending a delayed batch of steps. Policy-hidden placeholder
+   attempts remain governed by the runtime and may cancel a pending row instead
+   of persisting a failed tool card.
+   The referenced OpenCode source at fetched `origin/dev` commit
    `fa2b63f850fc0a23bec2bdff9e660450d3fe7913` also keeps assistant text,
    reasoning, and tool invocation as typed message parts in
    `packages/opencode/src/session/message.ts`, while

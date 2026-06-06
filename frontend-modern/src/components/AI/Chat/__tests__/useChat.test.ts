@@ -858,7 +858,8 @@ describe('useChat', () => {
       fire({ type: 'content', data: compacted });
       expect(chat.messages().find((m) => m.role === 'assistant')?.content).toBe('');
       expect(
-        chat.messages()
+        chat
+          .messages()
           .find((m) => m.role === 'assistant')
           ?.streamEvents?.filter((e) => e.type === 'content'),
       ).toEqual([]);
@@ -2400,6 +2401,35 @@ describe('useChat', () => {
       });
       expect(assistant.streamEvents?.filter((event) => event.type === 'pending_tool')).toHaveLength(
         2,
+      );
+      dispose();
+    });
+
+    it('removes a canceled pending tool without adding a completed tool call', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+
+      fire({ type: 'tool_start', data: { id: 'a', name: 'pulse_read', input: '{}' } });
+
+      let assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.pendingTools).toHaveLength(1);
+      expect(assistant.streamEvents?.filter((event) => event.type === 'pending_tool')).toHaveLength(
+        1,
+      );
+
+      fire({
+        type: 'tool_cancel',
+        data: { id: 'a', name: 'pulse_read', reason: 'current_resource unavailable' },
+      });
+
+      assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.pendingTools).toEqual([]);
+      expect(assistant.toolCalls).toEqual([]);
+      expect(assistant.streamEvents?.filter((event) => event.type === 'pending_tool')).toHaveLength(
+        0,
       );
       dispose();
     });

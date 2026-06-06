@@ -92,6 +92,12 @@ export interface ThinkingData {
   text: string;
 }
 
+export interface ToolCancelData {
+  id: string;
+  name: string;
+  reason?: string;
+}
+
 export interface ToolEndData {
   id: string;
   name: string;
@@ -135,6 +141,7 @@ export type AIChatStreamEvent =
   | { type: 'workflow_state'; data: WorkflowStateData }
   | { type: 'tool_start'; data: ToolStartData }
   | { type: 'tool_progress'; data: ToolProgressData }
+  | { type: 'tool_cancel'; data: ToolCancelData }
   | { type: 'tool_end'; data: ToolEndData }
   | { type: 'approval_needed'; data: ApprovalNeededData }
   | { type: 'question'; data: QuestionData & { session_id?: string } }

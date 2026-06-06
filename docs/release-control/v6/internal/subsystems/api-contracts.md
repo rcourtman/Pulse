@@ -443,9 +443,10 @@ payload shape change when the portal presents compact client rows.
     boundary. Browser Assistant output is owned by the AI runtime presentation
     contract rather than by API-client event typing.
     Tool execution progress is part of this SSE contract: `tool_start`,
-    `tool_progress`, and `tool_end` must carry typed payloads generated from
-    `internal/ai/chat` structs so the frontend can mutate one visible tool row
-    from pending to running/waiting to completed/error without inventing a
+    `tool_progress`, `tool_cancel`, and `tool_end` must carry typed payloads
+    generated from `internal/ai/chat` structs so the frontend can mutate one
+    visible tool row from pending to running/waiting to completed/error, or
+    cancel a runtime-policy-hidden pending row, without inventing a
     browser-only event shape.
 	    Cold Assistant streams must include a typed `session` event backed by
 	    `internal/ai/chat.SessionData` as soon as the HTTP SSE writer is ready and
@@ -909,7 +910,8 @@ the canonical monitored-system blocked payload.
    `frontend-modern/src/api/generated/aiChatEvents.ts` type must stay derived
    from `internal/ai/chat/types.go` through `scripts/generate-types.go`, and
    frontend API tests must pin any new generated SSE fields, including live
-   tool-progress payload fields such as `phase` and `message`.
+   tool-progress payload fields such as `phase` and `message` and pending tool
+   cancellation payloads such as `reason`.
    That same shared org-management client boundary now owns target-consent
    sharing semantics across `frontend-modern/src/api/orgs.ts`,
    `internal/api/org_handlers.go`, and the shared org route wiring. Cross-org

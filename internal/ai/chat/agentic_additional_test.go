@@ -555,7 +555,7 @@ func TestAgenticLoop_DoesNotAutoRecoverStructuredToolCall(t *testing.T) {
 	}
 }
 
-func TestAgenticLoop_HidesUnavailableCurrentResourceToolCall(t *testing.T) {
+func TestAgenticLoop_CancelsUnavailableCurrentResourcePendingToolCall(t *testing.T) {
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	provider := &stubStreamingProvider{}
 	loop := NewAgenticLoop(provider, executor, "prompt")
@@ -624,11 +624,27 @@ func TestAgenticLoop_HidesUnavailableCurrentResourceToolCall(t *testing.T) {
 	if callCount != 2 {
 		t.Fatalf("expected recovery turn after hidden current_resource block, got %d provider calls", callCount)
 	}
+	toolStarts := 0
+	toolCancels := 0
 	for _, event := range events {
 		switch event.Type {
-		case "tool_start", "tool_end":
-			t.Fatalf("current_resource placeholder block should not emit visible tool event: %+v", event)
+		case "tool_start":
+			toolStarts++
+		case "tool_cancel":
+			toolCancels++
+			var data ToolCancelData
+			if err := json.Unmarshal(event.Data, &data); err != nil {
+				t.Fatalf("unmarshal tool_cancel event: %v", err)
+			}
+			if data.ID != "call-read-dev" || data.Name != "pulse_read" {
+				t.Fatalf("unexpected tool_cancel payload: %+v", data)
+			}
+		case "tool_end":
+			t.Fatalf("current_resource placeholder block should cancel the pending tool, not complete it: %+v", event)
 		}
+	}
+	if toolStarts != 1 || toolCancels != 1 {
+		t.Fatalf("expected one early tool_start and one tool_cancel, got starts=%d cancels=%d events=%+v", toolStarts, toolCancels, events)
 	}
 	if len(results) != 1 {
 		t.Fatalf("expected only final assistant message to be session-visible, got %d: %+v", len(results), results)

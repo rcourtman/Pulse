@@ -180,6 +180,37 @@ func toolStartKey(id, name string) string {
 	return strings.TrimSpace(name)
 }
 
+func toolStartKeys(id, name string) []string {
+	keys := make([]string, 0, 2)
+	if key := strings.TrimSpace(id); key != "" {
+		keys = append(keys, key)
+	}
+	if key := strings.TrimSpace(name); key != "" {
+		for _, existing := range keys {
+			if existing == key {
+				return keys
+			}
+		}
+		keys = append(keys, key)
+	}
+	return keys
+}
+
+func toolStartMapHas(values map[string]bool, id, name string) bool {
+	for _, key := range toolStartKeys(id, name) {
+		if values[key] {
+			return true
+		}
+	}
+	return false
+}
+
+func markToolStartMap(values map[string]bool, id, name string) {
+	for _, key := range toolStartKeys(id, name) {
+		values[key] = true
+	}
+}
+
 func normalizeSummaryOnlyPulseQueryInput(prefer bool, name string, input map[string]interface{}) map[string]interface{} {
 	if !prefer || name != "pulse_query" || len(input) == 0 {
 		return input
@@ -227,6 +258,18 @@ func emitToolProgressEvent(callback StreamCallback, id, name string, input map[s
 		Message:  message,
 	})
 	callback(StreamEvent{Type: "tool_progress", Data: jsonData})
+}
+
+func emitToolCancelEvent(callback StreamCallback, id, name, reason string) {
+	if callback == nil {
+		return
+	}
+	jsonData, _ := json.Marshal(ToolCancelData{
+		ID:     id,
+		Name:   name,
+		Reason: strings.TrimSpace(reason),
+	})
+	callback(StreamEvent{Type: "tool_cancel", Data: jsonData})
 }
 
 func emitToolEndEvent(callback StreamCallback, id, name string, input map[string]interface{}, output string, success bool) {
@@ -758,38 +801,20 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		var suppressLeakedToolContent bool
 		var pendingVisibleContent string
 		visibleToolStarts := make(map[string]bool)
-		deferredToolStarts := make(map[string]providers.ToolStartEvent)
 		suppressedToolStarts := make(map[string]bool)
-		emitDeferredToolStart := func(tc providers.ToolCall) {
-			key := toolStartKey(tc.ID, tc.Name)
-			if key == "" || visibleToolStarts[key] || suppressedToolStarts[key] {
-				return
-			}
-			if _, ok := deferredToolStarts[key]; !ok {
+		emitToolStartIfNeeded := func(tc providers.ToolCall) {
+			keys := toolStartKeys(tc.ID, tc.Name)
+			if len(keys) == 0 || toolStartMapHas(visibleToolStarts, tc.ID, tc.Name) || toolStartMapHas(suppressedToolStarts, tc.ID, tc.Name) {
 				return
 			}
 			emitToolStartEvent(callback, tc.ID, tc.Name, tc.Input)
-			visibleToolStarts[key] = true
+			markToolStartMap(visibleToolStarts, tc.ID, tc.Name)
 		}
 		emitCurrentResourceBlock := func(tc providers.ToolCall, blockMsg string) {
-			key := toolStartKey(tc.ID, tc.Name)
-			if key != "" && visibleToolStarts[key] {
-				emitToolEndEvent(callback, tc.ID, tc.Name, tc.Input, blockMsg, false)
-				resultMessages = append(resultMessages, Message{
-					ID:        uuid.New().String(),
-					Role:      "user",
-					Timestamp: time.Now(),
-					ToolResult: &ToolResult{
-						ToolUseID: tc.ID,
-						Content:   blockMsg,
-						IsError:   true,
-					},
-				})
-				return
+			if toolStartMapHas(visibleToolStarts, tc.ID, tc.Name) {
+				emitToolCancelEvent(callback, tc.ID, tc.Name, "current_resource unavailable")
 			}
-			if key != "" {
-				suppressedToolStarts[key] = true
-			}
+			markToolStartMap(suppressedToolStarts, tc.ID, tc.Name)
 			resultMessages = removeToolCallFromResultMessages(resultMessages, tc.ID)
 		}
 
@@ -844,8 +869,10 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 						data.Input = normalizeSummaryOnlyPulseQueryInput(preferSummaryOnlyQueries, data.Name, data.Input)
 						key := toolStartKey(data.ID, data.Name)
 						if len(data.Input) == 0 {
-							if key != "" {
-								deferredToolStarts[key] = data
+							if key != "" && !toolStartMapHas(visibleToolStarts, data.ID, data.Name) && !toolStartMapHas(suppressedToolStarts, data.ID, data.Name) {
+								attemptEmittedVisibleEvents = true
+								emitToolStartEvent(callback, data.ID, data.Name, data.Input)
+								markToolStartMap(visibleToolStarts, data.ID, data.Name)
 							}
 							return
 						}
@@ -855,15 +882,11 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 								Str("id", data.ID).
 								Str("reason", blockMsg).
 								Msg("[AgenticLoop] Suppressed invalid current_resource tool_start before user-visible execution")
-							if key != "" {
-								suppressedToolStarts[key] = true
-							}
+							markToolStartMap(suppressedToolStarts, data.ID, data.Name)
 							return
 						}
 						attemptEmittedVisibleEvents = true
-						if key != "" {
-							visibleToolStarts[key] = true
-						}
+						markToolStartMap(visibleToolStarts, data.ID, data.Name)
 						emitToolStartEvent(callback, data.ID, data.Name, data.Input)
 					}
 
@@ -1189,7 +1212,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 							}
 						}
 
-						emitDeferredToolStart(tc)
+						emitToolStartIfNeeded(tc)
 						emitToolEndEvent(callback, tc.ID, tc.Name, tc.Input, fsmErr.Error(), false)
 
 						toolResultMsg := Message{
@@ -1221,7 +1244,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				if recentCallCounts[callKey] > maxIdenticalCalls {
 					loopMsg := fmt.Sprintf("LOOP_DETECTED: You have called %s with the same arguments %d times. This call is blocked. Try a different tool or approach.", tc.Name, recentCallCounts[callKey])
 
-					emitDeferredToolStart(tc)
+					emitToolStartIfNeeded(tc)
 					emitToolEndEvent(callback, tc.ID, tc.Name, tc.Input, loopMsg, false)
 
 					toolResultMsg := Message{
@@ -1250,7 +1273,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				if tc.Name != pulseQuestionToolName {
 					skipMsg := fmt.Sprintf("SKIPPED: %s was requested this turn. Wait for the user's answer, then re-issue this tool call with the clarified inputs.", pulseQuestionToolName)
 
-					emitDeferredToolStart(tc)
+					emitToolStartIfNeeded(tc)
 					emitToolEndEvent(callback, tc.ID, tc.Name, tc.Input, skipMsg, false)
 
 					toolResultMsg := Message{
@@ -1378,7 +1401,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					}
 
 					// Send tool_end event with error
-					emitDeferredToolStart(tc)
+					emitToolStartIfNeeded(tc)
 					emitToolEndEvent(callback, tc.ID, tc.Name, tc.Input, fsmErr.Error(), false)
 
 					// Create tool result message with the error
@@ -1421,7 +1444,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 				loopMsg := fmt.Sprintf("LOOP_DETECTED: You have called %s with the same arguments %d times. This call is blocked. Try a different tool or approach.", tc.Name, recentCallCounts[callKey])
 
-				emitDeferredToolStart(tc)
+				emitToolStartIfNeeded(tc)
 				emitToolEndEvent(callback, tc.ID, tc.Name, tc.Input, loopMsg, false)
 
 				toolResultMsg := Message{
@@ -1457,7 +1480,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		execResults := make([]parallelToolResult, len(pendingExec))
 		if len(pendingExec) > 0 {
 			for _, pe := range pendingExec {
-				emitDeferredToolStart(pe.tc)
+				emitToolStartIfNeeded(pe.tc)
 				emitToolProgressEvent(
 					callback,
 					pe.tc.ID,
