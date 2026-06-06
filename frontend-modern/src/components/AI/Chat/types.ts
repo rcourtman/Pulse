@@ -20,6 +20,7 @@ export interface PendingTool {
   rawInput?: string;
   status?: 'pending' | 'running' | 'waiting';
   progress?: string;
+  startedAt?: number;
 }
 
 export interface PendingApproval {

@@ -1154,6 +1154,22 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const currentStatus = createMemo(() =>
     getAssistantActiveTurnStatus(chat.messages(), chat.isLoading()),
   );
+  const [currentStatusNow, setCurrentStatusNow] = createSignal(Date.now());
+  createEffect(() => {
+    const status = currentStatus();
+    if (!status?.startedAt) return;
+    setCurrentStatusNow(Date.now());
+    const interval = window.setInterval(() => setCurrentStatusNow(Date.now()), 1000);
+    onCleanup(() => window.clearInterval(interval));
+  });
+  const currentStatusText = createMemo(() => {
+    const status = currentStatus();
+    if (!status) return '';
+    if (!status.startedAt) return status.text;
+    const elapsedSeconds = Math.max(0, Math.floor((currentStatusNow() - status.startedAt) / 1000));
+    if (elapsedSeconds < 2) return status.text;
+    return `${status.text} (${elapsedSeconds}s)`;
+  });
 
   createEffect(() => {
     input();
@@ -2376,7 +2392,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 </div>
               </Show>
 
-              <span class="min-w-0 truncate text-muted font-medium">{currentStatus()?.text}</span>
+              <span class="min-w-0 truncate text-muted font-medium">{currentStatusText()}</span>
 
               {/* Subtle animated dots */}
               <div class="flex gap-0.5 ml-1">

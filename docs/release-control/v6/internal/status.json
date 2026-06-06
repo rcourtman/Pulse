@@ -2981,7 +2981,8 @@
             "--",
             "--run",
             "src/components/AI/Chat/__tests__/useChat.test.ts",
-            "src/components/AI/Chat/__tests__/MessageItem.test.tsx"
+            "src/components/AI/Chat/__tests__/MessageItem.test.tsx",
+            "src/components/AI/Chat/__tests__/activeTurnStatus.test.ts"
           ]
         },
         {

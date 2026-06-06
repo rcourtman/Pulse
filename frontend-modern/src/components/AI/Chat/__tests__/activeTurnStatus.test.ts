@@ -23,11 +23,12 @@ describe('getAssistantActiveTurnStatus', () => {
   });
 
   it('surfaces the current pending tool from active message state', () => {
+    const startedAt = Date.now() - 5_000;
     expect(
       getAssistantActiveTurnStatus(
         [
           assistantMessage({
-            pendingTools: [{ id: 'tool-1', name: 'pulse_get_nodes', input: '{}' }],
+            pendingTools: [{ id: 'tool-1', name: 'pulse_get_nodes', input: '{}', startedAt }],
           }),
         ],
         true,
@@ -35,6 +36,29 @@ describe('getAssistantActiveTurnStatus', () => {
     ).toEqual({
       type: 'tool',
       text: 'Running get nodes',
+      startedAt,
+    });
+  });
+
+  it('carries workflow start time so the live footer can show elapsed wait', () => {
+    const startedAt = Date.now() - 8_000;
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            workflowStatus: {
+              phase: 'provider_start',
+              message: 'Sent request to OpenRouter; waiting for the first token.',
+              startedAt,
+            },
+          }),
+        ],
+        true,
+      ),
+    ).toEqual({
+      type: 'thinking',
+      text: 'Sent request to OpenRouter; waiting for the first token.',
+      startedAt,
     });
   });
 

@@ -299,6 +299,7 @@ export function useChat(options: UseChatOptions = {}) {
       rawInput: data.raw_input || tool.rawInput,
       status,
       progress: progress || tool.progress,
+      startedAt: tool.startedAt || Date.now(),
     });
 
     let resolvedTool: PendingTool | undefined;
@@ -319,6 +320,7 @@ export function useChat(options: UseChatOptions = {}) {
               rawInput: data.raw_input,
               status,
               progress,
+              startedAt: Date.now(),
             }),
           ];
 
@@ -691,6 +693,7 @@ export function useChat(options: UseChatOptions = {}) {
                 input: data.input || '{}',
                 rawInput: data.raw_input,
                 status: 'pending',
+                startedAt: Date.now(),
               };
 
               // Add to streamEvents in chronological position

@@ -1115,6 +1115,7 @@ describe('useChat', () => {
         input: '{}',
         rawInput: undefined,
         status: 'pending',
+        startedAt: expect.any(Number),
       });
       dispose();
     });

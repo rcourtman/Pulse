@@ -1,4 +1,4 @@
-import { Component, Show, createSignal, createMemo, For } from 'solid-js';
+import { Component, Show, createSignal, createMemo, createEffect, onCleanup, For } from 'solid-js';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle';
 import ClockIcon from 'lucide-solid/icons/clock';
 import LoaderCircleIcon from 'lucide-solid/icons/loader-circle';
@@ -144,6 +144,7 @@ export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
   const toolLabel = createMemo(() => getToolLabel(props.tool.name));
   const inputSummary = createMemo(() => parseToolInputSummary(props.tool.input || ''));
   const status = createMemo(() => props.tool.status || 'pending');
+  const [now, setNow] = createSignal(Date.now());
   const statusLabel = createMemo(() => {
     if (status() === 'waiting') return 'waiting';
     if (status() === 'running') return 'running';
@@ -153,6 +154,17 @@ export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
   const activityIconClass = createMemo(() => {
     if (status() === 'waiting') return 'h-3 w-3 shrink-0 text-amber-500 dark:text-amber-300';
     return 'h-3 w-3 shrink-0 animate-spin text-blue-500 dark:text-blue-400';
+  });
+  createEffect(() => {
+    if (!props.tool.startedAt || status() === 'waiting') return;
+    setNow(Date.now());
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    onCleanup(() => window.clearInterval(interval));
+  });
+  const elapsedLabel = createMemo(() => {
+    if (!props.tool.startedAt || status() === 'waiting') return '';
+    const elapsedSeconds = Math.max(0, Math.floor((now() - props.tool.startedAt) / 1000));
+    return elapsedSeconds >= 2 ? `${elapsedSeconds}s` : '';
   });
 
   return (
@@ -175,6 +187,9 @@ export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
         </span>
       </Show>
       <span class="shrink-0 text-[10px] text-muted">{statusLabel()}</span>
+      <Show when={elapsedLabel()}>
+        <span class="shrink-0 text-[10px] text-muted">{elapsedLabel()}</span>
+      </Show>
     </div>
   );
 };

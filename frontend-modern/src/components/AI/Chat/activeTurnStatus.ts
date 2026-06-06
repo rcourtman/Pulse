@@ -6,6 +6,7 @@ export type AssistantActiveTurnStatusKind = 'thinking' | 'tool' | 'generating';
 export interface AssistantActiveTurnStatus {
   text: string;
   type: AssistantActiveTurnStatusKind;
+  startedAt?: number;
 }
 
 const formatToolName = (name?: string) =>
@@ -100,7 +101,7 @@ export const getAssistantActiveTurnStatus = (
     assistantMessage.pendingTools?.at(-1) || activePendingToolFromEvents(assistantMessage.streamEvents);
   const pendingToolText = formatPendingToolStatus(pendingTool);
   if (pendingToolText) {
-    return { type: 'tool', text: pendingToolText };
+    return { type: 'tool', text: pendingToolText, startedAt: pendingTool?.startedAt };
   }
 
   const workflowStatusText = formatAssistantWorkflowStatus(assistantMessage.workflowStatus);
@@ -108,6 +109,7 @@ export const getAssistantActiveTurnStatus = (
     return {
       type: assistantMessage.workflowStatus?.tool ? 'tool' : 'thinking',
       text: workflowStatusText,
+      startedAt: assistantMessage.workflowStatus?.startedAt,
     };
   }
 

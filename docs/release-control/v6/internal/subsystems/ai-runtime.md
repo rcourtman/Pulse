@@ -203,7 +203,10 @@ runtime cost control, and shared AI transport surfaces.
    `workflow_state` replaces the active status immediately instead of waiting
    behind a dwell queue. Once visible assistant text, tool progress, approvals,
    or questions begin, stale workflow text must clear so the row does not keep
-   saying it is waiting on a phase that has already been superseded.
+   saying it is waiting on a phase that has already been superseded. Live
+   workflow and pending-tool activity must retain a per-state start timestamp
+   so the drawer can show elapsed wait/run time for long provider starts and
+   tool calls instead of repeating a timeless waiting label.
    OpenCode-parity Assistant UX work must reference OpenCode's actual source
    implementation for message parts, tool-state mutation, progress rendering,
    and model/session selection before changing Pulse behavior; parity means
@@ -236,7 +239,9 @@ runtime cost control, and shared AI transport surfaces.
    When multiple governed tools are pending, completed tools must not blank the
    status while another tool is still running, and the status heartbeat should
    follow the latest progressed pending tool without reordering the transcript's
-   chronological tool rows.
+   chronological tool rows. Pulse adapts this with a mutable footer status and
+   inline pending rows that show the current activity plus elapsed time while
+   keeping large command output collapsed.
    The referenced OpenCode source at commit
    `f750deaa3e95098fdde5fb00305b273e43c5b2cd` mutates a single tool part from
    `pending` input through `running` progress to completed/error in
