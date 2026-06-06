@@ -129,6 +129,17 @@ runtime cost control, and shared AI transport surfaces.
    text, return focus to the composer, and render a neutral transcript marker
    rather than persisting synthetic assistant answer text or surfacing the
    interruption as a retryable provider failure.
+   The referenced OpenCode source at commit
+   `9ed17da55ab1f7360cc0e01075f763e27fa899e9` routes prompt interruption
+   through the prompt command in
+   `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx`
+   (`session.interrupt`, lines 379-399) and handles stream interruption in
+   `packages/opencode/src/session/processor.ts` (`Effect.onInterrupt`, lines
+   977-983; aborted tool state finalization, lines 888-915). Pulse adapts that
+   terminal active-part behavior by clearing unresolved pending tool,
+   approval, and question transcript rows on explicit Stop while preserving
+   already-streamed answer text and completed tool evidence before showing the
+   neutral stopped marker.
    Composer prompt history is also drawer-local chat-runtime state: the drawer
    may persist a bounded local history of submitted prompt text and structured
    mentions for ArrowUp/ArrowDown recall, but that history must not persist or

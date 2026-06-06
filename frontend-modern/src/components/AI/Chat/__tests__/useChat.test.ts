@@ -1849,6 +1849,70 @@ describe('useChat', () => {
       expect(mockChat).toHaveBeenCalledTimes(1);
       dispose();
     });
+
+    it('removes unresolved interactive stream rows when stopping', async () => {
+      let fireEvent!: TestStreamDispatch;
+      const abortError = new Error('Aborted');
+      abortError.name = 'AbortError';
+      mockChat.mockImplementation(
+        (
+          _prompt: string,
+          _session: string,
+          _model: string | undefined,
+          onEvent: (event: StreamEvent) => void,
+          signal?: AbortSignal,
+        ) => {
+          fireEvent = (event) => dispatchTestStreamEvent(onEvent, event);
+          return new Promise<void>((_resolve, reject) => {
+            signal?.addEventListener('abort', () => reject(abortError));
+          });
+        },
+      );
+
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+      const send = chat.sendMessage('hello');
+      await new Promise((r) => setTimeout(r, 0));
+
+      fireEvent({ type: 'content', data: 'partial response' });
+      fireEvent({ type: 'tool_start', data: { id: 'tool-1', name: 'pulse_read', input: '{}' } });
+      fireEvent({
+        type: 'approval_needed',
+        data: {
+          command: 'systemctl restart nginx',
+          tool_id: 'tool-2',
+          tool_name: 'pulse_control',
+          run_on_host: true,
+          approval_id: 'approval-1',
+        },
+      });
+      fireEvent({
+        type: 'question',
+        data: {
+          question_id: 'question-1',
+          questions: [{ id: 'target', question: 'Which node?' }],
+        },
+      });
+
+      let assistant = chat.messages().find((message) => message.role === 'assistant')!;
+      expect(assistant.streamEvents?.map((event) => event.type)).toEqual([
+        'content',
+        'pending_tool',
+        'approval',
+        'question',
+      ]);
+
+      chat.stop();
+      await expect(send).resolves.toBe(false);
+
+      assistant = chat.messages().find((message) => message.role === 'assistant')!;
+      expect(assistant.content).toBe('partial response');
+      expect(assistant.interruption).toBe('stopped');
+      expect(assistant.pendingTools).toEqual([]);
+      expect(assistant.pendingApprovals).toEqual([]);
+      expect(assistant.pendingQuestions).toEqual([]);
+      expect(assistant.streamEvents?.map((event) => event.type)).toEqual(['content']);
+      dispose();
+    });
   });
 
   // ──────────────────────────────────────────────

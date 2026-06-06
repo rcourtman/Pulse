@@ -157,6 +157,17 @@ export function useChat(options: UseChatOptions = {}) {
     return promise;
   };
 
+  const streamEventsAfterInterruption = (
+    events: StreamDisplayEvent[] | undefined,
+    interruption?: AssistantInterruption,
+  ): StreamDisplayEvent[] | undefined => {
+    if (!interruption || !events) return events;
+    return events.filter(
+      (event) =>
+        event.type !== 'pending_tool' && event.type !== 'approval' && event.type !== 'question',
+    );
+  };
+
   const cancelActiveRequest = (interruption?: AssistantInterruption): Promise<void> | null => {
     const hasActiveRequest = isLoading() || abortControllerRef !== null;
     if (!hasActiveRequest) return null;
@@ -179,6 +190,7 @@ export function useChat(options: UseChatOptions = {}) {
               pendingTools: [],
               pendingApprovals: [],
               pendingQuestions: [],
+              streamEvents: streamEventsAfterInterruption(msg.streamEvents, interruption),
               workflowStatus: undefined,
             }
           : msg,
