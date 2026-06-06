@@ -2315,6 +2315,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
             getModelRouteLabel={formatChatMessageModelRoute}
             getModelRouteAlternative={getFailedTurnModelRouteAlternative}
             onUseModelRoute={switchToModelRoute}
+            queuedFollowUps={chat.queuedFollowUps()}
+            onEditQueuedFollowUp={editQueuedFollowUp}
+            onCancelQueuedFollowUp={(id) => {
+              chat.cancelQueuedFollowUp(id);
+              focusComposer();
+            }}
             recentSessions={sessions()
               .filter((s) => s.id !== chat.sessionId() && s.message_count > 0)
               .slice(0, 3)}

@@ -1,6 +1,7 @@
 import { Component, Show, For, createEffect, createMemo } from 'solid-js';
 import { MessageItem } from './MessageItem';
 import type { ChatSession } from '@/api/aiChat';
+import type { QueuedFollowUp } from './hooks/useChat';
 import type {
   ChatMessage,
   ModelRouteRecoveryOption,
@@ -24,6 +25,9 @@ interface ChatMessagesProps {
   getModelRouteLabel?: (modelId: string) => string;
   getModelRouteAlternative?: (message: ChatMessage) => ModelRouteRecoveryOption | null;
   onUseModelRoute?: (modelId: string, messageId?: string) => void;
+  queuedFollowUps?: QueuedFollowUp[];
+  onEditQueuedFollowUp?: (id: string) => void;
+  onCancelQueuedFollowUp?: (id: string) => void;
   // Dashboard props
   recentSessions?: ChatSession[];
   onLoadSession?: (sessionId: string) => void;
@@ -63,6 +67,19 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
   const recentSessions = createMemo(() =>
     (props.recentSessions || []).filter((session) => session.message_count > 0).slice(0, 3),
   );
+  const queuedFollowUpMetaByMessageId = createMemo(() => {
+    const entries = props.queuedFollowUps || [];
+    return new Map(
+      entries.map((entry, index) => [
+        entry.messageId,
+        {
+          id: entry.id,
+          position: index + 1,
+          count: entries.length,
+        },
+      ]),
+    );
+  });
 
   const formatSessionMessageCount = (count: number) =>
     `${count} ${count === 1 ? 'message' : 'messages'}`;
@@ -145,22 +162,43 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
 
       {/* Messages */}
       <For each={props.messages}>
-        {(message) => (
-          <MessageItem
-            message={message}
-            onApprove={(approval) => props.onApprove(message.id, approval)}
-            onSkip={(toolId) => props.onSkip(message.id, toolId)}
-            onAnswerQuestion={(question, answers) =>
-              props.onAnswerQuestion(message.id, question, answers)
-            }
-            onSkipQuestion={(questionId) => props.onSkipQuestion(message.id, questionId)}
-            onRetry={props.onRetry}
-            onChangeModel={props.onChangeModel}
-            getModelRouteLabel={props.getModelRouteLabel}
-            modelRouteAlternative={props.getModelRouteAlternative?.(message)}
-            onUseModelRoute={props.onUseModelRoute}
-          />
-        )}
+        {(message) => {
+          const queuedMeta = createMemo(() => queuedFollowUpMetaByMessageId().get(message.id));
+          return (
+            <MessageItem
+              message={message}
+              onApprove={(approval) => props.onApprove(message.id, approval)}
+              onSkip={(toolId) => props.onSkip(message.id, toolId)}
+              onAnswerQuestion={(question, answers) =>
+                props.onAnswerQuestion(message.id, question, answers)
+              }
+              onSkipQuestion={(questionId) => props.onSkipQuestion(message.id, questionId)}
+              onRetry={props.onRetry}
+              onChangeModel={props.onChangeModel}
+              getModelRouteLabel={props.getModelRouteLabel}
+              modelRouteAlternative={props.getModelRouteAlternative?.(message)}
+              onUseModelRoute={props.onUseModelRoute}
+              queuedPosition={queuedMeta()?.position}
+              queuedCount={queuedMeta()?.count}
+              onEditQueued={
+                queuedMeta() && props.onEditQueuedFollowUp
+                  ? () => {
+                      const meta = queuedMeta();
+                      if (meta) props.onEditQueuedFollowUp?.(meta.id);
+                    }
+                  : undefined
+              }
+              onCancelQueued={
+                queuedMeta() && props.onCancelQueuedFollowUp
+                  ? () => {
+                      const meta = queuedMeta();
+                      if (meta) props.onCancelQueuedFollowUp?.(meta.id);
+                    }
+                  : undefined
+              }
+            />
+          );
+        }}
       </For>
 
       {/* Scroll anchor */}

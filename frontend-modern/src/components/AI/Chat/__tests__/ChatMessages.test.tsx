@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { ChatMessages } from '../ChatMessages';
+import type { QueuedFollowUp } from '../hooks/useChat';
 import type {
   ChatMessage,
   ModelRouteRecoveryOption,
@@ -22,6 +23,10 @@ let capturedMessageItemProps: Array<{
   getModelRouteLabel?: (modelId: string) => string;
   modelRouteAlternative?: ModelRouteRecoveryOption | null;
   onUseModelRoute?: (modelId: string, messageId?: string) => void;
+  queuedPosition?: number;
+  queuedCount?: number;
+  onEditQueued?: () => void;
+  onCancelQueued?: () => void;
 }> = [];
 
 vi.mock('../MessageItem', () => ({
@@ -38,6 +43,10 @@ vi.mock('../MessageItem', () => ({
     getModelRouteLabel?: (modelId: string) => string;
     modelRouteAlternative?: ModelRouteRecoveryOption | null;
     onUseModelRoute?: (modelId: string, messageId?: string) => void;
+    queuedPosition?: number;
+    queuedCount?: number;
+    onEditQueued?: () => void;
+    onCancelQueued?: () => void;
   }) => {
     capturedMessageItemProps.push(props);
     return (
@@ -247,6 +256,60 @@ describe('ChatMessages', () => {
       const asstMsg = screen.getByTestId('message-item-asst-1');
       expect(userMsg).toHaveAttribute('data-role', 'user');
       expect(asstMsg).toHaveAttribute('data-role', 'assistant');
+    });
+
+    it('passes queue position and row actions to queued message items', () => {
+      const onEditQueuedFollowUp = vi.fn();
+      const onCancelQueuedFollowUp = vi.fn();
+      const queuedFollowUps: QueuedFollowUp[] = [
+        {
+          id: 'queue-1',
+          messageId: 'queued-user-1',
+          prompt: 'first queued turn',
+          timestamp: new Date('2026-03-01T12:01:00Z'),
+        },
+        {
+          id: 'queue-2',
+          messageId: 'queued-user-2',
+          prompt: 'second queued turn',
+          timestamp: new Date('2026-03-01T12:02:00Z'),
+        },
+      ];
+
+      render(() => (
+        <ChatMessages
+          messages={[
+            makeMessage({
+              id: 'queued-user-1',
+              role: 'user',
+              content: 'first queued turn',
+              delivery: 'queued',
+            }),
+            makeMessage({
+              id: 'queued-user-2',
+              role: 'user',
+              content: 'second queued turn',
+              delivery: 'queued',
+            }),
+          ]}
+          {...makeHandlers()}
+          queuedFollowUps={queuedFollowUps}
+          onEditQueuedFollowUp={onEditQueuedFollowUp}
+          onCancelQueuedFollowUp={onCancelQueuedFollowUp}
+        />
+      ));
+
+      const firstQueued = capturedMessageItemProps.find((p) => p.message.id === 'queued-user-1');
+      const secondQueued = capturedMessageItemProps.find((p) => p.message.id === 'queued-user-2');
+
+      expect(firstQueued).toMatchObject({ queuedPosition: 1, queuedCount: 2 });
+      expect(secondQueued).toMatchObject({ queuedPosition: 2, queuedCount: 2 });
+
+      firstQueued?.onEditQueued?.();
+      secondQueued?.onCancelQueued?.();
+
+      expect(onEditQueuedFollowUp).toHaveBeenCalledWith('queue-1');
+      expect(onCancelQueuedFollowUp).toHaveBeenCalledWith('queue-2');
     });
 
     it('renders the scroll anchor element', () => {

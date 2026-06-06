@@ -236,6 +236,17 @@ runtime cost control, and shared AI transport surfaces.
    still have a valid provider/model shape; malformed route strings must not
    become selectable chat routes.
    The referenced OpenCode source at fetched `origin/dev` commit
+   `147169e9b78bdd8430800f883af6b6485e5156e4` runs ordinary follow-up
+   prompts through a serial local queue in
+   `packages/opencode/src/cli/cmd/run/runtime.queue.ts`: prompts submitted
+   behind an active ordinary turn remain visible as queued prompts, expose
+   removal through `FooterApi.onQueuedRemove`, and are removed from the visible
+   queue before their own turn begins. Pulse's Assistant drawer adapts that
+   behavior by keeping queued follow-ups in the transcript, showing queue
+   position plus edit/remove controls on each queued user row, and draining
+   those rows through the existing chat-runtime queue without aborting the
+   active model stream.
+   The referenced OpenCode source at fetched `origin/dev` commit
    `fa2b63f850fc0a23bec2bdff9e660450d3fe7913` keeps prompt/footer status visible
    only while the session is non-idle in
    `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx`, and maps

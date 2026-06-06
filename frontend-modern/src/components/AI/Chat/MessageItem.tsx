@@ -14,8 +14,10 @@ import CircleAlertIcon from 'lucide-solid/icons/circle-alert';
 import ClockIcon from 'lucide-solid/icons/clock';
 import CopyIcon from 'lucide-solid/icons/copy';
 import CpuIcon from 'lucide-solid/icons/cpu';
+import PencilIcon from 'lucide-solid/icons/pencil';
 import RotateCcwIcon from 'lucide-solid/icons/rotate-ccw';
 import SparklesIcon from 'lucide-solid/icons/sparkles';
+import XIcon from 'lucide-solid/icons/x';
 import { renderMarkdown } from '../aiChatUtils';
 import { PendingToolBlock, ToolExecutionBlock } from './ToolExecutionBlock';
 import { ApprovalCard } from './ApprovalCard';
@@ -51,6 +53,10 @@ interface MessageItemProps {
   getModelRouteLabel?: (modelId: string) => string;
   modelRouteAlternative?: ModelRouteRecoveryOption | null;
   onUseModelRoute?: (modelId: string, messageId?: string) => void;
+  queuedPosition?: number;
+  queuedCount?: number;
+  onEditQueued?: () => void;
+  onCancelQueued?: () => void;
 }
 
 const markdownClass =
@@ -65,6 +71,15 @@ const markdownClass =
 export const MessageItem: Component<MessageItemProps> = (props) => {
   const isUser = () => props.message.role === 'user';
   const isQueuedUserMessage = () => isUser() && props.message.delivery === 'queued';
+  const queuedStatusLabel = createMemo(() => {
+    if (!isQueuedUserMessage()) return '';
+    const position = props.queuedPosition;
+    const count = props.queuedCount;
+    if (position && count && count > 1) {
+      return `Queued ${position} of ${count}`;
+    }
+    return 'Queued';
+  });
 
   // Group stream events into display blocks. Content collapses into a single
   // block even when a reasoning model interleaves hidden thinking deltas, so
@@ -189,11 +204,33 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
           <p class="text-sm whitespace-pre-wrap">{props.message.content}</p>
           <Show when={isQueuedUserMessage()}>
             <div
-              class="mt-1.5 flex items-center justify-end gap-1 text-[11px] font-medium text-blue-700 dark:text-blue-300"
+              class="mt-1.5 flex flex-wrap items-center justify-end gap-1.5 text-[11px] font-medium text-blue-700 dark:text-blue-300"
               role="status"
             >
               <ClockIcon class="h-3 w-3" aria-hidden="true" />
-              <span>Queued</span>
+              <span>{queuedStatusLabel()}</span>
+              <Show when={props.onEditQueued}>
+                <button
+                  type="button"
+                  onClick={() => props.onEditQueued?.()}
+                  aria-label="Edit queued follow-up"
+                  title="Edit queued follow-up"
+                  class="inline-flex h-5 w-5 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:text-blue-200 dark:hover:bg-blue-900/60"
+                >
+                  <PencilIcon class="h-3 w-3" aria-hidden="true" />
+                </button>
+              </Show>
+              <Show when={props.onCancelQueued}>
+                <button
+                  type="button"
+                  onClick={() => props.onCancelQueued?.()}
+                  aria-label="Remove queued follow-up"
+                  title="Remove queued follow-up"
+                  class="inline-flex h-5 w-5 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:text-blue-200 dark:hover:bg-blue-900/60"
+                >
+                  <XIcon class="h-3 w-3" aria-hidden="true" />
+                </button>
+              </Show>
             </div>
           </Show>
         </div>

@@ -24,6 +24,9 @@ const {
     getModelRouteLabel?: (modelId: string) => string;
     getModelRouteAlternative?: (message: ChatMessage) => ModelRouteRecoveryOption | null;
     onUseModelRoute?: (modelId: string, messageId?: string) => void;
+    queuedFollowUps?: QueuedFollowUp[];
+    onEditQueuedFollowUp?: (id: string) => void;
+    onCancelQueuedFollowUp?: (id: string) => void;
   }> = [];
   const mockModelSelectorProps: Array<{
     selectedModel: string;
@@ -206,6 +209,9 @@ vi.mock('../ChatMessages', () => ({
     getModelRouteLabel?: (modelId: string) => string;
     getModelRouteAlternative?: (message: ChatMessage) => ModelRouteRecoveryOption | null;
     onUseModelRoute?: (modelId: string, messageId?: string) => void;
+    queuedFollowUps?: QueuedFollowUp[];
+    onEditQueuedFollowUp?: (id: string) => void;
+    onCancelQueuedFollowUp?: (id: string) => void;
   }) => {
     const routeRecovery = () => {
       const failedMessage = props.messages.find((message) => message.error);
@@ -1526,6 +1532,31 @@ describe('AIChat', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Clear queued follow-up messages' }));
 
       expect(mockChat.clearQueuedFollowUps).toHaveBeenCalledTimes(1);
+    });
+
+    it('passes queued follow-up metadata and row actions into the transcript', () => {
+      const queuedFollowUps: QueuedFollowUp[] = [
+        {
+          id: 'queued-row-1',
+          messageId: 'msg-queued-row-1',
+          prompt: 'row queued prompt',
+          timestamp: new Date(),
+        },
+      ];
+      mockChat.queuedFollowUpCount.mockReturnValue(1);
+      mockChat.queuedFollowUps.mockReturnValue(queuedFollowUps);
+      mockChat.takeQueuedFollowUp.mockReturnValue(queuedFollowUps[0]);
+
+      renderChat();
+
+      const chatMessagesProps = mockChatMessagesProps.at(-1);
+      expect(chatMessagesProps?.queuedFollowUps).toBe(queuedFollowUps);
+
+      chatMessagesProps?.onEditQueuedFollowUp?.('queued-row-1');
+      expect(mockChat.takeQueuedFollowUp).toHaveBeenCalledWith('queued-row-1');
+
+      chatMessagesProps?.onCancelQueuedFollowUp?.('queued-row-1');
+      expect(mockChat.cancelQueuedFollowUp).toHaveBeenCalledWith('queued-row-1');
     });
 
     it('removes an individual queued follow-up', () => {

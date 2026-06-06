@@ -131,7 +131,9 @@ describe('MessageItem', () => {
       expect(p.tagName).toBe('P');
     });
 
-    it('renders queued user messages with a status marker', () => {
+    it('renders queued user messages with queue position and row actions', () => {
+      const onEditQueued = vi.fn();
+      const onCancelQueued = vi.fn();
       render(() => (
         <MessageItem
           message={makeMessage({
@@ -140,11 +142,21 @@ describe('MessageItem', () => {
             delivery: 'queued',
           })}
           {...makeHandlers()}
+          queuedPosition={2}
+          queuedCount={3}
+          onEditQueued={onEditQueued}
+          onCancelQueued={onCancelQueued}
         />
       ));
 
       expect(screen.getByText('follow up after this')).toBeInTheDocument();
-      expect(screen.getByRole('status')).toHaveTextContent('Queued');
+      expect(screen.getByRole('status')).toHaveTextContent('Queued 2 of 3');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Edit queued follow-up' }));
+      expect(onEditQueued).toHaveBeenCalledTimes(1);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Remove queued follow-up' }));
+      expect(onCancelQueued).toHaveBeenCalledTimes(1);
     });
   });
 
