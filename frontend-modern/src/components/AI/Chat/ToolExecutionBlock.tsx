@@ -28,7 +28,75 @@ const getToolLabel = (name: string) => {
   return formatIdentifierLabel(name, { stripPrefix: 'pulse_', maxLength: 12 });
 };
 
-const parseToolInputSummary = (input: string) => {
+const normalizedToolName = (name?: string) => (name || '').trim().replace(/^pulse_/, '');
+
+const stringField = (record: Record<string, unknown>, keys: string[]) => {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return String(value);
+    }
+  }
+  return '';
+};
+
+const booleanField = (record: Record<string, unknown>, key: string) => record[key] === true;
+
+const inlineValue = (value: string, maxLength = 24) =>
+  value.replace(/["\r\n]+/g, ' ').trim().substring(0, maxLength);
+
+const formatQueryInputSummary = (record: Record<string, unknown>) => {
+  const action = stringField(record, ['action', 'type']).toLowerCase();
+  const resourceType = stringField(record, ['resource_type', 'resourceType', 'kind', 'include']);
+  const listType = stringField(record, ['type', 'resource_type', 'resourceType', 'kind']);
+  const query = inlineValue(stringField(record, ['query', 'search', 'name', 'resource_name']));
+  const resourceId = inlineValue(stringField(record, ['resource_id', 'resourceId', 'id', 'vmid']));
+  const node = inlineValue(stringField(record, ['node', 'host']));
+
+  switch (action) {
+    case 'search':
+      return query ? `search "${query}"` : 'search resources';
+    case 'list':
+      return listType
+        ? `list ${formatIdentifierLabel(listType, { maxLength: 22 })}`
+        : 'list resources';
+    case 'get':
+      return resourceId ? `get ${resourceId}` : 'get resource';
+    case 'config':
+      if (resourceId && node) return `config ${resourceId} on ${node}`;
+      return resourceId ? `config ${resourceId}` : 'resource config';
+    case 'topology':
+      return booleanField(record, 'summary_only') ? 'topology summary' : 'topology';
+    case 'health':
+      return 'health summary';
+    default:
+      if (action) return formatIdentifierLabel(action, { maxLength: 28 });
+      return resourceType
+        ? `query ${formatIdentifierLabel(resourceType, { maxLength: 22 })}`
+        : 'query resources';
+  }
+};
+
+const formatAlertsInputSummary = (record: Record<string, unknown>) => {
+  const action = stringField(record, ['action']).toLowerCase();
+  const severity = stringField(record, ['severity', 'level']);
+  const resource = stringField(record, ['resource', 'resource_id', 'resourceId', 'name']);
+
+  if (action === 'list') {
+    return severity
+      ? `list ${formatIdentifierLabel(severity, { maxLength: 18 })} alerts`
+      : 'list active alerts';
+  }
+  if (action === 'get') {
+    return resource ? `get alert for ${inlineValue(resource, 18)}` : 'get alert';
+  }
+  return action ? formatIdentifierLabel(action, { maxLength: 28 }) : 'read alerts';
+};
+
+const parseToolInputSummary = (input: string, toolName?: string) => {
   const trimmed = input.trim();
   if (!trimmed) return '';
 
@@ -36,6 +104,13 @@ const parseToolInputSummary = (input: string) => {
     const parsed = JSON.parse(trimmed) as unknown;
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       const record = parsed as Record<string, unknown>;
+      const tool = normalizedToolName(toolName);
+      if (tool === 'query') {
+        return formatQueryInputSummary(record);
+      }
+      if (tool === 'alerts') {
+        return formatAlertsInputSummary(record);
+      }
       if (typeof record.action === 'string' && record.action.trim()) {
         return formatIdentifierLabel(record.action, { maxLength: 28 });
       }
@@ -56,6 +131,16 @@ const hasReadableToolOutput = (output: string) => {
   return trimmed.length > 0 && !trimmed.toLowerCase().includes('not available');
 };
 
+const toolValueText = (value: unknown) => {
+  if (typeof value === 'string') return value;
+  if (value === null || value === undefined) return '';
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+};
+
 /**
  * ToolExecutionBlock - Displays completed tool executions in a compact terminal-like style.
  */
@@ -63,9 +148,13 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
   const [showDetails, setShowDetails] = createSignal(false);
 
   const toolLabel = createMemo(() => getToolLabel(props.tool.name));
-  const inputSummary = createMemo(() => parseToolInputSummary(props.tool.input || ''));
-  const hasInput = createMemo(() => (props.tool.input || '').trim().length > 0);
-  const hasOutput = createMemo(() => hasReadableToolOutput(props.tool.output || ''));
+  const inputText = createMemo(() => toolValueText(props.tool.input));
+  const outputText = createMemo(() => toolValueText(props.tool.output));
+  const inputSummary = createMemo(() =>
+    parseToolInputSummary(inputText(), props.tool.name),
+  );
+  const hasInput = createMemo(() => inputText().trim().length > 0);
+  const hasOutput = createMemo(() => hasReadableToolOutput(outputText()));
   const hasDetails = createMemo(() => hasInput() || hasOutput());
 
   const statusLabel = () => (props.tool.success ? 'completed' : 'failed');
@@ -116,7 +205,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
               Input
             </div>
             <pre class="mb-2 max-h-32 overflow-y-auto overflow-x-hidden rounded bg-surface-alt p-2 text-[10px] leading-relaxed text-muted whitespace-pre-wrap break-all">
-              {(props.tool.input || '').trim()}
+              {inputText().trim()}
             </pre>
           </Show>
           <Show when={hasOutput()}>
@@ -124,7 +213,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
               Output
             </div>
             <pre class="max-h-64 overflow-y-auto overflow-x-hidden rounded bg-surface-alt p-2 text-[10px] leading-relaxed text-muted whitespace-pre-wrap break-all">
-              {(props.tool.output || '').trim()}
+              {outputText().trim()}
             </pre>
           </Show>
         </div>
@@ -142,7 +231,10 @@ interface PendingToolBlockProps {
 
 export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
   const toolLabel = createMemo(() => getToolLabel(props.tool.name));
-  const inputSummary = createMemo(() => parseToolInputSummary(props.tool.input || ''));
+  const inputText = createMemo(() => toolValueText(props.tool.input));
+  const inputSummary = createMemo(() =>
+    parseToolInputSummary(inputText(), props.tool.name),
+  );
   const status = createMemo(() => props.tool.status || 'pending');
   const [now, setNow] = createSignal(Date.now());
   const statusLabel = createMemo(() => {

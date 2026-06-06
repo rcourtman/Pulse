@@ -126,9 +126,58 @@ describe('ToolExecutionBlock', () => {
       />
     ));
 
-    expect(screen.getByText('topology')).toBeInTheDocument();
+    expect(screen.getByText('topology summary')).toBeInTheDocument();
     expect(screen.queryByText(/summary_only/)).not.toBeInTheDocument();
     expect(screen.queryByText(/total_nodes/)).not.toBeInTheDocument();
+  });
+
+  it('renders Pulse query search input as a readable action', () => {
+    render(() => (
+      <ToolExecutionBlock
+        tool={makeTool({
+          name: 'pulse_query',
+          input: '{"action":"search","query":"prowlarr"}',
+          output: '{"matches":[]}',
+        })}
+      />
+    ));
+
+    expect(screen.getByText('search "prowlarr"')).toBeInTheDocument();
+    expect(screen.queryByText(/"query"/)).not.toBeInTheDocument();
+  });
+
+  it('tolerates structured Pulse query input from persisted transcripts', () => {
+    render(() => (
+      <ToolExecutionBlock
+        tool={
+          {
+            ...makeTool({
+              name: 'pulse_query',
+            }),
+            input: { action: 'search', query: 'prowlarr' },
+            output: { matches: [] },
+          } as unknown as ToolExecution
+        }
+      />
+    ));
+
+    expect(screen.getByText('search "prowlarr"')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Details'));
+    expect(screen.getByText(/"action":"search"/)).toBeInTheDocument();
+  });
+
+  it('renders Pulse alerts list input as active alerts', () => {
+    render(() => (
+      <ToolExecutionBlock
+        tool={makeTool({
+          name: 'pulse_alerts',
+          input: '{"action":"list"}',
+          output: '{"alerts":[]}',
+        })}
+      />
+    ));
+
+    expect(screen.getByText('list active alerts')).toBeInTheDocument();
   });
 
   // --- Output display ---
@@ -295,6 +344,17 @@ describe('PendingToolBlock', () => {
 
     expect(screen.getByText('topology')).toBeInTheDocument();
     expect(screen.queryByText(/include/)).not.toBeInTheDocument();
+  });
+
+  it('renders pending Pulse query list input as a readable action', () => {
+    render(() => (
+      <PendingToolBlock
+        tool={makePending({ name: 'pulse_query', input: '{"action":"list","type":"vms"}' })}
+      />
+    ));
+
+    expect(screen.getByText('list vms')).toBeInTheDocument();
+    expect(screen.queryByText(/"type"/)).not.toBeInTheDocument();
   });
 
   // --- Activity state ---

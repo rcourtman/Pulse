@@ -305,6 +305,16 @@ runtime cost control, and shared AI transport surfaces.
    attempts remain governed by the runtime and may cancel a pending row instead
    of persisting a failed tool card.
    The referenced OpenCode source at fetched `origin/dev` commit
+   `09d9cf01f93798939c1284fbe974b6e1f4d2759d` renders tool-specific inline
+   labels such as `Read <path>`, `Grep "<pattern>"`, `WebFetch <url>`, and bash
+   commands in
+   `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`.
+   Pulse's compact tool rows must follow that operator-language model: the row
+   should summarize the actual governed action (`search "prowlarr"`, `list
+   active alerts`, `topology summary`) instead of exposing only internal
+   action names such as `QUERY search` or raw JSON; raw input and output stay
+   available behind Details.
+   The referenced OpenCode source at fetched `origin/dev` commit
    `fa2b63f850fc0a23bec2bdff9e660450d3fe7913` also keeps assistant text,
    reasoning, and tool invocation as typed message parts in
    `packages/opencode/src/session/message.ts`, while
