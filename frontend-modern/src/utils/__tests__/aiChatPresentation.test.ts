@@ -6,8 +6,6 @@ import {
   AI_CHAT_DISCOVERY_HINT_TITLE,
   AI_CHAT_DRAWER_SUBTITLE,
   AI_CHAT_DRAWER_TITLE,
-  AI_CHAT_EMPTY_STATE_SUBTITLE,
-  AI_CHAT_EMPTY_STATE_TITLE,
   AI_CHAT_LAUNCHER_ARIA_LABEL,
   AI_CHAT_LAST_TURN_USAGE_LABEL,
   AI_CHAT_MODEL_SELECTOR_EMPTY_STATE,
@@ -27,7 +25,6 @@ import {
   AI_CHAT_SESSION_SEARCH_TITLE,
   getAIChatProviderReadinessPresentation,
   getAIChatLauncherTitle,
-  getAIChatEmptyStatePresentation,
 } from '@/utils/aiChatPresentation';
 
 describe('aiChatPresentation', () => {
@@ -39,10 +36,6 @@ describe('aiChatPresentation', () => {
     expect(AI_CHAT_DISCOVERY_HINT_TITLE).toBe('Workload Discovery is off.');
     expect(AI_CHAT_DISCOVERY_HINT_BODY).toBe(
       'Enable it in Settings so Pulse Assistant can reference real services, versions, and commands instead of generic guidance.',
-    );
-    expect(AI_CHAT_EMPTY_STATE_TITLE).toBe('Ask about your infrastructure');
-    expect(AI_CHAT_EMPTY_STATE_SUBTITLE).toBe(
-      'Chat with your configured model using Pulse context and governed tools.',
     );
     expect(AI_CHAT_NEW_SESSION_SHORT_LABEL).toBe('New');
     expect(AI_CHAT_NEW_SESSION_MENU_LABEL).toBe('New session');
@@ -69,22 +62,6 @@ describe('aiChatPresentation', () => {
     expect(getAIChatLauncherTitle()).toBe('Open Pulse Assistant');
     expect(getAIChatLauncherTitle('Core Fabric')).toBe('Open Pulse Assistant for Core Fabric');
     expect(getAIChatLauncherTitle()).not.toContain('⌘K');
-  });
-
-  it('uses attached briefing context for scoped assistant handoff empty states', () => {
-    expect(
-      getAIChatEmptyStatePresentation({
-        isCluster: true,
-        briefing: {
-          sourceLabel: 'Pulse Patrol',
-          title: 'Patrol assessment attached',
-          subject: 'Coverage incomplete',
-        },
-      }),
-    ).toEqual({
-      title: 'Context attached',
-      subtitle: 'Pulse Patrol · Patrol assessment attached · Coverage incomplete',
-    });
   });
 
   it('builds neutral provider readiness presentation copy for Assistant checks', () => {

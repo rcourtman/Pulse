@@ -31,10 +31,6 @@ interface ChatMessagesProps {
   // Dashboard props
   recentSessions?: ChatSession[];
   onLoadSession?: (sessionId: string) => void;
-  emptyState?: {
-    title: string;
-    subtitle?: string;
-  };
 }
 
 /**
@@ -42,7 +38,7 @@ interface ChatMessagesProps {
  *
  * Features:
  * - Auto-scroll to bottom on new messages
- * - Empty state
+ * - Recent-session resume actions
  * - Smooth scrolling behavior
  */
 export const ChatMessages: Component<ChatMessagesProps> = (props) => {
@@ -115,49 +111,40 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
 
   return (
     <div ref={containerRef} class="flex-1 overflow-y-auto px-4 py-3 bg-surface">
-      {/* Empty state */}
-      <Show when={props.messages.length === 0 && props.emptyState}>
-        <div class="flex min-h-full flex-col items-center justify-center px-2 py-8 text-center">
-          <h3 class="text-base font-semibold text-base-content mb-3">{props.emptyState!.title}</h3>
-          <Show when={props.emptyState!.subtitle}>
-            <p class="text-sm text-muted max-w-xs">{props.emptyState!.subtitle}</p>
-          </Show>
-          <Show when={recentSessions().length > 0 && props.onLoadSession}>
-            <div class="mt-6 w-full max-w-sm text-left" aria-label="Recent Assistant sessions">
-              <div class="mb-2 text-[11px] font-semibold uppercase text-muted">Recent sessions</div>
-              <div class="space-y-1.5">
-                <For each={recentSessions()}>
-                  {(session) => {
-                    const handoffLabel = () => formatSessionHandoffLabel(session);
-                    return (
-                      <button
-                        type="button"
-                        class="w-full rounded-md border border-border bg-surface px-3 py-2 text-left transition-colors hover:border-blue-300 hover:bg-surface-alt focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                        onClick={() => props.onLoadSession?.(session.id)}
-                        aria-label={`Resume ${session.title || 'Untitled Assistant session'}`}
-                      >
-                        <div class="truncate text-sm font-medium text-base-content">
-                          {session.title || 'Untitled'}
-                        </div>
-                        <div class="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-muted">
-                          <span>{formatSessionMessageCount(session.message_count)}</span>
-                          <Show when={handoffLabel()}>
-                            {(label) => (
-                              <>
-                                <span aria-hidden="true">/</span>
-                                <span class="truncate">{label()}</span>
-                              </>
-                            )}
-                          </Show>
-                        </div>
-                      </button>
-                    );
-                  }}
-                </For>
-              </div>
-            </div>
-          </Show>
-        </div>
+      <Show when={props.messages.length === 0 && recentSessions().length > 0 && props.onLoadSession}>
+        <section class="mb-3 w-full" aria-label="Recent Assistant sessions">
+          <div class="mb-2 text-[11px] font-semibold uppercase text-muted">Recent sessions</div>
+          <div class="space-y-1.5">
+            <For each={recentSessions()}>
+              {(session) => {
+                const handoffLabel = () => formatSessionHandoffLabel(session);
+                return (
+                  <button
+                    type="button"
+                    class="w-full rounded-md border border-border bg-surface px-3 py-2 text-left transition-colors hover:border-blue-300 hover:bg-surface-alt focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                    onClick={() => props.onLoadSession?.(session.id)}
+                    aria-label={`Resume ${session.title || 'Untitled Assistant session'}`}
+                  >
+                    <div class="truncate text-sm font-medium text-base-content">
+                      {session.title || 'Untitled'}
+                    </div>
+                    <div class="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-muted">
+                      <span>{formatSessionMessageCount(session.message_count)}</span>
+                      <Show when={handoffLabel()}>
+                        {(label) => (
+                          <>
+                            <span aria-hidden="true">/</span>
+                            <span class="truncate">{label()}</span>
+                          </>
+                        )}
+                      </Show>
+                    </div>
+                  </button>
+                );
+              }}
+            </For>
+          </div>
+        </section>
       </Show>
 
       {/* Messages */}

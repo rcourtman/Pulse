@@ -18,9 +18,6 @@ export const AI_CHAT_MODEL_SELECTOR_EMPTY_STATE = 'No matching models.';
 export const AI_CHAT_DISCOVERY_HINT_TITLE = 'Workload Discovery is off.';
 export const AI_CHAT_DISCOVERY_HINT_BODY =
   'Enable it in Settings so Pulse Assistant can reference real services, versions, and commands instead of generic guidance.';
-export const AI_CHAT_EMPTY_STATE_TITLE = 'Ask about your infrastructure';
-export const AI_CHAT_EMPTY_STATE_SUBTITLE =
-  'Chat with your configured model using Pulse context and governed tools.';
 export const AI_CHAT_INPUT_PLACEHOLDER = 'Ask about your infrastructure...';
 export const AI_CHAT_QUESTION_CARD_TITLE = 'Pulse Assistant needs your input';
 export const AI_CHAT_QUESTION_CARD_PLACEHOLDER = 'Type your answer...';
@@ -30,17 +27,6 @@ export const AI_CHAT_LAST_TURN_USAGE_LABEL = 'Last assistant turn usage';
 export const AI_CHAT_PROVIDER_READINESS_SETTINGS_HREF = '/settings/system-ai';
 export const AI_CHAT_PROVIDER_READINESS_SETTINGS_LABEL = 'Open settings';
 export const AI_CHAT_PROVIDER_READINESS_RETRY_LABEL = 'Retry';
-
-export interface AIChatEmptyStateBriefingInput {
-  sourceLabel?: string;
-  subject?: string;
-  title?: string;
-}
-
-export interface AIChatEmptyStatePresentation {
-  subtitle?: string;
-  title: string;
-}
 
 export type AIChatProviderReadinessStatus = 'checking' | 'error';
 
@@ -57,28 +43,6 @@ export function getAIChatLauncherTitle(contextName?: unknown) {
   }
 
   return 'Open Pulse Assistant';
-}
-
-export function getAIChatEmptyStatePresentation(args: {
-  briefing?: AIChatEmptyStateBriefingInput;
-  isCluster: boolean;
-}): AIChatEmptyStatePresentation {
-  const sourceLabel = args.briefing?.sourceLabel?.trim();
-  const title = args.briefing?.title?.trim();
-  const subject = args.briefing?.subject?.trim();
-  void args.isCluster;
-
-  if (args.briefing && (sourceLabel || title || subject)) {
-    return {
-      title: 'Context attached',
-      subtitle: [sourceLabel, title, subject].filter(Boolean).join(' · ') || undefined,
-    };
-  }
-
-  return {
-    title: AI_CHAT_EMPTY_STATE_TITLE,
-    subtitle: AI_CHAT_EMPTY_STATE_SUBTITLE,
-  };
 }
 
 export function getAIChatProviderReadinessPresentation(args: {

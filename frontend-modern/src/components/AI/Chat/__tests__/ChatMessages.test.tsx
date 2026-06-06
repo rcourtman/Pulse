@@ -85,69 +85,28 @@ function makeHandlers() {
 }
 
 describe('ChatMessages', () => {
-  describe('empty state', () => {
-    it('shows empty state when no messages and emptyState provided', () => {
-      render(() => (
-        <ChatMessages
-          messages={[]}
-          {...makeHandlers()}
-          emptyState={{ title: 'Ask about your infrastructure' }}
-        />
-      ));
+  describe('empty transcript', () => {
+    it('keeps the transcript blank when there are no messages or resume actions', () => {
+      const { container } = render(() => <ChatMessages messages={[]} {...makeHandlers()} />);
 
-      expect(screen.getByText('Ask about your infrastructure')).toBeInTheDocument();
+      expect(screen.queryByText('Ask about your infrastructure')).not.toBeInTheDocument();
+      expect(screen.queryByText('Chat with your configured model')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Recent Assistant sessions')).not.toBeInTheDocument();
+      expect(container.querySelectorAll('[data-testid^="message-item-"]')).toHaveLength(0);
     });
 
-    it('shows subtitle when provided in emptyState', () => {
-      render(() => (
-        <ChatMessages
-          messages={[]}
-          {...makeHandlers()}
-          emptyState={{
-            title: 'Welcome',
-            subtitle: 'Ask me anything about your infrastructure',
-          }}
-        />
-      ));
-
-      expect(screen.getByText('Ask me anything about your infrastructure')).toBeInTheDocument();
-    });
-
-    it('does not show subtitle when not provided', () => {
-      render(() => (
-        <ChatMessages messages={[]} {...makeHandlers()} emptyState={{ title: 'Welcome' }} />
-      ));
-
-      expect(screen.getByText('Welcome')).toBeInTheDocument();
-      expect(screen.queryByText('Ask me anything')).not.toBeInTheDocument();
-    });
-
-    it('does not show empty state when there are messages', () => {
-      render(() => (
-        <ChatMessages
-          messages={[makeMessage()]}
-          {...makeHandlers()}
-          emptyState={{ title: 'Ask about your infrastructure' }}
-        />
-      ));
+    it('does not show empty transcript copy when there are messages', () => {
+      render(() => <ChatMessages messages={[makeMessage()]} {...makeHandlers()} />);
 
       expect(screen.queryByText('Ask about your infrastructure')).not.toBeInTheDocument();
     });
 
-    it('does not show empty state when emptyState prop is not provided', () => {
-      render(() => <ChatMessages messages={[]} {...makeHandlers()} />);
-
-      expect(screen.queryByText('Welcome')).not.toBeInTheDocument();
-      expect(screen.queryByText('Try asking')).not.toBeInTheDocument();
-    });
-
-    it('shows recent sessions as resume actions in the empty state', () => {
+    it('shows recent sessions as resume actions in an empty transcript', () => {
       const onLoadSession = vi.fn();
       render(() => (
         <ChatMessages
           messages={[]}
           {...makeHandlers()}
-          emptyState={{ title: 'Ask about your infrastructure' }}
           recentSessions={[
             {
               id: 'session-1',
@@ -193,7 +152,6 @@ describe('ChatMessages', () => {
         <ChatMessages
           messages={[makeMessage()]}
           {...makeHandlers()}
-          emptyState={{ title: 'Ask about your infrastructure' }}
           recentSessions={[
             {
               id: 'session-1',
@@ -321,7 +279,7 @@ describe('ChatMessages', () => {
       expect(anchor).toBeInTheDocument();
     });
 
-    it('renders no message items when messages is empty and no emptyState', () => {
+    it('renders no message items when messages is empty', () => {
       const { container } = render(() => <ChatMessages messages={[]} {...makeHandlers()} />);
 
       expect(container.querySelectorAll('[data-testid^="message-item-"]')).toHaveLength(0);

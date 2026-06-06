@@ -204,7 +204,6 @@ vi.mock('../hooks/useChat', () => ({
 vi.mock('../ChatMessages', () => ({
   ChatMessages: (props: {
     messages: ChatMessage[];
-    emptyState?: { title: string; subtitle?: string };
     onChangeModel?: () => void;
     getModelRouteLabel?: (modelId: string) => string;
     getModelRouteAlternative?: (message: ChatMessage) => ModelRouteRecoveryOption | null;
@@ -221,12 +220,6 @@ vi.mock('../ChatMessages', () => ({
     mockChatMessagesProps.push(props);
     return (
       <div data-testid="chat-messages" data-msg-count={props.messages.length}>
-        {props.emptyState?.title && (
-          <span data-testid="empty-state-title">{props.emptyState.title}</span>
-        )}
-        {props.emptyState?.subtitle && (
-          <span data-testid="empty-state-subtitle">{props.emptyState.subtitle}</span>
-        )}
         <button
           type="button"
           data-testid="mock-change-model"
@@ -1202,7 +1195,7 @@ describe('AIChat', () => {
       ).not.toBeInTheDocument();
     });
 
-    it('uses attached briefing context instead of product-authored empty-state prompts', () => {
+    it('uses the context strip instead of product-authored empty transcript prompts', () => {
       mockAiChatStore.context = {
         autonomousMode: false,
         briefing: {
@@ -1214,10 +1207,11 @@ describe('AIChat', () => {
 
       renderChat();
 
-      expect(screen.getByText('Context attached')).toBeInTheDocument();
-      expect(
-        screen.getByText('Pulse Patrol · Patrol assessment attached · Coverage incomplete'),
-      ).toBeInTheDocument();
+      expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
+      expect(screen.getByText('Coverage incomplete')).toBeInTheDocument();
+      expect(screen.getByText('Approval required before any action.')).toBeInTheDocument();
+      expect(screen.queryByText('Patrol assessment attached')).not.toBeInTheDocument();
+      expect(screen.queryByText('Ask about your infrastructure')).not.toBeInTheDocument();
       expect(
         screen.queryByRole('button', { name: 'Explain why coverage is incomplete' }),
       ).not.toBeInTheDocument();

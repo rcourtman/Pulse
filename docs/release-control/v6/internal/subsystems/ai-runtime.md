@@ -705,6 +705,17 @@ runtime cost control, and shared AI transport surfaces.
    remain route-distinct: if the configured chat override resolves to the same
    route as the effective default or the already selected session model, the
    drawer must not render a duplicate override action.
+   Empty Assistant sessions are prompt-first transcript surfaces, not product
+   marketing or instruction panels. The referenced OpenCode source at commit
+   `9ed17da55ab1f7360cc0e01075f763e27fa899e9`
+   `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx` derives
+   session messages in `Session` lines 185-203, renders only the message
+   stream inside the scrollbox at lines 1188-1295, and renders `Prompt` in the
+   `session_prompt` slot at lines 1313-1333 without inserting a centered
+   no-message title or subtitle. Pulse adapts that by leaving a blank
+   transcript blank, keeping scoped handoff context in the drawer context
+   strip, and limiting no-message transcript affordances to real
+   recent-session resume actions.
    The referenced OpenCode source at fetched `origin/dev` commit
    `1399323b78a04229d9bfe00c7436d7f41770fda8` renders the completed assistant
    footer in

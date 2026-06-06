@@ -52,7 +52,6 @@ import {
   AI_CHAT_SESSION_SEARCH_LOADING_STATE,
   AI_CHAT_SESSION_SEARCH_PLACEHOLDER,
   AI_CHAT_SESSION_SEARCH_TITLE,
-  getAIChatEmptyStatePresentation,
   getAIChatProviderReadinessPresentation,
 } from '@/utils/aiChatPresentation';
 import {
@@ -557,7 +556,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
   });
   const byType = (type: Resource['type']) =>
     allResources().filter((resource) => resource.type === type);
-  const isCluster = createMemo(() => byType('agent').length > 1);
 
   // @ mention autocomplete state
   const [mentionActive, setMentionActive] = createSignal(false);
@@ -1328,13 +1326,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
     return '';
   });
-  const emptyStatePresentation = createMemo(() =>
-    getAIChatEmptyStatePresentation({
-      briefing: contextBriefing(),
-      isCluster: isCluster(),
-    }),
-  );
-
   const currentStatus = createMemo(() =>
     getAssistantActiveTurnStatus(chat.messages(), chat.isLoading()),
   );
@@ -2633,10 +2624,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
               .filter((s) => s.id !== chat.sessionId() && s.message_count > 0)
               .slice(0, 3)}
             onLoadSession={handleLoadSession}
-            emptyState={{
-              title: emptyStatePresentation().title,
-              subtitle: emptyStatePresentation().subtitle,
-            }}
           />
 
           {/* Status indicator bar */}
