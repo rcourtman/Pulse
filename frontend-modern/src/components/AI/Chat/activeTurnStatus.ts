@@ -225,11 +225,11 @@ const latestStreamActivityStatus = (
         }
         break;
       case 'model_switch': {
-        const model = event.model?.trim();
-        if (model) {
+        const text = modelSwitchStatusText(event);
+        if (text) {
           candidate = {
             type: 'thinking',
-            text: `Switched to ${formatAIModelRouteLabel(model)}`,
+            text,
             startedAt: event.startedAt,
             activityAt: eventActivityAt(event),
             order: index,
@@ -261,6 +261,15 @@ const workflowStatusCandidate = (
     activityAt: status?.startedAt,
     order: Number.MAX_SAFE_INTEGER,
   };
+};
+
+const modelSwitchStatusText = (event: StreamDisplayEvent): string => {
+  const model = event.model?.trim();
+  if (!model) return '';
+  const next = formatAIModelRouteLabel(model);
+  const failed = event.failedModel?.trim();
+  if (!failed || failed === model) return `Switched to ${next}`;
+  return `Provider fallback: ${formatAIModelRouteLabel(failed)} -> ${next}`;
 };
 
 const hasVisibleAssistantOutput = (message: ChatMessage): boolean => {

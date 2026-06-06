@@ -222,6 +222,31 @@ describe('getAssistantActiveTurnStatus', () => {
     });
   });
 
+  it('shows failed and next model routes for provider fallback status', () => {
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            streamEvents: [
+              {
+                type: 'model_switch',
+                failedModel: 'openrouter:openai/gpt-4o-mini',
+                model: 'openrouter:deepseek/deepseek-v4-pro',
+                startedAt: 2_000,
+                updatedAt: 2_000,
+              },
+            ],
+          }),
+        ],
+        true,
+      ),
+    ).toEqual({
+      type: 'thinking',
+      text: 'Provider fallback: OpenAI: GPT 4o Mini via OpenRouter -> DeepSeek: DeepSeek V4 Pro via OpenRouter',
+      startedAt: 2_000,
+    });
+  });
+
   it('carries approval event timing into the active waiting status', () => {
     expect(
       getAssistantActiveTurnStatus(

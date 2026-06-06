@@ -1150,6 +1150,7 @@ describe('useChat', () => {
         expect.objectContaining({
           type: 'model_switch',
           model: 'gemini:gemini-3.1-flash-lite',
+          failedModel: 'openrouter:openai/gpt-4o-mini',
           startedAt: expect.any(Number),
           updatedAt: expect.any(Number),
         }),
@@ -1158,6 +1159,36 @@ describe('useChat', () => {
         expect.objectContaining({
           phase: 'provider_fallback',
           message: 'OpenRouter did not start a response; trying Gemini.',
+        }),
+      );
+      dispose();
+    });
+
+    it('does not infer a failed route when workflow only carries a next model', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() =>
+        useChat({ sessionId: 's', model: 'openrouter:openai/gpt-4o-mini' }),
+      );
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+
+      fire({
+        type: 'workflow_state',
+        data: {
+          phase: 'provider_fallback',
+          message: 'Trying Gemini.',
+          next_model: 'gemini:gemini-3.1-flash-lite',
+        },
+      });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.model).toBe('gemini:gemini-3.1-flash-lite');
+      expect(assistant.streamEvents).toContainEqual(
+        expect.objectContaining({
+          type: 'model_switch',
+          model: 'gemini:gemini-3.1-flash-lite',
+          failedModel: undefined,
         }),
       );
       dispose();

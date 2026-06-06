@@ -242,7 +242,10 @@ runtime cost control, and shared AI transport surfaces.
    `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`.
    Pulse adapts that by rendering provider fallback route changes as a typed
    `model_switch` stream row on the active assistant turn instead of hiding the
-   switch in transient status text or assistant prose.
+   switch in transient status text or assistant prose. Provider-fallback rows
+   must preserve the failed route and next route together, using the backend
+   `failed_model` and `next_model` payloads, so the transcript shows the actual
+   recovery path rather than only the successful replacement model.
    Interactive Assistant streams must establish the session ID and emit the
    `session` event once as soon as the HTTP SSE writer is ready, before finding
    handoff recovery, model resolution, provider fallback planning,

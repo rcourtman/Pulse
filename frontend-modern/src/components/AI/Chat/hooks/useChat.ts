@@ -615,6 +615,13 @@ export function useChat(options: UseChatOptions = {}) {
     return typeof nextModel === 'string' ? nextModel.trim() : '';
   };
 
+  const extractWorkflowFailedModel = (data: unknown): string => {
+    if (!data || typeof data !== 'object') return '';
+    const record = data as Record<string, unknown>;
+    const failedModel = record.failed_model ?? record.failedModel;
+    return typeof failedModel === 'string' ? failedModel.trim() : '';
+  };
+
   const extractErrorMessage = (data: unknown): string => {
     if (typeof data === 'string') return data;
     if (data && typeof data === 'object') {
@@ -818,6 +825,7 @@ export function useChat(options: UseChatOptions = {}) {
     if (event.type === 'workflow_state') {
       const workflowStatus = extractWorkflowStatus(event.data);
       const nextModel = extractWorkflowNextModel(event.data);
+      const failedModel = extractWorkflowFailedModel(event.data);
       if (!workflowStatus && !nextModel) return;
 
       if (nextModel) {
@@ -825,7 +833,11 @@ export function useChat(options: UseChatOptions = {}) {
           prev.map((msg) => {
             if (msg.id !== assistantId) return msg;
             if ((msg.model || '').trim() === nextModel) return msg;
-            const updated = addStreamEvent(msg, { type: 'model_switch', model: nextModel });
+            const updated = addStreamEvent(msg, {
+              type: 'model_switch',
+              model: nextModel,
+              failedModel: failedModel || undefined,
+            });
             return { ...updated, model: nextModel };
           }),
         );

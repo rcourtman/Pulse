@@ -152,6 +152,15 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     if (!model) return '';
     return props.getModelRouteLabel?.(model) || formatAIModelRouteLabel(model);
   };
+  const isProviderFallbackEvent = (event: StreamDisplayEvent) => {
+    const model = event.model?.trim();
+    const failed = event.failedModel?.trim();
+    return !!model && !!failed && failed !== model;
+  };
+  const modelSwitchTitle = (event: StreamDisplayEvent) => {
+    if (!isProviderFallbackEvent(event)) return event.model || '';
+    return `${modelRouteLabel(event.failedModel)} -> ${modelRouteLabel(event.model)}`;
+  };
   const messageModelLabel = () => modelRouteLabel(props.message.model);
   const messageDurationLabel = () =>
     props.message.isStreaming
@@ -388,15 +397,37 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                         <div
                           class="my-2 inline-flex max-w-full items-center gap-2 rounded-md border border-border-subtle bg-surface-alt px-2.5 py-1.5 text-xs text-muted"
                           role="status"
-                          aria-label="Assistant model route changed"
-                          title={evt.model}
+                          aria-label={
+                            isProviderFallbackEvent(evt)
+                              ? 'Assistant provider fallback route changed'
+                              : 'Assistant model route changed'
+                          }
+                          title={modelSwitchTitle(evt)}
                         >
                           <CpuIcon class="h-3.5 w-3.5 shrink-0 text-blue-500" aria-hidden="true" />
-                          <span class="shrink-0">Switched to</span>
-                          {' '}
-                          <span class="truncate font-medium text-base-content">
-                            {modelRouteLabel(evt.model)}
-                          </span>
+                          <Show
+                            when={isProviderFallbackEvent(evt)}
+                            fallback={
+                              <>
+                                <span class="shrink-0">Switched to</span>
+                                {' '}
+                                <span class="truncate font-medium text-base-content">
+                                  {modelRouteLabel(evt.model)}
+                                </span>
+                              </>
+                            }
+                          >
+                            <span class="shrink-0">Provider fallback</span>
+                            <span class="min-w-0 truncate font-medium text-base-content">
+                              {modelRouteLabel(evt.failedModel)}
+                            </span>
+                            <span class="shrink-0 text-muted" aria-hidden="true">
+                              -&gt;
+                            </span>
+                            <span class="min-w-0 truncate font-medium text-base-content">
+                              {modelRouteLabel(evt.model)}
+                            </span>
+                          </Show>
                         </div>
                       </Match>
 

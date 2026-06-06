@@ -693,11 +693,51 @@ describe('MessageItem', () => {
       ).toHaveTextContent('Switched to DeepSeek V4 Pro via OpenRouter');
     });
 
+    it('renders provider fallback model switches with failed and next routes', () => {
+      const events: StreamDisplayEvent[] = [
+        {
+          type: 'model_switch',
+          failedModel: 'openrouter:openai/gpt-4o-mini',
+          model: 'gemini:gemini-3.1-flash-lite',
+        },
+      ];
+
+      render(() => (
+        <MessageItem
+          message={makeMessage({ role: 'assistant', streamEvents: events })}
+          getModelRouteLabel={(model) =>
+            model === 'openrouter:openai/gpt-4o-mini'
+              ? 'OpenAI GPT-4o Mini via OpenRouter'
+              : model === 'gemini:gemini-3.1-flash-lite'
+                ? 'Gemini 3.1 Flash Lite'
+                : model
+          }
+          {...makeHandlers()}
+        />
+      ));
+
+      const status = screen.getByRole('status', {
+        name: 'Assistant provider fallback route changed',
+      });
+      expect(status).toHaveTextContent('Provider fallback');
+      expect(status).toHaveTextContent('OpenAI GPT-4o Mini via OpenRouter');
+      expect(status).toHaveTextContent('Gemini 3.1 Flash Lite');
+      expect(status).toHaveAttribute(
+        'title',
+        'OpenAI GPT-4o Mini via OpenRouter -> Gemini 3.1 Flash Lite',
+      );
+    });
+
     it('renders tool execution blocks', () => {
       const events: StreamDisplayEvent[] = [
         {
           type: 'tool',
-          tool: { name: 'pulse_get_nodes', input: '{}', output: 'node1, node2', success: true },
+          tool: {
+            name: 'pulse_get_nodes',
+            input: '{}',
+            output: 'node1, node2',
+            success: true,
+          },
         },
       ];
 

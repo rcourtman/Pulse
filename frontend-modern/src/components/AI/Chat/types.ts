@@ -112,6 +112,7 @@ export interface StreamDisplayEvent {
   pendingTool?: PendingTool;
   content?: string;
   model?: string;
+  failedModel?: string;
   toolId?: string; // Used to match pending_tool with completed tool
   approval?: PendingApproval; // For approval_needed events
   question?: PendingQuestion; // For question events
