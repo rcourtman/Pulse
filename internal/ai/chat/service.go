@@ -651,18 +651,6 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		selectedModel = overrideModel
 	}
 
-	attempts, initialProviderErr := s.chatProviderAttempts(ctx, cfgSnapshot, selectedModel, configuredModel, configuredProvider)
-	if len(attempts) == 0 {
-		if initialProviderErr != nil {
-			return initialProviderErr
-		}
-		return fmt.Errorf("provider not initialized")
-	}
-	initialFallbackModel := ""
-	if initialProviderErr != nil {
-		initialFallbackModel = attempts[0].Model
-	}
-
 	// Proactively gather context for mentioned resources
 	s.mu.RLock()
 	prefetcher := s.contextPrefetcher
@@ -763,6 +751,16 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	assistantToolScope := assistantToolScopeForPrompt(req.Prompt, hasModelHandoffContext)
 	if assistantToolScope == assistantTurnToolScopeQueryOnly {
 		emitWorkflowState(streamCallback, "context", "Reading current Pulse inventory with pulse_query.", "", "pulse_query")
+		if assistantPromptRequestsDeterministicInventoryCount(normalizeAssistantToolRoutingPrompt(req.Prompt)) {
+			if answer, ok := s.directAssistantInventoryCountAnswer(ctx, baseExecutor); ok {
+				emitWorkflowState(streamCallback, "context_ready", "Counted current Pulse inventory.", "", "pulse_query")
+				s.streamDirectAssistantAnswer(sessions, session.ID, answer, streamCallback)
+				log.Debug().
+					Str("session_id", session.ID).
+					Msg("[ChatService] Answered deterministic inventory count from canonical state")
+				return nil
+			}
+		}
 		if summaryContext := s.prefetchAssistantInventoryTopologyContext(ctx, baseExecutor); summaryContext != "" {
 			modelBoundaryAllowedInventoryContext = summaryContext
 			injectHandoffContextIntoLatestUserMessage(messages, summaryContext)
@@ -794,6 +792,18 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 			return
 		}
 		streamCallback(event)
+	}
+
+	attempts, initialProviderErr := s.chatProviderAttempts(ctx, cfgSnapshot, selectedModel, configuredModel, configuredProvider)
+	if len(attempts) == 0 {
+		if initialProviderErr != nil {
+			return initialProviderErr
+		}
+		return fmt.Errorf("provider not initialized")
+	}
+	initialFallbackModel := ""
+	if initialProviderErr != nil {
+		initialFallbackModel = attempts[0].Model
 	}
 	if initialFallbackModel != "" {
 		emitChatProviderFallback(streamCallback, selectedModel, initialFallbackModel)
@@ -1030,112 +1040,272 @@ func (s *Service) prefetchAssistantInventoryTopologyContextFromReadState() strin
 	return strings.TrimSpace(contextText)
 }
 
+func (s *Service) directAssistantInventoryCountAnswer(ctx context.Context, executor *tools.PulseToolExecutor) (string, bool) {
+	context, ok := s.assistantInventoryTopologyContextForDirectAnswer(ctx, executor)
+	if !ok {
+		return "", false
+	}
+	return formatAssistantInventoryCountAnswer(context)
+}
+
+func (s *Service) assistantInventoryTopologyContextForDirectAnswer(ctx context.Context, executor *tools.PulseToolExecutor) (assistantInventoryTopologyContext, bool) {
+	if contextText := strings.TrimSpace(s.prefetchAssistantInventoryTopologyContextFromReadState()); contextText != "" {
+		return parseAssistantInventoryTopologyContext(contextText)
+	}
+	if executor == nil {
+		return assistantInventoryTopologyContext{}, false
+	}
+	result, err := executor.ExecuteTool(ctx, "pulse_query", map[string]interface{}{
+		"action":                          "topology",
+		"summary_only":                    false,
+		"max_proxmox_nodes":               0,
+		"max_vms_per_node":                0,
+		"max_containers_per_node":         0,
+		"max_docker_hosts":                0,
+		"max_docker_containers_per_host":  0,
+		"max_k8s_clusters":                0,
+		"max_k8s_nodes_per_cluster":       0,
+		"max_k8s_deployments_per_cluster": 0,
+		"max_k8s_pods_per_cluster":        0,
+	})
+	if err != nil || result.IsError {
+		return assistantInventoryTopologyContext{}, false
+	}
+	resultText := strings.TrimSpace(FormatToolResult(result))
+	if resultText == "" {
+		return assistantInventoryTopologyContext{}, false
+	}
+	var topology tools.TopologyResponse
+	if err := json.Unmarshal([]byte(resultText), &topology); err != nil {
+		return assistantInventoryTopologyContext{}, false
+	}
+	contextText, err := marshalAssistantInventoryTopologyContext(topology.NormalizeCollections())
+	if err != nil {
+		return assistantInventoryTopologyContext{}, false
+	}
+	return parseAssistantInventoryTopologyContext(contextText)
+}
+
+func parseAssistantInventoryTopologyContext(contextText string) (assistantInventoryTopologyContext, bool) {
+	var context assistantInventoryTopologyContext
+	if err := json.Unmarshal([]byte(strings.TrimSpace(contextText)), &context); err != nil {
+		return assistantInventoryTopologyContext{}, false
+	}
+	if context.Proxmox.Nodes == nil {
+		context.Proxmox.Nodes = []assistantInventoryProxmoxNode{}
+	}
+	if context.Docker.Hosts == nil {
+		context.Docker.Hosts = []assistantInventoryDockerHost{}
+	}
+	if context.Kubernetes.Clusters == nil {
+		context.Kubernetes.Clusters = []assistantInventoryKubernetesCluster{}
+	}
+	return context, assistantInventorySummaryTotal(context.Summary) > 0 || assistantInventoryIncludedContextTotal(context) > 0
+}
+
+func (s *Service) streamDirectAssistantAnswer(sessions *SessionStore, sessionID, answer string, streamCallback StreamCallback) {
+	answer = strings.TrimSpace(answer)
+	if answer == "" {
+		return
+	}
+	if sessions != nil {
+		if err := sessions.AddMessage(sessionID, Message{
+			ID:        uuid.New().String(),
+			Role:      "assistant",
+			Content:   answer,
+			Timestamp: time.Now(),
+		}); err != nil {
+			log.Warn().Err(err).Str("session_id", sessionID).Msg("[ChatService] Failed to save direct Assistant answer")
+		}
+	}
+	contentData, _ := json.Marshal(ContentData{Text: answer})
+	streamCallback(StreamEvent{Type: "content", Data: contentData})
+	doneData, _ := json.Marshal(DoneData{SessionID: sessionID, Model: assistantLocalInventoryModelRoute})
+	streamCallback(StreamEvent{Type: "done", Data: doneData})
+}
+
+func formatAssistantInventoryCountAnswer(context assistantInventoryTopologyContext) (string, bool) {
+	summary := assistantInventoryContextSummary(context)
+	total := assistantInventorySummaryTotal(summary)
+	if total == 0 {
+		return "", false
+	}
+
+	computeTotal := summary.TotalNodes + summary.TotalVMs + summary.TotalSystemContainers
+	dockerTotal := summary.TotalDockerHosts + summary.TotalDockerContainers
+	kubernetesTotal := summary.TotalK8sClusters + summary.TotalK8sNodes + summary.TotalK8sDeployments + summary.TotalK8sPods
+
+	var categories []string
+	if computeTotal > 0 {
+		categories = append(categories, fmt.Sprintf("%s (%s)",
+			assistantInventoryCountPhrase(computeTotal, "compute resource", "compute resources"),
+			assistantInventoryJoinPhrases([]string{
+				assistantInventoryPositiveCountPhrase(summary.TotalNodes, "Proxmox node", "Proxmox nodes"),
+				assistantInventoryPositiveCountPhrase(summary.TotalVMs, "VM", "VMs"),
+				assistantInventoryPositiveCountPhrase(summary.TotalSystemContainers, "system container", "system containers"),
+			}),
+		))
+	}
+	if dockerTotal > 0 {
+		categories = append(categories, fmt.Sprintf("%s (%s)",
+			assistantInventoryCountPhrase(dockerTotal, "Docker inventory item", "Docker inventory items"),
+			assistantInventoryJoinPhrases([]string{
+				assistantInventoryPositiveCountPhrase(summary.TotalDockerHosts, "Docker host", "Docker hosts"),
+				assistantInventoryPositiveCountPhrase(summary.TotalDockerContainers, "Docker container", "Docker containers"),
+			}),
+		))
+	}
+	if kubernetesTotal > 0 {
+		categories = append(categories, fmt.Sprintf("%s (%s)",
+			assistantInventoryCountPhrase(kubernetesTotal, "Kubernetes inventory item", "Kubernetes inventory items"),
+			assistantInventoryJoinPhrases([]string{
+				assistantInventoryPositiveCountPhrase(summary.TotalK8sClusters, "cluster", "clusters"),
+				assistantInventoryPositiveCountPhrase(summary.TotalK8sNodes, "node", "nodes"),
+				assistantInventoryPositiveCountPhrase(summary.TotalK8sDeployments, "deployment", "deployments"),
+				assistantInventoryPositiveCountPhrase(summary.TotalK8sPods, "pod", "pods"),
+			}),
+		))
+	}
+
+	if len(categories) == 1 {
+		return "Pulse currently sees " + categories[0] + ".", true
+	}
+	return fmt.Sprintf("Pulse currently sees %s: %s.",
+		assistantInventoryCountPhrase(total, "visible inventory item", "visible inventory items"),
+		assistantInventoryJoinPhrases(categories),
+	), true
+}
+
+func assistantInventoryContextSummary(context assistantInventoryTopologyContext) tools.TopologySummary {
+	summary := context.Summary
+	included := assistantInventoryIncludedContextCounts(context)
+	if summary.TotalNodes == 0 {
+		summary.TotalNodes = included.proxmoxNodes
+	}
+	if summary.TotalVMs == 0 {
+		summary.TotalVMs = included.vms
+	}
+	if summary.TotalSystemContainers == 0 {
+		summary.TotalSystemContainers = included.systemContainers
+	}
+	if summary.TotalDockerHosts == 0 {
+		summary.TotalDockerHosts = included.dockerHosts
+	}
+	if summary.TotalDockerContainers == 0 {
+		summary.TotalDockerContainers = included.dockerContainers
+	}
+	if summary.TotalK8sClusters == 0 {
+		summary.TotalK8sClusters = included.k8sClusters
+	}
+	if summary.TotalK8sNodes == 0 {
+		summary.TotalK8sNodes = included.k8sNodes
+	}
+	if summary.TotalK8sDeployments == 0 {
+		summary.TotalK8sDeployments = included.k8sDeployments
+	}
+	if summary.TotalK8sPods == 0 {
+		summary.TotalK8sPods = included.k8sPods
+	}
+	return summary
+}
+
+func assistantInventorySummaryTotal(summary tools.TopologySummary) int {
+	return summary.TotalNodes +
+		summary.TotalVMs +
+		summary.TotalSystemContainers +
+		summary.TotalDockerHosts +
+		summary.TotalDockerContainers +
+		summary.TotalK8sClusters +
+		summary.TotalK8sNodes +
+		summary.TotalK8sDeployments +
+		summary.TotalK8sPods
+}
+
+func assistantInventoryIncludedContextTotal(context assistantInventoryTopologyContext) int {
+	counts := assistantInventoryIncludedContextCounts(context)
+	return counts.proxmoxNodes +
+		counts.vms +
+		counts.systemContainers +
+		counts.dockerHosts +
+		counts.dockerContainers +
+		counts.k8sClusters +
+		counts.k8sNodes +
+		counts.k8sDeployments +
+		counts.k8sPods
+}
+
+func assistantInventoryIncludedContextCounts(context assistantInventoryTopologyContext) assistantInventoryTopologyCounts {
+	counts := assistantInventoryTopologyCounts{
+		proxmoxNodes: len(context.Proxmox.Nodes),
+		dockerHosts:  len(context.Docker.Hosts),
+		k8sClusters:  len(context.Kubernetes.Clusters),
+	}
+	for _, node := range context.Proxmox.Nodes {
+		counts.vms += len(node.VMs)
+		counts.systemContainers += len(node.Containers)
+	}
+	for _, host := range context.Docker.Hosts {
+		counts.dockerContainers += len(host.Containers)
+	}
+	for _, cluster := range context.Kubernetes.Clusters {
+		counts.k8sNodes += len(cluster.Nodes)
+		counts.k8sDeployments += len(cluster.Deployments)
+		counts.k8sPods += len(cluster.Pods)
+	}
+	return counts
+}
+
+func assistantInventoryCountPhrase(count int, singular, plural string) string {
+	if count == 1 {
+		return fmt.Sprintf("1 %s", singular)
+	}
+	return fmt.Sprintf("%d %s", count, plural)
+}
+
+func assistantInventoryPositiveCountPhrase(count int, singular, plural string) string {
+	if count <= 0 {
+		return ""
+	}
+	return assistantInventoryCountPhrase(count, singular, plural)
+}
+
+func assistantInventoryJoinPhrases(phrases []string) string {
+	filtered := make([]string, 0, len(phrases))
+	for _, phrase := range phrases {
+		if trimmed := strings.TrimSpace(phrase); trimmed != "" {
+			filtered = append(filtered, trimmed)
+		}
+	}
+	switch len(filtered) {
+	case 0:
+		return ""
+	case 1:
+		return filtered[0]
+	case 2:
+		return filtered[0] + " and " + filtered[1]
+	default:
+		return strings.Join(filtered[:len(filtered)-1], ", ") + ", and " + filtered[len(filtered)-1]
+	}
+}
+
 func marshalAssistantInventoryTopologyContextFromReadState(rs unifiedresources.ReadState) (string, error) {
 	if rs == nil {
 		return "", nil
 	}
 
-	context := assistantInventoryTopologyContext{
-		Proxmox:    assistantInventoryProxmoxTopology{Nodes: []assistantInventoryProxmoxNode{}},
-		Docker:     assistantInventoryDockerTopology{Hosts: []assistantInventoryDockerHost{}},
-		Kubernetes: assistantInventoryKubernetesTopology{Clusters: []assistantInventoryKubernetesCluster{}},
-	}
-	nodeMap := make(map[string]*assistantInventoryProxmoxNode)
-	ensureNode := func(name, status string) *assistantInventoryProxmoxNode {
-		name = firstNonEmptyString(name, "unknown")
-		key := strings.ToLower(name)
-		if existing := nodeMap[key]; existing != nil {
-			if existing.Status == "" || existing.Status == "unknown" {
-				existing.Status = firstNonEmptyString(status, existing.Status, "unknown")
-			}
-			return existing
-		}
-		node := &assistantInventoryProxmoxNode{
-			AnswerLabel:    assistantInventoryNodeAnswerLabel(name),
-			Name:           name,
-			Status:         firstNonEmptyString(status, "unknown"),
-			VMs:            []assistantInventoryWorkload{},
-			Containers:     []assistantInventoryWorkload{},
-			VMCount:        0,
-			ContainerCount: 0,
-		}
-		nodeMap[key] = node
-		return node
-	}
-
-	for _, node := range rs.Nodes() {
-		if node == nil {
-			continue
-		}
-		context.Summary.TotalNodes++
-		ensureNode(firstNonEmptyString(node.NodeName(), node.Name()), string(node.Status()))
-	}
-	for _, vm := range rs.VMs() {
-		if vm == nil {
-			continue
-		}
-		context.Summary.TotalVMs++
-		if statusIsRunningOrOnline(string(vm.Status())) {
-			context.Summary.RunningVMs++
-		}
-		node := ensureNode(vm.Node(), "unknown")
-		node.VMCount++
-		name := strings.TrimSpace(vm.Name())
-		node.VMs = append(node.VMs, assistantInventoryWorkload{
-			AnswerLabel:   assistantInventoryGuestAnswerLabel("VM", vm.VMID(), name),
-			VMID:          vm.VMID(),
-			Name:          name,
-			Status:        string(vm.Status()),
-			CPUPercent:    vm.CPUPercent(),
-			MemoryPercent: vm.MemoryPercent(),
-		})
-	}
-	for _, container := range rs.Containers() {
-		if container == nil {
-			continue
-		}
-		context.Summary.TotalSystemContainers++
-		if statusIsRunningOrOnline(string(container.Status())) {
-			context.Summary.RunningContainers++
-		}
-		node := ensureNode(container.Node(), "unknown")
-		node.ContainerCount++
-		name := strings.TrimSpace(container.Name())
-		node.Containers = append(node.Containers, assistantInventoryWorkload{
-			AnswerLabel:   assistantInventoryGuestAnswerLabel("CT", container.VMID(), name),
-			VMID:          container.VMID(),
-			Name:          name,
-			Status:        string(container.Status()),
-			CPUPercent:    container.CPUPercent(),
-			MemoryPercent: container.MemoryPercent(),
-		})
-	}
-
-	for _, node := range nodeMap {
-		context.Proxmox.Nodes = append(context.Proxmox.Nodes, *node)
-	}
-	sort.Slice(context.Proxmox.Nodes, func(i, j int) bool {
-		return strings.ToLower(context.Proxmox.Nodes[i].Name) < strings.ToLower(context.Proxmox.Nodes[j].Name)
-	})
-	for i := range context.Proxmox.Nodes {
-		sort.Slice(context.Proxmox.Nodes[i].VMs, func(a, b int) bool {
-			return context.Proxmox.Nodes[i].VMs[a].VMID < context.Proxmox.Nodes[i].VMs[b].VMID
-		})
-		sort.Slice(context.Proxmox.Nodes[i].Containers, func(a, b int) bool {
-			return context.Proxmox.Nodes[i].Containers[a].VMID < context.Proxmox.Nodes[i].Containers[b].VMID
-		})
-	}
-
-	if len(context.Proxmox.Nodes) == 0 &&
-		context.Summary.TotalVMs == 0 &&
-		context.Summary.TotalSystemContainers == 0 {
+	topology, ok := assistantInventoryTopologyResponseFromReadState(rs)
+	if !ok {
 		return "", nil
 	}
-	encoded, err := json.Marshal(context)
-	if err != nil {
-		return "", err
+	return marshalAssistantInventoryTopologyContext(topology)
+}
+
+func assistantInventoryTopologyResponseFromReadState(rs unifiedresources.ReadState) (tools.TopologyResponse, bool) {
+	if rs == nil {
+		return tools.EmptyTopologyResponse(), false
 	}
-	return string(encoded), nil
+	response := tools.BuildTopologyResponseFromReadState(rs, tools.TopologyBuildOptions{Include: "all"})
+	return response, assistantInventorySummaryTotal(response.Summary) > 0
 }
 
 func marshalAssistantInventoryTopologyContext(topology tools.TopologyResponse) (string, error) {
@@ -4008,6 +4178,8 @@ const (
 	assistantTurnToolScopeTextOnly  assistantTurnToolScope = "text-only"
 )
 
+const assistantLocalInventoryModelRoute = "pulse:local-inventory"
+
 func (s *Service) toolsForAssistantTurn(prompt string, autonomousMode bool, patrolMode bool, hasModelContext bool) []providers.Tool {
 	scope := assistantToolScopeForPrompt(prompt, hasModelContext)
 	return s.toolsForAssistantTurnWithScope(scope, autonomousMode, patrolMode)
@@ -4229,6 +4401,33 @@ func assistantPromptIsInventoryQuery(normalized string) bool {
 		" what s in ",
 		" what are in ",
 		" what do i have ",
+	})
+}
+
+func assistantPromptRequestsDeterministicInventoryCount(normalized string) bool {
+	if !assistantPromptIsInventoryQuery(normalized) {
+		return false
+	}
+	if assistantPromptContainsAny(normalized, []string{
+		" list ",
+		" show ",
+		" breakdown ",
+		" detail ",
+		" details ",
+		" detailed ",
+		" overview ",
+		" status ",
+	}) {
+		return false
+	}
+	return assistantPromptContainsAny(normalized, []string{
+		" how many ",
+		" count ",
+		" counts ",
+		" total ",
+		" totals ",
+		" number ",
+		" number of ",
 	})
 }
 

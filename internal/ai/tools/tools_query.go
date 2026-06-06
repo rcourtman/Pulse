@@ -4019,6 +4019,443 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 	return NewJSONResult(response.NormalizeCollections()), nil
 }
 
+type TopologyBuildOptions struct {
+	Include                     string
+	SummaryOnly                 bool
+	MaxProxmoxNodes             int
+	MaxVMsPerNode               int
+	MaxContainersPerNode        int
+	MaxDockerHosts              int
+	MaxDockerContainersPerHost  int
+	MaxK8sClusters              int
+	MaxK8sNodesPerCluster       int
+	MaxK8sDeploymentsPerCluster int
+	MaxK8sPodsPerCluster        int
+	ConnectedAgentHostnames     map[string]bool
+	ControlEnabled              bool
+}
+
+func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options TopologyBuildOptions) TopologyResponse {
+	response := EmptyTopologyResponse()
+	if rs == nil {
+		return response
+	}
+
+	include := canonicalQueryTopologyInclude(options.Include)
+	if include == "" {
+		include = "all"
+	}
+	includeProxmox := include == "all" || include == "proxmox"
+	includeDocker := include == "all" || include == "app-containers"
+	includeKubernetes := include == "all" || include == "kubernetes"
+	connectedAgentHostnames := options.ConnectedAgentHostnames
+	if connectedAgentHostnames == nil {
+		connectedAgentHostnames = map[string]bool{}
+	}
+	governance := newGovernedQueryMetadataResolver(rs)
+
+	summary := TopologySummary{
+		TotalNodes:            len(rs.Nodes()),
+		TotalVMs:              len(rs.VMs()),
+		TotalSystemContainers: len(rs.Containers()),
+		TotalDockerHosts:      len(rs.DockerHosts()),
+		TotalDockerContainers: len(rs.DockerContainers()),
+		TotalK8sClusters:      len(rs.K8sClusters()),
+		TotalK8sNodes:         len(rs.K8sNodes()),
+		TotalK8sDeployments:   len(rs.K8sDeployments()),
+		TotalK8sPods:          len(rs.Pods()),
+	}
+
+	for _, node := range rs.Nodes() {
+		if node == nil {
+			continue
+		}
+		if connectedAgentHostnames[node.Name()] {
+			summary.NodesWithAgents++
+		}
+	}
+	for _, host := range rs.DockerHosts() {
+		if host == nil {
+			continue
+		}
+		hostname := strings.TrimSpace(host.Hostname())
+		displayName := strings.TrimSpace(host.Name())
+		if connectedAgentHostnames[hostname] || connectedAgentHostnames[displayName] {
+			summary.DockerHostsWithAgents++
+		}
+	}
+	for _, pod := range rs.Pods() {
+		if pod == nil {
+			continue
+		}
+		if statusMatchesFilter(string(pod.Status()), "running") || statusMatchesFilter(pod.PodPhase(), "running") {
+			summary.RunningK8sPods++
+		}
+	}
+
+	nodeMap := make(map[string]*ProxmoxNodeTopology)
+	if includeProxmox && !options.SummaryOnly {
+		for _, node := range rs.Nodes() {
+			if node == nil {
+				continue
+			}
+			if options.MaxProxmoxNodes > 0 && len(nodeMap) >= options.MaxProxmoxNodes {
+				break
+			}
+			name := node.Name()
+			hasAgent := connectedAgentHostnames[name]
+			nodeMap[name] = &ProxmoxNodeTopology{
+				GovernedResourceMetadata: governance.Resolve(node.Name(), node.ID()),
+				Name:                     name,
+				Status:                   string(node.Status()),
+				AgentConnected:           hasAgent,
+				CanExecute:               hasAgent && options.ControlEnabled,
+				VMs:                      []TopologyVM{},
+				Containers:               []TopologyContainer{},
+			}
+		}
+	}
+
+	ensureNode := func(name, status string) *ProxmoxNodeTopology {
+		if !includeProxmox || options.SummaryOnly {
+			return nil
+		}
+		if node, exists := nodeMap[name]; exists {
+			return node
+		}
+		if options.MaxProxmoxNodes > 0 && len(nodeMap) >= options.MaxProxmoxNodes {
+			return nil
+		}
+		hasAgent := connectedAgentHostnames[name]
+		nodeMap[name] = &ProxmoxNodeTopology{
+			GovernedResourceMetadata: governance.Resolve(name),
+			Name:                     name,
+			Status:                   status,
+			AgentConnected:           hasAgent,
+			CanExecute:               hasAgent && options.ControlEnabled,
+			VMs:                      []TopologyVM{},
+			Containers:               []TopologyContainer{},
+		}
+		return nodeMap[name]
+	}
+
+	for _, vm := range rs.VMs() {
+		if vm == nil {
+			continue
+		}
+		status := string(vm.Status())
+		if status == "running" || status == string(unifiedresources.StatusOnline) {
+			summary.RunningVMs++
+		}
+		nodeTopology := ensureNode(vm.Node(), "unknown")
+		if nodeTopology == nil {
+			continue
+		}
+		nodeTopology.VMCount++
+		if options.MaxVMsPerNode <= 0 || len(nodeTopology.VMs) < options.MaxVMsPerNode {
+			nodeTopology.VMs = append(nodeTopology.VMs, TopologyVM{
+				GovernedResourceMetadata: governance.Resolve(vm.Name(), vm.ID(), fmt.Sprintf("%d", vm.VMID())),
+				VMID:                     vm.VMID(),
+				Name:                     vm.Name(),
+				Status:                   status,
+				CPU:                      vm.CPUPercent(),
+				Memory:                   vm.MemoryPercent(),
+				Tags:                     vm.Tags(),
+			})
+		}
+	}
+
+	for _, ct := range rs.Containers() {
+		if ct == nil {
+			continue
+		}
+		status := string(ct.Status())
+		if status == "running" || status == string(unifiedresources.StatusOnline) {
+			summary.RunningContainers++
+		}
+		nodeTopology := ensureNode(ct.Node(), "unknown")
+		if nodeTopology == nil {
+			continue
+		}
+		nodeTopology.ContainerCount++
+		if options.MaxContainersPerNode <= 0 || len(nodeTopology.Containers) < options.MaxContainersPerNode {
+			nodeTopology.Containers = append(nodeTopology.Containers, TopologyContainer{
+				GovernedResourceMetadata: governance.Resolve(ct.Name(), ct.ID(), fmt.Sprintf("%d", ct.VMID())),
+				VMID:                     ct.VMID(),
+				Name:                     ct.Name(),
+				Status:                   status,
+				CPU:                      ct.CPUPercent(),
+				Memory:                   ct.MemoryPercent(),
+				Tags:                     ct.Tags(),
+			})
+		}
+	}
+
+	proxmoxNodes := []ProxmoxNodeTopology{}
+	if includeProxmox && !options.SummaryOnly {
+		for _, node := range nodeMap {
+			proxmoxNodes = append(proxmoxNodes, *node)
+		}
+		sort.Slice(proxmoxNodes, func(i, j int) bool {
+			return strings.ToLower(proxmoxNodes[i].Name) < strings.ToLower(proxmoxNodes[j].Name)
+		})
+		for i := range proxmoxNodes {
+			sort.Slice(proxmoxNodes[i].VMs, func(a, b int) bool {
+				return strings.ToLower(proxmoxNodes[i].VMs[a].Name) < strings.ToLower(proxmoxNodes[i].VMs[b].Name)
+			})
+			sort.Slice(proxmoxNodes[i].Containers, func(a, b int) bool {
+				return strings.ToLower(proxmoxNodes[i].Containers[a].Name) < strings.ToLower(proxmoxNodes[i].Containers[b].Name)
+			})
+		}
+	}
+
+	containersByHost := make(map[string][]*unifiedresources.DockerContainerView)
+	for _, container := range rs.DockerContainers() {
+		if container == nil {
+			continue
+		}
+		parentID := strings.TrimSpace(container.ParentID())
+		if parentID == "" {
+			continue
+		}
+		containersByHost[parentID] = append(containersByHost[parentID], container)
+		if statusMatchesFilter(container.ContainerState(), "running") || statusMatchesFilter(string(container.Status()), "running") {
+			summary.RunningDocker++
+		}
+	}
+
+	dockerHosts := []DockerHostTopology{}
+	for _, host := range rs.DockerHosts() {
+		if host == nil {
+			continue
+		}
+		hostname := strings.TrimSpace(host.Hostname())
+		displayName := strings.TrimSpace(host.Name())
+		hasAgent := connectedAgentHostnames[hostname] || connectedAgentHostnames[displayName]
+		hostContainers := containersByHost[host.ID()]
+		runningCount := 0
+		var containers []DockerContainerSummary
+
+		for _, container := range hostContainers {
+			state := strings.TrimSpace(container.ContainerState())
+			if state == "" {
+				state = string(container.Status())
+			}
+			if statusMatchesFilter(state, "running") {
+				runningCount++
+			}
+
+			if includeDocker && !options.SummaryOnly {
+				if options.MaxDockerContainersPerHost <= 0 || len(containers) < options.MaxDockerContainersPerHost {
+					containers = append(containers, DockerContainerSummary{
+						GovernedResourceMetadata: governance.Resolve(container.Name(), container.ID(), container.ContainerID()),
+						ID:                       container.ID(),
+						Name:                     container.Name(),
+						State:                    state,
+						Image:                    container.Image(),
+						Health:                   container.Health(),
+					})
+				}
+			}
+		}
+
+		if includeDocker && !options.SummaryOnly {
+			if options.MaxDockerHosts > 0 && len(dockerHosts) >= options.MaxDockerHosts {
+				continue
+			}
+
+			if hostname == "" {
+				hostname = displayName
+			}
+			dockerHosts = append(dockerHosts, DockerHostTopology{
+				GovernedResourceMetadata: governance.Resolve(host.Hostname(), host.Name(), host.HostSourceID(), host.ID()),
+				Hostname:                 hostname,
+				DisplayName:              displayName,
+				AgentConnected:           hasAgent,
+				CanExecute:               hasAgent && options.ControlEnabled,
+				Containers:               containers,
+				ContainerCount:           len(hostContainers),
+				RunningCount:             runningCount,
+			})
+		}
+	}
+	sort.Slice(dockerHosts, func(i, j int) bool {
+		return strings.ToLower(dockerHosts[i].Hostname) < strings.ToLower(dockerHosts[j].Hostname)
+	})
+
+	k8sClusters := []KubernetesClusterTopology{}
+	clusterMap := make(map[string]*KubernetesClusterTopology)
+	clusterKeyByID := make(map[string]string)
+	clusterKeyByName := make(map[string]string)
+	ensureCluster := func(name, id, status string) *KubernetesClusterTopology {
+		if !includeKubernetes || options.SummaryOnly {
+			return nil
+		}
+		name = strings.TrimSpace(name)
+		id = strings.TrimSpace(id)
+		status = strings.TrimSpace(status)
+		if status == "" {
+			status = "unknown"
+		}
+		key := strings.ToLower(id)
+		if key == "" {
+			key = strings.ToLower(name)
+		}
+		if key == "" {
+			return nil
+		}
+
+		if existing, ok := clusterMap[key]; ok {
+			if existing.Name == "" && name != "" {
+				existing.Name = name
+			}
+			if existing.ID == "" && id != "" {
+				existing.ID = id
+			}
+			if existing.Status == "unknown" && status != "" {
+				existing.Status = status
+			}
+			return existing
+		}
+		if options.MaxK8sClusters > 0 && len(clusterMap) >= options.MaxK8sClusters {
+			return nil
+		}
+
+		cluster := &KubernetesClusterTopology{
+			GovernedResourceMetadata: governance.Resolve(name, id),
+			Name:                     name,
+			ID:                       id,
+			Status:                   status,
+		}
+		if cluster.Name == "" {
+			cluster.Name = cluster.ID
+		}
+		clusterMap[key] = cluster
+		if cluster.ID != "" {
+			clusterKeyByID[cluster.ID] = key
+		}
+		if cluster.Name != "" {
+			clusterKeyByName[strings.ToLower(cluster.Name)] = key
+		}
+		return cluster
+	}
+	resolveCluster := func(parentID, clusterName string) *KubernetesClusterTopology {
+		parentID = strings.TrimSpace(parentID)
+		clusterName = strings.TrimSpace(clusterName)
+		if parentID != "" {
+			if key, ok := clusterKeyByID[parentID]; ok {
+				return clusterMap[key]
+			}
+		}
+		if clusterName != "" {
+			if key, ok := clusterKeyByName[strings.ToLower(clusterName)]; ok {
+				return clusterMap[key]
+			}
+		}
+		return ensureCluster(clusterName, parentID, "unknown")
+	}
+
+	if includeKubernetes && !options.SummaryOnly {
+		for _, cluster := range rs.K8sClusters() {
+			if cluster == nil {
+				continue
+			}
+			ensureCluster(cluster.Name(), cluster.ID(), string(cluster.Status()))
+		}
+	}
+
+	for _, node := range rs.K8sNodes() {
+		if node == nil {
+			continue
+		}
+		cluster := resolveCluster(node.ParentID(), node.ClusterName())
+		if cluster == nil {
+			continue
+		}
+		cluster.NodeCount++
+		if includeKubernetes && !options.SummaryOnly && (options.MaxK8sNodesPerCluster <= 0 || len(cluster.Nodes) < options.MaxK8sNodesPerCluster) {
+			cluster.Nodes = append(cluster.Nodes, KubernetesNodeTopology{
+				GovernedResourceMetadata: governance.Resolve(node.Name()),
+				Name:                     node.Name(),
+				Status:                   string(node.Status()),
+				Ready:                    node.Ready(),
+				Roles:                    node.Roles(),
+				CPU:                      node.CPUPercent(),
+				Memory:                   node.MemoryPercent(),
+			})
+		}
+	}
+
+	for _, deployment := range rs.K8sDeployments() {
+		if deployment == nil {
+			continue
+		}
+		cluster := resolveCluster(deployment.ParentID(), deployment.ClusterName())
+		if cluster == nil {
+			continue
+		}
+		cluster.DeploymentCount++
+		if includeKubernetes && !options.SummaryOnly && (options.MaxK8sDeploymentsPerCluster <= 0 || len(cluster.Deployments) < options.MaxK8sDeploymentsPerCluster) {
+			cluster.Deployments = append(cluster.Deployments, KubernetesDeploymentDetail{
+				GovernedResourceMetadata: governance.Resolve(deployment.Name()),
+				Name:                     deployment.Name(),
+				Namespace:                deployment.Namespace(),
+				Status:                   string(deployment.Status()),
+				DesiredReplicas:          deployment.DesiredReplicas(),
+				ReadyReplicas:            deployment.ReadyReplicas(),
+			})
+		}
+	}
+
+	for _, pod := range rs.Pods() {
+		if pod == nil {
+			continue
+		}
+		cluster := resolveCluster(pod.ParentID(), pod.ClusterName())
+		if cluster == nil {
+			continue
+		}
+		cluster.PodCount++
+		if includeKubernetes && !options.SummaryOnly && (options.MaxK8sPodsPerCluster <= 0 || len(cluster.Pods) < options.MaxK8sPodsPerCluster) {
+			cluster.Pods = append(cluster.Pods, KubernetesPodDetail{
+				GovernedResourceMetadata: governance.Resolve(pod.Name()),
+				Name:                     pod.Name(),
+				Namespace:                pod.Namespace(),
+				Status:                   string(pod.Status()),
+				Restarts:                 pod.Restarts(),
+				OwnerKind:                pod.OwnerKind(),
+				OwnerName:                pod.OwnerName(),
+			})
+		}
+	}
+
+	if includeKubernetes && !options.SummaryOnly {
+		for _, cluster := range clusterMap {
+			k8sClusters = append(k8sClusters, *cluster)
+		}
+		sort.Slice(k8sClusters, func(i, j int) bool {
+			return strings.ToLower(k8sClusters[i].Name) < strings.ToLower(k8sClusters[j].Name)
+		})
+		for i := range k8sClusters {
+			sort.Slice(k8sClusters[i].Nodes, func(a, b int) bool {
+				return strings.ToLower(k8sClusters[i].Nodes[a].Name) < strings.ToLower(k8sClusters[i].Nodes[b].Name)
+			})
+			sort.Slice(k8sClusters[i].Deployments, func(a, b int) bool {
+				return strings.ToLower(k8sClusters[i].Deployments[a].Name) < strings.ToLower(k8sClusters[i].Deployments[b].Name)
+			})
+			sort.Slice(k8sClusters[i].Pods, func(a, b int) bool {
+				return strings.ToLower(k8sClusters[i].Pods[a].Name) < strings.ToLower(k8sClusters[i].Pods[b].Name)
+			})
+		}
+	}
+
+	response.Proxmox.Nodes = proxmoxNodes
+	response.Docker.Hosts = dockerHosts
+	response.Kubernetes.Clusters = k8sClusters
+	response.Summary = summary
+	return response.NormalizeCollections()
+}
+
 func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
 	include, _ := args["include"].(string)
 	if include == "" {
@@ -4088,7 +4525,6 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 	if err != nil {
 		return NewErrorResult(err), nil
 	}
-	governance := newGovernedQueryMetadataResolver(rs)
 
 	// Build a set of connected agent hostnames for quick lookup
 	connectedAgentHostnames := make(map[string]bool)
@@ -4101,414 +4537,23 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 	// Check if control is enabled
 	controlEnabled := e.controlLevel != ControlLevelReadOnly && e.controlLevel != ""
 
-	includeProxmox := include == "all" || include == "proxmox"
-	includeDocker := include == "all" || include == "app-containers"
-	includeKubernetes := include == "all" || include == "kubernetes"
-
-	// Summary counters
-	summary := TopologySummary{
-		TotalNodes:            len(rs.Nodes()),
-		TotalVMs:              len(rs.VMs()),
-		TotalSystemContainers: len(rs.Containers()),
-		TotalDockerHosts:      len(rs.DockerHosts()),
-		TotalDockerContainers: len(rs.DockerContainers()),
-		TotalK8sClusters:      len(rs.K8sClusters()),
-		TotalK8sNodes:         len(rs.K8sNodes()),
-		TotalK8sDeployments:   len(rs.K8sDeployments()),
-		TotalK8sPods:          len(rs.Pods()),
-	}
-
-	for _, node := range rs.Nodes() {
-		if connectedAgentHostnames[node.Name()] {
-			summary.NodesWithAgents++
-		}
-	}
-	for _, host := range rs.DockerHosts() {
-		if host == nil {
-			continue
-		}
-		hostname := strings.TrimSpace(host.Hostname())
-		displayName := strings.TrimSpace(host.Name())
-		if connectedAgentHostnames[hostname] || connectedAgentHostnames[displayName] {
-			summary.DockerHostsWithAgents++
-		}
-	}
-	for _, pod := range rs.Pods() {
-		if pod == nil {
-			continue
-		}
-		if statusMatchesFilter(string(pod.Status()), "running") || statusMatchesFilter(pod.PodPhase(), "running") {
-			summary.RunningK8sPods++
-		}
-	}
-
-	// Build node topology - group VMs and containers by hypervisor node
-	nodeMap := make(map[string]*ProxmoxNodeTopology)
-	if includeProxmox && !summaryOnly {
-		for _, node := range rs.Nodes() {
-			if maxProxmoxNodes > 0 && len(nodeMap) >= maxProxmoxNodes {
-				break
-			}
-			name := node.Name()
-			hasAgent := connectedAgentHostnames[name]
-			nodeMap[name] = &ProxmoxNodeTopology{
-				GovernedResourceMetadata: governance.Resolve(node.Name(), node.ID()),
-				Name:                     name,
-				Status:                   string(node.Status()),
-				AgentConnected:           hasAgent,
-				CanExecute:               hasAgent && controlEnabled,
-				VMs:                      []TopologyVM{},
-				Containers:               []TopologyContainer{},
-			}
-		}
-	}
-
-	ensureNode := func(name, status string) *ProxmoxNodeTopology {
-		if !includeProxmox || summaryOnly {
-			return nil
-		}
-		if node, exists := nodeMap[name]; exists {
-			return node
-		}
-		if maxProxmoxNodes > 0 && len(nodeMap) >= maxProxmoxNodes {
-			return nil
-		}
-		hasAgent := connectedAgentHostnames[name]
-		nodeMap[name] = &ProxmoxNodeTopology{
-			GovernedResourceMetadata: governance.Resolve(name),
-			Name:                     name,
-			Status:                   status,
-			AgentConnected:           hasAgent,
-			CanExecute:               hasAgent && controlEnabled,
-			VMs:                      []TopologyVM{},
-			Containers:               []TopologyContainer{},
-		}
-		return nodeMap[name]
-	}
-
-	// Add VMs to their nodes
-	for _, vm := range rs.VMs() {
-		status := string(vm.Status())
-		if status == "running" || status == string(unifiedresources.StatusOnline) {
-			summary.RunningVMs++
-		}
-
-		nodeTopology := ensureNode(vm.Node(), "unknown")
-		if nodeTopology == nil {
-			continue
-		}
-
-		nodeTopology.VMCount++
-		if maxVMsPerNode <= 0 || len(nodeTopology.VMs) < maxVMsPerNode {
-			nodeTopology.VMs = append(nodeTopology.VMs, TopologyVM{
-				GovernedResourceMetadata: governance.Resolve(vm.Name(), vm.ID(), fmt.Sprintf("%d", vm.VMID())),
-				VMID:                     vm.VMID(),
-				Name:                     vm.Name(),
-				Status:                   status,
-				CPU:                      vm.CPUPercent(),
-				Memory:                   vm.MemoryPercent(),
-				Tags:                     vm.Tags(),
-			})
-		}
-	}
-
-	// Add containers to their nodes
-	for _, ct := range rs.Containers() {
-		status := string(ct.Status())
-		if status == "running" || status == string(unifiedresources.StatusOnline) {
-			summary.RunningContainers++
-		}
-
-		nodeTopology := ensureNode(ct.Node(), "unknown")
-		if nodeTopology == nil {
-			continue
-		}
-
-		nodeTopology.ContainerCount++
-		if maxContainersPerNode <= 0 || len(nodeTopology.Containers) < maxContainersPerNode {
-			nodeTopology.Containers = append(nodeTopology.Containers, TopologyContainer{
-				GovernedResourceMetadata: governance.Resolve(ct.Name(), ct.ID(), fmt.Sprintf("%d", ct.VMID())),
-				VMID:                     ct.VMID(),
-				Name:                     ct.Name(),
-				Status:                   status,
-				CPU:                      ct.CPUPercent(),
-				Memory:                   ct.MemoryPercent(),
-				Tags:                     ct.Tags(),
-			})
-		}
-	}
-
-	// Convert node map to slice
-	proxmoxNodes := []ProxmoxNodeTopology{}
-	if includeProxmox && !summaryOnly {
-		for _, node := range nodeMap {
-			proxmoxNodes = append(proxmoxNodes, *node)
-		}
-		sort.Slice(proxmoxNodes, func(i, j int) bool {
-			return strings.ToLower(proxmoxNodes[i].Name) < strings.ToLower(proxmoxNodes[j].Name)
-		})
-		for i := range proxmoxNodes {
-			sort.Slice(proxmoxNodes[i].VMs, func(a, b int) bool {
-				return strings.ToLower(proxmoxNodes[i].VMs[a].Name) < strings.ToLower(proxmoxNodes[i].VMs[b].Name)
-			})
-			sort.Slice(proxmoxNodes[i].Containers, func(a, b int) bool {
-				return strings.ToLower(proxmoxNodes[i].Containers[a].Name) < strings.ToLower(proxmoxNodes[i].Containers[b].Name)
-			})
-		}
-	}
-
-	// Build Docker topology
-	containersByHost := make(map[string][]*unifiedresources.DockerContainerView)
-	for _, container := range rs.DockerContainers() {
-		if container == nil {
-			continue
-		}
-		parentID := strings.TrimSpace(container.ParentID())
-		if parentID == "" {
-			continue
-		}
-		containersByHost[parentID] = append(containersByHost[parentID], container)
-		if statusMatchesFilter(container.ContainerState(), "running") || statusMatchesFilter(string(container.Status()), "running") {
-			summary.RunningDocker++
-		}
-	}
-
-	dockerHosts := []DockerHostTopology{}
-	for _, host := range rs.DockerHosts() {
-		if host == nil {
-			continue
-		}
-		hostname := strings.TrimSpace(host.Hostname())
-		displayName := strings.TrimSpace(host.Name())
-		hasAgent := connectedAgentHostnames[hostname] || connectedAgentHostnames[displayName]
-		hostContainers := containersByHost[host.ID()]
-		runningCount := 0
-		var containers []DockerContainerSummary
-
-		for _, container := range hostContainers {
-			state := strings.TrimSpace(container.ContainerState())
-			if state == "" {
-				state = string(container.Status())
-			}
-			if statusMatchesFilter(state, "running") {
-				runningCount++
-			}
-
-			if includeDocker && !summaryOnly {
-				if maxDockerContainersPerHost <= 0 || len(containers) < maxDockerContainersPerHost {
-					containers = append(containers, DockerContainerSummary{
-						GovernedResourceMetadata: governance.Resolve(container.Name(), container.ID(), container.ContainerID()),
-						ID:                       container.ID(),
-						Name:                     container.Name(),
-						State:                    state,
-						Image:                    container.Image(),
-						Health:                   container.Health(),
-					})
-				}
-			}
-		}
-
-		if includeDocker && !summaryOnly {
-			if maxDockerHosts > 0 && len(dockerHosts) >= maxDockerHosts {
-				continue
-			}
-
-			if hostname == "" {
-				hostname = displayName
-			}
-			dockerHosts = append(dockerHosts, DockerHostTopology{
-				GovernedResourceMetadata: governance.Resolve(host.Hostname(), host.Name(), host.HostSourceID(), host.ID()),
-				Hostname:                 hostname,
-				DisplayName:              displayName,
-				AgentConnected:           hasAgent,
-				CanExecute:               hasAgent && controlEnabled,
-				Containers:               containers,
-				ContainerCount:           len(hostContainers),
-				RunningCount:             runningCount,
-			})
-		}
-	}
-	sort.Slice(dockerHosts, func(i, j int) bool {
-		return strings.ToLower(dockerHosts[i].Hostname) < strings.ToLower(dockerHosts[j].Hostname)
+	response := BuildTopologyResponseFromReadState(rs, TopologyBuildOptions{
+		Include:                     include,
+		SummaryOnly:                 summaryOnly,
+		MaxProxmoxNodes:             maxProxmoxNodes,
+		MaxVMsPerNode:               maxVMsPerNode,
+		MaxContainersPerNode:        maxContainersPerNode,
+		MaxDockerHosts:              maxDockerHosts,
+		MaxDockerContainersPerHost:  maxDockerContainersPerHost,
+		MaxK8sClusters:              maxK8sClusters,
+		MaxK8sNodesPerCluster:       maxK8sNodesPerCluster,
+		MaxK8sDeploymentsPerCluster: maxK8sDeploymentsPerCluster,
+		MaxK8sPodsPerCluster:        maxK8sPodsPerCluster,
+		ConnectedAgentHostnames:     connectedAgentHostnames,
+		ControlEnabled:              controlEnabled,
 	})
 
-	// Build Kubernetes topology
-	k8sClusters := []KubernetesClusterTopology{}
-	clusterMap := make(map[string]*KubernetesClusterTopology)
-	clusterKeyByID := make(map[string]string)
-	clusterKeyByName := make(map[string]string)
-
-	ensureCluster := func(name, id, status string) *KubernetesClusterTopology {
-		if !includeKubernetes || summaryOnly {
-			return nil
-		}
-		name = strings.TrimSpace(name)
-		id = strings.TrimSpace(id)
-		status = strings.TrimSpace(status)
-		if status == "" {
-			status = "unknown"
-		}
-
-		key := strings.ToLower(id)
-		if key == "" {
-			key = strings.ToLower(name)
-		}
-		if key == "" {
-			return nil
-		}
-
-		if existing, ok := clusterMap[key]; ok {
-			if existing.Name == "" && name != "" {
-				existing.Name = name
-			}
-			if existing.ID == "" && id != "" {
-				existing.ID = id
-			}
-			if existing.Status == "unknown" && status != "" {
-				existing.Status = status
-			}
-			return existing
-		}
-		if maxK8sClusters > 0 && len(clusterMap) >= maxK8sClusters {
-			return nil
-		}
-
-		cluster := &KubernetesClusterTopology{
-			GovernedResourceMetadata: governance.Resolve(name, id),
-			Name:                     name,
-			ID:                       id,
-			Status:                   status,
-		}
-		if cluster.Name == "" {
-			cluster.Name = cluster.ID
-		}
-		clusterMap[key] = cluster
-		if cluster.ID != "" {
-			clusterKeyByID[cluster.ID] = key
-		}
-		if cluster.Name != "" {
-			clusterKeyByName[strings.ToLower(cluster.Name)] = key
-		}
-		return cluster
-	}
-
-	resolveCluster := func(parentID, clusterName string) *KubernetesClusterTopology {
-		parentID = strings.TrimSpace(parentID)
-		clusterName = strings.TrimSpace(clusterName)
-		if parentID != "" {
-			if key, ok := clusterKeyByID[parentID]; ok {
-				return clusterMap[key]
-			}
-		}
-		if clusterName != "" {
-			if key, ok := clusterKeyByName[strings.ToLower(clusterName)]; ok {
-				return clusterMap[key]
-			}
-		}
-		return ensureCluster(clusterName, parentID, "unknown")
-	}
-
-	if includeKubernetes && !summaryOnly {
-		for _, cluster := range rs.K8sClusters() {
-			if cluster == nil {
-				continue
-			}
-			ensureCluster(cluster.Name(), cluster.ID(), string(cluster.Status()))
-		}
-	}
-
-	for _, node := range rs.K8sNodes() {
-		if node == nil {
-			continue
-		}
-		cluster := resolveCluster(node.ParentID(), node.ClusterName())
-		if cluster == nil {
-			continue
-		}
-		cluster.NodeCount++
-		if includeKubernetes && !summaryOnly && (maxK8sNodesPerCluster <= 0 || len(cluster.Nodes) < maxK8sNodesPerCluster) {
-			cluster.Nodes = append(cluster.Nodes, KubernetesNodeTopology{
-				GovernedResourceMetadata: governance.Resolve(node.Name()),
-				Name:                     node.Name(),
-				Status:                   string(node.Status()),
-				Ready:                    node.Ready(),
-				Roles:                    node.Roles(),
-				CPU:                      node.CPUPercent(),
-				Memory:                   node.MemoryPercent(),
-			})
-		}
-	}
-
-	for _, deployment := range rs.K8sDeployments() {
-		if deployment == nil {
-			continue
-		}
-		cluster := resolveCluster(deployment.ParentID(), deployment.ClusterName())
-		if cluster == nil {
-			continue
-		}
-		cluster.DeploymentCount++
-		if includeKubernetes && !summaryOnly && (maxK8sDeploymentsPerCluster <= 0 || len(cluster.Deployments) < maxK8sDeploymentsPerCluster) {
-			cluster.Deployments = append(cluster.Deployments, KubernetesDeploymentDetail{
-				GovernedResourceMetadata: governance.Resolve(deployment.Name()),
-				Name:                     deployment.Name(),
-				Namespace:                deployment.Namespace(),
-				Status:                   string(deployment.Status()),
-				DesiredReplicas:          deployment.DesiredReplicas(),
-				ReadyReplicas:            deployment.ReadyReplicas(),
-			})
-		}
-	}
-
-	for _, pod := range rs.Pods() {
-		if pod == nil {
-			continue
-		}
-		cluster := resolveCluster(pod.ParentID(), pod.ClusterName())
-		if cluster == nil {
-			continue
-		}
-		cluster.PodCount++
-		if includeKubernetes && !summaryOnly && (maxK8sPodsPerCluster <= 0 || len(cluster.Pods) < maxK8sPodsPerCluster) {
-			cluster.Pods = append(cluster.Pods, KubernetesPodDetail{
-				GovernedResourceMetadata: governance.Resolve(pod.Name()),
-				Name:                     pod.Name(),
-				Namespace:                pod.Namespace(),
-				Status:                   string(pod.Status()),
-				Restarts:                 pod.Restarts(),
-				OwnerKind:                pod.OwnerKind(),
-				OwnerName:                pod.OwnerName(),
-			})
-		}
-	}
-
-	if includeKubernetes && !summaryOnly {
-		for _, cluster := range clusterMap {
-			k8sClusters = append(k8sClusters, *cluster)
-		}
-		sort.Slice(k8sClusters, func(i, j int) bool {
-			return strings.ToLower(k8sClusters[i].Name) < strings.ToLower(k8sClusters[j].Name)
-		})
-		for i := range k8sClusters {
-			sort.Slice(k8sClusters[i].Nodes, func(a, b int) bool {
-				return strings.ToLower(k8sClusters[i].Nodes[a].Name) < strings.ToLower(k8sClusters[i].Nodes[b].Name)
-			})
-			sort.Slice(k8sClusters[i].Deployments, func(a, b int) bool {
-				return strings.ToLower(k8sClusters[i].Deployments[a].Name) < strings.ToLower(k8sClusters[i].Deployments[b].Name)
-			})
-			sort.Slice(k8sClusters[i].Pods, func(a, b int) bool {
-				return strings.ToLower(k8sClusters[i].Pods[a].Name) < strings.ToLower(k8sClusters[i].Pods[b].Name)
-			})
-		}
-	}
-
-	response := EmptyTopologyResponse()
-	response.Proxmox.Nodes = proxmoxNodes
-	response.Docker.Hosts = dockerHosts
-	response.Kubernetes.Clusters = k8sClusters
-	response.Summary = summary
-
-	return NewJSONResult(response.NormalizeCollections()), nil
+	return NewJSONResult(response), nil
 }
 
 func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[string]interface{}) (CallToolResult, error) {

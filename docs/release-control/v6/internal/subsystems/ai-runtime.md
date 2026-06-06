@@ -252,6 +252,17 @@ runtime cost control, and shared AI transport surfaces.
    the topology detail is complete or context-truncated, and should pass a
    compact user-visible inventory payload rather than raw governed tool JSON so
    policy metadata cannot cause providers to hide ordinary topology labels.
+   Deterministic count-only inventory prompts are a stricter case of that same
+   contract: when canonical topology state already carries the complete
+   aggregate counts, `internal/ai/chat` should answer locally by streaming
+   normal typed assistant content and `done` before provider attempt creation.
+   This adapts the referenced OpenCode `message.ts` and `processor.ts` typed
+   part/delta model at commit `fa2b63f850fc0a23bec2bdff9e660450d3fe7913`:
+   locally owned text is still transcript text, but it must not wait on a
+   remote provider or pretend that shell/tool inspection produced the answer.
+   The completion metadata for that path should identify the effective route
+   as `pulse:local-inventory` so the transcript label reflects Pulse-owned
+   local runtime output instead of the operator's selected remote model.
    The compact payload must include exact `answer_label` fields for nodes and
    workloads; the provider-facing instruction must tell the model to copy those
    labels exactly instead of substituting generic labels like `Node 1`, `VM

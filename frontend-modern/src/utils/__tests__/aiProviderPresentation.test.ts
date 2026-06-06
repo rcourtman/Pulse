@@ -51,4 +51,8 @@ describe('aiProviderPresentation', () => {
       }),
     ).toBe('DeepSeek R1 via OpenRouter');
   });
+
+  it('labels Pulse-owned local runtime routes without provider wording', () => {
+    expect(formatAIModelRouteLabel('pulse:local-inventory')).toBe('Pulse inventory');
+  });
 });

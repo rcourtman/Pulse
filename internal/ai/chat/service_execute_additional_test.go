@@ -1026,57 +1026,168 @@ func TestService_ExecuteStream_InteractiveChatLetsModelChooseTools(t *testing.T)
 	}
 }
 
-func TestService_ExecuteStream_InventoryCountPrefetchesSummaryWithoutTools(t *testing.T) {
+func TestService_ExecuteStream_InventoryCountAnswersFromCanonicalStateWithoutProvider(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewSessionStore(tmpDir)
 	if err != nil {
 		t.Fatalf("failed to create session store: %v", err)
 	}
 
-	var capturedReq providers.ChatRequest
+	var providerCalled atomic.Bool
 	provider := &stubServiceProvider{
 		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
-			capturedReq = req
-			callback(providers.StreamEvent{
-				Type: "content",
-				Data: providers.ContentEvent{Text: "You have 0 resources."},
-			})
-			callback(providers.StreamEvent{
-				Type: "done",
-				Data: providers.DoneEvent{InputTokens: 1, OutputTokens: 1},
-			})
+			providerCalled.Store(true)
 			return nil
 		},
 	}
+	state := models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID:       "node1",
+			Name:     "node1",
+			Instance: "pve1",
+			Status:   "online",
+		}},
+		VMs: []models.VM{{
+			ID:       "qemu/pve1/node1/100",
+			Name:     "vm1",
+			VMID:     100,
+			Instance: "pve1",
+			Status:   "running",
+			Node:     "node1",
+		}},
+		Containers: []models.Container{{
+			ID:       "lxc/pve1/node1/201",
+			Name:     "ct1",
+			VMID:     201,
+			Instance: "pve1",
+			Status:   "running",
+			Node:     "node1",
+		}},
+		DockerHosts: []models.DockerHost{{
+			ID:       "docker-host-1",
+			Hostname: "docker-host-1",
+			Containers: []models.DockerContainer{{
+				ID:     "docker-container-1",
+				Name:   "nginx",
+				State:  "running",
+				Image:  "nginx",
+				Health: "healthy",
+			}},
+		}},
+		KubernetesClusters: []models.KubernetesCluster{{
+			ID:     "cluster-1",
+			Name:   "prod-cluster",
+			Status: "online",
+			Nodes: []models.KubernetesNode{{
+				Name:  "worker-1",
+				UID:   "node-1",
+				Ready: true,
+				Roles: []string{"worker"},
+			}},
+			Pods: []models.KubernetesPod{{
+				UID:       "pod-1",
+				Name:      "api-6f8d5c",
+				Namespace: "default",
+				Phase:     "Running",
+				Restarts:  2,
+				OwnerKind: "Deployment",
+				OwnerName: "api",
+			}},
+			Deployments: []models.KubernetesDeployment{{
+				UID:             "deploy-1",
+				Name:            "api",
+				Namespace:       "default",
+				DesiredReplicas: 3,
+				ReadyReplicas:   2,
+			}},
+		}},
+	}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(state)
 
 	service := NewService(Config{
 		AIConfig:      &config.AIConfig{ControlLevel: config.ControlLevelControlled},
-		StateProvider: &mockStateProvider{},
+		StateProvider: &mockStateProvider{state: state},
+		ReadState:     unifiedresources.NewMonitorAdapter(registry),
 		AgentServer:   &mockAgentServer{},
 	})
 	service.sessions = store
 	service.provider = provider
 	service.started = true
 
+	var content strings.Builder
+	var doneSeen bool
+	var doneModel string
+	var countedProgressSeen bool
 	err = service.ExecuteStream(context.Background(), ExecuteRequest{
 		SessionID: "inventory-count-fast-path",
 		Prompt:    "how many devices in this",
-	}, func(event StreamEvent) {})
+	}, func(event StreamEvent) {
+		switch event.Type {
+		case "content":
+			var data ContentData
+			if err := json.Unmarshal(event.Data, &data); err != nil {
+				t.Fatalf("unmarshal content: %v", err)
+			}
+			content.WriteString(data.Text)
+		case "done":
+			doneSeen = true
+			var data DoneData
+			if err := json.Unmarshal(event.Data, &data); err != nil {
+				t.Fatalf("unmarshal done: %v", err)
+			}
+			doneModel = data.Model
+		case "workflow_state":
+			var data WorkflowStateData
+			if err := json.Unmarshal(event.Data, &data); err != nil {
+				t.Fatalf("unmarshal workflow state: %v", err)
+			}
+			if data.Phase == "context_ready" && data.Message == "Counted current Pulse inventory." {
+				countedProgressSeen = true
+			}
+		}
+	})
 	if err != nil {
 		t.Fatalf("ExecuteStream failed: %v", err)
 	}
-	if len(capturedReq.Tools) != 0 {
-		t.Fatalf("expected prefetched inventory count turn to withhold tools, got %d", len(capturedReq.Tools))
+	if providerCalled.Load() {
+		t.Fatal("expected deterministic inventory count to avoid provider call")
 	}
-	if len(capturedReq.Messages) == 0 {
-		t.Fatal("expected provider request messages")
+	if !doneSeen {
+		t.Fatal("done event was not emitted")
 	}
-	lastMessage := capturedReq.Messages[len(capturedReq.Messages)-1].Content
-	if !strings.Contains(lastMessage, "Pulse inventory summary from current canonical resource state") {
-		t.Fatalf("expected prefetched inventory summary context, got %q", lastMessage)
+	if doneModel != assistantLocalInventoryModelRoute {
+		t.Fatalf("expected local inventory completion model, got %q", doneModel)
 	}
-	if !strings.Contains(lastMessage, "User message: how many devices in this") {
-		t.Fatalf("expected original user message to remain visible to the model, got %q", lastMessage)
+	if !countedProgressSeen {
+		t.Fatal("inventory count progress event was not emitted")
+	}
+	answer := content.String()
+	for _, want := range []string{
+		"Pulse currently sees 9 visible inventory items",
+		"3 compute resources",
+		"1 Proxmox node",
+		"1 VM",
+		"1 system container",
+		"2 Docker inventory items",
+		"1 Docker host",
+		"1 Docker container",
+		"4 Kubernetes inventory items",
+		"1 cluster",
+		"1 node",
+		"1 deployment",
+		"1 pod",
+	} {
+		if !strings.Contains(answer, want) {
+			t.Fatalf("expected direct inventory answer to contain %q, got %q", want, answer)
+		}
+	}
+	messages, err := store.GetMessages("inventory-count-fast-path")
+	if err != nil {
+		t.Fatalf("get messages: %v", err)
+	}
+	if len(messages) != 2 || messages[1].Role != "assistant" || messages[1].Content != answer {
+		t.Fatalf("expected direct assistant answer to be persisted, got %#v", messages)
 	}
 }
 

@@ -52,18 +52,25 @@ type AIModelRouteLabelInput =
   | (Pick<ModelInfo, 'id'> & Partial<Pick<ModelInfo, 'name' | 'provider'>>);
 
 const GATEWAY_MODEL_PROVIDERS = new Set<string>(['openrouter']);
+const LOCAL_MODEL_ROUTE_LABELS: Record<string, string> = {
+  'pulse:local-inventory': 'Pulse inventory',
+};
 
 const modelIdForLabel = (model: AIModelRouteLabelInput): string =>
   typeof model === 'string' ? model.trim() : model.id.trim();
 
 const baseModelLabel = (model: AIModelRouteLabelInput): string => {
+  const id = modelIdForLabel(model);
+  const localLabel = LOCAL_MODEL_ROUTE_LABELS[id];
+  if (localLabel) {
+    return localLabel;
+  }
   if (typeof model !== 'string') {
     const name = model.name?.trim();
     if (name) {
       return name;
     }
   }
-  const id = modelIdForLabel(model);
   return id.split(':').pop() || id;
 };
 
