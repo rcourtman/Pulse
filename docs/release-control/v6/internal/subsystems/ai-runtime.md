@@ -370,7 +370,10 @@ runtime cost control, and shared AI transport surfaces.
    provider/model labels before catalog hydration; this mirrors OpenCode's
    source pattern of retaining structured `providerID`/`modelID` metadata and
    presenting catalog names with ID fallbacks rather than leaking raw route
-   storage IDs into primary chat chrome.
+   storage IDs into primary chat chrome. Assistant model selector actions must
+   remain route-distinct: if the configured chat override resolves to the same
+   route as the effective default or the already selected session model, the
+   drawer must not render a duplicate override action.
 7. Keep AI chat presentation helpers aligned through `frontend-modern/src/components/AI/Chat/` and the shared `frontend-modern/src/utils/textPresentation.ts`
 8. Keep assistant drawer context, session, and org-switch reset state aligned through the shared `frontend-modern/src/stores/aiChat.ts` boundary instead of letting `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, or feature callers fork their own assistant shell state
    That shared drawer ownership also covers passive resource reads while the

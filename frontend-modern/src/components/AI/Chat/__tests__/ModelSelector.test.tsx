@@ -232,6 +232,43 @@ describe('ModelSelector', () => {
     expect(overrideButton.textContent).toContain('Qwen: Qwen3.7 Plus via OpenRouter');
   });
 
+  it('hides chat override option when it matches the effective default model', () => {
+    render(() => (
+      <ModelSelector
+        models={SAMPLE_MODELS}
+        selectedModel=""
+        defaultModel="openrouter:qwen/qwen3.7-plus"
+        defaultModelLabel="Qwen: Qwen3.7 Plus via OpenRouter"
+        chatOverrideModel="openrouter:qwen/qwen3.7-plus"
+        chatOverrideLabel="Qwen: Qwen3.7 Plus via OpenRouter"
+        onModelSelect={vi.fn()}
+      />
+    ));
+
+    fireEvent.click(screen.getByTitle('Select model for this chat'));
+
+    expect(screen.queryByText('Chat override')).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Use configured default model (Qwen: Qwen3.7 Plus via OpenRouter)'),
+    ).toBeInTheDocument();
+  });
+
+  it('hides chat override option when it is already selected', () => {
+    render(() => (
+      <ModelSelector
+        models={SAMPLE_MODELS}
+        selectedModel="openai:gpt-4o"
+        chatOverrideModel="openai:gpt-4o"
+        chatOverrideLabel="GPT-4o"
+        onModelSelect={vi.fn()}
+      />
+    ));
+
+    fireEvent.click(screen.getByTitle('Select model for this chat'));
+
+    expect(screen.queryByText('Chat override')).not.toBeInTheDocument();
+  });
+
   it('does not show chat override option when chatOverrideModel is not provided', () => {
     render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
 

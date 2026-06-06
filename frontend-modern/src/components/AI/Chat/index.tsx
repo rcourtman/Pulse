@@ -1909,6 +1909,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
               <ModelSelector
                 models={aiRuntimeModels()}
                 selectedModel={chat.model()}
+                defaultModel={defaultModel()}
                 defaultModelLabel={defaultModelLabel()}
                 chatOverrideModel={chatOverrideModel()}
                 chatOverrideLabel={chatOverrideLabel()}

@@ -6767,11 +6767,11 @@
     {
       "id": "codex-lane-followup-architecture-post-rc-canonicalization",
       "agent_id": "codex",
-      "summary": "Normalize Assistant model route labels",
+      "summary": "Remove redundant Assistant model override choice",
       "target_id": "v6-product-lane-expansion",
       "claimed_at": "2026-06-05T21:57:48Z",
-      "heartbeat_at": "2026-06-06T00:49:27Z",
-      "expires_at": "2026-06-06T02:49:27Z",
+      "heartbeat_at": "2026-06-06T01:00:36Z",
+      "expires_at": "2026-06-06T03:00:36Z",
       "work_item": {
         "kind": "lane-followup",
         "id": "architecture-post-rc-canonicalization"

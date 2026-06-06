@@ -20,6 +20,7 @@ import type { ModelInfo } from './types';
 export interface ModelSelectorProps {
   models: ModelInfo[];
   selectedModel: string;
+  defaultModel?: string;
   defaultModelLabel?: string;
   chatOverrideModel?: string;
   chatOverrideLabel?: string;
@@ -133,6 +134,16 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
   };
 
   const isUsingDefault = createMemo(() => !props.selectedModel?.trim());
+  const normalizedChatOverrideModel = createMemo(() => props.chatOverrideModel?.trim() || '');
+  const shouldShowChatOverride = createMemo(() => {
+    const override = normalizedChatOverrideModel();
+    if (!override) return false;
+    const selected = props.selectedModel?.trim() || '';
+    if (selected && selected === override) return false;
+    const defaultModel = props.defaultModel?.trim() || '';
+    if (defaultModel && defaultModel === override) return false;
+    return true;
+  });
 
   const selectedLabel = createMemo(() => {
     const selected = props.selectedModel?.trim();
@@ -285,14 +296,14 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
             </button>
 
             {/* Chat override option */}
-            <Show when={props.chatOverrideModel}>
+            <Show when={shouldShowChatOverride()}>
               <button
-                onClick={() => handleSelect(props.chatOverrideModel!)}
-                class={`w-full px-3 py-2 text-left text-sm hover:bg-surface-hover ${props.selectedModel === props.chatOverrideModel ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
+                onClick={() => handleSelect(normalizedChatOverrideModel())}
+                class={`w-full px-3 py-2 text-left text-sm hover:bg-surface-hover ${props.selectedModel === normalizedChatOverrideModel() ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
               >
                 <div class="font-medium text-base-content">Chat override</div>
                 <div class="text-[11px] text-muted">
-                  {props.chatOverrideLabel || formatAIModelRouteLabel(props.chatOverrideModel!)}
+                  {props.chatOverrideLabel || formatAIModelRouteLabel(normalizedChatOverrideModel())}
                 </div>
               </button>
             </Show>
