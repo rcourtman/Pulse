@@ -257,6 +257,17 @@ runtime cost control, and shared AI transport surfaces.
    already finished. Token content and hidden reasoning may continue to opt out
    of those checkpoints through the caller predicate so answer streaming remains
    fast.
+   Completed Assistant tool rows follow the same source-anchored display policy:
+   the referenced OpenCode commit
+   `9ed17da55ab1f7360cc0e01075f763e27fa899e9` keeps ordinary tool activity terse
+   through `GenericTool`/`InlineToolRow` in
+   `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx`, hides generic
+   output unless `showGenericToolOutput` is enabled, and bounds output-heavy
+   blocks with `packages/opencode/src/cli/cmd/tui/util/collapse-tool-output.ts`.
+   Pulse adapts that by keeping the completed tool action/command visible in the
+   transcript while raw command/tool output remains an explicit Details expansion
+   instead of a default preview. This preserves evidence for inspection without
+   letting large command output dominate the Assistant answer flow.
    OpenCode-parity Assistant UX work must reference OpenCode's actual source
    implementation for message parts, tool-state mutation, progress rendering,
    and model/session selection before changing Pulse behavior; parity means

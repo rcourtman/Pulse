@@ -225,9 +225,9 @@ describe('ToolExecutionBlock', () => {
 
   // --- Output display ---
 
-  it('shows compact plain-text output by default when non-empty', () => {
+  it('keeps plain-text output behind details by default', () => {
     render(() => <ToolExecutionBlock tool={makeTool({ output: 'hello world' })} />);
-    expect(screen.getByText('hello world')).toBeInTheDocument();
+    expect(screen.queryByText('hello world')).not.toBeInTheDocument();
     expect(screen.getByText('Details')).toBeInTheDocument();
   });
 
@@ -246,7 +246,7 @@ describe('ToolExecutionBlock', () => {
     expect(screen.getByText('Details')).toBeInTheDocument();
   });
 
-  it('collapses long plain-text output previews', () => {
+  it('does not push long plain-text output into the transcript by default', () => {
     const { container } = render(() => (
       <ToolExecutionBlock
         tool={makeTool({
@@ -256,10 +256,10 @@ describe('ToolExecutionBlock', () => {
     ));
 
     const text = container.textContent || '';
-    expect(text).toContain('line 1');
-    expect(text).toContain('line 3');
+    expect(text).not.toContain('line 1');
+    expect(text).not.toContain('line 3');
     expect(text).not.toContain('line 5');
-    expect(text).toContain('...');
+    expect(screen.getByText('Details')).toBeInTheDocument();
   });
 
   it('hides output that is only whitespace', () => {
