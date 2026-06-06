@@ -12,6 +12,7 @@ import { unwrap } from 'solid-js/store';
 import SendIcon from 'lucide-solid/icons/send';
 import SquareIcon from 'lucide-solid/icons/square';
 import ClockIcon from 'lucide-solid/icons/clock';
+import ClipboardCopyIcon from 'lucide-solid/icons/clipboard-copy';
 import CopyIcon from 'lucide-solid/icons/copy';
 import DownloadIcon from 'lucide-solid/icons/download';
 import GitForkIcon from 'lucide-solid/icons/git-fork';
@@ -44,6 +45,9 @@ import {
   AI_CHAT_CLOSE_LABEL,
   AI_CHAT_CONTROL_MODE_LABEL,
   AI_CHAT_CONTROL_MODE_MENU_LABEL,
+  AI_CHAT_COPY_LAST_ANSWER_ERROR_MESSAGE,
+  AI_CHAT_COPY_LAST_ANSWER_LABEL,
+  AI_CHAT_COPY_LAST_ANSWER_SUCCESS_MESSAGE,
   AI_CHAT_COPY_TRANSCRIPT_LABEL,
   AI_CHAT_DISCOVERY_HINT_BODY,
   AI_CHAT_DISCOVERY_HINT_DISMISS_LABEL,
@@ -111,6 +115,7 @@ import { ChatMessages } from './ChatMessages';
 import { ModelSelector } from './ModelSelector';
 import { MentionAutocomplete, type MentionResource } from './MentionAutocomplete';
 import { getAssistantActiveTurnStatus } from './activeTurnStatus';
+import { getLastAssistantAnswerText } from './assistantAnswerText';
 import {
   buildAssistantTranscriptFilename,
   downloadAssistantTranscriptFile,
@@ -1272,6 +1277,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
   };
 
   const hasCurrentTranscript = createMemo(() => hasAssistantTranscriptContent(chat.messages()));
+  const lastAssistantAnswerText = createMemo(() => getLastAssistantAnswerText(chat.messages()));
+  const hasLastAssistantAnswer = createMemo(() => !!lastAssistantAnswerText());
   const canForkCurrentSession = createMemo(
     () =>
       Boolean(chat.sessionId().trim()) &&
@@ -1317,6 +1324,19 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
     setTranscriptCopyFallback({ generatedAt, transcript });
     notificationStore.warning('Clipboard blocked; transcript opened for manual copy', 4000);
+  };
+
+  const copyLastAssistantAnswer = async () => {
+    const answer = lastAssistantAnswerText();
+    if (!answer) return;
+
+    const copied = await copyToClipboard(answer);
+    if (copied) {
+      notificationStore.success(AI_CHAT_COPY_LAST_ANSWER_SUCCESS_MESSAGE, 2000);
+      return;
+    }
+
+    notificationStore.error(AI_CHAT_COPY_LAST_ANSWER_ERROR_MESSAGE);
   };
 
   const exportAssistantTranscript = () => {
@@ -2658,6 +2678,19 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 >
                   <LoaderCircleIcon class="h-4 w-4 animate-spin" aria-hidden="true" />
                 </Show>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  void copyLastAssistantAnswer();
+                }}
+                disabled={!hasLastAssistantAnswer()}
+                class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted"
+                title={AI_CHAT_COPY_LAST_ANSWER_LABEL}
+                aria-label={AI_CHAT_COPY_LAST_ANSWER_LABEL}
+              >
+                <ClipboardCopyIcon class="h-4 w-4" aria-hidden="true" />
               </button>
 
               <button

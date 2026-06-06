@@ -16,6 +16,9 @@ export const AI_CHAT_FORK_SESSION_LOAD_ERROR_MESSAGE =
   'Forked Assistant session but failed to load it';
 export const AI_CHAT_FORK_SESSION_ERROR_MESSAGE = 'Failed to fork Assistant session';
 export const AI_CHAT_FORK_SESSION_SUCCESS_MESSAGE = 'Assistant session forked';
+export const AI_CHAT_COPY_LAST_ANSWER_LABEL = 'Copy last Assistant answer';
+export const AI_CHAT_COPY_LAST_ANSWER_SUCCESS_MESSAGE = 'Assistant answer copied';
+export const AI_CHAT_COPY_LAST_ANSWER_ERROR_MESSAGE = 'Failed to copy Assistant answer';
 export const AI_CHAT_COPY_TRANSCRIPT_LABEL = 'Copy Assistant transcript';
 export const AI_CHAT_EXPORT_TRANSCRIPT_LABEL = 'Export Assistant transcript';
 export const AI_CHAT_TRANSCRIPT_FALLBACK_CLOSE_LABEL = 'Close Assistant transcript copy panel';

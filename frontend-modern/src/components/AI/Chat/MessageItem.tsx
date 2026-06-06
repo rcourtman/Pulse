@@ -23,6 +23,7 @@ import { PendingToolBlock, ToolExecutionBlock } from './ToolExecutionBlock';
 import { ApprovalCard } from './ApprovalCard';
 import { QuestionCard } from './QuestionCard';
 import { ThinkingBlock } from './ThinkingBlock';
+import { getAssistantAnswerText } from './assistantAnswerText';
 import { stripAssistantOutputArtifacts } from './assistantOutputHygiene';
 import { formatAssistantWorkflowStatus } from './activeTurnStatus';
 import { groupStreamEventsForDisplay } from './streamEventGrouping';
@@ -224,9 +225,10 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
 
   // Copy-to-clipboard for a completed assistant answer.
   const [copied, setCopied] = createSignal(false);
-  const canCopy = () => !props.message.isStreaming && !!visibleMessageContent().trim();
+  const copyableMessageText = () => getAssistantAnswerText(props.message);
+  const canCopy = () => !props.message.isStreaming && !!copyableMessageText();
   const copyMessage = async () => {
-    const text = visibleMessageContent();
+    const text = copyableMessageText();
     try {
       await navigator.clipboard?.writeText(text);
       setCopied(true);

@@ -6,6 +6,9 @@ import {
   AI_CHAT_CLOSE_LABEL,
   AI_CHAT_CONTROL_MODE_LABEL,
   AI_CHAT_CONTROL_MODE_MENU_LABEL,
+  AI_CHAT_COPY_LAST_ANSWER_ERROR_MESSAGE,
+  AI_CHAT_COPY_LAST_ANSWER_LABEL,
+  AI_CHAT_COPY_LAST_ANSWER_SUCCESS_MESSAGE,
   AI_CHAT_DISCOVERY_HINT_BODY,
   AI_CHAT_DISCOVERY_HINT_DISMISS_LABEL,
   AI_CHAT_DISCOVERY_HINT_TITLE,
@@ -49,6 +52,9 @@ describe('aiChatPresentation', () => {
     expect(AI_CHAT_NEW_SESSION_BUTTON_TITLE).toBe('Start new Assistant session');
     expect(AI_CHAT_NEW_SESSION_MENU_LABEL).toBe('New session');
     expect(AI_CHAT_NEW_SESSION_MENU_ARIA_LABEL).toBe('Start new Assistant session');
+    expect(AI_CHAT_COPY_LAST_ANSWER_LABEL).toBe('Copy last Assistant answer');
+    expect(AI_CHAT_COPY_LAST_ANSWER_SUCCESS_MESSAGE).toBe('Assistant answer copied');
+    expect(AI_CHAT_COPY_LAST_ANSWER_ERROR_MESSAGE).toBe('Failed to copy Assistant answer');
     expect(AI_CHAT_LAUNCHER_ARIA_LABEL).toBe('Expand Pulse Assistant');
     expect(AI_CHAT_CLOSE_LABEL).toBe('Close Pulse Assistant');
     expect(AI_CHAT_SESSION_MENU_TITLE).toBe('Pulse Assistant sessions');

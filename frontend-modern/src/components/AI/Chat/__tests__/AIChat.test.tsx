@@ -450,8 +450,54 @@ describe('AIChat', () => {
       renderChat();
 
       expect(screen.getByRole('button', { name: 'Fork current Assistant session' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Copy last Assistant answer' })).toBeDisabled();
       expect(screen.getByRole('button', { name: 'Copy Assistant transcript' })).toBeDisabled();
       expect(screen.getByRole('button', { name: 'Export Assistant transcript' })).toBeDisabled();
+    });
+
+    it('copies the latest Assistant answer from the header', async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText },
+        configurable: true,
+      });
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: 'Earlier answer',
+          timestamp: new Date('2026-06-06T12:34:56Z'),
+        },
+        {
+          id: 'user-1',
+          role: 'user',
+          content: 'what changed now?',
+          timestamp: new Date('2026-06-06T12:35:00Z'),
+        },
+        {
+          id: 'assistant-2',
+          role: 'assistant',
+          content: '',
+          isStreaming: true,
+          streamEvents: [
+            {
+              type: 'content',
+              content: 'Current streamed answer.',
+            },
+          ],
+          timestamp: new Date('2026-06-06T12:35:01Z'),
+        },
+      ]);
+
+      renderChat();
+      fireEvent.click(screen.getByRole('button', { name: 'Copy last Assistant answer' }));
+
+      await waitFor(() => {
+        expect(writeText).toHaveBeenCalledWith('Current streamed answer.');
+      });
+      await waitFor(() => {
+        expect(mockNotificationStore.success).toHaveBeenCalledWith('Assistant answer copied', 2000);
+      });
     });
 
     it('copies the current Assistant transcript from the header', async () => {
