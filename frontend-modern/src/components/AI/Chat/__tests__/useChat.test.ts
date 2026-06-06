@@ -1261,6 +1261,7 @@ describe('useChat', () => {
         rawInput: undefined,
         status: 'pending',
         startedAt: expect.any(Number),
+        updatedAt: expect.any(Number),
       });
       dispose();
     });
@@ -2532,7 +2533,7 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('moves the most recently progressed pending tool to the active end', async () => {
+    it('keeps pending tool transcript order when an earlier tool reports progress', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
 
@@ -2553,15 +2554,23 @@ describe('useChat', () => {
       });
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
-      expect(assistant.pendingTools?.map((tool) => tool.id)).toEqual(['b', 'a']);
-      expect(assistant.pendingTools?.at(-1)).toMatchObject({
+      expect(assistant.pendingTools?.map((tool) => tool.id)).toEqual(['a', 'b']);
+      expect(assistant.pendingTools?.[0]).toMatchObject({
         id: 'a',
         progress: 'Reading node inventory',
         status: 'running',
       });
+      expect(assistant.pendingTools?.[0].updatedAt).toBeGreaterThanOrEqual(
+        assistant.pendingTools?.[0].startedAt || 0,
+      );
       expect(assistant.streamEvents?.filter((event) => event.type === 'pending_tool')).toHaveLength(
         2,
       );
+      expect(
+        assistant.streamEvents
+          ?.filter((event) => event.type === 'pending_tool')
+          .map((event) => event.pendingTool?.id),
+      ).toEqual(['a', 'b']);
       dispose();
     });
 

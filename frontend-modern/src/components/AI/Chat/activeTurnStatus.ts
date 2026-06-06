@@ -74,6 +74,15 @@ const activePendingToolFromEvents = (
   return undefined;
 };
 
+const latestPendingToolActivity = (tool?: PendingTool): number =>
+  tool?.updatedAt ?? tool?.startedAt ?? 0;
+
+const activePendingToolFromState = (pendingTools?: PendingTool[]): PendingTool | undefined =>
+  pendingTools?.reduce<PendingTool | undefined>((current, tool) => {
+    if (!current) return tool;
+    return latestPendingToolActivity(tool) >= latestPendingToolActivity(current) ? tool : current;
+  }, undefined);
+
 const hasVisibleAssistantOutput = (message: ChatMessage): boolean => {
   if ((message.content || '').trim() || message.error) return true;
 
@@ -98,7 +107,8 @@ export const getAssistantActiveTurnStatus = (
   }
 
   const pendingTool =
-    assistantMessage.pendingTools?.at(-1) || activePendingToolFromEvents(assistantMessage.streamEvents);
+    activePendingToolFromState(assistantMessage.pendingTools) ||
+    activePendingToolFromEvents(assistantMessage.streamEvents);
   const pendingToolText = formatPendingToolStatus(pendingTool);
   if (pendingToolText) {
     return { type: 'tool', text: pendingToolText, startedAt: pendingTool?.startedAt };

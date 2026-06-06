@@ -21,6 +21,7 @@ export interface PendingTool {
   status?: 'pending' | 'running' | 'waiting';
   progress?: string;
   startedAt?: number;
+  updatedAt?: number;
 }
 
 export interface PendingApproval {

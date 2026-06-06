@@ -310,6 +310,15 @@ runtime cost control, and shared AI transport surfaces.
    chronological tool rows. Pulse adapts this with a mutable footer status and
    inline pending rows that show the current activity plus elapsed time while
    keeping large command output collapsed.
+   The referenced OpenCode source at fetched `origin/dev` commit
+   `1399323b78a04229d9bfe00c7436d7f41770fda8` updates the existing typed tool
+   part through `updateToolCall` in
+   `packages/opencode/src/session/processor.ts` and renders ordered assistant
+   content parts through `AssistantMessage`/`AssistantTool` in
+   `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`;
+   Pulse pending tool progress must therefore mutate the matching row in place
+   and carry separate activity freshness metadata for the footer instead of
+   moving an earlier active tool row below later tools when progress arrives.
    Assistant experience parity claims against OpenCode must cite the inspected
    OpenCode commit and source file/function anchor that defines the behavior
    being adapted; observed UI behavior alone is not sufficient governance

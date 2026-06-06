@@ -313,6 +313,7 @@ export function useChat(options: UseChatOptions = {}) {
     const status = normalizePendingToolStatus(data.phase);
     const progress = data.message?.trim() || undefined;
     const pendingTools = msg.pendingTools || [];
+    const now = Date.now();
 
     const matchesTool = (tool?: PendingTool, toolId?: string) => {
       if (!tool) return false;
@@ -328,7 +329,8 @@ export function useChat(options: UseChatOptions = {}) {
       rawInput: data.raw_input || tool.rawInput,
       status,
       progress: progress || tool.progress,
-      startedAt: tool.startedAt || Date.now(),
+      startedAt: tool.startedAt || now,
+      updatedAt: now,
     });
 
     let resolvedTool: PendingTool | undefined;
@@ -337,8 +339,8 @@ export function useChat(options: UseChatOptions = {}) {
       pendingIndex >= 0
         ? [
             ...pendingTools.slice(0, pendingIndex),
-            ...pendingTools.slice(pendingIndex + 1),
             (resolvedTool = mergeTool(pendingTools[pendingIndex])),
+            ...pendingTools.slice(pendingIndex + 1),
           ]
         : [
             ...pendingTools,
@@ -349,7 +351,8 @@ export function useChat(options: UseChatOptions = {}) {
               rawInput: data.raw_input,
               status,
               progress,
-              startedAt: Date.now(),
+              startedAt: now,
+              updatedAt: now,
             }),
           ];
 
@@ -770,13 +773,15 @@ export function useChat(options: UseChatOptions = {}) {
               // Prefer backend tool call ID for robust matching across parallel calls.
               // Fall back to a local ID if backend didn't send one (older servers).
               const toolId = data.id || generateId();
+              const startedAt = Date.now();
               const pendingTool: PendingTool = {
                 id: toolId,
                 name: data.name || 'unknown',
                 input: data.input || '{}',
                 rawInput: data.raw_input,
                 status: 'pending',
-                startedAt: Date.now(),
+                startedAt,
+                updatedAt: startedAt,
               };
 
               // Add to streamEvents in chronological position

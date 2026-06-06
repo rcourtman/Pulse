@@ -90,6 +90,41 @@ describe('getAssistantActiveTurnStatus', () => {
     });
   });
 
+  it('uses latest pending tool activity without requiring transcript reordering', () => {
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            pendingTools: [
+              {
+                id: 'tool-a',
+                name: 'pulse_get_nodes',
+                input: '{}',
+                progress: 'Reading node inventory',
+                status: 'running',
+                startedAt: 100,
+                updatedAt: 300,
+              },
+              {
+                id: 'tool-b',
+                name: 'pulse_read',
+                input: '{}',
+                status: 'running',
+                startedAt: 200,
+                updatedAt: 200,
+              },
+            ],
+          }),
+        ],
+        true,
+      ),
+    ).toEqual({
+      type: 'tool',
+      text: 'Reading node inventory',
+      startedAt: 100,
+    });
+  });
+
   it('keeps showing a remaining pending tool when another parallel tool completes', () => {
     expect(
       getAssistantActiveTurnStatus(
