@@ -1222,7 +1222,9 @@ describe('AIChat', () => {
 
     it('renders New button', () => {
       renderChat();
-      expect(screen.getByText('New')).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Start new Assistant session' }),
+      ).toBeInTheDocument();
     });
 
     it('uses docked layout on wide viewports', () => {
@@ -1253,7 +1255,9 @@ describe('AIChat', () => {
       const headerActions = screen.getByTestId('assistant-header-actions');
       const routeControls = screen.getByTestId('assistant-composer-route-controls');
       const modelSelector = screen.getByTestId('model-selector');
-      const controlButton = screen.getByTitle('Control mode');
+      const controlButton = screen.getByRole('button', {
+        name: 'Assistant control mode: Read-only',
+      });
 
       expect(closeButton).toHaveClass('order-2');
       expect(headerActions).toHaveClass('order-3');
@@ -1273,7 +1277,7 @@ describe('AIChat', () => {
     it('calls onClose when close button is clicked', () => {
       const onClose = vi.fn();
       renderChat(onClose);
-      const closeBtn = screen.getByTitle('Close panel');
+      const closeBtn = screen.getByRole('button', { name: 'Close Pulse Assistant' });
       fireEvent.click(closeBtn);
       expect(onClose).toHaveBeenCalledTimes(1);
     });
@@ -1351,11 +1355,7 @@ describe('AIChat', () => {
       fireEvent.submit(form!);
 
       expect(mockChat.sendMessage).toHaveBeenCalledTimes(1);
-      expect(mockChat.sendMessage).toHaveBeenCalledWith(
-        'duplicate prompt',
-        undefined,
-        undefined,
-      );
+      expect(mockChat.sendMessage).toHaveBeenCalledWith('duplicate prompt', undefined, undefined);
     });
 
     it('releases the submit guard for the next intentional follow-up', async () => {
@@ -1514,7 +1514,9 @@ describe('AIChat', () => {
         'Ask about your infrastructure...',
       ) as HTMLTextAreaElement;
 
-      fireEvent.input(textarea, { target: { value: 'keep this draft while I check another page' } });
+      fireEvent.input(textarea, {
+        target: { value: 'keep this draft while I check another page' },
+      });
       textarea.setSelectionRange(10, 10);
 
       firstRender.unmount();
@@ -1546,7 +1548,9 @@ describe('AIChat', () => {
       const firstRender = renderChat();
 
       mockChatMessagesProps.at(-1)?.onEditQueuedFollowUp?.('queued-1');
-      let textarea = screen.getByPlaceholderText('Ask about your infrastructure...') as HTMLTextAreaElement;
+      let textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
       await waitFor(() => expect(textarea.value).toBe('queued scoped prompt'));
 
       firstRender.unmount();
@@ -1554,7 +1558,9 @@ describe('AIChat', () => {
       mockChat.queuedFollowUpCount.mockReturnValue(0);
       renderChat();
 
-      textarea = screen.getByPlaceholderText('Ask about your infrastructure...') as HTMLTextAreaElement;
+      textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
       await waitFor(() => expect(textarea.value).toBe('queued scoped prompt'));
       fireEvent.input(textarea, { target: { value: 'edited scoped prompt' } });
       fireEvent.keyDown(textarea, { key: 'Enter' });
@@ -1785,7 +1791,25 @@ describe('AIChat', () => {
 
     it('opens control menu on click', () => {
       renderChat();
-      fireEvent.click(screen.getByTitle('Control mode'));
+      const controlButton = screen.getByRole('button', {
+        name: 'Assistant control mode: Read-only',
+      });
+      expect(controlButton).toHaveAttribute('aria-expanded', 'false');
+
+      fireEvent.click(controlButton);
+
+      expect(controlButton).toHaveAttribute('aria-expanded', 'true');
+      expect(
+        screen.getByRole('menu', { name: 'Assistant control mode options' }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('menuitemradio', { name: /Read-only/ })).toHaveAttribute(
+        'aria-checked',
+        'true',
+      );
+      expect(screen.getByRole('menuitemradio', { name: /Approval/ })).toHaveAttribute(
+        'aria-checked',
+        'false',
+      );
       expect(screen.getByText('Default control mode')).toBeInTheDocument();
       expect(screen.getByText('No commands or control actions')).toBeInTheDocument();
       expect(screen.getByText('Ask before running commands')).toBeInTheDocument();
@@ -1798,7 +1822,7 @@ describe('AIChat', () => {
   describe('session management', () => {
     it('starts a blank conversation on New button click', async () => {
       renderChat();
-      fireEvent.click(screen.getByText('New'));
+      fireEvent.click(screen.getByRole('button', { name: 'Start new Assistant session' }));
       await waitFor(() => {
         expect(mockChat.newSession).toHaveBeenCalledTimes(1);
       });
@@ -1815,7 +1839,7 @@ describe('AIChat', () => {
       };
 
       renderChat();
-      fireEvent.click(screen.getByText('New'));
+      fireEvent.click(screen.getByRole('button', { name: 'Start new Assistant session' }));
 
       await waitFor(() => {
         expect(mockAiChatStore.clearContext).toHaveBeenCalledTimes(1);
@@ -1827,7 +1851,7 @@ describe('AIChat', () => {
       const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
       textarea.blur();
 
-      fireEvent.click(screen.getByText('New'));
+      fireEvent.click(screen.getByRole('button', { name: 'Start new Assistant session' }));
 
       await waitFor(() => {
         expect(mockChat.newSession).toHaveBeenCalledTimes(1);
@@ -1847,7 +1871,7 @@ describe('AIChat', () => {
       };
 
       renderChat();
-      fireEvent.click(screen.getByText('New'));
+      fireEvent.click(screen.getByRole('button', { name: 'Start new Assistant session' }));
 
       await waitFor(() => {
         expect(mockChat.newSession).toHaveBeenCalledTimes(1);
@@ -1862,7 +1886,9 @@ describe('AIChat', () => {
       fireEvent.click(sessionButton);
       await waitFor(() => {
         expect(sessionButton).toHaveAttribute('aria-expanded', 'true');
-        expect(screen.getByRole('dialog', { name: 'Pulse Assistant sessions' })).toBeInTheDocument();
+        expect(
+          screen.getByRole('dialog', { name: 'Pulse Assistant sessions' }),
+        ).toBeInTheDocument();
         expect(
           screen.getByRole('listbox', { name: 'Assistant session history' }),
         ).toBeInTheDocument();
@@ -3024,7 +3050,12 @@ describe('AIChat', () => {
       });
       renderChat();
       await waitFor(() => {
-        expect(screen.getByText('Switch to Approval')).toBeInTheDocument();
+        expect(
+          screen.getByRole('button', { name: 'Switch Assistant control mode to Approval' }),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole('button', { name: 'Dismiss autonomous control warning' }),
+        ).toBeInTheDocument();
       });
     });
 

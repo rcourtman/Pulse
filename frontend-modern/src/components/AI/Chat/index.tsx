@@ -32,13 +32,19 @@ import {
 } from '@/stores/aiRuntimeState';
 import { logger } from '@/utils/logger';
 import {
+  AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL,
   AI_CHAT_COLLAPSE_TITLE,
+  AI_CHAT_CLOSE_LABEL,
+  AI_CHAT_CONTROL_MODE_LABEL,
+  AI_CHAT_CONTROL_MODE_MENU_LABEL,
   AI_CHAT_DISCOVERY_HINT_BODY,
+  AI_CHAT_DISCOVERY_HINT_DISMISS_LABEL,
   AI_CHAT_DISCOVERY_HINT_TITLE,
   AI_CHAT_DRAWER_TITLE,
   AI_CHAT_INPUT_PLACEHOLDER,
   AI_CHAT_LAST_TURN_USAGE_LABEL,
   AI_CHAT_NEW_SESSION_BUTTON_TITLE,
+  AI_CHAT_NEW_SESSION_MENU_ARIA_LABEL,
   AI_CHAT_NEW_SESSION_MENU_LABEL,
   AI_CHAT_NEW_SESSION_SHORT_LABEL,
   AI_CHAT_PROVIDER_READINESS_RETRY_LABEL,
@@ -52,6 +58,7 @@ import {
   AI_CHAT_SESSION_SEARCH_LOADING_STATE,
   AI_CHAT_SESSION_SEARCH_PLACEHOLDER,
   AI_CHAT_SESSION_SEARCH_TITLE,
+  AI_CHAT_SWITCH_TO_APPROVAL_LABEL,
   getAIChatProviderReadinessPresentation,
 } from '@/utils/aiChatPresentation';
 import {
@@ -2228,9 +2235,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
           {/* Floating Close Handle (Desktop docked layout only) */}
           <Show when={!isOverlayLayout()}>
             <button
+              type="button"
               onClick={props.onClose}
               class="hidden sm:flex absolute left-0 top-1/2 -translate-x-full -translate-y-1/2 items-center justify-center w-8 py-3 rounded-l-lg bg-surface text-blue-600 dark:text-blue-400 border border-r-0 border-border hover:bg-surface-hover hover:text-blue-700 dark:hover:text-blue-300 transition-colors z-50 cursor-pointer"
               title={AI_CHAT_COLLAPSE_TITLE}
+              aria-label={AI_CHAT_COLLAPSE_TITLE}
             >
               <svg
                 class="h-5 w-5 flex-shrink-0"
@@ -2259,9 +2268,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
             >
               {/* New chat */}
               <button
+                type="button"
                 onClick={handleNewConversation}
                 class="flex flex-shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-muted hover:text-base-content rounded-md border border-border hover:border-border bg-surface transition-colors"
                 title={AI_CHAT_NEW_SESSION_BUTTON_TITLE}
+                aria-label={AI_CHAT_NEW_SESSION_BUTTON_TITLE}
               >
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -2277,6 +2288,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
               {/* Session picker */}
               <div class="relative" data-dropdown>
                 <button
+                  type="button"
                   ref={sessionButtonRef}
                   onClick={() => {
                     void handleToggleSessions();
@@ -2308,8 +2320,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     }}
                   >
                     <button
+                      type="button"
                       onClick={handleNewConversation}
                       class="w-full px-3 py-2.5 text-left text-sm flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 border-b border-border"
+                      aria-label={AI_CHAT_NEW_SESSION_MENU_ARIA_LABEL}
                     >
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path
@@ -2435,13 +2449,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
             {/* Close button (Always visible as fallback) */}
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 props.onClose();
               }}
               class="order-2 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md hover:text-base-content hover:bg-surface-hover transition-colors sm:order-none"
-              title="Close panel"
-              aria-label="Close Pulse Assistant"
+              title={AI_CHAT_CLOSE_LABEL}
+              aria-label={AI_CHAT_CLOSE_LABEL}
               data-testid="assistant-close-button"
             >
               <XIcon class="h-5 w-5" />
@@ -2459,15 +2474,19 @@ export const AIChat: Component<AIChatProps> = (props) => {
               <span>Commands execute without approval.</span>
               <div class="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => updateControlLevel('controlled')}
                   class="px-2 py-1 rounded-md border border-red-200 dark:border-red-800 bg-surface dark:bg-red-900 text-[10px] font-medium text-red-700 dark:text-red-200 hover:bg-red-100 dark:hover:bg-red-900"
+                  aria-label={AI_CHAT_SWITCH_TO_APPROVAL_LABEL}
                 >
                   Switch to Approval
                 </button>
                 <button
+                  type="button"
                   onClick={() => setAutonomousBannerDismissed(true)}
                   class="p-1 rounded-md text-red-400 hover:text-red-600 dark:hover:text-red-200 hover:bg-red-100 dark:hover:bg-red-900 transition-colors"
-                  title="Dismiss"
+                  title={AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL}
+                  aria-label={AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL}
                 >
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -2570,9 +2589,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 </span>
               </div>
               <button
+                type="button"
                 onClick={() => setDiscoveryHintDismissed(true)}
                 class="p-1 rounded hover:bg-cyan-100 dark:hover:bg-cyan-800 text-cyan-500 dark:text-cyan-400"
-                title="Dismiss"
+                title={AI_CHAT_DISCOVERY_HINT_DISMISS_LABEL}
+                aria-label={AI_CHAT_DISCOVERY_HINT_DISMISS_LABEL}
               >
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -2878,12 +2899,18 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
                 <div class="relative" data-dropdown>
                   <button
+                    type="button"
                     onClick={() => setShowControlMenu(!showControlMenu())}
                     class={`flex flex-shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded-md border transition-colors ${controlPresentation().pillClassName} ${controlSaving() ? 'opacity-70 cursor-wait' : 'hover:opacity-90'}`}
-                    title="Control mode"
+                    title={AI_CHAT_CONTROL_MODE_LABEL}
+                    aria-label={`${AI_CHAT_CONTROL_MODE_LABEL}: ${controlPresentation().label}`}
+                    aria-haspopup="menu"
+                    aria-expanded={showControlMenu()}
                     disabled={controlSaving()}
                   >
-                    <span class={`h-1.5 w-1.5 rounded-full ${controlPresentation().dotClassName}`} />
+                    <span
+                      class={`h-1.5 w-1.5 rounded-full ${controlPresentation().dotClassName}`}
+                    />
                     <span>{controlPresentation().label}</span>
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
@@ -2896,11 +2923,18 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   </button>
 
                   <Show when={showControlMenu()}>
-                    <div class="absolute bottom-full left-0 z-50 mb-2 w-60 overflow-hidden rounded-md border border-border bg-surface shadow-sm">
+                    <div
+                      class="absolute bottom-full left-0 z-50 mb-2 w-60 overflow-hidden rounded-md border border-border bg-surface shadow-sm"
+                      role="menu"
+                      aria-label={AI_CHAT_CONTROL_MODE_MENU_LABEL}
+                    >
                       <div class="border-b border-border px-3 py-2 text-[11px] text-muted">
                         Default control mode
                       </div>
                       <button
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={controlLevel() === 'read_only'}
                         class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'read_only' ? getAIChatControlLevelPresentation('read_only').selectedClassName : ''}`}
                         onClick={() => updateControlLevel('read_only')}
                       >
@@ -2912,6 +2946,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
                         </div>
                       </button>
                       <button
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={controlLevel() === 'controlled'}
                         class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'controlled' ? getAIChatControlLevelPresentation('controlled').selectedClassName : ''}`}
                         onClick={() => updateControlLevel('controlled')}
                       >
@@ -2923,6 +2960,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
                         </div>
                       </button>
                       <button
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={controlLevel() === 'autonomous'}
                         class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'autonomous' ? getAIChatControlLevelPresentation('autonomous').selectedClassName : ''}`}
                         onClick={() => updateControlLevel('autonomous')}
                       >

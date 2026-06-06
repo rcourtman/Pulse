@@ -195,6 +195,15 @@ runtime cost control, and shared AI transport surfaces.
    value before trimming and by using a one-dispatch composer guard that still
    releases immediately for intentional queued follow-ups during an active
    turn.
+   Assistant drawer controls are part of that same prompt command surface. The
+   referenced OpenCode prompt source exposes command-named actions such as
+   prompt submit, session interrupt, prompt history movement, and prompt stash
+   operations through explicit command titles before those actions reach the
+   terminal UI. Pulse's browser drawer must therefore expose command-specific
+   accessible names and selected/expanded state for always-visible chat actions
+   such as New session, session history, collapse/close, autonomous-warning
+   recovery, and the control-mode selector instead of depending on title-only
+   icon controls or ambiguous short labels.
    Failed-turn retry is part of that same local chat-runtime boundary: a
    retryable in-memory assistant error may replay the original user turn's
    structured mentions, finding id, approval override, handoff resources,

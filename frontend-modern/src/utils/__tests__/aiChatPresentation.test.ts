@@ -1,14 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import {
   AI_CHAT_ASSISTANT_MESSAGE_LABEL,
+  AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL,
   AI_CHAT_CONTEXT_USED_LABEL,
+  AI_CHAT_CLOSE_LABEL,
+  AI_CHAT_CONTROL_MODE_LABEL,
+  AI_CHAT_CONTROL_MODE_MENU_LABEL,
   AI_CHAT_DISCOVERY_HINT_BODY,
+  AI_CHAT_DISCOVERY_HINT_DISMISS_LABEL,
   AI_CHAT_DISCOVERY_HINT_TITLE,
   AI_CHAT_DRAWER_SUBTITLE,
   AI_CHAT_DRAWER_TITLE,
   AI_CHAT_LAUNCHER_ARIA_LABEL,
   AI_CHAT_LAST_TURN_USAGE_LABEL,
   AI_CHAT_MODEL_SELECTOR_EMPTY_STATE,
+  AI_CHAT_NEW_SESSION_BUTTON_TITLE,
+  AI_CHAT_NEW_SESSION_MENU_ARIA_LABEL,
   AI_CHAT_NEW_SESSION_MENU_LABEL,
   AI_CHAT_NEW_SESSION_SHORT_LABEL,
   AI_CHAT_PROVIDER_READINESS_RETRY_LABEL,
@@ -23,6 +30,7 @@ import {
   AI_CHAT_SESSION_SEARCH_LOADING_STATE,
   AI_CHAT_SESSION_SEARCH_PLACEHOLDER,
   AI_CHAT_SESSION_SEARCH_TITLE,
+  AI_CHAT_SWITCH_TO_APPROVAL_LABEL,
   getAIChatProviderReadinessPresentation,
   getAIChatLauncherTitle,
 } from '@/utils/aiChatPresentation';
@@ -38,9 +46,17 @@ describe('aiChatPresentation', () => {
       'Enable it in Settings so Pulse Assistant can reference real services, versions, and commands instead of generic guidance.',
     );
     expect(AI_CHAT_NEW_SESSION_SHORT_LABEL).toBe('New');
+    expect(AI_CHAT_NEW_SESSION_BUTTON_TITLE).toBe('Start new Assistant session');
     expect(AI_CHAT_NEW_SESSION_MENU_LABEL).toBe('New session');
+    expect(AI_CHAT_NEW_SESSION_MENU_ARIA_LABEL).toBe('Start new Assistant session');
     expect(AI_CHAT_LAUNCHER_ARIA_LABEL).toBe('Expand Pulse Assistant');
+    expect(AI_CHAT_CLOSE_LABEL).toBe('Close Pulse Assistant');
     expect(AI_CHAT_SESSION_MENU_TITLE).toBe('Pulse Assistant sessions');
+    expect(AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL).toBe('Dismiss autonomous control warning');
+    expect(AI_CHAT_DISCOVERY_HINT_DISMISS_LABEL).toBe('Dismiss discovery context warning');
+    expect(AI_CHAT_CONTROL_MODE_LABEL).toBe('Assistant control mode');
+    expect(AI_CHAT_CONTROL_MODE_MENU_LABEL).toBe('Assistant control mode options');
+    expect(AI_CHAT_SWITCH_TO_APPROVAL_LABEL).toBe('Switch Assistant control mode to Approval');
     expect(AI_CHAT_SESSION_EMPTY_STATE).toBe('No previous assistant sessions');
     expect(AI_CHAT_SESSION_LOADING_STATE).toBe('Loading assistant sessions...');
     expect(AI_CHAT_SESSION_SEARCH_PLACEHOLDER).toBe('Search sessions...');
