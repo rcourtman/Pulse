@@ -419,6 +419,16 @@ runtime cost control, and shared AI transport surfaces.
    stored assistant prose before the browser restores a transcript. Provider
    reasoning may remain in runtime-only history for model continuity, but it
    must not serialize through public session history or resumed drawer state.
+   The referenced OpenCode source at fetched `origin/dev` commit
+   `09d9cf01f93798939c1284fbe974b6e1f4d2759d` stores message parts as typed
+   text, reasoning, and `tool-invocation` entries whose tool invocation state
+   is `call`, `partial-call`, or `result` in
+   `packages/opencode/src/session/message.ts`. Pulse adapts that restored
+   transcript contract by folding persisted internal tool-result transport
+   messages back into the browser-safe assistant `tool_calls` projection as
+   completed `output` plus `success` state, preserving the assistant message's
+   effective model route, and omitting the internal tool-result messages from
+   the restored browser transcript.
    Pending tool progress is part of the same transcript contract: pending tool
    stream events must render inline as compact rows in the assistant turn,
    transition to `running` or `waiting` through `tool_progress`, and resolve in

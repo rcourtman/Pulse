@@ -107,9 +107,9 @@ export interface ChatMessage {
 
 export interface ToolCall {
   name: string;
-  input: string;
-  output: string;
-  success: boolean;
+  input?: string | Record<string, unknown>;
+  output?: string;
+  success?: boolean;
 }
 
 export type StreamEvent = AIChatStreamEvent;

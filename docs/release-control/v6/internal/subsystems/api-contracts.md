@@ -433,7 +433,15 @@ payload shape change when the portal presents compact client rows.
     JSON tool-call text, token accounting strings, and provider thinking text
     must not serialize into API history. Runtime history may retain provider
     reasoning for model continuity, but restored drawer state must expose only
-    visible assistant prose plus governed structured tool evidence.
+    visible assistant prose plus governed structured tool evidence. Persisted
+    tool-result transport messages must be folded into the assistant
+    `tool_calls` entries that own them, exposing completed `output` and
+    `success` state while keeping internal `tool_result` records out of the
+    browser transcript. Assistant message history must also preserve the
+    effective `model` route that produced the answer, including local runtime
+    routes such as `pulse:local-inventory`. Frontend API types must accept
+    restored `tool_calls[].input` from backend history as a structured object
+    as well as legacy/display strings, then normalize it before rendering.
     Chat stream events are generated from `internal/ai/chat` payload structs
     into `frontend-modern/src/api/generated/aiChatEvents.ts`; that generated
     union must not include the retired `explore_status` pre-pass event. Runtime

@@ -1812,7 +1812,7 @@ describe('useChat', () => {
           tool_calls: [
             {
               name: 'pulse_read',
-              input: '{"target":"vm-100"}',
+              input: { target: 'vm-100' },
               output: 'Resource is running',
               success: true,
             },

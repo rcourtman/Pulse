@@ -911,8 +911,10 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	var resultMessages []Message
 	var loop *AgenticLoop
 	var streamErr error
+	lastAttemptModel := selectedModel
 	for attemptIndex, attempt := range attempts {
 		var attemptVisible bool
+		lastAttemptModel = attempt.Model
 		resultMessages, loop, attemptVisible, streamErr = runAttempt(attempt)
 		if streamErr == nil {
 			selectedModel = attempt.Model
@@ -935,6 +937,9 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	if streamErr != nil {
 		// Still save any messages we got
 		for _, msg := range resultMessages {
+			if msg.Role == "assistant" && strings.TrimSpace(msg.Model) == "" {
+				msg.Model = lastAttemptModel
+			}
 			if saveErr := sessions.AddMessage(session.ID, msg); saveErr != nil {
 				log.Warn().Err(saveErr).Msg("failed to save message after error")
 			}
@@ -947,6 +952,9 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		// Skip user messages (already saved)
 		if msg.Role == "user" && msg.ToolResult == nil {
 			continue
+		}
+		if msg.Role == "assistant" && strings.TrimSpace(msg.Model) == "" {
+			msg.Model = selectedModel
 		}
 		if err := sessions.AddMessage(session.ID, msg); err != nil {
 			log.Warn().Err(err).Msg("failed to save message")
@@ -1113,6 +1121,7 @@ func (s *Service) streamDirectAssistantAnswer(sessions *SessionStore, sessionID,
 			ID:        uuid.New().String(),
 			Role:      "assistant",
 			Content:   answer,
+			Model:     assistantLocalInventoryModelRoute,
 			Timestamp: time.Now(),
 		}); err != nil {
 			log.Warn().Err(err).Str("session_id", sessionID).Msg("[ChatService] Failed to save direct Assistant answer")
@@ -3312,7 +3321,48 @@ func (s *Service) GetMessages(ctx context.Context, sessionID string) ([]Message,
 	for i := range messages {
 		messages[i] = messages[i].ClientSafe()
 	}
-	return messages, nil
+	return clientSafeTranscriptMessages(messages), nil
+}
+
+func clientSafeTranscriptMessages(messages []Message) []Message {
+	if len(messages) == 0 {
+		return []Message{}
+	}
+
+	resultsByToolID := make(map[string]ToolResult)
+	for _, msg := range messages {
+		if msg.ToolResult == nil {
+			continue
+		}
+		toolID := strings.TrimSpace(msg.ToolResult.ToolUseID)
+		if toolID == "" {
+			continue
+		}
+		resultsByToolID[toolID] = *msg.ToolResult
+	}
+
+	transcript := make([]Message, 0, len(messages))
+	for _, msg := range messages {
+		if msg.ToolResult != nil {
+			continue
+		}
+
+		safe := msg.ClientSafe()
+		for i := range safe.ToolCalls {
+			toolID := strings.TrimSpace(safe.ToolCalls[i].ID)
+			if toolID == "" {
+				continue
+			}
+			if result, ok := resultsByToolID[toolID]; ok {
+				success := !result.IsError
+				safe.ToolCalls[i].Output = result.Content
+				safe.ToolCalls[i].Success = &success
+			}
+		}
+		transcript = append(transcript, safe)
+	}
+
+	return transcript
 }
 
 // GetModelHandoffFindingID returns the session-scoped finding reference used to

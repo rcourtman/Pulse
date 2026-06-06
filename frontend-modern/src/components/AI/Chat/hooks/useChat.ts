@@ -6,6 +6,7 @@ import {
   type ChatHandoffResource,
   type ChatMention,
   type StreamEvent,
+  type ToolCall as PersistedToolCall,
 } from '@/api/aiChat';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
@@ -565,9 +566,30 @@ export function useChat(options: UseChatOptions = {}) {
     return Object.keys(sendOptions).length > 0 ? sendOptions : undefined;
   };
 
+  const normalizePersistedToolInput = (input: unknown): string => {
+    if (typeof input === 'string') {
+      return input.trim() ? input : '{}';
+    }
+    if (input && typeof input === 'object') {
+      try {
+        return JSON.stringify(input);
+      } catch {
+        return '{}';
+      }
+    }
+    return '{}';
+  };
+
+  const normalizePersistedToolExecution = (tool: PersistedToolCall): ToolExecution => ({
+    name: tool.name || 'unknown',
+    input: normalizePersistedToolInput(tool.input),
+    output: tool.output || '',
+    success: tool.success ?? true,
+  });
+
   const buildPersistedStreamEvents = (
     content: string,
-    toolCalls?: ToolExecution[],
+    toolCalls?: PersistedToolCall[],
   ): StreamDisplayEvent[] | undefined => {
     const events: StreamDisplayEvent[] = [];
     if (content.trim()) {
@@ -576,12 +598,7 @@ export function useChat(options: UseChatOptions = {}) {
     for (const tool of toolCalls || []) {
       events.push({
         type: 'tool',
-        tool: {
-          name: tool.name || 'unknown',
-          input: tool.input || '{}',
-          output: tool.output || '',
-          success: tool.success ?? true,
-        },
+        tool: normalizePersistedToolExecution(tool),
       });
     }
     return events.length > 0 ? events : undefined;
@@ -1259,11 +1276,14 @@ export function useChat(options: UseChatOptions = {}) {
       const msgs = await AIChatAPI.getMessages(id);
       setMessages(
         msgs.map((m) => {
-          const toolCalls = m.tool_calls || [];
+          const persistedToolCalls = m.tool_calls || [];
+          const toolCalls = persistedToolCalls.map(normalizePersistedToolExecution);
           const content =
             m.role === 'assistant' ? stripAssistantOutputArtifacts(m.content).text : m.content;
           const streamEvents =
-            m.role === 'assistant' ? buildPersistedStreamEvents(content, toolCalls) : undefined;
+            m.role === 'assistant'
+              ? buildPersistedStreamEvents(content, persistedToolCalls)
+              : undefined;
           return {
             id: m.id,
             role: m.role,

@@ -69,6 +69,38 @@ describe('AIChatAPI', () => {
     await expect(AIChatAPI.listSessions()).resolves.toEqual([]);
   });
 
+  it('preserves restored Assistant tool evidence on session messages', async () => {
+    const messages = [
+      {
+        id: 'msg-user',
+        role: 'user',
+        content: 'show alerts',
+        timestamp: '2026-06-06T05:00:00Z',
+      },
+      {
+        id: 'msg-assistant',
+        role: 'assistant',
+        content: 'I checked alerts.',
+        timestamp: '2026-06-06T05:00:01Z',
+        model: 'openrouter:qwen/qwen3.7-plus',
+        tool_calls: [
+          {
+            name: 'pulse_alerts',
+            input: { action: 'list' },
+            output: '{"count":11}',
+            success: true,
+          },
+        ],
+      },
+    ];
+    apiFetchJSONMock.mockResolvedValueOnce(messages);
+
+    await expect(AIChatAPI.getMessages('session/tool-history')).resolves.toEqual(messages);
+    expect(apiFetchJSONMock).toHaveBeenCalledWith(
+      '/api/ai/sessions/session%2Ftool-history/messages',
+    );
+  });
+
   it('clears read timeout timers when chat stream reads complete', async () => {
     const read = vi.fn().mockResolvedValueOnce({ done: true, value: undefined });
     const releaseLock = vi.fn();

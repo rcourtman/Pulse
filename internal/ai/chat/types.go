@@ -50,6 +50,7 @@ type Message struct {
 	ReasoningContent string      `json:"reasoning_content,omitempty"` // For extended thinking
 	ToolCalls        []ToolCall  `json:"tool_calls"`
 	ToolResult       *ToolResult `json:"tool_result,omitempty"`
+	Model            string      `json:"model,omitempty"`
 	Timestamp        time.Time   `json:"timestamp"`
 }
 
@@ -84,6 +85,8 @@ type ToolCall struct {
 	ID               string                 `json:"id"`
 	Name             string                 `json:"name"`
 	Input            map[string]interface{} `json:"input"`
+	Output           string                 `json:"output,omitempty"`
+	Success          *bool                  `json:"success,omitempty"`
 	ThoughtSignature json.RawMessage        `json:"thought_signature,omitempty"`
 }
 

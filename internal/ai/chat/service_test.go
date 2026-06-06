@@ -313,6 +313,116 @@ func TestService_SessionWrappers(t *testing.T) {
 	assert.Len(t, list, 0)
 }
 
+func TestServiceGetMessagesProjectsToolResultsIntoAssistantToolCalls(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := Config{
+		AIConfig: &config.AIConfig{
+			Enabled:      true,
+			OpenAIAPIKey: "test-key",
+			ChatModel:    "openai:gpt-4",
+		},
+		StateProvider: &mockStateProvider{},
+		DataDir:       tmpDir,
+	}
+	service := NewService(cfg)
+	ctx := context.Background()
+
+	require.NoError(t, service.Start(ctx))
+	session, err := service.CreateSession(ctx)
+	require.NoError(t, err)
+
+	require.NoError(t, service.sessions.AddMessage(session.ID, Message{
+		ID:      "user-1",
+		Role:    "user",
+		Content: "check storage",
+	}))
+	require.NoError(t, service.sessions.AddMessage(session.ID, Message{
+		ID:      "assistant-1",
+		Role:    "assistant",
+		Content: "I checked storage.",
+		Model:   "openrouter:qwen/qwen3.7-plus",
+		ToolCalls: []ToolCall{
+			{
+				ID:    "call-ok",
+				Name:  "pulse_query",
+				Input: map[string]interface{}{"action": "topology"},
+			},
+			{
+				ID:    "call-fail",
+				Name:  "pulse_read",
+				Input: map[string]interface{}{"target": "vm-100"},
+			},
+		},
+	}))
+	require.NoError(t, service.sessions.AddMessage(session.ID, Message{
+		ID:   "tool-result-ok",
+		Role: "user",
+		ToolResult: &ToolResult{
+			ToolUseID: "call-ok",
+			Content:   "topology ok",
+		},
+	}))
+	require.NoError(t, service.sessions.AddMessage(session.ID, Message{
+		ID:   "tool-result-fail",
+		Role: "user",
+		ToolResult: &ToolResult{
+			ToolUseID: "call-fail",
+			Content:   "permission denied",
+			IsError:   true,
+		},
+	}))
+
+	messages, err := service.GetMessages(ctx, session.ID)
+	require.NoError(t, err)
+	require.Len(t, messages, 2)
+	assert.Equal(t, "user", messages[0].Role)
+	assert.Equal(t, "assistant", messages[1].Role)
+	assert.Nil(t, messages[0].ToolResult)
+	assert.Nil(t, messages[1].ToolResult)
+	assert.Equal(t, "openrouter:qwen/qwen3.7-plus", messages[1].Model)
+
+	require.Len(t, messages[1].ToolCalls, 2)
+	assert.Equal(t, "topology ok", messages[1].ToolCalls[0].Output)
+	require.NotNil(t, messages[1].ToolCalls[0].Success)
+	assert.True(t, *messages[1].ToolCalls[0].Success)
+	assert.Equal(t, "permission denied", messages[1].ToolCalls[1].Output)
+	require.NotNil(t, messages[1].ToolCalls[1].Success)
+	assert.False(t, *messages[1].ToolCalls[1].Success)
+}
+
+func TestServiceStreamDirectAssistantAnswerPersistsLocalModelRoute(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := Config{
+		AIConfig: &config.AIConfig{
+			Enabled:      true,
+			OpenAIAPIKey: "test-key",
+			ChatModel:    "openai:gpt-4",
+		},
+		StateProvider: &mockStateProvider{},
+		DataDir:       tmpDir,
+	}
+	service := NewService(cfg)
+	ctx := context.Background()
+
+	require.NoError(t, service.Start(ctx))
+	session, err := service.CreateSession(ctx)
+	require.NoError(t, err)
+
+	var events []StreamEvent
+	service.streamDirectAssistantAnswer(service.sessions, session.ID, "Pulse sees 33 compute resources.", func(event StreamEvent) {
+		events = append(events, event)
+	})
+
+	messages, err := service.GetMessages(ctx, session.ID)
+	require.NoError(t, err)
+	require.Len(t, messages, 1)
+	assert.Equal(t, assistantLocalInventoryModelRoute, messages[0].Model)
+	assert.Equal(t, "Pulse sees 33 compute resources.", messages[0].Content)
+	require.Len(t, events, 2)
+	assert.Equal(t, "content", events[0].Type)
+	assert.Equal(t, "done", events[1].Type)
+}
+
 func TestService_Adapters(t *testing.T) {
 	// Test CommandPolicyAdapter
 	mockPolicy := &mockCommandPolicy{}
