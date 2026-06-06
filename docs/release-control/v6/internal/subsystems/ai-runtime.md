@@ -733,6 +733,19 @@ runtime cost control, and shared AI transport surfaces.
    `GET /api/ai/sessions?limit=30`, searched refreshes with
    `GET /api/ai/sessions?search=...&limit=30`, and searched result rows that
    resume through the same session-loading path as the normal recent list.
+   Assistant session forking is a runtime-backed session workflow, not a
+   header-only UI affordance. The referenced OpenCode source in
+   `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx` registers
+   `session.fork` as a first-class session command and opens
+   `DialogForkFromTimeline` from the current session route. Pulse adapts that
+   source behavior through `POST /api/ai/sessions/{id}/fork`: the local
+   `chat.Service` must route to `SessionStore.Fork`, and the store must create
+   a fresh durable session ID with fresh create/update timestamps while cloning
+   the saved transcript and browser-safe model handoff summary. Copied
+   messages keep their per-session message/tool IDs so assistant tool-call and
+   tool-result relationships remain intact inside the fork. Forking must not
+   mutate the source session, must continue through normal session list/load
+   contracts, and must not return `not_implemented` from the local runtime.
    The picker trigger and result rows are part of that source-backed workflow:
    the trigger must expose its accessible name and expanded state, opening the
    picker must focus search, and each result must be a keyboard-addressable

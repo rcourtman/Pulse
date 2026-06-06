@@ -245,6 +245,20 @@ func modelContextEmpty(modelContext *sessionModelContext) bool {
 		handoffMetadataEmpty(modelContext.HandoffMetadata)
 }
 
+func cloneSessionModelContext(modelContext *sessionModelContext) *sessionModelContext {
+	if modelContext == nil {
+		return nil
+	}
+	clone := *modelContext
+	if len(modelContext.HandoffResources) > 0 {
+		clone.HandoffResources = append([]HandoffResource(nil), modelContext.HandoffResources...)
+	}
+	if len(modelContext.HandoffActions) > 0 {
+		clone.HandoffActions = append([]HandoffAction(nil), modelContext.HandoffActions...)
+	}
+	return &clone
+}
+
 const (
 	sessionHandoffKindPatrolAssessment           = "patrol_assessment"
 	sessionHandoffKindPatrolConfigurationFailure = "patrol_configuration_failure"
@@ -531,6 +545,65 @@ func (s *SessionStore) Get(id string) (*Session, error) {
 		UpdatedAt:      data.UpdatedAt,
 		MessageCount:   len(data.Messages),
 		HandoffSummary: modelContextHandoffSummary(data.ModelContext),
+	}, nil
+}
+
+// Fork clones a persisted session into a new durable session. The copied
+// messages intentionally preserve their per-session IDs so tool-call/result
+// relationships remain intact inside the forked transcript.
+func (s *SessionStore) Fork(id string) (*Session, error) {
+	if err := validateSessionID(id); err != nil {
+		return nil, err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	source, err := s.readSession(id)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	messages := make([]Message, len(source.Messages))
+	for i, msg := range source.Messages {
+		messages[i] = msg.NormalizeCollections()
+	}
+
+	title := strings.TrimSpace(source.Title)
+	if title == "" {
+		for _, msg := range messages {
+			if msg.Role == "user" && strings.TrimSpace(msg.Content) != "" {
+				title = generateTitle(msg.Content)
+				break
+			}
+		}
+	}
+	if title == "" {
+		title = "Forked session"
+	} else if !strings.HasPrefix(strings.ToLower(title), "fork of ") {
+		title = "Fork of " + title
+	}
+
+	fork := sessionData{
+		ID:           uuid.New().String(),
+		Title:        title,
+		Messages:     messages,
+		ModelContext: cloneSessionModelContext(source.ModelContext),
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	if err := s.writeSession(fork); err != nil {
+		return nil, err
+	}
+
+	return &Session{
+		ID:             fork.ID,
+		Title:          fork.Title,
+		CreatedAt:      fork.CreatedAt,
+		UpdatedAt:      fork.UpdatedAt,
+		MessageCount:   len(fork.Messages),
+		HandoffSummary: modelContextHandoffSummary(fork.ModelContext),
 	}, nil
 }
 

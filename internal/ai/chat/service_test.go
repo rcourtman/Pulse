@@ -303,8 +303,28 @@ func TestService_SessionWrappers(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, list, 1)
 
+	// Fork Session
+	forked, err := service.ForkSession(ctx, session.ID)
+	require.NoError(t, err)
+	require.NotNil(t, forked)
+	assert.NotEqual(t, session.ID, forked.ID)
+	assert.Equal(t, 1, forked.MessageCount)
+	assert.Equal(t, "Forked session", forked.Title)
+
+	forkedMessages, err := service.GetMessages(ctx, forked.ID)
+	require.NoError(t, err)
+	require.Len(t, forkedMessages, 1)
+	assert.Equal(t, "I will inspect the device nodes.", forkedMessages[0].Content)
+	assert.NotContains(t, forkedMessages[0].Content, "pulse_read")
+
+	list, err = service.ListSessions(ctx)
+	require.NoError(t, err)
+	assert.Len(t, list, 2)
+
 	// Delete Session
 	err = service.DeleteSession(ctx, session.ID)
+	require.NoError(t, err)
+	err = service.DeleteSession(ctx, forked.ID)
 	require.NoError(t, err)
 
 	// Verify deletion via List

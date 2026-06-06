@@ -3488,7 +3488,15 @@ func (s *Service) GetSessionDiff(ctx context.Context, sessionID string) (map[str
 
 // ForkSession creates a branch
 func (s *Service) ForkSession(ctx context.Context, sessionID string) (*Session, error) {
-	return nil, fmt.Errorf("not implemented")
+	s.mu.RLock()
+	sessions := s.sessions
+	s.mu.RUnlock()
+
+	if sessions == nil {
+		return nil, fmt.Errorf("service not started")
+	}
+
+	return sessions.Fork(sessionID)
 }
 
 // RevertSession reverts changes

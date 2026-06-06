@@ -168,6 +168,85 @@ func TestSessionStore(t *testing.T) {
 	})
 }
 
+func TestSessionStoreForkClonesTranscriptAndHandoffSummary(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	require.NoError(t, err)
+
+	source, err := store.Create()
+	require.NoError(t, err)
+
+	require.NoError(t, store.AddMessage(source.ID, Message{
+		ID:      "user-1",
+		Role:    "user",
+		Content: "Inspect the storage warning",
+	}))
+	require.NoError(t, store.AddMessage(source.ID, Message{
+		ID:      "assistant-1",
+		Role:    "assistant",
+		Content: "I found the warning.",
+		ToolCalls: []ToolCall{
+			{
+				ID:    "tool-1",
+				Name:  "pulse_query",
+				Input: map[string]interface{}{"action": "resource"},
+			},
+		},
+	}))
+	require.NoError(t, store.SetModelHandoffEnvelope(
+		source.ID,
+		"finding-storage-1",
+		"private model handoff context must stay model-only",
+		[]HandoffResource{{ID: "storage:pool-a", Name: "pool-a", Type: "storage", Node: "nas-a"}},
+		[]HandoffAction{{
+			FindingID:      "finding-storage-1",
+			ApprovalID:     "approval-1",
+			ApprovalStatus: "pending",
+			Description:    "Review storage warning",
+		}},
+		HandoffMetadata{},
+	))
+
+	fork, err := store.Fork(source.ID)
+	require.NoError(t, err)
+	require.NotNil(t, fork)
+	assert.NotEqual(t, source.ID, fork.ID)
+	assert.Equal(t, "Fork of Inspect the storage warning", fork.Title)
+	assert.Equal(t, 2, fork.MessageCount)
+	require.NotNil(t, fork.HandoffSummary)
+	assert.Equal(t, sessionHandoffKindPatrolFinding, fork.HandoffSummary.Kind)
+	assert.Equal(t, "finding-storage-1", fork.HandoffSummary.FindingID)
+	assert.Equal(t, 1, fork.HandoffSummary.ResourceCount)
+	assert.Equal(t, 1, fork.HandoffSummary.ActionCount)
+	assert.True(t, fork.HandoffSummary.RequiresApproval)
+	require.NotNil(t, fork.HandoffSummary.PrimaryResource)
+	assert.Equal(t, "pool-a", fork.HandoffSummary.PrimaryResource.Name)
+
+	forkMessages, err := store.GetMessages(fork.ID)
+	require.NoError(t, err)
+	require.Len(t, forkMessages, 2)
+	assert.Equal(t, "user-1", forkMessages[0].ID)
+	assert.Equal(t, "Inspect the storage warning", forkMessages[0].Content)
+	require.Len(t, forkMessages[1].ToolCalls, 1)
+	assert.Equal(t, "tool-1", forkMessages[1].ToolCalls[0].ID)
+
+	require.NoError(t, store.AddMessage(fork.ID, Message{Role: "user", Content: "Continue here"}))
+	sourceMessages, err := store.GetMessages(source.ID)
+	require.NoError(t, err)
+	require.Len(t, sourceMessages, 2)
+}
+
+func TestSessionStoreForkRejectsMissingOrInvalidSession(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	require.NoError(t, err)
+
+	_, err = store.Fork("../bad")
+	require.Error(t, err)
+
+	_, err = store.Fork("missing-session")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "session not found")
+}
+
 func TestSessionStoreMigratesLegacySessionFileOnWrite(t *testing.T) {
 	store, err := NewSessionStore(t.TempDir())
 	require.NoError(t, err)
