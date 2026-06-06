@@ -1858,9 +1858,16 @@ describe('AIChat', () => {
 
     it('opens session picker on click', async () => {
       renderChat();
-      fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
+      const sessionButton = screen.getByRole('button', { name: 'Pulse Assistant sessions' });
+      fireEvent.click(sessionButton);
       await waitFor(() => {
+        expect(sessionButton).toHaveAttribute('aria-expanded', 'true');
+        expect(screen.getByRole('dialog', { name: 'Pulse Assistant sessions' })).toBeInTheDocument();
+        expect(
+          screen.getByRole('listbox', { name: 'Assistant session history' }),
+        ).toBeInTheDocument();
         expect(screen.getByText('New session')).toBeInTheDocument();
+        expect(document.activeElement).toBe(screen.getByPlaceholderText('Search sessions...'));
       });
     });
 
@@ -1886,11 +1893,13 @@ describe('AIChat', () => {
       renderChat();
       await waitFor(() => {
         expect(mockAIChatAPI.listSessions).toHaveBeenCalledTimes(1);
+        expect(mockAIChatAPI.listSessions).toHaveBeenNthCalledWith(1, { limit: 30 });
       });
       fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
 
       await waitFor(() => {
         expect(mockAIChatAPI.listSessions).toHaveBeenCalledTimes(2);
+        expect(mockAIChatAPI.listSessions).toHaveBeenNthCalledWith(2, { limit: 30 });
         expect(screen.getByText('Fresh session')).toBeInTheDocument();
       });
     });
@@ -1906,11 +1915,54 @@ describe('AIChat', () => {
       });
       fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
       await waitFor(() => {
-        expect(screen.getByText('Session One')).toBeInTheDocument();
-        expect(screen.getByText('Session Two')).toBeInTheDocument();
+        expect(
+          screen.getByRole('option', { name: 'Resume Session One, 5 messages' }),
+        ).toHaveAttribute('aria-selected', 'false');
+        expect(
+          screen.getByRole('option', { name: 'Resume Session Two, 3 messages' }),
+        ).toHaveAttribute('aria-selected', 'false');
         expect(screen.getByText('5 messages')).toBeInTheDocument();
         expect(screen.getByText('3 messages')).toBeInTheDocument();
       });
+    });
+
+    it('moves keyboard focus through session picker results', async () => {
+      mockAIChatAPI.listSessions.mockResolvedValue([
+        { id: 's1', title: 'Session One', created_at: '', updated_at: '', message_count: 5 },
+        { id: 's2', title: 'Session Two', created_at: '', updated_at: '', message_count: 3 },
+      ]);
+      renderChat();
+      await waitFor(() => {
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalled();
+      });
+
+      fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
+      const searchInput = await screen.findByPlaceholderText('Search sessions...');
+      const firstOption = await screen.findByRole('option', {
+        name: 'Resume Session One, 5 messages',
+      });
+      const secondOption = screen.getByRole('option', {
+        name: 'Resume Session Two, 3 messages',
+      });
+
+      await waitFor(() => {
+        expect(document.activeElement).toBe(searchInput);
+      });
+
+      fireEvent.keyDown(searchInput, { key: 'ArrowDown' });
+      expect(document.activeElement).toBe(firstOption);
+
+      fireEvent.keyDown(firstOption, { key: 'ArrowDown' });
+      expect(document.activeElement).toBe(secondOption);
+
+      fireEvent.keyDown(secondOption, { key: 'ArrowUp' });
+      expect(document.activeElement).toBe(firstOption);
+
+      fireEvent.keyDown(firstOption, { key: 'End' });
+      expect(document.activeElement).toBe(secondOption);
+
+      fireEvent.keyDown(secondOption, { key: 'Home' });
+      expect(document.activeElement).toBe(firstOption);
     });
 
     it('searches assistant sessions from the picker', async () => {
@@ -1976,9 +2028,11 @@ describe('AIChat', () => {
       });
       fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
       await waitFor(() => {
-        expect(screen.getByText('Session One')).toBeInTheDocument();
+        expect(
+          screen.getByRole('option', { name: 'Resume Session One, 5 messages' }),
+        ).toBeInTheDocument();
       });
-      fireEvent.click(screen.getByText('Session One'));
+      fireEvent.click(screen.getByRole('option', { name: 'Resume Session One, 5 messages' }));
       expect(mockChat.loadSession).toHaveBeenCalledWith('s1');
     });
 
@@ -2474,6 +2528,7 @@ describe('AIChat', () => {
       await waitFor(() => {
         expect(mockAIChatAPI.getStatus).toHaveBeenCalledTimes(1);
         expect(mockAIChatAPI.listSessions).toHaveBeenCalledTimes(1);
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalledWith({ limit: 30 });
         expect(mockAIAPI.getSettings).toHaveBeenCalledTimes(1);
         expect(mockAIAPI.getModels).toHaveBeenCalledTimes(1);
       });
@@ -3517,10 +3572,9 @@ describe('AIChat', () => {
           expect(screen.getByText('Session One')).toBeInTheDocument();
         });
 
-        // Find the delete button inside the session row
-        const sessionRow = screen.getByText('Session One').closest('[class*="group"]')!;
-        const deleteBtn = sessionRow.querySelector('button[type="button"]')!;
-        fireEvent.click(deleteBtn);
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Delete Assistant session: Session One' }),
+        );
 
         await waitFor(() => {
           expect(mockAIChatAPI.deleteSession).toHaveBeenCalledWith('s1');

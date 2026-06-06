@@ -708,8 +708,15 @@ runtime cost control, and shared AI transport surfaces.
    recency ordering through
    `orderByRecency`, and pinned/current session options before navigation.
    Pulse adapts that source workflow with a debounced Assistant session search
-   field, `GET /api/ai/sessions?search=...&limit=30`, and searched result rows
-   that resume through the same session-loading path as the normal recent list.
+   field, bounded recent-session refreshes with
+   `GET /api/ai/sessions?limit=30`, searched refreshes with
+   `GET /api/ai/sessions?search=...&limit=30`, and searched result rows that
+   resume through the same session-loading path as the normal recent list.
+   The picker trigger and result rows are part of that source-backed workflow:
+   the trigger must expose its accessible name and expanded state, opening the
+   picker must focus search, and each result must be a keyboard-addressable
+   option with list navigation and a named delete action instead of a
+   mouse-only row.
    The empty Assistant drawer may surface recent non-empty sessions as direct
    resume actions using the backend session list already owned by the drawer;
    it must not create a parallel recent-chat store or product-authored prompt

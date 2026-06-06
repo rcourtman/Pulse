@@ -527,6 +527,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [sessionSearchError, setSessionSearchError] = createSignal('');
   const [sessionDropdownPosition, setSessionDropdownPosition] = createSignal({ top: 0, right: 0 });
   let sessionButtonRef: HTMLButtonElement | undefined;
+  let sessionSearchInputRef: HTMLInputElement | undefined;
+  const sessionOptionRefs = new Map<string, HTMLButtonElement>();
   let sessionSearchRequestId = 0;
   const [modelSelectorOpenRequest, setModelSelectorOpenRequest] = createSignal(0);
   const [defaultModel, setDefaultModel] = createSignal('');
@@ -887,7 +889,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   };
 
   const refreshSessions = async () => {
-    const sessionList = await AIChatAPI.listSessions();
+    const sessionList = await AIChatAPI.listSessions({ limit: AI_CHAT_SESSION_SEARCH_LIMIT });
     setSessions(sessionList);
   };
 
@@ -916,10 +918,75 @@ export const AIChat: Component<AIChatProps> = (props) => {
     setSessionSearchLoading(false);
     setSessionSearchError('');
   };
+  const focusSessionSearch = () => {
+    queueMicrotask(() => sessionSearchInputRef?.focus());
+  };
 
   const findKnownSession = (sessionId: string) =>
     sessions().find((candidate) => candidate.id === sessionId) ||
     sessionSearchResults()?.find((candidate) => candidate.id === sessionId);
+
+  createEffect(() => {
+    const validSessionIds = new Set(sessionPickerSessions().map((session) => session.id));
+    for (const sessionId of sessionOptionRefs.keys()) {
+      if (!validSessionIds.has(sessionId)) {
+        sessionOptionRefs.delete(sessionId);
+      }
+    }
+  });
+
+  const focusSessionOptionAtIndex = (index: number) => {
+    const session = sessionPickerSessions()[index];
+    if (!session) return false;
+    sessionOptionRefs.get(session.id)?.focus();
+    return true;
+  };
+
+  const focusSessionOptionRelativeTo = (sessionId: string, offset: number) => {
+    const sessionList = sessionPickerSessions();
+    const currentIndex = sessionList.findIndex((session) => session.id === sessionId);
+    if (currentIndex < 0) return false;
+    const nextIndex = Math.min(Math.max(currentIndex + offset, 0), sessionList.length - 1);
+    return focusSessionOptionAtIndex(nextIndex);
+  };
+
+  const handleSessionSearchKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== 'ArrowDown' || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (focusSessionOptionAtIndex(0)) {
+      event.preventDefault();
+    }
+  };
+
+  const handleSessionOptionKeyDown = (
+    event: KeyboardEvent & { currentTarget: HTMLButtonElement },
+    sessionId: string,
+  ) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+
+    if (event.key === 'ArrowDown' && focusSessionOptionRelativeTo(sessionId, 1)) {
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'ArrowUp' && focusSessionOptionRelativeTo(sessionId, -1)) {
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'Home' && focusSessionOptionAtIndex(0)) {
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'End' && focusSessionOptionAtIndex(sessionPickerSessions().length - 1)) {
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setShowSessions(false);
+      setSessionRefreshLoading(false);
+      resetSessionSearch();
+      sessionButtonRef?.focus();
+    }
+  };
 
   // Chat hook
   const chat = useChat({
@@ -2017,6 +2084,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
     resetSessionSearch();
     setShowSessions(true);
+    focusSessionSearch();
     setSessionRefreshLoading(true);
 
     try {
@@ -2028,6 +2096,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
       setSessionRefreshLoading(false);
     }
   };
+
+  const formatSessionPickerMessageCount = (count: number) =>
+    `${count} ${count === 1 ? 'message' : 'messages'}`;
+  const getSessionPickerOptionLabel = (session: ChatSession) =>
+    `Resume ${session.title || 'Untitled'}, ${formatSessionPickerMessageCount(session.message_count)}`;
+  const getSessionDeleteLabel = (session: ChatSession) =>
+    `Delete Assistant session: ${session.title || 'Untitled'}`;
 
   // Load session
   const handleLoadSession = async (sessionId: string) => {
@@ -2208,6 +2283,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   }}
                   class="flex-shrink-0 p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors"
                   title={AI_CHAT_SESSION_MENU_TITLE}
+                  aria-label={AI_CHAT_SESSION_MENU_TITLE}
+                  aria-haspopup="dialog"
+                  aria-expanded={showSessions()}
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -2222,6 +2300,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 <Show when={showSessions()}>
                   <div
                     class="fixed w-80 max-h-[28rem] bg-surface rounded-md shadow-sm border border-border z-[9999] overflow-hidden"
+                    role="dialog"
+                    aria-label={AI_CHAT_SESSION_MENU_TITLE}
                     style={{
                       top: `${sessionDropdownPosition().top}px`,
                       right: `${sessionDropdownPosition().right}px`,
@@ -2246,9 +2326,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       <SearchField
                         value={sessionSearchQuery()}
                         onChange={setSessionSearchQuery}
+                        onKeyDown={handleSessionSearchKeyDown}
                         placeholder={AI_CHAT_SESSION_SEARCH_PLACEHOLDER}
                         title={AI_CHAT_SESSION_SEARCH_TITLE}
                         inputClass="py-1.5 text-xs"
+                        inputRef={(input) => {
+                          sessionSearchInputRef = input;
+                        }}
                       />
                     </div>
 
@@ -2262,7 +2346,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       </div>
                     </Show>
 
-                    <div class="max-h-72 overflow-y-auto">
+                    <div
+                      class="max-h-72 overflow-y-auto"
+                      role="listbox"
+                      aria-label="Assistant session history"
+                    >
                       <Show
                         when={sessionPickerSessions().length > 0}
                         fallback={
@@ -2274,15 +2362,25 @@ export const AIChat: Component<AIChatProps> = (props) => {
                         <For each={sessionPickerSessions()}>
                           {(session) => (
                             <div
-                              class={`group relative px-3 py-2.5 flex items-start gap-2 hover:bg-surface-hover cursor-pointer ${chat.sessionId() === session.id ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
-                              onClick={() => handleLoadSession(session.id)}
+                              class={`group relative flex items-start gap-2 px-3 py-2.5 hover:bg-surface-hover focus-within:bg-surface-hover ${chat.sessionId() === session.id ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
                             >
-                              <div class="flex-1 min-w-0">
+                              <button
+                                type="button"
+                                ref={(button) => {
+                                  sessionOptionRefs.set(session.id, button);
+                                }}
+                                role="option"
+                                aria-selected={chat.sessionId() === session.id}
+                                aria-label={getSessionPickerOptionLabel(session)}
+                                class="min-w-0 flex-1 text-left focus:outline-none"
+                                onClick={() => handleLoadSession(session.id)}
+                                onKeyDown={(event) => handleSessionOptionKeyDown(event, session.id)}
+                              >
                                 <div class="text-sm font-medium truncate text-base-content">
                                   {session.title || 'Untitled'}
                                 </div>
                                 <div class="text-xs text-muted">
-                                  {session.message_count} messages
+                                  {formatSessionPickerMessageCount(session.message_count)}
                                 </div>
                                 <Show when={session.handoff_summary}>
                                   {(summary) => (
@@ -2303,11 +2401,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
                                     </div>
                                   )}
                                 </Show>
-                              </div>
+                              </button>
                               <button
                                 type="button"
-                                class="flex-shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-100 dark:hover:bg-red-900 hover:text-red-500 transition-opacity"
+                                class="flex-shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 hover:bg-red-100 dark:hover:bg-red-900 hover:text-red-500 transition-opacity"
                                 onClick={(e) => handleDeleteSession(session.id, e)}
+                                aria-label={getSessionDeleteLabel(session)}
+                                title={getSessionDeleteLabel(session)}
                               >
                                 <svg
                                   class="w-3.5 h-3.5"
