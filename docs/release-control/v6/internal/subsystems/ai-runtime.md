@@ -320,7 +320,11 @@ runtime cost control, and shared AI transport surfaces.
    `workflow_state` replaces the canonical active status immediately. The
    browser may retain a bounded in-flight presentation history of those replaced
    labels and pace one visible workflow row through them when backend/network
-   coalescing would otherwise make the row jump straight to the last state.
+   coalescing would otherwise make the row jump straight to the last state. The
+   active-turn composer footer must use that same paced workflow-label
+   presentation when its current status is workflow-derived, so the footer does
+   not jump straight to the last coalesced preparation/provider state while the
+   transcript row is still stepping through the same live sequence.
    That history must stay live-only: once visible assistant text, tool progress,
    approvals, questions, terminal `done`, terminal `error`, or explicit Stop
    take over, stale workflow text and the presentation history must clear so
@@ -329,7 +333,7 @@ runtime cost control, and shared AI transport surfaces.
    start timestamp so the drawer can show elapsed wait/run time for long
    provider starts and tool calls instead of repeating a timeless waiting label.
    The referenced OpenCode source at fetched `origin/dev` commit
-   `4519a1da329c1a4fc384054e7203ba7d06928205` mutates typed message parts as
+   `0875203a6c726d7a37b5ffbb770cc433c98e7cd6` mutates typed message parts as
    events arrive in `packages/opencode/src/cli/cmd/tui/context/sync.tsx`
    (`message.part.updated` and `message.part.delta`) and represents session
    activity as separately updated status in
@@ -1707,9 +1711,12 @@ approval/question, terminal `done`, and terminal `error` events clear that row.
 The frontend now also keeps a bounded live-only `workflowStatusHistory` for the
 active assistant message so one row can visibly step through bursty preparation,
 context, provider-start, retry, and fallback labels instead of showing them all
-only after the final state arrives. The transcript therefore shows current
-motion while the provider is starting, retrying, or reasoning, but completed
-answers do not retain stale internal-progress prose.
+only after the final state arrives. The shared workflow-status presentation
+helper owns both the transcript row and the active-turn composer footer so the
+two live surfaces advance through the same short sequence before settling on the
+latest canonical workflow state. The transcript and footer therefore show
+current motion while the provider is starting, retrying, or reasoning, but
+completed answers do not retain stale internal-progress prose.
 
 Primary nav moved to governed platform/runtime destinations on 2026-05-16 and
 was clarified on 2026-05-25 through `frontend-modern/src/App.tsx` and

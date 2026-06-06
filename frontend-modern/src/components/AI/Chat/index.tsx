@@ -146,7 +146,7 @@ import { AssistantCommandHelpDialog } from './AssistantCommandHelpDialog';
 import { ModelSelector } from './ModelSelector';
 import { MentionAutocomplete, type MentionResource } from './MentionAutocomplete';
 import { SlashCommandAutocomplete } from './SlashCommandAutocomplete';
-import { getAssistantActiveTurnStatus } from './activeTurnStatus';
+import { formatAssistantWorkflowStatus, getAssistantActiveTurnStatus } from './activeTurnStatus';
 import { getLastAssistantAnswerText } from './assistantAnswerText';
 import {
   getNextAssistantRecentModelRoute,
@@ -165,6 +165,10 @@ import {
   formatAssistantTranscript,
   hasAssistantTranscriptContent,
 } from './transcriptExport';
+import {
+  createPacedWorkflowStatus,
+  normalizeWorkflowStatusSequence,
+} from './workflowStatusPresentation';
 import type {
   ChatMessage,
   ModelRouteRecoveryOption,
@@ -1458,12 +1462,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
       !forkingSession(),
   );
   const hasUndoableUserTurn = createMemo(() =>
-    chat.messages().some(
-      (message) =>
-        message.role === 'user' &&
-        message.delivery !== 'queued' &&
-        Boolean(message.content.trim()),
-    ),
+    chat
+      .messages()
+      .some(
+        (message) =>
+          message.role === 'user' &&
+          message.delivery !== 'queued' &&
+          Boolean(message.content.trim()),
+      ),
   );
   const canUndoLastTurn = createMemo(
     () =>
@@ -1998,9 +2004,64 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
     return '';
   });
-  const currentStatus = createMemo(() =>
-    getAssistantActiveTurnStatus(chat.messages(), chat.isLoading()),
+  const activeAssistantMessage = createMemo(() => {
+    if (!chat.isLoading()) return undefined;
+    const messages = chat.messages();
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message.role === 'assistant' && message.isStreaming !== false) {
+        return message;
+      }
+    }
+    return undefined;
+  });
+  const activeWorkflowStatusSequence = createMemo(() => {
+    const message = activeAssistantMessage();
+    if (!message) return [];
+    return normalizeWorkflowStatusSequence([
+      ...(message.workflowStatusHistory || []),
+      message.workflowStatus,
+    ]);
+  });
+  const displayedActiveWorkflowStatus = createPacedWorkflowStatus(
+    () => activeWorkflowStatusSequence(),
+    () => chat.isLoading() && !!activeAssistantMessage(),
+    () => {
+      const message = activeAssistantMessage();
+      return message ? `${message.id}:workflow-footer` : '';
+    },
   );
+  const currentStatus = createMemo(() => {
+    const status = getAssistantActiveTurnStatus(chat.messages(), chat.isLoading());
+    const message = activeAssistantMessage();
+    const latestWorkflowStatus = message?.workflowStatus;
+    const pacedWorkflowStatus = displayedActiveWorkflowStatus();
+    if (!status || !latestWorkflowStatus || !pacedWorkflowStatus) return status;
+
+    const latestWorkflowText = formatAssistantWorkflowStatus(latestWorkflowStatus);
+    const expectedType = latestWorkflowStatus.tool ? 'tool' : 'thinking';
+    const statusStartedAt = status.startedAt;
+    const workflowStartedAt = latestWorkflowStatus.startedAt;
+    if (
+      !latestWorkflowText ||
+      status.text !== latestWorkflowText ||
+      status.type !== expectedType ||
+      (statusStartedAt !== undefined &&
+        workflowStartedAt !== undefined &&
+        statusStartedAt !== workflowStartedAt)
+    ) {
+      return status;
+    }
+
+    const pacedText = formatAssistantWorkflowStatus(pacedWorkflowStatus);
+    if (!pacedText) return status;
+    return {
+      ...status,
+      type: pacedWorkflowStatus.tool ? 'tool' : 'thinking',
+      text: pacedText,
+      startedAt: pacedWorkflowStatus.startedAt,
+    };
+  });
   const [currentStatusNow, setCurrentStatusNow] = createSignal(Date.now());
   createEffect(() => {
     const status = currentStatus();
@@ -2610,7 +2671,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       ? { ...queuedDraft.sendOptions }
       : restoredDraft?.request
         ? sendOptionsFromRestoredRequest(restoredDraft.request)
-      : {};
+        : {};
     if (!queuedDraft && !restoredDraft) {
       if (typeof ctx.autonomousMode === 'boolean') {
         sendOptions.autonomousMode = ctx.autonomousMode;
