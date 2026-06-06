@@ -1,5 +1,15 @@
-import { Component, Show, createSignal, createMemo, createEffect, onCleanup, For } from 'solid-js';
+import {
+  Component,
+  Show,
+  createSignal,
+  createMemo,
+  createEffect,
+  onCleanup,
+  For,
+  createUniqueId,
+} from 'solid-js';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle';
+import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import ClockIcon from 'lucide-solid/icons/clock';
 import LoaderCircleIcon from 'lucide-solid/icons/loader-circle';
 import XCircleIcon from 'lucide-solid/icons/x-circle';
@@ -110,6 +120,7 @@ const ToolInputSummary: Component<ToolInputSummaryProps> = (props) => {
  */
 export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) => {
   const [showDetails, setShowDetails] = createSignal(false);
+  const detailsId = createUniqueId();
 
   const toolLabel = createMemo(() => getToolLabel(props.tool.name));
   const inputText = createMemo(() => toolValueText(props.tool.input));
@@ -127,10 +138,34 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
     props.tool.success
       ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300'
       : 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300';
+  const summaryControlTitle = () => (showDetails() ? 'Hide tool details' : 'Show tool details');
+  const toggleDetails = () => {
+    if (!hasDetails()) return;
+    setShowDetails(!showDetails());
+  };
+  const handleSummaryKeyDown = (event: KeyboardEvent) => {
+    if (!hasDetails()) return;
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    toggleDetails();
+  };
 
   return (
     <div class="my-2 overflow-hidden rounded-md border border-border-subtle bg-surface text-[11px] shadow-sm">
-      <div class="flex min-w-0 items-start gap-2 px-2.5 py-2">
+      <div
+        class={`flex min-w-0 items-start gap-2 px-2.5 py-2 ${
+          hasDetails()
+            ? 'cursor-pointer transition-colors hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:ring-inset'
+            : ''
+        }`}
+        role={hasDetails() ? 'button' : undefined}
+        tabIndex={hasDetails() ? 0 : undefined}
+        aria-expanded={hasDetails() ? showDetails() : undefined}
+        aria-controls={hasDetails() ? detailsId : undefined}
+        title={hasDetails() ? summaryControlTitle() : undefined}
+        onClick={toggleDetails}
+        onKeyDown={handleSummaryKeyDown}
+      >
         <div class="pt-0.5">
           <Show
             when={props.tool.success}
@@ -159,16 +194,12 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
               {statusLabel()}
             </span>
             <Show when={hasDetails()}>
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setShowDetails(!showDetails());
-                }}
-                class="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium text-muted hover:bg-surface-hover hover:text-base-content"
-              >
-                {showDetails() ? 'Hide details' : 'Details'}
-              </button>
+              <ChevronRightIcon
+                class={`h-3.5 w-3.5 shrink-0 text-muted transition-transform ${
+                  showDetails() ? 'rotate-90' : ''
+                }`}
+                aria-hidden="true"
+              />
             </Show>
           </div>
           <ToolInputSummary summary={inputSummary()} />
@@ -185,7 +216,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
       </Show>
 
       <Show when={showDetails() && hasDetails()}>
-        <div class="border-t border-border-subtle px-3 py-2">
+        <div id={detailsId} class="border-t border-border-subtle px-3 py-2">
           <Show when={hasInput()}>
             <div class="mb-1 text-[9px] font-semibold uppercase tracking-wide text-muted">
               Input

@@ -32,6 +32,8 @@ function makePending(overrides?: Partial<PendingTool>): PendingTool {
   };
 }
 
+const getToolDetailsTrigger = () => screen.getByTitle('Show tool details');
+
 // ============================================================
 // ToolExecutionBlock
 // ============================================================
@@ -162,7 +164,7 @@ describe('ToolExecutionBlock', () => {
     ));
 
     expect(screen.getByText('search "prowlarr"')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Details'));
+    fireEvent.click(getToolDetailsTrigger());
     expect(screen.getByText(/"action":"search"/)).toBeInTheDocument();
   });
 
@@ -279,8 +281,7 @@ describe('ToolExecutionBlock', () => {
   it('keeps successful plain-text output in details instead of previewing it', () => {
     render(() => <ToolExecutionBlock tool={makeTool({ output: 'hello world' })} />);
     expect(screen.queryByLabelText('Tool output preview')).not.toBeInTheDocument();
-    expect(screen.getByText('Details')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Details'));
+    fireEvent.click(getToolDetailsTrigger());
     expect(screen.getByText('hello world')).toBeInTheDocument();
   });
 
@@ -296,7 +297,7 @@ describe('ToolExecutionBlock', () => {
     ));
 
     expect(screen.queryByText(/total_nodes/)).not.toBeInTheDocument();
-    expect(screen.getByText('Details')).toBeInTheDocument();
+    expect(getToolDetailsTrigger()).toBeInTheDocument();
   });
 
   it('keeps successful long plain-text output behind details', () => {
@@ -312,7 +313,7 @@ describe('ToolExecutionBlock', () => {
     expect(screen.queryByLabelText('Tool output preview')).not.toBeInTheDocument();
     expect(text).not.toContain('line 1');
     expect(text).not.toContain('line 5');
-    expect(screen.getByText('Details')).toBeInTheDocument();
+    expect(getToolDetailsTrigger()).toBeInTheDocument();
   });
 
   it('previews failed plain-text output while keeping full details available', () => {
@@ -321,7 +322,7 @@ describe('ToolExecutionBlock', () => {
     ));
 
     expect(screen.getByLabelText('Tool output preview')).toHaveTextContent('permission denied');
-    expect(screen.getByText('Details')).toBeInTheDocument();
+    expect(getToolDetailsTrigger()).toBeInTheDocument();
   });
 
   it('uses raw streamed input to summarize sparse completed Pulse read tools', () => {
@@ -358,15 +359,18 @@ describe('ToolExecutionBlock', () => {
 
   // --- Expand/collapse behavior ---
 
-  it('shows a details button when raw input or output is available', () => {
+  it('makes the completed tool row the details trigger when raw input or output is available', () => {
     const output = 'l1\nl2\nl3\nl4\nl5';
     render(() => <ToolExecutionBlock tool={makeTool({ output })} />);
-    expect(screen.getByText('Details')).toBeInTheDocument();
+    const trigger = getToolDetailsTrigger();
+    expect(trigger).toBeInTheDocument();
+    expect(trigger).toHaveAttribute('role', 'button');
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('does not show a details button when there are no details', () => {
+  it('does not make the row expandable when there are no details', () => {
     render(() => <ToolExecutionBlock tool={makeTool({ input: '', output: '' })} />);
-    expect(screen.queryByText('Details')).toBeNull();
+    expect(screen.queryByTitle('Show tool details')).toBeNull();
   });
 
   it('shows raw input and output when details are opened', async () => {
@@ -374,10 +378,11 @@ describe('ToolExecutionBlock', () => {
     const { container } = render(() => (
       <ToolExecutionBlock tool={makeTool({ input: '{"action":"list"}', output })} />
     ));
-    const btn = screen.getByText('Details');
-    fireEvent.click(btn);
+    const trigger = getToolDetailsTrigger();
+    fireEvent.click(trigger);
 
-    expect(screen.getByText('Hide details')).toBeInTheDocument();
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(trigger).toHaveAttribute('title', 'Hide tool details');
     expect(screen.getByText('Input')).toBeInTheDocument();
     expect(screen.getByText('Output')).toBeInTheDocument();
     expect(screen.getByText('{"action":"list"}')).toBeInTheDocument();
@@ -398,7 +403,7 @@ describe('ToolExecutionBlock', () => {
       />
     ));
 
-    fireEvent.click(screen.getByText('Details'));
+    fireEvent.click(getToolDetailsTrigger());
     const detailBlocks = Array.from(container.querySelectorAll('pre'));
     expect(detailBlocks.length).toBeGreaterThanOrEqual(2);
     for (const block of detailBlocks) {
@@ -411,11 +416,24 @@ describe('ToolExecutionBlock', () => {
   it('hides raw details when toggled closed', async () => {
     const output = '{"value":"line1"}';
     render(() => <ToolExecutionBlock tool={makeTool({ output })} />);
-    fireEvent.click(screen.getByText('Details'));
-    expect(screen.getByText('Hide details')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Hide details'));
-    expect(screen.getByText('Details')).toBeInTheDocument();
+    const trigger = getToolDetailsTrigger();
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByText(/line1/)).not.toBeInTheDocument();
+  });
+
+  it('toggles raw details from the keyboard on the completed tool row', async () => {
+    render(() => <ToolExecutionBlock tool={makeTool({ output: 'keyboard output' })} />);
+    const trigger = getToolDetailsTrigger();
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('keyboard output')).toBeInTheDocument();
+
+    fireEvent.keyDown(trigger, { key: ' ' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('keyboard output')).not.toBeInTheDocument();
   });
 
   // --- Edge cases ---
@@ -437,8 +455,7 @@ describe('ToolExecutionBlock', () => {
     const { container } = render(() => <ToolExecutionBlock tool={makeTool({ output })} />);
     // hasOutput returns false when output contains "not available"
     expect(container.querySelector('pre')).toBeNull();
-    // The expand button should also not appear since output section is hidden
-    expect(screen.getByText('Details')).toBeInTheDocument();
+    expect(getToolDetailsTrigger()).toBeInTheDocument();
   });
 
   it('does not truncate input summaries at exactly 28 chars', () => {

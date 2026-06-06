@@ -372,6 +372,13 @@ runtime cost control, and shared AI transport surfaces.
    JSON, unavailable output, successful command output, and the full raw payload
    stay behind Details. This preserves evidence for inspection without letting
    command output compete with the Assistant answer flow.
+   The row itself owns the details trigger, not a tiny adjacent text action:
+   completed tool rows with inspectable input or output must expose
+   `aria-expanded`, keyboard activation, and a chevron affordance on the row
+   header so opening evidence feels like expanding the tool part. That adapts
+   OpenCode's `BasicTool` collapsible trigger in
+   `packages/ui/src/components/basic-tool.tsx`, where the trigger row and
+   arrow own expansion while pending/running tools remain locked.
    Tool-row summaries are part of that same source-anchored contract, not
    assistant prose cleanup: when provider or backend transport supplies a
    function-style call such as `pulse_read(...)` or a friendly string backed by

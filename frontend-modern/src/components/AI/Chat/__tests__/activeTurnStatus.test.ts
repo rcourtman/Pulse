@@ -62,7 +62,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'tool',
-      text: 'Running $ ls /dev | wc -l on current resource',
+      text: 'Running Inspect devices on current resource',
       startedAt,
     });
   });
@@ -90,7 +90,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'tool',
-      text: 'Running $ ls /dev | wc -l on current resource',
+      text: 'Running Inspect devices on current resource',
     });
   });
 
