@@ -122,6 +122,16 @@ func TestCleanToolCallArtifacts(t *testing.T) {
 	}
 }
 
+func TestCleanToolCallArtifactsCleansDecorativeOperationalSymbols(t *testing.T) {
+	input := "### 🔴 Critical Alerts\n###⚠️Warnings\n- ⚠️ Active AI Patrol Finding\n3.✅ Backup is healthy\nCheck ⚠️ the alert, then ✅ the backup.\nNext Steps:✅Would you like me to investigate?\nTemperature is 58°C.\n\n```text\n⚠️ literal status stays inside code\n```\n"
+	expected := "### Critical Alerts\n### Warnings\n- Active AI Patrol Finding\n3. Backup is healthy\nCheck the alert, then the backup.\nNext Steps: Would you like me to investigate?\nTemperature is 58°C.\n\n```text\n⚠️ literal status stays inside code\n```\n"
+
+	got := cleanToolCallArtifacts(input)
+	if got != expected {
+		t.Fatalf("cleanToolCallArtifacts() = %q, want %q", got, expected)
+	}
+}
+
 func TestContainsToolCallMarker(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -235,5 +245,43 @@ func TestAppendVisibleContentBeforeToolLeak_ClearsCompactedPreludeWhenSplit(t *t
 	}
 	if delta != "" || builder.String() != "" || pending != "" {
 		t.Fatalf("compacted prelude should be cleared after split leak, got delta=%q builder=%q pending=%q", delta, builder.String(), pending)
+	}
+}
+
+func TestAppendVisibleContentBeforeToolLeak_CleansDecorativeSymbolsAcrossChunks(t *testing.T) {
+	var builder strings.Builder
+	var pending string
+
+	delta, leakFound := appendVisibleContentBeforeToolLeak(&builder, &pending, "###")
+	if leakFound {
+		t.Fatal("markdown heading prefix should not be treated as a tool leak")
+	}
+	if delta != "###" || builder.String() != "###" {
+		t.Fatalf("unexpected first delta=%q builder=%q", delta, builder.String())
+	}
+
+	delta, leakFound = appendVisibleContentBeforeToolLeak(&builder, &pending, "⚠️Critical Alerts")
+	if leakFound {
+		t.Fatal("decorative status glyph should not be treated as a tool leak")
+	}
+	if delta != " Critical Alerts" || builder.String() != "### Critical Alerts" {
+		t.Fatalf("decorative heading should stream as valid markdown, got delta=%q builder=%q", delta, builder.String())
+	}
+
+	delta, leakFound = appendVisibleContentBeforeToolLeak(&builder, &pending, "\nNext Steps:")
+	if leakFound {
+		t.Fatal("plain heading text should not be treated as a tool leak")
+	}
+	if delta != "\nNext Steps:" {
+		t.Fatalf("unexpected next-steps delta=%q", delta)
+	}
+
+	delta, leakFound = appendVisibleContentBeforeToolLeak(&builder, &pending, "✅Would you like me to investigate?")
+	if leakFound {
+		t.Fatal("decorative status glyph should not be treated as a tool leak")
+	}
+	expected := "### Critical Alerts\nNext Steps: Would you like me to investigate?"
+	if delta != " Would you like me to investigate?" || builder.String() != expected {
+		t.Fatalf("decorative colon spacing should stream cleanly, got delta=%q builder=%q", delta, builder.String())
 	}
 }

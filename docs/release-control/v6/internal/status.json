@@ -6826,8 +6826,8 @@
       "summary": "Align Assistant live tool progress with OpenCode source workflow",
       "target_id": "v6-product-lane-expansion",
       "claimed_at": "2026-06-06T04:02:24Z",
-      "heartbeat_at": "2026-06-06T04:28:32Z",
-      "expires_at": "2026-06-06T12:28:32Z",
+      "heartbeat_at": "2026-06-06T04:46:07Z",
+      "expires_at": "2026-06-06T12:46:07Z",
       "work_item": {
         "kind": "lane-followup",
         "id": "architecture-post-rc-canonicalization"

@@ -38,3 +38,26 @@ func TestStreamEventClientSafeCleansContentToolCallArtifacts(t *testing.T) {
 		t.Fatalf("content text = %q, want cleaned prose", content.Text)
 	}
 }
+
+func TestStreamEventClientSafeCleansDecorativeOperationalSymbols(t *testing.T) {
+	data, err := json.Marshal(ContentData{
+		Text: "### 🔴 Critical Alerts\n- ⚠️ Active AI Patrol Finding\nTemperature is 58°C.",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	event, ok := (StreamEvent{Type: "content", Data: data}).ClientSafe()
+	if !ok {
+		t.Fatal("content event should remain visible")
+	}
+
+	var content ContentData
+	if err := json.Unmarshal(event.Data, &content); err != nil {
+		t.Fatal(err)
+	}
+	expected := "### Critical Alerts\n- Active AI Patrol Finding\nTemperature is 58°C."
+	if content.Text != expected {
+		t.Fatalf("content text = %q, want %q", content.Text, expected)
+	}
+}

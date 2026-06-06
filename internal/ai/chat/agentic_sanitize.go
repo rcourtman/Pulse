@@ -66,6 +66,35 @@ var (
 	// instead of a structured tool call. Gate on canonical tool names so a
 	// random prose function call is not stripped.
 	plainFunctionToolCallRe = regexp.MustCompile(`(?:^|[^a-zA-Z0-9_])([a-zA-Z_][a-zA-Z0-9_]*)[ \t\r\n]*\(`)
+
+	// Operational providers often decorate alert/status answers with emoji
+	// badges even when instructed not to. Pulse renders state through typed
+	// tool/progress rows, so these glyphs are treated as presentation artifacts
+	// at the browser/API boundary rather than assistant prose.
+	decorativeAssistantSymbolReplacer = strings.NewReplacer(
+		"\ufe0f", "",
+		"⚠️", "", "⚠", "",
+		"🚨", "", "🛑", "", "⛔", "",
+		"🔴", "", "🟠", "", "🟡", "", "🟢", "", "🔵", "", "🟣", "", "🟤", "", "⚫", "", "⚪", "",
+		"✅", "", "❌", "", "❎", "", "✔️", "", "✔", "", "☑️", "", "☑", "", "✖️", "", "✖", "", "✗", "", "✘", "",
+		"ℹ️", "", "ℹ", "", "❗", "", "❕", "", "❓", "", "❔", "",
+		"🔧", "", "🛠️", "", "🛠", "", "🧰", "",
+		"🔥", "", "💡", "", "📌", "", "📍", "", "📊", "", "📈", "", "📉", "",
+	)
+	decorativeAssistantSymbols = []string{
+		"⚠️", "⚠", "🚨", "🛑", "⛔",
+		"🔴", "🟠", "🟡", "🟢", "🔵", "🟣", "🟤", "⚫", "⚪",
+		"✅", "❌", "❎", "✔️", "✔", "☑️", "☑", "✖️", "✖", "✗", "✘",
+		"ℹ️", "ℹ", "❗", "❕", "❓", "❔",
+		"🔧", "🛠️", "🛠", "🧰",
+		"🔥", "💡", "📌", "📍", "📊", "📈", "📉",
+	}
+	decorativeWhitespaceGapRe       = regexp.MustCompile(`([^\s])[ \t]{2,}([^\s])`)
+	decorativeSpaceBeforePunctRe    = regexp.MustCompile(`[ \t]+([,.;:!?])`)
+	decorativeTightHeadingRe        = regexp.MustCompile(`^([ \t]{0,3}#{1,6})([^#\s])`)
+	decorativeTightListMarkerRe     = regexp.MustCompile(`^([ \t]*(?:[-*+]|[0-9]+[.)]))([^ \t])`)
+	decorativeTightColonRe          = regexp.MustCompile(`(:)([A-Z][A-Za-z])`)
+	decorativeAssistantFenceStartRe = regexp.MustCompile(`^[ \t]*(?:` + "```" + `|~~~)`)
 )
 
 // cleanToolCallArtifacts removes LLM-internal tool call format leakage from content.
@@ -85,7 +114,68 @@ func cleanToolCallArtifacts(content string) string {
 		content = prefix
 	}
 
-	return content
+	return cleanDecorativeAssistantSymbols(content)
+}
+
+func cleanDecorativeAssistantSymbols(content string) string {
+	if content == "" {
+		return content
+	}
+
+	var builder strings.Builder
+	builder.Grow(len(content))
+
+	inFence := false
+	lines := strings.SplitAfter(content, "\n")
+	for _, segment := range lines {
+		line := strings.TrimSuffix(segment, "\n")
+		hasNewline := len(segment) > len(line)
+
+		if decorativeAssistantFenceStartRe.MatchString(line) {
+			builder.WriteString(line)
+			if hasNewline {
+				builder.WriteByte('\n')
+			}
+			inFence = !inFence
+			continue
+		}
+		if inFence {
+			builder.WriteString(line)
+			if hasNewline {
+				builder.WriteByte('\n')
+			}
+			continue
+		}
+
+		cleaned := decorativeAssistantSymbolReplacer.Replace(line)
+		if cleaned != line {
+			if lineStartsWithDecorativeAssistantSymbol(line) {
+				cleaned = strings.TrimLeft(cleaned, " \t")
+			}
+			cleaned = decorativeTightHeadingRe.ReplaceAllString(cleaned, "$1 $2")
+			cleaned = decorativeTightListMarkerRe.ReplaceAllString(cleaned, "$1 $2")
+			cleaned = decorativeTightColonRe.ReplaceAllString(cleaned, "$1 $2")
+			cleaned = decorativeWhitespaceGapRe.ReplaceAllString(cleaned, "$1 $2")
+			cleaned = decorativeSpaceBeforePunctRe.ReplaceAllString(cleaned, "$1")
+		}
+
+		builder.WriteString(cleaned)
+		if hasNewline {
+			builder.WriteByte('\n')
+		}
+	}
+
+	return builder.String()
+}
+
+func lineStartsWithDecorativeAssistantSymbol(line string) bool {
+	trimmed := strings.TrimLeft(line, " \t")
+	for _, symbol := range decorativeAssistantSymbols {
+		if strings.HasPrefix(trimmed, symbol) {
+			return true
+		}
+	}
+	return false
 }
 
 // containsToolCallMarker checks if content contains any known LLM-internal tool call markers.
@@ -156,13 +246,10 @@ func appendVisibleContentBeforeToolLeak(
 	idx := toolCallArtifactIndex(candidate)
 	if idx < 0 {
 		visible, held := splitTrailingPotentialToolNamePrefix(text)
-		if visible != "" {
-			builder.WriteString(visible)
-		}
 		if pending != nil {
 			*pending = held
 		}
-		return visible, false
+		return appendSanitizedVisibleDelta(builder, visible), false
 	}
 
 	if idx > len(existing) {
@@ -174,7 +261,7 @@ func appendVisibleContentBeforeToolLeak(
 			return "", true
 		}
 		visibleDelta, _ = splitTrailingPotentialToolNamePrefix(candidate[len(existing):idx])
-		builder.WriteString(visibleDelta)
+		visibleDelta = appendSanitizedVisibleDelta(builder, visibleDelta)
 	} else if isCompactedToolPrelude(candidate[:idx]) {
 		builder.Reset()
 		if pending != nil {
@@ -190,8 +277,21 @@ func flushPendingVisibleContent(builder *strings.Builder, pending *string) strin
 	}
 	visible := *pending
 	*pending = ""
-	builder.WriteString(visible)
-	return visible
+	return appendSanitizedVisibleDelta(builder, visible)
+}
+
+func appendSanitizedVisibleDelta(builder *strings.Builder, visible string) string {
+	if visible == "" {
+		return ""
+	}
+	existing := builder.String()
+	cleanedCandidate := cleanDecorativeAssistantSymbols(existing + visible)
+	if !strings.HasPrefix(cleanedCandidate, existing) {
+		cleanedCandidate = existing + cleanDecorativeAssistantSymbols(visible)
+	}
+	delta := strings.TrimPrefix(cleanedCandidate, existing)
+	builder.WriteString(delta)
+	return delta
 }
 
 func splitTrailingPotentialToolNamePrefix(content string) (visible string, held string) {

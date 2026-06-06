@@ -457,6 +457,15 @@ runtime cost control, and shared AI transport surfaces.
    Assistant stream events must pass through `chat.StreamEvent.ClientSafe()`;
    provider `thinking` chunks are runtime-only and may be retained internally
    for model continuity, but they are dropped before the browser/API boundary.
+   The referenced OpenCode source at fetched `origin/dev` commit
+   `1399323b78a04229d9bfe00c7436d7f41770fda8` stores assistant output as typed
+   text, reasoning, and `tool-invocation` parts in
+   `packages/opencode/src/session/message.ts` and mutates those typed parts
+   through explicit stream events in
+   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`; Pulse adapts that
+   invariant by stripping operational decorative status glyphs, warning icons,
+   and check/cross badges from browser-safe assistant prose while preserving
+   ordinary Unicode answer text such as units.
    The agentic stream may translate the first private provider reasoning delta
    before visible output into a neutral `model_thinking` workflow status so the
    drawer shows live activity without exposing chain-of-thought. Neutral
