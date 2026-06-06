@@ -821,9 +821,12 @@ runtime cost control, and shared AI transport surfaces.
    lines 246-264 and renders it in the prompt footer at lines 1652-1667. Pulse
    adapts that source-backed contract by deriving the latest completed
    `ChatMessage.tokens` with positive output tokens and rendering only the
-   backend-proven total/input/output counts in the Assistant composer footer;
-   cost and context-limit percentages stay absent until the runtime exposes
-   those values through a governed contract.
+   backend-proven total token count as low-priority Assistant composer chrome.
+   The input/output split remains in the footer title/accessibility text, not
+   the visible transcript or composer copy, so shorthand such as `4358 in · 943
+   out` cannot read like assistant output. Cost and context-limit percentages
+   stay absent until the runtime exposes those values through a governed
+   contract.
 7. Keep AI chat presentation helpers aligned through `frontend-modern/src/components/AI/Chat/` and the shared `frontend-modern/src/utils/textPresentation.ts`
 8. Keep assistant drawer context, session, and org-switch reset state aligned through the shared `frontend-modern/src/stores/aiChat.ts` boundary instead of letting `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, or feature callers fork their own assistant shell state
    That shared drawer ownership also covers passive resource reads while the

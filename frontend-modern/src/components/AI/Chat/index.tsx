@@ -130,7 +130,6 @@ interface ComposerDraftStash {
 }
 
 interface AssistantUsageSummary {
-  detail: string;
   label: string;
   title: string;
 }
@@ -168,8 +167,6 @@ const getAssistantUsageSummary = (message: ChatMessage): AssistantUsageSummary |
 
   const total = input + output;
   const totalLabel = `${formatAssistantTokenCount(total)} ${total === 1 ? 'token' : 'tokens'}`;
-  const inputLabel = `${formatAssistantTokenCount(input)} in`;
-  const outputLabel = `${formatAssistantTokenCount(output)} out`;
   const titleDetail = [
     `${formatAssistantTokenCount(total)} total`,
     `${formatAssistantTokenCount(input)} input`,
@@ -177,8 +174,7 @@ const getAssistantUsageSummary = (message: ChatMessage): AssistantUsageSummary |
   ].join(', ');
 
   return {
-    label: totalLabel,
-    detail: `${inputLabel} / ${outputLabel}`,
+    label: `Last turn: ${totalLabel}`,
     title: `${AI_CHAT_LAST_TURN_USAGE_LABEL}: ${titleDetail}`,
   };
 };
@@ -2845,13 +2841,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
               <Show when={lastAssistantUsage()}>
                 {(usage) => (
                   <div
-                    class="flex min-h-4 min-w-0 items-center justify-end gap-1.5 text-[10px] font-medium text-muted"
+                    class="flex min-h-4 min-w-0 items-center justify-end text-[10px] font-medium text-muted"
                     aria-label={usage().title}
                     title={usage().title}
                   >
                     <span class="truncate">{usage().label}</span>
-                    <span class="h-1 w-1 shrink-0 rounded-full bg-border" aria-hidden="true" />
-                    <span class="shrink-0">{usage().detail}</span>
                   </div>
                 )}
               </Show>

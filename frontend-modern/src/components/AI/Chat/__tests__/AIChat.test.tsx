@@ -3420,8 +3420,13 @@ describe('AIChat', () => {
       renderChat();
 
       const usage = screen.getByLabelText(/Last assistant turn usage/);
-      expect(usage).toHaveTextContent('700 tokens');
-      expect(usage).toHaveTextContent('500 in / 200 out');
+      expect(usage).toHaveTextContent('Last turn: 700 tokens');
+      expect(usage).not.toHaveTextContent('500 in');
+      expect(usage).not.toHaveTextContent('200 out');
+      expect(usage).toHaveAttribute(
+        'title',
+        'Last assistant turn usage: 700 total, 500 input, 200 output',
+      );
     });
 
     it('uses the latest completed assistant turn with output tokens', () => {
@@ -3448,8 +3453,9 @@ describe('AIChat', () => {
       renderChat();
 
       const usage = screen.getByLabelText(/Last assistant turn usage/);
-      expect(usage).toHaveTextContent('150 tokens');
-      expect(usage).toHaveTextContent('100 in / 50 out');
+      expect(usage).toHaveTextContent('Last turn: 150 tokens');
+      expect(usage).not.toHaveTextContent('100 in');
+      expect(usage).not.toHaveTextContent('50 out');
       expect(usage).not.toHaveTextContent('1,700 tokens');
     });
 
