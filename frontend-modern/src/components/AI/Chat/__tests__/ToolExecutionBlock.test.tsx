@@ -180,6 +180,49 @@ describe('ToolExecutionBlock', () => {
     expect(screen.getByText('list active alerts')).toBeInTheDocument();
   });
 
+  it('renders Pulse read exec input as the actual command', () => {
+    render(() => (
+      <ToolExecutionBlock
+        tool={makeTool({
+          name: 'pulse_read',
+          input: '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
+          output: '42',
+        })}
+      />
+    ));
+
+    expect(screen.getByText('$ ls /dev | wc -l on current resource')).toBeInTheDocument();
+    expect(screen.queryByText(/"target_host"/)).not.toBeInTheDocument();
+  });
+
+  it('renders Pulse read log input as a readable log action', () => {
+    render(() => (
+      <ToolExecutionBlock
+        tool={makeTool({
+          name: 'pulse_read',
+          input: '{"action":"logs","target_host":"jellyfin","source":"systemd","unit":"jellyfin"}',
+          output: 'log output',
+        })}
+      />
+    ));
+
+    expect(screen.getByText('logs jellyfin on jellyfin')).toBeInTheDocument();
+  });
+
+  it('renders governed command input as the command being run', () => {
+    render(() => (
+      <ToolExecutionBlock
+        tool={makeTool({
+          name: 'pulse_run_command',
+          input: '{"target_host":"tower","command":"systemctl restart nginx"}',
+          output: 'queued',
+        })}
+      />
+    ));
+
+    expect(screen.getByText('$ systemctl restart nginx on tower')).toBeInTheDocument();
+  });
+
   // --- Output display ---
 
   it('does not show output by default when non-empty', () => {
@@ -355,6 +398,21 @@ describe('PendingToolBlock', () => {
 
     expect(screen.getByText('list vms')).toBeInTheDocument();
     expect(screen.queryByText(/"type"/)).not.toBeInTheDocument();
+  });
+
+  it('renders pending Pulse read exec input as the command being prepared', () => {
+    render(() => (
+      <PendingToolBlock
+        tool={makePending({
+          name: 'pulse_read',
+          input:
+            '{"action":"exec","target_host":"current_resource","command":"lsblk -o NAME,SIZE"}',
+        })}
+      />
+    ));
+
+    expect(screen.getByText('$ lsblk -o NAME,SIZE on current resource')).toBeInTheDocument();
+    expect(screen.queryByText(/"command"/)).not.toBeInTheDocument();
   });
 
   // --- Activity state ---

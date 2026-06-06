@@ -46,7 +46,58 @@ const stringField = (record: Record<string, unknown>, keys: string[]) => {
 const booleanField = (record: Record<string, unknown>, key: string) => record[key] === true;
 
 const inlineValue = (value: string, maxLength = 24) =>
-  value.replace(/["\r\n]+/g, ' ').trim().substring(0, maxLength);
+  value
+    .replace(/["\r\n]+/g, ' ')
+    .trim()
+    .substring(0, maxLength);
+
+const targetSuffix = (record: Record<string, unknown>) => {
+  const target = stringField(record, ['target_host', 'targetHost', 'resource_id', 'resourceId']);
+  if (!target) return '';
+  return ` on ${formatIdentifierLabel(target, { maxLength: 18 })}`;
+};
+
+const formatCommandSummary = (record: Record<string, unknown>) => {
+  const command = stringField(record, ['command', 'cmd']);
+  if (!command) return '';
+  return `$ ${inlineValue(command, 64)}${targetSuffix(record)}`;
+};
+
+const formatPulseReadInputSummary = (record: Record<string, unknown>) => {
+  const action = stringField(record, ['action', 'type']).toLowerCase();
+  const path = inlineValue(stringField(record, ['path', 'file', 'file_path', 'filePath']), 36);
+  const pattern = inlineValue(
+    stringField(record, ['pattern', 'grep', 'grep_pattern', 'grepPattern']),
+    28,
+  );
+  const container = inlineValue(stringField(record, ['container', 'service', 'unit']), 24);
+  const source = stringField(record, ['source']).toLowerCase();
+
+  if (action === 'exec') {
+    return formatCommandSummary(record) || `run read-only command${targetSuffix(record)}`;
+  }
+  if (action === 'file') {
+    return path ? `read ${path}${targetSuffix(record)}` : `read file${targetSuffix(record)}`;
+  }
+  if (action === 'tail') {
+    return path ? `tail ${path}${targetSuffix(record)}` : `tail file${targetSuffix(record)}`;
+  }
+  if (action === 'find') {
+    if (pattern && path) return `find "${pattern}" in ${path}${targetSuffix(record)}`;
+    return pattern
+      ? `find "${pattern}"${targetSuffix(record)}`
+      : `find files${targetSuffix(record)}`;
+  }
+  if (action === 'logs') {
+    if (container) return `logs ${container}${targetSuffix(record)}`;
+    return source
+      ? `${formatIdentifierLabel(source, { maxLength: 18 })} logs${targetSuffix(record)}`
+      : `read logs${targetSuffix(record)}`;
+  }
+  return (
+    formatCommandSummary(record) || (action ? formatIdentifierLabel(action, { maxLength: 28 }) : '')
+  );
+};
 
 const formatQueryInputSummary = (record: Record<string, unknown>) => {
   const action = stringField(record, ['action', 'type']).toLowerCase();
@@ -105,6 +156,12 @@ const parseToolInputSummary = (input: string, toolName?: string) => {
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       const record = parsed as Record<string, unknown>;
       const tool = normalizedToolName(toolName);
+      if (tool === 'read') {
+        return formatPulseReadInputSummary(record) || 'read resource';
+      }
+      if (tool === 'run_command' || tool === 'control') {
+        return formatCommandSummary(record) || 'run command';
+      }
       if (tool === 'query') {
         return formatQueryInputSummary(record);
       }
@@ -150,9 +207,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
   const toolLabel = createMemo(() => getToolLabel(props.tool.name));
   const inputText = createMemo(() => toolValueText(props.tool.input));
   const outputText = createMemo(() => toolValueText(props.tool.output));
-  const inputSummary = createMemo(() =>
-    parseToolInputSummary(inputText(), props.tool.name),
-  );
+  const inputSummary = createMemo(() => parseToolInputSummary(inputText(), props.tool.name));
   const hasInput = createMemo(() => inputText().trim().length > 0);
   const hasOutput = createMemo(() => hasReadableToolOutput(outputText()));
   const hasDetails = createMemo(() => hasInput() || hasOutput());
@@ -232,9 +287,7 @@ interface PendingToolBlockProps {
 export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
   const toolLabel = createMemo(() => getToolLabel(props.tool.name));
   const inputText = createMemo(() => toolValueText(props.tool.input));
-  const inputSummary = createMemo(() =>
-    parseToolInputSummary(inputText(), props.tool.name),
-  );
+  const inputSummary = createMemo(() => parseToolInputSummary(inputText(), props.tool.name));
   const status = createMemo(() => props.tool.status || 'pending');
   const [now, setNow] = createSignal(Date.now());
   const statusLabel = createMemo(() => {

@@ -325,9 +325,9 @@ runtime cost control, and shared AI transport surfaces.
    `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`.
    Pulse's compact tool rows must follow that operator-language model: the row
    should summarize the actual governed action (`search "prowlarr"`, `list
-   active alerts`, `topology summary`) instead of exposing only internal
-   action names such as `QUERY search` or raw JSON; raw input and output stay
-   available behind Details.
+   active alerts`, `topology summary`, `$ ls /dev | wc -l on current resource`)
+   instead of exposing only internal action names such as `QUERY search`,
+   `exec`, or raw JSON; raw input and output stay available behind Details.
    The referenced OpenCode source at fetched `origin/dev` commit
    `fa2b63f850fc0a23bec2bdff9e660450d3fe7913` also keeps assistant text,
    reasoning, and tool invocation as typed message parts in
