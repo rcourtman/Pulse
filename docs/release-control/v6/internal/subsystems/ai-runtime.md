@@ -140,6 +140,19 @@ runtime cost control, and shared AI transport surfaces.
    approval, and question transcript rows on explicit Stop while preserving
    already-streamed answer text and completed tool evidence before showing the
    neutral stopped marker.
+   The same terminal cleanup applies to non-interrupt terminal paths. When a
+   stream reaches `done`, emits a structured `error`, or rejects before an SSE
+   terminal event, the drawer must not leave pending tool, approval, or
+   question controls live in the transcript. The referenced OpenCode source at
+   commit `9ed17da55ab1f7360cc0e01075f763e27fa899e9` mutates active tool
+   parts into terminal `success` or `failed` rows in
+   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`
+   (`session.next.tool.success`, lines 328-348;
+   `session.next.tool.failed`, lines 350-371), and the processor marks
+   interrupted active tools terminal before completing the assistant message in
+   `packages/opencode/src/session/processor.ts` (lines 888-917). Pulse adapts
+   that by retaining completed tool rows and assistant text while removing
+   unresolved interactive rows from terminal browser transcript state.
    Composer prompt history is also drawer-local chat-runtime state: the drawer
    may persist a bounded local history of submitted prompt text and structured
    mentions for ArrowUp/ArrowDown recall, but that history must not persist or

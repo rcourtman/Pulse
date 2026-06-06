@@ -313,6 +313,54 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('chat promise rejection removes unresolved interactive stream rows', async () => {
+      mockChat.mockImplementation(
+        (
+          _prompt: string,
+          _session: string,
+          _model: string | undefined,
+          onEvent: (event: StreamEvent) => void,
+        ) => {
+          dispatchTestStreamEvent(onEvent, { type: 'content', data: 'partial response' });
+          dispatchTestStreamEvent(onEvent, {
+            type: 'tool_start',
+            data: { id: 'tool-1', name: 'pulse_read', input: '{}' },
+          });
+          dispatchTestStreamEvent(onEvent, {
+            type: 'approval_needed',
+            data: {
+              command: 'systemctl restart nginx',
+              tool_id: 'tool-2',
+              tool_name: 'pulse_control',
+              run_on_host: true,
+              approval_id: 'approval-1',
+            },
+          });
+          dispatchTestStreamEvent(onEvent, {
+            type: 'question',
+            data: {
+              question_id: 'question-1',
+              questions: [{ id: 'target', question: 'Which node?' }],
+            },
+          });
+          return Promise.reject(new Error('server error'));
+        },
+      );
+
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'sess' }));
+      const result = await chat.sendMessage('hello');
+
+      expect(result).toBe(false);
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.error).toBe('server error');
+      expect(assistant.content).toBe('partial response');
+      expect(assistant.pendingTools).toEqual([]);
+      expect(assistant.pendingApprovals).toEqual([]);
+      expect(assistant.pendingQuestions).toEqual([]);
+      expect(assistant.streamEvents?.map((event) => event.type)).toEqual(['content']);
+      dispose();
+    });
+
     it('retryMessage drops the failed turn and re-sends the prompt', async () => {
       mockChat.mockRejectedValueOnce(new Error('server error'));
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'sess' }));
@@ -1690,6 +1738,44 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('done event removes unresolved interactive stream rows', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+
+      fire({ type: 'content', data: 'partial response' });
+      fire({ type: 'tool_start', data: { id: 'tool-1', name: 'pulse_read', input: '{}' } });
+      fire({
+        type: 'approval_needed',
+        data: {
+          command: 'systemctl restart nginx',
+          tool_id: 'tool-2',
+          tool_name: 'pulse_control',
+          run_on_host: true,
+          approval_id: 'approval-1',
+        },
+      });
+      fire({
+        type: 'question',
+        data: {
+          question_id: 'question-1',
+          questions: [{ id: 'target', question: 'Which node?' }],
+        },
+      });
+      fire({ type: 'done', data: { input_tokens: 1, output_tokens: 2 } });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.isStreaming).toBe(false);
+      expect(assistant.content).toBe('partial response');
+      expect(assistant.pendingTools).toEqual([]);
+      expect(assistant.pendingApprovals).toEqual([]);
+      expect(assistant.pendingQuestions).toEqual([]);
+      expect(assistant.streamEvents?.map((event) => event.type)).toEqual(['content']);
+      dispose();
+    });
+
     it('processes error events', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
@@ -1704,6 +1790,45 @@ describe('useChat', () => {
       expect(assistant.completedAt).toBeInstanceOf(Date);
       expect(assistant.error).toBe('Rate limited');
       expect(assistant.pendingTools).toHaveLength(0);
+      dispose();
+    });
+
+    it('error event removes unresolved interactive stream rows', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+
+      fire({ type: 'content', data: 'partial response' });
+      fire({ type: 'tool_start', data: { id: 'tool-1', name: 'pulse_read', input: '{}' } });
+      fire({
+        type: 'approval_needed',
+        data: {
+          command: 'systemctl restart nginx',
+          tool_id: 'tool-2',
+          tool_name: 'pulse_control',
+          run_on_host: true,
+          approval_id: 'approval-1',
+        },
+      });
+      fire({
+        type: 'question',
+        data: {
+          question_id: 'question-1',
+          questions: [{ id: 'target', question: 'Which node?' }],
+        },
+      });
+      fire({ type: 'error', data: { message: 'Provider disconnected' } });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.isStreaming).toBe(false);
+      expect(assistant.error).toBe('Provider disconnected');
+      expect(assistant.content).toBe('partial response');
+      expect(assistant.pendingTools).toEqual([]);
+      expect(assistant.pendingApprovals).toEqual([]);
+      expect(assistant.pendingQuestions).toEqual([]);
+      expect(assistant.streamEvents?.map((event) => event.type)).toEqual(['content']);
       dispose();
     });
 

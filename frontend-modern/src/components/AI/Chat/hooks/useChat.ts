@@ -157,11 +157,10 @@ export function useChat(options: UseChatOptions = {}) {
     return promise;
   };
 
-  const streamEventsAfterInterruption = (
+  const streamEventsWithoutUnresolvedInteractiveRows = (
     events: StreamDisplayEvent[] | undefined,
-    interruption?: AssistantInterruption,
   ): StreamDisplayEvent[] | undefined => {
-    if (!interruption || !events) return events;
+    if (!events) return events;
     return events.filter(
       (event) =>
         event.type !== 'pending_tool' && event.type !== 'approval' && event.type !== 'question',
@@ -190,7 +189,9 @@ export function useChat(options: UseChatOptions = {}) {
               pendingTools: [],
               pendingApprovals: [],
               pendingQuestions: [],
-              streamEvents: streamEventsAfterInterruption(msg.streamEvents, interruption),
+              streamEvents: interruption
+                ? streamEventsWithoutUnresolvedInteractiveRows(msg.streamEvents)
+                : msg.streamEvents,
               workflowStatus: undefined,
             }
           : msg,
@@ -1130,6 +1131,11 @@ export function useChat(options: UseChatOptions = {}) {
                   completedAt,
                   ...(completedModel ? { model: completedModel } : {}),
                   pendingTools: [],
+                  pendingApprovals: [],
+                  pendingQuestions: [],
+                  streamEvents: streamEventsWithoutUnresolvedInteractiveRows(
+                    flushedMsg.streamEvents,
+                  ),
                   tokens,
                   workflowStatus: undefined,
                 };
@@ -1140,6 +1146,9 @@ export function useChat(options: UseChatOptions = {}) {
                 completedAt,
                 ...(completedModel ? { model: completedModel } : {}),
                 pendingTools: [],
+                pendingApprovals: [],
+                pendingQuestions: [],
+                streamEvents: streamEventsWithoutUnresolvedInteractiveRows(flushedMsg.streamEvents),
                 workflowStatus: undefined,
               };
             }
@@ -1154,6 +1163,9 @@ export function useChat(options: UseChatOptions = {}) {
                 isStreaming: false,
                 completedAt: new Date(),
                 pendingTools: [],
+                pendingApprovals: [],
+                pendingQuestions: [],
+                streamEvents: streamEventsWithoutUnresolvedInteractiveRows(msg.streamEvents),
                 workflowStatus: undefined,
                 error: errorMsg || 'Request failed',
               };
@@ -1326,7 +1338,16 @@ export function useChat(options: UseChatOptions = {}) {
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === assistantId
-            ? { ...msg, isStreaming: false, workflowStatus: undefined, error: errorMessage }
+            ? {
+                ...msg,
+                isStreaming: false,
+                pendingTools: [],
+                pendingApprovals: [],
+                pendingQuestions: [],
+                streamEvents: streamEventsWithoutUnresolvedInteractiveRows(msg.streamEvents),
+                workflowStatus: undefined,
+                error: errorMessage,
+              }
             : msg,
         ),
       );
