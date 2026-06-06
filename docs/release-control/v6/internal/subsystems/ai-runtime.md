@@ -360,6 +360,11 @@ runtime cost control, and shared AI transport surfaces.
    `session.next.tool.input.*` mutations in
    `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`: typed tool state
    owns the action row, while raw invocation syntax is inspection detail.
+   The live active-turn footer is part of the same contract: pending tools must
+   reuse the tool-row action/command summary instead of falling back to generic
+   tool names such as `read` or `query`. This keeps the always-visible progress
+   surface aligned with OpenCode's visible `ToolPart` state rather than hiding
+   the concrete command until the transcript row catches up.
    Streaming thinking rows follow the same source-anchored reasoning-display
    contract: OpenCode commit
    `9ed17da55ab1f7360cc0e01075f763e27fa899e9` renders reasoning through

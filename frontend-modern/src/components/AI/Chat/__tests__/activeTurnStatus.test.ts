@@ -40,6 +40,60 @@ describe('getAssistantActiveTurnStatus', () => {
     });
   });
 
+  it('surfaces the active pending command instead of the generic tool name', () => {
+    const startedAt = Date.now() - 5_000;
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            pendingTools: [
+              {
+                id: 'tool-1',
+                name: 'pulse_read',
+                input:
+                  '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
+                status: 'running',
+                startedAt,
+              },
+            ],
+          }),
+        ],
+        true,
+      ),
+    ).toEqual({
+      type: 'tool',
+      text: 'Running $ ls /dev | wc -l on current resource',
+      startedAt,
+    });
+  });
+
+  it('surfaces provider-style pending command input in the active turn status', () => {
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            streamEvents: [
+              {
+                type: 'pending_tool',
+                pendingTool: {
+                  id: 'tool-1',
+                  name: 'pulse_read',
+                  input: 'pulse_read(target_host="current_resource", command="ls /dev | wc -l")',
+                  status: 'running',
+                },
+                toolId: 'tool-1',
+              },
+            ],
+          }),
+        ],
+        true,
+      ),
+    ).toEqual({
+      type: 'tool',
+      text: 'Running $ ls /dev | wc -l on current resource',
+    });
+  });
+
   it('carries workflow start time so the live footer can show elapsed wait', () => {
     const startedAt = Date.now() - 8_000;
     expect(

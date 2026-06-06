@@ -2,6 +2,11 @@ import type { ChatMessage, PendingTool, StreamDisplayEvent, WorkflowStatus } fro
 import { formatIdentifierLabel } from '@/utils/textPresentation';
 import { formatAIModelRouteLabel } from '@/utils/aiProviderPresentation';
 import { extractReasoningSummaryTitle } from './reasoningSummary';
+import {
+  isPlaceholderToolInputSummary,
+  parseToolInputSummary,
+  toolValueText,
+} from './toolPresentation';
 
 export type AssistantActiveTurnStatusKind = 'thinking' | 'tool' | 'generating';
 
@@ -34,8 +39,8 @@ export const formatAssistantWorkflowStatus = (status?: WorkflowStatus): string =
   const toolLabel = tool ? formatToolName(tool) : '';
   const toolSuffix =
     toolLabel && !message.includes(tool || '') && !messageContainsToolLabel(message, toolLabel)
-    ? ` · ${toolLabel}`
-    : '';
+      ? ` · ${toolLabel}`
+      : '';
 
   return `${message}${toolSuffix}`;
 };
@@ -46,15 +51,20 @@ const formatPendingToolStatus = (tool?: PendingTool): string => {
   const progress = tool.progress?.trim();
   if (progress) return progress;
 
+  const inputSummary = parseToolInputSummary(toolValueText(tool.input), tool.name, tool.rawInput);
+  const toolActivity = isPlaceholderToolInputSummary(inputSummary) ? '' : inputSummary;
+  if (toolActivity) {
+    if (tool.status === 'waiting') return `Waiting on ${toolActivity}`;
+    return `Running ${toolActivity}`;
+  }
+
   const toolLabel = formatToolName(tool.name);
   if (tool.status === 'waiting') return `Waiting on ${toolLabel}`;
 
   return `Running ${toolLabel}`;
 };
 
-const activePendingToolFromEvents = (
-  events?: StreamDisplayEvent[],
-): PendingTool | undefined => {
+const activePendingToolFromEvents = (events?: StreamDisplayEvent[]): PendingTool | undefined => {
   const completedToolKeys = new Set<string>();
 
   for (let index = (events?.length || 0) - 1; index >= 0; index -= 1) {
@@ -296,7 +306,9 @@ export const getAssistantActiveTurnStatus = (
   }
 
   const statusCandidates: AssistantActiveTurnStatusCandidate[] = [];
-  const statePendingToolCandidate = activePendingToolCandidateFromState(assistantMessage.pendingTools);
+  const statePendingToolCandidate = activePendingToolCandidateFromState(
+    assistantMessage.pendingTools,
+  );
   if (statePendingToolCandidate) {
     statusCandidates.push(statePendingToolCandidate);
   }
