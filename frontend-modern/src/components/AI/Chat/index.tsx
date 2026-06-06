@@ -12,6 +12,8 @@ import { unwrap } from 'solid-js/store';
 import SendIcon from 'lucide-solid/icons/send';
 import SquareIcon from 'lucide-solid/icons/square';
 import ClockIcon from 'lucide-solid/icons/clock';
+import CopyIcon from 'lucide-solid/icons/copy';
+import DownloadIcon from 'lucide-solid/icons/download';
 import PencilIcon from 'lucide-solid/icons/pencil';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import SettingsIcon from 'lucide-solid/icons/settings';
@@ -41,10 +43,12 @@ import {
   AI_CHAT_CLOSE_LABEL,
   AI_CHAT_CONTROL_MODE_LABEL,
   AI_CHAT_CONTROL_MODE_MENU_LABEL,
+  AI_CHAT_COPY_TRANSCRIPT_LABEL,
   AI_CHAT_DISCOVERY_HINT_BODY,
   AI_CHAT_DISCOVERY_HINT_DISMISS_LABEL,
   AI_CHAT_DISCOVERY_HINT_TITLE,
   AI_CHAT_DRAWER_TITLE,
+  AI_CHAT_EXPORT_TRANSCRIPT_LABEL,
   AI_CHAT_INPUT_PLACEHOLDER,
   AI_CHAT_LAST_TURN_USAGE_LABEL,
   AI_CHAT_NEW_SESSION_BUTTON_TITLE,
@@ -63,6 +67,10 @@ import {
   AI_CHAT_SESSION_SEARCH_PLACEHOLDER,
   AI_CHAT_SESSION_SEARCH_TITLE,
   AI_CHAT_SWITCH_TO_APPROVAL_LABEL,
+  AI_CHAT_TRANSCRIPT_FALLBACK_CLOSE_LABEL,
+  AI_CHAT_TRANSCRIPT_FALLBACK_DOWNLOAD_LABEL,
+  AI_CHAT_TRANSCRIPT_FALLBACK_TEXTAREA_LABEL,
+  AI_CHAT_TRANSCRIPT_FALLBACK_TITLE,
   getAIChatProviderReadinessPresentation,
 } from '@/utils/aiChatPresentation';
 import {
@@ -85,6 +93,7 @@ import {
 } from '@/utils/agentResources';
 import { normalizeChatMentionKeyPart } from '@/utils/chatIdentifiers';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
+import { copyToClipboard } from '@/utils/clipboard';
 import {
   getPreferredResourceDisplayName,
   getPreferredResourceHostname,
@@ -95,6 +104,12 @@ import { ChatMessages } from './ChatMessages';
 import { ModelSelector } from './ModelSelector';
 import { MentionAutocomplete, type MentionResource } from './MentionAutocomplete';
 import { getAssistantActiveTurnStatus } from './activeTurnStatus';
+import {
+  buildAssistantTranscriptFilename,
+  downloadAssistantTranscriptFile,
+  formatAssistantTranscript,
+  hasAssistantTranscriptContent,
+} from './transcriptExport';
 import type {
   ChatMessage,
   ModelRouteRecoveryOption,
@@ -150,6 +165,11 @@ interface ComposerDraftStash {
 interface AssistantUsageSummary {
   label: string;
   title: string;
+}
+
+interface TranscriptCopyFallback {
+  generatedAt: Date;
+  transcript: string;
 }
 
 interface AIChatProps {
@@ -559,6 +579,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [controlLevel, setControlLevel] = createSignal<AIControlLevel>('read_only');
   const [showControlMenu, setShowControlMenu] = createSignal(false);
   const [controlSaving, setControlSaving] = createSignal(false);
+  const [transcriptCopyFallback, setTranscriptCopyFallback] =
+    createSignal<TranscriptCopyFallback | null>(null);
   const [discoveryEnabled, setDiscoveryEnabled] = createSignal<boolean | null>(null); // null = loading
   const [discoveryHintDismissed, setDiscoveryHintDismissed] = createSignal(false);
   const [autonomousBannerDismissed, setAutonomousBannerDismissed] = createSignal(false);
@@ -580,6 +602,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [mentionResources, setMentionResources] = createSignal<MentionResource[]>([]);
   const [accumulatedMentions, setAccumulatedMentions] = createSignal<MentionResource[]>([]);
   let textareaRef: HTMLTextAreaElement | undefined;
+  let transcriptFallbackTextareaRef: HTMLTextAreaElement | undefined;
   let interruptArmTimeout: ReturnType<typeof setTimeout> | undefined;
   let composerSubmitDispatchLocked = false;
 
@@ -1240,6 +1263,76 @@ export const AIChat: Component<AIChatProps> = (props) => {
     return match?.provider?.trim() || getProviderFromModelId(normalized);
   };
 
+  const hasCurrentTranscript = createMemo(() => hasAssistantTranscriptContent(chat.messages()));
+
+  const buildCurrentTranscript = (generatedAt = new Date()) => {
+    const sessionId = chat.sessionId().trim();
+    const knownSession = sessionId ? findKnownSession(sessionId) : undefined;
+    return formatAssistantTranscript({
+      messages: chat.messages(),
+      session: {
+        id: sessionId || undefined,
+        title: knownSession?.title,
+      },
+      generatedAt,
+      getModelRouteLabel: formatChatMessageModelRoute,
+    });
+  };
+
+  const downloadTranscript = (transcript: string, generatedAt: Date) => {
+    downloadAssistantTranscriptFile(
+      transcript,
+      buildAssistantTranscriptFilename(chat.sessionId(), generatedAt),
+    );
+  };
+
+  const copyAssistantTranscript = async () => {
+    const generatedAt = new Date();
+    const transcript = buildCurrentTranscript(generatedAt);
+    if (!transcript.trim()) {
+      notificationStore.info('No Assistant transcript to copy', 2000);
+      return;
+    }
+
+    const copied = await copyToClipboard(transcript);
+    if (copied) {
+      setTranscriptCopyFallback(null);
+      notificationStore.success('Assistant transcript copied', 2000);
+      return;
+    }
+    setTranscriptCopyFallback({ generatedAt, transcript });
+    notificationStore.warning('Clipboard blocked; transcript opened for manual copy', 4000);
+  };
+
+  const exportAssistantTranscript = () => {
+    const generatedAt = new Date();
+    const transcript = buildCurrentTranscript(generatedAt);
+    if (!transcript.trim()) {
+      notificationStore.info('No Assistant transcript to export', 2000);
+      return;
+    }
+
+    try {
+      downloadTranscript(transcript, generatedAt);
+      notificationStore.success('Assistant transcript exported', 2000);
+    } catch (error) {
+      logger.error('[AIChat] Failed to export Assistant transcript:', error);
+      notificationStore.error('Failed to export Assistant transcript');
+    }
+  };
+
+  const downloadFallbackTranscript = () => {
+    const fallback = transcriptCopyFallback();
+    if (!fallback) return;
+    try {
+      downloadTranscript(fallback.transcript, fallback.generatedAt);
+      notificationStore.success('Assistant transcript exported', 2000);
+    } catch (error) {
+      logger.error('[AIChat] Failed to export Assistant transcript:', error);
+      notificationStore.error('Failed to export Assistant transcript');
+    }
+  };
+
   const failedModelRouteHistory = createMemo(() => {
     const modelIds = new Set<string>();
     const providers = new Set<string>();
@@ -1583,6 +1676,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
       if (usage) return usage;
     }
     return null;
+  });
+
+  createEffect(() => {
+    if (!transcriptCopyFallback()) return;
+    queueMicrotask(() => {
+      transcriptFallbackTextareaRef?.focus();
+      transcriptFallbackTextareaRef?.select();
+    });
   });
 
   createEffect(() => {
@@ -2469,6 +2570,30 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 <span class="font-medium">{AI_CHAT_NEW_SESSION_SHORT_LABEL}</span>
               </button>
 
+              <button
+                type="button"
+                onClick={() => {
+                  void copyAssistantTranscript();
+                }}
+                disabled={!hasCurrentTranscript()}
+                class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted"
+                title={AI_CHAT_COPY_TRANSCRIPT_LABEL}
+                aria-label={AI_CHAT_COPY_TRANSCRIPT_LABEL}
+              >
+                <CopyIcon class="h-4 w-4" aria-hidden="true" />
+              </button>
+
+              <button
+                type="button"
+                onClick={exportAssistantTranscript}
+                disabled={!hasCurrentTranscript()}
+                class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted"
+                title={AI_CHAT_EXPORT_TRANSCRIPT_LABEL}
+                aria-label={AI_CHAT_EXPORT_TRANSCRIPT_LABEL}
+              >
+                <DownloadIcon class="h-4 w-4" aria-hidden="true" />
+              </button>
+
               {/* Session picker */}
               <div class="relative" data-dropdown>
                 <button
@@ -2681,6 +2806,46 @@ export const AIChat: Component<AIChatProps> = (props) => {
               <XIcon class="h-5 w-5" />
             </button>
           </div>
+
+          <Show when={transcriptCopyFallback()}>
+            {(fallback) => (
+              <section
+                class="border-b border-amber-200 bg-amber-50 px-4 py-3 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100"
+                aria-label={AI_CHAT_TRANSCRIPT_FALLBACK_TITLE}
+              >
+                <div class="mb-2 flex items-center justify-between gap-2">
+                  <div class="text-xs font-semibold">{AI_CHAT_TRANSCRIPT_FALLBACK_TITLE}</div>
+                  <div class="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={downloadFallbackTranscript}
+                      class="flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900"
+                      title={AI_CHAT_TRANSCRIPT_FALLBACK_DOWNLOAD_LABEL}
+                      aria-label={AI_CHAT_TRANSCRIPT_FALLBACK_DOWNLOAD_LABEL}
+                    >
+                      <DownloadIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTranscriptCopyFallback(null)}
+                      class="flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:text-amber-200 dark:hover:bg-amber-900"
+                      title={AI_CHAT_TRANSCRIPT_FALLBACK_CLOSE_LABEL}
+                      aria-label={AI_CHAT_TRANSCRIPT_FALLBACK_CLOSE_LABEL}
+                    >
+                      <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  ref={transcriptFallbackTextareaRef}
+                  class="h-36 w-full resize-y rounded-md border border-amber-200 bg-surface px-2 py-2 font-mono text-[11px] leading-relaxed text-base-content outline-none focus:border-amber-400 dark:border-amber-800 dark:bg-surface"
+                  readonly
+                  value={fallback().transcript}
+                  aria-label={AI_CHAT_TRANSCRIPT_FALLBACK_TEXTAREA_LABEL}
+                />
+              </section>
+            )}
+          </Show>
 
           <Show
             when={

@@ -365,6 +365,14 @@ async function waitForProviderCheckSettled() {
   });
 }
 
+const readBlobText = (blob: Blob): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(blob);
+  });
+
 // ── Setup / teardown ───────────────────────────────────────────────────────
 
 beforeEach(() => {
@@ -422,6 +430,188 @@ describe('AIChat', () => {
     it('renders the header with title when open', () => {
       renderChat();
       expect(screen.getByText('Pulse Assistant')).toBeInTheDocument();
+    });
+
+    it('disables transcript actions until the current session has messages', () => {
+      renderChat();
+
+      expect(screen.getByRole('button', { name: 'Copy Assistant transcript' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Export Assistant transcript' })).toBeDisabled();
+    });
+
+    it('copies the current Assistant transcript from the header', async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText },
+        configurable: true,
+      });
+      mockChat.sessionId.mockReturnValue('session-123456789');
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'user-1',
+          role: 'user',
+          content: 'how many devices in this',
+          timestamp: new Date('2026-06-06T12:34:56Z'),
+        },
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: 'There are 4,358 entries in /dev.',
+          timestamp: new Date('2026-06-06T12:35:01Z'),
+          model: 'openrouter:deepseek/deepseek-chat',
+          streamEvents: [
+            {
+              type: 'tool',
+              tool: {
+                name: 'pulse_read',
+                input: JSON.stringify({
+                  action: 'exec',
+                  command: 'ls /dev | wc -l',
+                  target_host: 'current_resource',
+                }),
+                output: '4358\n',
+                success: true,
+              },
+            },
+            {
+              type: 'content',
+              content: 'There are 4,358 entries in /dev.',
+            },
+          ],
+        },
+      ]);
+
+      renderChat();
+      fireEvent.click(screen.getByRole('button', { name: 'Copy Assistant transcript' }));
+
+      await waitFor(() => {
+        expect(writeText).toHaveBeenCalled();
+      });
+      const transcript = writeText.mock.calls[0][0] as string;
+      expect(transcript).toContain('Session ID: session-123456789');
+      expect(transcript).toContain('how many devices in this');
+      expect(transcript).toContain('[tool:read]');
+      expect(transcript).toContain('ls /dev | wc -l');
+      expect(transcript).toContain('There are 4,358 entries in /dev.');
+      expect(transcript).not.toContain('pulse_read');
+      await waitFor(() => {
+        expect(mockNotificationStore.success).toHaveBeenCalledWith(
+          'Assistant transcript copied',
+          2000,
+        );
+      });
+    });
+
+    it('opens a manual transcript panel when clipboard writes are blocked', async () => {
+      const writeText = vi.fn().mockRejectedValue(new DOMException('Denied', 'NotAllowedError'));
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText },
+        configurable: true,
+      });
+      mockChat.sessionId.mockReturnValue('session-clipboard-denied');
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'user-1',
+          role: 'user',
+          content: 'copy fallback check',
+          timestamp: new Date('2026-06-06T12:34:56Z'),
+        },
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: 'fallback transcript body',
+          timestamp: new Date('2026-06-06T12:35:01Z'),
+        },
+      ]);
+
+      renderChat();
+      fireEvent.click(screen.getByRole('button', { name: 'Copy Assistant transcript' }));
+
+      const transcriptField = await screen.findByLabelText('Assistant transcript');
+      const transcriptValue = (transcriptField as HTMLTextAreaElement).value;
+      expect(transcriptValue).toContain('copy fallback check');
+      expect(transcriptValue).toContain('fallback transcript body');
+      expect(document.activeElement).toBe(transcriptField);
+      expect(mockNotificationStore.warning).toHaveBeenCalledWith(
+        'Clipboard blocked; transcript opened for manual copy',
+        4000,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Close Assistant transcript copy panel' }));
+
+      await waitFor(() => {
+        expect(screen.queryByLabelText('Assistant transcript')).not.toBeInTheDocument();
+      });
+    });
+
+    it('exports the current Assistant transcript from the header', async () => {
+      const originalCreateObjectURL = URL.createObjectURL;
+      const originalRevokeObjectURL = URL.revokeObjectURL;
+      const createObjectURL = vi.fn((blob: Blob) => {
+        void blob;
+        return 'blob:assistant-transcript';
+      });
+      const revokeObjectURL = vi.fn();
+      Object.defineProperty(URL, 'createObjectURL', {
+        value: createObjectURL,
+        configurable: true,
+      });
+      Object.defineProperty(URL, 'revokeObjectURL', {
+        value: revokeObjectURL,
+        configurable: true,
+      });
+      const originalCreateElement = document.createElement.bind(document);
+      const createElementSpy = vi.spyOn(document, 'createElement').mockImplementation((tagName) => {
+        const element = originalCreateElement(tagName);
+        if (tagName.toLowerCase() === 'a') {
+          vi.spyOn(element as HTMLAnchorElement, 'click').mockImplementation(() => undefined);
+        }
+        return element;
+      });
+      mockChat.sessionId.mockReturnValue('session-abcdef123456');
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'user-1',
+          role: 'user',
+          content: 'summarize the session',
+          timestamp: new Date('2026-06-06T12:34:56Z'),
+        },
+      ]);
+
+      try {
+        renderChat();
+        fireEvent.click(screen.getByRole('button', { name: 'Export Assistant transcript' }));
+
+        await waitFor(() => {
+          expect(createObjectURL).toHaveBeenCalled();
+        });
+        const createdBlob = createObjectURL.mock.calls[0]?.[0] as unknown as Blob;
+        expect(await readBlobText(createdBlob)).toContain('summarize the session');
+        const anchor = createElementSpy.mock.results
+          .map((result) => result.value)
+          .find((element): element is HTMLAnchorElement => element instanceof HTMLAnchorElement);
+        expect(anchor?.download).toBe('pulse-assistant-session-abcdef123456.md');
+        expect(anchor?.click).toHaveBeenCalled();
+        expect(revokeObjectURL).toHaveBeenCalledWith('blob:assistant-transcript');
+        expect(mockNotificationStore.success).toHaveBeenCalledWith(
+          'Assistant transcript exported',
+          2000,
+        );
+      } finally {
+        createElementSpy.mockRestore();
+        if (originalCreateObjectURL) {
+          Object.defineProperty(URL, 'createObjectURL', {
+            value: originalCreateObjectURL,
+            configurable: true,
+          });
+        }
+        if (originalRevokeObjectURL) {
+          Object.defineProperty(URL, 'revokeObjectURL', {
+            value: originalRevokeObjectURL,
+            configurable: true,
+          });
+        }
+      }
     });
 
     it('renders the input textarea', () => {
