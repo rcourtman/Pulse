@@ -114,10 +114,10 @@ export const getAssistantActiveTurnStatus = (
     return { type: 'tool', text: pendingToolText, startedAt: pendingTool?.startedAt };
   }
 
-  const workflowStatusText = formatAssistantWorkflowStatus(assistantMessage.workflowStatus);
-  if (hasVisibleAssistantOutput(assistantMessage)) {
-    return { type: 'generating', text: 'Generating response' };
-  }
+  const workflowStatusText =
+    assistantMessage.isStreaming === false
+      ? ''
+      : formatAssistantWorkflowStatus(assistantMessage.workflowStatus);
 
   if (workflowStatusText) {
     return {
@@ -125,6 +125,10 @@ export const getAssistantActiveTurnStatus = (
       text: workflowStatusText,
       startedAt: assistantMessage.workflowStatus?.startedAt,
     };
+  }
+
+  if (hasVisibleAssistantOutput(assistantMessage)) {
+    return { type: 'generating', text: 'Generating response' };
   }
 
   return { type: 'thinking', text: 'Waiting for assistant' };

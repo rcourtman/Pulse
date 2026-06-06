@@ -219,9 +219,9 @@ runtime cost control, and shared AI transport surfaces.
    The drawer transcript owns detailed in-flight progress for the active turn:
    a new assistant row must start with a neutral local preparation status until
    stream progress arrives, must show the current effective model route while
-   the turn is still streaming, and must render late workflow progress as typed
-   Assistant row evidence while the composer footer keeps a one-line live
-   heartbeat of the current active state. Workflow status is live
+   the turn is still streaming, and must keep late workflow progress visible
+   through the composer footer while transcript rows continue to render typed
+   Assistant evidence. Workflow status is live
    progress, not answer content or a delayed walkthrough; each new
    `workflow_state` replaces the active status immediately instead of waiting
    behind a dwell queue. Once visible assistant text, tool progress, approvals,
@@ -235,9 +235,18 @@ runtime cost control, and shared AI transport surfaces.
    active assistant message in
    `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`; Pulse adapts that
    precedence by letting typed content, tool, approval, and question evidence
-   own the visible row once it exists, so later neutral workflow states such as
-   provider reasoning do not repaint a completed tool row as if the turn were
-   still waiting on the earlier phase.
+   own the visible row once it exists, while later neutral workflow states such
+   as provider reasoning still replace the live footer heartbeat instead of
+   being hidden behind generic "generating" copy.
+   The referenced OpenCode source at commit
+   `9ed17da55ab1f7360cc0e01075f763e27fa899e9` renders active assistant work
+   as session-owned parts in
+   `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx`
+   (`Session`, `ToolPart`, `InlineToolRow`) and mutates the matching active
+   tool/text state in `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`;
+   Pulse's browser drawer adapts that model by keeping the transcript rows
+   typed and stable while the active-turn footer remains a replacing live
+   status slot for provider and workflow progress between visible parts.
    OpenCode-parity Assistant UX work must reference OpenCode's actual source
    implementation for message parts, tool-state mutation, progress rendering,
    and model/session selection before changing Pulse behavior; parity means

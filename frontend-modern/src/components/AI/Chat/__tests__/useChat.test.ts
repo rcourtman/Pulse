@@ -1204,7 +1204,7 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('ignores neutral workflow progress after typed tool evidence is visible', async () => {
+    it('keeps late workflow progress live after typed tool evidence without adding transcript rows', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
 
@@ -1238,7 +1238,12 @@ describe('useChat', () => {
       });
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
-      expect(assistant.workflowStatus).toBeUndefined();
+      expect(assistant.workflowStatus).toEqual(
+        expect.objectContaining({
+          phase: 'model_thinking',
+          message: 'Model is reasoning before responding.',
+        }),
+      );
       expect(assistant.streamEvents?.map((event) => event.type)).toEqual(['tool']);
       expect(assistant.toolCalls).toHaveLength(1);
       dispose();

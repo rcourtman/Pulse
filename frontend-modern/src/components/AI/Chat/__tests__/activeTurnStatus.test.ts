@@ -210,11 +210,12 @@ describe('getAssistantActiveTurnStatus', () => {
     });
   });
 
-  it('prefers generated tool evidence over stale neutral workflow status', () => {
+  it('surfaces fresh workflow progress after completed tool evidence', () => {
     expect(
       getAssistantActiveTurnStatus(
         [
           assistantMessage({
+            isStreaming: true,
             workflowStatus: {
               phase: 'model_thinking',
               message: 'Model is reasoning before responding.',
@@ -232,6 +233,29 @@ describe('getAssistantActiveTurnStatus', () => {
                 },
               },
             ],
+          }),
+        ],
+        true,
+      ),
+    ).toEqual({
+      type: 'thinking',
+      text: 'Model is reasoning before responding.',
+      startedAt: 1000,
+    });
+  });
+
+  it('ignores stale workflow status on a completed assistant turn', () => {
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            isStreaming: false,
+            content: 'Finished answer',
+            workflowStatus: {
+              phase: 'model_thinking',
+              message: 'Model is reasoning before responding.',
+              startedAt: 1000,
+            },
           }),
         ],
         true,

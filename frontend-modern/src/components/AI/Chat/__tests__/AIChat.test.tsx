@@ -3205,6 +3205,29 @@ describe('AIChat', () => {
       );
     });
 
+    it('keeps late workflow progress visible after assistant content has streamed', () => {
+      mockChat.isLoading.mockReturnValue(true);
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'msg-1',
+          role: 'assistant' as const,
+          content: 'I checked the first source.',
+          timestamp: new Date(),
+          isStreaming: true,
+          streamEvents: [{ type: 'content', content: 'I checked the first source.' }],
+          workflowStatus: {
+            phase: 'provider_start',
+            message: 'Sent request to OpenRouter; waiting for the first token.',
+            startedAt: Date.now() - 5_000,
+          },
+        },
+      ]);
+      renderChat();
+      expect(screen.getByLabelText('Assistant active turn status')).toHaveTextContent(
+        'Sent request to OpenRouter; waiting for the first token.',
+      );
+    });
+
     it('does not fall back to waiting when loading outlives visible assistant content', () => {
       mockChat.isLoading.mockReturnValue(true);
       mockChat.messages.mockReturnValue([

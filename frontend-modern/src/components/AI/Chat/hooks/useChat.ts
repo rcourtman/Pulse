@@ -123,28 +123,6 @@ export function useChat(options: UseChatOptions = {}) {
     (a.state || '') === (b.state || '') &&
     (a.tool || '') === (b.tool || '');
 
-  const streamEventHasTypedAssistantEvidence = (event: StreamDisplayEvent) => {
-    switch (event.type) {
-      case 'content':
-        return !!event.content?.trim();
-      case 'pending_tool':
-        return !!event.pendingTool;
-      case 'tool':
-        return !!event.tool;
-      case 'approval':
-        return !!event.approval;
-      case 'question':
-        return !!event.question;
-      default:
-        return false;
-    }
-  };
-
-  const messageHasTypedAssistantEvidence = (message: ChatMessage) => {
-    if ((message.content || '').trim() || message.error) return true;
-    return (message.streamEvents || []).some(streamEventHasTypedAssistantEvidence);
-  };
-
   const setAssistantWorkflowStatus = (
     assistantId: string,
     requestId: number,
@@ -154,9 +132,7 @@ export function useChat(options: UseChatOptions = {}) {
     setMessages((prev) =>
       prev.map((msg) => {
         if (msg.id !== assistantId) return msg;
-        if (messageHasTypedAssistantEvidence(msg)) {
-          return msg.workflowStatus ? { ...msg, workflowStatus: undefined } : msg;
-        }
+        if (msg.isStreaming === false) return msg;
         if (workflowStatusesMatch(msg.workflowStatus, workflowStatus)) return msg;
         return { ...msg, workflowStatus };
       }),
