@@ -2942,14 +2942,16 @@ describe('AIChat', () => {
   // ── Status indicator ─────────────────────────────────────────────────
 
   describe('status indicator', () => {
-    it('shows "Thinking..." when loading with no assistant message', () => {
+    it('shows active turn status when loading with no assistant message', () => {
       mockChat.isLoading.mockReturnValue(true);
       mockChat.messages.mockReturnValue([]);
       renderChat();
-      expect(screen.getByText('Thinking...')).toBeInTheDocument();
+      expect(screen.getByLabelText('Assistant active turn status')).toHaveTextContent(
+        'Waiting for assistant',
+      );
     });
 
-    it('does not duplicate first-token status in the footer once an assistant turn exists', () => {
+    it('keeps first-token status visible once an assistant turn exists', () => {
       mockChat.isLoading.mockReturnValue(true);
       mockChat.messages.mockReturnValue([
         {
@@ -2962,11 +2964,13 @@ describe('AIChat', () => {
         },
       ]);
       renderChat();
-      expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Assistant active turn status')).toHaveTextContent(
+        'Waiting for assistant',
+      );
       expect(screen.queryByText('Generating response...')).not.toBeInTheDocument();
     });
 
-    it('does not duplicate workflow progress in the footer once an assistant turn exists', () => {
+    it('keeps workflow progress visible in the active turn status', () => {
       mockChat.isLoading.mockReturnValue(true);
       mockChat.messages.mockReturnValue([
         {
@@ -2986,13 +2990,12 @@ describe('AIChat', () => {
       ]);
       renderChat();
       expect(
-        screen.queryByText('Planning governed action and safety checks before execution.'),
-      ).not.toBeInTheDocument();
-      expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
+        screen.getByLabelText('Assistant active turn status'),
+      ).toHaveTextContent('Planning governed action and safety checks before execution. · exec');
       expect(screen.queryByText('Generating response...')).not.toBeInTheDocument();
     });
 
-    it('does not duplicate pending tool status in the footer once an assistant turn exists', () => {
+    it('keeps pending tool progress visible in the active turn status', () => {
       mockChat.isLoading.mockReturnValue(true);
       mockChat.messages.mockReturnValue([
         {
@@ -3004,11 +3007,12 @@ describe('AIChat', () => {
         },
       ]);
       renderChat();
-      expect(screen.queryByText('Running get nodes...')).not.toBeInTheDocument();
-      expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Assistant active turn status')).toHaveTextContent(
+        'Running get nodes',
+      );
     });
 
-    it('does not duplicate status in the footer when assistant content is streaming', () => {
+    it('shows generating status when assistant content is streaming', () => {
       mockChat.isLoading.mockReturnValue(true);
       mockChat.messages.mockReturnValue([
         {
@@ -3020,11 +3024,12 @@ describe('AIChat', () => {
         },
       ]);
       renderChat();
-      expect(screen.queryByText('Generating response...')).not.toBeInTheDocument();
-      expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Assistant active turn status')).toHaveTextContent(
+        'Generating response',
+      );
     });
 
-    it('does not fall back to thinking when loading outlives visible assistant content', () => {
+    it('does not fall back to waiting when loading outlives visible assistant content', () => {
       mockChat.isLoading.mockReturnValue(true);
       mockChat.messages.mockReturnValue([
         {
@@ -3037,11 +3042,12 @@ describe('AIChat', () => {
         },
       ]);
       renderChat();
-      expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
-      expect(screen.queryByText('Generating response...')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Assistant active turn status')).toHaveTextContent(
+        'Generating response',
+      );
     });
 
-    it('keeps queued follow-up status without duplicating active assistant streaming status', () => {
+    it('keeps queued follow-up status alongside active assistant streaming status', () => {
       mockChat.isLoading.mockReturnValue(true);
       mockChat.queuedFollowUpCount.mockReturnValue(1);
       mockChat.messages.mockReturnValue([
@@ -3061,15 +3067,16 @@ describe('AIChat', () => {
         },
       ]);
       renderChat();
-      expect(screen.queryByText('Generating response...')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Assistant active turn status')).toHaveTextContent(
+        'Generating response',
+      );
       expect(screen.getByText('1 follow-up queued')).toBeInTheDocument();
     });
 
     it('shows no status indicator when not loading', () => {
       mockChat.isLoading.mockReturnValue(false);
       renderChat();
-      expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
-      expect(screen.queryByText('Generating response...')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Assistant active turn status')).not.toBeInTheDocument();
     });
   });
 

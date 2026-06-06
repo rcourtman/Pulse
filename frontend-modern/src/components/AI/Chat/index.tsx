@@ -76,6 +76,7 @@ import { useChat, type QueuedFollowUp, type SendMessageOptions } from './hooks/u
 import { ChatMessages } from './ChatMessages';
 import { ModelSelector } from './ModelSelector';
 import { MentionAutocomplete, type MentionResource } from './MentionAutocomplete';
+import { getAssistantActiveTurnStatus } from './activeTurnStatus';
 import type {
   ChatMessage,
   ModelRouteRecoveryOption,
@@ -1099,61 +1100,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }),
   );
 
-  const assistantHasVisibleTranscriptOutput = (message: ChatMessage) => {
-    if (message.role !== 'assistant') return false;
-    if ((message.content || '').trim() || message.error) return true;
-    if (
-      message.pendingTools?.length ||
-      message.pendingApprovals?.length ||
-      message.pendingQuestions?.length ||
-      message.toolCalls?.length
-    ) {
-      return true;
-    }
-
-    return (message.streamEvents || []).some((event) => {
-      switch (event.type) {
-        case 'content':
-          return !!event.content?.trim();
-        case 'tool':
-          return !!event.tool;
-        case 'pending_tool':
-          return !!event.pendingTool;
-        case 'approval':
-          return !!event.approval;
-        case 'question':
-          return !!event.question;
-        default:
-          return false;
-      }
-    });
-  };
-
-  // Compute current status for display
-  const currentStatus = createMemo(() => {
-    if (!chat.isLoading()) return null;
-
-    const messages = chat.messages();
-    const activeAssistant = [...messages]
-      .reverse()
-      .find((message) => message.role === 'assistant' && message.isStreaming);
-    if (activeAssistant) {
-      return null;
-    }
-
-    const lastAssistant = [...messages].reverse().find((message) => message.role === 'assistant');
-    if (lastAssistant && assistantHasVisibleTranscriptOutput(lastAssistant)) {
-      return null;
-    }
-
-    const lastMessage = messages[messages.length - 1];
-
-    if (!lastMessage || lastMessage.role !== 'assistant') {
-      return { type: 'thinking', text: 'Thinking...' };
-    }
-
-    return { type: 'thinking', text: 'Thinking...' };
-  });
+  const currentStatus = createMemo(() =>
+    getAssistantActiveTurnStatus(chat.messages(), chat.isLoading()),
+  );
 
   createEffect(() => {
     input();
@@ -2310,7 +2259,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
           {/* Status indicator bar */}
           <Show when={currentStatus()}>
-            <div class="px-4 py-2 bg-surface-alt border-t border-border flex items-center gap-2.5 text-xs">
+            <div
+              class="px-4 py-2 bg-surface-alt border-t border-border flex min-w-0 items-center gap-2.5 text-xs"
+              role="status"
+              aria-label="Assistant active turn status"
+              aria-live="polite"
+            >
               {/* Status icon based on type */}
               <Show when={currentStatus()?.type === 'thinking'}>
                 <div class="flex items-center justify-center w-4 h-4">
@@ -2370,7 +2324,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 </div>
               </Show>
 
-              <span class="text-muted font-medium">{currentStatus()?.text}</span>
+              <span class="min-w-0 truncate text-muted font-medium">{currentStatus()?.text}</span>
 
               {/* Subtle animated dots */}
               <div class="flex gap-0.5 ml-1">

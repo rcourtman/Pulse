@@ -193,11 +193,12 @@ runtime cost control, and shared AI transport surfaces.
    turns, and selected-provider startup. These events are runtime progress, not
    Assistant-authored analysis, and they must not become keyword routers,
    explore pre-passes, or instructions that choose the model's next action.
-   The drawer transcript owns visible in-flight progress for the active turn:
+   The drawer transcript owns detailed in-flight progress for the active turn:
    a new assistant row must start with a neutral local preparation status until
    stream progress arrives, must show the current effective model route while
-   the turn is still streaming, and must render late workflow progress in the
-   assistant row instead of only in drawer chrome. Workflow status is live
+   the turn is still streaming, and must render late workflow progress as typed
+   Assistant row evidence while the composer footer keeps a one-line live
+   heartbeat of the current active state. Workflow status is live
    progress, not answer content or a delayed walkthrough; each new
    `workflow_state` replaces the active status immediately instead of waiting
    behind a dwell queue. Once visible assistant text, tool progress, approvals,
@@ -207,6 +208,16 @@ runtime cost control, and shared AI transport surfaces.
    implementation for message parts, tool-state mutation, and progress
    rendering before changing Pulse behavior; parity means adapting the proven
    interaction model, not guessing from screenshots or observed behavior alone.
+   The referenced OpenCode source at fetched `origin/dev` commit
+   `fa2b63f850fc0a23bec2bdff9e660450d3fe7913` keeps prompt/footer status visible
+   only while the session is non-idle in
+   `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx`, and maps
+   `turn.send`, `turn.wait`, and tool status patches into a live footer in
+   `packages/opencode/src/cli/cmd/run/footer.ts` plus
+   `packages/opencode/src/cli/cmd/run/session-data.ts`. Pulse's drawer adapts
+   that as an active-turn status strip: no idle diagnostics, but while a turn is
+   loading it must show waiting, current tool/workflow progress, or generating
+   status even when the transcript already contains an in-flight assistant row.
    The referenced OpenCode source at commit
    `f750deaa3e95098fdde5fb00305b273e43c5b2cd` mutates a single tool part from
    `pending` input through `running` progress to completed/error in
@@ -331,11 +342,12 @@ runtime cost control, and shared AI transport surfaces.
    frontend rendering. Compacted no-whitespace internal prelude text attached
    to a leaked tool invocation is part of that same artifact and must be
    suppressed or retracted from the current stream segment instead of rendered
-   as assistant prose. Drawer-level loading/progress status must not duplicate
-   transcript output once assistant content, governed tool progress, approvals,
-   questions, errors, or restored tool evidence are already visible; progress
-   stays in the transcript row that owns the active turn. Completed tool rows
-   in the drawer may show compact tool name, action summary, status, and an
+   as assistant prose. Drawer-level loading/progress status must stay scoped to
+   the active turn and must collapse back to quiet when the turn is idle; it may
+   mirror the latest active tool/workflow state as a compact heartbeat, but raw
+   outputs, restored evidence, errors, and completed details stay in the
+   transcript row that owns the turn. Completed tool rows in the drawer may show
+   compact tool name, action summary, status, and an
    explicit details affordance, but raw tool input/output JSON must not render
    in the default transcript. Token accounting and other provider metadata
    remain runtime/accounting data, not normal transcript prose.
