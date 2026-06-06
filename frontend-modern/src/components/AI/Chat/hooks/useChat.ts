@@ -867,8 +867,10 @@ export function useChat(options: UseChatOptions = {}) {
                 });
                 updatedEvents.push({ type: 'tool', tool: newToolCall, toolId: data.id });
               } else {
-                // No approval - just replace pending_tool in place
+                // No approval - replace the pending_tool in place. If the terminal
+                // event is the first visible evidence, keep the completed row.
                 updatedEvents = [...events];
+                let replacedPendingTool = false;
                 for (let i = events.length - 1; i >= 0; i--) {
                   const evt = events[i];
                   if (
@@ -878,8 +880,12 @@ export function useChat(options: UseChatOptions = {}) {
                       : normalizeChatToolName(evt.pendingTool?.name || '') === normalizedEndName)
                   ) {
                     updatedEvents[i] = { type: 'tool', tool: newToolCall, toolId: data.id };
+                    replacedPendingTool = true;
                     break;
                   }
+                }
+                if (!replacedPendingTool) {
+                  updatedEvents.push({ type: 'tool', tool: newToolCall, toolId: data.id });
                 }
               }
 

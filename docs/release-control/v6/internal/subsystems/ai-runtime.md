@@ -317,11 +317,21 @@ runtime cost control, and shared AI transport surfaces.
    until `[DONE]`, `message_stop`, or execution completion recreates the
    delayed batch feeling this contract is meant to prevent. Policy-hidden
    placeholder attempts remain governed by the runtime and may cancel a pending
-   row instead of persisting a failed tool card. While streamed arguments are
-   still invalid or incomplete JSON, the frontend must use the `raw_input`
+   row instead of persisting a failed tool card. If a terminal `tool_end`
+   reaches the browser without a matching pending row, the frontend must still
+   append the completed row instead of dropping the only visible tool evidence.
+   While streamed arguments are still invalid or incomplete JSON, the frontend
+   must use the `raw_input`
    fragment to show a safe partial command/path/query summary instead of a
    blank `{}` request row, then replace it with the structured summary once
    parsing succeeds.
+   The referenced OpenCode source at fetched `origin/dev` commit
+   `1399323b78a04229d9bfe00c7436d7f41770fda8` keeps tool invocations as durable
+   message parts in `packages/opencode/src/session/processor.ts`
+   (`ensureToolCall`, `updateToolCall`, `completeToolCall`) and renders the
+   typed part immediately in
+   `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`
+   (`AssistantTool`, `pendingInput`, `toolComplete`).
    The referenced OpenCode source at fetched `origin/dev` commit
    `09d9cf01f93798939c1284fbe974b6e1f4d2759d` renders tool-specific inline
    labels such as `Read <path>`, `Grep "<pattern>"`, `WebFetch <url>`, and bash

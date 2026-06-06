@@ -2370,6 +2370,18 @@ describe('useChat', () => {
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.toolCalls).toHaveLength(1);
       expect(assistant.toolCalls![0].name).toBe('mystery_tool');
+      const toolEvents = assistant.streamEvents?.filter((event) => event.type === 'tool');
+      expect(toolEvents).toHaveLength(1);
+      expect(toolEvents![0]).toEqual({
+        type: 'tool',
+        tool: {
+          name: 'mystery_tool',
+          input: '{}',
+          output: 'ok',
+          success: true,
+        },
+        toolId: 'orphan',
+      });
       // pendingTools should remain empty (nothing to remove)
       expect(assistant.pendingTools).toHaveLength(0);
       dispose();
