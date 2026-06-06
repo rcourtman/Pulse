@@ -281,10 +281,10 @@ runtime cost control, and shared AI transport surfaces.
    `1399323b78a04229d9bfe00c7436d7f41770fda8` applies each typed event to the
    active assistant message in
    `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`; Pulse adapts that
-   precedence by letting typed content, tool, approval, and question evidence
-   own the visible row once it exists, while later neutral workflow states such
-   as provider reasoning still replace the live footer heartbeat instead of
-   being hidden behind generic "generating" copy.
+   precedence by letting typed content, model-switch, tool, approval, and
+   question evidence own the visible row once it exists, while later neutral
+   workflow states such as provider reasoning still replace the live footer
+   heartbeat instead of being hidden behind generic "generating" copy.
    The referenced OpenCode source at commit
    `9ed17da55ab1f7360cc0e01075f763e27fa899e9` renders active assistant work
    as session-owned parts in
@@ -309,8 +309,8 @@ runtime cost control, and shared AI transport surfaces.
    render workflow/tool steps only after a batch has already finished.
    `frontend-modern/src/api/aiChat.ts` owns the Assistant predicate: token
    content and hidden reasoning may continue to opt out of those checkpoints so
-   answer streaming remains fast, while session/workflow/tool/approval/question
-   events remain user-visible progress checkpoints.
+   answer streaming remains fast, while session, workflow, model-switch, tool,
+   approval, and question events remain user-visible progress checkpoints.
    Completed Assistant tool rows follow the same source-anchored display policy:
    the referenced OpenCode commit
    `9ed17da55ab1f7360cc0e01075f763e27fa899e9` keeps ordinary tool activity terse

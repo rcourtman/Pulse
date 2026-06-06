@@ -1,5 +1,6 @@
 import type { ChatMessage, PendingTool, StreamDisplayEvent, WorkflowStatus } from './types';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
+import { formatAIModelRouteLabel } from '@/utils/aiProviderPresentation';
 import { extractReasoningSummaryTitle } from './reasoningSummary';
 
 export type AssistantActiveTurnStatusKind = 'thinking' | 'tool' | 'generating';
@@ -206,6 +207,7 @@ const latestStreamActivityStatus = (
           candidate = {
             type: 'thinking',
             text: 'Waiting for approval',
+            startedAt: event.startedAt,
             activityAt: eventActivityAt(event),
             order: index,
           };
@@ -216,11 +218,25 @@ const latestStreamActivityStatus = (
           candidate = {
             type: 'thinking',
             text: 'Waiting for answer',
+            startedAt: event.startedAt,
             activityAt: eventActivityAt(event),
             order: index,
           };
         }
         break;
+      case 'model_switch': {
+        const model = event.model?.trim();
+        if (model) {
+          candidate = {
+            type: 'thinking',
+            text: `Switched to ${formatAIModelRouteLabel(model)}`,
+            startedAt: event.startedAt,
+            activityAt: eventActivityAt(event),
+            order: index,
+          };
+        }
+        break;
+      }
       default:
         break;
     }

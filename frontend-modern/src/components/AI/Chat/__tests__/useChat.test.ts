@@ -1146,10 +1146,14 @@ describe('useChat', () => {
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.model).toBe('gemini:gemini-3.1-flash-lite');
-      expect(assistant.streamEvents).toContainEqual({
-        type: 'model_switch',
-        model: 'gemini:gemini-3.1-flash-lite',
-      });
+      expect(assistant.streamEvents).toContainEqual(
+        expect.objectContaining({
+          type: 'model_switch',
+          model: 'gemini:gemini-3.1-flash-lite',
+          startedAt: expect.any(Number),
+          updatedAt: expect.any(Number),
+        }),
+      );
       expect(assistant.workflowStatus).toEqual(
         expect.objectContaining({
           phase: 'provider_fallback',
@@ -1323,6 +1327,14 @@ describe('useChat', () => {
         startedAt: expect.any(Number),
         updatedAt: expect.any(Number),
       });
+      expect(assistant.streamEvents).toContainEqual(
+        expect.objectContaining({
+          type: 'pending_tool',
+          toolId: 'tool-1',
+          startedAt: expect.any(Number),
+          updatedAt: expect.any(Number),
+        }),
+      );
       dispose();
     });
 
@@ -1358,11 +1370,15 @@ describe('useChat', () => {
       });
       const pendingToolEvents = assistant.streamEvents?.filter((e) => e.type === 'pending_tool');
       expect(pendingToolEvents).toHaveLength(1);
-      expect(pendingToolEvents![0].pendingTool).toMatchObject({
-        id: 'tool-1',
-        rawInput: '{"action": "logs"',
-        status: 'running',
-        progress: 'Running.',
+      expect(pendingToolEvents![0]).toMatchObject({
+        startedAt: expect.any(Number),
+        updatedAt: expect.any(Number),
+        pendingTool: {
+          id: 'tool-1',
+          rawInput: '{"action": "logs"',
+          status: 'running',
+          progress: 'Running.',
+        },
       });
       dispose();
     });
@@ -1596,6 +1612,13 @@ describe('useChat', () => {
         isExecuting: false,
         approvalId: 'appr-5',
       });
+      expect(assistant.streamEvents).toContainEqual(
+        expect.objectContaining({
+          type: 'approval',
+          startedAt: expect.any(Number),
+          updatedAt: expect.any(Number),
+        }),
+      );
       dispose();
     });
 
@@ -1632,6 +1655,13 @@ describe('useChat', () => {
         header: undefined,
         options: [{ label: 'Node 1', value: 'n1', description: 'Primary' }],
       });
+      expect(assistant.streamEvents).toContainEqual(
+        expect.objectContaining({
+          type: 'question',
+          startedAt: expect.any(Number),
+          updatedAt: expect.any(Number),
+        }),
+      );
       dispose();
     });
 

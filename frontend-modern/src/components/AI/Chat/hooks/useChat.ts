@@ -244,11 +244,25 @@ export function useChat(options: UseChatOptions = {}) {
   };
 
   // Helper to add stream event for chronological display
+  const withStreamEventTiming = (
+    event: StreamDisplayEvent,
+    now = Date.now(),
+  ): StreamDisplayEvent => {
+    const startedAt = event.startedAt ?? event.pendingTool?.startedAt ?? now;
+    const updatedAt = event.updatedAt ?? event.pendingTool?.updatedAt ?? startedAt;
+    return {
+      ...event,
+      startedAt,
+      updatedAt,
+    };
+  };
+
   const addStreamEvent = (msg: ChatMessage, event: StreamDisplayEvent): ChatMessage => {
+    const nextEvent = withStreamEventTiming(event);
     const events = msg.streamEvents || [];
 
     // For content events, merge consecutive content into one
-    if (event.type === 'content' && events.length > 0) {
+    if (nextEvent.type === 'content' && events.length > 0) {
       const last = events[events.length - 1];
       if (last.type === 'content') {
         const now = Date.now();
@@ -258,9 +272,9 @@ export function useChat(options: UseChatOptions = {}) {
             ...events.slice(0, -1),
             {
               ...last,
-              content: (last.content || '') + (event.content || ''),
-              startedAt: last.startedAt || event.startedAt || now,
-              updatedAt: event.updatedAt || now,
+              content: (last.content || '') + (nextEvent.content || ''),
+              startedAt: last.startedAt || nextEvent.startedAt || now,
+              updatedAt: nextEvent.updatedAt || now,
             },
           ],
         };
@@ -268,7 +282,7 @@ export function useChat(options: UseChatOptions = {}) {
     }
 
     // For thinking events, merge consecutive thinking into one
-    if (event.type === 'thinking' && events.length > 0) {
+    if (nextEvent.type === 'thinking' && events.length > 0) {
       const last = events[events.length - 1];
       if (last.type === 'thinking') {
         const now = Date.now();
@@ -278,9 +292,9 @@ export function useChat(options: UseChatOptions = {}) {
             ...events.slice(0, -1),
             {
               ...last,
-              thinking: (last.thinking || '') + (event.thinking || ''),
-              startedAt: last.startedAt || event.startedAt || now,
-              updatedAt: event.updatedAt || now,
+              thinking: (last.thinking || '') + (nextEvent.thinking || ''),
+              startedAt: last.startedAt || nextEvent.startedAt || now,
+              updatedAt: nextEvent.updatedAt || now,
             },
           ],
         };
@@ -289,7 +303,7 @@ export function useChat(options: UseChatOptions = {}) {
 
     return {
       ...msg,
-      streamEvents: [...events, event],
+      streamEvents: [...events, nextEvent],
     };
   };
 
@@ -365,19 +379,27 @@ export function useChat(options: UseChatOptions = {}) {
         return event;
       }
       replacedEvent = true;
-      return {
-        ...event,
-        toolId: resolvedTool?.id || event.toolId,
-        pendingTool: resolvedTool,
-      };
+      return withStreamEventTiming(
+        {
+          ...event,
+          toolId: resolvedTool?.id || event.toolId,
+          pendingTool: resolvedTool,
+        },
+        now,
+      );
     });
 
     if (!replacedEvent && resolvedTool) {
-      updatedEvents.push({
-        type: 'pending_tool',
-        pendingTool: resolvedTool,
-        toolId: resolvedTool.id,
-      });
+      updatedEvents.push(
+        withStreamEventTiming(
+          {
+            type: 'pending_tool',
+            pendingTool: resolvedTool,
+            toolId: resolvedTool.id,
+          },
+          now,
+        ),
+      );
     }
 
     return {
@@ -434,8 +456,12 @@ export function useChat(options: UseChatOptions = {}) {
       ...events.slice(0, boundaryIndex + 1),
       ...events.slice(boundaryIndex + 1).filter((evt) => evt.type !== 'content'),
     ];
+    const now = Date.now();
     const streamEvents = replacementText
-      ? [...retainedEvents, { type: 'content' as const, content: replacementText }]
+      ? [
+          ...retainedEvents,
+          withStreamEventTiming({ type: 'content' as const, content: replacementText }, now),
+        ]
       : retainedEvents;
 
     let content = msg.content || '';
@@ -1478,6 +1504,7 @@ export function useChat(options: UseChatOptions = {}) {
         }
 
         const shouldUpdateExecuting = typeof update.isExecuting === 'boolean';
+        const updatedAt = Date.now();
 
         // Update the approval in place
         return {
@@ -1494,6 +1521,7 @@ export function useChat(options: UseChatOptions = {}) {
             }
             return {
               ...event,
+              updatedAt,
               approval: {
                 ...event.approval,
                 isExecuting: update.isExecuting,
@@ -1516,7 +1544,10 @@ export function useChat(options: UseChatOptions = {}) {
         return {
           ...msg,
           toolCalls: [...(msg.toolCalls || []), toolCall],
-          streamEvents: [...(msg.streamEvents || []), { type: 'tool' as const, tool: toolCall }],
+          streamEvents: [
+            ...(msg.streamEvents || []),
+            withStreamEventTiming({ type: 'tool' as const, tool: toolCall }),
+          ],
         };
       }),
     );
@@ -1545,6 +1576,7 @@ export function useChat(options: UseChatOptions = {}) {
         }
 
         const shouldUpdateAnswering = typeof update.isAnswering === 'boolean';
+        const updatedAt = Date.now();
 
         // Update the question in place
         return {
@@ -1561,6 +1593,7 @@ export function useChat(options: UseChatOptions = {}) {
             }
             return {
               ...event,
+              updatedAt,
               question: {
                 ...event.question,
                 isAnswering: update.isAnswering,

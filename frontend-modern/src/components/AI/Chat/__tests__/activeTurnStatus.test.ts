@@ -193,6 +193,108 @@ describe('getAssistantActiveTurnStatus', () => {
     });
   });
 
+  it('lets a newer provider switch replace stale waiting progress', () => {
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            workflowStatus: {
+              phase: 'provider_start',
+              message: 'Sent request to OpenRouter; waiting for the first token.',
+              startedAt: 1_000,
+            },
+            streamEvents: [
+              {
+                type: 'model_switch',
+                model: 'openrouter:deepseek/deepseek-v4-pro',
+                startedAt: 2_000,
+                updatedAt: 2_000,
+              },
+            ],
+          }),
+        ],
+        true,
+      ),
+    ).toEqual({
+      type: 'thinking',
+      text: 'Switched to DeepSeek: DeepSeek V4 Pro via OpenRouter',
+      startedAt: 2_000,
+    });
+  });
+
+  it('carries approval event timing into the active waiting status', () => {
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            streamEvents: [
+              {
+                type: 'content',
+                content: 'I found the target service.',
+                startedAt: 1_000,
+                updatedAt: 1_200,
+              },
+              {
+                type: 'approval',
+                startedAt: 2_000,
+                updatedAt: 2_000,
+                approval: {
+                  command: 'systemctl restart nginx',
+                  toolId: 'tool-1',
+                  toolName: 'pulse_control',
+                  runOnHost: true,
+                },
+              },
+            ],
+          }),
+        ],
+        true,
+      ),
+    ).toEqual({
+      type: 'thinking',
+      text: 'Waiting for approval',
+      startedAt: 2_000,
+    });
+  });
+
+  it('carries question event timing into the active waiting status', () => {
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            streamEvents: [
+              {
+                type: 'approval',
+                startedAt: 1_000,
+                updatedAt: 1_000,
+                approval: {
+                  command: 'systemctl restart nginx',
+                  toolId: 'tool-1',
+                  toolName: 'pulse_control',
+                  runOnHost: true,
+                },
+              },
+              {
+                type: 'question',
+                startedAt: 2_000,
+                updatedAt: 2_000,
+                question: {
+                  questionId: 'question-1',
+                  questions: [{ id: 'target', type: 'text', question: 'Which node?' }],
+                },
+              },
+            ],
+          }),
+        ],
+        true,
+      ),
+    ).toEqual({
+      type: 'thinking',
+      text: 'Waiting for answer',
+      startedAt: 2_000,
+    });
+  });
+
   it('shows generating status after visible assistant output starts streaming', () => {
     expect(
       getAssistantActiveTurnStatus(
