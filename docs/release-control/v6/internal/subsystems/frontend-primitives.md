@@ -1003,9 +1003,13 @@ not a replacement status card, CTA band, or page-local nested card.
     the current manual selection instead of rendering raw provider catalogs as
     plain select options. The picker must also constrain its dropdown and
     internal result list to the available viewport height so settings model
-    catalogs remain usable on mobile and tablet layouts with bottom navigation.
-    Chat-owned selectors must reuse this shared picker instead of carrying a
-    parallel dropdown implementation. Recent/priority model sections, external
+    catalogs remain usable on mobile and tablet layouts with bottom navigation,
+    and it must flip above its trigger when prompt/composer chrome leaves
+    insufficient room below. Caller-owned alignment may choose left or right
+    anchoring, but the shared picker still owns the fixed-position dropdown,
+    viewport cap, search shell, and result list sizing. Chat-owned selectors
+    must reuse this shared picker instead of carrying a parallel dropdown
+    implementation. Recent/priority model sections, external
     open-and-focus requests, selected older model visibility, route labels, and
     explicit `provider:model` custom-route validation belong to the shared
     picker so Assistant, settings, and future model-selection surfaces do not

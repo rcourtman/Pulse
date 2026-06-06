@@ -72,6 +72,7 @@ const DEFAULT_LIST_MAX_HEIGHT = 288;
 const MIN_DROPDOWN_MAX_HEIGHT = 120;
 const MOBILE_BOTTOM_CLEARANCE = 88;
 const DESKTOP_BOTTOM_CLEARANCE = 16;
+const TOP_CLEARANCE = 16;
 const SEARCH_HEADER_HEIGHT = 52;
 const ERROR_ROW_HEIGHT = 36;
 const CUSTOM_RECENT_MODEL_DESCRIPTION = 'Recent custom model route';
@@ -128,11 +129,13 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
   const [showAllModels, setShowAllModels] = createSignal(false);
   const [searchQuery, setSearchQuery] = createSignal('');
   const [dropdownPosition, setDropdownPosition] = createSignal({
+    bottom: 0,
     top: 0,
     left: 0,
     right: 0,
     maxHeight: DEFAULT_DROPDOWN_MAX_HEIGHT,
     listMaxHeight: DEFAULT_LIST_MAX_HEIGHT,
+    placement: 'bottom' as 'bottom' | 'top',
   });
   let containerRef: HTMLDivElement | undefined;
   let buttonRef: HTMLButtonElement | undefined;
@@ -246,7 +249,12 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
 
   const dropdownStyle = createMemo(() => {
     const position = dropdownPosition();
-    const base = { top: `${position.top}px`, 'max-height': `${position.maxHeight}px` };
+    const base = {
+      ...(position.placement === 'top'
+        ? { bottom: `${position.bottom}px` }
+        : { top: `${position.top}px` }),
+      'max-height': `${position.maxHeight}px`,
+    };
     if (props.align === 'left') {
       return { ...base, left: `${position.left}px` };
     }
@@ -260,18 +268,26 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
     const rect = buttonRef.getBoundingClientRect();
     const bottomClearance =
       window.innerWidth < 1024 ? MOBILE_BOTTOM_CLEARANCE : DESKTOP_BOTTOM_CLEARANCE;
-    const availableHeight = window.innerHeight - rect.bottom - bottomClearance;
+    const availableBelow = window.innerHeight - rect.bottom - bottomClearance;
+    const availableAbove = rect.top - TOP_CLEARANCE;
+    const placement =
+      availableBelow < MIN_DROPDOWN_MAX_HEIGHT && availableAbove > availableBelow
+        ? 'top'
+        : 'bottom';
+    const availableHeight = placement === 'top' ? availableAbove : availableBelow;
     const maxHeight = Math.max(
       MIN_DROPDOWN_MAX_HEIGHT,
       Math.min(DEFAULT_DROPDOWN_MAX_HEIGHT, availableHeight),
     );
     const nonListHeight = SEARCH_HEADER_HEIGHT + (props.error ? ERROR_ROW_HEIGHT : 0);
     setDropdownPosition({
+      bottom: window.innerHeight - rect.top + 4,
       top: rect.bottom + 4,
       left: rect.left,
       right: window.innerWidth - rect.right,
       maxHeight,
       listMaxHeight: Math.max(80, maxHeight - nonListHeight),
+      placement,
     });
   };
 

@@ -135,6 +135,17 @@ describe('ModelSelector', () => {
     expect(screen.getByPlaceholderText('Search or enter model ID')).toBeInTheDocument();
   });
 
+  it('left-aligns the dropdown for composer chrome placement', () => {
+    render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
+
+    fireEvent.click(screen.getByTitle('Select model for this chat'));
+
+    const dropdown = document.querySelector('[data-ai-model-picker] .fixed') as HTMLElement;
+    expect(dropdown.style.left).toBe('0px');
+    expect(dropdown.style.right).toBe('');
+    expect(dropdown.className).toContain('max-w-[calc(100vw-2rem)]');
+  });
+
   it('opens dropdown and focuses search when an external recovery action requests it', async () => {
     const [openRequest, setOpenRequest] = createSignal(0);
     render(() => (

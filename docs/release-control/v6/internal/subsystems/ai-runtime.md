@@ -705,6 +705,17 @@ runtime cost control, and shared AI transport surfaces.
    remain route-distinct: if the configured chat override resolves to the same
    route as the effective default or the already selected session model, the
    drawer must not render a duplicate override action.
+   Assistant route and control chrome belongs with the prompt surface, not the
+   drawer title row. The referenced OpenCode source at commit
+   `9ed17da55ab1f7360cc0e01075f763e27fa899e9`
+   `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx` derives the
+   current provider label in `Prompt` lines 196-197 and renders agent, model,
+   provider, and variant metadata in the prompt footer at lines 1452-1479; the
+   session route injects that prompt through
+   `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx`
+   `session_prompt` lines 1313-1333. Pulse adapts that by keeping the active
+   model route selector, control-mode selector, and last-turn usage in composer
+   chrome while the drawer header stays limited to drawer/session commands.
    Empty Assistant sessions are prompt-first transcript surfaces, not product
    marketing or instruction panels. The referenced OpenCode source at commit
    `9ed17da55ab1f7360cc0e01075f763e27fa899e9`

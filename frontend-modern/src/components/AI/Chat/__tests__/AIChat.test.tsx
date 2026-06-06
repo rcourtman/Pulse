@@ -1245,18 +1245,25 @@ describe('AIChat', () => {
       expect(screen.getByLabelText('Close Pulse Assistant')).toBeInTheDocument();
     });
 
-    it('keeps the phone close button outside the scrollable assistant header actions', () => {
+    it('keeps phone route controls in the composer chrome instead of the header actions', () => {
       setViewportWidth(375);
       renderChat();
 
       const closeButton = screen.getByRole('button', { name: 'Close Pulse Assistant' });
       const headerActions = screen.getByTestId('assistant-header-actions');
+      const routeControls = screen.getByTestId('assistant-composer-route-controls');
+      const modelSelector = screen.getByTestId('model-selector');
+      const controlButton = screen.getByTitle('Control mode');
 
       expect(closeButton).toHaveClass('order-2');
       expect(headerActions).toHaveClass('order-3');
       expect(headerActions).toHaveClass('w-full');
-      expect(headerActions).toHaveClass('overflow-x-auto');
+      expect(headerActions).not.toHaveClass('overflow-x-auto');
       expect(headerActions).not.toContainElement(closeButton);
+      expect(headerActions).not.toContainElement(modelSelector);
+      expect(headerActions).not.toContainElement(controlButton);
+      expect(routeControls).toContainElement(modelSelector);
+      expect(routeControls).toContainElement(controlButton);
     });
   });
 

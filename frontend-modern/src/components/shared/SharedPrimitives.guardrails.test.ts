@@ -254,7 +254,10 @@ describe('shared primitive guardrails', () => {
     expect(aiModelPickerSource).toContain("candidate.includes('://')");
     expect(aiModelPickerSource).toContain('separator <= 0 || separator === candidate.length - 1');
     expect(aiModelPickerSource).toContain('MOBILE_BOTTOM_CLEARANCE');
-    expect(aiModelPickerSource).toContain('availableHeight = window.innerHeight');
+    expect(aiModelPickerSource).toContain('TOP_CLEARANCE');
+    expect(aiModelPickerSource).toContain("placement: 'bottom' as 'bottom' | 'top'");
+    expect(aiModelPickerSource).toContain("position.placement === 'top'");
+    expect(aiModelPickerSource).toContain("availableHeight = placement === 'top'");
     expect(aiModelPickerSource).toContain(
       "style={{ 'max-height': `${dropdownPosition().listMaxHeight}px` }}",
     );

@@ -2183,7 +2183,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
             </h2>
 
             <div
-              class="order-3 -mx-1 flex w-full min-w-0 items-center gap-1.5 overflow-x-auto px-1 pb-0.5 sm:order-none sm:mx-0 sm:w-auto sm:flex-none sm:overflow-visible sm:px-0 sm:pb-0"
+              class="order-3 flex w-full min-w-0 items-center gap-1.5 sm:order-none sm:w-auto sm:flex-none"
               data-testid="assistant-header-actions"
             >
               {/* New chat */}
@@ -2202,84 +2202,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 </svg>
                 <span class="font-medium">{AI_CHAT_NEW_SESSION_SHORT_LABEL}</span>
               </button>
-
-              {/* Model selector */}
-              <ModelSelector
-                models={aiRuntimeModels()}
-                selectedModel={chat.model()}
-                defaultModel={defaultModel()}
-                defaultModelLabel={defaultModelLabel()}
-                chatOverrideModel={chatOverrideModel()}
-                chatOverrideLabel={chatOverrideLabel()}
-                recentModelIds={recentModelIds()}
-                isLoading={aiRuntimeModelsLoading()}
-                error={aiRuntimeModelsError()}
-                openRequest={modelSelectorOpenRequest()}
-                onModelSelect={selectModel}
-                onRefresh={() => loadModels(true)}
-              />
-
-              {/* Control mode toggle */}
-              <div class="relative" data-dropdown>
-                <button
-                  onClick={() => setShowControlMenu(!showControlMenu())}
-                  class={`flex flex-shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded-md border transition-colors ${controlPresentation().pillClassName} ${controlSaving() ? 'opacity-70 cursor-wait' : 'hover:opacity-90'}`}
-                  title="Control mode"
-                  disabled={controlSaving()}
-                >
-                  <span class={`h-1.5 w-1.5 rounded-full ${controlPresentation().dotClassName}`} />
-                  <span>{controlPresentation().label}</span>
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M19 9l-7 7-7-7"
-                    />
-                  </svg>
-                </button>
-
-                <Show when={showControlMenu()}>
-                  <div class="absolute right-0 mt-2 w-60 rounded-md border border-border bg-surface shadow-sm z-50 overflow-hidden">
-                    <div class="px-3 py-2 text-[11px] text-muted border-b border-border">
-                      Default control mode
-                    </div>
-                    <button
-                      class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'read_only' ? getAIChatControlLevelPresentation('read_only').selectedClassName : ''}`}
-                      onClick={() => updateControlLevel('read_only')}
-                    >
-                      <div class="font-medium text-base-content">
-                        {getAIChatControlLevelPresentation('read_only').label}
-                      </div>
-                      <div class="text-[11px] text-muted">
-                        {getAIChatControlLevelPresentation('read_only').description}
-                      </div>
-                    </button>
-                    <button
-                      class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'controlled' ? getAIChatControlLevelPresentation('controlled').selectedClassName : ''}`}
-                      onClick={() => updateControlLevel('controlled')}
-                    >
-                      <div class="font-medium text-base-content">
-                        {getAIChatControlLevelPresentation('controlled').label}
-                      </div>
-                      <div class="text-[11px] text-muted">
-                        {getAIChatControlLevelPresentation('controlled').description}
-                      </div>
-                    </button>
-                    <button
-                      class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'autonomous' ? getAIChatControlLevelPresentation('autonomous').selectedClassName : ''}`}
-                      onClick={() => updateControlLevel('autonomous')}
-                    >
-                      <div class="font-medium text-base-content">
-                        {getAIChatControlLevelPresentation('autonomous').label}
-                      </div>
-                      <div class="text-[11px] text-muted">
-                        {getAIChatControlLevelPresentation('autonomous').description}
-                      </div>
-                    </button>
-                  </div>
-                </Show>
-              </div>
 
               {/* Session picker */}
               <div class="relative" data-dropdown>
@@ -2835,19 +2757,105 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 </div>
               </div>
             </form>
-            <Show when={lastAssistantUsage()}>
-              {(usage) => (
-                <div
-                  class="mt-1.5 flex min-h-4 min-w-0 items-center justify-end gap-1.5 text-[10px] font-medium text-muted"
-                  aria-label={usage().title}
-                  title={usage().title}
-                >
-                  <span class="truncate">{usage().label}</span>
-                  <span class="h-1 w-1 shrink-0 rounded-full bg-border" aria-hidden="true" />
-                  <span class="shrink-0">{usage().detail}</span>
+            <div
+              class="mt-1.5 flex min-h-7 min-w-0 flex-wrap items-center justify-between gap-2"
+              data-testid="assistant-composer-chrome"
+            >
+              <div
+                class="flex min-w-0 flex-1 flex-wrap items-center gap-1.5"
+                data-testid="assistant-composer-route-controls"
+              >
+                <ModelSelector
+                  models={aiRuntimeModels()}
+                  selectedModel={chat.model()}
+                  defaultModel={defaultModel()}
+                  defaultModelLabel={defaultModelLabel()}
+                  chatOverrideModel={chatOverrideModel()}
+                  chatOverrideLabel={chatOverrideLabel()}
+                  recentModelIds={recentModelIds()}
+                  isLoading={aiRuntimeModelsLoading()}
+                  error={aiRuntimeModelsError()}
+                  openRequest={modelSelectorOpenRequest()}
+                  onModelSelect={selectModel}
+                  onRefresh={() => loadModels(true)}
+                />
+
+                <div class="relative" data-dropdown>
+                  <button
+                    onClick={() => setShowControlMenu(!showControlMenu())}
+                    class={`flex flex-shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded-md border transition-colors ${controlPresentation().pillClassName} ${controlSaving() ? 'opacity-70 cursor-wait' : 'hover:opacity-90'}`}
+                    title="Control mode"
+                    disabled={controlSaving()}
+                  >
+                    <span class={`h-1.5 w-1.5 rounded-full ${controlPresentation().dotClassName}`} />
+                    <span>{controlPresentation().label}</span>
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M19 9l-7 7-7-7"
+                      />
+                    </svg>
+                  </button>
+
+                  <Show when={showControlMenu()}>
+                    <div class="absolute bottom-full left-0 z-50 mb-2 w-60 overflow-hidden rounded-md border border-border bg-surface shadow-sm">
+                      <div class="border-b border-border px-3 py-2 text-[11px] text-muted">
+                        Default control mode
+                      </div>
+                      <button
+                        class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'read_only' ? getAIChatControlLevelPresentation('read_only').selectedClassName : ''}`}
+                        onClick={() => updateControlLevel('read_only')}
+                      >
+                        <div class="font-medium text-base-content">
+                          {getAIChatControlLevelPresentation('read_only').label}
+                        </div>
+                        <div class="text-[11px] text-muted">
+                          {getAIChatControlLevelPresentation('read_only').description}
+                        </div>
+                      </button>
+                      <button
+                        class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'controlled' ? getAIChatControlLevelPresentation('controlled').selectedClassName : ''}`}
+                        onClick={() => updateControlLevel('controlled')}
+                      >
+                        <div class="font-medium text-base-content">
+                          {getAIChatControlLevelPresentation('controlled').label}
+                        </div>
+                        <div class="text-[11px] text-muted">
+                          {getAIChatControlLevelPresentation('controlled').description}
+                        </div>
+                      </button>
+                      <button
+                        class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'autonomous' ? getAIChatControlLevelPresentation('autonomous').selectedClassName : ''}`}
+                        onClick={() => updateControlLevel('autonomous')}
+                      >
+                        <div class="font-medium text-base-content">
+                          {getAIChatControlLevelPresentation('autonomous').label}
+                        </div>
+                        <div class="text-[11px] text-muted">
+                          {getAIChatControlLevelPresentation('autonomous').description}
+                        </div>
+                      </button>
+                    </div>
+                  </Show>
                 </div>
-              )}
-            </Show>
+              </div>
+
+              <Show when={lastAssistantUsage()}>
+                {(usage) => (
+                  <div
+                    class="flex min-h-4 min-w-0 items-center justify-end gap-1.5 text-[10px] font-medium text-muted"
+                    aria-label={usage().title}
+                    title={usage().title}
+                  >
+                    <span class="truncate">{usage().label}</span>
+                    <span class="h-1 w-1 shrink-0 rounded-full bg-border" aria-hidden="true" />
+                    <span class="shrink-0">{usage().detail}</span>
+                  </div>
+                )}
+              </Show>
+            </div>
           </div>
         </Show>
       </div>

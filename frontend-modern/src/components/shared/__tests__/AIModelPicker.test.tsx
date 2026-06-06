@@ -116,6 +116,39 @@ describe('AIModelPicker', () => {
     expect(screen.getByRole('listbox').style.maxHeight).toBe('240px');
   });
 
+  it('opens the dropdown above the button when composer chrome leaves no room below', () => {
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(390);
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(700);
+    render(() => (
+      <AIModelPicker
+        models={models}
+        selectedModel="openrouter:minimax/minimax-m2.5"
+        onModelSelect={vi.fn()}
+        title="Select shared default model"
+      />
+    ));
+
+    const button = screen.getByTitle('Select shared default model');
+    vi.spyOn(button, 'getBoundingClientRect').mockReturnValue({
+      bottom: 668,
+      height: 40,
+      left: 16,
+      right: 332,
+      top: 628,
+      width: 316,
+      x: 16,
+      y: 628,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    fireEvent.click(button);
+
+    const dropdown = document.querySelector('[data-ai-model-picker] .fixed') as HTMLElement;
+    expect(dropdown.style.top).toBe('');
+    expect(dropdown.style.bottom).toBe('76px');
+    expect(dropdown.style.maxHeight).toBe('384px');
+  });
+
   it('searches the full catalog without requiring the older-model disclosure first', () => {
     render(() => (
       <AIModelPicker
