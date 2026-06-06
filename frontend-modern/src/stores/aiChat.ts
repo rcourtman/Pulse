@@ -83,6 +83,7 @@ export type AIChatCommandRequestAction =
   | 'new'
   | 'sessions'
   | 'models'
+  | 'providers'
   | 'status'
   | 'undo'
   | 'redo';

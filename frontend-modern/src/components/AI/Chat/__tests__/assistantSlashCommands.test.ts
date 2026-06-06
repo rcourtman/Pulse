@@ -17,6 +17,10 @@ describe('assistantSlashCommands', () => {
     expect(parseAssistantSlashCommand('/models')).toBe('models');
     expect(parseAssistantSlashCommand('/model')).toBe('models');
     expect(parseAssistantSlashCommand('/mo')).toBe('models');
+    expect(parseAssistantSlashCommand('/providers')).toBe('providers');
+    expect(parseAssistantSlashCommand('/connect')).toBe('providers');
+    expect(parseAssistantSlashCommand('/settings')).toBe('providers');
+    expect(parseAssistantSlashCommand('/keys')).toBe('providers');
     expect(parseAssistantSlashCommand('/status')).toBe('status');
     expect(parseAssistantSlashCommand('/runtime')).toBe('status');
     expect(parseAssistantSlashCommand('/health')).toBe('status');
@@ -44,6 +48,7 @@ describe('assistantSlashCommands', () => {
       'new',
       'sessions',
       'models',
+      'providers',
       'status',
       'copy',
       'export',
@@ -55,7 +60,11 @@ describe('assistantSlashCommands', () => {
       'sessions',
     ]);
     expect(filterAssistantSlashCommands('provider').map((command) => command.name)).toEqual([
+      'providers',
       'models',
+    ]);
+    expect(filterAssistantSlashCommands('connect').map((command) => command.name)).toEqual([
+      'providers',
     ]);
     expect(filterAssistantSlashCommands('runtime').map((command) => command.name)).toEqual([
       'status',
@@ -72,6 +81,13 @@ describe('assistantSlashCommands', () => {
     expect(getAssistantSlashCommandTokens(sessions)).toEqual(['sessions', 'resume', 'continue']);
     const models = filterAssistantSlashCommands('mo')[0];
     expect(getAssistantSlashCommandTokens(models)).toEqual(['models', 'model', 'mo']);
+    const providers = filterAssistantSlashCommands('connect')[0];
+    expect(getAssistantSlashCommandTokens(providers)).toEqual([
+      'providers',
+      'connect',
+      'settings',
+      'keys',
+    ]);
     const status = filterAssistantSlashCommands('status')[0];
     expect(getAssistantSlashCommandTokens(status)).toEqual(['status', 'runtime', 'health']);
   });

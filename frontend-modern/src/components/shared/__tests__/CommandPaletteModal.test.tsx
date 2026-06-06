@@ -86,6 +86,7 @@ describe('CommandPaletteModal', () => {
     expect(commandPaletteModelSource).toContain("id: 'assistant-help'");
     expect(commandPaletteModelSource).toContain("id: 'assistant-switch-session'");
     expect(commandPaletteModelSource).toContain("id: 'assistant-switch-model'");
+    expect(commandPaletteModelSource).toContain("id: 'assistant-provider-settings'");
     expect(commandPaletteModelSource).toContain("id: 'assistant-status'");
     expect(commandPaletteModelSource).toContain("id: 'assistant-undo-last-turn'");
     expect(commandPaletteModelSource).toContain("id: 'assistant-redo-last-turn'");
@@ -109,6 +110,7 @@ describe('CommandPaletteModal', () => {
     expect(screen.getByText('New Assistant session')).toBeInTheDocument();
     expect(screen.getByText('Switch Assistant session')).toBeInTheDocument();
     expect(screen.getByText('Switch Assistant model')).toBeInTheDocument();
+    expect(screen.getByText('Open Assistant provider settings')).toBeInTheDocument();
     expect(screen.getByText('Check Assistant status')).toBeInTheDocument();
     expect(screen.getByText('Undo last Assistant turn')).toBeInTheDocument();
     expect(screen.getByText('Redo last Assistant turn')).toBeInTheDocument();
@@ -189,6 +191,25 @@ describe('CommandPaletteModal', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     await waitFor(() => {
       expect(requestCommand).toHaveBeenCalledWith('status');
+    });
+  });
+
+  it('routes Assistant provider settings commands through the Assistant store', async () => {
+    const onClose = vi.fn();
+    const requestCommand = vi.spyOn(aiChatStore, 'requestCommand').mockImplementation(() => {});
+    render(() => (
+      <CommandPaletteModal
+        isOpen={true}
+        onClose={onClose}
+        platformVisibility={platformVisibility}
+      />
+    ));
+
+    await fireEvent.click(screen.getByText('Open Assistant provider settings'));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(requestCommand).toHaveBeenCalledWith('providers');
     });
   });
 

@@ -35,6 +35,7 @@ export type CommandPaletteAssistantActions = {
   newSession: () => void;
   sessions: () => void;
   models: () => void;
+  providers: () => void;
   status: () => void;
   undo: () => void;
   redo: () => void;
@@ -84,6 +85,22 @@ export function buildCommandPaletteCommands(options: {
         description: '/models',
         keywords: ['assistant', 'models', 'model', 'provider', 'openrouter', 'deepseek'],
         action: options.assistantActions.models,
+      },
+      {
+        id: 'assistant-provider-settings',
+        label: 'Open Assistant provider settings',
+        description: '/providers',
+        keywords: [
+          'assistant',
+          'providers',
+          'provider',
+          'connect',
+          'settings',
+          'keys',
+          'openrouter',
+          'deepseek',
+        ],
+        action: options.assistantActions.providers,
       },
       {
         id: 'assistant-status',

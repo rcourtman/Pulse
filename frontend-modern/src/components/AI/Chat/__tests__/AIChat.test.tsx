@@ -17,6 +17,7 @@ const {
   mockWebSocketState,
   mockChatMessagesProps,
   mockModelSelectorProps,
+  mockNavigate,
 } = vi.hoisted(() => {
   const mockChatMessagesProps: Array<{
     messages: ChatMessage[];
@@ -133,7 +134,7 @@ const {
     commandRequestSignal: vi.fn(
       (): {
         id: number;
-        action: 'help' | 'new' | 'sessions' | 'models' | 'status' | 'undo' | 'redo';
+        action: 'help' | 'new' | 'sessions' | 'models' | 'providers' | 'status' | 'undo' | 'redo';
       } | null => null,
     ),
     ackCommandRequest: vi.fn(),
@@ -203,6 +204,7 @@ const {
   const mockWebSocketState = {
     resources: [] as Array<{ id: string; type: string }> | undefined,
   };
+  const mockNavigate = vi.fn();
 
   return {
     mockChat,
@@ -215,10 +217,15 @@ const {
     mockWebSocketState,
     mockChatMessagesProps,
     mockModelSelectorProps,
+    mockNavigate,
   };
 });
 
 // ── Module mocks ───────────────────────────────────────────────────────────
+
+vi.mock('@solidjs/router', () => ({
+  useNavigate: () => mockNavigate,
+}));
 
 vi.mock('../hooks/useChat', () => ({
   useChat: () => mockChat,
@@ -402,6 +409,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockChatMessagesProps.length = 0;
   mockModelSelectorProps.length = 0;
+  mockNavigate.mockReset();
   resetAIChatComposerDraftStashForTests();
   setViewportWidth(1440);
   resetAIRuntimeState();
@@ -1655,6 +1663,19 @@ describe('AIChat', () => {
         ).not.toBeInTheDocument();
         expect(screen.getByTestId('model-selector')).toHaveAttribute('data-open-request', '1');
       });
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('opens Assistant provider settings from /connect without sending a provider prompt', async () => {
+      const onClose = vi.fn();
+      renderChat(onClose);
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+
+      fireEvent.input(textarea, { target: { value: '/connect' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(mockNavigate).toHaveBeenCalledWith('/settings/system-ai');
+      expect(onClose).toHaveBeenCalledTimes(1);
       expect(mockChat.sendMessage).not.toHaveBeenCalled();
     });
 

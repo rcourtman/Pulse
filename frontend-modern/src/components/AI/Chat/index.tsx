@@ -8,6 +8,7 @@ import {
   createMemo,
   createEffect,
 } from 'solid-js';
+import { useNavigate } from '@solidjs/router';
 import { unwrap } from 'solid-js/store';
 import SendIcon from 'lucide-solid/icons/send';
 import SquareIcon from 'lucide-solid/icons/square';
@@ -602,6 +603,7 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
  * session management, and streaming response display.
  */
 export const AIChat: Component<AIChatProps> = (props) => {
+  const navigate = useNavigate();
   // UI state - use store's isOpenSignal for reactivity
   const isOpen = aiChatStore.isOpenSignal;
   const { width } = useBreakpoint();
@@ -1672,6 +1674,15 @@ export const AIChat: Component<AIChatProps> = (props) => {
     void refreshSelectedProviderReadiness(provider, model);
   };
 
+  const openAssistantProviderSettings = () => {
+    setShowSessions(false);
+    setShowCommandHelp(false);
+    setSessionRefreshLoading(false);
+    resetSessionSearch();
+    navigate(AI_CHAT_PROVIDER_READINESS_SETTINGS_HREF);
+    props.onClose();
+  };
+
   const isOverlayLayout = createMemo(() => width() < AI_CHAT_MIN_DOCKED_VIEWPORT_WIDTH);
   const rootClassName = createMemo(() => {
     if (isOverlayLayout()) {
@@ -2437,6 +2448,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
         setSessionRefreshLoading(false);
         resetSessionSearch();
         setModelSelectorOpenRequest((value) => value + 1);
+        break;
+      case 'providers':
+        openAssistantProviderSettings();
         break;
       case 'status':
         setShowCommandHelp(false);

@@ -4,6 +4,7 @@ import ClockIcon from 'lucide-solid/icons/clock';
 import CopyIcon from 'lucide-solid/icons/copy';
 import DownloadIcon from 'lucide-solid/icons/download';
 import GitForkIcon from 'lucide-solid/icons/git-fork';
+import KeyRoundIcon from 'lucide-solid/icons/key-round';
 import PlusIcon from 'lucide-solid/icons/plus';
 import Redo2Icon from 'lucide-solid/icons/redo-2';
 import SettingsIcon from 'lucide-solid/icons/settings';
@@ -33,6 +34,8 @@ export const AssistantSlashCommandIcon = (props: { action: AssistantSlashCommand
       return <ClockIcon class="h-4 w-4" aria-hidden="true" />;
     case 'models':
       return <SettingsIcon class="h-4 w-4" aria-hidden="true" />;
+    case 'providers':
+      return <KeyRoundIcon class="h-4 w-4" aria-hidden="true" />;
     case 'status':
       return <ActivityIcon class="h-4 w-4" aria-hidden="true" />;
     case 'copy':

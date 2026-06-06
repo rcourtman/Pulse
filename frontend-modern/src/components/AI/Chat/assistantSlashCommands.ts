@@ -5,6 +5,7 @@ export type AssistantSlashCommandAction =
   | 'help'
   | 'models'
   | 'new'
+  | 'providers'
   | 'redo'
   | 'status'
   | 'undo'
@@ -41,6 +42,12 @@ export const ASSISTANT_SLASH_COMMANDS: AssistantSlashCommand[] = [
     aliases: ['model', 'mo'],
     action: 'models',
     description: 'Choose the model and provider route',
+  },
+  {
+    name: 'providers',
+    aliases: ['connect', 'settings', 'keys'],
+    action: 'providers',
+    description: 'Open Assistant provider settings',
   },
   {
     name: 'status',
