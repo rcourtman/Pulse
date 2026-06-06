@@ -299,6 +299,12 @@ runtime cost control, and shared AI transport surfaces.
    the selected model owns investigation and action choice inside Pulse policy.
    Direct text turns such as exact-reply diagnostics must withhold tools and
    use a scoped system prompt that does not advertise unavailable tools.
+   Short alert and finding prompts are not direct-text turns: prompts such as
+   "Alerts count", "active alerts", or "findings count" must keep the full
+   governed manifest, including `pulse_alerts`, so the selected model can
+   choose the canonical Pulse alert/finding tool instead of receiving a
+   no-tools system prompt and asking the operator to paste context Pulse
+   already owns.
    Inventory, count, overview, status, list, and breakdown prompts that only
    need canonical Pulse resource state must expose the canonical
    query/clarification path instead of shell/read/control tools, so prompts
@@ -364,7 +370,14 @@ runtime cost control, and shared AI transport surfaces.
    stream events must render inline as compact rows in the assistant turn,
    transition to `running` or `waiting` through `tool_progress`, and resolve in
    place on `tool_end` instead of disappearing until completion or relying only
-   on the drawer-level status bar.
+   on the drawer-level status bar. The referenced OpenCode source at fetched
+   `origin/dev` commit `ba57718b0516c7a8670d1e820b1a24146a8b8262` emits an ACP
+   `tool_call` when a tool part is known and then sends `tool_call_update`
+   patches for pending, running, completed, and failed states through
+   `packages/opencode/src/acp/event.ts` and
+   `packages/opencode/src/acp/tool.ts`; Pulse adapts that by keeping the live
+   pending row's current progress text visible inside the transcript at drawer
+   width, not only in the footer/status strip.
    Assistant session listing is a history-browsing path, not a send-path lock.
    The session store must not hold its shared mutex while scanning and parsing
    every persisted session file for `/api/ai/sessions`; writes must remain

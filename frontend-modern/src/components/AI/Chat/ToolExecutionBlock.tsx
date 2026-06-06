@@ -168,27 +168,31 @@ export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
   });
 
   return (
-    <div class="my-0.5 font-mono text-[11px] flex items-center gap-1.5 px-2 py-1 rounded bg-surface-alt border border-border">
-      <Show
-        when={status() === 'waiting'}
-        fallback={<LoaderCircleIcon class={activityIconClass()} aria-label={statusLabel()} />}
-      >
-        <ClockIcon class={activityIconClass()} aria-label={statusLabel()} />
-      </Show>
+    <div class="my-0.5 font-mono text-[11px] rounded border border-border bg-surface-alt px-2 py-1">
+      <div class="flex min-w-0 items-center gap-1.5">
+        <Show
+          when={status() === 'waiting'}
+          fallback={<LoaderCircleIcon class={activityIconClass()} aria-label={statusLabel()} />}
+        >
+          <ClockIcon class={activityIconClass()} aria-label={statusLabel()} />
+        </Show>
 
-      <span class="text-muted uppercase text-[9px] font-medium tracking-wider min-w-[50px]">
-        {toolLabel()}
-      </span>
-
-      <span class="text-base-content truncate flex-1">{inputSummary()}</span>
-      <Show when={progressText()}>
-        <span class="hidden sm:inline-block max-w-[180px] truncate text-[10px] text-muted">
-          {progressText()}
+        <span class="text-muted uppercase text-[9px] font-medium tracking-wider min-w-[50px]">
+          {toolLabel()}
         </span>
-      </Show>
-      <span class="shrink-0 text-[10px] text-muted">{statusLabel()}</span>
-      <Show when={elapsedLabel()}>
-        <span class="shrink-0 text-[10px] text-muted">{elapsedLabel()}</span>
+
+        <span class="min-w-0 flex-1 truncate text-base-content">{inputSummary()}</span>
+        <span class="shrink-0 text-[10px] text-muted">{statusLabel()}</span>
+        <Show when={elapsedLabel()}>
+          <span class="shrink-0 text-[10px] text-muted">{elapsedLabel()}</span>
+        </Show>
+      </div>
+      <Show when={progressText()}>
+        <div class="mt-0.5 min-w-0 pl-[calc(0.75rem+56px)] text-[10px] leading-snug text-muted">
+          <span class="block truncate" title={progressText()}>
+            {progressText()}
+          </span>
+        </div>
       </Show>
     </div>
   );

@@ -223,6 +223,35 @@ func TestToolsForAssistantTurn_ActionAndDiagnosticsKeepFullManifest(t *testing.T
 	}
 }
 
+func TestToolsForAssistantTurn_AlertPromptsKeepFullManifest(t *testing.T) {
+	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
+		StateProvider: fakeStateProvider{},
+		AgentServer:   fakeAgentServer{},
+		ReadState:     &fakeCanonicalReadState{},
+		ControlLevel:  tools.ControlLevelControlled,
+	})
+
+	svc := &Service{executor: exec}
+	for _, prompt := range []string{
+		"Alerts count",
+		"active alerts",
+		"findings count",
+	} {
+		toolsList := svc.toolsForAssistantTurn(prompt, false, false, false)
+		set := toolNameSet(toolsList)
+		if !set["pulse_alerts"] || !set["pulse_query"] {
+			t.Fatalf("expected full manifest for %q, got %#v", prompt, set)
+		}
+		promptText := svc.buildSystemPromptForOfferedTools(toolsList)
+		if strings.Contains(promptText, "No Pulse tools are offered for this turn") {
+			t.Fatalf("expected alert prompt to avoid text-only tool boundary, got %q", promptText)
+		}
+		if !strings.Contains(promptText, "pulse_alerts: mode=mixed") {
+			t.Fatalf("expected alert prompt system prompt to advertise pulse_alerts, got %q", promptText)
+		}
+	}
+}
+
 func TestToolsForAssistantTurn_ModelHandoffKeepsFullManifest(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
 		StateProvider: fakeStateProvider{},

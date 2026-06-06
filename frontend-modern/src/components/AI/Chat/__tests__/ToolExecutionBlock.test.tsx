@@ -312,7 +312,10 @@ describe('PendingToolBlock', () => {
     ));
 
     expect(screen.getByText('running')).toBeInTheDocument();
-    expect(screen.getByText('Running command.')).toBeInTheDocument();
+    const progress = screen.getByText('Running command.');
+    expect(progress).toBeInTheDocument();
+    expect(progress).toHaveAttribute('title', 'Running command.');
+    expect(progress.className).not.toContain('hidden');
   });
 
   it('renders waiting status without a spinner', () => {
