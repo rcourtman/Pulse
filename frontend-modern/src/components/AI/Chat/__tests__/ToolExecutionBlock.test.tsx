@@ -443,6 +443,14 @@ describe('PendingToolBlock', () => {
     expect(screen.queryByText(/include/)).not.toBeInTheDocument();
   });
 
+  it('renders an action-specific pending label before query arguments arrive', () => {
+    render(() => <PendingToolBlock tool={makePending({ name: 'pulse_query', input: '{}' })} />);
+
+    expect(screen.getByText('Preparing query...')).toBeInTheDocument();
+    expect(screen.getByText('preparing')).toBeInTheDocument();
+    expect(screen.queryByText('request')).not.toBeInTheDocument();
+  });
+
   it('renders pending Pulse query list input as a readable action', () => {
     render(() => (
       <PendingToolBlock
@@ -499,6 +507,22 @@ describe('PendingToolBlock', () => {
     expect(screen.getByText('$ ls /dev |')).toBeInTheDocument();
   });
 
+  it('renders a command-specific pending label before governed command arguments arrive', () => {
+    render(() => <PendingToolBlock tool={makePending({ name: 'pulse_run_command', input: '{}' })} />);
+
+    expect(screen.getByText('Writing command...')).toBeInTheDocument();
+    expect(screen.getByText('writing')).toBeInTheDocument();
+    expect(screen.queryByText('request')).not.toBeInTheDocument();
+  });
+
+  it('renders a read-specific pending label before Pulse read arguments arrive', () => {
+    render(() => <PendingToolBlock tool={makePending({ name: 'pulse_read', input: '{}' })} />);
+
+    expect(screen.getByText('Preparing read...')).toBeInTheDocument();
+    expect(screen.getByText('reading')).toBeInTheDocument();
+    expect(screen.queryByText('request')).not.toBeInTheDocument();
+  });
+
   // --- Activity state ---
 
   it('renders a spinner SVG with animate-spin class while pending', () => {
@@ -547,7 +571,7 @@ describe('PendingToolsList', () => {
     render(() => <PendingToolsList tools={tools} />);
     expect(screen.getByText('cmd1')).toBeInTheDocument();
     expect(screen.getByText('url1')).toBeInTheDocument();
-    expect(screen.getByText('request')).toBeInTheDocument();
+    expect(screen.getByText('Reading storage...')).toBeInTheDocument();
   });
 
   it('collapses when more than 3 tools, showing first 2', () => {

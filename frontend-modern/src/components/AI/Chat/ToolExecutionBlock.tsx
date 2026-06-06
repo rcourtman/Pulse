@@ -30,6 +30,52 @@ const getToolLabel = (name: string) => {
 
 const normalizedToolName = (name?: string) => (name || '').trim().replace(/^pulse_/, '');
 
+const pendingToolActionLabel = (name?: string) => {
+  const tool = normalizedToolName(name);
+  if (tool === 'run_command' || tool === 'control') return 'Writing command...';
+  if (tool === 'read') return 'Preparing read...';
+  if (tool === 'query') return 'Preparing query...';
+  if (tool === 'fetch_url') return 'Fetching URL...';
+  if (tool === 'get_infrastructure_state') return 'Reading infrastructure...';
+  if (tool === 'get_active_alerts' || tool === 'alerts') return 'Reading alerts...';
+  if (tool === 'get_metrics_history') return 'Reading metrics...';
+  if (tool === 'get_baselines') return 'Reading baselines...';
+  if (tool === 'get_patterns') return 'Reading patterns...';
+  if (tool === 'get_disk_health') return 'Checking disks...';
+  if (tool === 'get_storage' || tool === 'get_storage_config') return 'Reading storage...';
+  if (tool === 'get_resource_details') return 'Reading resource...';
+  if ((name || '').includes('finding')) return 'Preparing finding...';
+  return 'Preparing tool...';
+};
+
+const pendingToolActionState = (name?: string) => {
+  const tool = normalizedToolName(name);
+  if (tool === 'run_command' || tool === 'control') return 'writing';
+  if (tool === 'query') return 'preparing';
+  if (tool === 'fetch_url') return 'fetching';
+  if (tool === 'get_disk_health') return 'checking';
+  if (
+    tool === 'read' ||
+    tool === 'get_infrastructure_state' ||
+    tool === 'get_active_alerts' ||
+    tool === 'alerts' ||
+    tool === 'get_metrics_history' ||
+    tool === 'get_baselines' ||
+    tool === 'get_patterns' ||
+    tool === 'get_storage' ||
+    tool === 'get_storage_config' ||
+    tool === 'get_resource_details'
+  ) {
+    return 'reading';
+  }
+  return 'preparing';
+};
+
+const isPlaceholderToolInputSummary = (summary: string) => {
+  const normalized = summary.trim().toLowerCase();
+  return !normalized || normalized === 'request' || normalized === 'receiving input';
+};
+
 const escapePartialJSONKey = (key: string) => key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const extractPartialJSONStringField = (rawInput: string, keys: string[]) => {
@@ -405,14 +451,19 @@ interface PendingToolBlockProps {
 export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
   const toolLabel = createMemo(() => getToolLabel(props.tool.name));
   const inputText = createMemo(() => toolValueText(props.tool.input));
-  const inputSummary = createMemo(() =>
+  const parsedInputSummary = createMemo(() =>
     parseToolInputSummary(inputText(), props.tool.name, props.tool.rawInput),
   );
+  const inputSummary = createMemo(() => {
+    const summary = parsedInputSummary();
+    return isPlaceholderToolInputSummary(summary) ? pendingToolActionLabel(props.tool.name) : summary;
+  });
   const status = createMemo(() => props.tool.status || 'pending');
   const [now, setNow] = createSignal(Date.now());
   const statusLabel = createMemo(() => {
     if (status() === 'waiting') return 'waiting';
     if (status() === 'running') return 'running';
+    if (isPlaceholderToolInputSummary(parsedInputSummary())) return pendingToolActionState(props.tool.name);
     return 'pending';
   });
   const progressText = createMemo(() => (props.tool.progress || '').trim());

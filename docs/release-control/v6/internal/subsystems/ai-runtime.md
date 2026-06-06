@@ -490,7 +490,17 @@ runtime cost control, and shared AI transport surfaces.
    active alerts`, `topology summary`, `$ ls /dev | wc -l on current resource`)
    instead of exposing only internal action names such as `QUERY search`,
    `exec`, or raw JSON; raw input and full output stay available behind
-   Details. The referenced OpenCode source at fetched `origin/dev` commit
+   Details. The referenced OpenCode source at commit
+   `9ed17da55ab1f7360cc0e01075f763e27fa899e9` also renders pending tool rows
+   through `InlineTool` pending text in
+   `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`
+   (`InlineTool`, lines 563-651; `Bash`, lines 701-735; `Read`, lines
+   758-770; `Grep`, lines 788-790). Pulse adapts that by using
+   action-specific pending copy such as `Writing command...`, `Preparing
+   query...`, and `Reading storage...` before streamed tool arguments are
+   parseable, then replacing that copy with the governed command/query/resource
+   summary as soon as input arrives.
+   The referenced OpenCode source at fetched `origin/dev` commit
    `9ed17da55ab1f7360cc0e01075f763e27fa899e9` renders completed bash and
    generic tool output inside the tool block and uses `collapseToolOutput` in
    `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`
