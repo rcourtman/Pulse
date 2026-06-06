@@ -97,6 +97,14 @@ func (m *MockAIService) DeleteSession(ctx context.Context, sessionID string) err
 	return args.Error(0)
 }
 
+func (m *MockAIService) RenameSession(ctx context.Context, sessionID, title string) (*chat.Session, error) {
+	args := m.Called(ctx, sessionID, title)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*chat.Session), args.Error(1)
+}
+
 func (m *MockAIService) GetMessages(ctx context.Context, sessionID string) ([]chat.Message, error) {
 	args := m.Called(ctx, sessionID)
 	return args.Get(0).([]chat.Message), args.Error(1)
@@ -556,6 +564,47 @@ func TestHandleDeleteSession(t *testing.T) {
 	h.HandleDeleteSession(w, req, "s1")
 
 	assert.Equal(t, http.StatusNoContent, w.Code)
+}
+
+func TestHandleRenameSession(t *testing.T) {
+	cfg := &config.Config{}
+	h := newTestAIHandler(cfg, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.On("RenameSession", mock.Anything, "s1", "Renamed session").Return(&chat.Session{
+		ID:    "s1",
+		Title: "Renamed session",
+	}, nil)
+
+	req := httptest.NewRequest("PATCH", "/api/ai/sessions/s1", strings.NewReader(`{"title":"Renamed session"}`))
+	w := httptest.NewRecorder()
+
+	h.HandleRenameSession(w, req, "s1")
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var got chat.Session
+	assert.NoError(t, json.NewDecoder(w.Body).Decode(&got))
+	assert.Equal(t, "Renamed session", got.Title)
+	mockSvc.AssertExpectations(t)
+}
+
+func TestHandleRenameSessionRejectsEmptyTitle(t *testing.T) {
+	cfg := &config.Config{}
+	h := newTestAIHandler(cfg, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+
+	mockSvc.On("IsRunning").Return(true)
+
+	req := httptest.NewRequest("PATCH", "/api/ai/sessions/s1", strings.NewReader(`{"title":"   "}`))
+	w := httptest.NewRecorder()
+
+	h.HandleRenameSession(w, req, "s1")
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	mockSvc.AssertNotCalled(t, "RenameSession", mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestHandleMessages(t *testing.T) {

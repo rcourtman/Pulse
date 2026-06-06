@@ -751,6 +751,17 @@ runtime cost control, and shared AI transport surfaces.
    picker must focus search, and each result must be a keyboard-addressable
    option with list navigation and a named delete action instead of a
    mouse-only row.
+   Assistant session rename is part of that same source-backed session
+   workflow. The referenced OpenCode source in
+   `packages/opencode/src/cli/cmd/tui/component/dialog-session-list.tsx`
+   imports `DialogSessionRename` and invokes the runtime session rename action
+   from the session list, so Pulse must not leave rename as local picker state.
+   Pulse owns the equivalent through `PATCH /api/ai/sessions/{id}`,
+   `chat.Service.RenameSession`, and `SessionStore.Rename`; the drawer picker
+   may render the edit inline, but saving must persist the normalized title,
+   return the updated `ChatSession`, update the visible row without closing the
+   picker, and leave messages, handoff context, approvals, and tool evidence
+   unchanged.
    The empty Assistant drawer may surface recent non-empty sessions as direct
    resume actions using the backend session list already owned by the drawer;
    it must not create a parallel recent-chat store or product-authored prompt

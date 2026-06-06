@@ -22,6 +22,7 @@ import RotateCwIcon from 'lucide-solid/icons/rotate-cw';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import XIcon from 'lucide-solid/icons/x';
 import BookmarkIcon from 'lucide-solid/icons/bookmark';
+import CheckIcon from 'lucide-solid/icons/check';
 import LoaderCircleIcon from 'lucide-solid/icons/loader-circle';
 import PlusIcon from 'lucide-solid/icons/plus';
 import Trash2Icon from 'lucide-solid/icons/trash-2';
@@ -70,6 +71,11 @@ import {
   AI_CHAT_PROVIDER_READINESS_RETRY_LABEL,
   AI_CHAT_PROVIDER_READINESS_SETTINGS_HREF,
   AI_CHAT_PROVIDER_READINESS_SETTINGS_LABEL,
+  AI_CHAT_RENAME_SESSION_CANCEL_LABEL,
+  AI_CHAT_RENAME_SESSION_EMPTY_MESSAGE,
+  AI_CHAT_RENAME_SESSION_ERROR_MESSAGE,
+  AI_CHAT_RENAME_SESSION_LABEL,
+  AI_CHAT_RENAME_SESSION_SAVE_LABEL,
   AI_CHAT_SESSION_MENU_TITLE,
   AI_CHAT_SESSION_EMPTY_STATE,
   AI_CHAT_SESSION_LOADING_STATE,
@@ -152,6 +158,7 @@ const AI_CHAT_MIN_DOCKED_VIEWPORT_WIDTH = 1200;
 const AI_CHAT_PROMPT_HISTORY_LIMIT = 100;
 const AI_CHAT_RECENT_MODEL_LIMIT = 8;
 const AI_CHAT_PINNED_SESSION_LIMIT = 30;
+const AI_CHAT_SESSION_TITLE_MAX_LENGTH = 120;
 const AI_CHAT_SESSION_SEARCH_DEBOUNCE_MS = 150;
 const AI_CHAT_SESSION_SEARCH_LIMIT = 30;
 const STRUCTURED_PATROL_CONTEXT_TARGETS = new Set(['patrol-configuration', 'patrol-run']);
@@ -589,10 +596,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [sessionSearchResults, setSessionSearchResults] = createSignal<ChatSession[] | null>(null);
   const [sessionSearchLoading, setSessionSearchLoading] = createSignal(false);
   const [sessionSearchError, setSessionSearchError] = createSignal('');
+  const [renamingSessionId, setRenamingSessionId] = createSignal('');
+  const [sessionRenameDraft, setSessionRenameDraft] = createSignal('');
+  const [sessionRenameSaving, setSessionRenameSaving] = createSignal(false);
   const [sessionDropdownPosition, setSessionDropdownPosition] = createSignal({ top: 0, right: 0 });
   const [forkingSession, setForkingSession] = createSignal(false);
   let sessionButtonRef: HTMLButtonElement | undefined;
   let sessionSearchInputRef: HTMLInputElement | undefined;
+  let sessionRenameInputRef: HTMLInputElement | undefined;
   const sessionOptionRefs = new Map<string, HTMLButtonElement>();
   let sessionSearchRequestId = 0;
   const [modelSelectorOpenRequest, setModelSelectorOpenRequest] = createSignal(0);
@@ -1102,15 +1113,27 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
     return sessionRefreshLoading() ? AI_CHAT_SESSION_LOADING_STATE : '';
   });
+  const resetSessionRename = () => {
+    setRenamingSessionId('');
+    setSessionRenameDraft('');
+    setSessionRenameSaving(false);
+  };
   const resetSessionSearch = () => {
     sessionSearchRequestId += 1;
     setSessionSearchQuery('');
     setSessionSearchResults(null);
     setSessionSearchLoading(false);
     setSessionSearchError('');
+    resetSessionRename();
   };
   const focusSessionSearch = () => {
     queueMicrotask(() => sessionSearchInputRef?.focus());
+  };
+  const focusSessionRenameInput = () => {
+    queueMicrotask(() => {
+      sessionRenameInputRef?.focus();
+      sessionRenameInputRef?.select();
+    });
   };
 
   const findKnownSession = (sessionId: string) =>
@@ -1368,8 +1391,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const upsertSession = (session: ChatSession) => {
     setSessions((prev) => [session, ...prev.filter((candidate) => candidate.id !== session.id)]);
     setSessionSearchResults(
-      (prev) =>
-        prev && [session, ...prev.filter((candidate) => candidate.id !== session.id)],
+      (prev) => prev && [session, ...prev.filter((candidate) => candidate.id !== session.id)],
     );
   };
 
@@ -2624,8 +2646,71 @@ export const AIChat: Component<AIChatProps> = (props) => {
       .join(', ');
   const getSessionPinLabel = (session: ChatSession) =>
     `${isSessionPinned(session.id) ? 'Unpin' : 'Pin'} Assistant session: ${session.title || 'Untitled'}`;
+  const getSessionRenameLabel = (session: ChatSession) =>
+    `${AI_CHAT_RENAME_SESSION_LABEL}: ${session.title || 'Untitled'}`;
   const getSessionDeleteLabel = (session: ChatSession) =>
     `Delete Assistant session: ${session.title || 'Untitled'}`;
+  const isSessionRenaming = (sessionId: string) => renamingSessionId() === sessionId;
+  const normalizeSessionRenameTitle = (title: string) => {
+    const normalized = title.trim().replace(/\s+/g, ' ');
+    const chars = Array.from(normalized);
+    return chars.length > AI_CHAT_SESSION_TITLE_MAX_LENGTH
+      ? chars.slice(0, AI_CHAT_SESSION_TITLE_MAX_LENGTH).join('')
+      : normalized;
+  };
+
+  const startRenamingSession = (session: ChatSession, event: Event) => {
+    event.stopPropagation();
+    if (sessionRenameSaving()) return;
+    setRenamingSessionId(session.id);
+    setSessionRenameDraft(session.title || '');
+    focusSessionRenameInput();
+  };
+
+  const cancelRenamingSession = (event?: Event) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+    const sessionId = renamingSessionId();
+    resetSessionRename();
+    queueMicrotask(() => sessionOptionRefs.get(sessionId)?.focus());
+  };
+
+  const handleSessionRenameKeyDown = (event: KeyboardEvent) => {
+    event.stopPropagation();
+    if (event.key === 'Escape') {
+      cancelRenamingSession(event);
+    }
+  };
+
+  const submitSessionRename = async (session: ChatSession, event: Event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (sessionRenameSaving()) return;
+
+    const title = normalizeSessionRenameTitle(sessionRenameDraft());
+    if (!title) {
+      notificationStore.error(AI_CHAT_RENAME_SESSION_EMPTY_MESSAGE);
+      focusSessionRenameInput();
+      return;
+    }
+    if (title === normalizeSessionRenameTitle(session.title || '')) {
+      cancelRenamingSession();
+      return;
+    }
+
+    setSessionRenameSaving(true);
+    try {
+      const updatedSession = await AIChatAPI.renameSession(session.id, title);
+      upsertSession(updatedSession);
+      resetSessionRename();
+      queueMicrotask(() => sessionOptionRefs.get(updatedSession.id)?.focus());
+    } catch (error) {
+      logger.error('[AIChat] Failed to rename session:', error);
+      notificationStore.error(AI_CHAT_RENAME_SESSION_ERROR_MESSAGE);
+      setSessionRenameSaving(false);
+      focusSessionRenameInput();
+    }
+  };
 
   // Load session
   const handleLoadSession = async (sessionId: string) => {
@@ -2940,101 +3025,175 @@ export const AIChat: Component<AIChatProps> = (props) => {
                                         : ''
                                     }`}
                                   >
-                                    <button
-                                      type="button"
-                                      ref={(button) => {
-                                        sessionOptionRefs.set(session.id, button);
-                                      }}
-                                      role="option"
-                                      aria-selected={isSessionCurrent(session.id)}
-                                      aria-label={getSessionPickerOptionLabel(session)}
-                                      class="min-w-0 flex-1 text-left focus:outline-none"
-                                      onClick={() => handleLoadSession(session.id)}
-                                      onKeyDown={(event) =>
-                                        handleSessionOptionKeyDown(event, session.id)
-                                      }
-                                    >
-                                      <div class="flex min-w-0 items-center gap-2">
-                                        <div class="min-w-0 flex-1 truncate text-sm font-medium text-base-content">
-                                          {session.title || 'Untitled'}
-                                        </div>
-                                        <Show when={isSessionWorking(session.id)}>
-                                          <span class="inline-flex shrink-0 items-center gap-1 rounded border border-blue-200 bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-200">
-                                            <LoaderCircleIcon class="h-3 w-3 animate-spin" />
-                                            Working
-                                          </span>
-                                        </Show>
-                                        <Show
-                                          when={
-                                            isSessionCurrent(session.id) &&
-                                            !isSessionWorking(session.id)
+                                    <Show
+                                      when={isSessionRenaming(session.id)}
+                                      fallback={
+                                        <button
+                                          type="button"
+                                          ref={(button) => {
+                                            sessionOptionRefs.set(session.id, button);
+                                          }}
+                                          role="option"
+                                          aria-selected={isSessionCurrent(session.id)}
+                                          aria-label={getSessionPickerOptionLabel(session)}
+                                          class="min-w-0 flex-1 text-left focus:outline-none"
+                                          onClick={() => handleLoadSession(session.id)}
+                                          onKeyDown={(event) =>
+                                            handleSessionOptionKeyDown(event, session.id)
                                           }
                                         >
-                                          <span class="shrink-0 rounded border border-blue-200 bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-blue-700 dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-200">
-                                            Current
-                                          </span>
-                                        </Show>
-                                      </div>
-                                      <div class="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted">
-                                        <span>
-                                          {formatSessionPickerMessageCount(session.message_count)}
-                                        </span>
-                                        <Show when={formatSessionPickerUpdatedAt(session)}>
-                                          {(updatedAt) => (
-                                            <>
-                                              <span aria-hidden="true">·</span>
-                                              <span>{updatedAt()}</span>
-                                            </>
-                                          )}
-                                        </Show>
-                                      </div>
-                                      <Show when={session.handoff_summary}>
-                                        {(summary) => (
-                                          <div class="mt-1 flex max-w-full flex-wrap gap-1.5">
-                                            <span class="rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
-                                              {getSessionHandoffSourceLabel(summary())}
+                                          <div class="flex min-w-0 items-center gap-2">
+                                            <div class="min-w-0 flex-1 truncate text-sm font-medium text-base-content">
+                                              {session.title || 'Untitled'}
+                                            </div>
+                                            <Show when={isSessionWorking(session.id)}>
+                                              <span class="inline-flex shrink-0 items-center gap-1 rounded border border-blue-200 bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-200">
+                                                <LoaderCircleIcon class="h-3 w-3 animate-spin" />
+                                                Working
+                                              </span>
+                                            </Show>
+                                            <Show
+                                              when={
+                                                isSessionCurrent(session.id) &&
+                                                !isSessionWorking(session.id)
+                                              }
+                                            >
+                                              <span class="shrink-0 rounded border border-blue-200 bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-blue-700 dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-200">
+                                                Current
+                                              </span>
+                                            </Show>
+                                          </div>
+                                          <div class="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted">
+                                            <span>
+                                              {formatSessionPickerMessageCount(
+                                                session.message_count,
+                                              )}
                                             </span>
-                                            <span class="rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] text-muted">
-                                              {getSessionHandoffBadgeLabel(summary())}
-                                            </span>
-                                            <Show when={formatSessionHandoffStatus(summary())}>
-                                              {(status) => (
-                                                <span class="max-w-full truncate rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] text-muted">
-                                                  {status()}
-                                                </span>
+                                            <Show when={formatSessionPickerUpdatedAt(session)}>
+                                              {(updatedAt) => (
+                                                <>
+                                                  <span aria-hidden="true">·</span>
+                                                  <span>{updatedAt()}</span>
+                                                </>
                                               )}
                                             </Show>
                                           </div>
-                                        )}
-                                      </Show>
-                                    </button>
-                                    <div class="flex shrink-0 items-center gap-1">
-                                      <button
-                                        type="button"
-                                        class={`rounded p-1 transition-opacity focus:opacity-100 hover:bg-blue-100 hover:text-blue-600 dark:hover:bg-blue-900 dark:hover:text-blue-300 ${
-                                          isSessionPinned(session.id)
-                                            ? 'opacity-100 text-blue-600 dark:text-blue-300'
-                                            : 'opacity-0 text-muted group-hover:opacity-100 group-focus-within:opacity-100'
-                                        }`}
-                                        onClick={(event) => togglePinnedSession(session.id, event)}
-                                        aria-pressed={isSessionPinned(session.id)}
-                                        aria-label={getSessionPinLabel(session)}
-                                        title={getSessionPinLabel(session)}
+                                          <Show when={session.handoff_summary}>
+                                            {(summary) => (
+                                              <div class="mt-1 flex max-w-full flex-wrap gap-1.5">
+                                                <span class="rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
+                                                  {getSessionHandoffSourceLabel(summary())}
+                                                </span>
+                                                <span class="rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] text-muted">
+                                                  {getSessionHandoffBadgeLabel(summary())}
+                                                </span>
+                                                <Show when={formatSessionHandoffStatus(summary())}>
+                                                  {(status) => (
+                                                    <span class="max-w-full truncate rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] text-muted">
+                                                      {status()}
+                                                    </span>
+                                                  )}
+                                                </Show>
+                                              </div>
+                                            )}
+                                          </Show>
+                                        </button>
+                                      }
+                                    >
+                                      <form
+                                        class="min-w-0 flex-1"
+                                        onSubmit={(event) => submitSessionRename(session, event)}
+                                        onClick={(event) => event.stopPropagation()}
                                       >
-                                        <BookmarkIcon
-                                          class={`h-3.5 w-3.5 ${isSessionPinned(session.id) ? 'fill-current' : ''}`}
-                                        />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        class="rounded p-1 text-muted opacity-0 transition-opacity hover:bg-red-100 hover:text-red-500 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-red-900"
-                                        onClick={(event) => handleDeleteSession(session.id, event)}
-                                        aria-label={getSessionDeleteLabel(session)}
-                                        title={getSessionDeleteLabel(session)}
-                                      >
-                                        <Trash2Icon class="h-3.5 w-3.5" />
-                                      </button>
-                                    </div>
+                                        <div class="flex min-w-0 items-center gap-1.5">
+                                          <input
+                                            ref={(input) => {
+                                              sessionRenameInputRef = input;
+                                            }}
+                                            value={sessionRenameDraft()}
+                                            onInput={(event) =>
+                                              setSessionRenameDraft(event.currentTarget.value)
+                                            }
+                                            onKeyDown={handleSessionRenameKeyDown}
+                                            maxLength={AI_CHAT_SESSION_TITLE_MAX_LENGTH}
+                                            disabled={sessionRenameSaving()}
+                                            aria-label={`New title for ${session.title || 'Untitled'}`}
+                                            class="min-w-0 flex-1 rounded border border-blue-300 bg-surface px-2 py-1 text-sm font-medium text-base-content outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-70 dark:border-blue-800"
+                                          />
+                                          <button
+                                            type="submit"
+                                            disabled={sessionRenameSaving()}
+                                            class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60"
+                                            aria-label={AI_CHAT_RENAME_SESSION_SAVE_LABEL}
+                                            title={AI_CHAT_RENAME_SESSION_SAVE_LABEL}
+                                          >
+                                            <Show
+                                              when={sessionRenameSaving()}
+                                              fallback={
+                                                <CheckIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                                              }
+                                            >
+                                              <LoaderCircleIcon
+                                                class="h-3.5 w-3.5 animate-spin"
+                                                aria-hidden="true"
+                                              />
+                                            </Show>
+                                          </button>
+                                          <button
+                                            type="button"
+                                            disabled={sessionRenameSaving()}
+                                            onClick={cancelRenamingSession}
+                                            class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content disabled:opacity-50"
+                                            aria-label={AI_CHAT_RENAME_SESSION_CANCEL_LABEL}
+                                            title={AI_CHAT_RENAME_SESSION_CANCEL_LABEL}
+                                          >
+                                            <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                                          </button>
+                                        </div>
+                                      </form>
+                                    </Show>
+                                    <Show when={!isSessionRenaming(session.id)}>
+                                      <div class="flex shrink-0 items-center gap-1">
+                                        <button
+                                          type="button"
+                                          class="rounded p-1 text-muted opacity-0 transition-opacity hover:bg-blue-100 hover:text-blue-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-blue-900 dark:hover:text-blue-300"
+                                          onClick={(event) => startRenamingSession(session, event)}
+                                          aria-label={getSessionRenameLabel(session)}
+                                          title={getSessionRenameLabel(session)}
+                                        >
+                                          <PencilIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          class={`rounded p-1 transition-opacity focus:opacity-100 hover:bg-blue-100 hover:text-blue-600 dark:hover:bg-blue-900 dark:hover:text-blue-300 ${
+                                            isSessionPinned(session.id)
+                                              ? 'opacity-100 text-blue-600 dark:text-blue-300'
+                                              : 'opacity-0 text-muted group-hover:opacity-100 group-focus-within:opacity-100'
+                                          }`}
+                                          onClick={(event) =>
+                                            togglePinnedSession(session.id, event)
+                                          }
+                                          aria-pressed={isSessionPinned(session.id)}
+                                          aria-label={getSessionPinLabel(session)}
+                                          title={getSessionPinLabel(session)}
+                                        >
+                                          <BookmarkIcon
+                                            class={`h-3.5 w-3.5 ${isSessionPinned(session.id) ? 'fill-current' : ''}`}
+                                          />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          class="rounded p-1 text-muted opacity-0 transition-opacity hover:bg-red-100 hover:text-red-500 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-red-900"
+                                          onClick={(event) =>
+                                            handleDeleteSession(session.id, event)
+                                          }
+                                          aria-label={getSessionDeleteLabel(session)}
+                                          title={getSessionDeleteLabel(session)}
+                                        >
+                                          <Trash2Icon class="h-3.5 w-3.5" />
+                                        </button>
+                                      </div>
+                                    </Show>
                                   </div>
                                 )}
                               </For>

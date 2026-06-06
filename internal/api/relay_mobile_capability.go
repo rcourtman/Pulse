@@ -34,6 +34,7 @@ const (
 	relayMobileRouteSessionCreate                relayMobileRuntimeRouteID = "session-create"
 	relayMobileRouteSessionMessages              relayMobileRuntimeRouteID = "session-messages"
 	relayMobileRouteSessionAbort                 relayMobileRuntimeRouteID = "session-abort"
+	relayMobileRouteSessionRename                relayMobileRuntimeRouteID = "session-rename"
 	relayMobileRouteSessionDelete                relayMobileRuntimeRouteID = "session-delete"
 )
 
@@ -55,6 +56,7 @@ var relayMobileRuntimeRouteOrder = []relayMobileRuntimeRouteID{
 	relayMobileRouteSessionCreate,
 	relayMobileRouteSessionMessages,
 	relayMobileRouteSessionAbort,
+	relayMobileRouteSessionRename,
 	relayMobileRouteSessionDelete,
 }
 
@@ -159,6 +161,12 @@ var relayMobileRuntimeRouteSpecs = map[relayMobileRuntimeRouteID]relayMobileRunt
 		id:            relayMobileRouteSessionAbort,
 		method:        http.MethodPost,
 		path:          "/api/ai/sessions/{session_id}/abort",
+		requiredScope: config.ScopeAIChat,
+	},
+	relayMobileRouteSessionRename: {
+		id:            relayMobileRouteSessionRename,
+		method:        http.MethodPatch,
+		path:          "/api/ai/sessions/{session_id}",
 		requiredScope: config.ScopeAIChat,
 	},
 	relayMobileRouteSessionDelete: {

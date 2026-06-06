@@ -25,6 +25,11 @@ import {
   AI_CHAT_PROVIDER_READINESS_SETTINGS_HREF,
   AI_CHAT_PROVIDER_READINESS_SETTINGS_LABEL,
   AI_CHAT_QUESTION_CARD_TITLE,
+  AI_CHAT_RENAME_SESSION_CANCEL_LABEL,
+  AI_CHAT_RENAME_SESSION_EMPTY_MESSAGE,
+  AI_CHAT_RENAME_SESSION_ERROR_MESSAGE,
+  AI_CHAT_RENAME_SESSION_LABEL,
+  AI_CHAT_RENAME_SESSION_SAVE_LABEL,
   AI_CHAT_SESSION_EMPTY_STATE,
   AI_CHAT_SESSION_LOADING_STATE,
   AI_CHAT_SESSION_MENU_TITLE,
@@ -55,6 +60,11 @@ describe('aiChatPresentation', () => {
     expect(AI_CHAT_COPY_LAST_ANSWER_LABEL).toBe('Copy last Assistant answer');
     expect(AI_CHAT_COPY_LAST_ANSWER_SUCCESS_MESSAGE).toBe('Assistant answer copied');
     expect(AI_CHAT_COPY_LAST_ANSWER_ERROR_MESSAGE).toBe('Failed to copy Assistant answer');
+    expect(AI_CHAT_RENAME_SESSION_LABEL).toBe('Rename Assistant session');
+    expect(AI_CHAT_RENAME_SESSION_SAVE_LABEL).toBe('Save Assistant session title');
+    expect(AI_CHAT_RENAME_SESSION_CANCEL_LABEL).toBe('Cancel Assistant session rename');
+    expect(AI_CHAT_RENAME_SESSION_EMPTY_MESSAGE).toBe('Session title cannot be empty');
+    expect(AI_CHAT_RENAME_SESSION_ERROR_MESSAGE).toBe('Failed to rename Assistant session');
     expect(AI_CHAT_LAUNCHER_ARIA_LABEL).toBe('Expand Pulse Assistant');
     expect(AI_CHAT_CLOSE_LABEL).toBe('Close Pulse Assistant');
     expect(AI_CHAT_SESSION_MENU_TITLE).toBe('Pulse Assistant sessions');

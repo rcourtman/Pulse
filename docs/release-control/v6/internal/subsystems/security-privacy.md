@@ -170,6 +170,12 @@ controls as normal product settings.
     read-only Agent-context boundary. Router glue may connect providers, but
     it must not become an alternate command path, raw provider-command path,
     config path, environment path, or secret-bearing metadata path.
+    Assistant session rename routing through `PATCH /api/ai/sessions/{id}`
+    stays on that same auth/scope boundary: the route may accept only a
+    user-visible title mutation, must not expose transcript contents,
+    provider-bound model context, tool evidence, approvals, or action state,
+    and must not treat title text as trusted secret-bearing or command-bearing
+    input.
 
 ## Forbidden Paths
 

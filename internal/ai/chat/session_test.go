@@ -59,6 +59,24 @@ func TestSessionStore(t *testing.T) {
 		assert.Contains(t, err.Error(), "session not found")
 	})
 
+	t.Run("Rename", func(t *testing.T) {
+		session, _ := store.Create()
+		renamed, err := store.Rename(session.ID, "  Renamed\nsession  ")
+		require.NoError(t, err)
+		assert.Equal(t, "Renamed session", renamed.Title)
+
+		retrieved, err := store.Get(session.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "Renamed session", retrieved.Title)
+	})
+
+	t.Run("Rename rejects empty title", func(t *testing.T) {
+		session, _ := store.Create()
+		_, err := store.Rename(session.ID, "   ")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "session title required")
+	})
+
 	t.Run("AddMessage and Title Generation", func(t *testing.T) {
 		session, _ := store.Create()
 		msg := Message{

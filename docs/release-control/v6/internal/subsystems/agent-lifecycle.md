@@ -230,6 +230,11 @@ the API-owned action audit records `executing` before dispatch and the
 terminal execution result afterward. Dry-run-only plans remain planning evidence
 only; lifecycle surfaces must not present them as executable, dispatch them
 through agent-local command paths, or bypass the API fail-closed execution gate.
+Assistant session rename through `PATCH /api/ai/sessions/{id}` follows that
+same browser-safe history boundary. Lifecycle surfaces, MCP adapters, and
+agents may display the updated title as human navigation metadata, but they
+must not treat a renamed title as command authorization, host identity,
+enrollment state, capability evidence, or install-token disclosure.
 Agent lifecycle consumers of `/api/agent/events` and
 `/api/agent/resource-context/{id}` must also honor the shared API command
 payload boundary: API tokens with monitoring/read scope receive

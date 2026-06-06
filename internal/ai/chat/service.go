@@ -3308,6 +3308,19 @@ func (s *Service) DeleteSession(ctx context.Context, sessionID string) error {
 	return sessions.Delete(sessionID)
 }
 
+// RenameSession updates the user-visible title for a persisted session.
+func (s *Service) RenameSession(ctx context.Context, sessionID, title string) (*Session, error) {
+	s.mu.RLock()
+	sessions := s.sessions
+	s.mu.RUnlock()
+
+	if sessions == nil {
+		return nil, fmt.Errorf("service not started")
+	}
+
+	return sessions.Rename(sessionID, title)
+}
+
 // GetMessages returns messages for a session
 func (s *Service) GetMessages(ctx context.Context, sessionID string) ([]Message, error) {
 	s.mu.RLock()

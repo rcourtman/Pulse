@@ -437,6 +437,15 @@ payload shape change when the portal presents compact client rows.
     remediation details, and frontend clients must route searchable picker
     requests through the shared `AIChatAPI.listSessions({ search, limit })`
     helper rather than inventing a parallel local history endpoint.
+    `PATCH /api/ai/sessions/{id}` owns the Assistant session-title mutation
+    contract. The request body is limited to a user-visible `title`; the
+    handler must reject empty titles, the chat store must normalize whitespace
+    and bound persisted title length, and the response must be the updated
+    browser-safe `ChatSession` projection. Rename must not expose or mutate
+    stored prompts, messages, provider reasoning, model handoff context,
+    approvals, action state, or tool evidence. Browser clients must call the
+    shared `AIChatAPI.renameSession(sessionId, title)` helper so path encoding
+    and JSON body shape stay canonical.
     Resource-context follow-up turns are different from Patrol-run rehydration:
     browser-safe `handoff_metadata.kind=resource_context` must not replace a
     stored rich handoff envelope with a partial metadata-only envelope, and the

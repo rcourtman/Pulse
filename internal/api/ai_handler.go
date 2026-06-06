@@ -47,6 +47,7 @@ type AIService interface {
 	ListSessions(ctx context.Context) ([]chat.Session, error)
 	CreateSession(ctx context.Context) (*chat.Session, error)
 	DeleteSession(ctx context.Context, sessionID string) error
+	RenameSession(ctx context.Context, sessionID, title string) (*chat.Session, error)
 	GetMessages(ctx context.Context, sessionID string) ([]chat.Message, error)
 	GetModelHandoffFindingID(ctx context.Context, sessionID string) (string, error)
 	GetModelHandoffMetadata(ctx context.Context, sessionID string) (chat.HandoffMetadata, error)
@@ -984,6 +985,10 @@ type ChatRequest struct {
 	HandoffActions   []chat.HandoffAction   `json:"handoff_actions,omitempty"`
 	HandoffMetadata  chat.HandoffMetadata   `json:"handoff_metadata,omitempty"`
 	AutonomousMode   *bool                  `json:"autonomous_mode,omitempty"`
+}
+
+type RenameSessionRequest struct {
+	Title string `json:"title"`
 }
 
 const (
@@ -2752,6 +2757,40 @@ func (h *AIHandler) HandleDeleteSession(w http.ResponseWriter, r *http.Request, 
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// HandleRenameSession handles PATCH /api/ai/sessions/{id}
+func (h *AIHandler) HandleRenameSession(w http.ResponseWriter, r *http.Request, sessionID string) {
+	ctx := r.Context()
+	if !h.IsRunning(ctx) {
+		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
+		return
+	}
+
+	svc := h.GetService(ctx)
+	if svc == nil {
+		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req RenameSessionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(req.Title) == "" {
+		http.Error(w, "Session title required", http.StatusBadRequest)
+		return
+	}
+
+	session, err := svc.RenameSession(ctx, sessionID, req.Title)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(session)
 }
 
 // HandleMessages handles GET /api/ai/sessions/{id}/messages

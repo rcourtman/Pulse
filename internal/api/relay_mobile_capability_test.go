@@ -56,6 +56,7 @@ func TestRelayMobileRuntimeRouteInventory(t *testing.T) {
 		"POST /api/ai/sessions => ai:chat",
 		"GET /api/ai/sessions/{session_id}/messages => ai:chat",
 		"POST /api/ai/sessions/{session_id}/abort => ai:chat",
+		"PATCH /api/ai/sessions/{session_id} => ai:chat",
 		"DELETE /api/ai/sessions/{session_id} => ai:chat",
 	}
 

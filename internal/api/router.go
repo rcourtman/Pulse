@@ -892,6 +892,11 @@ func (r *Router) routeAISessions(w http.ResponseWriter, req *http.Request) {
 
 	// Handle session-level operations
 	switch req.Method {
+	case http.MethodPatch:
+		if !ensureRelayMobileRuntimeRoute(w, req, relayMobileRouteSessionRename) {
+			return
+		}
+		r.aiHandler.HandleRenameSession(w, req, sessionID)
 	case http.MethodDelete:
 		if !ensureRelayMobileRuntimeRoute(w, req, relayMobileRouteSessionDelete) {
 			return

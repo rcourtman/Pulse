@@ -88,6 +88,13 @@ const {
       message_count: 0,
     }),
     deleteSession: vi.fn().mockResolvedValue(undefined),
+    renameSession: vi.fn().mockResolvedValue({
+      id: 'renamed-session',
+      title: 'Renamed session',
+      created_at: '2026-06-06T12:30:00Z',
+      updated_at: '2026-06-06T12:35:00Z',
+      message_count: 2,
+    }),
     forkSession: vi.fn().mockResolvedValue({
       id: 'forked-session',
       title: 'Forked session',
@@ -422,6 +429,13 @@ beforeEach(() => {
   });
   mockAIChatAPI.getStatus.mockResolvedValue({ running: true });
   mockAIChatAPI.listSessions.mockResolvedValue([]);
+  mockAIChatAPI.renameSession.mockResolvedValue({
+    id: 'renamed-session',
+    title: 'Renamed session',
+    created_at: '2026-06-06T12:30:00Z',
+    updated_at: '2026-06-06T12:35:00Z',
+    message_count: 2,
+  });
   mockAIChatAPI.forkSession.mockResolvedValue({
     id: 'forked-session',
     title: 'Forked session',
@@ -598,7 +612,9 @@ describe('AIChat', () => {
         4000,
       );
 
-      fireEvent.click(screen.getByRole('button', { name: 'Close Assistant transcript copy panel' }));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Close Assistant transcript copy panel' }),
+      );
 
       await waitFor(() => {
         expect(screen.queryByLabelText('Assistant transcript')).not.toBeInTheDocument();
@@ -1608,7 +1624,9 @@ describe('AIChat', () => {
       fireEvent.click(screen.getByRole('option', { name: /Run \/sessions/ }));
 
       await waitFor(() => {
-        expect(screen.getByRole('dialog', { name: 'Pulse Assistant sessions' })).toBeInTheDocument();
+        expect(
+          screen.getByRole('dialog', { name: 'Pulse Assistant sessions' }),
+        ).toBeInTheDocument();
       });
       expect(mockAIChatAPI.listSessions).toHaveBeenCalledWith({ limit: 30 });
       expect(mockChat.sendMessage).not.toHaveBeenCalled();
@@ -1626,7 +1644,9 @@ describe('AIChat', () => {
       fireEvent.keyDown(textarea, { key: 'Escape' });
 
       await waitFor(() => {
-        expect(screen.queryByRole('listbox', { name: 'Assistant commands' })).not.toBeInTheDocument();
+        expect(
+          screen.queryByRole('listbox', { name: 'Assistant commands' }),
+        ).not.toBeInTheDocument();
       });
       expect(textarea.value).toBe('/');
       expect(mockChat.sendMessage).not.toHaveBeenCalled();
@@ -1660,7 +1680,9 @@ describe('AIChat', () => {
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
       await waitFor(() => {
-        expect(screen.getByRole('dialog', { name: 'Pulse Assistant sessions' })).toBeInTheDocument();
+        expect(
+          screen.getByRole('dialog', { name: 'Pulse Assistant sessions' }),
+        ).toBeInTheDocument();
       });
       expect(mockAIChatAPI.listSessions).toHaveBeenCalledWith({ limit: 30 });
       expect(mockChat.sendMessage).not.toHaveBeenCalled();
@@ -2533,6 +2555,65 @@ describe('AIChat', () => {
       await waitFor(() => {
         expect(localStorage.getItem('pulse:ai_chat_pinned_sessions')).toBeNull();
       });
+    });
+
+    it('renames sessions inline from the picker', async () => {
+      mockAIChatAPI.listSessions.mockResolvedValue([
+        { id: 's1', title: 'Session One', created_at: '', updated_at: '', message_count: 5 },
+      ]);
+      mockAIChatAPI.renameSession.mockResolvedValue({
+        id: 's1',
+        title: 'Renamed session',
+        created_at: '',
+        updated_at: '2026-06-06T12:35:00Z',
+        message_count: 5,
+      });
+      renderChat();
+      await waitFor(() => {
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalled();
+      });
+
+      fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
+      await screen.findByText('Session One');
+
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Rename Assistant session: Session One' }),
+      );
+      const titleInput = screen.getByLabelText('New title for Session One');
+      expect(titleInput).toHaveValue('Session One');
+
+      fireEvent.input(titleInput, { target: { value: 'Renamed session' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save Assistant session title' }));
+
+      await waitFor(() => {
+        expect(mockAIChatAPI.renameSession).toHaveBeenCalledWith('s1', 'Renamed session');
+      });
+      expect(screen.getByText('Renamed session')).toBeInTheDocument();
+      expect(screen.queryByText('Session One')).not.toBeInTheDocument();
+    });
+
+    it('keeps empty session rename drafts local', async () => {
+      mockAIChatAPI.listSessions.mockResolvedValue([
+        { id: 's1', title: 'Session One', created_at: '', updated_at: '', message_count: 5 },
+      ]);
+      renderChat();
+      await waitFor(() => {
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalled();
+      });
+
+      fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
+      await screen.findByText('Session One');
+
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Rename Assistant session: Session One' }),
+      );
+      const titleInput = screen.getByLabelText('New title for Session One');
+      fireEvent.input(titleInput, { target: { value: '   ' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save Assistant session title' }));
+
+      expect(mockAIChatAPI.renameSession).not.toHaveBeenCalled();
+      expect(mockNotificationStore.error).toHaveBeenCalledWith('Session title cannot be empty');
+      expect(titleInput).toBeInTheDocument();
     });
 
     it('marks the current working session in the picker', async () => {

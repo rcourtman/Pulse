@@ -121,6 +121,12 @@ surface too. The dedicated `relay:mobile:access` credential may only reach the
 explicit runtime route inventory in `internal/api/relay_mobile_capability.go`,
 and expanding that inventory is governed L7 work rather than a router-local
 compatibility tweak.
+Assistant session rename is part of that explicit mobile relay runtime
+inventory: `PATCH /api/ai/sessions/{session_id}` may pass through
+`relay:mobile:access` with `ai:chat` scope because it mutates only the
+browser-safe session title projection. The relay inventory must not widen that
+route into transcript, provider-context, approval, action-execution, or raw
+tool-evidence mutation authority.
 The route that mints that dedicated credential is also part of the paid Relay
 boundary. `POST /api/security/tokens/relay-mobile` lives in the shared
 auth/security router, but it must require the paid `relay` entitlement before

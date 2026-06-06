@@ -16,6 +16,11 @@ export const AI_CHAT_FORK_SESSION_LOAD_ERROR_MESSAGE =
   'Forked Assistant session but failed to load it';
 export const AI_CHAT_FORK_SESSION_ERROR_MESSAGE = 'Failed to fork Assistant session';
 export const AI_CHAT_FORK_SESSION_SUCCESS_MESSAGE = 'Assistant session forked';
+export const AI_CHAT_RENAME_SESSION_LABEL = 'Rename Assistant session';
+export const AI_CHAT_RENAME_SESSION_SAVE_LABEL = 'Save Assistant session title';
+export const AI_CHAT_RENAME_SESSION_CANCEL_LABEL = 'Cancel Assistant session rename';
+export const AI_CHAT_RENAME_SESSION_EMPTY_MESSAGE = 'Session title cannot be empty';
+export const AI_CHAT_RENAME_SESSION_ERROR_MESSAGE = 'Failed to rename Assistant session';
 export const AI_CHAT_COPY_LAST_ANSWER_LABEL = 'Copy last Assistant answer';
 export const AI_CHAT_COPY_LAST_ANSWER_SUCCESS_MESSAGE = 'Assistant answer copied';
 export const AI_CHAT_COPY_LAST_ANSWER_ERROR_MESSAGE = 'Failed to copy Assistant answer';

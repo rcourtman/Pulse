@@ -231,6 +231,11 @@ regression protection.
    before returning it to AI runtime, but it must not scan run history broadly,
    hydrate resource inventories, call models, or perform persistence fan-out as
    part of router setup or generic request admission.
+   Assistant session rename routing follows the same bounded router rule:
+   `PATCH /api/ai/sessions/{id}` may branch to the AI handler and relay-mobile
+   capability check, but router setup and auth gating must not scan session
+   files, load transcripts, hydrate handoff context, or inspect model/tool
+   history before the route-local handler owns the single title mutation.
    Report branding follows the same bounded-work rule. Reporting handlers may
    read provider-default env configuration and a tenant-local system-settings
    record when a report is generated, but router setup and normal protected

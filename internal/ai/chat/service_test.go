@@ -267,6 +267,9 @@ func TestService_SessionWrappers(t *testing.T) {
 	_, err := service.CreateSession(ctx)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "service not started")
+	_, err = service.RenameSession(ctx, "missing", "Renamed session")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "service not started")
 
 	// Start service
 	err = service.Start(ctx)
@@ -303,13 +306,23 @@ func TestService_SessionWrappers(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, list, 1)
 
+	renamed, err := service.RenameSession(ctx, session.ID, "Renamed session")
+	require.NoError(t, err)
+	require.NotNil(t, renamed)
+	assert.Equal(t, "Renamed session", renamed.Title)
+
+	list, err = service.ListSessions(ctx)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.Equal(t, "Renamed session", list[0].Title)
+
 	// Fork Session
 	forked, err := service.ForkSession(ctx, session.ID)
 	require.NoError(t, err)
 	require.NotNil(t, forked)
 	assert.NotEqual(t, session.ID, forked.ID)
 	assert.Equal(t, 1, forked.MessageCount)
-	assert.Equal(t, "Forked session", forked.Title)
+	assert.Equal(t, "Fork of Renamed session", forked.Title)
 
 	forkedMessages, err := service.GetMessages(ctx, forked.ID)
 	require.NoError(t, err)

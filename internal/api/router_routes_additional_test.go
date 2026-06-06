@@ -100,6 +100,29 @@ func TestRouteAISessions_DeleteSession(t *testing.T) {
 	mockSvc.AssertExpectations(t)
 }
 
+func TestRouteAISessions_RenameSession(t *testing.T) {
+	mockSvc := &MockAIService{}
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.On("RenameSession", mock.Anything, "session-1", "Renamed session").Return(&chat.Session{
+		ID:    "session-1",
+		Title: "Renamed session",
+	}, nil)
+
+	handler := &AIHandler{}
+	setUnexportedField(t, handler, "defaultService", mockSvc)
+
+	router := &Router{aiHandler: handler}
+	req := httptest.NewRequest(http.MethodPatch, "/api/ai/sessions/session-1", strings.NewReader(`{"title":"Renamed session"}`))
+	rec := httptest.NewRecorder()
+
+	router.routeAISessions(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	mockSvc.AssertExpectations(t)
+}
+
 func TestRouteAISessions_Abort(t *testing.T) {
 	mockSvc := &MockAIService{}
 	mockSvc.On("IsRunning").Return(true)

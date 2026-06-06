@@ -219,6 +219,15 @@ export class AIChatAPI {
     });
   }
 
+  // Rename a session
+  static async renameSession(sessionId: string, title: string): Promise<ChatSession> {
+    return apiFetchJSON(`${this.baseUrl}/sessions/${encodeURIComponent(sessionId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    }) as Promise<ChatSession>;
+  }
+
   // Get messages for a session
   static async getMessages(sessionId: string): Promise<ChatMessage[]> {
     return apiFetchJSON(

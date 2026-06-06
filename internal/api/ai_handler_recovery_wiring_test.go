@@ -40,6 +40,9 @@ func (s *capturingAIService) CreateSession(ctx context.Context) (*chat.Session, 
 	return &chat.Session{ID: "test"}, nil
 }
 func (s *capturingAIService) DeleteSession(ctx context.Context, sessionID string) error { return nil }
+func (s *capturingAIService) RenameSession(ctx context.Context, sessionID, title string) (*chat.Session, error) {
+	return &chat.Session{ID: sessionID, Title: title}, nil
+}
 func (s *capturingAIService) GetMessages(ctx context.Context, sessionID string) ([]chat.Message, error) {
 	return nil, nil
 }

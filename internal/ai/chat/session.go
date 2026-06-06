@@ -360,7 +360,10 @@ func modelContextHandoffSummary(modelContext *sessionModelContext) *SessionHando
 	return summary
 }
 
-const maxSessionIDLength = 128
+const (
+	maxSessionIDLength   = 128
+	maxSessionTitleRunes = 120
+)
 
 var errSessionNotFound = errors.New("session not found")
 
@@ -535,6 +538,37 @@ func (s *SessionStore) Get(id string) (*Session, error) {
 
 	data, err := s.readSession(id)
 	if err != nil {
+		return nil, err
+	}
+
+	return &Session{
+		ID:             data.ID,
+		Title:          data.Title,
+		CreatedAt:      data.CreatedAt,
+		UpdatedAt:      data.UpdatedAt,
+		MessageCount:   len(data.Messages),
+		HandoffSummary: modelContextHandoffSummary(data.ModelContext),
+	}, nil
+}
+
+// Rename updates a session title without touching messages or handoff context.
+func (s *SessionStore) Rename(id, title string) (*Session, error) {
+	normalizedTitle := normalizeSessionTitle(title)
+	if normalizedTitle == "" {
+		return nil, fmt.Errorf("session title required")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	data, err := s.readSession(id)
+	if err != nil {
+		return nil, err
+	}
+
+	data.Title = normalizedTitle
+	data.UpdatedAt = time.Now()
+	if err := s.writeSession(*data); err != nil {
 		return nil, err
 	}
 
@@ -1177,6 +1211,15 @@ func generateTitle(content string) string {
 	}
 
 	return truncated + "..."
+}
+
+func normalizeSessionTitle(title string) string {
+	normalized := strings.Join(strings.Fields(strings.TrimSpace(title)), " ")
+	runes := []rune(normalized)
+	if len(runes) <= maxSessionTitleRunes {
+		return normalized
+	}
+	return string(runes[:maxSessionTitleRunes])
 }
 
 // EnsureSession ensures a session exists, creating one if needed

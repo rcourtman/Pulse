@@ -1543,6 +1543,7 @@ func TestRelayMobileAccessScopeAllowsGovernedMobileRuntimeEndpoints(t *testing.T
 		{method: http.MethodGet, path: "/api/ai/sessions", body: ""},
 		{method: http.MethodGet, path: "/api/ai/sessions/session-1/messages", body: ""},
 		{method: http.MethodPost, path: "/api/ai/sessions/session-1/abort", body: `{}`},
+		{method: http.MethodPatch, path: "/api/ai/sessions/session-1", body: `{"title":"Renamed session"}`},
 		{method: http.MethodDelete, path: "/api/ai/sessions/session-1", body: ""},
 	}
 

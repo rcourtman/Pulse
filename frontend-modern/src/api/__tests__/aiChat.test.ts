@@ -138,11 +138,7 @@ describe('AIChatAPI', () => {
     await advancePaintCheckpoint();
     await streamPromise;
 
-    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
-      'content',
-      'content',
-      'done',
-    ]);
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual(['content', 'content', 'done']);
     expect(releaseLock).toHaveBeenCalledTimes(1);
   });
 
@@ -196,6 +192,27 @@ describe('AIChatAPI', () => {
   it('normalizes a non-array sessions payload to an empty array (#1149)', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({ error: 'boom' });
     await expect(AIChatAPI.listSessions()).resolves.toEqual([]);
+  });
+
+  it('renames sessions through the session root endpoint', async () => {
+    const renamed = {
+      id: 'session/root',
+      title: 'Renamed session',
+      created_at: '2026-06-06T10:00:00Z',
+      updated_at: '2026-06-06T10:05:00Z',
+      message_count: 2,
+    };
+    apiFetchJSONMock.mockResolvedValueOnce(renamed);
+
+    await expect(AIChatAPI.renameSession('session/root', 'Renamed session')).resolves.toEqual(
+      renamed,
+    );
+
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/sessions/session%2Froot', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Renamed session' }),
+    });
   });
 
   it('preserves restored Assistant tool evidence on session messages', async () => {
