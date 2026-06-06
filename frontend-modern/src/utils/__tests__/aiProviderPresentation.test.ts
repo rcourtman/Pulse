@@ -52,6 +52,22 @@ describe('aiProviderPresentation', () => {
     ).toBe('DeepSeek R1 via OpenRouter');
   });
 
+  it('formats OpenRouter route IDs when model catalog names are not hydrated', () => {
+    expect(formatAIModelRouteLabel('openrouter:qwen/qwen3.7-plus')).toBe(
+      'Qwen: Qwen3.7 Plus via OpenRouter',
+    );
+    expect(
+      formatAIModelRouteLabel({
+        id: 'openrouter:anthropic/claude-sonnet-4.5',
+        name: 'anthropic/claude-sonnet-4.5',
+        provider: 'openrouter',
+      }),
+    ).toBe('Anthropic: Claude Sonnet 4.5 via OpenRouter');
+    expect(formatAIModelRouteLabel('openrouter:~anthropic/claude-sonnet-latest')).toBe(
+      'Anthropic: Claude Sonnet Latest via OpenRouter',
+    );
+  });
+
   it('labels Pulse-owned local runtime routes without provider wording', () => {
     expect(formatAIModelRouteLabel('pulse:local-inventory')).toBe('Pulse inventory');
   });

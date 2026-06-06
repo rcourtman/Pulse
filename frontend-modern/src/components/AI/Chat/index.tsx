@@ -740,14 +740,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const fallback = defaultModel().trim();
     if (!fallback) return '';
     const match = aiRuntimeModels().find((model) => model.id === fallback);
-    return match ? formatAIModelRouteLabel(match) : fallback;
+    return match ? formatAIModelRouteLabel(match) : formatAIModelRouteLabel(fallback);
   });
 
   const chatOverrideLabel = createMemo(() => {
     const override = chatOverrideModel().trim();
     if (!override) return '';
     const match = aiRuntimeModels().find((model) => model.id === override);
-    return match ? formatAIModelRouteLabel(match) : override;
+    return match ? formatAIModelRouteLabel(match) : formatAIModelRouteLabel(override);
   });
 
   const selectedChatModel = createMemo(() => {

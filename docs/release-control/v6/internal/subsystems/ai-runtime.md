@@ -366,7 +366,11 @@ runtime cost control, and shared AI transport surfaces.
    route. Assistant transcript rows must carry and render the effective model
    route that produced each live or restored response so route recovery and
    mixed-provider sessions remain auditable. Direct provider models must not
-   gain a gateway label.
+   gain a gateway label. Gateway route strings must still render as readable
+   provider/model labels before catalog hydration; this mirrors OpenCode's
+   source pattern of retaining structured `providerID`/`modelID` metadata and
+   presenting catalog names with ID fallbacks rather than leaking raw route
+   storage IDs into primary chat chrome.
 7. Keep AI chat presentation helpers aligned through `frontend-modern/src/components/AI/Chat/` and the shared `frontend-modern/src/utils/textPresentation.ts`
 8. Keep assistant drawer context, session, and org-switch reset state aligned through the shared `frontend-modern/src/stores/aiChat.ts` boundary instead of letting `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, or feature callers fork their own assistant shell state
    That shared drawer ownership also covers passive resource reads while the

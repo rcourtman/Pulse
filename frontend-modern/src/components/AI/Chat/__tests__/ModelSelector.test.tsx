@@ -94,16 +94,16 @@ describe('ModelSelector', () => {
     expect(screen.getByText('default')).toBeInTheDocument();
   });
 
-  it('shows raw model ID when selectedModel is not in the models list', () => {
+  it('formats gateway route IDs when selectedModel is not in the models list', () => {
     render(() => (
       <ModelSelector
         models={SAMPLE_MODELS}
-        selectedModel="custom:my-model"
+        selectedModel="openrouter:qwen/qwen3.7-plus"
         onModelSelect={vi.fn()}
       />
     ));
 
-    expect(screen.getByText('custom:my-model')).toBeInTheDocument();
+    expect(screen.getByText('Qwen: Qwen3.7 Plus via OpenRouter')).toBeInTheDocument();
   });
 
   it('shows the loading spinner when isLoading is true', () => {
@@ -216,21 +216,20 @@ describe('ModelSelector', () => {
     expect(screen.getByText('GPT-4o (override)')).toBeInTheDocument();
   });
 
-  it('uses chatOverrideModel as label when chatOverrideLabel is not provided', () => {
+  it('formats chatOverrideModel when chatOverrideLabel is not provided', () => {
     render(() => (
       <ModelSelector
         models={SAMPLE_MODELS}
         selectedModel=""
-        chatOverrideModel="openai:gpt-4o"
+        chatOverrideModel="openrouter:qwen/qwen3.7-plus"
         onModelSelect={vi.fn()}
       />
     ));
 
     fireEvent.click(screen.getByTitle('Select model for this chat'));
 
-    // The override section label should contain the model ID
     const overrideButton = screen.getByText('Chat override').closest('button')!;
-    expect(overrideButton.textContent).toContain('openai:gpt-4o');
+    expect(overrideButton.textContent).toContain('Qwen: Qwen3.7 Plus via OpenRouter');
   });
 
   it('does not show chat override option when chatOverrideModel is not provided', () => {

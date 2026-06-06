@@ -141,7 +141,7 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
     }
     const match = props.models.find((model) => model.id === selected);
     if (match) return formatAIModelRouteLabel(match);
-    return selected;
+    return formatAIModelRouteLabel(selected);
   });
 
   // Click outside handler
@@ -292,7 +292,7 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
               >
                 <div class="font-medium text-base-content">Chat override</div>
                 <div class="text-[11px] text-muted">
-                  {props.chatOverrideLabel || props.chatOverrideModel}
+                  {props.chatOverrideLabel || formatAIModelRouteLabel(props.chatOverrideModel!)}
                 </div>
               </button>
             </Show>
