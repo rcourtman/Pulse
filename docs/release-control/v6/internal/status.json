@@ -6767,11 +6767,11 @@
     {
       "id": "codex-lane-followup-architecture-post-rc-canonicalization",
       "agent_id": "codex",
-      "summary": "Add live Assistant active-turn status",
+      "summary": "Keep Assistant status on the active tool",
       "target_id": "v6-product-lane-expansion",
       "claimed_at": "2026-06-05T21:57:48Z",
-      "heartbeat_at": "2026-06-06T01:14:47Z",
-      "expires_at": "2026-06-06T03:14:47Z",
+      "heartbeat_at": "2026-06-06T01:23:29Z",
+      "expires_at": "2026-06-06T03:23:29Z",
       "work_item": {
         "kind": "lane-followup",
         "id": "architecture-post-rc-canonicalization"

@@ -218,6 +218,10 @@ runtime cost control, and shared AI transport surfaces.
    that as an active-turn status strip: no idle diagnostics, but while a turn is
    loading it must show waiting, current tool/workflow progress, or generating
    status even when the transcript already contains an in-flight assistant row.
+   When multiple governed tools are pending, completed tools must not blank the
+   status while another tool is still running, and the status heartbeat should
+   follow the latest progressed pending tool without reordering the transcript's
+   chronological tool rows.
    The referenced OpenCode source at commit
    `f750deaa3e95098fdde5fb00305b273e43c5b2cd` mutates a single tool part from
    `pending` input through `running` progress to completed/error in

@@ -305,11 +305,11 @@ export function useChat(options: UseChatOptions = {}) {
     const pendingIndex = pendingTools.findIndex((tool) => matchesTool(tool, tool.id));
     const updatedPendingTools =
       pendingIndex >= 0
-        ? pendingTools.map((tool, index) => {
-            if (index !== pendingIndex) return tool;
-            resolvedTool = mergeTool(tool);
-            return resolvedTool;
-          })
+        ? [
+            ...pendingTools.slice(0, pendingIndex),
+            ...pendingTools.slice(pendingIndex + 1),
+            (resolvedTool = mergeTool(pendingTools[pendingIndex])),
+          ]
         : [
             ...pendingTools,
             (resolvedTool = {
@@ -792,7 +792,7 @@ export function useChat(options: UseChatOptions = {}) {
                   }
                   return true;
                 });
-                updatedEvents.push({ type: 'tool', tool: newToolCall });
+                updatedEvents.push({ type: 'tool', tool: newToolCall, toolId: data.id });
               } else {
                 // No approval - just replace pending_tool in place
                 updatedEvents = [...events];
@@ -804,7 +804,7 @@ export function useChat(options: UseChatOptions = {}) {
                       ? evt.toolId === data.id
                       : normalizeChatToolName(evt.pendingTool?.name || '') === normalizedEndName)
                   ) {
-                    updatedEvents[i] = { type: 'tool', tool: newToolCall };
+                    updatedEvents[i] = { type: 'tool', tool: newToolCall, toolId: data.id };
                     break;
                   }
                 }

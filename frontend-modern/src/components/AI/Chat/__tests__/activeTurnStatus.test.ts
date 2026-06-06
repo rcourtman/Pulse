@@ -66,6 +66,54 @@ describe('getAssistantActiveTurnStatus', () => {
     });
   });
 
+  it('keeps showing a remaining pending tool when another parallel tool completes', () => {
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            streamEvents: [
+              {
+                type: 'pending_tool',
+                pendingTool: {
+                  id: 'tool-a',
+                  name: 'pulse_get_nodes',
+                  input: '{}',
+                  status: 'running',
+                },
+                toolId: 'tool-a',
+              },
+              {
+                type: 'pending_tool',
+                pendingTool: {
+                  id: 'tool-b',
+                  name: 'pulse_read',
+                  input: '{}',
+                  progress: 'Reading storage layout',
+                  status: 'running',
+                },
+                toolId: 'tool-b',
+              },
+              {
+                type: 'tool',
+                toolId: 'tool-a',
+                tool: {
+                  name: 'pulse_get_nodes',
+                  input: '{}',
+                  output: 'ok',
+                  success: true,
+                },
+              },
+            ],
+          }),
+        ],
+        true,
+      ),
+    ).toEqual({
+      type: 'tool',
+      text: 'Reading storage layout',
+    });
+  });
+
   it('surfaces neutral workflow progress while a turn is active', () => {
     expect(
       getAssistantActiveTurnStatus(

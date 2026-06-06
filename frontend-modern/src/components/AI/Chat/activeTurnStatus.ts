@@ -47,14 +47,26 @@ const formatPendingToolStatus = (tool?: PendingTool): string => {
 const activePendingToolFromEvents = (
   events?: StreamDisplayEvent[],
 ): PendingTool | undefined => {
+  const completedToolKeys = new Set<string>();
+
   for (let index = (events?.length || 0) - 1; index >= 0; index -= 1) {
     const event = events?.[index];
     if (!event) continue;
     if (event.type === 'pending_tool' && event.pendingTool) {
-      return event.pendingTool;
+      const keys = [event.toolId, event.pendingTool.id, event.pendingTool.name]
+        .map((value) => value?.trim())
+        .filter((value): value is string => !!value);
+      if (!keys.some((key) => completedToolKeys.has(key))) {
+        return event.pendingTool;
+      }
     }
     if (event.type === 'tool') {
-      return undefined;
+      for (const key of [event.toolId, event.tool?.name]) {
+        const normalized = key?.trim();
+        if (normalized) {
+          completedToolKeys.add(normalized);
+        }
+      }
     }
   }
 
