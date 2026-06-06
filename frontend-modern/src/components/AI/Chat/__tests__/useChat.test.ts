@@ -1164,6 +1164,39 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('stores provider retry metadata from workflow state events', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() =>
+        useChat({ sessionId: 's', model: 'openrouter:openai/gpt-4o-mini' }),
+      );
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+
+      fire({
+        type: 'workflow_state',
+        data: {
+          phase: 'provider_retry',
+          message: 'Provider connection failed before any output; retrying.',
+          attempt: 2,
+          max_attempts: 2,
+          retry_after_ms: 200,
+        },
+      });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.workflowStatus).toEqual(
+        expect.objectContaining({
+          phase: 'provider_retry',
+          message: 'Provider connection failed before any output; retrying.',
+          attempt: 2,
+          maxAttempts: 2,
+          retryAfterMs: 200,
+        }),
+      );
+      dispose();
+    });
+
     it('does not infer a failed route when workflow only carries a next model', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() =>

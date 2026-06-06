@@ -113,6 +113,15 @@ product API routes free of maintainer commercial analytics.
 
 ## Shared Boundaries
 
+Assistant chat `workflow_state` events are a shared AI/API payload boundary.
+The backend source of truth is `internal/ai/chat.WorkflowStateData`, generated
+to `frontend-modern/src/api/generated/aiChatEvents.ts` by
+`scripts/generate-types.go` and pinned by `internal/api/contract_test.go`.
+Provider retry progress must use typed fields (`attempt`, `max_attempts`,
+`retry_after_ms`) on that same event instead of frontend-only string parsing or
+provider-specific ad hoc events; the Assistant UI may format those fields, but
+must not invent retry progress that the stream contract did not carry.
+
 Infrastructure settings copied agent commands are a shared API/payload boundary
 even when the final command string is assembled in the browser. Selected-row
 upgrade commands may carry fresh token and identity fields when the operator is

@@ -31,6 +31,33 @@ const messageContainsToolLabel = (message: string, label: string) => {
   return new RegExp(`(^|\\W)${escapeRegExp(label)}($|\\W)`, 'i').test(message);
 };
 
+const formatRetryDelay = (milliseconds?: number): string => {
+  if (!Number.isFinite(milliseconds) || !milliseconds || milliseconds <= 0) return '';
+  if (milliseconds < 1000) return `${Math.round(milliseconds)}ms`;
+  const seconds = milliseconds / 1000;
+  if (seconds < 10) return `${Number(seconds.toFixed(1))}s`;
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const minutes = seconds / 60;
+  if (minutes < 10) return `${Number(minutes.toFixed(1))}m`;
+  return `${Math.round(minutes)}m`;
+};
+
+const formatRetryStatusSuffix = (status?: WorkflowStatus): string => {
+  const parts: string[] = [];
+  if (status?.attempt && status.maxAttempts) {
+    parts.push(`attempt ${status.attempt}/${status.maxAttempts}`);
+  } else if (status?.attempt) {
+    parts.push(`attempt ${status.attempt}`);
+  }
+
+  const retryDelay = formatRetryDelay(status?.retryAfterMs);
+  if (retryDelay) {
+    parts.push(`retrying in ${retryDelay}`);
+  }
+
+  return parts.length > 0 ? ` · ${parts.join(' · ')}` : '';
+};
+
 export const formatAssistantWorkflowStatus = (status?: WorkflowStatus): string => {
   const message = status?.message?.trim();
   if (!message) return '';
@@ -41,8 +68,9 @@ export const formatAssistantWorkflowStatus = (status?: WorkflowStatus): string =
     toolLabel && !message.includes(tool || '') && !messageContainsToolLabel(message, toolLabel)
       ? ` · ${toolLabel}`
       : '';
+  const retrySuffix = formatRetryStatusSuffix(status);
 
-  return `${message}${toolSuffix}`;
+  return `${message}${toolSuffix}${retrySuffix}`;
 };
 
 const formatPendingToolStatus = (tool?: PendingTool): string => {

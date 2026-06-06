@@ -65,16 +65,38 @@ func isRetryableProviderStreamError(err error) bool {
 	return false
 }
 
-func emitWorkflowState(callback StreamCallback, phase, message, state, tool string) {
+type workflowStateOption func(*WorkflowStateData)
+
+func withWorkflowRetry(nextAttempt, maxAttempts int, retryAfter time.Duration) workflowStateOption {
+	return func(data *WorkflowStateData) {
+		if nextAttempt > 0 {
+			data.Attempt = nextAttempt
+		}
+		if maxAttempts > 0 {
+			data.MaxAttempts = maxAttempts
+		}
+		if retryAfter > 0 {
+			data.RetryAfterMS = int64(retryAfter / time.Millisecond)
+		}
+	}
+}
+
+func emitWorkflowState(callback StreamCallback, phase, message, state, tool string, opts ...workflowStateOption) {
 	if callback == nil {
 		return
 	}
-	jsonData, _ := json.Marshal(WorkflowStateData{
+	data := WorkflowStateData{
 		Phase:   phase,
 		Message: message,
 		State:   state,
 		Tool:    tool,
-	})
+	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&data)
+		}
+	}
+	jsonData, _ := json.Marshal(data)
 	callback(StreamEvent{Type: "workflow_state", Data: jsonData})
 }
 
@@ -83,6 +105,23 @@ func sessionFSMState(fsm *SessionFSM) string {
 		return ""
 	}
 	return string(fsm.State)
+}
+
+func providerRetryStatusMessage(err error) string {
+	if err == nil {
+		return "Provider stream interrupted before any output; retrying."
+	}
+	msg := strings.ToLower(strings.TrimSpace(err.Error()))
+	switch {
+	case strings.Contains(msg, "rate limit"), strings.Contains(msg, "too many requests"), strings.Contains(msg, "429"):
+		return "Provider is rate limiting the request; retrying."
+	case strings.Contains(msg, "timeout"), strings.Contains(msg, "timed out"), strings.Contains(msg, "deadline"):
+		return "Provider timed out before any output; retrying."
+	case strings.Contains(msg, "connection"), strings.Contains(msg, "broken pipe"), strings.Contains(msg, "eof"):
+		return "Provider connection failed before any output; retrying."
+	default:
+		return "Provider stream interrupted before any output; retrying."
+	}
 }
 
 const defaultProviderStreamErrorMessage = "AI response stream interrupted before completion. Please retry."
@@ -996,6 +1035,14 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					Dur("backoff", backoff).
 					Str("session_id", sessionID).
 					Msg("[AgenticLoop] Provider stream failed before events; retrying turn")
+				emitWorkflowState(
+					callback,
+					"provider_retry",
+					providerRetryStatusMessage(effectiveErr),
+					sessionFSMState(a.sessionFSM),
+					"",
+					withWorkflowRetry(attempt+1, maxProviderAttempts, backoff),
+				)
 				select {
 				case <-time.After(backoff):
 				case <-ctx.Done():

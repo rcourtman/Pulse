@@ -42,6 +42,25 @@ describe('AI chat stream event contract', () => {
     expect(aiChatEventsSource).toContain('next_model?: string');
   });
 
+  it('exposes provider retry metadata on workflow state events', () => {
+    const workflow: WorkflowStateData = {
+      phase: 'provider_retry',
+      message: 'Provider connection failed before any output; retrying.',
+      state: 'investigating',
+      attempt: 2,
+      max_attempts: 2,
+      retry_after_ms: 200,
+    };
+    const event: AIChatStreamEvent = { type: 'workflow_state', data: workflow };
+
+    expect(event.data.attempt).toBe(2);
+    expect(event.data.max_attempts).toBe(2);
+    expect(event.data.retry_after_ms).toBe(200);
+    expect(aiChatEventsSource).toContain('attempt?: number');
+    expect(aiChatEventsSource).toContain('max_attempts?: number');
+    expect(aiChatEventsSource).toContain('retry_after_ms?: number');
+  });
+
   it('exposes live tool progress as a typed stream contract', () => {
     const progress: ToolProgressData = {
       id: 'tool-1',

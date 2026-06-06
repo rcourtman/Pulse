@@ -10616,6 +10616,18 @@ func TestContract_ChatStreamEventJSONSnapshots(t *testing.T) {
 			want: `{"type":"workflow_state","data":{"phase":"provider_fallback","message":"OpenRouter did not start a response; trying DeepSeek.","state":"provider_fallback","failed_provider":"openrouter","failed_model":"openrouter:qwen/qwen3.7-plus","next_provider":"deepseek","next_model":"deepseek:deepseek-v4-pro"}}`,
 		},
 		{
+			name: "workflow_state_provider_retry",
+			event: mustStreamEvent(t, "workflow_state", chat.WorkflowStateData{
+				Phase:        "provider_retry",
+				Message:      "Provider connection failed before any output; retrying.",
+				State:        "investigating",
+				Attempt:      2,
+				MaxAttempts:  2,
+				RetryAfterMS: 200,
+			}),
+			want: `{"type":"workflow_state","data":{"phase":"provider_retry","message":"Provider connection failed before any output; retrying.","state":"investigating","attempt":2,"max_attempts":2,"retry_after_ms":200}}`,
+		},
+		{
 			name: "tool_start",
 			event: mustStreamEvent(t, "tool_start", chat.ToolStartData{
 				ID:       "tool-1",

@@ -1507,6 +1507,22 @@ runtime cost control, and shared AI transport surfaces.
 
 ## Current State
 
+Assistant provider retries are a first-class visible workflow state, not a
+hidden server log. The referenced OpenCode source at fetched `dev` commit
+`7ae856a9e97130f664f6f11fa5871a2795de9902` defines retry session status in
+`packages/opencode/src/session/status.ts` (`SessionStatus.Info` /
+`SessionStatus.set`), wires retry updates from
+`packages/opencode/src/session/processor.ts` through
+`SessionRetry.policy({ set })`, and renders retry attempt/backoff state from
+`status().type === "retry"` in
+`packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx`. Pulse adapts
+that contract at the owning stream boundary: `WorkflowStateData` carries
+`attempt`, `max_attempts`, and `retry_after_ms`, and `AgenticLoop` emits
+`provider_retry` before sleeping between transient pre-output provider
+attempts. The frontend active-turn footer renders that same typed workflow state
+as compact attempt/backoff progress, so the user sees Pulse moving through a
+retry instead of staring at an obsolete provider-wait message.
+
 Primary nav moved to governed platform/runtime destinations on 2026-05-16 and
 was clarified on 2026-05-25 through `frontend-modern/src/App.tsx` and
 `frontend-modern/src/AppLayout.tsx`: the top of the app may expose canonical

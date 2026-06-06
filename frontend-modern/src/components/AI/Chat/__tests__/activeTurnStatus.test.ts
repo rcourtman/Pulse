@@ -116,6 +116,31 @@ describe('getAssistantActiveTurnStatus', () => {
     });
   });
 
+  it('surfaces provider retry attempt and backoff metadata in the active footer', () => {
+    const startedAt = Date.now() - 2_000;
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            workflowStatus: {
+              phase: 'provider_retry',
+              message: 'Provider connection failed before any output; retrying.',
+              attempt: 2,
+              maxAttempts: 2,
+              retryAfterMs: 200,
+              startedAt,
+            },
+          }),
+        ],
+        true,
+      ),
+    ).toEqual({
+      type: 'thinking',
+      text: 'Provider connection failed before any output; retrying. · attempt 2/2 · retrying in 200ms',
+      startedAt,
+    });
+  });
+
   it('prefers live tool progress over generic tool labels', () => {
     expect(
       getAssistantActiveTurnStatus(

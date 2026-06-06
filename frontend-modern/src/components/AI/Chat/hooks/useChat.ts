@@ -121,7 +121,10 @@ export function useChat(options: UseChatOptions = {}) {
     (a.phase || '') === (b.phase || '') &&
     a.message === b.message &&
     (a.state || '') === (b.state || '') &&
-    (a.tool || '') === (b.tool || '');
+    (a.tool || '') === (b.tool || '') &&
+    (a.attempt || 0) === (b.attempt || 0) &&
+    (a.maxAttempts || 0) === (b.maxAttempts || 0) &&
+    (a.retryAfterMs || 0) === (b.retryAfterMs || 0);
 
   const setAssistantWorkflowStatus = (
     assistantId: string,
@@ -601,6 +604,11 @@ export function useChat(options: UseChatOptions = {}) {
     };
   };
 
+  const positiveNumber = (value: unknown): number | undefined => {
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : undefined;
+  };
+
   const extractCompletedModel = (data: unknown): string => {
     if (!data || typeof data !== 'object') return '';
     const record = data as Record<string, unknown>;
@@ -640,12 +648,18 @@ export function useChat(options: UseChatOptions = {}) {
     const phase = typeof record.phase === 'string' ? record.phase.trim() : '';
     const state = typeof record.state === 'string' ? record.state.trim() : '';
     const tool = typeof record.tool === 'string' ? record.tool.trim() : '';
+    const attempt = positiveNumber(record.attempt);
+    const maxAttempts = positiveNumber(record.max_attempts ?? record.maxAttempts);
+    const retryAfterMs = positiveNumber(record.retry_after_ms ?? record.retryAfterMs);
 
     return {
       message,
       phase: phase || undefined,
       state: state || undefined,
       tool: tool || undefined,
+      attempt,
+      maxAttempts,
+      retryAfterMs,
       startedAt: Date.now(),
     };
   };
@@ -691,7 +705,9 @@ export function useChat(options: UseChatOptions = {}) {
     return Object.keys(requestContext).length > 0 ? requestContext : undefined;
   };
 
-  const snapshotSendOptions = (sendOptions?: SendMessageOptions): SendMessageOptions | undefined => {
+  const snapshotSendOptions = (
+    sendOptions?: SendMessageOptions,
+  ): SendMessageOptions | undefined => {
     const modelRoute = effectiveModelRoute(sendOptions);
     const next: SendMessageOptions = {};
     if (modelRoute) {

@@ -296,12 +296,38 @@ func TestAgenticLoop_RetriesProviderStreamBeforeEvents(t *testing.T) {
 		return nil
 	}
 
-	results, err := loop.Execute(context.Background(), "retry-before-events", []Message{{Role: "user", Content: "hi"}}, func(event StreamEvent) {})
+	var workflowStates []WorkflowStateData
+	results, err := loop.Execute(context.Background(), "retry-before-events", []Message{{Role: "user", Content: "hi"}}, func(event StreamEvent) {
+		if event.Type != "workflow_state" {
+			return
+		}
+		var data WorkflowStateData
+		if err := json.Unmarshal(event.Data, &data); err != nil {
+			t.Fatalf("failed to decode workflow_state: %v", err)
+		}
+		workflowStates = append(workflowStates, data)
+	})
 	if err != nil {
 		t.Fatalf("expected retry to recover stream failure, got error: %v", err)
 	}
 	if callCount != 2 {
 		t.Fatalf("expected 2 provider attempts, got %d", callCount)
+	}
+	if len(workflowStates) != 1 {
+		t.Fatalf("expected one retry workflow state, got %#v", workflowStates)
+	}
+	retry := workflowStates[0]
+	if retry.Phase != "provider_retry" {
+		t.Fatalf("retry phase = %q, want provider_retry", retry.Phase)
+	}
+	if retry.Attempt != 2 || retry.MaxAttempts != 2 {
+		t.Fatalf("retry attempts = %d/%d, want 2/2", retry.Attempt, retry.MaxAttempts)
+	}
+	if retry.RetryAfterMS != 200 {
+		t.Fatalf("retry backoff = %dms, want 200ms", retry.RetryAfterMS)
+	}
+	if retry.Message != "Provider connection failed before any output; retrying." {
+		t.Fatalf("retry message = %q", retry.Message)
 	}
 	if len(results) != 1 || results[0].Content != "hello" {
 		t.Fatalf("unexpected results: %+v", results)
