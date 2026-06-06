@@ -75,13 +75,26 @@ const DESKTOP_BOTTOM_CLEARANCE = 16;
 const SEARCH_HEADER_HEIGHT = 52;
 const ERROR_ROW_HEIGHT = 36;
 const CUSTOM_RECENT_MODEL_DESCRIPTION = 'Recent custom model route';
+const MODEL_ROUTE_PROVIDER_RE = /^[a-z][a-z0-9_-]*$/i;
 
 type ResolvedModelRoute = {
   id: string;
   model?: ModelInfo;
 };
 
-const isExplicitModelRoute = (modelId: string) => modelId.includes(':');
+const isExplicitModelRoute = (modelId: string) => {
+  const candidate = modelId.trim();
+  if (!candidate || /\s/.test(candidate) || candidate.includes('://')) {
+    return false;
+  }
+  const separator = candidate.indexOf(':');
+  if (separator <= 0 || separator === candidate.length - 1) {
+    return false;
+  }
+  const provider = candidate.slice(0, separator);
+  const model = candidate.slice(separator + 1);
+  return MODEL_ROUTE_PROVIDER_RE.test(provider) && Boolean(model.trim()) && !model.startsWith('/');
+};
 
 const modelRouteLabel = (entry: ResolvedModelRoute) =>
   entry.model ? formatAIModelRouteLabel(entry.model) : formatAIModelRouteLabel(entry.id);

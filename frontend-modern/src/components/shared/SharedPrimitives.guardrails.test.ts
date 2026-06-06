@@ -248,9 +248,11 @@ describe('shared primitive guardrails', () => {
       "import { AI_CHAT_MODEL_SELECTOR_EMPTY_STATE } from '@/utils/aiChatPresentation';",
     );
     expect(aiModelPickerSource).toContain('const notableModels = createMemo');
-    expect(aiModelPickerSource).toContain('return props.models.filter((model) => !model.notable');
+    expect(aiModelPickerSource).toContain('(model) => !model.notable');
     expect(aiModelPickerSource).toContain('Show ${hiddenModelCount()} older models');
-    expect(aiModelPickerSource).toContain("if (!candidate.includes(':'))");
+    expect(aiModelPickerSource).toContain('const MODEL_ROUTE_PROVIDER_RE');
+    expect(aiModelPickerSource).toContain("candidate.includes('://')");
+    expect(aiModelPickerSource).toContain('separator <= 0 || separator === candidate.length - 1');
     expect(aiModelPickerSource).toContain('MOBILE_BOTTOM_CLEARANCE');
     expect(aiModelPickerSource).toContain('availableHeight = window.innerHeight');
     expect(aiModelPickerSource).toContain(

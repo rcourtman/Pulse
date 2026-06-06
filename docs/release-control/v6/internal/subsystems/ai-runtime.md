@@ -219,7 +219,7 @@ runtime cost control, and shared AI transport surfaces.
    adapting the proven interaction model, not guessing from screenshots or
    observed behavior alone.
    The referenced OpenCode source at fetched `origin/dev` commit
-   `9ed17da55ab1f7360cc0e01075f763e27fa899e9` builds the model dialog from
+   `54f4974546104bb72f7a0be2b75b92f9defc009b` builds the model dialog from
    provider metadata, favorites, recent models, and provider sections in
    `packages/opencode/src/cli/cmd/tui/component/dialog-model.tsx`, keeps
    structured `{ providerID, modelID }` current/recent/favorite state with
@@ -231,7 +231,10 @@ runtime cost control, and shared AI transport surfaces.
    above the provider catalog, routing chat-specific default/override options
    through the shared model picker, preserving selected older models in the
    visible list, and accepting custom model entries only when they are explicit
-   `provider:model` routes that the backend chat stream can execute.
+   `provider:model` routes that the backend chat stream can execute. Unknown
+   recent or custom Pulse routes may survive catalog hydration only when they
+   still have a valid provider/model shape; malformed route strings must not
+   become selectable chat routes.
    The referenced OpenCode source at fetched `origin/dev` commit
    `fa2b63f850fc0a23bec2bdff9e660450d3fe7913` keeps prompt/footer status visible
    only while the session is non-idle in

@@ -563,6 +563,23 @@ describe('ModelSelector', () => {
     expect(screen.getByText('No matching models.')).toBeInTheDocument();
   });
 
+  it('does not offer malformed custom model routes', () => {
+    const onModelSelect = vi.fn();
+    render(() => (
+      <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={onModelSelect} />
+    ));
+
+    fireEvent.click(screen.getByTitle('Select model for this chat'));
+    const searchInput = screen.getByPlaceholderText('Search or enter model ID');
+
+    for (const value of ['openrouter:', ':custom/model', 'https://openrouter.ai/models/foo']) {
+      fireEvent.input(searchInput, { target: { value } });
+      expect(screen.queryByText(`Use "${value}"`)).not.toBeInTheDocument();
+      fireEvent.keyDown(searchInput, { key: 'Enter' });
+      expect(onModelSelect).not.toHaveBeenCalled();
+    }
+  });
+
   it('does not show custom model option when query exactly matches an existing model ID', () => {
     render(() => <ModelSelector models={SAMPLE_MODELS} selectedModel="" onModelSelect={vi.fn()} />);
 

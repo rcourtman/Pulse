@@ -1009,7 +1009,11 @@ not a replacement status card, CTA band, or page-local nested card.
     open-and-focus requests, selected older model visibility, route labels, and
     explicit `provider:model` custom-route validation belong to the shared
     picker so Assistant, settings, and future model-selection surfaces do not
-    drift apart.
+    drift apart. Unknown custom or recent routes may remain visible only when
+    they have a valid non-empty provider and model segment; malformed route
+    strings such as empty provider/model values, URL-shaped text, whitespace,
+    or path-only payloads must be dropped instead of becoming selectable model
+    routes.
     Gateway-routed model choices must not look like direct-provider choices:
     the shared picker, System AI settings status strip, and per-surface
     inherited-default descriptions must render OpenRouter-hosted provider

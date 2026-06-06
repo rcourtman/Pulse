@@ -195,6 +195,34 @@ describe('AIModelPicker', () => {
     expect(onModelSelect).toHaveBeenCalledWith('openrouter:custom/model');
   });
 
+  it('does not offer malformed explicit custom routes', () => {
+    const onModelSelect = vi.fn();
+    render(() => (
+      <AIModelPicker
+        models={models}
+        selectedModel=""
+        onModelSelect={onModelSelect}
+        title="Select shared default model"
+      />
+    ));
+
+    fireEvent.click(screen.getByTitle('Select shared default model'));
+    const searchInput = screen.getByPlaceholderText('Search or enter model ID');
+
+    for (const value of [
+      'openrouter:',
+      ':custom/model',
+      'https://openrouter.ai/models/deepseek/deepseek-chat',
+      'openrouter:/custom/model',
+      'open router:custom/model',
+    ]) {
+      fireEvent.input(searchInput, { target: { value } });
+      expect(screen.queryByText(`Use "${value}"`)).not.toBeInTheDocument();
+      fireEvent.keyDown(searchInput, { key: 'Enter' });
+      expect(onModelSelect).not.toHaveBeenCalled();
+    }
+  });
+
   it('selects an exact model ID on Enter', () => {
     const onModelSelect = vi.fn();
     render(() => (
@@ -237,5 +265,28 @@ describe('AIModelPicker', () => {
     expect(screen.getByText('Custom: Model via OpenRouter')).toBeInTheDocument();
     expect(screen.getByText('Recent custom model route')).toBeInTheDocument();
     expect(screen.getAllByText('MiniMax: MiniMax M2.5 via OpenRouter')).toHaveLength(1);
+  });
+
+  it('drops malformed custom routes from priority model sections', () => {
+    render(() => (
+      <AIModelPicker
+        models={models}
+        selectedModel=""
+        onModelSelect={vi.fn()}
+        title="Select shared default model"
+        modelSections={[
+          {
+            title: 'Recent',
+            modelIds: ['openrouter:', 'https://openrouter.ai/models/foo', 'openrouter:custom/model'],
+          },
+        ]}
+      />
+    ));
+
+    fireEvent.click(screen.getByTitle('Select shared default model'));
+
+    expect(screen.getByText('Custom: Model via OpenRouter')).toBeInTheDocument();
+    expect(screen.queryByText('Openrouter:')).not.toBeInTheDocument();
+    expect(screen.queryByText(/openrouter\.ai/)).not.toBeInTheDocument();
   });
 });
