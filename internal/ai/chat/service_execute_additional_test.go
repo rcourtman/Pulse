@@ -412,6 +412,9 @@ func TestServiceExecuteStreamMockModeStreamsToolFixtureWithoutProviderCall(t *te
 	originalMockMode := mockruntime.IsEnabled()
 	t.Cleanup(func() { mockruntime.SetEnabled(originalMockMode) })
 	mockruntime.SetEnabled(true)
+	originalPace := mockAssistantStreamPace
+	mockAssistantStreamPace = 0
+	t.Cleanup(func() { mockAssistantStreamPace = originalPace })
 
 	var providerFactoryCalls atomic.Int32
 	var providerStreamCalls atomic.Int32

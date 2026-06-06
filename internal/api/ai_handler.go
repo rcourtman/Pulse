@@ -22,6 +22,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mockmode"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -103,6 +104,18 @@ func aiChatRuntimeConfigDigest(cfg *config.AIConfig) [sha256.Size]byte {
 
 func aiChatRuntimeConfigChanged(current, latest *config.AIConfig) bool {
 	return aiChatRuntimeConfigDigest(current) != aiChatRuntimeConfigDigest(latest)
+}
+
+func aiChatRuntimeConfigForMockMode(cfg *config.AIConfig) *config.AIConfig {
+	if !mockmode.IsEnabled() {
+		return cfg
+	}
+	if cfg == nil {
+		cfg = config.NewDefaultAIConfig()
+	}
+	next := *cfg
+	next.Enabled = true
+	return &next
 }
 
 type patrolRunHandoffProvider func(context.Context, string) (airuntime.PatrolRunRecord, bool)
@@ -514,7 +527,7 @@ func (h *AIHandler) syncServiceConfig(ctx context.Context, svc AIService) {
 	}
 
 	currentCfg := reader.GetConfig()
-	latestCfg := h.loadAIConfig(ctx)
+	latestCfg := aiChatRuntimeConfigForMockMode(h.loadAIConfig(ctx))
 	if latestCfg == nil || !latestCfg.Enabled {
 		if currentCfg != nil && currentCfg.Enabled {
 			if err := svc.Stop(ctx); err != nil {
@@ -582,7 +595,7 @@ func (h *AIHandler) initTenantService(ctx context.Context, orgID string) AIServi
 
 	// Tenant chat startup must use the same hosted-aware config path as
 	// /api/settings/ai so hosted orgs do not race into a synthetic disabled/default config.
-	aiCfg := h.loadAIConfig(tenantCtx)
+	aiCfg := aiChatRuntimeConfigForMockMode(h.loadAIConfig(tenantCtx))
 	if aiCfg == nil {
 		log.Info().Str("orgID", orgID).Msg("AI config is nil for tenant service initialization")
 		return nil
@@ -818,6 +831,7 @@ func (h *AIHandler) Start(ctx context.Context, monitor *monitoring.Monitor) erro
 // startWithConfig starts the AI service with an already-loaded config so callers
 // such as Restart do not re-read (and risk racing) the config a second time.
 func (h *AIHandler) startWithConfig(ctx context.Context, monitor *monitoring.Monitor, aiCfg *config.AIConfig) error {
+	aiCfg = aiChatRuntimeConfigForMockMode(aiCfg)
 	if aiCfg == nil {
 		log.Info().Msg("AI config is nil, AI is disabled")
 		return nil
@@ -891,7 +905,7 @@ func (h *AIHandler) Stop(ctx context.Context) error {
 // Call this when model or other settings change
 func (h *AIHandler) Restart(ctx context.Context) error {
 	// Load fresh config from persistence to get latest settings
-	newCfg := h.loadAIConfig(ctx)
+	newCfg := aiChatRuntimeConfigForMockMode(h.loadAIConfig(ctx))
 	svc := h.getDefaultService()
 
 	if newCfg == nil || !newCfg.Enabled {

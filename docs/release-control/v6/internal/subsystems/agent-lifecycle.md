@@ -1532,6 +1532,12 @@ prior chat session. Lifecycle-adjacent mobile pairing and setup flows depend
 on `/api/ai/approvals` becoming ready from the first governed settings save,
 not only after some earlier process-start or chat-start side effect has
 already initialized the approval store.
+That same shared dependency now also assumes mock-mode Assistant runtime
+startup is AI/runtime-only. When mock mode is active, `internal/api/ai_handler.go`
+may enable the Assistant runtime in memory so `/api/ai/chat` can exercise the
+typed mock stream without configured providers, but that effective config must
+not become agent enrollment, install readiness, command approval authority, or
+persisted lifecycle setup state.
 That same shared `internal/api/ai_handler.go` dependency now also assumes
 Assistant finding handoffs may include a model-only factual finding briefing
 from Patrol's unified finding and structured investigation record. Lifecycle-adjacent

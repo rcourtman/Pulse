@@ -10821,6 +10821,47 @@ func TestContract_AssistantChatStreamUsesClientSafeProjection(t *testing.T) {
 	}
 }
 
+func TestContract_AssistantMockModeRuntimeUsesEffectiveConfig(t *testing.T) {
+	handlerSource, err := os.ReadFile(filepath.Clean("ai_handler.go"))
+	if err != nil {
+		t.Fatalf("read ai_handler.go: %v", err)
+	}
+	mockStreamSource, err := os.ReadFile(filepath.Clean("../ai/chat/mock_stream.go"))
+	if err != nil {
+		t.Fatalf("read chat mock stream: %v", err)
+	}
+
+	handlerText := string(handlerSource)
+	for _, required := range []string{
+		"func aiChatRuntimeConfigForMockMode(cfg *config.AIConfig) *config.AIConfig",
+		"mockmode.IsEnabled()",
+		"next.Enabled = true",
+		"latestCfg := aiChatRuntimeConfigForMockMode(h.loadAIConfig(ctx))",
+		"aiCfg := aiChatRuntimeConfigForMockMode(h.loadAIConfig(tenantCtx))",
+		"aiCfg = aiChatRuntimeConfigForMockMode(aiCfg)",
+		"newCfg := aiChatRuntimeConfigForMockMode(h.loadAIConfig(ctx))",
+	} {
+		if !strings.Contains(handlerText, required) {
+			t.Fatalf("Assistant mock-mode runtime config must stay effective-only and cover startup/sync paths: missing %q", required)
+		}
+	}
+
+	mockStreamText := string(mockStreamSource)
+	for _, required := range []string{
+		"var mockAssistantStreamPace =",
+		"func pauseMockAssistantStream(ctx context.Context) bool",
+		"time.NewTimer(mockAssistantStreamPace)",
+		"pauseMockAssistantStream(ctx)",
+		"Reading synthetic Pulse inventory.",
+		"Summarizing mock inventory result.",
+		"Composing mock Assistant response.",
+	} {
+		if !strings.Contains(mockStreamText, required) {
+			t.Fatalf("Assistant mock stream must pace browser-visible status/tool/content proof: missing %q", required)
+		}
+	}
+}
+
 func TestContract_PushNotificationJSONSnapshots(t *testing.T) {
 	cases := []struct {
 		name    string

@@ -18,7 +18,23 @@ const (
 	mockAssistantToolName   = "pulse_query"
 )
 
-func streamMockAssistantTurnIfEnabled(sessions *SessionStore, sessionID, prompt string, streamCallback StreamCallback) bool {
+var mockAssistantStreamPace = 220 * time.Millisecond
+
+func pauseMockAssistantStream(ctx context.Context) bool {
+	if mockAssistantStreamPace <= 0 {
+		return true
+	}
+	timer := time.NewTimer(mockAssistantStreamPace)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
+func streamMockAssistantTurnIfEnabled(ctx context.Context, sessions *SessionStore, sessionID, prompt string, streamCallback StreamCallback) bool {
 	if !mockmode.IsEnabled() {
 		return false
 	}
@@ -42,10 +58,25 @@ func streamMockAssistantTurnIfEnabled(sessions *SessionStore, sessionID, prompt 
 	toolOutput := string(toolOutputBytes)
 
 	emitWorkflowState(streamCallback, "mock_context", "Preparing mock Assistant fixture.", "mock", "")
+	if !pauseMockAssistantStream(ctx) {
+		return true
+	}
 	emitToolStartEvent(streamCallback, mockAssistantToolID, mockAssistantToolName, toolInput)
+	if !pauseMockAssistantStream(ctx) {
+		return true
+	}
 	emitToolProgressEvent(streamCallback, mockAssistantToolID, mockAssistantToolName, toolInput, "running", "Reading synthetic Pulse inventory.")
+	if !pauseMockAssistantStream(ctx) {
+		return true
+	}
 	emitToolProgressEvent(streamCallback, mockAssistantToolID, mockAssistantToolName, toolInput, "running", "Summarizing mock inventory result.")
+	if !pauseMockAssistantStream(ctx) {
+		return true
+	}
 	emitToolEndEvent(streamCallback, mockAssistantToolID, mockAssistantToolName, toolInput, toolOutput, true)
+	if !pauseMockAssistantStream(ctx) {
+		return true
+	}
 	emitWorkflowState(streamCallback, "mock_response", "Composing mock Assistant response.", "mock", mockAssistantToolName)
 
 	chunks := mockAssistantResponseChunks(prompt)
@@ -71,6 +102,9 @@ func streamMockAssistantTurnIfEnabled(sessions *SessionStore, sessionID, prompt 
 	}
 
 	for _, chunk := range chunks {
+		if !pauseMockAssistantStream(ctx) {
+			return true
+		}
 		contentData, _ := json.Marshal(ContentData{Text: chunk})
 		streamCallback(StreamEvent{Type: "content", Data: contentData})
 	}

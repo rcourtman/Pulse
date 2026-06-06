@@ -221,6 +221,12 @@ state only. A restored prompt or restored message count may help an operator
 continue a protected-item investigation, but it must not become backup coverage
 evidence, recovery freshness, restore entitlement, storage-owner identity,
 approval policy, or a provider-local recovery command handoff.
+Mock-mode Assistant chat startup through `internal/api/ai_handler.go` is also
+only adjacent AI/runtime proof for storage/recovery consumers. The handler may
+enable the Assistant runtime in memory during mock mode so the typed mock SSE
+fixture works without real providers, but that effective config and paced mock
+tool stream must not become backup visibility, recovery readiness, restore
+authority, storage health evidence, or a recovery-local fixture path.
 Storage and recovery may also consume unified-resource TrueNAS app and VM
 metadata, TrueNAS native service metadata, plus TrueNAS network-share metadata,
 as read-only workload, system, and storage-access context when explaining

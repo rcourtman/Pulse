@@ -17,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	mockfixtures "github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
@@ -299,6 +300,74 @@ func TestStart(t *testing.T) {
 	err = h.Start(context.Background(), nil)
 	assert.NoError(t, err)
 	assert.Equal(t, mockSvc, h.defaultService)
+}
+
+func TestStart_MockModeStartsChatServiceWhenPersistedConfigDisabled(t *testing.T) {
+	previousMock := mockfixtures.IsMockEnabled()
+	t.Cleanup(func() { _ = mockfixtures.SetEnabled(previousMock) })
+	if err := mockfixtures.SetEnabled(true); err != nil {
+		t.Fatalf("enable mock mode: %v", err)
+	}
+
+	oldNewService := newChatService
+	defer func() { newChatService = oldNewService }()
+
+	mockSvc := new(MockAIService)
+	persistedCfg := &config.AIConfig{Enabled: false}
+	var gotCfg chat.Config
+	newChatService = func(cfg chat.Config) AIService {
+		gotCfg = cfg
+		return mockSvc
+	}
+
+	mockPersist := new(MockAIPersistence)
+	mockPersist.On("LoadAIConfig").Return(persistedCfg, nil).Once()
+	mockSvc.On("Start", mock.Anything).Return(nil).Once()
+	h := newTestAIHandler(&config.Config{}, mockPersist, nil)
+
+	err := h.Start(context.Background(), nil)
+	assert.NoError(t, err)
+	assert.Equal(t, mockSvc, h.defaultService)
+	if assert.NotNil(t, gotCfg.AIConfig) {
+		assert.True(t, gotCfg.AIConfig.Enabled)
+	}
+	assert.False(t, persistedCfg.Enabled, "mock-mode runtime enablement must not mutate persisted settings")
+	mockSvc.AssertExpectations(t)
+	mockPersist.AssertExpectations(t)
+}
+
+func TestRestart_MockModeStartsChatServiceWhenPersistedConfigDisabled(t *testing.T) {
+	previousMock := mockfixtures.IsMockEnabled()
+	t.Cleanup(func() { _ = mockfixtures.SetEnabled(previousMock) })
+	if err := mockfixtures.SetEnabled(true); err != nil {
+		t.Fatalf("enable mock mode: %v", err)
+	}
+
+	oldNewService := newChatService
+	defer func() { newChatService = oldNewService }()
+
+	mockSvc := new(MockAIService)
+	persistedCfg := &config.AIConfig{Enabled: false}
+	var gotCfg chat.Config
+	newChatService = func(cfg chat.Config) AIService {
+		gotCfg = cfg
+		return mockSvc
+	}
+
+	mockPersist := new(MockAIPersistence)
+	mockPersist.On("LoadAIConfig").Return(persistedCfg, nil).Once()
+	mockSvc.On("Start", mock.Anything).Return(nil).Once()
+	h := newTestAIHandler(&config.Config{}, mockPersist, nil)
+
+	err := h.Restart(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, mockSvc, h.defaultService)
+	if assert.NotNil(t, gotCfg.AIConfig) {
+		assert.True(t, gotCfg.AIConfig.Enabled)
+	}
+	assert.False(t, persistedCfg.Enabled, "mock-mode runtime enablement must not mutate persisted settings")
+	mockSvc.AssertExpectations(t)
+	mockPersist.AssertExpectations(t)
 }
 
 func TestStop(t *testing.T) {

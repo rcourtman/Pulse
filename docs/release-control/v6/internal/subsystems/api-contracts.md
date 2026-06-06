@@ -527,8 +527,8 @@ payload shape change when the portal presents compact client rows.
 	    Assistant execution is still in flight. Hidden SSE comment heartbeats are
 	    not sufficient user-visible progress. The handler must serialize comment
 	    heartbeats and JSON event writes through one writer lock, and the
-	    `stream_idle` event must stop before terminal `done`/`error` rather than
-	    becoming assistant-authored transcript content.
+    `stream_idle` event must stop before terminal `done`/`error` rather than
+    becoming assistant-authored transcript content.
 	    The generated frontend union, stream parser
 	    tests, and backend JSON snapshot proof must stay in lockstep with that payload;
     `done.session_id` and `question.session_id` remain compatibility payloads,
@@ -536,6 +536,16 @@ payload shape change when the portal presents compact client rows.
     must also carry the effective `model` route that completed the stream so
     provider fallback, transcript labels, retries, and model-route recovery stay
     tied to the actual responding provider rather than the failed request route.
+    Mock-mode Assistant chat is part of that same API contract: when mock mode
+    is active, `internal/api/ai_handler.go` must start, restart, sync, and
+    tenant-initialize the chat runtime from an in-memory effective config that
+    enables Assistant without mutating the persisted `AIConfig`. `/api/ai/chat`
+    must therefore accept cold Assistant requests in mock mode even when no real
+    provider or model is configured, and it must return the normal typed SSE
+    sequence rather than the service-not-running recovery error. The mock
+    fixture must pace its browser-facing status/tool/content events enough to
+    prove the visible stream contract, while tests may disable that pace to keep
+    backend proof fast.
 34. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
     Provider test responses from `/api/ai/test` and provider-specific
     `/api/ai/test/{provider}` preflight responses must return one safe

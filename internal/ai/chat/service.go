@@ -595,7 +595,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		Int("message_count", len(messages)).
 		Msg("[ChatService] Got messages, calling agentic loop")
 
-	if streamMockAssistantTurnIfEnabled(sessions, session.ID, req.Prompt, streamCallback) {
+	if streamMockAssistantTurnIfEnabled(ctx, sessions, session.ID, req.Prompt, streamCallback) {
 		return nil
 	}
 

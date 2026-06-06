@@ -567,9 +567,26 @@ runtime cost control, and shared AI transport surfaces.
    persist a real assistant message with model route `pulse:mock-assistant` and
    a successful `pulse_query` tool call so session restore, transcript tooling,
    and stream-contract tests exercise the same backend-to-browser shape as a
-   live provider/tool turn. This fixture must not run as provider fallback in
-   non-mock mode and must not become Pulse-authored remediation or routing
-   behavior.
+   live provider/tool turn. Mock mode is also an effective runtime-config
+   overlay: `internal/api/ai_handler.go` startup, restart, config sync, and
+   tenant service initialization must treat Assistant as enabled in memory when
+   mock mode is active, without saving or mutating the persisted `AIConfig`, so
+   `/api/ai/chat` and Assistant sessions are available with zero configured
+   external providers or models. The live fixture must pace its status, tool,
+   and content events enough for the browser to paint each state in sequence;
+   unit tests may disable that pace, but the dev fixture must not collapse into
+   a single final completed row. This fixture must not run as provider fallback
+   in non-mock mode and must not become Pulse-authored remediation or routing
+   behavior. The referenced OpenCode source at fetched `origin/dev` commit
+   `4519a1da329c1a4fc384054e7203ba7d06928205` publishes tool-call and
+   tool-result events incrementally in
+   `packages/core/src/session/runner/publish-llm-event.ts`, mutates assistant
+   tool parts through pending/running/completed states in
+   `packages/core/src/session/message-updater.ts`, and renders the current tool
+   part state in `packages/ui/src/components/message-part.tsx` through
+   `packages/ui/src/components/basic-tool.tsx`. Pulse adapts that source model
+   by making the mock fixture prove the same visible state sequence without
+   copying OpenCode's editor-specific tool catalog.
    The referenced OpenCode source at fetched `origin/dev` commit
    `09d9cf01f93798939c1284fbe974b6e1f4d2759d` renders tool-specific inline
    labels such as `Read <path>`, `Grep "<pattern>"`, `WebFetch <url>`, and bash
