@@ -4,6 +4,7 @@ import {
   formatAIModelRouteLabel,
   getAIProviderDisplayName,
   getProviderFromModelId,
+  isPulseOwnedLocalModelRoute,
 } from '@/utils/aiProviderPresentation';
 
 describe('aiProviderPresentation', () => {
@@ -11,6 +12,7 @@ describe('aiProviderPresentation', () => {
     expect(AI_PROVIDER_DISPLAY_NAMES.openai).toBe('OpenAI');
     expect(getAIProviderDisplayName('anthropic')).toBe('Anthropic');
     expect(getAIProviderDisplayName('gemini')).toBe('Google Gemini');
+    expect(getAIProviderDisplayName('pulse')).toBe('Pulse');
     expect(getAIProviderDisplayName('custom-provider')).toBe('custom-provider');
   });
 
@@ -70,5 +72,16 @@ describe('aiProviderPresentation', () => {
 
   it('labels Pulse-owned local runtime routes without provider wording', () => {
     expect(formatAIModelRouteLabel('pulse:local-inventory')).toBe('Pulse inventory');
+    expect(formatAIModelRouteLabel('pulse:mock-assistant')).toBe('Pulse mock Assistant');
+    expect(
+      formatAIModelRouteLabel({
+        id: 'pulse:mock-assistant',
+        name: 'Pulse mock Assistant',
+        provider: 'pulse',
+      }),
+    ).toBe('Pulse mock Assistant');
+    expect(isPulseOwnedLocalModelRoute('pulse:local-inventory')).toBe(true);
+    expect(isPulseOwnedLocalModelRoute('pulse:mock-assistant')).toBe(true);
+    expect(isPulseOwnedLocalModelRoute('pulse:unknown')).toBe(false);
   });
 });

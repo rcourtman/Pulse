@@ -193,6 +193,9 @@ describe('shared primitive guardrails', () => {
   it('keeps AI model picker labels route-aware for gateway providers', () => {
     expect(aiModelPickerSource).toContain('formatAIModelRouteLabel(match)');
     expect(aiModelPickerSource).toContain('formatAIModelRouteLabel(model)');
+    expect(aiModelPickerSource).toContain('isPulseOwnedLocalModelRoute');
+    expect(aiModelPickerSource).toContain('const secondaryModelId = () =>');
+    expect(aiModelPickerSource).toContain('!isPulseOwnedLocalModelRoute(model.id)');
     expect(aiModelPickerSource).not.toContain("model.id.split(':').pop()");
   });
 

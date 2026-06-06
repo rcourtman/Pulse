@@ -19,6 +19,7 @@ import {
   formatAIModelRouteLabel,
   getAIProviderDisplayName,
   getProviderFromModelId,
+  isPulseOwnedLocalModelRoute,
 } from '@/utils/aiProviderPresentation';
 
 type AIModelPickerDefaultOption = {
@@ -108,6 +109,7 @@ const modelRouteDescription = (entry: ResolvedModelRoute) =>
 
 const modelRouteSecondaryId = (entry: ResolvedModelRoute) => {
   const model = entry.model;
+  if (model && isPulseOwnedLocalModelRoute(model.id)) return '';
   if (!model?.name || model.name === model.id) return '';
   return model.id;
 };
@@ -781,44 +783,51 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
                     {getAIProviderDisplayName(provider) || provider}
                   </div>
                   <For each={providerModels}>
-                    {(model) => (
-                      <button
-                        type="button"
-                        ref={(button) => {
-                          optionRefs.set(optionKeyForModel(model.id), button);
-                        }}
-                        onClick={() => handleSelect(model.id)}
-                        onKeyDown={(event) =>
-                          handleOptionKeyDown(event, optionKeyForModel(model.id))
-                        }
-                        role="option"
-                        aria-selected={isSelectedRoute(model.id)}
-                        aria-label={optionAriaLabel(
-                          formatAIModelRouteLabel(model),
-                          isSelectedRoute(model.id),
-                          [
-                            model.description,
-                            model.name && model.name !== model.id ? model.id : undefined,
-                          ],
-                        )}
-                        class={optionClass(isSelectedRoute(model.id))}
-                      >
-                        <div class="flex min-w-0 items-center gap-2">
-                          <span class="min-w-0 flex-1 truncate font-medium text-base-content">
-                            {formatAIModelRouteLabel(model)}
-                          </span>
-                          <Show when={isSelectedRoute(model.id)}>
-                            <CurrentSelectionBadge />
+                    {(model) => {
+                      const secondaryModelId = () =>
+                        model.name &&
+                        model.name !== model.id &&
+                        !isPulseOwnedLocalModelRoute(model.id)
+                          ? model.id
+                          : undefined;
+                      return (
+                        <button
+                          type="button"
+                          ref={(button) => {
+                            optionRefs.set(optionKeyForModel(model.id), button);
+                          }}
+                          onClick={() => handleSelect(model.id)}
+                          onKeyDown={(event) =>
+                            handleOptionKeyDown(event, optionKeyForModel(model.id))
+                          }
+                          role="option"
+                          aria-selected={isSelectedRoute(model.id)}
+                          aria-label={optionAriaLabel(
+                            formatAIModelRouteLabel(model),
+                            isSelectedRoute(model.id),
+                            [model.description, secondaryModelId()],
+                          )}
+                          class={optionClass(isSelectedRoute(model.id))}
+                        >
+                          <div class="flex min-w-0 items-center gap-2">
+                            <span class="min-w-0 flex-1 truncate font-medium text-base-content">
+                              {formatAIModelRouteLabel(model)}
+                            </span>
+                            <Show when={isSelectedRoute(model.id)}>
+                              <CurrentSelectionBadge />
+                            </Show>
+                          </div>
+                          <Show when={model.description}>
+                            <div class="line-clamp-2 text-[11px] text-muted">
+                              {model.description}
+                            </div>
                           </Show>
-                        </div>
-                        <Show when={model.description}>
-                          <div class="line-clamp-2 text-[11px] text-muted">{model.description}</div>
-                        </Show>
-                        <Show when={model.name && model.name !== model.id}>
-                          <div class="text-[10px] text-muted">{model.id}</div>
-                        </Show>
-                      </button>
-                    )}
+                          <Show when={secondaryModelId()}>
+                            {(modelId) => <div class="text-[10px] text-muted">{modelId()}</div>}
+                          </Show>
+                        </button>
+                      );
+                    }}
                   </For>
                 </>
               )}

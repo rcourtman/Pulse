@@ -7,6 +7,7 @@ export const AI_PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   deepseek: 'DeepSeek',
   gemini: 'Google Gemini',
   ollama: 'Ollama',
+  pulse: 'Pulse',
 };
 
 export const getAIProviderDisplayName = (provider: string): string =>
@@ -54,7 +55,10 @@ type AIModelRouteLabelInput =
 const GATEWAY_MODEL_PROVIDERS = new Set<string>(['openrouter']);
 const LOCAL_MODEL_ROUTE_LABELS: Record<string, string> = {
   'pulse:local-inventory': 'Pulse inventory',
+  'pulse:mock-assistant': 'Pulse mock Assistant',
 };
+export const isPulseOwnedLocalModelRoute = (modelId: string): boolean =>
+  Boolean(LOCAL_MODEL_ROUTE_LABELS[modelId.trim()]);
 const UPSTREAM_PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   anthropic: 'Anthropic',
   'arcee-ai': 'Arcee AI',

@@ -607,7 +607,12 @@ runtime cost control, and shared AI transport surfaces.
    `pulse_read(...)`. That fixture keeps session restore, transcript tooling,
    stream-contract tests, and live browser checks exercising the same
    backend-to-browser shape as a real provider/tool turn, including the raw
-   function-call syntax Pulse must summarize instead of rendering. Mock mode is
+   function-call syntax Pulse must summarize instead of rendering. Pulse-owned
+   local Assistant routes such as `pulse:local-inventory` and
+   `pulse:mock-assistant` must render through named labels (`Pulse inventory`,
+   `Pulse mock Assistant`) in shared model picker and transcript chrome; the
+   raw route IDs are implementation details, unlike external provider route IDs
+   that may remain visible for disambiguation. Mock mode is
    also an effective runtime-config
    overlay: `internal/api/ai_handler.go` startup, restart, config sync, and
    tenant service initialization must treat Assistant as enabled in memory when

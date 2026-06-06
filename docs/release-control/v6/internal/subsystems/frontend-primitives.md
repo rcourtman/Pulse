@@ -356,6 +356,13 @@ scan-friendly without hiding any container from drilldown.
    `patrol-assessment`/`pulse-patrol-assessment` target identity rather than a
    retired dashboard target, so first-open and restored-session chrome remain
    source-named.
+   The shared `frontend-modern/src/components/shared/AIModelPicker.tsx`
+   primitive must keep model route presentation delegated to the AI runtime
+   label helpers. Pulse-owned local Assistant routes such as
+   `pulse:local-inventory` and `pulse:mock-assistant` are implementation
+   routes and must render as named choices without secondary raw route IDs,
+   while external provider route IDs may remain visible where they disambiguate
+   catalog entries.
 9. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `unified-resources`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
    It must expose the manifest `surface_kind` field so runtime lenses such as
    `docker` are not collapsed back into owning platform semantics.

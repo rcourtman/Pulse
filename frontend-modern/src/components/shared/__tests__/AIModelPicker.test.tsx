@@ -84,6 +84,34 @@ describe('AIModelPicker', () => {
     expect(screen.getByText('DeepSeek: DeepSeek V4 Pro')).toBeInTheDocument();
   });
 
+  it('labels Pulse-owned mock routes as Assistant runtime choices', () => {
+    const routeModels: ModelInfo[] = [
+      {
+        id: 'pulse:mock-assistant',
+        name: 'Pulse mock Assistant',
+        provider: 'pulse',
+        notable: true,
+      },
+    ];
+
+    render(() => (
+      <AIModelPicker
+        models={routeModels}
+        selectedModel="pulse:mock-assistant"
+        onModelSelect={vi.fn()}
+        title="Select shared default model"
+      />
+    ));
+
+    expect(screen.getByText('Pulse mock Assistant')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle('Select shared default model'));
+
+    expect(screen.getByText('Pulse')).toBeInTheDocument();
+    expect(screen.getAllByText('Pulse mock Assistant').length).toBeGreaterThan(0);
+    expect(screen.queryByText('pulse:mock-assistant')).not.toBeInTheDocument();
+  });
+
   it('separates selected model labels from selection badges in composer chrome', () => {
     render(() => (
       <AIModelPicker
