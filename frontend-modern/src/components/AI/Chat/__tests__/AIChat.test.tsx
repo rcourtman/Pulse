@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach, beforeAll, beforeEach } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import { Show } from 'solid-js';
+import { Show, createSignal } from 'solid-js';
 import type { ChatMessage, ModelInfo, ModelRouteRecoveryOption } from '../types';
 import type { QueuedFollowUp } from '../hooks/useChat';
 
@@ -586,7 +586,8 @@ describe('AIChat', () => {
       expect(transcript).toContain('Session ID: session-123456789');
       expect(transcript).toContain('how many devices in this');
       expect(transcript).toContain('[tool:read]');
-      expect(transcript).toContain('ls /dev | wc -l');
+      expect(transcript).toContain('Inspect devices on current resource');
+      expect(transcript).not.toContain('ls /dev | wc -l');
       expect(transcript).toContain('There are 4,358 entries in /dev.');
       expect(transcript).not.toContain('pulse_read');
       await waitFor(() => {
@@ -3893,6 +3894,154 @@ describe('AIChat', () => {
           'openrouter:deepseek/deepseek-v4-pro',
         );
       });
+    });
+
+    it('adopts a successful provider fallback route for the active session', async () => {
+      const [messages, setMessages] = createSignal<ChatMessage[]>([]);
+      mockChat.messages.mockImplementation(() => messages());
+      mockChat.sessionId.mockReturnValue('session-1');
+      mockChat.model.mockReturnValue('deepseek:deepseek-v4-pro');
+      mockAIAPI.getSettings.mockResolvedValue({
+        model: 'deepseek:deepseek-v4-pro',
+        chat_model: '',
+        control_level: 'read_only',
+        autonomous_mode: false,
+        discovery_enabled: true,
+      });
+
+      renderChat();
+
+      setMessages([
+        {
+          id: 'assistant-fallback',
+          role: 'assistant',
+          content: '',
+          timestamp: new Date('2026-06-06T12:00:00Z'),
+          model: 'openrouter:deepseek/deepseek-v4-pro',
+          isStreaming: true,
+          streamEvents: [
+            {
+              type: 'model_switch',
+              model: 'openrouter:deepseek/deepseek-v4-pro',
+              failedModel: 'deepseek:deepseek-v4-pro',
+            },
+          ],
+        },
+      ]);
+
+      expect(mockChat.setModel).not.toHaveBeenCalledWith(
+        'openrouter:deepseek/deepseek-v4-pro',
+      );
+
+      setMessages([
+        {
+          id: 'assistant-fallback',
+          role: 'assistant',
+          content: 'DeepSeek is reachable through OpenRouter.',
+          timestamp: new Date('2026-06-06T12:00:00Z'),
+          completedAt: new Date('2026-06-06T12:00:03Z'),
+          model: 'openrouter:deepseek/deepseek-v4-pro',
+          isStreaming: false,
+          streamEvents: [
+            {
+              type: 'model_switch',
+              model: 'openrouter:deepseek/deepseek-v4-pro',
+              failedModel: 'deepseek:deepseek-v4-pro',
+            },
+            {
+              type: 'content',
+              content: 'DeepSeek is reachable through OpenRouter.',
+            },
+          ],
+        },
+      ]);
+
+      await waitFor(() => {
+        expect(mockChat.setModel).toHaveBeenCalledWith(
+          'openrouter:deepseek/deepseek-v4-pro',
+        );
+      });
+      expect(localStorage.getItem('pulse:ai_chat_models_by_session')).toBe(
+        JSON.stringify({ 'session-1': 'openrouter:deepseek/deepseek-v4-pro' }),
+      );
+      expect(localStorage.getItem('pulse:ai_chat_recent_models')).toBe(
+        JSON.stringify(['openrouter:deepseek/deepseek-v4-pro']),
+      );
+    });
+
+    it('does not override a user-selected route when a fallback turn completes', async () => {
+      const [messages, setMessages] = createSignal<ChatMessage[]>([]);
+      const [selectedModel, setSelectedModel] = createSignal('deepseek:deepseek-v4-pro');
+      mockChat.messages.mockImplementation(() => messages());
+      mockChat.sessionId.mockReturnValue('session-1');
+      mockChat.model.mockImplementation(() => selectedModel());
+      mockChat.setModel.mockImplementation((modelId: string) => {
+        setSelectedModel(modelId);
+      });
+      mockAIAPI.getSettings.mockResolvedValue({
+        model: 'deepseek:deepseek-v4-pro',
+        chat_model: '',
+        control_level: 'read_only',
+        autonomous_mode: false,
+        discovery_enabled: true,
+      });
+
+      renderChat();
+
+      setMessages([
+        {
+          id: 'assistant-fallback',
+          role: 'assistant',
+          content: '',
+          timestamp: new Date('2026-06-06T12:00:00Z'),
+          model: 'openrouter:deepseek/deepseek-v4-pro',
+          isStreaming: true,
+          streamEvents: [
+            {
+              type: 'model_switch',
+              model: 'openrouter:deepseek/deepseek-v4-pro',
+              failedModel: 'deepseek:deepseek-v4-pro',
+            },
+          ],
+        },
+      ]);
+
+      mockModelSelectorProps[mockModelSelectorProps.length - 1].onModelSelect?.('openai:gpt-4o');
+
+      setMessages([
+        {
+          id: 'assistant-fallback',
+          role: 'assistant',
+          content: 'Fallback answer.',
+          timestamp: new Date('2026-06-06T12:00:00Z'),
+          completedAt: new Date('2026-06-06T12:00:03Z'),
+          model: 'openrouter:deepseek/deepseek-v4-pro',
+          isStreaming: false,
+          streamEvents: [
+            {
+              type: 'model_switch',
+              model: 'openrouter:deepseek/deepseek-v4-pro',
+              failedModel: 'deepseek:deepseek-v4-pro',
+            },
+            {
+              type: 'content',
+              content: 'Fallback answer.',
+            },
+          ],
+        },
+      ]);
+
+      await waitFor(() => {
+        expect(localStorage.getItem('pulse:ai_chat_models_by_session')).toBe(
+          JSON.stringify({ 'session-1': 'openai:gpt-4o' }),
+        );
+      });
+      expect(mockChat.setModel).not.toHaveBeenCalledWith(
+        'openrouter:deepseek/deepseek-v4-pro',
+      );
+      expect(localStorage.getItem('pulse:ai_chat_recent_models')).toBe(
+        JSON.stringify(['openai:gpt-4o']),
+      );
     });
 
     it('does not record non-routed model strings as recents', () => {

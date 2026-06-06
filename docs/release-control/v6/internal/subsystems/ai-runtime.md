@@ -261,7 +261,15 @@ runtime cost control, and shared AI transport surfaces.
    switch in transient status text or assistant prose. Provider-fallback rows
    must preserve the failed route and next route together, using the backend
    `failed_model` and `next_model` payloads, so the transcript shows the actual
-   recovery path rather than only the successful replacement model.
+   recovery path rather than only the successful replacement model. A successful
+   provider fallback is also a session-model event, not only transcript
+   decoration: once the live assistant turn completes with the fallback route as
+   its effective model, the drawer must promote that route into the active
+   session selection and recent-model list so the next prompt does not retry
+   the just-failed direct provider before using the route that worked. This
+   promotion may only apply to fallback rows observed during the live stream and
+   must not rewrite historical loaded sessions or override an explicit user
+   model change made while the fallback turn was still running.
    Interactive Assistant streams must establish the session ID and emit the
    `session` event once as soon as the HTTP SSE writer is ready, before finding
    handoff recovery, model resolution, provider fallback planning,

@@ -236,8 +236,41 @@ interface AIChatProps {
 
 let stashedComposerDraft: ComposerDraftStash | null = null;
 
+interface AssistantFallbackRouteAdoptionCandidate {
+  route: string;
+  failedModel: string;
+}
+
 export const resetAIChatComposerDraftStashForTests = () => {
   stashedComposerDraft = null;
+};
+
+const getAssistantFallbackRouteAdoptionCandidate = (
+  message: ChatMessage,
+): AssistantFallbackRouteAdoptionCandidate | null => {
+  if (message.role !== 'assistant' || message.error) return null;
+
+  const events = [...(message.streamEvents || [])].reverse();
+  const modelSwitch = events.find(
+    (event) =>
+      event.type === 'model_switch' &&
+      typeof event.model === 'string' &&
+      event.model.trim() &&
+      typeof event.failedModel === 'string' &&
+      event.failedModel.trim(),
+  );
+  if (!modelSwitch) return null;
+
+  const route = modelSwitch.model?.trim() || '';
+  const failedModel = modelSwitch.failedModel?.trim() || '';
+  if (!route || !failedModel) return null;
+
+  const completedModel = (message.model || '').trim();
+  if (message.isStreaming === false && completedModel && completedModel !== route) {
+    return null;
+  }
+
+  return { route, failedModel };
 };
 
 const compactText = (items: Array<string | undefined>): string[] =>
@@ -642,6 +675,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [modelSelectorOpenRequest, setModelSelectorOpenRequest] = createSignal(0);
   const [defaultModel, setDefaultModel] = createSignal('');
   const [chatOverrideModel, setChatOverrideModel] = createSignal('');
+  const pendingFallbackRouteAdoptions = new Map<string, AssistantFallbackRouteAdoptionCandidate>();
+  const adoptedFallbackRouteMessageIds = new Set<string>();
   const [providerReadiness, setProviderReadiness] = createSignal<ChatProviderReadinessState>({
     status: 'idle',
     provider: '',
@@ -1824,6 +1859,50 @@ export const AIChat: Component<AIChatProps> = (props) => {
     selectModel(alternative.id);
     return alternative;
   };
+
+  createEffect(() => {
+    const messages = chat.messages();
+    const visibleMessageIds = new Set(messages.map((message) => message.id));
+    for (const messageId of [...pendingFallbackRouteAdoptions.keys()]) {
+      if (!visibleMessageIds.has(messageId)) {
+        pendingFallbackRouteAdoptions.delete(messageId);
+      }
+    }
+    for (const messageId of [...adoptedFallbackRouteMessageIds]) {
+      if (!visibleMessageIds.has(messageId)) {
+        adoptedFallbackRouteMessageIds.delete(messageId);
+      }
+    }
+
+    for (const message of messages) {
+      const candidate = getAssistantFallbackRouteAdoptionCandidate(message);
+      if (!candidate) continue;
+
+      if (message.isStreaming !== false) {
+        pendingFallbackRouteAdoptions.set(message.id, candidate);
+        continue;
+      }
+
+      const pending = pendingFallbackRouteAdoptions.get(message.id);
+      if (
+        !pending ||
+        pending.route !== candidate.route ||
+        adoptedFallbackRouteMessageIds.has(message.id)
+      ) {
+        continue;
+      }
+
+      const currentRoute = selectedChatModel().trim();
+      if (currentRoute && currentRoute !== pending.failedModel) {
+        pendingFallbackRouteAdoptions.delete(message.id);
+        continue;
+      }
+
+      adoptedFallbackRouteMessageIds.add(message.id);
+      pendingFallbackRouteAdoptions.delete(message.id);
+      selectModel(candidate.route);
+    }
+  });
 
   createEffect(() => {
     const sessionId = chat.sessionId();
