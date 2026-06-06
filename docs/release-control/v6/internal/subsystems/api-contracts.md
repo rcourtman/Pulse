@@ -420,6 +420,14 @@ payload shape change when the portal presents compact client rows.
     actions when the run cannot be resolved. Stored session metadata must be
     readable by the handler so follow-up turns can rehydrate the same backend
     context without asking the browser to resend provider-bound payloads.
+    `GET /api/ai/sessions` also owns the Assistant history lookup contract:
+    optional `search` text must filter the browser-safe session projection
+    before optional `limit` truncation, and matching may use only safe session
+    identity, title, timestamps, and handoff-summary fields. Search must not
+    expose provider-bound model context, stored prompts, raw tool output, or
+    remediation details, and frontend clients must route searchable picker
+    requests through the shared `AIChatAPI.listSessions({ search, limit })`
+    helper rather than inventing a parallel local history endpoint.
     Resource-context follow-up turns are different from Patrol-run rehydration:
     browser-safe `handoff_metadata.kind=resource_context` must not replace a
     stored rich handoff envelope with a partial metadata-only envelope, and the

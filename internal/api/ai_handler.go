@@ -2638,6 +2638,10 @@ func (h *AIHandler) HandleSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if query := r.URL.Query().Get("search"); strings.TrimSpace(query) != "" {
+		sessions = filterAIChatSessionsForSearch(sessions, query)
+	}
+
 	// Optional limit parameter (for relay proxy clients with body size constraints)
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
 		if limit, err := strconv.Atoi(limitStr); err == nil && limit > 0 && limit < len(sessions) {
@@ -2647,6 +2651,61 @@ func (h *AIHandler) HandleSessions(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(sessions)
+}
+
+func filterAIChatSessionsForSearch(sessions []chat.Session, query string) []chat.Session {
+	terms := strings.Fields(strings.ToLower(strings.TrimSpace(query)))
+	if len(terms) == 0 {
+		return sessions
+	}
+
+	filtered := make([]chat.Session, 0, len(sessions))
+	for _, session := range sessions {
+		haystack := aiChatSessionSearchText(session)
+		matched := true
+		for _, term := range terms {
+			if !strings.Contains(haystack, term) {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			filtered = append(filtered, session)
+		}
+	}
+	return filtered
+}
+
+func aiChatSessionSearchText(session chat.Session) string {
+	parts := []string{
+		session.ID,
+		session.Title,
+		session.CreatedAt.Format(time.RFC3339),
+		session.UpdatedAt.Format(time.RFC3339),
+	}
+
+	if summary := session.HandoffSummary; summary != nil {
+		parts = append(parts,
+			summary.Kind,
+			summary.FindingID,
+			summary.RunID,
+			summary.RunType,
+			summary.RunStatus,
+			summary.LastKnownApprovalStatus,
+			summary.LastKnownActionState,
+			summary.LastKnownActionRisk,
+		)
+		if summary.PrimaryResource != nil {
+			parts = append(parts,
+				summary.PrimaryResource.ID,
+				summary.PrimaryResource.Name,
+				summary.PrimaryResource.Type,
+				summary.PrimaryResource.Node,
+			)
+		}
+	}
+
+	return strings.ToLower(strings.Join(parts, " "))
 }
 
 // HandleCreateSession handles POST /api/ai/sessions - create session

@@ -15,6 +15,11 @@ export interface ChatSession {
   handoff_summary?: ChatSessionHandoffSummary;
 }
 
+export interface ListChatSessionsOptions {
+  search?: string;
+  limit?: number;
+}
+
 export type ChatMentionType = 'vm' | 'system-container' | 'app-container' | 'agent' | 'storage';
 
 export interface ChatMention {
@@ -158,8 +163,15 @@ export class AIChatAPI {
   // List all chat sessions. Normalizes a null/non-array payload (e.g. a server
   // error body) to an empty array so callers can rely on array semantics and do
   // not crash on .length/.some()/.map() (#1149).
-  static async listSessions(): Promise<ChatSession[]> {
-    const value = await apiFetchJSON(`${this.baseUrl}/sessions`);
+  static async listSessions(options: ListChatSessionsOptions = {}): Promise<ChatSession[]> {
+    const params = new URLSearchParams();
+    const search = options.search?.trim();
+    if (search) params.set('search', search);
+    if (typeof options.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0) {
+      params.set('limit', String(Math.floor(options.limit)));
+    }
+    const suffix = params.toString();
+    const value = await apiFetchJSON(`${this.baseUrl}/sessions${suffix ? `?${suffix}` : ''}`);
     return Array.isArray(value) ? (value as ChatSession[]) : [];
   }
 

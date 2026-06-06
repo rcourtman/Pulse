@@ -468,6 +468,61 @@ func TestHandleSessions(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
+func TestHandleSessionsSearchAndLimit(t *testing.T) {
+	cfg := &config.Config{}
+	h := newTestAIHandler(cfg, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+
+	now := time.Now().UTC()
+	sessions := []chat.Session{
+		{
+			ID:           "s-backup",
+			Title:        "PBS backup follow-up",
+			CreatedAt:    now.Add(-3 * time.Hour),
+			UpdatedAt:    now.Add(-2 * time.Hour),
+			MessageCount: 2,
+			HandoffSummary: &chat.SessionHandoffSummary{
+				Kind:      "patrol_finding",
+				FindingID: "finding-backup-age",
+				PrimaryResource: &chat.HandoffResource{
+					Name: "pbs-store-1",
+					Type: "storage",
+					Node: "pve-1",
+				},
+			},
+		},
+		{
+			ID:           "s-unrelated",
+			Title:        "Container cleanup",
+			CreatedAt:    now.Add(-2 * time.Hour),
+			UpdatedAt:    now.Add(-1 * time.Hour),
+			MessageCount: 4,
+		},
+		{
+			ID:           "s-backup-second",
+			Title:        "Backup verification",
+			CreatedAt:    now.Add(-90 * time.Minute),
+			UpdatedAt:    now.Add(-30 * time.Minute),
+			MessageCount: 1,
+		},
+	}
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.On("ListSessions", mock.Anything).Return(sessions, nil)
+
+	req := httptest.NewRequest("GET", "/api/ai/sessions?search=backup&limit=1", nil)
+	w := httptest.NewRecorder()
+
+	h.HandleSessions(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var got []chat.Session
+	assert.NoError(t, json.NewDecoder(w.Body).Decode(&got))
+	if assert.Len(t, got, 1) {
+		assert.Equal(t, "s-backup", got[0].ID)
+	}
+}
+
 func TestHandleCreateSession(t *testing.T) {
 	cfg := &config.Config{}
 	h := newTestAIHandler(cfg, nil, nil)

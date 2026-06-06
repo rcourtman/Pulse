@@ -521,6 +521,24 @@ runtime cost control, and shared AI transport surfaces.
    atomically readable through temp-file plus rename so a large recent-session
    list cannot block `EnsureSession`, `AddMessage`, or stored handoff reads on
    a new prompt.
+   Assistant session navigation must provide a searchable history path in the
+   drawer-owned picker, using the canonical `/api/ai/sessions` contract rather
+   than a separate recent-chat store. Search is applied before result limiting
+   so the picker can narrow older sessions without hiding matches behind a
+   recency cap, the picker must open immediately with cached sessions while any
+   refresh/search is still running, and loading/error states must stay inside
+   the picker instead of making the main send path look busy. The referenced
+   OpenCode source at fetched `origin/dev` commit
+   `1399323b78a04229d9bfe00c7436d7f41770fda8` implements
+   `SessionSwitcherDialog` in
+   `packages/opencode/src/cli/cmd/tui/feature-plugins/session/dialog.tsx` with
+   `createDebouncedSignal("", 150)`,
+   `sdk.client.session.list({ search: input.query, limit: 30, ...input.filter })`,
+   recency ordering through
+   `orderByRecency`, and pinned/current session options before navigation.
+   Pulse adapts that source workflow with a debounced Assistant session search
+   field, `GET /api/ai/sessions?search=...&limit=30`, and searched result rows
+   that resume through the same session-loading path as the normal recent list.
    The empty Assistant drawer may surface recent non-empty sessions as direct
    resume actions using the backend session list already owned by the drawer;
    it must not create a parallel recent-chat store or product-authored prompt

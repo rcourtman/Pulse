@@ -642,6 +642,11 @@ recovery scope, or a storage/recovery-owned secret source.
     raw `pulse_*` / `patrol_*` tool-call prose, token accounting text, and
     provider thinking text are not recovery evidence, backup freshness, restore
     eligibility, storage-local approval state, or recovery execution authority.
+    Searchable Assistant session-list queries on `GET /api/ai/sessions` remain
+    the same adjacent browser-safe history navigation projection: storage and
+    recovery surfaces may not reinterpret search hits, handoff summaries, or
+    message counts as backup coverage, recovery freshness, restore capability,
+    or storage-local action authority.
     That same adjacent `internal/api/` boundary still carries Patrol-run
     execution identity. Storage and recovery may observe shared Patrol
     transport through `internal/api/chat_service_adapter.go`, but they must not

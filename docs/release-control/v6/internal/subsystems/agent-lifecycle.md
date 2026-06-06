@@ -218,9 +218,14 @@ Assistant session-history reads from the shared AI endpoints are likewise
 API-owned browser-safe projections: lifecycle surfaces, MCP adapters, and
 agents must not depend on `reasoning_content`, raw `pulse_*` / `patrol_*`
 tool-call prose, token accounting text, or assistant transcript prose as an
-agent command grant, install-token disclosure, or host-execution shortcut. When a
-planned resource capability is actually executed from an agent-lifecycle
-surface, that handoff must route through `POST /api/actions/{id}/execute` so
+agent command grant, install-token disclosure, or host-execution shortcut.
+Searchable Assistant session-list queries on `GET /api/ai/sessions` are the
+same browser-safe history navigation projection; lifecycle surfaces may not
+reinterpret search matches, handoff summaries, or message counts as agent
+capability state, command authority, enrollment evidence, or install-token
+availability. When a planned resource capability is actually executed from an
+agent-lifecycle surface, that handoff must route through
+`POST /api/actions/{id}/execute` so
 the API-owned action audit records `executing` before dispatch and the
 terminal execution result afterward. Dry-run-only plans remain planning evidence
 only; lifecycle surfaces must not present them as executable, dispatch them

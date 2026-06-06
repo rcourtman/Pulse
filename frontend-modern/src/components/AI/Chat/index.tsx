@@ -18,6 +18,7 @@ import SettingsIcon from 'lucide-solid/icons/settings';
 import XIcon from 'lucide-solid/icons/x';
 import { AIAPI } from '@/api/ai';
 import { AIChatAPI, type ChatSession, type ChatSessionHandoffSummary } from '@/api/aiChat';
+import { SearchField } from '@/components/shared/SearchField';
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore, type AIChatContext } from '@/stores/aiChat';
 import {
@@ -44,6 +45,12 @@ import {
   AI_CHAT_PROVIDER_READINESS_SETTINGS_LABEL,
   AI_CHAT_SESSION_MENU_TITLE,
   AI_CHAT_SESSION_EMPTY_STATE,
+  AI_CHAT_SESSION_LOADING_STATE,
+  AI_CHAT_SESSION_SEARCH_EMPTY_STATE,
+  AI_CHAT_SESSION_SEARCH_ERROR_STATE,
+  AI_CHAT_SESSION_SEARCH_LOADING_STATE,
+  AI_CHAT_SESSION_SEARCH_PLACEHOLDER,
+  AI_CHAT_SESSION_SEARCH_TITLE,
   getAIChatEmptyStatePresentation,
   getAIChatProviderReadinessPresentation,
 } from '@/utils/aiChatPresentation';
@@ -92,6 +99,8 @@ const DEFAULT_SESSION_KEY = '__default__';
 const AI_CHAT_MIN_DOCKED_VIEWPORT_WIDTH = 1200;
 const AI_CHAT_PROMPT_HISTORY_LIMIT = 100;
 const AI_CHAT_RECENT_MODEL_LIMIT = 8;
+const AI_CHAT_SESSION_SEARCH_DEBOUNCE_MS = 150;
+const AI_CHAT_SESSION_SEARCH_LIMIT = 30;
 const STRUCTURED_PATROL_CONTEXT_TARGETS = new Set(['patrol-configuration', 'patrol-run']);
 const STRUCTURED_RESOURCE_CONTEXT_HANDOFF_KINDS = new Set(['resource_context']);
 
@@ -463,8 +472,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [savedPromptDraft, setSavedPromptDraft] = createSignal<PromptHistoryEntry | null>(null);
   const [sessions, setSessions] = createSignal<ChatSession[]>([]);
   const [showSessions, setShowSessions] = createSignal(false);
+  const [sessionRefreshLoading, setSessionRefreshLoading] = createSignal(false);
+  const [sessionSearchQuery, setSessionSearchQuery] = createSignal('');
+  const [sessionSearchResults, setSessionSearchResults] = createSignal<ChatSession[] | null>(null);
+  const [sessionSearchLoading, setSessionSearchLoading] = createSignal(false);
+  const [sessionSearchError, setSessionSearchError] = createSignal('');
   const [sessionDropdownPosition, setSessionDropdownPosition] = createSignal({ top: 0, right: 0 });
   let sessionButtonRef: HTMLButtonElement | undefined;
+  let sessionSearchRequestId = 0;
   const [modelSelectorOpenRequest, setModelSelectorOpenRequest] = createSignal(0);
   const [defaultModel, setDefaultModel] = createSignal('');
   const [chatOverrideModel, setChatOverrideModel] = createSignal('');
@@ -767,6 +782,36 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const sessionList = await AIChatAPI.listSessions();
     setSessions(sessionList);
   };
+
+  const normalizedSessionSearchQuery = createMemo(() => sessionSearchQuery().trim());
+  const sessionPickerSessions = createMemo(() =>
+    normalizedSessionSearchQuery() ? (sessionSearchResults() ?? []) : sessions(),
+  );
+  const sessionPickerEmptyText = createMemo(() => {
+    if (sessionSearchError()) return sessionSearchError();
+    if (!normalizedSessionSearchQuery()) {
+      return sessionRefreshLoading() ? AI_CHAT_SESSION_LOADING_STATE : AI_CHAT_SESSION_EMPTY_STATE;
+    }
+    if (sessionSearchLoading()) return AI_CHAT_SESSION_SEARCH_LOADING_STATE;
+    return AI_CHAT_SESSION_SEARCH_EMPTY_STATE;
+  });
+  const sessionPickerLoadingText = createMemo(() => {
+    if (normalizedSessionSearchQuery()) {
+      return sessionSearchLoading() ? AI_CHAT_SESSION_SEARCH_LOADING_STATE : '';
+    }
+    return sessionRefreshLoading() ? AI_CHAT_SESSION_LOADING_STATE : '';
+  });
+  const resetSessionSearch = () => {
+    sessionSearchRequestId += 1;
+    setSessionSearchQuery('');
+    setSessionSearchResults(null);
+    setSessionSearchLoading(false);
+    setSessionSearchError('');
+  };
+
+  const findKnownSession = (sessionId: string) =>
+    sessions().find((candidate) => candidate.id === sessionId) ||
+    sessionSearchResults()?.find((candidate) => candidate.id === sessionId);
 
   // Chat hook
   const chat = useChat({
@@ -1209,6 +1254,46 @@ export const AIChat: Component<AIChatProps> = (props) => {
   });
 
   createEffect(() => {
+    if (!showSessions()) {
+      return;
+    }
+
+    const query = normalizedSessionSearchQuery();
+    if (!query) {
+      sessionSearchRequestId += 1;
+      setSessionSearchResults(null);
+      setSessionSearchLoading(false);
+      setSessionSearchError('');
+      return;
+    }
+
+    const requestId = ++sessionSearchRequestId;
+    setSessionSearchResults(null);
+    setSessionSearchLoading(true);
+    setSessionSearchError('');
+
+    const timeoutId = window.setTimeout(() => {
+      AIChatAPI.listSessions({ search: query, limit: AI_CHAT_SESSION_SEARCH_LIMIT })
+        .then((sessionList) => {
+          if (requestId !== sessionSearchRequestId) return;
+          setSessionSearchResults(sessionList);
+        })
+        .catch((error) => {
+          if (requestId !== sessionSearchRequestId) return;
+          logger.error('[AIChat] Failed to search sessions:', error);
+          setSessionSearchResults([]);
+          setSessionSearchError(AI_CHAT_SESSION_SEARCH_ERROR_STATE);
+        })
+        .finally(() => {
+          if (requestId !== sessionSearchRequestId) return;
+          setSessionSearchLoading(false);
+        });
+    }, AI_CHAT_SESSION_SEARCH_DEBOUNCE_MS);
+
+    onCleanup(() => window.clearTimeout(timeoutId));
+  });
+
+  createEffect(() => {
     if (!chat.isLoading() && interruptArmed()) {
       clearInterruptArm();
     }
@@ -1279,6 +1364,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
       // Only close if click is outside dropdown containers
       if (!target.closest('[data-dropdown]')) {
         setShowSessions(false);
+        setSessionRefreshLoading(false);
+        resetSessionSearch();
         setShowControlMenu(false);
       }
       // Close mention autocomplete when clicking outside
@@ -1777,6 +1864,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
     setEditingQueuedFollowUp(null);
     aiChatStore.clearContext?.();
     setShowSessions(false);
+    setSessionRefreshLoading(false);
+    resetSessionSearch();
     focusComposer();
   };
 
@@ -1784,6 +1873,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const next = !showSessions();
     if (!next) {
       setShowSessions(false);
+      setSessionRefreshLoading(false);
+      resetSessionSearch();
       return;
     }
 
@@ -1795,20 +1886,23 @@ export const AIChat: Component<AIChatProps> = (props) => {
       });
     }
 
+    resetSessionSearch();
+    setShowSessions(true);
+    setSessionRefreshLoading(true);
+
     try {
       await refreshSessions();
     } catch (error) {
       logger.error('[AIChat] Failed to refresh sessions before opening picker:', error);
       notificationStore.error('Failed to refresh assistant sessions');
-      return;
+    } finally {
+      setSessionRefreshLoading(false);
     }
-
-    setShowSessions(true);
   };
 
   // Load session
   const handleLoadSession = async (sessionId: string) => {
-    const session = sessions().find((candidate) => candidate.id === sessionId);
+    const session = findKnownSession(sessionId);
     const loaded = await chat.loadSession(sessionId);
     if (!loaded) return;
     resetPromptHistoryNavigation();
@@ -1820,6 +1914,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
       aiChatStore.clearContext?.();
     }
     setShowSessions(false);
+    setSessionRefreshLoading(false);
+    resetSessionSearch();
     focusComposer();
   };
 
@@ -1830,6 +1926,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     try {
       await AIChatAPI.deleteSession(sessionId);
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      setSessionSearchResults((prev) => prev?.filter((s) => s.id !== sessionId) ?? null);
       updateStoredModel(sessionId, '');
       if (chat.sessionId() === sessionId) {
         chat.clearMessages();
@@ -2073,7 +2170,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
                 <Show when={showSessions()}>
                   <div
-                    class="fixed w-72 max-h-96 bg-surface rounded-md shadow-sm border border-border z-[9999] overflow-hidden"
+                    class="fixed w-80 max-h-[28rem] bg-surface rounded-md shadow-sm border border-border z-[9999] overflow-hidden"
                     style={{
                       top: `${sessionDropdownPosition().top}px`,
                       right: `${sessionDropdownPosition().right}px`,
@@ -2094,16 +2191,36 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       <span class="font-medium">{AI_CHAT_NEW_SESSION_MENU_LABEL}</span>
                     </button>
 
-                    <div class="max-h-64 overflow-y-auto">
+                    <div class="border-b border-border px-3 py-2">
+                      <SearchField
+                        value={sessionSearchQuery()}
+                        onChange={setSessionSearchQuery}
+                        placeholder={AI_CHAT_SESSION_SEARCH_PLACEHOLDER}
+                        title={AI_CHAT_SESSION_SEARCH_TITLE}
+                        inputClass="py-1.5 text-xs"
+                      />
+                    </div>
+
+                    <Show when={sessionPickerLoadingText()}>
+                      <div
+                        class="border-b border-border px-3 py-1.5 text-[11px] text-muted"
+                        role="status"
+                        aria-live="polite"
+                      >
+                        {sessionPickerLoadingText()}
+                      </div>
+                    </Show>
+
+                    <div class="max-h-72 overflow-y-auto">
                       <Show
-                        when={sessions().length > 0}
+                        when={sessionPickerSessions().length > 0}
                         fallback={
                           <div class="px-3 py-6 text-center text-xs text-muted">
-                            {AI_CHAT_SESSION_EMPTY_STATE}
+                            {sessionPickerEmptyText()}
                           </div>
                         }
                       >
-                        <For each={sessions()}>
+                        <For each={sessionPickerSessions()}>
                           {(session) => (
                             <div
                               class={`group relative px-3 py-2.5 flex items-start gap-2 hover:bg-surface-hover cursor-pointer ${chat.sessionId() === session.id ? 'bg-blue-50 dark:bg-blue-900' : ''}`}

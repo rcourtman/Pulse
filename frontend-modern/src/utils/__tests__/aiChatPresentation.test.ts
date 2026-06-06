@@ -17,7 +17,13 @@ import {
   AI_CHAT_PROVIDER_READINESS_SETTINGS_LABEL,
   AI_CHAT_QUESTION_CARD_TITLE,
   AI_CHAT_SESSION_EMPTY_STATE,
+  AI_CHAT_SESSION_LOADING_STATE,
   AI_CHAT_SESSION_MENU_TITLE,
+  AI_CHAT_SESSION_SEARCH_EMPTY_STATE,
+  AI_CHAT_SESSION_SEARCH_ERROR_STATE,
+  AI_CHAT_SESSION_SEARCH_LOADING_STATE,
+  AI_CHAT_SESSION_SEARCH_PLACEHOLDER,
+  AI_CHAT_SESSION_SEARCH_TITLE,
   getAIChatProviderReadinessPresentation,
   getAIChatLauncherTitle,
   getAIChatEmptyStatePresentation,
@@ -42,6 +48,12 @@ describe('aiChatPresentation', () => {
     expect(AI_CHAT_LAUNCHER_ARIA_LABEL).toBe('Expand Pulse Assistant');
     expect(AI_CHAT_SESSION_MENU_TITLE).toBe('Pulse Assistant sessions');
     expect(AI_CHAT_SESSION_EMPTY_STATE).toBe('No previous assistant sessions');
+    expect(AI_CHAT_SESSION_LOADING_STATE).toBe('Loading assistant sessions...');
+    expect(AI_CHAT_SESSION_SEARCH_PLACEHOLDER).toBe('Search sessions...');
+    expect(AI_CHAT_SESSION_SEARCH_TITLE).toBe('Search Assistant sessions');
+    expect(AI_CHAT_SESSION_SEARCH_EMPTY_STATE).toBe('No sessions match your search');
+    expect(AI_CHAT_SESSION_SEARCH_LOADING_STATE).toBe('Searching assistant sessions...');
+    expect(AI_CHAT_SESSION_SEARCH_ERROR_STATE).toBe('Failed to search assistant sessions');
     expect(AI_CHAT_MODEL_SELECTOR_EMPTY_STATE).toBe('No matching models.');
     expect(AI_CHAT_QUESTION_CARD_TITLE).toBe('Pulse Assistant needs your input');
     expect(AI_CHAT_ASSISTANT_MESSAGE_LABEL).toBe('Pulse Assistant');

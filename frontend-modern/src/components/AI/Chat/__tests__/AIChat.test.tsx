@@ -1791,6 +1791,59 @@ describe('AIChat', () => {
       });
     });
 
+    it('searches assistant sessions from the picker', async () => {
+      mockAIChatAPI.listSessions
+        .mockResolvedValueOnce([
+          { id: 's1', title: 'Session One', created_at: '', updated_at: '', message_count: 5 },
+          {
+            id: 's2',
+            title: 'Backup Patrol Follow-up',
+            created_at: '',
+            updated_at: '',
+            message_count: 3,
+          },
+        ])
+        .mockResolvedValueOnce([
+          { id: 's1', title: 'Session One', created_at: '', updated_at: '', message_count: 5 },
+          {
+            id: 's2',
+            title: 'Backup Patrol Follow-up',
+            created_at: '',
+            updated_at: '',
+            message_count: 3,
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            id: 's2',
+            title: 'Backup Patrol Follow-up',
+            created_at: '',
+            updated_at: '',
+            message_count: 3,
+          },
+        ]);
+
+      renderChat();
+      await waitFor(() => {
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalledTimes(1);
+      });
+
+      fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText('Search sessions...')).toBeInTheDocument();
+      });
+
+      fireEvent.input(screen.getByPlaceholderText('Search sessions...'), {
+        target: { value: 'backup' },
+      });
+
+      await waitFor(() => {
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalledWith({ search: 'backup', limit: 30 });
+        expect(screen.getByText('Backup Patrol Follow-up')).toBeInTheDocument();
+        expect(screen.queryByText('Session One')).not.toBeInTheDocument();
+      });
+    });
+
     it('loads a session when clicked in the dropdown', async () => {
       mockAIChatAPI.listSessions.mockResolvedValue([
         { id: 's1', title: 'Session One', created_at: '', updated_at: '', message_count: 5 },

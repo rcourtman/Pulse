@@ -59,6 +59,16 @@ describe('AIChatAPI', () => {
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/sessions');
   });
 
+  it('passes session search and limit as query parameters', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce([]);
+
+    await expect(AIChatAPI.listSessions({ search: '  backup jobs  ', limit: 30 })).resolves.toEqual(
+      [],
+    );
+
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/sessions?search=backup+jobs&limit=30');
+  });
+
   it('normalizes a null sessions payload to an empty array (#1149)', async () => {
     apiFetchJSONMock.mockResolvedValueOnce(null);
     await expect(AIChatAPI.listSessions()).resolves.toEqual([]);
