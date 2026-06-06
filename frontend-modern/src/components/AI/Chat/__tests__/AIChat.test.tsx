@@ -622,7 +622,7 @@ describe('AIChat', () => {
       );
     });
 
-    it('sends user input while the selected provider check is still running', async () => {
+    it('keeps a pending selected-provider check quiet while still allowing input', async () => {
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'openai:gpt-4',
         chat_model: '',
@@ -634,7 +634,12 @@ describe('AIChat', () => {
 
       renderChat();
 
-      await screen.findByText('Verifying OpenAI provider');
+      await waitFor(() => {
+        expect(mockAIAPI.testProvider).toHaveBeenCalledWith('openai', 'openai:gpt-4');
+      });
+      expect(screen.queryByText('Verifying OpenAI provider')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Assistant provider status')).not.toBeInTheDocument();
+
       const textarea = screen.getByPlaceholderText(
         'Ask about your infrastructure...',
       ) as HTMLTextAreaElement;

@@ -339,6 +339,10 @@ runtime cost control, and shared AI transport surfaces.
    explicit details affordance, but raw tool input/output JSON must not render
    in the default transcript. Token accounting and other provider metadata
    remain runtime/accounting data, not normal transcript prose.
+   Background provider-readiness checks are diagnostics and must stay quiet
+   while idle unless they produce an actionable issue; checking status may
+   surface during an active send, but an open empty drawer must not look busy
+   just because Pulse is verifying the selected route.
 4. Add or change Patrol, alert-analysis, or remediation transport through `internal/api/ai_handlers.go`, `internal/api/ai_intelligence_handlers.go`, and `frontend-modern/src/api/patrol.ts`
    Provider preflight diagnostics returned from `internal/api/ai_handlers.go`
    must reuse the Patrol runtime failure classifier in `internal/ai/` and

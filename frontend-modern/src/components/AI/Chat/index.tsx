@@ -815,6 +815,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (!readiness.provider || readiness.status === 'idle' || readiness.status === 'ready') {
       return null;
     }
+    if (readiness.status === 'checking' && !chat.isLoading()) {
+      return null;
+    }
     return getAIChatProviderReadinessPresentation({
       status: readiness.status === 'checking' ? 'checking' : 'error',
       providerLabel: getAIProviderDisplayName(readiness.provider),
