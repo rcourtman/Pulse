@@ -7,7 +7,25 @@ export interface JSONEventStreamOptions<T> {
   onTimeout?: () => void;
   onComplete?: () => void;
   timeoutMs?: number;
+  yieldBetweenEvents?: boolean | ((event: T) => boolean);
 }
+
+const yieldToBrowser = () =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, 1);
+  });
+
+const shouldYieldAfterEvent = <T,>(
+  event: T,
+  options: JSONEventStreamOptions<T>,
+  hasBufferedEventAfterThisOne: boolean,
+) => {
+  if (!hasBufferedEventAfterThisOne || !options.yieldBetweenEvents) return false;
+  if (typeof options.yieldBetweenEvents === 'function') {
+    return options.yieldBetweenEvents(event);
+  }
+  return true;
+};
 
 export async function consumeJSONEventStream<T>(
   response: Response,
@@ -39,18 +57,25 @@ export async function consumeJSONEventStream<T>(
     }
   };
 
-  const processMessages = (chunk: string): boolean => {
+  const processMessages = async (chunk: string): Promise<boolean> => {
     const normalizedBuffer = chunk.replace(/\r\n/g, '\n');
     const messages = normalizedBuffer.split('\n\n');
     buffer = messages.pop() || '';
 
-    for (const message of messages) {
+    const messageHasData = (message: string) =>
+      !!message
+        .split('\n')
+        .find((line) => line.startsWith('data: ') && !!line.slice(6).trim());
+
+    for (let messageIndex = 0; messageIndex < messages.length; messageIndex += 1) {
+      const message = messages[messageIndex];
       if (!message.trim() || message.trim().startsWith(':')) {
         continue;
       }
 
       const dataLines = message.split('\n').filter((line) => line.startsWith('data: '));
-      for (const line of dataLines) {
+      for (let lineIndex = 0; lineIndex < dataLines.length; lineIndex += 1) {
+        const line = dataLines[lineIndex];
         const jsonStr = line.slice(6);
         if (!jsonStr.trim()) {
           continue;
@@ -64,6 +89,12 @@ export async function consumeJSONEventStream<T>(
 
         if (options.onEvent(event)) {
           return true;
+        }
+        const hasBufferedEventAfterThisOne =
+          dataLines.slice(lineIndex + 1).some((nextLine) => !!nextLine.slice(6).trim()) ||
+          messages.slice(messageIndex + 1).some(messageHasData);
+        if (shouldYieldAfterEvent(event, options, hasBufferedEventAfterThisOne)) {
+          await yieldToBrowser();
         }
       }
     }
@@ -95,7 +126,7 @@ export async function consumeJSONEventStream<T>(
 
       lastEventTime = Date.now();
       buffer += decoder.decode(value, { stream: true });
-      if (processMessages(buffer)) {
+      if (await processMessages(buffer)) {
         return;
       }
     }

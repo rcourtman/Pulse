@@ -346,6 +346,7 @@ export class AIChatAPI {
       onComplete: () => {
         onEvent({ type: 'done' });
       },
+      yieldBetweenEvents: (event) => event.type !== 'content' && event.type !== 'thinking',
     });
   }
 }

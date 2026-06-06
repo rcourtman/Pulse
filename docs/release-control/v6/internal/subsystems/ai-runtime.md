@@ -341,7 +341,14 @@ runtime cost control, and shared AI transport surfaces.
    (`ensureToolCall`, `updateToolCall`, `completeToolCall`) and renders the
    typed part immediately in
    `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`
-   (`AssistantTool`, `pendingInput`, `toolComplete`).
+   (`AssistantTool`, `pendingInput`, `toolComplete`). Pulse's Assistant chat
+   stream must also preserve that event-by-event feel when HTTP or browser
+   buffering delivers several SSE messages in one network chunk: the frontend
+   stream consumer must let the browser paint between buffered Assistant
+   progress/tool/status events for chat streams instead of synchronously
+   draining a coalesced `tool_start`/`tool_progress`/`tool_end` batch in one
+   JavaScript task. Ordinary content-token streaming must not be frame-throttled
+   by that progress-batch safeguard.
    The referenced OpenCode source at fetched `origin/dev` commit
    `09d9cf01f93798939c1284fbe974b6e1f4d2759d` renders tool-specific inline
    labels such as `Read <path>`, `Grep "<pattern>"`, `WebFetch <url>`, and bash
