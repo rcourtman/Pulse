@@ -119,6 +119,11 @@ export interface ToolCall {
 
 export type StreamEvent = AIChatStreamEvent;
 
+const AI_CHAT_STREAM_PAINT_CHECKPOINT_EXCLUDED_TYPES = new Set(['content', 'thinking']);
+
+export const shouldYieldAfterAIChatStreamEvent = (event: Pick<StreamEvent, 'type'>): boolean =>
+  !AI_CHAT_STREAM_PAINT_CHECKPOINT_EXCLUDED_TYPES.has(event.type);
+
 export interface AIStatus {
   running: boolean;
   engine: string;
@@ -358,7 +363,7 @@ export class AIChatAPI {
       onComplete: () => {
         onEvent({ type: 'done' });
       },
-      yieldBetweenEvents: (event) => event.type !== 'content' && event.type !== 'thinking',
+      yieldBetweenEvents: shouldYieldAfterAIChatStreamEvent,
     });
   }
 }

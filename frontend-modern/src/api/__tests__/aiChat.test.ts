@@ -14,7 +14,7 @@ vi.mock('@/utils/logger', () => ({
   },
 }));
 
-import { AIChatAPI } from '@/api/aiChat';
+import { AIChatAPI, shouldYieldAfterAIChatStreamEvent } from '@/api/aiChat';
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
 
@@ -25,6 +25,24 @@ describe('AIChatAPI', () => {
   beforeEach(() => {
     apiFetchMock.mockReset();
     apiFetchJSONMock.mockReset();
+  });
+
+  it('uses paint checkpoints for visible Assistant progress events but not text tokens', () => {
+    expect(shouldYieldAfterAIChatStreamEvent({ type: 'content' })).toBe(false);
+    expect(shouldYieldAfterAIChatStreamEvent({ type: 'thinking' })).toBe(false);
+
+    for (const type of [
+      'session',
+      'workflow_state',
+      'tool_start',
+      'tool_progress',
+      'tool_cancel',
+      'tool_end',
+      'approval_needed',
+      'question',
+    ] as const) {
+      expect(shouldYieldAfterAIChatStreamEvent({ type })).toBe(true);
+    }
   });
 
   it('preserves safe handoff summaries on listed chat sessions', async () => {

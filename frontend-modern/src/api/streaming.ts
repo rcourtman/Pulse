@@ -10,9 +10,35 @@ export interface JSONEventStreamOptions<T> {
   yieldBetweenEvents?: boolean | ((event: T) => boolean);
 }
 
-const yieldToBrowser = () =>
+const PAINT_CHECKPOINT_FALLBACK_MS = 50;
+
+const yieldToBrowserPaint = () =>
   new Promise<void>((resolve) => {
-    setTimeout(resolve, 1);
+    const raf =
+      typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function'
+        ? window.requestAnimationFrame.bind(window)
+        : undefined;
+
+    if (!raf) {
+      setTimeout(resolve, 1);
+      return;
+    }
+
+    let settled = false;
+    let fallbackId: ReturnType<typeof setTimeout> | undefined;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      if (fallbackId !== undefined) {
+        clearTimeout(fallbackId);
+      }
+      resolve();
+    };
+
+    fallbackId = setTimeout(finish, PAINT_CHECKPOINT_FALLBACK_MS);
+    raf(() => {
+      setTimeout(finish, 0);
+    });
   });
 
 const shouldYieldAfterEvent = <T,>(
@@ -85,7 +111,7 @@ export async function consumeJSONEventStream<T>(
           return true;
         }
         if (shouldYieldAfterEvent(event, options)) {
-          await yieldToBrowser();
+          await yieldToBrowserPaint();
         }
       }
     }

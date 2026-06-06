@@ -37,14 +37,51 @@ const flushMicrotasks = async () => {
   }
 };
 
+const originalRequestAnimationFrame = window.requestAnimationFrame;
+const originalCancelAnimationFrame = window.cancelAnimationFrame;
+
 describe('consumeJSONEventStream', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    Object.defineProperty(window, 'requestAnimationFrame', {
+      configurable: true,
+      value: originalRequestAnimationFrame,
+    });
+    Object.defineProperty(window, 'cancelAnimationFrame', {
+      configurable: true,
+      value: originalCancelAnimationFrame,
+    });
     vi.useRealTimers();
   });
 
+  const installAnimationFrame = () => {
+    const requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      return window.setTimeout(() => callback(performance.now()), 16);
+    });
+    const cancelAnimationFrame = vi.fn((id: number) => window.clearTimeout(id));
+    vi.stubGlobal('requestAnimationFrame', requestAnimationFrame);
+    vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrame);
+    Object.defineProperty(window, 'requestAnimationFrame', {
+      configurable: true,
+      value: requestAnimationFrame,
+    });
+    Object.defineProperty(window, 'cancelAnimationFrame', {
+      configurable: true,
+      value: cancelAnimationFrame,
+    });
+    return requestAnimationFrame;
+  };
+
+  const advancePaintCheckpoint = async () => {
+    await vi.advanceTimersToNextTimerAsync();
+    await vi.advanceTimersToNextTimerAsync();
+    await flushMicrotasks();
+  };
+
   it('yields to the browser between coalesced stream events when requested', async () => {
     vi.useFakeTimers();
+    const requestAnimationFrame = installAnimationFrame();
 
     const events: string[] = [];
     const streamPromise = consumeJSONEventStream<{ type: string }>(
@@ -70,14 +107,15 @@ describe('consumeJSONEventStream', () => {
 
     await flushMicrotasks();
     expect(events).toEqual(['tool_start']);
+    expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBeGreaterThan(0);
 
-    await vi.advanceTimersByTimeAsync(1);
-    await flushMicrotasks();
+    await advancePaintCheckpoint();
     expect(events).toEqual(['tool_start', 'tool_progress']);
+    expect(requestAnimationFrame).toHaveBeenCalledTimes(2);
     expect(vi.getTimerCount()).toBeGreaterThan(0);
 
-    await vi.advanceTimersByTimeAsync(1);
+    await advancePaintCheckpoint();
     await streamPromise;
     expect(events).toEqual(['tool_start', 'tool_progress', 'done']);
     expect(vi.getTimerCount()).toBe(0);
@@ -85,6 +123,7 @@ describe('consumeJSONEventStream', () => {
 
   it('does not yield for coalesced events rejected by the event predicate', async () => {
     vi.useFakeTimers();
+    const requestAnimationFrame = installAnimationFrame();
 
     const events: string[] = [];
     const streamPromise = consumeJSONEventStream<{ type: string }>(
@@ -110,9 +149,10 @@ describe('consumeJSONEventStream', () => {
 
     await flushMicrotasks();
     expect(events).toEqual(['content', 'tool_progress']);
+    expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBeGreaterThan(0);
 
-    await vi.advanceTimersByTimeAsync(1);
+    await advancePaintCheckpoint();
     await streamPromise;
     expect(events).toEqual(['content', 'tool_progress', 'done']);
     expect(vi.getTimerCount()).toBe(0);
@@ -120,6 +160,7 @@ describe('consumeJSONEventStream', () => {
 
   it('yields to the browser between matching events that arrive in separate queued reads', async () => {
     vi.useFakeTimers();
+    const requestAnimationFrame = installAnimationFrame();
 
     const events: string[] = [];
     const streamPromise = consumeJSONEventStream<{ type: string }>(
@@ -139,16 +180,59 @@ describe('consumeJSONEventStream', () => {
 
     await flushMicrotasks();
     expect(events).toEqual(['tool_start']);
+    expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+    await advancePaintCheckpoint();
+    expect(events).toEqual(['tool_start', 'tool_progress']);
+    expect(requestAnimationFrame).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+    await advancePaintCheckpoint();
+    await streamPromise;
+    expect(events).toEqual(['tool_start', 'tool_progress', 'done']);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('falls back to a short timer when animation frames are unavailable', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('requestAnimationFrame', undefined);
+    Object.defineProperty(window, 'requestAnimationFrame', {
+      configurable: true,
+      value: undefined,
+    });
+
+    const events: string[] = [];
+    const streamPromise = consumeJSONEventStream<{ type: string }>(
+      makeEventStreamResponse(
+        [
+          'data: {"type":"tool_start"}',
+          '',
+          'data: {"type":"tool_progress"}',
+          '',
+          'data: {"type":"done"}',
+          '',
+          '',
+        ].join('\n'),
+      ),
+      {
+        onEvent: (event) => {
+          events.push(event.type);
+          return event.type === 'done';
+        },
+        yieldBetweenEvents: true,
+      },
+    );
+
+    await flushMicrotasks();
+    expect(events).toEqual(['tool_start']);
 
     await vi.advanceTimersByTimeAsync(1);
     await flushMicrotasks();
     expect(events).toEqual(['tool_start', 'tool_progress']);
-    expect(vi.getTimerCount()).toBeGreaterThan(0);
 
     await vi.advanceTimersByTimeAsync(1);
     await streamPromise;
     expect(events).toEqual(['tool_start', 'tool_progress', 'done']);
-    expect(vi.getTimerCount()).toBe(0);
   });
 });

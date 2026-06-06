@@ -464,12 +464,13 @@ payload shape change when the portal presents compact client rows.
     visible tool row from pending to running/waiting to completed/error, or
     cancel a runtime-policy-hidden pending row, without inventing a
     browser-only event shape. The shared frontend SSE consumer in
-    `frontend-modern/src/api/streaming.ts` may insert a bounded task break after
+    `frontend-modern/src/api/streaming.ts` may insert an
+    animation-frame-backed paint checkpoint with a bounded timer fallback after
     opted-in Assistant progress/tool/status events, including events that arrive
-    through separate queued stream reads rather than the same decoded HTTP chunk.
-    That pacing is an API-client consumption rule only: it must not change event
-    payload shape, event order, timeout handling, reader cleanup, parse-error
-    handling, or ordinary content-token throughput.
+    through separate queued stream reads rather than the same decoded HTTP
+    chunk. That pacing is an API-client consumption rule only: it must not
+    change event payload shape, event order, timeout handling, reader cleanup,
+    parse-error handling, or ordinary content-token throughput.
 	    Cold Assistant streams must include a typed `session` event backed by
 	    `internal/ai/chat.SessionData` as soon as the HTTP SSE writer is ready and
 	    an immediate neutral `workflow_state` preparation event before backend

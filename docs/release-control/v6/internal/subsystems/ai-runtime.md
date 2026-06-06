@@ -278,11 +278,15 @@ runtime cost control, and shared AI transport surfaces.
    `session.next.tool.progress`, line 317; `session.next.tool.success`, line
    328; `session.next.tool.failed`, line 350), so Pulse's shared browser SSE
    consumer must treat opted-in non-text Assistant progress events as paint
-   checkpoints. `frontend-modern/src/api/streaming.ts` must not drain queued
-   workflow/tool/model events from separate stream reads without yielding to the
-   browser, or the drawer will show those steps only after a batch has already
-   finished. Token content and hidden reasoning may continue to opt out of those
-   checkpoints through the caller predicate so answer streaming remains fast.
+   checkpoints. `frontend-modern/src/api/streaming.ts` must yield through an
+   animation-frame-backed browser paint checkpoint, with a bounded timer
+   fallback for inactive tabs, before draining the next opted-in event; a plain
+   synchronous loop or microtask-only pause is insufficient because it can still
+   render workflow/tool steps only after a batch has already finished.
+   `frontend-modern/src/api/aiChat.ts` owns the Assistant predicate: token
+   content and hidden reasoning may continue to opt out of those checkpoints so
+   answer streaming remains fast, while session/workflow/tool/approval/question
+   events remain user-visible progress checkpoints.
    Completed Assistant tool rows follow the same source-anchored display policy:
    the referenced OpenCode commit
    `9ed17da55ab1f7360cc0e01075f763e27fa899e9` keeps ordinary tool activity terse
