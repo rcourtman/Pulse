@@ -6,7 +6,9 @@ import type {
   ChatMessage,
   ModelRouteRecoveryOption,
   PendingApproval,
+  PendingTool,
   PendingQuestion,
+  StreamDisplayEvent,
 } from './types';
 import { humanizeToken } from '@/utils/textPresentation';
 
@@ -45,19 +47,89 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
   let messagesEndRef: HTMLDivElement | undefined;
   let containerRef: HTMLDivElement | undefined;
 
+  const textActivityFingerprint = (value?: string) =>
+    value ? `${value.length}:${value.slice(-32)}` : '0:';
+
+  const pendingToolActivityFingerprint = (tool?: PendingTool) =>
+    [
+      tool?.id,
+      tool?.name,
+      tool?.status,
+      tool?.progress,
+      textActivityFingerprint(tool?.input),
+      textActivityFingerprint(tool?.rawInput),
+      tool?.startedAt,
+      tool?.updatedAt,
+    ]
+      .map((value) => String(value ?? ''))
+      .join(':');
+
+  const streamEventActivityFingerprint = (event: StreamDisplayEvent) => {
+    const base = [event.type, event.toolId, event.startedAt, event.updatedAt];
+    switch (event.type) {
+      case 'pending_tool':
+        return [...base, pendingToolActivityFingerprint(event.pendingTool)].join(':');
+      case 'tool':
+        return [
+          ...base,
+          event.tool?.name,
+          event.tool?.success,
+          textActivityFingerprint(event.tool?.input),
+          textActivityFingerprint(event.tool?.rawInput),
+          textActivityFingerprint(event.tool?.output),
+        ].join(':');
+      case 'content':
+        return [...base, textActivityFingerprint(event.content)].join(':');
+      case 'thinking':
+        return [...base, textActivityFingerprint(event.thinking)].join(':');
+      case 'model_switch':
+        return [...base, event.model].join(':');
+      case 'approval':
+        return [
+          ...base,
+          event.approval?.toolId,
+          event.approval?.toolName,
+          event.approval?.isExecuting,
+          event.approval?.approvalId,
+        ].join(':');
+      case 'question':
+        return [
+          ...base,
+          event.question?.questionId,
+          event.question?.isAnswering,
+          event.question?.questions.length,
+        ].join(':');
+      default:
+        return base.join(':');
+    }
+  };
+
+  const messageActivityFingerprint = (message: ChatMessage) =>
+    [
+      message.id,
+      message.role,
+      message.isStreaming ? 'streaming' : 'idle',
+      message.interruption,
+      textActivityFingerprint(message.content),
+      textActivityFingerprint(message.error),
+      message.workflowStatus?.phase,
+      message.workflowStatus?.message,
+      message.workflowStatus?.tool,
+      message.workflowStatus?.startedAt,
+      ...(message.pendingTools || []).map(pendingToolActivityFingerprint),
+      ...(message.streamEvents || []).map(streamEventActivityFingerprint),
+    ]
+      .map((value) => String(value ?? ''))
+      .join('|');
+
   // Track content changes for auto-scroll (not just array length)
-  // This tracks: message count, last message content length, streaming state, and stream events
+  // This tracks in-place streamed activity as well as message/event count so
+  // patched tool progress remains visible while the transcript row stays put.
   const scrollTrigger = createMemo(() => {
     const msgs = props.messages;
     if (msgs.length === 0) return 0;
     const lastMsg = msgs[msgs.length - 1];
-    // Combine multiple signals to ensure we detect all content updates
-    return (
-      msgs.length +
-      (lastMsg.content?.length || 0) +
-      (lastMsg.isStreaming ? 1000000 : 0) +
-      (lastMsg.streamEvents?.length || 0)
-    );
+    return `${msgs.length}:${messageActivityFingerprint(lastMsg)}`;
   });
 
   const recentSessions = createMemo(() =>

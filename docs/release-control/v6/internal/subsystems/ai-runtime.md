@@ -606,6 +606,20 @@ runtime cost control, and shared AI transport surfaces.
    `packages/opencode/src/acp/tool.ts`; Pulse adapts that by keeping the live
    pending row's current progress text visible inside the transcript at drawer
    width, not only in the footer/status strip.
+   The drawer transcript must treat those in-place progress patches as fresh
+   visible activity even when the message count and stream-event count do not
+   change. The referenced OpenCode source at commit
+   `9ed17da55ab1f7360cc0e01075f763e27fa899e9` applies
+   `session.next.tool.progress` by mutating the latest matching tool part in
+   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`
+   (`apply(event)`, line 120; `session.next.tool.progress`, lines 317-326)
+   and renders the same session-owned tool part through
+   `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx`
+   (`ToolPart` mapping, lines 1788-1796; `InlineToolRow`, line 1926).
+   Pulse adapts that by deriving transcript scroll/freshness from the latest
+   message's activity fingerprint, including pending-tool progress and
+   `updatedAt`, instead of using appended-event count as the only streamed
+   activity signal.
    Assistant session listing is a history-browsing path, not a send-path lock.
    The session store must not hold its shared mutex while scanning and parsing
    every persisted session file for `/api/ai/sessions`; writes must remain

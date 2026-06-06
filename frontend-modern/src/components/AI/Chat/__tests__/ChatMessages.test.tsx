@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { ChatMessages } from '../ChatMessages';
 import type { QueuedFollowUp } from '../hooks/useChat';
 import type {
@@ -421,6 +422,85 @@ describe('ChatMessages', () => {
 
       // scrollIntoView should have been called by the createEffect
       expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    });
+
+    it('reacts to in-place pending tool progress without a new stream event', async () => {
+      const [messages, setMessages] = createSignal<ChatMessage[]>([
+        makeMessage({
+          id: 'assistant-1',
+          role: 'assistant',
+          content: '',
+          isStreaming: true,
+          pendingTools: [
+            {
+              id: 'tool-1',
+              name: 'pulse_read',
+              input: '{"command":"ls /dev | wc -l"}',
+              status: 'running',
+              progress: 'Starting command',
+              startedAt: 1_000,
+              updatedAt: 1_000,
+            },
+          ],
+          streamEvents: [
+            {
+              type: 'pending_tool',
+              toolId: 'tool-1',
+              pendingTool: {
+                id: 'tool-1',
+                name: 'pulse_read',
+                input: '{"command":"ls /dev | wc -l"}',
+                status: 'running',
+                progress: 'Starting command',
+                startedAt: 1_000,
+                updatedAt: 1_000,
+              },
+            },
+          ],
+        }),
+      ]);
+      render(() => <ChatMessages messages={messages()} {...makeHandlers()} />);
+
+      const scrollIntoView = Element.prototype.scrollIntoView as ReturnType<typeof vi.fn>;
+      scrollIntoView.mockClear();
+
+      setMessages([
+        makeMessage({
+          id: 'assistant-1',
+          role: 'assistant',
+          content: '',
+          isStreaming: true,
+          pendingTools: [
+            {
+              id: 'tool-1',
+              name: 'pulse_read',
+              input: '{"command":"ls /dev | wc -l"}',
+              status: 'running',
+              progress: 'Reading device nodes',
+              startedAt: 1_000,
+              updatedAt: 2_000,
+            },
+          ],
+          streamEvents: [
+            {
+              type: 'pending_tool',
+              toolId: 'tool-1',
+              pendingTool: {
+                id: 'tool-1',
+                name: 'pulse_read',
+                input: '{"command":"ls /dev | wc -l"}',
+                status: 'running',
+                progress: 'Reading device nodes',
+                startedAt: 1_000,
+                updatedAt: 2_000,
+              },
+            },
+          ],
+        }),
+      ]);
+      await Promise.resolve();
+
+      expect(scrollIntoView).toHaveBeenCalled();
     });
 
     it('does not call scrollIntoView when messages list is empty', () => {
