@@ -215,6 +215,12 @@ conversation may make protected-item investigation easier to find, but title
 text must not become backup coverage evidence, restore entitlement,
 storage-owner identity, approval policy, or a provider-local recovery command
 handoff.
+Assistant session undo/redo through `POST /api/ai/sessions/{id}/undo` and
+`POST /api/ai/sessions/{id}/redo` is likewise adjacent conversation repair
+state only. A restored prompt or restored message count may help an operator
+continue a protected-item investigation, but it must not become backup coverage
+evidence, recovery freshness, restore entitlement, storage-owner identity,
+approval policy, or a provider-local recovery command handoff.
 Storage and recovery may also consume unified-resource TrueNAS app and VM
 metadata, TrueNAS native service metadata, plus TrueNAS network-share metadata,
 as read-only workload, system, and storage-access context when explaining
@@ -653,6 +659,10 @@ recovery scope, or a storage/recovery-owned secret source.
     recovery surfaces may not reinterpret search hits, handoff summaries, or
     message counts as backup coverage, recovery freshness, restore capability,
     or storage-local action authority.
+    The `can_redo` flag on that same session-list projection is only Assistant
+    conversation repair state. It must not be interpreted as recovery
+    reversibility, restore availability, backup freshness, or any storage-local
+    undo capability.
     That same adjacent `internal/api/` boundary still carries Patrol-run
     execution identity. Storage and recovery may observe shared Patrol
     transport through `internal/api/chat_service_adapter.go`, but they must not

@@ -833,7 +833,7 @@ func (h *LicenseHandlers) RemoveTenantService(orgID string) {
 
 // routeAISessions routes session-specific AI chat requests
 func (r *Router) routeAISessions(w http.ResponseWriter, req *http.Request) {
-	// Extract session ID from path: /api/ai/sessions/{id}[/messages|/abort|/summarize|/diff|/fork|/revert|/unrevert]
+	// Extract session ID from path: /api/ai/sessions/{id}[/messages|/abort|/summarize|/diff|/fork|/undo|/redo|/revert|/unrevert]
 	path := strings.TrimPrefix(req.URL.Path, "/api/ai/sessions/")
 	parts := strings.SplitN(path, "/", 2)
 	sessionID := parts[0]
@@ -871,6 +871,16 @@ func (r *Router) routeAISessions(w http.ResponseWriter, req *http.Request) {
 				return
 			}
 			r.aiHandler.HandleFork(w, req, sessionID)
+		case "undo":
+			if !ensureScope(w, req, config.ScopeAIChat) {
+				return
+			}
+			r.aiHandler.HandleUndoLastTurn(w, req, sessionID)
+		case "redo":
+			if !ensureScope(w, req, config.ScopeAIChat) {
+				return
+			}
+			r.aiHandler.HandleRedoLastTurn(w, req, sessionID)
 		case "revert":
 			if !ensureScope(w, req, config.ScopeAIChat) {
 				return

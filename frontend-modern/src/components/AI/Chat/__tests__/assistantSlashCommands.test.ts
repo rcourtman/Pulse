@@ -18,6 +18,8 @@ describe('assistantSlashCommands', () => {
     expect(parseAssistantSlashCommand('/copy')).toBe('copy');
     expect(parseAssistantSlashCommand('/export')).toBe('export');
     expect(parseAssistantSlashCommand('/fork')).toBe('fork');
+    expect(parseAssistantSlashCommand('/undo')).toBe('undo');
+    expect(parseAssistantSlashCommand('/redo')).toBe('redo');
   });
 
   it('normalizes casing and surrounding whitespace', () => {
@@ -39,8 +41,10 @@ describe('assistantSlashCommands', () => {
       'copy',
       'export',
       'fork',
+      'undo',
+      'redo',
     ]);
-    expect(filterAssistantSlashCommands('res').map((command) => command.name)).toEqual([
+    expect(filterAssistantSlashCommands('resume').map((command) => command.name)).toEqual([
       'sessions',
     ]);
     expect(filterAssistantSlashCommands('provider').map((command) => command.name)).toEqual([

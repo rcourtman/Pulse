@@ -3522,6 +3522,32 @@ func (s *Service) UnrevertSession(ctx context.Context, sessionID string) (map[st
 	return map[string]interface{}{"status": "not_implemented"}, nil
 }
 
+// UndoLastTurn removes the latest user turn from the durable chat session.
+func (s *Service) UndoLastTurn(ctx context.Context, sessionID string) (*SessionTurnUndoResult, error) {
+	s.mu.RLock()
+	sessions := s.sessions
+	s.mu.RUnlock()
+
+	if sessions == nil {
+		return nil, fmt.Errorf("service not started")
+	}
+
+	return sessions.UndoLastTurn(sessionID)
+}
+
+// RedoLastTurn restores the latest turn removed by UndoLastTurn.
+func (s *Service) RedoLastTurn(ctx context.Context, sessionID string) (*SessionTurnRedoResult, error) {
+	s.mu.RLock()
+	sessions := s.sessions
+	s.mu.RUnlock()
+
+	if sessions == nil {
+		return nil, fmt.Errorf("service not started")
+	}
+
+	return sessions.RedoLastTurn(sessionID)
+}
+
 // GetBaseURL returns empty since there's no sidecar
 func (s *Service) GetBaseURL() string {
 	return ""

@@ -4,6 +4,8 @@ export type AssistantSlashCommandAction =
   | 'fork'
   | 'models'
   | 'new'
+  | 'redo'
+  | 'undo'
   | 'sessions';
 
 export interface AssistantSlashCommand {
@@ -46,6 +48,16 @@ export const ASSISTANT_SLASH_COMMANDS: AssistantSlashCommand[] = [
     name: 'fork',
     action: 'fork',
     description: 'Fork this session into a new copy',
+  },
+  {
+    name: 'undo',
+    action: 'undo',
+    description: 'Restore the last prompt for editing',
+  },
+  {
+    name: 'redo',
+    action: 'redo',
+    description: 'Restore the last undone turn',
   },
 ];
 

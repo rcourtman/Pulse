@@ -50,6 +50,9 @@ describe('aiChatStore', () => {
 
     aiChatStore.ackCommandRequest(request!.id);
     expect(aiChatStore.commandRequest).toBeNull();
+
+    aiChatStore.requestCommand('undo');
+    expect(aiChatStore.commandRequest).toMatchObject({ action: 'undo' });
   });
 
   it('sets legacy context and clears it', () => {

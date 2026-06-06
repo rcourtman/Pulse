@@ -34,6 +34,8 @@ export type CommandPaletteAssistantActions = {
   newSession: () => void;
   sessions: () => void;
   models: () => void;
+  undo: () => void;
+  redo: () => void;
 };
 
 export function buildCommandPaletteCommands(options: {
@@ -73,6 +75,20 @@ export function buildCommandPaletteCommands(options: {
         description: '/models',
         keywords: ['assistant', 'models', 'model', 'provider', 'openrouter', 'deepseek'],
         action: options.assistantActions.models,
+      },
+      {
+        id: 'assistant-undo-last-turn',
+        label: 'Undo last Assistant turn',
+        description: '/undo',
+        keywords: ['assistant', 'undo', 'edit', 'prompt', 'last', 'turn'],
+        action: options.assistantActions.undo,
+      },
+      {
+        id: 'assistant-redo-last-turn',
+        label: 'Redo last Assistant turn',
+        description: '/redo',
+        keywords: ['assistant', 'redo', 'restore', 'prompt', 'last', 'turn'],
+        action: options.assistantActions.redo,
       },
     );
   }

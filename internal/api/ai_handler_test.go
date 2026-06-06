@@ -176,6 +176,22 @@ func (m *MockAIService) UnrevertSession(ctx context.Context, sessionID string) (
 	return args.Get(0).(map[string]interface{}), args.Error(1)
 }
 
+func (m *MockAIService) UndoLastTurn(ctx context.Context, sessionID string) (*chat.SessionTurnUndoResult, error) {
+	args := m.Called(ctx, sessionID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*chat.SessionTurnUndoResult), args.Error(1)
+}
+
+func (m *MockAIService) RedoLastTurn(ctx context.Context, sessionID string) (*chat.SessionTurnRedoResult, error) {
+	args := m.Called(ctx, sessionID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*chat.SessionTurnRedoResult), args.Error(1)
+}
+
 func (m *MockAIService) AnswerQuestion(ctx context.Context, questionID string, answers []chat.QuestionAnswer) error {
 	args := m.Called(ctx, questionID, answers)
 	return args.Error(0)

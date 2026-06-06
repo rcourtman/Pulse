@@ -64,6 +64,16 @@ export interface QueuedFollowUp {
   timestamp: Date;
 }
 
+export interface RestoredPromptDraft {
+  prompt: string;
+  request?: ChatMessageRequestContext;
+}
+
+export interface RedoTurnResult {
+  success: boolean;
+  canRedo: boolean;
+}
+
 export function useChat(options: UseChatOptions = {}) {
   // Core state
   const [messages, setMessages] = createSignal<ChatMessage[]>([]);
@@ -727,6 +737,40 @@ export function useChat(options: UseChatOptions = {}) {
 
   const cloneMentions = (mentions?: ChatMention[]): ChatMention[] | undefined =>
     mentions?.map((mention) => ({ ...mention }));
+
+  const cloneRequestContext = (
+    request?: ChatMessageRequestContext,
+  ): ChatMessageRequestContext | undefined => {
+    if (!request) return undefined;
+
+    const cloned: ChatMessageRequestContext = {};
+    if (request.mentions?.length) {
+      cloned.mentions = cloneMentions(request.mentions);
+    }
+    if (request.findingId) {
+      cloned.findingId = request.findingId;
+    }
+    if (request.model) {
+      cloned.model = request.model;
+    }
+    if (typeof request.autonomousMode === 'boolean') {
+      cloned.autonomousMode = request.autonomousMode;
+    }
+    if (request.handoffContext) {
+      cloned.handoffContext = request.handoffContext;
+    }
+    if (request.handoffResources?.length) {
+      cloned.handoffResources = request.handoffResources.map((resource) => ({ ...resource }));
+    }
+    if (request.handoffActions?.length) {
+      cloned.handoffActions = request.handoffActions.map((action) => ({ ...action }));
+    }
+    if (request.handoffMetadata) {
+      cloned.handoffMetadata = { ...request.handoffMetadata };
+    }
+
+    return Object.keys(cloned).length > 0 ? cloned : undefined;
+  };
 
   const cloneSendOptions = (
     sendOptions?: SendMessageOptions,
@@ -1651,6 +1695,61 @@ export function useChat(options: UseChatOptions = {}) {
     return true;
   };
 
+  const latestUserPromptDraft = (): RestoredPromptDraft | null => {
+    const currentMessages = messages();
+    for (let index = currentMessages.length - 1; index >= 0; index -= 1) {
+      const message = currentMessages[index];
+      if (message.role !== 'user' || !message.content.trim() || message.delivery === 'queued') {
+        continue;
+      }
+      return {
+        prompt: message.content,
+        request: cloneRequestContext(message.request),
+      };
+    }
+    return null;
+  };
+
+  const undoLastTurn = async (): Promise<RestoredPromptDraft | null> => {
+    const currentSessionId = sessionId().trim();
+    if (!currentSessionId || isLoading()) return null;
+
+    const localDraft = latestUserPromptDraft();
+    const result = await AIChatAPI.undoLastTurn(currentSessionId);
+    if (!result.success) {
+      if (result.message) {
+        notificationStore.info(result.message);
+      }
+      return null;
+    }
+
+    await loadSession(currentSessionId);
+    await notifyConversationChanged();
+    const prompt = localDraft?.prompt || result.restored_prompt || '';
+    if (!prompt.trim()) return null;
+    return {
+      prompt,
+      request: localDraft?.request,
+    };
+  };
+
+  const redoLastTurn = async (): Promise<RedoTurnResult> => {
+    const currentSessionId = sessionId().trim();
+    if (!currentSessionId || isLoading()) return { success: false, canRedo: false };
+
+    const result = await AIChatAPI.redoLastTurn(currentSessionId);
+    if (!result.success) {
+      if (result.message) {
+        notificationStore.info(result.message);
+      }
+      return { success: false, canRedo: result.can_redo };
+    }
+
+    const loaded = await loadSession(currentSessionId);
+    await notifyConversationChanged();
+    return { success: loaded, canRedo: result.can_redo };
+  };
+
   // Update pending approval state (e.g., to mark as executing or remove)
   const updateApproval = (
     messageId: string,
@@ -1861,6 +1960,8 @@ export function useChat(options: UseChatOptions = {}) {
     queuedFollowUpCount: () => queuedFollowUps().length,
     sendMessage,
     retryMessage,
+    undoLastTurn,
+    redoLastTurn,
     stop,
     cancelQueuedFollowUp,
     takeQueuedFollowUp,

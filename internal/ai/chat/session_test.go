@@ -253,6 +253,89 @@ func TestSessionStoreForkClonesTranscriptAndHandoffSummary(t *testing.T) {
 	require.Len(t, sourceMessages, 2)
 }
 
+func TestSessionStoreUndoRedoLastTurn(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	require.NoError(t, err)
+
+	session, err := store.Create()
+	require.NoError(t, err)
+
+	require.NoError(t, store.AddMessage(session.ID, Message{ID: "u1", Role: "user", Content: "First prompt"}))
+	require.NoError(t, store.AddMessage(session.ID, Message{ID: "a1", Role: "assistant", Content: "First answer"}))
+	require.NoError(t, store.AddMessage(session.ID, Message{ID: "u2", Role: "user", Content: "Second prompt"}))
+	require.NoError(t, store.AddMessage(session.ID, Message{ID: "a2", Role: "assistant", Content: "Second answer"}))
+
+	undo, err := store.UndoLastTurn(session.ID)
+	require.NoError(t, err)
+	require.NotNil(t, undo)
+	assert.True(t, undo.Success)
+	assert.Equal(t, "Second prompt", undo.RestoredPrompt)
+	assert.Equal(t, 2, undo.RemovedMessages)
+	assert.True(t, undo.CanRedo)
+
+	summary, err := store.Get(session.ID)
+	require.NoError(t, err)
+	assert.True(t, summary.CanRedo)
+
+	messages, err := store.GetMessages(session.ID)
+	require.NoError(t, err)
+	require.Len(t, messages, 2)
+	assert.Equal(t, "u1", messages[0].ID)
+	assert.Equal(t, "a1", messages[1].ID)
+
+	undo, err = store.UndoLastTurn(session.ID)
+	require.NoError(t, err)
+	assert.True(t, undo.Success)
+	assert.Equal(t, "First prompt", undo.RestoredPrompt)
+
+	messages, err = store.GetMessages(session.ID)
+	require.NoError(t, err)
+	assert.Empty(t, messages)
+
+	redo, err := store.RedoLastTurn(session.ID)
+	require.NoError(t, err)
+	require.NotNil(t, redo)
+	assert.True(t, redo.Success)
+	assert.Equal(t, 2, redo.RestoredMessages)
+	assert.True(t, redo.CanRedo)
+
+	messages, err = store.GetMessages(session.ID)
+	require.NoError(t, err)
+	require.Len(t, messages, 2)
+	assert.Equal(t, "First prompt", messages[0].Content)
+
+	redo, err = store.RedoLastTurn(session.ID)
+	require.NoError(t, err)
+	assert.True(t, redo.Success)
+	assert.False(t, redo.CanRedo)
+
+	summary, err = store.Get(session.ID)
+	require.NoError(t, err)
+	assert.False(t, summary.CanRedo)
+
+	messages, err = store.GetMessages(session.ID)
+	require.NoError(t, err)
+	require.Len(t, messages, 4)
+	assert.Equal(t, "Second prompt", messages[2].Content)
+
+	undo, err = store.UndoLastTurn(session.ID)
+	require.NoError(t, err)
+	assert.True(t, undo.CanRedo)
+	summary, err = store.Get(session.ID)
+	require.NoError(t, err)
+	assert.True(t, summary.CanRedo)
+	require.NoError(t, store.AddMessage(session.ID, Message{ID: "u3", Role: "user", Content: "Replacement"}))
+	summary, err = store.Get(session.ID)
+	require.NoError(t, err)
+	assert.False(t, summary.CanRedo)
+
+	redo, err = store.RedoLastTurn(session.ID)
+	require.NoError(t, err)
+	assert.False(t, redo.Success)
+	assert.False(t, redo.CanRedo)
+	assert.Equal(t, "No undone turn to redo.", redo.Message)
+}
+
 func TestSessionStoreForkRejectsMissingOrInvalidSession(t *testing.T) {
 	store, err := NewSessionStore(t.TempDir())
 	require.NoError(t, err)

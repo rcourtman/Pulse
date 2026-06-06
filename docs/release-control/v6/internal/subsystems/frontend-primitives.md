@@ -317,6 +317,13 @@ scan-friendly without hiding any container from drilldown.
    `handoffMetadata` while preserving the safe visible briefing and scoped
    approval-required posture, so later turns rely on backend session hydration
    instead of resending stale browser context. Patrol handoffs must not include
+   Persisted Assistant redo availability is safe session chrome, not transcript
+   content. The drawer may consume `ChatSession.can_redo` from the backend
+   session list to re-enable Redo after reload or session refresh, but it must
+   not read or duplicate the redo stack in frontend state. Undo restores the
+   editable prompt draft and safe structured send metadata into the composer;
+   Redo clears that recovered draft only after the backend restores the turn.
+   Patrol handoffs must not include
    safe next-step labels, action kinds, or whitelisted app-route hrefs in
    `handoffMetadata`; the drawer must treat
    `handoff_summary.requires_approval` as a current pending-decision flag, not a
@@ -2314,6 +2321,11 @@ selection, and `frontend-modern/src/components/shared/commandPaletteModel.ts`
 owns canonical command construction plus query normalization and filtering
 policy. Future command-palette work should extend those owners instead of
 pushing route construction or search policy back into the shared shell.
+Assistant command-palette actions are shell requests, not duplicated chat
+logic. New session, session picker, model picker, Undo, and Redo commands must
+flow through the shared `frontend-modern/src/stores/aiChat.ts` command request
+contract so the drawer owns disabled/loading state, prompt restoration, and
+notifications while the palette remains only a searchable command surface.
 The shared search field now follows that same owner split.
 `frontend-modern/src/components/shared/SearchField.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useSearchFieldState.ts` owns focused-

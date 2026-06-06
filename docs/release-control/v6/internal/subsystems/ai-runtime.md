@@ -762,6 +762,22 @@ runtime cost control, and shared AI transport surfaces.
    return the updated `ChatSession`, update the visible row without closing the
    picker, and leave messages, handoff context, approvals, and tool evidence
    unchanged.
+   Assistant turn undo/redo is also a source-backed session repair workflow,
+   not a transcript-local delete button. The referenced OpenCode source in
+   `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx` registers
+   `session.undo` and `session.redo` as first-class session commands and uses
+   runtime revert/unrevert responses to restore the user's prompt into the
+   composer. Pulse adapts that behavior through
+   `POST /api/ai/sessions/{id}/undo` and
+   `POST /api/ai/sessions/{id}/redo`: the backend session store must remove the
+   latest user-authored turn plus following assistant/tool messages as one
+   durable turn, persist a bounded redo stack, expose `can_redo` on the
+   browser-safe session summary, clear redo state when a new message or trim
+   changes the transcript, and keep forked sessions independent from the source
+   redo stack. The drawer must restore the removed prompt, structured mentions,
+   finding id, handoff metadata, approval/autonomous override, and selected
+   model route when available so the operator can edit and resend without
+   reconstructing hidden context from transcript prose.
    The empty Assistant drawer may surface recent non-empty sessions as direct
    resume actions using the backend session list already owned by the drawer;
    it must not create a parallel recent-chat store or product-authored prompt

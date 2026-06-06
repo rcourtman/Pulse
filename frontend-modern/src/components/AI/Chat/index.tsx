@@ -17,9 +17,11 @@ import CopyIcon from 'lucide-solid/icons/copy';
 import DownloadIcon from 'lucide-solid/icons/download';
 import GitForkIcon from 'lucide-solid/icons/git-fork';
 import PencilIcon from 'lucide-solid/icons/pencil';
+import Redo2Icon from 'lucide-solid/icons/redo-2';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import RotateCwIcon from 'lucide-solid/icons/rotate-cw';
 import SettingsIcon from 'lucide-solid/icons/settings';
+import Undo2Icon from 'lucide-solid/icons/undo-2';
 import XIcon from 'lucide-solid/icons/x';
 import BookmarkIcon from 'lucide-solid/icons/bookmark';
 import CheckIcon from 'lucide-solid/icons/check';
@@ -27,7 +29,12 @@ import LoaderCircleIcon from 'lucide-solid/icons/loader-circle';
 import PlusIcon from 'lucide-solid/icons/plus';
 import Trash2Icon from 'lucide-solid/icons/trash-2';
 import { AIAPI } from '@/api/ai';
-import { AIChatAPI, type ChatSession, type ChatSessionHandoffSummary } from '@/api/aiChat';
+import {
+  AIChatAPI,
+  type ChatMention,
+  type ChatSession,
+  type ChatSessionHandoffSummary,
+} from '@/api/aiChat';
 import { SearchField } from '@/components/shared/SearchField';
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore, type AIChatContext } from '@/stores/aiChat';
@@ -71,6 +78,11 @@ import {
   AI_CHAT_PROVIDER_READINESS_RETRY_LABEL,
   AI_CHAT_PROVIDER_READINESS_SETTINGS_HREF,
   AI_CHAT_PROVIDER_READINESS_SETTINGS_LABEL,
+  AI_CHAT_REDO_LAST_TURN_EMPTY_MESSAGE,
+  AI_CHAT_REDO_LAST_TURN_ERROR_MESSAGE,
+  AI_CHAT_REDO_LAST_TURN_LABEL,
+  AI_CHAT_REDO_LAST_TURN_LOADING_MESSAGE,
+  AI_CHAT_REDO_LAST_TURN_SUCCESS_MESSAGE,
   AI_CHAT_RENAME_SESSION_CANCEL_LABEL,
   AI_CHAT_RENAME_SESSION_EMPTY_MESSAGE,
   AI_CHAT_RENAME_SESSION_ERROR_MESSAGE,
@@ -89,6 +101,11 @@ import {
   AI_CHAT_TRANSCRIPT_FALLBACK_DOWNLOAD_LABEL,
   AI_CHAT_TRANSCRIPT_FALLBACK_TEXTAREA_LABEL,
   AI_CHAT_TRANSCRIPT_FALLBACK_TITLE,
+  AI_CHAT_UNDO_LAST_TURN_EMPTY_MESSAGE,
+  AI_CHAT_UNDO_LAST_TURN_ERROR_MESSAGE,
+  AI_CHAT_UNDO_LAST_TURN_LABEL,
+  AI_CHAT_UNDO_LAST_TURN_LOADING_MESSAGE,
+  AI_CHAT_UNDO_LAST_TURN_SUCCESS_MESSAGE,
   getAIChatProviderReadinessPresentation,
 } from '@/utils/aiChatPresentation';
 import {
@@ -117,7 +134,12 @@ import {
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
-import { useChat, type QueuedFollowUp, type SendMessageOptions } from './hooks/useChat';
+import {
+  useChat,
+  type QueuedFollowUp,
+  type RestoredPromptDraft,
+  type SendMessageOptions,
+} from './hooks/useChat';
 import { ChatMessages } from './ChatMessages';
 import { ModelSelector } from './ModelSelector';
 import { MentionAutocomplete, type MentionResource } from './MentionAutocomplete';
@@ -193,6 +215,7 @@ interface ComposerDraftStash {
   cursorStart: number;
   cursorEnd: number;
   editingQueuedFollowUp: QueuedFollowUp | null;
+  restoredPromptDraft: RestoredPromptDraft | null;
 }
 
 interface AssistantUsageSummary {
@@ -585,6 +608,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [editingQueuedFollowUp, setEditingQueuedFollowUp] = createSignal<QueuedFollowUp | null>(
     null,
   );
+  const [restoredPromptDraft, setRestoredPromptDraft] = createSignal<RestoredPromptDraft | null>(
+    null,
+  );
   const [interruptArmed, setInterruptArmed] = createSignal(false);
   const [promptHistory, setPromptHistory] = createSignal<PromptHistoryEntry[]>([]);
   const [promptHistoryIndex, setPromptHistoryIndex] = createSignal(-1);
@@ -601,6 +627,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [sessionRenameSaving, setSessionRenameSaving] = createSignal(false);
   const [sessionDropdownPosition, setSessionDropdownPosition] = createSignal({ top: 0, right: 0 });
   const [forkingSession, setForkingSession] = createSignal(false);
+  const [undoingLastTurn, setUndoingLastTurn] = createSignal(false);
+  const [redoingLastTurn, setRedoingLastTurn] = createSignal(false);
+  const [redoLastTurnAvailable, setRedoLastTurnAvailable] = createSignal(false);
   let sessionButtonRef: HTMLButtonElement | undefined;
   let sessionSearchInputRef: HTMLInputElement | undefined;
   let sessionRenameInputRef: HTMLInputElement | undefined;
@@ -691,6 +720,25 @@ export const AIChat: Component<AIChatProps> = (props) => {
     };
   };
 
+  const cloneRestoredPromptDraft = (
+    draft: RestoredPromptDraft | null,
+  ): RestoredPromptDraft | null => {
+    if (!draft) return null;
+    const request = draft.request;
+    return {
+      prompt: draft.prompt,
+      request: request
+        ? {
+            ...request,
+            mentions: request.mentions?.map((mention) => ({ ...mention })),
+            handoffResources: request.handoffResources?.map((resource) => ({ ...resource })),
+            handoffActions: request.handoffActions?.map((action) => ({ ...action })),
+            handoffMetadata: request.handoffMetadata ? { ...request.handoffMetadata } : undefined,
+          }
+        : undefined,
+    };
+  };
+
   const cloneQueuedFollowUp = (queued: QueuedFollowUp): QueuedFollowUp => ({
     ...queued,
     mentions: queued.mentions?.map((mention) => ({ ...mention })),
@@ -762,7 +810,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const text = input();
     const mentions = accumulatedMentions();
     const queuedDraft = editingQueuedFollowUp();
-    if (!text.trim() && mentions.length === 0 && !queuedDraft) {
+    const restoredDraft = restoredPromptDraft();
+    if (!text.trim() && mentions.length === 0 && !queuedDraft && !restoredDraft) {
       stashedComposerDraft = null;
       return;
     }
@@ -774,6 +823,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       cursorStart: textareaRef?.selectionStart ?? fallbackCursor,
       cursorEnd: textareaRef?.selectionEnd ?? fallbackCursor,
       editingQueuedFollowUp: queuedDraft ? cloneQueuedFollowUp(queuedDraft) : null,
+      restoredPromptDraft: cloneRestoredPromptDraft(restoredDraft),
     };
   };
 
@@ -788,6 +838,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     setEditingQueuedFollowUp(
       draft.editingQueuedFollowUp ? cloneQueuedFollowUp(draft.editingQueuedFollowUp) : null,
     );
+    setRestoredPromptDraft(cloneRestoredPromptDraft(draft.restoredPromptDraft));
     setMentionActive(false);
     setSlashCommandActive(false);
     resetPromptHistoryNavigation();
@@ -1232,6 +1283,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
     onConversationChanged: refreshSessions,
   });
 
+  createEffect(() => {
+    const currentSessionId = chat.sessionId().trim();
+    if (!currentSessionId) return;
+    const session = findKnownSession(currentSessionId);
+    if (!session) return;
+    setRedoLastTurnAvailable(Boolean(session.can_redo));
+  });
+
   const stopActiveResponse = () => {
     clearInterruptArm();
     chat.stop();
@@ -1246,15 +1305,41 @@ export const AIChat: Component<AIChatProps> = (props) => {
     return firstLine || 'Queued follow-up';
   };
 
-  const restoreQueuedMentions = (mentions?: QueuedFollowUp['mentions']) => {
+  const restoreChatMentions = (mentions?: ChatMention[]) => {
     setAccumulatedMentions(
       (mentions || []).map((mention) => ({
         id: mention.id,
-        label: mention.name,
+        label: mention.name || mention.id,
         type: mention.type,
         node: mention.node,
       })),
     );
+  };
+
+  const sendOptionsFromRestoredRequest = (
+    request?: RestoredPromptDraft['request'],
+  ): SendMessageOptions => {
+    if (!request) return {};
+    const sendOptions: SendMessageOptions = {};
+    if (request.model) {
+      sendOptions.model = request.model;
+    }
+    if (typeof request.autonomousMode === 'boolean') {
+      sendOptions.autonomousMode = request.autonomousMode;
+    }
+    if (request.handoffContext) {
+      sendOptions.handoffContext = request.handoffContext;
+    }
+    if (request.handoffResources?.length) {
+      sendOptions.handoffResources = request.handoffResources.map((resource) => ({ ...resource }));
+    }
+    if (request.handoffActions?.length) {
+      sendOptions.handoffActions = request.handoffActions.map((action) => ({ ...action }));
+    }
+    if (request.handoffMetadata) {
+      sendOptions.handoffMetadata = { ...request.handoffMetadata };
+    }
+    return sendOptions;
   };
 
   const editQueuedFollowUp = (id: string) => {
@@ -1262,9 +1347,22 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (!queued) return;
     resetPromptHistoryNavigation();
     setEditingQueuedFollowUp(queued);
+    setRestoredPromptDraft(null);
     setInput(queued.prompt);
-    restoreQueuedMentions(queued.mentions);
+    restoreChatMentions(queued.mentions);
     setMentionActive(false);
+    focusComposer();
+    queueMicrotask(resizeTextarea);
+  };
+
+  const restoreLastTurnDraft = (draft: RestoredPromptDraft) => {
+    resetPromptHistoryNavigation();
+    setEditingQueuedFollowUp(null);
+    setRestoredPromptDraft(cloneRestoredPromptDraft(draft));
+    setInput(draft.prompt);
+    restoreChatMentions(draft.request?.mentions);
+    setMentionActive(false);
+    setSlashCommandActive(false);
     focusComposer();
     queueMicrotask(resizeTextarea);
   };
@@ -1318,6 +1416,30 @@ export const AIChat: Component<AIChatProps> = (props) => {
       hasCurrentTranscript() &&
       !chat.isLoading() &&
       !forkingSession(),
+  );
+  const hasUndoableUserTurn = createMemo(() =>
+    chat.messages().some(
+      (message) =>
+        message.role === 'user' &&
+        message.delivery !== 'queued' &&
+        Boolean(message.content.trim()),
+    ),
+  );
+  const canUndoLastTurn = createMemo(
+    () =>
+      Boolean(chat.sessionId().trim()) &&
+      !chat.isLoading() &&
+      !undoingLastTurn() &&
+      !redoingLastTurn() &&
+      hasUndoableUserTurn(),
+  );
+  const canRedoLastTurn = createMemo(
+    () =>
+      Boolean(chat.sessionId().trim()) &&
+      !chat.isLoading() &&
+      !undoingLastTurn() &&
+      !redoingLastTurn() &&
+      redoLastTurnAvailable(),
   );
 
   const buildCurrentTranscript = (generatedAt = new Date()) => {
@@ -2234,6 +2356,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const clearLocalComposerCommand = () => {
     stashedComposerDraft = null;
     setEditingQueuedFollowUp(null);
+    setRestoredPromptDraft(null);
     setInput('');
     setAccumulatedMentions([]);
     setMentionActive(false);
@@ -2270,6 +2393,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
         break;
       case 'fork':
         void handleForkSession();
+        break;
+      case 'undo':
+        void handleUndoLastTurn();
+        break;
+      case 'redo':
+        void handleRedoLastTurn();
         break;
     }
   };
@@ -2318,11 +2447,16 @@ export const AIChat: Component<AIChatProps> = (props) => {
     // Pass findingId from context on the first message, clear after success
     const ctx = aiChatStore.context;
     const queuedDraft = editingQueuedFollowUp();
-    const findingId = queuedDraft ? queuedDraft.findingId : ctx.findingId;
+    const restoredDraft = restoredPromptDraft();
+    const findingId = queuedDraft
+      ? queuedDraft.findingId
+      : (restoredDraft?.request?.findingId ?? ctx.findingId);
     const sendOptions: SendMessageOptions = queuedDraft?.sendOptions
       ? { ...queuedDraft.sendOptions }
+      : restoredDraft?.request
+        ? sendOptionsFromRestoredRequest(restoredDraft.request)
       : {};
-    if (!queuedDraft) {
+    if (!queuedDraft && !restoredDraft) {
       if (typeof ctx.autonomousMode === 'boolean') {
         sendOptions.autonomousMode = ctx.autonomousMode;
       }
@@ -2370,10 +2504,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
         }
         stashedComposerDraft = null;
         setEditingQueuedFollowUp(null);
-        if (!queuedDraft && findingId) {
+        setRestoredPromptDraft(null);
+        setRedoLastTurnAvailable(false);
+        if (!queuedDraft && !restoredDraft && findingId) {
           aiChatStore.clearFindingId?.();
         }
-        if (!queuedDraft && hasRequestHandoffPayload) {
+        if (!queuedDraft && !restoredDraft && hasRequestHandoffPayload) {
           aiChatStore.clearRequestHandoffPayload?.();
         }
       })
@@ -2534,12 +2670,73 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
   };
 
+  const handleUndoLastTurn = async () => {
+    if (undoingLastTurn() || redoingLastTurn()) return;
+    if (chat.isLoading()) {
+      notificationStore.info(AI_CHAT_UNDO_LAST_TURN_LOADING_MESSAGE, 2000);
+      return;
+    }
+    if (!canUndoLastTurn()) {
+      notificationStore.info(AI_CHAT_UNDO_LAST_TURN_EMPTY_MESSAGE, 2000);
+      return;
+    }
+
+    setUndoingLastTurn(true);
+    try {
+      const draft = await chat.undoLastTurn();
+      if (!draft) return;
+      setRedoLastTurnAvailable(true);
+      restoreLastTurnDraft(draft);
+      notificationStore.success(AI_CHAT_UNDO_LAST_TURN_SUCCESS_MESSAGE, 2000);
+    } catch (error) {
+      logger.error('[AIChat] Failed to undo Assistant turn:', error);
+      notificationStore.error(AI_CHAT_UNDO_LAST_TURN_ERROR_MESSAGE);
+    } finally {
+      setUndoingLastTurn(false);
+    }
+  };
+
+  const handleRedoLastTurn = async () => {
+    if (undoingLastTurn() || redoingLastTurn()) return;
+    if (chat.isLoading()) {
+      notificationStore.info(AI_CHAT_REDO_LAST_TURN_LOADING_MESSAGE, 2000);
+      return;
+    }
+    if (!chat.sessionId().trim() || !redoLastTurnAvailable()) {
+      notificationStore.info(AI_CHAT_REDO_LAST_TURN_EMPTY_MESSAGE, 2000);
+      return;
+    }
+
+    setRedoingLastTurn(true);
+    try {
+      const result = await chat.redoLastTurn();
+      setRedoLastTurnAvailable(result.canRedo);
+      if (!result.success) return;
+      setRestoredPromptDraft(null);
+      setEditingQueuedFollowUp(null);
+      setInput('');
+      setAccumulatedMentions([]);
+      setMentionActive(false);
+      setSlashCommandActive(false);
+      notificationStore.success(AI_CHAT_REDO_LAST_TURN_SUCCESS_MESSAGE, 2000);
+      focusComposer();
+      queueMicrotask(resizeTextarea);
+    } catch (error) {
+      logger.error('[AIChat] Failed to redo Assistant turn:', error);
+      notificationStore.error(AI_CHAT_REDO_LAST_TURN_ERROR_MESSAGE);
+    } finally {
+      setRedoingLastTurn(false);
+    }
+  };
+
   // New conversation
   const handleNewConversation = async () => {
     const started = await chat.newSession();
     if (!started) return;
     resetPromptHistoryNavigation();
     setEditingQueuedFollowUp(null);
+    setRestoredPromptDraft(null);
+    setRedoLastTurnAvailable(false);
     aiChatStore.clearContext?.();
     setShowSessions(false);
     setSessionRefreshLoading(false);
@@ -2576,6 +2773,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
       resetPromptHistoryNavigation();
       setEditingQueuedFollowUp(null);
+      setRestoredPromptDraft(null);
+      setRedoLastTurnAvailable(false);
       const restoredContext = buildSessionHandoffContext(forkedSession);
       if (restoredContext) {
         aiChatStore.setContext(restoredContext);
@@ -2729,6 +2928,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (!loaded) return;
     resetPromptHistoryNavigation();
     setEditingQueuedFollowUp(null);
+    setRestoredPromptDraft(null);
+    setRedoLastTurnAvailable(Boolean(session?.can_redo));
     const restoredContext = buildSessionHandoffContext(session);
     if (restoredContext) {
       aiChatStore.setContext(restoredContext);
@@ -2755,6 +2956,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
         chat.clearMessages();
         resetPromptHistoryNavigation();
         setEditingQueuedFollowUp(null);
+        setRestoredPromptDraft(null);
+        setRedoLastTurnAvailable(false);
       }
     } catch (_error) {
       notificationStore.error('Failed to delete session');
@@ -2904,6 +3107,44 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 <Show
                   when={forkingSession()}
                   fallback={<GitForkIcon class="h-4 w-4" aria-hidden="true" />}
+                >
+                  <LoaderCircleIcon class="h-4 w-4 animate-spin" aria-hidden="true" />
+                </Show>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  void handleUndoLastTurn();
+                }}
+                disabled={!canUndoLastTurn()}
+                class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted"
+                title={AI_CHAT_UNDO_LAST_TURN_LABEL}
+                aria-label={AI_CHAT_UNDO_LAST_TURN_LABEL}
+                aria-busy={undoingLastTurn()}
+              >
+                <Show
+                  when={undoingLastTurn()}
+                  fallback={<Undo2Icon class="h-4 w-4" aria-hidden="true" />}
+                >
+                  <LoaderCircleIcon class="h-4 w-4 animate-spin" aria-hidden="true" />
+                </Show>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  void handleRedoLastTurn();
+                }}
+                disabled={!canRedoLastTurn()}
+                class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted"
+                title={AI_CHAT_REDO_LAST_TURN_LABEL}
+                aria-label={AI_CHAT_REDO_LAST_TURN_LABEL}
+                aria-busy={redoingLastTurn()}
+              >
+                <Show
+                  when={redoingLastTurn()}
+                  fallback={<Redo2Icon class="h-4 w-4" aria-hidden="true" />}
                 >
                   <LoaderCircleIcon class="h-4 w-4 animate-spin" aria-hidden="true" />
                 </Show>

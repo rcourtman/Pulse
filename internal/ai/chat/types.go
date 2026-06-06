@@ -18,7 +18,28 @@ type Session struct {
 	CreatedAt      time.Time              `json:"created_at"`
 	UpdatedAt      time.Time              `json:"updated_at"`
 	MessageCount   int                    `json:"message_count,omitempty"`
+	CanRedo        bool                   `json:"can_redo,omitempty"`
 	HandoffSummary *SessionHandoffSummary `json:"handoff_summary,omitempty"`
+}
+
+// SessionTurnUndoResult is returned when the chat runtime removes the latest
+// user turn and makes that prompt available for editing.
+type SessionTurnUndoResult struct {
+	Success         bool   `json:"success"`
+	SessionID       string `json:"session_id"`
+	RestoredPrompt  string `json:"restored_prompt,omitempty"`
+	RemovedMessages int    `json:"removed_messages,omitempty"`
+	CanRedo         bool   `json:"can_redo"`
+	Message         string `json:"message,omitempty"`
+}
+
+// SessionTurnRedoResult is returned when a previously undone turn is restored.
+type SessionTurnRedoResult struct {
+	Success          bool   `json:"success"`
+	SessionID        string `json:"session_id"`
+	RestoredMessages int    `json:"restored_messages,omitempty"`
+	CanRedo          bool   `json:"can_redo"`
+	Message          string `json:"message,omitempty"`
 }
 
 // SessionHandoffSummary is the browser-safe public summary of private

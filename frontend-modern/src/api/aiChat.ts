@@ -12,7 +12,25 @@ export interface ChatSession {
   created_at: string;
   updated_at: string;
   message_count: number;
+  can_redo?: boolean;
   handoff_summary?: ChatSessionHandoffSummary;
+}
+
+export interface ChatSessionUndoResult {
+  success: boolean;
+  session_id: string;
+  restored_prompt?: string;
+  removed_messages?: number;
+  can_redo: boolean;
+  message?: string;
+}
+
+export interface ChatSessionRedoResult {
+  success: boolean;
+  session_id: string;
+  restored_messages?: number;
+  can_redo: boolean;
+  message?: string;
 }
 
 export interface ListChatSessionsOptions {
@@ -301,6 +319,20 @@ export class AIChatAPI {
     return apiFetchJSON(`${this.baseUrl}/sessions/${encodeURIComponent(sessionId)}/fork`, {
       method: 'POST',
     }) as Promise<ChatSession>;
+  }
+
+  // Undo latest chat turn and return the user prompt so the composer can restore it.
+  static async undoLastTurn(sessionId: string): Promise<ChatSessionUndoResult> {
+    return apiFetchJSON(`${this.baseUrl}/sessions/${encodeURIComponent(sessionId)}/undo`, {
+      method: 'POST',
+    }) as Promise<ChatSessionUndoResult>;
+  }
+
+  // Redo the latest chat turn removed by undoLastTurn.
+  static async redoLastTurn(sessionId: string): Promise<ChatSessionRedoResult> {
+    return apiFetchJSON(`${this.baseUrl}/sessions/${encodeURIComponent(sessionId)}/redo`, {
+      method: 'POST',
+    }) as Promise<ChatSessionRedoResult>;
   }
 
   // Revert session changes

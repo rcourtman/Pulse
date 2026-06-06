@@ -16,6 +16,16 @@ export const AI_CHAT_FORK_SESSION_LOAD_ERROR_MESSAGE =
   'Forked Assistant session but failed to load it';
 export const AI_CHAT_FORK_SESSION_ERROR_MESSAGE = 'Failed to fork Assistant session';
 export const AI_CHAT_FORK_SESSION_SUCCESS_MESSAGE = 'Assistant session forked';
+export const AI_CHAT_UNDO_LAST_TURN_LABEL = 'Undo last Assistant turn';
+export const AI_CHAT_UNDO_LAST_TURN_EMPTY_MESSAGE = 'No Assistant turn to undo';
+export const AI_CHAT_UNDO_LAST_TURN_LOADING_MESSAGE = 'Assistant is still working';
+export const AI_CHAT_UNDO_LAST_TURN_ERROR_MESSAGE = 'Failed to undo Assistant turn';
+export const AI_CHAT_UNDO_LAST_TURN_SUCCESS_MESSAGE = 'Last prompt restored for editing';
+export const AI_CHAT_REDO_LAST_TURN_LABEL = 'Redo last Assistant turn';
+export const AI_CHAT_REDO_LAST_TURN_EMPTY_MESSAGE = 'No undone Assistant turn to redo';
+export const AI_CHAT_REDO_LAST_TURN_LOADING_MESSAGE = 'Assistant is still working';
+export const AI_CHAT_REDO_LAST_TURN_ERROR_MESSAGE = 'Failed to redo Assistant turn';
+export const AI_CHAT_REDO_LAST_TURN_SUCCESS_MESSAGE = 'Assistant turn restored';
 export const AI_CHAT_RENAME_SESSION_LABEL = 'Rename Assistant session';
 export const AI_CHAT_RENAME_SESSION_SAVE_LABEL = 'Save Assistant session title';
 export const AI_CHAT_RENAME_SESSION_CANCEL_LABEL = 'Cancel Assistant session rename';

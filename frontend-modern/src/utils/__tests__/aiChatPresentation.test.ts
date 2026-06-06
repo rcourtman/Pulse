@@ -30,6 +30,11 @@ import {
   AI_CHAT_RENAME_SESSION_ERROR_MESSAGE,
   AI_CHAT_RENAME_SESSION_LABEL,
   AI_CHAT_RENAME_SESSION_SAVE_LABEL,
+  AI_CHAT_REDO_LAST_TURN_EMPTY_MESSAGE,
+  AI_CHAT_REDO_LAST_TURN_ERROR_MESSAGE,
+  AI_CHAT_REDO_LAST_TURN_LABEL,
+  AI_CHAT_REDO_LAST_TURN_LOADING_MESSAGE,
+  AI_CHAT_REDO_LAST_TURN_SUCCESS_MESSAGE,
   AI_CHAT_SESSION_EMPTY_STATE,
   AI_CHAT_SESSION_LOADING_STATE,
   AI_CHAT_SESSION_MENU_TITLE,
@@ -39,6 +44,11 @@ import {
   AI_CHAT_SESSION_SEARCH_PLACEHOLDER,
   AI_CHAT_SESSION_SEARCH_TITLE,
   AI_CHAT_SWITCH_TO_APPROVAL_LABEL,
+  AI_CHAT_UNDO_LAST_TURN_EMPTY_MESSAGE,
+  AI_CHAT_UNDO_LAST_TURN_ERROR_MESSAGE,
+  AI_CHAT_UNDO_LAST_TURN_LABEL,
+  AI_CHAT_UNDO_LAST_TURN_LOADING_MESSAGE,
+  AI_CHAT_UNDO_LAST_TURN_SUCCESS_MESSAGE,
   getAIChatProviderReadinessPresentation,
   getAIChatLauncherTitle,
 } from '@/utils/aiChatPresentation';
@@ -65,6 +75,16 @@ describe('aiChatPresentation', () => {
     expect(AI_CHAT_RENAME_SESSION_CANCEL_LABEL).toBe('Cancel Assistant session rename');
     expect(AI_CHAT_RENAME_SESSION_EMPTY_MESSAGE).toBe('Session title cannot be empty');
     expect(AI_CHAT_RENAME_SESSION_ERROR_MESSAGE).toBe('Failed to rename Assistant session');
+    expect(AI_CHAT_UNDO_LAST_TURN_LABEL).toBe('Undo last Assistant turn');
+    expect(AI_CHAT_UNDO_LAST_TURN_EMPTY_MESSAGE).toBe('No Assistant turn to undo');
+    expect(AI_CHAT_UNDO_LAST_TURN_LOADING_MESSAGE).toBe('Assistant is still working');
+    expect(AI_CHAT_UNDO_LAST_TURN_ERROR_MESSAGE).toBe('Failed to undo Assistant turn');
+    expect(AI_CHAT_UNDO_LAST_TURN_SUCCESS_MESSAGE).toBe('Last prompt restored for editing');
+    expect(AI_CHAT_REDO_LAST_TURN_LABEL).toBe('Redo last Assistant turn');
+    expect(AI_CHAT_REDO_LAST_TURN_EMPTY_MESSAGE).toBe('No undone Assistant turn to redo');
+    expect(AI_CHAT_REDO_LAST_TURN_LOADING_MESSAGE).toBe('Assistant is still working');
+    expect(AI_CHAT_REDO_LAST_TURN_ERROR_MESSAGE).toBe('Failed to redo Assistant turn');
+    expect(AI_CHAT_REDO_LAST_TURN_SUCCESS_MESSAGE).toBe('Assistant turn restored');
     expect(AI_CHAT_LAUNCHER_ARIA_LABEL).toBe('Expand Pulse Assistant');
     expect(AI_CHAT_CLOSE_LABEL).toBe('Close Pulse Assistant');
     expect(AI_CHAT_SESSION_MENU_TITLE).toBe('Pulse Assistant sessions');

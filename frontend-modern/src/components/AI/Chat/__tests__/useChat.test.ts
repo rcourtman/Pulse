@@ -9,6 +9,8 @@ vi.mock('@/api/aiChat', () => ({
     getMessages: vi.fn(),
     abortSession: vi.fn(),
     answerQuestion: vi.fn(),
+    undoLastTurn: vi.fn(),
+    redoLastTurn: vi.fn(),
   },
 }));
 
@@ -38,6 +40,8 @@ const mockChat = AIChatAPI.chat as ReturnType<typeof vi.fn>;
 const mockGetMessages = AIChatAPI.getMessages as ReturnType<typeof vi.fn>;
 const mockAbortSession = AIChatAPI.abortSession as ReturnType<typeof vi.fn>;
 const mockAnswerQuestion = AIChatAPI.answerQuestion as ReturnType<typeof vi.fn>;
+const mockUndoLastTurn = AIChatAPI.undoLastTurn as ReturnType<typeof vi.fn>;
+const mockRedoLastTurn = AIChatAPI.redoLastTurn as ReturnType<typeof vi.fn>;
 const mockNotifyError = notificationStore.error as ReturnType<typeof vi.fn>;
 
 type TestStreamEvent = StreamEvent | { type: string; data?: unknown };
@@ -67,6 +71,18 @@ describe('useChat', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mockAbortSession.mockResolvedValue(undefined);
+    mockUndoLastTurn.mockResolvedValue({
+      success: false,
+      session_id: 's',
+      can_redo: false,
+      message: 'No user turn to undo.',
+    });
+    mockRedoLastTurn.mockResolvedValue({
+      success: false,
+      session_id: 's',
+      can_redo: false,
+      message: 'No undone turn to redo.',
+    });
   });
 
   // ──────────────────────────────────────────────
@@ -83,6 +99,8 @@ describe('useChat', () => {
       expect(chat.queuedFollowUpCount()).toBe(0);
       expect(typeof chat.sendMessage).toBe('function');
       expect(typeof chat.retryMessage).toBe('function');
+      expect(typeof chat.undoLastTurn).toBe('function');
+      expect(typeof chat.redoLastTurn).toBe('function');
       expect(typeof chat.stop).toBe('function');
       expect(typeof chat.cancelQueuedFollowUp).toBe('function');
       expect(typeof chat.takeQueuedFollowUp).toBe('function');
@@ -2398,6 +2416,78 @@ describe('useChat', () => {
       expect(loaded).toBe(false);
       expect(mockNotifyError).toHaveBeenCalledWith('Failed to load session');
       expect(chat.messages()).toEqual([]);
+      dispose();
+    });
+  });
+
+  // ──────────────────────────────────────────────
+  // undo / redo
+  // ──────────────────────────────────────────────
+  describe('undo and redo', () => {
+    it('undoes the latest turn, reloads the session, and returns the editable prompt draft', async () => {
+      const mentions: ChatMention[] = [
+        { id: 'vm:pve:101', name: 'vm-101', type: 'vm', node: 'pve' },
+      ];
+      mockChat.mockResolvedValue(undefined);
+      mockUndoLastTurn.mockResolvedValue({
+        success: true,
+        session_id: 'sess-undo',
+        restored_prompt: 'inspect vm-101',
+        removed_messages: 2,
+        can_redo: true,
+      });
+      mockGetMessages.mockResolvedValue([
+        {
+          id: 'msg-previous',
+          role: 'assistant',
+          content: 'Previous answer',
+          timestamp: '2026-06-06T12:00:00Z',
+        },
+      ]);
+
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'sess-undo' }));
+      await chat.sendMessage('inspect vm-101', mentions, 'finding-101', {
+        model: 'openrouter:deepseek/deepseek-chat',
+        autonomousMode: false,
+        handoffContext: '[Patrol Finding Context]\nVM 101 has stale guest tools',
+      });
+
+      const draft = await chat.undoLastTurn();
+
+      expect(mockUndoLastTurn).toHaveBeenCalledWith('sess-undo');
+      expect(mockGetMessages).toHaveBeenCalledWith('sess-undo');
+      expect(chat.messages()).toHaveLength(1);
+      expect(draft).toEqual({
+        prompt: 'inspect vm-101',
+        request: {
+          mentions,
+          findingId: 'finding-101',
+          model: 'openrouter:deepseek/deepseek-chat',
+          autonomousMode: false,
+          handoffContext: '[Patrol Finding Context]\nVM 101 has stale guest tools',
+        },
+      });
+      dispose();
+    });
+
+    it('redoes an undone turn and returns remaining redo availability', async () => {
+      mockRedoLastTurn.mockResolvedValue({
+        success: true,
+        session_id: 'sess-redo',
+        restored_messages: 2,
+        can_redo: true,
+      });
+      mockGetMessages.mockResolvedValue([
+        { id: 'msg-1', role: 'user', content: 'hello', timestamp: '2026-06-06T12:00:00Z' },
+      ]);
+
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'sess-redo' }));
+      const result = await chat.redoLastTurn();
+
+      expect(mockRedoLastTurn).toHaveBeenCalledWith('sess-redo');
+      expect(mockGetMessages).toHaveBeenCalledWith('sess-redo');
+      expect(result).toEqual({ success: true, canRedo: true });
+      expect(chat.messages()).toHaveLength(1);
       dispose();
     });
   });

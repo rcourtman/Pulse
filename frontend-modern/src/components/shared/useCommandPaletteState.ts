@@ -50,6 +50,8 @@ export function useCommandPaletteState(props: CommandPaletteModalProps) {
         newSession: () => requestAssistantCommand('new'),
         sessions: () => requestAssistantCommand('sessions'),
         models: () => requestAssistantCommand('models'),
+        undo: () => requestAssistantCommand('undo'),
+        redo: () => requestAssistantCommand('redo'),
       },
     }),
   );

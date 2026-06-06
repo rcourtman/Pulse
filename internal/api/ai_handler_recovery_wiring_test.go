@@ -71,6 +71,12 @@ func (s *capturingAIService) RevertSession(ctx context.Context, sessionID string
 func (s *capturingAIService) UnrevertSession(ctx context.Context, sessionID string) (map[string]interface{}, error) {
 	return nil, nil
 }
+func (s *capturingAIService) UndoLastTurn(ctx context.Context, sessionID string) (*chat.SessionTurnUndoResult, error) {
+	return &chat.SessionTurnUndoResult{Success: true, SessionID: sessionID}, nil
+}
+func (s *capturingAIService) RedoLastTurn(ctx context.Context, sessionID string) (*chat.SessionTurnRedoResult, error) {
+	return &chat.SessionTurnRedoResult{Success: true, SessionID: sessionID}, nil
+}
 func (s *capturingAIService) AnswerQuestion(ctx context.Context, questionID string, answers []chat.QuestionAnswer) error {
 	return nil
 }

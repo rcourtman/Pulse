@@ -524,8 +524,10 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 	}
 
 	chatSessionText := string(chatSessionSource)
+	if !regexp.MustCompile(`ModelContext\s+\*sessionModelContext`).MatchString(chatSessionText) {
+		t.Fatalf("chat session store must persist model-only handoff metadata outside messages: missing %q", "ModelContext *sessionModelContext")
+	}
 	for _, required := range []string{
-		"ModelContext *sessionModelContext",
 		"SetModelHandoffFindingID",
 		"SetModelHandoffEnvelope",
 		"GetModelHandoffFindingID",

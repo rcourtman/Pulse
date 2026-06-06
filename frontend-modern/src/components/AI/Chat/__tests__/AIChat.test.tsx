@@ -45,6 +45,8 @@ const {
     queuedFollowUpCount: vi.fn(() => 0),
     sendMessage: vi.fn().mockResolvedValue(true),
     retryMessage: vi.fn(),
+    undoLastTurn: vi.fn().mockResolvedValue(null),
+    redoLastTurn: vi.fn().mockResolvedValue({ success: false, canRedo: false }),
     stop: vi.fn(),
     cancelQueuedFollowUp: vi.fn(),
     takeQueuedFollowUp: vi.fn((): QueuedFollowUp | undefined => undefined),
@@ -128,8 +130,11 @@ const {
 
   const mockAiChatStore = {
     isOpenSignal: vi.fn(() => true),
-    commandRequestSignal: vi.fn((): { id: number; action: 'new' | 'sessions' | 'models' } | null =>
-      null,
+    commandRequestSignal: vi.fn(
+      (): {
+        id: number;
+        action: 'new' | 'sessions' | 'models' | 'undo' | 'redo';
+      } | null => null,
     ),
     ackCommandRequest: vi.fn(),
     context: emptyChatContext() as {
@@ -414,6 +419,8 @@ beforeEach(() => {
   mockChat.queuedFollowUps.mockReturnValue([]);
   mockChat.queuedFollowUpCount.mockReturnValue(0);
   mockChat.sendMessage.mockResolvedValue(true);
+  mockChat.undoLastTurn.mockResolvedValue(null);
+  mockChat.redoLastTurn.mockResolvedValue({ success: false, canRedo: false });
   mockChat.takeQueuedFollowUp.mockReturnValue(undefined);
   mockByType.mockReturnValue([]);
   mockResources.mockReturnValue([]);
@@ -2393,6 +2400,91 @@ describe('AIChat', () => {
       expect(mockNotificationStore.error).toHaveBeenCalledWith('Failed to fork Assistant session');
     });
 
+    it('undoes the latest Assistant turn and restores the prompt for editing', async () => {
+      mockChat.sessionId.mockReturnValue('session-undo');
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'user-1',
+          role: 'user',
+          content: 'inspect vm-101',
+          timestamp: new Date('2026-06-06T12:34:56Z'),
+        },
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: 'vm-101 has stale guest tools.',
+          timestamp: new Date('2026-06-06T12:35:01Z'),
+        },
+      ]);
+      mockChat.undoLastTurn.mockResolvedValue({
+        prompt: 'inspect vm-101',
+        request: {
+          mentions: [{ id: 'vm:pve:101', name: 'vm-101', type: 'vm', node: 'pve' }],
+          findingId: 'finding-101',
+          model: 'openrouter:deepseek/deepseek-chat',
+          autonomousMode: false,
+          handoffContext: '[Patrol Finding Context]\nVM 101 has stale guest tools',
+        },
+      });
+
+      renderChat();
+      fireEvent.click(screen.getByRole('button', { name: 'Undo last Assistant turn' }));
+
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+      await waitFor(() => {
+        expect(mockChat.undoLastTurn).toHaveBeenCalledTimes(1);
+        expect(textarea).toHaveValue('inspect vm-101');
+      });
+      expect(mockNotificationStore.success).toHaveBeenCalledWith(
+        'Last prompt restored for editing',
+        2000,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+      await waitFor(() => {
+        expect(mockChat.sendMessage).toHaveBeenCalledWith(
+          'inspect vm-101',
+          [{ id: 'vm:pve:101', name: 'vm-101', type: 'vm', node: 'pve' }],
+          'finding-101',
+          expect.objectContaining({
+            autonomousMode: false,
+            handoffContext: '[Patrol Finding Context]\nVM 101 has stale guest tools',
+            model: 'openrouter:deepseek/deepseek-chat',
+          }),
+        );
+      });
+    });
+
+    it('redoes the latest undone Assistant turn from the header', async () => {
+      mockChat.sessionId.mockReturnValue('session-redo');
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'user-1',
+          role: 'user',
+          content: 'inspect vm-101',
+          timestamp: new Date('2026-06-06T12:34:56Z'),
+        },
+      ]);
+      mockChat.undoLastTurn.mockResolvedValue({ prompt: 'inspect vm-101' });
+      mockChat.redoLastTurn.mockResolvedValue({ success: true, canRedo: false });
+
+      renderChat();
+      fireEvent.click(screen.getByRole('button', { name: 'Undo last Assistant turn' }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Redo last Assistant turn' })).not.toBeDisabled();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Redo last Assistant turn' }));
+
+      await waitFor(() => {
+        expect(mockChat.redoLastTurn).toHaveBeenCalledTimes(1);
+      });
+      expect(screen.getByPlaceholderText('Ask about your infrastructure...')).toHaveValue('');
+      expect(mockNotificationStore.success).toHaveBeenCalledWith('Assistant turn restored', 2000);
+    });
+
     it('opens session picker on click', async () => {
       renderChat();
       const sessionButton = screen.getByRole('button', { name: 'Pulse Assistant sessions' });
@@ -2462,6 +2554,29 @@ describe('AIChat', () => {
         ).toHaveAttribute('aria-selected', 'false');
         expect(screen.getByText('5 messages')).toBeInTheDocument();
         expect(screen.getByText('3 messages')).toBeInTheDocument();
+      });
+    });
+
+    it('restores redo availability from the active saved session summary', async () => {
+      mockChat.sessionId.mockReturnValue('session-with-redo');
+      mockAIChatAPI.listSessions.mockResolvedValue([
+        {
+          id: 'session-with-redo',
+          title: 'Needs redo',
+          created_at: '2026-06-06T12:30:00Z',
+          updated_at: '2026-06-06T12:35:00Z',
+          message_count: 1,
+          can_redo: true,
+        },
+      ]);
+
+      renderChat();
+      await waitFor(() => {
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalled();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Redo last Assistant turn' })).not.toBeDisabled();
       });
     });
 

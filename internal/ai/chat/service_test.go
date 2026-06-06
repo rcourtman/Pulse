@@ -330,6 +330,36 @@ func TestService_SessionWrappers(t *testing.T) {
 	assert.Equal(t, "I will inspect the device nodes.", forkedMessages[0].Content)
 	assert.NotContains(t, forkedMessages[0].Content, "pulse_read")
 
+	require.NoError(t, service.sessions.AddMessage(forked.ID, Message{
+		Role:    "user",
+		Content: "How many device nodes?",
+	}))
+	require.NoError(t, service.sessions.AddMessage(forked.ID, Message{
+		Role:    "assistant",
+		Content: "There are 42 device nodes.",
+	}))
+	undo, err := service.UndoLastTurn(ctx, forked.ID)
+	require.NoError(t, err)
+	require.NotNil(t, undo)
+	assert.True(t, undo.Success)
+	assert.Equal(t, "How many device nodes?", undo.RestoredPrompt)
+	assert.True(t, undo.CanRedo)
+
+	forkedMessages, err = service.GetMessages(ctx, forked.ID)
+	require.NoError(t, err)
+	require.Len(t, forkedMessages, 1)
+	assert.Equal(t, "I will inspect the device nodes.", forkedMessages[0].Content)
+
+	redo, err := service.RedoLastTurn(ctx, forked.ID)
+	require.NoError(t, err)
+	require.NotNil(t, redo)
+	assert.True(t, redo.Success)
+	assert.False(t, redo.CanRedo)
+
+	forkedMessages, err = service.GetMessages(ctx, forked.ID)
+	require.NoError(t, err)
+	require.Len(t, forkedMessages, 3)
+
 	list, err = service.ListSessions(ctx)
 	require.NoError(t, err)
 	assert.Len(t, list, 2)

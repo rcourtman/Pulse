@@ -85,6 +85,8 @@ describe('CommandPaletteModal', () => {
     expect(commandPaletteModelSource).toContain("id: 'assistant-open'");
     expect(commandPaletteModelSource).toContain("id: 'assistant-switch-session'");
     expect(commandPaletteModelSource).toContain("id: 'assistant-switch-model'");
+    expect(commandPaletteModelSource).toContain("id: 'assistant-undo-last-turn'");
+    expect(commandPaletteModelSource).toContain("id: 'assistant-redo-last-turn'");
     expect(commandPaletteModelSource).not.toContain("id: 'nav-infrastructure'");
     expect(commandPaletteModelSource).not.toContain("id: 'nav-workloads'");
     expect(commandPaletteModelSource).not.toContain("id: 'nav-storage'");
@@ -104,6 +106,8 @@ describe('CommandPaletteModal', () => {
     expect(screen.getByText('New Assistant session')).toBeInTheDocument();
     expect(screen.getByText('Switch Assistant session')).toBeInTheDocument();
     expect(screen.getByText('Switch Assistant model')).toBeInTheDocument();
+    expect(screen.getByText('Undo last Assistant turn')).toBeInTheDocument();
+    expect(screen.getByText('Redo last Assistant turn')).toBeInTheDocument();
     expect(screen.getByText('Go to Machines')).toBeInTheDocument();
     expect(screen.getByText('/standalone/machines')).toBeInTheDocument();
     expect(screen.getByText('Go to Proxmox')).toBeInTheDocument();
@@ -143,6 +147,25 @@ describe('CommandPaletteModal', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     await waitFor(() => {
       expect(requestCommand).toHaveBeenCalledWith('models');
+    });
+  });
+
+  it('routes Assistant undo workflow commands through the Assistant store', async () => {
+    const onClose = vi.fn();
+    const requestCommand = vi.spyOn(aiChatStore, 'requestCommand').mockImplementation(() => {});
+    render(() => (
+      <CommandPaletteModal
+        isOpen={true}
+        onClose={onClose}
+        platformVisibility={platformVisibility}
+      />
+    ));
+
+    await fireEvent.click(screen.getByText('Undo last Assistant turn'));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(requestCommand).toHaveBeenCalledWith('undo');
     });
   });
 

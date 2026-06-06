@@ -41,14 +41,22 @@ type SessionStore struct {
 	knowledgeAccumulators map[string]*KnowledgeAccumulator
 }
 
+const maxSessionTurnRedoStack = 10
+
 // sessionData is the on-disk format for a session
 type sessionData struct {
-	ID           string               `json:"id"`
-	Title        string               `json:"title"`
-	Messages     []Message            `json:"messages"`
-	ModelContext *sessionModelContext `json:"model_context,omitempty"`
-	CreatedAt    time.Time            `json:"created_at"`
-	UpdatedAt    time.Time            `json:"updated_at"`
+	ID            string                 `json:"id"`
+	Title         string                 `json:"title"`
+	Messages      []Message              `json:"messages"`
+	ModelContext  *sessionModelContext   `json:"model_context,omitempty"`
+	TurnRedoStack []sessionTurnRedoEntry `json:"turn_redo_stack,omitempty"`
+	CreatedAt     time.Time              `json:"created_at"`
+	UpdatedAt     time.Time              `json:"updated_at"`
+}
+
+type sessionTurnRedoEntry struct {
+	Messages  []Message `json:"messages"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type sessionModelContext struct {
@@ -58,6 +66,17 @@ type sessionModelContext struct {
 	HandoffActions   []HandoffAction   `json:"handoff_actions,omitempty"`
 	HandoffMetadata  HandoffMetadata   `json:"handoff_metadata,omitempty"`
 	UpdatedAt        time.Time         `json:"updated_at,omitempty"`
+}
+
+func cloneSessionMessages(messages []Message) []Message {
+	if len(messages) == 0 {
+		return nil
+	}
+	cloned := make([]Message, len(messages))
+	for i, msg := range messages {
+		cloned[i] = msg.NormalizeCollections()
+	}
+	return cloned
 }
 
 func normalizeHandoffResources(resources []HandoffResource) []HandoffResource {
@@ -360,6 +379,18 @@ func modelContextHandoffSummary(modelContext *sessionModelContext) *SessionHando
 	return summary
 }
 
+func sessionSummaryFromData(data sessionData) Session {
+	return Session{
+		ID:             data.ID,
+		Title:          data.Title,
+		CreatedAt:      data.CreatedAt,
+		UpdatedAt:      data.UpdatedAt,
+		MessageCount:   len(data.Messages),
+		CanRedo:        len(data.TurnRedoStack) > 0,
+		HandoffSummary: modelContextHandoffSummary(data.ModelContext),
+	}
+}
+
 const (
 	maxSessionIDLength   = 128
 	maxSessionTitleRunes = 120
@@ -487,14 +518,7 @@ func (s *SessionStore) List() ([]Session, error) {
 			data.Messages[i] = data.Messages[i].NormalizeCollections()
 		}
 
-		sessions = append(sessions, Session{
-			ID:             data.ID,
-			Title:          data.Title,
-			CreatedAt:      data.CreatedAt,
-			UpdatedAt:      data.UpdatedAt,
-			MessageCount:   len(data.Messages),
-			HandoffSummary: modelContextHandoffSummary(data.ModelContext),
-		})
+		sessions = append(sessions, sessionSummaryFromData(data))
 	}
 
 	// Sort by updated_at descending (newest first)
@@ -523,12 +547,8 @@ func (s *SessionStore) Create() (*Session, error) {
 		return nil, err
 	}
 
-	return &Session{
-		ID:        data.ID,
-		Title:     data.Title,
-		CreatedAt: data.CreatedAt,
-		UpdatedAt: data.UpdatedAt,
-	}, nil
+	session := sessionSummaryFromData(data)
+	return &session, nil
 }
 
 // Get retrieves a session by ID
@@ -541,14 +561,8 @@ func (s *SessionStore) Get(id string) (*Session, error) {
 		return nil, err
 	}
 
-	return &Session{
-		ID:             data.ID,
-		Title:          data.Title,
-		CreatedAt:      data.CreatedAt,
-		UpdatedAt:      data.UpdatedAt,
-		MessageCount:   len(data.Messages),
-		HandoffSummary: modelContextHandoffSummary(data.ModelContext),
-	}, nil
+	session := sessionSummaryFromData(*data)
+	return &session, nil
 }
 
 // Rename updates a session title without touching messages or handoff context.
@@ -572,14 +586,8 @@ func (s *SessionStore) Rename(id, title string) (*Session, error) {
 		return nil, err
 	}
 
-	return &Session{
-		ID:             data.ID,
-		Title:          data.Title,
-		CreatedAt:      data.CreatedAt,
-		UpdatedAt:      data.UpdatedAt,
-		MessageCount:   len(data.Messages),
-		HandoffSummary: modelContextHandoffSummary(data.ModelContext),
-	}, nil
+	session := sessionSummaryFromData(*data)
+	return &session, nil
 }
 
 // Fork clones a persisted session into a new durable session. The copied
@@ -599,10 +607,7 @@ func (s *SessionStore) Fork(id string) (*Session, error) {
 	}
 
 	now := time.Now()
-	messages := make([]Message, len(source.Messages))
-	for i, msg := range source.Messages {
-		messages[i] = msg.NormalizeCollections()
-	}
+	messages := cloneSessionMessages(source.Messages)
 
 	title := strings.TrimSpace(source.Title)
 	if title == "" {
@@ -631,13 +636,114 @@ func (s *SessionStore) Fork(id string) (*Session, error) {
 		return nil, err
 	}
 
-	return &Session{
-		ID:             fork.ID,
-		Title:          fork.Title,
-		CreatedAt:      fork.CreatedAt,
-		UpdatedAt:      fork.UpdatedAt,
-		MessageCount:   len(fork.Messages),
-		HandoffSummary: modelContextHandoffSummary(fork.ModelContext),
+	session := sessionSummaryFromData(fork)
+	return &session, nil
+}
+
+// UndoLastTurn removes the latest user-authored turn from a session and stores
+// the removed messages so RedoLastTurn can restore them.
+func (s *SessionStore) UndoLastTurn(id string) (*SessionTurnUndoResult, error) {
+	if err := validateSessionID(id); err != nil {
+		return nil, err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	data, err := s.readSession(id)
+	if err != nil {
+		return nil, err
+	}
+
+	lastUserIndex := -1
+	for i := len(data.Messages) - 1; i >= 0; i-- {
+		if strings.EqualFold(data.Messages[i].Role, "user") {
+			lastUserIndex = i
+			break
+		}
+	}
+	if lastUserIndex < 0 {
+		return &SessionTurnUndoResult{
+			Success:   false,
+			SessionID: data.ID,
+			CanRedo:   len(data.TurnRedoStack) > 0,
+			Message:   "No user turn to undo.",
+		}, nil
+	}
+
+	removed := cloneSessionMessages(data.Messages[lastUserIndex:])
+	prompt := ""
+	for _, msg := range removed {
+		if strings.EqualFold(msg.Role, "user") {
+			prompt = msg.Content
+			break
+		}
+	}
+
+	now := time.Now()
+	data.Messages = cloneSessionMessages(data.Messages[:lastUserIndex])
+	data.TurnRedoStack = append(data.TurnRedoStack, sessionTurnRedoEntry{
+		Messages:  removed,
+		UpdatedAt: now,
+	})
+	if len(data.TurnRedoStack) > maxSessionTurnRedoStack {
+		data.TurnRedoStack = data.TurnRedoStack[len(data.TurnRedoStack)-maxSessionTurnRedoStack:]
+	}
+	data.UpdatedAt = now
+
+	if err := s.writeSession(*data); err != nil {
+		return nil, err
+	}
+
+	return &SessionTurnUndoResult{
+		Success:         true,
+		SessionID:       data.ID,
+		RestoredPrompt:  prompt,
+		RemovedMessages: len(removed),
+		CanRedo:         len(data.TurnRedoStack) > 0,
+	}, nil
+}
+
+// RedoLastTurn restores the most recently undone turn, if one is available.
+func (s *SessionStore) RedoLastTurn(id string) (*SessionTurnRedoResult, error) {
+	if err := validateSessionID(id); err != nil {
+		return nil, err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	data, err := s.readSession(id)
+	if err != nil {
+		return nil, err
+	}
+	if len(data.TurnRedoStack) == 0 {
+		return &SessionTurnRedoResult{
+			Success:   false,
+			SessionID: data.ID,
+			CanRedo:   false,
+			Message:   "No undone turn to redo.",
+		}, nil
+	}
+
+	entryIndex := len(data.TurnRedoStack) - 1
+	entry := data.TurnRedoStack[entryIndex]
+	data.TurnRedoStack = data.TurnRedoStack[:entryIndex]
+	data.Messages = append(data.Messages, cloneSessionMessages(entry.Messages)...)
+	if len(data.TurnRedoStack) == 0 {
+		data.TurnRedoStack = nil
+	}
+	data.UpdatedAt = time.Now()
+
+	if err := s.writeSession(*data); err != nil {
+		return nil, err
+	}
+
+	return &SessionTurnRedoResult{
+		Success:          true,
+		SessionID:        data.ID,
+		RestoredMessages: len(entry.Messages),
+		CanRedo:          len(data.TurnRedoStack) > 0,
 	}, nil
 }
 
@@ -723,6 +829,7 @@ func (s *SessionStore) TrimMessages(id string, keepMostRecent int) error {
 	trimmed := make([]Message, keepMostRecent)
 	copy(trimmed, data.Messages[start:])
 	data.Messages = trimmed
+	data.TurnRedoStack = nil
 	data.UpdatedAt = time.Now()
 	return s.writeSession(*data)
 }
@@ -747,6 +854,7 @@ func (s *SessionStore) AddMessage(id string, msg Message) error {
 	msg = msg.NormalizeCollections()
 
 	data.Messages = append(data.Messages, msg)
+	data.TurnRedoStack = nil
 	data.UpdatedAt = time.Now()
 
 	// Auto-generate title from first user message if not set
@@ -1126,6 +1234,9 @@ func (s *SessionStore) readSessionWithLegacyScan(id string, allowLegacyScan bool
 	for i := range data.Messages {
 		data.Messages[i] = data.Messages[i].NormalizeCollections()
 	}
+	for i := range data.TurnRedoStack {
+		data.TurnRedoStack[i].Messages = cloneSessionMessages(data.TurnRedoStack[i].Messages)
+	}
 
 	return &data, nil
 }
@@ -1137,6 +1248,12 @@ func (s *SessionStore) writeSession(data sessionData) error {
 	}
 	for i := range data.Messages {
 		data.Messages[i] = data.Messages[i].NormalizeCollections()
+	}
+	for i := range data.TurnRedoStack {
+		data.TurnRedoStack[i].Messages = cloneSessionMessages(data.TurnRedoStack[i].Messages)
+	}
+	if len(data.TurnRedoStack) == 0 {
+		data.TurnRedoStack = nil
 	}
 
 	file, err := json.MarshalIndent(data, "", "  ")
@@ -1235,12 +1352,8 @@ func (s *SessionStore) EnsureSession(id string) (*Session, error) {
 	data, err := s.readSessionFast(id)
 	s.mu.RUnlock()
 	if err == nil {
-		return &Session{
-			ID:        data.ID,
-			Title:     data.Title,
-			CreatedAt: data.CreatedAt,
-			UpdatedAt: data.UpdatedAt,
-		}, nil
+		session := sessionSummaryFromData(*data)
+		return &session, nil
 	}
 	if !errors.Is(err, errSessionNotFound) {
 		return nil, err
@@ -1253,12 +1366,8 @@ func (s *SessionStore) EnsureSession(id string) (*Session, error) {
 
 	data, err = s.readSessionFast(id)
 	if err == nil {
-		return &Session{
-			ID:        data.ID,
-			Title:     data.Title,
-			CreatedAt: data.CreatedAt,
-			UpdatedAt: data.UpdatedAt,
-		}, nil
+		session := sessionSummaryFromData(*data)
+		return &session, nil
 	}
 	if !errors.Is(err, errSessionNotFound) {
 		return nil, err
@@ -1277,11 +1386,8 @@ func (s *SessionStore) EnsureSession(id string) (*Session, error) {
 		return nil, err
 	}
 
-	return &Session{
-		ID:        data.ID,
-		CreatedAt: data.CreatedAt,
-		UpdatedAt: data.UpdatedAt,
-	}, nil
+	session := sessionSummaryFromData(*data)
+	return &session, nil
 }
 
 func validateSessionID(id string) error {

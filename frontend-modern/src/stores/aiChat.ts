@@ -78,7 +78,7 @@ export interface AIChatContext {
   autonomousMode?: boolean;
 }
 
-export type AIChatCommandRequestAction = 'new' | 'sessions' | 'models';
+export type AIChatCommandRequestAction = 'new' | 'sessions' | 'models' | 'undo' | 'redo';
 
 export interface AIChatCommandRequest {
   id: number;

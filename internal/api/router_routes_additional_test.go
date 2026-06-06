@@ -203,6 +203,56 @@ func TestRouteAISessions_Fork(t *testing.T) {
 	mockSvc.AssertExpectations(t)
 }
 
+func TestRouteAISessions_UndoLastTurn(t *testing.T) {
+	mockSvc := &MockAIService{}
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.On("UndoLastTurn", mock.Anything, "session-1").Return(&chat.SessionTurnUndoResult{
+		Success:        true,
+		SessionID:      "session-1",
+		RestoredPrompt: "Inspect storage warnings",
+		CanRedo:        true,
+	}, nil)
+
+	handler := &AIHandler{}
+	setUnexportedField(t, handler, "defaultService", mockSvc)
+
+	router := &Router{aiHandler: handler}
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/sessions/session-1/undo", nil)
+	rec := httptest.NewRecorder()
+
+	router.routeAISessions(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	mockSvc.AssertExpectations(t)
+}
+
+func TestRouteAISessions_RedoLastTurn(t *testing.T) {
+	mockSvc := &MockAIService{}
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.On("RedoLastTurn", mock.Anything, "session-1").Return(&chat.SessionTurnRedoResult{
+		Success:          true,
+		SessionID:        "session-1",
+		RestoredMessages: 2,
+		CanRedo:          false,
+	}, nil)
+
+	handler := &AIHandler{}
+	setUnexportedField(t, handler, "defaultService", mockSvc)
+
+	router := &Router{aiHandler: handler}
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/sessions/session-1/redo", nil)
+	rec := httptest.NewRecorder()
+
+	router.routeAISessions(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	mockSvc.AssertExpectations(t)
+}
+
 func TestRouteAISessions_Revert(t *testing.T) {
 	mockSvc := &MockAIService{}
 	mockSvc.On("IsRunning").Return(true)

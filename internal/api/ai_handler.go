@@ -58,6 +58,8 @@ type AIService interface {
 	ForkSession(ctx context.Context, sessionID string) (*chat.Session, error)
 	RevertSession(ctx context.Context, sessionID string) (map[string]interface{}, error)
 	UnrevertSession(ctx context.Context, sessionID string) (map[string]interface{}, error)
+	UndoLastTurn(ctx context.Context, sessionID string) (*chat.SessionTurnUndoResult, error)
+	RedoLastTurn(ctx context.Context, sessionID string) (*chat.SessionTurnRedoResult, error)
 	AnswerQuestion(ctx context.Context, questionID string, answers []chat.QuestionAnswer) error
 	SetAlertProvider(provider chat.MCPAlertProvider)
 	SetFindingsProvider(provider chat.MCPFindingsProvider)
@@ -2934,6 +2936,54 @@ func (h *AIHandler) HandleFork(w http.ResponseWriter, r *http.Request, sessionID
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(session)
+}
+
+// HandleUndoLastTurn handles POST /api/ai/sessions/{id}/undo.
+func (h *AIHandler) HandleUndoLastTurn(w http.ResponseWriter, r *http.Request, sessionID string) {
+	ctx := r.Context()
+	if !h.IsRunning(ctx) {
+		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
+		return
+	}
+
+	svc := h.GetService(ctx)
+	if svc == nil {
+		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	result, err := svc.UndoLastTurn(ctx, sessionID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+// HandleRedoLastTurn handles POST /api/ai/sessions/{id}/redo.
+func (h *AIHandler) HandleRedoLastTurn(w http.ResponseWriter, r *http.Request, sessionID string) {
+	ctx := r.Context()
+	if !h.IsRunning(ctx) {
+		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
+		return
+	}
+
+	svc := h.GetService(ctx)
+	if svc == nil {
+		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	result, err := svc.RedoLastTurn(ctx, sessionID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }
 
 // HandleRevert handles POST /api/ai/sessions/{id}/revert

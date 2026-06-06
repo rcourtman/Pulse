@@ -1542,6 +1542,12 @@ run-history lookup so AI runtime can rebuild model-only run context, but the
 resulting scoped resources, runtime failure summaries, and follow-up session
 metadata must not become agent command authorization, reachability proof,
 install state, profile assignment, or fleet lifecycle evidence.
+Assistant session undo/redo through `POST /api/ai/sessions/{id}/undo` and
+`POST /api/ai/sessions/{id}/redo` follows the same adjacent AI/runtime boundary.
+The restored prompt, redo availability flag, and restored message count are
+conversation repair metadata only; lifecycle-adjacent surfaces must not treat
+them as agent enrollment state, command authorization, update readiness, or
+fleet-control evidence.
 That same shared dependency now also assumes hosted cloud handoff authorizes
 tenant org access before browser lifecycle continues. Lifecycle-adjacent opens
 into hosted workspaces may depend on `internal/api/cloud_handoff_handlers.go`,

@@ -149,6 +149,7 @@ describe('AIChatAPI', () => {
       created_at: '2026-05-06T12:00:00Z',
       updated_at: '2026-05-06T12:08:00Z',
       message_count: 2,
+      can_redo: true,
       handoff_summary: {
         kind: 'patrol_finding',
         finding_id: 'finding-operator-briefing',
@@ -212,6 +213,33 @@ describe('AIChatAPI', () => {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: 'Renamed session' }),
+    });
+  });
+
+  it('undoes and redoes chat turns through explicit session endpoints', async () => {
+    const undoResult = {
+      success: true,
+      session_id: 'session/root',
+      restored_prompt: 'show me the affected hosts',
+      removed_messages: 2,
+      can_redo: true,
+    };
+    const redoResult = {
+      success: true,
+      session_id: 'session/root',
+      restored_messages: 2,
+      can_redo: false,
+    };
+    apiFetchJSONMock.mockResolvedValueOnce(undoResult).mockResolvedValueOnce(redoResult);
+
+    await expect(AIChatAPI.undoLastTurn('session/root')).resolves.toEqual(undoResult);
+    await expect(AIChatAPI.redoLastTurn('session/root')).resolves.toEqual(redoResult);
+
+    expect(apiFetchJSONMock).toHaveBeenNthCalledWith(1, '/api/ai/sessions/session%2Froot/undo', {
+      method: 'POST',
+    });
+    expect(apiFetchJSONMock).toHaveBeenNthCalledWith(2, '/api/ai/sessions/session%2Froot/redo', {
+      method: 'POST',
     });
   });
 

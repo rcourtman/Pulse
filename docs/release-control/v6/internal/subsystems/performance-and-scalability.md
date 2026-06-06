@@ -236,6 +236,12 @@ regression protection.
    capability check, but router setup and auth gating must not scan session
    files, load transcripts, hydrate handoff context, or inspect model/tool
    history before the route-local handler owns the single title mutation.
+   Assistant session undo/redo routing follows the same bounded router rule:
+   `POST /api/ai/sessions/{id}/undo` and
+   `POST /api/ai/sessions/{id}/redo` may branch to the AI handler after normal
+   auth/scope checks, but router setup must not scan sessions, read redo stacks,
+   hydrate transcripts, or perform model/provider work before the route-local
+   handler owns the single session mutation.
    Report branding follows the same bounded-work rule. Reporting handlers may
    read provider-default env configuration and a tenant-local system-settings
    record when a report is generated, but router setup and normal protected

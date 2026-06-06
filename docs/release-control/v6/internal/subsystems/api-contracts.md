@@ -444,10 +444,25 @@ payload shape change when the portal presents compact client rows.
     browser-safe `ChatSession` projection. Rename must not expose or mutate
     stored prompts, messages, provider reasoning, model handoff context,
     approvals, action state, or tool evidence. Browser clients must call the
-    shared `AIChatAPI.renameSession(sessionId, title)` helper so path encoding
-    and JSON body shape stay canonical.
-    Resource-context follow-up turns are different from Patrol-run rehydration:
-    browser-safe `handoff_metadata.kind=resource_context` must not replace a
+	    shared `AIChatAPI.renameSession(sessionId, title)` helper so path encoding
+	    and JSON body shape stay canonical.
+	    `POST /api/ai/sessions/{id}/undo` and
+	    `POST /api/ai/sessions/{id}/redo` own the Assistant turn-repair API
+	    contract. Undo removes the latest user-authored turn and all later
+	    assistant/tool messages as one durable unit, returns a browser-safe
+	    `restored_prompt`, `removed_messages`, and `can_redo`, and must not expose
+	    provider reasoning, raw tool output, model-only handoff text, approval
+	    payload internals, or remediation command data. Redo restores the latest
+	    undone turn and returns `restored_messages` plus the remaining `can_redo`
+	    state. `GET /api/ai/sessions` and other `ChatSession` projections may
+	    expose only the boolean `can_redo` hint alongside safe title/timestamp,
+	    count, and handoff-summary fields so the drawer can re-enable redo after a
+	    reload without reading the redo stack itself. Browser clients must use the
+	    shared `AIChatAPI.undoLastTurn(sessionId)` and
+	    `AIChatAPI.redoLastTurn(sessionId)` helpers so path encoding and response
+	    shape stay canonical.
+	    Resource-context follow-up turns are different from Patrol-run rehydration:
+	    browser-safe `handoff_metadata.kind=resource_context` must not replace a
     stored rich handoff envelope with a partial metadata-only envelope, and the
     handler must not ask the browser to resend resource context that the chat
     runtime can rehydrate from the stored selected-resource envelope.
