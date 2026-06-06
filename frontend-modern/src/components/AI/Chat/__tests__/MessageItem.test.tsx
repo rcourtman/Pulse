@@ -544,7 +544,7 @@ describe('MessageItem', () => {
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
     });
 
-    it('shows current workflow progress in the assistant header after visible content starts', () => {
+    it('hides stale workflow progress after visible content starts', () => {
       render(() => (
         <MessageItem
           message={makeMessage({
@@ -563,7 +563,9 @@ describe('MessageItem', () => {
       ));
 
       expect(screen.getByText('Partial answer')).toBeInTheDocument();
-      expect(screen.getByText('Sent request to OpenRouter; waiting for the first token.')).toBeInTheDocument();
+      expect(
+        screen.queryByText('Sent request to OpenRouter; waiting for the first token.'),
+      ).not.toBeInTheDocument();
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
     });
 

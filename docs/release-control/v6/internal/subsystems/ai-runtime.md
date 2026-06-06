@@ -213,6 +213,14 @@ runtime cost control, and shared AI transport surfaces.
    workflow and pending-tool activity must retain a per-state start timestamp
    so the drawer can show elapsed wait/run time for long provider starts and
    tool calls instead of repeating a timeless waiting label.
+   The referenced OpenCode source at fetched `origin/dev` commit
+   `1399323b78a04229d9bfe00c7436d7f41770fda8` applies each typed event to the
+   active assistant message in
+   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`; Pulse adapts that
+   precedence by letting typed content, tool, approval, and question evidence
+   own the visible row once it exists, so later neutral workflow states such as
+   provider reasoning do not repaint a completed tool row as if the turn were
+   still waiting on the earlier phase.
    OpenCode-parity Assistant UX work must reference OpenCode's actual source
    implementation for message parts, tool-state mutation, progress rendering,
    and model/session selection before changing Pulse behavior; parity means

@@ -123,8 +123,8 @@ func TestCleanToolCallArtifacts(t *testing.T) {
 }
 
 func TestCleanToolCallArtifactsCleansDecorativeOperationalSymbols(t *testing.T) {
-	input := "### 🔴 Critical Alerts\n###⚠️Warnings\n- ⚠️ Active AI Patrol Finding\n3.✅ Backup is healthy\nCheck ⚠️ the alert, then ✅ the backup.\nNext Steps:✅Would you like me to investigate?\nTemperature is 58°C.\n\n```text\n⚠️ literal status stays inside code\n```\n"
-	expected := "### Critical Alerts\n### Warnings\n- Active AI Patrol Finding\n3. Backup is healthy\nCheck the alert, then the backup.\nNext Steps: Would you like me to investigate?\nTemperature is 58°C.\n\n```text\n⚠️ literal status stays inside code\n```\n"
+	input := "### 🔴 Critical Alerts\n###⚠️Warnings\n- ⚠️ Active AI Patrol Finding\n- 🤖 AI Patrol Finding\n3.✅ Backup is healthy\nCheck ⚠️ the alert, then ✅ the backup.\nNext Steps:✅Would you like me to investigate?\nTemperature is 58°C.\n\n```text\n⚠️ literal status stays inside code\n```\n"
+	expected := "### Critical Alerts\n### Warnings\n- Active AI Patrol Finding\n- AI Patrol Finding\n3. Backup is healthy\nCheck the alert, then the backup.\nNext Steps: Would you like me to investigate?\nTemperature is 58°C.\n\n```text\n⚠️ literal status stays inside code\n```\n"
 
 	got := cleanToolCallArtifacts(input)
 	if got != expected {

@@ -174,4 +174,36 @@ describe('getAssistantActiveTurnStatus', () => {
       text: 'Generating response',
     });
   });
+
+  it('prefers generated tool evidence over stale neutral workflow status', () => {
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            workflowStatus: {
+              phase: 'model_thinking',
+              message: 'Model is reasoning before responding.',
+              startedAt: 1000,
+            },
+            streamEvents: [
+              {
+                type: 'tool',
+                toolId: 'tool-1',
+                tool: {
+                  name: 'pulse_alerts',
+                  input: '{}',
+                  output: '11 active alerts',
+                  success: true,
+                },
+              },
+            ],
+          }),
+        ],
+        true,
+      ),
+    ).toEqual({
+      type: 'generating',
+      text: 'Generating response',
+    });
+  });
 });

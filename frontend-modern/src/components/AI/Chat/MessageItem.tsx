@@ -164,7 +164,11 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     return workflowStatusText() || 'Thinking...';
   });
   const shouldShowHeaderWorkflowStatus = () =>
-    props.message.isStreaming && !isWaitingForFirstToken() && !!workflowStatusText();
+    props.message.isStreaming &&
+    !isWaitingForFirstToken() &&
+    !visibleMessageContent().trim() &&
+    !hasRenderableStreamEvents() &&
+    !!workflowStatusText();
   const interruptionLabel = createMemo(() => {
     switch (props.message.interruption) {
       case 'replaced':

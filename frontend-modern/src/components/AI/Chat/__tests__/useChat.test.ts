@@ -1146,6 +1146,46 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('ignores neutral workflow progress after typed tool evidence is visible', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+
+      fire({
+        type: 'workflow_state',
+        data: {
+          phase: 'provider_start',
+          message: 'Sent request to OpenRouter; waiting for the first token.',
+        },
+      });
+      fire({ type: 'tool_start', data: { id: 'tool-1', name: 'pulse_alerts', input: '{}' } });
+      fire({
+        type: 'tool_end',
+        data: {
+          id: 'tool-1',
+          name: 'pulse_alerts',
+          input: '{}',
+          output: '11 active alerts',
+          success: true,
+        },
+      });
+      fire({
+        type: 'workflow_state',
+        data: {
+          phase: 'model_thinking',
+          message: 'Model is reasoning before responding.',
+        },
+      });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.workflowStatus).toBeUndefined();
+      expect(assistant.streamEvents?.map((event) => event.type)).toEqual(['tool']);
+      expect(assistant.toolCalls).toHaveLength(1);
+      dispose();
+    });
+
     it('processes tool_start events', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
