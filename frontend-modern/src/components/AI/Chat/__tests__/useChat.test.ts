@@ -1383,6 +1383,58 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('deduplicates repeated tool_start events without regressing live progress', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+
+      fire({ type: 'tool_start', data: { id: 'tool-1', name: 'pulse_read', input: '{}' } });
+      fire({
+        type: 'tool_progress',
+        data: {
+          id: 'tool-1',
+          name: 'pulse_read',
+          input: '{}',
+          raw_input: '{"command":"ls /dev"}',
+          phase: 'running',
+          message: 'Running command.',
+        },
+      });
+      fire({
+        type: 'tool_start',
+        data: {
+          id: 'tool-1',
+          name: 'pulse_read',
+          input: '{"command":"ls /dev"}',
+          raw_input: '{"command":"ls /dev"}',
+        },
+      });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.pendingTools).toHaveLength(1);
+      expect(assistant.pendingTools![0]).toMatchObject({
+        id: 'tool-1',
+        name: 'pulse_read',
+        input: '{"command":"ls /dev"}',
+        rawInput: '{"command":"ls /dev"}',
+        status: 'running',
+        progress: 'Running command.',
+      });
+      const pendingToolEvents = assistant.streamEvents?.filter((e) => e.type === 'pending_tool');
+      expect(pendingToolEvents).toHaveLength(1);
+      expect(pendingToolEvents![0]).toMatchObject({
+        toolId: 'tool-1',
+        pendingTool: {
+          id: 'tool-1',
+          status: 'running',
+          progress: 'Running command.',
+        },
+      });
+      dispose();
+    });
+
     it('creates a pending row when tool_progress arrives before tool_start', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));

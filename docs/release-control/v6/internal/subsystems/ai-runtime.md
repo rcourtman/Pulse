@@ -307,6 +307,11 @@ runtime cost control, and shared AI transport surfaces.
    fallback for inactive tabs, before draining the next opted-in event; a plain
    synchronous loop or microtask-only pause is insufficient because it can still
    render workflow/tool steps only after a batch has already finished.
+   Pulse's reducer must also keep the same keyed-part behavior: repeated
+   `tool_start` or `tool_progress` events for one backend tool ID, or the same
+   normalized tool name when an older server omits IDs, upsert one pending tool
+   row and collapse stale duplicate pending rows instead of replaying several
+   near-identical steps in the transcript.
    `frontend-modern/src/api/aiChat.ts` owns the Assistant predicate: token
    content and hidden reasoning may continue to opt out of those checkpoints so
    answer streaming remains fast, while session, workflow, model-switch, tool,

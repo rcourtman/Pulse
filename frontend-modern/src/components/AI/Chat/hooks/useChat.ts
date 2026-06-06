@@ -314,6 +314,125 @@ export function useChat(options: UseChatOptions = {}) {
     return 'running';
   };
 
+  const replacePendingToolStreamEvents = (
+    events: StreamDisplayEvent[],
+    resolvedTool: PendingTool,
+    matchesTool: (tool?: PendingTool, toolId?: string) => boolean,
+    now: number,
+  ): StreamDisplayEvent[] => {
+    let replacedEvent = false;
+    const updatedEvents: StreamDisplayEvent[] = [];
+
+    for (const event of events) {
+      if (event.type !== 'pending_tool' || !matchesTool(event.pendingTool, event.toolId)) {
+        updatedEvents.push(event);
+        continue;
+      }
+      if (replacedEvent) {
+        continue;
+      }
+      replacedEvent = true;
+      updatedEvents.push(
+        withStreamEventTiming(
+          {
+            ...event,
+            toolId: resolvedTool.id,
+            pendingTool: resolvedTool,
+          },
+          now,
+        ),
+      );
+    }
+
+    if (!replacedEvent) {
+      updatedEvents.push(
+        withStreamEventTiming(
+          {
+            type: 'pending_tool',
+            pendingTool: resolvedTool,
+            toolId: resolvedTool.id,
+          },
+          now,
+        ),
+      );
+    }
+
+    return updatedEvents;
+  };
+
+  const upsertPendingToolStart = (
+    msg: ChatMessage,
+    data: {
+      id?: string;
+      name?: string;
+      input?: string;
+      raw_input?: string;
+    },
+  ): ChatMessage => {
+    const normalizedName = normalizeChatToolName(data.name || '');
+    const pendingTools = msg.pendingTools || [];
+    const now = Date.now();
+
+    const matchesTool = (tool?: PendingTool, toolId?: string) => {
+      if (!tool) return false;
+      if (data.id && toolId === data.id) return true;
+      if (data.id && tool.id === data.id) return true;
+      return normalizedName !== '' && normalizeChatToolName(tool.name) === normalizedName;
+    };
+
+    let replacedTool = false;
+    let resolvedTool: PendingTool | undefined;
+    const updatedPendingTools: PendingTool[] = [];
+
+    for (const tool of pendingTools) {
+      if (!matchesTool(tool, tool.id)) {
+        updatedPendingTools.push(tool);
+        continue;
+      }
+      if (replacedTool) {
+        continue;
+      }
+      replacedTool = true;
+      resolvedTool = {
+        ...tool,
+        id: data.id || tool.id,
+        name: data.name || tool.name,
+        input: data.input || tool.input,
+        rawInput: data.raw_input || tool.rawInput,
+        status: tool.status || 'pending',
+        progress: tool.progress,
+        startedAt: tool.startedAt || now,
+        updatedAt: now,
+      };
+      updatedPendingTools.push(resolvedTool);
+    }
+
+    if (!resolvedTool) {
+      resolvedTool = {
+        id: data.id || generateId(),
+        name: data.name || 'unknown',
+        input: data.input || '{}',
+        rawInput: data.raw_input,
+        status: 'pending',
+        startedAt: now,
+        updatedAt: now,
+      };
+      updatedPendingTools.push(resolvedTool);
+    }
+
+    return {
+      ...msg,
+      streamEvents: replacePendingToolStreamEvents(
+        msg.streamEvents || [],
+        resolvedTool,
+        matchesTool,
+        now,
+      ),
+      workflowStatus: undefined,
+      pendingTools: updatedPendingTools,
+    };
+  };
+
   const updatePendingToolProgress = (
     msg: ChatMessage,
     data: {
@@ -350,61 +469,41 @@ export function useChat(options: UseChatOptions = {}) {
     });
 
     let resolvedTool: PendingTool | undefined;
-    const pendingIndex = pendingTools.findIndex((tool) => matchesTool(tool, tool.id));
-    const updatedPendingTools =
-      pendingIndex >= 0
-        ? [
-            ...pendingTools.slice(0, pendingIndex),
-            (resolvedTool = mergeTool(pendingTools[pendingIndex])),
-            ...pendingTools.slice(pendingIndex + 1),
-          ]
-        : [
-            ...pendingTools,
-            (resolvedTool = {
-              id: data.id || generateId(),
-              name: data.name || 'unknown',
-              input: data.input || '{}',
-              rawInput: data.raw_input,
-              status,
-              progress,
-              startedAt: now,
-              updatedAt: now,
-            }),
-          ];
+    let replacedTool = false;
+    const updatedPendingTools: PendingTool[] = [];
 
-    const events = msg.streamEvents || [];
-    let replacedEvent = false;
-    const updatedEvents = events.map((event) => {
-      if (event.type !== 'pending_tool' || !matchesTool(event.pendingTool, event.toolId)) {
-        return event;
+    for (const tool of pendingTools) {
+      if (!matchesTool(tool, tool.id)) {
+        updatedPendingTools.push(tool);
+        continue;
       }
-      replacedEvent = true;
-      return withStreamEventTiming(
-        {
-          ...event,
-          toolId: resolvedTool?.id || event.toolId,
-          pendingTool: resolvedTool,
-        },
-        now,
-      );
-    });
+      if (replacedTool) {
+        continue;
+      }
+      replacedTool = true;
+      resolvedTool = mergeTool(tool);
+      updatedPendingTools.push(resolvedTool);
+    }
 
-    if (!replacedEvent && resolvedTool) {
-      updatedEvents.push(
-        withStreamEventTiming(
-          {
-            type: 'pending_tool',
-            pendingTool: resolvedTool,
-            toolId: resolvedTool.id,
-          },
-          now,
-        ),
-      );
+    if (!resolvedTool) {
+      resolvedTool = {
+        id: data.id || generateId(),
+        name: data.name || 'unknown',
+        input: data.input || '{}',
+        rawInput: data.raw_input,
+        status,
+        progress,
+        startedAt: now,
+        updatedAt: now,
+      };
+      updatedPendingTools.push(resolvedTool);
     }
 
     return {
       ...msg,
-      streamEvents: updatedEvents,
+      streamEvents: resolvedTool
+        ? replacePendingToolStreamEvents(msg.streamEvents || [], resolvedTool, matchesTool, now)
+        : msg.streamEvents,
       workflowStatus: undefined,
       pendingTools: updatedPendingTools,
     };
@@ -810,32 +909,7 @@ export function useChat(options: UseChatOptions = {}) {
                 return msg;
               }
 
-              // Prefer backend tool call ID for robust matching across parallel calls.
-              // Fall back to a local ID if backend didn't send one (older servers).
-              const toolId = data.id || generateId();
-              const startedAt = Date.now();
-              const pendingTool: PendingTool = {
-                id: toolId,
-                name: data.name || 'unknown',
-                input: data.input || '{}',
-                rawInput: data.raw_input,
-                status: 'pending',
-                startedAt,
-                updatedAt: startedAt,
-              };
-
-              // Add to streamEvents in chronological position
-              const updated = addStreamEvent(msg, {
-                type: 'pending_tool',
-                pendingTool,
-                toolId,
-              });
-
-              return {
-                ...updated,
-                workflowStatus: undefined,
-                pendingTools: [...(msg.pendingTools || []), pendingTool],
-              };
+              return upsertPendingToolStart(msg, data);
             }
 
             case 'tool_progress': {
