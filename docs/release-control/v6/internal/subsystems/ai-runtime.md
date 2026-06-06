@@ -252,24 +252,30 @@ runtime cost control, and shared AI transport surfaces.
    when `provider_fallback` names the next route so message labels, cost
    context, retry decisions, and model-route recovery do not continue to point
    at the failed provider. The referenced OpenCode source at fetched
-   `origin/dev` commit `1399323b78a04229d9bfe00c7436d7f41770fda8` renders
-   `ModelSwitchedMessage` as a typed transcript message and appends the
-   effective provider/model route to completed assistant turns in
+   `origin/dev` commit `4519a1da329c1a4fc384054e7203ba7d06928205` defines
+   `session.next.model.switched` in
+   `packages/core/src/session/event.ts`, appends it as a
+   `SessionMessage.ModelSwitched` transcript message in
+   `packages/core/src/session/message-updater.ts`, and renders it as
+   `ModelSwitchedMessage` in
    `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`.
-   Pulse adapts that by rendering provider fallback route changes as a typed
-   `model_switch` stream row on the active assistant turn instead of hiding the
-   switch in transient status text or assistant prose. Provider-fallback rows
-   must preserve the failed route and next route together, using the backend
-   `failed_model` and `next_model` payloads, so the transcript shows the actual
-   recovery path rather than only the successful replacement model. A successful
-   provider fallback is also a session-model event, not only transcript
-   decoration: once the live assistant turn completes with the fallback route as
-   its effective model, the drawer must promote that route into the active
-   session selection and recent-model list so the next prompt does not retry
-   the just-failed direct provider before using the route that worked. This
-   promotion may only apply to fallback rows observed during the live stream and
-   must not rewrite historical loaded sessions or override an explicit user
-   model change made while the fallback turn was still running.
+   Pulse adapts that by rendering model route changes as typed `model_switch`
+   stream rows on the active assistant turn instead of hiding the route in
+   transient status text or assistant prose. The initial `provider_start`
+   workflow state must carry the selected `provider` and concrete `model` route,
+   and the drawer must render that first route as a selected-model row (`Using
+   ...`) before visible content or tool activity when the event arrives.
+   Provider-fallback rows must preserve the failed route and next route
+   together, using the backend `failed_model` and `next_model` payloads, so the
+   transcript shows the actual recovery path rather than only the successful
+   replacement model. A successful provider fallback is also a session-model
+   event, not only transcript decoration: once the live assistant turn completes
+   with the fallback route as its effective model, the drawer must promote that
+   route into the active session selection and recent-model list so the next
+   prompt does not retry the just-failed direct provider before using the route
+   that worked. This promotion may only apply to fallback rows observed during
+   the live stream and must not rewrite historical loaded sessions or override
+   an explicit user model change made while the fallback turn was still running.
    Interactive Assistant streams must establish the session ID and emit the
    `session` event once as soon as the HTTP SSE writer is ready, before finding
    handoff recovery, model resolution, provider fallback planning,

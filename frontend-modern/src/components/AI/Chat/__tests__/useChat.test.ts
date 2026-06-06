@@ -1393,6 +1393,59 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('records the initial provider model route as a typed stream event', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+
+      fire({
+        type: 'workflow_state',
+        data: {
+          phase: 'provider_start',
+          message: 'Sent request to OpenRouter; waiting for the first token.',
+          provider: 'openrouter',
+          model: 'openrouter:qwen/qwen3.7-plus',
+        },
+      });
+      fire({
+        type: 'workflow_state',
+        data: {
+          phase: 'provider_start',
+          message: 'Sent request to OpenRouter; waiting for the first token.',
+          provider: 'openrouter',
+          model: 'openrouter:qwen/qwen3.7-plus',
+        },
+      });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.model).toBe('openrouter:qwen/qwen3.7-plus');
+      expect(assistant.streamEvents?.map((event) => event.type)).toEqual([
+        'model_switch',
+        'workflow_status',
+      ]);
+      expect(assistant.streamEvents?.[0]).toEqual(
+        expect.objectContaining({
+          type: 'model_switch',
+          model: 'openrouter:qwen/qwen3.7-plus',
+          failedModel: undefined,
+          modelEvent: 'selected',
+        }),
+      );
+      expect(assistant.streamEvents?.[1]).toEqual(
+        expect.objectContaining({
+          type: 'workflow_status',
+          workflowStatus: expect.objectContaining({
+            phase: 'provider_start',
+            message: 'Sent request to OpenRouter; waiting for the first token.',
+          }),
+        }),
+      );
+
+      dispose();
+    });
+
     it('keeps the local request-start status when an early idle heartbeat arrives', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));

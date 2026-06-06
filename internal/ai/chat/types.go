@@ -276,6 +276,8 @@ type WorkflowStateData struct {
 	Message        string `json:"message"`                   // Human-readable status text for the UI
 	State          string `json:"state,omitempty"`           // Backend workflow state, when available
 	Tool           string `json:"tool,omitempty"`            // Tool associated with this transition
+	Provider       string `json:"provider,omitempty"`        // Provider selected for this workflow step
+	Model          string `json:"model,omitempty"`           // Model route selected for this workflow step
 	Attempt        int    `json:"attempt,omitempty"`         // One-based attempt number for transient provider retries
 	MaxAttempts    int    `json:"max_attempts,omitempty"`    // Maximum attempts available for the current provider request
 	RetryAfterMS   int64  `json:"retry_after_ms,omitempty"`  // Milliseconds until the next provider attempt starts

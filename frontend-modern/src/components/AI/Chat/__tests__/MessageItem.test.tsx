@@ -821,6 +821,30 @@ describe('MessageItem', () => {
       ).toHaveTextContent('Switched to DeepSeek V4 Pro via OpenRouter');
     });
 
+    it('renders the initially selected provider model route as active model use', () => {
+      const events: StreamDisplayEvent[] = [
+        {
+          type: 'model_switch',
+          model: 'openrouter:qwen/qwen3.7-plus',
+          modelEvent: 'selected',
+        },
+      ];
+
+      render(() => (
+        <MessageItem
+          message={makeMessage({ role: 'assistant', streamEvents: events })}
+          getModelRouteLabel={(model) =>
+            model === 'openrouter:qwen/qwen3.7-plus' ? 'Qwen 3.7 Plus via OpenRouter' : model
+          }
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(
+        screen.getByRole('status', { name: 'Assistant model route selected' }),
+      ).toHaveTextContent('Using Qwen 3.7 Plus via OpenRouter');
+    });
+
     it('renders provider fallback model switches with failed and next routes', () => {
       const events: StreamDisplayEvent[] = [
         {

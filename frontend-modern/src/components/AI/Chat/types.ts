@@ -115,6 +115,7 @@ export interface StreamDisplayEvent {
   content?: string;
   model?: string;
   failedModel?: string;
+  modelEvent?: 'selected' | 'switch' | 'fallback';
   toolId?: string; // Used to match pending_tool with completed tool
   approval?: PendingApproval; // For approval_needed events
   question?: PendingQuestion; // For question events

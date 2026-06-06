@@ -13,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
@@ -78,6 +79,18 @@ func withWorkflowRetry(nextAttempt, maxAttempts int, retryAfter time.Duration) w
 		if retryAfter > 0 {
 			data.RetryAfterMS = int64(retryAfter / time.Millisecond)
 		}
+	}
+}
+
+func withWorkflowModelRoute(modelRoute string) workflowStateOption {
+	return func(data *WorkflowStateData) {
+		route := strings.TrimSpace(modelRoute)
+		if route == "" {
+			return
+		}
+		provider, _ := config.ParseModelString(route)
+		data.Model = route
+		data.Provider = provider
 	}
 }
 

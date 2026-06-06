@@ -83,7 +83,7 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
       case 'thinking':
         return [...base, textActivityFingerprint(event.thinking)].join(':');
       case 'model_switch':
-        return [...base, event.model, event.failedModel].join(':');
+        return [...base, event.model, event.failedModel, event.modelEvent].join(':');
       case 'approval':
         return [
           ...base,

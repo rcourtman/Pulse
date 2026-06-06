@@ -326,6 +326,31 @@ describe('getAssistantActiveTurnStatus', () => {
     });
   });
 
+  it('shows the initial selected model route without calling it a fallback', () => {
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            streamEvents: [
+              {
+                type: 'model_switch',
+                model: 'openrouter:qwen/qwen3.7-plus',
+                modelEvent: 'selected',
+                startedAt: 2_000,
+                updatedAt: 2_000,
+              },
+            ],
+          }),
+        ],
+        true,
+      ),
+    ).toEqual({
+      type: 'thinking',
+      text: 'Using Qwen: Qwen3.7 Plus via OpenRouter',
+      startedAt: 2_000,
+    });
+  });
+
   it('carries approval event timing into the active waiting status', () => {
     expect(
       getAssistantActiveTurnStatus(

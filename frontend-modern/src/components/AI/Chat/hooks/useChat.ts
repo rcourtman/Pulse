@@ -424,6 +424,40 @@ export function useChat(options: UseChatOptions = {}) {
     };
   };
 
+  const streamModelEventKind = (event: StreamDisplayEvent): StreamDisplayEvent['modelEvent'] => {
+    if (event.modelEvent) return event.modelEvent;
+    const model = event.model?.trim();
+    const failed = event.failedModel?.trim();
+    return model && failed && model !== failed ? 'fallback' : 'switch';
+  };
+
+  const withModelRouteEvent = (
+    msg: ChatMessage,
+    route: string,
+    options: { failedModel?: string; modelEvent: NonNullable<StreamDisplayEvent['modelEvent']> },
+  ): ChatMessage => {
+    const model = route.trim();
+    if (!model) return msg;
+    const failedModel = options.failedModel?.trim();
+    const duplicate = (msg.streamEvents || []).some(
+      (event) =>
+        event.type === 'model_switch' &&
+        event.model?.trim() === model &&
+        (event.failedModel?.trim() || '') === (failedModel || '') &&
+        streamModelEventKind(event) === options.modelEvent,
+    );
+    if (duplicate) {
+      return { ...msg, model };
+    }
+    const updated = addStreamEvent(msg, {
+      type: 'model_switch',
+      model,
+      failedModel: failedModel || undefined,
+      modelEvent: options.modelEvent,
+    });
+    return { ...updated, model };
+  };
+
   const normalizePendingToolStatus = (phase?: string): PendingTool['status'] => {
     const normalized = (phase || 'running').trim().toLowerCase();
     if (normalized === 'pending') return 'pending';
@@ -737,6 +771,8 @@ export function useChat(options: UseChatOptions = {}) {
     return typeof modelRoute === 'string' ? modelRoute.trim() : '';
   };
 
+  const extractWorkflowModel = (data: unknown): string => extractCompletedModel(data);
+
   const extractWorkflowNextModel = (data: unknown): string => {
     if (!data || typeof data !== 'object') return '';
     const record = data as Record<string, unknown>;
@@ -997,19 +1033,33 @@ export function useChat(options: UseChatOptions = {}) {
       const workflowStatus = extractWorkflowStatus(event.data);
       const nextModel = extractWorkflowNextModel(event.data);
       const failedModel = extractWorkflowFailedModel(event.data);
-      if (!workflowStatus && !nextModel) return;
+      const startedModel =
+        workflowStatus?.phase === 'provider_start' ? extractWorkflowModel(event.data) : '';
+      const routeEvent = nextModel
+        ? {
+            model: nextModel,
+            failedModel,
+            modelEvent: (failedModel ? 'fallback' : 'switch') as NonNullable<
+              StreamDisplayEvent['modelEvent']
+            >,
+          }
+        : startedModel
+          ? {
+              model: startedModel,
+              failedModel: '',
+              modelEvent: 'selected' as const,
+            }
+          : null;
+      if (!workflowStatus && !routeEvent) return;
 
-      if (nextModel) {
+      if (routeEvent) {
         setMessages((prev) =>
           prev.map((msg) => {
             if (msg.id !== assistantId) return msg;
-            if ((msg.model || '').trim() === nextModel) return msg;
-            const updated = addStreamEvent(msg, {
-              type: 'model_switch',
-              model: nextModel,
-              failedModel: failedModel || undefined,
+            return withModelRouteEvent(msg, routeEvent.model, {
+              failedModel: routeEvent.failedModel || undefined,
+              modelEvent: routeEvent.modelEvent,
             });
-            return { ...updated, model: nextModel };
           }),
         );
       }

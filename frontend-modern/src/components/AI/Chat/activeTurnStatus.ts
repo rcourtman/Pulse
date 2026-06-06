@@ -322,6 +322,7 @@ const modelSwitchStatusText = (event: StreamDisplayEvent): string => {
   if (!model) return '';
   const next = formatAIModelRouteLabel(model);
   const failed = event.failedModel?.trim();
+  if (event.modelEvent === 'selected') return `Using ${next}`;
   if (!failed || failed === model) return `Switched to ${next}`;
   return `Provider fallback: ${formatAIModelRouteLabel(failed)} -> ${next}`;
 };

@@ -616,6 +616,12 @@ func TestService_ExecuteStream_EmitsProviderStartupBeforeProviderCall(t *testing
 			if data.Message != "Sent request to OpenRouter; waiting for the first token." {
 				t.Fatalf("provider_start message = %q", data.Message)
 			}
+			if data.Provider != config.AIProviderOpenRouter {
+				t.Fatalf("provider_start provider = %q, want %q", data.Provider, config.AIProviderOpenRouter)
+			}
+			if data.Model != "openrouter:qwen/qwen3.7-plus" {
+				t.Fatalf("provider_start model = %q, want OpenRouter route", data.Model)
+			}
 		}
 	})
 	if err != nil {

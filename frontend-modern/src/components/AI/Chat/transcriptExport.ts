@@ -129,6 +129,7 @@ const formatModelSwitch = (
   const model = formatModelRoute(event.model, getModelRouteLabel);
   if (!model) return '';
   const failed = formatModelRoute(event.failedModel, getModelRouteLabel);
+  if (event.modelEvent === 'selected') return `[model] using ${model}`;
   return failed && failed !== model ? `[model] ${model} after ${failed}` : `[model] ${model}`;
 };
 

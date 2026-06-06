@@ -151,6 +151,30 @@ describe('Assistant transcript export', () => {
     expect(transcript).toContain('No active alerts');
   });
 
+  it('formats initially selected model route events distinctly from fallback switches', () => {
+    const transcript = formatAssistantTranscript({
+      messages: [
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: '',
+          timestamp,
+          streamEvents: [
+            {
+              type: 'model_switch',
+              model: 'openrouter:qwen/qwen3.7-plus',
+              modelEvent: 'selected',
+            },
+          ],
+        },
+      ],
+      generatedAt: timestamp,
+      getModelRouteLabel: () => 'Qwen 3.7 Plus via OpenRouter',
+    });
+
+    expect(transcript).toContain('[model] using Qwen 3.7 Plus via OpenRouter');
+  });
+
   it('reports whether a transcript has content', () => {
     expect(hasAssistantTranscriptContent([])).toBe(false);
     expect(

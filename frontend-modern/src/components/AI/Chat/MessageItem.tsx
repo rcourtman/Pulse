@@ -431,8 +431,10 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     const failed = event.failedModel?.trim();
     return !!model && !!failed && failed !== model;
   };
+  const isSelectedModelEvent = (event: StreamDisplayEvent) =>
+    event.modelEvent === 'selected' && !!event.model?.trim();
   const modelSwitchTitle = (event: StreamDisplayEvent) => {
-    if (!isProviderFallbackEvent(event)) return event.model || '';
+    if (!isProviderFallbackEvent(event)) return modelRouteLabel(event.model);
     return `${modelRouteLabel(event.failedModel)} -> ${modelRouteLabel(event.model)}`;
   };
   const messageModelLabel = () => modelRouteLabel(props.message.model);
@@ -731,7 +733,9 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                           aria-label={
                             isProviderFallbackEvent(evt)
                               ? 'Assistant provider fallback route changed'
-                              : 'Assistant model route changed'
+                              : isSelectedModelEvent(evt)
+                                ? 'Assistant model route selected'
+                                : 'Assistant model route changed'
                           }
                           title={modelSwitchTitle(evt)}
                         >
@@ -740,7 +744,12 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                             when={isProviderFallbackEvent(evt)}
                             fallback={
                               <>
-                                <span class="shrink-0">Switched to</span>{' '}
+                                <Show when={isSelectedModelEvent(evt)}>
+                                  <span class="shrink-0">Using</span>{' '}
+                                </Show>
+                                <Show when={!isSelectedModelEvent(evt)}>
+                                  <span class="shrink-0">Switched to</span>{' '}
+                                </Show>
                                 <span class="truncate font-medium text-base-content">
                                   {modelRouteLabel(evt.model)}
                                 </span>
