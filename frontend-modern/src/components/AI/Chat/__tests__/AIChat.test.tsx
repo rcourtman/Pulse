@@ -133,7 +133,7 @@ const {
     commandRequestSignal: vi.fn(
       (): {
         id: number;
-        action: 'new' | 'sessions' | 'models' | 'status' | 'undo' | 'redo';
+        action: 'help' | 'new' | 'sessions' | 'models' | 'status' | 'undo' | 'redo';
       } | null => null,
     ),
     ackCommandRequest: vi.fn(),
@@ -1619,6 +1619,42 @@ describe('AIChat', () => {
         expect(screen.getByTestId('model-selector')).toHaveAttribute('data-open-request', '1');
       });
       expect(screen.queryByRole('listbox', { name: 'Assistant commands' })).not.toBeInTheDocument();
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('opens Assistant command help from /help without sending a provider prompt', async () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+
+      fireEvent.input(textarea, { target: { value: '/help' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(screen.getByRole('dialog', { name: 'Assistant commands' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /\/models/ })).toHaveTextContent(
+        'Choose the model and provider route',
+      );
+      expect(screen.getByRole('button', { name: /\/status/ })).toHaveTextContent(
+        'Check the selected model route',
+      );
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('runs commands from Assistant command help', async () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+
+      fireEvent.input(textarea, { target: { value: '/commands' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(screen.getByRole('dialog', { name: 'Assistant commands' })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /\/models/ }));
+
+      await waitFor(() => {
+        expect(
+          screen.queryByRole('dialog', { name: 'Assistant commands' }),
+        ).not.toBeInTheDocument();
+        expect(screen.getByTestId('model-selector')).toHaveAttribute('data-open-request', '1');
+      });
       expect(mockChat.sendMessage).not.toHaveBeenCalled();
     });
 

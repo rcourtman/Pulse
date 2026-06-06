@@ -56,6 +56,9 @@ describe('aiChatStore', () => {
 
     aiChatStore.requestCommand('status');
     expect(aiChatStore.commandRequest).toMatchObject({ action: 'status' });
+
+    aiChatStore.requestCommand('help');
+    expect(aiChatStore.commandRequest).toMatchObject({ action: 'help' });
   });
 
   it('sets legacy context and clears it', () => {

@@ -2,6 +2,7 @@ export type AssistantSlashCommandAction =
   | 'copy'
   | 'export'
   | 'fork'
+  | 'help'
   | 'models'
   | 'new'
   | 'redo'
@@ -17,6 +18,12 @@ export interface AssistantSlashCommand {
 }
 
 export const ASSISTANT_SLASH_COMMANDS: AssistantSlashCommand[] = [
+  {
+    name: 'help',
+    aliases: ['commands'],
+    action: 'help',
+    description: 'Show Assistant commands',
+  },
   {
     name: 'new',
     aliases: ['clear'],
@@ -75,9 +82,7 @@ const commandByToken = new Map<string, AssistantSlashCommandAction>(
   ]),
 );
 
-export const parseAssistantSlashCommand = (
-  input: string,
-): AssistantSlashCommandAction | null => {
+export const parseAssistantSlashCommand = (input: string): AssistantSlashCommandAction | null => {
   const trimmed = input.trim();
   if (!trimmed.startsWith('/')) return null;
 
@@ -117,9 +122,7 @@ export const filterAssistantSlashCommands = (
   limit = ASSISTANT_SLASH_COMMANDS.length,
 ): AssistantSlashCommand[] => {
   const normalizedQuery = normalizeSlashQuery(query);
-  return ASSISTANT_SLASH_COMMANDS.filter((command) =>
-    commandMatchesQuery(command, normalizedQuery),
-  )
+  return ASSISTANT_SLASH_COMMANDS.filter((command) => commandMatchesQuery(command, normalizedQuery))
     .map((command, index) => ({ command, index }))
     .sort((left, right) => {
       const scoreDelta =

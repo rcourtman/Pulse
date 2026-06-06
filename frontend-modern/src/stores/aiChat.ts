@@ -79,6 +79,7 @@ export interface AIChatContext {
 }
 
 export type AIChatCommandRequestAction =
+  | 'help'
   | 'new'
   | 'sessions'
   | 'models'

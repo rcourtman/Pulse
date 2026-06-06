@@ -47,6 +47,7 @@ export function useCommandPaletteState(props: CommandPaletteModalProps) {
       navigate,
       assistantActions: {
         open: () => runAfterPaletteSelection(() => aiChatStore.open()),
+        help: () => requestAssistantCommand('help'),
         newSession: () => requestAssistantCommand('new'),
         sessions: () => requestAssistantCommand('sessions'),
         models: () => requestAssistantCommand('models'),

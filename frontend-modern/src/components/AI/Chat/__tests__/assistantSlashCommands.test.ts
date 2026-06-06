@@ -7,6 +7,8 @@ import {
 
 describe('assistantSlashCommands', () => {
   it('maps OpenCode-style session commands to local Assistant actions', () => {
+    expect(parseAssistantSlashCommand('/help')).toBe('help');
+    expect(parseAssistantSlashCommand('/commands')).toBe('help');
     expect(parseAssistantSlashCommand('/new')).toBe('new');
     expect(parseAssistantSlashCommand('/clear')).toBe('new');
     expect(parseAssistantSlashCommand('/sessions')).toBe('sessions');
@@ -38,6 +40,7 @@ describe('assistantSlashCommands', () => {
 
   it('filters commands by canonical name, alias, and description', () => {
     expect(filterAssistantSlashCommands('').map((command) => command.name)).toEqual([
+      'help',
       'new',
       'sessions',
       'models',
@@ -57,9 +60,14 @@ describe('assistantSlashCommands', () => {
     expect(filterAssistantSlashCommands('runtime').map((command) => command.name)).toEqual([
       'status',
     ]);
+    expect(filterAssistantSlashCommands('commands').map((command) => command.name)).toEqual([
+      'help',
+    ]);
   });
 
   it('exposes canonical and alias tokens for the picker', () => {
+    const help = filterAssistantSlashCommands('commands')[0];
+    expect(getAssistantSlashCommandTokens(help)).toEqual(['help', 'commands']);
     const sessions = filterAssistantSlashCommands('resume')[0];
     expect(getAssistantSlashCommandTokens(sessions)).toEqual(['sessions', 'resume', 'continue']);
     const models = filterAssistantSlashCommands('mo')[0];

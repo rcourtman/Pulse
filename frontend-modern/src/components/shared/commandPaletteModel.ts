@@ -31,6 +31,7 @@ export type CommandPaletteCommandPaths = {
 
 export type CommandPaletteAssistantActions = {
   open: () => void;
+  help: () => void;
   newSession: () => void;
   sessions: () => void;
   models: () => void;
@@ -57,6 +58,13 @@ export function buildCommandPaletteCommands(options: {
         action: options.assistantActions.open,
       },
       {
+        id: 'assistant-help',
+        label: 'Show Assistant commands',
+        description: '/help',
+        keywords: ['assistant', 'help', 'commands', 'slash', 'palette'],
+        action: options.assistantActions.help,
+      },
+      {
         id: 'assistant-new-session',
         label: 'New Assistant session',
         description: '/new',
@@ -81,7 +89,15 @@ export function buildCommandPaletteCommands(options: {
         id: 'assistant-status',
         label: 'Check Assistant status',
         description: '/status',
-        keywords: ['assistant', 'status', 'runtime', 'health', 'provider', 'openrouter', 'deepseek'],
+        keywords: [
+          'assistant',
+          'status',
+          'runtime',
+          'health',
+          'provider',
+          'openrouter',
+          'deepseek',
+        ],
         action: options.assistantActions.status,
       },
       {

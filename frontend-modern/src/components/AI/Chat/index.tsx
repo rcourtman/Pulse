@@ -141,6 +141,7 @@ import {
   type SendMessageOptions,
 } from './hooks/useChat';
 import { ChatMessages } from './ChatMessages';
+import { AssistantCommandHelpDialog } from './AssistantCommandHelpDialog';
 import { ModelSelector } from './ModelSelector';
 import { MentionAutocomplete, type MentionResource } from './MentionAutocomplete';
 import { SlashCommandAutocomplete } from './SlashCommandAutocomplete';
@@ -617,6 +618,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [savedPromptDraft, setSavedPromptDraft] = createSignal<PromptHistoryEntry | null>(null);
   const [sessions, setSessions] = createSignal<ChatSession[]>([]);
   const [showSessions, setShowSessions] = createSignal(false);
+  const [showCommandHelp, setShowCommandHelp] = createSignal(false);
   const [sessionRefreshLoading, setSessionRefreshLoading] = createSignal(false);
   const [sessionSearchQuery, setSessionSearchQuery] = createSignal('');
   const [sessionSearchResults, setSessionSearchResults] = createSignal<ChatSession[] | null>(null);
@@ -1949,6 +1951,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
   createEffect(() => {
     if (!isOpen()) {
+      setShowCommandHelp(false);
       return;
     }
     void initializeWhenOpen();
@@ -2415,33 +2418,48 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
     switch (command) {
       case 'new':
+        setShowCommandHelp(false);
         void handleNewConversation();
         break;
       case 'sessions':
+        setShowCommandHelp(false);
         void handleToggleSessions();
+        break;
+      case 'help':
+        setShowSessions(false);
+        setSessionRefreshLoading(false);
+        resetSessionSearch();
+        setShowCommandHelp(true);
         break;
       case 'models':
         setShowSessions(false);
+        setShowCommandHelp(false);
         setSessionRefreshLoading(false);
         resetSessionSearch();
         setModelSelectorOpenRequest((value) => value + 1);
         break;
       case 'status':
+        setShowCommandHelp(false);
         runSelectedProviderStatusCheck();
         break;
       case 'copy':
+        setShowCommandHelp(false);
         void copyAssistantTranscript();
         break;
       case 'export':
+        setShowCommandHelp(false);
         exportAssistantTranscript();
         break;
       case 'fork':
+        setShowCommandHelp(false);
         void handleForkSession();
         break;
       case 'undo':
+        setShowCommandHelp(false);
         void handleUndoLastTurn();
         break;
       case 'redo':
+        setShowCommandHelp(false);
         void handleRedoLastTurn();
         break;
     }
@@ -2636,6 +2654,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
     setSlashCommandQuery('');
     setInput(`/${command.name}`);
     executeSlashCommand(command.action);
+  };
+
+  const handleCommandHelpRun = (command: AssistantSlashCommand) => {
+    setShowCommandHelp(false);
+    queueMicrotask(() => executeSlashCommand(command.action));
   };
 
   // Handle mention selection
@@ -3114,6 +3137,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 />
               </svg>
             </button>
+          </Show>
+          <Show when={showCommandHelp()}>
+            <AssistantCommandHelpDialog
+              onClose={() => setShowCommandHelp(false)}
+              onRunCommand={handleCommandHelpRun}
+            />
           </Show>
           {/* Header - wraps on mobile */}
           <div class="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-border bg-surface-alt">

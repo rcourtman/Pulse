@@ -83,6 +83,7 @@ describe('CommandPaletteModal', () => {
     expect(commandPaletteModelSource).toContain("id: 'nav-vmware'");
     expect(commandPaletteModelSource).toContain("id: 'nav-vmware-networks'");
     expect(commandPaletteModelSource).toContain("id: 'assistant-open'");
+    expect(commandPaletteModelSource).toContain("id: 'assistant-help'");
     expect(commandPaletteModelSource).toContain("id: 'assistant-switch-session'");
     expect(commandPaletteModelSource).toContain("id: 'assistant-switch-model'");
     expect(commandPaletteModelSource).toContain("id: 'assistant-status'");
@@ -104,6 +105,7 @@ describe('CommandPaletteModal', () => {
     ));
 
     expect(screen.getByText('Open Pulse Assistant')).toBeInTheDocument();
+    expect(screen.getByText('Show Assistant commands')).toBeInTheDocument();
     expect(screen.getByText('New Assistant session')).toBeInTheDocument();
     expect(screen.getByText('Switch Assistant session')).toBeInTheDocument();
     expect(screen.getByText('Switch Assistant model')).toBeInTheDocument();
@@ -149,6 +151,25 @@ describe('CommandPaletteModal', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     await waitFor(() => {
       expect(requestCommand).toHaveBeenCalledWith('models');
+    });
+  });
+
+  it('routes Assistant help workflow commands through the Assistant store', async () => {
+    const onClose = vi.fn();
+    const requestCommand = vi.spyOn(aiChatStore, 'requestCommand').mockImplementation(() => {});
+    render(() => (
+      <CommandPaletteModal
+        isOpen={true}
+        onClose={onClose}
+        platformVisibility={platformVisibility}
+      />
+    ));
+
+    await fireEvent.click(screen.getByText('Show Assistant commands'));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(requestCommand).toHaveBeenCalledWith('help');
     });
   });
 

@@ -8,6 +8,7 @@ import PlusIcon from 'lucide-solid/icons/plus';
 import Redo2Icon from 'lucide-solid/icons/redo-2';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import Undo2Icon from 'lucide-solid/icons/undo-2';
+import CircleHelpIcon from 'lucide-solid/icons/circle-help';
 import type { AssistantSlashCommand, AssistantSlashCommandAction } from './assistantSlashCommands';
 import {
   filterAssistantSlashCommands,
@@ -22,8 +23,10 @@ interface SlashCommandAutocompleteProps {
   onSelect: (command: AssistantSlashCommand) => void;
 }
 
-const commandIcon = (action: AssistantSlashCommandAction) => {
-  switch (action) {
+export const AssistantSlashCommandIcon = (props: { action: AssistantSlashCommandAction }) => {
+  switch (props.action) {
+    case 'help':
+      return <CircleHelpIcon class="h-4 w-4" aria-hidden="true" />;
     case 'new':
       return <PlusIcon class="h-4 w-4" aria-hidden="true" />;
     case 'sessions':
@@ -104,9 +107,7 @@ export function SlashCommandAutocomplete(props: SlashCommandAutocompleteProps) {
         data-slash-command-autocomplete
         onClick={(event) => event.stopPropagation()}
       >
-        <div class="border-b border-border px-3 py-2 text-xs font-medium text-muted">
-          Commands
-        </div>
+        <div class="border-b border-border px-3 py-2 text-xs font-medium text-muted">Commands</div>
         <div class="max-h-[260px] overflow-y-auto" role="listbox" aria-label="Assistant commands">
           <For each={commands()}>
             {(command, index) => (
@@ -124,7 +125,9 @@ export function SlashCommandAutocomplete(props: SlashCommandAutocompleteProps) {
                 }}
                 onMouseEnter={() => setSelectedIndex(index())}
               >
-                <span class="mt-0.5 text-muted">{commandIcon(command.action)}</span>
+                <span class="mt-0.5 text-muted">
+                  <AssistantSlashCommandIcon action={command.action} />
+                </span>
                 <span class="min-w-0 flex-1">
                   <span class="flex min-w-0 items-center gap-2">
                     <span class="font-mono text-xs font-semibold text-base-content">
