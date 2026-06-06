@@ -1,5 +1,6 @@
 import { Component, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import BrainIcon from 'lucide-solid/icons/brain';
+import { extractReasoningSummaryTitle } from './reasoningSummary';
 
 interface ThinkingBlockProps {
   content?: string;
@@ -7,11 +8,6 @@ interface ThinkingBlockProps {
   startedAt?: number;
   updatedAt?: number;
 }
-
-const extractReasoningSummaryTitle = (content?: string): string => {
-  const match = content?.trim().match(/^\*\*([^*\n]+)\*\*(?:\r?\n\r?\n|$)/);
-  return match?.[1]?.trim().replace(/\s+/g, ' ') || '';
-};
 
 const formatThinkingDuration = (durationMs: number): string => {
   if (!Number.isFinite(durationMs) || durationMs < 0) return '';

@@ -58,6 +58,20 @@ describe('groupStreamEventsForDisplay', () => {
     });
   });
 
+  it('preserves merged content activity timing', () => {
+    const grouped = groupStreamEventsForDisplay([
+      { type: 'content', content: 'Hello ', startedAt: 1_000, updatedAt: 1_100 },
+      { type: 'content', content: 'world', startedAt: 1_500, updatedAt: 2_500 },
+    ]);
+
+    expect(grouped[0]).toMatchObject({
+      type: 'content',
+      content: 'Hello world',
+      startedAt: 1_000,
+      updatedAt: 2_500,
+    });
+  });
+
   it('keeps content separated across a tool boundary so order is preserved', () => {
     const tool: StreamDisplayEvent = {
       type: 'tool',

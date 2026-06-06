@@ -278,6 +278,19 @@ runtime cost control, and shared AI transport surfaces.
    showing a live `Thinking:`/completed `Thought:` row with duration and optional
    provider summary title while keeping the raw reasoning body out of the
    transcript.
+   The active-turn status strip follows the same source-backed part freshness
+   rule: OpenCode commit `9ed17da55ab1f7360cc0e01075f763e27fa899e9`
+   updates live assistant parts in place through
+   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`
+   (`latestTool`, `latestText`, `latestReasoning`, and `apply(event)`),
+   renders reasoning headers with `ReasoningPart`/`ReasoningHeader` in
+   `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx`, and keeps the
+   prompt footer as the replacing live status surface in
+   `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx`. Pulse adapts
+   that by ranking workflow, content, hidden reasoning, and pending-tool footer
+   copy by the freshest activity timestamp: a later answer token can replace an
+   older tool status, and a later in-place tool progress patch can replace the
+   answer status again without moving the transcript's chronological row.
    OpenCode-parity Assistant UX work must reference OpenCode's actual source
    implementation for message parts, tool-state mutation, progress rendering,
    and model/session selection before changing Pulse behavior; parity means

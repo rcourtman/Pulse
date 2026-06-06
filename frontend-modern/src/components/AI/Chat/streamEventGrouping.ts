@@ -29,9 +29,12 @@ export const groupStreamEventsForDisplay = (
       case 'content': {
         if (!evt.content) break; // skip empty deltas
         if (contentIdx >= 0) {
+          const current = grouped[contentIdx];
           grouped[contentIdx] = {
-            ...grouped[contentIdx],
-            content: (grouped[contentIdx].content || '') + evt.content,
+            ...current,
+            content: (current.content || '') + evt.content,
+            startedAt: current.startedAt || evt.startedAt,
+            updatedAt: evt.updatedAt || current.updatedAt,
           };
         } else {
           grouped.push({ ...evt });

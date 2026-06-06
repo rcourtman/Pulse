@@ -835,6 +835,9 @@ describe('useChat', () => {
       const contentEvents = assistant.streamEvents?.filter((e) => e.type === 'content') ?? [];
       expect(contentEvents).toHaveLength(1);
       expect(contentEvents[0].content).toBe('Hello world');
+      expect(contentEvents[0].startedAt).toEqual(expect.any(Number));
+      expect(contentEvents[0].updatedAt).toEqual(expect.any(Number));
+      expect(contentEvents[0].updatedAt).toBeGreaterThanOrEqual(contentEvents[0].startedAt || 0);
       dispose();
     });
 
@@ -920,7 +923,7 @@ describe('useChat', () => {
       expect(assistant.content).toBe('I will inspect the device nodes.');
       expect(assistant.content).not.toContain('pulse_read');
       expect(assistant.content).not.toContain('raw arguments');
-      expect(assistant.streamEvents?.filter((e) => e.type === 'content')).toEqual([
+      expect(assistant.streamEvents?.filter((e) => e.type === 'content')).toMatchObject([
         { type: 'content', content: 'I will inspect the device nodes.' },
       ]);
       dispose();
@@ -945,7 +948,7 @@ describe('useChat', () => {
       expect(assistant.content).not.toContain('pulse_read');
       expect(assistant.content).not.toContain('target_host');
       expect(assistant.content).not.toContain('raw arguments');
-      expect(assistant.streamEvents?.filter((e) => e.type === 'content')).toEqual([
+      expect(assistant.streamEvents?.filter((e) => e.type === 'content')).toMatchObject([
         { type: 'content', content: 'I will check ' },
       ]);
       dispose();
@@ -999,7 +1002,7 @@ describe('useChat', () => {
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.content).toBe(compacted);
-      expect(assistant.streamEvents?.filter((e) => e.type === 'content')).toEqual([
+      expect(assistant.streamEvents?.filter((e) => e.type === 'content')).toMatchObject([
         { type: 'content', content: compacted },
       ]);
       expect(assistant.isStreaming).toBe(false);
@@ -2450,6 +2453,7 @@ describe('useChat', () => {
           success: true,
         },
         toolId: 'orphan',
+        updatedAt: expect.any(Number),
       });
       // pendingTools should remain empty (nothing to remove)
       expect(assistant.pendingTools).toHaveLength(0);

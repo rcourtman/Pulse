@@ -238,11 +238,17 @@ export function useChat(options: UseChatOptions = {}) {
     if (event.type === 'content' && events.length > 0) {
       const last = events[events.length - 1];
       if (last.type === 'content') {
+        const now = Date.now();
         return {
           ...msg,
           streamEvents: [
             ...events.slice(0, -1),
-            { ...last, content: (last.content || '') + (event.content || '') },
+            {
+              ...last,
+              content: (last.content || '') + (event.content || ''),
+              startedAt: last.startedAt || event.startedAt || now,
+              updatedAt: event.updatedAt || now,
+            },
           ],
         };
       }
@@ -721,7 +727,13 @@ export function useChat(options: UseChatOptions = {}) {
                   : msg;
               if (!visible.text) return baseMsg;
               // Add to streamEvents for chronological display
-              const updated = addStreamEvent(baseMsg, { type: 'content', content: visible.text });
+              const now = Date.now();
+              const updated = addStreamEvent(baseMsg, {
+                type: 'content',
+                content: visible.text,
+                startedAt: now,
+                updatedAt: now,
+              });
               return {
                 ...updated,
                 content: appendMessageContent(baseMsg, visible.text),
@@ -900,12 +912,20 @@ export function useChat(options: UseChatOptions = {}) {
                   }
                   return true;
                 });
-                updatedEvents.push({ type: 'tool', tool: newToolCall, toolId: data.id });
+                const completedAt = Date.now();
+                updatedEvents.push({
+                  type: 'tool',
+                  tool: newToolCall,
+                  toolId: data.id,
+                  startedAt: pendingTools[resolvedPendingIndex]?.startedAt,
+                  updatedAt: completedAt,
+                });
               } else {
                 // No approval - replace the pending_tool in place. If the terminal
                 // event is the first visible evidence, keep the completed row.
                 updatedEvents = [...events];
                 let replacedPendingTool = false;
+                const completedAt = Date.now();
                 for (let i = events.length - 1; i >= 0; i--) {
                   const evt = events[i];
                   if (
@@ -914,13 +934,24 @@ export function useChat(options: UseChatOptions = {}) {
                       ? evt.toolId === data.id
                       : normalizeChatToolName(evt.pendingTool?.name || '') === normalizedEndName)
                   ) {
-                    updatedEvents[i] = { type: 'tool', tool: newToolCall, toolId: data.id };
+                    updatedEvents[i] = {
+                      type: 'tool',
+                      tool: newToolCall,
+                      toolId: data.id,
+                      startedAt: evt.pendingTool?.startedAt || evt.startedAt,
+                      updatedAt: completedAt,
+                    };
                     replacedPendingTool = true;
                     break;
                   }
                 }
                 if (!replacedPendingTool) {
-                  updatedEvents.push({ type: 'tool', tool: newToolCall, toolId: data.id });
+                  updatedEvents.push({
+                    type: 'tool',
+                    tool: newToolCall,
+                    toolId: data.id,
+                    updatedAt: completedAt,
+                  });
                 }
               }
 
@@ -1068,7 +1099,12 @@ export function useChat(options: UseChatOptions = {}) {
               clearOutputArtifactState(assistantId);
               const flushedMsg = pendingText
                 ? {
-                    ...addStreamEvent(msg, { type: 'content', content: pendingText }),
+                    ...addStreamEvent(msg, {
+                      type: 'content',
+                      content: pendingText,
+                      startedAt: Date.now(),
+                      updatedAt: Date.now(),
+                    }),
                     content: appendMessageContent(msg, pendingText),
                   }
                 : msg;

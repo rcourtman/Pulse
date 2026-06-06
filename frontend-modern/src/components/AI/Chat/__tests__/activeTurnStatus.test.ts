@@ -210,6 +210,132 @@ describe('getAssistantActiveTurnStatus', () => {
     });
   });
 
+  it('lets newer streamed content replace an older pending tool footer status', () => {
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            pendingTools: [
+              {
+                id: 'tool-1',
+                name: 'pulse_get_nodes',
+                input: '{}',
+                progress: 'Reading node inventory',
+                status: 'running',
+                startedAt: 1_000,
+                updatedAt: 1_500,
+              },
+            ],
+            streamEvents: [
+              {
+                type: 'pending_tool',
+                toolId: 'tool-1',
+                pendingTool: {
+                  id: 'tool-1',
+                  name: 'pulse_get_nodes',
+                  input: '{}',
+                  progress: 'Reading node inventory',
+                  status: 'running',
+                  startedAt: 1_000,
+                  updatedAt: 1_500,
+                },
+              },
+              {
+                type: 'content',
+                content: 'The node inventory is healthy.',
+                startedAt: 2_000,
+                updatedAt: 2_500,
+              },
+            ],
+          }),
+        ],
+        true,
+      ),
+    ).toEqual({
+      type: 'generating',
+      text: 'Generating response',
+      startedAt: 2_000,
+    });
+  });
+
+  it('lets a newer in-place tool progress patch replace content footer status', () => {
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            pendingTools: [
+              {
+                id: 'tool-1',
+                name: 'pulse_read',
+                input: '{}',
+                progress: 'Reading storage layout',
+                status: 'running',
+                startedAt: 1_000,
+                updatedAt: 3_000,
+              },
+            ],
+            streamEvents: [
+              {
+                type: 'pending_tool',
+                toolId: 'tool-1',
+                pendingTool: {
+                  id: 'tool-1',
+                  name: 'pulse_read',
+                  input: '{}',
+                  progress: 'Reading storage layout',
+                  status: 'running',
+                  startedAt: 1_000,
+                  updatedAt: 3_000,
+                },
+              },
+              {
+                type: 'content',
+                content: 'I found the node list.',
+                startedAt: 2_000,
+                updatedAt: 2_500,
+              },
+            ],
+          }),
+        ],
+        true,
+      ),
+    ).toEqual({
+      type: 'tool',
+      text: 'Reading storage layout',
+      startedAt: 1_000,
+    });
+  });
+
+  it('surfaces newer hidden reasoning metadata in the footer after content', () => {
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            streamEvents: [
+              {
+                type: 'content',
+                content: 'The device count is',
+                startedAt: 1_000,
+                updatedAt: 1_500,
+              },
+              {
+                type: 'thinking',
+                thinking: '**Checking device nodes**\n\nHidden reasoning body.',
+                startedAt: 2_000,
+                updatedAt: 2_500,
+              },
+            ],
+          }),
+        ],
+        true,
+      ),
+    ).toEqual({
+      type: 'thinking',
+      text: 'Thinking: Checking device nodes',
+      startedAt: 2_000,
+    });
+  });
+
   it('surfaces fresh workflow progress after completed tool evidence', () => {
     expect(
       getAssistantActiveTurnStatus(
