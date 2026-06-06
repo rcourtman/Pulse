@@ -14,6 +14,7 @@ describe('assistantSlashCommands', () => {
     expect(parseAssistantSlashCommand('/continue')).toBe('sessions');
     expect(parseAssistantSlashCommand('/models')).toBe('models');
     expect(parseAssistantSlashCommand('/model')).toBe('models');
+    expect(parseAssistantSlashCommand('/mo')).toBe('models');
     expect(parseAssistantSlashCommand('/copy')).toBe('copy');
     expect(parseAssistantSlashCommand('/export')).toBe('export');
     expect(parseAssistantSlashCommand('/fork')).toBe('fork');
@@ -50,5 +51,7 @@ describe('assistantSlashCommands', () => {
   it('exposes canonical and alias tokens for the picker', () => {
     const sessions = filterAssistantSlashCommands('resume')[0];
     expect(getAssistantSlashCommandTokens(sessions)).toEqual(['sessions', 'resume', 'continue']);
+    const models = filterAssistantSlashCommands('mo')[0];
+    expect(getAssistantSlashCommandTokens(models)).toEqual(['models', 'model', 'mo']);
   });
 });

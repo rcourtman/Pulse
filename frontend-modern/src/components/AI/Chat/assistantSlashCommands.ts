@@ -28,7 +28,7 @@ export const ASSISTANT_SLASH_COMMANDS: AssistantSlashCommand[] = [
   },
   {
     name: 'models',
-    aliases: ['model'],
+    aliases: ['model', 'mo'],
     action: 'models',
     description: 'Choose the model and provider route',
   },

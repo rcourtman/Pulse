@@ -11,6 +11,10 @@ const aiChatSource = readFileSync(
 
 describe('aiChatStore', () => {
   beforeEach(() => {
+    const pendingCommand = aiChatStore.commandRequest;
+    if (pendingCommand) {
+      aiChatStore.ackCommandRequest(pendingCommand.id);
+    }
     aiChatStore.close();
     aiChatStore.clearContext();
     aiChatStore.clearAllContext();
@@ -30,6 +34,22 @@ describe('aiChatStore', () => {
     expect(aiChatStore.isOpen).toBe(true);
     aiChatStore.close();
     expect(aiChatStore.isOpen).toBe(false);
+  });
+
+  it('opens the drawer and exposes one-shot Assistant command requests', () => {
+    expect(aiChatStore.commandRequest).toBeNull();
+
+    aiChatStore.requestCommand('models');
+
+    expect(aiChatStore.isOpen).toBe(true);
+    const request = aiChatStore.commandRequest;
+    expect(request).toMatchObject({ action: 'models' });
+
+    aiChatStore.ackCommandRequest((request?.id ?? 0) + 1);
+    expect(aiChatStore.commandRequest).toMatchObject({ action: 'models' });
+
+    aiChatStore.ackCommandRequest(request!.id);
+    expect(aiChatStore.commandRequest).toBeNull();
   });
 
   it('sets legacy context and clears it', () => {

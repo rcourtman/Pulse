@@ -128,6 +128,10 @@ const {
 
   const mockAiChatStore = {
     isOpenSignal: vi.fn(() => true),
+    commandRequestSignal: vi.fn((): { id: number; action: 'new' | 'sessions' | 'models' } | null =>
+      null,
+    ),
+    ackCommandRequest: vi.fn(),
     context: emptyChatContext() as {
       targetType?: string;
       targetId?: string;
@@ -397,6 +401,7 @@ beforeEach(() => {
   setViewportWidth(1440);
   resetAIRuntimeState();
   mockAiChatStore.isOpenSignal.mockReturnValue(true);
+  mockAiChatStore.commandRequestSignal.mockReturnValue(null);
   mockAiChatStore.context = {
     findingId: undefined,
     autonomousMode: undefined,
@@ -1699,6 +1704,17 @@ describe('AIChat', () => {
       await waitFor(() => {
         expect(screen.getByTestId('model-selector')).toHaveAttribute('data-open-request', '1');
       });
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('consumes pending command palette model requests without sending a provider prompt', async () => {
+      mockAiChatStore.commandRequestSignal.mockReturnValue({ id: 42, action: 'models' });
+      renderChat();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('model-selector')).toHaveAttribute('data-open-request', '1');
+      });
+      expect(mockAiChatStore.ackCommandRequest).toHaveBeenCalledWith(42);
       expect(mockChat.sendMessage).not.toHaveBeenCalled();
     });
 

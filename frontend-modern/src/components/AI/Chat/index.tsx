@@ -645,6 +645,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   let transcriptFallbackTextareaRef: HTMLTextAreaElement | undefined;
   let interruptArmTimeout: ReturnType<typeof setTimeout> | undefined;
   let composerSubmitDispatchLocked = false;
+  let handledAssistantCommandRequestId = 0;
 
   const focusComposer = () => {
     queueMicrotask(() => {
@@ -2272,6 +2273,15 @@ export const AIChat: Component<AIChatProps> = (props) => {
         break;
     }
   };
+
+  createEffect(() => {
+    const request = aiChatStore.commandRequestSignal?.();
+    if (!request || request.id === handledAssistantCommandRequestId || !isOpen()) return;
+
+    handledAssistantCommandRequestId = request.id;
+    executeSlashCommand(request.action);
+    aiChatStore.ackCommandRequest?.(request.id);
+  });
 
   // Handle submit
   const handleSubmit = () => {

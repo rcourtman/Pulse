@@ -29,12 +29,53 @@ export type CommandPaletteCommandPaths = {
   vmwareNetworksPath: string;
 };
 
+export type CommandPaletteAssistantActions = {
+  open: () => void;
+  newSession: () => void;
+  sessions: () => void;
+  models: () => void;
+};
+
 export function buildCommandPaletteCommands(options: {
   paths: CommandPaletteCommandPaths;
   platformVisibility: PlatformNavigationVisibility;
   navigate: (path: string) => void;
+  assistantActions?: CommandPaletteAssistantActions;
 }): CommandPaletteModalCommand[] {
   const commands: CommandPaletteModalCommand[] = [];
+
+  if (options.assistantActions) {
+    commands.push(
+      {
+        id: 'assistant-open',
+        label: 'Open Pulse Assistant',
+        description: 'Chat with Pulse about this infrastructure',
+        keywords: ['assistant', 'ai', 'chat', 'ask', 'pulse'],
+        action: options.assistantActions.open,
+      },
+      {
+        id: 'assistant-new-session',
+        label: 'New Assistant session',
+        description: '/new',
+        keywords: ['assistant', 'chat', 'new', 'clear', 'session'],
+        action: options.assistantActions.newSession,
+      },
+      {
+        id: 'assistant-switch-session',
+        label: 'Switch Assistant session',
+        description: '/sessions',
+        keywords: ['assistant', 'sessions', 'resume', 'continue', 'history'],
+        action: options.assistantActions.sessions,
+      },
+      {
+        id: 'assistant-switch-model',
+        label: 'Switch Assistant model',
+        description: '/models',
+        keywords: ['assistant', 'models', 'model', 'provider', 'openrouter', 'deepseek'],
+        action: options.assistantActions.models,
+      },
+    );
+  }
 
   if (primaryPlatformNavigationIsVisible(options.platformVisibility, 'proxmox')) {
     commands.push({

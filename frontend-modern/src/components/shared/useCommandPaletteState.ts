@@ -8,6 +8,7 @@ import {
   buildTrueNASPath,
   buildVmwarePath,
 } from '@/routing/resourceLinks';
+import { aiChatStore, type AIChatCommandRequestAction } from '@/stores/aiChat';
 import {
   buildCommandPaletteCommands,
   filterCommandPaletteCommands,
@@ -17,10 +18,18 @@ import {
 
 export type { CommandPaletteModalCommand, CommandPaletteModalProps } from './commandPaletteModel';
 
+const runAfterPaletteSelection = (action: () => void) => {
+  queueMicrotask(action);
+};
+
 export function useCommandPaletteState(props: CommandPaletteModalProps) {
   const navigate = useNavigate();
   const [query, setQuery] = createSignal('');
   const [inputRef, setInputRef] = createSignal<HTMLInputElement>();
+
+  const requestAssistantCommand = (action: AIChatCommandRequestAction) => {
+    runAfterPaletteSelection(() => aiChatStore.requestCommand(action));
+  };
 
   const commands = createMemo(() =>
     buildCommandPaletteCommands({
@@ -36,6 +45,12 @@ export function useCommandPaletteState(props: CommandPaletteModalProps) {
       },
       platformVisibility: props.platformVisibility(),
       navigate,
+      assistantActions: {
+        open: () => runAfterPaletteSelection(() => aiChatStore.open()),
+        newSession: () => requestAssistantCommand('new'),
+        sessions: () => requestAssistantCommand('sessions'),
+        models: () => requestAssistantCommand('models'),
+      },
     }),
   );
 

@@ -78,6 +78,13 @@ export interface AIChatContext {
   autonomousMode?: boolean;
 }
 
+export type AIChatCommandRequestAction = 'new' | 'sessions' | 'models';
+
+export interface AIChatCommandRequest {
+  id: number;
+  action: AIChatCommandRequestAction;
+}
+
 // A single context item that can be accumulated
 interface ContextItem {
   id: string; // unique identifier (e.g., "vm-pve-node-101")
@@ -159,6 +166,8 @@ const saveMessagesToStorage = (msgs: Message[]) => {
 // Global state for the AI chat drawer
 const [isAIChatOpen, setIsAIChatOpen] = createSignal(false);
 const [aiChatContext, setAIChatContext] = createSignal<AIChatContext>({});
+const [aiChatCommandRequest, setAIChatCommandRequest] =
+  createSignal<AIChatCommandRequest | null>(null);
 const [contextItems, setContextItems] = createSignal<ContextItem[]>([]);
 const [messages, setMessages] = createSignal<Message[]>(loadMessagesFromStorage());
 const [aiEnabled, setAiEnabled] = createSignal<boolean | null>(null); // null = not checked yet
@@ -173,6 +182,7 @@ const [_isSyncing, _setIsSyncing] = createSignal<boolean>(false);
 // Debounce timer for saving
 let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 const SAVE_DEBOUNCE_MS = 2000; // Save 2 seconds after last change
+let nextAIChatCommandRequestId = 1;
 
 // Store reference to AI input for focusing from keyboard shortcuts
 let aiInputRef: HTMLTextAreaElement | null = null;
@@ -207,6 +217,12 @@ export const aiChatStore = {
 
   // Reactive accessor - use this in Show/createEffect for proper reactivity
   isOpenSignal: isAIChatOpen,
+
+  commandRequestSignal: aiChatCommandRequest,
+
+  get commandRequest() {
+    return aiChatCommandRequest();
+  },
 
   // Get current context (single-item compatibility shape)
   get context() {
@@ -370,6 +386,18 @@ export const aiChatStore = {
     setIsAIChatOpen(true);
   },
 
+  requestCommand(action: AIChatCommandRequestAction) {
+    setAIChatCommandRequest({
+      id: nextAIChatCommandRequestId++,
+      action,
+    });
+    setIsAIChatOpen(true);
+  },
+
+  ackCommandRequest(id: number) {
+    setAIChatCommandRequest((request) => (request?.id === id ? null : request));
+  },
+
   // Close the AI chat
   close() {
     setIsAIChatOpen(false);
@@ -531,6 +559,7 @@ eventBus.on('org_switched', () => {
   }
 
   // Clear context
+  setAIChatCommandRequest(null);
   setContextItems([]);
   setAIChatContext({});
   setSessionTitle('');

@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.tsx?raw';
 import commandPaletteModelSource from '@/components/shared/commandPaletteModel.ts?raw';
 import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
 import { buildPrimaryPlatformNavigationVisibility } from '@/features/platformNavigation/platformNavigationModel';
+import { aiChatStore } from '@/stores/aiChat';
 
 const navigateMock = vi.fn();
 
@@ -47,6 +48,7 @@ describe('CommandPaletteModal', () => {
   afterEach(() => {
     cleanup();
     navigateMock.mockReset();
+    vi.restoreAllMocks();
   });
 
   it('keeps the command palette on shell, runtime, and model owners', () => {
@@ -60,6 +62,7 @@ describe('CommandPaletteModal', () => {
     expect(commandPaletteStateSource).toContain('buildStandalonePath');
     expect(commandPaletteStateSource).toContain('buildProxmoxPath');
     expect(commandPaletteStateSource).toContain('export function useCommandPaletteState');
+    expect(commandPaletteStateSource).toContain('aiChatStore.requestCommand');
 
     // Infrastructure and aggregate workspaces are not command-palette routes;
     // platform/runtime pages own those workflows.
@@ -79,6 +82,9 @@ describe('CommandPaletteModal', () => {
     expect(commandPaletteModelSource).toContain("id: 'nav-truenas'");
     expect(commandPaletteModelSource).toContain("id: 'nav-vmware'");
     expect(commandPaletteModelSource).toContain("id: 'nav-vmware-networks'");
+    expect(commandPaletteModelSource).toContain("id: 'assistant-open'");
+    expect(commandPaletteModelSource).toContain("id: 'assistant-switch-session'");
+    expect(commandPaletteModelSource).toContain("id: 'assistant-switch-model'");
     expect(commandPaletteModelSource).not.toContain("id: 'nav-infrastructure'");
     expect(commandPaletteModelSource).not.toContain("id: 'nav-workloads'");
     expect(commandPaletteModelSource).not.toContain("id: 'nav-storage'");
@@ -94,6 +100,10 @@ describe('CommandPaletteModal', () => {
       />
     ));
 
+    expect(screen.getByText('Open Pulse Assistant')).toBeInTheDocument();
+    expect(screen.getByText('New Assistant session')).toBeInTheDocument();
+    expect(screen.getByText('Switch Assistant session')).toBeInTheDocument();
+    expect(screen.getByText('Switch Assistant model')).toBeInTheDocument();
     expect(screen.getByText('Go to Machines')).toBeInTheDocument();
     expect(screen.getByText('/standalone/machines')).toBeInTheDocument();
     expect(screen.getByText('Go to Proxmox')).toBeInTheDocument();
@@ -111,9 +121,48 @@ describe('CommandPaletteModal', () => {
     expect(screen.getByText('/vmware/networks')).toBeInTheDocument();
 
     const commandLabels = screen.getAllByRole('button').map((button) => button.textContent ?? '');
+    expect(commandLabels.findIndex((label) => label.includes('Open Pulse Assistant'))).toBe(0);
     expect(commandLabels.findIndex((label) => label.includes('Go to Proxmox'))).toBeLessThan(
       commandLabels.findIndex((label) => label.includes('Go to Machines')),
     );
+  });
+
+  it('routes Assistant model workflow commands through the Assistant store', async () => {
+    const onClose = vi.fn();
+    const requestCommand = vi.spyOn(aiChatStore, 'requestCommand').mockImplementation(() => {});
+    render(() => (
+      <CommandPaletteModal
+        isOpen={true}
+        onClose={onClose}
+        platformVisibility={platformVisibility}
+      />
+    ));
+
+    await fireEvent.click(screen.getByText('Switch Assistant model'));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(requestCommand).toHaveBeenCalledWith('models');
+    });
+  });
+
+  it('opens Pulse Assistant from the command palette after closing the palette', async () => {
+    const onClose = vi.fn();
+    const openAssistant = vi.spyOn(aiChatStore, 'open').mockImplementation(() => {});
+    render(() => (
+      <CommandPaletteModal
+        isOpen={true}
+        onClose={onClose}
+        platformVisibility={platformVisibility}
+      />
+    ));
+
+    await fireEvent.click(screen.getByText('Open Pulse Assistant'));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(openAssistant).toHaveBeenCalledWith();
+    });
   });
 
   it('navigates to the Kubernetes workloads tab', async () => {
