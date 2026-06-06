@@ -332,6 +332,7 @@ vi.mock('@/hooks/useResources', () => ({
 // ── Lazy import after mocks ────────────────────────────────────────────────
 
 let AIChat: typeof import('../index').AIChat;
+let resetAIChatComposerDraftStashForTests: typeof import('../index').resetAIChatComposerDraftStashForTests;
 let resetAIRuntimeState: typeof import('@/stores/aiRuntimeState').resetAIRuntimeState;
 
 beforeAll(async () => {
@@ -340,6 +341,7 @@ beforeAll(async () => {
     import('@/stores/aiRuntimeState'),
   ]);
   AIChat = chatModule.AIChat;
+  resetAIChatComposerDraftStashForTests = chatModule.resetAIChatComposerDraftStashForTests;
   resetAIRuntimeState = runtimeModule.resetAIRuntimeState;
 });
 
@@ -376,6 +378,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockChatMessagesProps.length = 0;
   mockModelSelectorProps.length = 0;
+  resetAIChatComposerDraftStashForTests();
   setViewportWidth(1440);
   resetAIRuntimeState();
   mockAiChatStore.isOpenSignal.mockReturnValue(true);
@@ -1443,6 +1446,65 @@ describe('AIChat', () => {
       resolveSend(false);
 
       await waitFor(() => expect(textarea.value).toBe('new draft while waiting'));
+    });
+
+    it('restores an unsent composer draft after the assistant drawer remounts', async () => {
+      const firstRender = renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+
+      fireEvent.input(textarea, { target: { value: 'keep this draft while I check another page' } });
+      textarea.setSelectionRange(10, 10);
+
+      firstRender.unmount();
+      renderChat();
+
+      const restoredTextarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+      await waitFor(() =>
+        expect(restoredTextarea.value).toBe('keep this draft while I check another page'),
+      );
+      await waitFor(() => expect(restoredTextarea.selectionStart).toBe(10));
+      expect(document.activeElement).toBe(restoredTextarea);
+    });
+
+    it('restores queued follow-up edit metadata after remounting the composer', async () => {
+      const queued: QueuedFollowUp = {
+        id: 'queued-1',
+        messageId: 'msg-queued-1',
+        prompt: 'queued scoped prompt',
+        mentions: [{ id: 'vm-1', name: 'web-1', type: 'vm', node: 'pve-1' }],
+        findingId: 'finding-1',
+        sendOptions: { autonomousMode: false, handoffContext: 'scoped context' },
+        timestamp: new Date('2026-06-06T08:00:00Z'),
+      };
+      mockChat.queuedFollowUps.mockReturnValue([queued]);
+      mockChat.queuedFollowUpCount.mockReturnValue(1);
+      mockChat.takeQueuedFollowUp.mockReturnValue(queued);
+      const firstRender = renderChat();
+
+      mockChatMessagesProps.at(-1)?.onEditQueuedFollowUp?.('queued-1');
+      let textarea = screen.getByPlaceholderText('Ask about your infrastructure...') as HTMLTextAreaElement;
+      await waitFor(() => expect(textarea.value).toBe('queued scoped prompt'));
+
+      firstRender.unmount();
+      mockChat.queuedFollowUps.mockReturnValue([]);
+      mockChat.queuedFollowUpCount.mockReturnValue(0);
+      renderChat();
+
+      textarea = screen.getByPlaceholderText('Ask about your infrastructure...') as HTMLTextAreaElement;
+      await waitFor(() => expect(textarea.value).toBe('queued scoped prompt'));
+      fireEvent.input(textarea, { target: { value: 'edited scoped prompt' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(mockChat.sendMessage).toHaveBeenCalledWith(
+        'edited scoped prompt',
+        [{ id: 'vm-1', name: 'web-1', type: 'vm', node: 'pve-1' }],
+        'finding-1',
+        { autonomousMode: false, handoffContext: 'scoped context' },
+      );
     });
 
     it('allows newlines with Shift+Enter', () => {

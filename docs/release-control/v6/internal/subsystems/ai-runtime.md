@@ -141,6 +141,17 @@ runtime cost control, and shared AI transport surfaces.
    Assistant drawer follows that draft-safe recall model rather than limiting
    history recall to an empty composer. Scoped context replay remains owned by
    explicit session handoff metadata or queued follow-up edit state.
+   Unsent composer drafts are recoverable remount state, not prompt history:
+   closing or remounting the Assistant drawer must restore the current prompt,
+   structured mentions, cursor position, and any queued-follow-up edit metadata
+   without writing the draft into submitted prompt history. The referenced
+   OpenCode source at commit `9ed17da55ab1f7360cc0e01075f763e27fa899e9`
+   keeps a module-local `stashed` prompt in
+   `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx`, restores it
+   in `Prompt` `onMount` (lines 595-604), and captures it in `onCleanup`
+   (lines 607-610). Pulse adapts that source behavior with a drawer-local
+   composer stash so normal close/reopen does not drop an unsent user thought
+   or downgrade a scoped queued follow-up into a plain prompt.
    Failed-turn retry is part of that same local chat-runtime boundary: a
    retryable in-memory assistant error may replay the original user turn's
    structured mentions, finding id, approval override, handoff resources,

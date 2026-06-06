@@ -121,9 +121,23 @@ interface PromptHistoryEntry {
   mentions: MentionResource[];
 }
 
+interface ComposerDraftStash {
+  input: string;
+  mentions: MentionResource[];
+  cursorStart: number;
+  cursorEnd: number;
+  editingQueuedFollowUp: QueuedFollowUp | null;
+}
+
 interface AIChatProps {
   onClose: () => void;
 }
+
+let stashedComposerDraft: ComposerDraftStash | null = null;
+
+export const resetAIChatComposerDraftStashForTests = () => {
+  stashedComposerDraft = null;
+};
 
 const compactText = (items: Array<string | undefined>): string[] =>
   items.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
@@ -547,6 +561,25 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const cloneMentions = (mentions: MentionResource[]) =>
     mentions.map((mention) => ({ ...mention }));
 
+  const cloneSendMessageOptions = (
+    sendOptions?: SendMessageOptions,
+  ): SendMessageOptions | undefined => {
+    if (!sendOptions) return undefined;
+    return {
+      ...sendOptions,
+      handoffResources: sendOptions.handoffResources?.map((resource) => ({ ...resource })),
+      handoffActions: sendOptions.handoffActions?.map((action) => ({ ...action })),
+      handoffMetadata: sendOptions.handoffMetadata ? { ...sendOptions.handoffMetadata } : undefined,
+    };
+  };
+
+  const cloneQueuedFollowUp = (queued: QueuedFollowUp): QueuedFollowUp => ({
+    ...queued,
+    mentions: queued.mentions?.map((mention) => ({ ...mention })),
+    sendOptions: cloneSendMessageOptions(queued.sendOptions),
+    timestamp: new Date(queued.timestamp),
+  });
+
   const loadPromptHistory = (): PromptHistoryEntry[] => {
     try {
       const raw = localStorage.getItem(PROMPT_HISTORY_STORAGE_KEY);
@@ -605,6 +638,47 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const resetPromptHistoryNavigation = () => {
     setPromptHistoryIndex(-1);
     setSavedPromptDraft(null);
+  };
+
+  const stashComposerDraftForRemount = () => {
+    const text = input();
+    const mentions = accumulatedMentions();
+    const queuedDraft = editingQueuedFollowUp();
+    if (!text.trim() && mentions.length === 0 && !queuedDraft) {
+      stashedComposerDraft = null;
+      return;
+    }
+
+    const fallbackCursor = text.length;
+    stashedComposerDraft = {
+      input: text,
+      mentions: cloneMentions(mentions),
+      cursorStart: textareaRef?.selectionStart ?? fallbackCursor,
+      cursorEnd: textareaRef?.selectionEnd ?? fallbackCursor,
+      editingQueuedFollowUp: queuedDraft ? cloneQueuedFollowUp(queuedDraft) : null,
+    };
+  };
+
+  const restoreStashedComposerDraft = () => {
+    const draft = stashedComposerDraft;
+    stashedComposerDraft = null;
+    if (!draft) return;
+    if (input().trim() || accumulatedMentions().length > 0 || editingQueuedFollowUp()) return;
+
+    setInput(draft.input);
+    setAccumulatedMentions(cloneMentions(draft.mentions));
+    setEditingQueuedFollowUp(
+      draft.editingQueuedFollowUp ? cloneQueuedFollowUp(draft.editingQueuedFollowUp) : null,
+    );
+    setMentionActive(false);
+    resetPromptHistoryNavigation();
+    queueMicrotask(() => {
+      resizeTextarea();
+      textareaRef?.focus();
+      const start = Math.min(draft.cursorStart, draft.input.length);
+      const end = Math.min(draft.cursorEnd, draft.input.length);
+      textareaRef?.setSelectionRange(start, end);
+    });
   };
 
   const applyPromptHistoryEntry = (entry: PromptHistoryEntry, cursor: 'start' | 'end') => {
@@ -1357,6 +1431,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   onMount(() => {
     setPromptHistory(loadPromptHistory());
     aiChatStore.registerInput?.(textareaRef ?? null);
+    restoreStashedComposerDraft();
     focusComposer();
 
     const handleClickOutside = (e: MouseEvent) => {
@@ -1375,6 +1450,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     };
     document.addEventListener('click', handleClickOutside);
     onCleanup(() => {
+      stashComposerDraftForRemount();
       document.removeEventListener('click', handleClickOutside);
       aiChatStore.registerInput?.(null);
       clearInterruptArm();
@@ -1737,6 +1813,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
           restoreFailedSubmitDraft(submittedInput, submittedMentions);
           return;
         }
+        stashedComposerDraft = null;
         setEditingQueuedFollowUp(null);
         if (!queuedDraft && findingId) {
           aiChatStore.clearFindingId?.();
@@ -1749,6 +1826,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
         logger.warn('[AIChat] Failed to send Assistant message:', error);
         restoreFailedSubmitDraft(submittedInput, submittedMentions);
       });
+    stashedComposerDraft = null;
     setInput('');
     setAccumulatedMentions([]);
     setMentionActive(false);
