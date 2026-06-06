@@ -691,6 +691,12 @@ profile and assignment columns, but embedded table framing must route through
 5. Keep release-grade updater trust fail-closed across `internal/agentupdate/`, `internal/dockeragent/`, and the shared `internal/api/unified_agent.go` download helpers. When release builds embed trusted update signing keys, published agent binaries and installer assets must carry detached `.sig` plus `.sshsig` sidecars; updater/runtime paths must require `X-Signature-Ed25519` in addition to `X-Checksum-Sha256`, and installer-owned download flows must require the matching base64-encoded `X-Signature-SSHSIG`, instead of silently downgrading to checksum-only trust.
 6. Keep shared `internal/api/` helper edits isolated from agent lifecycle semantics: Patrol-specific status transport or alert-trigger wiring changes in shared handlers must not bleed into auto-register, installer, or fleet-control behavior unless this contract moves in the same slice.
    The same isolation rule applies to AI settings payload work in `internal/api/ai_handlers.go`: provider auth fields, masked-secret echoes, and provider-test model selection remain AI/runtime plus API-contract ownership and must not be reinterpreted as lifecycle setup or registration semantics just because they share backend helper layers.
+   The same isolation rule applies to Pulse Assistant chat SSE progress in
+   `internal/api/ai_handler.go`: neutral `workflow_state` transport liveness
+   such as `stream_idle`, provider startup, retry, fallback, and model-thinking
+   status remains AI/runtime plus API-contract ownership and must not be
+   reinterpreted as agent enrollment, install progress, command websocket
+   liveness, or fleet-control freshness.
    The same isolation rule applies to report branding validation and rendering
    request assembly in `internal/api/system_settings.go` and
    `internal/api/metrics_reporting_handlers.go`: lifecycle-owned install,

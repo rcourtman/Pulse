@@ -10630,6 +10630,14 @@ func TestContract_ChatStreamEventJSONSnapshots(t *testing.T) {
 			want: `{"type":"workflow_state","data":{"phase":"provider_retry","message":"Provider connection failed before any output; retrying.","state":"investigating","attempt":2,"max_attempts":2,"retry_after_ms":200}}`,
 		},
 		{
+			name: "workflow_state_stream_idle",
+			event: mustStreamEvent(t, "workflow_state", chat.WorkflowStateData{
+				Phase:   "stream_idle",
+				Message: chatStreamIdleProgressMessage,
+			}),
+			want: `{"type":"workflow_state","data":{"phase":"stream_idle","message":"Assistant is still working; waiting for the next stream event."}}`,
+		},
+		{
 			name: "tool_start",
 			event: mustStreamEvent(t, "tool_start", chat.ToolStartData{
 				ID:       "tool-1",

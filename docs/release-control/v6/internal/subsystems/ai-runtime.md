@@ -282,6 +282,16 @@ runtime cost control, and shared AI transport surfaces.
    turns, and selected-provider startup. These events are runtime progress, not
    Assistant-authored analysis, and they must not become keyword routers,
    explore pre-passes, or instructions that choose the model's next action.
+   The HTTP chat stream handler also owns visible idle progress for silent
+   intervals after the stream has opened: if no client-visible Assistant event
+   reaches the browser for the governed idle interval while execution is still
+   request-bound, the handler must emit a neutral `workflow_state` with phase
+   `stream_idle` rather than relying only on hidden SSE comment heartbeats.
+   Comment heartbeats and visible events must share a serialized writer so a
+   progress tick cannot interleave bytes with a provider/tool event. This is a
+   transport liveness signal only; it must replace the active workflow status,
+   stop before terminal `done`/`error`, and must not become persisted assistant
+   prose or raw provider reasoning.
    The drawer transcript owns detailed in-flight progress for the active turn:
    a new assistant row must start with a neutral local preparation status until
    stream progress arrives, must show the current effective model route while
@@ -296,6 +306,17 @@ runtime cost control, and shared AI transport surfaces.
    workflow and pending-tool activity must retain a per-state start timestamp
    so the drawer can show elapsed wait/run time for long provider starts and
    tool calls instead of repeating a timeless waiting label.
+   The referenced OpenCode source at fetched `origin/dev` commit
+   `4519a1da329c1a4fc384054e7203ba7d06928205` mutates typed message parts as
+   events arrive in `packages/opencode/src/cli/cmd/tui/context/sync.tsx`
+   (`message.part.updated` and `message.part.delta`) and represents session
+   activity as separately updated status in
+   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`
+   (`session.next.step.started`, `session.next.text.delta`, and tool state
+   events). Pulse adapts that event-by-event activity model with browser-safe
+   `workflow_state` and typed tool rows, including replacing `stream_idle`
+   status while no provider event has arrived, rather than exposing terminal
+   UI internals or chain-of-thought.
    The referenced OpenCode source at fetched `origin/dev` commit
    `1399323b78a04229d9bfe00c7436d7f41770fda8` applies each typed event to the
    active assistant message in

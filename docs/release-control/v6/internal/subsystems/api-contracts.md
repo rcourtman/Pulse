@@ -521,7 +521,15 @@ payload shape change when the portal presents compact client rows.
 	    separate create-session request. That cold-stream model resolution must use
 	    explicit configured chat routes or stable provider defaults without waiting
 	    on provider model catalogs; `/api/ai/models` and settings responses own
-	    catalog-backed recommendation, not the first-response chat stream. The generated frontend union, stream parser
+	    catalog-backed recommendation, not the first-response chat stream.
+	    The same SSE transport must emit neutral `workflow_state` events with
+	    phase `stream_idle` during governed silent intervals while request-bound
+	    Assistant execution is still in flight. Hidden SSE comment heartbeats are
+	    not sufficient user-visible progress. The handler must serialize comment
+	    heartbeats and JSON event writes through one writer lock, and the
+	    `stream_idle` event must stop before terminal `done`/`error` rather than
+	    becoming assistant-authored transcript content.
+	    The generated frontend union, stream parser
 	    tests, and backend JSON snapshot proof must stay in lockstep with that payload;
     `done.session_id` and `question.session_id` remain compatibility payloads,
     not the primary cold-session creation contract. Assistant `done` events

@@ -554,6 +554,12 @@ recovery scope, or a storage/recovery-owned secret source.
 19. Preserve shipped local security-doc guidance in shared `internal/api/` config/setup helpers so storage- and recovery-adjacent transport surfaces do not reintroduce GitHub `main` security links when the running build already serves its own local security documentation route.
 20. Keep shared `internal/api/` Patrol transport and alert-trigger edits feature-isolated: Patrol-specific recency fields, callback fan-out, or alert-bridge wiring changes must not leak into recovery queries, storage links, or recovery-adjacent install/setup flows unless this contract changes in the same slice.
     The same adjacency rule applies to AI settings transport in `internal/api/ai_handlers.go`: provider auth state, masked-secret payload fields, provider-test model selection, and safe provider preflight diagnostics remain AI/runtime plus API-contract concerns and must not be absorbed into storage/recovery transport ownership just because those handlers live under the shared backend API tree.
+    The same adjacency rule applies to Pulse Assistant chat SSE progress in
+    `internal/api/ai_handler.go`: neutral `workflow_state` transport liveness
+    such as `stream_idle`, provider startup, retry, fallback, and
+    model-thinking status is Assistant/API progress only, not recovery
+    acquisition, restore identity, backup task freshness, storage-provider
+    health, or storage/recovery job progress.
     Direct alert-investigation execution controls in `internal/api/ai_handlers.go`
     follow that same split: request-scoped `AutonomousMode:false` and
     `RequireCommandApproval:true` are AI action-governance constraints, not

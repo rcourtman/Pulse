@@ -767,6 +767,41 @@ func TestHandleChat_EmitsSessionBeforeExecuteStream(t *testing.T) {
 	assert.Equal(t, 1, strings.Count(response, `"type":"workflow_state"`))
 }
 
+func TestHandleChat_EmitsIdleProgressWhileServiceIsSilent(t *testing.T) {
+	cfg := &config.Config{}
+	h := newTestAIHandler(cfg, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+
+	idleInterval := chatStreamIdleProgressInterval
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.On("ExecuteStream", mock.Anything, mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+		time.Sleep(idleInterval + 25*time.Millisecond)
+	})
+
+	body := `{"prompt": "hi", "session_id": "idle-progress-session"}`
+	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	h.HandleChat(w, req)
+
+	response := w.Body.String()
+	idleIndex := strings.Index(response, `"phase":"stream_idle"`)
+	doneIndex := strings.LastIndex(response, `"type":"done"`)
+	if idleIndex < 0 {
+		t.Fatalf("response missing idle progress event: %s", response)
+	}
+	if !strings.Contains(response, chatStreamIdleProgressMessage) {
+		t.Fatalf("response missing idle progress message: %s", response)
+	}
+	if doneIndex < 0 {
+		t.Fatalf("response missing done event: %s", response)
+	}
+	if idleIndex > doneIndex {
+		t.Fatalf("idle progress appeared after done event: %s", response)
+	}
+}
+
 func TestHandleChat_DoesNotLoadStoredHandoffForGeneratedSession(t *testing.T) {
 	cfg := &config.Config{}
 	h := newTestAIHandler(cfg, nil, nil)

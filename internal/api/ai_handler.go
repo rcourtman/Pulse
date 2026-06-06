@@ -158,6 +158,10 @@ type AIHandler struct {
 	costStoreResolver func(ctx context.Context) *cost.Store
 }
 
+var chatStreamIdleProgressInterval = 2500 * time.Millisecond
+
+const chatStreamIdleProgressMessage = "Assistant is still working; waiting for the next stream event."
+
 // SetReportNarratorResolver wires the optional per-tenant
 // report-narrator resolver. When unset (or when the resolver returns
 // nil), chat sessions construct their tool executor without report
@@ -2435,6 +2439,11 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Minute)
 	defer cancel()
 
+	var writeMu sync.Mutex
+	var lastClientEventUnixMilli atomic.Int64
+	var terminalEventsStarted atomic.Bool
+	lastClientEventUnixMilli.Store(time.Now().UnixMilli())
+
 	// Heartbeat
 	heartbeatDone := make(chan struct{})
 	var clientDisconnected atomic.Bool
@@ -2448,14 +2457,17 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 				clientDisconnected.Store(true)
 				return
 			case <-ticker.C:
+				writeMu.Lock()
 				_ = rc.SetWriteDeadline(time.Now().Add(10 * time.Second))
 				_, err := w.Write([]byte(": heartbeat\n\n"))
 				if err != nil {
+					writeMu.Unlock()
 					clientDisconnected.Store(true)
 					cancel()
 					return
 				}
 				flusher.Flush()
+				writeMu.Unlock()
 			case <-heartbeatDone:
 				return
 			}
@@ -2464,7 +2476,7 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	defer close(heartbeatDone)
 
 	// Write helper
-	writeEvent := func(event chat.StreamEvent) {
+	writeEventIf := func(event chat.StreamEvent, shouldWrite func() bool) {
 		if clientDisconnected.Load() {
 			return
 		}
@@ -2477,6 +2489,11 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return
 		}
+		writeMu.Lock()
+		defer writeMu.Unlock()
+		if shouldWrite != nil && !shouldWrite() {
+			return
+		}
 		_ = rc.SetWriteDeadline(time.Now().Add(10 * time.Second))
 		_, err = w.Write([]byte("data: " + string(data) + "\n\n"))
 		if err != nil {
@@ -2485,6 +2502,54 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		flusher.Flush()
+		lastClientEventUnixMilli.Store(time.Now().UnixMilli())
+	}
+	writeEvent := func(event chat.StreamEvent) {
+		writeEventIf(event, nil)
+	}
+
+	assistantExecutionDone := make(chan struct{})
+	var assistantExecutionDoneClosed atomic.Bool
+	finishAssistantExecution := func() {
+		if assistantExecutionDoneClosed.CompareAndSwap(false, true) {
+			close(assistantExecutionDone)
+		}
+	}
+	defer finishAssistantExecution()
+
+	if chatStreamIdleProgressInterval > 0 {
+		go func() {
+			ticker := time.NewTicker(chatStreamIdleProgressInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-heartbeatDone:
+					return
+				case <-assistantExecutionDone:
+					return
+				case <-ticker.C:
+					if clientDisconnected.Load() {
+						return
+					}
+					if terminalEventsStarted.Load() || assistantExecutionDoneClosed.Load() {
+						return
+					}
+					lastEventAt := time.UnixMilli(lastClientEventUnixMilli.Load())
+					if time.Since(lastEventAt) < chatStreamIdleProgressInterval {
+						continue
+					}
+					progressData, _ := json.Marshal(chat.WorkflowStateData{
+						Phase:   "stream_idle",
+						Message: chatStreamIdleProgressMessage,
+					})
+					writeEventIf(chat.StreamEvent{Type: "workflow_state", Data: progressData}, func() bool {
+						return !terminalEventsStarted.Load() && !assistantExecutionDoneClosed.Load()
+					})
+				}
+			}
+		}()
 	}
 
 	requestSessionID := strings.TrimSpace(req.SessionID)
@@ -2605,22 +2670,27 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	}, func(event chat.StreamEvent) {
 		if event.Type == "done" {
 			serviceSentDone = true
+			terminalEventsStarted.Store(true)
 		} else if event.Type == "error" {
 			serviceSentError = true
+			terminalEventsStarted.Store(true)
 		}
 		writeEvent(event)
 	})
+	finishAssistantExecution()
 
 	if err != nil {
 		log.Error().Err(err).Msg("Chat stream error")
 		if !serviceSentError {
 			errData, _ := json.Marshal(chat.ErrorData{Message: "An error occurred while processing your request"})
+			terminalEventsStarted.Store(true)
 			writeEvent(chat.StreamEvent{Type: "error", Data: errData})
 		}
 	}
 
 	// Send done
 	if !serviceSentDone {
+		terminalEventsStarted.Store(true)
 		writeEvent(chat.StreamEvent{Type: "done", Data: nil})
 	}
 }
