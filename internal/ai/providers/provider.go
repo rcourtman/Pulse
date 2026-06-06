@@ -165,7 +165,7 @@ type Provider interface {
 
 // StreamEvent represents a streaming event from the AI provider
 type StreamEvent struct {
-	Type string      // "content", "thinking", "tool_start", "tool_end", "done", "error"
+	Type string      // "content", "thinking", "tool_start", "tool_progress", "tool_end", "done", "error"
 	Data interface{} // Type-specific data
 }
 
@@ -187,6 +187,25 @@ type ToolStartEvent struct {
 }
 
 func (e ToolStartEvent) NormalizeCollections() ToolStartEvent {
+	if e.Input == nil {
+		e.Input = map[string]interface{}{}
+	}
+	return e
+}
+
+// ToolProgressEvent is the data for "tool_progress" stream events.
+// Providers use this to mutate an already visible pending tool row while the
+// model is still streaming tool arguments or while execution advances.
+type ToolProgressEvent struct {
+	ID       string                 `json:"id"`
+	Name     string                 `json:"name"`
+	Input    map[string]interface{} `json:"input,omitempty"`
+	RawInput string                 `json:"raw_input,omitempty"`
+	Phase    string                 `json:"phase,omitempty"`
+	Message  string                 `json:"message,omitempty"`
+}
+
+func (e ToolProgressEvent) NormalizeCollections() ToolProgressEvent {
 	if e.Input == nil {
 		e.Input = map[string]interface{}{}
 	}

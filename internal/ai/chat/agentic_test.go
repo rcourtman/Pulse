@@ -227,6 +227,91 @@ func TestAgenticLoop(t *testing.T) {
 		mockProvider.AssertExpectations(t)
 	})
 
+	t.Run("Provider Tool Argument Progress Mutates Pending Tool", func(t *testing.T) {
+		mockProvider := &MockProvider{}
+		loop := NewAgenticLoop(mockProvider, executor, "You are a helper")
+		ctx := context.Background()
+		sessionID := "test-session"
+		messages := []Message{{Role: "user", Content: "List matching resources"}}
+
+		mockProvider.On("ChatStream", mock.Anything, mock.MatchedBy(func(req providers.ChatRequest) bool {
+			return len(req.Messages) == 1
+		}), mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+			callback := args.Get(2).(providers.StreamCallback)
+			callback(providers.StreamEvent{
+				Type: "tool_start",
+				Data: providers.ToolStartEvent{ID: "call_query", Name: "pulse_query"},
+			})
+			callback(providers.StreamEvent{
+				Type: "tool_progress",
+				Data: providers.ToolProgressEvent{
+					ID:       "call_query",
+					Name:     "pulse_query",
+					RawInput: `{"action":"sea`,
+					Phase:    "pending",
+					Message:  "Receiving tool input.",
+				},
+			})
+			callback(providers.StreamEvent{
+				Type: "tool_progress",
+				Data: providers.ToolProgressEvent{
+					ID:       "call_query",
+					Name:     "pulse_query",
+					Input:    map[string]interface{}{"action": "search", "query": "prowlarr"},
+					RawInput: `{"action":"search","query":"prowlarr"}`,
+					Phase:    "pending",
+					Message:  "Prepared tool input.",
+				},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{
+					ToolCalls: []providers.ToolCall{
+						{
+							ID:    "call_query",
+							Name:  "pulse_query",
+							Input: map[string]interface{}{"action": "search", "query": "prowlarr"},
+						},
+					},
+				},
+			})
+		}).Once()
+
+		mockProvider.On("ChatStream", mock.Anything, mock.MatchedBy(func(req providers.ChatRequest) bool {
+			return len(req.Messages) == 3
+		}), mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+			callback := args.Get(2).(providers.StreamCallback)
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: "Prowlarr is present."},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{},
+			})
+		}).Once()
+
+		var progressEvents []ToolProgressData
+		_, err := loop.Execute(ctx, sessionID, messages, func(event StreamEvent) {
+			if event.Type != "tool_progress" {
+				return
+			}
+			var data ToolProgressData
+			_ = json.Unmarshal(event.Data, &data)
+			progressEvents = append(progressEvents, data)
+		})
+
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, len(progressEvents), 3)
+		assert.Equal(t, "Receiving tool input.", progressEvents[0].Message)
+		assert.Equal(t, `{"action":"sea`, progressEvents[0].RawInput)
+		assert.Equal(t, "Prepared tool input.", progressEvents[1].Message)
+		assert.JSONEq(t, `{"action":"search","query":"prowlarr"}`, progressEvents[1].Input)
+		assert.Equal(t, "running", progressEvents[2].Phase)
+		assert.Equal(t, "call_query", progressEvents[2].ID)
+		mockProvider.AssertExpectations(t)
+	})
+
 	t.Run("Abort Session", func(t *testing.T) {
 		mockProvider := &MockProvider{}
 		loop := NewAgenticLoop(mockProvider, executor, "You are a helper")

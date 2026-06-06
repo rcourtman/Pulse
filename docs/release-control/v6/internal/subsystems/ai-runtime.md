@@ -293,6 +293,17 @@ runtime cost control, and shared AI transport surfaces.
    stream contract adapts that model with `tool_start`, `tool_progress`, and
    `tool_end` events that update the same visible pending tool row in place.
    The referenced OpenCode source at fetched `origin/dev` commit
+   `09d9cf01f93798939c1284fbe974b6e1f4d2759d` also emits and applies
+   tool-input lifecycle deltas in
+   `packages/opencode/src/session/processor.ts` (`tool-input-start`,
+   `tool-input-delta`, `tool-input-end`) and
+   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`
+   (`session.next.tool.input.started`, `.delta`, `.ended`). Pulse's
+   OpenAI-compatible provider path must surface streamed function-argument
+   deltas as `tool_progress` so the pending tool row mutates while the model is
+   still forming the call; waiting until `[DONE]` or execution completion
+   recreates the delayed batch feeling this contract is meant to prevent.
+   The referenced OpenCode source at fetched `origin/dev` commit
    `9ed17da55ab1f7360cc0e01075f763e27fa899e9` creates a tool message part as
    soon as tool input starts in `packages/opencode/src/session/processor.ts`,
    mutates that part through running/completed/error states via

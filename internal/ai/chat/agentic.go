@@ -245,10 +245,17 @@ func emitToolStartEvent(callback StreamCallback, id, name string, input map[stri
 }
 
 func emitToolProgressEvent(callback StreamCallback, id, name string, input map[string]interface{}, phase, message string) {
+	emitToolProgressEventWithRawInput(callback, id, name, input, "", phase, message)
+}
+
+func emitToolProgressEventWithRawInput(callback StreamCallback, id, name string, input map[string]interface{}, rawInputOverride, phase, message string) {
 	if callback == nil {
 		return
 	}
 	inputStr, rawInput := formatToolInputForFrontend(name, input, false)
+	if rawInputOverride != "" {
+		rawInput = rawInputOverride
+	}
 	jsonData, _ := json.Marshal(ToolProgressData{
 		ID:       id,
 		Name:     name,
@@ -893,6 +900,43 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 						attemptEmittedVisibleEvents = true
 						markToolStartMap(visibleToolStarts, data.ID, data.Name)
 						emitToolStartEvent(callback, data.ID, data.Name, data.Input)
+					}
+
+				case "tool_progress":
+					if data, ok := event.Data.(providers.ToolProgressEvent); ok {
+						if data.Name == pulseQuestionToolName {
+							return
+						}
+						data.Input = normalizeSummaryOnlyPulseQueryInput(preferSummaryOnlyQueries, data.Name, data.Input)
+						if toolStartMapHas(suppressedToolStarts, data.ID, data.Name) {
+							return
+						}
+						if len(data.Input) > 0 {
+							if blockMsg, blocked := a.currentResourcePlaceholderBlock(providers.ToolCall{ID: data.ID, Name: data.Name, Input: data.Input}); blocked {
+								log.Warn().
+									Str("tool", data.Name).
+									Str("id", data.ID).
+									Str("reason", blockMsg).
+									Msg("[AgenticLoop] Suppressed invalid current_resource tool_progress before user-visible execution")
+								emitCurrentResourceBlock(providers.ToolCall{ID: data.ID, Name: data.Name, Input: data.Input}, blockMsg)
+								return
+							}
+						}
+						if !toolStartMapHas(visibleToolStarts, data.ID, data.Name) {
+							attemptEmittedVisibleEvents = true
+							emitToolStartEvent(callback, data.ID, data.Name, data.Input)
+							markToolStartMap(visibleToolStarts, data.ID, data.Name)
+						}
+						attemptEmittedVisibleEvents = true
+						emitToolProgressEventWithRawInput(
+							callback,
+							data.ID,
+							data.Name,
+							data.Input,
+							data.RawInput,
+							firstNonEmptyTrimmed(data.Phase, "pending"),
+							data.Message,
+						)
 					}
 
 				case "done":

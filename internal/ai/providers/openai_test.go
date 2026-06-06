@@ -419,11 +419,17 @@ func TestOpenAIClient_ChatStream_ToolCall(t *testing.T) {
 
 	var toolCalls []ToolCall
 	var toolStartIndex int
+	var toolProgressEvents []ToolProgressEvent
 
 	callback := func(event StreamEvent) {
 		t.Logf("Received event type: %s", event.Type)
 		if event.Type == "tool_start" {
 			toolStartIndex++
+		}
+		if event.Type == "tool_progress" {
+			if data, ok := event.Data.(ToolProgressEvent); ok {
+				toolProgressEvents = append(toolProgressEvents, data)
+			}
 		}
 		if event.Type == "done" {
 			if data, ok := event.Data.(DoneEvent); ok {
@@ -440,6 +446,15 @@ func TestOpenAIClient_ChatStream_ToolCall(t *testing.T) {
 
 	// Check that we got a tool_start event
 	assert.Equal(t, 1, toolStartIndex, "Should have received 1 tool_start event")
+	require.Len(t, toolProgressEvents, 2, "tool argument deltas should stream as progress events")
+	assert.Equal(t, "call_123", toolProgressEvents[0].ID)
+	assert.Equal(t, "get_weather", toolProgressEvents[0].Name)
+	assert.Equal(t, "pending", toolProgressEvents[0].Phase)
+	assert.Equal(t, "Receiving tool input.", toolProgressEvents[0].Message)
+	assert.Equal(t, `{"loc`, toolProgressEvents[0].RawInput)
+	assert.Nil(t, toolProgressEvents[0].Input)
+	assert.Equal(t, "Prepared tool input.", toolProgressEvents[1].Message)
+	assert.Equal(t, map[string]interface{}{"location": "NYC"}, toolProgressEvents[1].Input)
 
 	// Check accumulated tool calls in done event
 	require.Len(t, toolCalls, 1)
