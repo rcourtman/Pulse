@@ -71,13 +71,13 @@ describe('stripAssistantOutputArtifacts', () => {
     expect(flushPendingAssistantOutputText(state)).toBe('');
   });
 
-  it('asks callers to replace already emitted compacted prose when a split leak completes', () => {
+  it('holds compacted prose so a split tool leak never flashes in the transcript', () => {
     const state = createAssistantOutputArtifactStreamState();
     const first =
       "I'llcheckthedevicenodesinsidethecontainertoanswerthat.Letmecounttheentriesin/devandlisttheblockdevices.";
 
     expect(appendVisibleTextBeforeAssistantOutputArtifacts(state, first)).toEqual({
-      text: first,
+      text: '',
       stripped: false,
     });
     expect(
@@ -88,10 +88,20 @@ describe('stripAssistantOutputArtifacts', () => {
     ).toEqual({
       text: '',
       stripped: true,
-      previousVisibleText: first,
-      replacementText: '',
     });
     expect(flushPendingAssistantOutputText(state)).toBe('');
+  });
+
+  it('flushes held compacted prose when no tool leak follows before stream end', () => {
+    const state = createAssistantOutputArtifactStreamState();
+    const content =
+      "Thisisbadmodelspacingbutitistheactualanswerbecauseitneverturnsintoatoolcall.";
+
+    expect(appendVisibleTextBeforeAssistantOutputArtifacts(state, content)).toEqual({
+      text: '',
+      stripped: false,
+    });
+    expect(flushPendingAssistantOutputText(state)).toBe(content);
   });
 
   it('releases a held prefix when the next delta proves it is normal prose', () => {

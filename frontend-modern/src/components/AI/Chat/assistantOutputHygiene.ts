@@ -76,6 +76,11 @@ export function appendVisibleTextBeforeAssistantOutputArtifacts(
   const candidate = existing + text;
   const idx = assistantOutputArtifactIndex(candidate);
   if (idx < 0) {
+    if (!existing && isCompactedToolPrelude(text)) {
+      state.pendingText = text;
+      return { text: '', stripped: false };
+    }
+
     const { visible, held } = splitTrailingPotentialToolNamePrefix(text);
     state.visibleText += visible;
     state.pendingText = held;
@@ -87,6 +92,12 @@ export function appendVisibleTextBeforeAssistantOutputArtifacts(
     const previousVisibleText = state.visibleText;
     state.visibleText = '';
     state.pendingText = '';
+    if (!previousVisibleText) {
+      return {
+        text: '',
+        stripped: true,
+      };
+    }
     return {
       text: '',
       stripped: true,

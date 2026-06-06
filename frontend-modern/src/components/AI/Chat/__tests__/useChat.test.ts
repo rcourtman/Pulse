@@ -846,7 +846,7 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('retracts compacted internal prose when a split tool-call leak completes', async () => {
+    it('holds compacted internal prose so a split tool-call leak never becomes visible', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
 
@@ -856,7 +856,12 @@ describe('useChat', () => {
         "I'llcheckthedevicenodesinsidethecontainertoanswerthat.Letmecounttheentriesin/devandlisttheblockdevices.";
 
       fire({ type: 'content', data: compacted });
-      expect(chat.messages().find((m) => m.role === 'assistant')?.content).toBe(compacted);
+      expect(chat.messages().find((m) => m.role === 'assistant')?.content).toBe('');
+      expect(
+        chat.messages()
+          .find((m) => m.role === 'assistant')
+          ?.streamEvents?.filter((e) => e.type === 'content'),
+      ).toEqual([]);
 
       fire({
         type: 'content',
@@ -869,6 +874,29 @@ describe('useChat', () => {
       expect(assistant.content).not.toContain('pulse_read');
       expect(assistant.content).not.toContain('raw arguments');
       expect(assistant.streamEvents?.filter((e) => e.type === 'content')).toEqual([]);
+      dispose();
+    });
+
+    it('flushes held compacted prose on done when no tool-call leak follows', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+      const compacted =
+        'Thisisbadmodelspacingbutitistheactualanswerbecauseitneverturnsintoatoolcall.';
+
+      fire({ type: 'content', data: compacted });
+      expect(chat.messages().find((m) => m.role === 'assistant')?.content).toBe('');
+
+      fire({ type: 'done', data: {} });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.content).toBe(compacted);
+      expect(assistant.streamEvents?.filter((e) => e.type === 'content')).toEqual([
+        { type: 'content', content: compacted },
+      ]);
+      expect(assistant.isStreaming).toBe(false);
       dispose();
     });
 

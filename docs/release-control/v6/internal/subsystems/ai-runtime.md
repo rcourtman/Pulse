@@ -214,6 +214,20 @@ runtime cost control, and shared AI transport surfaces.
    updates flowing through `packages/opencode/src/session/tools.ts`. Pulse's
    stream contract adapts that model with `tool_start`, `tool_progress`, and
    `tool_end` events that update the same visible pending tool row in place.
+   The referenced OpenCode source at fetched `origin/dev` commit
+   `fa2b63f850fc0a23bec2bdff9e660450d3fe7913` also keeps assistant text,
+   reasoning, and tool invocation as typed message parts in
+   `packages/opencode/src/session/message.ts`, while
+   `packages/opencode/src/session/processor.ts` updates text and reasoning
+   parts through `*-delta` events instead of rendering raw provider tool-call
+   syntax as assistant prose. Pulse's frontend stream reducer must preserve the
+   same user-facing invariant: visible transcript content is typed assistant
+   text or a typed Pulse tool/approval/question row. Suspicious compacted
+   provider prelude text that looks like tool-call narration must be buffered
+   until it is proven to be normal answer text or stripped when a raw tool-call
+   marker arrives; it must not flash as run-on prose such as
+   `I'llcheckthedevicenodes...` while the actual governed tool row is still
+   being assembled.
    Streamed provider startup must be bounded by the configured Assistant request
    timeout, the OpenAI-compatible SSE response-header guard, and the first SSE
    body-read guard adapted from OpenCode's provider `wrapSSE` source; transient
