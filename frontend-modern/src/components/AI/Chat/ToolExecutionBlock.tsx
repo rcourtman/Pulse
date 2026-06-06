@@ -30,6 +30,22 @@ const getToolLabel = (name: string) => {
 
 const normalizedToolName = (name?: string) => (name || '').trim().replace(/^pulse_/, '');
 
+const escapePartialJSONKey = (key: string) => key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const extractPartialJSONStringField = (rawInput: string, keys: string[]) => {
+  const raw = rawInput.trim();
+  if (!raw) return '';
+
+  for (const key of keys) {
+    const escapedKey = escapePartialJSONKey(key);
+    const match = raw.match(new RegExp(`"${escapedKey}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)`));
+    if (match?.[1]) {
+      return match[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\').trim();
+    }
+  }
+  return '';
+};
+
 const stringField = (record: Record<string, unknown>, keys: string[]) => {
   for (const key of keys) {
     const value = record[key];
@@ -55,6 +71,48 @@ const targetSuffix = (record: Record<string, unknown>) => {
   const target = stringField(record, ['target_host', 'targetHost', 'resource_id', 'resourceId']);
   if (!target) return '';
   return ` on ${formatIdentifierLabel(target, { maxLength: 18 })}`;
+};
+
+const formatPartialRawInputSummary = (rawInput: string | undefined, toolName?: string) => {
+  if (!rawInput?.trim()) return '';
+
+  const action = extractPartialJSONStringField(rawInput, ['action', 'type']).toLowerCase();
+  const command = extractPartialJSONStringField(rawInput, ['command', 'cmd']);
+  const path = extractPartialJSONStringField(rawInput, ['path', 'file', 'file_path', 'filePath']);
+  const pattern = extractPartialJSONStringField(rawInput, ['pattern', 'grep', 'grep_pattern', 'grepPattern']);
+  const query = extractPartialJSONStringField(rawInput, ['query', 'search', 'name', 'resource_name']);
+  const target = extractPartialJSONStringField(rawInput, [
+    'target_host',
+    'targetHost',
+    'resource_id',
+    'resourceId',
+  ]);
+  const record: Record<string, unknown> = {
+    ...(action ? { action } : {}),
+    ...(command ? { command } : {}),
+    ...(path ? { path } : {}),
+    ...(pattern ? { pattern } : {}),
+    ...(query ? { query } : {}),
+    ...(target ? { target_host: target } : {}),
+  };
+  const tool = normalizedToolName(toolName);
+
+  if ((tool === 'read' || tool === 'run_command' || tool === 'control') && command) {
+    return `$ ${inlineValue(command, 64)}${targetSuffix(record)}`;
+  }
+  if (tool === 'read') {
+    if (action === 'file' && path) return `read ${inlineValue(path, 36)}${targetSuffix(record)}`;
+    if (action === 'tail' && path) return `tail ${inlineValue(path, 36)}${targetSuffix(record)}`;
+    if (action === 'find' && pattern) return `find "${inlineValue(pattern, 28)}"${targetSuffix(record)}`;
+    if (action === 'logs') return `read logs${targetSuffix(record)}`;
+  }
+  if (tool === 'query') {
+    if (action === 'search' && query) return `search "${inlineValue(query, 28)}"`;
+    if (action === 'list') return 'list resources';
+    if (action) return formatIdentifierLabel(action, { maxLength: 28 });
+  }
+  if (action) return formatIdentifierLabel(action, { maxLength: 28 });
+  return 'receiving input';
 };
 
 const formatCommandSummary = (record: Record<string, unknown>) => {
@@ -147,7 +205,7 @@ const formatAlertsInputSummary = (record: Record<string, unknown>) => {
   return action ? formatIdentifierLabel(action, { maxLength: 28 }) : 'read alerts';
 };
 
-const parseToolInputSummary = (input: string, toolName?: string) => {
+const parseToolInputSummary = (input: string, toolName?: string, rawInput?: string) => {
   const trimmed = input.trim();
   if (!trimmed) return '';
 
@@ -155,6 +213,9 @@ const parseToolInputSummary = (input: string, toolName?: string) => {
     const parsed = JSON.parse(trimmed) as unknown;
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       const record = parsed as Record<string, unknown>;
+      if (Object.keys(record).length === 0) {
+        return formatPartialRawInputSummary(rawInput, toolName) || 'request';
+      }
       const tool = normalizedToolName(toolName);
       if (tool === 'read') {
         return formatPulseReadInputSummary(record) || 'read resource';
@@ -287,7 +348,9 @@ interface PendingToolBlockProps {
 export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
   const toolLabel = createMemo(() => getToolLabel(props.tool.name));
   const inputText = createMemo(() => toolValueText(props.tool.input));
-  const inputSummary = createMemo(() => parseToolInputSummary(inputText(), props.tool.name));
+  const inputSummary = createMemo(() =>
+    parseToolInputSummary(inputText(), props.tool.name, props.tool.rawInput),
+  );
   const status = createMemo(() => props.tool.status || 'pending');
   const [now, setNow] = createSignal(Date.now());
   const statusLabel = createMemo(() => {

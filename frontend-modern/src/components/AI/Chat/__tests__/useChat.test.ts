@@ -1222,6 +1222,7 @@ describe('useChat', () => {
           id: 'tool-1',
           name: 'get_logs',
           input: '{}',
+          raw_input: '{"action": "logs"',
           phase: 'running',
           message: 'Running.',
         },
@@ -1233,6 +1234,7 @@ describe('useChat', () => {
         id: 'tool-1',
         name: 'get_logs',
         input: '{}',
+        rawInput: '{"action": "logs"',
         status: 'running',
         progress: 'Running.',
       });
@@ -1240,6 +1242,7 @@ describe('useChat', () => {
       expect(pendingToolEvents).toHaveLength(1);
       expect(pendingToolEvents![0].pendingTool).toMatchObject({
         id: 'tool-1',
+        rawInput: '{"action": "logs"',
         status: 'running',
         progress: 'Running.',
       });

@@ -415,6 +415,36 @@ describe('PendingToolBlock', () => {
     expect(screen.queryByText(/"command"/)).not.toBeInTheDocument();
   });
 
+  it('uses raw partial input while pending Pulse read command JSON is still streaming', () => {
+    render(() => (
+      <PendingToolBlock
+        tool={makePending({
+          name: 'pulse_read',
+          input: '{}',
+          rawInput:
+            '{"action": "exec", "command": "ls /dev | wc -l", "target_host": "current_resource',
+        })}
+      />
+    ));
+
+    expect(screen.getByText('$ ls /dev | wc -l on current resource')).toBeInTheDocument();
+    expect(screen.queryByText(/"target_host"/)).not.toBeInTheDocument();
+  });
+
+  it('shows the currently streamed command fragment before the tool input is valid JSON', () => {
+    render(() => (
+      <PendingToolBlock
+        tool={makePending({
+          name: 'pulse_read',
+          input: '{}',
+          rawInput: '{"action": "exec", "command": "ls /dev |',
+        })}
+      />
+    ));
+
+    expect(screen.getByText('$ ls /dev |')).toBeInTheDocument();
+  });
+
   // --- Activity state ---
 
   it('renders a spinner SVG with animate-spin class while pending', () => {
