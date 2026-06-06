@@ -150,8 +150,13 @@ func TestAgenticLoop(t *testing.T) {
 			assert.NotEqual(t, "thinking", event.Type)
 			assert.NotContains(t, string(event.Data), "private provider reasoning")
 		}
-		require.Len(t, events, 1)
-		assert.Equal(t, "content", events[0].Type)
+		require.Len(t, events, 2)
+		assert.Equal(t, "workflow_state", events[0].Type)
+		var workflowState WorkflowStateData
+		require.NoError(t, json.Unmarshal(events[0].Data, &workflowState))
+		assert.Equal(t, "model_thinking", workflowState.Phase)
+		assert.Equal(t, "Model is reasoning before responding.", workflowState.Message)
+		assert.Equal(t, "content", events[1].Type)
 	})
 
 	t.Run("Execute with Tool Call", func(t *testing.T) {

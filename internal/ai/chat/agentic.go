@@ -800,6 +800,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		var toolCalls []providers.ToolCall
 		var suppressLeakedToolContent bool
 		var pendingVisibleContent string
+		var emittedThinkingWorkflow bool
 		visibleToolStarts := make(map[string]bool)
 		suppressedToolStarts := make(map[string]bool)
 		emitToolStartIfNeeded := func(tc providers.ToolCall) {
@@ -858,6 +859,10 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				case "thinking":
 					if data, ok := event.Data.(providers.ThinkingEvent); ok {
 						thinkingBuilder.WriteString(data.Text)
+						if !emittedThinkingWorkflow && !attemptEmittedVisibleEvents {
+							emitWorkflowState(callback, "model_thinking", "Model is reasoning before responding.", sessionFSMState(a.sessionFSM), "")
+							emittedThinkingWorkflow = true
+						}
 					}
 
 				case "tool_start":

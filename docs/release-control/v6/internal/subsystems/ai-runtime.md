@@ -369,8 +369,11 @@ runtime cost control, and shared AI transport surfaces.
    Assistant stream events must pass through `chat.StreamEvent.ClientSafe()`;
    provider `thinking` chunks are runtime-only and may be retained internally
    for model continuity, but they are dropped before the browser/API boundary.
-   Neutral progress comes from the active stream state, workflow status, or
-   governed tool/question/approval events, not from a reasoning body. Pulse tool
+   The agentic stream may translate the first private provider reasoning delta
+   before visible output into a neutral `model_thinking` workflow status so the
+   drawer shows live activity without exposing chain-of-thought. Neutral
+   progress comes from the active stream state, workflow status, or governed
+   tool/question/approval events, not from a reasoning body. Pulse tool
    invocations must surface only through governed `tool_start` / `tool_end`,
    approval, or question blocks; if a provider emits `pulse_*` / `patrol_*`
    calls, DSML, XML/function-call envelopes, or JSON tool-call shapes as text
