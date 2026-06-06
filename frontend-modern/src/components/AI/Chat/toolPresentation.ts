@@ -108,6 +108,65 @@ const targetSuffix = (record: Record<string, unknown>) => {
   return ` on ${formatIdentifierLabel(target, { maxLength: 18 })}`;
 };
 
+const normalizedShellCommand = (command: string) => command.replace(/\s+/g, ' ').trim();
+
+const shellCommandIntentLabel = (command: string) => {
+  const normalized = normalizedShellCommand(command).toLowerCase();
+  if (!normalized) return '';
+
+  if (/lsblk|udevadm|lspci|lsusb|\/dev|nvme\s+list|blkid/.test(normalized)) {
+    return 'Inspect devices';
+  }
+  if (/smartctl|nvme\s+smart-log|storcli|megacli/.test(normalized)) {
+    return 'Check disk health';
+  }
+  if (/\bdf\b|findmnt|mount\s|ls\s+\/mnt|ls\s+\/media/.test(normalized)) {
+    return 'Inspect filesystems';
+  }
+  if (/\bzpool\b|\bzfs\b/.test(normalized)) {
+    return 'Inspect ZFS storage';
+  }
+  if (
+    /journalctl|docker\s+logs|kubectl\s+logs|tail\s+-f\s+\/var\/log|\/var\/log/.test(normalized)
+  ) {
+    return 'Read logs';
+  }
+  if (/systemctl\s+(status|is-active|show)|service\s+\S+\s+status/.test(normalized)) {
+    return 'Check service status';
+  }
+  if (/docker\s+(ps|inspect|stats)|podman\s+(ps|inspect|stats)/.test(normalized)) {
+    return 'Inspect containers';
+  }
+  if (/kubectl\s+(get|describe|top)|helm\s+(list|status)/.test(normalized)) {
+    return 'Inspect Kubernetes resources';
+  }
+  if (/\b(qm|pct)\s+(list|status|config|pending)|pvesh\s+get|pvesm\s+status/.test(normalized)) {
+    return 'Inspect Proxmox resources';
+  }
+  if (/\b(ip|ss|netstat|ping|traceroute|curl|wget|dig|nslookup)\b/.test(normalized)) {
+    return 'Check network state';
+  }
+  return '';
+};
+
+const isComplexShellCommand = (command: string) =>
+  command.length > 48 || /[;&|`<>]/.test(command) || /\$\(|\${/.test(command);
+
+const formatCommandActivitySummary = (record: Record<string, unknown>, mode: 'read' | 'write') => {
+  const command = normalizedShellCommand(stringField(record, ['command', 'cmd']));
+  if (!command) return '';
+
+  const target = targetSuffix(record);
+  const intent = shellCommandIntentLabel(command);
+  if (mode === 'read' && intent) {
+    return `${intent}${target}`;
+  }
+  if (mode === 'read' && isComplexShellCommand(command)) {
+    return `Read with shell command${target}`;
+  }
+  return `$ ${inlineValue(command, 64)}${target}`;
+};
+
 const parseFunctionStyleToolInput = (input: string) => {
   const match = /^([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([\s\S]*)\)\s*$/.exec(input.trim());
   if (!match) return null;
@@ -222,7 +281,8 @@ const formatPartialRawInputSummary = (rawInput: string | undefined, toolName?: s
   const tool = normalizedToolName(toolName);
 
   if ((tool === 'read' || tool === 'run_command' || tool === 'control') && command) {
-    return `$ ${inlineValue(command, 64)}${targetSuffix(record)}`;
+    const mode = tool === 'run_command' || tool === 'control' ? 'write' : 'read';
+    return formatCommandActivitySummary(record, mode);
   }
   if (tool === 'read') {
     if (action === 'file' && path) return `read ${inlineValue(path, 36)}${targetSuffix(record)}`;
@@ -240,12 +300,6 @@ const formatPartialRawInputSummary = (rawInput: string | undefined, toolName?: s
   return 'receiving input';
 };
 
-const formatCommandSummary = (record: Record<string, unknown>) => {
-  const command = stringField(record, ['command', 'cmd']);
-  if (!command) return '';
-  return `$ ${inlineValue(command, 64)}${targetSuffix(record)}`;
-};
-
 const formatPulseReadInputSummary = (record: Record<string, unknown>) => {
   const action = stringField(record, ['action', 'type']).toLowerCase();
   const path = inlineValue(stringField(record, ['path', 'file', 'file_path', 'filePath']), 36);
@@ -257,7 +311,9 @@ const formatPulseReadInputSummary = (record: Record<string, unknown>) => {
   const source = stringField(record, ['source']).toLowerCase();
 
   if (action === 'exec') {
-    return formatCommandSummary(record) || `run read-only command${targetSuffix(record)}`;
+    return (
+      formatCommandActivitySummary(record, 'read') || `run read-only command${targetSuffix(record)}`
+    );
   }
   if (action === 'file') {
     return path ? `read ${path}${targetSuffix(record)}` : `read file${targetSuffix(record)}`;
@@ -278,7 +334,8 @@ const formatPulseReadInputSummary = (record: Record<string, unknown>) => {
       : `read logs${targetSuffix(record)}`;
   }
   return (
-    formatCommandSummary(record) || (action ? formatIdentifierLabel(action, { maxLength: 28 }) : '')
+    formatCommandActivitySummary(record, 'read') ||
+    (action ? formatIdentifierLabel(action, { maxLength: 28 }) : '')
   );
 };
 
@@ -344,7 +401,7 @@ const formatStructuredInputSummary = (
     return formatPulseReadInputSummary(record) || 'read resource';
   }
   if (tool === 'run_command' || tool === 'control') {
-    return formatCommandSummary(record) || 'run command';
+    return formatCommandActivitySummary(record, 'write') || 'run command';
   }
   if (tool === 'query') {
     return formatQueryInputSummary(record);

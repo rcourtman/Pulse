@@ -10854,6 +10854,9 @@ func TestContract_AssistantMockModeRuntimeUsesEffectiveConfig(t *testing.T) {
 		"pauseMockAssistantStream(ctx)",
 		"Reading synthetic Pulse inventory.",
 		"Summarizing mock inventory result.",
+		"Reading mock device inventory.",
+		"Summarizing mock device count.",
+		"mockAssistantReadToolName",
 		"Composing mock Assistant response.",
 	} {
 		if !strings.Contains(mockStreamText, required) {

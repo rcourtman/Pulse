@@ -13,9 +13,13 @@ import (
 )
 
 const (
-	mockAssistantModelRoute = "pulse:mock-assistant"
-	mockAssistantToolID     = "mock-pulse-query"
-	mockAssistantToolName   = "pulse_query"
+	mockAssistantModelRoute    = "pulse:mock-assistant"
+	mockAssistantQueryToolID   = "mock-pulse-query"
+	mockAssistantQueryToolName = "pulse_query"
+	mockAssistantReadToolID    = "mock-pulse-read"
+	mockAssistantReadToolName  = "pulse_read"
+	mockAssistantToolID        = mockAssistantQueryToolID
+	mockAssistantToolName      = mockAssistantQueryToolName
 )
 
 var mockAssistantStreamPace = 220 * time.Millisecond
@@ -42,12 +46,12 @@ func streamMockAssistantTurnIfEnabled(ctx context.Context, sessions *SessionStor
 		streamCallback = func(StreamEvent) {}
 	}
 
-	toolInput := map[string]interface{}{
+	queryInput := map[string]interface{}{
 		"action":       "topology",
 		"summary_only": true,
 		"source":       "mock_assistant_fixture",
 	}
-	toolOutputBytes, _ := json.Marshal(map[string]interface{}{
+	queryOutputBytes, _ := json.Marshal(map[string]interface{}{
 		"source": "mock_assistant_fixture",
 		"summary": map[string]interface{}{
 			"nodes":           3,
@@ -55,29 +59,52 @@ func streamMockAssistantTurnIfEnabled(ctx context.Context, sessions *SessionStor
 			"active_findings": 2,
 		},
 	})
-	toolOutput := string(toolOutputBytes)
+	queryOutput := string(queryOutputBytes)
+	readInput := map[string]interface{}{
+		"action":      "exec",
+		"target_host": "current_resource",
+		"command":     "ls /dev | wc -l && echo '---' && lsblk -d -o NAME,TYPE,SIZE",
+	}
+	readRawInput := `pulse_read(target_host="current_resource",command="ls/dev|wc-l&&echo'---'&&lsblk-d-oNAME,TYPE,SIZE2>/dev/null||echo'lsblknotavailable'")`
+	readOutput := "devices=42\nblock_devices=8"
 
 	emitWorkflowState(streamCallback, "mock_context", "Preparing mock Assistant fixture.", "mock", "")
 	if !pauseMockAssistantStream(ctx) {
 		return true
 	}
-	emitToolStartEvent(streamCallback, mockAssistantToolID, mockAssistantToolName, toolInput)
+	emitToolStartEvent(streamCallback, mockAssistantQueryToolID, mockAssistantQueryToolName, queryInput)
 	if !pauseMockAssistantStream(ctx) {
 		return true
 	}
-	emitToolProgressEvent(streamCallback, mockAssistantToolID, mockAssistantToolName, toolInput, "running", "Reading synthetic Pulse inventory.")
+	emitToolProgressEvent(streamCallback, mockAssistantQueryToolID, mockAssistantQueryToolName, queryInput, "running", "Reading synthetic Pulse inventory.")
 	if !pauseMockAssistantStream(ctx) {
 		return true
 	}
-	emitToolProgressEvent(streamCallback, mockAssistantToolID, mockAssistantToolName, toolInput, "running", "Summarizing mock inventory result.")
+	emitToolProgressEvent(streamCallback, mockAssistantQueryToolID, mockAssistantQueryToolName, queryInput, "running", "Summarizing mock inventory result.")
 	if !pauseMockAssistantStream(ctx) {
 		return true
 	}
-	emitToolEndEvent(streamCallback, mockAssistantToolID, mockAssistantToolName, toolInput, toolOutput, true)
+	emitToolEndEvent(streamCallback, mockAssistantQueryToolID, mockAssistantQueryToolName, queryInput, queryOutput, true)
 	if !pauseMockAssistantStream(ctx) {
 		return true
 	}
-	emitWorkflowState(streamCallback, "mock_response", "Composing mock Assistant response.", "mock", mockAssistantToolName)
+	emitToolStartEvent(streamCallback, mockAssistantReadToolID, mockAssistantReadToolName, readInput)
+	if !pauseMockAssistantStream(ctx) {
+		return true
+	}
+	emitToolProgressEventWithRawInput(streamCallback, mockAssistantReadToolID, mockAssistantReadToolName, readInput, readRawInput, "running", "Reading mock device inventory.")
+	if !pauseMockAssistantStream(ctx) {
+		return true
+	}
+	emitToolProgressEvent(streamCallback, mockAssistantReadToolID, mockAssistantReadToolName, readInput, "running", "Summarizing mock device count.")
+	if !pauseMockAssistantStream(ctx) {
+		return true
+	}
+	emitToolEndEvent(streamCallback, mockAssistantReadToolID, mockAssistantReadToolName, readInput, readOutput, true)
+	if !pauseMockAssistantStream(ctx) {
+		return true
+	}
+	emitWorkflowState(streamCallback, "mock_response", "Composing mock Assistant response.", "mock", mockAssistantReadToolName)
 
 	chunks := mockAssistantResponseChunks(prompt)
 	answer := strings.Join(chunks, "")
@@ -90,10 +117,16 @@ func streamMockAssistantTurnIfEnabled(ctx context.Context, sessions *SessionStor
 			Model:     mockAssistantModelRoute,
 			Timestamp: time.Now(),
 			ToolCalls: []ToolCall{{
-				ID:      mockAssistantToolID,
-				Name:    mockAssistantToolName,
-				Input:   toolInput,
-				Output:  toolOutput,
+				ID:      mockAssistantQueryToolID,
+				Name:    mockAssistantQueryToolName,
+				Input:   queryInput,
+				Output:  queryOutput,
+				Success: &success,
+			}, {
+				ID:      mockAssistantReadToolID,
+				Name:    mockAssistantReadToolName,
+				Input:   readInput,
+				Output:  readOutput,
 				Success: &success,
 			}},
 		}); err != nil {
@@ -121,7 +154,8 @@ func mockAssistantResponseChunks(prompt string) []string {
 	}
 	return []string{
 		firstChunk,
-		"I read a synthetic Pulse inventory snapshot with pulse_query and found 3 nodes, 8 workloads, and 2 active findings. ",
+		"I read a synthetic Pulse inventory snapshot with pulse_query, then inspected mock device inventory with pulse_read. ",
+		"The fixture found 3 nodes, 8 workloads, 42 device entries, and 2 active findings. ",
 		"This deterministic stream exercises status, tool, content, and done updates without waiting on a live model provider.",
 	}
 }

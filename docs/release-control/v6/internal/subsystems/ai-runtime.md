@@ -366,11 +366,12 @@ runtime cost control, and shared AI transport surfaces.
    `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx`, hides generic
    output unless `showGenericToolOutput` is enabled, and bounds output-heavy
    blocks with `packages/opencode/src/cli/cmd/tui/util/collapse-tool-output.ts`.
-   Pulse adapts that by keeping the completed tool action/command visible in the
-   transcript, showing a compact plain-text output preview when it is safe and
-   useful, and keeping structured JSON, unavailable output, and the full raw
-   payload behind Details. This preserves evidence for inspection without
-   letting large command output dominate the Assistant answer flow.
+   Pulse adapts that by keeping the completed tool action visible in the
+   transcript, keeping successful raw output behind Details, and surfacing only
+   short failed plain-text output as a preview when it is actionable. Structured
+   JSON, unavailable output, successful command output, and the full raw payload
+   stay behind Details. This preserves evidence for inspection without letting
+   command output compete with the Assistant answer flow.
    Tool-row summaries are part of that same source-anchored contract, not
    assistant prose cleanup: when provider or backend transport supplies a
    function-style call such as `pulse_read(...)` or a friendly string backed by
@@ -564,10 +565,14 @@ runtime cost control, and shared AI transport surfaces.
    turns: anchored `session`/prepare events from the normal entry path followed
    by mock `workflow_state`, `tool_start`, `tool_progress`, `tool_end`,
    response `workflow_state`, content chunks, and terminal `done`. It must also
-   persist a real assistant message with model route `pulse:mock-assistant` and
-   a successful `pulse_query` tool call so session restore, transcript tooling,
-   and stream-contract tests exercise the same backend-to-browser shape as a
-   live provider/tool turn. Mock mode is also an effective runtime-config
+   persist a real assistant message with model route `pulse:mock-assistant`,
+   a successful `pulse_query` tool call, and a successful `pulse_read` tool call
+   whose progress event includes provider-style raw input such as
+   `pulse_read(...)`. That fixture keeps session restore, transcript tooling,
+   stream-contract tests, and live browser checks exercising the same
+   backend-to-browser shape as a real provider/tool turn, including the raw
+   function-call syntax Pulse must summarize instead of rendering. Mock mode is
+   also an effective runtime-config
    overlay: `internal/api/ai_handler.go` startup, restart, config sync, and
    tenant service initialization must treat Assistant as enabled in memory when
    mock mode is active, without saving or mutating the persisted `AIConfig`, so
@@ -594,10 +599,12 @@ runtime cost control, and shared AI transport surfaces.
    `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`.
    Pulse's compact tool rows must follow that operator-language model: the row
    should summarize the actual governed action (`search "prowlarr"`, `list
-   active alerts`, `topology summary`, `$ ls /dev | wc -l on current resource`)
-   instead of exposing only internal action names such as `QUERY search`,
-   `exec`, or raw JSON; raw input and full output stay available behind
-   Details. The referenced OpenCode source at commit
+   active alerts`, `topology summary`, `Inspect devices on current resource`,
+   or exact governed write commands where the command itself is the operator
+   decision) instead of exposing only internal action names such as `QUERY
+   search`, `exec`, provider function calls, or raw JSON; raw input and full
+   output stay available behind Details. The referenced OpenCode source at
+   commit
    `9ed17da55ab1f7360cc0e01075f763e27fa899e9` also renders pending tool rows
    through `InlineTool` pending text in
    `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`
@@ -612,10 +619,11 @@ runtime cost control, and shared AI transport surfaces.
    generic tool output inside the tool block and uses `collapseToolOutput` in
    `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`
    (`GenericTool`, lines 526-559; `Bash`, lines 701-731) to keep long output bounded.
-   Pulse's completed tool rows must adapt that by
-   showing a compact plain-text output preview when it is safe and useful,
-   while keeping structured JSON, unavailable output, and the full raw payload
-   behind Details. The browser implementation owner is
+   Pulse's completed tool rows must adapt that by keeping successful output
+   behind Details and only previewing failed plain-text output when the preview
+   is short enough to be actionable. Structured JSON, unavailable output,
+   successful command output, and the full raw payload stay behind Details. The
+   browser implementation owner is
    `frontend-modern/src/components/AI/Chat/ToolExecutionBlock.tsx`; completed
    `tool_end` events preserve streamed `raw_input` for the same readable command
    summary used while the tool is pending.

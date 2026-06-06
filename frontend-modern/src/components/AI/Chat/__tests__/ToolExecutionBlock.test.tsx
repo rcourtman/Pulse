@@ -180,7 +180,7 @@ describe('ToolExecutionBlock', () => {
     expect(screen.getByText('list active alerts')).toBeInTheDocument();
   });
 
-  it('renders Pulse read exec input as the actual command', () => {
+  it('renders Pulse read exec input as a readable activity', () => {
     render(() => (
       <ToolExecutionBlock
         tool={makeTool({
@@ -191,7 +191,7 @@ describe('ToolExecutionBlock', () => {
       />
     ));
 
-    expect(screen.getByText('$ ls /dev | wc -l on current resource')).toBeInTheDocument();
+    expect(screen.getByText('Inspect devices on current resource')).toBeInTheDocument();
     expect(screen.queryByText(/"target_host"/)).not.toBeInTheDocument();
   });
 
@@ -206,14 +206,16 @@ describe('ToolExecutionBlock', () => {
       />
     ));
 
-    const summary = screen.getByText('$ ls /dev | wc -l on current resource').closest('code');
+    const summary = screen
+      .getByText('Inspect devices on current resource')
+      .closest('[data-testid="tool-input-summary"]');
     expect(summary).toBeInTheDocument();
     expect(summary?.className).toContain('whitespace-pre-wrap');
     expect(summary?.className).toContain('break-words');
     expect(summary?.className).not.toContain('truncate');
   });
 
-  it('renders provider-style Pulse read function input as the actual command', () => {
+  it('renders provider-style Pulse read function input as a readable activity', () => {
     render(() => (
       <ToolExecutionBlock
         tool={makeTool({
@@ -224,7 +226,7 @@ describe('ToolExecutionBlock', () => {
       />
     ));
 
-    expect(screen.getByText('$ ls /dev | wc -l on current resource')).toBeInTheDocument();
+    expect(screen.getByText('Inspect devices on current resource')).toBeInTheDocument();
     expect(screen.queryByText(/pulse_read\(/)).not.toBeInTheDocument();
   });
 
@@ -274,10 +276,12 @@ describe('ToolExecutionBlock', () => {
 
   // --- Output display ---
 
-  it('previews plain-text output while keeping full details available', () => {
+  it('keeps successful plain-text output in details instead of previewing it', () => {
     render(() => <ToolExecutionBlock tool={makeTool({ output: 'hello world' })} />);
-    expect(screen.getByLabelText('Tool output preview')).toHaveTextContent('hello world');
+    expect(screen.queryByLabelText('Tool output preview')).not.toBeInTheDocument();
     expect(screen.getByText('Details')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Details'));
+    expect(screen.getByText('hello world')).toBeInTheDocument();
   });
 
   it('does not preview structured JSON output by default', () => {
@@ -295,7 +299,7 @@ describe('ToolExecutionBlock', () => {
     expect(screen.getByText('Details')).toBeInTheDocument();
   });
 
-  it('bounds long plain-text output previews without losing full details', () => {
+  it('keeps successful long plain-text output behind details', () => {
     const { container } = render(() => (
       <ToolExecutionBlock
         tool={makeTool({
@@ -305,10 +309,18 @@ describe('ToolExecutionBlock', () => {
     ));
 
     const text = container.textContent || '';
-    expect(screen.getByLabelText('Tool output preview').textContent).toBe(
-      ['line 1', 'line 2', 'line 3', 'line 4', '...'].join('\n'),
-    );
+    expect(screen.queryByLabelText('Tool output preview')).not.toBeInTheDocument();
+    expect(text).not.toContain('line 1');
     expect(text).not.toContain('line 5');
+    expect(screen.getByText('Details')).toBeInTheDocument();
+  });
+
+  it('previews failed plain-text output while keeping full details available', () => {
+    render(() => (
+      <ToolExecutionBlock tool={makeTool({ success: false, output: 'permission denied' })} />
+    ));
+
+    expect(screen.getByLabelText('Tool output preview')).toHaveTextContent('permission denied');
     expect(screen.getByText('Details')).toBeInTheDocument();
   });
 
@@ -325,8 +337,8 @@ describe('ToolExecutionBlock', () => {
       />
     ));
 
-    expect(screen.getByText('$ ls /dev | wc -l on current resource')).toBeInTheDocument();
-    expect(screen.getByLabelText('Tool output preview')).toHaveTextContent('42');
+    expect(screen.getByText('Inspect devices on current resource')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Tool output preview')).not.toBeInTheDocument();
   });
 
   it('hides output that is only whitespace', () => {
@@ -532,7 +544,7 @@ describe('PendingToolBlock', () => {
     expect(screen.queryByText(/"type"/)).not.toBeInTheDocument();
   });
 
-  it('renders pending Pulse read exec input as the command being prepared', () => {
+  it('renders pending Pulse read exec input as readable activity', () => {
     render(() => (
       <PendingToolBlock
         tool={makePending({
@@ -543,7 +555,7 @@ describe('PendingToolBlock', () => {
       />
     ));
 
-    expect(screen.getByText('$ lsblk -o NAME,SIZE on current resource')).toBeInTheDocument();
+    expect(screen.getByText('Inspect devices on current resource')).toBeInTheDocument();
     expect(screen.queryByText(/"command"/)).not.toBeInTheDocument();
   });
 
@@ -558,14 +570,16 @@ describe('PendingToolBlock', () => {
       />
     ));
 
-    const summary = screen.getByText('$ lsblk -o NAME,SIZE on current resource').closest('code');
+    const summary = screen
+      .getByText('Inspect devices on current resource')
+      .closest('[data-testid="tool-input-summary"]');
     expect(summary).toBeInTheDocument();
     expect(summary?.className).toContain('whitespace-pre-wrap');
     expect(summary?.className).toContain('break-words');
     expect(summary?.className).not.toContain('truncate');
   });
 
-  it('renders pending provider-style Pulse read function input as the command being prepared', () => {
+  it('renders pending provider-style Pulse read function input as readable activity', () => {
     render(() => (
       <PendingToolBlock
         tool={makePending({
@@ -575,7 +589,7 @@ describe('PendingToolBlock', () => {
       />
     ));
 
-    expect(screen.getByText('$ lsblk -o NAME,SIZE on current resource')).toBeInTheDocument();
+    expect(screen.getByText('Inspect devices on current resource')).toBeInTheDocument();
     expect(screen.queryByText(/pulse_read\(/)).not.toBeInTheDocument();
   });
 
@@ -591,11 +605,11 @@ describe('PendingToolBlock', () => {
       />
     ));
 
-    expect(screen.getByText('$ ls /dev | wc -l on current resource')).toBeInTheDocument();
+    expect(screen.getByText('Inspect devices on current resource')).toBeInTheDocument();
     expect(screen.queryByText(/"target_host"/)).not.toBeInTheDocument();
   });
 
-  it('shows the currently streamed command fragment before the tool input is valid JSON', () => {
+  it('turns streamed command fragments into readable activity before valid JSON arrives', () => {
     render(() => (
       <PendingToolBlock
         tool={makePending({
@@ -606,7 +620,7 @@ describe('PendingToolBlock', () => {
       />
     ));
 
-    expect(screen.getByText('$ ls /dev |')).toBeInTheDocument();
+    expect(screen.getByText('Inspect devices')).toBeInTheDocument();
   });
 
   it('uses structured raw input over pending backend command display strings', () => {
@@ -625,7 +639,9 @@ describe('PendingToolBlock', () => {
   });
 
   it('renders a command-specific pending label before governed command arguments arrive', () => {
-    render(() => <PendingToolBlock tool={makePending({ name: 'pulse_run_command', input: '{}' })} />);
+    render(() => (
+      <PendingToolBlock tool={makePending({ name: 'pulse_run_command', input: '{}' })} />
+    ));
 
     expect(screen.getByText('Writing command...')).toBeInTheDocument();
     expect(screen.getByText('writing')).toBeInTheDocument();

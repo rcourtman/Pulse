@@ -469,7 +469,12 @@ func TestServiceExecuteStreamMockModeStreamsToolFixtureWithoutProviderCall(t *te
 		"tool_progress",
 		"tool_progress",
 		"tool_end",
+		"tool_start",
+		"tool_progress",
+		"tool_progress",
+		"tool_end",
 		"workflow_state",
+		"content",
 		"content",
 		"content",
 		"content",
@@ -483,7 +488,7 @@ func TestServiceExecuteStreamMockModeStreamsToolFixtureWithoutProviderCall(t *te
 	if err := json.Unmarshal(events[3].Data, &toolStart); err != nil {
 		t.Fatalf("unmarshal tool_start: %v", err)
 	}
-	if toolStart.ID != mockAssistantToolID || toolStart.Name != mockAssistantToolName {
+	if toolStart.ID != mockAssistantQueryToolID || toolStart.Name != mockAssistantQueryToolName {
 		t.Fatalf("tool_start = %#v, want mock pulse_query", toolStart)
 	}
 
@@ -491,7 +496,7 @@ func TestServiceExecuteStreamMockModeStreamsToolFixtureWithoutProviderCall(t *te
 	if err := json.Unmarshal(events[4].Data, &toolProgress); err != nil {
 		t.Fatalf("unmarshal tool_progress: %v", err)
 	}
-	if toolProgress.ID != mockAssistantToolID || toolProgress.Phase != "running" {
+	if toolProgress.ID != mockAssistantQueryToolID || toolProgress.Phase != "running" {
 		t.Fatalf("tool_progress = %#v, want running mock tool", toolProgress)
 	}
 
@@ -499,8 +504,32 @@ func TestServiceExecuteStreamMockModeStreamsToolFixtureWithoutProviderCall(t *te
 	if err := json.Unmarshal(events[6].Data, &toolEnd); err != nil {
 		t.Fatalf("unmarshal tool_end: %v", err)
 	}
-	if toolEnd.ID != mockAssistantToolID || toolEnd.Name != mockAssistantToolName || !toolEnd.Success {
+	if toolEnd.ID != mockAssistantQueryToolID || toolEnd.Name != mockAssistantQueryToolName || !toolEnd.Success {
 		t.Fatalf("tool_end = %#v, want successful mock pulse_query", toolEnd)
+	}
+
+	var readToolStart ToolStartData
+	if err := json.Unmarshal(events[7].Data, &readToolStart); err != nil {
+		t.Fatalf("unmarshal read tool_start: %v", err)
+	}
+	if readToolStart.ID != mockAssistantReadToolID || readToolStart.Name != mockAssistantReadToolName {
+		t.Fatalf("read tool_start = %#v, want mock pulse_read", readToolStart)
+	}
+
+	var readToolProgress ToolProgressData
+	if err := json.Unmarshal(events[8].Data, &readToolProgress); err != nil {
+		t.Fatalf("unmarshal read tool_progress: %v", err)
+	}
+	if readToolProgress.ID != mockAssistantReadToolID || !strings.Contains(readToolProgress.RawInput, "pulse_read(") {
+		t.Fatalf("read tool_progress = %#v, want raw provider-style pulse_read input", readToolProgress)
+	}
+
+	var readToolEnd ToolEndData
+	if err := json.Unmarshal(events[10].Data, &readToolEnd); err != nil {
+		t.Fatalf("unmarshal read tool_end: %v", err)
+	}
+	if readToolEnd.ID != mockAssistantReadToolID || readToolEnd.Name != mockAssistantReadToolName || !readToolEnd.Success {
+		t.Fatalf("read tool_end = %#v, want successful mock pulse_read", readToolEnd)
 	}
 
 	var done DoneData
@@ -522,14 +551,20 @@ func TestServiceExecuteStreamMockModeStreamsToolFixtureWithoutProviderCall(t *te
 	if assistantMessage.Role != "assistant" || assistantMessage.Model != mockAssistantModelRoute {
 		t.Fatalf("assistant message = %#v, want persisted mock assistant", assistantMessage)
 	}
-	if len(assistantMessage.ToolCalls) != 1 {
-		t.Fatalf("assistant tool calls = %d, want 1", len(assistantMessage.ToolCalls))
+	if len(assistantMessage.ToolCalls) != 2 {
+		t.Fatalf("assistant tool calls = %d, want 2", len(assistantMessage.ToolCalls))
 	}
-	if assistantMessage.ToolCalls[0].Name != mockAssistantToolName {
+	if assistantMessage.ToolCalls[0].Name != mockAssistantQueryToolName {
 		t.Fatalf("assistant tool call = %#v, want mock pulse_query", assistantMessage.ToolCalls[0])
 	}
 	if assistantMessage.ToolCalls[0].Success == nil || !*assistantMessage.ToolCalls[0].Success {
 		t.Fatalf("assistant tool call success = %#v, want true", assistantMessage.ToolCalls[0].Success)
+	}
+	if assistantMessage.ToolCalls[1].Name != mockAssistantReadToolName {
+		t.Fatalf("assistant tool call = %#v, want mock pulse_read", assistantMessage.ToolCalls[1])
+	}
+	if assistantMessage.ToolCalls[1].Success == nil || !*assistantMessage.ToolCalls[1].Success {
+		t.Fatalf("assistant tool call success = %#v, want true", assistantMessage.ToolCalls[1].Success)
 	}
 }
 

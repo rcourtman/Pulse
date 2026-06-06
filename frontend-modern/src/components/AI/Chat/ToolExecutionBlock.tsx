@@ -18,18 +18,18 @@ interface ToolExecutionBlockProps {
   tool: ToolExecution;
 }
 
+interface ToolInputSummaryProps {
+  summary: string;
+}
+
 const hasReadableToolOutput = (output: string) => {
   const trimmed = output.trim();
   return trimmed.length > 0 && !trimmed.toLowerCase().includes('not available');
 };
 
-const ansiControlCodePattern = new RegExp(
-  String.raw`\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])`,
-  'g',
-);
+const ansiControlCodePattern = new RegExp(String.raw`\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])`, 'g');
 
-const stripAnsiControlCodes = (value: string) =>
-  value.replace(ansiControlCodePattern, '');
+const stripAnsiControlCodes = (value: string) => value.replace(ansiControlCodePattern, '');
 
 const looksLikeStructuredOutput = (value: string) => {
   const trimmed = value.trim();
@@ -58,7 +58,9 @@ const trimPreviewLine = (line: string, maxLength: number) => {
   return `${trimmed.slice(0, maxLength).trimEnd()}...`;
 };
 
-const formatOutputPreview = (output: string) => {
+const formatOutputPreview = (output: string, success: boolean) => {
+  if (success) return '';
+
   const normalized = stripAnsiControlCodes(output).replace(/\r\n/g, '\n').trim();
   if (!hasReadableToolOutput(normalized)) return '';
   if (looksLikeStructuredOutput(normalized)) return '';
@@ -78,6 +80,31 @@ const formatOutputPreview = (output: string) => {
   return linesTruncated || charsTruncated ? `${fullPreview}\n...` : fullPreview;
 };
 
+const ToolInputSummary: Component<ToolInputSummaryProps> = (props) => {
+  const isShellSummary = createMemo(() => props.summary.trim().startsWith('$ '));
+  const className = createMemo(
+    () =>
+      `mt-1 block whitespace-pre-wrap break-words leading-5 text-base-content ${
+        isShellSummary() ? 'font-mono text-[11px]' : 'text-[12px] font-medium'
+      }`,
+  );
+
+  return (
+    <Show
+      when={isShellSummary()}
+      fallback={
+        <span data-testid="tool-input-summary" class={className()}>
+          {props.summary}
+        </span>
+      }
+    >
+      <code data-testid="tool-input-summary" class={className()}>
+        {props.summary}
+      </code>
+    </Show>
+  );
+};
+
 /**
  * ToolExecutionBlock - Displays completed tool executions in a compact terminal-like style.
  */
@@ -90,7 +117,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
   const inputSummary = createMemo(() =>
     parseToolInputSummary(inputText(), props.tool.name, props.tool.rawInput),
   );
-  const outputPreview = createMemo(() => formatOutputPreview(outputText()));
+  const outputPreview = createMemo(() => formatOutputPreview(outputText(), props.tool.success));
   const hasInput = createMemo(() => inputText().trim().length > 0);
   const hasOutput = createMemo(() => hasReadableToolOutput(outputText()));
   const hasDetails = createMemo(() => hasInput() || hasOutput());
@@ -144,9 +171,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
               </button>
             </Show>
           </div>
-          <code class="mt-1 block whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-base-content">
-            {inputSummary()}
-          </code>
+          <ToolInputSummary summary={inputSummary()} />
         </div>
       </div>
 
@@ -250,9 +275,7 @@ export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
               <span class="shrink-0 text-[10px] text-muted">{elapsedLabel()}</span>
             </Show>
           </div>
-          <code class="mt-1 block whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-base-content">
-            {inputSummary()}
-          </code>
+          <ToolInputSummary summary={inputSummary()} />
         </div>
       </div>
       <Show when={progressText()}>
