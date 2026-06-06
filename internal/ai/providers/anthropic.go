@@ -756,6 +756,25 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 							}
 						case "input_json_delta":
 							currentToolInput.WriteString(event.Delta.PartialJSON)
+							if currentToolName != "" {
+								rawInput := currentToolInput.String()
+								parsedInput := parseStreamToolInput(rawInput)
+								message := "Receiving tool input."
+								if parsedInput != nil {
+									message = "Prepared tool input."
+								}
+								callback(StreamEvent{
+									Type: "tool_progress",
+									Data: ToolProgressEvent{
+										ID:       currentToolID,
+										Name:     currentToolName,
+										Input:    parsedInput,
+										RawInput: rawInput,
+										Phase:    "pending",
+										Message:  message,
+									},
+								})
+							}
 						}
 					}
 

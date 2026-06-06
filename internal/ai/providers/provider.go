@@ -4,6 +4,7 @@ package providers
 import (
 	"context"
 	"encoding/json"
+	"strings"
 )
 
 // Message represents a chat message
@@ -210,6 +211,17 @@ func (e ToolProgressEvent) NormalizeCollections() ToolProgressEvent {
 		e.Input = map[string]interface{}{}
 	}
 	return e
+}
+
+func parseStreamToolInput(rawArgs string) map[string]interface{} {
+	if strings.TrimSpace(rawArgs) == "" {
+		return nil
+	}
+	var input map[string]interface{}
+	if err := json.Unmarshal([]byte(rawArgs), &input); err != nil {
+		return nil
+	}
+	return input
 }
 
 // ToolEndEvent is the data for "tool_end" stream events

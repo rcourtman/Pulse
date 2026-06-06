@@ -446,7 +446,8 @@ func TestAnthropicClient_ChatStream_ToolUse(t *testing.T) {
 		`{"type":"content_block_delta","delta":{"type":"text_delta","text":"Hi "}}`,
 		`{"type":"content_block_stop"}`,
 		`{"type":"content_block_start","content_block":{"type":"tool_use","id":"tool_1","name":"get_time"}}`,
-		`{"type":"content_block_delta","delta":{"type":"input_json_delta","partial_json":"{\"tz\":\"UTC\"}"}}`,
+		`{"type":"content_block_delta","delta":{"type":"input_json_delta","partial_json":"{\"tz"}}`,
+		`{"type":"content_block_delta","delta":{"type":"input_json_delta","partial_json":"\":\"UTC\"}"}}`,
 		`{"type":"content_block_stop"}`,
 		`{"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":7}}`,
 		`{"type":"message_stop"}`,
@@ -468,6 +469,7 @@ func TestAnthropicClient_ChatStream_ToolUse(t *testing.T) {
 	var done DoneEvent
 	var doneCalled bool
 	var toolStarts int
+	var toolProgressEvents []ToolProgressEvent
 
 	err := client.ChatStream(context.Background(), ChatRequest{
 		Messages: []Message{{Role: "user", Content: "Hi"}},
@@ -479,6 +481,10 @@ func TestAnthropicClient_ChatStream_ToolUse(t *testing.T) {
 			}
 		case "tool_start":
 			toolStarts++
+		case "tool_progress":
+			if data, ok := event.Data.(ToolProgressEvent); ok {
+				toolProgressEvents = append(toolProgressEvents, data)
+			}
 		case "done":
 			if data, ok := event.Data.(DoneEvent); ok {
 				done = data
@@ -495,6 +501,21 @@ func TestAnthropicClient_ChatStream_ToolUse(t *testing.T) {
 	}
 	if toolStarts != 1 {
 		t.Fatalf("toolStarts = %d, want 1", toolStarts)
+	}
+	if len(toolProgressEvents) != 2 {
+		t.Fatalf("toolProgressEvents = %d, want 2", len(toolProgressEvents))
+	}
+	if toolProgressEvents[0].ID != "tool_1" || toolProgressEvents[0].Name != "get_time" {
+		t.Fatalf("unexpected first tool progress identity: %+v", toolProgressEvents[0])
+	}
+	if toolProgressEvents[0].RawInput != `{"tz` || toolProgressEvents[0].Input != nil || toolProgressEvents[0].Message != "Receiving tool input." {
+		t.Fatalf("unexpected partial tool progress: %+v", toolProgressEvents[0])
+	}
+	if toolProgressEvents[1].Message != "Prepared tool input." {
+		t.Fatalf("unexpected complete tool progress message: %+v", toolProgressEvents[1])
+	}
+	if got, want := toolProgressEvents[1].Input["tz"], "UTC"; got != want {
+		t.Fatalf("tool progress input tz = %v, want %q", got, want)
 	}
 	if !doneCalled {
 		t.Fatalf("done event not called")

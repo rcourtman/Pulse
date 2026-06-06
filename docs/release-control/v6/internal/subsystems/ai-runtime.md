@@ -293,28 +293,23 @@ runtime cost control, and shared AI transport surfaces.
    stream contract adapts that model with `tool_start`, `tool_progress`, and
    `tool_end` events that update the same visible pending tool row in place.
    The referenced OpenCode source at fetched `origin/dev` commit
-   `09d9cf01f93798939c1284fbe974b6e1f4d2759d` also emits and applies
-   tool-input lifecycle deltas in
-   `packages/opencode/src/session/processor.ts` (`tool-input-start`,
-   `tool-input-delta`, `tool-input-end`) and
+   `09d9cf01f93798939c1284fbe974b6e1f4d2759d` creates and mutates tool parts as
+   input arrives in `packages/opencode/src/session/processor.ts`
+   (`ensureToolCall`, `tool-input-start`, `tool-input-delta`,
+   `tool-input-end`), applies those input/running/completion updates in
    `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`
-   (`session.next.tool.input.started`, `.delta`, `.ended`). Pulse's
-   OpenAI-compatible provider path must surface streamed function-argument
-   deltas as `tool_progress` so the pending tool row mutates while the model is
-   still forming the call; waiting until `[DONE]` or execution completion
-   recreates the delayed batch feeling this contract is meant to prevent.
-   The referenced OpenCode source at fetched `origin/dev` commit
-   `9ed17da55ab1f7360cc0e01075f763e27fa899e9` creates a tool message part as
-   soon as tool input starts in `packages/opencode/src/session/processor.ts`,
-   mutates that part through running/completed/error states via
-   `packages/opencode/src/session/tools.ts`, and renders the same live part in
-   `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx` through
-   pending/running/completed rows. Pulse's Assistant stream must mirror that
-   timing: model-selected tools become visible when the tool name is known,
-   later argument/progress updates mutate the row, and completion replaces that
-   row rather than appending a delayed batch of steps. Policy-hidden placeholder
-   attempts remain governed by the runtime and may cancel a pending row instead
-   of persisting a failed tool card.
+   (`session.next.tool.input.started`, `.delta`, `.ended`, `.called`,
+   `.progress`, `.success`, `.failed`), and renders the same live tool part in
+   `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx`. Pulse's
+   Assistant stream must mirror that timing: model-selected tools become
+   visible when the tool name is known, streamed function-argument deltas,
+   including Anthropic `input_json_delta` chunks, surface as `tool_progress`,
+   later argument/progress updates mutate the pending row, and completion
+   replaces that row rather than appending a delayed batch of steps. Waiting
+   until `[DONE]`, `message_stop`, or execution completion recreates the
+   delayed batch feeling this contract is meant to prevent. Policy-hidden
+   placeholder attempts remain governed by the runtime and may cancel a pending
+   row instead of persisting a failed tool card.
    The referenced OpenCode source at fetched `origin/dev` commit
    `09d9cf01f93798939c1284fbe974b6e1f4d2759d` renders tool-specific inline
    labels such as `Read <path>`, `Grep "<pattern>"`, `WebFetch <url>`, and bash

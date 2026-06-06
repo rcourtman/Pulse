@@ -742,17 +742,6 @@ type openaiStreamToolCallBuilder struct {
 	args strings.Builder
 }
 
-func parseOpenAIStreamToolInput(rawArgs string) map[string]interface{} {
-	if strings.TrimSpace(rawArgs) == "" {
-		return nil
-	}
-	var input map[string]interface{}
-	if err := json.Unmarshal([]byte(rawArgs), &input); err != nil {
-		return nil
-	}
-	return input
-}
-
 func finalizeOpenAIStreamToolCalls(builders map[int]*openaiStreamToolCallBuilder) []ToolCall {
 	if len(builders) == 0 {
 		return nil
@@ -1094,12 +1083,13 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 						},
 					})
 					if rawArgs := builder.args.String(); rawArgs != "" {
+						parsedInput := parseStreamToolInput(rawArgs)
 						callback(StreamEvent{
 							Type: "tool_progress",
 							Data: ToolProgressEvent{
 								ID:       builder.id,
 								Name:     builder.name,
-								Input:    parseOpenAIStreamToolInput(rawArgs),
+								Input:    parsedInput,
 								RawInput: rawArgs,
 								Phase:    "pending",
 								Message:  "Receiving tool input.",
@@ -1111,8 +1101,9 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 					builder.args.WriteString(tc.Function.Arguments)
 					if builder.name != "" {
 						rawArgs := builder.args.String()
+						parsedInput := parseStreamToolInput(rawArgs)
 						message := "Receiving tool input."
-						if parseOpenAIStreamToolInput(rawArgs) != nil {
+						if parsedInput != nil {
 							message = "Prepared tool input."
 						}
 						callback(StreamEvent{
@@ -1120,7 +1111,7 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 							Data: ToolProgressEvent{
 								ID:       builder.id,
 								Name:     builder.name,
-								Input:    parseOpenAIStreamToolInput(rawArgs),
+								Input:    parsedInput,
 								RawInput: rawArgs,
 								Phase:    "pending",
 								Message:  message,
