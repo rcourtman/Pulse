@@ -265,21 +265,24 @@ runtime cost control, and shared AI transport surfaces.
    `9ed17da55ab1f7360cc0e01075f763e27fa899e9` renders active assistant work
    as session-owned parts in
    `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx`
-   (`Session`, `ToolPart`, `InlineToolRow`) and mutates the matching active
-   tool/text state in `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`;
+   (`Session`, line 185; `ToolPart` mapping, lines 1788-1796;
+   `InlineToolRow`, line 1926) and mutates the matching active tool/text state
+   in `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`
+   (`apply(event)`, line 120; `session.next.tool.*`, lines 276-372);
    Pulse's browser drawer adapts that model by keeping the transcript rows
    typed and stable while the active-turn footer remains a replacing live
    status slot for provider and workflow progress between visible parts.
    The same OpenCode commit applies each streamed session event as its own
    state mutation in `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`
-   (`apply(event)` and the `session.next.tool.*` cases), so Pulse's shared
-   browser SSE consumer must treat opted-in non-text Assistant progress events
-   as paint checkpoints. `frontend-modern/src/api/streaming.ts` must not drain
-   queued workflow/tool/model events from separate stream reads without yielding
-   to the browser, or the drawer will show those steps only after a batch has
-   already finished. Token content and hidden reasoning may continue to opt out
-   of those checkpoints through the caller predicate so answer streaming remains
-   fast.
+   (`apply(event)`, line 120; `session.next.tool.input.started`, line 276;
+   `session.next.tool.progress`, line 317; `session.next.tool.success`, line
+   328; `session.next.tool.failed`, line 350), so Pulse's shared browser SSE
+   consumer must treat opted-in non-text Assistant progress events as paint
+   checkpoints. `frontend-modern/src/api/streaming.ts` must not drain queued
+   workflow/tool/model events from separate stream reads without yielding to the
+   browser, or the drawer will show those steps only after a batch has already
+   finished. Token content and hidden reasoning may continue to opt out of those
+   checkpoints through the caller predicate so answer streaming remains fast.
    Completed Assistant tool rows follow the same source-anchored display policy:
    the referenced OpenCode commit
    `9ed17da55ab1f7360cc0e01075f763e27fa899e9` keeps ordinary tool activity terse
@@ -288,8 +291,9 @@ runtime cost control, and shared AI transport surfaces.
    output unless `showGenericToolOutput` is enabled, and bounds output-heavy
    blocks with `packages/opencode/src/cli/cmd/tui/util/collapse-tool-output.ts`.
    Pulse adapts that by keeping the completed tool action/command visible in the
-   transcript while raw command/tool output remains an explicit Details expansion
-   instead of a default preview. This preserves evidence for inspection without
+   transcript, showing a compact plain-text output preview when it is safe and
+   useful, and keeping structured JSON, unavailable output, and the full raw
+   payload behind Details. This preserves evidence for inspection without
    letting large command output dominate the Assistant answer flow.
    Streaming thinking rows follow the same source-anchored reasoning-display
    contract: OpenCode commit
@@ -314,11 +318,14 @@ runtime cost control, and shared AI transport surfaces.
    copy by the freshest activity timestamp: a later answer token can replace an
    older tool status, and a later in-place tool progress patch can replace the
    answer status again without moving the transcript's chronological row.
-   OpenCode-parity Assistant UX work must reference OpenCode's actual source
-   implementation for message parts, tool-state mutation, progress rendering,
-   and model/session selection before changing Pulse behavior; parity means
-   adapting the proven interaction model, not guessing from screenshots or
-   observed behavior alone.
+   The active OpenCode-parity Assistant goal requires future parity slices to
+   reference OpenCode's actual source implementation before changing Pulse
+   behavior. Each slice must record the inspected OpenCode commit SHA plus
+   source file, symbol/function, and line anchor for the behavior being adapted,
+   including message parts, tool-state mutation, progress rendering,
+   model/session selection, and prompt/footer interaction. Parity means adapting
+   the proven interaction model, not guessing from screenshots or observed
+   behavior alone.
    The referenced OpenCode source at fetched `origin/dev` commit
    `54f4974546104bb72f7a0be2b75b92f9defc009b` builds the model dialog from
    provider metadata, favorites, recent models, and provider sections in
@@ -396,9 +403,9 @@ runtime cost control, and shared AI transport surfaces.
    and carry separate activity freshness metadata for the footer instead of
    moving an earlier active tool row below later tools when progress arrives.
    Assistant experience parity claims against OpenCode must cite the inspected
-   OpenCode commit and source file/function anchor that defines the behavior
-   being adapted; observed UI behavior alone is not sufficient governance
-   evidence for future parity slices.
+   OpenCode commit, source file, source symbol/function, and line anchor that
+   defines the behavior being adapted; observed UI behavior alone is not
+   sufficient governance evidence for future parity slices.
    The referenced OpenCode source at commit
    `f750deaa3e95098fdde5fb00305b273e43c5b2cd` mutates a single tool part from
    `pending` input through `running` progress to completed/error in
