@@ -32,6 +32,7 @@ import {
   DISCOVERY_ANALYSIS_REASONING_LABEL,
 } from '@/utils/resourceAnalysisPresentation';
 import { useDiscoveryTabState } from './useDiscoveryTabState';
+import { orderFactsByActionability } from './factOrdering';
 
 interface DiscoveryTabProps {
   resourceType: ResourceType;
@@ -982,7 +983,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                     <DiscoveryProvenanceMarker showLabel={false} />
                   </div>
                   <div class="space-y-1.5">
-                    <For each={d().facts.slice(0, 8)}>
+                    <For each={orderFactsByActionability(d().facts).slice(0, 8)}>
                       {(fact) => (
                         <div class="flex items-center justify-between gap-2 text-xs">
                           <span class="min-w-0 text-muted truncate">{fact.key}</span>
