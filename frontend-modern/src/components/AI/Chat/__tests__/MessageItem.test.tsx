@@ -969,6 +969,83 @@ describe('MessageItem', () => {
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
     });
 
+    it('keeps completed transcript workflow activity visible after the turn finishes', () => {
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            content: 'Inventory has 3 devices.',
+            isStreaming: false,
+            pendingTools: [],
+            streamEvents: [
+              {
+                type: 'workflow_status',
+                workflowStatus: {
+                  phase: 'provider_start',
+                  message: 'OpenRouter is starting the response.',
+                },
+              },
+              { type: 'content', content: 'Inventory has 3 devices.' },
+            ],
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(screen.getByText('OpenRouter is starting the response.')).toBeInTheDocument();
+      expect(screen.getByText('Inventory has 3 devices.')).toBeInTheDocument();
+      expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
+    });
+
+    it('keeps completed request-start activity visible beside skipped tool evidence', () => {
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            content:
+              'I could not inspect the current resource because no resource context was attached to this chat turn.',
+            isStreaming: false,
+            pendingTools: [],
+            streamEvents: [
+              {
+                type: 'workflow_status',
+                workflowStatus: {
+                  phase: 'request_start',
+                  message: 'Preparing Pulse context.',
+                },
+              },
+              {
+                type: 'tool_cancel',
+                toolId: 'fixture-tool-skipped',
+                toolCancel: {
+                  id: 'fixture-tool-skipped',
+                  name: 'pulse_read',
+                  input:
+                    '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
+                  rawInput: 'pulse_read(target_host="current_resource", command="ls /dev | wc -l")',
+                  reason: 'current_resource unavailable',
+                },
+              },
+              {
+                type: 'content',
+                content:
+                  'I could not inspect the current resource because no resource context was attached to this chat turn.',
+              },
+            ],
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(screen.getByText('Preparing Pulse context.')).toBeInTheDocument();
+      expect(screen.getByText('current_resource unavailable')).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          'I could not inspect the current resource because no resource context was attached to this chat turn.',
+        ),
+      ).toBeInTheDocument();
+    });
+
     it('does not show cursor when streaming but there are pending tools', () => {
       const { container } = render(() => (
         <MessageItem

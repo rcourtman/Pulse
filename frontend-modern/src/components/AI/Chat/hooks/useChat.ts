@@ -257,13 +257,6 @@ export function useChat(options: UseChatOptions = {}) {
     return promise;
   };
 
-  const streamEventsWithoutWorkflowStatusRows = (
-    events: StreamDisplayEvent[] | undefined,
-  ): StreamDisplayEvent[] | undefined => {
-    if (!events) return events;
-    return events.filter((event) => event.type !== 'workflow_status');
-  };
-
   const isLocalPromptProgressEvent = (event: StreamDisplayEvent) =>
     event.type === 'workflow_status' &&
     (event.workflowStatus?.phase === 'request_send' ||
@@ -273,16 +266,15 @@ export function useChat(options: UseChatOptions = {}) {
     events: StreamDisplayEvent[] | undefined,
   ): StreamDisplayEvent[] => (events || []).filter((event) => !isLocalPromptProgressEvent(event));
 
-  const streamEventsWithoutTransientRows = (
+  const streamEventsWithoutUnresolvedInteractiveRows = (
     events: StreamDisplayEvent[] | undefined,
   ): StreamDisplayEvent[] | undefined => {
     if (!events) return events;
-    return events.filter(
+    return streamEventsWithoutLocalPromptProgressRows(events).filter(
       (event) =>
         event.type !== 'pending_tool' &&
         event.type !== 'approval' &&
-        event.type !== 'question' &&
-        event.type !== 'workflow_status',
+        event.type !== 'question',
     );
   };
 
@@ -310,7 +302,7 @@ export function useChat(options: UseChatOptions = {}) {
               pendingApprovals: [],
               pendingQuestions: [],
               streamEvents: interruption
-                ? streamEventsWithoutTransientRows(msg.streamEvents)
+                ? streamEventsWithoutUnresolvedInteractiveRows(msg.streamEvents)
                 : msg.streamEvents,
               workflowStatus: undefined,
               workflowStatusHistory: undefined,
@@ -1379,7 +1371,7 @@ export function useChat(options: UseChatOptions = {}) {
                 workflowStatusHistory: undefined,
                 pendingTools: pendingTools.filter((tool) => !matchesTool(tool, tool.id)),
                 streamEvents: replacePendingToolWithCancelEvent(
-                  streamEventsWithoutWorkflowStatusRows(msg.streamEvents || []) || [],
+                  streamEventsWithoutLocalPromptProgressRows(msg.streamEvents),
                   {
                     ...resolvedTool,
                     updatedAt: now,
@@ -1706,7 +1698,9 @@ export function useChat(options: UseChatOptions = {}) {
                   pendingTools: [],
                   pendingApprovals: [],
                   pendingQuestions: [],
-                  streamEvents: streamEventsWithoutTransientRows(flushedMsg.streamEvents),
+                  streamEvents: streamEventsWithoutUnresolvedInteractiveRows(
+                    flushedMsg.streamEvents,
+                  ),
                   tokens,
                   workflowStatus: undefined,
                   workflowStatusHistory: undefined,
@@ -1720,7 +1714,9 @@ export function useChat(options: UseChatOptions = {}) {
                 pendingTools: [],
                 pendingApprovals: [],
                 pendingQuestions: [],
-                streamEvents: streamEventsWithoutTransientRows(flushedMsg.streamEvents),
+                streamEvents: streamEventsWithoutUnresolvedInteractiveRows(
+                  flushedMsg.streamEvents,
+                ),
                 workflowStatus: undefined,
                 workflowStatusHistory: undefined,
               };
@@ -1738,7 +1734,7 @@ export function useChat(options: UseChatOptions = {}) {
                 pendingTools: [],
                 pendingApprovals: [],
                 pendingQuestions: [],
-                streamEvents: streamEventsWithoutTransientRows(msg.streamEvents),
+                streamEvents: streamEventsWithoutUnresolvedInteractiveRows(msg.streamEvents),
                 workflowStatus: undefined,
                 workflowStatusHistory: undefined,
                 error: errorMsg || 'Request failed',
@@ -1969,7 +1965,7 @@ export function useChat(options: UseChatOptions = {}) {
                 pendingTools: [],
                 pendingApprovals: [],
                 pendingQuestions: [],
-                streamEvents: streamEventsWithoutTransientRows(msg.streamEvents),
+                streamEvents: streamEventsWithoutUnresolvedInteractiveRows(msg.streamEvents),
                 workflowStatus: undefined,
                 workflowStatusHistory: undefined,
                 error: errorMessage,

@@ -25,7 +25,7 @@ import { QuestionCard } from './QuestionCard';
 import { ThinkingBlock } from './ThinkingBlock';
 import { getAssistantAnswerText } from './assistantAnswerText';
 import { stripAssistantOutputArtifacts } from './assistantOutputHygiene';
-import { formatAssistantWorkflowStatus, isInitialRequestStartStatus } from './activeTurnStatus';
+import { formatAssistantWorkflowStatus } from './activeTurnStatus';
 import { groupStreamEventsForDisplay } from './streamEventGrouping';
 import { createPacedWorkflowStatus, workflowStatusRenderKey } from './workflowStatusPresentation';
 import type {
@@ -262,10 +262,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
   const isConcreteStreamActivity = (evt: StreamDisplayEvent) => {
     switch (evt.type) {
       case 'workflow_status':
-        return (
-          !isInitialRequestStartStatus(evt.workflowStatus) &&
-          !!formatAssistantWorkflowStatus(evt.workflowStatus)
-        );
+        return !!formatAssistantWorkflowStatus(evt.workflowStatus);
       case 'thinking':
         return !!evt.thinking?.trim();
       case 'content':
@@ -286,12 +283,8 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
         return false;
     }
   };
-  const hasConcreteStreamActivity = createMemo(() =>
-    groupedEvents().some(isConcreteStreamActivity),
-  );
   const shouldRenderWorkflowStatusEvent = (evt: StreamDisplayEvent) =>
-    !!formatAssistantWorkflowStatus(evt.workflowStatus) &&
-    (!isInitialRequestStartStatus(evt.workflowStatus) || !hasConcreteStreamActivity());
+    !!formatAssistantWorkflowStatus(evt.workflowStatus);
   const renderableWorkflowStatusEvents = createMemo(() =>
     groupedEvents().filter(
       (evt) => evt.type === 'workflow_status' && shouldRenderWorkflowStatusEvent(evt),

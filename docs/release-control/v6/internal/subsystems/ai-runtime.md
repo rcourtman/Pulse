@@ -506,6 +506,19 @@ remain visible/inspectable.
    turns, and selected-provider startup. These events are runtime progress, not
    Assistant-authored analysis, and they must not become keyword routers,
    explore pre-passes, or instructions that choose the model's next action.
+   Backend-emitted `workflow_state` rows that explain real provider, context, or
+   tool progress must remain visible in chronological transcript order after the
+   turn completes or fails; only local prompt placeholders such as initial
+   send/wait rows and unresolved interactive rows such as approvals, questions,
+   and pending tools are cleared on terminal events. The referenced OpenCode
+   source at fetched `origin/dev` commit
+   `914a643ab26053df463ef78a1deadcdb223e8783` writes step, tool, and text parts
+   as soon as they arrive in `packages/opencode/src/session/processor.ts` lines
+   151-162, 322-339, 443-466, and 787-806, then renders completed text parts
+   from stored part state in `packages/ui/src/components/message-part.tsx` lines
+   1545-1551; Pulse adapts that part-style visibility by preserving real
+   workflow activity as evidence rather than collapsing it into an invisible
+   wait state.
    Selected-provider startup copy must describe the provider route as actively
    starting the response (for example, `<Provider> is starting the response.`)
    rather than as a passive wait label, while preserving the same
