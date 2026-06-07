@@ -225,6 +225,13 @@ interface ChatProviderReadinessState {
   action?: string;
 }
 
+interface AssistantProviderRouteHealthPresentation {
+  label: string;
+  title: string;
+  className: string;
+  dotClassName: string;
+}
+
 interface PromptHistoryEntry {
   prompt: string;
   mentions: MentionResource[];
@@ -1914,6 +1921,51 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const readiness = providerReadiness();
     if (readiness.status !== 'error') return null;
     return modelRouteAlternativeFor(selectedChatModel());
+  });
+
+  const providerRouteHealth = createMemo<AssistantProviderRouteHealthPresentation | null>(() => {
+    const readiness = providerReadiness();
+    if (!readiness.provider || readiness.status === 'idle') return null;
+
+    const providerLabel = getAIProviderDisplayName(readiness.provider);
+    const routeLabel = readiness.model?.trim() ? formatChatMessageModelRoute(readiness.model) : '';
+    const title = compactText([
+      readiness.status === 'checking'
+        ? `Checking ${providerLabel} provider route`
+        : readiness.status === 'ready'
+          ? `${providerLabel} provider route ready`
+          : `${providerLabel} provider route issue`,
+      routeLabel ? `Route: ${routeLabel}` : undefined,
+      readiness.summary || readiness.message,
+    ]).join('. ');
+
+    if (readiness.status === 'checking') {
+      return {
+        label: `Checking ${providerLabel}`,
+        title,
+        className:
+          'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200',
+        dotClassName: 'bg-blue-500 animate-pulse',
+      };
+    }
+
+    if (readiness.status === 'ready') {
+      return {
+        label: `${providerLabel} ready`,
+        title,
+        className:
+          'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200',
+        dotClassName: 'bg-emerald-500',
+      };
+    }
+
+    return {
+      label: `${providerLabel} issue`,
+      title,
+      className:
+        'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100',
+      dotClassName: 'bg-amber-500',
+    };
   });
 
   let providerReadinessRequestId = 0;
@@ -4749,6 +4801,24 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   onModelSelect={selectModel}
                   onRefresh={() => loadModels(true)}
                 />
+                <Show when={providerRouteHealth()}>
+                  {(health) => (
+                    <div
+                      role="status"
+                      aria-label="Assistant provider route health"
+                      aria-live="polite"
+                      title={health().title}
+                      class={`inline-flex h-7 max-w-[11rem] shrink-0 items-center gap-1.5 rounded-md border px-2 text-[10px] font-medium ${health().className}`}
+                      data-testid="assistant-provider-route-health"
+                    >
+                      <span
+                        class={`h-1.5 w-1.5 shrink-0 rounded-full ${health().dotClassName}`}
+                        aria-hidden="true"
+                      />
+                      <span class="min-w-0 truncate">{health().label}</span>
+                    </div>
+                  )}
+                </Show>
                 <button
                   type="button"
                   onClick={openAssistantCommandHelp}

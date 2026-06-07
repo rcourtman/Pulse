@@ -110,7 +110,10 @@ runtime cost control, and shared AI transport surfaces.
    drawer may surface the result as actionable retry/settings status plus
    same-model configured-provider alternatives without converting it into
    assistant-authored output. Provider checking is a background diagnostic and
-   must not delay the user's first useful chat turn; a confirmed selected-route
+   must not delay the user's first useful chat turn; the drawer should keep
+   routine selected-route health visible in compact composer chrome while
+   reserving the larger provider-status banner for requested checks and
+   actionable failures. A confirmed selected-route
    provider error must keep typed text and focus without blocking normal chat
    dispatch. If a same-model configured-provider alternative is available when
    the operator sends while that warning is still visible, the drawer must
