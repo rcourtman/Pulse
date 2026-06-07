@@ -426,10 +426,6 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	var lastErr error
 	maxRetries := geminiMaxRetries
 
-	if req.FastFailProviderStartup() {
-		maxRetries = 0
-	}
-
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
 			// Exponential backoff: 2s, 4s, 8s
@@ -832,10 +828,6 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	var resp *http.Response
 	var lastErr error
 	maxRetries := geminiMaxRetries
-
-	if req.FastFailProviderStartup() {
-		maxRetries = 0
-	}
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		// Bail out early if the parent context is already cancelled

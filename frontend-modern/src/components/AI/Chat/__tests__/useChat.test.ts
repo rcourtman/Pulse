@@ -1279,7 +1279,7 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('updates the in-flight message model when provider fallback starts', async () => {
+    it('ignores obsolete provider fallback workflow metadata', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() =>
         useChat({ sessionId: 's', model: 'openrouter:openai/gpt-4o-mini' }),
@@ -1299,21 +1299,14 @@ describe('useChat', () => {
       });
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
-      expect(assistant.model).toBe('gemini:gemini-3.1-flash-lite');
-      expect(assistant.streamEvents).toContainEqual(
-        expect.objectContaining({
-          type: 'model_switch',
-          model: 'gemini:gemini-3.1-flash-lite',
-          failedModel: 'openrouter:openai/gpt-4o-mini',
-          startedAt: expect.any(Number),
-          updatedAt: expect.any(Number),
-        }),
-      );
-      expect(assistant.workflowStatus).toEqual(
-        expect.objectContaining({
-          phase: 'provider_fallback',
-          message: 'OpenRouter did not start a response; trying Gemini.',
-        }),
+      expect(assistant.model).toBe('openrouter:openai/gpt-4o-mini');
+      expect(assistant.streamEvents).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'model_switch',
+            model: 'gemini:gemini-3.1-flash-lite',
+          }),
+        ]),
       );
       dispose();
     });
@@ -1369,7 +1362,7 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('does not infer a failed route when workflow only carries a next model', async () => {
+    it('does not infer a model switch from legacy next-model workflow metadata', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() =>
         useChat({ sessionId: 's', model: 'openrouter:openai/gpt-4o-mini' }),
@@ -1388,13 +1381,14 @@ describe('useChat', () => {
       });
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
-      expect(assistant.model).toBe('gemini:gemini-3.1-flash-lite');
-      expect(assistant.streamEvents).toContainEqual(
-        expect.objectContaining({
-          type: 'model_switch',
-          model: 'gemini:gemini-3.1-flash-lite',
-          failedModel: undefined,
-        }),
+      expect(assistant.model).toBe('openrouter:openai/gpt-4o-mini');
+      expect(assistant.streamEvents).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'model_switch',
+            model: 'gemini:gemini-3.1-flash-lite',
+          }),
+        ]),
       );
       dispose();
     });
@@ -2146,7 +2140,8 @@ describe('useChat', () => {
 
       await chat.sendMessage('hi');
       const fire = getFireEvent();
-      const input = '{"action":"exec","command":"ls /dev | wc -l","target_host":"current_resource"}';
+      const input =
+        '{"action":"exec","command":"ls /dev | wc -l","target_host":"current_resource"}';
 
       fire({
         type: 'tool_start',

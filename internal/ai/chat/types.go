@@ -272,19 +272,15 @@ type ThinkingData struct {
 
 // WorkflowStateData is the data for "workflow_state" events.
 type WorkflowStateData struct {
-	Phase          string `json:"phase"`                     // investigate | clarify | plan | approve | execute | verify | complete
-	Message        string `json:"message"`                   // Human-readable status text for the UI
-	State          string `json:"state,omitempty"`           // Backend workflow state, when available
-	Tool           string `json:"tool,omitempty"`            // Tool associated with this transition
-	Provider       string `json:"provider,omitempty"`        // Provider selected for this workflow step
-	Model          string `json:"model,omitempty"`           // Model route selected for this workflow step
-	Attempt        int    `json:"attempt,omitempty"`         // One-based attempt number for transient provider retries
-	MaxAttempts    int    `json:"max_attempts,omitempty"`    // Maximum attempts available for the current provider request
-	RetryAfterMS   int64  `json:"retry_after_ms,omitempty"`  // Milliseconds until the next provider attempt starts
-	FailedProvider string `json:"failed_provider,omitempty"` // Provider that failed before visible output
-	FailedModel    string `json:"failed_model,omitempty"`    // Model that failed before visible output
-	NextProvider   string `json:"next_provider,omitempty"`   // Provider selected for the fallback attempt
-	NextModel      string `json:"next_model,omitempty"`      // Model selected for the fallback attempt
+	Phase        string `json:"phase"`                    // investigate | clarify | plan | approve | execute | verify | complete
+	Message      string `json:"message"`                  // Human-readable status text for the UI
+	State        string `json:"state,omitempty"`          // Backend workflow state, when available
+	Tool         string `json:"tool,omitempty"`           // Tool associated with this transition
+	Provider     string `json:"provider,omitempty"`       // Provider selected for this workflow step
+	Model        string `json:"model,omitempty"`          // Model route selected for this workflow step
+	Attempt      int    `json:"attempt,omitempty"`        // One-based attempt number for transient provider retries
+	MaxAttempts  int    `json:"max_attempts,omitempty"`   // Maximum attempts available for the current provider request
+	RetryAfterMS int64  `json:"retry_after_ms,omitempty"` // Milliseconds until the next provider attempt starts
 }
 
 // SessionData is the data for "session" events emitted once the backend has

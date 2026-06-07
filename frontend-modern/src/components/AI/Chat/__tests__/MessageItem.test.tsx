@@ -1023,7 +1023,7 @@ describe('MessageItem', () => {
       expect(screen.queryByText(/Hidden reasoning/i)).not.toBeInTheDocument();
     });
 
-    it('renders provider fallback model switches as typed transcript status', () => {
+    it('renders model switches as typed transcript status', () => {
       const events: StreamDisplayEvent[] = [
         { type: 'model_switch', model: 'openrouter:deepseek/deepseek-v4-pro' },
       ];
@@ -1112,7 +1112,7 @@ describe('MessageItem', () => {
       expect(screen.getByText(/Preparing Pulse context\./)).toBeInTheDocument();
     });
 
-    it('renders provider fallback model switches with failed and next routes', () => {
+    it('renders model route switches with previous and next routes', () => {
       const events: StreamDisplayEvent[] = [
         {
           type: 'model_switch',
@@ -1136,9 +1136,9 @@ describe('MessageItem', () => {
       ));
 
       const status = screen.getByRole('status', {
-        name: 'Assistant provider fallback route changed',
+        name: 'Assistant model route changed',
       });
-      expect(status).toHaveTextContent('Provider fallback');
+      expect(status).toHaveTextContent('Switched from');
       expect(status).toHaveTextContent('OpenAI GPT-4o Mini via OpenRouter');
       expect(status).toHaveTextContent('Gemini 3.1 Flash Lite');
       expect(status).toHaveAttribute(

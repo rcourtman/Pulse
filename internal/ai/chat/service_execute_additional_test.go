@@ -809,33 +809,17 @@ func TestService_ExecuteStream_SuppressesSessionEventWhenCallerAlreadySentIt(t *
 	}
 }
 
-func TestService_ExecuteStream_FallsBackWhenPrimaryProviderFailsBeforeVisibleOutput(t *testing.T) {
+func TestService_ExecuteStream_DoesNotFallbackWhenSelectedProviderFailsBeforeVisibleOutput(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewSessionStore(tmpDir)
 	if err != nil {
 		t.Fatalf("failed to create session store: %v", err)
 	}
 
-	var primaryStartupMode providers.ProviderStartupMode
-	var fallbackStartupMode providers.ProviderStartupMode
+	var fallbackCalled atomic.Bool
 	primary := &stubServiceProvider{
 		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
-			primaryStartupMode = req.ProviderStartupMode
 			return errors.New("API error (401): unauthorized")
-		},
-	}
-	fallback := &stubServiceProvider{
-		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
-			fallbackStartupMode = req.ProviderStartupMode
-			callback(providers.StreamEvent{
-				Type: "content",
-				Data: providers.ContentEvent{Text: "PULSE_OK"},
-			})
-			callback(providers.StreamEvent{
-				Type: "done",
-				Data: providers.DoneEvent{InputTokens: 1, OutputTokens: 2},
-			})
-			return nil
 		},
 	}
 
@@ -851,9 +835,7 @@ func TestService_ExecuteStream_FallsBackWhenPrimaryProviderFailsBeforeVisibleOut
 	service.sessions = store
 	service.provider = primary
 	service.providerFactory = func(model string) (providers.StreamingProvider, error) {
-		if model == "gemini:gemini-test" {
-			return fallback, nil
-		}
+		fallbackCalled.Store(true)
 		return nil, errors.New("unexpected model " + model)
 	}
 	service.started = true
@@ -863,7 +845,7 @@ func TestService_ExecuteStream_FallsBackWhenPrimaryProviderFailsBeforeVisibleOut
 	var fallbackEvents int
 	var doneModel string
 	err = service.ExecuteStream(context.Background(), ExecuteRequest{
-		SessionID: "fallback-before-visible-output",
+		SessionID: "no-fallback-before-visible-output",
 		Prompt:    "reply",
 	}, func(event StreamEvent) {
 		switch event.Type {
@@ -891,29 +873,26 @@ func TestService_ExecuteStream_FallsBackWhenPrimaryProviderFailsBeforeVisibleOut
 			doneModel = data.Model
 		}
 	})
-	if err != nil {
-		t.Fatalf("ExecuteStream failed: %v", err)
+	if err == nil {
+		t.Fatal("expected selected provider error")
 	}
-	if got := content.String(); got != "PULSE_OK" {
-		t.Fatalf("content = %q, want fallback response", got)
+	if got := content.String(); got != "" {
+		t.Fatalf("content = %q, want no hidden alternate-route response", got)
 	}
-	if errorEvents != 0 {
-		t.Fatalf("expected hidden primary failure without client error event, got %d", errorEvents)
+	if errorEvents != 1 {
+		t.Fatalf("error events = %d, want selected provider failure event", errorEvents)
 	}
-	if fallbackEvents != 1 {
-		t.Fatalf("fallback workflow events = %d, want 1", fallbackEvents)
+	if fallbackEvents != 0 {
+		t.Fatalf("fallback workflow events = %d, want 0", fallbackEvents)
 	}
-	if doneModel != "gemini:gemini-test" {
-		t.Fatalf("done model = %q, want fallback model", doneModel)
+	if doneModel != "" {
+		t.Fatalf("done model = %q, want no done event", doneModel)
 	}
-	if primaryStartupMode != providers.ProviderStartupFastFailBeforeVisibleOutput {
-		t.Fatalf("primary startup mode = %q, want fast-fail before fallback", primaryStartupMode)
-	}
-	if fallbackStartupMode != providers.ProviderStartupDefault {
-		t.Fatalf("fallback startup mode = %q, want provider default", fallbackStartupMode)
+	if fallbackCalled.Load() {
+		t.Fatal("providerFactory should not be called for a hidden alternate route")
 	}
 
-	messages, err := store.GetMessages("fallback-before-visible-output")
+	messages, err := store.GetMessages("no-fallback-before-visible-output")
 	if err != nil {
 		t.Fatalf("GetMessages failed: %v", err)
 	}
@@ -924,7 +903,7 @@ func TestService_ExecuteStream_FallsBackWhenPrimaryProviderFailsBeforeVisibleOut
 	}
 }
 
-func TestService_ExecuteStream_FallsBackToSameModelGatewayRouteBeforeDefaults(t *testing.T) {
+func TestService_ExecuteStream_DoesNotFallbackToSameModelGatewayRoute(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewSessionStore(tmpDir)
 	if err != nil {
@@ -932,23 +911,11 @@ func TestService_ExecuteStream_FallsBackToSameModelGatewayRouteBeforeDefaults(t 
 	}
 
 	var primaryCalls atomic.Int32
+	var providerFactoryCalls atomic.Int32
 	primary := &stubServiceProvider{
 		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
 			primaryCalls.Add(1)
 			return errors.New("dial tcp: i/o timeout")
-		},
-	}
-	fallback := &stubServiceProvider{
-		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
-			callback(providers.StreamEvent{
-				Type: "content",
-				Data: providers.ContentEvent{Text: "GATEWAY_OK"},
-			})
-			callback(providers.StreamEvent{
-				Type: "done",
-				Data: providers.DoneEvent{InputTokens: 1, OutputTokens: 2},
-			})
-			return nil
 		},
 	}
 
@@ -963,18 +930,16 @@ func TestService_ExecuteStream_FallsBackToSameModelGatewayRouteBeforeDefaults(t 
 	service.sessions = store
 	service.provider = primary
 	service.providerFactory = func(model string) (providers.StreamingProvider, error) {
-		if model == "openrouter:deepseek/deepseek-v4-pro" {
-			return fallback, nil
-		}
+		providerFactoryCalls.Add(1)
 		return nil, errors.New("unexpected model " + model)
 	}
 	service.started = true
 
 	var content strings.Builder
-	var fallbackNextModel string
+	var fallbackEvents int
 	var doneModel string
 	err = service.ExecuteStream(context.Background(), ExecuteRequest{
-		SessionID: "fallback-to-same-model-gateway",
+		SessionID: "no-fallback-to-same-model-gateway",
 		Prompt:    "reply",
 	}, func(event StreamEvent) {
 		switch event.Type {
@@ -990,7 +955,7 @@ func TestService_ExecuteStream_FallsBackToSameModelGatewayRouteBeforeDefaults(t 
 				t.Fatalf("unmarshal workflow state: %v", err)
 			}
 			if data.Phase == "provider_fallback" {
-				fallbackNextModel = data.NextModel
+				fallbackEvents++
 			}
 		case "done":
 			var data DoneData
@@ -1000,106 +965,61 @@ func TestService_ExecuteStream_FallsBackToSameModelGatewayRouteBeforeDefaults(t 
 			doneModel = data.Model
 		}
 	})
-	if err != nil {
-		t.Fatalf("ExecuteStream failed: %v", err)
+	if err == nil {
+		t.Fatal("expected selected provider error")
 	}
-	if got := content.String(); got != "GATEWAY_OK" {
-		t.Fatalf("content = %q, want gateway fallback response", got)
+	if got := content.String(); got != "" {
+		t.Fatalf("content = %q, want no gateway fallback response", got)
 	}
-	if fallbackNextModel != "openrouter:deepseek/deepseek-v4-pro" {
-		t.Fatalf("fallback next model = %q, want same-model gateway route", fallbackNextModel)
+	if fallbackEvents != 0 {
+		t.Fatalf("fallback workflow events = %d, want 0", fallbackEvents)
 	}
-	if doneModel != "openrouter:deepseek/deepseek-v4-pro" {
-		t.Fatalf("done model = %q, want same-model gateway route", doneModel)
+	if doneModel != "" {
+		t.Fatalf("done model = %q, want no done event", doneModel)
 	}
-	if got := primaryCalls.Load(); got != 1 {
-		t.Fatalf("primary provider calls = %d, want one fast-fail call before fallback", got)
+	if got := primaryCalls.Load(); got != 2 {
+		t.Fatalf("primary provider calls = %d, want two selected-route retry calls", got)
+	}
+	if got := providerFactoryCalls.Load(); got != 0 {
+		t.Fatalf("provider factory calls = %d, want no automatic gateway provider", got)
 	}
 }
 
-func TestService_ChatProviderAttemptsUsesStableFallbackModelsWithoutLiveCatalog(t *testing.T) {
+func TestService_ChatProviderAttemptUsesSelectedRouteOnly(t *testing.T) {
 	service := &Service{}
-	cfg := &config.AIConfig{
-		ChatModel:        "openrouter:qwen/qwen3.7-plus",
-		DiscoveryModel:   "gemini:gemini-3.1-flash-lite",
-		OpenRouterAPIKey: "sk-or-test",
-		GeminiAPIKey:     "gemini-test",
-		DeepSeekAPIKey:   "deepseek-test",
-	}
 
-	attempts, err := service.chatProviderAttempts(
-		context.Background(),
-		cfg,
+	attempt, err := service.chatProviderAttempt(
 		"openrouter:qwen/qwen3.7-plus",
 		"openrouter:qwen/qwen3.7-plus",
 		&stubServiceProvider{},
 	)
 	if err != nil {
-		t.Fatalf("chatProviderAttempts failed: %v", err)
+		t.Fatalf("chatProviderAttempt failed: %v", err)
 	}
-
-	got := make([]string, 0, len(attempts))
-	for _, attempt := range attempts {
-		got = append(got, attempt.Model)
+	if attempt.Model != "openrouter:qwen/qwen3.7-plus" {
+		t.Fatalf("attempt model = %q, want selected route", attempt.Model)
 	}
-	want := []string{
-		"openrouter:qwen/qwen3.7-plus",
-		"deepseek:deepseek-v4-flash",
-		"gemini:gemini-3.1-flash-lite",
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("attempt models = %#v, want %#v", got, want)
-	}
-	if attempts[0].Provider == nil {
-		t.Fatal("primary attempt should reuse the configured provider")
-	}
-	for i, attempt := range attempts[1:] {
-		if attempt.Provider != nil {
-			t.Fatalf("fallback attempt %d should be lazy provider creation", i+1)
-		}
+	if attempt.Provider == nil {
+		t.Fatal("selected configured route should reuse the configured provider")
 	}
 }
 
-func TestService_ChatProviderAttemptsPrefersSameModelGatewayFallbackBeforeProviderDefaults(t *testing.T) {
+func TestService_ChatProviderAttemptDoesNotAddGatewayEquivalentRoute(t *testing.T) {
 	service := &Service{}
-	cfg := &config.AIConfig{
-		ChatModel:        "deepseek:deepseek-v4-pro",
-		DiscoveryModel:   "gemini:gemini-3.1-flash-lite",
-		OpenRouterAPIKey: "sk-or-test",
-		DeepSeekAPIKey:   "deepseek-test",
-		GeminiAPIKey:     "gemini-test",
-	}
 
-	attempts, err := service.chatProviderAttempts(
-		context.Background(),
-		cfg,
+	attempt, err := service.chatProviderAttempt(
 		"deepseek:deepseek-v4-pro",
 		"deepseek:deepseek-v4-pro",
 		&stubServiceProvider{},
 	)
 	if err != nil {
-		t.Fatalf("chatProviderAttempts failed: %v", err)
+		t.Fatalf("chatProviderAttempt failed: %v", err)
 	}
-
-	got := make([]string, 0, len(attempts))
-	for _, attempt := range attempts {
-		got = append(got, attempt.Model)
+	if attempt.Model != "deepseek:deepseek-v4-pro" {
+		t.Fatalf("attempt model = %q, want selected route only", attempt.Model)
 	}
-	want := []string{
-		"deepseek:deepseek-v4-pro",
-		"openrouter:deepseek/deepseek-v4-pro",
-		"gemini:gemini-3.1-flash-lite",
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("attempt models = %#v, want %#v", got, want)
-	}
-	if attempts[0].Provider == nil {
-		t.Fatal("primary attempt should reuse the configured provider")
-	}
-	for i, attempt := range attempts[1:] {
-		if attempt.Provider != nil {
-			t.Fatalf("fallback attempt %d should be lazy provider creation", i+1)
-		}
+	if attempt.Provider == nil {
+		t.Fatal("selected configured route should reuse the configured provider")
 	}
 }
 

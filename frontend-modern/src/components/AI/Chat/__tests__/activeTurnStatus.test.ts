@@ -36,11 +36,7 @@ describe('getAssistantActiveTurnStatus', () => {
 
   it('tracks startup timing from the submitted user turn', () => {
     expect(
-      getAssistantActiveTurnStatus(
-        [userMessage({ timestamp: new Date(1_000) })],
-        true,
-        4_000,
-      ),
+      getAssistantActiveTurnStatus([userMessage({ timestamp: new Date(1_000) })], true, 4_000),
     ).toEqual({
       type: 'thinking',
       text: 'Sending prompt',
@@ -183,8 +179,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'tool',
-      text:
-        'Running $ curl -H "Authorization: Bearer [redacted-secret]" --password [redacted-secret] https://example.local',
+      text: 'Running $ curl -H "Authorization: Bearer [redacted-secret]" --password [redacted-secret] https://example.local',
     });
   });
 
@@ -652,7 +647,7 @@ describe('getAssistantActiveTurnStatus', () => {
     });
   });
 
-  it('shows failed and next model routes for provider fallback status', () => {
+  it('shows previous and next model routes for explicit route switches', () => {
     expect(
       getAssistantActiveTurnStatus(
         [
@@ -672,7 +667,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'thinking',
-      text: 'Provider fallback: OpenAI: GPT 4o Mini via OpenRouter -> DeepSeek: DeepSeek V4 Pro via OpenRouter',
+      text: 'Switched from OpenAI: GPT 4o Mini via OpenRouter to DeepSeek: DeepSeek V4 Pro via OpenRouter',
       startedAt: 2_000,
     });
   });

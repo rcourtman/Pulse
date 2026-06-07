@@ -350,7 +350,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     if (!model) return '';
     return props.getModelRouteLabel?.(model) || formatAIModelRouteLabel(model);
   };
-  const isProviderFallbackEvent = (event: StreamDisplayEvent) => {
+  const hasPreviousModelRoute = (event: StreamDisplayEvent) => {
     const model = event.model?.trim();
     const failed = event.failedModel?.trim();
     return !!model && !!failed && failed !== model;
@@ -358,7 +358,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
   const isSelectedModelEvent = (event: StreamDisplayEvent) =>
     event.modelEvent === 'selected' && !!event.model?.trim();
   const modelSwitchTitle = (event: StreamDisplayEvent) => {
-    if (!isProviderFallbackEvent(event)) return modelRouteLabel(event.model);
+    if (!hasPreviousModelRoute(event)) return modelRouteLabel(event.model);
     return `${modelRouteLabel(event.failedModel)} -> ${modelRouteLabel(event.model)}`;
   };
   const messageModelLabel = () => modelRouteLabel(props.message.model);
@@ -673,11 +673,9 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                                 class="my-2 inline-flex max-w-full items-center gap-2 rounded-md border border-border-subtle bg-surface-alt px-2.5 py-1.5 text-xs text-muted"
                                 role="status"
                                 aria-label={
-                                  isProviderFallbackEvent(event)
-                                    ? 'Assistant provider fallback route changed'
-                                    : isSelectedModelEvent(event)
-                                      ? 'Assistant model route selected'
-                                      : 'Assistant model route changed'
+                                  isSelectedModelEvent(event)
+                                    ? 'Assistant model route selected'
+                                    : 'Assistant model route changed'
                                 }
                                 title={modelSwitchTitle(event)}
                               >
@@ -686,7 +684,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                                   aria-hidden="true"
                                 />
                                 <Show
-                                  when={isProviderFallbackEvent(event)}
+                                  when={hasPreviousModelRoute(event)}
                                   fallback={
                                     <>
                                       <Show when={isSelectedModelEvent(event)}>
@@ -701,7 +699,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                                     </>
                                   }
                                 >
-                                  <span class="shrink-0">Provider fallback</span>
+                                  <span class="shrink-0">Switched from</span>
                                   <span class="min-w-0 truncate font-medium text-base-content">
                                     {modelRouteLabel(event.failedModel)}
                                   </span>

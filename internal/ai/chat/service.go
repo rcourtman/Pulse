@@ -805,31 +805,21 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		streamCallback(event)
 	}
 
-	attempts, initialProviderErr := s.chatProviderAttempts(ctx, cfgSnapshot, selectedModel, configuredModel, configuredProvider)
-	if len(attempts) == 0 {
-		if initialProviderErr != nil {
-			return initialProviderErr
-		}
-		return fmt.Errorf("provider not initialized")
-	}
-	initialFallbackModel := ""
-	if initialProviderErr != nil {
-		initialFallbackModel = attempts[0].Model
-	}
-	if initialFallbackModel != "" {
-		emitChatProviderFallback(streamCallback, selectedModel, initialFallbackModel)
+	attempt, providerErr := s.chatProviderAttempt(selectedModel, configuredModel, configuredProvider)
+	if providerErr != nil {
+		return providerErr
 	}
 
-	runAttempt := func(attempt chatProviderAttempt, hasFallback bool) ([]Message, *AgenticLoop, bool, error) {
+	runAttempt := func(attempt chatProviderAttempt) ([]Message, *AgenticLoop, error) {
 		attemptProvider := attempt.Provider
 		if attemptProvider == nil {
 			if strings.TrimSpace(attempt.Model) == "" {
-				return nil, nil, false, fmt.Errorf("no chat model configured")
+				return nil, nil, fmt.Errorf("no chat model configured")
 			}
 			var providerErr error
 			attemptProvider, providerErr = s.createProviderForModel(attempt.Model)
 			if providerErr != nil {
-				return nil, nil, false, fmt.Errorf("failed to create provider for model %q: %w", attempt.Model, providerErr)
+				return nil, nil, fmt.Errorf("failed to create provider for model %q: %w", attempt.Model, providerErr)
 			}
 		}
 
@@ -846,14 +836,13 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		}
 
 		// Create a per-attempt AgenticLoop to ensure complete isolation between
-		// concurrent sessions and provider fallback attempts. This prevents race
+		// concurrent sessions and chat attempts. This prevents race
 		// conditions where ExecuteStream calls overwrite each other's FSM,
 		// knowledge accumulator, autonomous mode, budget checker, and provider info.
 		systemPrompt := s.buildSystemPromptForOfferedTools(filteredTools)
 		loop := NewAgenticLoop(attemptProvider, executor, systemPrompt)
 		loop.SetOrgID(s.orgID)
 		loop.SetAutonomousMode(autonomousMode)
-		loop.SetFastFailProviderStartup(hasFallback)
 		loop.SetPreferSummaryOnlyQueries(assistantToolScope == assistantTurnToolScopeQueryOnly)
 		sanitizerOptions := []modelboundary.RequestSanitizerOption{}
 		if modelBoundaryAllowedInventoryContext != "" {
@@ -891,16 +880,12 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 			Str("model", attempt.Model).
 			Msg("[ChatService] Set session FSM on agentic loop")
 
-		attemptVisible := false
 		attemptCallback := func(event StreamEvent) {
 			if event.Type == "question" {
 				var data QuestionData
 				if err := json.Unmarshal(event.Data, &data); err == nil && data.QuestionID != "" {
 					s.registerQuestionLoop(data.QuestionID, loop)
 				}
-			}
-			if chatStreamEventBlocksProviderFallback(event) {
-				attemptVisible = true
 			}
 			wrappedCallback(event)
 		}
@@ -918,36 +903,17 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 			Err(err).
 			Msg("[ChatService] Agentic loop returned")
 
-		return resultMessages, loop, attemptVisible, err
+		return resultMessages, loop, err
 	}
 
 	var resultMessages []Message
 	var loop *AgenticLoop
 	var streamErr error
-	lastAttemptModel := selectedModel
-	for attemptIndex, attempt := range attempts {
-		var attemptVisible bool
-		lastAttemptModel = attempt.Model
-		resultMessages, loop, attemptVisible, streamErr = runAttempt(attempt, attemptIndex < len(attempts)-1)
-		if streamErr == nil {
-			selectedModel = attempt.Model
-			break
-		}
-		if attemptVisible || attemptIndex == len(attempts)-1 || ctx.Err() != nil {
-			emitChatProviderError(streamCallback, streamErr)
-			break
-		}
-		nextAttempt := attempts[attemptIndex+1]
-		log.Warn().
-			Err(streamErr).
-			Str("failed_model", attempt.Model).
-			Str("fallback_model", nextAttempt.Model).
-			Str("session_id", session.ID).
-			Msg("[ChatService] Provider failed before visible output; trying configured fallback provider")
-		emitChatProviderFallback(streamCallback, attempt.Model, nextAttempt.Model)
-	}
+	lastAttemptModel := attempt.Model
+	resultMessages, loop, streamErr = runAttempt(attempt)
 
 	if streamErr != nil {
+		emitChatProviderError(streamCallback, streamErr)
 		// Still save any messages we got
 		for _, msg := range resultMessages {
 			if msg.Role == "assistant" && strings.TrimSpace(msg.Model) == "" {
@@ -3041,126 +3007,21 @@ type chatProviderAttempt struct {
 	Provider providers.StreamingProvider
 }
 
-func (s *Service) chatProviderAttempts(_ context.Context, cfg *config.AIConfig, primaryModel, configuredModel string, configuredProvider providers.StreamingProvider) ([]chatProviderAttempt, error) {
-	var attempts []chatProviderAttempt
-	var primaryErr error
-	seen := make(map[string]struct{})
-	seenProviders := make(map[string]struct{})
-	addAttempt := func(model string, provider providers.StreamingProvider) {
-		model = strings.TrimSpace(model)
-		if model == "" && provider == nil {
-			return
-		}
-		key := model
-		if key == "" {
-			key = fmt.Sprintf("__provider_%d", len(attempts))
-		}
-		if _, ok := seen[key]; ok {
-			return
-		}
-		seen[key] = struct{}{}
-		if attemptProvider, _ := config.ParseModelString(model); attemptProvider != "" {
-			seenProviders[attemptProvider] = struct{}{}
-		}
-		attempts = append(attempts, chatProviderAttempt{Model: model, Provider: provider})
-	}
-
+func (s *Service) chatProviderAttempt(primaryModel, configuredModel string, configuredProvider providers.StreamingProvider) (chatProviderAttempt, error) {
 	primaryModel = strings.TrimSpace(primaryModel)
 	configuredModel = strings.TrimSpace(configuredModel)
 	if primaryModel == "" {
 		if configuredProvider != nil {
-			addAttempt("", configuredProvider)
-		} else {
-			primaryErr = fmt.Errorf("no chat model configured")
+			return chatProviderAttempt{Provider: configuredProvider}, nil
 		}
-	} else {
-		provider := configuredProvider
-		if primaryModel != configuredModel {
-			provider = nil
-		}
-		addAttempt(primaryModel, provider)
+		return chatProviderAttempt{}, fmt.Errorf("no chat model configured")
 	}
 
-	if cfg == nil {
-		return attempts, primaryErr
+	provider := configuredProvider
+	if primaryModel != configuredModel {
+		provider = nil
 	}
-
-	primaryProvider, _ := config.ParseModelString(primaryModel)
-	for _, gatewayModel := range modelresolution.GatewayEquivalentChatModels(cfg, primaryModel) {
-		addAttempt(gatewayModel, nil)
-	}
-	for _, providerName := range cfg.GetConfiguredProviders() {
-		if providerName == primaryProvider {
-			continue
-		}
-		if _, ok := seenProviders[providerName]; ok {
-			continue
-		}
-		model := chatFallbackModelForProvider(cfg, providerName)
-		if strings.TrimSpace(model) == "" {
-			log.Debug().
-				Str("provider", providerName).
-				Msg("[ChatService] Skipping provider fallback candidate with no stable chat model")
-			continue
-		}
-		addAttempt(model, nil)
-	}
-
-	return attempts, primaryErr
-}
-
-func chatFallbackModelForProvider(cfg *config.AIConfig, provider string) string {
-	if cfg == nil {
-		return ""
-	}
-	if preferred := strings.TrimSpace(cfg.GetPreferredModelForProvider(provider)); preferred != "" &&
-		modelresolution.IsModelUsableForChatWithConfig(cfg, preferred) {
-		return preferred
-	}
-	if fallback := strings.TrimSpace(config.DefaultModelForProvider(provider)); fallback != "" &&
-		modelresolution.IsModelUsableForChatWithConfig(cfg, fallback) {
-		return fallback
-	}
-	return ""
-}
-
-func chatStreamEventBlocksProviderFallback(event StreamEvent) bool {
-	switch strings.ToLower(strings.TrimSpace(event.Type)) {
-	case "approval_needed", "content", "question", "tool_end", "tool_progress", "tool_start":
-		return true
-	default:
-		return false
-	}
-}
-
-func emitChatProviderFallback(callback StreamCallback, failedModel, nextModel string) {
-	if callback == nil {
-		return
-	}
-	failedProvider := ""
-	if strings.TrimSpace(failedModel) != "" {
-		failedProvider, _ = config.ParseModelString(strings.TrimSpace(failedModel))
-	}
-	nextProvider := ""
-	if strings.TrimSpace(nextModel) != "" {
-		nextProvider, _ = config.ParseModelString(strings.TrimSpace(nextModel))
-	}
-	if strings.TrimSpace(failedProvider) == "" {
-		failedProvider = "selected provider"
-	}
-	if strings.TrimSpace(nextProvider) == "" {
-		nextProvider = "another configured provider"
-	}
-	data, _ := json.Marshal(WorkflowStateData{
-		Phase:          "provider_fallback",
-		Message:        fmt.Sprintf("%s did not start a response; trying %s.", providerLabel(failedProvider), providerLabel(nextProvider)),
-		State:          "provider_fallback",
-		FailedProvider: failedProvider,
-		FailedModel:    strings.TrimSpace(failedModel),
-		NextProvider:   nextProvider,
-		NextModel:      strings.TrimSpace(nextModel),
-	})
-	callback(StreamEvent{Type: "workflow_state", Data: data})
+	return chatProviderAttempt{Model: primaryModel, Provider: provider}, nil
 }
 
 func emitChatProviderError(callback StreamCallback, err error) {

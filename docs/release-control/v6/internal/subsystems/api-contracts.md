@@ -123,7 +123,13 @@ to `frontend-modern/src/api/generated/aiChatEvents.ts` by
 Provider retry progress must use typed fields (`attempt`, `max_attempts`,
 `retry_after_ms`) on that same event instead of frontend-only string parsing or
 provider-specific ad hoc events; the Assistant UI may format those fields, but
-must not invent retry progress that the stream contract did not carry.
+must not invent retry progress that the stream contract did not carry. Assistant
+chat stream payloads must not expose automatic provider fallback metadata:
+`workflow_state` may carry the selected `provider` and `model` plus same-route
+retry fields, but `provider_fallback`, `failed_provider`, `failed_model`,
+`next_provider`, and `next_model` are retired from the generated stream event
+contract. Cross-route recovery belongs to explicit failed-turn actions, not
+hidden `/api/ai/chat` stream mutation.
 Assistant local stream fixtures are part of the same frontend API contract:
 `frontend-modern/src/api/aiChatDevStreamFixture.ts` may short-circuit only
 explicit `/fixture ...` prompts in development or test mode, must emit the same
@@ -134,6 +140,10 @@ obsolete grouped-context wording in fixture answer content. The fixture payload
 contract proves the stream reducer and transcript renderer against the same
 chronological event order a live provider would produce; UI grouping or footer
 summaries are not part of the fixture contract.
+The provider-retry fixture must exercise selected-route retry by emitting
+`provider_retry` for the selected route and completing with that same model; it
+must not simulate an automatic switch to a configured gateway or alternate
+provider route.
 Queue verification fixtures must cover both the active hold turn and the queued
 drain turn so UX proof can exercise queued follow-up ordering and tool rows
 without consuming external model quota.

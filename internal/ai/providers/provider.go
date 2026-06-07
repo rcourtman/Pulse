@@ -89,28 +89,16 @@ type ToolChoice struct {
 	Type ToolChoiceType `json:"type"`
 }
 
-type ProviderStartupMode string
-
-const (
-	// ProviderStartupDefault keeps provider-owned startup retries enabled.
-	ProviderStartupDefault ProviderStartupMode = ""
-	// ProviderStartupFastFailBeforeVisibleOutput is used when the caller has a
-	// separate fallback route ready and wants startup failures to return quickly
-	// before any user-visible provider output is emitted.
-	ProviderStartupFastFailBeforeVisibleOutput ProviderStartupMode = "fast_fail_before_visible_output"
-)
-
 // ChatRequest represents a request to the AI provider
 type ChatRequest struct {
-	Messages            []Message           `json:"messages"`
-	Model               string              `json:"model"`
-	ExecutionID         string              `json:"execution_id,omitempty"` // Stable higher-level run ID shared across related provider turns
-	MaxTokens           int                 `json:"max_tokens,omitempty"`
-	Temperature         float64             `json:"temperature,omitempty"`
-	System              string              `json:"system,omitempty"`      // System prompt (Anthropic style)
-	Tools               []Tool              `json:"tools,omitempty"`       // Available tools
-	ToolChoice          *ToolChoice         `json:"tool_choice,omitempty"` // nil = model-owned automatic selection; none = text-only safety brake
-	ProviderStartupMode ProviderStartupMode `json:"-"`
+	Messages    []Message   `json:"messages"`
+	Model       string      `json:"model"`
+	ExecutionID string      `json:"execution_id,omitempty"` // Stable higher-level run ID shared across related provider turns
+	MaxTokens   int         `json:"max_tokens,omitempty"`
+	Temperature float64     `json:"temperature,omitempty"`
+	System      string      `json:"system,omitempty"`      // System prompt (Anthropic style)
+	Tools       []Tool      `json:"tools,omitempty"`       // Available tools
+	ToolChoice  *ToolChoice `json:"tool_choice,omitempty"` // nil = model-owned automatic selection; none = text-only safety brake
 }
 
 func (r ChatRequest) NormalizeCollections() ChatRequest {
@@ -127,10 +115,6 @@ func (r ChatRequest) NormalizeCollections() ChatRequest {
 		r.Tools[i] = r.Tools[i].NormalizeCollections()
 	}
 	return r
-}
-
-func (r ChatRequest) FastFailProviderStartup() bool {
-	return r.ProviderStartupMode == ProviderStartupFastFailBeforeVisibleOutput
 }
 
 // ChatResponse represents a response from the AI provider

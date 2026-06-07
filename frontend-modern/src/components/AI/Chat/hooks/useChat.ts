@@ -496,10 +496,8 @@ export function useChat(options: UseChatOptions = {}) {
   };
 
   const streamModelEventKind = (event: StreamDisplayEvent): StreamDisplayEvent['modelEvent'] => {
-    if (event.modelEvent) return event.modelEvent;
-    const model = event.model?.trim();
-    const failed = event.failedModel?.trim();
-    return model && failed && model !== failed ? 'fallback' : 'switch';
+    if (event.modelEvent && event.modelEvent !== 'fallback') return event.modelEvent;
+    return 'switch';
   };
 
   const isDurableAssistantStreamBoundary = (event: StreamDisplayEvent): boolean =>
@@ -924,20 +922,6 @@ export function useChat(options: UseChatOptions = {}) {
 
   const extractWorkflowModel = (data: unknown): string => extractCompletedModel(data);
 
-  const extractWorkflowNextModel = (data: unknown): string => {
-    if (!data || typeof data !== 'object') return '';
-    const record = data as Record<string, unknown>;
-    const nextModel = record.next_model ?? record.nextModel;
-    return typeof nextModel === 'string' ? nextModel.trim() : '';
-  };
-
-  const extractWorkflowFailedModel = (data: unknown): string => {
-    if (!data || typeof data !== 'object') return '';
-    const record = data as Record<string, unknown>;
-    const failedModel = record.failed_model ?? record.failedModel;
-    return typeof failedModel === 'string' ? failedModel.trim() : '';
-  };
-
   const extractErrorMessage = (data: unknown): string => {
     if (typeof data === 'string') return data;
     if (data && typeof data === 'object') {
@@ -954,6 +938,7 @@ export function useChat(options: UseChatOptions = {}) {
     if (!message) return null;
 
     const phase = typeof record.phase === 'string' ? record.phase.trim() : '';
+    if (phase === 'provider_fallback') return null;
     const state = typeof record.state === 'string' ? record.state.trim() : '';
     const tool = typeof record.tool === 'string' ? record.tool.trim() : '';
     const attempt = positiveNumber(record.attempt);
@@ -1182,25 +1167,14 @@ export function useChat(options: UseChatOptions = {}) {
 
     if (event.type === 'workflow_state') {
       const workflowStatus = extractWorkflowStatus(event.data);
-      const nextModel = extractWorkflowNextModel(event.data);
-      const failedModel = extractWorkflowFailedModel(event.data);
       const startedModel =
         workflowStatus?.phase === 'provider_start' ? extractWorkflowModel(event.data) : '';
-      const routeEvent = nextModel
+      const routeEvent = startedModel
         ? {
-            model: nextModel,
-            failedModel,
-            modelEvent: (failedModel ? 'fallback' : 'switch') as NonNullable<
-              StreamDisplayEvent['modelEvent']
-            >,
+            model: startedModel,
+            modelEvent: 'selected' as const,
           }
-        : startedModel
-          ? {
-              model: startedModel,
-              failedModel: '',
-              modelEvent: 'selected' as const,
-            }
-          : null;
+        : null;
       if (!workflowStatus && !routeEvent) return;
 
       if (routeEvent) {
@@ -1208,7 +1182,6 @@ export function useChat(options: UseChatOptions = {}) {
           prev.map((msg) => {
             if (msg.id !== assistantId) return msg;
             return withModelRouteEvent(msg, routeEvent.model, {
-              failedModel: routeEvent.failedModel || undefined,
               modelEvent: routeEvent.modelEvent,
             });
           }),
@@ -1480,7 +1453,11 @@ export function useChat(options: UseChatOptions = {}) {
                   ) {
                     const startedAt = evt.pendingTool?.startedAt || evt.startedAt;
                     const settleUntil = newToolCall.success
-                      ? getAssistantFastToolCompletionSettleUntil(startedAt, completedAt, completedAt)
+                      ? getAssistantFastToolCompletionSettleUntil(
+                          startedAt,
+                          completedAt,
+                          completedAt,
+                        )
                       : undefined;
                     updatedEvents[i] = {
                       type: 'tool',
@@ -1505,8 +1482,8 @@ export function useChat(options: UseChatOptions = {}) {
               }
 
               // Also remove from pendingApprovals if present
-              const updatedApprovals = (msg.pendingApprovals || []).filter((a) =>
-                !matchesCompletedTool(a.toolId, a.toolName),
+              const updatedApprovals = (msg.pendingApprovals || []).filter(
+                (a) => !matchesCompletedTool(a.toolId, a.toolName),
               );
 
               return {

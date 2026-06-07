@@ -620,36 +620,25 @@ const buildProviderRetryFixtureEvents = (): AIChatStreamEvent[] => [
     type: 'workflow_state',
     data: {
       phase: 'provider_retry',
-      message: 'DeepSeek failed before output; retrying through OpenRouter.',
+      message: 'Provider connection failed before any output; retrying.',
       provider: 'deepseek',
       model: 'deepseek:deepseek-chat',
-      failed_model: 'deepseek:deepseek-chat',
-      next_model: 'openrouter:deepseek/deepseek-chat',
       attempt: 2,
       max_attempts: 3,
       retry_after_ms: 3200,
     },
   },
   {
-    type: 'workflow_state',
-    data: {
-      phase: 'provider_start',
-      message: 'Retrying through OpenRouter with deepseek/deepseek-chat.',
-      provider: 'openrouter',
-      model: 'openrouter:deepseek/deepseek-chat',
-    },
-  },
-  {
     type: 'content',
     data: {
-      text: 'The provider retry fixture switched to OpenRouter after the direct provider failed before output.',
+      text: 'The provider retry fixture retried the selected route after a transient startup failure.',
     },
   },
   {
     type: 'done',
     data: {
       session_id: 'dev-fixture-provider-retry',
-      model: 'openrouter:deepseek/deepseek-chat',
+      model: 'deepseek:deepseek-chat',
       input_tokens: 73,
       output_tokens: 29,
     },

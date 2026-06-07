@@ -417,102 +417,55 @@ leave the transcript without exposing hidden provider/tool metadata.
    retryable in-memory assistant error may replay the original user turn's
    structured mentions, finding id, approval override, handoff resources,
    handoff actions, and handoff metadata, but must not reconstruct scoped
-   context from prompt history or saved transcript prose.
-   Failed-turn recovery must also expose model-route switching through the
-   existing drawer model selector so operators can move from a blocked direct
-   provider route to a configured gateway or alternate model without losing the
-   draft or creating a parallel picker. When the same model is available through
-   another configured provider route, the failed turn must offer that route as a
-   direct one-click route-and-retry action, but route recovery must not loop
-   between providers that already failed in the same transcript; once equivalent
-   routes are exhausted, the failed turn must fall back to another configured
-   notable model/provider before falling back to the general model selector.
-   Retry remains available, but it must not be the only visible action when a
-   failed Assistant turn is shown.
-   Provider recovery before visible output is backend-owned chat-runtime
-   behavior. When a selected route fails before streaming content, tool
-   progress, approval, or question events, `internal/ai/chat` may try the next
-   configured provider/model route in the same user turn and must emit a
-   `provider_fallback` workflow-state event that identifies the failed and next
-   provider/model route. This fallback must use chat-suitable model resolution
-   from `internal/ai/modelresolution`, skipping obvious non-chat endpoints such
-   as realtime, audio, moderation, embedding, and content-safety catalog
-   entries. Gateway-equivalent routes, such as a direct provider model exposed
-   through a configured gateway, must be produced by that model-resolution
-   policy rather than hardcoded in chat execution or frontend UI logic.
-   Fallback planning must not block the selected provider's first
-   attempt on live catalog reads for every other configured provider; the hot
-   path may queue only explicit provider preferences or stable provider defaults
-   and defer fallback provider construction until the selected route actually
-   fails before visible output. Primary interactive chat model resolution is
-   governed by that same hot-path rule: it must use the explicit configured
+   context from prompt history or saved transcript prose. Provider/model route
+   recovery is explicit user-visible recovery, not hidden chat execution. A
+   failed turn may expose route-and-retry actions through the existing drawer
+   model selector so operators can move from a blocked direct provider route to a
+   configured gateway or alternate model without losing the draft or creating a
+   parallel picker, but `/api/ai/chat` must not automatically switch provider or
+   model routes inside a single Assistant turn after the selected route fails.
+   That prohibition includes same-model gateway equivalents and configured
+   provider defaults: those routes may be offered as explicit recovery actions,
+   but the selected turn owns its selected route until it completes or fails.
+   The referenced OpenCode source at fetched `dev` commit
+   `e82542b8023a8374f29c23b70ec019c8f256354e` models this boundary by keeping
+   same-route retry visible in `packages/opencode/src/session/retry.ts`,
+   publishing retry status from `packages/opencode/src/session/processor.ts`,
+   rendering retry state in `packages/ui/src/components/session-retry.tsx`, and
+   treating provider/model changes as explicit session events in
+   `packages/core/src/session/event.ts` and
+   `packages/opencode/src/session/prompt.ts`. Pulse adapts that behavior for the
+   drawer instead of implementing automatic cross-provider fallback.
+   Primary interactive chat model resolution must use the explicit configured
    chat route or a stable provider default without calling provider model
    catalogs before the selected stream starts. Catalog-backed recommendation
-   belongs to settings/model-list flows, not `/api/ai/chat` first-response
-   startup. When the selected direct-provider route fails before visible output,
-   fallback planning may first try configured gateway-equivalent candidates
-   returned by `internal/ai/modelresolution` when they preserve the same
-   provider/model family through a deterministic route string, before falling
-   back to unrelated configured provider defaults. That same-model gateway
-   planning must remain catalog-free, capability-driven, and may continue to the
-   next configured provider if a gateway attempt also fails before visible
-   output; chat execution and frontend UI must never encode user-specific
-   network assumptions or named-provider failover rules. Once visible output has
-   streamed, Pulse must
-   not silently switch providers for that turn; the error belongs to the visible
-   attempt and is surfaced through normal failed-turn recovery. Assistant
-   startup retry behavior must be route-aware: when another provider/model
-   attempt is already queued for the same user turn, non-final attempts must
-   fast-fail before visible output instead of spending hidden same-route retry
-   and backoff time. In that mode, provider-owned startup retries and the
-   agentic loop's retry of the same provider turn are disabled for the
-   non-final attempt, and the wait for the first visible provider event is
-   bounded so `provider_fallback` can reach the browser quickly. The final
-   queued attempt keeps normal provider retry behavior because there is no
-   later route to hand off to. The referenced OpenCode source at fetched
-   `origin/dev` commit `1025540fcc2a69609a0131a7168300205656d728` models retry
-   as explicit session activity through `RetryError` and `Retried` in
-   `packages/core/src/session/event.ts` and renders retry status in
-   `packages/ui/src/components/session-retry.tsx`; Pulse adapts that principle
-   by surfacing route changes through workflow/model rows and by yielding to
-   the next configured route quickly instead of hiding repeated startup
-   retries behind a static waiting label. Provider retry workflow states that
-   include `retry_after_ms` must render as live countdowns derived from the
-   workflow `started_at` timestamp while the turn is active, matching
-   OpenCode's visible retry wait behavior instead of freezing the first retry
-   label.
+   belongs to settings/model-list and explicit route-recovery flows, not
+   `/api/ai/chat` first-response startup. Once the selected provider route
+   starts, transient pre-output transport failures may retry the same route and
+   must surface a `provider_retry` workflow state with `attempt`,
+   `max_attempts`, and `retry_after_ms` before sleeping. If same-route retry is
+   exhausted before visible output, Pulse must emit a normal provider error and
+   leave recovery to the failed-turn actions; it must not emit
+   `provider_fallback`, `failed_provider`, `failed_model`, `next_provider`, or
+   `next_model` workflow metadata. Once visible output has streamed, Pulse must
+   also keep the failure on that visible attempt rather than silently changing
+   route mid-turn. Provider retry workflow states that include `retry_after_ms`
+   must render as live countdowns derived from the workflow `started_at`
+   timestamp while the turn is active, matching OpenCode's visible retry wait
+   behavior instead of freezing the first retry label.
    Assistant completion events must carry the effective model route that actually
-   completed the turn, and the drawer must update the in-flight transcript row
-   when `provider_fallback` names the next route so message labels, cost
-   context, retry decisions, and model-route recovery do not continue to point
-   at the failed provider. The referenced OpenCode source at fetched
-   `origin/dev` commit `4519a1da329c1a4fc384054e7203ba7d06928205` defines
-   `session.next.model.switched` in
-   `packages/core/src/session/event.ts`, appends it as a
-   `SessionMessage.ModelSwitched` transcript message in
-   `packages/core/src/session/message-updater.ts`, and renders it as
-   `ModelSwitchedMessage` in
-   `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`.
-   Pulse adapts that by rendering model route changes as typed `model_switch`
-   stream rows on the active assistant turn instead of hiding the route in
-   transient status text or assistant prose. The initial `provider_start`
-   workflow state must carry the selected `provider` and concrete `model` route,
-   and the drawer must render that first route as a selected-model row (`Using
-   ...`) before visible content or tool activity when the event arrives.
-   Provider-fallback rows must preserve the failed route and next route
-   together, using the backend `failed_model` and `next_model` payloads, so the
-   transcript shows the actual recovery path rather than only the successful
-   replacement model. A successful provider fallback is also a session-model
-   event, not only transcript decoration: once the live assistant turn completes
-   with the fallback route as its effective model, the drawer must promote that
-   route into the active session selection and recent-model list so the next
-   prompt does not retry the just-failed direct provider before using the route
-   that worked. This promotion may only apply to fallback rows observed during
-   the live stream and must not rewrite historical loaded sessions or override
-   an explicit user model change made while the fallback turn was still running.
+   completed the selected turn. The drawer must render the initial
+   `provider_start` workflow state as a selected-model row (`Using ...`) before
+   visible content or tool activity when the event arrives. Later model-route
+   changes may still be rendered as typed `model_switch` transcript rows when
+   they come from explicit route recovery or restored historical data, but the UI
+   must label them neutrally as selected or switched routes rather than as
+   automatic provider fallback, and completing a streamed route-switch row must
+   not promote a fallback route into the active model selection without an
+   explicit user action.
    Interactive Assistant streams must establish the session ID and emit the
    `session` event once as soon as the HTTP SSE writer is ready, before finding
-   handoff recovery, model resolution, provider fallback planning,
+   handoff recovery, model resolution, selected-provider startup,
    handoff/context prefetch, recent-session injection, inventory summary reads,
    tool scoping, or provider startup. The chat service then persists/ensures
    that same session ID while suppressing duplicate session events. This keeps
@@ -1008,7 +961,7 @@ leave the transcript without exposing hidden provider/tool metadata.
    external providers or models. The live fixture must pace its status, tool,
    and content events enough for the browser to paint each state in sequence;
    unit tests may disable that pace, but the dev fixture must not collapse into
-   a single final completed row. This fixture must not run as provider fallback
+   a single final completed row. This fixture must not emit `provider_fallback`
    in non-mock mode and must not become Pulse-authored remediation or routing
    behavior. The referenced OpenCode source at fetched `origin/dev` commit
    `4519a1da329c1a4fc384054e7203ba7d06928205` publishes tool-call and

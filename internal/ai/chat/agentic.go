@@ -7,7 +7,6 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -27,8 +26,6 @@ type parallelToolResult struct {
 	Result tools.CallToolResult
 	Err    error
 }
-
-const providerFallbackStartupTimeout = 4 * time.Second
 
 func isRetryableProviderStreamError(err error) bool {
 	if err == nil {
@@ -67,15 +64,6 @@ func isRetryableProviderStreamError(err error) bool {
 		}
 	}
 	return false
-}
-
-func providerStreamEventShowsStartup(event providers.StreamEvent) bool {
-	switch strings.ToLower(strings.TrimSpace(event.Type)) {
-	case "content", "done", "thinking", "tool_progress", "tool_start":
-		return true
-	default:
-		return false
-	}
 }
 
 type workflowStateOption func(*WorkflowStateData)
@@ -565,13 +553,9 @@ type AgenticLoop struct {
 	requestSanitizer func(providers.ChatRequest) providers.ChatRequest
 
 	// When true, provider terminal errors are returned to the caller without
-	// emitting a stream error event. The chat service uses this to try another
-	// configured provider before the browser sees a failed first attempt.
+	// emitting a stream error event. The chat service uses this to centralize
+	// terminal provider error presentation at the stream boundary.
 	suppressProviderErrorEvents bool
-
-	// When true, this loop is running as one attempt in a service-owned provider
-	// fallback chain, so hidden startup retries should yield to the next route.
-	fastFailProviderStartup bool
 
 	// Query-only count/overview turns should not let a provider accidentally
 	// expand a topology request into the full infrastructure tree.
@@ -617,12 +601,6 @@ func (a *AgenticLoop) SetSuppressProviderErrorEvents(suppress bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.suppressProviderErrorEvents = suppress
-}
-
-func (a *AgenticLoop) SetFastFailProviderStartup(enabled bool) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.fastFailProviderStartup = enabled
 }
 
 func (a *AgenticLoop) SetPreferSummaryOnlyQueries(prefer bool) {
@@ -722,7 +700,6 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		modelName := a.modelName
 		requestSanitizer := a.requestSanitizer
 		preferSummaryOnlyQueries := a.preferSummaryOnlyQueries
-		fastFailProviderStartup := a.fastFailProviderStartup
 		a.mu.Unlock()
 
 		// Record telemetry for loop iteration
@@ -754,9 +731,6 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			System:      systemPrompt,
 			Tools:       tools,
 			ExecutionID: a.executionID,
-		}
-		if fastFailProviderStartup {
-			req.ProviderStartupMode = providers.ProviderStartupFastFailBeforeVisibleOutput
 		}
 
 		// Tool selection is model-owned. Pulse normally exposes the governed tool
@@ -913,36 +887,13 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		}
 
 		maxProviderAttempts := 2
-		if fastFailProviderStartup {
-			maxProviderAttempts = 1
-		}
 		err := error(nil)
 		for attempt := 1; attempt <= maxProviderAttempts; attempt++ {
 			attemptSawDone := false
 			attemptEmittedVisibleEvents := false
 			var attemptErrorMessages []string
-			providerCtx := ctx
-			var cancelProviderStartup context.CancelFunc
-			var startupTimedOut atomic.Bool
-			var startupTimer *time.Timer
-			stopStartupTimer := func() {}
-			if fastFailProviderStartup {
-				providerCtx, cancelProviderStartup = context.WithCancel(ctx)
-				startupTimer = time.AfterFunc(providerFallbackStartupTimeout, func() {
-					startupTimedOut.Store(true)
-					cancelProviderStartup()
-				})
-				stopStartupTimer = func() {
-					if startupTimer != nil {
-						startupTimer.Stop()
-					}
-				}
-			}
 
-			err = a.provider.ChatStream(providerCtx, req, func(event providers.StreamEvent) {
-				if providerStreamEventShowsStartup(event) {
-					stopStartupTimer()
-				}
+			err = a.provider.ChatStream(ctx, req, func(event providers.StreamEvent) {
 				switch event.Type {
 				case "content":
 					if data, ok := event.Data.(providers.ContentEvent); ok {
@@ -1070,14 +1021,6 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					}
 				}
 			})
-			stopStartupTimer()
-			if cancelProviderStartup != nil {
-				cancelProviderStartup()
-			}
-			if startupTimedOut.Load() && err != nil {
-				err = fmt.Errorf("provider startup timed out after %s: %w", providerFallbackStartupTimeout, err)
-			}
-
 			effectiveErr := err
 			if effectiveErr == nil && len(attemptErrorMessages) > 0 {
 				effectiveErr = fmt.Errorf("stream error: %s", attemptErrorMessages[0])

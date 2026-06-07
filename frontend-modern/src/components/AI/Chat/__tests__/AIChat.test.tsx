@@ -3018,7 +3018,10 @@ describe('AIChat', () => {
         expect(mockChat.loadSession).toHaveBeenCalledWith('source-session');
       });
       expect(mockAIChatAPI.listSessions).toHaveBeenCalledWith({ limit: 30 });
-      expect(mockNotificationStore.info).toHaveBeenCalledWith('Compacting Assistant session...', 2000);
+      expect(mockNotificationStore.info).toHaveBeenCalledWith(
+        'Compacting Assistant session...',
+        2000,
+      );
       await waitFor(() => {
         expect(mockNotificationStore.success).toHaveBeenCalledWith(
           'Compacted 8 older messages into a session summary.',
@@ -4552,7 +4555,7 @@ describe('AIChat', () => {
       });
     });
 
-    it('adopts a successful provider fallback route for the active session', async () => {
+    it('does not adopt a completed route-switch row for the active session automatically', async () => {
       const [messages, setMessages] = createSignal<ChatMessage[]>([]);
       mockChat.messages.mockImplementation(() => messages());
       mockChat.sessionId.mockReturnValue('session-1');
@@ -4569,7 +4572,7 @@ describe('AIChat', () => {
 
       setMessages([
         {
-          id: 'assistant-fallback',
+          id: 'assistant-route-switch',
           role: 'assistant',
           content: '',
           timestamp: new Date('2026-06-06T12:00:00Z'),
@@ -4589,9 +4592,9 @@ describe('AIChat', () => {
 
       setMessages([
         {
-          id: 'assistant-fallback',
+          id: 'assistant-route-switch',
           role: 'assistant',
-          content: 'DeepSeek is reachable through OpenRouter.',
+          content: 'The response completed on another route.',
           timestamp: new Date('2026-06-06T12:00:00Z'),
           completedAt: new Date('2026-06-06T12:00:03Z'),
           model: 'openrouter:deepseek/deepseek-v4-pro',
@@ -4604,34 +4607,27 @@ describe('AIChat', () => {
             },
             {
               type: 'content',
-              content: 'DeepSeek is reachable through OpenRouter.',
+              content: 'The response completed on another route.',
             },
           ],
         },
       ]);
 
-      await waitFor(() => {
-        expect(mockChat.setModel).toHaveBeenCalledWith('openrouter:deepseek/deepseek-v4-pro');
-      });
       expect(
-        screen.getByRole('status', { name: 'Assistant fallback route adopted' }),
-      ).toHaveTextContent('after fallback from');
-      expect(
-        screen.getByRole('button', { name: 'Dismiss fallback route notice' }),
-      ).toBeInTheDocument();
-      expect(mockNotificationStore.success).toHaveBeenCalledWith(
+        screen.queryByRole('status', { name: 'Assistant fallback route adopted' }),
+      ).not.toBeInTheDocument();
+      expect(mockChat.setModel).not.toHaveBeenCalledWith('openrouter:deepseek/deepseek-v4-pro');
+      expect(mockNotificationStore.success).not.toHaveBeenCalledWith(
         expect.stringContaining('Assistant model route switched to'),
-        2500,
+        expect.any(Number),
       );
       expect(localStorage.getItem('pulse:ai_chat_models_by_session')).toBe(
-        JSON.stringify({ 'session-1': 'openrouter:deepseek/deepseek-v4-pro' }),
+        JSON.stringify({ 'session-1': 'deepseek:deepseek-v4-pro' }),
       );
-      expect(localStorage.getItem('pulse:ai_chat_recent_models')).toBe(
-        JSON.stringify(['openrouter:deepseek/deepseek-v4-pro']),
-      );
+      expect(localStorage.getItem('pulse:ai_chat_recent_models')).toBeNull();
     });
 
-    it('does not override a user-selected route when a fallback turn completes', async () => {
+    it('does not override a user-selected route when a route-switch row completes', async () => {
       const [messages, setMessages] = createSignal<ChatMessage[]>([]);
       const [selectedModel, setSelectedModel] = createSignal('deepseek:deepseek-v4-pro');
       mockChat.messages.mockImplementation(() => messages());
@@ -4652,7 +4648,7 @@ describe('AIChat', () => {
 
       setMessages([
         {
-          id: 'assistant-fallback',
+          id: 'assistant-route-switch',
           role: 'assistant',
           content: '',
           timestamp: new Date('2026-06-06T12:00:00Z'),
@@ -4672,9 +4668,9 @@ describe('AIChat', () => {
 
       setMessages([
         {
-          id: 'assistant-fallback',
+          id: 'assistant-route-switch',
           role: 'assistant',
-          content: 'Fallback answer.',
+          content: 'Route switch answer.',
           timestamp: new Date('2026-06-06T12:00:00Z'),
           completedAt: new Date('2026-06-06T12:00:03Z'),
           model: 'openrouter:deepseek/deepseek-v4-pro',
@@ -4687,7 +4683,7 @@ describe('AIChat', () => {
             },
             {
               type: 'content',
-              content: 'Fallback answer.',
+              content: 'Route switch answer.',
             },
           ],
         },
@@ -5306,9 +5302,7 @@ describe('AIChat', () => {
 
       const status = screen.getByLabelText('Assistant active turn status');
       expect(status).toHaveTextContent('Preparing Pulse context.');
-      expect(status).not.toHaveTextContent(
-        'OpenRouter is starting the response.',
-      );
+      expect(status).not.toHaveTextContent('OpenRouter is starting the response.');
 
       await vi.advanceTimersByTimeAsync(650);
       expect(status).toHaveTextContent('Reading current Pulse inventory.');
@@ -5381,15 +5375,11 @@ describe('AIChat', () => {
       expect(status).not.toHaveTextContent('OpenRouter is starting the response.');
 
       await vi.advanceTimersByTimeAsync(650);
-      expect(status).toHaveTextContent(
-        'Reading current Pulse inventory. · 1 follow-up queued',
-      );
+      expect(status).toHaveTextContent('Reading current Pulse inventory. · 1 follow-up queued');
       expect(status).not.toHaveTextContent('pulse_query');
 
       await vi.advanceTimersByTimeAsync(650);
-      expect(status).toHaveTextContent(
-        'OpenRouter is starting the response. · 1 follow-up queued',
-      );
+      expect(status).toHaveTextContent('OpenRouter is starting the response. · 1 follow-up queued');
       expect(status).not.toHaveTextContent('Preparing Pulse context.');
     });
 
@@ -5571,7 +5561,9 @@ describe('AIChat', () => {
 
       await waitFor(() => {
         const activityDock = screen.getByTestId('assistant-activity-dock');
-        expect(activityDock).toContainElement(screen.getByLabelText('Assistant active turn status'));
+        expect(activityDock).toContainElement(
+          screen.getByLabelText('Assistant active turn status'),
+        );
         expect(activityDock).toContainElement(
           screen.getByRole('status', { name: 'Assistant autonomous control warning' }),
         );

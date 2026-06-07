@@ -268,17 +268,6 @@ interface AIChatProps {
 
 let stashedComposerDraft: ComposerDraftStash | null = null;
 
-interface AssistantFallbackRouteAdoptionCandidate {
-  route: string;
-  failedModel: string;
-}
-
-interface AssistantFallbackRouteNotice extends AssistantFallbackRouteAdoptionCandidate {
-  failedModelLabel: string;
-  messageId: string;
-  routeLabel: string;
-}
-
 interface AssistantProviderReadinessRouteNotice {
   failedProviderLabel: string;
   failedRouteLabel: string;
@@ -305,34 +294,6 @@ const hasProviderRouteFailureEvidence = (message: ChatMessage): boolean => {
         event.modelEvent === 'fallback' ||
         event.modelEvent === 'switch'),
   );
-};
-
-const getAssistantFallbackRouteAdoptionCandidate = (
-  message: ChatMessage,
-): AssistantFallbackRouteAdoptionCandidate | null => {
-  if (message.role !== 'assistant' || message.error) return null;
-
-  const events = [...(message.streamEvents || [])].reverse();
-  const modelSwitch = events.find(
-    (event) =>
-      event.type === 'model_switch' &&
-      typeof event.model === 'string' &&
-      event.model.trim() &&
-      typeof event.failedModel === 'string' &&
-      event.failedModel.trim(),
-  );
-  if (!modelSwitch) return null;
-
-  const route = modelSwitch.model?.trim() || '';
-  const failedModel = modelSwitch.failedModel?.trim() || '';
-  if (!route || !failedModel) return null;
-
-  const completedModel = (message.model || '').trim();
-  if (message.isStreaming === false && completedModel && completedModel !== route) {
-    return null;
-  }
-
-  return { route, failedModel };
 };
 
 const compactText = (items: Array<string | undefined>): string[] =>
@@ -740,10 +701,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [modelSelectorOpenRequest, setModelSelectorOpenRequest] = createSignal(0);
   const [defaultModel, setDefaultModel] = createSignal('');
   const [chatOverrideModel, setChatOverrideModel] = createSignal('');
-  const pendingFallbackRouteAdoptions = new Map<string, AssistantFallbackRouteAdoptionCandidate>();
-  const adoptedFallbackRouteMessageIds = new Set<string>();
-  const [fallbackRouteNotice, setFallbackRouteNotice] =
-    createSignal<AssistantFallbackRouteNotice | null>(null);
   const [providerReadinessRouteNotice, setProviderReadinessRouteNotice] =
     createSignal<AssistantProviderReadinessRouteNotice | null>(null);
   const [providerReadiness, setProviderReadiness] = createSignal<ChatProviderReadinessState>({
@@ -2137,7 +2094,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (options.rememberRecent !== false) {
       rememberRecentModel(modelId);
     }
-    setFallbackRouteNotice(null);
     setProviderReadinessRouteNotice(null);
   };
 
@@ -2271,59 +2227,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
     });
     return alternative;
   };
-
-  createEffect(() => {
-    const messages = chat.messages();
-    const visibleMessageIds = new Set(messages.map((message) => message.id));
-    for (const messageId of [...pendingFallbackRouteAdoptions.keys()]) {
-      if (!visibleMessageIds.has(messageId)) {
-        pendingFallbackRouteAdoptions.delete(messageId);
-      }
-    }
-    for (const messageId of [...adoptedFallbackRouteMessageIds]) {
-      if (!visibleMessageIds.has(messageId)) {
-        adoptedFallbackRouteMessageIds.delete(messageId);
-      }
-    }
-
-    for (const message of messages) {
-      const candidate = getAssistantFallbackRouteAdoptionCandidate(message);
-      if (!candidate) continue;
-
-      if (message.isStreaming !== false) {
-        pendingFallbackRouteAdoptions.set(message.id, candidate);
-        continue;
-      }
-
-      const pending = pendingFallbackRouteAdoptions.get(message.id);
-      if (
-        !pending ||
-        pending.route !== candidate.route ||
-        adoptedFallbackRouteMessageIds.has(message.id)
-      ) {
-        continue;
-      }
-
-      const currentRoute = selectedChatModel().trim();
-      if (currentRoute && currentRoute !== pending.failedModel) {
-        pendingFallbackRouteAdoptions.delete(message.id);
-        continue;
-      }
-
-      adoptedFallbackRouteMessageIds.add(message.id);
-      pendingFallbackRouteAdoptions.delete(message.id);
-      selectModel(candidate.route);
-      const routeLabel = formatChatMessageModelRoute(candidate.route);
-      const failedModelLabel = formatChatMessageModelRoute(pending.failedModel);
-      setFallbackRouteNotice({
-        ...candidate,
-        failedModelLabel,
-        messageId: message.id,
-        routeLabel,
-      });
-      notificationStore.success(`Assistant model route switched to ${routeLabel}`, 2500);
-    }
-  });
 
   createEffect(() => {
     const sessionId = chat.sessionId();
@@ -3108,7 +3011,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const submittedInput = readComposerInputForSubmit();
     const prompt = submittedInput.trim();
     if (!prompt) return;
-    setFallbackRouteNotice(null);
     setProviderReadinessRouteNotice(null);
     composerSubmitDispatchLocked = true;
     queueMicrotask(() => {
@@ -3438,7 +3340,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
     resetPromptHistoryNavigation();
     setEditingQueuedFollowUp(null);
     setRestoredPromptDraft(null);
-    setFallbackRouteNotice(null);
     setProviderReadinessRouteNotice(null);
     setRedoLastTurnAvailable(false);
     aiChatStore.clearContext?.();
@@ -3533,7 +3434,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
       focusComposer();
     } catch (error) {
       logger.error('[AIChat] Failed to compact Assistant session:', error);
-      const message = error instanceof Error ? error.message : AI_CHAT_COMPACT_SESSION_ERROR_MESSAGE;
+      const message =
+        error instanceof Error ? error.message : AI_CHAT_COMPACT_SESSION_ERROR_MESSAGE;
       notificationStore.error(message);
     } finally {
       setCompactingSession(false);
@@ -3703,7 +3605,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
         resetPromptHistoryNavigation();
         setEditingQueuedFollowUp(null);
         setRestoredPromptDraft(null);
-        setFallbackRouteNotice(null);
         setProviderReadinessRouteNotice(null);
         setRedoLastTurnAvailable(false);
       }
@@ -4482,7 +4383,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
               when={
                 currentStatus() ||
                 autonomousWarningVisible() ||
-                fallbackRouteNotice() ||
                 providerReadinessRouteNotice() ||
                 chat.queuedFollowUpCount() > 0
               }
@@ -4492,9 +4392,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 data-testid="assistant-activity-dock"
               >
                 <Show when={currentStatus()}>
-                  <div
-                    class="flex min-h-8 min-w-0 items-center gap-2 px-2.5 py-1.5 text-xs"
-                  >
+                  <div class="flex min-h-8 min-w-0 items-center gap-2 px-2.5 py-1.5 text-xs">
                     <div
                       class="flex min-w-0 flex-1 items-center gap-2"
                       role="status"
@@ -4509,9 +4407,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                         }`}
                         aria-hidden="true"
                       />
-                      <span class="min-w-0 flex-1 truncate font-medium">
-                        {currentStatusText()}
-                      </span>
+                      <span class="min-w-0 flex-1 truncate font-medium">{currentStatusText()}</span>
                       <span class="flex shrink-0 gap-0.5" aria-hidden="true">
                         <span
                           class="h-1 w-1 rounded-full bg-blue-400 animate-bounce"
@@ -4590,45 +4486,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     </button>
                   </div>
                 </Show>
-                <Show when={fallbackRouteNotice()}>
-                  {(notice) => (
-                    <div
-                      class={`flex min-h-8 min-w-0 items-center gap-2 px-2.5 py-1.5 text-xs ${
-                        currentStatus() || autonomousWarningVisible()
-                          ? 'border-t border-border/70'
-                          : ''
-                      }`}
-                      role="status"
-                      aria-label="Assistant fallback route adopted"
-                      aria-live="polite"
-                    >
-                      <CheckIcon
-                        class="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-300"
-                        aria-hidden="true"
-                      />
-                      <span class="min-w-0 flex-1 truncate font-medium">
-                        Using {notice().routeLabel} after fallback from {notice().failedModelLabel}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setFallbackRouteNotice(null);
-                          focusComposer();
-                        }}
-                        class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-900 dark:text-blue-200 dark:hover:bg-blue-900/50"
-                        title="Dismiss fallback route notice"
-                        aria-label="Dismiss fallback route notice"
-                      >
-                        <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                      </button>
-                    </div>
-                  )}
-                </Show>
                 <Show when={providerReadinessRouteNotice()}>
                   {(notice) => (
                     <div
                       class={`flex min-h-8 min-w-0 items-center gap-2 px-2.5 py-1.5 text-xs ${
-                        currentStatus() || autonomousWarningVisible() || fallbackRouteNotice()
+                        currentStatus() || autonomousWarningVisible()
                           ? 'border-t border-border/70'
                           : ''
                       }`}
@@ -4667,7 +4529,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     class={`px-2.5 py-1.5 ${
                       currentStatus() ||
                       autonomousWarningVisible() ||
-                      fallbackRouteNotice() ||
                       providerReadinessRouteNotice()
                         ? 'border-t border-border/70'
                         : ''

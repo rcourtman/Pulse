@@ -440,9 +440,6 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	var respBody []byte
 	var lastErr error
 	maxRetries := openaiMaxRetries
-	if req.FastFailProviderStartup() {
-		maxRetries = 0
-	}
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
@@ -912,9 +909,6 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		streamClient = c.client
 	}
 	maxRetries := openaiStreamMaxRetries
-	if req.FastFailProviderStartup() {
-		maxRetries = 0
-	}
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {

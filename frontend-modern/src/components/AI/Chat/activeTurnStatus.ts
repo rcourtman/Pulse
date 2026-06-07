@@ -522,7 +522,7 @@ const modelSwitchStatusText = (event: StreamDisplayEvent): string => {
   const failed = event.failedModel?.trim();
   if (event.modelEvent === 'selected') return `Using ${next}`;
   if (!failed || failed === model) return `Switched to ${next}`;
-  return `Provider fallback: ${formatAIModelRouteLabel(failed)} -> ${next}`;
+  return `Switched from ${formatAIModelRouteLabel(failed)} to ${next}`;
 };
 
 const hasVisibleAssistantOutput = (message: ChatMessage): boolean => {
@@ -664,5 +664,8 @@ export const getAssistantActiveTurnStatus = (
     );
   }
 
-  return withAssistantQueuedFollowUpStatus(initialRequestStatus(messages, assistantMessage), messages);
+  return withAssistantQueuedFollowUpStatus(
+    initialRequestStatus(messages, assistantMessage),
+    messages,
+  );
 };

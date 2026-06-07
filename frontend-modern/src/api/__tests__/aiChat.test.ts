@@ -244,12 +244,7 @@ describe('AIChatAPI', () => {
   it('runs the send-hold dev stream fixture without opening a provider request', async () => {
     const onEvent = vi.fn();
 
-    await AIChatAPI.chat(
-      '/fixture send-hold',
-      undefined,
-      'openrouter:qwen/qwen3.7-plus',
-      onEvent,
-    );
+    await AIChatAPI.chat('/fixture send-hold', undefined, 'openrouter:qwen/qwen3.7-plus', onEvent);
 
     expect(apiFetchMock).not.toHaveBeenCalled();
     expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
@@ -551,7 +546,6 @@ describe('AIChatAPI', () => {
       'workflow_state',
       'workflow_state',
       'workflow_state',
-      'workflow_state',
       'content',
       'done',
     ]);
@@ -559,28 +553,17 @@ describe('AIChatAPI', () => {
       type: 'workflow_state',
       data: {
         phase: 'provider_retry',
-        message: 'DeepSeek failed before output; retrying through OpenRouter.',
+        message: 'Provider connection failed before any output; retrying.',
         attempt: 2,
-        failed_model: 'deepseek:deepseek-chat',
         max_attempts: 3,
-        next_model: 'openrouter:deepseek/deepseek-chat',
         retry_after_ms: 3200,
       },
     });
-    expect(onEvent.mock.calls[4][0]).toMatchObject({
-      type: 'workflow_state',
-      data: {
-        phase: 'provider_start',
-        message: 'Retrying through OpenRouter with deepseek/deepseek-chat.',
-        provider: 'openrouter',
-        model: 'openrouter:deepseek/deepseek-chat',
-      },
-    });
-    expect(onEvent.mock.calls[6][0]).toMatchObject({
+    expect(onEvent.mock.calls[5][0]).toMatchObject({
       type: 'done',
       data: {
         session_id: 'dev-fixture-provider-retry',
-        model: 'openrouter:deepseek/deepseek-chat',
+        model: 'deepseek:deepseek-chat',
       },
     });
   });

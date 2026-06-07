@@ -24,22 +24,12 @@ describe('AI chat stream event contract', () => {
     expect(aiChatEventsSource).toContain("type: 'session'");
   });
 
-  it('exposes provider fallback metadata on workflow state events', () => {
-    const workflow: WorkflowStateData = {
-      phase: 'provider_fallback',
-      message: 'OpenRouter did not start a response; trying DeepSeek.',
-      state: 'provider_fallback',
-      failed_provider: 'openrouter',
-      failed_model: 'openrouter:qwen/qwen3.7-plus',
-      next_provider: 'deepseek',
-      next_model: 'deepseek:deepseek-v4-pro',
-    };
-    const event: AIChatStreamEvent = { type: 'workflow_state', data: workflow };
-
-    expect(event.data.failed_model).toBe('openrouter:qwen/qwen3.7-plus');
-    expect(event.data.next_model).toBe('deepseek:deepseek-v4-pro');
-    expect(aiChatEventsSource).toContain('failed_model?: string');
-    expect(aiChatEventsSource).toContain('next_model?: string');
+  it('does not expose automatic provider fallback metadata on workflow state events', () => {
+    expect(aiChatEventsSource).not.toContain('provider_fallback');
+    expect(aiChatEventsSource).not.toContain('failed_provider?: string');
+    expect(aiChatEventsSource).not.toContain('failed_model?: string');
+    expect(aiChatEventsSource).not.toContain('next_provider?: string');
+    expect(aiChatEventsSource).not.toContain('next_model?: string');
   });
 
   it('exposes selected provider and model metadata on workflow state events', () => {
