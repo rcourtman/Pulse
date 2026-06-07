@@ -157,6 +157,88 @@ func contextScenarioCorpus() []contextScenario {
 				"docker restart frigate",
 			},
 		},
+		{
+			name:         "nginx reverse proxy (Docker, read-only config mount)",
+			userQuestion: "my site returns 502 bad gateway",
+			discovery: &ResourceDiscovery{
+				ID:             MakeResourceID(ResourceTypeDocker, "web1", "nginx"),
+				ResourceType:   ResourceTypeDocker,
+				ResourceID:     "nginx",
+				TargetID:       "web1",
+				Hostname:       "web1",
+				ServiceType:    "nginx",
+				ServiceName:    "Nginx",
+				ServiceVersion: "1.27",
+				Category:       CategoryWebServer,
+				CLIAccess:      "docker exec nginx sh",
+				ConfigPaths:    []string{"/etc/nginx/nginx.conf", "/etc/nginx/conf.d/default.conf"},
+				LogPaths:       []string{"/var/log/nginx/error.log", "/var/log/nginx/access.log"},
+				Ports: []PortInfo{
+					{Port: 80, Protocol: "tcp", Process: "nginx"},
+					{Port: 443, Protocol: "tcp", Process: "nginx"},
+				},
+				DockerMounts: []DockerBindMount{
+					{
+						ContainerName: "nginx",
+						Source:        "/srv/nginx/conf.d",
+						Destination:   "/etc/nginx/conf.d",
+						Type:          "bind",
+						ReadOnly:      true,
+					},
+				},
+				Facts: []DiscoveryFact{
+					{Category: FactCategoryDependency, Key: "upstream", Value: "app:3000", Source: "config_files", Confidence: 0.85},
+					{Category: FactCategoryService, Key: "reload", Value: "docker exec nginx nginx -s reload", Source: "running_services", Confidence: 0.9},
+				},
+			},
+			// A 502 means the upstream is unreachable: the Assistant needs the
+			// config, the error log, the upstream target, and how to reload after
+			// a fix. The config mount is read-only — it must know that before
+			// trying to edit (pins the read-only marker).
+			mustContain: []string{
+				"/etc/nginx/conf.d/default.conf",
+				"/var/log/nginx/error.log",
+				"app:3000",
+				"/srv/nginx/conf.d -> /etc/nginx/conf.d (read-only)",
+				"nginx -s reload",
+			},
+		},
+		{
+			name:         "mosquitto MQTT broker (LXC, auth)",
+			userQuestion: "my smart-home devices can't connect to MQTT",
+			discovery: &ResourceDiscovery{
+				ID:             MakeResourceID(ResourceTypeSystemContainer, "delly", "120"),
+				ResourceType:   ResourceTypeSystemContainer,
+				ResourceID:     "120",
+				TargetID:       "delly",
+				Hostname:       "mqtt",
+				ServiceType:    "mosquitto",
+				ServiceName:    "Mosquitto MQTT",
+				ServiceVersion: "2.0.18",
+				Category:       CategoryNetwork,
+				CLIAccess:      "pct exec 120 -- bash",
+				ConfigPaths:    []string{"/etc/mosquitto/mosquitto.conf", "/etc/mosquitto/conf.d/auth.conf"},
+				LogPaths:       []string{"/var/log/mosquitto/mosquitto.log"},
+				Ports: []PortInfo{
+					{Port: 1883, Protocol: "tcp", Process: "mosquitto"},
+					{Port: 8883, Protocol: "tcp", Process: "mosquitto"},
+				},
+				Facts: []DiscoveryFact{
+					{Category: FactCategorySecurity, Key: "auth", Value: "password_file set; allow_anonymous false", Source: "config_files", Confidence: 0.9},
+					{Category: FactCategoryService, Key: "restart", Value: "systemctl restart mosquitto", Source: "running_services", Confidence: 0.9},
+				},
+			},
+			// "Can't connect" is usually auth or the listener: the Assistant needs
+			// the config, the listening port, the auth setup (a security fact —
+			// pins security-category surfacing), and how to restart after a change.
+			mustContain: []string{
+				"pct exec 120",
+				"/etc/mosquitto/conf.d/auth.conf",
+				"1883/tcp",
+				"allow_anonymous false",
+				"systemctl restart mosquitto",
+			},
+		},
 	}
 }
 
