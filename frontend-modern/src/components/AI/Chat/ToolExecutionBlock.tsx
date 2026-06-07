@@ -47,6 +47,15 @@ interface ToolCancellationBlockProps {
   tool: ToolCancellation;
 }
 
+type ToolDetailKind = 'input' | 'output' | 'reason';
+
+interface ToolDetailsPanelProps {
+  id: string;
+  input?: string;
+  output?: string;
+  reason?: string;
+}
+
 const hasReadableToolOutput = (output: string) => {
   const trimmed = output.trim();
   return trimmed.length > 0 && !trimmed.toLowerCase().includes('not available');
@@ -172,15 +181,97 @@ const ToolCommandPreview: Component<ToolCommandPreviewProps> = (props) => (
   </code>
 );
 
+const normalizeDetailText = (value?: string) => value?.trim() ?? '';
+
+const detailTitle = (kind: ToolDetailKind) => {
+  if (kind === 'input') return 'Input';
+  if (kind === 'output') return 'Output';
+  return 'Reason';
+};
+
+const detailCopyTarget = (kind: ToolDetailKind) => {
+  if (kind === 'input') return 'tool input';
+  if (kind === 'output') return 'tool output';
+  return 'skip reason';
+};
+
+const detailPreClass = (kind: ToolDetailKind) =>
+  `${kind === 'output' ? 'max-h-72' : 'max-h-36'} overflow-auto rounded bg-surface-alt p-2 font-mono text-[10px] leading-5 text-muted whitespace-pre-wrap break-words`;
+
+const ToolDetailsPanel: Component<ToolDetailsPanelProps> = (props) => {
+  const [copiedDetail, setCopiedDetail] = createSignal<ToolDetailKind | null>(null);
+  let copiedResetTimer: number | undefined;
+
+  const details = createMemo(() => {
+    const items: Array<{ kind: ToolDetailKind; text: string }> = [];
+    const input = normalizeDetailText(props.input);
+    const output = normalizeDetailText(props.output);
+    const reason = normalizeDetailText(props.reason);
+
+    if (input) items.push({ kind: 'input', text: input });
+    if (output) items.push({ kind: 'output', text: output });
+    if (reason) items.push({ kind: 'reason', text: reason });
+    return items;
+  });
+
+  const detailCopyLabel = (kind: ToolDetailKind) => {
+    const target = detailCopyTarget(kind);
+    return copiedDetail() === kind ? `Copied ${target}` : `Copy ${target}`;
+  };
+
+  const copyDetail = async (kind: ToolDetailKind, value: string) => {
+    const text = value.trim();
+    if (!text) return;
+    const copied = await copyToClipboard(text);
+    if (!copied) return;
+    setCopiedDetail(kind);
+    if (copiedResetTimer) window.clearTimeout(copiedResetTimer);
+    copiedResetTimer = window.setTimeout(() => setCopiedDetail(null), 1500);
+  };
+
+  onCleanup(() => {
+    if (copiedResetTimer) window.clearTimeout(copiedResetTimer);
+  });
+
+  return (
+    <div id={props.id} class="border-t border-border-subtle px-3 py-2">
+      <For each={details()}>
+        {(detail) => (
+          <div class="mb-2 last:mb-0">
+            <div class="mb-1 flex items-center justify-between gap-2">
+              <div class="text-[9px] font-semibold uppercase tracking-wide text-muted">
+                {detailTitle(detail.kind)}
+              </div>
+              <button
+                type="button"
+                class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                onClick={() => void copyDetail(detail.kind, detail.text)}
+                title={detailCopyLabel(detail.kind)}
+                aria-label={detailCopyLabel(detail.kind)}
+              >
+                <Show
+                  when={copiedDetail() === detail.kind}
+                  fallback={<CopyIcon class="h-3 w-3" aria-hidden="true" />}
+                >
+                  <CheckIcon class="h-3 w-3 text-emerald-600" aria-hidden="true" />
+                </Show>
+              </button>
+            </div>
+            <pre class={detailPreClass(detail.kind)}>{detail.text}</pre>
+          </div>
+        )}
+      </For>
+    </div>
+  );
+};
+
 /**
  * ToolExecutionBlock - Displays completed tool executions in a compact terminal-like style.
  */
 export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) => {
   const [showDetails, setShowDetails] = createSignal(false);
-  const [copiedDetail, setCopiedDetail] = createSignal<'input' | 'output' | null>(null);
   const [settlingFastCompletion, setSettlingFastCompletion] = createSignal(false);
   const detailsId = createUniqueId();
-  let copiedResetTimer: number | undefined;
 
   const toolLabel = createMemo(() => getToolLabel(props.tool.name));
   const inputText = createMemo(() => toolValueText(props.tool.input));
@@ -226,9 +317,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
   });
 
   const durationLabel = createMemo(() =>
-    settlingFastCompletion()
-      ? ''
-      : formatCompletedToolDuration(props.startedAt, props.completedAt),
+    settlingFastCompletion() ? '' : formatCompletedToolDuration(props.startedAt, props.completedAt),
   );
 
   const statusLabel = () =>
@@ -250,21 +339,6 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
     event.preventDefault();
     toggleDetails();
   };
-  const copyDetail = async (kind: 'input' | 'output', value: string) => {
-    const text = value.trim();
-    if (!text) return;
-    const copied = await copyToClipboard(text);
-    if (!copied) return;
-    setCopiedDetail(kind);
-    if (copiedResetTimer) window.clearTimeout(copiedResetTimer);
-    copiedResetTimer = window.setTimeout(() => setCopiedDetail(null), 1500);
-  };
-  const detailCopyLabel = (kind: 'input' | 'output') =>
-    copiedDetail() === kind ? `Copied tool ${kind}` : `Copy tool ${kind}`;
-
-  onCleanup(() => {
-    if (copiedResetTimer) window.clearTimeout(copiedResetTimer);
-  });
 
   return (
     <div
@@ -368,52 +442,11 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
       </Show>
 
       <Show when={showDetails() && hasDetails()}>
-        <div id={detailsId} class="border-t border-border-subtle px-3 py-2">
-          <Show when={hasInput()}>
-            <div class="mb-1 flex items-center justify-between gap-2">
-              <div class="text-[9px] font-semibold uppercase tracking-wide text-muted">Input</div>
-              <button
-                type="button"
-                class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                onClick={() => void copyDetail('input', inputText())}
-                title={detailCopyLabel('input')}
-                aria-label={detailCopyLabel('input')}
-              >
-                <Show
-                  when={copiedDetail() === 'input'}
-                  fallback={<CopyIcon class="h-3 w-3" aria-hidden="true" />}
-                >
-                  <CheckIcon class="h-3 w-3 text-emerald-600" aria-hidden="true" />
-                </Show>
-              </button>
-            </div>
-            <pre class="mb-2 max-h-36 overflow-auto rounded bg-surface-alt p-2 font-mono text-[10px] leading-5 text-muted whitespace-pre-wrap break-words">
-              {inputText().trim()}
-            </pre>
-          </Show>
-          <Show when={hasOutput()}>
-            <div class="mb-1 flex items-center justify-between gap-2">
-              <div class="text-[9px] font-semibold uppercase tracking-wide text-muted">Output</div>
-              <button
-                type="button"
-                class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                onClick={() => void copyDetail('output', outputText())}
-                title={detailCopyLabel('output')}
-                aria-label={detailCopyLabel('output')}
-              >
-                <Show
-                  when={copiedDetail() === 'output'}
-                  fallback={<CopyIcon class="h-3 w-3" aria-hidden="true" />}
-                >
-                  <CheckIcon class="h-3 w-3 text-emerald-600" aria-hidden="true" />
-                </Show>
-              </button>
-            </div>
-            <pre class="max-h-72 overflow-auto rounded bg-surface-alt p-2 font-mono text-[10px] leading-5 text-muted whitespace-pre-wrap break-words">
-              {outputText().trim()}
-            </pre>
-          </Show>
-        </div>
+        <ToolDetailsPanel
+          id={detailsId}
+          input={hasInput() ? inputText() : ''}
+          output={hasOutput() ? outputText() : ''}
+        />
       </Show>
     </div>
   );
@@ -513,6 +546,8 @@ export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
  * ToolCancellationBlock - Durable row for tool calls skipped by policy/runtime boundaries.
  */
 export const ToolCancellationBlock: Component<ToolCancellationBlockProps> = (props) => {
+  const [showDetails, setShowDetails] = createSignal(false);
+  const detailsId = createUniqueId();
   const toolLabel = createMemo(() => getToolLabel(props.tool.name));
   const inputText = createMemo(() => toolValueText(props.tool.input));
   const parsedInputSummary = createMemo(() =>
@@ -520,7 +555,9 @@ export const ToolCancellationBlock: Component<ToolCancellationBlockProps> = (pro
   );
   const inputSummary = createMemo(() => {
     const summary = parsedInputSummary();
-    return isPlaceholderToolInputSummary(summary) ? pendingToolActionLabel(props.tool.name) : summary;
+    return isPlaceholderToolInputSummary(summary)
+      ? pendingToolActionLabel(props.tool.name)
+      : summary;
   });
   const commandPreview = createMemo(() => {
     const preview = parseToolCommandPreview(inputText(), props.tool.name, props.tool.rawInput);
@@ -529,15 +566,42 @@ export const ToolCancellationBlock: Component<ToolCancellationBlockProps> = (pro
     return preview;
   });
   const reason = createMemo(() => props.tool.reason?.trim() || 'Skipped before execution');
+  const hasInput = createMemo(() => inputText().trim().length > 0);
+  const hasReason = createMemo(() => reason().trim().length > 0);
+  const hasDetails = createMemo(() => hasInput() || hasReason());
+  const summaryControlTitle = () => (showDetails() ? 'Hide tool details' : 'Show tool details');
+  const toggleDetails = () => {
+    if (!hasDetails()) return;
+    setShowDetails(!showDetails());
+  };
+  const handleSummaryKeyDown = (event: KeyboardEvent) => {
+    if (!hasDetails()) return;
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    toggleDetails();
+  };
 
   return (
     <div
-      class="my-1 rounded-md border border-amber-200 bg-amber-50/70 px-2.5 py-2 text-[11px] dark:border-amber-900/60 dark:bg-amber-950/20"
+      class="my-1 overflow-hidden rounded-md border border-amber-200 bg-amber-50/70 text-[11px] dark:border-amber-900/60 dark:bg-amber-950/20"
       role="status"
       aria-label="Assistant tool canceled"
       title={reason()}
     >
-      <div class="flex min-w-0 items-start gap-2">
+      <div
+        class={`flex min-w-0 items-start gap-2 px-2.5 py-2 ${
+          hasDetails()
+            ? 'cursor-pointer transition-colors hover:bg-amber-100/60 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:ring-inset dark:hover:bg-amber-950/30'
+            : ''
+        }`}
+        role={hasDetails() ? 'button' : undefined}
+        tabIndex={hasDetails() ? 0 : undefined}
+        aria-expanded={hasDetails() ? showDetails() : undefined}
+        aria-controls={hasDetails() ? detailsId : undefined}
+        title={hasDetails() ? summaryControlTitle() : undefined}
+        onClick={toggleDetails}
+        onKeyDown={handleSummaryKeyDown}
+      >
         <div class="pt-0.5">
           <XCircleIcon
             class="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-300"
@@ -553,6 +617,14 @@ export const ToolCancellationBlock: Component<ToolCancellationBlockProps> = (pro
             <span class="shrink-0 rounded border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
               skipped
             </span>
+            <Show when={hasDetails()}>
+              <ChevronRightIcon
+                class={`h-3.5 w-3.5 shrink-0 text-muted transition-transform ${
+                  showDetails() ? 'rotate-90' : ''
+                }`}
+                aria-hidden="true"
+              />
+            </Show>
           </div>
           <ToolInputSummary summary={inputSummary()} />
           <Show when={commandPreview()}>
@@ -563,6 +635,13 @@ export const ToolCancellationBlock: Component<ToolCancellationBlockProps> = (pro
           </div>
         </div>
       </div>
+      <Show when={showDetails() && hasDetails()}>
+        <ToolDetailsPanel
+          id={detailsId}
+          input={hasInput() ? inputText() : ''}
+          reason={hasReason() ? reason() : ''}
+        />
+      </Show>
     </div>
   );
 };

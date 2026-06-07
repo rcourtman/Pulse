@@ -8,7 +8,7 @@ import {
   PendingToolsList,
   ToolExecutionsList,
 } from '../ToolExecutionBlock';
-import type { ToolExecution, PendingTool } from '../types';
+import type { ToolExecution, PendingTool, ToolCancellation } from '../types';
 
 afterEach(() => {
   cleanup();
@@ -32,6 +32,16 @@ function makePending(overrides?: Partial<PendingTool>): PendingTool {
     id: 'tool-1',
     name: 'run_command',
     input: 'uptime',
+    ...overrides,
+  };
+}
+
+function makeCancellation(overrides?: Partial<ToolCancellation>): ToolCancellation {
+  return {
+    id: 'tool-1',
+    name: 'pulse_read',
+    input: '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
+    reason: 'current_resource unavailable',
     ...overrides,
   };
 }
@@ -110,17 +120,13 @@ describe('ToolExecutionBlock', () => {
   });
 
   it('shows completed tool duration when stream timing is available', () => {
-    render(() => (
-      <ToolExecutionBlock tool={makeTool()} startedAt={1_000} completedAt={4_200} />
-    ));
+    render(() => <ToolExecutionBlock tool={makeTool()} startedAt={1_000} completedAt={4_200} />);
 
     expect(screen.getByLabelText('Tool duration 3s')).toHaveTextContent('3s');
   });
 
   it('keeps very fast completed tools visible as sub-second work', () => {
-    render(() => (
-      <ToolExecutionBlock tool={makeTool()} startedAt={1_000} completedAt={1_450} />
-    ));
+    render(() => <ToolExecutionBlock tool={makeTool()} startedAt={1_000} completedAt={1_450} />);
 
     expect(screen.getByLabelText('Tool duration <1s')).toHaveTextContent('<1s');
   });
@@ -877,16 +883,7 @@ describe('PendingToolBlock', () => {
 
 describe('ToolCancellationBlock', () => {
   it('renders skipped tool activity with the cancellation reason', () => {
-    render(() => (
-      <ToolCancellationBlock
-        tool={{
-          id: 'tool-1',
-          name: 'pulse_read',
-          input: '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
-          reason: 'current_resource unavailable',
-        }}
-      />
-    ));
+    render(() => <ToolCancellationBlock tool={makeCancellation()} />);
 
     expect(screen.getByRole('status', { name: 'Assistant tool canceled' })).toHaveTextContent(
       'skipped',
@@ -894,6 +891,78 @@ describe('ToolCancellationBlock', () => {
     expect(screen.getByText('Inspect devices on current resource')).toBeInTheDocument();
     expect(screen.getByLabelText('Tool command')).toHaveTextContent('$ ls /dev | wc -l');
     expect(screen.getByText('current_resource unavailable')).toBeInTheDocument();
+  });
+
+  it('makes the skipped tool row the details trigger when raw input or reason is available', () => {
+    render(() => <ToolCancellationBlock tool={makeCancellation()} />);
+
+    const trigger = getToolDetailsTrigger();
+    expect(trigger).toBeInTheDocument();
+    expect(trigger).toHaveAttribute('role', 'button');
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('shows canceled tool input and reason when details are opened', () => {
+    const input = '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}';
+    const reason = 'current_resource unavailable';
+    const { container } = render(() => (
+      <ToolCancellationBlock tool={makeCancellation({ input, reason })} />
+    ));
+
+    const trigger = getToolDetailsTrigger();
+    fireEvent.click(trigger);
+
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(trigger).toHaveAttribute('title', 'Hide tool details');
+    expect(screen.getByText('Input')).toBeInTheDocument();
+    expect(screen.getByText('Reason')).toBeInTheDocument();
+    const rawDetails = Array.from(container.querySelectorAll('pre'))
+      .map((pre) => pre.textContent || '')
+      .join('\n');
+    expect(rawDetails).toContain(input);
+    expect(rawDetails).toContain(reason);
+  });
+
+  it('copies skipped tool input and skip reason from the details panel', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+    const input = '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}';
+    const reason = 'current_resource unavailable';
+
+    render(() => <ToolCancellationBlock tool={makeCancellation({ input, reason })} />);
+    fireEvent.click(getToolDetailsTrigger());
+    fireEvent.click(screen.getByRole('button', { name: 'Copy tool input' }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(input);
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Copied tool input' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy skip reason' }));
+    await waitFor(() => {
+      expect(writeText).toHaveBeenLastCalledWith(reason);
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Copied skip reason' })).toBeInTheDocument();
+    });
+  });
+
+  it('toggles canceled tool details from the keyboard', () => {
+    render(() => <ToolCancellationBlock tool={makeCancellation()} />);
+
+    const trigger = getToolDetailsTrigger();
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Reason')).toBeInTheDocument();
+
+    fireEvent.keyDown(trigger, { key: ' ' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Reason')).not.toBeInTheDocument();
   });
 });
 

@@ -744,6 +744,17 @@ runtime cost control, and shared AI transport surfaces.
    typed message parts through terminal success/failed states; Pulse adapts
    that lifecycle shape by making skipped policy/runtime tool calls visible as
    terminal transcript rows.
+   The 2026-06-07 skipped-evidence slice rechecked OpenCode `origin/dev`
+   commit `31c099be435d59bd6749ace7a9f2bb2245e6d3fa`:
+   `packages/core/src/session/event.ts` lines 307-336 define replayable tool
+   input start/delta/end events and lines 386-399 define terminal failed tool
+   events, `packages/core/src/session/message-updater.ts` lines 247-267 and
+   318-339 preserve and update the same assistant tool part through input and
+   failure, and `packages/opencode/src/session/tools.ts` lines 48-65 and
+   180-200 keep terminal tool input/output evidence. Pulse skipped/canceled
+   tool rows must therefore keep raw tool input and skip reason behind the same
+   expandable, copyable Details panel used for completed terminal tool rows,
+   while the compact row remains the operator-readable action summary.
    While streamed arguments are still invalid, incomplete JSON, or incomplete
    provider-style function-call input, the frontend must use the `raw_input`
    fragment to show a safe partial command/path/query summary instead of a
