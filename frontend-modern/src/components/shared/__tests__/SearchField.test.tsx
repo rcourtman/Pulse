@@ -117,4 +117,36 @@ describe('SearchField', () => {
     expect(onBlur).toHaveBeenCalledTimes(1);
     expect(onBlur.mock.calls[0][0].currentTarget).toBe(input);
   });
+
+  it('lets explicit keyboard handlers claim the native event', () => {
+    const onKeyDown = vi.fn((event: KeyboardEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    const onParentKeyDown = vi.fn();
+
+    render(() => (
+      <div onKeyDown={onParentKeyDown}>
+        <SearchField
+          value="alpha"
+          onChange={vi.fn()}
+          placeholder="Claimed field"
+          onKeyDown={onKeyDown}
+          clearOnFocusedEscape={false}
+        />
+      </div>
+    ));
+
+    const input = screen.getByPlaceholderText('Claimed field');
+    const event = new KeyboardEvent('keydown', {
+      key: 'Escape',
+      bubbles: true,
+      cancelable: true,
+    });
+    input.dispatchEvent(event);
+
+    expect(onKeyDown).toHaveBeenCalledTimes(1);
+    expect(event.defaultPrevented).toBe(true);
+    expect(onParentKeyDown).not.toHaveBeenCalled();
+  });
 });

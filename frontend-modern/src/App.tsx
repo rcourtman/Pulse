@@ -397,8 +397,11 @@ function App() {
         // Escape closes the drawer only after mounted drawer controls have had
         // a chance to claim the key for local flows such as interrupt confirm.
         if (e.key === 'Escape' && aiChatStore.isOpen) {
+          const escapeTarget = e.target instanceof Element ? e.target : null;
+          const isModelPickerEscape = Boolean(escapeTarget?.closest('[data-ai-model-picker]'));
+
           window.setTimeout(() => {
-            if (!e.defaultPrevented && aiChatStore.isOpen) {
+            if (!e.defaultPrevented && !isModelPickerEscape && aiChatStore.isOpen) {
               aiChatStore.close();
             }
           }, 0);

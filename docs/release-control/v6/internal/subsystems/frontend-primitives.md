@@ -1039,7 +1039,9 @@ not a replacement status card, CTA band, or page-local nested card.
     must expose its owned listbox while expanded, and keyboard movement from
     search through the option rows must support current-row focus,
     filtered-result focus, up/down, page, home/end, and Escape return to the
-    trigger so model choice does not depend on mouse interaction.
+    trigger so model choice does not depend on mouse interaction. Picker-owned
+    navigation keys, including Escape, must be consumed by the picker so parent
+    shells do not also treat the same keypress as drawer or page-level Escape.
     Gateway-routed model choices must not look like direct-provider choices:
     the shared picker, System AI settings status strip, and per-surface
     inherited-default descriptions must render OpenRouter-hosted provider
@@ -2341,10 +2343,10 @@ Escape clear/blur behavior and input-ref lifecycle, and
 visibility rules plus trailing-control padding policy. Future search-field work
 should extend those owners instead of pushing event behavior or layout policy
 back into the shared shell. Forwarded keyboard and blur events must preserve
-native browser event getters while normalizing `currentTarget` and `target`;
-shared search-field wrappers must not proxy native event properties through a
-receiver that can break `KeyboardEvent`/`FocusEvent` getters in live browser
-surfaces.
+native browser event getters and methods while normalizing `currentTarget` and
+`target`; shared search-field wrappers must not proxy native event properties or
+methods through a receiver that can break `KeyboardEvent`/`FocusEvent` getters,
+`preventDefault()`, or `stopPropagation()` in live browser surfaces.
 The shared search input now follows that same owner split.
 `frontend-modern/src/components/shared/SearchInput.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useSearchInputState.ts` owns input-ref

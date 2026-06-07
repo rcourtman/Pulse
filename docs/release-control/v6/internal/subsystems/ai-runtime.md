@@ -554,7 +554,10 @@ runtime cost control, and shared AI transport surfaces.
    focused composer arm the visible Stop control first and letting the next
    Escape confirm the same governed `chat.stop()` path as the Stop button,
    including aborting the active stream, clearing queued follow-ups, preserving
-   partial text, and returning focus to the composer.
+   partial text, and returning focus to the composer. The App-level Assistant
+   drawer Escape guard must not close the drawer when Escape originates inside
+   the shared model picker; model-picker Escape is a local search/listbox close
+   path that returns focus to the picker trigger while the drawer remains open.
    The referenced OpenCode source at fetched `origin/dev` commit
    `fa2b63f850fc0a23bec2bdff9e660450d3fe7913` keeps prompt/footer status visible
    only while the session is non-idle in

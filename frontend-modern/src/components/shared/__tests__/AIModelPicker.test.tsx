@@ -238,6 +238,63 @@ describe('AIModelPicker', () => {
     expect(document.activeElement).toBe(currentOption);
   });
 
+  it('supports page, home, end, and Escape from the search field', async () => {
+    const pageModels: ModelInfo[] = Array.from({ length: 12 }, (_, index) => ({
+      id: `openrouter:page/model-${index}`,
+      name: `Page Model ${index}`,
+      notable: true,
+      provider: 'openrouter',
+    }));
+    const onParentKeyDown = vi.fn();
+
+    render(() => (
+      <div onKeyDown={onParentKeyDown}>
+        <AIModelPicker
+          models={pageModels}
+          selectedModel="openrouter:page/model-0"
+          onModelSelect={vi.fn()}
+          title="Select shared default model"
+        />
+      </div>
+    ));
+
+    const button = screen.getByTitle('Select shared default model');
+    fireEvent.click(button);
+
+    const searchInput = screen.getByPlaceholderText('Search or enter model ID');
+    const optionFor = (index: number) =>
+      screen.getByRole('option', {
+        name: new RegExp(`^Page Model ${index} via OpenRouter(?:, Current)?\\. `),
+      });
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(searchInput);
+    });
+
+    fireEvent.keyDown(searchInput, { key: 'PageDown' });
+    expect(document.activeElement).toBe(optionFor(10));
+
+    searchInput.focus();
+    fireEvent.keyDown(searchInput, { key: 'PageUp' });
+    expect(document.activeElement).toBe(optionFor(11));
+
+    searchInput.focus();
+    fireEvent.keyDown(searchInput, { key: 'End' });
+    expect(document.activeElement).toBe(optionFor(11));
+
+    searchInput.focus();
+    fireEvent.keyDown(searchInput, { key: 'Home' });
+    expect(document.activeElement).toBe(optionFor(0));
+
+    searchInput.focus();
+    fireEvent.keyDown(searchInput, { key: 'Escape' });
+    expect(screen.queryByRole('listbox', { name: 'Select shared default model' })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(document.activeElement).toBe(button);
+    });
+    expect(onParentKeyDown).not.toHaveBeenCalled();
+  });
+
   it('moves keyboard focus to the first filtered result while searching', async () => {
     render(() => (
       <AIModelPicker
@@ -265,13 +322,17 @@ describe('AIModelPicker', () => {
   });
 
   it('closes the picker and returns focus to the trigger from option Escape', async () => {
+    const onParentKeyDown = vi.fn();
+
     render(() => (
-      <AIModelPicker
-        models={models}
-        selectedModel="openrouter:minimax/minimax-m2.5"
-        onModelSelect={vi.fn()}
-        title="Select shared default model"
-      />
+      <div onKeyDown={onParentKeyDown}>
+        <AIModelPicker
+          models={models}
+          selectedModel="openrouter:minimax/minimax-m2.5"
+          onModelSelect={vi.fn()}
+          title="Select shared default model"
+        />
+      </div>
     ));
 
     const button = screen.getByTitle('Select shared default model');
@@ -290,7 +351,10 @@ describe('AIModelPicker', () => {
     fireEvent.keyDown(currentOption, { key: 'Escape' });
 
     expect(screen.queryByPlaceholderText('Search or enter model ID')).not.toBeInTheDocument();
-    expect(document.activeElement).toBe(button);
+    await waitFor(() => {
+      expect(document.activeElement).toBe(button);
+    });
+    expect(onParentKeyDown).not.toHaveBeenCalled();
   });
 
   it('constrains the dropdown to the available mobile viewport height', () => {

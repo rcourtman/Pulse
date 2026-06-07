@@ -36,7 +36,11 @@ export function useSearchFieldState(options: SearchFieldStateOptions) {
       get(eventTarget, prop) {
         if (prop === 'currentTarget') return currentTarget;
         if (prop === 'target') return normalizedTarget;
-        return Reflect.get(eventTarget, prop);
+        const value = Reflect.get(eventTarget, prop);
+        if (typeof value === 'function') {
+          return value.bind(eventTarget);
+        }
+        return value;
       },
     });
   };

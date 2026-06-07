@@ -369,6 +369,17 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
     setSearchQuery('');
   };
 
+  const focusTriggerAfterClose = () => {
+    const trigger = buttonRef;
+    if (!trigger) return;
+    window.setTimeout(() => trigger.focus(), 0);
+  };
+
+  const closePickerAndFocusTrigger = () => {
+    closePicker();
+    focusTriggerAfterClose();
+  };
+
   const focusSearchInput = () => {
     queueMicrotask(() => searchInputRef?.focus());
   };
@@ -420,12 +431,32 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
     return true;
   };
 
-  const focusInitialOption = () => {
+  const initialOptionIndex = () => {
     const keys = displayedOptionKeys();
-    if (keys.length === 0) return false;
+    if (keys.length === 0) return -1;
     const currentKey = currentOptionKey();
     const currentIndex = !searchQuery().trim() && currentKey ? keys.indexOf(currentKey) : -1;
-    return focusOptionAtIndex(currentIndex >= 0 ? currentIndex : 0);
+    return currentIndex >= 0 ? currentIndex : 0;
+  };
+
+  const focusInitialOption = () => {
+    const nextIndex = initialOptionIndex();
+    return nextIndex >= 0 && focusOptionAtIndex(nextIndex);
+  };
+
+  const focusOptionFromSearchByOffset = (offset: number) => {
+    const keys = displayedOptionKeys();
+    const startIndex = initialOptionIndex();
+    if (keys.length === 0 || startIndex < 0) return false;
+    let nextIndex = startIndex + offset;
+    if (nextIndex < 0) nextIndex = keys.length - 1;
+    if (nextIndex >= keys.length) nextIndex = 0;
+    return focusOptionAtIndex(nextIndex);
+  };
+
+  const consumePickerKey = (event: KeyboardEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
   };
 
   const focusOptionRelativeTo = (optionKey: string, offset: number) => {
@@ -441,15 +472,36 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
   const handleSearchKeyDown = (event: KeyboardEvent) => {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     if (event.key === 'ArrowDown' && focusInitialOption()) {
-      event.preventDefault();
+      consumePickerKey(event);
       return;
     }
     if (event.key === 'ArrowUp' && focusOptionAtIndex(displayedOptionKeys().length - 1)) {
-      event.preventDefault();
+      consumePickerKey(event);
+      return;
+    }
+    if (event.key === 'PageDown' && focusOptionFromSearchByOffset(10)) {
+      consumePickerKey(event);
+      return;
+    }
+    if (event.key === 'PageUp' && focusOptionFromSearchByOffset(-10)) {
+      consumePickerKey(event);
+      return;
+    }
+    if (event.key === 'Home' && focusOptionAtIndex(0)) {
+      consumePickerKey(event);
+      return;
+    }
+    if (event.key === 'End' && focusOptionAtIndex(displayedOptionKeys().length - 1)) {
+      consumePickerKey(event);
+      return;
+    }
+    if (event.key === 'Escape') {
+      consumePickerKey(event);
+      closePickerAndFocusTrigger();
       return;
     }
     if (event.key === 'Enter') {
-      event.preventDefault();
+      consumePickerKey(event);
       const candidate = customModelCandidate();
       if (candidate && (exactCandidateModel() || showCustomModelOption())) {
         handleSelect(candidate);
@@ -464,33 +516,32 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
 
     if (event.key === 'ArrowDown' && focusOptionRelativeTo(optionKey, 1)) {
-      event.preventDefault();
+      consumePickerKey(event);
       return;
     }
     if (event.key === 'ArrowUp' && focusOptionRelativeTo(optionKey, -1)) {
-      event.preventDefault();
+      consumePickerKey(event);
       return;
     }
     if (event.key === 'PageDown' && focusOptionRelativeTo(optionKey, 10)) {
-      event.preventDefault();
+      consumePickerKey(event);
       return;
     }
     if (event.key === 'PageUp' && focusOptionRelativeTo(optionKey, -10)) {
-      event.preventDefault();
+      consumePickerKey(event);
       return;
     }
     if (event.key === 'Home' && focusOptionAtIndex(0)) {
-      event.preventDefault();
+      consumePickerKey(event);
       return;
     }
     if (event.key === 'End' && focusOptionAtIndex(displayedOptionKeys().length - 1)) {
-      event.preventDefault();
+      consumePickerKey(event);
       return;
     }
     if (event.key === 'Escape') {
-      event.preventDefault();
-      closePicker();
-      buttonRef?.focus();
+      consumePickerKey(event);
+      closePickerAndFocusTrigger();
     }
   };
 
@@ -498,9 +549,8 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
     event: KeyboardEvent & { currentTarget: HTMLButtonElement },
   ) => {
     if (event.key !== 'Escape' || event.altKey || event.ctrlKey || event.metaKey) return;
-    event.preventDefault();
-    closePicker();
-    buttonRef?.focus();
+    consumePickerKey(event);
+    closePickerAndFocusTrigger();
   };
 
   createEffect(() => {
@@ -584,6 +634,7 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
               value={searchQuery()}
               onChange={setSearchQuery}
               onKeyDown={handleSearchKeyDown}
+              clearOnFocusedEscape={false}
               placeholder={props.searchPlaceholder || 'Search or enter model ID'}
               class="flex-1"
               inputClass="py-1.5 text-xs focus:ring-blue-400"
