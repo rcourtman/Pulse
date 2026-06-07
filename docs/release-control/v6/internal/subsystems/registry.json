@@ -1562,7 +1562,8 @@
         "pkg/pulsecli/actions.go",
         "pkg/pulsecli/api_client.go",
         "pkg/pulsecli/fleet.go",
-        "pkg/pulsecli/root.go"
+        "pkg/pulsecli/root.go",
+        "scripts/generate-types.go"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -1574,6 +1575,21 @@
         ],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "ai-chat-stream-event-types",
+            "label": "AI chat SSE generated type proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/api/generated/aiChatEvents.ts",
+              "scripts/generate-types.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/aiChatEvents.test.ts",
+              "internal/api/contract_test.go"
+            ]
+          },
           {
             "id": "auth-state-persistence-compatibility",
             "label": "session and CSRF persistence migration proof",

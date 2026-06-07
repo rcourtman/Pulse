@@ -86,10 +86,9 @@ func main() {
 	// QuestionData is wrapped by the backend as {question_id, questions} plus session_id in some callers.
 	// The contract test covers {question_id, questions}; the UI currently expects session_id too.
 	// Keep session_id optional for backward compatibility.
-	buf.WriteString("  | { type: 'question'; data: (QuestionData & { session_id?: string }) }\n")
+	buf.WriteString("  | { type: 'question'; data: QuestionData & { session_id?: string } }\n")
 	buf.WriteString("  | { type: 'done'; data?: DoneData }\n")
-	buf.WriteString("  | { type: 'error'; data: ErrorData }\n")
-	buf.WriteString(";\n")
+	buf.WriteString("  | { type: 'error'; data: ErrorData };\n")
 
 	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
 		fatal(err)

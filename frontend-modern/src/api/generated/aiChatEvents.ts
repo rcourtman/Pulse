@@ -128,6 +128,8 @@ export interface WorkflowStateData {
   message: string;
   state?: string;
   tool?: string;
+  provider?: string;
+  model?: string;
   attempt?: number;
   max_attempts?: number;
   retry_after_ms?: number;

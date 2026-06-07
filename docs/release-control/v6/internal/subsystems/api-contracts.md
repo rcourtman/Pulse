@@ -108,8 +108,10 @@ product API routes free of maintainer commercial analytics.
 68. `frontend-modern/src/api/ai.ts`
 69. `frontend-modern/src/api/aiChat.ts`
 70. `frontend-modern/src/api/patrol.ts`
-71. `internal/api/agent_exec_token_binding.go`
-72. `internal/agentcontext/`
+71. `frontend-modern/src/api/generated/aiChatEvents.ts`
+72. `internal/api/agent_exec_token_binding.go`
+73. `internal/agentcontext/`
+74. `scripts/generate-types.go`
 
 ## Shared Boundaries
 
@@ -1007,10 +1009,11 @@ the canonical monitored-system blocked payload.
 9. Route frontend API-client parsed error propagation, API-error-status fallback handling, allowed-status handling, custom status-specific error handling, command-trigger success envelope handling, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, stream event consumption, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
    Assistant chat stream workflow-state payloads are part of this same
    frontend API-client boundary. `workflow_state` events must keep `phase`,
-   `message`, `state`, and `tool` stable, and provider fallback transitions may
-   additionally carry `failed_provider`, `failed_model`, `next_provider`, and
-   `next_model` so diagnostics can identify the exact route change without
-   expanding the visible operator message. The generated
+   `message`, `state`, and `tool` stable, selected-route starts may carry
+   `provider` and `model`, and provider fallback transitions may additionally
+   carry `failed_provider`, `failed_model`, `next_provider`, and `next_model` so
+   diagnostics can identify the exact route change without expanding the visible
+   operator message. The generated
    `frontend-modern/src/api/generated/aiChatEvents.ts` type must stay derived
    from `internal/ai/chat/types.go` through `scripts/generate-types.go`, and
    frontend API tests must pin any new generated SSE fields, including live

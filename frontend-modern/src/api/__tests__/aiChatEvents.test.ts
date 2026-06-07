@@ -42,6 +42,21 @@ describe('AI chat stream event contract', () => {
     expect(aiChatEventsSource).toContain('next_model?: string');
   });
 
+  it('exposes selected provider and model metadata on workflow state events', () => {
+    const workflow: WorkflowStateData = {
+      phase: 'provider_start',
+      message: 'Sent request to OpenRouter; waiting for the first token.',
+      provider: 'openrouter',
+      model: 'openrouter:qwen/qwen3.7-plus',
+    };
+    const event: AIChatStreamEvent = { type: 'workflow_state', data: workflow };
+
+    expect(event.data.provider).toBe('openrouter');
+    expect(event.data.model).toBe('openrouter:qwen/qwen3.7-plus');
+    expect(aiChatEventsSource).toContain('provider?: string');
+    expect(aiChatEventsSource).toContain('model?: string');
+  });
+
   it('exposes provider retry metadata on workflow state events', () => {
     const workflow: WorkflowStateData = {
       phase: 'provider_retry',

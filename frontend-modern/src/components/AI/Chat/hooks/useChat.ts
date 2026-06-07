@@ -313,10 +313,7 @@ export function useChat(options: UseChatOptions = {}) {
 
   const addStreamEvent = (msg: ChatMessage, event: StreamDisplayEvent): ChatMessage => {
     const nextEvent = withStreamEventTiming(event);
-    const events =
-      nextEvent.type === 'workflow_status'
-        ? msg.streamEvents || []
-        : streamEventsWithoutWorkflowStatusRows(msg.streamEvents || []) || [];
+    const events = msg.streamEvents || [];
 
     // For content events, merge consecutive content into one
     if (nextEvent.type === 'content' && events.length > 0) {
@@ -574,7 +571,7 @@ export function useChat(options: UseChatOptions = {}) {
     return {
       ...msg,
       streamEvents: replacePendingToolStreamEvents(
-        streamEventsWithoutWorkflowStatusRows(msg.streamEvents || []) || [],
+        msg.streamEvents || [],
         resolvedTool,
         matchesTool,
         now,
@@ -655,7 +652,7 @@ export function useChat(options: UseChatOptions = {}) {
       ...msg,
       streamEvents: resolvedTool
         ? replacePendingToolStreamEvents(
-            streamEventsWithoutWorkflowStatusRows(msg.streamEvents || []) || [],
+            msg.streamEvents || [],
             resolvedTool,
             matchesTool,
             now,
@@ -1211,7 +1208,7 @@ export function useChat(options: UseChatOptions = {}) {
                 success: boolean;
               };
               const pendingTools = msg.pendingTools || [];
-              const events = streamEventsWithoutWorkflowStatusRows(msg.streamEvents || []) || [];
+              const events = msg.streamEvents || [];
 
               const normalizedEndName = normalizeChatToolName(data.name || '');
 

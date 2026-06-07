@@ -170,6 +170,26 @@ runtime cost control, and shared AI transport surfaces.
 	   that by carrying the stream event start/end timestamps into the completed
 	   browser tool row, so the visible activity timeline does not collapse when a
 	   running command is replaced by its completed result.
+	   Live workflow activity is also active turn state, not disposable waiting
+	   copy. The referenced OpenCode source at fetched `origin/dev` commit
+	   `4519a1da329c1a4fc384054e7203ba7d06928205` defines model, shell, step,
+	   and tool lifecycle events in `packages/core/src/session/event.ts` (model
+	   switched lines 62-70; shell started/ended lines 151-174; tool lifecycle
+	   lines 340-392), projects them into durable message/part rows in
+	   `packages/core/src/session/message-updater.ts` (step started lines
+	   189-210; tool called/progress/success/failed lines 269-335), and renders
+	   model-switch plus tool rows in
+	   `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`
+	   (model switch lines 120-122 and 262-274; tool rows lines 455-500).
+	   Pulse adapts that by keeping the latest browser `workflow_status` activity
+	   visible in the live stream event sequence across content, tool, approval,
+	   and question boundaries instead of dropping it the instant a richer row
+	   arrives. Burst workflow statuses may still replace one another until a
+	   durable stream boundary appears, and terminal cleanup on done/error/Stop
+	   may remove transient workflow-status rows while preserving typed
+	   model-switch and tool evidence. The generated frontend SSE contract must
+	   include workflow `provider` and `model` fields so selected-route activity
+	   is typed end to end.
 	   Composer prompt history is also drawer-local chat-runtime state: the drawer
 	   may persist a bounded local history of submitted prompt text and structured
    mentions for ArrowUp/ArrowDown recall, but that history must not persist or

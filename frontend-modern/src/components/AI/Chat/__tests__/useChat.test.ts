@@ -1481,7 +1481,7 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('clears neutral workflow progress when answer content starts streaming', async () => {
+    it('keeps neutral workflow activity visible when answer content starts streaming', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
 
@@ -1500,11 +1500,23 @@ describe('useChat', () => {
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.content).toBe('Here is the answer.');
       expect(assistant.workflowStatus).toBeUndefined();
-      expect(assistant.streamEvents?.map((event) => event.type)).toEqual(['content']);
+      expect(assistant.streamEvents?.map((event) => event.type)).toEqual([
+        'workflow_status',
+        'content',
+      ]);
+      expect(assistant.streamEvents?.[0]).toEqual(
+        expect.objectContaining({
+          type: 'workflow_status',
+          workflowStatus: expect.objectContaining({
+            phase: 'provider_start',
+            message: 'Sent request to OpenRouter; waiting for the first token.',
+          }),
+        }),
+      );
       dispose();
     });
 
-    it('clears neutral workflow progress when a governed tool block starts', async () => {
+    it('keeps neutral workflow activity visible when a governed tool block starts', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
 
@@ -1523,7 +1535,19 @@ describe('useChat', () => {
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.workflowStatus).toBeUndefined();
       expect(assistant.pendingTools).toHaveLength(1);
-      expect(assistant.streamEvents?.map((event) => event.type)).toEqual(['pending_tool']);
+      expect(assistant.streamEvents?.map((event) => event.type)).toEqual([
+        'workflow_status',
+        'pending_tool',
+      ]);
+      expect(assistant.streamEvents?.[0]).toEqual(
+        expect.objectContaining({
+          type: 'workflow_status',
+          workflowStatus: expect.objectContaining({
+            phase: 'context',
+            message: 'Reading Pulse inventory.',
+          }),
+        }),
+      );
       dispose();
     });
 
@@ -1568,10 +1592,11 @@ describe('useChat', () => {
         }),
       );
       expect(assistant.streamEvents?.map((event) => event.type)).toEqual([
+        'workflow_status',
         'tool',
         'workflow_status',
       ]);
-      expect(assistant.streamEvents?.[1]).toEqual(
+      expect(assistant.streamEvents?.[2]).toEqual(
         expect.objectContaining({
           workflowStatus: expect.objectContaining({
             phase: 'model_thinking',
