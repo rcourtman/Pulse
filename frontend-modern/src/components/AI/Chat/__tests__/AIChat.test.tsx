@@ -5187,7 +5187,9 @@ describe('AIChat', () => {
       expect(status).not.toHaveTextContent('Using Qwen: Qwen3.7 Plus via OpenRouter');
     });
 
-    it('shows the latest burst workflow progress immediately in the active turn status footer', () => {
+    it('paces burst workflow progress in the active turn status footer', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(1_200);
       const [isLoading, setIsLoading] = createSignal(false);
       const [messages, setMessages] = createSignal<ChatMessage[]>([]);
       const workflowStatusHistory = [
@@ -5234,6 +5236,16 @@ describe('AIChat', () => {
       ]);
 
       const status = screen.getByLabelText('Assistant active turn status');
+      expect(status).toHaveTextContent('Preparing Pulse context.');
+      expect(status).not.toHaveTextContent(
+        'Sent request to OpenRouter; waiting for the first token.',
+      );
+
+      await vi.advanceTimersByTimeAsync(650);
+      expect(status).toHaveTextContent('Reading current Pulse inventory.');
+      expect(status).not.toHaveTextContent('pulse_query');
+
+      await vi.advanceTimersByTimeAsync(650);
       expect(status).toHaveTextContent('Sent request to OpenRouter; waiting for the first token.');
       expect(status).not.toHaveTextContent('Preparing Pulse context.');
       expect(status).not.toHaveTextContent('Reading current Pulse inventory with pulse_query.');

@@ -7,6 +7,7 @@ import {
   For,
   createMemo,
   createEffect,
+  untrack,
 } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { unwrap } from 'solid-js/store';
@@ -169,12 +170,14 @@ import {
 import {
   latestWorkflowStatus,
   normalizeWorkflowStatusSequence,
+  workflowStatusRenderKey,
 } from './workflowStatusPresentation';
 import type {
   ChatMessage,
   ModelRouteRecoveryOption,
   PendingApproval,
   PendingQuestion,
+  WorkflowStatus,
 } from './types';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
 
@@ -190,6 +193,7 @@ const AI_CHAT_PINNED_SESSION_LIMIT = 30;
 const AI_CHAT_SESSION_TITLE_MAX_LENGTH = 120;
 const AI_CHAT_SESSION_SEARCH_DEBOUNCE_MS = 150;
 const AI_CHAT_SESSION_SEARCH_LIMIT = 30;
+const AI_CHAT_WORKFLOW_STATUS_BURST_VISIBLE_MS = 650;
 const STRUCTURED_PATROL_CONTEXT_TARGETS = new Set(['patrol-configuration', 'patrol-run']);
 const STRUCTURED_RESOURCE_CONTEXT_HANDOFF_KINDS = new Set(['resource_context']);
 const AI_CHAT_CYCLE_RECENT_MODEL_LABEL = 'Cycle recent Assistant model';
@@ -2383,20 +2387,112 @@ export const AIChat: Component<AIChatProps> = (props) => {
       message.workflowStatus,
     ]);
   });
-  const displayedActiveWorkflowStatus = createMemo(() =>
-    latestWorkflowStatus(activeWorkflowStatusSequence()),
-  );
-  const currentStatus = createMemo(() => {
-    const status = getAssistantActiveTurnStatus(chat.messages(), chat.isLoading());
-    const message = activeAssistantMessage();
-    const latestWorkflowStatus = message?.workflowStatus;
-    const pacedWorkflowStatus = displayedActiveWorkflowStatus();
-    if (!status || !latestWorkflowStatus || !pacedWorkflowStatus) return status;
+  const [displayedActiveWorkflowStatusKey, setDisplayedActiveWorkflowStatusKey] =
+    createSignal('');
+  const [pacingWorkflowStatusBurst, setPacingWorkflowStatusBurst] = createSignal(false);
+  let lastWorkflowStatusSequenceFingerprint = '';
+  let lastWorkflowStatusSequenceLength = 0;
+  let workflowStatusAdvanceTimer: number | undefined;
 
-    const latestWorkflowText = formatAssistantWorkflowStatus(latestWorkflowStatus);
-    const expectedType = latestWorkflowStatus.tool ? 'tool' : 'thinking';
+  const clearWorkflowStatusAdvanceTimer = () => {
+    if (workflowStatusAdvanceTimer) {
+      window.clearTimeout(workflowStatusAdvanceTimer);
+      workflowStatusAdvanceTimer = undefined;
+    }
+  };
+
+  const scheduleWorkflowStatusAdvance = (keys: string[], currentIndex: number) => {
+    clearWorkflowStatusAdvanceTimer();
+    if (currentIndex >= keys.length - 1) {
+      setPacingWorkflowStatusBurst(false);
+      return;
+    }
+
+    setPacingWorkflowStatusBurst(true);
+    workflowStatusAdvanceTimer = window.setTimeout(() => {
+      const nextIndex = Math.min(currentIndex + 1, keys.length - 1);
+      setDisplayedActiveWorkflowStatusKey(keys[nextIndex] || '');
+      scheduleWorkflowStatusAdvance(keys, nextIndex);
+    }, AI_CHAT_WORKFLOW_STATUS_BURST_VISIBLE_MS);
+  };
+
+  // Burst status histories can arrive in one render after cold starts. Pace
+  // only those bursts so the dock shows visible progress instead of jumping.
+  createEffect(() => {
+    const sequence = activeWorkflowStatusSequence();
+    const keys = sequence.map(workflowStatusRenderKey);
+    const fingerprint = keys.join('\u001e');
+    const previousFingerprint = lastWorkflowStatusSequenceFingerprint;
+    const previousLength = lastWorkflowStatusSequenceLength;
+    const sequenceChanged = fingerprint !== previousFingerprint;
+    const addedCount = sequenceChanged ? Math.max(0, sequence.length - previousLength) : 0;
+
+    lastWorkflowStatusSequenceFingerprint = fingerprint;
+    lastWorkflowStatusSequenceLength = sequence.length;
+    clearWorkflowStatusAdvanceTimer();
+
+    if (sequence.length === 0) {
+      setDisplayedActiveWorkflowStatusKey('');
+      setPacingWorkflowStatusBurst(false);
+      return;
+    }
+
+    const currentKey = untrack(displayedActiveWorkflowStatusKey);
+    const currentIndex = keys.indexOf(currentKey);
+    if (currentIndex === -1) {
+      const initialIndex = sequence.length > 1 ? 0 : sequence.length - 1;
+      setDisplayedActiveWorkflowStatusKey(keys[initialIndex] || '');
+      if (initialIndex < sequence.length - 1) {
+        scheduleWorkflowStatusAdvance(keys, initialIndex);
+      } else {
+        setPacingWorkflowStatusBurst(false);
+      }
+      return;
+    }
+
+    if (currentIndex >= sequence.length - 1) {
+      setPacingWorkflowStatusBurst(false);
+      return;
+    }
+
+    const pendingCount = sequence.length - currentIndex - 1;
+    const shouldPace = untrack(pacingWorkflowStatusBurst) || addedCount > 1 || pendingCount > 1;
+    if (shouldPace) {
+      scheduleWorkflowStatusAdvance(keys, currentIndex);
+      return;
+    }
+
+    setDisplayedActiveWorkflowStatusKey(keys[sequence.length - 1] || '');
+    setPacingWorkflowStatusBurst(false);
+  });
+
+  onCleanup(clearWorkflowStatusAdvanceTimer);
+
+  const displayedActiveWorkflowStatus = createMemo<WorkflowStatus | undefined>(() => {
+    const sequence = activeWorkflowStatusSequence();
+    const key = displayedActiveWorkflowStatusKey();
+    if (key) {
+      const matched = sequence.find((status) => workflowStatusRenderKey(status) === key);
+      if (matched) return matched;
+    }
+    return latestWorkflowStatus(sequence);
+  });
+  const [currentStatusNow, setCurrentStatusNow] = createSignal(Date.now());
+  const currentStatus = createMemo(() => {
+    const status = getAssistantActiveTurnStatus(
+      chat.messages(),
+      chat.isLoading(),
+      currentStatusNow(),
+    );
+    const message = activeAssistantMessage();
+    const latestWorkflow = message?.workflowStatus;
+    const pacedWorkflowStatus = displayedActiveWorkflowStatus();
+    if (!status || !latestWorkflow || !pacedWorkflowStatus) return status;
+
+    const latestWorkflowText = formatAssistantWorkflowStatus(latestWorkflow, currentStatusNow());
+    const expectedType = latestWorkflow.tool ? 'tool' : 'thinking';
     const statusStartedAt = status.startedAt;
-    const workflowStartedAt = latestWorkflowStatus.startedAt;
+    const workflowStartedAt = latestWorkflow.startedAt;
     if (
       !latestWorkflowText ||
       status.text !== latestWorkflowText ||
@@ -2408,7 +2504,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       return status;
     }
 
-    const pacedText = formatAssistantWorkflowStatus(pacedWorkflowStatus);
+    const pacedText = formatAssistantWorkflowStatus(pacedWorkflowStatus, currentStatusNow());
     if (!pacedText) return status;
     return {
       ...status,
@@ -2417,7 +2513,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
       startedAt: pacedWorkflowStatus.startedAt,
     };
   });
-  const [currentStatusNow, setCurrentStatusNow] = createSignal(Date.now());
   createEffect(() => {
     const status = currentStatus();
     if (!status?.startedAt) return;
@@ -2426,9 +2521,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     onCleanup(() => window.clearInterval(interval));
   });
   const currentStatusText = createMemo(() => {
-    const status =
-      getAssistantActiveTurnStatus(chat.messages(), chat.isLoading(), currentStatusNow()) ||
-      currentStatus();
+    const status = currentStatus();
     if (!status) return '';
     if (!status.startedAt) return status.text;
     const elapsedSeconds = Math.max(0, Math.floor((currentStatusNow() - status.startedAt) / 1000));

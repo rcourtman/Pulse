@@ -1019,6 +1019,15 @@ runtime cost control, and shared AI transport surfaces.
    through transport-sized copy in the compact row. Pulse adapts that by keeping
    exact output type/size in the accessible label and Details panel while the
    visible compact badge says only `output available`.
+   The 2026-06-07 active-dock pacing slice rechecked current OpenCode
+   `origin/dev` commit `e82542b8023a8374f29c23b70ec019c8f256354e` in
+   `packages/tui/src/feature-plugins/system/session-v2.tsx`: `InlineTool`
+   (lines 564-651) keeps one visible activity row that moves from pending copy
+   to completed copy, while `Bash` (lines 702-740) keeps shell activity visible
+   through the same inline/block transition. Pulse adapts that for the
+   Assistant dock by pacing burst-arriving workflow status history locally so
+   `Preparing context`, `Reading inventory`, and provider wait states appear in
+   sequence; statuses that arrive one at a time still replace immediately.
    The referenced OpenCode source at fetched `origin/dev` commit
    `fa2b63f850fc0a23bec2bdff9e660450d3fe7913` also keeps assistant text,
    reasoning, and tool invocation as typed message parts in
