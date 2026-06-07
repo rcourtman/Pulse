@@ -1331,7 +1331,7 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('ignores obsolete provider fallback workflow metadata', async () => {
+    it('surfaces obsolete provider fallback workflow metadata without switching routes', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() =>
         useChat({ sessionId: 's', model: 'openrouter:openai/gpt-4o-mini' }),
@@ -1352,6 +1352,23 @@ describe('useChat', () => {
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.model).toBe('openrouter:openai/gpt-4o-mini');
+      expect(assistant.workflowStatus).toEqual(
+        expect.objectContaining({
+          phase: 'provider_fallback_rejected',
+          message: 'Provider fallback metadata received; selected route unchanged.',
+        }),
+      );
+      expect(assistant.streamEvents).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'workflow_status',
+            workflowStatus: expect.objectContaining({
+              phase: 'provider_fallback_rejected',
+              message: 'Provider fallback metadata received; selected route unchanged.',
+            }),
+          }),
+        ]),
+      );
       expect(assistant.streamEvents).not.toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -1434,6 +1451,12 @@ describe('useChat', () => {
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.model).toBe('openrouter:openai/gpt-4o-mini');
+      expect(assistant.workflowStatus).toEqual(
+        expect.objectContaining({
+          phase: 'provider_fallback_rejected',
+          message: 'Provider fallback metadata received; selected route unchanged.',
+        }),
+      );
       expect(assistant.streamEvents).not.toEqual(
         expect.arrayContaining([
           expect.objectContaining({

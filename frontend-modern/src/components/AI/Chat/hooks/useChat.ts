@@ -511,7 +511,7 @@ export function useChat(options: UseChatOptions = {}) {
   };
 
   const streamModelEventKind = (event: StreamDisplayEvent): StreamDisplayEvent['modelEvent'] => {
-    if (event.modelEvent && event.modelEvent !== 'fallback') return event.modelEvent;
+    if (event.modelEvent === 'selected' || event.modelEvent === 'switch') return event.modelEvent;
     return 'switch';
   };
 
@@ -949,11 +949,17 @@ export function useChat(options: UseChatOptions = {}) {
   const extractWorkflowStatus = (data: unknown): WorkflowStatus | null => {
     if (!data || typeof data !== 'object') return null;
     const record = data as Record<string, unknown>;
+    const phase = typeof record.phase === 'string' ? record.phase.trim() : '';
+    if (phase === 'provider_fallback') {
+      return {
+        phase: 'provider_fallback_rejected',
+        message: 'Provider fallback metadata received; selected route unchanged.',
+        startedAt: Date.now(),
+      };
+    }
+
     const message = typeof record.message === 'string' ? record.message.trim() : '';
     if (!message) return null;
-
-    const phase = typeof record.phase === 'string' ? record.phase.trim() : '';
-    if (phase === 'provider_fallback') return null;
     const state = typeof record.state === 'string' ? record.state.trim() : '';
     const tool = typeof record.tool === 'string' ? record.tool.trim() : '';
     const attempt = positiveNumber(record.attempt);

@@ -290,9 +290,7 @@ const hasProviderRouteFailureEvidence = (message: ChatMessage): boolean => {
   return (message.streamEvents || []).some(
     (event) =>
       event.type === 'model_switch' &&
-      (Boolean(event.failedModel?.trim()) ||
-        event.modelEvent === 'fallback' ||
-        event.modelEvent === 'switch'),
+      (Boolean(event.failedModel?.trim()) || event.modelEvent === 'switch'),
   );
 };
 
