@@ -3306,6 +3306,82 @@ describe('AIChat', () => {
       expect(onClose).not.toHaveBeenCalled();
     });
 
+    it('consumes session picker search keys before later document handlers see them', async () => {
+      mockAIChatAPI.listSessions.mockResolvedValue([
+        { id: 's1', title: 'Session One', created_at: '', updated_at: '', message_count: 5 },
+        { id: 's2', title: 'Session Two', created_at: '', updated_at: '', message_count: 3 },
+      ]);
+      renderChat();
+      await waitFor(() => {
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalled();
+      });
+
+      fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
+      const searchInput = await screen.findByPlaceholderText('Search sessions...');
+      await waitFor(() => {
+        expect(document.activeElement).toBe(searchInput);
+      });
+
+      const laterDocumentHandler = vi.fn();
+      document.addEventListener('keydown', laterDocumentHandler);
+      const escapeEvent = new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        key: 'Escape',
+      });
+
+      searchInput.dispatchEvent(escapeEvent);
+
+      document.removeEventListener('keydown', laterDocumentHandler);
+      expect(escapeEvent.defaultPrevented).toBe(true);
+      expect(laterDocumentHandler).not.toHaveBeenCalled();
+      await waitFor(() => {
+        expect(
+          screen.queryByRole('dialog', { name: 'Pulse Assistant sessions' }),
+        ).not.toBeInTheDocument();
+      });
+    });
+
+    it('consumes session picker option keys before later document handlers see them', async () => {
+      mockAIChatAPI.listSessions.mockResolvedValue([
+        { id: 's1', title: 'Session One', created_at: '', updated_at: '', message_count: 5 },
+        { id: 's2', title: 'Session Two', created_at: '', updated_at: '', message_count: 3 },
+      ]);
+      renderChat();
+      await waitFor(() => {
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalled();
+      });
+
+      fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
+      const searchInput = await screen.findByPlaceholderText('Search sessions...');
+      const firstOption = await screen.findByRole('option', {
+        name: 'Resume Session One, 5 messages',
+      });
+      const secondOption = screen.getByRole('option', {
+        name: 'Resume Session Two, 3 messages',
+      });
+      await waitFor(() => {
+        expect(document.activeElement).toBe(searchInput);
+      });
+      fireEvent.keyDown(searchInput, { key: 'ArrowDown' });
+      expect(document.activeElement).toBe(firstOption);
+
+      const laterDocumentHandler = vi.fn();
+      document.addEventListener('keydown', laterDocumentHandler);
+      const arrowDownEvent = new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        key: 'ArrowDown',
+      });
+
+      firstOption.dispatchEvent(arrowDownEvent);
+
+      document.removeEventListener('keydown', laterDocumentHandler);
+      expect(arrowDownEvent.defaultPrevented).toBe(true);
+      expect(laterDocumentHandler).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(secondOption);
+    });
+
     it('pins sessions above the recency groups and persists the choice', async () => {
       mockAIChatAPI.listSessions.mockResolvedValue([
         {

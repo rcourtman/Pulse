@@ -1357,6 +1357,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const consumeSessionPickerKey = (event: KeyboardEvent) => {
     event.preventDefault();
     event.stopPropagation();
+    event.stopImmediatePropagation();
   };
 
   const focusSessionOptionRelativeTo = (sessionId: string, offset: number) => {
