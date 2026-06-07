@@ -303,6 +303,44 @@ func contextScenarioCorpus() []contextScenario {
 				"intel-quicksync",                   // hardware fact (transcode decoder)
 			},
 		},
+		{
+			name:         "redis cache (Kubernetes pod)",
+			userQuestion: "the app keeps losing its cache and redis restarts",
+			discovery: &ResourceDiscovery{
+				ID:             MakeResourceID(ResourceTypeK8s, "prod-cluster", "cache/redis-0"),
+				ResourceType:   ResourceTypeK8s,
+				ResourceID:     "cache/redis-0",
+				TargetID:       "prod-cluster",
+				Hostname:       "redis-0",
+				ServiceType:    "redis",
+				ServiceName:    "Redis",
+				ServiceVersion: "7.2",
+				Category:       CategoryCache,
+				// k8s pods are reached via kubectl exec, and "restart" is a
+				// rollout/delete, not systemctl — completes the resource-type matrix.
+				CLIAccess:   "kubectl exec -n cache redis-0 -- sh",
+				ConfigPaths: []string{"/usr/local/etc/redis/redis.conf"},
+				Ports:       []PortInfo{{Port: 6379, Protocol: "tcp", Process: "redis-server"}},
+				Facts: []DiscoveryFact{
+					{Category: FactCategoryService, Key: "restart", Value: "kubectl rollout restart statefulset/redis -n cache", Source: "running_services", Confidence: 0.85},
+					{Category: FactCategoryStorage, Key: "maxmemory", Value: "256mb (no eviction policy)", Source: "config_files", Confidence: 0.8},
+				},
+			},
+			// Cache loss + restarts on k8s usually means OOM / eviction config: the
+			// Assistant needs kubectl access, redis.conf, the rollout-restart, and
+			// the memory-limit fact.
+			mustContain: []string{
+				"kubectl exec -n cache redis-0",
+				"redis.conf",
+				"kubectl rollout restart statefulset/redis",
+				"6379/tcp",
+			},
+			remediationMustContain: []string{
+				"kubectl rollout restart statefulset/redis", // service control
+				"redis.conf",                 // config
+				"256mb (no eviction policy)", // storage fact (memory limit)
+			},
+		},
 	}
 }
 
