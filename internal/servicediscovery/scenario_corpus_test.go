@@ -259,6 +259,50 @@ func contextScenarioCorpus() []contextScenario {
 				"allow_anonymous false",       // security fact (now surfaced) — the connect failure
 			},
 		},
+		{
+			name:         "plex media server (VM, qm guest exec)",
+			userQuestion: "playback keeps buffering and transcodes are failing",
+			discovery: &ResourceDiscovery{
+				ID:             MakeResourceID(ResourceTypeVM, "minipc", "200"),
+				ResourceType:   ResourceTypeVM,
+				ResourceID:     "200",
+				TargetID:       "minipc",
+				Hostname:       "plex",
+				ServiceType:    "plex",
+				ServiceName:    "Plex Media Server",
+				ServiceVersion: "1.40.2",
+				Category:       CategoryMedia,
+				// VMs are reached via the QEMU guest agent, not pct/docker exec —
+				// the one resource type the other cells don't cover.
+				CLIAccess: "qm guest exec 200 -- bash",
+				ConfigPaths: []string{
+					"/var/lib/plexmediaserver/Library/Application Support/Plex Media Server/Preferences.xml",
+				},
+				DataPaths: []string{"/mnt/media"},
+				LogPaths: []string{
+					"/var/lib/plexmediaserver/Library/Application Support/Plex Media Server/Logs/Plex Media Server.log",
+				},
+				Ports: []PortInfo{{Port: 32400, Protocol: "tcp", Process: "Plex Media Server"}},
+				Facts: []DiscoveryFact{
+					{Category: FactCategoryHardware, Key: "gpu", Value: "intel-quicksync (/dev/dri/renderD128)", Source: "gpu_devices", Confidence: 0.9},
+					{Category: FactCategoryService, Key: "restart", Value: "systemctl restart plexmediaserver", Source: "running_services", Confidence: 0.9},
+				},
+			},
+			// Transcode failures point at the hardware decoder and the service: the
+			// Assistant needs how to reach the VM (qm guest exec), the GPU it should
+			// be using, and how to restart Plex.
+			mustContain: []string{
+				"qm guest exec 200",
+				"intel-quicksync",
+				"systemctl restart plexmediaserver",
+				"32400/tcp",
+			},
+			remediationMustContain: []string{
+				"systemctl restart plexmediaserver", // service control
+				"Preferences.xml",                   // config
+				"intel-quicksync",                   // hardware fact (transcode decoder)
+			},
+		},
 	}
 }
 
