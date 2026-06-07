@@ -801,7 +801,7 @@ describe('MessageItem', () => {
       ).toBeInTheDocument();
     });
 
-    it('shows the latest replacing workflow activity in one live transcript row', () => {
+    it('paces replacing workflow activity through one live transcript row', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(1_200);
 
@@ -844,7 +844,21 @@ describe('MessageItem', () => {
         />
       ));
 
-      expect(screen.getByText('OpenRouter is starting the response.')).toBeInTheDocument();
+      expect(screen.getByText('Preparing Pulse context.')).toBeInTheDocument();
+      expect(screen.queryByText(/OpenRouter is starting the response\./)).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(/Reading current Pulse inventory\./),
+      ).not.toBeInTheDocument();
+
+      vi.advanceTimersByTime(1_000);
+      await Promise.resolve();
+      expect(screen.getByText('Reading current Pulse inventory.')).toBeInTheDocument();
+      expect(screen.queryByText(/Preparing Pulse context\./)).not.toBeInTheDocument();
+      expect(screen.queryByText(/OpenRouter is starting the response\./)).not.toBeInTheDocument();
+
+      vi.advanceTimersByTime(1_000);
+      await Promise.resolve();
+      expect(screen.getByText(/OpenRouter is starting the response\./)).toBeInTheDocument();
       expect(screen.queryByText(/Preparing Pulse context\./)).not.toBeInTheDocument();
       expect(
         screen.queryByText(/Reading current Pulse inventory\./),

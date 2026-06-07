@@ -27,6 +27,7 @@ import { getAssistantAnswerText } from './assistantAnswerText';
 import { stripAssistantOutputArtifacts } from './assistantOutputHygiene';
 import { formatAssistantWorkflowStatus } from './activeTurnStatus';
 import { groupStreamEventsForDisplay } from './streamEventGrouping';
+import { pacedWorkflowStatusForDisplay } from './workflowStatusPacing';
 import type {
   ChatMessage,
   ModelRouteRecoveryOption,
@@ -388,8 +389,15 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     }
     return `${message}${elapsedSuffix}`;
   };
+  const displayedWorkflowStatus = (status?: WorkflowStatus) =>
+    pacedWorkflowStatusForDisplay(
+      props.message.workflowStatusHistory,
+      status,
+      groupedEvents(),
+      props.message.isStreaming ? statusNow() : undefined,
+    );
   const workflowStatusText = createMemo(() =>
-    formatWorkflowStatus(currentWorkflowStatus(), true),
+    formatWorkflowStatus(displayedWorkflowStatus(currentWorkflowStatus()), true),
   );
   const shouldShowHeaderWorkflowStatus = () =>
     props.message.isStreaming &&
@@ -580,7 +588,9 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                     const contentText = () =>
                       stripAssistantOutputArtifacts(evt?.content || '').text;
                     const visibleWorkflowStatus = () =>
-                      evt?.type === 'workflow_status' ? evt.workflowStatus : undefined;
+                      evt?.type === 'workflow_status'
+                        ? displayedWorkflowStatus(evt.workflowStatus)
+                        : undefined;
 
                     return (
                       <Switch>

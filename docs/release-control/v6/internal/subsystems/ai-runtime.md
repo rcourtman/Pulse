@@ -714,9 +714,10 @@ timers when the stream already has a newer workflow/tool state.
    delaying copy/export, tool boundaries, approvals, or audit evidence.
    Live workflow labels follow that same presentation-layer constraint: the
    canonical SSE/store state remains the latest typed `workflow_state`, and the
-   browser must render that latest status immediately instead of replaying an
-   older live-only history. This follows the current OpenCode TUI event
-   mutation model at fetched `origin/dev` commit
+   browser must render single fresh status updates immediately while using
+   bounded live-only history only to pace backend/network burst replacements.
+   This follows the current OpenCode TUI event mutation model at fetched
+   `origin/dev` commit
    `06d7840d1d42c9815d2d2e45e7fa4090ca4e3577`, especially
    `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`, where
    `session.next.step.started`, text deltas, and tool progress mutate the

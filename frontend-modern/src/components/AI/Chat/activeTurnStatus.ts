@@ -8,6 +8,7 @@ import {
   parseToolInputSummary,
   toolValueText,
 } from './toolPresentation';
+import { pacedWorkflowStatusForDisplay } from './workflowStatusPacing';
 
 export type AssistantActiveTurnStatusKind = 'thinking' | 'tool' | 'generating';
 
@@ -363,6 +364,7 @@ const completedToolStatusText = (event: StreamDisplayEvent): string => {
 const latestStreamActivityStatus = (
   events?: StreamDisplayEvent[],
   now?: number,
+  workflowStatusHistory?: WorkflowStatus[],
 ): AssistantActiveTurnStatusCandidate | null => {
   const completedToolKeys = new Set<string>();
   let current: AssistantActiveTurnStatusCandidate | null = null;
@@ -424,14 +426,20 @@ const latestStreamActivityStatus = (
         break;
       }
       case 'workflow_status': {
-        const text = formatAssistantWorkflowStatus(event.workflowStatus, now);
+        const workflowStatus = pacedWorkflowStatusForDisplay(
+          workflowStatusHistory,
+          event.workflowStatus,
+          events,
+          now,
+        );
+        const text = formatAssistantWorkflowStatus(workflowStatus, now);
         if (text) {
           candidate = {
-            type: event.workflowStatus?.tool ? 'tool' : 'thinking',
+            type: workflowStatus?.tool ? 'tool' : 'thinking',
             text,
-            startedAt: event.workflowStatus?.startedAt || event.startedAt,
+            startedAt: workflowStatus?.startedAt || event.startedAt,
             activityAt: eventActivityAt(event),
-            placeholder: isInitialRequestStartStatus(event.workflowStatus),
+            placeholder: isInitialRequestStartStatus(workflowStatus),
             order: index,
           };
         }
@@ -617,7 +625,11 @@ export const getAssistantActiveTurnStatus = (
   if (statePendingToolCandidate) {
     statusCandidates.push(statePendingToolCandidate);
   }
-  const eventStatusCandidate = latestStreamActivityStatus(assistantMessage.streamEvents, now);
+  const eventStatusCandidate = latestStreamActivityStatus(
+    assistantMessage.streamEvents,
+    now,
+    assistantMessage.workflowStatusHistory,
+  );
   if (eventStatusCandidate) {
     statusCandidates.push(eventStatusCandidate);
   } else {
@@ -628,11 +640,17 @@ export const getAssistantActiveTurnStatus = (
     }
   }
   if (assistantMessage.isStreaming !== false) {
-    const workflowCandidate = workflowStatusCandidate(assistantMessage.workflowStatus, now);
+    const displayedWorkflowStatus = pacedWorkflowStatusForDisplay(
+      assistantMessage.workflowStatusHistory,
+      assistantMessage.workflowStatus,
+      assistantMessage.streamEvents,
+      now,
+    );
+    const workflowCandidate = workflowStatusCandidate(displayedWorkflowStatus, now);
     if (
       workflowCandidate &&
       !(
-        isInitialRequestStartStatus(assistantMessage.workflowStatus) &&
+        isInitialRequestStartStatus(displayedWorkflowStatus) &&
         eventStatusCandidate &&
         eventStatusCandidate.placeholder !== true
       )

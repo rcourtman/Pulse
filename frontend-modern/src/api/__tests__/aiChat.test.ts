@@ -243,6 +243,50 @@ describe('AIChatAPI', () => {
     });
   });
 
+  it('runs the workflow-burst dev stream fixture without opening a provider request', async () => {
+    const onEvent = vi.fn();
+
+    await AIChatAPI.chat(
+      '/fixture workflow-burst',
+      undefined,
+      'openrouter:qwen/qwen3.7-plus',
+      onEvent,
+    );
+
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'session',
+      'workflow_state',
+      'workflow_state',
+      'workflow_state',
+      'content',
+      'done',
+    ]);
+    expect(onEvent.mock.calls[2][0]).toMatchObject({
+      type: 'workflow_state',
+      data: {
+        phase: 'context',
+        message: 'Reading current Pulse inventory with pulse_query.',
+        tool: 'pulse_query',
+      },
+    });
+    expect(onEvent.mock.calls[3][0]).toMatchObject({
+      type: 'workflow_state',
+      data: {
+        phase: 'provider_start',
+        message: 'OpenRouter is starting the response.',
+        model: 'openrouter:qwen/qwen3.7-plus',
+      },
+    });
+    expect(onEvent.mock.calls[5][0]).toMatchObject({
+      type: 'done',
+      data: {
+        session_id: 'dev-fixture-workflow-burst',
+        model: 'openrouter:qwen/qwen3.7-plus',
+      },
+    });
+  });
+
   it('keeps the tool-burst fixture running state visible when fixture pacing is enabled', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const onEvent = vi.fn();

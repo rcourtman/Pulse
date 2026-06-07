@@ -244,6 +244,58 @@ describe('getAssistantActiveTurnStatus', () => {
     });
   });
 
+  it('paces burst workflow progress in the active turn footer', () => {
+    const workflowStatusHistory = [
+      {
+        phase: 'request_start',
+        message: 'Preparing Pulse context.',
+        startedAt: 1_000,
+      },
+      {
+        phase: 'context',
+        message: 'Reading current Pulse inventory with pulse_query.',
+        tool: 'pulse_query',
+        startedAt: 1_100,
+      },
+      {
+        phase: 'provider_start',
+        message: 'OpenRouter is starting the response.',
+        startedAt: 1_200,
+      },
+    ];
+    const messages = [
+      assistantMessage({
+        isStreaming: true,
+        workflowStatusHistory,
+        workflowStatus: workflowStatusHistory[2],
+        streamEvents: [
+          {
+            type: 'workflow_status',
+            workflowStatus: workflowStatusHistory[2],
+            startedAt: 1_200,
+            updatedAt: 1_200,
+          },
+        ],
+      }),
+    ];
+
+    expect(getAssistantActiveTurnStatus(messages, true, 1_200)).toEqual({
+      type: 'thinking',
+      text: 'Preparing Pulse context.',
+      startedAt: 1_000,
+    });
+    expect(getAssistantActiveTurnStatus(messages, true, 1_900)).toEqual({
+      type: 'tool',
+      text: 'Reading current Pulse inventory.',
+      startedAt: 1_100,
+    });
+    expect(getAssistantActiveTurnStatus(messages, true, 2_800)).toEqual({
+      type: 'thinking',
+      text: 'OpenRouter is starting the response.',
+      startedAt: 1_200,
+    });
+  });
+
   it('prefers workflow progress over selected model route evidence', () => {
     const startedAt = Date.now() - 1_000;
     expect(
