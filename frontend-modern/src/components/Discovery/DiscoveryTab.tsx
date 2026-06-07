@@ -522,9 +522,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 commands → connectivity) is the one surfaced, in one place. */}
             <Show
               when={
-                props.resourceType === 'agent' &&
-                !connectedAgents.loading &&
-                !discoveryInfo.loading
+                props.resourceType === 'agent' && !connectedAgents.loading && !discoveryInfo.loading
               }
             >
               <Show when={discoveryReadiness().status === 'needs_ai_provider'}>
