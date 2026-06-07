@@ -904,6 +904,38 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 </div>
               </Show>
 
+              {/* Docker bind mounts — host ↔ container path mapping, only on
+                  Docker resources. The host source is where to actually edit or
+                  back up files; the container destination is what the app sees. */}
+              <Show when={(d().docker_mounts?.length ?? 0) > 0}>
+                <div class="rounded border border-border p-3 shadow-sm">
+                  <div class="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-base-content">
+                    <span>Bind Mounts</span>
+                    <DiscoveryProvenanceMarker showLabel={false} />
+                  </div>
+                  <div class="space-y-1.5">
+                    <For each={d().docker_mounts}>
+                      {(mount) => (
+                        <div class="space-y-0.5">
+                          <CopyableCodeRow
+                            value={mount.source}
+                            copiedValue={copiedDiscoveryValue}
+                            onCopy={handleCopyDiscoveryValue}
+                            label="Copy host path"
+                          />
+                          <div class="pl-1 text-[10px] text-muted">
+                            → {mount.destination} in container
+                            <Show when={mount.read_only}>
+                              <span> (read-only)</span>
+                            </Show>
+                          </div>
+                        </div>
+                      )}
+                    </For>
+                  </div>
+                </div>
+              </Show>
+
               {/* Ports */}
               <Show when={d().ports?.length > 0}>
                 <div class="rounded border border-border p-3 shadow-sm">

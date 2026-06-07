@@ -354,4 +354,54 @@ describe('DiscoveryTab', () => {
       await screen.findByText('Mapped open ports and running processes to a PostgreSQL service.'),
     ).toBeInTheDocument();
   });
+
+  it('renders Docker bind mounts so the host path is visible', async () => {
+    vi.mocked(discoveryApi.getDiscoveryInfo).mockResolvedValue(discoveryInfoWithProvider());
+    vi.mocked(discoveryApi.getDiscovery).mockResolvedValue({
+      id: 'app-container:nuc:homeassistant',
+      resource_type: 'app-container',
+      resource_id: 'homeassistant',
+      target_id: 'nuc',
+      hostname: 'nuc',
+      service_type: 'home-assistant',
+      service_name: 'Home Assistant',
+      service_version: '2026.5',
+      category: 'home_automation',
+      cli_access: 'docker exec homeassistant bash',
+      facts: [],
+      config_paths: ['/config/automations.yaml'],
+      data_paths: [],
+      log_paths: [],
+      ports: [],
+      docker_mounts: [
+        {
+          container_name: 'homeassistant',
+          source: '/opt/homeassistant/config',
+          destination: '/config',
+          type: 'bind',
+        },
+      ],
+      user_notes: '',
+      user_secrets: {},
+      confidence: 0.9,
+      ai_reasoning: '',
+      discovered_at: '2026-05-01T00:00:00Z',
+      updated_at: '2026-05-01T00:00:00Z',
+      scan_duration: 10,
+    });
+
+    render(() => (
+      <DiscoveryTab
+        resourceType="app-container"
+        agentId="nuc"
+        resourceId="homeassistant"
+        hostname="nuc"
+      />
+    ));
+
+    // The host source is where you actually edit/back up the files — it must be
+    // visible, not just the container-internal /config path.
+    expect(await screen.findByText('Bind Mounts')).toBeInTheDocument();
+    expect(await screen.findByText('/opt/homeassistant/config')).toBeInTheDocument();
+  });
 });

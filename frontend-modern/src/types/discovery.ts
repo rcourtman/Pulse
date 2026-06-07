@@ -48,6 +48,16 @@ export interface PortInfo {
   address: string;
 }
 
+export interface DockerBindMount {
+  container_name?: string;
+  /** Host path — where the container's files actually live. */
+  source: string;
+  /** Container path — what the service sees. */
+  destination: string;
+  type?: string;
+  read_only?: boolean;
+}
+
 export interface ResourceDiscovery {
   id: string;
   resource_type: APIResourceType;
@@ -67,6 +77,7 @@ export interface ResourceDiscovery {
   data_paths: string[];
   log_paths: string[];
   ports: PortInfo[];
+  docker_mounts?: DockerBindMount[];
   user_notes: string;
   user_secrets: Record<string, string>;
   confidence: number;
