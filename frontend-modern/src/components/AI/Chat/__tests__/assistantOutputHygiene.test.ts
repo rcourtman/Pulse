@@ -52,6 +52,17 @@ describe('stripAssistantOutputArtifacts', () => {
     });
   });
 
+  it('normalizes internal tool identifiers in visible assistant prose', () => {
+    expect(
+      stripAssistantOutputArtifacts(
+        'The burst fixture completed a fast `pulse_read` command and kept the tool transition visible.',
+      ),
+    ).toEqual({
+      text: 'The burst fixture completed a fast read command and kept the tool transition visible.',
+      stripped: false,
+    });
+  });
+
   it('holds split tool-name prefixes until the next stream delta proves the shape', () => {
     const state = createAssistantOutputArtifactStreamState();
 
@@ -113,6 +124,25 @@ describe('stripAssistantOutputArtifacts', () => {
     });
     expect(appendVisibleTextBeforeAssistantOutputArtifacts(state, 'latform is healthy.')).toEqual({
       text: 'platform is healthy.',
+      stripped: false,
+    });
+    expect(flushPendingAssistantOutputText(state)).toBe('');
+  });
+
+  it('normalizes streamed tool identifiers without flashing a split code token', () => {
+    const state = createAssistantOutputArtifactStreamState();
+
+    expect(appendVisibleTextBeforeAssistantOutputArtifacts(state, 'The fast `pulse_')).toEqual({
+      text: 'The fast ',
+      stripped: false,
+    });
+    expect(
+      appendVisibleTextBeforeAssistantOutputArtifacts(
+        state,
+        'read` command kept the tool transition visible.',
+      ),
+    ).toEqual({
+      text: 'read command kept the tool transition visible.',
       stripped: false,
     });
     expect(flushPendingAssistantOutputText(state)).toBe('');

@@ -28,15 +28,29 @@ const jsonToolCallLeakRe =
   /(?:^|\n)[ \t]*(?:```[ \t]*(?:json|JSON)?[ \t]*\n?[ \t]*)?\{[ \t\n]*"name"[ \t]*:[ \t]*"([a-zA-Z_][a-zA-Z0-9_]*)"/g;
 const functionToolCallLeakRe = /(?:^|[^a-zA-Z0-9_])([a-zA-Z_][a-zA-Z0-9_]*)[ \t\r\n]*\(/g;
 const minimaxToolCallLeakRe = /^minimax:tool_call\b/m;
+const visibleInternalToolIdentifierRe =
+  /`?\b((?:pulse|patrol)_[a-zA-Z0-9_]+|run_command)\b`?(?:[ \t]+(tool|command|query|call))?/g;
+
+const VISIBLE_INTERNAL_TOOL_IDENTIFIER_LABELS: Record<string, string> = {
+  patrol_collect: 'collection',
+  patrol_remediate: 'remediation',
+  pulse_exec: 'command',
+  pulse_query: 'inventory lookup',
+  pulse_read: 'read command',
+  pulse_run_command: 'command',
+  run_command: 'command',
+};
 
 export interface AssistantOutputArtifactStreamState {
   visibleText: string;
+  rawVisibleText: string;
   pendingText: string;
 }
 
 export function createAssistantOutputArtifactStreamState(): AssistantOutputArtifactStreamState {
   return {
     visibleText: '',
+    rawVisibleText: '',
     pendingText: '',
   };
 }
@@ -47,11 +61,13 @@ export function stripAssistantOutputArtifacts(content: string): {
 } {
   const idx = assistantOutputArtifactIndex(content);
   if (idx < 0) {
-    return { text: content, stripped: false };
+    return { text: normalizeAssistantVisibleInternalIdentifiers(content), stripped: false };
   }
   const visiblePrefix = content.slice(0, idx).trim();
   return {
-    text: isCompactedToolPrelude(visiblePrefix) ? '' : visiblePrefix,
+    text: isCompactedToolPrelude(visiblePrefix)
+      ? ''
+      : normalizeAssistantVisibleInternalIdentifiers(visiblePrefix),
     stripped: true,
   };
 }
@@ -72,25 +88,29 @@ export function appendVisibleTextBeforeAssistantOutputArtifacts(
   const text = state.pendingText + content;
   state.pendingText = '';
 
-  const existing = state.visibleText;
-  const candidate = existing + text;
+  const existingVisibleText = state.visibleText;
+  const existingRawText = state.rawVisibleText || existingVisibleText;
+  const candidate = existingRawText + text;
   const idx = assistantOutputArtifactIndex(candidate);
   if (idx < 0) {
-    if (!existing && isCompactedToolPrelude(text)) {
+    if (!existingRawText && isCompactedToolPrelude(text)) {
       state.pendingText = text;
       return { text: '', stripped: false };
     }
 
     const { visible, held } = splitTrailingPotentialToolNamePrefix(text);
-    state.visibleText += visible;
+    const normalizedVisible = normalizeAssistantVisibleInternalIdentifiers(visible);
+    state.rawVisibleText += visible;
+    state.visibleText += normalizedVisible;
     state.pendingText = held;
-    return { text: visible, stripped: false };
+    return { text: normalizedVisible, stripped: false };
   }
 
   const safeText = candidate.slice(0, idx).trimEnd();
   if (isCompactedToolPrelude(safeText)) {
     const previousVisibleText = state.visibleText;
     state.visibleText = '';
+    state.rawVisibleText = '';
     state.pendingText = '';
     if (!previousVisibleText) {
       return {
@@ -105,8 +125,13 @@ export function appendVisibleTextBeforeAssistantOutputArtifacts(
       replacementText: '',
     };
   }
-  const visibleDelta = safeText.length > existing.length ? safeText.slice(existing.length) : '';
-  state.visibleText = safeText;
+  const normalizedSafeText = normalizeAssistantVisibleInternalIdentifiers(safeText);
+  const visibleDelta =
+    normalizedSafeText.length > existingVisibleText.length
+      ? normalizedSafeText.slice(existingVisibleText.length)
+      : '';
+  state.visibleText = normalizedSafeText;
+  state.rawVisibleText = safeText;
   state.pendingText = '';
   return { text: visibleDelta, stripped: true };
 }
@@ -120,8 +145,20 @@ export function flushPendingAssistantOutputText(state: AssistantOutputArtifactSt
   if (isCompactedToolPrelude(text)) {
     return '';
   }
-  state.visibleText += text;
-  return text;
+  const normalizedText = normalizeAssistantVisibleInternalIdentifiers(text);
+  state.rawVisibleText += text;
+  state.visibleText += normalizedText;
+  return normalizedText;
+}
+
+function normalizeAssistantVisibleInternalIdentifiers(content: string): string {
+  if (!content) return content;
+
+  return content.replace(visibleInternalToolIdentifierRe, (_match, rawName: string) => {
+    const name = rawName.toLowerCase();
+    const label = VISIBLE_INTERNAL_TOOL_IDENTIFIER_LABELS[name] || formatInternalIdentifier(name);
+    return label;
+  });
 }
 
 function assistantOutputArtifactIndex(content: string): number {
@@ -189,9 +226,14 @@ function splitTrailingPotentialToolNamePrefix(content: string): {
 
   const token = content.slice(start);
   if (isKnownAssistantToolNamePrefix(token)) {
-    return { visible: content.slice(0, start), held: token };
+    const holdStart = start > 0 && content[start - 1] === '`' ? start - 1 : start;
+    return { visible: content.slice(0, holdStart), held: content.slice(holdStart) };
   }
   return { visible: content, held: '' };
+}
+
+function formatInternalIdentifier(name: string): string {
+  return name.replace(/^(?:pulse|patrol)_/, '').replace(/_/g, ' ');
 }
 
 function isToolNameCharacter(char: string): boolean {

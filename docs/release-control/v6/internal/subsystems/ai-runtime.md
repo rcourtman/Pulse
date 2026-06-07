@@ -231,6 +231,11 @@ runtime cost control, and shared AI transport surfaces.
    export status lines must normalize internal tool identifiers such as
    `pulse_query`, `pulse_read`, and `pulse_exec` into operator-facing activity
    labels, while preserving the raw typed event payload for Details/debug paths.
+   Assistant-authored visible answer prose is part of the same boundary: model
+   text may describe the action in operator vocabulary such as "read command"
+   or "inventory lookup", but raw internal identifiers such as `pulse_read`
+   must not appear in the normal transcript, copied answer text, or transcript
+   export unless the operator explicitly opens raw details/debug content.
    Selected-model route rows are typed route evidence, not live activity. They
    may render immediately while the backend/provider stream is still quiet, but
    they must not hide or outrank workflow progress once a `request_start`,
