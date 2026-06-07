@@ -1116,6 +1116,14 @@ func TestService_PromptsAndDiscoveryLoop(t *testing.T) {
 	if !strings.Contains(deepPrompt, "Limit output to at most 12 facts") {
 		t.Fatalf("expected deep prompt to limit response size")
 	}
+	// The analyzer must capture what the context pack now surfaces (iter 5):
+	// how to restart/reload the service, and the specific key files a user edits.
+	if !strings.Contains(deepPrompt, "systemd unit") {
+		t.Fatalf("expected deep prompt to ask how the service is restarted/reloaded")
+	}
+	if !strings.Contains(deepPrompt, "specific key files") {
+		t.Fatalf("expected deep prompt to ask for specific key files, not just config dirs")
+	}
 
 	hostPrompt := service.buildDeepAnalysisPrompt(AIAnalysisRequest{
 		ResourceType: ResourceTypeAgent,

@@ -2593,6 +2593,7 @@ Based on all available information, determine:
 6. What ports are in use?
 7. Any special hardware (GPU, TPU, etc.)?
 8. Any dependencies (databases, message queues, etc.)?
+9. How is the service managed — what restarts or reloads it (systemd unit, or container restart)?
 
 Respond in this exact JSON format:
 {
@@ -2616,6 +2617,8 @@ Important:
 - Extract version numbers from package lists, process output, or config files
 - Identify config and data paths from mount points and file listings
 - Identify log paths (e.g., /var/log/, application-specific logs) for troubleshooting
+- In config_paths, include the specific key files a user edits (e.g. configuration.yaml, automations.yaml, postgresql.conf), not just the parent config directory
+- Capture how the service is managed as a fact with category "service" (e.g. the systemd unit "home-assistant.service", or a reload command) so it can be restarted or reloaded
 - Note any special hardware like Coral TPU, NVIDIA GPU
 - For LXC/VM, the CLI access should use pct exec or qm guest exec
 - For Docker, use docker exec
