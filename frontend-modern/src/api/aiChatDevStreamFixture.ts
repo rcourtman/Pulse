@@ -3,6 +3,7 @@ import type { AIChatStreamEvent } from './generated/aiChatEvents';
 export const AI_CHAT_DEV_STREAM_FIXTURE_PROMPTS = [
   '/fixture devices',
   '/fixture assistant-stream',
+  '/fixture skipped-tool',
 ] as const;
 
 const DEFAULT_DEV_FIXTURE_STEP_DELAY_MS = 140;
@@ -141,6 +142,62 @@ const buildDeviceCountFixtureEvents = (model?: string): AIChatStreamEvent[] => [
   },
 ];
 
+const buildSkippedToolFixtureEvents = (model?: string): AIChatStreamEvent[] => [
+  {
+    type: 'session',
+    data: { id: 'dev-fixture-skipped-tool' },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'request_start',
+      message: 'Preparing Pulse context.',
+    },
+  },
+  {
+    type: 'tool_start',
+    data: {
+      id: 'fixture-tool-skipped',
+      name: 'pulse_read',
+      input:
+        '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
+      raw_input:
+        'pulse_read(target_host="current_resource", command="ls /dev | wc -l")',
+    },
+  },
+  {
+    type: 'tool_cancel',
+    data: {
+      id: 'fixture-tool-skipped',
+      name: 'pulse_read',
+      reason: 'current_resource unavailable',
+    },
+  },
+  {
+    type: 'content',
+    data: {
+      text: 'I could not inspect the current resource because no resource context was attached to this chat turn.',
+    },
+  },
+  {
+    type: 'done',
+    data: {
+      session_id: 'dev-fixture-skipped-tool',
+      model: assistantFixtureModel(model),
+      input_tokens: 41,
+      output_tokens: 27,
+    },
+  },
+];
+
+const buildFixtureEvents = (prompt: string, model?: string): AIChatStreamEvent[] => {
+  const normalized = normalizeFixturePrompt(prompt);
+  if (normalized === '/fixture skipped-tool') {
+    return buildSkippedToolFixtureEvents(model);
+  }
+  return buildDeviceCountFixtureEvents(model);
+};
+
 export const maybeRunAIChatDevStreamFixture = async (
   options: AIChatDevStreamFixtureOptions,
 ): Promise<boolean> => {
@@ -153,7 +210,7 @@ export const maybeRunAIChatDevStreamFixture = async (
     (import.meta.env.MODE === 'test'
       ? TEST_FIXTURE_STEP_DELAY_MS
       : DEFAULT_DEV_FIXTURE_STEP_DELAY_MS);
-  const events = buildDeviceCountFixtureEvents(options.model);
+  const events = buildFixtureEvents(options.prompt, options.model);
 
   for (let index = 0; index < events.length; index += 1) {
     const event = events[index];

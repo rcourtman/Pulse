@@ -313,8 +313,8 @@ type ToolProgressData struct {
 }
 
 // ToolCancelData is the data for "tool_cancel" events.
-// It removes a pending tool row when a model-selected call is consumed by an
-// internal policy boundary instead of becoming user-visible tool execution.
+// It marks a pending tool row as skipped when a model-selected call is consumed
+// by an internal policy boundary instead of becoming user-visible execution.
 type ToolCancelData struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`

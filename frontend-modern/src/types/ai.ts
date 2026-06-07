@@ -215,6 +215,7 @@ export interface AIExecuteResponse {
 export type AIStreamEventType =
   | 'tool_start'
   | 'tool_progress'
+  | 'tool_cancel'
   | 'tool_end'
   | 'content'
   | 'thinking'
@@ -235,6 +236,12 @@ export interface AIStreamToolProgressData {
   input?: string;
   phase?: string;
   message?: string;
+}
+
+export interface AIStreamToolCancelData {
+  id: string;
+  name: string;
+  reason?: string;
 }
 
 export interface AIStreamToolEndData {
@@ -296,6 +303,7 @@ export interface AIStreamEvent {
     | string
     | AIStreamToolStartData
     | AIStreamToolProgressData
+    | AIStreamToolCancelData
     | AIStreamToolEndData
     | AIStreamCompleteData
     | AIStreamApprovalNeededData

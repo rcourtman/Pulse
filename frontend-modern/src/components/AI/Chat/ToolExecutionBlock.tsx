@@ -15,7 +15,7 @@ import ClockIcon from 'lucide-solid/icons/clock';
 import CopyIcon from 'lucide-solid/icons/copy';
 import LoaderCircleIcon from 'lucide-solid/icons/loader-circle';
 import XCircleIcon from 'lucide-solid/icons/x-circle';
-import type { ToolExecution, PendingTool } from './types';
+import type { ToolExecution, PendingTool, ToolCancellation } from './types';
 import { copyToClipboard } from '@/utils/clipboard';
 import { getToolCallResultTextClass } from '@/utils/patrolRunPresentation';
 import {
@@ -40,6 +40,10 @@ interface ToolInputSummaryProps {
 
 interface ToolCommandPreviewProps {
   preview: string;
+}
+
+interface ToolCancellationBlockProps {
+  tool: ToolCancellation;
 }
 
 const hasReadableToolOutput = (output: string) => {
@@ -454,6 +458,64 @@ export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
           </span>
         </div>
       </Show>
+    </div>
+  );
+};
+
+/**
+ * ToolCancellationBlock - Durable row for tool calls skipped by policy/runtime boundaries.
+ */
+export const ToolCancellationBlock: Component<ToolCancellationBlockProps> = (props) => {
+  const toolLabel = createMemo(() => getToolLabel(props.tool.name));
+  const inputText = createMemo(() => toolValueText(props.tool.input));
+  const parsedInputSummary = createMemo(() =>
+    parseToolInputSummary(inputText(), props.tool.name, props.tool.rawInput),
+  );
+  const inputSummary = createMemo(() => {
+    const summary = parsedInputSummary();
+    return isPlaceholderToolInputSummary(summary) ? pendingToolActionLabel(props.tool.name) : summary;
+  });
+  const commandPreview = createMemo(() => {
+    const preview = parseToolCommandPreview(inputText(), props.tool.name, props.tool.rawInput);
+    const summary = inputSummary().trim();
+    if (!preview || summary.startsWith('$ ') || preview === summary) return '';
+    return preview;
+  });
+  const reason = createMemo(() => props.tool.reason?.trim() || 'Skipped before execution');
+
+  return (
+    <div
+      class="my-1 rounded-md border border-amber-200 bg-amber-50/70 px-2.5 py-2 text-[11px] dark:border-amber-900/60 dark:bg-amber-950/20"
+      role="status"
+      aria-label="Assistant tool canceled"
+      title={reason()}
+    >
+      <div class="flex min-w-0 items-start gap-2">
+        <div class="pt-0.5">
+          <XCircleIcon
+            class="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-300"
+            aria-label="skipped"
+          />
+        </div>
+
+        <div class="min-w-0 flex-1">
+          <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <span class="shrink-0 font-mono text-[9px] font-semibold uppercase tracking-wider text-muted">
+              {toolLabel()}
+            </span>
+            <span class="shrink-0 rounded border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+              skipped
+            </span>
+          </div>
+          <ToolInputSummary summary={inputSummary()} />
+          <Show when={commandPreview()}>
+            <ToolCommandPreview preview={commandPreview()} />
+          </Show>
+          <div class="mt-1 min-w-0 text-[10px] leading-snug text-muted">
+            <span class="block whitespace-pre-wrap break-words">{reason()}</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

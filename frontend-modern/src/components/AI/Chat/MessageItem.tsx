@@ -19,7 +19,7 @@ import RotateCcwIcon from 'lucide-solid/icons/rotate-ccw';
 import SparklesIcon from 'lucide-solid/icons/sparkles';
 import XIcon from 'lucide-solid/icons/x';
 import { renderMarkdown } from '../aiChatUtils';
-import { PendingToolBlock, ToolExecutionBlock } from './ToolExecutionBlock';
+import { PendingToolBlock, ToolCancellationBlock, ToolExecutionBlock } from './ToolExecutionBlock';
 import { ApprovalCard } from './ApprovalCard';
 import { QuestionCard } from './QuestionCard';
 import { ThinkingBlock } from './ThinkingBlock';
@@ -276,6 +276,8 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
         return !!evt.tool;
       case 'pending_tool':
         return !!evt.pendingTool;
+      case 'tool_cancel':
+        return !!evt.toolCancel;
       case 'model_switch':
         return !!evt.model?.trim();
       case 'approval':
@@ -304,6 +306,8 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
         return !!evt.tool;
       case 'pending_tool':
         return !!evt.pendingTool;
+      case 'tool_cancel':
+        return !!evt.toolCancel;
       case 'model_switch':
         return !!evt.model?.trim();
       case 'approval':
@@ -611,6 +615,10 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
 
                       <Match when={evt.type === 'pending_tool' && evt.pendingTool}>
                         <PendingToolBlock tool={evt.pendingTool!} />
+                      </Match>
+
+                      <Match when={evt.type === 'tool_cancel' && evt.toolCancel}>
+                        <ToolCancellationBlock tool={evt.toolCancel!} />
                       </Match>
 
                       <Match when={evt.type === 'tool' && evt.tool}>

@@ -4,6 +4,7 @@ import { afterEach } from 'vitest';
 import {
   ToolExecutionBlock,
   PendingToolBlock,
+  ToolCancellationBlock,
   PendingToolsList,
   ToolExecutionsList,
 } from '../ToolExecutionBlock';
@@ -831,6 +832,28 @@ describe('PendingToolBlock', () => {
     expect(screen.getByText('waiting')).toBeInTheDocument();
     expect(screen.getByText('Waiting for approval.')).toBeInTheDocument();
     expect(container.querySelector('svg.animate-spin')).toBeNull();
+  });
+});
+
+describe('ToolCancellationBlock', () => {
+  it('renders skipped tool activity with the cancellation reason', () => {
+    render(() => (
+      <ToolCancellationBlock
+        tool={{
+          id: 'tool-1',
+          name: 'pulse_read',
+          input: '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
+          reason: 'current_resource unavailable',
+        }}
+      />
+    ));
+
+    expect(screen.getByRole('status', { name: 'Assistant tool canceled' })).toHaveTextContent(
+      'skipped',
+    );
+    expect(screen.getByText('Inspect devices on current resource')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tool command')).toHaveTextContent('$ ls /dev | wc -l');
+    expect(screen.getByText('current_resource unavailable')).toBeInTheDocument();
   });
 });
 

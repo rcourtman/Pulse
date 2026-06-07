@@ -475,8 +475,9 @@ runtime cost control, and shared AI transport surfaces.
    may short-circuit an explicit local fixture prompt only when
    `import.meta.env.DEV` or test mode is active, and the fixture must emit the
    same typed `StreamEvent` objects (`session`, `workflow_state`, `thinking`,
-   `tool_start`, `tool_progress`, `tool_end`, `content`, `done`) through the
-   normal `useChat` reducer rather than rendering a separate mock transcript.
+   `tool_start`, `tool_progress`, `tool_cancel`, `tool_end`, `content`,
+   `done`) through the normal `useChat` reducer rather than rendering a
+   separate mock transcript.
    This fixture is a local development primitive, not a product mode: it must
    not bypass backend governance in production, persist as a server session, or
    introduce any UI-only event shape that real providers cannot emit.
@@ -696,10 +697,19 @@ runtime cost control, and shared AI transport surfaces.
    replaces that row rather than appending a delayed batch of steps. Waiting
    until `[DONE]`, `message_stop`, or execution completion recreates the
    delayed batch feeling this contract is meant to prevent. Policy-hidden
-   placeholder attempts remain governed by the runtime and may cancel a pending
-   row instead of persisting a failed tool card. If a terminal `tool_end`
-   reaches the browser without a matching pending row, the frontend must still
-   append the completed row instead of dropping the only visible tool evidence.
+   placeholder attempts remain governed by the runtime and may resolve the
+   pending row into a durable skipped `tool_cancel` row instead of either
+   persisting a failed tool card or hiding the activity. If a terminal
+   `tool_end` or `tool_cancel` reaches the browser without a matching pending
+   row, the frontend must still append terminal tool evidence instead of
+   dropping the only visible activity. The 2026-06-07 Pulse slice rechecked
+   OpenCode `origin/dev` commit
+   `1025540fcc2a69609a0131a7168300205656d728`, where
+   `packages/core/src/session/event.ts` and
+   `packages/core/src/session/message-updater.ts` keep tool lifecycle events as
+   typed message parts through terminal success/failed states; Pulse adapts
+   that lifecycle shape by making skipped policy/runtime tool calls visible as
+   terminal transcript rows.
    While streamed arguments are still invalid, incomplete JSON, or incomplete
    provider-style function-call input, the frontend must use the `raw_input`
    fragment to show a safe partial command/path/query summary instead of a

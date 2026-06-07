@@ -29,6 +29,16 @@ vi.mock('../ToolExecutionBlock', () => ({
       {props.tool.input}
     </div>
   ),
+  ToolCancellationBlock: (props: {
+    tool: { name: string; input: string; reason?: string };
+  }) => (
+    <div role="status" aria-label="Assistant tool canceled">
+      <span>{props.tool.name.replace(/^pulse_/, '')}</span>
+      <span>skipped</span>
+      <span>Inspect devices on current resource</span>
+      <span>{props.tool.reason}</span>
+    </div>
+  ),
   ToolExecutionBlock: (props: {
     tool: { name: string; input: string; output: string; success: boolean };
     startedAt?: number;
@@ -972,6 +982,35 @@ describe('MessageItem', () => {
       const block = screen.getByTestId('tool-execution-block');
       expect(block).toHaveAttribute('data-started-at', '1000');
       expect(block).toHaveAttribute('data-completed-at', '4200');
+    });
+
+    it('renders canceled tool activity as a skipped transcript row', () => {
+      const events: StreamDisplayEvent[] = [
+        {
+          type: 'tool_cancel',
+          toolId: 'tool-1',
+          toolCancel: {
+            id: 'tool-1',
+            name: 'pulse_read',
+            input:
+              '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
+            reason: 'current_resource unavailable',
+          },
+        },
+      ];
+
+      render(() => (
+        <MessageItem
+          message={makeMessage({ role: 'assistant', content: '', streamEvents: events })}
+          {...makeHandlers()}
+        />
+      ));
+
+      const row = screen.getByRole('status', { name: 'Assistant tool canceled' });
+      expect(row).toHaveTextContent('read');
+      expect(row).toHaveTextContent('skipped');
+      expect(row).toHaveTextContent('Inspect devices on current resource');
+      expect(row).toHaveTextContent('current_resource unavailable');
     });
 
     it('does not render tool block when tool property is undefined', () => {

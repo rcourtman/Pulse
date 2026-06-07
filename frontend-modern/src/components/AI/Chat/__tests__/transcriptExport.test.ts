@@ -175,6 +175,41 @@ describe('Assistant transcript export', () => {
     expect(transcript).toContain('[model] using Qwen 3.7 Plus via OpenRouter');
   });
 
+  it('includes canceled tool activity as skipped transcript evidence', () => {
+    const transcript = formatAssistantTranscript({
+      messages: [
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: '',
+          timestamp,
+          streamEvents: [
+            {
+              type: 'tool_cancel',
+              toolId: 'tool-1',
+              toolCancel: {
+                id: 'tool-1',
+                name: 'pulse_read',
+                input: JSON.stringify({
+                  action: 'exec',
+                  target_host: 'current_resource',
+                  command: 'ls /dev | wc -l',
+                }),
+                reason: 'current_resource unavailable',
+              },
+            },
+          ],
+        },
+      ],
+      generatedAt: timestamp,
+    });
+
+    expect(transcript).toContain('[tool:read] Inspect devices on current resource');
+    expect(transcript).toContain('skipped');
+    expect(transcript).toContain('reason: current_resource unavailable');
+    expect(transcript).not.toContain('ls /dev | wc -l');
+  });
+
   it('reports whether a transcript has content', () => {
     expect(hasAssistantTranscriptContent([])).toBe(false);
     expect(

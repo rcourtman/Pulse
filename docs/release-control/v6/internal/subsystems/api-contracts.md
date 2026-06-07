@@ -555,13 +555,16 @@ payload shape change when the portal presents compact client rows.
     mode, only for reserved `/fixture ...` prompts, and only by calling the
 	normal `AIChatAPI.chat` event callback with the generated
 	`AIChatStreamEvent` union (`session`, `workflow_state`, `thinking`,
-	`tool_start`, `tool_progress`, `tool_end`, `content`, `done`). It must not
-	open a backend session, mutate persisted chat history, add browser-only
-	stream event shapes, or become a production fallback for provider or VPN
-	failures. At least one fixture-backed Assistant tool sequence must exercise
-	the OpenCode-parity raw tool-input path by starting with incomplete
-	provider-style `raw_input`, then mutating the same tool row with completed
-	arguments through the normal `tool_progress` event.
+	`tool_start`, `tool_progress`, `tool_cancel`, `tool_end`, `content`,
+	`done`). It must not open a backend session, mutate persisted chat history,
+	add browser-only stream event shapes, or become a production fallback for
+	provider or VPN failures. At least one fixture-backed Assistant tool
+	sequence must exercise the OpenCode-parity raw tool-input path by starting
+	with incomplete provider-style `raw_input`, then mutating the same tool row
+	with completed arguments through the normal `tool_progress` event.
+	At least one fixture-backed Assistant tool sequence must exercise the
+	skipped-tool lifecycle by resolving a visible `tool_start` row through
+	`tool_cancel` instead of hiding the activity.
 34. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
     Legacy Assistant SSE routes in this handler that still use the older
     execute envelope, including `/api/ai/execute/stream` and

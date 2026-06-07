@@ -3307,7 +3307,7 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('removes a canceled pending tool without adding a completed tool call', async () => {
+    it('replaces a canceled pending tool with durable skipped activity', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
 
@@ -3333,6 +3333,19 @@ describe('useChat', () => {
       expect(assistant.streamEvents?.filter((event) => event.type === 'pending_tool')).toHaveLength(
         0,
       );
+      expect(assistant.streamEvents?.filter((event) => event.type === 'tool_cancel')).toEqual([
+        expect.objectContaining({
+          type: 'tool_cancel',
+          toolId: 'a',
+          toolCancel: {
+            id: 'a',
+            name: 'pulse_read',
+            input: '{}',
+            rawInput: undefined,
+            reason: 'current_resource unavailable',
+          },
+        }),
+      ]);
       dispose();
     });
   });

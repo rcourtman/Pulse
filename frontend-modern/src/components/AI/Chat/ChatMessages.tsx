@@ -97,6 +97,15 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
           textActivityFingerprint(event.tool?.rawInput),
           textActivityFingerprint(event.tool?.output),
         ].join(':');
+      case 'tool_cancel':
+        return [
+          ...base,
+          event.toolCancel?.id,
+          event.toolCancel?.name,
+          textActivityFingerprint(event.toolCancel?.input),
+          textActivityFingerprint(event.toolCancel?.rawInput),
+          textActivityFingerprint(event.toolCancel?.reason),
+        ].join(':');
       case 'content':
         return [...base, textActivityFingerprint(event.content)].join(':');
       case 'thinking':

@@ -4,6 +4,7 @@ import type {
   PendingQuestion,
   PendingTool,
   StreamDisplayEvent,
+  ToolCancellation,
   ToolExecution,
   WorkflowStatus,
 } from './types';
@@ -117,6 +118,17 @@ const formatPendingTool = (tool: PendingTool): string => {
   ]);
 };
 
+const formatCanceledTool = (tool: ToolCancellation): string => {
+  const label = getToolLabel(tool.name);
+  const parsedSummary = formatToolInputSummary(tool.name, tool.input, tool.rawInput);
+  const summary = parsedSummary || pendingToolActionLabel(tool.name);
+  return compactText([
+    `[tool:${label}] ${summary}`,
+    'skipped',
+    tool.reason?.trim() ? `reason: ${tool.reason.trim()}` : undefined,
+  ]);
+};
+
 const formatWorkflowStatus = (status?: WorkflowStatus): string => {
   const message = formatAssistantWorkflowStatus(status).trim();
   return message ? `[status] ${message}` : '';
@@ -162,6 +174,8 @@ const hasRenderableEvent = (event: StreamDisplayEvent, includeThinking = false):
       return Boolean(event.tool);
     case 'pending_tool':
       return Boolean(event.pendingTool);
+    case 'tool_cancel':
+      return Boolean(event.toolCancel);
     case 'content':
       return Boolean(visibleContentEvent(event));
     case 'model_switch':
@@ -246,6 +260,11 @@ const appendAssistantStreamEvents = (
         if (event.pendingTool) {
           appendBlock(lines, formatPendingTool(event.pendingTool));
           pendingToolAppended = true;
+        }
+        break;
+      case 'tool_cancel':
+        if (event.toolCancel) {
+          appendBlock(lines, formatCanceledTool(event.toolCancel));
         }
         break;
       case 'model_switch':

@@ -149,6 +149,51 @@ describe('AIChatAPI', () => {
     });
   });
 
+  it('runs the skipped-tool dev stream fixture without opening a provider request', async () => {
+    const onEvent = vi.fn();
+
+    await AIChatAPI.chat(
+      '/fixture skipped-tool',
+      undefined,
+      'openrouter:deepseek/deepseek-chat',
+      onEvent,
+    );
+
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'session',
+      'workflow_state',
+      'tool_start',
+      'tool_cancel',
+      'content',
+      'done',
+    ]);
+    expect(onEvent.mock.calls[2][0]).toMatchObject({
+      type: 'tool_start',
+      data: {
+        id: 'fixture-tool-skipped',
+        name: 'pulse_read',
+        input: expect.stringContaining('current_resource'),
+        raw_input: expect.stringContaining('ls /dev | wc -l'),
+      },
+    });
+    expect(onEvent.mock.calls[3][0]).toMatchObject({
+      type: 'tool_cancel',
+      data: {
+        id: 'fixture-tool-skipped',
+        name: 'pulse_read',
+        reason: 'current_resource unavailable',
+      },
+    });
+    expect(onEvent.mock.calls[5][0]).toMatchObject({
+      type: 'done',
+      data: {
+        session_id: 'dev-fixture-skipped-tool',
+        model: 'openrouter:deepseek/deepseek-chat',
+      },
+    });
+  });
+
   it('lets the browser paint the first visible text delta before draining a coalesced chat chunk', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const requestAnimationFrame = installAnimationFrame();

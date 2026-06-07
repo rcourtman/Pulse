@@ -428,6 +428,49 @@ describe('getAssistantActiveTurnStatus', () => {
     });
   });
 
+  it('surfaces skipped tool activity in the active turn status', () => {
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            streamEvents: [
+              {
+                type: 'pending_tool',
+                toolId: 'tool-1',
+                pendingTool: {
+                  id: 'tool-1',
+                  name: 'pulse_read',
+                  input: '{}',
+                  status: 'pending',
+                  startedAt: 1_000,
+                },
+                startedAt: 1_000,
+                updatedAt: 1_000,
+              },
+              {
+                type: 'tool_cancel',
+                toolId: 'tool-1',
+                toolCancel: {
+                  id: 'tool-1',
+                  name: 'pulse_read',
+                  input: '{}',
+                  reason: 'current_resource unavailable',
+                },
+                startedAt: 1_000,
+                updatedAt: 1_500,
+              },
+            ],
+          }),
+        ],
+        true,
+      ),
+    ).toEqual({
+      type: 'tool',
+      text: 'Skipped read: current_resource unavailable',
+      startedAt: 1_000,
+    });
+  });
+
   it('carries question event timing into the active waiting status', () => {
     expect(
       getAssistantActiveTurnStatus(

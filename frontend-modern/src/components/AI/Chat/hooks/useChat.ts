@@ -508,6 +508,52 @@ export function useChat(options: UseChatOptions = {}) {
     return updatedEvents;
   };
 
+  const replacePendingToolWithCancelEvent = (
+    events: StreamDisplayEvent[],
+    canceledTool: PendingTool,
+    reason: string | undefined,
+    matchesTool: (tool?: PendingTool, toolId?: string) => boolean,
+    now: number,
+  ): StreamDisplayEvent[] => {
+    let replacedEvent = false;
+    const updatedEvents: StreamDisplayEvent[] = [];
+    const cancelEvent = () =>
+      withStreamEventTiming(
+        {
+          type: 'tool_cancel',
+          toolId: canceledTool.id,
+          toolCancel: {
+            id: canceledTool.id,
+            name: canceledTool.name,
+            input: canceledTool.input,
+            rawInput: canceledTool.rawInput,
+            reason,
+          },
+          startedAt: canceledTool.startedAt,
+          updatedAt: now,
+        },
+        now,
+      );
+
+    for (const event of events) {
+      if (event.type !== 'pending_tool' || !matchesTool(event.pendingTool, event.toolId)) {
+        updatedEvents.push(event);
+        continue;
+      }
+      if (replacedEvent) {
+        continue;
+      }
+      replacedEvent = true;
+      updatedEvents.push(cancelEvent());
+    }
+
+    if (!replacedEvent) {
+      updatedEvents.push(cancelEvent());
+    }
+
+    return updatedEvents;
+  };
+
   const upsertPendingToolStart = (
     msg: ChatMessage,
     data: {
@@ -1171,6 +1217,7 @@ export function useChat(options: UseChatOptions = {}) {
               const data = event.data as {
                 id?: string;
                 name?: string;
+                reason?: string;
               };
               const normalizedName = normalizeChatToolName(data.name || '');
               const matchesTool = (tool?: PendingTool, toolId?: string) => {
@@ -1179,20 +1226,32 @@ export function useChat(options: UseChatOptions = {}) {
                 if (data.id && tool.id === data.id) return true;
                 return normalizedName !== '' && normalizeChatToolName(tool.name) === normalizedName;
               };
+              const pendingTools = msg.pendingTools || [];
+              const resolvedTool =
+                pendingTools.find((tool) => matchesTool(tool, tool.id)) ||
+                ({
+                  id: data.id || generateId(),
+                  name: data.name || 'unknown',
+                  input: '{}',
+                  startedAt: Date.now(),
+                  updatedAt: Date.now(),
+                } satisfies PendingTool);
+              const now = Date.now();
 
               return {
                 ...msg,
                 workflowStatus: undefined,
                 workflowStatusHistory: undefined,
-                pendingTools: (msg.pendingTools || []).filter(
-                  (tool) => !matchesTool(tool, tool.id),
-                ),
-                streamEvents: (
-                  streamEventsWithoutWorkflowStatusRows(msg.streamEvents || []) || []
-                ).filter(
-                  (streamEvent) =>
-                    streamEvent.type !== 'pending_tool' ||
-                    !matchesTool(streamEvent.pendingTool, streamEvent.toolId),
+                pendingTools: pendingTools.filter((tool) => !matchesTool(tool, tool.id)),
+                streamEvents: replacePendingToolWithCancelEvent(
+                  streamEventsWithoutWorkflowStatusRows(msg.streamEvents || []) || [],
+                  {
+                    ...resolvedTool,
+                    updatedAt: now,
+                  },
+                  data.reason?.trim() || undefined,
+                  matchesTool,
+                  now,
                 ),
               };
             }

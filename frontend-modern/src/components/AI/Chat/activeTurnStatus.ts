@@ -107,11 +107,19 @@ const activePendingToolFromEvents = (events?: StreamDisplayEvent[]): PendingTool
         return event.pendingTool;
       }
     }
-    if (event.type === 'tool') {
+    if (event.type === 'tool' || event.type === 'tool_cancel') {
       for (const key of [event.toolId, event.tool?.name]) {
         const normalized = key?.trim();
         if (normalized) {
           completedToolKeys.add(normalized);
+        }
+      }
+      if (event.type === 'tool_cancel') {
+        for (const key of [event.toolCancel?.id, event.toolCancel?.name]) {
+          const normalized = key?.trim();
+          if (normalized) {
+            completedToolKeys.add(normalized);
+          }
         }
       }
     }
@@ -170,7 +178,7 @@ const eventActivityAt = (event: StreamDisplayEvent): number | undefined => {
 };
 
 const toolCompletionKeys = (event: StreamDisplayEvent): string[] =>
-  [event.toolId, event.tool?.name]
+  [event.toolId, event.tool?.name, event.toolCancel?.id, event.toolCancel?.name]
     .map((value) => value?.trim())
     .filter((value): value is string => !!value);
 
@@ -197,6 +205,13 @@ const isFresherStatusCandidate = (
   return candidate.order >= current.order;
 };
 
+const toolCancelStatusText = (event: StreamDisplayEvent): string => {
+  const name = event.toolCancel?.name || event.pendingTool?.name;
+  const label = formatToolName(name);
+  const reason = event.toolCancel?.reason?.trim();
+  return reason ? `Skipped ${label}: ${reason}` : `Skipped ${label}`;
+};
+
 const latestStreamActivityStatus = (
   events?: StreamDisplayEvent[],
 ): AssistantActiveTurnStatusCandidate | null => {
@@ -213,6 +228,19 @@ const latestStreamActivityStatus = (
         for (const key of toolCompletionKeys(event)) {
           completedToolKeys.add(key);
         }
+        break;
+      }
+      case 'tool_cancel': {
+        for (const key of toolCompletionKeys(event)) {
+          completedToolKeys.add(key);
+        }
+        candidate = {
+          type: 'tool',
+          text: toolCancelStatusText(event),
+          startedAt: event.startedAt,
+          activityAt: eventActivityAt(event),
+          order: index,
+        };
         break;
       }
       case 'pending_tool': {
@@ -341,6 +369,7 @@ const hasVisibleAssistantOutput = (message: ChatMessage): boolean => {
   return (message.streamEvents || []).some((event) => {
     if (event.type === 'content') return !!event.content?.trim();
     if (event.type === 'tool') return !!event.tool;
+    if (event.type === 'tool_cancel') return !!event.toolCancel;
     if (event.type === 'approval') return !!event.approval;
     if (event.type === 'question') return !!event.question;
     return false;

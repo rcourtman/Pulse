@@ -25,6 +25,14 @@ export interface PendingTool {
   updatedAt?: number;
 }
 
+export interface ToolCancellation {
+  id: string;
+  name: string;
+  input: string;
+  rawInput?: string;
+  reason?: string;
+}
+
 export interface PendingApproval {
   command: string;
   toolId: string;
@@ -100,6 +108,7 @@ export type StreamEventType =
   | 'tool'
   | 'content'
   | 'pending_tool'
+  | 'tool_cancel'
   | 'model_switch'
   | 'approval'
   | 'question';
@@ -112,6 +121,7 @@ export interface StreamDisplayEvent {
   updatedAt?: number;
   tool?: ToolExecution;
   pendingTool?: PendingTool;
+  toolCancel?: ToolCancellation;
   content?: string;
   model?: string;
   failedModel?: string;
