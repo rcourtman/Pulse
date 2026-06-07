@@ -248,8 +248,26 @@ interface AssistantFallbackRouteAdoptionCandidate {
   failedModel: string;
 }
 
+const PROVIDER_ROUTE_FAILURE_PATTERN =
+  /\b(ai provider|provider endpoint|provider credentials|provider api key|provider connection|selected provider url|provider url|model route|openrouter|openai|anthropic|deepseek|gemini|ollama|api key|rate limit|quota|credits?|upstream|llm|429|402)\b/i;
+const LOCAL_ASSISTANT_FAILURE_PATTERN = /\bUnknown Assistant fixture\b|\bAvailable fixtures:\b/i;
+
 export const resetAIChatComposerDraftStashForTests = () => {
   stashedComposerDraft = null;
+};
+
+const hasProviderRouteFailureEvidence = (message: ChatMessage): boolean => {
+  if (message.role !== 'assistant' || !message.error) return false;
+  if (LOCAL_ASSISTANT_FAILURE_PATTERN.test(message.error)) return false;
+  if (PROVIDER_ROUTE_FAILURE_PATTERN.test(message.error)) return true;
+
+  return (message.streamEvents || []).some(
+    (event) =>
+      event.type === 'model_switch' &&
+      (Boolean(event.failedModel?.trim()) ||
+        event.modelEvent === 'fallback' ||
+        event.modelEvent === 'switch'),
+  );
 };
 
 const getAssistantFallbackRouteAdoptionCandidate = (
@@ -1749,6 +1767,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const providers = new Set<string>();
 
     for (const message of chat.messages()) {
+      if (!hasProviderRouteFailureEvidence(message)) continue;
       const modelId = message.error && message.model?.trim();
       if (!modelId) continue;
       modelIds.add(modelId);
@@ -2066,7 +2085,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   };
 
   const getFailedTurnModelRouteAlternative = (message: ChatMessage) => {
-    if (!message.error) return null;
+    if (!hasProviderRouteFailureEvidence(message)) return null;
     return modelRouteAlternativeFor(message.model || selectedChatModel());
   };
 

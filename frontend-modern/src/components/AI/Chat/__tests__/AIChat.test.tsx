@@ -828,6 +828,61 @@ describe('AIChat', () => {
       );
     });
 
+    it('does not offer provider route recovery for local fixture failures', async () => {
+      const localFixtureFailure: ChatMessage = {
+        id: 'assistant-local-fixture-error',
+        role: 'assistant',
+        content: '',
+        error:
+          'Unknown Assistant fixture "/fixture typo-check". Available fixtures: devices, assistant-stream, tool-burst, pending-tool, provider-retry, stream-idle, compacted-artifact, skipped-tool.',
+        timestamp: new Date('2026-06-05T10:00:00Z'),
+        model: 'openrouter:qwen/qwen3.7-plus',
+        streamEvents: [
+          {
+            type: 'model_switch',
+            model: 'openrouter:qwen/qwen3.7-plus',
+            modelEvent: 'selected',
+          },
+        ],
+      };
+      mockChat.model.mockReturnValue('openrouter:qwen/qwen3.7-plus');
+      mockChat.messages.mockReturnValue([localFixtureFailure]);
+      mockAIAPI.getSettings.mockResolvedValue({
+        model: 'openrouter:qwen/qwen3.7-plus',
+        chat_model: '',
+        control_level: 'read_only',
+        autonomous_mode: false,
+        discovery_enabled: true,
+        configured_providers: ['openrouter', 'openai'],
+      });
+      mockAIAPI.getModels.mockResolvedValue({
+        models: [
+          {
+            id: 'openrouter:qwen/qwen3.7-plus',
+            name: 'Qwen: Qwen3.7 Plus',
+            provider: 'openrouter',
+            notable: true,
+          },
+          {
+            id: 'openai:gpt-4o',
+            name: 'GPT-4o',
+            provider: 'openai',
+            notable: true,
+          },
+        ],
+      });
+
+      renderChat();
+
+      await waitFor(() => {
+        expect(mockAIAPI.getModels).toHaveBeenCalled();
+      });
+
+      const props = mockChatMessagesProps[mockChatMessagesProps.length - 1];
+      expect(props.getModelRouteAlternative?.(localFixtureFailure)).toBeNull();
+      expect(screen.queryByTestId('mock-use-model-route')).not.toBeInTheDocument();
+    });
+
     it('falls back to another configured provider after equivalent routes have already failed', async () => {
       const openRouterFailure: ChatMessage = {
         id: 'assistant-error-openrouter',
