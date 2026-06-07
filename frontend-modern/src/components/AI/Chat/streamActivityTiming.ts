@@ -1,4 +1,4 @@
-export const ASSISTANT_FAST_TOOL_COMPLETION_SETTLE_MS = 420;
+export const ASSISTANT_FAST_TOOL_COMPLETION_SETTLE_MS = 900;
 
 export const getAssistantFastToolCompletionSettleUntil = (
   startedAt: number | undefined,

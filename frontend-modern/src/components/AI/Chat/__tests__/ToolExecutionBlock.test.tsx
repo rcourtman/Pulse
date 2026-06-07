@@ -8,6 +8,7 @@ import {
   PendingToolsList,
   ToolExecutionsList,
 } from '../ToolExecutionBlock';
+import { ASSISTANT_FAST_TOOL_COMPLETION_SETTLE_MS } from '../streamActivityTiming';
 import type { ToolExecution, PendingTool, ToolCancellation } from '../types';
 
 afterEach(() => {
@@ -47,7 +48,7 @@ function makeCancellation(overrides?: Partial<ToolCancellation>): ToolCancellati
 }
 
 const getToolDetailsTrigger = () => screen.getByTitle('Show tool details');
-const FAST_TOOL_SETTLE_TEST_MS = 500;
+const FAST_TOOL_SETTLE_TEST_MS = ASSISTANT_FAST_TOOL_COMPLETION_SETTLE_MS + 80;
 
 // ============================================================
 // ToolExecutionBlock
@@ -161,21 +162,23 @@ describe('ToolExecutionBlock', () => {
         tool={makeTool()}
         startedAt={9_900}
         completedAt={9_940}
-        settleUntil={10_380}
+        settleUntil={10_000 + ASSISTANT_FAST_TOOL_COMPLETION_SETTLE_MS - 40}
       />
     ));
 
     expect(screen.getByLabelText('Assistant tool running')).toBeInTheDocument();
     expect(screen.getByText('running')).toBeInTheDocument();
 
-    await vi.advanceTimersByTimeAsync(380);
+    await vi.advanceTimersByTimeAsync(FAST_TOOL_SETTLE_TEST_MS);
 
     expect(screen.queryByLabelText('Assistant tool running')).not.toBeInTheDocument();
     expect(screen.getByText('completed')).toBeInTheDocument();
     expect(screen.getByLabelText('Tool duration <1s')).toHaveTextContent('<1s');
   });
 
-  it('renders compact completed activity without the running settle state', () => {
+  it('briefly presents compact fresh live fast completions as running', async () => {
+    vi.useFakeTimers();
+
     render(() => (
       <ToolExecutionBlock
         tool={makeTool({ output: 'up 42 days' })}
@@ -186,13 +189,22 @@ describe('ToolExecutionBlock', () => {
       />
     ));
 
+    const runningRow = screen.getByRole('status', { name: 'Assistant tool running' });
+    expect(runningRow).toHaveTextContent('cmd');
+    expect(runningRow).toHaveTextContent('running');
+    expect(runningRow).toHaveTextContent('uptime');
+    expect(screen.getByLabelText('running')).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Tool duration/)).not.toBeInTheDocument();
+
+    await vi.advanceTimersByTimeAsync(FAST_TOOL_SETTLE_TEST_MS);
+
     const row = screen.getByRole('status', { name: 'Assistant completed tool activity' });
     expect(row).toHaveTextContent('cmd');
+    expect(row).toHaveTextContent('completed');
     expect(row).toHaveTextContent('uptime');
     expect(row).toHaveTextContent('<1s');
     expect(screen.getByLabelText('completed')).toBeInTheDocument();
     expect(screen.queryByLabelText('Assistant tool running')).not.toBeInTheDocument();
-    expect(screen.queryByText('running')).not.toBeInTheDocument();
   });
 
   it('does not defer failed fast completions behind a running state', () => {

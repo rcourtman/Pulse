@@ -354,7 +354,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
   const hasOutput = createMemo(() => hasReadableToolOutput(outputText()));
   const hasDetails = createMemo(() => hasInput() || hasOutput());
   createEffect(() => {
-    if (props.compact || !props.tool.success) {
+    if (!props.tool.success) {
       setSettlingFastCompletion(false);
       return;
     }
@@ -410,16 +410,31 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
         <div
           class="my-1 inline-flex max-w-full items-start gap-2 rounded-md border border-border-subtle bg-surface-alt px-2.5 py-1.5 text-[11px] text-muted"
           role="status"
-          aria-label="Assistant completed tool activity"
+          aria-label={
+            settlingFastCompletion()
+              ? 'Assistant tool running'
+              : 'Assistant completed tool activity'
+          }
           title={inputSummary()}
         >
-          <CheckCircleIcon
-            class="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-300"
-            aria-label="completed"
-          />
+          <Show
+            when={!settlingFastCompletion()}
+            fallback={
+              <LoaderCircleIcon
+                class="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin text-blue-500 dark:text-blue-400"
+                aria-label="running"
+              />
+            }
+          >
+            <CheckCircleIcon
+              class="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-300"
+              aria-label="completed"
+            />
+          </Show>
           <span class="shrink-0 font-mono text-[9px] font-semibold uppercase tracking-wider">
             {toolLabel()}
           </span>
+          <span class="shrink-0 text-[10px] font-medium">{statusLabel()}</span>
           <span class="min-w-0 truncate text-base-content">{inputSummary()}</span>
           <Show when={durationLabel()}>
             <span class="shrink-0 text-[10px]" aria-label={`Tool duration ${durationLabel()}`}>

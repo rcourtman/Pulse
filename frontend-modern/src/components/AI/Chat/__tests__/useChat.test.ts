@@ -32,6 +32,7 @@ vi.mock('@/utils/logger', () => ({
 }));
 
 import { useChat } from '../hooks/useChat';
+import { ASSISTANT_FAST_TOOL_COMPLETION_SETTLE_MS } from '../streamActivityTiming';
 import { AIChatAPI, type ChatMention, type StreamEvent } from '@/api/aiChat';
 import { notificationStore } from '@/stores/notifications';
 
@@ -2211,7 +2212,7 @@ describe('useChat', () => {
           toolId: 'tool-1',
           startedAt: 20_000,
           updatedAt: 20_040,
-          settleUntil: 20_420,
+          settleUntil: 20_000 + ASSISTANT_FAST_TOOL_COMPLETION_SETTLE_MS,
         }),
       );
       expect(assistant.streamEvents?.map((event) => event.type)).toEqual(['tool', 'content']);

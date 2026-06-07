@@ -225,7 +225,15 @@ timers when the stream already has a newer workflow/tool state.
    exposes a provider action in the same dialog. Pulse adapts that by wiring
    the Assistant model chooser's provider action to the governed Assistant &
    Patrol provider settings route instead of hiding provider repair behind a
-   separate slash command or silently switching model routes. Stop is the explicit
+   separate slash command or silently switching model routes. The same
+   2026-06-07 activity-visibility pass rechecked OpenCode
+   `packages/app/src/pages/session/message-timeline.tsx` and
+   `message-timeline.data.ts`: active turns are represented as session timeline
+   rows, with busy/retry state kept visible while assistant parts continue to
+   arrive. Pulse adapts that by keeping fast command/tool completions in a
+   transient running state long enough for the compact transcript row to paint,
+   while still collapsing large command output behind the existing tool-details
+   affordance. Stop is the explicit
    interruption path: it must abort the active stream, clear queued follow-ups
    and pending tool/approval/question affordances, preserve any partial model
    text, return focus to the composer, and render a neutral transcript marker
