@@ -565,7 +565,12 @@ payload shape change when the portal presents compact client rows.
 	At least one fixture-backed Assistant tool sequence must exercise the
 	skipped-tool lifecycle by resolving a visible `tool_start` row through
 	`tool_cancel` instead of hiding the activity. At least one fixture-backed
-	Assistant tool sequence must exercise compacted provider artifact
+	Assistant tool sequence must exercise live pending/running tool evidence by
+	emitting placeholder structured input plus raw provider-style input on
+	`tool_start`, mutating that same row through `tool_progress`, and pacing the
+	running state long enough for browser proof to inspect and copy both the
+	completed input and current progress before `tool_end`. At least one
+	fixture-backed Assistant tool sequence must exercise compacted provider artifact
 	suppression by emitting compacted pre-tool content before a governed tool row
 	and final normal answer content. At least one fixture-backed Assistant tool
 	sequence must exercise a buffered `tool_start` -> `tool_end` burst with no

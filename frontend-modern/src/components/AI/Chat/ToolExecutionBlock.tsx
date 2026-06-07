@@ -47,12 +47,13 @@ interface ToolCancellationBlockProps {
   tool: ToolCancellation;
 }
 
-type ToolDetailKind = 'input' | 'output' | 'reason';
+type ToolDetailKind = 'input' | 'output' | 'progress' | 'reason';
 
 interface ToolDetailsPanelProps {
   id: string;
   input?: string;
   output?: string;
+  progress?: string;
   reason?: string;
 }
 
@@ -183,15 +184,24 @@ const ToolCommandPreview: Component<ToolCommandPreviewProps> = (props) => (
 
 const normalizeDetailText = (value?: string) => value?.trim() ?? '';
 
+const toolDetailInputText = (input: string, rawInput?: string) => {
+  const text = input.trim();
+  const raw = rawInput?.trim() ?? '';
+  if (raw && (!text || text === '{}' || text === '[]')) return raw;
+  return text || raw;
+};
+
 const detailTitle = (kind: ToolDetailKind) => {
   if (kind === 'input') return 'Input';
   if (kind === 'output') return 'Output';
+  if (kind === 'progress') return 'Progress';
   return 'Reason';
 };
 
 const detailCopyTarget = (kind: ToolDetailKind) => {
   if (kind === 'input') return 'tool input';
   if (kind === 'output') return 'tool output';
+  if (kind === 'progress') return 'tool progress';
   return 'skip reason';
 };
 
@@ -206,10 +216,12 @@ const ToolDetailsPanel: Component<ToolDetailsPanelProps> = (props) => {
     const items: Array<{ kind: ToolDetailKind; text: string }> = [];
     const input = normalizeDetailText(props.input);
     const output = normalizeDetailText(props.output);
+    const progress = normalizeDetailText(props.progress);
     const reason = normalizeDetailText(props.reason);
 
     if (input) items.push({ kind: 'input', text: input });
     if (output) items.push({ kind: 'output', text: output });
+    if (progress) items.push({ kind: 'progress', text: progress });
     if (reason) items.push({ kind: 'reason', text: reason });
     return items;
   });
@@ -275,6 +287,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
 
   const toolLabel = createMemo(() => getToolLabel(props.tool.name));
   const inputText = createMemo(() => toolValueText(props.tool.input));
+  const detailInputText = createMemo(() => toolDetailInputText(inputText(), props.tool.rawInput));
   const outputText = createMemo(() => toolValueText(props.tool.output));
   const inputSummary = createMemo(() =>
     parseToolInputSummary(inputText(), props.tool.name, props.tool.rawInput),
@@ -289,7 +302,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
   const hiddenOutputSummary = createMemo(() =>
     outputPreview() ? '' : formatHiddenOutputSummary(outputText()),
   );
-  const hasInput = createMemo(() => inputText().trim().length > 0);
+  const hasInput = createMemo(() => detailInputText().trim().length > 0);
   const hasOutput = createMemo(() => hasReadableToolOutput(outputText()));
   const hasDetails = createMemo(() => hasInput() || hasOutput());
   createEffect(() => {
@@ -444,7 +457,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
       <Show when={showDetails() && hasDetails()}>
         <ToolDetailsPanel
           id={detailsId}
-          input={hasInput() ? inputText() : ''}
+          input={hasInput() ? detailInputText() : ''}
           output={hasOutput() ? outputText() : ''}
         />
       </Show>
@@ -460,8 +473,11 @@ interface PendingToolBlockProps {
 }
 
 export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
+  const [showDetails, setShowDetails] = createSignal(false);
+  const detailsId = createUniqueId();
   const toolLabel = createMemo(() => getToolLabel(props.tool.name));
   const inputText = createMemo(() => toolValueText(props.tool.input));
+  const detailInputText = createMemo(() => toolDetailInputText(inputText(), props.tool.rawInput));
   const parsedInputSummary = createMemo(() =>
     parseToolInputSummary(inputText(), props.tool.name, props.tool.rawInput),
   );
@@ -487,6 +503,20 @@ export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
     return 'pending';
   });
   const progressText = createMemo(() => (props.tool.progress || '').trim());
+  const hasInput = createMemo(() => detailInputText().trim().length > 0);
+  const hasProgress = createMemo(() => progressText().length > 0);
+  const hasDetails = createMemo(() => hasInput() || hasProgress());
+  const summaryControlTitle = () => (showDetails() ? 'Hide tool details' : 'Show tool details');
+  const toggleDetails = () => {
+    if (!hasDetails()) return;
+    setShowDetails(!showDetails());
+  };
+  const handleSummaryKeyDown = (event: KeyboardEvent) => {
+    if (!hasDetails()) return;
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    toggleDetails();
+  };
   const activityIconClass = createMemo(() => {
     if (status() === 'waiting') return 'h-3 w-3 shrink-0 text-amber-500 dark:text-amber-300';
     return 'h-3 w-3 shrink-0 animate-spin text-blue-500 dark:text-blue-400';
@@ -504,39 +534,70 @@ export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
   });
 
   return (
-    <div class="my-1 rounded-md border border-blue-200 bg-blue-50/70 px-2.5 py-2 text-[11px] dark:border-blue-900/60 dark:bg-blue-950/20">
-      <div class="flex min-w-0 items-start gap-2">
-        <div class="pt-0.5">
-          <Show
-            when={status() === 'waiting'}
-            fallback={<LoaderCircleIcon class={activityIconClass()} aria-label={statusLabel()} />}
-          >
-            <ClockIcon class={activityIconClass()} aria-label={statusLabel()} />
-          </Show>
-        </div>
-
-        <div class="min-w-0 flex-1">
-          <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            <span class="shrink-0 font-mono text-[9px] font-semibold uppercase tracking-wider text-muted">
-              {toolLabel()}
-            </span>
-            <span class="shrink-0 text-[10px] font-medium text-muted">{statusLabel()}</span>
-            <Show when={elapsedLabel()}>
-              <span class="shrink-0 text-[10px] text-muted">{elapsedLabel()}</span>
+    <div class="my-1 overflow-hidden rounded-md border border-blue-200 bg-blue-50/70 text-[11px] dark:border-blue-900/60 dark:bg-blue-950/20">
+      <div
+        class={`px-2.5 py-2 ${
+          hasDetails()
+            ? 'cursor-pointer transition-colors hover:bg-blue-100/60 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:ring-inset dark:hover:bg-blue-950/30'
+            : ''
+        }`}
+        role={hasDetails() ? 'button' : undefined}
+        tabIndex={hasDetails() ? 0 : undefined}
+        aria-expanded={hasDetails() ? showDetails() : undefined}
+        aria-controls={hasDetails() ? detailsId : undefined}
+        title={hasDetails() ? summaryControlTitle() : undefined}
+        onClick={toggleDetails}
+        onKeyDown={handleSummaryKeyDown}
+      >
+        <div class="flex min-w-0 items-start gap-2">
+          <div class="pt-0.5">
+            <Show
+              when={status() === 'waiting'}
+              fallback={<LoaderCircleIcon class={activityIconClass()} aria-label={statusLabel()} />}
+            >
+              <ClockIcon class={activityIconClass()} aria-label={statusLabel()} />
             </Show>
           </div>
-          <ToolInputSummary summary={inputSummary()} />
-          <Show when={commandPreview()}>
-            <ToolCommandPreview preview={commandPreview()} />
-          </Show>
+
+          <div class="min-w-0 flex-1">
+            <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <span class="shrink-0 font-mono text-[9px] font-semibold uppercase tracking-wider text-muted">
+                {toolLabel()}
+              </span>
+              <span class="shrink-0 text-[10px] font-medium text-muted">{statusLabel()}</span>
+              <Show when={elapsedLabel()}>
+                <span class="shrink-0 text-[10px] text-muted">{elapsedLabel()}</span>
+              </Show>
+              <Show when={hasDetails()}>
+                <ChevronRightIcon
+                  class={`h-3.5 w-3.5 shrink-0 text-muted transition-transform ${
+                    showDetails() ? 'rotate-90' : ''
+                  }`}
+                  aria-hidden="true"
+                />
+              </Show>
+            </div>
+            <ToolInputSummary summary={inputSummary()} />
+            <Show when={commandPreview()}>
+              <ToolCommandPreview preview={commandPreview()} />
+            </Show>
+          </div>
         </div>
+
+        <Show when={progressText()}>
+          <div class="mt-1 min-w-0 pl-[calc(0.875rem+0.5rem)] text-[10px] leading-snug text-muted">
+            <span class="block whitespace-pre-wrap break-words" title={progressText()}>
+              {progressText()}
+            </span>
+          </div>
+        </Show>
       </div>
-      <Show when={progressText()}>
-        <div class="mt-1 min-w-0 pl-[calc(0.875rem+0.5rem)] text-[10px] leading-snug text-muted">
-          <span class="block whitespace-pre-wrap break-words" title={progressText()}>
-            {progressText()}
-          </span>
-        </div>
+      <Show when={showDetails() && hasDetails()}>
+        <ToolDetailsPanel
+          id={detailsId}
+          input={hasInput() ? detailInputText() : ''}
+          progress={hasProgress() ? progressText() : ''}
+        />
       </Show>
     </div>
   );
@@ -550,6 +611,7 @@ export const ToolCancellationBlock: Component<ToolCancellationBlockProps> = (pro
   const detailsId = createUniqueId();
   const toolLabel = createMemo(() => getToolLabel(props.tool.name));
   const inputText = createMemo(() => toolValueText(props.tool.input));
+  const detailInputText = createMemo(() => toolDetailInputText(inputText(), props.tool.rawInput));
   const parsedInputSummary = createMemo(() =>
     parseToolInputSummary(inputText(), props.tool.name, props.tool.rawInput),
   );
@@ -566,7 +628,7 @@ export const ToolCancellationBlock: Component<ToolCancellationBlockProps> = (pro
     return preview;
   });
   const reason = createMemo(() => props.tool.reason?.trim() || 'Skipped before execution');
-  const hasInput = createMemo(() => inputText().trim().length > 0);
+  const hasInput = createMemo(() => detailInputText().trim().length > 0);
   const hasReason = createMemo(() => reason().trim().length > 0);
   const hasDetails = createMemo(() => hasInput() || hasReason());
   const summaryControlTitle = () => (showDetails() ? 'Hide tool details' : 'Show tool details');
@@ -638,7 +700,7 @@ export const ToolCancellationBlock: Component<ToolCancellationBlockProps> = (pro
       <Show when={showDetails() && hasDetails()}>
         <ToolDetailsPanel
           id={detailsId}
-          input={hasInput() ? inputText() : ''}
+          input={hasInput() ? detailInputText() : ''}
           reason={hasReason() ? reason() : ''}
         />
       </Show>

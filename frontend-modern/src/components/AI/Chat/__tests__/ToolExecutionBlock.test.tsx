@@ -879,6 +879,104 @@ describe('PendingToolBlock', () => {
     expect(screen.getByText('Waiting for approval.')).toBeInTheDocument();
     expect(container.querySelector('svg.animate-spin')).toBeNull();
   });
+
+  it('makes the pending tool row the details trigger when input or progress exists', () => {
+    render(() => (
+      <PendingToolBlock tool={makePending({ status: 'running', progress: 'Reading devices.' })} />
+    ));
+
+    const trigger = getToolDetailsTrigger();
+    expect(trigger).toBeInTheDocument();
+    expect(trigger).toHaveAttribute('role', 'button');
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('shows pending tool input and progress when details are opened', () => {
+    const input = '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}';
+    const progress = 'Running read-only command.';
+    const { container } = render(() => (
+      <PendingToolBlock tool={makePending({ name: 'pulse_read', input, progress })} />
+    ));
+
+    const trigger = getToolDetailsTrigger();
+    fireEvent.click(trigger);
+
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(trigger).toHaveAttribute('title', 'Hide tool details');
+    expect(screen.getByText('Input')).toBeInTheDocument();
+    expect(screen.getByText('Progress')).toBeInTheDocument();
+    const rawDetails = Array.from(container.querySelectorAll('pre'))
+      .map((pre) => pre.textContent || '')
+      .join('\n');
+    expect(rawDetails).toContain(input);
+    expect(rawDetails).toContain(progress);
+  });
+
+  it('uses raw streamed input in pending tool details while structured arguments are placeholders', () => {
+    const rawInput = 'pulse_read(target_host="current_resource", command="ls /dev | wc';
+    const { container } = render(() => (
+      <PendingToolBlock
+        tool={makePending({
+          name: 'pulse_read',
+          input: '{}',
+          rawInput,
+          progress: 'Receiving tool arguments.',
+        })}
+      />
+    ));
+
+    fireEvent.click(getToolDetailsTrigger());
+
+    const rawDetails = Array.from(container.querySelectorAll('pre'))
+      .map((pre) => pre.textContent || '')
+      .join('\n');
+    expect(rawDetails).toContain(rawInput);
+    expect(rawDetails).not.toContain('{}');
+  });
+
+  it('copies pending tool input and progress from the details panel', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+    const input = '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}';
+    const progress = 'Running read-only command.';
+
+    render(() => <PendingToolBlock tool={makePending({ name: 'pulse_read', input, progress })} />);
+    fireEvent.click(getToolDetailsTrigger());
+    fireEvent.click(screen.getByRole('button', { name: 'Copy tool input' }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(input);
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Copied tool input' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy tool progress' }));
+    await waitFor(() => {
+      expect(writeText).toHaveBeenLastCalledWith(progress);
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Copied tool progress' })).toBeInTheDocument();
+    });
+  });
+
+  it('toggles pending tool details from the keyboard', () => {
+    render(() => (
+      <PendingToolBlock tool={makePending({ status: 'running', progress: 'Running command.' })} />
+    ));
+
+    const trigger = getToolDetailsTrigger();
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Progress')).toBeInTheDocument();
+
+    fireEvent.keyDown(trigger, { key: ' ' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Progress')).not.toBeInTheDocument();
+  });
 });
 
 describe('ToolCancellationBlock', () => {

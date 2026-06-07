@@ -241,6 +241,54 @@ describe('AIChatAPI', () => {
     });
   });
 
+  it('runs the pending-tool dev stream fixture without opening a provider request', async () => {
+    const onEvent = vi.fn();
+
+    await AIChatAPI.chat(
+      '/fixture pending-tool',
+      undefined,
+      'openrouter:deepseek/deepseek-chat',
+      onEvent,
+    );
+
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'session',
+      'workflow_state',
+      'tool_start',
+      'tool_progress',
+      'tool_end',
+      'content',
+      'done',
+    ]);
+    expect(onEvent.mock.calls[2][0]).toMatchObject({
+      type: 'tool_start',
+      data: {
+        id: 'fixture-tool-pending',
+        name: 'pulse_read',
+        input: '{}',
+        raw_input: expect.stringContaining('ls /dev | wc'),
+      },
+    });
+    expect(onEvent.mock.calls[3][0]).toMatchObject({
+      type: 'tool_progress',
+      data: {
+        id: 'fixture-tool-pending',
+        name: 'pulse_read',
+        phase: 'running',
+        message: 'Running command.',
+        raw_input: expect.stringContaining('lsblk -d -o NAME,TYPE,SIZE'),
+      },
+    });
+    expect(onEvent.mock.calls[6][0]).toMatchObject({
+      type: 'done',
+      data: {
+        session_id: 'dev-fixture-pending-tool',
+        model: 'openrouter:deepseek/deepseek-chat',
+      },
+    });
+  });
+
   it('runs the provider-retry dev stream fixture without opening a provider request', async () => {
     const onEvent = vi.fn();
 

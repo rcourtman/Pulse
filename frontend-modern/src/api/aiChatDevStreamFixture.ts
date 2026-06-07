@@ -4,6 +4,7 @@ export const AI_CHAT_DEV_STREAM_FIXTURE_PROMPTS = [
   '/fixture devices',
   '/fixture assistant-stream',
   '/fixture tool-burst',
+  '/fixture pending-tool',
   '/fixture provider-retry',
   '/fixture compacted-artifact',
   '/fixture skipped-tool',
@@ -248,6 +249,70 @@ const buildToolBurstFixtureEvents = (model?: string): AIChatStreamEvent[] => [
   },
 ];
 
+const buildPendingToolFixtureEvents = (model?: string): AIChatStreamEvent[] => [
+  {
+    type: 'session',
+    data: { id: 'dev-fixture-pending-tool' },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'request_start',
+      message: 'Preparing Pulse context.',
+    },
+  },
+  {
+    type: 'tool_start',
+    data: {
+      id: 'fixture-tool-pending',
+      name: 'pulse_read',
+      input: '{}',
+      raw_input: 'pulse_read(target_host="current_resource", command="ls /dev | wc',
+    },
+  },
+  {
+    type: 'tool_progress',
+    data: {
+      id: 'fixture-tool-pending',
+      name: 'pulse_read',
+      phase: 'running',
+      message: 'Running command.',
+      input:
+        '{"target_host":"current_resource","command":"ls /dev | wc -l && lsblk -d -o NAME,TYPE,SIZE"}',
+      raw_input:
+        'pulse_read(target_host="current_resource", command="ls /dev | wc -l && lsblk -d -o NAME,TYPE,SIZE")',
+    },
+  },
+  {
+    type: 'tool_end',
+    data: {
+      id: 'fixture-tool-pending',
+      name: 'pulse_read',
+      input:
+        '{"target_host":"current_resource","command":"ls /dev | wc -l && lsblk -d -o NAME,TYPE,SIZE"}',
+      raw_input:
+        'pulse_read(target_host="current_resource", command="ls /dev | wc -l && lsblk -d -o NAME,TYPE,SIZE")',
+      output: ['4358', 'NAME    TYPE SIZE', 'sda     disk 1.8T', 'nvme0n1 disk 931.5G'].join('\n'),
+      success: true,
+    },
+  },
+  {
+    type: 'content',
+    data: {
+      text: 'The pending-tool fixture kept the running tool row inspectable before completion.',
+    },
+  },
+  {
+    type: 'done',
+    data: {
+      session_id: 'dev-fixture-pending-tool',
+      model: assistantFixtureModel(model),
+      input_tokens: 88,
+      output_tokens: 34,
+    },
+  },
+];
+
 const buildProviderRetryFixtureEvents = (): AIChatStreamEvent[] => [
   {
     type: 'session',
@@ -377,6 +442,9 @@ const buildFixtureEvents = (prompt: string, model?: string): AIChatStreamEvent[]
   if (normalized === '/fixture tool-burst') {
     return buildToolBurstFixtureEvents(model);
   }
+  if (normalized === '/fixture pending-tool') {
+    return buildPendingToolFixtureEvents(model);
+  }
   if (normalized === '/fixture provider-retry') {
     return buildProviderRetryFixtureEvents();
   }
@@ -396,6 +464,10 @@ const fixtureStepDelay = (
   ) {
     return 1600;
   }
+  if (normalizedPrompt === '/fixture pending-tool' && event.type === 'tool_progress') {
+    return 2200;
+  }
+  if (normalizedPrompt === '/fixture pending-tool') return defaultDelayMs;
   if (normalizedPrompt !== '/fixture tool-burst') return defaultDelayMs;
   if (event.type === 'tool_start') return 0;
   return defaultDelayMs;

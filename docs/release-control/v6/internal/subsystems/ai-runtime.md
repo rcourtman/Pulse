@@ -744,6 +744,22 @@ runtime cost control, and shared AI transport surfaces.
    typed message parts through terminal success/failed states; Pulse adapts
    that lifecycle shape by making skipped policy/runtime tool calls visible as
    terminal transcript rows.
+   The 2026-06-07 live-tool-evidence slice rechecked OpenCode `origin/dev`
+   commit `31c099be435d59bd6749ace7a9f2bb2245e6d3fa`:
+   `packages/core/src/session/event.ts` lines 307-366 define live tool input
+   and bounded progress events, `packages/core/src/session/message-updater.ts`
+   lines 247-293 mutates the same assistant tool part from pending input to
+   running progress, and `packages/ui/src/components/basic-tool.tsx` lines
+   90 and 246-253 keep pending/running tools as active compact rows rather than
+   expanding details by default. Pulse adapts that source model for
+   infrastructure operations by keeping the compact live row primary while
+   allowing an operator to expand pending/running tool rows for copyable raw
+   input and current progress evidence; raw provider envelopes stay behind
+   Details and are used there when structured arguments are still placeholder
+   `{}` / `[]`. The local dev `/fixture pending-tool` stream is the canonical
+   no-provider browser proof fixture for this live pending-tool Details window
+   and must keep a paced running state long enough to exercise the row before
+   it resolves.
    The 2026-06-07 skipped-evidence slice rechecked OpenCode `origin/dev`
    commit `31c099be435d59bd6749ace7a9f2bb2245e6d3fa`:
    `packages/core/src/session/event.ts` lines 307-336 define replayable tool
