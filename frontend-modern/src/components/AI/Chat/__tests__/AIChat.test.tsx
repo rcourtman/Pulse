@@ -2519,6 +2519,63 @@ describe('AIChat', () => {
       expect(mockChat.cancelQueuedFollowUp).toHaveBeenCalledWith('queued-1');
     });
 
+    it('loads a focused queued follow-up row into the composer with Enter', () => {
+      mockChat.queuedFollowUpCount.mockReturnValue(1);
+      mockChat.queuedFollowUps.mockReturnValue([
+        {
+          id: 'queued-1',
+          messageId: 'msg-queued-1',
+          prompt: 'keyboard edit queued prompt',
+          timestamp: new Date(),
+        },
+      ]);
+      mockChat.takeQueuedFollowUp.mockReturnValue({
+        id: 'queued-1',
+        messageId: 'msg-queued-1',
+        prompt: 'keyboard edit queued prompt',
+        timestamp: new Date(),
+      });
+
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+
+      fireEvent.keyDown(
+        screen.getByRole('listitem', {
+          name: 'Queued follow-up: keyboard edit queued prompt. Press Enter to edit or Delete to remove.',
+        }),
+        { key: 'Enter' },
+      );
+
+      expect(mockChat.takeQueuedFollowUp).toHaveBeenCalledWith('queued-1');
+      expect(textarea.value).toBe('keyboard edit queued prompt');
+    });
+
+    it('removes a focused queued follow-up row with Delete', async () => {
+      mockChat.queuedFollowUpCount.mockReturnValue(1);
+      mockChat.queuedFollowUps.mockReturnValue([
+        {
+          id: 'queued-1',
+          messageId: 'msg-queued-1',
+          prompt: 'keyboard remove queued prompt',
+          timestamp: new Date(),
+        },
+      ]);
+      renderChat();
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+
+      fireEvent.keyDown(
+        screen.getByRole('listitem', {
+          name: 'Queued follow-up: keyboard remove queued prompt. Press Enter to edit or Delete to remove.',
+        }),
+        { key: 'Delete' },
+      );
+
+      expect(mockChat.cancelQueuedFollowUp).toHaveBeenCalledWith('queued-1');
+      await waitFor(() => expect(document.activeElement).toBe(textarea));
+    });
+
     it('loads an individual queued follow-up into the composer for editing', () => {
       mockChat.queuedFollowUpCount.mockReturnValue(1);
       mockChat.queuedFollowUps.mockReturnValue([

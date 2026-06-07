@@ -1607,6 +1607,25 @@ export const AIChat: Component<AIChatProps> = (props) => {
     });
   };
 
+  const handleQueuedFollowUpRowKeyDown = (
+    event: KeyboardEvent & { currentTarget: HTMLDivElement },
+    id: string,
+  ) => {
+    if (event.defaultPrevented || event.target !== event.currentTarget) return;
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      editQueuedFollowUp(id);
+      return;
+    }
+
+    if (event.key === 'Delete' || event.key === 'Backspace') {
+      event.preventDefault();
+      chat.cancelQueuedFollowUp(id);
+      focusComposer();
+    }
+  };
+
   const restoreLastTurnDraft = (draft: RestoredPromptDraft) => {
     resetPromptHistoryNavigation();
     setEditingQueuedFollowUp(null);
@@ -4450,12 +4469,21 @@ export const AIChat: Component<AIChatProps> = (props) => {
                         <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
                       </button>
                     </div>
-                    <div class="mt-1 max-h-24 space-y-1 overflow-y-auto">
+                    <div class="mt-1 max-h-24 space-y-1 overflow-y-auto" role="list">
                       <For each={chat.queuedFollowUps()}>
                         {(queued, index) => {
                           const preview = () => queuedFollowUpPreview(queued.prompt);
                           return (
-                            <div class="flex min-h-7 items-center gap-2 rounded-md bg-white/70 px-2 py-1 text-xs text-blue-900 dark:bg-blue-900/30 dark:text-blue-100">
+                            <div
+                              class="flex min-h-7 items-center gap-2 rounded-md bg-white/70 px-2 py-1 text-xs text-blue-900 outline-none transition-colors focus:bg-white focus:ring-2 focus:ring-blue-500/40 dark:bg-blue-900/30 dark:text-blue-100 dark:focus:bg-blue-900/50"
+                              role="listitem"
+                              tabIndex={0}
+                              aria-label={`Queued follow-up: ${preview()}. Press Enter to edit or Delete to remove.`}
+                              data-testid="assistant-queued-follow-up-row"
+                              onKeyDown={(event) =>
+                                handleQueuedFollowUpRowKeyDown(event, queued.id)
+                              }
+                            >
                               <span class="min-w-0 flex-1 truncate">{preview()}</span>
                               <Show when={chat.queuedFollowUpCount() > 1 && index() > 0}>
                                 <button

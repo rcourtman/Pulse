@@ -146,7 +146,17 @@ runtime cost control, and shared AI transport surfaces.
    `packages/opencode/src/cli/cmd/run/demo.ts` (`startTool` and `doneTool`,
    lines 451-525; demo command routing, lines 1039-1076); Pulse adapts that by
    keeping `/fixture queue-hold` and `/fixture queued-follow-up` fully local
-   browser fixtures for queue interaction proof. OpenCode's `DialogModel` feeds
+   browser fixtures for queue interaction proof. The referenced OpenCode source
+   at fetched `origin/dev` commit
+   `e82542b8023a8374f29c23b70ec019c8f256354e` exposes queued prompts through
+   `RunQueuedPromptSelectBody` in
+   `packages/opencode/src/cli/cmd/run/footer.command.tsx` lines 588-650:
+   queued rows are searchable and keyboard-operable, with Enter/Ctrl+E editing
+   the selected prompt and Delete/Ctrl+D removing it. Pulse adapts that pattern
+   to the browser drawer by making each composer-adjacent queued follow-up row
+   focusable and directly operable with Enter to edit and Delete/Backspace to
+   remove, while retaining the visible icon buttons and avoiding terminal-only
+   shortcuts that collide with browser chrome. OpenCode's `DialogModel` feeds
    current, recent, favorite, and provider model rows into
    `DialogSelect`, while `DialogSelect` maintains a selected row and handles
    up/down/page/home/end/return navigation. The fetched OpenCode
