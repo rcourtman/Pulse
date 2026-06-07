@@ -33,6 +33,7 @@ import {
 } from '@/utils/resourceAnalysisPresentation';
 import { useDiscoveryTabState } from './useDiscoveryTabState';
 import { orderFactsByActionability } from './factOrdering';
+import { deriveCliCommand } from './cliCommand';
 
 interface DiscoveryTabProps {
   resourceType: ResourceType;
@@ -150,6 +151,14 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
       return null;
     }
     return getConfidenceLevel(current.confidence);
+  });
+  // A concrete, human-runnable command for this workload (pct exec / docker
+  // exec, including the nested-container layer). null when there is no clean
+  // human command for the type, in which case we show the Assistant guidance.
+  const cliCommand = createMemo(() => {
+    const current = discovery();
+    if (!current) return null;
+    return deriveCliCommand(props.resourceType, current.resource_id, current.cli_access);
   });
   const commandSettingsTarget = getDiscoveryCommandSettingsTarget();
   const apiAccessSettingsTarget = getDiscoveryApiAccessSettingsTarget();
@@ -824,12 +833,26 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                     <span>CLI Access</span>
                     <DiscoveryProvenanceMarker showLabel={false} />
                   </div>
-                  <CopyableCodeRow
-                    value={d().cli_access}
-                    copiedValue={copiedDiscoveryValue}
-                    onCopy={handleCopyDiscoveryValue}
-                    label="Copy CLI access"
-                  />
+                  <Show
+                    when={cliCommand()}
+                    fallback={
+                      <p class="text-xs text-muted">
+                        <span class="text-muted">How the Pulse Assistant runs commands here: </span>
+                        {d().cli_access}
+                      </p>
+                    }
+                  >
+                    <CopyableCodeRow
+                      value={cliCommand()!}
+                      copiedValue={copiedDiscoveryValue}
+                      onCopy={handleCopyDiscoveryValue}
+                      label="Copy CLI command"
+                    />
+                    <p class="mt-1.5 text-[11px] text-muted">
+                      Run from the{' '}
+                      {props.resourceType === 'app-container' ? 'Docker host' : 'Proxmox host'}.
+                    </p>
+                  </Show>
                 </div>
               </Show>
 
