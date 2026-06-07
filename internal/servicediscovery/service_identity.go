@@ -196,6 +196,80 @@ func surfaceIdentityResponse(identity knownServiceIdentity, evidence string) *AI
 	}
 }
 
+// knownServiceAliases returns the name aliases for a service type from the
+// identity table (falling back to the type itself), used to match a service
+// against nested container names/images.
+func knownServiceAliases(serviceType string) []string {
+	for _, identity := range knownServiceIdentities {
+		if identity.ServiceType == serviceType {
+			return append([]string{identity.ServiceType, identity.ServiceName}, identity.Aliases...)
+		}
+	}
+	return []string{serviceType}
+}
+
+// nestedContainerForService inspects the nested-container probe output
+// ("name|image" lines) and returns the name of a Docker container that appears
+// to run the identified service. This is access topology: when the service runs
+// in a nested container, the access path must be layered (enter the container),
+// not the bare guest shell. Empty string if nothing matches.
+func nestedContainerForService(probeOutput, serviceType, serviceName string) string {
+	probeOutput = strings.TrimSpace(probeOutput)
+	if probeOutput == "" {
+		return ""
+	}
+	aliases := append(knownServiceAliases(serviceType), serviceName)
+	normalizedAliases := make([]string, 0, len(aliases))
+	for _, alias := range aliases {
+		if na := normalizeKnownServiceEvidence(alias); na != "" {
+			normalizedAliases = append(normalizedAliases, na)
+		}
+	}
+	if len(normalizedAliases) == 0 {
+		return ""
+	}
+
+	for _, line := range strings.Split(probeOutput, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "|", 2)
+		name := strings.TrimSpace(parts[0])
+		if name == "" {
+			continue
+		}
+		image := ""
+		if len(parts) > 1 {
+			image = strings.TrimSpace(parts[1])
+		}
+		normalizedName := normalizeKnownServiceEvidence(name)
+		normalizedImage := normalizeKnownServiceEvidence(image)
+		for _, na := range normalizedAliases {
+			if (normalizedName != "" && strings.Contains(normalizedName, na)) ||
+				(normalizedImage != "" && strings.Contains(normalizedImage, na)) {
+				return name
+			}
+		}
+	}
+	return ""
+}
+
+// withNestedDockerAccess rewrites cli_access guidance so the Assistant enters
+// the nested Docker container that actually runs the service, rather than the
+// bare guest shell.
+func withNestedDockerAccess(cliAccess, containerName string) string {
+	cliAccess = strings.TrimSpace(cliAccess)
+	note := fmt.Sprintf(
+		"The service runs inside a Docker container named %q on this guest — to reach the service itself, prefix commands with: docker exec %s <your-command>.",
+		containerName, containerName,
+	)
+	if cliAccess == "" {
+		return note
+	}
+	return cliAccess + " " + note
+}
+
 type knownServiceEvidenceCandidate struct {
 	Source string
 	Value  string

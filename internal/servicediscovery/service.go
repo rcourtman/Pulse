@@ -1918,6 +1918,22 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 	}
 	applyKnownServiceIdentity(discovery, req, analysisReq.Metadata, analysisReq.CommandOutputs)
 
+	// Access topology: if the identified service actually runs in a nested Docker
+	// container (e.g. Home Assistant Container inside an LXC), layer the access
+	// path so the Assistant enters the container instead of the bare guest shell.
+	// This is index-level "how to reach it" — only a probe can know it.
+	if req.ResourceType == ResourceTypeSystemContainer || req.ResourceType == ResourceTypeVM {
+		if probe, ok := analysisReq.CommandOutputs["nested_containers"]; ok {
+			if name := nestedContainerForService(probe, discovery.ServiceType, discovery.ServiceName); name != "" {
+				discovery.CLIAccess = withNestedDockerAccess(discovery.CLIAccess, name)
+				log.Debug().
+					Str("id", discovery.ID).
+					Str("container", name).
+					Msg("Service runs in a nested Docker container; layered access path")
+			}
+		}
+	}
+
 	// Suggest web interface URL based on service type and external IP.
 	// If no URL can be inferred, capture diagnostics for logs and UI.
 	urlSuggestionDiagnostic := ""

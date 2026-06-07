@@ -101,12 +101,20 @@ func getSystemContainerCommands() []DiscoveryCommand {
 			Categories:  []string{"service"},
 			Optional:    true,
 		},
-		// Surface discovery only: identity + how-to-reach. Deep enumeration
-		// (installed packages, config-file trees, hardware/GPU, bind mounts,
-		// disk, cron) is intentionally omitted — it bloats the evidence payload
-		// and slows AI analysis, and it re-derives what the Assistant already
-		// knows about standard services. Specifics are fetched on demand via
-		// agent commands when actually needed. See discovery-assistant-goal.
+		{
+			Name:        "nested_containers",
+			Command:     "docker ps --format '{{.Names}}|{{.Image}}' 2>/dev/null | head -20 || true",
+			Description: "Nested Docker containers — access topology (how the service runs)",
+			Categories:  []string{"container"},
+			Optional:    true,
+		},
+		// Surface discovery only: identity + how-to-reach. The nested-container
+		// probe stays because whether the service runs in a Docker container
+		// CHANGES the access path (pct exec <guest> -- docker exec <name> ...) —
+		// that is index-level, not encyclopedia. Deep enumeration (installed
+		// packages, config-file trees, hardware/GPU, bind mounts, disk, cron) is
+		// omitted; the Assistant knows standard layouts and fetches specifics on
+		// demand. See discovery-assistant-goal.
 	}
 }
 
@@ -148,10 +156,18 @@ func getVMCommands() []DiscoveryCommand {
 			Categories:  []string{"service"},
 			Optional:    true,
 		},
-		// Surface discovery only — identity + how-to-reach. Deep enumeration
-		// (disk, nested docker + bind mounts, hardware/GPU) is omitted and
-		// fetched on demand via agent commands when needed. See
-		// getSystemContainerCommands / discovery-assistant-goal.
+		{
+			Name:        "nested_containers",
+			Command:     "docker ps --format '{{.Names}}|{{.Image}}' 2>/dev/null | head -20 || true",
+			Description: "Nested Docker containers — access topology (how the service runs)",
+			Categories:  []string{"container"},
+			Optional:    true,
+		},
+		// Surface discovery only — identity + how-to-reach (incl. whether the
+		// service runs in a nested Docker container, which changes the access
+		// path). Deep enumeration (disk, bind mounts, hardware/GPU) is omitted
+		// and fetched on demand. See getSystemContainerCommands /
+		// discovery-assistant-goal.
 	}
 }
 
