@@ -13,9 +13,9 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// ensureFinalTextResponse checks if the result messages contain any assistant text.
-// If not, it makes one last LLM call without tools so the model can summarize
-// its findings.
+// ensureFinalTextResponse checks if the result messages contain assistant text
+// after the latest user/tool-result anchor. If not, it makes one last LLM call
+// without tools so the model can summarize its findings.
 // This prevents the loop from exiting silently after making tool calls without answering.
 //
 // cost-recording-exempt: any tokens this final summary turn consumes
@@ -30,11 +30,8 @@ func (a *AgenticLoop) ensureFinalTextResponse(
 	providerMessages []providers.Message,
 	callback StreamCallback,
 ) []Message {
-	// Check if any assistant message has text content
-	for i := len(resultMessages) - 1; i >= 0; i-- {
-		if resultMessages[i].Role == "assistant" && strings.TrimSpace(resultMessages[i].Content) != "" {
-			return resultMessages // Already has text — nothing to do
-		}
+	if hasFinalAssistantText(resultMessages) {
+		return resultMessages
 	}
 
 	// No text content from the model. Make a final text-only call.
@@ -145,6 +142,26 @@ func (a *AgenticLoop) ensureFinalTextResponse(
 	log.Warn().Str("session_id", sessionID).Int("summary_len", len(fallback)).Msg("[AgenticLoop] Emitted deterministic fallback summary")
 
 	return resultMessages
+}
+
+func hasFinalAssistantText(resultMessages []Message) bool {
+	anchor := -1
+	for i, msg := range resultMessages {
+		if msg.ToolResult != nil {
+			anchor = i
+			continue
+		}
+		if msg.Role == "user" && strings.TrimSpace(msg.Content) != "" {
+			anchor = i
+		}
+	}
+
+	for i := len(resultMessages) - 1; i > anchor; i-- {
+		if resultMessages[i].Role == "assistant" && strings.TrimSpace(resultMessages[i].Content) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func buildAutomaticFallbackSummary(resultMessages []Message) string {

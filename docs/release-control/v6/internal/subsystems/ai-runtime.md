@@ -743,6 +743,22 @@ runtime cost control, and shared AI transport surfaces.
    arrives; it must not flash as run-on prose such as
    `I'llcheckthedevicenodes...` while the actual governed tool row is still
    being assembled.
+   A pre-tool assistant preamble such as "I'll check that" does not satisfy the
+   final-answer contract after Pulse executes tools. The final-response guard
+   must require non-empty assistant text after the latest user/tool-result
+   anchor; otherwise it must make the bounded no-tools summary call or emit the
+   deterministic fallback summary. This adapts the referenced OpenCode source
+   at fetched `origin/dev` commit
+   `06d7840d1d42c9815d2d2e45e7fa4090ca4e3577`: `packages/opencode/src/session/llm/ai-sdk.ts`
+   maps tool input/call/result stream events into typed tool events (lines
+   190-246), `packages/opencode/src/session/message-v2.ts` serializes completed
+   tool results and reasoning as ordered provider message parts (lines
+   340-390), and `packages/ui/src/components/message-part.tsx` only renders
+   non-empty typed text/reasoning/tool parts through `renderable` and
+   `AssistantParts` (lines 607-728). Pulse adapts that ordered-part invariant
+   inside `internal/ai/chat/agentic_final.go` because Pulse's transcript is
+   persisted as messages plus tool-result anchors rather than OpenCode's
+   per-part store.
    Streamed provider startup and mid-stream progress must be bounded by the
    configured Assistant request timeout, the OpenAI-compatible SSE
    response-header guard, and the per-chunk SSE body-read guard adapted from

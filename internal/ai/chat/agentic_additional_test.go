@@ -187,6 +187,112 @@ func TestEnsureFinalTextResponse(t *testing.T) {
 	}
 }
 
+func TestEnsureFinalTextResponseRequiresAssistantTextAfterLatestToolResult(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	loop := &AgenticLoop{provider: provider, baseSystemPrompt: "prompt"}
+
+	var emitted strings.Builder
+	result := loop.ensureFinalTextResponse(
+		context.Background(),
+		"session-pre-tool-preamble",
+		[]Message{
+			{Role: "user", Content: "how many devices are in this?"},
+			{
+				Role:    "assistant",
+				Content: "I'll check the device nodes.",
+				ToolCalls: []ToolCall{
+					{ID: "call-1", Name: "pulse_read", Input: map[string]interface{}{"command": "ls /dev | wc -l"}},
+				},
+			},
+			{
+				Role:       "user",
+				ToolResult: &ToolResult{ToolUseID: "pulse_read_0", Content: "4358", IsError: false},
+			},
+			{Role: "assistant", Content: ""},
+		},
+		[]providers.Message{
+			{Role: "user", Content: "how many devices are in this?"},
+			{
+				Role:    "assistant",
+				Content: "I'll check the device nodes.",
+				ToolCalls: []providers.ToolCall{
+					{ID: "call-1", Name: "pulse_read", Input: map[string]interface{}{"command": "ls /dev | wc -l"}},
+				},
+			},
+			{Role: "tool", ToolResult: &providers.ToolResult{ToolUseID: "call-1", Content: "4358"}},
+			{Role: "assistant", Content: ""},
+		},
+		func(event StreamEvent) {
+			if event.Type != "content" {
+				return
+			}
+			var data ContentData
+			if err := json.Unmarshal(event.Data, &data); err == nil {
+				emitted.WriteString(data.Text)
+			}
+		},
+	)
+
+	if len(result) != 5 {
+		t.Fatalf("expected final summary to be appended after tool result, got %d messages", len(result))
+	}
+	if result[len(result)-1].Content != "summary" {
+		t.Fatalf("expected provider summary to be appended, got %q", result[len(result)-1].Content)
+	}
+	if emitted.String() != "summary" {
+		t.Fatalf("expected summary to be streamed, got %q", emitted.String())
+	}
+}
+
+func TestHasFinalAssistantText(t *testing.T) {
+	tests := []struct {
+		name     string
+		messages []Message
+		want     bool
+	}{
+		{
+			name:     "assistant text without tool results is final",
+			messages: []Message{{Role: "assistant", Content: "done"}},
+			want:     true,
+		},
+		{
+			name: "assistant text before latest user prompt is not final",
+			messages: []Message{
+				{Role: "assistant", Content: "previous answer"},
+				{Role: "user", Content: "new question"},
+			},
+			want: false,
+		},
+		{
+			name: "pre tool text before latest tool result is not final",
+			messages: []Message{
+				{Role: "user", Content: "check it"},
+				{Role: "assistant", Content: "I'll check", ToolCalls: []ToolCall{{Name: "pulse_query"}}},
+				{Role: "user", ToolResult: &ToolResult{ToolUseID: "pulse_query_0", Content: "ok"}},
+			},
+			want: false,
+		},
+		{
+			name: "assistant text after latest tool result is final",
+			messages: []Message{
+				{Role: "user", Content: "check it"},
+				{Role: "assistant", Content: "I'll check", ToolCalls: []ToolCall{{Name: "pulse_query"}}},
+				{Role: "user", ToolResult: &ToolResult{ToolUseID: "pulse_query_0", Content: "ok"}},
+				{Role: "assistant", Content: "The result is ok."},
+			},
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := hasFinalAssistantText(tt.messages); got != tt.want {
+				t.Fatalf("hasFinalAssistantText() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestEnsureFinalTextResponseAppliesRequestSanitizer(t *testing.T) {
 	provider := &stubStreamingProvider{}
 	loop := &AgenticLoop{provider: provider, baseSystemPrompt: "raw-host"}
