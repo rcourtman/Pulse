@@ -1471,11 +1471,14 @@ timers when the stream already has a newer workflow/tool state.
    route. Assistant transcript rows must carry and render the effective model
    route that produced each live or restored response so route recovery and
    mixed-provider sessions remain auditable. Direct provider models must not
-   gain a gateway label. Gateway route strings must still render as readable
-   provider/model labels before catalog hydration; this mirrors OpenCode's
-   source pattern of retaining structured `providerID`/`modelID` metadata and
-   presenting catalog names with ID fallbacks rather than leaking raw route
-   storage IDs into primary chat chrome. Assistant model selector actions must
+   gain a gateway label, but explicit direct route strings such as
+   `deepseek:deepseek-v4-pro` must still render with provider identity rather
+   than collapsing to a bare-looking model payload. Gateway route strings must
+   still render as readable provider/model labels before catalog hydration; this
+   mirrors OpenCode's source pattern of retaining structured
+   `providerID`/`modelID` metadata and presenting catalog names with ID
+   fallbacks rather than leaking raw route storage IDs into primary chat chrome.
+   Assistant model selector actions must
    remain route-distinct: if the configured chat override resolves to the same
    route as the effective default or the already selected session model, the
    drawer must not render a duplicate override action.

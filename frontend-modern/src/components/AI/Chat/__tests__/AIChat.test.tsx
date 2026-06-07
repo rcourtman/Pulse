@@ -4921,6 +4921,29 @@ describe('AIChat', () => {
       expect(mockChat.setModel).toHaveBeenCalledWith('openrouter:qwen/qwen3.7-plus');
     });
 
+    it('labels direct provider recent routes with provider identity', () => {
+      localStorage.setItem(
+        'pulse:ai_chat_recent_models',
+        JSON.stringify(['deepseek:deepseek-v4-pro']),
+      );
+      mockChat.model.mockReturnValue('openrouter:qwen/qwen3.7-plus');
+
+      renderChat();
+
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: /Cycle recent Assistant model: DeepSeek: DeepSeek V4 Pro/,
+        }),
+      );
+
+      expect(
+        screen.queryByRole('button', {
+          name: 'Cycle recent Assistant model: deepseek-v4-pro',
+        }),
+      ).not.toBeInTheDocument();
+      expect(mockChat.setModel).toHaveBeenCalledWith('deepseek:deepseek-v4-pro');
+    });
+
     it('disables recent model cycling when the active route is the only recent route', () => {
       localStorage.setItem(
         'pulse:ai_chat_recent_models',

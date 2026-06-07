@@ -42,6 +42,10 @@ describe('aiProviderPresentation', () => {
         provider: 'deepseek',
       }),
     ).toBe('DeepSeek: DeepSeek V4 Pro');
+
+    expect(formatAIModelRouteLabel('deepseek:deepseek-v4-pro')).toBe(
+      'DeepSeek: DeepSeek V4 Pro',
+    );
   });
 
   it('does not duplicate an existing OpenRouter route label', () => {

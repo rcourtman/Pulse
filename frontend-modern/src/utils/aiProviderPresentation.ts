@@ -191,12 +191,26 @@ const gatewayFallbackLabel = (model: AIModelRouteLabelInput): string => {
   return `${upstreamProvider}: ${modelLabel}`;
 };
 
+const directProviderRouteFallbackLabel = (model: AIModelRouteLabelInput): string => {
+  if (explicitModelNameForLabel(model)) return '';
+  const id = modelIdForLabel(model);
+  if (isPulseOwnedLocalModelRoute(id)) return '';
+  const separator = id.indexOf(':');
+  if (separator <= 0 || separator === id.length - 1) return '';
+  const provider = id.slice(0, separator);
+  if (GATEWAY_MODEL_PROVIDERS.has(provider)) return '';
+  const providerName = getAIProviderDisplayName(provider);
+  const modelLabel = titleizeModelRouteId(id.slice(separator + 1));
+  if (!providerName || !modelLabel) return '';
+  return `${providerName}: ${modelLabel}`;
+};
+
 export const formatAIModelRouteLabel = (model: AIModelRouteLabelInput): string => {
   const provider = transportProviderForLabel(model);
   const label =
     provider && GATEWAY_MODEL_PROVIDERS.has(provider)
       ? gatewayFallbackLabel(model) || baseModelLabel(model)
-      : baseModelLabel(model);
+      : directProviderRouteFallbackLabel(model) || baseModelLabel(model);
   if (!provider || !GATEWAY_MODEL_PROVIDERS.has(provider)) {
     return label;
   }
