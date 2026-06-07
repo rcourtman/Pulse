@@ -27,9 +27,7 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
     const q = props.query.toLowerCase();
     if (!q) return props.resources.slice(0, 10); // Show first 10 if no query
 
-    return props.resources
-      .filter((r) => r.label.toLowerCase().includes(q))
-      .slice(0, 10); // Limit to 10 results
+    return props.resources.filter((r) => r.label.toLowerCase().includes(q)).slice(0, 10); // Limit to 10 results
   };
 
   // Reset selection when query changes
@@ -44,6 +42,16 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
     e.stopImmediatePropagation();
   };
 
+  const moveSelection = (direction: -1 | 1, total: number) => {
+    if (total <= 0) return;
+    setSelectedIndex((index) => {
+      const next = index + direction;
+      if (next < 0) return total - 1;
+      if (next >= total) return 0;
+      return next;
+    });
+  };
+
   // Handle keyboard navigation
   const handleKeyDown = (e: KeyboardEvent) => {
     if (!props.visible) return;
@@ -53,11 +61,11 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
     switch (e.key) {
       case 'ArrowDown':
         consumeMentionKey(e);
-        setSelectedIndex((i) => Math.min(i + 1, resources.length - 1));
+        moveSelection(1, resources.length);
         break;
       case 'ArrowUp':
         consumeMentionKey(e);
-        setSelectedIndex((i) => Math.max(i - 1, 0));
+        moveSelection(-1, resources.length);
         break;
       case 'Enter':
       case 'Tab':
@@ -156,20 +164,32 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
           bottom: `${props.position.top}px`,
           left: `${props.position.left}px`,
         }}
+        data-mention-autocomplete
+        onClick={(event) => event.stopPropagation()}
       >
         <div class="px-3 py-2 border-b border-border text-xs font-medium text-muted">Resources</div>
-        <div class="max-h-[240px] overflow-y-auto">
+        <div class="max-h-[240px] overflow-y-auto" role="listbox" aria-label="Assistant resources">
           <For each={filteredResources()}>
             {(resource, index) => (
               <button
                 type="button"
+                role="option"
+                aria-selected={index() === selectedIndex()}
+                aria-label={`Mention ${resource.label}: ${resource.type}${
+                  resource.node ? ` on ${resource.node}` : ''
+                }${resource.status ? `, ${resource.status}` : ''}`}
                 class={`w-full px-3 py-2 flex items-center gap-3 text-left hover:bg-surface-hover transition-colors ${
                   index() === selectedIndex() ? 'bg-surface-hover' : ''
                 }`}
-                onClick={() => props.onSelect(resource)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  props.onSelect(resource);
+                }}
                 onMouseEnter={() => setSelectedIndex(index())}
               >
-                <span class="text-muted">{getTypeIcon(resource.type)}</span>
+                <span class="text-muted" aria-hidden="true">
+                  {getTypeIcon(resource.type)}
+                </span>
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2">
                     <span class="font-medium text-base-content truncate">{resource.label}</span>

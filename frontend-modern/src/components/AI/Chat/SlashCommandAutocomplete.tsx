@@ -71,6 +71,16 @@ export function SlashCommandAutocomplete(props: SlashCommandAutocompleteProps) {
     event.stopImmediatePropagation();
   };
 
+  const moveSelection = (direction: -1 | 1, total: number) => {
+    if (total <= 0) return;
+    setSelectedIndex((index) => {
+      const next = index + direction;
+      if (next < 0) return total - 1;
+      if (next >= total) return 0;
+      return next;
+    });
+  };
+
   const handleKeyDown = (event: KeyboardEvent) => {
     if (!props.visible) return;
 
@@ -78,11 +88,11 @@ export function SlashCommandAutocomplete(props: SlashCommandAutocompleteProps) {
     switch (event.key) {
       case 'ArrowDown':
         consumeCommandKey(event);
-        setSelectedIndex((index) => Math.min(index + 1, Math.max(0, options.length - 1)));
+        moveSelection(1, options.length);
         break;
       case 'ArrowUp':
         consumeCommandKey(event);
-        setSelectedIndex((index) => Math.max(index - 1, 0));
+        moveSelection(-1, options.length);
         break;
       case 'Enter':
         consumeCommandKey(event);

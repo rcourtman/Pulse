@@ -173,6 +173,27 @@ describe('MentionAutocomplete', () => {
       const statusDot = resourceBtn.querySelector('.bg-red-500');
       expect(statusDot).not.toBeNull();
     });
+
+    it('exposes resources as a named listbox with selected option state', () => {
+      renderAutocomplete();
+
+      const listbox = screen.getByRole('listbox', { name: 'Assistant resources' });
+      expect(listbox).toBeInTheDocument();
+
+      const firstOption = screen.getByRole('option', {
+        name: 'Mention web-server: vm on pve1, running',
+      });
+      expect(firstOption).toHaveAttribute('aria-selected', 'true');
+
+      fireEvent.keyDown(document, { key: 'ArrowDown' });
+
+      expect(firstOption).toHaveAttribute('aria-selected', 'false');
+      expect(
+        screen.getByRole('option', {
+          name: 'Mention db-container: system-container on pve2, running',
+        }),
+      ).toHaveAttribute('aria-selected', 'true');
+    });
   });
 
   describe('click interaction', () => {
@@ -220,29 +241,26 @@ describe('MentionAutocomplete', () => {
       expect(onSelect).toHaveBeenCalledWith(defaultResources[1]);
     });
 
-    it('does not go below 0 on ArrowUp at the top', () => {
+    it('wraps from the first item to the last item on ArrowUp', () => {
       const onSelect = vi.fn();
       renderAutocomplete({ onSelect });
 
-      // ArrowUp at index 0 should stay at 0
       fireEvent.keyDown(document, { key: 'ArrowUp' });
       fireEvent.keyDown(document, { key: 'Enter' });
 
-      expect(onSelect).toHaveBeenCalledWith(defaultResources[0]);
+      expect(onSelect).toHaveBeenCalledWith(defaultResources[defaultResources.length - 1]);
     });
 
-    it('does not go past last item on ArrowDown', () => {
+    it('wraps from the last item to the first item on ArrowDown', () => {
       const onSelect = vi.fn();
       const twoResources = defaultResources.slice(0, 2);
       renderAutocomplete({ onSelect, resources: twoResources });
 
-      // ArrowDown 5 times should cap at index 1
-      for (let i = 0; i < 5; i++) {
-        fireEvent.keyDown(document, { key: 'ArrowDown' });
-      }
+      fireEvent.keyDown(document, { key: 'ArrowUp' });
+      fireEvent.keyDown(document, { key: 'ArrowDown' });
       fireEvent.keyDown(document, { key: 'Enter' });
 
-      expect(onSelect).toHaveBeenCalledWith(twoResources[1]);
+      expect(onSelect).toHaveBeenCalledWith(twoResources[0]);
     });
 
     it('selects on Tab key', () => {

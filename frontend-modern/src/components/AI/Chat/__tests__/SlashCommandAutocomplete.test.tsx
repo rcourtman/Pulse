@@ -65,4 +65,39 @@ describe('SlashCommandAutocomplete', () => {
       }),
     );
   });
+
+  it('wraps keyboard selection from the first command to the last visible command', () => {
+    const onSelect = vi.fn();
+    render(() => (
+      <SlashCommandAutocomplete
+        query=""
+        visible
+        position={{ top: 58, left: 0 }}
+        onClose={vi.fn()}
+        onSelect={onSelect}
+      />
+    ));
+
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        key: 'ArrowUp',
+      }),
+    );
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        key: 'Enter',
+      }),
+    );
+
+    expect(onSelect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'export',
+        name: 'export',
+      }),
+    );
+  });
 });
