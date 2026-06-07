@@ -65,10 +65,12 @@ updates running tool metadata from the execution context in
 `packages/opencode/src/session/tools.ts` lines 53-66, and suppresses completed
 successful tool detail when `showDetails` is off in
 `packages/tui/src/routes/session/index.tsx` lines 1704-1779. Pulse adapts that
-by compacting only successful completed tool rows while the same Assistant turn
-is still streaming and newer concrete activity has arrived. Pending tools,
-skipped/canceled tools, failed tools, and completed-turn tool details must
-remain visible/inspectable.
+by keeping successful completed tool rows command/status visible, compacting
+them while the same Assistant turn is still streaming and newer concrete
+activity has arrived, and keeping successful raw output behind the details
+disclosure by default once the turn completes. Pending tools, skipped/canceled
+tools, failed tools, and completed-turn tool details must remain
+visible/inspectable; failed output may render inline because it is actionable.
 
 Assistant live workflow status follows OpenCode's current-state timeline
 model: history may persist for audit/session state, but live transcript rows

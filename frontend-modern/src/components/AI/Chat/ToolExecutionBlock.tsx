@@ -344,11 +344,17 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
     return preview;
   });
   const outputPreview = createMemo(() => formatOutputPreview(outputText()));
+  const showInlineOutputPreview = createMemo(
+    () => props.tool.success === false && outputPreview().length > 0,
+  );
   const hiddenOutputSummary = createMemo(() =>
-    outputPreview() ? '' : formatHiddenOutputSummary(outputText()),
+    showInlineOutputPreview() ? '' : formatHiddenOutputSummary(outputText()),
+  );
+  const hiddenOutputBadgeSummary = createMemo(() =>
+    settlingFastCompletion() ? '' : hiddenOutputSummary(),
   );
   const hiddenOutputBadgeLabel = createMemo(() =>
-    hiddenOutputSummary() ? 'output available' : '',
+    hiddenOutputBadgeSummary() ? 'output available' : '',
   );
   const hasInput = createMemo(() => detailInputText().trim().length > 0);
   const hasOutput = createMemo(() => hasReadableToolOutput(outputText()));
@@ -441,11 +447,11 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
               {durationLabel()}
             </span>
           </Show>
-          <Show when={hiddenOutputSummary()}>
+          <Show when={hiddenOutputBadgeSummary()}>
             <span
               class="shrink-0 rounded border border-border-subtle bg-surface px-1.5 py-0.5 text-[9px] font-medium"
               title="Open the completed turn to inspect tool output"
-              aria-label={`Tool output available: ${hiddenOutputSummary()}`}
+              aria-label={`Tool output available: ${hiddenOutputBadgeSummary()}`}
             >
               {hiddenOutputBadgeLabel()}
             </span>
@@ -527,11 +533,11 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
                 aria-hidden="true"
               />
             </Show>
-            <Show when={hiddenOutputSummary()}>
+            <Show when={hiddenOutputBadgeSummary()}>
               <span
                 class="shrink-0 rounded border border-border-subtle bg-surface-alt px-1.5 py-0.5 text-[9px] font-medium text-muted"
                 title="Open tool details to inspect output"
-                aria-label={`Tool output available: ${hiddenOutputSummary()}`}
+                aria-label={`Tool output available: ${hiddenOutputBadgeSummary()}`}
               >
                 {hiddenOutputBadgeLabel()}
               </span>
@@ -544,7 +550,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
         </div>
       </div>
 
-      <Show when={outputPreview()}>
+      <Show when={showInlineOutputPreview()}>
         <pre
           class="border-t border-border-subtle bg-surface-alt px-3 py-2 font-mono text-[11px] leading-5 text-base-content whitespace-pre-wrap break-words"
           aria-label="Tool output preview"
