@@ -304,8 +304,11 @@ func TestService_DiscoverResource_AbstainsWithoutCommandEvidence(t *testing.T) {
 		ResourceType: ResourceTypeSystemContainer,
 		TargetID:     "delly",
 		ResourceID:   "102",
-		Hostname:     "esphome",
-		Force:        true,
+		// Generic name that matches no known service, so the deterministic
+		// surface fast-path does NOT fire — this exercises the pure abstention
+		// path (no command evidence, nothing to identify from).
+		Hostname: "ct-200",
+		Force:    true,
 	})
 	if err != nil {
 		t.Fatalf("DiscoverResource error: %v", err)
@@ -2093,8 +2096,10 @@ func TestService_RunManualDiscoveryRefreshRepairsFreshUnknownKnownService(t *tes
 	if summary.CandidateCount != 1 || summary.DiscoveredCount != 1 || summary.FailedCount != 0 {
 		t.Fatalf("expected one repaired candidate, got %+v", summary)
 	}
-	if analyzer.calls != 1 {
-		t.Fatalf("expected one analyzer call, got %d", analyzer.calls)
+	// The resource is named "esphome", so the deterministic surface fast-path
+	// identifies it before the model — the repair happens with no analyzer call.
+	if analyzer.calls != 0 {
+		t.Fatalf("expected zero analyzer calls (fast-path identity), got %d", analyzer.calls)
 	}
 
 	discovery, err := store.Get(id)
@@ -2193,8 +2198,13 @@ func TestService_DiscoverResource_ReturnsUpgradedCachedDiscovery(t *testing.T) {
 		TargetID:     "host1",
 		ResourceID:   "web",
 		ServiceType:  "nginx",
+		// Complete, confident identity so the known-service improver sees nothing
+		// to upgrade and the cached record is returned as-is (this test covers
+		// cache return + URL-source parsing, not re-identification).
+		ServiceName:  "Nginx",
 		Category:     CategoryWebServer,
 		CLIAccess:    "docker exec web bash",
+		Confidence:   0.9,
 		AIReasoning:  `[URL suggestion source: service_default_match (service default: nginx)] previous discovery`,
 		DiscoveredAt: time.Now(),
 		UpdatedAt:    time.Now(),

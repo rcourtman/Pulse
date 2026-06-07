@@ -1782,7 +1782,18 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 		len(analysisReq.CommandOutputs) == 0
 
 	var result *AIAnalysisResponse
-	if metadataOnly {
+	if identity, evidence, ok := inferSurfaceIdentity(req, analysisReq.Metadata); ok {
+		// Fast surface path: the resource name clearly identifies a known
+		// service, so skip the (slow) model entirely. Identity is the surface;
+		// depth comes from the Assistant's own knowledge plus on-demand commands.
+		result = surfaceIdentityResponse(identity, evidence)
+		s.broadcastProgress(&DiscoveryProgress{
+			ResourceID:      resourceID,
+			Status:          DiscoveryStatusRunning,
+			CurrentStep:     "Identified from resource name (fast path)",
+			PercentComplete: 90,
+		})
+	} else if metadataOnly {
 		result = metadataOnlyDiscoveryAbstention()
 	} else {
 		// Build prompt and analyze

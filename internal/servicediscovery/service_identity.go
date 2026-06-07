@@ -13,14 +13,32 @@ type knownServiceIdentity struct {
 	Confidence  float64
 }
 
+// knownServiceIdentities drives both the deterministic surface fast-path
+// (inferSurfaceIdentity, name-based, runs before the model) and the post-model
+// identity improver (applyKnownServiceIdentity). Common homelab services are
+// usually named after themselves, so the resource name alone identifies them
+// instantly — no model call. Aliases are matched against the normalized name.
 var knownServiceIdentities = []knownServiceIdentity{
-	{
-		ServiceType: "esphome",
-		ServiceName: "ESPHome",
-		Category:    CategoryHomeAuto,
-		Aliases:     []string{"esphome", "esp-home", "esp home"},
-		Confidence:  0.85,
-	},
+	{ServiceType: "home-assistant", ServiceName: "Home Assistant", Category: CategoryHomeAuto, Aliases: []string{"home assistant", "homeassistant", "hassio", "hass"}, Confidence: 0.9},
+	{ServiceType: "esphome", ServiceName: "ESPHome", Category: CategoryHomeAuto, Aliases: []string{"esphome", "esp-home", "esp home"}, Confidence: 0.85},
+	{ServiceType: "zigbee2mqtt", ServiceName: "Zigbee2MQTT", Category: CategoryHomeAuto, Aliases: []string{"zigbee2mqtt", "zigbee 2 mqtt"}, Confidence: 0.9},
+	{ServiceType: "frigate", ServiceName: "Frigate NVR", Category: CategoryNVR, Aliases: []string{"frigate"}, Confidence: 0.9},
+	{ServiceType: "mosquitto", ServiceName: "Mosquitto MQTT", Category: CategoryNetwork, Aliases: []string{"mosquitto", "mqtt"}, Confidence: 0.85},
+	{ServiceType: "postgresql", ServiceName: "PostgreSQL", Category: CategoryDatabase, Aliases: []string{"postgresql", "postgres"}, Confidence: 0.9},
+	{ServiceType: "mariadb", ServiceName: "MariaDB", Category: CategoryDatabase, Aliases: []string{"mariadb", "mysqld", "mysql"}, Confidence: 0.85},
+	{ServiceType: "redis", ServiceName: "Redis", Category: CategoryCache, Aliases: []string{"redis", "redis server"}, Confidence: 0.9},
+	{ServiceType: "influxdb", ServiceName: "InfluxDB", Category: CategoryDatabase, Aliases: []string{"influxdb", "influx"}, Confidence: 0.85},
+	{ServiceType: "plex", ServiceName: "Plex Media Server", Category: CategoryMedia, Aliases: []string{"plex media server", "plexmediaserver", "plex"}, Confidence: 0.9},
+	{ServiceType: "jellyfin", ServiceName: "Jellyfin", Category: CategoryMedia, Aliases: []string{"jellyfin"}, Confidence: 0.9},
+	{ServiceType: "nginx", ServiceName: "Nginx", Category: CategoryWebServer, Aliases: []string{"nginx"}, Confidence: 0.8},
+	{ServiceType: "grafana", ServiceName: "Grafana", Category: CategoryMonitoring, Aliases: []string{"grafana"}, Confidence: 0.9},
+	{ServiceType: "prometheus", ServiceName: "Prometheus", Category: CategoryMonitoring, Aliases: []string{"prometheus"}, Confidence: 0.9},
+	{ServiceType: "uptime-kuma", ServiceName: "Uptime Kuma", Category: CategoryMonitoring, Aliases: []string{"uptime kuma", "uptimekuma"}, Confidence: 0.9},
+	{ServiceType: "pihole", ServiceName: "Pi-hole", Category: CategoryNetwork, Aliases: []string{"pi hole", "pihole"}, Confidence: 0.9},
+	{ServiceType: "adguard", ServiceName: "AdGuard Home", Category: CategoryNetwork, Aliases: []string{"adguard home", "adguardhome", "adguard"}, Confidence: 0.9},
+	{ServiceType: "tailscale", ServiceName: "Tailscale", Category: CategoryNetwork, Aliases: []string{"tailscale"}, Confidence: 0.85},
+	{ServiceType: "unifi", ServiceName: "UniFi Controller", Category: CategoryNetwork, Aliases: []string{"unifi controller", "unifi"}, Confidence: 0.85},
+	{ServiceType: "nextcloud", ServiceName: "Nextcloud", Category: CategoryStorage, Aliases: []string{"nextcloud"}, Confidence: 0.85},
 }
 
 func applyKnownServiceIdentity(
@@ -124,6 +142,58 @@ func inferKnownServiceIdentity(
 	}
 
 	return knownServiceIdentity{}, "", false
+}
+
+// inferSurfaceIdentity is the discovery fast-path: deterministic, NAME-based
+// identification that runs BEFORE the model. When a resource's name (hostname,
+// id, or metadata name) clearly names a known service, we identify it instantly
+// and skip the model entirely. Conservative on purpose — it only considers
+// strong naming signals, never broad command-output text — so the model is
+// skipped only on an obvious match; ambiguous workloads still fall through to
+// the full analysis.
+func inferSurfaceIdentity(req DiscoveryRequest, metadata map[string]any) (knownServiceIdentity, string, bool) {
+	candidates := []knownServiceEvidenceCandidate{
+		{Source: "resource name", Value: req.Hostname},
+		{Source: "resource id", Value: req.ResourceID},
+	}
+	if name := stringMetadataValue(metadata, "name", "hostname", "display_name"); name != "" {
+		candidates = append(candidates, knownServiceEvidenceCandidate{Source: "resource name", Value: name})
+	}
+
+	for _, identity := range knownServiceIdentities {
+		aliases := append([]string{identity.ServiceType, identity.ServiceName}, identity.Aliases...)
+		for _, candidate := range candidates {
+			normalizedCandidate := normalizeKnownServiceEvidence(candidate.Value)
+			if normalizedCandidate == "" {
+				continue
+			}
+			for _, alias := range aliases {
+				normalizedAlias := normalizeKnownServiceEvidence(alias)
+				if normalizedAlias == "" {
+					continue
+				}
+				if normalizedCandidate == normalizedAlias ||
+					strings.Contains(normalizedCandidate, normalizedAlias) {
+					return identity, candidate.Source, true
+				}
+			}
+		}
+	}
+	return knownServiceIdentity{}, "", false
+}
+
+// surfaceIdentityResponse builds a no-model discovery result from a fast-path
+// match. Identity only: config/data/log paths are intentionally left empty —
+// the Assistant knows standard service layouts and fetches specifics on demand,
+// and cli_access is derived downstream from the resource type.
+func surfaceIdentityResponse(identity knownServiceIdentity, evidence string) *AIAnalysisResponse {
+	return &AIAnalysisResponse{
+		ServiceType: identity.ServiceType,
+		ServiceName: identity.ServiceName,
+		Category:    identity.Category,
+		Confidence:  identity.Confidence,
+		Reasoning:   fmt.Sprintf("Identified from %s — fast surface match, no model call.", evidence),
+	}
 }
 
 type knownServiceEvidenceCandidate struct {
