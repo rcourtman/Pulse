@@ -249,10 +249,13 @@ leave the transcript without exposing hidden provider/tool metadata.
    (`ToolView.output`, lines 40-44; tool display hooks, lines 117-123), and
    commits allowed tool output into scrollback in
    `packages/opencode/src/cli/cmd/run/session-data.ts` (lines 960-964). Pulse
-   completed rows must expose compact output metadata for hidden long,
-   structured, or binary outputs while keeping raw output behind the existing
-   details disclosure, and those raw input/output details must be copyable
-   from the disclosure without expanding the default transcript.
+   completed rows must expose compact output metadata for hidden successful
+   outputs while keeping raw output behind the existing details disclosure, and
+   those raw input/output details must be copyable from the disclosure without
+   expanding the default transcript. Failed tool output may stay visible as a
+   bounded inline preview because it is the operator-facing failure reason;
+   successful command output belongs in details unless the Assistant answer
+   explicitly summarizes it as normal response text.
    Completed Assistant context summaries must use the same operator-facing
    tool-input presentation as the visible tool rows, not raw internal tool
    identifiers. A completed `pulse_read` device inspection should therefore
