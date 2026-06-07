@@ -84,6 +84,40 @@ func contextScenarioCorpus() []contextScenario {
 				"/opt/homeassistant/config -> /config",
 			},
 		},
+		{
+			name:         "postgresql LXC",
+			userQuestion: "the database is slow and I may need to restart it",
+			discovery: &ResourceDiscovery{
+				ID:             MakeResourceID(ResourceTypeSystemContainer, "minipc", "112"),
+				ResourceType:   ResourceTypeSystemContainer,
+				ResourceID:     "112",
+				TargetID:       "minipc",
+				Hostname:       "pg-primary",
+				ServiceType:    "postgresql",
+				ServiceName:    "PostgreSQL",
+				ServiceVersion: "16.3",
+				Category:       CategoryDatabase,
+				CLIAccess:      "pct exec 112 -- bash",
+				ConfigPaths:    []string{"/etc/postgresql/16/main/postgresql.conf"},
+				DataPaths:      []string{"/var/lib/postgresql/16/main"},
+				LogPaths:       []string{"/var/log/postgresql/postgresql-16-main.log"},
+				Ports:          []PortInfo{{Port: 5432, Protocol: "tcp", Process: "postgres"}},
+				Facts: []DiscoveryFact{
+					{Category: FactCategoryService, Key: "systemd_unit", Value: "postgresql@16-main.service", Source: "running_services", Confidence: 0.9},
+					{Category: FactCategoryStorage, Key: "data_filesystem", Value: "zfs tank/postgres", Source: "disk_usage", Confidence: 0.85},
+				},
+			},
+			// To triage slowness and restart, the Assistant needs how to reach
+			// the guest, the config + log, AND how the service is managed (the
+			// systemd unit) and where its data lives (the dataset) — service and
+			// storage facts the context pack used to drop.
+			mustContain: []string{
+				"pct exec 112",
+				"postgresql.conf",
+				"postgresql@16-main.service",
+				"tank/postgres",
+			},
+		},
 	}
 }
 

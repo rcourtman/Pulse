@@ -122,12 +122,18 @@ func formatSingleDiscovery(d *ResourceDiscovery) string {
 func filterImportantFacts(facts []DiscoveryFact) []DiscoveryFact {
 	var important []DiscoveryFact
 
-	// Priority categories
+	// Priority categories — facts the assistant needs to understand and act on
+	// the workload. Service + storage were previously dropped, yet a service
+	// fact (e.g. the systemd unit) is exactly how you restart/reload a workload,
+	// and a storage fact (e.g. the backing dataset/disk) is where its data
+	// physically lives — neither is redundant with the path/CLI sections.
 	priorityCategories := map[FactCategory]bool{
 		FactCategoryHardware:   true, // GPU, TPU
 		FactCategoryDependency: true, // MQTT, database connections
 		FactCategorySecurity:   true, // Auth info
 		FactCategoryVersion:    true, // Version info
+		FactCategoryService:    true, // how the service is managed (systemd unit, init)
+		FactCategoryStorage:    true, // where data physically lives (pool/dataset/disk)
 	}
 
 	for _, f := range facts {
