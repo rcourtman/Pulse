@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { cleanup, render, screen, fireEvent } from '@solidjs/testing-library';
+import { describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
 import { afterEach } from 'vitest';
 import {
   ToolExecutionBlock,
@@ -452,6 +452,49 @@ describe('ToolExecutionBlock', () => {
       .map((pre) => pre.textContent || '')
       .join('\n');
     expect(rawDetails).toContain('line5');
+  });
+
+  it('copies raw tool output from the details panel without closing it', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+    const output = ['line1', 'line2', 'line3', 'line4', 'line5'].join('\n');
+
+    render(() => <ToolExecutionBlock tool={makeTool({ input: '{"action":"list"}', output })} />);
+    const trigger = getToolDetailsTrigger();
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy tool output' }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(output);
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Copied tool output' })).toBeInTheDocument();
+    });
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Output')).toBeInTheDocument();
+  });
+
+  it('copies raw tool input from the details panel', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+    const input = '{"action":"exec","command":"ls /dev | wc -l"}';
+
+    render(() => <ToolExecutionBlock tool={makeTool({ input, output: '42' })} />);
+    fireEvent.click(getToolDetailsTrigger());
+    fireEvent.click(screen.getByRole('button', { name: 'Copy tool input' }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(input);
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Copied tool input' })).toBeInTheDocument();
+    });
   });
 
   it('keeps raw tool details readable without break-all formatting', async () => {

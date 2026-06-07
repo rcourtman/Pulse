@@ -8,12 +8,15 @@ import {
   For,
   createUniqueId,
 } from 'solid-js';
+import CheckIcon from 'lucide-solid/icons/check';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle';
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import ClockIcon from 'lucide-solid/icons/clock';
+import CopyIcon from 'lucide-solid/icons/copy';
 import LoaderCircleIcon from 'lucide-solid/icons/loader-circle';
 import XCircleIcon from 'lucide-solid/icons/x-circle';
 import type { ToolExecution, PendingTool } from './types';
+import { copyToClipboard } from '@/utils/clipboard';
 import { getToolCallResultTextClass } from '@/utils/patrolRunPresentation';
 import {
   getToolLabel,
@@ -167,7 +170,9 @@ const ToolCommandPreview: Component<ToolCommandPreviewProps> = (props) => (
  */
 export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) => {
   const [showDetails, setShowDetails] = createSignal(false);
+  const [copiedDetail, setCopiedDetail] = createSignal<'input' | 'output' | null>(null);
   const detailsId = createUniqueId();
+  let copiedResetTimer: number | undefined;
 
   const toolLabel = createMemo(() => getToolLabel(props.tool.name));
   const inputText = createMemo(() => toolValueText(props.tool.input));
@@ -208,6 +213,21 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
     event.preventDefault();
     toggleDetails();
   };
+  const copyDetail = async (kind: 'input' | 'output', value: string) => {
+    const text = value.trim();
+    if (!text) return;
+    const copied = await copyToClipboard(text);
+    if (!copied) return;
+    setCopiedDetail(kind);
+    if (copiedResetTimer) window.clearTimeout(copiedResetTimer);
+    copiedResetTimer = window.setTimeout(() => setCopiedDetail(null), 1500);
+  };
+  const detailCopyLabel = (kind: 'input' | 'output') =>
+    copiedDetail() === kind ? `Copied tool ${kind}` : `Copy tool ${kind}`;
+
+  onCleanup(() => {
+    if (copiedResetTimer) window.clearTimeout(copiedResetTimer);
+  });
 
   return (
     <div class="my-2 overflow-hidden rounded-md border border-border-subtle bg-surface text-[11px] shadow-sm">
@@ -299,16 +319,44 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
       <Show when={showDetails() && hasDetails()}>
         <div id={detailsId} class="border-t border-border-subtle px-3 py-2">
           <Show when={hasInput()}>
-            <div class="mb-1 text-[9px] font-semibold uppercase tracking-wide text-muted">
-              Input
+            <div class="mb-1 flex items-center justify-between gap-2">
+              <div class="text-[9px] font-semibold uppercase tracking-wide text-muted">Input</div>
+              <button
+                type="button"
+                class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                onClick={() => void copyDetail('input', inputText())}
+                title={detailCopyLabel('input')}
+                aria-label={detailCopyLabel('input')}
+              >
+                <Show
+                  when={copiedDetail() === 'input'}
+                  fallback={<CopyIcon class="h-3 w-3" aria-hidden="true" />}
+                >
+                  <CheckIcon class="h-3 w-3 text-emerald-600" aria-hidden="true" />
+                </Show>
+              </button>
             </div>
             <pre class="mb-2 max-h-36 overflow-auto rounded bg-surface-alt p-2 font-mono text-[10px] leading-5 text-muted whitespace-pre-wrap break-words">
               {inputText().trim()}
             </pre>
           </Show>
           <Show when={hasOutput()}>
-            <div class="mb-1 text-[9px] font-semibold uppercase tracking-wide text-muted">
-              Output
+            <div class="mb-1 flex items-center justify-between gap-2">
+              <div class="text-[9px] font-semibold uppercase tracking-wide text-muted">Output</div>
+              <button
+                type="button"
+                class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                onClick={() => void copyDetail('output', outputText())}
+                title={detailCopyLabel('output')}
+                aria-label={detailCopyLabel('output')}
+              >
+                <Show
+                  when={copiedDetail() === 'output'}
+                  fallback={<CopyIcon class="h-3 w-3" aria-hidden="true" />}
+                >
+                  <CheckIcon class="h-3 w-3 text-emerald-600" aria-hidden="true" />
+                </Show>
+              </button>
             </div>
             <pre class="max-h-72 overflow-auto rounded bg-surface-alt p-2 font-mono text-[10px] leading-5 text-muted whitespace-pre-wrap break-words">
               {outputText().trim()}

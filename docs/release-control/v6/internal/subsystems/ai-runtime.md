@@ -174,10 +174,13 @@ runtime cost control, and shared AI transport surfaces.
    suppressed: the referenced OpenCode source at fetched `origin/dev` commit
    `1025540fcc2a69609a0131a7168300205656d728` keeps output visibility as an
    explicit tool-view policy in `packages/opencode/src/cli/cmd/run/tool.ts`
-   (`ToolView.output`, lines 40-44; tool display hooks, lines 117-123), so
-   Pulse completed rows must expose compact output metadata for hidden long,
+   (`ToolView.output`, lines 40-44; tool display hooks, lines 117-123), and
+   commits allowed tool output into scrollback in
+   `packages/opencode/src/cli/cmd/run/session-data.ts` (lines 960-964). Pulse
+   completed rows must expose compact output metadata for hidden long,
    structured, or binary outputs while keeping raw output behind the existing
-   details disclosure.
+   details disclosure, and those raw input/output details must be copyable
+   from the disclosure without expanding the default transcript.
    Live workflow activity is also active turn state, not disposable waiting
 	   copy. The referenced OpenCode source at fetched `origin/dev` commit
 	   `4519a1da329c1a4fc384054e7203ba7d06928205` defines model, shell, step,
