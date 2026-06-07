@@ -10,7 +10,10 @@ import {
 } from '../ToolExecutionBlock';
 import type { ToolExecution, PendingTool } from '../types';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 // --- Factories ---
 
@@ -34,6 +37,7 @@ function makePending(overrides?: Partial<PendingTool>): PendingTool {
 }
 
 const getToolDetailsTrigger = () => screen.getByTitle('Show tool details');
+const FAST_TOOL_SETTLE_TEST_MS = 500;
 
 // ============================================================
 // ToolExecutionBlock
@@ -119,6 +123,42 @@ describe('ToolExecutionBlock', () => {
     ));
 
     expect(screen.getByLabelText('Tool duration <1s')).toHaveTextContent('<1s');
+  });
+
+  it('briefly presents fresh live fast completions as running before settling', async () => {
+    vi.useFakeTimers();
+
+    render(() => (
+      <ToolExecutionBlock tool={makeTool()} startedAt={1_000} completedAt={1_040} live />
+    ));
+
+    expect(screen.getByLabelText('Assistant tool running')).toBeInTheDocument();
+    expect(screen.getByLabelText('running')).toBeInTheDocument();
+    expect(screen.getByText('running')).toBeInTheDocument();
+    expect(screen.queryByText('completed')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Tool duration/)).not.toBeInTheDocument();
+
+    await vi.advanceTimersByTimeAsync(FAST_TOOL_SETTLE_TEST_MS);
+
+    expect(screen.queryByLabelText('Assistant tool running')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('completed')).toBeInTheDocument();
+    expect(screen.getByText('completed')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tool duration <1s')).toHaveTextContent('<1s');
+  });
+
+  it('does not defer failed fast completions behind a running state', () => {
+    render(() => (
+      <ToolExecutionBlock
+        tool={makeTool({ success: false })}
+        startedAt={1_000}
+        completedAt={1_040}
+        live
+      />
+    ));
+
+    expect(screen.getByLabelText('failed')).toBeInTheDocument();
+    expect(screen.getByText('failed')).toBeInTheDocument();
+    expect(screen.queryByText('running')).not.toBeInTheDocument();
   });
 
   it('does not invent completed tool duration without a valid start and end', () => {

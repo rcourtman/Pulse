@@ -625,6 +625,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                         <ToolExecutionBlock
                           startedAt={evt.startedAt}
                           completedAt={evt.updatedAt}
+                          live={props.message.isStreaming}
                           tool={{
                             name: evt.tool?.name || 'unknown',
                             input: evt.tool?.input || '{}',

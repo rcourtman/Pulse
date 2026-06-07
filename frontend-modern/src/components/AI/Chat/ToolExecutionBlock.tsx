@@ -32,6 +32,7 @@ interface ToolExecutionBlockProps {
   tool: ToolExecution;
   startedAt?: number;
   completedAt?: number;
+  live?: boolean;
 }
 
 interface ToolInputSummaryProps {
@@ -134,6 +135,8 @@ const formatCompletedToolDuration = (startedAt?: number, completedAt?: number): 
   return remainingMinutes ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
 };
 
+const FAST_TOOL_COMPLETION_SETTLE_MS = 420;
+
 const ToolInputSummary: Component<ToolInputSummaryProps> = (props) => {
   const isShellSummary = createMemo(() => props.summary.trim().startsWith('$ '));
   const className = createMemo(
@@ -175,6 +178,7 @@ const ToolCommandPreview: Component<ToolCommandPreviewProps> = (props) => (
 export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) => {
   const [showDetails, setShowDetails] = createSignal(false);
   const [copiedDetail, setCopiedDetail] = createSignal<'input' | 'output' | null>(null);
+  const [settlingFastCompletion, setSettlingFastCompletion] = createSignal(false);
   const detailsId = createUniqueId();
   let copiedResetTimer: number | undefined;
 
@@ -197,15 +201,44 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
   const hasInput = createMemo(() => inputText().trim().length > 0);
   const hasOutput = createMemo(() => hasReadableToolOutput(outputText()));
   const hasDetails = createMemo(() => hasInput() || hasOutput());
+  createEffect(() => {
+    if (!props.live || !props.tool.success || !props.startedAt || !props.completedAt) {
+      setSettlingFastCompletion(false);
+      return;
+    }
+
+    const durationMs = props.completedAt - props.startedAt;
+    if (
+      !Number.isFinite(durationMs) ||
+      durationMs < 0 ||
+      durationMs >= FAST_TOOL_COMPLETION_SETTLE_MS
+    ) {
+      setSettlingFastCompletion(false);
+      return;
+    }
+
+    setSettlingFastCompletion(true);
+    const timeout = window.setTimeout(
+      () => setSettlingFastCompletion(false),
+      FAST_TOOL_COMPLETION_SETTLE_MS - durationMs,
+    );
+    onCleanup(() => window.clearTimeout(timeout));
+  });
+
   const durationLabel = createMemo(() =>
-    formatCompletedToolDuration(props.startedAt, props.completedAt),
+    settlingFastCompletion()
+      ? ''
+      : formatCompletedToolDuration(props.startedAt, props.completedAt),
   );
 
-  const statusLabel = () => (props.tool.success ? 'completed' : 'failed');
+  const statusLabel = () =>
+    settlingFastCompletion() ? 'running' : props.tool.success ? 'completed' : 'failed';
   const statusPillClass = () =>
-    props.tool.success
-      ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300'
-      : 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300';
+    settlingFastCompletion()
+      ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300'
+      : props.tool.success
+        ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300'
+        : 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300';
   const summaryControlTitle = () => (showDetails() ? 'Hide tool details' : 'Show tool details');
   const toggleDetails = () => {
     if (!hasDetails()) return;
@@ -234,7 +267,11 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
   });
 
   return (
-    <div class="my-2 overflow-hidden rounded-md border border-border-subtle bg-surface text-[11px] shadow-sm">
+    <div
+      class="my-2 overflow-hidden rounded-md border border-border-subtle bg-surface text-[11px] shadow-sm"
+      role={settlingFastCompletion() ? 'status' : undefined}
+      aria-label={settlingFastCompletion() ? 'Assistant tool running' : undefined}
+    >
       <div
         class={`flex min-w-0 items-start gap-2 px-2.5 py-2 ${
           hasDetails()
@@ -251,18 +288,28 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
       >
         <div class="pt-0.5">
           <Show
-            when={props.tool.success}
+            when={!settlingFastCompletion()}
             fallback={
-              <XCircleIcon
-                class={`${getToolCallResultTextClass(props.tool.success)} h-3.5 w-3.5 shrink-0`}
-                aria-label={statusLabel()}
+              <LoaderCircleIcon
+                class="h-3.5 w-3.5 shrink-0 animate-spin text-blue-500 dark:text-blue-400"
+                aria-label="running"
               />
             }
           >
-            <CheckCircleIcon
-              class={`${getToolCallResultTextClass(props.tool.success)} h-3.5 w-3.5 shrink-0`}
-              aria-label={statusLabel()}
-            />
+            <Show
+              when={props.tool.success}
+              fallback={
+                <XCircleIcon
+                  class={`${getToolCallResultTextClass(props.tool.success)} h-3.5 w-3.5 shrink-0`}
+                  aria-label={statusLabel()}
+                />
+              }
+            >
+              <CheckCircleIcon
+                class={`${getToolCallResultTextClass(props.tool.success)} h-3.5 w-3.5 shrink-0`}
+                aria-label={statusLabel()}
+              />
+            </Show>
           </Show>
         </div>
 

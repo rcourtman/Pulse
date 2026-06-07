@@ -169,7 +169,18 @@ runtime cost control, and shared AI transport surfaces.
    `packages/opencode/src/cli/cmd/run/tool.ts` (lines 191-200). Pulse adapts
    that by carrying the stream event start/end timestamps into the completed
    browser tool row, so the visible activity timeline does not collapse when a
-   running command is replaced by its completed result. Completed browser tool
+   running command is replaced by its completed result. When a live browser
+   stream receives a `tool_start` and successful `tool_end` in the same
+   buffered burst, the completed row may briefly present as running before it
+   settles to completed, matching OpenCode's perceptible pending-tool motion
+   at fetched `origin/dev` commit
+   `1025540fcc2a69609a0131a7168300205656d728` in
+   `packages/ui/src/components/basic-tool.tsx` (`pending`, lines 90 and
+   195-205) and `packages/ui/src/components/tool-status-title.tsx` while
+   keeping Pulse's typed completed tool row, persisted status, answer stream,
+   and failure state authoritative. That settle interval must be bounded,
+   live-only, success-only, and must not delay assistant content, terminal
+   cleanup, or failed-tool visibility. Completed browser tool
    rows must also preserve output trust when a raw preview is intentionally
    suppressed: the referenced OpenCode source at fetched `origin/dev` commit
    `1025540fcc2a69609a0131a7168300205656d728` keeps output visibility as an

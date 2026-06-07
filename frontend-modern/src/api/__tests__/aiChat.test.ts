@@ -194,6 +194,53 @@ describe('AIChatAPI', () => {
     });
   });
 
+  it('runs the tool-burst dev stream fixture without opening a provider request', async () => {
+    const onEvent = vi.fn();
+
+    await AIChatAPI.chat(
+      '/fixture tool-burst',
+      undefined,
+      'openrouter:deepseek/deepseek-chat',
+      onEvent,
+    );
+
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'session',
+      'workflow_state',
+      'workflow_state',
+      'tool_start',
+      'tool_end',
+      'content',
+      'done',
+    ]);
+    expect(onEvent.mock.calls[2][0]).toMatchObject({
+      type: 'workflow_state',
+      data: {
+        phase: 'provider_start',
+        message: 'Sent request to OpenRouter; waiting for the first token.',
+        model: 'openrouter:deepseek/deepseek-chat',
+      },
+    });
+    expect(onEvent.mock.calls[3][0]).toMatchObject({
+      type: 'tool_start',
+      data: {
+        id: 'fixture-tool-burst',
+        name: 'pulse_read',
+        input: expect.stringContaining('ls /dev | wc -l'),
+      },
+    });
+    expect(onEvent.mock.calls[4][0]).toMatchObject({
+      type: 'tool_end',
+      data: {
+        id: 'fixture-tool-burst',
+        name: 'pulse_read',
+        output: '4358',
+        success: true,
+      },
+    });
+  });
+
   it('runs the compacted-artifact dev stream fixture without opening a provider request', async () => {
     const onEvent = vi.fn();
 

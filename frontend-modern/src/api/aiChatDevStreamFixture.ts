@@ -3,6 +3,7 @@ import type { AIChatStreamEvent } from './generated/aiChatEvents';
 export const AI_CHAT_DEV_STREAM_FIXTURE_PROMPTS = [
   '/fixture devices',
   '/fixture assistant-stream',
+  '/fixture tool-burst',
   '/fixture compacted-artifact',
   '/fixture skipped-tool',
 ] as const;
@@ -191,6 +192,67 @@ const buildSkippedToolFixtureEvents = (model?: string): AIChatStreamEvent[] => [
   },
 ];
 
+const buildToolBurstFixtureEvents = (model?: string): AIChatStreamEvent[] => [
+  {
+    type: 'session',
+    data: { id: 'dev-fixture-tool-burst' },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'request_start',
+      message: 'Preparing Pulse context.',
+    },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'provider_start',
+      message: 'Sent request to OpenRouter; waiting for the first token.',
+      model: assistantFixtureModel(model),
+    },
+  },
+  {
+    type: 'tool_start',
+    data: {
+      id: 'fixture-tool-burst',
+      name: 'pulse_read',
+      input:
+        '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
+      raw_input:
+        'pulse_read(target_host="current_resource", command="ls /dev | wc -l")',
+    },
+  },
+  {
+    type: 'tool_end',
+    data: {
+      id: 'fixture-tool-burst',
+      name: 'pulse_read',
+      input:
+        '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
+      raw_input:
+        'pulse_read(target_host="current_resource", command="ls /dev | wc -l")',
+      output: '4358',
+      success: true,
+    },
+  },
+  {
+    type: 'content',
+    data: {
+      text: 'The burst fixture completed a fast `pulse_read` command and kept the tool transition visible.',
+    },
+  },
+  {
+    type: 'done',
+    data: {
+      session_id: 'dev-fixture-tool-burst',
+      model: assistantFixtureModel(model),
+      input_tokens: 64,
+      output_tokens: 31,
+    },
+  },
+];
+
 const buildCompactedArtifactFixtureEvents = (model?: string): AIChatStreamEvent[] => [
   {
     type: 'session',
@@ -258,13 +320,27 @@ const buildFixtureEvents = (prompt: string, model?: string): AIChatStreamEvent[]
   if (normalized === '/fixture skipped-tool') {
     return buildSkippedToolFixtureEvents(model);
   }
+  if (normalized === '/fixture tool-burst') {
+    return buildToolBurstFixtureEvents(model);
+  }
   return buildDeviceCountFixtureEvents(model);
+};
+
+const fixtureStepDelay = (
+  normalizedPrompt: string,
+  event: AIChatStreamEvent,
+  defaultDelayMs: number,
+): number => {
+  if (normalizedPrompt !== '/fixture tool-burst') return defaultDelayMs;
+  if (event.type === 'tool_start') return 0;
+  return defaultDelayMs;
 };
 
 export const maybeRunAIChatDevStreamFixture = async (
   options: AIChatDevStreamFixtureOptions,
 ): Promise<boolean> => {
-  if (!isAIChatDevStreamFixtureAvailable() || !isAIChatDevStreamFixturePrompt(options.prompt)) {
+  const normalizedPrompt = normalizeFixturePrompt(options.prompt);
+  if (!isAIChatDevStreamFixtureAvailable() || !isAIChatDevStreamFixturePrompt(normalizedPrompt)) {
     return false;
   }
 
@@ -273,14 +349,14 @@ export const maybeRunAIChatDevStreamFixture = async (
     (import.meta.env.MODE === 'test'
       ? TEST_FIXTURE_STEP_DELAY_MS
       : DEFAULT_DEV_FIXTURE_STEP_DELAY_MS);
-  const events = buildFixtureEvents(options.prompt, options.model);
+  const events = buildFixtureEvents(normalizedPrompt, options.model);
 
   for (let index = 0; index < events.length; index += 1) {
     const event = events[index];
     throwIfAborted(options.signal);
     options.onEvent(event);
     if (index < events.length - 1) {
-      await waitForFixtureStep(delayMs, options.signal);
+      await waitForFixtureStep(fixtureStepDelay(normalizedPrompt, event, delayMs), options.signal);
     }
   }
 

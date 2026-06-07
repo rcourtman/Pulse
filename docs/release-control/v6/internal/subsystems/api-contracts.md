@@ -567,7 +567,11 @@ payload shape change when the portal presents compact client rows.
 	`tool_cancel` instead of hiding the activity. At least one fixture-backed
 	Assistant tool sequence must exercise compacted provider artifact
 	suppression by emitting compacted pre-tool content before a governed tool row
-	and final normal answer content.
+	and final normal answer content. At least one fixture-backed Assistant tool
+	sequence must exercise a buffered `tool_start` -> `tool_end` burst with no
+	provider delay between the two events, followed by a paced content/terminal
+	step, so browser proof can verify that fast command activity remains
+	perceptible without a real provider request.
 34. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
     Legacy Assistant SSE routes in this handler that still use the older
     execute envelope, including `/api/ai/execute/stream` and
