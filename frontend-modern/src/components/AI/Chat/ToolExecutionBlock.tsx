@@ -96,6 +96,19 @@ const formatOutputPreview = (output: string, success: boolean) => {
   return linesTruncated || charsTruncated ? `${fullPreview}\n...` : fullPreview;
 };
 
+const formatHiddenOutputSummary = (output: string) => {
+  const normalized = stripAnsiControlCodes(output).replace(/\r\n/g, '\n').trim();
+  if (!hasReadableToolOutput(normalized)) return '';
+  if (looksLikeStructuredOutput(normalized)) return 'structured output';
+  if (hasBinaryControlCharacters(normalized)) return 'binary output';
+
+  const lines = normalized.split('\n');
+  if (lines.length > 1) return `${lines.length} lines output`;
+
+  const characterCount = normalized.length;
+  return `${characterCount} ${characterCount === 1 ? 'char' : 'chars'} output`;
+};
+
 const formatCompletedToolDuration = (startedAt?: number, completedAt?: number): string => {
   if (!startedAt || !completedAt) return '';
   const durationMs = completedAt - startedAt;
@@ -169,6 +182,9 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
     return preview;
   });
   const outputPreview = createMemo(() => formatOutputPreview(outputText(), props.tool.success));
+  const hiddenOutputSummary = createMemo(() =>
+    outputPreview() ? '' : formatHiddenOutputSummary(outputText()),
+  );
   const hasInput = createMemo(() => inputText().trim().length > 0);
   const hasOutput = createMemo(() => hasReadableToolOutput(outputText()));
   const hasDetails = createMemo(() => hasInput() || hasOutput());
@@ -253,6 +269,15 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
                 }`}
                 aria-hidden="true"
               />
+            </Show>
+            <Show when={hiddenOutputSummary()}>
+              <span
+                class="shrink-0 rounded border border-border-subtle bg-surface-alt px-1.5 py-0.5 text-[9px] font-medium text-muted"
+                title="Open tool details to inspect output"
+                aria-label={`Tool output available: ${hiddenOutputSummary()}`}
+              >
+                {hiddenOutputSummary()}
+              </span>
             </Show>
           </div>
           <ToolInputSummary summary={inputSummary()} />

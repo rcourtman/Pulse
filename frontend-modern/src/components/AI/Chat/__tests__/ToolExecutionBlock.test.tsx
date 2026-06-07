@@ -325,6 +325,7 @@ describe('ToolExecutionBlock', () => {
   it('previews successful short plain-text output while keeping full details available', () => {
     render(() => <ToolExecutionBlock tool={makeTool({ output: 'hello world' })} />);
     expect(screen.getByLabelText('Tool output preview')).toHaveTextContent('hello world');
+    expect(screen.queryByLabelText(/Tool output available/)).not.toBeInTheDocument();
     fireEvent.click(getToolDetailsTrigger());
     expect(screen.getByText('Output')).toBeInTheDocument();
     expect(screen.getAllByText('hello world')).toHaveLength(2);
@@ -342,6 +343,9 @@ describe('ToolExecutionBlock', () => {
     ));
 
     expect(screen.queryByText(/total_nodes/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Tool output available: structured output')).toHaveTextContent(
+      'structured output',
+    );
     expect(getToolDetailsTrigger()).toBeInTheDocument();
   });
 
@@ -358,7 +362,19 @@ describe('ToolExecutionBlock', () => {
     expect(screen.queryByLabelText('Tool output preview')).not.toBeInTheDocument();
     expect(text).not.toContain('line 1');
     expect(text).not.toContain('line 5');
+    expect(screen.getByLabelText('Tool output available: 5 lines output')).toHaveTextContent(
+      '5 lines output',
+    );
     expect(getToolDetailsTrigger()).toBeInTheDocument();
+  });
+
+  it('summarizes suppressed single-line output by character count', () => {
+    render(() => <ToolExecutionBlock tool={makeTool({ output: 'x'.repeat(160) })} />);
+
+    expect(screen.queryByLabelText('Tool output preview')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Tool output available: 160 chars output')).toHaveTextContent(
+      '160 chars output',
+    );
   });
 
   it('previews failed plain-text output while keeping full details available', () => {

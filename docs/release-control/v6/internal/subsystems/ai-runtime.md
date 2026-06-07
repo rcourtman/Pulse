@@ -164,13 +164,21 @@ runtime cost control, and shared AI transport surfaces.
 	   referenced OpenCode source at fetched `origin/dev` commit
 	   `effd27b23900720a53e965396ff1a105c1f7e9c8` carries tool identity and
 	   state through `toolCommit` / `startTool` / `doneTool` in
-	   `packages/opencode/src/cli/cmd/run/session-data.ts` (lines 622-733) and
-	   formats elapsed tool state with `span` in
-	   `packages/opencode/src/cli/cmd/run/tool.ts` (lines 191-200). Pulse adapts
-	   that by carrying the stream event start/end timestamps into the completed
-	   browser tool row, so the visible activity timeline does not collapse when a
-	   running command is replaced by its completed result.
-	   Live workflow activity is also active turn state, not disposable waiting
+   `packages/opencode/src/cli/cmd/run/session-data.ts` (lines 622-733) and
+   formats elapsed tool state with `span` in
+   `packages/opencode/src/cli/cmd/run/tool.ts` (lines 191-200). Pulse adapts
+   that by carrying the stream event start/end timestamps into the completed
+   browser tool row, so the visible activity timeline does not collapse when a
+   running command is replaced by its completed result. Completed browser tool
+   rows must also preserve output trust when a raw preview is intentionally
+   suppressed: the referenced OpenCode source at fetched `origin/dev` commit
+   `1025540fcc2a69609a0131a7168300205656d728` keeps output visibility as an
+   explicit tool-view policy in `packages/opencode/src/cli/cmd/run/tool.ts`
+   (`ToolView.output`, lines 40-44; tool display hooks, lines 117-123), so
+   Pulse completed rows must expose compact output metadata for hidden long,
+   structured, or binary outputs while keeping raw output behind the existing
+   details disclosure.
+   Live workflow activity is also active turn state, not disposable waiting
 	   copy. The referenced OpenCode source at fetched `origin/dev` commit
 	   `4519a1da329c1a4fc384054e7203ba7d06928205` defines model, shell, step,
 	   and tool lifecycle events in `packages/core/src/session/event.ts` (model
