@@ -85,6 +85,29 @@ function makeHandlers() {
   };
 }
 
+function setScrollMetrics(
+  element: Element,
+  metrics: {
+    scrollTop: number;
+    scrollHeight: number;
+    clientHeight: number;
+  },
+) {
+  Object.defineProperty(element, 'scrollTop', {
+    configurable: true,
+    value: metrics.scrollTop,
+    writable: true,
+  });
+  Object.defineProperty(element, 'scrollHeight', {
+    configurable: true,
+    value: metrics.scrollHeight,
+  });
+  Object.defineProperty(element, 'clientHeight', {
+    configurable: true,
+    value: metrics.clientHeight,
+  });
+}
+
 describe('ChatMessages', () => {
   describe('empty transcript', () => {
     it('keeps the transcript blank when there are no messages or resume actions', () => {
@@ -503,6 +526,79 @@ describe('ChatMessages', () => {
       expect(scrollIntoView).toHaveBeenCalled();
     });
 
+    it('keeps following live output when a large streaming update grows from the bottom', async () => {
+      const [messages, setMessages] = createSignal<ChatMessage[]>([
+        makeMessage({
+          id: 'assistant-1',
+          role: 'assistant',
+          content: 'Starting',
+          isStreaming: true,
+        }),
+      ]);
+      render(() => <ChatMessages messages={messages()} {...makeHandlers()} />);
+      const scrollContainer = screen.getByTestId('assistant-message-list');
+      const scrollIntoView = Element.prototype.scrollIntoView as ReturnType<typeof vi.fn>;
+
+      setScrollMetrics(scrollContainer, {
+        scrollTop: 800,
+        scrollHeight: 1000,
+        clientHeight: 200,
+      });
+      fireEvent.scroll(scrollContainer);
+      scrollIntoView.mockClear();
+
+      setScrollMetrics(scrollContainer, {
+        scrollTop: 800,
+        scrollHeight: 1400,
+        clientHeight: 200,
+      });
+      setMessages([
+        makeMessage({
+          id: 'assistant-1',
+          role: 'assistant',
+          content: `${'Streaming update. '.repeat(80)}`,
+          isStreaming: true,
+        }),
+      ]);
+      await Promise.resolve();
+
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'instant' });
+    });
+
+    it('does not pull the transcript back down after the user scrolls away from live output', async () => {
+      const [messages, setMessages] = createSignal<ChatMessage[]>([
+        makeMessage({
+          id: 'assistant-1',
+          role: 'assistant',
+          content: 'Starting',
+          isStreaming: true,
+        }),
+      ]);
+      render(() => <ChatMessages messages={messages()} {...makeHandlers()} />);
+      const scrollContainer = screen.getByTestId('assistant-message-list');
+      const scrollIntoView = Element.prototype.scrollIntoView as ReturnType<typeof vi.fn>;
+
+      setScrollMetrics(scrollContainer, {
+        scrollTop: 100,
+        scrollHeight: 1000,
+        clientHeight: 200,
+      });
+      fireEvent.scroll(scrollContainer);
+      scrollIntoView.mockClear();
+
+      setMessages([
+        makeMessage({
+          id: 'assistant-1',
+          role: 'assistant',
+          content: `${'Streaming update. '.repeat(80)}`,
+          isStreaming: true,
+        }),
+      ]);
+      await Promise.resolve();
+
+      expect(scrollIntoView).not.toHaveBeenCalled();
+    });
+
     it('does not call scrollIntoView when messages list is empty', () => {
       // Reset the mock to clear any prior calls
       (Element.prototype.scrollIntoView as ReturnType<typeof vi.fn>).mockClear();
@@ -519,6 +615,7 @@ describe('ChatMessages', () => {
 
       const scrollContainer = container.firstElementChild;
       expect(scrollContainer).toHaveClass('flex-1', 'overflow-y-auto');
+      expect(scrollContainer).toHaveAttribute('data-testid', 'assistant-message-list');
     });
   });
 });

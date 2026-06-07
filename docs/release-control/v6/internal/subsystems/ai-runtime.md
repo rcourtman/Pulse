@@ -181,17 +181,29 @@ runtime cost control, and shared AI transport surfaces.
 	   model-switch plus tool rows in
 	   `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`
 	   (model switch lines 120-122 and 262-274; tool rows lines 455-500).
-	   Pulse adapts that by keeping the latest browser `workflow_status` activity
-	   visible in the live stream event sequence across content, tool, approval,
-	   and question boundaries instead of dropping it the instant a richer row
-	   arrives. Burst workflow statuses may still replace one another until a
-	   durable stream boundary appears, and terminal cleanup on done/error/Stop
-	   may remove transient workflow-status rows while preserving typed
-	   model-switch and tool evidence. The generated frontend SSE contract must
-	   include workflow `provider` and `model` fields so selected-route activity
-	   is typed end to end.
-	   Composer prompt history is also drawer-local chat-runtime state: the drawer
-	   may persist a bounded local history of submitted prompt text and structured
+   Pulse adapts that by keeping the latest browser `workflow_status` activity
+   visible in the live stream event sequence across content, tool, approval,
+   and question boundaries instead of dropping it the instant a richer row
+   arrives. Burst workflow statuses may still replace one another until a
+   durable stream boundary appears, and terminal cleanup on done/error/Stop
+   may remove transient workflow-status rows while preserving typed
+   model-switch and tool evidence. The generated frontend SSE contract must
+   include workflow `provider` and `model` fields so selected-route activity
+   is typed end to end.
+   The transcript viewport is part of the same live activity contract. The
+   referenced OpenCode source at fetched `origin/dev` commit
+   `4519a1da329c1a4fc384054e7203ba7d06928205` forwards reducer commits into
+   terminal scrollback in
+   `packages/opencode/src/cli/cmd/run/stream.ts` (lines 140-145) and renders
+   bottom-sticky activity in
+   `packages/opencode/src/cli/cmd/run/footer.subagent.tsx` (lines 148-153)
+   with `stickyScroll={true}` and `stickyStart="bottom"`. Pulse adapts that
+   by tracking whether the browser transcript is pinned to the live bottom
+   before streamed content or tool rows grow, continuing to follow active
+   output while pinned, and preserving the operator's scroll position after
+   they intentionally scroll away from live activity.
+   Composer prompt history is also drawer-local chat-runtime state: the drawer
+   may persist a bounded local history of submitted prompt text and structured
    mentions for ArrowUp/ArrowDown recall, but that history must not persist or
    replay one-shot finding handoff, approval, autonomous-mode, or other scoped
    send options. The referenced OpenCode source at fetched `origin/dev` commit

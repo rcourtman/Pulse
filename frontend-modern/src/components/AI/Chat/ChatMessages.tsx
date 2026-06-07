@@ -1,4 +1,4 @@
-import { Component, Show, For, createEffect, createMemo } from 'solid-js';
+import { Component, Show, For, createEffect, createMemo, createSignal } from 'solid-js';
 import { MessageItem } from './MessageItem';
 import type { ChatSession } from '@/api/aiChat';
 import type { QueuedFollowUp } from './hooks/useChat';
@@ -11,6 +11,8 @@ import type {
   StreamDisplayEvent,
 } from './types';
 import { humanizeToken } from '@/utils/textPresentation';
+
+const STICKY_SCROLL_BOTTOM_THRESHOLD_PX = 200;
 
 interface ChatMessagesProps {
   messages: ChatMessage[];
@@ -46,6 +48,17 @@ interface ChatMessagesProps {
 export const ChatMessages: Component<ChatMessagesProps> = (props) => {
   let messagesEndRef: HTMLDivElement | undefined;
   let containerRef: HTMLDivElement | undefined;
+  const [isPinnedToBottom, setIsPinnedToBottom] = createSignal(true);
+
+  const isContainerNearBottom = () => {
+    if (!containerRef) return true;
+    const { scrollTop, scrollHeight, clientHeight } = containerRef;
+    return scrollHeight - scrollTop - clientHeight < STICKY_SCROLL_BOTTOM_THRESHOLD_PX;
+  };
+
+  const updatePinnedToBottom = () => {
+    setIsPinnedToBottom(isContainerNearBottom());
+  };
 
   const textActivityFingerprint = (value?: string) =>
     value ? `${value.length}:${value.slice(-32)}` : '0:';
@@ -168,11 +181,7 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
     void scrollTrigger();
 
     if (props.messages.length > 0 && messagesEndRef && containerRef) {
-      // Only auto-scroll if user is near the bottom (within 200px)
-      const { scrollTop, scrollHeight, clientHeight } = containerRef;
-      const isNearBottom = scrollHeight - scrollTop - clientHeight < 200;
-
-      if (isNearBottom) {
+      if (isPinnedToBottom() || isContainerNearBottom()) {
         // Use instant scroll during active streaming for smoother experience
         const lastMsg = props.messages[props.messages.length - 1];
         const behavior = lastMsg.isStreaming ? 'instant' : 'smooth';
@@ -182,8 +191,15 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
   });
 
   return (
-    <div ref={containerRef} class="flex-1 overflow-y-auto px-4 py-3 bg-surface">
-      <Show when={props.messages.length === 0 && recentSessions().length > 0 && props.onLoadSession}>
+    <div
+      ref={containerRef}
+      class="flex-1 overflow-y-auto px-4 py-3 bg-surface"
+      data-testid="assistant-message-list"
+      onScroll={updatePinnedToBottom}
+    >
+      <Show
+        when={props.messages.length === 0 && recentSessions().length > 0 && props.onLoadSession}
+      >
         <section class="mb-3 w-full" aria-label="Recent Assistant sessions">
           <div class="mb-2 text-[11px] font-semibold uppercase text-muted">Recent sessions</div>
           <div class="space-y-1.5">
