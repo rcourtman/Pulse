@@ -25,6 +25,95 @@ interface AssistantActiveTurnStatusCandidate extends AssistantActiveTurnStatus {
 const formatToolName = (name?: string) =>
   formatIdentifierLabel(name, { stripPrefix: 'pulse_', fallback: 'tool', maxLength: 36 });
 
+const WORKFLOW_TOOL_LABELS: Record<string, string> = {
+  alerts: 'alerts',
+  control: 'command',
+  exec: 'command',
+  fetch_url: 'fetch',
+  get_active_alerts: 'alerts',
+  get_baselines: 'baselines',
+  get_disk_health: 'disk health',
+  get_infrastructure_state: 'infrastructure',
+  get_metrics_history: 'metrics',
+  get_patterns: 'patterns',
+  get_resource_details: 'resource',
+  get_storage: 'storage',
+  get_storage_config: 'storage config',
+  pulse_alerts: 'alerts',
+  pulse_control: 'command',
+  pulse_exec: 'command',
+  pulse_fetch_url: 'fetch',
+  pulse_get_active_alerts: 'alerts',
+  pulse_get_baselines: 'baselines',
+  pulse_get_disk_health: 'disk health',
+  pulse_get_infrastructure_state: 'infrastructure',
+  pulse_get_metrics_history: 'metrics',
+  pulse_get_patterns: 'patterns',
+  pulse_get_resource_details: 'resource',
+  pulse_get_storage: 'storage',
+  pulse_get_storage_config: 'storage config',
+  pulse_query: 'inventory',
+  pulse_read: 'read',
+  pulse_run_command: 'command',
+  query: 'inventory',
+  read: 'read',
+  run_command: 'command',
+};
+
+const normalizedWorkflowToolName = (name?: string) => name?.trim().toLowerCase() || '';
+
+const formatWorkflowToolName = (name?: string) => {
+  const normalized = normalizedWorkflowToolName(name);
+  return (
+    WORKFLOW_TOOL_LABELS[normalized] ||
+    formatIdentifierLabel(name, { stripPrefix: 'pulse_', fallback: 'tool', maxLength: 36 })
+  );
+};
+
+const internalWorkflowToolIdentifiers = (tool?: string) => {
+  const identifiers = new Set<string>();
+  const normalized = normalizedWorkflowToolName(tool);
+  if (normalized) {
+    identifiers.add(normalized);
+    if (normalized.startsWith('pulse_')) {
+      identifiers.add(normalized.slice('pulse_'.length));
+    }
+  }
+
+  for (const key of Object.keys(WORKFLOW_TOOL_LABELS)) {
+    if (key.startsWith('pulse_') || key.includes('_')) {
+      identifiers.add(key);
+    }
+  }
+
+  return Array.from(identifiers).sort((a, b) => b.length - a.length);
+};
+
+const sanitizeWorkflowStatusMessage = (message: string, tool?: string) => {
+  const toolLabel = formatWorkflowToolName(tool);
+  let sanitized = message.trim();
+
+  for (const identifier of internalWorkflowToolIdentifiers(tool)) {
+    const escaped = escapeRegExp(identifier);
+    sanitized = sanitized.replace(
+      new RegExp(`\\s+(?:with|using|via)\\s+(?:the\\s+)?${escaped}\\.?$`, 'i'),
+      (match) => (match.trim().endsWith('.') ? '.' : ''),
+    );
+  }
+
+  for (const identifier of internalWorkflowToolIdentifiers(tool)) {
+    const label = WORKFLOW_TOOL_LABELS[identifier] || toolLabel;
+    if (!label) continue;
+    const escaped = escapeRegExp(identifier);
+    sanitized = sanitized.replace(new RegExp(`\\b${escaped}\\b`, 'gi'), label);
+  }
+
+  return sanitized
+    .replace(/\s+\./g, '.')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+};
+
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const messageContainsToolLabel = (message: string, label: string) => {
@@ -74,14 +163,17 @@ export const formatAssistantWorkflowStatus = (status?: WorkflowStatus, now?: num
   if (!message) return '';
 
   const tool = status?.tool?.trim();
-  const toolLabel = tool ? formatToolName(tool) : '';
+  const visibleMessage = sanitizeWorkflowStatusMessage(message, tool);
+  const toolLabel = tool ? formatWorkflowToolName(tool) : '';
   const toolSuffix =
-    toolLabel && !message.includes(tool || '') && !messageContainsToolLabel(message, toolLabel)
+    toolLabel &&
+    !visibleMessage.includes(tool || '') &&
+    !messageContainsToolLabel(visibleMessage, toolLabel)
       ? ` · ${toolLabel}`
       : '';
   const retrySuffix = formatRetryStatusSuffix(status, now);
 
-  return `${message}${toolSuffix}${retrySuffix}`;
+  return `${visibleMessage}${toolSuffix}${retrySuffix}`;
 };
 
 const formatPendingToolStatus = (tool?: PendingTool): string => {

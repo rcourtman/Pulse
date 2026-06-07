@@ -221,6 +221,10 @@ runtime cost control, and shared AI transport surfaces.
    evidence arrives, that confirmed route replaces the provisional local
    selected-model row rather than stacking multiple "Using ..." rows. Once a
    durable boundary exists, later route events are preserved chronologically.
+   Rendered workflow-status rows, active-turn footer text, and transcript
+   export status lines must normalize internal tool identifiers such as
+   `pulse_query`, `pulse_read`, and `pulse_exec` into operator-facing activity
+   labels, while preserving the raw typed event payload for Details/debug paths.
    Placeholder `request_start` workflow statuses remain fallback activity only:
    once selected-model, provider, tool, thinking, approval, question, or content
    activity is visible, the placeholder must not outrank it in the footer or

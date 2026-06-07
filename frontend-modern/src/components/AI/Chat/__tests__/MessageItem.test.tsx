@@ -600,9 +600,41 @@ describe('MessageItem', () => {
       ));
 
       expect(
-        screen.getByText('Planning governed action and safety checks before execution. · exec'),
+        screen.getByText('Planning governed action and safety checks before execution. · command'),
       ).toBeInTheDocument();
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
+    });
+
+    it('renders workflow progress without internal tool identifiers', () => {
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            isStreaming: true,
+            pendingTools: [],
+            streamEvents: [
+              {
+                type: 'workflow_status',
+                workflowStatus: {
+                  phase: 'context',
+                  message: 'Reading current Pulse inventory with pulse_query.',
+                  tool: 'pulse_query',
+                },
+              },
+            ],
+            workflowStatus: {
+              phase: 'context',
+              message: 'Reading current Pulse inventory with pulse_query.',
+              tool: 'pulse_query',
+            },
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(screen.getByText('Reading current Pulse inventory.')).toBeInTheDocument();
+      expect(screen.queryByText(/pulse_query/)).not.toBeInTheDocument();
     });
 
     it('shows live workflow progress as a transcript activity row', () => {

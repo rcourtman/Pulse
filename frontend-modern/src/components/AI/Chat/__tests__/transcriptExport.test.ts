@@ -37,8 +37,9 @@ describe('Assistant transcript export', () => {
           {
             type: 'workflow_status',
             workflowStatus: {
-              message: 'Checking device nodes',
-              phase: 'tool',
+              message: 'Reading current Pulse inventory with pulse_query.',
+              phase: 'context',
+              tool: 'pulse_query',
             },
           },
           {
@@ -76,7 +77,8 @@ describe('Assistant transcript export', () => {
     expect(transcript).toContain('how many devices in this');
     expect(transcript).toContain('## Pulse Assistant');
     expect(transcript).toContain('Model: DeepSeek via OpenRouter');
-    expect(transcript).toContain('[status] Checking device nodes');
+    expect(transcript).toContain('[status] Reading current Pulse inventory.');
+    expect(transcript).not.toContain('pulse_query');
     expect(transcript).toContain('[tool:read]');
     expect(transcript).toContain('Inspect devices on current resource');
     expect(transcript).not.toContain('ls /dev | wc -l');

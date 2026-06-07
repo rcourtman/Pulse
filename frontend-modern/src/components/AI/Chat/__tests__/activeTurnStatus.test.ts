@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getAssistantActiveTurnStatus } from '../activeTurnStatus';
+import { formatAssistantWorkflowStatus, getAssistantActiveTurnStatus } from '../activeTurnStatus';
 import type { ChatMessage } from '../types';
 
 const assistantMessage = (overrides: Partial<ChatMessage> = {}): ChatMessage => ({
@@ -362,8 +362,26 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'tool',
-      text: 'Preparing governed tools · exec',
+      text: 'Preparing governed tools · command',
     });
+  });
+
+  it('normalizes internal workflow tool identifiers before display', () => {
+    expect(
+      formatAssistantWorkflowStatus({
+        phase: 'context',
+        message: 'Reading current Pulse inventory with pulse_query.',
+        tool: 'pulse_query',
+      }),
+    ).toBe('Reading current Pulse inventory.');
+
+    expect(
+      formatAssistantWorkflowStatus({
+        phase: 'preflight',
+        message: 'Preparing governed tools',
+        tool: 'pulse_exec',
+      }),
+    ).toBe('Preparing governed tools · command');
   });
 
   it('lets a newer provider switch replace stale waiting progress', () => {

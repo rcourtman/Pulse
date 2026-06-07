@@ -4672,7 +4672,10 @@ describe('AIChat', () => {
       ]);
       renderChat();
       expect(screen.getByLabelText('Assistant active turn status')).toHaveTextContent(
-        'Planning governed action and safety checks before execution. · exec',
+        'Planning governed action and safety checks before execution. · command',
+      );
+      expect(screen.getByLabelText('Assistant active turn status')).not.toHaveTextContent(
+        'pulse_exec',
       );
       expect(screen.queryByText('Generating response...')).not.toBeInTheDocument();
     });
