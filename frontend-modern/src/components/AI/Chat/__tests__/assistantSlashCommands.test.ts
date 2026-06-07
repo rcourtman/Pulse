@@ -15,6 +15,8 @@ describe('assistantSlashCommands', () => {
     expect(parseAssistantSlashCommand('/sessions')).toBe('sessions');
     expect(parseAssistantSlashCommand('/resume')).toBe('sessions');
     expect(parseAssistantSlashCommand('/continue')).toBe('sessions');
+    expect(parseAssistantSlashCommand('/compact')).toBe('compact');
+    expect(parseAssistantSlashCommand('/summarize')).toBe('compact');
     expect(parseAssistantSlashCommand('/models')).toBe('models');
     expect(parseAssistantSlashCommand('/model')).toBe('models');
     expect(parseAssistantSlashCommand('/mo')).toBe('models');
@@ -69,6 +71,7 @@ describe('assistantSlashCommands', () => {
       'help',
       'new',
       'sessions',
+      'compact',
       'models',
       'providers',
       'status',
@@ -80,6 +83,9 @@ describe('assistantSlashCommands', () => {
     ]);
     expect(filterAssistantSlashCommands('resume').map((command) => command.name)).toEqual([
       'sessions',
+    ]);
+    expect(filterAssistantSlashCommands('summarize').map((command) => command.name)).toEqual([
+      'compact',
     ]);
     expect(filterAssistantSlashCommands('provider').map((command) => command.name)).toEqual([
       'providers',
@@ -101,6 +107,8 @@ describe('assistantSlashCommands', () => {
     expect(getAssistantSlashCommandTokens(help)).toEqual(['help', 'commands']);
     const sessions = filterAssistantSlashCommands('resume')[0];
     expect(getAssistantSlashCommandTokens(sessions)).toEqual(['sessions', 'resume', 'continue']);
+    const compact = filterAssistantSlashCommands('summarize')[0];
+    expect(getAssistantSlashCommandTokens(compact)).toEqual(['compact', 'summarize']);
     const models = filterAssistantSlashCommands('mo')[0];
     expect(getAssistantSlashCommandTokens(models)).toEqual(['models', 'model', 'mo']);
     const providers = filterAssistantSlashCommands('connect')[0];

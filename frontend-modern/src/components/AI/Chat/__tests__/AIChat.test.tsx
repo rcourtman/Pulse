@@ -108,6 +108,14 @@ const {
       updated_at: '2026-06-06T12:45:00Z',
       message_count: 2,
     }),
+    summarizeSession: vi.fn().mockResolvedValue({
+      success: true,
+      status: 'compacted',
+      message: 'Compacted 2 older messages into a session summary.',
+      session_id: 'source-session',
+      compacted_messages: 2,
+      kept_recent_messages: 4,
+    }),
     approveCommand: vi.fn().mockResolvedValue({ approved: true, message: 'ok' }),
     denyCommand: vi.fn().mockResolvedValue({ denied: true, message: 'ok' }),
   };
@@ -137,7 +145,16 @@ const {
     commandRequestSignal: vi.fn(
       (): {
         id: number;
-        action: 'help' | 'new' | 'sessions' | 'models' | 'providers' | 'status' | 'undo' | 'redo';
+        action:
+          | 'compact'
+          | 'help'
+          | 'new'
+          | 'sessions'
+          | 'models'
+          | 'providers'
+          | 'status'
+          | 'undo'
+          | 'redo';
       } | null => null,
     ),
     ackCommandRequest: vi.fn(),
@@ -468,6 +485,14 @@ beforeEach(() => {
     created_at: '2026-06-06T12:45:00Z',
     updated_at: '2026-06-06T12:45:00Z',
     message_count: 2,
+  });
+  mockAIChatAPI.summarizeSession.mockResolvedValue({
+    success: true,
+    status: 'compacted',
+    message: 'Compacted 2 older messages into a session summary.',
+    session_id: 'source-session',
+    compacted_messages: 2,
+    kept_recent_messages: 4,
   });
   Element.prototype.scrollIntoView = vi.fn();
   localStorage.clear();
@@ -2868,6 +2893,48 @@ describe('AIChat', () => {
       });
       expect(mockChat.loadSession).not.toHaveBeenCalled();
       expect(mockNotificationStore.error).toHaveBeenCalledWith('Failed to fork Assistant session');
+    });
+
+    it('compacts the current saved Assistant session from the header', async () => {
+      mockChat.sessionId.mockReturnValue('source-session');
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'user-1',
+          role: 'user',
+          content: 'inspect the noisy session',
+          timestamp: new Date('2026-06-06T12:34:56Z'),
+        },
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: 'The session has enough context to compact.',
+          timestamp: new Date('2026-06-06T12:35:01Z'),
+        },
+      ]);
+      mockAIChatAPI.summarizeSession.mockResolvedValue({
+        success: true,
+        status: 'compacted',
+        message: 'Compacted 8 older messages into a session summary.',
+        session_id: 'source-session',
+        compacted_messages: 8,
+        kept_recent_messages: 4,
+      });
+
+      renderChat();
+      fireEvent.click(screen.getByRole('button', { name: 'Compact session' }));
+
+      await waitFor(() => {
+        expect(mockAIChatAPI.summarizeSession).toHaveBeenCalledWith('source-session');
+        expect(mockChat.loadSession).toHaveBeenCalledWith('source-session');
+      });
+      expect(mockAIChatAPI.listSessions).toHaveBeenCalledWith({ limit: 30 });
+      expect(mockNotificationStore.info).toHaveBeenCalledWith('Compacting Assistant session...', 2000);
+      await waitFor(() => {
+        expect(mockNotificationStore.success).toHaveBeenCalledWith(
+          'Compacted 8 older messages into a session summary.',
+          2500,
+        );
+      });
     });
 
     it('undoes the latest Assistant turn and restores the prompt for editing', async () => {

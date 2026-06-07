@@ -756,6 +756,24 @@ describe('AIChatAPI', () => {
     });
   });
 
+  it('compacts a session through the summarize endpoint', async () => {
+    const result = {
+      success: true,
+      status: 'compacted',
+      message: 'Compacted 8 older messages into a session summary.',
+      session_id: 'session/root',
+      compacted_messages: 8,
+      kept_recent_messages: 4,
+    };
+    apiFetchJSONMock.mockResolvedValueOnce(result);
+
+    await expect(AIChatAPI.summarizeSession('session/root')).resolves.toEqual(result);
+
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/sessions/session%2Froot/summarize', {
+      method: 'POST',
+    });
+  });
+
   it('preserves restored Assistant tool evidence on session messages', async () => {
     const messages = [
       {

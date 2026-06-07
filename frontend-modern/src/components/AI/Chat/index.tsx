@@ -27,6 +27,7 @@ import XIcon from 'lucide-solid/icons/x';
 import BookmarkIcon from 'lucide-solid/icons/bookmark';
 import CheckIcon from 'lucide-solid/icons/check';
 import LoaderCircleIcon from 'lucide-solid/icons/loader-circle';
+import Minimize2Icon from 'lucide-solid/icons/minimize-2';
 import PlusIcon from 'lucide-solid/icons/plus';
 import Trash2Icon from 'lucide-solid/icons/trash-2';
 import { AIAPI } from '@/api/ai';
@@ -195,6 +196,14 @@ const AI_CHAT_CYCLE_RECENT_MODEL_LABEL = 'Cycle recent Assistant model';
 const AI_CHAT_CONTROL_LEVEL_ORDER: AIControlLevel[] = ['read_only', 'controlled', 'autonomous'];
 const AI_CHAT_MODEL_SLASH_HELP =
   'Use /model provider:model-id, /model default, /model next, or /model previous.';
+const AI_CHAT_COMPACT_SESSION_LABEL = 'Compact session';
+const AI_CHAT_COMPACT_SESSION_EMPTY_MESSAGE = 'No Assistant session to compact';
+const AI_CHAT_COMPACT_SESSION_LOADING_MESSAGE =
+  'Wait for the active Assistant response before compacting this session';
+const AI_CHAT_COMPACT_SESSION_START_MESSAGE = 'Compacting Assistant session...';
+const AI_CHAT_COMPACT_SESSION_SUCCESS_MESSAGE = 'Assistant session compacted';
+const AI_CHAT_COMPACT_SESSION_ERROR_MESSAGE = 'Failed to compact Assistant session';
+const AI_CHAT_COMPACT_SESSION_LOAD_ERROR_MESSAGE = 'Session compacted, but reload failed';
 
 type SessionPickerSection = {
   title: string;
@@ -701,6 +710,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [sessionRenameSaving, setSessionRenameSaving] = createSignal(false);
   const [sessionDropdownPosition, setSessionDropdownPosition] = createSignal({ top: 0, right: 0 });
   const [forkingSession, setForkingSession] = createSignal(false);
+  const [compactingSession, setCompactingSession] = createSignal(false);
   const [undoingLastTurn, setUndoingLastTurn] = createSignal(false);
   const [redoingLastTurn, setRedoingLastTurn] = createSignal(false);
   const [redoLastTurnAvailable, setRedoLastTurnAvailable] = createSignal(false);
@@ -1706,6 +1716,16 @@ export const AIChat: Component<AIChatProps> = (props) => {
       hasCurrentTranscript() &&
       !chat.isLoading() &&
       !forkingSession(),
+  );
+  const canCompactCurrentSession = createMemo(
+    () =>
+      Boolean(chat.sessionId().trim()) &&
+      hasCurrentTranscript() &&
+      !chat.isLoading() &&
+      !forkingSession() &&
+      !compactingSession() &&
+      !undoingLastTurn() &&
+      !redoingLastTurn(),
   );
   const hasUndoableUserTurn = createMemo(() =>
     chat
@@ -2925,6 +2945,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
         setShowCommandHelp(false);
         void handleToggleSessions();
         break;
+      case 'compact':
+        setShowCommandHelp(false);
+        void handleCompactSession();
+        break;
       case 'help':
         setShowSessions(false);
         setSessionRefreshLoading(false);
@@ -3375,6 +3399,48 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
   };
 
+  const handleCompactSession = async () => {
+    if (compactingSession()) return;
+    const sessionId = chat.sessionId().trim();
+    if (!sessionId || !hasCurrentTranscript()) {
+      notificationStore.info(AI_CHAT_COMPACT_SESSION_EMPTY_MESSAGE, 2000);
+      return;
+    }
+    if (chat.isLoading()) {
+      notificationStore.info(AI_CHAT_COMPACT_SESSION_LOADING_MESSAGE, 2500);
+      return;
+    }
+
+    setCompactingSession(true);
+    notificationStore.info(AI_CHAT_COMPACT_SESSION_START_MESSAGE, 2000);
+    try {
+      const result = await AIChatAPI.summarizeSession(sessionId);
+      if (!result.success) {
+        notificationStore.info(result.message || AI_CHAT_COMPACT_SESSION_EMPTY_MESSAGE, 2500);
+        return;
+      }
+
+      const loaded = await chat.loadSession(sessionId);
+      if (!loaded) {
+        notificationStore.error(AI_CHAT_COMPACT_SESSION_LOAD_ERROR_MESSAGE);
+        return;
+      }
+      await refreshSessions();
+      setRedoLastTurnAvailable(false);
+      setShowSessions(false);
+      setSessionRefreshLoading(false);
+      resetSessionSearch();
+      notificationStore.success(result.message || AI_CHAT_COMPACT_SESSION_SUCCESS_MESSAGE, 2500);
+      focusComposer();
+    } catch (error) {
+      logger.error('[AIChat] Failed to compact Assistant session:', error);
+      const message = error instanceof Error ? error.message : AI_CHAT_COMPACT_SESSION_ERROR_MESSAGE;
+      notificationStore.error(message);
+    } finally {
+      setCompactingSession(false);
+    }
+  };
+
   const handleToggleSessions = async () => {
     const next = !showSessions();
     if (!next) {
@@ -3696,6 +3762,25 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 <Show
                   when={forkingSession()}
                   fallback={<GitForkIcon class="h-4 w-4" aria-hidden="true" />}
+                >
+                  <LoaderCircleIcon class="h-4 w-4 animate-spin" aria-hidden="true" />
+                </Show>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  void handleCompactSession();
+                }}
+                disabled={!canCompactCurrentSession()}
+                class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted"
+                title={AI_CHAT_COMPACT_SESSION_LABEL}
+                aria-label={AI_CHAT_COMPACT_SESSION_LABEL}
+                aria-busy={compactingSession()}
+              >
+                <Show
+                  when={compactingSession()}
+                  fallback={<Minimize2Icon class="h-4 w-4" aria-hidden="true" />}
                 >
                   <LoaderCircleIcon class="h-4 w-4 animate-spin" aria-hidden="true" />
                 </Show>

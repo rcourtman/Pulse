@@ -519,11 +519,12 @@ func TestService_ExtendedMethods(t *testing.T) {
 	err := service.AnswerQuestion(ctx, "q1", nil)
 	assert.Error(t, err)
 
-	// 2. Unimplemented methods return safely
+	// 2. Session compaction is a real service operation and requires startup state.
 	res, err := service.SummarizeSession(ctx, "s1")
-	assert.NoError(t, err)
-	assert.Equal(t, "not_implemented", res["status"])
+	assert.Error(t, err)
+	assert.Nil(t, res)
 
+	// 3. Unimplemented methods return safely
 	res, err = service.GetSessionDiff(ctx, "s1")
 	assert.NoError(t, err)
 	assert.Equal(t, "not_implemented", res["status"])
@@ -536,11 +537,11 @@ func TestService_ExtendedMethods(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "not_implemented", res["status"])
 
-	// 3. ForkSession returns error
+	// 4. ForkSession returns error
 	_, err = service.ForkSession(ctx, "s1")
 	assert.Error(t, err)
 
-	// 4. GetBaseURL
+	// 5. GetBaseURL
 	url := service.GetBaseURL()
 	assert.Equal(t, "", url)
 

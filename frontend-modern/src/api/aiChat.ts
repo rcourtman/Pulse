@@ -34,6 +34,19 @@ export interface ChatSessionRedoResult {
   message?: string;
 }
 
+export interface ChatSessionCompactionResult {
+  success: boolean;
+  status: 'compacted' | 'not_needed' | 'empty' | string;
+  message?: string;
+  session_id: string;
+  summary_message_id?: string;
+  original_message_count?: number;
+  compacted_message_count?: number;
+  compacted_messages?: number;
+  kept_recent_messages?: number;
+  summary_chars?: number;
+}
+
 export interface ListChatSessionsOptions {
   search?: string;
   limit?: number;
@@ -302,10 +315,10 @@ export class AIChatAPI {
   // Summarize a session (compress context when nearing limits)
   static async summarizeSession(
     sessionId: string,
-  ): Promise<{ success: boolean; message?: string }> {
+  ): Promise<ChatSessionCompactionResult> {
     return apiFetchJSON(`${this.baseUrl}/sessions/${encodeURIComponent(sessionId)}/summarize`, {
       method: 'POST',
-    }) as Promise<{ success: boolean; message?: string }>;
+    }) as Promise<ChatSessionCompactionResult>;
   }
 
   // Get file changes/diff for a session

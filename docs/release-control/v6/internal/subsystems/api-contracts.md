@@ -137,6 +137,19 @@ summaries are not part of the fixture contract.
 Queue verification fixtures must cover both the active hold turn and the queued
 drain turn so UX proof can exercise queued follow-up ordering and tool rows
 without consuming external model quota.
+Assistant session summarization is a typed compaction API contract, not a
+free-form helper response. `POST /api/ai/sessions/{id}/summarize` returns a
+browser-safe `ChatSessionCompactionResult` with stable fields for `success`,
+`status`, `message`, `session_id`, `summary_message_id`,
+`original_message_count`, `compacted_message_count`, `compacted_messages`,
+`kept_recent_messages`, and `summary_chars`. Short sessions may return
+`success=false` with `status=not_needed`; transport failures, missing sessions,
+provider errors, or active-running sessions remain normal API errors. The
+payload must not include the raw transcript, raw provider response, raw tool
+input/output, hidden reasoning, secrets, or token values. Frontend consumers
+under `frontend-modern/src/api/aiChat.ts` must preserve that typed response and
+let the Assistant drawer reload canonical session state instead of rebuilding a
+compacted transcript from local browser state.
 
 Infrastructure settings copied agent commands are a shared API/payload boundary
 even when the final command string is assembled in the browser. Selected-row

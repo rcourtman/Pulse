@@ -62,6 +62,25 @@ runtime cost control, and shared AI transport surfaces.
    the Ollama `keep_alive` request field. An empty configured value means
    Pulse omits `keep_alive` so the Ollama server default applies.
 3. Add or change Pulse Assistant request flow through `internal/api/ai_handler.go`, `frontend-modern/src/api/ai.ts`, and `frontend-modern/src/api/aiChat.ts`
+   Assistant session compaction is a runtime-backed session workflow, not a
+   local waiting message, transcript-only UI action, or stubbed summarize
+   endpoint. The referenced OpenCode source at fetched `origin/dev` commit
+   `e82542b8023a8374f29c23b70ec019c8f256354e` registers `/compact` with
+   `/summarize` as an alias in
+   `packages/tui/src/routes/session/index.tsx` lines 548-570 and calls the
+   runtime session summary action with the current provider/model route. Pulse
+   adapts that behavior through `POST /api/ai/sessions/{id}/summarize`,
+   `chat.Service.SummarizeSession`, and
+   `SessionStore.CompactWithSummary`: the backend must reject active-running
+   sessions, build a bounded and redacted transcript for the active chat model,
+   record provider token usage as `assistant_session_compaction`, persist one
+   visible assistant summary row plus the latest bounded turns, clear redo
+   state, and never stream or persist raw provider tool-call artifacts, hidden
+   reasoning, secrets, or raw provider responses as the compacted transcript.
+   The drawer header action and `/compact` slash command must call the same
+   endpoint, surface compacting progress, reload the compacted session and
+   session list, keep focus in the composer after completion, and treat
+   `not_needed` results as quiet operator feedback instead of an error.
    OpenRouter-routed Assistant chat requests must set a bounded default
    completion budget when the runtime request does not specify `MaxTokens`.
    OpenRouter preflights affordability against the requested maximum completion

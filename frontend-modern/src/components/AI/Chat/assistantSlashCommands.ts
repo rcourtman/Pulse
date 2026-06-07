@@ -1,4 +1,5 @@
 export type AssistantSlashCommandAction =
+  | 'compact'
   | 'copy'
   | 'export'
   | 'fork'
@@ -41,6 +42,12 @@ export const ASSISTANT_SLASH_COMMANDS: AssistantSlashCommand[] = [
     aliases: ['resume', 'continue'],
     action: 'sessions',
     description: 'Open Assistant session history',
+  },
+  {
+    name: 'compact',
+    aliases: ['summarize'],
+    action: 'compact',
+    description: 'Summarize older turns and keep this session moving',
   },
   {
     name: 'models',

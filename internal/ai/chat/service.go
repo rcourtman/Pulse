@@ -3498,11 +3498,6 @@ func (s *Service) AnswerQuestion(ctx context.Context, questionID string, answers
 
 // Stub methods for features not yet implemented
 
-// SummarizeSession compresses context
-func (s *Service) SummarizeSession(ctx context.Context, sessionID string) (map[string]interface{}, error) {
-	return map[string]interface{}{"status": "not_implemented"}, nil
-}
-
 // GetSessionDiff returns file changes
 func (s *Service) GetSessionDiff(ctx context.Context, sessionID string) (map[string]interface{}, error) {
 	return map[string]interface{}{"status": "not_implemented"}, nil
