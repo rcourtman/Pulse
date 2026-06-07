@@ -302,6 +302,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
   const hiddenOutputSummary = createMemo(() =>
     outputPreview() ? '' : formatHiddenOutputSummary(outputText()),
   );
+  const hiddenOutputBadgeLabel = createMemo(() => (hiddenOutputSummary() ? 'output available' : ''));
   const hasInput = createMemo(() => detailInputText().trim().length > 0);
   const hasOutput = createMemo(() => hasReadableToolOutput(outputText()));
   const hasDetails = createMemo(() => hasInput() || hasOutput());
@@ -434,7 +435,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
                 title="Open tool details to inspect output"
                 aria-label={`Tool output available: ${hiddenOutputSummary()}`}
               >
-                {hiddenOutputSummary()}
+                {hiddenOutputBadgeLabel()}
               </span>
             </Show>
           </div>

@@ -1012,6 +1012,13 @@ runtime cost control, and shared AI transport surfaces.
    `frontend-modern/src/components/AI/Chat/ToolExecutionBlock.tsx`; completed
    `tool_end` events preserve streamed `raw_input` for the same readable command
    summary used while the tool is pending.
+   The 2026-06-07 completed-output badge slice rechecked OpenCode `origin/dev`
+   commit `e82542b8023a8374f29c23b70ec019c8f256354e` in the same
+   `session-v2.tsx` `GenericTool` / `Bash` renderers (lines 527-559 and
+   702-735): overflow is communicated through the expandable tool block, not
+   through transport-sized copy in the compact row. Pulse adapts that by keeping
+   exact output type/size in the accessible label and Details panel while the
+   visible compact badge says only `output available`.
    The referenced OpenCode source at fetched `origin/dev` commit
    `fa2b63f850fc0a23bec2bdff9e660450d3fe7913` also keeps assistant text,
    reasoning, and tool invocation as typed message parts in

@@ -391,7 +391,7 @@ describe('ToolExecutionBlock', () => {
 
     expect(screen.queryByText(/total_nodes/)).not.toBeInTheDocument();
     expect(screen.getByLabelText('Tool output available: structured output')).toHaveTextContent(
-      'structured output',
+      'output available',
     );
     expect(getToolDetailsTrigger()).toBeInTheDocument();
   });
@@ -410,18 +410,20 @@ describe('ToolExecutionBlock', () => {
     expect(text).not.toContain('line 1');
     expect(text).not.toContain('line 5');
     expect(screen.getByLabelText('Tool output available: 5 lines output')).toHaveTextContent(
-      '5 lines output',
+      'output available',
     );
+    expect(screen.queryByText('5 lines output')).not.toBeInTheDocument();
     expect(getToolDetailsTrigger()).toBeInTheDocument();
   });
 
-  it('summarizes suppressed single-line output by character count', () => {
+  it('keeps suppressed single-line output counts out of the visible row', () => {
     render(() => <ToolExecutionBlock tool={makeTool({ output: 'x'.repeat(160) })} />);
 
     expect(screen.queryByLabelText('Tool output preview')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Tool output available: 160 chars output')).toHaveTextContent(
-      '160 chars output',
+      'output available',
     );
+    expect(screen.queryByText('160 chars output')).not.toBeInTheDocument();
   });
 
   it('previews failed plain-text output while keeping full details available', () => {
