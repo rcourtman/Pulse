@@ -192,6 +192,7 @@ const AI_CHAT_SESSION_SEARCH_LIMIT = 30;
 const STRUCTURED_PATROL_CONTEXT_TARGETS = new Set(['patrol-configuration', 'patrol-run']);
 const STRUCTURED_RESOURCE_CONTEXT_HANDOFF_KINDS = new Set(['resource_context']);
 const AI_CHAT_CYCLE_RECENT_MODEL_LABEL = 'Cycle recent Assistant model';
+const AI_CHAT_CONTROL_LEVEL_ORDER: AIControlLevel[] = ['read_only', 'controlled', 'autonomous'];
 
 type SessionPickerSection = {
   title: string;
@@ -674,7 +675,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
   let sessionButtonRef: HTMLButtonElement | undefined;
   let sessionSearchInputRef: HTMLInputElement | undefined;
   let sessionRenameInputRef: HTMLInputElement | undefined;
+  let controlModeButtonRef: HTMLButtonElement | undefined;
   const sessionOptionRefs = new Map<string, HTMLButtonElement>();
+  const controlModeOptionRefs = new Map<AIControlLevel, HTMLButtonElement>();
   let sessionSearchRequestId = 0;
   const [modelSelectorOpenRequest, setModelSelectorOpenRequest] = createSignal(0);
   const [defaultModel, setDefaultModel] = createSignal('');
@@ -1380,6 +1383,106 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (event.key === 'Escape') {
       consumeSessionPickerKey(event);
       closeSessionPickerAndFocusTrigger();
+    }
+  };
+
+  const getCurrentControlLevelIndex = () => {
+    const index = AI_CHAT_CONTROL_LEVEL_ORDER.indexOf(controlLevel());
+    return index >= 0 ? index : 0;
+  };
+
+  const focusControlModeOptionAtIndex = (index: number) => {
+    const nextIndex =
+      ((index % AI_CHAT_CONTROL_LEVEL_ORDER.length) + AI_CHAT_CONTROL_LEVEL_ORDER.length) %
+      AI_CHAT_CONTROL_LEVEL_ORDER.length;
+    const level = AI_CHAT_CONTROL_LEVEL_ORDER[nextIndex];
+    const option = controlModeOptionRefs.get(level);
+    if (!option) return false;
+    option.focus();
+    return true;
+  };
+
+  const focusCurrentControlModeOption = () => {
+    queueMicrotask(() => {
+      if (!focusControlModeOptionAtIndex(getCurrentControlLevelIndex())) {
+        focusControlModeOptionAtIndex(0);
+      }
+    });
+  };
+
+  const focusControlModeTriggerAfterClose = () => {
+    const trigger = controlModeButtonRef;
+    if (!trigger) return;
+    window.setTimeout(() => trigger.focus(), 0);
+  };
+
+  const closeControlMenuAndFocusTrigger = () => {
+    setShowControlMenu(false);
+    focusControlModeTriggerAfterClose();
+  };
+
+  const openControlMenuAndFocusSelection = () => {
+    if (controlSaving()) return;
+    setShowControlMenu(true);
+    focusCurrentControlModeOption();
+  };
+
+  const toggleControlMenu = () => {
+    if (showControlMenu()) {
+      setShowControlMenu(false);
+      return;
+    }
+    openControlMenuAndFocusSelection();
+  };
+
+  const consumeControlMenuKey = (event: KeyboardEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+  };
+
+  const focusControlModeOptionRelativeTo = (level: AIControlLevel, offset: number) => {
+    const currentIndex = AI_CHAT_CONTROL_LEVEL_ORDER.indexOf(level);
+    if (currentIndex < 0) return false;
+    return focusControlModeOptionAtIndex(currentIndex + offset);
+  };
+
+  const handleControlModeTriggerKeyDown = (event: KeyboardEvent) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      consumeControlMenuKey(event);
+      openControlMenuAndFocusSelection();
+    }
+  };
+
+  const handleControlModeOptionKeyDown = (
+    event: KeyboardEvent & { currentTarget: HTMLButtonElement },
+    level: AIControlLevel,
+  ) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+
+    if (event.key === 'ArrowDown' && focusControlModeOptionRelativeTo(level, 1)) {
+      consumeControlMenuKey(event);
+      return;
+    }
+    if (event.key === 'ArrowUp' && focusControlModeOptionRelativeTo(level, -1)) {
+      consumeControlMenuKey(event);
+      return;
+    }
+    if (event.key === 'Home' && focusControlModeOptionAtIndex(0)) {
+      consumeControlMenuKey(event);
+      return;
+    }
+    if (
+      event.key === 'End' &&
+      focusControlModeOptionAtIndex(AI_CHAT_CONTROL_LEVEL_ORDER.length - 1)
+    ) {
+      consumeControlMenuKey(event);
+      return;
+    }
+    if (event.key === 'Escape') {
+      consumeControlMenuKey(event);
+      closeControlMenuAndFocusTrigger();
     }
   };
 
@@ -4291,7 +4394,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 <div class="relative" data-dropdown>
                   <button
                     type="button"
-                    onClick={() => setShowControlMenu(!showControlMenu())}
+                    ref={controlModeButtonRef}
+                    onClick={toggleControlMenu}
+                    onKeyDown={handleControlModeTriggerKeyDown}
                     class={`flex flex-shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded-md border transition-colors ${controlPresentation().pillClassName} ${controlSaving() ? 'opacity-70 cursor-wait' : 'hover:opacity-90'}`}
                     title={AI_CHAT_CONTROL_MODE_LABEL}
                     aria-label={`${AI_CHAT_CONTROL_MODE_LABEL}: ${controlPresentation().label}`}
@@ -4324,9 +4429,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       </div>
                       <button
                         type="button"
+                        ref={(button) => {
+                          controlModeOptionRefs.set('read_only', button);
+                        }}
                         role="menuitemradio"
                         aria-checked={controlLevel() === 'read_only'}
                         class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'read_only' ? getAIChatControlLevelPresentation('read_only').selectedClassName : ''}`}
+                        onKeyDown={(event) => handleControlModeOptionKeyDown(event, 'read_only')}
                         onClick={() => updateControlLevel('read_only')}
                       >
                         <div class="font-medium text-base-content">
@@ -4338,9 +4447,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       </button>
                       <button
                         type="button"
+                        ref={(button) => {
+                          controlModeOptionRefs.set('controlled', button);
+                        }}
                         role="menuitemradio"
                         aria-checked={controlLevel() === 'controlled'}
                         class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'controlled' ? getAIChatControlLevelPresentation('controlled').selectedClassName : ''}`}
+                        onKeyDown={(event) => handleControlModeOptionKeyDown(event, 'controlled')}
                         onClick={() => updateControlLevel('controlled')}
                       >
                         <div class="font-medium text-base-content">
@@ -4352,9 +4465,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       </button>
                       <button
                         type="button"
+                        ref={(button) => {
+                          controlModeOptionRefs.set('autonomous', button);
+                        }}
                         role="menuitemradio"
                         aria-checked={controlLevel() === 'autonomous'}
                         class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'autonomous' ? getAIChatControlLevelPresentation('autonomous').selectedClassName : ''}`}
+                        onKeyDown={(event) => handleControlModeOptionKeyDown(event, 'autonomous')}
                         onClick={() => updateControlLevel('autonomous')}
                       >
                         <div class="font-medium text-base-content">

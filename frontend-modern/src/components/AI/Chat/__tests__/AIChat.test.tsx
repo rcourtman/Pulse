@@ -2369,7 +2369,7 @@ describe('AIChat', () => {
       expect(screen.getByText('Read-only')).toBeInTheDocument();
     });
 
-    it('opens control menu on click', () => {
+    it('opens control menu on click and focuses the current mode', async () => {
       renderChat();
       const controlButton = screen.getByRole('button', {
         name: 'Assistant control mode: Read-only',
@@ -2394,6 +2394,74 @@ describe('AIChat', () => {
       expect(screen.getByText('No commands or control actions')).toBeInTheDocument();
       expect(screen.getByText('Ask before running commands')).toBeInTheDocument();
       expect(screen.getByText('Executes without approval')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(document.activeElement).toBe(
+          screen.getByRole('menuitemradio', { name: /Read-only/ }),
+        );
+      });
+    });
+
+    it('opens the control menu from the keyboard', async () => {
+      renderChat();
+      const controlButton = screen.getByRole('button', {
+        name: 'Assistant control mode: Read-only',
+      });
+
+      fireEvent.keyDown(controlButton, { key: 'ArrowDown' });
+
+      expect(controlButton).toHaveAttribute('aria-expanded', 'true');
+      expect(
+        screen.getByRole('menu', { name: 'Assistant control mode options' }),
+      ).toBeInTheDocument();
+      await waitFor(() => {
+        expect(document.activeElement).toBe(
+          screen.getByRole('menuitemradio', { name: /Read-only/ }),
+        );
+      });
+    });
+
+    it('moves focus through control modes and closes on Escape without leaking key events', async () => {
+      const onParentKeyDown = vi.fn();
+      const onClose = vi.fn();
+      render(() => (
+        <div onKeyDown={onParentKeyDown}>
+          <AIChat onClose={onClose} />
+        </div>
+      ));
+      const controlButton = screen.getByRole('button', {
+        name: 'Assistant control mode: Read-only',
+      });
+
+      fireEvent.click(controlButton);
+      const readOnlyOption = screen.getByRole('menuitemradio', { name: /Read-only/ });
+      const approvalOption = screen.getByRole('menuitemradio', { name: /Approval/ });
+      const autonomousOption = screen.getByRole('menuitemradio', { name: /Autonomous/ });
+      await waitFor(() => {
+        expect(document.activeElement).toBe(readOnlyOption);
+      });
+
+      fireEvent.keyDown(readOnlyOption, { key: 'ArrowDown' });
+      expect(document.activeElement).toBe(approvalOption);
+
+      fireEvent.keyDown(approvalOption, { key: 'End' });
+      expect(document.activeElement).toBe(autonomousOption);
+
+      fireEvent.keyDown(autonomousOption, { key: 'Home' });
+      expect(document.activeElement).toBe(readOnlyOption);
+
+      fireEvent.keyDown(readOnlyOption, { key: 'ArrowUp' });
+      expect(document.activeElement).toBe(autonomousOption);
+
+      fireEvent.keyDown(autonomousOption, { key: 'Escape' });
+
+      await waitFor(() => {
+        expect(
+          screen.queryByRole('menu', { name: 'Assistant control mode options' }),
+        ).not.toBeInTheDocument();
+        expect(document.activeElement).toBe(controlButton);
+      });
+      expect(onParentKeyDown).not.toHaveBeenCalled();
+      expect(onClose).not.toHaveBeenCalled();
     });
   });
 
