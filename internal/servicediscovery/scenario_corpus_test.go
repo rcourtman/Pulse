@@ -118,6 +118,45 @@ func contextScenarioCorpus() []contextScenario {
 				"tank/postgres",
 			},
 		},
+		{
+			name:         "frigate Docker (fact-heavy)",
+			userQuestion: "my driveway camera keeps going offline",
+			discovery: &ResourceDiscovery{
+				ID:             MakeResourceID(ResourceTypeDocker, "nvr", "frigate"),
+				ResourceType:   ResourceTypeDocker,
+				ResourceID:     "frigate",
+				TargetID:       "nvr",
+				Hostname:       "nvr",
+				ServiceType:    "frigate",
+				ServiceName:    "Frigate NVR",
+				ServiceVersion: "0.14.1",
+				Category:       CategoryNVR,
+				CLIAccess:      "docker exec frigate bash",
+				ConfigPaths:    []string{"/config/config.yml"},
+				LogPaths:       []string{"/config/frigate.log"},
+				Ports:          []PortInfo{{Port: 5000, Protocol: "tcp", Process: "frigate"}},
+				// Six priority facts — more than the old cap of 5. The
+				// service-control fact (how to restart the camera service) is last
+				// in input order, so it must be sorted ahead of the informational
+				// facts to survive the cap.
+				Facts: []DiscoveryFact{
+					{Category: FactCategoryVersion, Key: "frigate_version", Value: "0.14.1", Source: "config_files", Confidence: 0.95},
+					{Category: FactCategoryHardware, Key: "coral_tpu", Value: "/dev/apex_0", Source: "gpu_devices", Confidence: 0.9},
+					{Category: FactCategoryHardware, Key: "gpu", Value: "intel-vaapi", Source: "gpu_devices", Confidence: 0.85},
+					{Category: FactCategoryDependency, Key: "mqtt_broker", Value: "mosquitto:1883", Source: "listening_ports", Confidence: 0.85},
+					{Category: FactCategoryStorage, Key: "media_volume", Value: "/mnt/nvr zfs", Source: "disk_usage", Confidence: 0.8},
+					{Category: FactCategoryService, Key: "restart", Value: "docker restart frigate", Source: "running_services", Confidence: 0.9},
+				},
+			},
+			// To triage an offline camera the Assistant needs the config + log,
+			// the detector (coral) it depends on, and how to restart the service.
+			mustContain: []string{
+				"docker exec frigate",
+				"/config/config.yml",
+				"coral_tpu",
+				"docker restart frigate",
+			},
+		},
 	}
 }
 

@@ -2,6 +2,7 @@ package servicediscovery
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -120,31 +121,39 @@ func formatSingleDiscovery(d *ResourceDiscovery) string {
 
 // filterImportantFacts returns the most relevant facts for AI context.
 func filterImportantFacts(facts []DiscoveryFact) []DiscoveryFact {
-	var important []DiscoveryFact
-
-	// Priority categories — facts the assistant needs to understand and act on
-	// the workload. Service + storage were previously dropped, yet a service
-	// fact (e.g. the systemd unit) is exactly how you restart/reload a workload,
-	// and a storage fact (e.g. the backing dataset/disk) is where its data
-	// physically lives — neither is redundant with the path/CLI sections.
-	priorityCategories := map[FactCategory]bool{
-		FactCategoryHardware:   true, // GPU, TPU
-		FactCategoryDependency: true, // MQTT, database connections
-		FactCategorySecurity:   true, // Auth info
-		FactCategoryVersion:    true, // Version info
-		FactCategoryService:    true, // how the service is managed (systemd unit, init)
-		FactCategoryStorage:    true, // where data physically lives (pool/dataset/disk)
+	// Priority ranking — facts the assistant needs to understand and act on the
+	// workload, ordered most-actionable first so the cap never drops a fact that
+	// helps it DO something (restart, auth) in favour of an informational one.
+	// Service + storage were previously dropped entirely; a service fact (e.g.
+	// the systemd unit) is exactly how you restart/reload a workload, and a
+	// storage fact (the backing dataset/disk) is where its data lives — neither
+	// is redundant with the path/CLI sections.
+	priorityRank := map[FactCategory]int{
+		FactCategoryService:    0, // how to restart/reload — most actionable
+		FactCategorySecurity:   1, // auth/access
+		FactCategoryDependency: 2, // MQTT, database connections
+		FactCategoryHardware:   3, // GPU, TPU
+		FactCategoryVersion:    4, // version info
+		FactCategoryStorage:    5, // backing dataset/disk
 	}
 
+	var important []DiscoveryFact
 	for _, f := range facts {
-		if priorityCategories[f.Category] && f.Confidence >= 0.7 {
+		if _, ok := priorityRank[f.Category]; ok && f.Confidence >= 0.7 {
 			important = append(important, f)
 		}
 	}
 
-	// Limit to top 5 facts
-	if len(important) > 5 {
-		important = important[:5]
+	// Stable sort by actionability so the most useful facts survive the cap;
+	// within a category the analyzer's original order is preserved.
+	sort.SliceStable(important, func(i, j int) bool {
+		return priorityRank[important[i].Category] < priorityRank[important[j].Category]
+	})
+
+	// Cap to keep the pack concise (the analyzer already caps total facts at 12).
+	const maxFacts = 8
+	if len(important) > maxFacts {
+		important = important[:maxFacts]
 	}
 
 	return important

@@ -216,7 +216,7 @@ func TestFormatScopeHint(t *testing.T) {
 
 func TestFilterImportantFactsLimit(t *testing.T) {
 	var facts []DiscoveryFact
-	for i := 0; i < 7; i++ {
+	for i := 0; i < 10; i++ {
 		facts = append(facts, DiscoveryFact{
 			Category:   FactCategoryVersion,
 			Key:        "k",
@@ -224,9 +224,30 @@ func TestFilterImportantFactsLimit(t *testing.T) {
 			Confidence: 0.9,
 		})
 	}
+	// A trailing, most-actionable service-control fact among many informational
+	// ones must survive the cap (and sort to the front) — it is how the
+	// assistant restarts the workload.
+	facts = append(facts, DiscoveryFact{
+		Category:   FactCategoryService,
+		Key:        "systemd_unit",
+		Value:      "app.service",
+		Confidence: 0.9,
+	})
 
 	important := filterImportantFacts(facts)
-	if len(important) != 5 {
-		t.Fatalf("expected 5 facts, got %d", len(important))
+	if len(important) != 8 {
+		t.Fatalf("expected cap of 8 facts, got %d", len(important))
+	}
+	if important[0].Category != FactCategoryService {
+		t.Fatalf("expected the service-control fact surfaced first, got %s", important[0].Category)
+	}
+	found := false
+	for _, f := range important {
+		if f.Key == "systemd_unit" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("service-control fact was dropped by the cap")
 	}
 }
