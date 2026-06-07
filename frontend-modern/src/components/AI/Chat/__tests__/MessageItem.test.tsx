@@ -742,7 +742,10 @@ describe('MessageItem', () => {
       ).toBeInTheDocument();
     });
 
-    it('shows the latest burst workflow activity through one live transcript row', () => {
+    it('paces burst workflow activity through one live transcript row', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(1_200);
+
       const workflowStatusHistory = [
         {
           phase: 'request_start',
@@ -782,13 +785,21 @@ describe('MessageItem', () => {
         />
       ));
 
-      expect(screen.queryByText(/Preparing Pulse context\./)).not.toBeInTheDocument();
+      expect(screen.getByText('Preparing Pulse context.')).toBeInTheDocument();
+      expect(screen.queryByText(/OpenRouter is starting the response\./)).not.toBeInTheDocument();
+
+      await vi.advanceTimersByTimeAsync(650);
+
+      expect(screen.getByText('Reading current Pulse inventory.')).toBeInTheDocument();
       expect(
         screen.queryByText(/Reading current Pulse inventory with pulse_query\./),
       ).not.toBeInTheDocument();
-      expect(
-        screen.getByText(/OpenRouter is starting the response\./),
-      ).toBeInTheDocument();
+      expect(screen.queryByText(/OpenRouter is starting the response\./)).not.toBeInTheDocument();
+
+      await vi.advanceTimersByTimeAsync(650);
+
+      expect(screen.getByText('OpenRouter is starting the response.')).toBeInTheDocument();
+      expect(screen.queryByText(/Preparing Pulse context\./)).not.toBeInTheDocument();
     });
 
     it('keeps separated transcript workflow rows tied to their own streamed status', () => {

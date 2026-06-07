@@ -541,12 +541,15 @@ runtime cost control, and shared AI transport surfaces.
    progress, not answer content or a delayed walkthrough; each new
    `workflow_state` replaces the canonical active status immediately. The
    browser may retain a bounded in-flight history of those replaced labels for
-   state continuity, but the live transcript row and active-turn composer
-   footer must render the latest workflow status immediately rather than
-   replaying stale preparation/provider labels after backend or network
-   coalescing. Older neutral statuses may disappear when replaced by newer
-   status, tool, reasoning, or answer evidence; that replacement is the intended
-   motion signal.
+   state continuity. When several statuses arrive in one backend/network burst,
+   the live transcript row and active-turn composer footer must use the same
+   paced presentation helper so the operator sees the row move through
+   preparation, context, provider, and tool states instead of jumping to the
+   final burst label. Single fresh status updates still render immediately, and
+   separated transcript workflow rows stay tied to their own streamed event
+   when a durable content/tool/approval/question boundary exists. Older neutral
+   statuses may disappear when replaced by newer status, tool, reasoning, or
+   answer evidence; that replacement is the intended motion signal.
    That history must stay live-only: once visible assistant text, tool progress,
    approvals, questions, terminal `done`, terminal `error`, or explicit Stop
    take over, stale workflow text and the presentation history must clear so
