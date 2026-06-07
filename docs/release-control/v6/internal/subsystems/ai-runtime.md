@@ -143,7 +143,11 @@ timers when the stream already has a newer workflow/tool state.
    send-time recovery or hidden provider fallback. The OpenCode reference
    behavior for this slice is retries on the selected provider/model, not
    silent fallback to another provider or route; Pulse must adapt that as
-   explicit route choice plus visible route search/recovery. The Assistant
+   explicit route choice plus visible route search/recovery. Frontend stream
+   reducers must ignore retired `provider_fallback` workflow phases entirely
+   instead of rendering compatibility "fallback rejected" rows, because the
+   selected-route retry/error contract is the only live recovery path until an
+   operator explicitly chooses another route. The Assistant
    `/model` command therefore has two owned paths: an exact `provider:model-id`
    argument selects that route directly, while a partial argument opens the
    shared model picker with the search text prefilled.

@@ -976,11 +976,7 @@ export function useChat(options: UseChatOptions = {}) {
     const record = data as Record<string, unknown>;
     const phase = typeof record.phase === 'string' ? record.phase.trim() : '';
     if (phase === 'provider_fallback') {
-      return {
-        phase: 'provider_fallback_rejected',
-        message: 'Provider route-switch metadata ignored; selected route unchanged.',
-        startedAt: Date.now(),
-      };
+      return null;
     }
 
     const message = typeof record.message === 'string' ? record.message.trim() : '';

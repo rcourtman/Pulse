@@ -1332,7 +1332,7 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('surfaces obsolete provider route-switch workflow metadata without switching routes', async () => {
+    it('ignores obsolete provider route-switch workflow metadata without switching routes', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() =>
         useChat({ sessionId: 's', model: 'openrouter:openai/gpt-4o-mini' }),
@@ -1353,19 +1353,13 @@ describe('useChat', () => {
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.model).toBe('openrouter:openai/gpt-4o-mini');
-      expect(assistant.workflowStatus).toEqual(
-        expect.objectContaining({
-          phase: 'provider_fallback_rejected',
-          message: 'Provider route-switch metadata ignored; selected route unchanged.',
-        }),
-      );
-      expect(assistant.streamEvents).toEqual(
+      expect(assistant.workflowStatus?.phase).toBe('request_send');
+      expect(assistant.streamEvents).not.toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             type: 'workflow_status',
             workflowStatus: expect.objectContaining({
-              phase: 'provider_fallback_rejected',
-              message: 'Provider route-switch metadata ignored; selected route unchanged.',
+              phase: 'provider_fallback',
             }),
           }),
         ]),
@@ -1452,11 +1446,16 @@ describe('useChat', () => {
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.model).toBe('openrouter:openai/gpt-4o-mini');
-      expect(assistant.workflowStatus).toEqual(
-        expect.objectContaining({
-          phase: 'provider_fallback_rejected',
-          message: 'Provider route-switch metadata ignored; selected route unchanged.',
-        }),
+      expect(assistant.workflowStatus?.phase).toBe('request_send');
+      expect(assistant.streamEvents).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'workflow_status',
+            workflowStatus: expect.objectContaining({
+              phase: 'provider_fallback',
+            }),
+          }),
+        ]),
       );
       expect(assistant.streamEvents).not.toEqual(
         expect.arrayContaining([
