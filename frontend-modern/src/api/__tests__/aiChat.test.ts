@@ -503,6 +503,43 @@ describe('AIChatAPI', () => {
     });
   });
 
+  it('runs the long-output dev stream fixture without opening a provider request', async () => {
+    const onEvent = vi.fn();
+
+    await AIChatAPI.chat(
+      '/fixture long-output',
+      undefined,
+      'openrouter:deepseek/deepseek-chat',
+      onEvent,
+    );
+
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'session',
+      'workflow_state',
+      'tool_start',
+      'tool_end',
+      'content',
+      'done',
+    ]);
+    expect(onEvent.mock.calls[3][0]).toMatchObject({
+      type: 'tool_end',
+      data: {
+        id: 'fixture-tool-long-output',
+        name: 'pulse_read',
+        output: expect.stringContaining('line 6'),
+        success: true,
+      },
+    });
+    expect(onEvent.mock.calls[5][0]).toMatchObject({
+      type: 'done',
+      data: {
+        session_id: 'dev-fixture-long-output',
+        model: 'openrouter:deepseek/deepseek-chat',
+      },
+    });
+  });
+
   it('runs the provider-retry dev stream fixture without opening a provider request', async () => {
     const onEvent = vi.fn();
 

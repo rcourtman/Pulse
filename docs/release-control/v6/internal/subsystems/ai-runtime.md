@@ -557,6 +557,12 @@ runtime cost control, and shared AI transport surfaces.
    superseded. Live workflow and pending-tool activity must retain a per-state
    start timestamp so the drawer can show elapsed wait/run time for long
    provider starts and tool calls instead of repeating a timeless waiting label.
+   Completed plain-text tool output must keep a bounded transcript preview
+   visible by default, with full input/output available through expansion, so
+   the operator sees evidence of what completed without receiving a raw output
+   dump. Structured, binary, unavailable, or otherwise noisy output may stay
+   collapsed behind details, but a successful text command must not degrade to
+   an opaque `output available` badge when a safe preview can be rendered.
    If the UI enters a loading turn before the assistant shell or first
    `workflow_state` exists, the active-turn footer must show the active startup
    status `Sending prompt` and derive elapsed time from the submitted, non-queued

@@ -596,8 +596,12 @@ payload shape change when the portal presents compact client rows.
 	emitting placeholder structured input plus raw provider-style input on
 	`tool_start`, mutating that same row through `tool_progress`, and pacing the
 	running state long enough for browser proof to inspect and copy both the
-	completed input and current progress before `tool_end`. At least one
-	fixture-backed Assistant tool sequence must exercise compacted provider artifact
+		completed input and current progress before `tool_end`. At least one
+		fixture-backed Assistant tool sequence must exercise successful long
+		plain-text tool output by emitting enough output lines to prove the browser
+		drawer renders a bounded collapsed preview, avoids an opaque output badge,
+		and preserves the full output in expandable details. At least one
+		fixture-backed Assistant tool sequence must exercise compacted provider artifact
 	suppression by emitting compacted pre-tool content before a governed tool row
 	and final normal answer content. At least one fixture-backed Assistant tool
 	sequence must exercise a buffered `tool_start` -> `tool_end` burst with no

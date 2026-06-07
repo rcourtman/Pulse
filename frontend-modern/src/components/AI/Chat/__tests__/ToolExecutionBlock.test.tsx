@@ -419,7 +419,7 @@ describe('ToolExecutionBlock', () => {
     expect(getToolDetailsTrigger()).toBeInTheDocument();
   });
 
-  it('keeps successful long plain-text output behind details', () => {
+  it('previews successful long plain-text output with a bounded collapsed view', () => {
     const { container } = render(() => (
       <ToolExecutionBlock
         tool={makeTool({
@@ -429,23 +429,22 @@ describe('ToolExecutionBlock', () => {
     ));
 
     const text = container.textContent || '';
-    expect(screen.queryByLabelText('Tool output preview')).not.toBeInTheDocument();
-    expect(text).not.toContain('line 1');
+    const preview = screen.getByLabelText('Tool output preview');
+    expect(preview).toHaveTextContent('line 1');
+    expect(preview).toHaveTextContent('line 4');
+    expect(preview).toHaveTextContent('...');
     expect(text).not.toContain('line 5');
-    expect(screen.getByLabelText('Tool output available: 5 lines output')).toHaveTextContent(
-      'output available',
-    );
+    expect(screen.queryByLabelText(/Tool output available/)).not.toBeInTheDocument();
     expect(screen.queryByText('5 lines output')).not.toBeInTheDocument();
     expect(getToolDetailsTrigger()).toBeInTheDocument();
   });
 
-  it('keeps suppressed single-line output counts out of the visible row', () => {
+  it('previews long successful single-line output without showing raw output counts', () => {
     render(() => <ToolExecutionBlock tool={makeTool({ output: 'x'.repeat(160) })} />);
 
-    expect(screen.queryByLabelText('Tool output preview')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Tool output available: 160 chars output')).toHaveTextContent(
-      'output available',
-    );
+    const preview = screen.getByLabelText('Tool output preview');
+    expect(preview).toHaveTextContent(`${'x'.repeat(120)}...`);
+    expect(screen.queryByLabelText(/Tool output available/)).not.toBeInTheDocument();
     expect(screen.queryByText('160 chars output')).not.toBeInTheDocument();
   });
 

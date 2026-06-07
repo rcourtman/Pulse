@@ -8,6 +8,7 @@ export const AI_CHAT_DEV_STREAM_FIXTURE_PROMPTS = [
   '/fixture context-group',
   '/fixture status-boundary',
   '/fixture pending-tool',
+  '/fixture long-output',
   '/fixture provider-retry',
   '/fixture stream-idle',
   '/fixture queue-hold',
@@ -541,6 +542,59 @@ const buildPendingToolFixtureEvents = (model?: string): AIChatStreamEvent[] => [
   },
 ];
 
+const buildLongOutputFixtureEvents = (model?: string): AIChatStreamEvent[] => [
+  {
+    type: 'session',
+    data: { id: 'dev-fixture-long-output' },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'request_start',
+      message: 'Preparing Pulse context.',
+    },
+  },
+  {
+    type: 'tool_start',
+    data: {
+      id: 'fixture-tool-long-output',
+      name: 'pulse_read',
+      input:
+        '{"action":"exec","target_host":"current_resource","command":"cat /tmp/pulse-long-output-fixture.txt"}',
+      raw_input:
+        'pulse_read(target_host="current_resource", command="cat /tmp/pulse-long-output-fixture.txt")',
+    },
+  },
+  {
+    type: 'tool_end',
+    data: {
+      id: 'fixture-tool-long-output',
+      name: 'pulse_read',
+      input:
+        '{"action":"exec","target_host":"current_resource","command":"cat /tmp/pulse-long-output-fixture.txt"}',
+      raw_input:
+        'pulse_read(target_host="current_resource", command="cat /tmp/pulse-long-output-fixture.txt")',
+      output: ['line 1', 'line 2', 'line 3', 'line 4', 'line 5', 'line 6'].join('\n'),
+      success: true,
+    },
+  },
+  {
+    type: 'content',
+    data: {
+      text: 'The long-output fixture kept a bounded plain-text tool preview visible while preserving the full output in details.',
+    },
+  },
+  {
+    type: 'done',
+    data: {
+      session_id: 'dev-fixture-long-output',
+      model: assistantFixtureModel(model),
+      input_tokens: 64,
+      output_tokens: 24,
+    },
+  },
+];
+
 const buildProviderRetryFixtureEvents = (): AIChatStreamEvent[] => [
   {
     type: 'session',
@@ -830,6 +884,9 @@ const buildFixtureEvents = (prompt: string, model?: string): AIChatStreamEvent[]
   }
   if (normalized === '/fixture pending-tool') {
     return buildPendingToolFixtureEvents(model);
+  }
+  if (normalized === '/fixture long-output') {
+    return buildLongOutputFixtureEvents(model);
   }
   if (normalized === '/fixture provider-retry') {
     return buildProviderRetryFixtureEvents();

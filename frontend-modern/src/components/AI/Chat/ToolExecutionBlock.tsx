@@ -95,7 +95,7 @@ const trimPreviewLine = (line: string, maxLength: number) => {
   return `${trimmed.slice(0, maxLength).trimEnd()}...`;
 };
 
-const formatOutputPreview = (output: string, success: boolean) => {
+const formatOutputPreview = (output: string) => {
   const normalized = stripAnsiControlCodes(output).replace(/\r\n/g, '\n').trim();
   if (!hasReadableToolOutput(normalized)) return '';
   if (looksLikeStructuredOutput(normalized)) return '';
@@ -112,7 +112,6 @@ const formatOutputPreview = (output: string, success: boolean) => {
   const charsTruncated = lines
     .slice(0, maxLines)
     .some((line) => line.trimEnd().length > maxLineLength);
-  if (success && (linesTruncated || charsTruncated)) return '';
   return linesTruncated || charsTruncated ? `${fullPreview}\n...` : fullPreview;
 };
 
@@ -298,7 +297,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
     if (!preview || summary.startsWith('$ ') || preview === summary) return '';
     return preview;
   });
-  const outputPreview = createMemo(() => formatOutputPreview(outputText(), props.tool.success));
+  const outputPreview = createMemo(() => formatOutputPreview(outputText()));
   const hiddenOutputSummary = createMemo(() =>
     outputPreview() ? '' : formatHiddenOutputSummary(outputText()),
   );
