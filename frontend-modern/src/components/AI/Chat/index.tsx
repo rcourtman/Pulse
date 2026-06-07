@@ -4593,6 +4593,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   initialSearchQuery={modelSelectorInitialSearch()}
                   onModelSelect={selectModel}
                   onRefresh={() => loadModels(true)}
+                  onManageProviders={openAssistantProviderSettings}
                 />
                 <Show when={providerRouteHealth()}>
                   {(health) => (

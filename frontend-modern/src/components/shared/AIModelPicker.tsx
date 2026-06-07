@@ -12,6 +12,7 @@ import {
 import ChevronDownIcon from 'lucide-solid/icons/chevron-down';
 import MonitorIcon from 'lucide-solid/icons/monitor';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
+import SettingsIcon from 'lucide-solid/icons/settings';
 import { SearchField } from '@/components/shared/SearchField';
 import type { ModelInfo } from '@/types/ai';
 import { AI_CHAT_MODEL_SELECTOR_EMPTY_STATE } from '@/utils/aiChatPresentation';
@@ -56,6 +57,8 @@ export interface AIModelPickerProps {
   isLoading?: boolean;
   error?: string;
   onRefresh?: () => void;
+  onManageProviders?: () => void;
+  manageProvidersLabel?: string;
   openRequest?: number;
   initialSearchQuery?: string;
   align?: 'left' | 'right';
@@ -413,6 +416,10 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
     props.onModelSelect(modelId);
     closePicker();
   };
+  const handleManageProviders = () => {
+    closePicker();
+    props.onManageProviders?.();
+  };
   const isSelectedRoute = (modelId: string) => selectedModel() === modelId;
   const optionClass = (isSelected: boolean) =>
     `w-full px-3 py-2 text-left text-sm hover:bg-surface-hover ${
@@ -648,6 +655,17 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
                 searchInputRef = el;
               }}
             />
+            <Show when={props.onManageProviders}>
+              <button
+                type="button"
+                onClick={handleManageProviders}
+                class="rounded-md p-1.5 text-muted hover:bg-surface-hover hover:text-base-content"
+                title={props.manageProvidersLabel || 'Open provider settings'}
+                aria-label={props.manageProvidersLabel || 'Open provider settings'}
+              >
+                <SettingsIcon class="h-3.5 w-3.5" />
+              </button>
+            </Show>
             <Show when={props.onRefresh}>
               <button
                 type="button"

@@ -201,6 +201,28 @@ describe('AIModelPicker', () => {
     ).toBeInTheDocument();
   });
 
+  it('opens provider management from the model chooser header', () => {
+    const onManageProviders = vi.fn();
+    render(() => (
+      <AIModelPicker
+        models={models}
+        selectedModel="openrouter:minimax/minimax-m2.5"
+        onModelSelect={vi.fn()}
+        onManageProviders={onManageProviders}
+        manageProvidersLabel="Open Assistant provider settings"
+        title="Select shared default model"
+      />
+    ));
+
+    fireEvent.click(screen.getByTitle('Select shared default model'));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Assistant provider settings' }));
+
+    expect(onManageProviders).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByRole('dialog', { name: 'Select shared default model' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('prefills search when opened by an external request', async () => {
     const [openRequest, setOpenRequest] = createSignal(0);
     const [initialSearchQuery, setInitialSearchQuery] = createSignal('');

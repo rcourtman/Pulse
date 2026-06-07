@@ -1564,7 +1564,11 @@ The shared AI model picker owns model route search and presentation for
 Assistant surfaces. External open requests may seed an initial search query,
 but filtering, current/default route badges, recent routes, and custom route
 selection must remain inside `AIModelPicker`; callers should not duplicate that
-logic in command handlers or feature-local model selectors.
+logic in command handlers or feature-local model selectors. Optional provider
+management actions belong in the same picker header as model refresh so
+Assistant and settings surfaces can expose provider repair without forking the
+model-list shell; callers own the destination, while the shared picker owns the
+button placement, labeling, close behavior, and keyboard-safe dropdown state.
 
 The Patrol alert-trigger severity selector under
 `frontend-modern/src/features/patrol/` is built on the shared `FormSelect`

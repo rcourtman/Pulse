@@ -36,6 +36,7 @@ const {
     recentModelIds?: string[];
     openRequest?: number;
     initialSearchQuery?: string;
+    onManageProviders?: () => void;
     onModelSelect?: (modelId: string) => void;
   }> = [];
   const mockChat = {
@@ -306,6 +307,7 @@ vi.mock('../ModelSelector', () => ({
     recentModelIds?: string[];
     openRequest?: number;
     initialSearchQuery?: string;
+    onManageProviders?: () => void;
     onModelSelect?: (modelId: string) => void;
   }) => {
     mockModelSelectorProps.push(props);
@@ -1862,6 +1864,19 @@ describe('AIChat', () => {
       expect(mockNavigate).toHaveBeenCalledWith('/settings/system-ai');
       expect(onClose).toHaveBeenCalledTimes(1);
       expect(mockChat.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('wires Assistant provider settings into the model selector', () => {
+      const onClose = vi.fn();
+      renderChat(onClose);
+
+      const selectorProps = mockModelSelectorProps[mockModelSelectorProps.length - 1];
+      expect(selectorProps.onManageProviders).toEqual(expect.any(Function));
+
+      selectorProps.onManageProviders?.();
+
+      expect(mockNavigate).toHaveBeenCalledWith('/settings/system-ai');
+      expect(onClose).toHaveBeenCalledTimes(1);
     });
 
     it('filters slash command suggestions by alias and runs clicked commands', async () => {

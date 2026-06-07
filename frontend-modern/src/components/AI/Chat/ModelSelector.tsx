@@ -21,6 +21,7 @@ export interface ModelSelectorProps {
   initialSearchQuery?: string;
   onModelSelect: (modelId: string) => void;
   onRefresh?: () => void;
+  onManageProviders?: () => void;
 }
 
 /**
@@ -94,6 +95,8 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
       openRequest={props.openRequest}
       initialSearchQuery={props.initialSearchQuery}
       onRefresh={props.onRefresh}
+      onManageProviders={props.onManageProviders}
+      manageProvidersLabel="Open Assistant provider settings"
       align="left"
       buttonClass="flex flex-shrink-0 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-[11px] text-muted transition-colors hover:border-border hover:text-base-content"
       buttonLabelClass="max-w-[90px] truncate font-medium sm:max-w-[180px]"

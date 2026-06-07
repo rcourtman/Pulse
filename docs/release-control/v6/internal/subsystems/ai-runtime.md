@@ -218,7 +218,14 @@ timers when the stream already has a newer workflow/tool state.
    search/listbox surface, focus search on open, move keyboard focus from
    search into the current or filtered model row, and keep every actionable
    list row, including catalog-disclosure rows, navigable without requiring
-   mouse clicks. Stop is the explicit
+   mouse clicks. The 2026-06-07 model-provider slice rechecked OpenCode
+   `origin/dev` commit `914a643`: `packages/app/src/components/dialog-select-model.tsx`
+   exposes provider connection and model management actions directly inside
+   the model picker, while `packages/tui/src/component/dialog-model.tsx`
+   exposes a provider action in the same dialog. Pulse adapts that by wiring
+   the Assistant model chooser's provider action to the governed Assistant &
+   Patrol provider settings route instead of hiding provider repair behind a
+   separate slash command or silently switching model routes. Stop is the explicit
    interruption path: it must abort the active stream, clear queued follow-ups
    and pending tool/approval/question affordances, preserve any partial model
    text, return focus to the composer, and render a neutral transcript marker
