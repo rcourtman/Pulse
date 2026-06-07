@@ -324,8 +324,12 @@ runtime cost control, and shared AI transport surfaces.
    input cursor boundary: previous history is available at the start of the
    current draft, and next history restores the saved draft at the end. Pulse's
    Assistant drawer follows that draft-safe recall model rather than limiting
-   history recall to an empty composer. Scoped context replay remains owned by
-   explicit session handoff metadata or queued follow-up edit state.
+   history recall to an empty composer. Once a history entry is loaded, the
+   same boundary ownership remains direction-specific: ArrowUp may move to an
+   older prompt only from the start edge, and ArrowDown may move newer or
+   restore the saved draft only from the end edge, so normal textarea movement
+   is not stolen at the opposite boundary. Scoped context replay remains owned
+   by explicit session handoff metadata or queued follow-up edit state.
    Unsent composer drafts are recoverable remount state, not prompt history:
    closing or remounting the Assistant drawer must restore the current prompt,
    structured mentions, cursor position, and any queued-follow-up edit metadata

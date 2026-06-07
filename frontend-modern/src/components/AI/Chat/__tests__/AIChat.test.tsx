@@ -2156,6 +2156,7 @@ describe('AIChat', () => {
       fireEvent.keyDown(textarea, { key: 'ArrowUp' });
       await waitFor(() => expect(textarea.value).toBe('first prompt'));
 
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length);
       fireEvent.keyDown(textarea, { key: 'ArrowDown' });
       await waitFor(() => expect(textarea.value).toBe('second prompt'));
 
@@ -2180,8 +2181,79 @@ describe('AIChat', () => {
 
       await waitFor(() => expect(textarea.value).toBe('previous prompt'));
 
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length);
       fireEvent.keyDown(textarea, { key: 'ArrowDown' });
 
+      await waitFor(() => expect(textarea.value).toBe('draft prompt'));
+    });
+
+    it('keeps previous-history navigation at the start boundary only', async () => {
+      localStorage.setItem(
+        'pulse:ai_chat_prompt_history',
+        JSON.stringify([
+          { prompt: 'newer prompt', mentions: [] },
+          { prompt: 'older prompt', mentions: [] },
+        ]),
+      );
+
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+
+      fireEvent.input(textarea, { target: { value: 'draft prompt' } });
+      textarea.setSelectionRange(0, 0);
+      fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+      await waitFor(() => expect(textarea.value).toBe('newer prompt'));
+
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+      const arrowUpAtEnd = new KeyboardEvent('keydown', {
+        key: 'ArrowUp',
+        bubbles: true,
+        cancelable: true,
+      });
+      textarea.dispatchEvent(arrowUpAtEnd);
+
+      expect(textarea.value).toBe('newer prompt');
+      expect(arrowUpAtEnd.defaultPrevented).toBe(false);
+
+      textarea.setSelectionRange(0, 0);
+      fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+      await waitFor(() => expect(textarea.value).toBe('older prompt'));
+    });
+
+    it('keeps next-history navigation at the end boundary only', async () => {
+      localStorage.setItem(
+        'pulse:ai_chat_prompt_history',
+        JSON.stringify([
+          { prompt: 'newer prompt', mentions: [] },
+          { prompt: 'older prompt', mentions: [] },
+        ]),
+      );
+
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+
+      fireEvent.input(textarea, { target: { value: 'draft prompt' } });
+      textarea.setSelectionRange(0, 0);
+      fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+      await waitFor(() => expect(textarea.value).toBe('newer prompt'));
+
+      textarea.setSelectionRange(0, 0);
+      const arrowDownAtStart = new KeyboardEvent('keydown', {
+        key: 'ArrowDown',
+        bubbles: true,
+        cancelable: true,
+      });
+      textarea.dispatchEvent(arrowDownAtStart);
+
+      expect(textarea.value).toBe('newer prompt');
+      expect(arrowDownAtStart.defaultPrevented).toBe(false);
+
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+      fireEvent.keyDown(textarea, { key: 'ArrowDown' });
       await waitFor(() => expect(textarea.value).toBe('draft prompt'));
     });
 
