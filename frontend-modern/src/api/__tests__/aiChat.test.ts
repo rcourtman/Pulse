@@ -476,6 +476,36 @@ describe('AIChatAPI', () => {
     });
   });
 
+  it('runs the queue-hold dev stream fixture without opening a provider request', async () => {
+    const onEvent = vi.fn();
+
+    await AIChatAPI.chat('/fixture queue-hold', undefined, 'openrouter:qwen/qwen3.7-plus', onEvent);
+
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'session',
+      'workflow_state',
+      'workflow_state',
+      'workflow_state',
+      'content',
+      'done',
+    ]);
+    expect(onEvent.mock.calls[3][0]).toMatchObject({
+      type: 'workflow_state',
+      data: {
+        phase: 'stream_idle',
+        message: 'Holding the Assistant turn open so queued follow-ups can be reordered.',
+      },
+    });
+    expect(onEvent.mock.calls[5][0]).toMatchObject({
+      type: 'done',
+      data: {
+        session_id: 'dev-fixture-queue-hold',
+        model: 'openrouter:qwen/qwen3.7-plus',
+      },
+    });
+  });
+
   it('runs the compacted-artifact dev stream fixture without opening a provider request', async () => {
     const onEvent = vi.fn();
 

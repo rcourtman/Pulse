@@ -275,6 +275,40 @@ export function useChat(options: UseChatOptions = {}) {
     return item;
   };
 
+  const moveQueuedMessageToFront = (messageId: string) => {
+    setMessages((prev) => {
+      const targetIndex = prev.findIndex(
+        (msg) => msg.id === messageId && msg.role === 'user' && msg.delivery === 'queued',
+      );
+      if (targetIndex < 0) return prev;
+
+      const target = prev[targetIndex];
+      const withoutTarget = prev.filter((msg) => msg.id !== messageId);
+      const firstQueuedIndex = withoutTarget.findIndex(
+        (msg) => msg.role === 'user' && msg.delivery === 'queued',
+      );
+      if (firstQueuedIndex < 0) return prev;
+      return [
+        ...withoutTarget.slice(0, firstQueuedIndex),
+        target,
+        ...withoutTarget.slice(firstQueuedIndex),
+      ];
+    });
+  };
+
+  const promoteQueuedFollowUp = (id: string): boolean => {
+    const item = queuedFollowUps().find((entry) => entry.id === id);
+    if (!item) return false;
+
+    setQueuedFollowUps((prev) => {
+      const currentIndex = prev.findIndex((entry) => entry.id === id);
+      if (currentIndex <= 0) return prev;
+      return [prev[currentIndex], ...prev.slice(0, currentIndex), ...prev.slice(currentIndex + 1)];
+    });
+    moveQueuedMessageToFront(item.messageId);
+    return true;
+  };
+
   const clearQueuedFollowUps = () => {
     const messageIds = new Set(queuedFollowUps().map((entry) => entry.messageId));
     setQueuedFollowUps([]);
@@ -730,12 +764,7 @@ export function useChat(options: UseChatOptions = {}) {
     return {
       ...msg,
       streamEvents: resolvedTool
-        ? replacePendingToolStreamEvents(
-            msg.streamEvents || [],
-            resolvedTool,
-            matchesTool,
-            now,
-          )
+        ? replacePendingToolStreamEvents(msg.streamEvents || [], resolvedTool, matchesTool, now)
         : msg.streamEvents,
       workflowStatus: undefined,
       workflowStatusHistory: undefined,
@@ -1861,6 +1890,19 @@ export function useChat(options: UseChatOptions = {}) {
     return startMessageSend(prompt, mentions, findingId, sendOptions);
   };
 
+  const sendQueuedFollowUpNow = async (id: string): Promise<boolean> => {
+    const item = queuedFollowUps().find((entry) => entry.id === id);
+    if (!item) return false;
+    if (isLoading()) {
+      return promoteQueuedFollowUp(id);
+    }
+
+    setQueuedFollowUps((prev) => prev.filter((entry) => entry.id !== id));
+    return startMessageSend(item.prompt, item.mentions, item.findingId, item.sendOptions, {
+      queuedMessageId: item.messageId,
+    });
+  };
+
   // Clear messages and reset session (for starting fresh)
   const clearMessages = () => {
     void cancelActiveRequest();
@@ -2179,6 +2221,7 @@ export function useChat(options: UseChatOptions = {}) {
     queuedFollowUps,
     queuedFollowUpCount: () => queuedFollowUps().length,
     sendMessage,
+    sendQueuedFollowUpNow,
     retryMessage,
     undoLastTurn,
     redoLastTurn,

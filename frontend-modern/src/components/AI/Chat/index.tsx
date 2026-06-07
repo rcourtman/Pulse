@@ -1585,6 +1585,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
     queueMicrotask(resizeTextarea);
   };
 
+  const sendQueuedFollowUpNext = (id: string) => {
+    void chat.sendQueuedFollowUpNow(id).finally(() => {
+      focusComposer();
+    });
+  };
+
   const restoreLastTurnDraft = (draft: RestoredPromptDraft) => {
     resetPromptHistoryNavigation();
     setEditingQueuedFollowUp(null);
@@ -4349,11 +4355,22 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 </div>
                 <div class="mt-1 max-h-24 space-y-1 overflow-y-auto">
                   <For each={chat.queuedFollowUps()}>
-                    {(queued) => {
+                    {(queued, index) => {
                       const preview = () => queuedFollowUpPreview(queued.prompt);
                       return (
                         <div class="flex min-h-7 items-center gap-2 rounded-md bg-white/70 px-2 py-1 text-xs text-blue-900 dark:bg-blue-900/30 dark:text-blue-100">
                           <span class="min-w-0 flex-1 truncate">{preview()}</span>
+                          <Show when={chat.queuedFollowUpCount() > 1 && index() > 0}>
+                            <button
+                              type="button"
+                              onClick={() => sendQueuedFollowUpNext(queued.id)}
+                              class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60"
+                              title="Send queued follow-up next"
+                              aria-label={`Send queued follow-up next: ${preview()}`}
+                            >
+                              <SendIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                            </button>
+                          </Show>
                           <button
                             type="button"
                             onClick={() => editQueuedFollowUp(queued.id)}

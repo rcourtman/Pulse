@@ -8,6 +8,7 @@ export const AI_CHAT_DEV_STREAM_FIXTURE_PROMPTS = [
   '/fixture pending-tool',
   '/fixture provider-retry',
   '/fixture stream-idle',
+  '/fixture queue-hold',
   '/fixture compacted-artifact',
   '/fixture skipped-tool',
 ] as const;
@@ -537,6 +538,51 @@ const buildStreamIdleFixtureEvents = (model?: string): AIChatStreamEvent[] => [
   },
 ];
 
+const buildQueueHoldFixtureEvents = (model?: string): AIChatStreamEvent[] => [
+  {
+    type: 'session',
+    data: { id: 'dev-fixture-queue-hold' },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'request_start',
+      message: 'Preparing Pulse context.',
+    },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'provider_start',
+      message: 'Sent request to OpenRouter; waiting for the first token.',
+      provider: 'openrouter',
+      model: assistantFixtureModel(model),
+    },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'stream_idle',
+      message: 'Holding the Assistant turn open so queued follow-ups can be reordered.',
+    },
+  },
+  {
+    type: 'content',
+    data: {
+      text: 'The queue-hold fixture kept the turn active long enough to inspect queued follow-up controls.',
+    },
+  },
+  {
+    type: 'done',
+    data: {
+      session_id: 'dev-fixture-queue-hold',
+      model: assistantFixtureModel(model),
+      input_tokens: 44,
+      output_tokens: 23,
+    },
+  },
+];
+
 const buildCompactedArtifactFixtureEvents = (model?: string): AIChatStreamEvent[] => [
   {
     type: 'session',
@@ -619,6 +665,9 @@ const buildFixtureEvents = (prompt: string, model?: string): AIChatStreamEvent[]
   if (normalized === '/fixture stream-idle') {
     return buildStreamIdleFixtureEvents(model);
   }
+  if (normalized === '/fixture queue-hold') {
+    return buildQueueHoldFixtureEvents(model);
+  }
   return buildDeviceCountFixtureEvents(model);
 };
 
@@ -650,6 +699,13 @@ const fixtureStepDelay = (
     event.data.phase === 'stream_idle'
   ) {
     return 1800;
+  }
+  if (
+    normalizedPrompt === '/fixture queue-hold' &&
+    event.type === 'workflow_state' &&
+    event.data.phase === 'stream_idle'
+  ) {
+    return 10000;
   }
   if (normalizedPrompt === '/fixture pending-tool') return defaultDelayMs;
   if (normalizedPrompt !== '/fixture tool-burst') return defaultDelayMs;

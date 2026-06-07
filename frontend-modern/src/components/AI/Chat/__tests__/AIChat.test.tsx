@@ -51,6 +51,7 @@ const {
     stop: vi.fn(),
     cancelQueuedFollowUp: vi.fn(),
     takeQueuedFollowUp: vi.fn((): QueuedFollowUp | undefined => undefined),
+    sendQueuedFollowUpNow: vi.fn().mockResolvedValue(true),
     clearQueuedFollowUps: vi.fn(),
     clearMessages: vi.fn(),
     loadSession: vi.fn().mockResolvedValue(true),
@@ -427,6 +428,7 @@ beforeEach(() => {
   mockChat.queuedFollowUps.mockReturnValue([]);
   mockChat.queuedFollowUpCount.mockReturnValue(0);
   mockChat.sendMessage.mockResolvedValue(true);
+  mockChat.sendQueuedFollowUpNow.mockResolvedValue(true);
   mockChat.undoLastTurn.mockResolvedValue(null);
   mockChat.redoLastTurn.mockResolvedValue({ success: false, canRedo: false });
   mockChat.takeQueuedFollowUp.mockReturnValue(undefined);
@@ -2386,6 +2388,40 @@ describe('AIChat', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Clear queued follow-up messages' }));
 
       expect(mockChat.clearQueuedFollowUps).toHaveBeenCalledTimes(1);
+    });
+
+    it('lets a later queued follow-up be promoted to send next', async () => {
+      mockChat.queuedFollowUpCount.mockReturnValue(2);
+      mockChat.queuedFollowUps.mockReturnValue([
+        {
+          id: 'queued-1',
+          messageId: 'msg-queued-1',
+          prompt: 'first queued prompt',
+          timestamp: new Date(),
+        },
+        {
+          id: 'queued-2',
+          messageId: 'msg-queued-2',
+          prompt: 'second queued prompt',
+          timestamp: new Date(),
+        },
+      ]);
+      renderChat();
+
+      expect(
+        screen.queryByRole('button', {
+          name: 'Send queued follow-up next: first queued prompt',
+        }),
+      ).not.toBeInTheDocument();
+
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: 'Send queued follow-up next: second queued prompt',
+        }),
+      );
+
+      expect(mockChat.sendQueuedFollowUpNow).toHaveBeenCalledWith('queued-2');
+      await waitFor(() => expect(document.activeElement).toHaveAttribute('placeholder'));
     });
 
     it('passes queued follow-up metadata and row actions into the transcript', () => {

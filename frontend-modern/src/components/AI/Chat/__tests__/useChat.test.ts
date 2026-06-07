@@ -104,6 +104,7 @@ describe('useChat', () => {
       expect(typeof chat.stop).toBe('function');
       expect(typeof chat.cancelQueuedFollowUp).toBe('function');
       expect(typeof chat.takeQueuedFollowUp).toBe('function');
+      expect(typeof chat.sendQueuedFollowUpNow).toBe('function');
       expect(typeof chat.clearQueuedFollowUps).toBe('function');
       expect(typeof chat.clearMessages).toBe('function');
       expect(typeof chat.loadSession).toBe('function');
@@ -742,6 +743,54 @@ describe('useChat', () => {
       expect(mockChat).toHaveBeenCalledTimes(3);
       expect(mockChat.mock.calls[2][0]).toBe('third');
       expect(chat.queuedFollowUpCount()).toBe(0);
+
+      resolvers[2]();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(chat.isLoading()).toBe(false);
+      dispose();
+    });
+
+    it('promotes a queued follow-up to send next while the active response is streaming', async () => {
+      const resolvers: Array<() => void> = [];
+      mockChat.mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            resolvers.push(resolve);
+          }),
+      );
+
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'sess' }));
+      const first = chat.sendMessage('first');
+      await new Promise((r) => setTimeout(r, 0));
+
+      await chat.sendMessage('second');
+      await chat.sendMessage('third');
+
+      const third = chat.queuedFollowUps().find((entry) => entry.prompt === 'third');
+      expect(third).toBeDefined();
+      await expect(chat.sendQueuedFollowUpNow(third!.id)).resolves.toBe(true);
+
+      expect(chat.queuedFollowUps().map((entry) => entry.prompt)).toEqual(['third', 'second']);
+      expect(
+        chat
+          .messages()
+          .filter((message) => message.role === 'user' && message.delivery === 'queued')
+          .map((message) => message.content),
+      ).toEqual(['third', 'second']);
+
+      resolvers[0]();
+      await first;
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(mockChat).toHaveBeenCalledTimes(2);
+      expect(mockChat.mock.calls[1][0]).toBe('third');
+      expect(chat.queuedFollowUps().map((entry) => entry.prompt)).toEqual(['second']);
+
+      resolvers[1]();
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(mockChat).toHaveBeenCalledTimes(3);
+      expect(mockChat.mock.calls[2][0]).toBe('second');
 
       resolvers[2]();
       await new Promise((r) => setTimeout(r, 0));
