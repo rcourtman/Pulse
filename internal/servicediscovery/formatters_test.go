@@ -53,7 +53,9 @@ func TestFormattersAndTables(t *testing.T) {
 	}
 
 	remediation := FormatForRemediation(discovery)
-	if !strings.Contains(remediation, "How to Execute Commands") || !strings.Contains(remediation, "Hardware") {
+	if !strings.Contains(remediation, "How to Execute Commands") ||
+		!strings.Contains(remediation, "Relevant Facts") ||
+		!strings.Contains(remediation, "gpu") {
 		t.Fatalf("unexpected remediation output: %s", remediation)
 	}
 	if FormatForRemediation(nil) != "" {

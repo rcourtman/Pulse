@@ -22,7 +22,10 @@ type contextScenario struct {
 	name         string             // service-type cell
 	userQuestion string             // the real question this context must answer
 	discovery    *ResourceDiscovery // a realistic discovered workload
-	mustContain  []string           // substrings the context pack must include
+	mustContain  []string           // substrings the chat context pack (FormatForAIContext) must include
+	// substrings the remediation pack (FormatForRemediation, what Patrol/fix
+	// flows consume) must include; nil skips the remediation check for this cell.
+	remediationMustContain []string
 }
 
 func contextScenarioCorpus() []contextScenario {
@@ -117,6 +120,12 @@ func contextScenarioCorpus() []contextScenario {
 				"postgresql@16-main.service",
 				"tank/postgres",
 			},
+			remediationMustContain: []string{
+				"postgresql@16-main.service",  // service control
+				"postgresql.conf",             // config
+				"/var/lib/postgresql/16/main", // data directory
+				"tank/postgres",               // storage fact (now surfaced)
+			},
 		},
 		{
 			name:         "frigate Docker (fact-heavy)",
@@ -202,6 +211,12 @@ func contextScenarioCorpus() []contextScenario {
 				"/srv/nginx/conf.d -> /etc/nginx/conf.d (read-only)",
 				"nginx -s reload",
 			},
+			remediationMustContain: []string{
+				"nginx -s reload",   // service control
+				"default.conf",      // config
+				"/srv/nginx/conf.d", // bind-mount host source
+				"app:3000",          // dependency fact (now surfaced) — the 502 upstream
+			},
 		},
 		{
 			name:         "mosquitto MQTT broker (LXC, auth)",
@@ -238,6 +253,11 @@ func contextScenarioCorpus() []contextScenario {
 				"allow_anonymous false",
 				"systemctl restart mosquitto",
 			},
+			remediationMustContain: []string{
+				"systemctl restart mosquitto", // service control
+				"auth.conf",                   // config
+				"allow_anonymous false",       // security fact (now surfaced) — the connect failure
+			},
 		},
 	}
 }
@@ -249,6 +269,27 @@ func TestContextScenarioCorpus(t *testing.T) {
 			for _, want := range sc.mustContain {
 				if !strings.Contains(pack, want) {
 					t.Errorf("context pack for %q (question: %q) is missing %q —\nthe Assistant could not answer the question without it.\n--- context pack ---\n%s",
+						sc.name, sc.userQuestion, want, pack)
+				}
+			}
+		})
+	}
+}
+
+// The remediation pack (FormatForRemediation, what Patrol/fix flows consume)
+// must carry the same act-on-it context as the chat pack — including the
+// dependency, security, and storage facts a fix actually needs (a 502's
+// upstream, a broker's auth, a database's backing disk).
+func TestRemediationScenarioCorpus(t *testing.T) {
+	for _, sc := range contextScenarioCorpus() {
+		if len(sc.remediationMustContain) == 0 {
+			continue
+		}
+		t.Run(sc.name, func(t *testing.T) {
+			pack := FormatForRemediation(sc.discovery)
+			for _, want := range sc.remediationMustContain {
+				if !strings.Contains(pack, want) {
+					t.Errorf("remediation pack for %q (question: %q) is missing %q —\nthe fix flow could not act without it.\n--- remediation pack ---\n%s",
 						sc.name, sc.userQuestion, want, pack)
 				}
 			}

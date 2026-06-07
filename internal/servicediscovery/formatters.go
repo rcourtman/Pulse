@@ -394,11 +394,24 @@ func FormatForRemediation(d *ResourceDiscovery) string {
 		sb.WriteString("\n\n")
 	}
 
-	// Hardware info for special considerations
-	for _, f := range d.Facts {
-		if f.Category == FactCategoryHardware {
-			sb.WriteString(fmt.Sprintf("**Hardware:** %s = %s\n", f.Key, f.Value))
+	// Other facts needed to diagnose — dependencies (upstreams, brokers, DBs),
+	// auth/security posture, backing storage, special hardware. Previously only
+	// hardware surfaced here, so a 502's upstream or a broker's auth never
+	// reached the fix context. Use the same ranked filter as the chat pack;
+	// service facts are already shown prominently under Service Control.
+	var diagnosticFacts []DiscoveryFact
+	for _, f := range filterImportantFacts(d.Facts) {
+		if f.Category == FactCategoryService {
+			continue
 		}
+		diagnosticFacts = append(diagnosticFacts, f)
+	}
+	if len(diagnosticFacts) > 0 {
+		sb.WriteString("### Relevant Facts\n")
+		for _, f := range diagnosticFacts {
+			sb.WriteString(fmt.Sprintf("- %s: %s\n", f.Key, f.Value))
+		}
+		sb.WriteString("\n")
 	}
 
 	return sb.String()
