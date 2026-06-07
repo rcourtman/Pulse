@@ -1702,13 +1702,14 @@ describe('AIChat', () => {
       expect(mockChat.sendMessage).not.toHaveBeenCalled();
     });
 
-    it('closes slash command suggestions with Escape without submitting', async () => {
-      renderChat();
+    it('clears a transient slash command draft with Escape without submitting', async () => {
+      const onClose = vi.fn();
+      renderChat(onClose);
       const textarea = screen.getByPlaceholderText(
         'Ask about your infrastructure...',
       ) as HTMLTextAreaElement;
 
-      fireEvent.input(textarea, { target: { value: '/' } });
+      fireEvent.input(textarea, { target: { value: '/mo' } });
       expect(screen.getByRole('listbox', { name: 'Assistant commands' })).toBeInTheDocument();
 
       fireEvent.keyDown(textarea, { key: 'Escape' });
@@ -1718,7 +1719,30 @@ describe('AIChat', () => {
           screen.queryByRole('listbox', { name: 'Assistant commands' }),
         ).not.toBeInTheDocument();
       });
-      expect(textarea.value).toBe('/');
+      expect(textarea.value).toBe('');
+      expect(screen.getByTestId('model-selector')).toHaveAttribute('data-open-request', '0');
+      expect(onClose).not.toHaveBeenCalled();
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('clears a transient slash command draft when autocomplete closes from outside click', async () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+
+      fireEvent.input(textarea, { target: { value: '/new' } });
+      expect(screen.getByRole('listbox', { name: 'Assistant commands' })).toBeInTheDocument();
+
+      fireEvent.click(document.body);
+
+      await waitFor(() => {
+        expect(
+          screen.queryByRole('listbox', { name: 'Assistant commands' }),
+        ).not.toBeInTheDocument();
+      });
+      expect(textarea.value).toBe('');
+      expect(mockChat.newSession).not.toHaveBeenCalled();
       expect(mockChat.sendMessage).not.toHaveBeenCalled();
     });
 

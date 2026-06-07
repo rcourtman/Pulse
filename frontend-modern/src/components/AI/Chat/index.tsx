@@ -850,6 +850,34 @@ export const AIChat: Component<AIChatProps> = (props) => {
     setSavedPromptDraft(null);
   };
 
+  const isTransientSlashCommandDraft = () => {
+    const text = input();
+    const cursor = textareaRef?.selectionStart ?? text.length;
+    const textBeforeCursor = text.slice(0, cursor);
+    const textAfterCursor = text.slice(cursor);
+    return (
+      textBeforeCursor.startsWith('/') &&
+      !/\s/.test(textBeforeCursor) &&
+      !textAfterCursor.trim()
+    );
+  };
+
+  const closeSlashCommandAutocomplete = (options?: { clearTransientDraft?: boolean }) => {
+    const shouldClearDraft = Boolean(options?.clearTransientDraft && isTransientSlashCommandDraft());
+    setSlashCommandActive(false);
+    setSlashCommandQuery('');
+    if (!shouldClearDraft) return;
+
+    setInput('');
+    setAccumulatedMentions([]);
+    resetPromptHistoryNavigation();
+    queueMicrotask(() => {
+      resizeTextarea();
+      textareaRef?.focus();
+      textareaRef?.setSelectionRange(0, 0);
+    });
+  };
+
   const stashComposerDraftForRemount = () => {
     const text = input();
     const mentions = accumulatedMentions();
@@ -2271,7 +2299,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
         setMentionActive(false);
       }
       if (!target.closest('[data-slash-command-autocomplete]') && !target.closest('textarea')) {
-        setSlashCommandActive(false);
+        closeSlashCommandAutocomplete({ clearTransientDraft: true });
       }
     };
     document.addEventListener('click', handleClickOutside);
@@ -2888,7 +2916,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
       }
     }
     if (slashCommandActive()) {
-      if (['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes(e.key)) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        closeSlashCommandAutocomplete({ clearTransientDraft: true });
+        return;
+      }
+      if (['ArrowDown', 'ArrowUp', 'Enter', 'Tab'].includes(e.key)) {
         // These are handled by SlashCommandAutocomplete.
         return;
       }
@@ -4182,7 +4216,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   query={slashCommandQuery()}
                   position={{ top: 58, left: 0 }}
                   onSelect={handleSlashCommandSelect}
-                  onClose={() => setSlashCommandActive(false)}
+                  onClose={() => closeSlashCommandAutocomplete({ clearTransientDraft: true })}
                   visible={slashCommandActive()}
                 />
                 <div class="absolute bottom-2 right-2 flex items-center gap-1.5">

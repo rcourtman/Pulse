@@ -72,22 +72,27 @@ export function SlashCommandAutocomplete(props: SlashCommandAutocompleteProps) {
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
+        event.stopPropagation();
         setSelectedIndex((index) => Math.min(index + 1, Math.max(0, options.length - 1)));
         break;
       case 'ArrowUp':
         event.preventDefault();
+        event.stopPropagation();
         setSelectedIndex((index) => Math.max(index - 1, 0));
         break;
       case 'Enter':
         event.preventDefault();
+        event.stopPropagation();
         selectCommand(options[selectedIndex()]);
         break;
       case 'Tab':
         event.preventDefault();
+        event.stopPropagation();
         selectCommand(options[selectedIndex()]);
         break;
       case 'Escape':
         event.preventDefault();
+        event.stopPropagation();
         props.onClose();
         break;
     }

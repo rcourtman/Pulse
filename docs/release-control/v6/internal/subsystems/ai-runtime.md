@@ -214,6 +214,16 @@ runtime cost control, and shared AI transport surfaces.
    such as New session, session history, collapse/close, autonomous-warning
    recovery, and the control-mode selector instead of depending on title-only
    icon controls or ambiguous short labels.
+   Slash autocomplete close semantics are owned by that same prompt command
+   surface. The referenced OpenCode source at fetched `origin/dev` commit
+   `4519a1da329c1a4fc384054e7203ba7d06928205` clears a transient slash
+   command query when `hide()` closes prompt autocomplete in
+   `packages/opencode/src/cli/cmd/tui/component/prompt/autocomplete.tsx`
+   (lines 668-678), so Pulse's browser slash command popup must close Escape
+   and outside-click locally, clear only slash-only command drafts, return focus
+   to the composer, and leave ordinary prompts or already-submitted local
+   command actions untouched. Closing the popup must not leave `/mo`, `/new`, or
+   another executable command token behind for the next Enter press.
    Failed-turn retry is part of that same local chat-runtime boundary: a
    retryable in-memory assistant error may replay the original user turn's
    structured mentions, finding id, approval override, handoff resources,
