@@ -1102,7 +1102,7 @@ describe('AIChat', () => {
       expect(document.activeElement).toBe(textarea);
     });
 
-    it('switches from a failed stored route to the configured chat model', async () => {
+    it('keeps a failed stored route selected until the user explicitly changes it', async () => {
       mockChat.model.mockReturnValue('openrouter:deepseek/deepseek-v4-pro');
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'deepseek:deepseek-v4-pro',
@@ -1129,14 +1129,17 @@ describe('AIChat', () => {
           'openrouter',
           'openrouter:deepseek/deepseek-v4-pro',
         );
-        expect(mockChat.setModel).toHaveBeenCalledWith('gemini:gemini-3.1-flash-lite');
       });
+      expect(mockChat.setModel).not.toHaveBeenCalledWith('gemini:gemini-3.1-flash-lite');
       expect(
-        screen.getByRole('status', { name: 'Assistant provider readiness route adopted' }),
-      ).toHaveTextContent('Using gemini-3.1-flash-lite after OpenRouter provider check failed');
-      expect(mockNotificationStore.success).toHaveBeenCalledWith(
+        screen.queryByRole('status', { name: 'Assistant provider readiness route adopted' }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Assistant provider status')).toHaveTextContent(
+        'OpenRouter provider issue',
+      );
+      expect(mockNotificationStore.success).not.toHaveBeenCalledWith(
         expect.stringContaining('after OpenRouter provider check'),
-        2500,
+        expect.any(Number),
       );
     });
 
@@ -1236,7 +1239,7 @@ describe('AIChat', () => {
       );
     });
 
-    it('uses a configured-provider route automatically when sending after a selected provider failure', async () => {
+    it('does not automatically change provider route when sending after a selected provider failure', async () => {
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'deepseek:deepseek-v4-pro',
         chat_model: '',
@@ -1284,25 +1287,20 @@ describe('AIChat', () => {
       fireEvent.input(textarea, { target: { value: 'summarize the cluster' } });
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
-      expect(mockChat.setModel).toHaveBeenCalledWith('openrouter:deepseek/deepseek-v4-pro');
       expect(mockChat.sendMessage).toHaveBeenCalledWith(
         'summarize the cluster',
         undefined,
         undefined,
-        { model: 'openrouter:deepseek/deepseek-v4-pro' },
       );
-      expect(mockChat.setModel.mock.invocationCallOrder[0]).toBeLessThan(
-        mockChat.sendMessage.mock.invocationCallOrder[0],
+      expect(mockChat.setModel).not.toHaveBeenCalledWith(
+        'openrouter:deepseek/deepseek-v4-pro',
       );
-      const notice = screen.getByRole('status', {
-        name: 'Assistant provider readiness route adopted',
-      });
-      expect(notice).toHaveTextContent('Using DeepSeek: DeepSeek V4 Pro via OpenRouter');
-      expect(notice).toHaveTextContent('after DeepSeek provider check failed');
-      expect(notice).toHaveTextContent('for DeepSeek V4 Pro');
-      expect(mockNotificationStore.success).toHaveBeenCalledWith(
+      expect(
+        screen.queryByRole('status', { name: 'Assistant provider readiness route adopted' }),
+      ).not.toBeInTheDocument();
+      expect(mockNotificationStore.success).not.toHaveBeenCalledWith(
         expect.stringContaining('after DeepSeek provider check'),
-        2500,
+        expect.any(Number),
       );
       expect(textarea.value).toBe('');
     });

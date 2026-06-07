@@ -114,16 +114,12 @@ leave the transcript without exposing hidden provider/tool metadata.
    must not delay the user's first useful chat turn; the drawer should keep
    routine selected-route health visible in compact composer chrome while
    reserving the larger provider-status banner for requested checks and
-   actionable failures. A confirmed selected-route
-   provider error must keep typed text and focus without blocking normal chat
-   dispatch. If a same-model configured-provider alternative is available when
-   the operator sends while that warning is still visible, the drawer must
-   promote that route before dispatching the turn instead of knowingly sending
-   through the broken provider again. When no configured alternative is
-   available, the send path owns the attempt and any retryable provider failure
-   is handled as a normal failed turn with draft restoration. Same-model
-   configured-provider alternatives remain one-click route changes as well as
-   send-time recovery choices, not required preconditions for typing or sending.
+   actionable failures. A confirmed selected-route provider error must keep
+   typed text and focus without blocking normal chat dispatch, but the send path
+   must still use the currently selected route until the operator explicitly
+   chooses a different route. Same-model configured-provider alternatives remain
+   visible one-click route changes and failed-turn retry choices, not automatic
+   send-time recovery or hidden provider fallback.
    Assistant model-selection defaults are settings-owned: the drawer may persist
    explicit model selections only for concrete session IDs, while blank-session
    chat defaults must flow from `/api/settings/ai` `chat_model` or `model`.
