@@ -1622,6 +1622,7 @@ describe('AIChat', () => {
 
       const closeButton = screen.getByRole('button', { name: 'Close Pulse Assistant' });
       const headerActions = screen.getByTestId('assistant-header-actions');
+      const composerChrome = screen.getByTestId('assistant-composer-chrome');
       const routeControls = screen.getByTestId('assistant-composer-route-controls');
       const modelSelector = screen.getByTestId('model-selector');
       const controlButton = screen.getByRole('button', {
@@ -1635,6 +1636,9 @@ describe('AIChat', () => {
       expect(headerActions).not.toContainElement(closeButton);
       expect(headerActions).not.toContainElement(modelSelector);
       expect(headerActions).not.toContainElement(controlButton);
+      expect(composerChrome).toHaveClass('flex-col');
+      expect(composerChrome).toHaveClass('sm:flex-row');
+      expect(routeControls).toHaveClass('flex-wrap');
       expect(routeControls).toContainElement(modelSelector);
       expect(routeControls).toContainElement(controlButton);
     });
@@ -4528,10 +4532,10 @@ describe('AIChat', () => {
     });
   });
 
-  // ── Autonomous banner ────────────────────────────────────────────────
+  // ── Autonomous warning ───────────────────────────────────────────────
 
-  describe('autonomous banner', () => {
-    it('shows autonomous banner when control level is autonomous', async () => {
+  describe('autonomous warning', () => {
+    it('shows autonomous warning in the activity dock when control level is autonomous', async () => {
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'gpt-4',
         chat_model: '',
@@ -4541,11 +4545,15 @@ describe('AIChat', () => {
       });
       renderChat();
       await waitFor(() => {
-        expect(screen.getByText('Commands execute without approval.')).toBeInTheDocument();
+        const warning = screen.getByRole('status', {
+          name: 'Assistant autonomous control warning',
+        });
+        expect(screen.getByTestId('assistant-activity-dock')).toContainElement(warning);
+        expect(warning).toHaveTextContent('Autonomous: commands execute without approval.');
       });
     });
 
-    it('shows Switch to Approval button in autonomous banner', async () => {
+    it('shows Switch to Approval button in autonomous warning row', async () => {
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'gpt-4',
         chat_model: '',
@@ -4555,6 +4563,9 @@ describe('AIChat', () => {
       });
       renderChat();
       await waitFor(() => {
+        expect(
+          screen.getByRole('status', { name: 'Assistant autonomous control warning' }),
+        ).toBeInTheDocument();
         expect(
           screen.getByRole('button', { name: 'Switch Assistant control mode to Approval' }),
         ).toBeInTheDocument();
@@ -4586,7 +4597,9 @@ describe('AIChat', () => {
       expect(
         screen.queryByText(/Approval required for this dashboard brief/),
       ).not.toBeInTheDocument();
-      expect(screen.queryByText('Commands execute without approval.')).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('status', { name: 'Assistant autonomous control warning' }),
+      ).not.toBeInTheDocument();
 
       const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
       fireEvent.input(textarea, { target: { value: 'summarize this dashboard' } });
@@ -5164,6 +5177,36 @@ describe('AIChat', () => {
       );
       expect(activityDock).toContainElement(screen.getByLabelText('Queued follow-up messages'));
       expect(screen.getByText('1 follow-up queued')).toBeInTheDocument();
+    });
+
+    it('keeps autonomous warning alongside active assistant streaming status', async () => {
+      mockAIAPI.getSettings.mockResolvedValue({
+        model: 'gpt-4',
+        chat_model: '',
+        control_level: 'autonomous',
+        autonomous_mode: true,
+        discovery_enabled: true,
+      });
+      mockChat.isLoading.mockReturnValue(true);
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'msg-1',
+          role: 'assistant' as const,
+          content: '',
+          timestamp: new Date(),
+          isStreaming: true,
+        },
+      ]);
+
+      renderChat();
+
+      await waitFor(() => {
+        const activityDock = screen.getByTestId('assistant-activity-dock');
+        expect(activityDock).toContainElement(screen.getByLabelText('Assistant active turn status'));
+        expect(activityDock).toContainElement(
+          screen.getByRole('status', { name: 'Assistant autonomous control warning' }),
+        );
+      });
     });
 
     it('shows no status indicator when not loading', () => {

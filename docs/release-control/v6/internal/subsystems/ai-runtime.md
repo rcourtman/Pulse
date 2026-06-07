@@ -2065,6 +2065,20 @@ the latest canonical workflow state immediately. The transcript and footer
 therefore show current motion while the provider is starting, retrying, or
 reasoning, but completed answers do not retain stale internal-progress prose.
 
+Assistant drawer shell status follows the same OpenCode-referenced separation
+between prompt-adjacent operational status and transcript content. The
+referenced OpenCode source at fetched `dev` commit
+`e82542b8023a8374f29c23b70ec019c8f256354e` renders agent/model metadata beneath
+the prompt and active/retry/interrupt state in the prompt footer in
+`packages/tui/src/component/prompt/index.tsx`, with broader system status kept
+in `packages/tui/src/routes/session/footer.tsx`. Pulse adapts that pattern for
+the web drawer by keeping model route, recent-route cycling, control mode,
+last-turn usage, active workflow progress, queued follow-ups, fallback notices,
+and the autonomous control warning in the input-adjacent composer/status rail.
+Those items stay visible and actionable, but they do not compete with the
+transcript as separate top-of-drawer banners unless they are provider readiness
+or scoped handoff context surfaces with their own governed content.
+
 Primary nav moved to governed platform/runtime destinations on 2026-05-16 and
 was clarified on 2026-05-25 through `frontend-modern/src/App.tsx` and
 `frontend-modern/src/AppLayout.tsx`: the top of the app may expose canonical

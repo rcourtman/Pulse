@@ -2284,6 +2284,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
       hasScopedApprovalHandoff() && controlLevel() === 'autonomous' ? 'controlled' : controlLevel(),
     ),
   );
+  const autonomousWarningVisible = createMemo(
+    () =>
+      controlLevel() === 'autonomous' &&
+      !autonomousBannerDismissed() &&
+      !hasScopedApprovalHandoff(),
+  );
   const contextBriefingTitle = createMemo(() => {
     const briefing = contextBriefing();
     if (!briefing) return '';
@@ -4098,44 +4104,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
             )}
           </Show>
 
-          <Show
-            when={
-              controlLevel() === 'autonomous' &&
-              !autonomousBannerDismissed() &&
-              !hasScopedApprovalHandoff()
-            }
-          >
-            <div class="px-4 py-2 border-b border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900 flex items-center justify-between gap-3 text-[11px] text-red-700 dark:text-red-200">
-              <span>Commands execute without approval.</span>
-              <div class="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => updateControlLevel('controlled')}
-                  class="px-2 py-1 rounded-md border border-red-200 dark:border-red-800 bg-surface dark:bg-red-900 text-[10px] font-medium text-red-700 dark:text-red-200 hover:bg-red-100 dark:hover:bg-red-900"
-                  aria-label={AI_CHAT_SWITCH_TO_APPROVAL_LABEL}
-                >
-                  Switch to Approval
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAutonomousBannerDismissed(true)}
-                  class="p-1 rounded-md text-red-400 hover:text-red-600 dark:hover:text-red-200 hover:bg-red-100 dark:hover:bg-red-900 transition-colors"
-                  title={AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL}
-                  aria-label={AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL}
-                >
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </Show>
-
           <Show when={providerReadinessPresentation()}>
             {(presentation) => (
               <section
@@ -4329,13 +4297,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
             <Show
               when={
                 currentStatus() ||
+                autonomousWarningVisible() ||
                 fallbackRouteNotice() ||
                 providerReadinessRouteNotice() ||
                 chat.queuedFollowUpCount() > 0
               }
             >
               <div
-                class="mb-2 overflow-hidden rounded-md border border-blue-200 bg-blue-50 text-blue-800 shadow-sm dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200"
+                class="mb-2 overflow-hidden rounded-md border border-border bg-surface-alt text-base-content shadow-sm"
                 data-testid="assistant-activity-dock"
               >
                 <Show when={currentStatus()}>
@@ -4370,11 +4339,48 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     </span>
                   </div>
                 </Show>
+                <Show when={autonomousWarningVisible()}>
+                  <div
+                    class={`flex min-h-8 min-w-0 items-center gap-2 px-2.5 py-1.5 text-xs text-red-700 dark:text-red-200 ${
+                      currentStatus() ? 'border-t border-border/70' : ''
+                    }`}
+                    role="status"
+                    aria-label="Assistant autonomous control warning"
+                    aria-live="polite"
+                  >
+                    <span
+                      class="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500 dark:bg-red-300"
+                      aria-hidden="true"
+                    />
+                    <span class="min-w-0 flex-1 font-medium leading-4 sm:truncate">
+                      Autonomous: commands execute without approval.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => updateControlLevel('controlled')}
+                      class="inline-flex shrink-0 items-center rounded-md border border-red-200 bg-surface px-2 py-1 text-[10px] font-medium text-red-700 transition-colors hover:bg-red-50 hover:text-red-900 dark:border-red-800 dark:bg-surface dark:text-red-200 dark:hover:bg-red-950/40"
+                      aria-label={AI_CHAT_SWITCH_TO_APPROVAL_LABEL}
+                    >
+                      Switch to Approval
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAutonomousBannerDismissed(true)}
+                      class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-red-500 transition-colors hover:bg-red-50 hover:text-red-700 dark:text-red-200 dark:hover:bg-red-950/40"
+                      title={AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL}
+                      aria-label={AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL}
+                    >
+                      <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  </div>
+                </Show>
                 <Show when={fallbackRouteNotice()}>
                   {(notice) => (
                     <div
                       class={`flex min-h-8 min-w-0 items-center gap-2 px-2.5 py-1.5 text-xs ${
-                        currentStatus() ? 'border-t border-blue-200/70 dark:border-blue-900/60' : ''
+                        currentStatus() || autonomousWarningVisible()
+                          ? 'border-t border-border/70'
+                          : ''
                       }`}
                       role="status"
                       aria-label="Assistant fallback route adopted"
@@ -4406,8 +4412,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   {(notice) => (
                     <div
                       class={`flex min-h-8 min-w-0 items-center gap-2 px-2.5 py-1.5 text-xs ${
-                        currentStatus() || fallbackRouteNotice()
-                          ? 'border-t border-blue-200/70 dark:border-blue-900/60'
+                        currentStatus() || autonomousWarningVisible() || fallbackRouteNotice()
+                          ? 'border-t border-border/70'
                           : ''
                       }`}
                       role="status"
@@ -4443,8 +4449,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 <Show when={chat.queuedFollowUpCount() > 0}>
                   <div
                     class={`px-2.5 py-1.5 ${
-                      currentStatus() || fallbackRouteNotice() || providerReadinessRouteNotice()
-                        ? 'border-t border-blue-200/70 dark:border-blue-900/60'
+                      currentStatus() ||
+                      autonomousWarningVisible() ||
+                      fallbackRouteNotice() ||
+                      providerReadinessRouteNotice()
+                        ? 'border-t border-border/70'
                         : ''
                     }`}
                     role="status"
@@ -4606,11 +4615,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
               </div>
             </form>
             <div
-              class="mt-1.5 flex min-h-7 min-w-0 flex-wrap items-center justify-between gap-2"
+              class="mt-1.5 flex min-h-7 min-w-0 flex-col items-stretch gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-2"
               data-testid="assistant-composer-chrome"
             >
               <div
-                class="flex min-w-0 flex-1 flex-wrap items-center gap-1.5"
+                class="flex min-w-0 flex-wrap items-center gap-1.5 sm:flex-1 sm:flex-nowrap sm:overflow-hidden"
                 data-testid="assistant-composer-route-controls"
               >
                 <ModelSelector
@@ -4744,7 +4753,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
               <Show when={lastAssistantUsage()}>
                 {(usage) => (
                   <div
-                    class="flex min-h-4 min-w-0 items-center justify-end text-[10px] font-medium text-muted"
+                    class="flex h-5 min-w-0 items-center justify-end self-end text-[10px] font-medium text-muted sm:h-7 sm:max-w-[12rem] sm:shrink-0 sm:self-auto"
                     aria-label={usage().title}
                     title={usage().title}
                   >
