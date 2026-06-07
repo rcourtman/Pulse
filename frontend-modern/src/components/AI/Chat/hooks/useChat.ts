@@ -19,6 +19,7 @@ import {
   type AssistantOutputArtifactStreamState,
 } from '../assistantOutputHygiene';
 import { isAssistantExplicitModelRoute } from '../assistantModelRoutes';
+import { getAssistantFastToolCompletionSettleUntil } from '../streamActivityTiming';
 import type {
   ChatMessage,
   ToolExecution,
@@ -1438,12 +1439,21 @@ export function useChat(options: UseChatOptions = {}) {
                   return true;
                 });
                 const completedAt = Date.now();
+                const settleUntil =
+                  newToolCall.success && resolvedPendingTool?.startedAt
+                    ? getAssistantFastToolCompletionSettleUntil(
+                        resolvedPendingTool.startedAt,
+                        completedAt,
+                        completedAt,
+                      )
+                    : undefined;
                 updatedEvents.push({
                   type: 'tool',
                   tool: newToolCall,
                   toolId: completedToolId,
                   startedAt: resolvedPendingTool?.startedAt,
                   updatedAt: completedAt,
+                  settleUntil,
                 });
               } else {
                 // No approval - replace the pending_tool in place. If the terminal
@@ -1457,12 +1467,17 @@ export function useChat(options: UseChatOptions = {}) {
                     evt.type === 'pending_tool' &&
                     matchesCompletedTool(evt.toolId, evt.pendingTool?.name)
                   ) {
+                    const startedAt = evt.pendingTool?.startedAt || evt.startedAt;
+                    const settleUntil = newToolCall.success
+                      ? getAssistantFastToolCompletionSettleUntil(startedAt, completedAt, completedAt)
+                      : undefined;
                     updatedEvents[i] = {
                       type: 'tool',
                       tool: newToolCall,
                       toolId: completedToolId,
-                      startedAt: evt.pendingTool?.startedAt || evt.startedAt,
+                      startedAt,
                       updatedAt: completedAt,
+                      settleUntil,
                     };
                     replacedPendingTool = true;
                     break;

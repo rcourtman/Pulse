@@ -597,6 +597,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                               startedAt={evt?.startedAt}
                               completedAt={evt?.updatedAt}
                               live={props.message.isStreaming}
+                              settleUntil={evt?.settleUntil}
                               tool={{
                                 name: tool().name || 'unknown',
                                 input: tool().input || '{}',

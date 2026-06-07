@@ -152,6 +152,29 @@ describe('ToolExecutionBlock', () => {
     expect(screen.getByLabelText('Tool duration <1s')).toHaveTextContent('<1s');
   });
 
+  it('briefly presents explicitly settled fast completions after the turn has ended', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
+
+    render(() => (
+      <ToolExecutionBlock
+        tool={makeTool()}
+        startedAt={9_900}
+        completedAt={9_940}
+        settleUntil={10_380}
+      />
+    ));
+
+    expect(screen.getByLabelText('Assistant tool running')).toBeInTheDocument();
+    expect(screen.getByText('running')).toBeInTheDocument();
+
+    await vi.advanceTimersByTimeAsync(380);
+
+    expect(screen.queryByLabelText('Assistant tool running')).not.toBeInTheDocument();
+    expect(screen.getByText('completed')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tool duration <1s')).toHaveTextContent('<1s');
+  });
+
   it('does not defer failed fast completions behind a running state', () => {
     render(() => (
       <ToolExecutionBlock

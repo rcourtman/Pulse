@@ -2085,6 +2085,17 @@ as visible transcript rows in arrival order instead of being replaced by a
 grouped context footer, while command previews, inputs, progress, and large
 outputs remain contained inside each tool row. This keeps the user-facing stream
 feeling active without dumping large command output into the default answer.
+Fast tool completions must also stay visibly live long enough to be perceived:
+the frontend stream reducer stamps sub-420ms successful tool completions with a
+transient settle deadline, and the row renders that deadline as a running state
+even if the turn's `done` event has already arrived. The referenced OpenCode
+source at fetched `dev` commit `e82542b8023a8374f29c23b70ec019c8f256354e`
+implements the same user-visible principle in
+`packages/opencode/src/cli/cmd/run/session-data.ts` by emitting a `start` commit
+for running tools and a later completed/error commit instead of only surfacing a
+batched terminal transcript. Pulse adapts that as an in-memory UI settle window
+because Pulse transcripts persist completed tool facts, not OpenCode scrollback
+commit phases.
 
 Assistant provider retries are a first-class visible workflow state, not a
 hidden server log. The referenced OpenCode source at fetched `dev` commit

@@ -41,12 +41,14 @@ vi.mock('../ToolExecutionBlock', () => ({
     tool: { name: string; input: string; output: string; success: boolean };
     startedAt?: number;
     completedAt?: number;
+    settleUntil?: number;
   }) => (
     <div
       data-testid="tool-execution-block"
       data-tool-name={props.tool.name}
       data-started-at={props.startedAt}
       data-completed-at={props.completedAt}
+      data-settle-until={props.settleUntil}
     >
       {props.tool.output}
     </div>

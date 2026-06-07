@@ -27,12 +27,14 @@ import {
   pendingToolActionState,
   toolValueText,
 } from './toolPresentation';
+import { getAssistantFastToolCompletionSettleUntil } from './streamActivityTiming';
 
 interface ToolExecutionBlockProps {
   tool: ToolExecution;
   startedAt?: number;
   completedAt?: number;
   live?: boolean;
+  settleUntil?: number;
 }
 
 interface ToolInputSummaryProps {
@@ -144,8 +146,6 @@ const formatCompletedToolDuration = (startedAt?: number, completedAt?: number): 
   const remainingMinutes = minutes % 60;
   return remainingMinutes ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
 };
-
-const FAST_TOOL_COMPLETION_SETTLE_MS = 420;
 
 const ToolInputSummary: Component<ToolInputSummaryProps> = (props) => {
   const isShellSummary = createMemo(() => props.summary.trim().startsWith('$ '));
@@ -307,26 +307,28 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
   const hasOutput = createMemo(() => hasReadableToolOutput(outputText()));
   const hasDetails = createMemo(() => hasInput() || hasOutput());
   createEffect(() => {
-    if (!props.live || !props.tool.success || !props.startedAt || !props.completedAt) {
+    if (!props.tool.success) {
       setSettlingFastCompletion(false);
       return;
     }
 
-    const durationMs = props.completedAt - props.startedAt;
-    if (
-      !Number.isFinite(durationMs) ||
-      durationMs < 0 ||
-      durationMs >= FAST_TOOL_COMPLETION_SETTLE_MS
-    ) {
+    const now = Date.now();
+    const explicitSettleUntil =
+      Number.isFinite(props.settleUntil) && (props.settleUntil || 0) > now
+        ? props.settleUntil
+        : undefined;
+    const liveSettleUntil =
+      props.live === true
+        ? getAssistantFastToolCompletionSettleUntil(props.startedAt, props.completedAt, now)
+        : undefined;
+    const settleUntil = explicitSettleUntil || liveSettleUntil;
+    if (!settleUntil) {
       setSettlingFastCompletion(false);
       return;
     }
 
     setSettlingFastCompletion(true);
-    const timeout = window.setTimeout(
-      () => setSettlingFastCompletion(false),
-      FAST_TOOL_COMPLETION_SETTLE_MS - durationMs,
-    );
+    const timeout = window.setTimeout(() => setSettlingFastCompletion(false), settleUntil - now);
     onCleanup(() => window.clearTimeout(timeout));
   });
 

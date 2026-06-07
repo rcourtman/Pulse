@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { createEffect, createRoot } from 'solid-js';
 
 // Mock dependencies before importing
@@ -83,6 +83,10 @@ describe('useChat', () => {
       can_redo: false,
       message: 'No undone turn to redo.',
     });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   // ──────────────────────────────────────────────
@@ -2042,6 +2046,82 @@ describe('useChat', () => {
           updatedAt: expect.any(Number),
         }),
       );
+      dispose();
+    });
+
+    it('stamps fast tool completions with a transient settle deadline', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(20_000);
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+
+      fire({ type: 'tool_start', data: { id: 'tool-1', name: 'pulse_read', input: '{}' } });
+      vi.setSystemTime(20_040);
+      fire({
+        type: 'tool_end',
+        data: {
+          id: 'tool-1',
+          name: 'pulse_read',
+          input: '{}',
+          output: '4358',
+          success: true,
+        },
+      });
+      fire({ type: 'content', data: 'There are 4,358 entries.' });
+      fire({ type: 'done', data: {} });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      const toolEvent = assistant.streamEvents?.find((event) => event.type === 'tool');
+      expect(assistant.isStreaming).toBe(false);
+      expect(toolEvent).toEqual(
+        expect.objectContaining({
+          type: 'tool',
+          toolId: 'tool-1',
+          startedAt: 20_000,
+          updatedAt: 20_040,
+          settleUntil: 20_420,
+        }),
+      );
+      expect(assistant.streamEvents?.map((event) => event.type)).toEqual(['tool', 'content']);
+      dispose();
+    });
+
+    it('does not stamp slow tool completions with a settle deadline', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(30_000);
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+
+      fire({ type: 'tool_start', data: { id: 'tool-1', name: 'pulse_read', input: '{}' } });
+      vi.setSystemTime(31_000);
+      fire({
+        type: 'tool_end',
+        data: {
+          id: 'tool-1',
+          name: 'pulse_read',
+          input: '{}',
+          output: '4358',
+          success: true,
+        },
+      });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      const toolEvent = assistant.streamEvents?.find((event) => event.type === 'tool');
+      expect(toolEvent).toEqual(
+        expect.objectContaining({
+          type: 'tool',
+          toolId: 'tool-1',
+          startedAt: 30_000,
+          updatedAt: 31_000,
+        }),
+      );
+      expect(toolEvent?.settleUntil).toBeUndefined();
       dispose();
     });
 
