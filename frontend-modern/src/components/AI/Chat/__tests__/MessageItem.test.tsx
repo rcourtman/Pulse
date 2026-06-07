@@ -31,8 +31,15 @@ vi.mock('../ToolExecutionBlock', () => ({
   ),
   ToolExecutionBlock: (props: {
     tool: { name: string; input: string; output: string; success: boolean };
+    startedAt?: number;
+    completedAt?: number;
   }) => (
-    <div data-testid="tool-execution-block" data-tool-name={props.tool.name}>
+    <div
+      data-testid="tool-execution-block"
+      data-tool-name={props.tool.name}
+      data-started-at={props.startedAt}
+      data-completed-at={props.completedAt}
+    >
       {props.tool.output}
     </div>
   ),
@@ -895,6 +902,33 @@ describe('MessageItem', () => {
       const block = screen.getByTestId('tool-execution-block');
       expect(block).toBeInTheDocument();
       expect(block.getAttribute('data-tool-name')).toBe('pulse_get_nodes');
+    });
+
+    it('passes completed stream timing into completed tool rows', () => {
+      const events: StreamDisplayEvent[] = [
+        {
+          type: 'tool',
+          startedAt: 1_000,
+          updatedAt: 4_200,
+          tool: {
+            name: 'pulse_get_nodes',
+            input: '{}',
+            output: 'node1, node2',
+            success: true,
+          },
+        },
+      ];
+
+      render(() => (
+        <MessageItem
+          message={makeMessage({ role: 'assistant', streamEvents: events })}
+          {...makeHandlers()}
+        />
+      ));
+
+      const block = screen.getByTestId('tool-execution-block');
+      expect(block).toHaveAttribute('data-started-at', '1000');
+      expect(block).toHaveAttribute('data-completed-at', '4200');
     });
 
     it('does not render tool block when tool property is undefined', () => {

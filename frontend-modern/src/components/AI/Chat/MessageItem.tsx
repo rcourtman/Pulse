@@ -584,6 +584,8 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
 
                       <Match when={evt.type === 'tool' && evt.tool}>
                         <ToolExecutionBlock
+                          startedAt={evt.startedAt}
+                          completedAt={evt.updatedAt}
                           tool={{
                             name: evt.tool?.name || 'unknown',
                             input: evt.tool?.input || '{}',

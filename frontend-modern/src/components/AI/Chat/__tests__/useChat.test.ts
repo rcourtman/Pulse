@@ -1787,6 +1787,14 @@ describe('useChat', () => {
         output: 'log data',
         success: true,
       });
+      expect(assistant.streamEvents).toContainEqual(
+        expect.objectContaining({
+          type: 'tool',
+          toolId: 'tool-1',
+          startedAt: expect.any(Number),
+          updatedAt: expect.any(Number),
+        }),
+      );
       dispose();
     });
 

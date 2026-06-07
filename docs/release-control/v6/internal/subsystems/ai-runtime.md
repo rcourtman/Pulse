@@ -153,15 +153,25 @@ runtime cost control, and shared AI transport surfaces.
    question controls live in the transcript. The referenced OpenCode source at
    commit `9ed17da55ab1f7360cc0e01075f763e27fa899e9` mutates active tool
    parts into terminal `success` or `failed` rows in
-   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`
-   (`session.next.tool.success`, lines 328-348;
-   `session.next.tool.failed`, lines 350-371), and the processor marks
-   interrupted active tools terminal before completing the assistant message in
-   `packages/opencode/src/session/processor.ts` (lines 888-917). Pulse adapts
-   that by retaining completed tool rows and assistant text while removing
-   unresolved interactive rows from terminal browser transcript state.
-   Composer prompt history is also drawer-local chat-runtime state: the drawer
-   may persist a bounded local history of submitted prompt text and structured
+	   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`
+	   (`session.next.tool.success`, lines 328-348;
+	   `session.next.tool.failed`, lines 350-371), and the processor marks
+	   interrupted active tools terminal before completing the assistant message in
+	   `packages/opencode/src/session/processor.ts` (lines 888-917). Pulse adapts
+	   that by retaining completed tool rows and assistant text while removing
+	   unresolved interactive rows from terminal browser transcript state.
+	   Completed tool rows must preserve timing once a pending row resolves. The
+	   referenced OpenCode source at fetched `origin/dev` commit
+	   `effd27b23900720a53e965396ff1a105c1f7e9c8` carries tool identity and
+	   state through `toolCommit` / `startTool` / `doneTool` in
+	   `packages/opencode/src/cli/cmd/run/session-data.ts` (lines 622-733) and
+	   formats elapsed tool state with `span` in
+	   `packages/opencode/src/cli/cmd/run/tool.ts` (lines 191-200). Pulse adapts
+	   that by carrying the stream event start/end timestamps into the completed
+	   browser tool row, so the visible activity timeline does not collapse when a
+	   running command is replaced by its completed result.
+	   Composer prompt history is also drawer-local chat-runtime state: the drawer
+	   may persist a bounded local history of submitted prompt text and structured
    mentions for ArrowUp/ArrowDown recall, but that history must not persist or
    replay one-shot finding handoff, approval, autonomous-mode, or other scoped
    send options. The referenced OpenCode source at fetched `origin/dev` commit

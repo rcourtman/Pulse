@@ -27,6 +27,8 @@ import {
 
 interface ToolExecutionBlockProps {
   tool: ToolExecution;
+  startedAt?: number;
+  completedAt?: number;
 }
 
 interface ToolInputSummaryProps {
@@ -94,6 +96,24 @@ const formatOutputPreview = (output: string, success: boolean) => {
   return linesTruncated || charsTruncated ? `${fullPreview}\n...` : fullPreview;
 };
 
+const formatCompletedToolDuration = (startedAt?: number, completedAt?: number): string => {
+  if (!startedAt || !completedAt) return '';
+  const durationMs = completedAt - startedAt;
+  if (!Number.isFinite(durationMs) || durationMs < 0) return '';
+  if (durationMs < 1000) return '<1s';
+
+  const totalSeconds = Math.max(1, Math.round(durationMs / 1000));
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes < 60) return seconds ? `${minutes}m ${seconds}s` : `${minutes}m`;
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+};
+
 const ToolInputSummary: Component<ToolInputSummaryProps> = (props) => {
   const isShellSummary = createMemo(() => props.summary.trim().startsWith('$ '));
   const className = createMemo(
@@ -152,6 +172,9 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
   const hasInput = createMemo(() => inputText().trim().length > 0);
   const hasOutput = createMemo(() => hasReadableToolOutput(outputText()));
   const hasDetails = createMemo(() => hasInput() || hasOutput());
+  const durationLabel = createMemo(() =>
+    formatCompletedToolDuration(props.startedAt, props.completedAt),
+  );
 
   const statusLabel = () => (props.tool.success ? 'completed' : 'failed');
   const statusPillClass = () =>
@@ -213,6 +236,16 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
             >
               {statusLabel()}
             </span>
+            <Show when={durationLabel()}>
+              <span
+                class="inline-flex shrink-0 items-center gap-1 text-[10px] font-medium text-muted"
+                title="Tool duration"
+                aria-label={`Tool duration ${durationLabel()}`}
+              >
+                <ClockIcon class="h-3 w-3" aria-hidden="true" />
+                {durationLabel()}
+              </span>
+            </Show>
             <Show when={hasDetails()}>
               <ChevronRightIcon
                 class={`h-3.5 w-3.5 shrink-0 text-muted transition-transform ${

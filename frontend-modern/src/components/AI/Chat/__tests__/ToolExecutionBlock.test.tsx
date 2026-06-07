@@ -104,6 +104,28 @@ describe('ToolExecutionBlock', () => {
     expect(icon).not.toBeNull();
   });
 
+  it('shows completed tool duration when stream timing is available', () => {
+    render(() => (
+      <ToolExecutionBlock tool={makeTool()} startedAt={1_000} completedAt={4_200} />
+    ));
+
+    expect(screen.getByLabelText('Tool duration 3s')).toHaveTextContent('3s');
+  });
+
+  it('keeps very fast completed tools visible as sub-second work', () => {
+    render(() => (
+      <ToolExecutionBlock tool={makeTool()} startedAt={1_000} completedAt={1_450} />
+    ));
+
+    expect(screen.getByLabelText('Tool duration <1s')).toHaveTextContent('<1s');
+  });
+
+  it('does not invent completed tool duration without a valid start and end', () => {
+    render(() => <ToolExecutionBlock tool={makeTool()} startedAt={4_000} completedAt={3_000} />);
+
+    expect(screen.queryByLabelText(/Tool duration/)).not.toBeInTheDocument();
+  });
+
   // --- Input display ---
 
   it('renders input text', () => {
