@@ -1428,7 +1428,7 @@ describe('MessageItem', () => {
   });
 
   describe('context tools display', () => {
-    it('shows "Context used" with unique tool summaries when not streaming', () => {
+    it('groups consecutive context checks into one expandable transcript row', () => {
       const events: StreamDisplayEvent[] = [
         {
           type: 'tool',
@@ -1439,6 +1439,129 @@ describe('MessageItem', () => {
             success: true,
           },
         },
+        {
+          type: 'tool',
+          tool: {
+            name: 'pulse_get_metrics',
+            input: '{"action":"history","resource":"vm-101"}',
+            output: 'ok',
+            success: true,
+          },
+        },
+      ];
+
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            streamEvents: events,
+            isStreaming: false,
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(screen.getByTestId('context-tool-group')).toHaveTextContent('Context gathered');
+      expect(screen.getByTestId('context-tool-group')).toHaveTextContent('2 context checks');
+      expect(screen.queryByTestId('tool-execution-block')).not.toBeInTheDocument();
+      expect(screen.queryByText('Context used')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /Context gathered/i }));
+
+      expect(screen.getAllByTestId('tool-execution-block')).toHaveLength(2);
+    });
+
+    it('shows consecutive pending context checks as one active expandable transcript row', () => {
+      const events: StreamDisplayEvent[] = [
+        {
+          type: 'pending_tool',
+          toolId: 'context-resource',
+          pendingTool: {
+            id: 'context-resource',
+            name: 'pulse_get_resource_details',
+            input: '{"resource_id":"vm-101"}',
+          },
+        },
+        {
+          type: 'pending_tool',
+          toolId: 'context-metrics',
+          pendingTool: {
+            id: 'context-metrics',
+            name: 'pulse_get_metrics_history',
+            input: '{"resource_id":"vm-101","metric":"cpu"}',
+          },
+        },
+      ];
+
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            streamEvents: events,
+            isStreaming: true,
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(screen.getByTestId('context-tool-group')).toHaveTextContent('Gathering context');
+      expect(screen.getByTestId('context-tool-group')).toHaveTextContent('2 context checks');
+      expect(screen.queryByTestId('pending-tool-block')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /Gathering context/i }));
+
+      expect(screen.getAllByTestId('pending-tool-block')).toHaveLength(2);
+    });
+
+    it('keeps action tools visible as individual transcript rows', () => {
+      const events: StreamDisplayEvent[] = [
+        {
+          type: 'tool',
+          tool: {
+            name: 'pulse_run_command',
+            input: '{"target_host":"pve-1","command":"systemctl restart pvedaemon"}',
+            output: 'queued',
+            success: true,
+          },
+        },
+        {
+          type: 'tool',
+          tool: {
+            name: 'pulse_apply_fix',
+            input: '{"resource_id":"vm-101","action":"restart_service"}',
+            output: 'approval required',
+            success: true,
+          },
+        },
+      ];
+
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            streamEvents: events,
+            isStreaming: false,
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(screen.queryByTestId('context-tool-group')).not.toBeInTheDocument();
+      expect(screen.getAllByTestId('tool-execution-block')).toHaveLength(2);
+    });
+
+    it('shows "Context used" with unique tool summaries when context checks are not grouped', () => {
+      const events: StreamDisplayEvent[] = [
+        {
+          type: 'tool',
+          tool: {
+            name: 'pulse_read',
+            input: '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
+            output: 'ok',
+            success: true,
+          },
+        },
+        { type: 'content', content: 'I checked the device node count.' },
         {
           type: 'tool',
           tool: {
@@ -1478,6 +1601,7 @@ describe('MessageItem', () => {
             success: true,
           },
         },
+        { type: 'content', content: 'First context check complete.' },
         {
           type: 'tool',
           tool: {
@@ -1487,6 +1611,7 @@ describe('MessageItem', () => {
             success: true,
           },
         },
+        { type: 'content', content: 'Second context check complete.' },
         {
           type: 'tool',
           tool: { name: 'pulse_get_metrics', input: '{}', output: 'ok', success: true },

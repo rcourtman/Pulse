@@ -4,6 +4,7 @@ export const AI_CHAT_DEV_STREAM_FIXTURE_PROMPTS = [
   '/fixture devices',
   '/fixture assistant-stream',
   '/fixture tool-burst',
+  '/fixture context-group',
   '/fixture pending-tool',
   '/fixture provider-retry',
   '/fixture stream-idle',
@@ -291,6 +292,83 @@ const buildToolBurstFixtureEvents = (model?: string): AIChatStreamEvent[] => [
   },
 ];
 
+const buildContextGroupFixtureEvents = (model?: string): AIChatStreamEvent[] => [
+  {
+    type: 'session',
+    data: { id: 'dev-fixture-context-group' },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'request_start',
+      message: 'Preparing Pulse context.',
+    },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'context',
+      message: 'Gathering resource details and recent metrics.',
+      tool: 'pulse_get_resource_details',
+    },
+  },
+  {
+    type: 'tool_start',
+    data: {
+      id: 'fixture-tool-context-resource',
+      name: 'pulse_get_resource_details',
+      input: '{"resource_id":"vm-101"}',
+      raw_input: 'pulse_get_resource_details(resource_id="vm-101")',
+    },
+  },
+  {
+    type: 'tool_end',
+    data: {
+      id: 'fixture-tool-context-resource',
+      name: 'pulse_get_resource_details',
+      input: '{"resource_id":"vm-101"}',
+      raw_input: 'pulse_get_resource_details(resource_id="vm-101")',
+      output: '{"name":"web-101","status":"running","node":"pve-1"}',
+      success: true,
+    },
+  },
+  {
+    type: 'tool_start',
+    data: {
+      id: 'fixture-tool-context-metrics',
+      name: 'pulse_get_metrics_history',
+      input: '{"resource_id":"vm-101","metric":"cpu","range":"1h"}',
+      raw_input: 'pulse_get_metrics_history(resource_id="vm-101", metric="cpu", range="1h")',
+    },
+  },
+  {
+    type: 'tool_end',
+    data: {
+      id: 'fixture-tool-context-metrics',
+      name: 'pulse_get_metrics_history',
+      input: '{"resource_id":"vm-101","metric":"cpu","range":"1h"}',
+      raw_input: 'pulse_get_metrics_history(resource_id="vm-101", metric="cpu", range="1h")',
+      output: '{"average":42,"peak":67,"unit":"percent"}',
+      success: true,
+    },
+  },
+  {
+    type: 'content',
+    data: {
+      text: 'The context-group fixture gathered the resource identity and recent CPU history as one compact context activity row.',
+    },
+  },
+  {
+    type: 'done',
+    data: {
+      session_id: 'dev-fixture-context-group',
+      model: assistantFixtureModel(model),
+      input_tokens: 82,
+      output_tokens: 33,
+    },
+  },
+];
+
 const buildPendingToolFixtureEvents = (model?: string): AIChatStreamEvent[] => [
   {
     type: 'session',
@@ -529,6 +607,9 @@ const buildFixtureEvents = (prompt: string, model?: string): AIChatStreamEvent[]
   if (normalized === '/fixture tool-burst') {
     return buildToolBurstFixtureEvents(model);
   }
+  if (normalized === '/fixture context-group') {
+    return buildContextGroupFixtureEvents(model);
+  }
   if (normalized === '/fixture pending-tool') {
     return buildPendingToolFixtureEvents(model);
   }
@@ -556,6 +637,12 @@ const fixtureStepDelay = (
   }
   if (normalizedPrompt === '/fixture pending-tool' && event.type === 'tool_progress') {
     return 2200;
+  }
+  if (normalizedPrompt === '/fixture context-group' && event.type === 'tool_start') {
+    return 900;
+  }
+  if (normalizedPrompt === '/fixture context-group' && event.type === 'tool_end') {
+    return 180;
   }
   if (
     normalizedPrompt === '/fixture stream-idle' &&

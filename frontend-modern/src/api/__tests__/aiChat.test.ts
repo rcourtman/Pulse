@@ -269,6 +269,53 @@ describe('AIChatAPI', () => {
     });
   });
 
+  it('runs the context-group dev stream fixture without opening a provider request', async () => {
+    const onEvent = vi.fn();
+
+    await AIChatAPI.chat(
+      '/fixture context-group',
+      undefined,
+      'openrouter:deepseek/deepseek-chat',
+      onEvent,
+    );
+
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'session',
+      'workflow_state',
+      'workflow_state',
+      'tool_start',
+      'tool_end',
+      'tool_start',
+      'tool_end',
+      'content',
+      'done',
+    ]);
+    expect(onEvent.mock.calls[3][0]).toMatchObject({
+      type: 'tool_start',
+      data: {
+        id: 'fixture-tool-context-resource',
+        name: 'pulse_get_resource_details',
+        input: expect.stringContaining('vm-101'),
+      },
+    });
+    expect(onEvent.mock.calls[6][0]).toMatchObject({
+      type: 'tool_end',
+      data: {
+        id: 'fixture-tool-context-metrics',
+        name: 'pulse_get_metrics_history',
+        success: true,
+      },
+    });
+    expect(onEvent.mock.calls[8][0]).toMatchObject({
+      type: 'done',
+      data: {
+        session_id: 'dev-fixture-context-group',
+        model: 'openrouter:deepseek/deepseek-chat',
+      },
+    });
+  });
+
   it('fails unknown dev fixture prompts locally instead of sending them to a provider', async () => {
     const onEvent = vi.fn();
 

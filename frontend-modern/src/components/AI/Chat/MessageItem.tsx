@@ -10,6 +10,7 @@ import {
   onCleanup,
 } from 'solid-js';
 import CheckIcon from 'lucide-solid/icons/check';
+import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import CircleAlertIcon from 'lucide-solid/icons/circle-alert';
 import ClockIcon from 'lucide-solid/icons/clock';
 import CopyIcon from 'lucide-solid/icons/copy';
@@ -41,7 +42,9 @@ import type {
   ModelRouteRecoveryOption,
   PendingApproval,
   PendingQuestion,
+  PendingTool,
   StreamDisplayEvent,
+  ToolExecution,
   WorkflowStatus,
 } from './types';
 import {
@@ -94,6 +97,94 @@ const markdownClass =
 
 const TEXT_RENDER_PACE_MS = 24;
 const TEXT_RENDER_SNAP = /[\s.,!?;:)\]]/;
+
+type ContextToolStreamEvent =
+  | (StreamDisplayEvent & { type: 'pending_tool'; pendingTool: PendingTool })
+  | (StreamDisplayEvent & { type: 'tool'; tool: ToolExecution });
+
+type DisplayStreamItem =
+  | { kind: 'event'; event: StreamDisplayEvent }
+  | { kind: 'context_tool_group'; events: ContextToolStreamEvent[]; key: string };
+
+const CONTEXT_TOOL_NAMES = new Set([
+  'read',
+  'query',
+  'fetch_url',
+  'get_infrastructure_state',
+  'get_active_alerts',
+  'get_metrics',
+  'get_metrics_history',
+  'get_baselines',
+  'get_patterns',
+  'get_disk_health',
+  'get_storage',
+  'get_storage_config',
+  'get_resource_details',
+]);
+
+const normalizedContextToolName = (name?: string) => name?.trim().replace(/^pulse_/, '') || '';
+
+const isContextToolName = (name?: string) =>
+  CONTEXT_TOOL_NAMES.has(normalizedContextToolName(name));
+
+const asContextToolStreamEvent = (event: StreamDisplayEvent): ContextToolStreamEvent | null => {
+  if (
+    event.type === 'pending_tool' &&
+    event.pendingTool &&
+    isContextToolName(event.pendingTool.name)
+  ) {
+    return event as ContextToolStreamEvent;
+  }
+  if (event.type === 'tool' && event.tool && isContextToolName(event.tool.name)) {
+    return event as ContextToolStreamEvent;
+  }
+  return null;
+};
+
+const contextToolEventKey = (event: ContextToolStreamEvent) =>
+  [
+    event.type,
+    event.toolId,
+    event.type === 'pending_tool' ? event.pendingTool.id : event.tool.name,
+    event.startedAt,
+    event.updatedAt,
+  ]
+    .map((value) => String(value ?? ''))
+    .join(':');
+
+const groupContextToolStreamItems = (events: StreamDisplayEvent[]): DisplayStreamItem[] => {
+  const items: DisplayStreamItem[] = [];
+  let pendingGroup: ContextToolStreamEvent[] = [];
+
+  const flushGroup = () => {
+    if (pendingGroup.length >= 2) {
+      items.push({
+        kind: 'context_tool_group',
+        events: pendingGroup,
+        key: `context-tool:${pendingGroup.map(contextToolEventKey).join('|')}`,
+      });
+    } else {
+      for (const event of pendingGroup) {
+        items.push({ kind: 'event', event });
+      }
+    }
+    pendingGroup = [];
+  };
+
+  for (const event of events) {
+    const contextToolEvent = asContextToolStreamEvent(event);
+    if (contextToolEvent) {
+      pendingGroup.push(contextToolEvent);
+      continue;
+    }
+
+    flushGroup();
+    items.push({ kind: 'event', event });
+  }
+
+  flushGroup();
+  return items;
+};
 
 const textRenderStep = (size: number) => {
   if (size <= 12) return 2;
@@ -240,6 +331,88 @@ const AssistantMarkdownBlock: Component<{
   );
 };
 
+const ContextToolActivityGroup: Component<{
+  events: ContextToolStreamEvent[];
+  live: boolean;
+}> = (props) => {
+  const [expanded, setExpanded] = createSignal(false);
+  const active = createMemo(() => props.events.some((event) => event.type === 'pending_tool'));
+  const count = createMemo(() => props.events.length);
+  const countLabel = createMemo(() => `${count()} context ${count() === 1 ? 'check' : 'checks'}`);
+  const statusLabel = createMemo(() => (active() ? 'Gathering context' : 'Context gathered'));
+  const title = createMemo(() => `${statusLabel()} · ${countLabel()}`);
+  const toggle = () => setExpanded((value) => !value);
+
+  return (
+    <div
+      class="my-1 overflow-hidden rounded-md border border-blue-200 bg-blue-50/60 text-[11px] dark:border-blue-900/60 dark:bg-blue-950/20"
+      data-testid="context-tool-group"
+      role="group"
+      aria-label={title()}
+    >
+      <button
+        type="button"
+        class="flex w-full min-w-0 items-center gap-2 px-2.5 py-2 text-left transition-colors hover:bg-blue-100/60 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:ring-inset dark:hover:bg-blue-950/30"
+        aria-expanded={expanded()}
+        onClick={toggle}
+      >
+        <span
+          class={`h-1.5 w-1.5 shrink-0 rounded-full ${
+            active() ? 'animate-pulse bg-blue-500' : 'bg-emerald-500'
+          }`}
+          aria-hidden="true"
+        />
+        <span class="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted">
+          {statusLabel()}
+        </span>
+        <span class="min-w-0 truncate text-[12px] font-medium text-base-content">
+          {countLabel()}
+        </span>
+        <ChevronRightIcon
+          class={`ml-auto h-3.5 w-3.5 shrink-0 text-muted transition-transform ${
+            expanded() ? 'rotate-90' : ''
+          }`}
+          aria-hidden="true"
+        />
+      </button>
+      <Show when={expanded()}>
+        <div class="border-t border-blue-200/70 px-2 py-1.5 dark:border-blue-900/60">
+          <For each={props.events}>
+            {(event) => {
+              const pendingTool = event.type === 'pending_tool' ? event.pendingTool : undefined;
+              const tool = event.type === 'tool' ? event.tool : undefined;
+
+              return (
+                <Switch>
+                  <Match when={pendingTool}>
+                    {(pending) => <PendingToolBlock tool={pending()} />}
+                  </Match>
+                  <Match when={tool}>
+                    {(completedTool) => (
+                      <ToolExecutionBlock
+                        startedAt={event.startedAt}
+                        completedAt={event.updatedAt}
+                        live={props.live}
+                        tool={{
+                          name: completedTool().name || 'unknown',
+                          input: completedTool().input || '{}',
+                          rawInput: completedTool().rawInput,
+                          output: completedTool().output || '',
+                          success: completedTool().success ?? true,
+                        }}
+                      />
+                    )}
+                  </Match>
+                </Switch>
+              );
+            }}
+          </For>
+        </div>
+      </Show>
+    </div>
+  );
+};
+
 /**
  * MessageItem - Renders a single message in the chat.
  *
@@ -265,6 +438,10 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
   // whitespace-trimmed pieces. See groupStreamEventsForDisplay for the rationale.
   const groupedEvents = createMemo(() =>
     groupStreamEventsForDisplay(props.message.streamEvents || []),
+  );
+  const displayStreamItems = createMemo(() => groupContextToolStreamItems(groupedEvents()));
+  const hasContextToolActivityGroup = createMemo(() =>
+    displayStreamItems().some((item) => item.kind === 'context_tool_group'),
   );
   const isSelectedModelRouteEvent = (evt: StreamDisplayEvent) =>
     evt.type === 'model_switch' && evt.modelEvent === 'selected' && !evt.failedModel?.trim();
@@ -586,156 +763,181 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
 
               {/* Stream events - chronological display */}
               <Show when={hasRenderableStreamEvents()}>
-                <For each={groupedEvents()}>
-                  {(evt, index) => (
-                    <Switch>
-                      <Match
-                        when={
-                          evt.type === 'thinking' &&
-                          evt.thinking?.trim() &&
-                          isLeadingThinkingEvent(index())
-                        }
-                      >
-                        <ThinkingBlock
-                          content={evt.thinking || ''}
-                          isStreaming={props.message.isStreaming}
-                          startedAt={evt.startedAt}
-                          updatedAt={evt.updatedAt}
-                        />
-                      </Match>
+                <For each={displayStreamItems()}>
+                  {(item, index) => {
+                    const contextGroup = item.kind === 'context_tool_group' ? item : undefined;
+                    const evt = item.kind === 'event' ? item.event : undefined;
+                    const contentText = () =>
+                      stripAssistantOutputArtifacts(evt?.content || '').text;
 
-                      <Match
-                        when={
-                          evt.type === 'workflow_status' && shouldRenderWorkflowStatusEvent(evt)
-                        }
-                      >
-                        <div
-                          class="my-1 inline-flex max-w-full items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200"
-                          role="status"
-                          aria-live="polite"
-                          title={formatWorkflowStatus(
-                            evt.workflowStatus,
-                            props.message.isStreaming,
-                          )}
-                        >
-                          <span
-                            class="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500 animate-pulse"
-                            aria-hidden="true"
-                          />
-                          <span class="min-w-0 truncate">
-                            <WorkflowStatusText
-                              status={evt.workflowStatus}
-                              includeElapsed={props.message.isStreaming}
+                    return (
+                      <Switch>
+                        <Match when={contextGroup}>
+                          {(group) => (
+                            <ContextToolActivityGroup
+                              events={group().events}
+                              live={props.message.isStreaming === true}
                             />
-                          </span>
-                        </div>
-                      </Match>
-
-                      <Match when={evt.type === 'pending_tool' && evt.pendingTool}>
-                        <PendingToolBlock tool={evt.pendingTool!} />
-                      </Match>
-
-                      <Match when={evt.type === 'tool_cancel' && evt.toolCancel}>
-                        <ToolCancellationBlock tool={evt.toolCancel!} />
-                      </Match>
-
-                      <Match when={evt.type === 'tool' && evt.tool}>
-                        <ToolExecutionBlock
-                          startedAt={evt.startedAt}
-                          completedAt={evt.updatedAt}
-                          live={props.message.isStreaming}
-                          tool={{
-                            name: evt.tool?.name || 'unknown',
-                            input: evt.tool?.input || '{}',
-                            rawInput: evt.tool?.rawInput,
-                            output: evt.tool?.output || '',
-                            success: evt.tool?.success ?? true,
-                          }}
-                        />
-                      </Match>
-
-                      <Match when={evt.type === 'model_switch' && evt.model?.trim()}>
-                        <div
-                          class="my-2 inline-flex max-w-full items-center gap-2 rounded-md border border-border-subtle bg-surface-alt px-2.5 py-1.5 text-xs text-muted"
-                          role="status"
-                          aria-label={
-                            isProviderFallbackEvent(evt)
-                              ? 'Assistant provider fallback route changed'
-                              : isSelectedModelEvent(evt)
-                                ? 'Assistant model route selected'
-                                : 'Assistant model route changed'
+                          )}
+                        </Match>
+                        <Match
+                          when={
+                            evt?.type === 'thinking' &&
+                            evt.thinking?.trim() &&
+                            isLeadingThinkingEvent(index())
                           }
-                          title={modelSwitchTitle(evt)}
                         >
-                          <CpuIcon class="h-3.5 w-3.5 shrink-0 text-blue-500" aria-hidden="true" />
-                          <Show
-                            when={isProviderFallbackEvent(evt)}
-                            fallback={
-                              <>
-                                <Show when={isSelectedModelEvent(evt)}>
-                                  <span class="shrink-0">Using</span>{' '}
-                                </Show>
-                                <Show when={!isSelectedModelEvent(evt)}>
-                                  <span class="shrink-0">Switched to</span>{' '}
-                                </Show>
-                                <span class="truncate font-medium text-base-content">
-                                  {modelRouteLabel(evt.model)}
-                                </span>
-                              </>
-                            }
+                          <ThinkingBlock
+                            content={evt?.thinking || ''}
+                            isStreaming={props.message.isStreaming}
+                            startedAt={evt?.startedAt}
+                            updatedAt={evt?.updatedAt}
+                          />
+                        </Match>
+
+                        <Match
+                          when={
+                            evt?.type === 'workflow_status' && shouldRenderWorkflowStatusEvent(evt)
+                          }
+                        >
+                          <div
+                            class="my-1 inline-flex max-w-full items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200"
+                            role="status"
+                            aria-live="polite"
+                            title={formatWorkflowStatus(
+                              evt?.workflowStatus,
+                              props.message.isStreaming,
+                            )}
                           >
-                            <span class="shrink-0">Provider fallback</span>
-                            <span class="min-w-0 truncate font-medium text-base-content">
-                              {modelRouteLabel(evt.failedModel)}
+                            <span
+                              class="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500 animate-pulse"
+                              aria-hidden="true"
+                            />
+                            <span class="min-w-0 truncate">
+                              <WorkflowStatusText
+                                status={evt?.workflowStatus}
+                                includeElapsed={props.message.isStreaming}
+                              />
                             </span>
-                            <span class="shrink-0 text-muted" aria-hidden="true">
-                              -&gt;
-                            </span>
-                            <span class="min-w-0 truncate font-medium text-base-content">
-                              {modelRouteLabel(evt.model)}
-                            </span>
-                          </Show>
-                        </div>
-                      </Match>
+                          </div>
+                        </Match>
 
-                      {/* Content/text block */}
-                      <Match
-                        when={
-                          evt.type === 'content' &&
-                          stripAssistantOutputArtifacts(evt.content || '').text
-                        }
-                      >
-                        <AssistantMarkdownBlock
-                          text={stripAssistantOutputArtifacts(evt.content || '').text}
-                          streaming={props.message.isStreaming}
-                          paceKey={`${props.message.id}:stream:${index()}`}
-                        />
-                      </Match>
+                        <Match when={evt?.type === 'pending_tool' ? evt.pendingTool : undefined}>
+                          {(pendingTool) => <PendingToolBlock tool={pendingTool()} />}
+                        </Match>
 
-                      <Match when={evt.type === 'approval' && evt.approval}>
-                        <div class="my-4">
-                          <ApprovalCard
-                            approval={evt.approval!}
-                            onApprove={() => props.onApprove(evt.approval!)}
-                            onSkip={() => props.onSkip(evt.approval!.toolId)}
+                        <Match when={evt?.type === 'tool_cancel' ? evt.toolCancel : undefined}>
+                          {(toolCancel) => <ToolCancellationBlock tool={toolCancel()} />}
+                        </Match>
+
+                        <Match when={evt?.type === 'tool' ? evt.tool : undefined}>
+                          {(tool) => (
+                            <ToolExecutionBlock
+                              startedAt={evt?.startedAt}
+                              completedAt={evt?.updatedAt}
+                              live={props.message.isStreaming}
+                              tool={{
+                                name: tool().name || 'unknown',
+                                input: tool().input || '{}',
+                                rawInput: tool().rawInput,
+                                output: tool().output || '',
+                                success: tool().success ?? true,
+                              }}
+                            />
+                          )}
+                        </Match>
+
+                        <Match
+                          when={evt?.type === 'model_switch' && evt.model?.trim() ? evt : undefined}
+                        >
+                          {(modelEvent) => {
+                            const event = modelEvent();
+                            return (
+                              <div
+                                class="my-2 inline-flex max-w-full items-center gap-2 rounded-md border border-border-subtle bg-surface-alt px-2.5 py-1.5 text-xs text-muted"
+                                role="status"
+                                aria-label={
+                                  isProviderFallbackEvent(event)
+                                    ? 'Assistant provider fallback route changed'
+                                    : isSelectedModelEvent(event)
+                                      ? 'Assistant model route selected'
+                                      : 'Assistant model route changed'
+                                }
+                                title={modelSwitchTitle(event)}
+                              >
+                                <CpuIcon
+                                  class="h-3.5 w-3.5 shrink-0 text-blue-500"
+                                  aria-hidden="true"
+                                />
+                                <Show
+                                  when={isProviderFallbackEvent(event)}
+                                  fallback={
+                                    <>
+                                      <Show when={isSelectedModelEvent(event)}>
+                                        <span class="shrink-0">Using</span>{' '}
+                                      </Show>
+                                      <Show when={!isSelectedModelEvent(event)}>
+                                        <span class="shrink-0">Switched to</span>{' '}
+                                      </Show>
+                                      <span class="truncate font-medium text-base-content">
+                                        {modelRouteLabel(event.model)}
+                                      </span>
+                                    </>
+                                  }
+                                >
+                                  <span class="shrink-0">Provider fallback</span>
+                                  <span class="min-w-0 truncate font-medium text-base-content">
+                                    {modelRouteLabel(event.failedModel)}
+                                  </span>
+                                  <span class="shrink-0 text-muted" aria-hidden="true">
+                                    -&gt;
+                                  </span>
+                                  <span class="min-w-0 truncate font-medium text-base-content">
+                                    {modelRouteLabel(event.model)}
+                                  </span>
+                                </Show>
+                              </div>
+                            );
+                          }}
+                        </Match>
+
+                        {/* Content/text block */}
+                        <Match when={evt?.type === 'content' && contentText()}>
+                          <AssistantMarkdownBlock
+                            text={contentText()}
+                            streaming={props.message.isStreaming}
+                            paceKey={`${props.message.id}:stream:${index()}`}
                           />
-                        </div>
-                      </Match>
+                        </Match>
 
-                      <Match when={evt.type === 'question' && evt.question}>
-                        <div class="my-4">
-                          <QuestionCard
-                            question={evt.question!}
-                            onAnswer={(answers) => props.onAnswerQuestion(evt.question!, answers)}
-                            onSkip={() => props.onSkipQuestion(evt.question!.questionId)}
-                          />
-                        </div>
-                      </Match>
-                    </Switch>
-                  )}
+                        <Match when={evt?.type === 'approval' ? evt.approval : undefined}>
+                          {(approval) => (
+                            <div class="my-4">
+                              <ApprovalCard
+                                approval={approval()}
+                                onApprove={() => props.onApprove(approval())}
+                                onSkip={() => props.onSkip(approval().toolId)}
+                              />
+                            </div>
+                          )}
+                        </Match>
+
+                        <Match when={evt?.type === 'question' ? evt.question : undefined}>
+                          {(question) => (
+                            <div class="my-4">
+                              <QuestionCard
+                                question={question()}
+                                onAnswer={(answers) => props.onAnswerQuestion(question(), answers)}
+                                onSkip={() => props.onSkipQuestion(question().questionId)}
+                              />
+                            </div>
+                          )}
+                        </Match>
+                      </Switch>
+                    );
+                  }}
                 </For>
               </Show>
-
               {/* Fallback */}
               <Show when={visibleMessageContent() && !hasRenderableStreamEvents()}>
                 <AssistantMarkdownBlock
@@ -816,7 +1018,13 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                 <span class="inline-block w-1.5 h-4 ml-0.5 align-middle bg-blue-500 dark:bg-blue-400 animate-pulse rounded-full" />
               </Show>
 
-              <Show when={!props.message.isStreaming && contextToolSummaries().length > 0}>
+              <Show
+                when={
+                  !props.message.isStreaming &&
+                  !hasContextToolActivityGroup() &&
+                  contextToolSummaries().length > 0
+                }
+              >
                 <div class="mt-4 pt-3 border-t border-border-subtle flex flex-wrap gap-2">
                   <span class="text-[10px] uppercase font-semibold text-muted">
                     {AI_CHAT_CONTEXT_USED_LABEL}
