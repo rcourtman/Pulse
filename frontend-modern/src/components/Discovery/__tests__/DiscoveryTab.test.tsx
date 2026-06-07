@@ -203,6 +203,24 @@ describe('DiscoveryTab', () => {
     expect(screen.queryByText('Commands not enabled')).not.toBeInTheDocument();
   });
 
+  it('surfaces the AI-provider prerequisite tab-wide for non-agent resources', async () => {
+    vi.mocked(discoveryApi.getDiscovery).mockResolvedValue(null);
+    // Default getDiscoveryInfo mock returns null → no provider configured. The
+    // provider gate previously only rendered inside the agent-only trio, so a
+    // VM/container tab gave no hint Discovery could not run. It is now tab-wide.
+
+    render(() => (
+      <DiscoveryTab
+        resourceType="system-container"
+        agentId="pve4"
+        resourceId="152"
+        hostname="smtp-relay-32"
+      />
+    ));
+
+    expect(await screen.findByText('AI provider not configured')).toBeInTheDocument();
+  });
+
   it('uses canonical settings copy for disabled command guidance', async () => {
     vi.mocked(discoveryApi.getDiscovery).mockResolvedValue(null);
     vi.mocked(discoveryApi.getDiscoveryInfo).mockResolvedValue(discoveryInfoWithProvider());

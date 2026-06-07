@@ -216,6 +216,25 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
           </div>
         </Show>
 
+        {/* Provider prerequisite — tab-wide for every resource type, styled to
+            match the disabled banner above (both are tab-level prerequisites).
+            Surfaces the "enabled but no provider" dead end that previously only
+            showed for agents, so Discovery is never silently on-but-useless. */}
+        <Show when={!discoveryInfo.loading && discoveryReadiness().status === 'needs_ai_provider'}>
+          <div class="rounded border border-amber-200 bg-amber-50/80 p-3 shadow-sm dark:border-amber-800/50 dark:bg-amber-900/20">
+            <div class="flex items-start gap-2.5">
+              <TriangleAlertIcon class="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+              <div class="text-xs text-amber-800 dark:text-amber-200">
+                <p class="mb-1 font-medium">AI provider not configured</p>
+                <p class="text-amber-700 dark:text-amber-300">
+                  Discovery needs an AI provider to analyze what is running. Configure one in
+                  Settings -&gt; AI before scanning.
+                </p>
+              </div>
+            </div>
+          </div>
+        </Show>
+
         <Show when={showManualRunAction()}>
           <div class="rounded border border-border bg-surface p-3 shadow-sm">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -517,42 +536,14 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
               </Show>
             </div>
 
-            {/* Connection Status Warning - driven by the canonical readiness
-                verdict so the most-fundamental missing prerequisite (provider →
-                commands → connectivity) is the one surfaced, in one place. */}
+            {/* Command/connectivity prerequisites for agent deep scans, driven
+                by the canonical readiness verdict. The provider prerequisite is
+                surfaced tab-wide above; here we handle commands -> connectivity. */}
             <Show
               when={
                 props.resourceType === 'agent' && !connectedAgents.loading && !discoveryInfo.loading
               }
             >
-              <Show when={discoveryReadiness().status === 'needs_ai_provider'}>
-                <div class="mb-4 mx-auto max-w-md rounded-md border border-amber-200 bg-amber-50 p-3 text-left dark:border-amber-800 dark:bg-amber-900">
-                  <div class="flex items-start gap-2">
-                    <svg
-                      class="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                      />
-                    </svg>
-                    <div class="text-xs">
-                      <p class="font-medium text-amber-800 dark:text-amber-200">
-                        AI provider not configured
-                      </p>
-                      <p class="text-amber-700 dark:text-amber-300 mt-0.5">
-                        Discovery needs an AI provider to analyze what is running. Configure one in
-                        Settings -&gt; AI before scanning.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </Show>
               <Show when={discoveryReadiness().status === 'needs_commands'}>
                 <div class="mb-4 mx-auto max-w-md rounded-md border border-amber-200 bg-amber-50 p-3 text-left dark:border-amber-800 dark:bg-amber-900">
                   <div class="flex items-start gap-2">
