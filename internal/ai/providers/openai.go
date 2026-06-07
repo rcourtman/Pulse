@@ -544,15 +544,8 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		reasoning = choice.Message.Reasoning
 	}
 
-	// When a reasoner returns no visible content, fall back to the reasoning text
-	// so the turn still carries the model's output instead of an empty string.
-	contentToUse := choice.Message.Content
-	if contentToUse == "" && reasoning != "" {
-		contentToUse = reasoning
-	}
-
 	result := &ChatResponse{
-		Content:          contentToUse,
+		Content:          choice.Message.Content,
 		ReasoningContent: reasoning, // surfaced as the turn's thinking
 		Model:            openaiResp.Model,
 		StopReason:       choice.FinishReason,

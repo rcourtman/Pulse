@@ -459,6 +459,22 @@ runtime cost control, and shared AI transport surfaces.
    showing a live `Thinking:`/completed `Thought:` row with duration and optional
    provider summary title while keeping the raw reasoning body out of the
    transcript.
+   Provider reasoning must not become fallback assistant answer text when an
+   OpenAI-compatible non-stream response contains `reasoning` or
+   `reasoning_content` without visible `content`. The referenced OpenCode
+   source at fetched `origin/dev` commit
+   `4519a1da329c1a4fc384054e7203ba7d06928205` maps AI SDK
+   `reasoning-start` / `reasoning-delta` / `reasoning-end` events to
+   dedicated reasoning events in
+   `packages/opencode/src/session/llm/ai-sdk.ts` (lines 158-188), preserves
+   assistant reasoning as a `type: "reasoning"` message part in
+   `packages/opencode/src/session/message-v2.ts` (lines 374-387), and keeps
+   text and reasoning renderability distinct in
+   `packages/ui/src/components/message-part.tsx` (lines 607-615). Pulse adapts
+   that boundary by keeping `ChatResponse.Content` limited to provider
+   `message.content` and storing OpenAI-compatible reasoning only in
+   `ReasoningContent`, so hidden provider reasoning cannot be rendered as the
+   final answer by any Pulse surface that consumes non-stream chat responses.
    The active-turn status strip follows the same source-backed part freshness
    rule: OpenCode commit `9ed17da55ab1f7360cc0e01075f763e27fa899e9`
    updates live assistant parts in place through

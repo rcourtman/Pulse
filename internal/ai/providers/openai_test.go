@@ -395,6 +395,29 @@ func TestOpenAIClient_Chat_OpenRouterDefaultsCompletionBudget(t *testing.T) {
 	assert.Zero(t, captured.MaxTokens)
 }
 
+func TestOpenAIClient_Chat_KeepsReasoningOutOfVisibleContent(t *testing.T) {
+	client := NewOpenAIClient("sk-test", "openrouter:deepseek/deepseek-v4-pro", "https://openrouter.ai/api/v1", 0)
+	client.client = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body: io.NopCloser(strings.NewReader(
+					`{"id":"chatcmpl-1","model":"deepseek/deepseek-v4-pro","choices":[{"message":{"role":"assistant","reasoning":"We need to inspect the prompt before answering."},"finish_reason":"stop"}]}`,
+				)),
+			}, nil
+		}),
+	}
+
+	resp, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+	})
+
+	require.NoError(t, err)
+	assert.Empty(t, resp.Content)
+	assert.Equal(t, "We need to inspect the prompt before answering.", resp.ReasoningContent)
+}
+
 func TestOpenAIClient_ChatStream_ToolCall(t *testing.T) {
 	// Mock tool call stream
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
