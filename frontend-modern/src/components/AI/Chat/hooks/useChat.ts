@@ -272,6 +272,7 @@ export function useChat(options: UseChatOptions = {}) {
     if (!events) return events;
     return streamEventsWithoutLocalPromptProgressRows(events).filter(
       (event) =>
+        event.type !== 'workflow_status' &&
         event.type !== 'pending_tool' &&
         event.type !== 'approval' &&
         event.type !== 'question',

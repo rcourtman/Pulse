@@ -2633,7 +2633,7 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('done event removes unresolved interactive rows while preserving workflow activity', async () => {
+    it('done event removes transient workflow and unresolved interactive rows', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
 
@@ -2674,17 +2674,11 @@ describe('useChat', () => {
       expect(assistant.pendingTools).toEqual([]);
       expect(assistant.pendingApprovals).toEqual([]);
       expect(assistant.pendingQuestions).toEqual([]);
-      expect(assistant.streamEvents?.map((event) => event.type)).toEqual([
-        'workflow_status',
-        'content',
-      ]);
+      expect(assistant.streamEvents?.map((event) => event.type)).toEqual(['content']);
       expect(assistant.streamEvents?.[0]).toEqual(
         expect.objectContaining({
-          type: 'workflow_status',
-          workflowStatus: expect.objectContaining({
-            phase: 'provider_start',
-            message: 'OpenRouter is starting the response.',
-          }),
+          type: 'content',
+          content: 'partial response',
         }),
       );
       dispose();
@@ -2707,7 +2701,7 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('error event removes unresolved interactive rows while preserving workflow activity', async () => {
+    it('error event removes transient workflow and unresolved interactive rows', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
 
@@ -2749,17 +2743,11 @@ describe('useChat', () => {
       expect(assistant.pendingTools).toEqual([]);
       expect(assistant.pendingApprovals).toEqual([]);
       expect(assistant.pendingQuestions).toEqual([]);
-      expect(assistant.streamEvents?.map((event) => event.type)).toEqual([
-        'workflow_status',
-        'content',
-      ]);
+      expect(assistant.streamEvents?.map((event) => event.type)).toEqual(['content']);
       expect(assistant.streamEvents?.[0]).toEqual(
         expect.objectContaining({
-          type: 'workflow_status',
-          workflowStatus: expect.objectContaining({
-            phase: 'provider_start',
-            message: 'OpenRouter is starting the response.',
-          }),
+          type: 'content',
+          content: 'partial response',
         }),
       );
       dispose();
