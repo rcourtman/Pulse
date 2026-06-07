@@ -3086,7 +3086,7 @@ func (s *Service) chatProviderAttempts(_ context.Context, cfg *config.AIConfig, 
 	}
 
 	primaryProvider, _ := config.ParseModelString(primaryModel)
-	if gatewayModel, ok := modelresolution.OpenRouterEquivalentChatModel(cfg, primaryModel); ok {
+	for _, gatewayModel := range modelresolution.GatewayEquivalentChatModels(cfg, primaryModel) {
 		addAttempt(gatewayModel, nil)
 	}
 	for _, providerName := range cfg.GetConfiguredProviders() {

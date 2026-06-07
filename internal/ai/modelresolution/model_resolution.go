@@ -111,11 +111,51 @@ func ResolveConfiguredChatProviderModelOffline(cfg *config.AIConfig, provider st
 	return "", fmt.Errorf("no chat model configured for %s provider", provider)
 }
 
+type gatewayEquivalentResolver struct {
+	resolve func(cfg *config.AIConfig, model string) (string, bool)
+}
+
+var gatewayEquivalentResolvers = []gatewayEquivalentResolver{
+	{resolve: openRouterEquivalentChatModel},
+}
+
+// GatewayEquivalentChatModels maps a configured direct-provider chat model to
+// equivalent routes through configured gateway providers. Provider-specific
+// route syntax belongs in this model-resolution registry; chat execution should
+// consume the returned candidates without hardcoding a gateway.
+func GatewayEquivalentChatModels(cfg *config.AIConfig, model string) []string {
+	if cfg == nil {
+		return nil
+	}
+	routes := make([]string, 0, len(gatewayEquivalentResolvers))
+	seen := make(map[string]struct{}, len(gatewayEquivalentResolvers))
+	for _, resolver := range gatewayEquivalentResolvers {
+		candidate, ok := resolver.resolve(cfg, model)
+		if !ok {
+			continue
+		}
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		if _, exists := seen[candidate]; exists {
+			continue
+		}
+		seen[candidate] = struct{}{}
+		routes = append(routes, candidate)
+	}
+	return routes
+}
+
 // OpenRouterEquivalentChatModel maps a configured direct-provider chat model to
 // the same vendor/model route through OpenRouter when that gateway is configured.
 // It never calls a live model catalog; unsupported gateway routes simply fail as
 // normal provider attempts and the chat fallback planner can continue.
 func OpenRouterEquivalentChatModel(cfg *config.AIConfig, model string) (string, bool) {
+	return openRouterEquivalentChatModel(cfg, model)
+}
+
+func openRouterEquivalentChatModel(cfg *config.AIConfig, model string) (string, bool) {
 	if cfg == nil || !cfg.HasProvider(config.AIProviderOpenRouter) {
 		return "", false
 	}

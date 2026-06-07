@@ -127,3 +127,32 @@ func TestOpenRouterEquivalentChatModel_RejectsUnavailableOrNonGatewayRoutes(t *t
 		}
 	}
 }
+
+func TestGatewayEquivalentChatModels_ReturnsConfiguredGatewayRoutes(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.AIConfig{
+		OpenRouterAPIKey: "sk-or-test",
+		DeepSeekAPIKey:   "deepseek-test",
+	}
+
+	got := GatewayEquivalentChatModels(cfg, "deepseek:deepseek-v4-pro")
+	want := []string{"openrouter:deepseek/deepseek-v4-pro"}
+	if len(got) != len(want) {
+		t.Fatalf("GatewayEquivalentChatModels length = %d, want %d: %#v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("GatewayEquivalentChatModels[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestGatewayEquivalentChatModels_ReturnsEmptyWithoutConfiguredGateway(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.AIConfig{DeepSeekAPIKey: "deepseek-test"}
+	if got := GatewayEquivalentChatModels(cfg, "deepseek:deepseek-v4-pro"); len(got) != 0 {
+		t.Fatalf("GatewayEquivalentChatModels without gateway = %#v, want empty", got)
+	}
+}

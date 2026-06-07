@@ -1060,7 +1060,7 @@ func TestService_ChatProviderAttemptsUsesStableFallbackModelsWithoutLiveCatalog(
 	}
 }
 
-func TestService_ChatProviderAttemptsPrefersSameModelOpenRouterGatewayFallback(t *testing.T) {
+func TestService_ChatProviderAttemptsPrefersSameModelGatewayFallbackBeforeProviderDefaults(t *testing.T) {
 	service := &Service{}
 	cfg := &config.AIConfig{
 		ChatModel:        "deepseek:deepseek-v4-pro",

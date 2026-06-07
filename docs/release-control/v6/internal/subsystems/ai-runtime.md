@@ -426,7 +426,10 @@ runtime cost control, and shared AI transport surfaces.
    provider/model route. This fallback must use chat-suitable model resolution
    from `internal/ai/modelresolution`, skipping obvious non-chat endpoints such
    as realtime, audio, moderation, embedding, and content-safety catalog
-   entries. Fallback planning must not block the selected provider's first
+   entries. Gateway-equivalent routes, such as a direct provider model exposed
+   through a configured gateway, must be produced by that model-resolution
+   policy rather than hardcoded in chat execution or frontend UI logic.
+   Fallback planning must not block the selected provider's first
    attempt on live catalog reads for every other configured provider; the hot
    path may queue only explicit provider preferences or stable provider defaults
    and defer fallback provider construction until the selected route actually
