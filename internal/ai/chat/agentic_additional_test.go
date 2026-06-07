@@ -440,6 +440,70 @@ func TestAgenticLoop_RetriesProviderStreamBeforeEvents(t *testing.T) {
 	}
 }
 
+func TestAgenticLoop_RetriesProviderStreamAfterOnlySuppressedArtifacts(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	loop := NewAgenticLoop(provider, executor, "prompt")
+
+	callCount := 0
+	provider.chatStream = func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		callCount++
+		if callCount == 1 {
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{
+					Text: "I'llcheckthedevicenodesinsidethecontainertoanswerthat.Letmecounttheentriesin/devandlisttheblockdevices.",
+				},
+			})
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: `pulse_read(target_host="current_resource", command="ls /dev | wc -l")`},
+			})
+			return errors.New("connection reset by peer")
+		}
+		callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "There are 4,358 entries under /dev."}})
+		callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+		return nil
+	}
+
+	var emittedContent strings.Builder
+	var workflowStates []WorkflowStateData
+	results, err := loop.Execute(context.Background(), "retry-after-suppressed-artifacts", []Message{{Role: "user", Content: "how many devices in this"}}, func(event StreamEvent) {
+		switch event.Type {
+		case "content":
+			var data ContentData
+			if err := json.Unmarshal(event.Data, &data); err != nil {
+				t.Fatalf("failed to decode content event: %v", err)
+			}
+			emittedContent.WriteString(data.Text)
+		case "workflow_state":
+			var data WorkflowStateData
+			if err := json.Unmarshal(event.Data, &data); err != nil {
+				t.Fatalf("failed to decode workflow_state: %v", err)
+			}
+			workflowStates = append(workflowStates, data)
+		}
+	})
+	if err != nil {
+		t.Fatalf("expected retry to recover suppressed artifact stream failure, got error: %v", err)
+	}
+	if callCount != 2 {
+		t.Fatalf("expected 2 provider attempts, got %d", callCount)
+	}
+	if emittedContent.String() != "There are 4,358 entries under /dev." {
+		t.Fatalf("unexpected streamed content: %q", emittedContent.String())
+	}
+	if strings.Contains(emittedContent.String(), "pulse_read") || strings.Contains(emittedContent.String(), "I'llcheck") {
+		t.Fatalf("streamed content leaked suppressed artifact text: %q", emittedContent.String())
+	}
+	if len(workflowStates) != 1 || workflowStates[0].Phase != "provider_retry" {
+		t.Fatalf("expected one provider_retry workflow state, got %#v", workflowStates)
+	}
+	if len(results) != 1 || results[0].Content != "There are 4,358 entries under /dev." {
+		t.Fatalf("unexpected results: %+v", results)
+	}
+}
+
 func TestAgenticLoop_DoesNotRetryAfterPartialEvents(t *testing.T) {
 	provider := &stubStreamingProvider{}
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})

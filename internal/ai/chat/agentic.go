@@ -897,12 +897,12 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				switch event.Type {
 				case "content":
 					if data, ok := event.Data.(providers.ContentEvent); ok {
-						attemptEmittedVisibleEvents = true
 						if suppressLeakedToolContent {
 							return
 						}
 						visibleText, leakFound := appendVisibleContentBeforeToolLeak(&contentBuilder, &pendingVisibleContent, data.Text)
 						if visibleText != "" {
+							attemptEmittedVisibleEvents = true
 							jsonData, _ := json.Marshal(ContentData{Text: visibleText})
 							callback(StreamEvent{Type: "content", Data: jsonData})
 						}
@@ -1047,6 +1047,11 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					Dur("backoff", backoff).
 					Str("session_id", sessionID).
 					Msg("[AgenticLoop] Provider stream failed before events; retrying turn")
+				contentBuilder.Reset()
+				thinkingBuilder.Reset()
+				pendingVisibleContent = ""
+				suppressLeakedToolContent = false
+				toolCalls = nil
 				emitWorkflowState(
 					callback,
 					"provider_retry",
