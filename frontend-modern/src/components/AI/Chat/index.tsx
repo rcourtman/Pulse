@@ -198,8 +198,6 @@ const STRUCTURED_PATROL_CONTEXT_TARGETS = new Set(['patrol-configuration', 'patr
 const STRUCTURED_RESOURCE_CONTEXT_HANDOFF_KINDS = new Set(['resource_context']);
 const AI_CHAT_CYCLE_RECENT_MODEL_LABEL = 'Cycle recent Assistant model';
 const AI_CHAT_CONTROL_LEVEL_ORDER: AIControlLevel[] = ['read_only', 'controlled', 'autonomous'];
-const AI_CHAT_MODEL_SLASH_HELP =
-  'Use /model provider:model-id, /model default, /model next, or /model previous.';
 const AI_CHAT_COMPACT_SESSION_LABEL = 'Compact session';
 const AI_CHAT_COMPACT_SESSION_EMPTY_MESSAGE = 'No Assistant session to compact';
 const AI_CHAT_COMPACT_SESSION_LOADING_MESSAGE =
@@ -691,6 +689,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const controlModeOptionRefs = new Map<AIControlLevel, HTMLButtonElement>();
   let sessionSearchRequestId = 0;
   const [modelSelectorOpenRequest, setModelSelectorOpenRequest] = createSignal(0);
+  const [modelSelectorInitialSearch, setModelSelectorInitialSearch] = createSignal('');
   const [defaultModel, setDefaultModel] = createSignal('');
   const [chatOverrideModel, setChatOverrideModel] = createSignal('');
   const [providerReadiness, setProviderReadiness] = createSignal<ChatProviderReadinessState>({
@@ -2067,6 +2066,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
   };
 
+  const openModelSelector = (initialSearch = '') => {
+    setModelSelectorInitialSearch(initialSearch.trim());
+    setModelSelectorOpenRequest((value) => value + 1);
+  };
+
   const recentModelRouteByDirection = (direction: 1 | -1) =>
     getNextAssistantRecentModelRoute({
       currentModel: selectedChatModel(),
@@ -2093,7 +2097,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       setShowCommandHelp(false);
       setSessionRefreshLoading(false);
       resetSessionSearch();
-      setModelSelectorOpenRequest((value) => value + 1);
+      openModelSelector();
       return true;
     }
 
@@ -2138,9 +2142,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
 
     if (!isAssistantExplicitModelRoute(target)) {
-      notificationStore.error(AI_CHAT_MODEL_SLASH_HELP);
+      openModelSelector(target);
       focusComposer();
-      return false;
+      return true;
     }
 
     selectModel(target);
@@ -2153,7 +2157,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   };
 
   const openModelSelectorFromError = () => {
-    setModelSelectorOpenRequest((value) => value + 1);
+    openModelSelector();
   };
 
   const getFailedTurnModelRouteAlternative = (message: ChatMessage) => {
@@ -2878,7 +2882,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
         setShowCommandHelp(false);
         setSessionRefreshLoading(false);
         resetSessionSearch();
-        setModelSelectorOpenRequest((value) => value + 1);
+        openModelSelector();
         break;
       case 'providers':
         openAssistantProviderSettings();
@@ -4562,6 +4566,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   isLoading={aiRuntimeModelsLoading()}
                   error={aiRuntimeModelsError()}
                   openRequest={modelSelectorOpenRequest()}
+                  initialSearchQuery={modelSelectorInitialSearch()}
                   onModelSelect={selectModel}
                   onRefresh={() => loadModels(true)}
                 />

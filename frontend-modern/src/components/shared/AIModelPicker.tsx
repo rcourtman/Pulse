@@ -57,6 +57,7 @@ export interface AIModelPickerProps {
   error?: string;
   onRefresh?: () => void;
   openRequest?: number;
+  initialSearchQuery?: string;
   align?: 'left' | 'right';
   buttonClass?: string;
   buttonLabelClass?: string;
@@ -390,9 +391,9 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
     queueMicrotask(() => searchInputRef?.focus());
   };
 
-  const openPicker = () => {
+  const openPicker = (initialSearchQuery = '') => {
     updateDropdownPosition();
-    setSearchQuery('');
+    setSearchQuery(initialSearchQuery.trim());
     setIsOpen(true);
     focusSearchInput();
   };
@@ -564,7 +565,7 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
       return;
     }
     lastOpenRequest = request;
-    queueMicrotask(openPicker);
+    queueMicrotask(() => openPicker(props.initialSearchQuery));
   });
 
   const hasVisibleListOptions = createMemo(

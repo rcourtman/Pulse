@@ -53,7 +53,7 @@ export const ASSISTANT_SLASH_COMMANDS: AssistantSlashCommand[] = [
     name: 'models',
     aliases: ['model', 'mo'],
     action: 'models',
-    description: 'Choose or set the model route (/model provider:model-id)',
+    description: 'Open model search or set a route (/model qwen or /model provider:model-id)',
   },
   {
     name: 'providers',

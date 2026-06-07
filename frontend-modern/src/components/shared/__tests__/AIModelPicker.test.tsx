@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createSignal } from 'solid-js';
 import { AIModelPicker } from '@/components/shared/AIModelPicker';
 import type { ModelInfo } from '@/types/ai';
 
@@ -198,6 +199,41 @@ describe('AIModelPicker', () => {
     expect(
       screen.getByRole('listbox', { name: 'Select shared default model' }),
     ).toBeInTheDocument();
+  });
+
+  it('prefills search when opened by an external request', async () => {
+    const [openRequest, setOpenRequest] = createSignal(0);
+    const [initialSearchQuery, setInitialSearchQuery] = createSignal('');
+    render(() => (
+      <>
+        <button
+          type="button"
+          onClick={() => {
+            setInitialSearchQuery('gpt');
+            setOpenRequest((value) => value + 1);
+          }}
+        >
+          Open model search
+        </button>
+        <AIModelPicker
+          models={models}
+          selectedModel=""
+          onModelSelect={vi.fn()}
+          title="Select shared default model"
+          openRequest={openRequest()}
+          initialSearchQuery={initialSearchQuery()}
+        />
+      </>
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open model search' }));
+
+    const searchInput = (await screen.findByPlaceholderText(
+      'Search or enter model ID',
+    )) as HTMLInputElement;
+    expect(searchInput.value).toBe('gpt');
+    expect(screen.getByText('GPT-5.1 Mini')).toBeInTheDocument();
+    expect(screen.queryByText('MiniMax: MiniMax M2.5 via OpenRouter')).not.toBeInTheDocument();
   });
 
   it('moves keyboard focus from search through model options', async () => {

@@ -18,6 +18,7 @@ export interface ModelSelectorProps {
   isLoading?: boolean;
   error?: string;
   openRequest?: number;
+  initialSearchQuery?: string;
   onModelSelect: (modelId: string) => void;
   onRefresh?: () => void;
 }
@@ -91,6 +92,7 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
       isLoading={props.isLoading}
       error={props.error}
       openRequest={props.openRequest}
+      initialSearchQuery={props.initialSearchQuery}
       onRefresh={props.onRefresh}
       align="left"
       buttonClass="flex flex-shrink-0 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-[11px] text-muted transition-colors hover:border-border hover:text-base-content"

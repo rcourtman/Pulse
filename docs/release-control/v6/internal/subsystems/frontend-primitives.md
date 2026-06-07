@@ -1560,6 +1560,11 @@ provider-local form fork. The shared provider configuration section must render
 provider-specific controls from `aiSettingsModel.ts` `extraFields`, including
 Ollama `keep_alive`, so Assistant and Patrol keep one settings shape across
 labeling, help affordances, helper copy, and persistence binding.
+The shared AI model picker owns model route search and presentation for
+Assistant surfaces. External open requests may seed an initial search query,
+but filtering, current/default route badges, recent routes, and custom route
+selection must remain inside `AIModelPicker`; callers should not duplicate that
+logic in command handlers or feature-local model selectors.
 
 The Patrol alert-trigger severity selector under
 `frontend-modern/src/features/patrol/` is built on the shared `FormSelect`

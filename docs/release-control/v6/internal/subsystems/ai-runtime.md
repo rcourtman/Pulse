@@ -119,7 +119,13 @@ leave the transcript without exposing hidden provider/tool metadata.
    must still use the currently selected route until the operator explicitly
    chooses a different route. Same-model configured-provider alternatives remain
    visible one-click route changes and failed-turn retry choices, not automatic
-   send-time recovery or hidden provider fallback.
+   send-time recovery or hidden provider fallback. The OpenCode reference
+   behavior for this slice is retries on the selected provider/model, not
+   silent fallback to another provider or route; Pulse must adapt that as
+   explicit route choice plus visible route search/recovery. The Assistant
+   `/model` command therefore has two owned paths: an exact `provider:model-id`
+   argument selects that route directly, while a partial argument opens the
+   shared model picker with the search text prefilled.
    Assistant model-selection defaults are settings-owned: the drawer may persist
    explicit model selections only for concrete session IDs, while blank-session
    chat defaults must flow from `/api/settings/ai` `chat_model` or `model`.

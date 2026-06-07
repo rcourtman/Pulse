@@ -35,6 +35,7 @@ const {
     models: ModelInfo[];
     recentModelIds?: string[];
     openRequest?: number;
+    initialSearchQuery?: string;
     onModelSelect?: (modelId: string) => void;
   }> = [];
   const mockChat = {
@@ -302,6 +303,7 @@ vi.mock('../ModelSelector', () => ({
     models: ModelInfo[];
     recentModelIds?: string[];
     openRequest?: number;
+    initialSearchQuery?: string;
     onModelSelect?: (modelId: string) => void;
   }) => {
     mockModelSelectorProps.push(props);
@@ -311,6 +313,7 @@ vi.mock('../ModelSelector', () => ({
         data-selected={props.selectedModel}
         data-count={props.models.length}
         data-open-request={String(props.openRequest || 0)}
+        data-initial-search={props.initialSearchQuery || ''}
         data-recent-models={(props.recentModelIds || []).join('|')}
       />
     );
@@ -1763,7 +1766,7 @@ describe('AIChat', () => {
 
       expect(screen.getByRole('dialog', { name: 'Assistant commands' })).toBeInTheDocument();
       expect(screen.getByRole('option', { name: /\/models/ })).toHaveTextContent(
-        'Choose or set the model route (/model provider:model-id)',
+        'Open model search or set a route (/model qwen or /model provider:model-id)',
       );
       expect(screen.getByRole('option', { name: /\/status/ })).toHaveTextContent(
         'Check the selected model route',
@@ -1969,7 +1972,7 @@ describe('AIChat', () => {
       await waitFor(() => expect(textarea.value).toBe(''));
     });
 
-    it('keeps invalid /model route drafts editable instead of sending them', async () => {
+    it('opens model search for partial /model route text instead of sending it', async () => {
       renderChat();
       const textarea = screen.getByPlaceholderText(
         'Ask about your infrastructure...',
@@ -1980,10 +1983,15 @@ describe('AIChat', () => {
 
       expect(mockChat.setModel).not.toHaveBeenCalled();
       expect(mockChat.sendMessage).not.toHaveBeenCalled();
-      expect(mockNotificationStore.error).toHaveBeenCalledWith(
-        'Use /model provider:model-id, /model default, /model next, or /model previous.',
+      await waitFor(() => {
+        expect(screen.getByTestId('model-selector')).toHaveAttribute('data-open-request', '1');
+      });
+      expect(screen.getByTestId('model-selector')).toHaveAttribute(
+        'data-initial-search',
+        'qwen3.7-plus',
       );
-      expect(textarea.value).toBe('/model qwen3.7-plus');
+      expect(mockNotificationStore.error).not.toHaveBeenCalled();
+      await waitFor(() => expect(textarea.value).toBe(''));
     });
 
     it('checks selected provider status from /status without sending a provider prompt', async () => {
