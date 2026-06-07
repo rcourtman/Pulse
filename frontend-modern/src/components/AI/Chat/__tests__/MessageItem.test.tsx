@@ -42,6 +42,7 @@ vi.mock('../ToolExecutionBlock', () => ({
     startedAt?: number;
     completedAt?: number;
     settleUntil?: number;
+    compact?: boolean;
   }) => (
     <div
       data-testid="tool-execution-block"
@@ -49,6 +50,7 @@ vi.mock('../ToolExecutionBlock', () => ({
       data-started-at={props.startedAt}
       data-completed-at={props.completedAt}
       data-settle-until={props.settleUntil}
+      data-compact={props.compact ? 'true' : 'false'}
     >
       {props.tool.output}
     </div>
@@ -1197,6 +1199,102 @@ describe('MessageItem', () => {
       const block = screen.getByTestId('tool-execution-block');
       expect(block).toHaveAttribute('data-started-at', '1000');
       expect(block).toHaveAttribute('data-completed-at', '4200');
+    });
+
+    it('compacts superseded successful tool rows while the turn is still streaming', () => {
+      const events: StreamDisplayEvent[] = [
+        {
+          type: 'tool',
+          tool: {
+            name: 'pulse_read',
+            input: '{"command":"ls /dev | wc -l"}',
+            output: '4358',
+            success: true,
+          },
+        },
+        {
+          type: 'pending_tool',
+          pendingTool: {
+            id: 'tool-2',
+            name: 'pulse_get_metrics_history',
+            input: '{"resource_id":"vm-101"}',
+            status: 'running',
+          },
+        },
+      ];
+
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            isStreaming: true,
+            streamEvents: events,
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(screen.getByTestId('tool-execution-block')).toHaveAttribute('data-compact', 'true');
+      expect(screen.getByTestId('pending-tool-block')).toHaveAttribute(
+        'data-tool-name',
+        'pulse_get_metrics_history',
+      );
+    });
+
+    it('keeps completed-turn successful tool rows expanded for later inspection', () => {
+      const events: StreamDisplayEvent[] = [
+        {
+          type: 'tool',
+          tool: {
+            name: 'pulse_read',
+            input: '{"command":"ls /dev | wc -l"}',
+            output: '4358',
+            success: true,
+          },
+        },
+        { type: 'content', content: 'Done.' },
+      ];
+
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            isStreaming: false,
+            streamEvents: events,
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(screen.getByTestId('tool-execution-block')).toHaveAttribute('data-compact', 'false');
+    });
+
+    it('does not compact failed tool rows while newer stream activity continues', () => {
+      const events: StreamDisplayEvent[] = [
+        {
+          type: 'tool',
+          tool: {
+            name: 'pulse_read',
+            input: '{"command":"cat /root/secret"}',
+            output: 'permission denied',
+            success: false,
+          },
+        },
+        { type: 'content', content: 'I could not read that path.' },
+      ];
+
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            isStreaming: true,
+            streamEvents: events,
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(screen.getByTestId('tool-execution-block')).toHaveAttribute('data-compact', 'false');
     });
 
     it('renders canceled tool activity as a skipped transcript row', () => {

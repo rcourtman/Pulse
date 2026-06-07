@@ -35,6 +35,7 @@ interface ToolExecutionBlockProps {
   completedAt?: number;
   live?: boolean;
   settleUntil?: number;
+  compact?: boolean;
 }
 
 interface ToolInputSummaryProps {
@@ -356,7 +357,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
   const hasOutput = createMemo(() => hasReadableToolOutput(outputText()));
   const hasDetails = createMemo(() => hasInput() || hasOutput());
   createEffect(() => {
-    if (!props.tool.success) {
+    if (props.compact || !props.tool.success) {
       setSettlingFastCompletion(false);
       return;
     }
@@ -406,6 +407,40 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
   };
 
   return (
+    <Show
+      when={!props.compact}
+      fallback={
+        <div
+          class="my-1 inline-flex max-w-full items-start gap-2 rounded-md border border-border-subtle bg-surface-alt px-2.5 py-1.5 text-[11px] text-muted"
+          role="status"
+          aria-label="Assistant completed tool activity"
+          title={inputSummary()}
+        >
+          <CheckCircleIcon
+            class="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-300"
+            aria-label="completed"
+          />
+          <span class="shrink-0 font-mono text-[9px] font-semibold uppercase tracking-wider">
+            {toolLabel()}
+          </span>
+          <span class="min-w-0 truncate text-base-content">{inputSummary()}</span>
+          <Show when={durationLabel()}>
+            <span class="shrink-0 text-[10px]" aria-label={`Tool duration ${durationLabel()}`}>
+              {durationLabel()}
+            </span>
+          </Show>
+          <Show when={hiddenOutputSummary()}>
+            <span
+              class="shrink-0 rounded border border-border-subtle bg-surface px-1.5 py-0.5 text-[9px] font-medium"
+              title="Open the completed turn to inspect tool output"
+              aria-label={`Tool output available: ${hiddenOutputSummary()}`}
+            >
+              {hiddenOutputBadgeLabel()}
+            </span>
+          </Show>
+        </div>
+      }
+    >
     <div
       class="my-2 overflow-hidden rounded-md border border-border-subtle bg-surface text-[11px] shadow-sm"
       role={settlingFastCompletion() ? 'status' : undefined}
@@ -514,6 +549,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
         />
       </Show>
     </div>
+    </Show>
   );
 };
 

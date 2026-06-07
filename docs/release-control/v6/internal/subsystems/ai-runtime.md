@@ -55,6 +55,21 @@ leave the transcript without exposing hidden provider/tool metadata.
 
 ## Extension Points
 
+Assistant frontend presentation changes under
+`frontend-modern/src/components/AI/Chat/` must keep live tool activity aligned
+with OpenCode's mutable tool-part pattern without losing Pulse's operator audit
+trail. The current OpenCode reference at fetched `origin/dev` commit
+`233427f08eb8b2a0627123816e807123fbbe5b26` keeps tool input/progress/result as
+a single mutable part in `packages/tui/src/context/sync-v2.tsx` lines 276-345,
+updates running tool metadata from the execution context in
+`packages/opencode/src/session/tools.ts` lines 53-66, and suppresses completed
+successful tool detail when `showDetails` is off in
+`packages/tui/src/routes/session/index.tsx` lines 1704-1779. Pulse adapts that
+by compacting only successful completed tool rows while the same Assistant turn
+is still streaming and newer concrete activity has arrived. Pending tools,
+skipped/canceled tools, failed tools, and completed-turn tool details must
+remain visible/inspectable.
+
 1. Add or change chat runtime, Patrol orchestration, findings generation, or remediation behavior through `internal/ai/`
 2. Add or change canonical AI provider config, provider-scoped model selection, or runtime auth/base-URL defaults through `internal/config/ai.go`.
    Ollama request keep-alive is a provider runtime option owned by this path:

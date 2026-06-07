@@ -175,6 +175,26 @@ describe('ToolExecutionBlock', () => {
     expect(screen.getByLabelText('Tool duration <1s')).toHaveTextContent('<1s');
   });
 
+  it('renders compact completed activity without the running settle state', () => {
+    render(() => (
+      <ToolExecutionBlock
+        tool={makeTool({ output: 'up 42 days' })}
+        startedAt={1_000}
+        completedAt={1_040}
+        live
+        compact
+      />
+    ));
+
+    const row = screen.getByRole('status', { name: 'Assistant completed tool activity' });
+    expect(row).toHaveTextContent('cmd');
+    expect(row).toHaveTextContent('uptime');
+    expect(row).toHaveTextContent('<1s');
+    expect(screen.getByLabelText('completed')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Assistant tool running')).not.toBeInTheDocument();
+    expect(screen.queryByText('running')).not.toBeInTheDocument();
+  });
+
   it('does not defer failed fast completions behind a running state', () => {
     render(() => (
       <ToolExecutionBlock

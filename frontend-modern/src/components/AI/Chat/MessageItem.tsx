@@ -338,6 +338,16 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     }
   };
   const hasRenderableStreamEvents = () => groupedEvents().some(isRenderableStreamEvent);
+  const hasLaterConcreteLiveActivity = (eventIndex: number) =>
+    props.message.isStreaming === true &&
+    groupedEvents()
+      .slice(eventIndex + 1)
+      .some((evt) => evt.type !== 'model_switch' && isConcreteStreamActivity(evt));
+  const shouldCompactCompletedToolEvent = (evt: StreamDisplayEvent, eventIndex: number) =>
+    evt.type === 'tool' &&
+    props.message.isStreaming === true &&
+    evt.tool?.success !== false &&
+    hasLaterConcreteLiveActivity(eventIndex);
   const isLeadingThinkingEvent = (index: number) =>
     groupedEvents()
       .slice(0, index)
@@ -652,6 +662,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                               completedAt={evt?.updatedAt}
                               live={props.message.isStreaming}
                               settleUntil={evt?.settleUntil}
+                              compact={shouldCompactCompletedToolEvent(evt, index())}
                               tool={{
                                 name: tool().name || 'unknown',
                                 input: tool().input || '{}',
