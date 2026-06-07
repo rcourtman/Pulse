@@ -46,6 +46,7 @@ export const AI_CHAT_CONTROL_MODE_LABEL = 'Assistant control mode';
 export const AI_CHAT_CONTROL_MODE_MENU_LABEL = 'Assistant control mode options';
 export const AI_CHAT_SWITCH_TO_APPROVAL_LABEL = 'Switch Assistant control mode to Approval';
 export const AI_CHAT_COMMAND_HELP_TITLE = 'Assistant commands';
+export const AI_CHAT_COMMAND_HELP_BUTTON_LABEL = 'Open Assistant commands';
 export const AI_CHAT_COMMAND_HELP_CLOSE_LABEL = 'Close Assistant commands';
 export const AI_CHAT_SESSION_EMPTY_STATE = 'No previous assistant sessions';
 export const AI_CHAT_SESSION_LOADING_STATE = 'Loading assistant sessions...';

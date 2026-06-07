@@ -1741,6 +1741,18 @@ describe('AIChat', () => {
       expect(mockChat.sendMessage).not.toHaveBeenCalled();
     });
 
+    it('opens Assistant command help from the composer chrome without sending a provider prompt', () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+
+      fireEvent.input(textarea, { target: { value: 'count devices' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Open Assistant commands' }));
+
+      expect(screen.getByRole('dialog', { name: 'Assistant commands' })).toBeInTheDocument();
+      expect(textarea).toHaveValue('count devices');
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+    });
+
     it('opens Assistant command help from /help without sending a provider prompt', async () => {
       renderChat();
       const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');

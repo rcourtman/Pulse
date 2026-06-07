@@ -4,6 +4,9 @@ import {
   AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL,
   AI_CHAT_CONTEXT_USED_LABEL,
   AI_CHAT_CLOSE_LABEL,
+  AI_CHAT_COMMAND_HELP_BUTTON_LABEL,
+  AI_CHAT_COMMAND_HELP_CLOSE_LABEL,
+  AI_CHAT_COMMAND_HELP_TITLE,
   AI_CHAT_CONTROL_MODE_LABEL,
   AI_CHAT_CONTROL_MODE_MENU_LABEL,
   AI_CHAT_COPY_LAST_ANSWER_ERROR_MESSAGE,
@@ -93,6 +96,9 @@ describe('aiChatPresentation', () => {
     expect(AI_CHAT_CONTROL_MODE_LABEL).toBe('Assistant control mode');
     expect(AI_CHAT_CONTROL_MODE_MENU_LABEL).toBe('Assistant control mode options');
     expect(AI_CHAT_SWITCH_TO_APPROVAL_LABEL).toBe('Switch Assistant control mode to Approval');
+    expect(AI_CHAT_COMMAND_HELP_TITLE).toBe('Assistant commands');
+    expect(AI_CHAT_COMMAND_HELP_BUTTON_LABEL).toBe('Open Assistant commands');
+    expect(AI_CHAT_COMMAND_HELP_CLOSE_LABEL).toBe('Close Assistant commands');
     expect(AI_CHAT_SESSION_EMPTY_STATE).toBe('No previous assistant sessions');
     expect(AI_CHAT_SESSION_LOADING_STATE).toBe('Loading assistant sessions...');
     expect(AI_CHAT_SESSION_SEARCH_PLACEHOLDER).toBe('Search sessions...');

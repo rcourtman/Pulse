@@ -2141,6 +2141,19 @@ Those items stay visible and actionable, but they do not compete with the
 transcript as separate top-of-drawer banners unless they are provider readiness
 or scoped handoff context surfaces with their own governed content.
 
+Assistant command access follows the same OpenCode-referenced footer principle:
+commands are reachable from prompt-adjacent chrome, not only from a hidden slash
+draft. The referenced OpenCode source at fetched `dev` commit
+`e82542b8023a8374f29c23b70ec019c8f256354e` builds the direct command surface in
+`packages/opencode/src/cli/cmd/run/footer.command.tsx` (`RunCommandMenuBody`
+with suggested actions, slash commands, and search) and keeps the footer command
+entry discoverable from `packages/opencode/src/cli/cmd/run/footer.view.tsx`.
+Pulse adapts that pattern for the web drawer by exposing the existing Assistant
+commands dialog from the composer chrome. The button must use the same
+`ASSISTANT_SLASH_COMMANDS` registry, `AssistantCommandHelpDialog`, and
+`executeSlashCommand` path as `/help` and `/commands`; it must not introduce a
+second command registry or a separate provider-bound prompt path.
+
 Primary nav moved to governed platform/runtime destinations on 2026-05-16 and
 was clarified on 2026-05-25 through `frontend-modern/src/App.tsx` and
 `frontend-modern/src/AppLayout.tsx`: the top of the app may expose canonical

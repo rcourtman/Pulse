@@ -27,6 +27,7 @@ import Undo2Icon from 'lucide-solid/icons/undo-2';
 import XIcon from 'lucide-solid/icons/x';
 import BookmarkIcon from 'lucide-solid/icons/bookmark';
 import CheckIcon from 'lucide-solid/icons/check';
+import CircleHelpIcon from 'lucide-solid/icons/circle-help';
 import LoaderCircleIcon from 'lucide-solid/icons/loader-circle';
 import Minimize2Icon from 'lucide-solid/icons/minimize-2';
 import PlusIcon from 'lucide-solid/icons/plus';
@@ -55,6 +56,7 @@ import {
   AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL,
   AI_CHAT_COLLAPSE_TITLE,
   AI_CHAT_CLOSE_LABEL,
+  AI_CHAT_COMMAND_HELP_BUTTON_LABEL,
   AI_CHAT_CONTROL_MODE_LABEL,
   AI_CHAT_CONTROL_MODE_MENU_LABEL,
   AI_CHAT_COPY_LAST_ANSWER_ERROR_MESSAGE,
@@ -3020,6 +3022,16 @@ export const AIChat: Component<AIChatProps> = (props) => {
     });
   };
 
+  const openAssistantCommandHelp = () => {
+    setShowSessions(false);
+    setSessionRefreshLoading(false);
+    resetSessionSearch();
+    setMentionActive(false);
+    closeSlashCommandAutocomplete({ clearTransientDraft: true });
+    setShowControlMenu(false);
+    setShowCommandHelp(true);
+  };
+
   const executeSlashCommand = (command: AssistantSlashCommandAction, args = '') => {
     const commandArgs = args.trim();
     if (command === 'models' && commandArgs) {
@@ -3046,10 +3058,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
         void handleCompactSession();
         break;
       case 'help':
-        setShowSessions(false);
-        setSessionRefreshLoading(false);
-        resetSessionSearch();
-        setShowCommandHelp(true);
+        openAssistantCommandHelp();
         break;
       case 'models':
         setShowSessions(false);
@@ -4821,6 +4830,16 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   onModelSelect={selectModel}
                   onRefresh={() => loadModels(true)}
                 />
+                <button
+                  type="button"
+                  onClick={openAssistantCommandHelp}
+                  class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                  title={AI_CHAT_COMMAND_HELP_BUTTON_LABEL}
+                  aria-label={AI_CHAT_COMMAND_HELP_BUTTON_LABEL}
+                  data-testid="assistant-command-help-trigger"
+                >
+                  <CircleHelpIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
                 <button
                   type="button"
                   onClick={() => cycleRecentModelRoute()}
