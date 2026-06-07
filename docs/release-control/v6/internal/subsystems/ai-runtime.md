@@ -358,6 +358,18 @@ runtime cost control, and shared AI transport surfaces.
    such as New session, session history, collapse/close, autonomous-warning
    recovery, and the control-mode selector instead of depending on title-only
    icon controls or ambiguous short labels.
+   The slash command autocomplete is a command-discovery surface, not just a
+   text shortcut hint. The referenced OpenCode source at fetched `origin/dev`
+   commit `e82542b8023a8374f29c23b70ec019c8f256354e` advertises session
+   commands such as `/models`, `/new`, `/sessions`, `/compact`, `/export`, and
+   `/connect` in `packages/tui/src/feature-plugins/home/tips-view.tsx` lines
+   179-192, while each command registration carries a command title, category,
+   and slash metadata in `packages/tui/src/routes/session/index.tsx` (for
+   `/compact`, lines 548-570). Pulse adapts that by showing the full local
+   Assistant command set in the scrollable slash list instead of silently
+   capping discovery to the first few commands, and every listed command row
+   must carry a matching icon so `/compact`, `/undo`, `/redo`, and other
+   lower-frequency actions do not appear as unfinished blank rows.
    Slash autocomplete close semantics are owned by that same prompt command
    surface. The referenced OpenCode source at fetched `origin/dev` commit
    `4519a1da329c1a4fc384054e7203ba7d06928205` clears a transient slash

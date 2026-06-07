@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render } from '@solidjs/testing-library';
+import { cleanup, render, screen } from '@solidjs/testing-library';
+import { ASSISTANT_SLASH_COMMANDS } from '../assistantSlashCommands';
 import { SlashCommandAutocomplete } from '../SlashCommandAutocomplete';
 
 afterEach(cleanup);
@@ -66,7 +67,7 @@ describe('SlashCommandAutocomplete', () => {
     );
   });
 
-  it('wraps keyboard selection from the first command to the last visible command', () => {
+  it('wraps keyboard selection from the first command to the last command', () => {
     const onSelect = vi.fn();
     render(() => (
       <SlashCommandAutocomplete
@@ -95,9 +96,30 @@ describe('SlashCommandAutocomplete', () => {
 
     expect(onSelect).toHaveBeenCalledWith(
       expect.objectContaining({
-        action: 'export',
-        name: 'export',
+        action: 'redo',
+        name: 'redo',
       }),
+    );
+  });
+
+  it('renders the full local command list with an icon for every command', () => {
+    const { container } = render(() => (
+      <SlashCommandAutocomplete
+        query=""
+        visible
+        position={{ top: 58, left: 0 }}
+        onClose={vi.fn()}
+        onSelect={vi.fn()}
+      />
+    ));
+
+    const options = screen.getAllByRole('option');
+    expect(options).toHaveLength(ASSISTANT_SLASH_COMMANDS.length);
+    expect(options.map((option) => option.getAttribute('aria-label'))).toContain(
+      'Run /compact: Summarize older turns and keep this session moving',
+    );
+    expect(container.querySelectorAll('[role="option"] svg')).toHaveLength(
+      ASSISTANT_SLASH_COMMANDS.length,
     );
   });
 });

@@ -5,6 +5,7 @@ import CopyIcon from 'lucide-solid/icons/copy';
 import DownloadIcon from 'lucide-solid/icons/download';
 import GitForkIcon from 'lucide-solid/icons/git-fork';
 import KeyRoundIcon from 'lucide-solid/icons/key-round';
+import Minimize2Icon from 'lucide-solid/icons/minimize-2';
 import PlusIcon from 'lucide-solid/icons/plus';
 import Redo2Icon from 'lucide-solid/icons/redo-2';
 import SettingsIcon from 'lucide-solid/icons/settings';
@@ -32,6 +33,8 @@ export const AssistantSlashCommandIcon = (props: { action: AssistantSlashCommand
       return <PlusIcon class="h-4 w-4" aria-hidden="true" />;
     case 'sessions':
       return <ClockIcon class="h-4 w-4" aria-hidden="true" />;
+    case 'compact':
+      return <Minimize2Icon class="h-4 w-4" aria-hidden="true" />;
     case 'models':
       return <SettingsIcon class="h-4 w-4" aria-hidden="true" />;
     case 'providers':
@@ -53,7 +56,7 @@ export const AssistantSlashCommandIcon = (props: { action: AssistantSlashCommand
 
 export function SlashCommandAutocomplete(props: SlashCommandAutocompleteProps) {
   const [selectedIndex, setSelectedIndex] = createSignal(0);
-  const commands = createMemo(() => filterAssistantSlashCommands(props.query, 8));
+  const commands = createMemo(() => filterAssistantSlashCommands(props.query));
 
   createEffect(() => {
     props.query;
