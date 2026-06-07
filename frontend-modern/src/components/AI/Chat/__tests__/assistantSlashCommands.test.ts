@@ -102,6 +102,40 @@ describe('assistantSlashCommands', () => {
     ]);
   });
 
+  it('filters disabled commands from the prompt slash list by default', () => {
+    expect(
+      filterAssistantSlashCommands('compact', undefined, {
+        availability: {
+          compact: {
+            disabled: true,
+            reason: 'Requires transcript content.',
+          },
+        },
+      }).map((command) => command.name),
+    ).toEqual([]);
+  });
+
+  it('can include disabled commands for full command help', () => {
+    const commands = filterAssistantSlashCommands('compact', undefined, {
+      availability: {
+        compact: {
+          disabled: true,
+          reason: 'Requires transcript content.',
+        },
+      },
+      includeDisabled: true,
+    });
+
+    expect(commands).toHaveLength(1);
+    expect(commands[0]).toEqual(
+      expect.objectContaining({
+        disabled: true,
+        disabledReason: 'Requires transcript content.',
+        name: 'compact',
+      }),
+    );
+  });
+
   it('exposes canonical and alias tokens for the picker', () => {
     const help = filterAssistantSlashCommands('commands')[0];
     expect(getAssistantSlashCommandTokens(help)).toEqual(['help', 'commands']);

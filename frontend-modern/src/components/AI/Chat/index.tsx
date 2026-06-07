@@ -162,6 +162,7 @@ import {
   normalizeAssistantRecentModelRoutes,
 } from './assistantModelRoutes';
 import {
+  type AssistantSlashCommandAvailability,
   filterAssistantSlashCommands,
   parseAssistantSlashCommandInput,
   type AssistantSlashCommand,
@@ -1699,6 +1700,54 @@ export const AIChat: Component<AIChatProps> = (props) => {
       !redoingLastTurn() &&
       redoLastTurnAvailable(),
   );
+  const assistantCommandAvailability = createMemo<AssistantSlashCommandAvailability>(() => ({
+    compact: {
+      disabled: !canCompactCurrentSession(),
+      reason: chat.isLoading()
+        ? 'Available after the active response finishes.'
+        : !chat.sessionId().trim()
+          ? 'Requires a saved Assistant session.'
+          : !hasCurrentTranscript()
+            ? 'Requires transcript content.'
+            : 'Unavailable while another session action is running.',
+    },
+    copy: {
+      disabled: !hasCurrentTranscript(),
+      reason: 'Requires transcript content.',
+    },
+    export: {
+      disabled: !hasCurrentTranscript(),
+      reason: 'Requires transcript content.',
+    },
+    fork: {
+      disabled: !canForkCurrentSession(),
+      reason: chat.isLoading()
+        ? 'Available after the active response finishes.'
+        : !chat.sessionId().trim()
+          ? 'Requires a saved Assistant session.'
+          : !hasCurrentTranscript()
+            ? 'Requires transcript content.'
+            : 'Forking is already running.',
+    },
+    redo: {
+      disabled: !canRedoLastTurn(),
+      reason: 'No undone Assistant turn is available.',
+    },
+    status: {
+      disabled: providerReadiness().status === 'checking',
+      reason: 'Route health check already running.',
+    },
+    undo: {
+      disabled: !canUndoLastTurn(),
+      reason: chat.isLoading()
+        ? 'Available after the active response finishes.'
+        : 'Requires a sent Assistant prompt.',
+    },
+  }));
+  const disabledAssistantCommandReason = (command: AssistantSlashCommandAction) => {
+    const state = assistantCommandAvailability()[command];
+    return state?.disabled ? state.reason || 'Assistant command is unavailable right now.' : '';
+  };
 
   const buildCurrentTranscript = (generatedAt = new Date()) => {
     const sessionId = chat.sessionId().trim();
@@ -2851,6 +2900,15 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
   const executeSlashCommand = (command: AssistantSlashCommandAction, args = '') => {
     const commandArgs = args.trim();
+    const disabledReason = disabledAssistantCommandReason(command);
+    if (disabledReason) {
+      clearLocalComposerCommand();
+      setShowCommandHelp(false);
+      notificationStore.info(disabledReason, 2000);
+      focusComposer();
+      return true;
+    }
+
     if (command === 'models' && commandArgs) {
       const consumed = runModelSlashCommand(commandArgs);
       if (consumed) {
@@ -3044,7 +3102,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
     ) {
       const query = textBeforeCursor.slice(1);
       setSlashCommandQuery(query);
-      const hasMatches = filterAssistantSlashCommands(query, 1).length > 0;
+      const hasMatches =
+        filterAssistantSlashCommands(query, 1, {
+          availability: assistantCommandAvailability(),
+        }).length > 0;
       setSlashCommandActive(hasMatches);
       if (hasMatches) {
         setMentionActive(false);
@@ -3634,6 +3695,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
           </Show>
           <Show when={showCommandHelp()}>
             <AssistantCommandHelpDialog
+              availability={assistantCommandAvailability()}
               onClose={() => setShowCommandHelp(false)}
               onRunCommand={handleCommandHelpRun}
             />
@@ -4528,6 +4590,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   />
                 </div>
                 <SlashCommandAutocomplete
+                  availability={assistantCommandAvailability()}
                   query={slashCommandQuery()}
                   position={{ top: 58, left: 0 }}
                   onSelect={handleSlashCommandSelect}

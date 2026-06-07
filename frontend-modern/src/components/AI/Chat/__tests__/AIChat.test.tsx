@@ -1745,6 +1745,34 @@ describe('AIChat', () => {
       expect(mockChat.sendMessage).not.toHaveBeenCalled();
     });
 
+    it('omits unavailable session commands from slash suggestions', () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+
+      fireEvent.input(textarea, { target: { value: '/compact' } });
+
+      expect(screen.queryByRole('listbox', { name: 'Assistant commands' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('option', { name: /Run \/compact/ })).not.toBeInTheDocument();
+    });
+
+    it('explains unavailable manual slash commands without sending a provider prompt', async () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+
+      fireEvent.input(textarea, { target: { value: '/compact' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(mockAIChatAPI.summarizeSession).not.toHaveBeenCalled();
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+      expect(mockNotificationStore.info).toHaveBeenCalledWith(
+        'Requires a saved Assistant session.',
+        2000,
+      );
+      await waitFor(() => expect(textarea.value).toBe(''));
+    });
+
     it('opens Assistant command help from the composer chrome without sending a provider prompt', () => {
       renderChat();
       const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');

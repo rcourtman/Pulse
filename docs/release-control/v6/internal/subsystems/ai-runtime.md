@@ -2144,6 +2144,18 @@ remain visible/inspectable.
 
 ## Current State
 
+Assistant slash-command availability is part of the command runtime contract,
+not only visual polish. The OpenCode reference at fetched `origin/dev` commit
+`c495635` filters prompt slash commands through the registered command catalog
+and omits disabled builtin commands from the prompt popover in
+`packages/app/src/components/prompt-input.tsx` (slash command list creation,
+lines 677-699), while command metadata owns `disabled` and `slash` in
+`packages/app/src/context/command.tsx`. Pulse adapts that by deriving command
+availability from the same predicates as the drawer toolbar: prompt slash
+autocomplete hides unavailable local commands, command help may show them
+disabled with a reason, and manual slash submissions respect the same
+availability before running local session actions.
+
 Assistant tool activity now follows an OpenCode-referenced chronological row
 model where appropriate for Pulse. Consecutive context/read/query tools render
 as visible transcript rows in arrival order instead of being replaced by a

@@ -15,8 +15,19 @@ export type AssistantSlashCommandAction =
 export interface AssistantSlashCommand {
   action: AssistantSlashCommandAction;
   aliases?: string[];
+  disabled?: boolean;
+  disabledReason?: string;
   description: string;
   name: string;
+}
+
+export type AssistantSlashCommandAvailability = Partial<
+  Record<AssistantSlashCommandAction, { disabled: boolean; reason?: string }>
+>;
+
+export interface AssistantSlashCommandFilterOptions {
+  availability?: AssistantSlashCommandAvailability;
+  includeDisabled?: boolean;
 }
 
 export interface ParsedAssistantSlashCommand {
@@ -132,6 +143,19 @@ const normalizeSlashQuery = (query: string) => query.trim().toLowerCase();
 
 const commandAliases = (command: AssistantSlashCommand): string[] => command.aliases || [];
 
+const commandWithAvailability = (
+  command: AssistantSlashCommand,
+  availability?: AssistantSlashCommandAvailability,
+): AssistantSlashCommand => {
+  const state = availability?.[command.action];
+  if (!state) return command;
+  return {
+    ...command,
+    disabled: state.disabled,
+    disabledReason: state.reason,
+  };
+};
+
 const commandMatchesQuery = (command: AssistantSlashCommand, query: string) => {
   if (!query) return true;
   if (command.name.toLowerCase().includes(query)) return true;
@@ -156,9 +180,14 @@ export const getAssistantSlashCommandTokens = (command: AssistantSlashCommand): 
 export const filterAssistantSlashCommands = (
   query: string,
   limit = ASSISTANT_SLASH_COMMANDS.length,
+  options: AssistantSlashCommandFilterOptions = {},
 ): AssistantSlashCommand[] => {
   const normalizedQuery = normalizeSlashQuery(query);
-  return ASSISTANT_SLASH_COMMANDS.filter((command) => commandMatchesQuery(command, normalizedQuery))
+  return ASSISTANT_SLASH_COMMANDS.map((command) =>
+    commandWithAvailability(command, options.availability),
+  )
+    .filter((command) => options.includeDisabled || !command.disabled)
+    .filter((command) => commandMatchesQuery(command, normalizedQuery))
     .map((command, index) => ({ command, index }))
     .sort((left, right) => {
       const scoreDelta =

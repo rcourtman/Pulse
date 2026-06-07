@@ -48,6 +48,34 @@ describe('AssistantCommandHelpDialog', () => {
     );
   });
 
+  it('shows disabled commands in help without running them', () => {
+    const onRunCommand = vi.fn();
+    render(() => (
+      <AssistantCommandHelpDialog
+        availability={{
+          compact: {
+            disabled: true,
+            reason: 'Requires transcript content.',
+          },
+        }}
+        onClose={vi.fn()}
+        onRunCommand={onRunCommand}
+      />
+    ));
+
+    fireEvent.input(screen.getByLabelText('Search Assistant commands'), {
+      target: { value: 'compact' },
+    });
+
+    const compactCommand = screen.getByRole('option', { name: /\/compact/ });
+    expect(compactCommand).toHaveAttribute('aria-disabled', 'true');
+    expect(compactCommand).toBeDisabled();
+    expect(screen.getByText('Requires transcript content.')).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: 'Enter' });
+    expect(onRunCommand).not.toHaveBeenCalled();
+  });
+
   it('consumes Escape as a local dialog close command', () => {
     const onClose = vi.fn();
     render(() => <AssistantCommandHelpDialog onClose={onClose} onRunCommand={vi.fn()} />);

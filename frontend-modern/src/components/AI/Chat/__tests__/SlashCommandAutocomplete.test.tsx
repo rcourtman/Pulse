@@ -122,4 +122,25 @@ describe('SlashCommandAutocomplete', () => {
       ASSISTANT_SLASH_COMMANDS.length,
     );
   });
+
+  it('omits disabled commands from prompt autocomplete', () => {
+    render(() => (
+      <SlashCommandAutocomplete
+        availability={{
+          compact: {
+            disabled: true,
+            reason: 'Requires transcript content.',
+          },
+        }}
+        query="compact"
+        visible
+        position={{ top: 58, left: 0 }}
+        onClose={vi.fn()}
+        onSelect={vi.fn()}
+      />
+    ));
+
+    expect(screen.queryByRole('listbox', { name: 'Assistant commands' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /\/compact/ })).not.toBeInTheDocument();
+  });
 });

@@ -13,11 +13,13 @@ import Undo2Icon from 'lucide-solid/icons/undo-2';
 import CircleHelpIcon from 'lucide-solid/icons/circle-help';
 import type { AssistantSlashCommand, AssistantSlashCommandAction } from './assistantSlashCommands';
 import {
+  type AssistantSlashCommandAvailability,
   filterAssistantSlashCommands,
   getAssistantSlashCommandTokens,
 } from './assistantSlashCommands';
 
 interface SlashCommandAutocompleteProps {
+  availability?: AssistantSlashCommandAvailability;
   query: string;
   visible: boolean;
   position: { top: number; left: number };
@@ -56,7 +58,11 @@ export const AssistantSlashCommandIcon = (props: { action: AssistantSlashCommand
 
 export function SlashCommandAutocomplete(props: SlashCommandAutocompleteProps) {
   const [selectedIndex, setSelectedIndex] = createSignal(0);
-  const commands = createMemo(() => filterAssistantSlashCommands(props.query));
+  const commands = createMemo(() =>
+    filterAssistantSlashCommands(props.query, undefined, {
+      availability: props.availability,
+    }),
+  );
 
   createEffect(() => {
     props.query;

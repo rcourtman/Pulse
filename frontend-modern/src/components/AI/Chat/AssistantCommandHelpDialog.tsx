@@ -1,6 +1,7 @@
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import XIcon from 'lucide-solid/icons/x';
 import {
+  type AssistantSlashCommandAvailability,
   filterAssistantSlashCommands,
   getAssistantSlashCommandTokens,
   type AssistantSlashCommand,
@@ -15,6 +16,7 @@ import {
 } from '@/utils/aiChatPresentation';
 
 interface AssistantCommandHelpDialogProps {
+  availability?: AssistantSlashCommandAvailability;
   onClose: () => void;
   onRunCommand: (command: AssistantSlashCommand) => void;
 }
@@ -24,7 +26,12 @@ export function AssistantCommandHelpDialog(props: AssistantCommandHelpDialogProp
   const [selectedCommandIndex, setSelectedCommandIndex] = createSignal(0);
   let searchInputRef: HTMLInputElement | undefined;
 
-  const commands = createMemo(() => filterAssistantSlashCommands(commandSearchQuery()));
+  const commands = createMemo(() =>
+    filterAssistantSlashCommands(commandSearchQuery(), undefined, {
+      availability: props.availability,
+      includeDisabled: true,
+    }),
+  );
   const selectedCommand = () => commands()[selectedCommandIndex()];
 
   const consumeDialogCloseKey = (event: KeyboardEvent) => {
@@ -70,7 +77,7 @@ export function AssistantCommandHelpDialog(props: AssistantCommandHelpDialogProp
       case 'Enter': {
         consumeDialogCloseKey(event);
         const command = selectedCommand();
-        if (!command) return;
+        if (!command || command.disabled) return;
         props.onRunCommand(command);
         break;
       }
@@ -160,10 +167,17 @@ export function AssistantCommandHelpDialog(props: AssistantCommandHelpDialogProp
                     type="button"
                     role="option"
                     aria-selected={index() === selectedCommandIndex()}
-                    class={`flex w-full items-start gap-3 rounded-md px-3 py-2.5 text-left transition-colors hover:bg-surface-hover focus:bg-surface-hover focus:outline-none ${
-                      index() === selectedCommandIndex() ? 'bg-surface-hover' : ''
-                    }`}
-                    onClick={() => props.onRunCommand(command)}
+                    aria-disabled={command.disabled ? 'true' : undefined}
+                    disabled={command.disabled}
+                    class={`flex w-full items-start gap-3 rounded-md px-3 py-2.5 text-left transition-colors focus:outline-none ${
+                      command.disabled
+                        ? 'cursor-not-allowed opacity-55'
+                        : 'hover:bg-surface-hover focus:bg-surface-hover'
+                    } ${index() === selectedCommandIndex() ? 'bg-surface-hover' : ''}`}
+                    onClick={() => {
+                      if (command.disabled) return;
+                      props.onRunCommand(command);
+                    }}
                     onMouseEnter={() => setSelectedCommandIndex(index())}
                   >
                     <span class="mt-0.5 text-muted">
@@ -185,6 +199,11 @@ export function AssistantCommandHelpDialog(props: AssistantCommandHelpDialogProp
                       <span class="mt-0.5 block text-xs leading-5 text-muted">
                         {command.description}
                       </span>
+                      <Show when={command.disabled && command.disabledReason}>
+                        <span class="mt-0.5 block text-[11px] leading-4 text-muted">
+                          {command.disabledReason}
+                        </span>
+                      </Show>
                     </span>
                   </button>
                 );
