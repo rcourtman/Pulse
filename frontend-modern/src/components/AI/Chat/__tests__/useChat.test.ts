@@ -1563,6 +1563,8 @@ describe('useChat', () => {
         data: {
           phase: 'provider_start',
           message: 'OpenRouter is starting the response.',
+          provider: 'openrouter',
+          model: 'openrouter:qwen/qwen3.7-plus',
         },
       });
       fire({
@@ -1577,17 +1579,60 @@ describe('useChat', () => {
       expect(assistant.workflowStatus).toEqual(
         expect.objectContaining({
           phase: 'stream_idle',
-          message: 'Assistant is still working; waiting for the next stream event.',
+          message: 'OpenRouter is still working; waiting for more response data.',
+          provider: 'openrouter',
+          model: 'openrouter:qwen/qwen3.7-plus',
         }),
       );
-      expect(assistant.streamEvents).toHaveLength(1);
-      expect(assistant.streamEvents?.[0]).toEqual(
+      expect(assistant.streamEvents?.filter((event) => event.type === 'model_switch')).toEqual([
+        expect.objectContaining({
+          type: 'model_switch',
+          model: 'openrouter:qwen/qwen3.7-plus',
+          modelEvent: 'selected',
+        }),
+      ]);
+      expect(assistant.streamEvents?.filter((event) => event.type === 'workflow_status')).toEqual([
         expect.objectContaining({
           type: 'workflow_status',
           workflowStatus: expect.objectContaining({
             phase: 'stream_idle',
-            message: 'Assistant is still working; waiting for the next stream event.',
+            message: 'OpenRouter is still working; waiting for more response data.',
+            provider: 'openrouter',
+            model: 'openrouter:qwen/qwen3.7-plus',
           }),
+        }),
+      ]);
+
+      dispose();
+    });
+
+    it('uses the selected model route in idle progress before provider startup confirms the route', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() =>
+        useChat({
+          sessionId: 's',
+          defaultModel: () => 'openrouter:qwen/qwen3.7-plus',
+        }),
+      );
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+
+      fire({
+        type: 'workflow_state',
+        data: {
+          phase: 'stream_idle',
+          message: 'Assistant is still working; waiting for the next stream event.',
+        },
+      });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.workflowStatus).toEqual(
+        expect.objectContaining({
+          phase: 'stream_idle',
+          message: 'OpenRouter is still working; waiting for more response data.',
+          provider: 'openrouter',
+          model: 'openrouter:qwen/qwen3.7-plus',
         }),
       );
 

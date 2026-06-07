@@ -1190,7 +1190,10 @@ remain visible/inspectable.
    status/header status rather than a dead-looking wait state or a dumped list
    of transient phases. Hide or collapse unsafe details and bulky outputs, but
    do not hide the fact that Pulse is running a local read, invoking a governed
-   tool, or waiting on a provider. If a query-only
+   tool, or waiting on a provider. Stream-idle heartbeats must inherit the
+   selected provider/model route when Pulse has that route, so the visible row
+   reads as route-specific liveness instead of falling back to generic
+   Assistant waiting copy. If a query-only
    turn still reaches a model-owned `pulse_query` topology call, omitting
    `summary_only` must default to summary-only before execution; detailed
    topology remains available in the full governed path or when the model
@@ -2199,6 +2202,11 @@ transcript row and the active-turn composer footer so the two live surfaces show
 the latest canonical workflow state immediately. The transcript and footer
 therefore show current motion while the provider is starting, retrying, or
 reasoning, but completed answers do not retain stale internal-progress prose.
+Stream-idle heartbeats are part of that same visible workflow state. When the
+frontend knows the selected provider/model route from the backend workflow event
+or the streaming assistant message, the idle heartbeat must render as
+route-specific liveness such as `OpenRouter is still working; waiting for more
+response data.` instead of reverting to generic Assistant waiting copy.
 Prompt dispatch itself is also a visible live state: before any backend
 workflow event returns, the frontend seeds the active assistant turn with a
 local `request_send` / `Sending prompt.` workflow row after any selected-model

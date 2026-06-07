@@ -11,6 +11,7 @@ import {
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { normalizeChatToolName } from '@/utils/chatIdentifiers';
+import { getAIProviderDisplayName, getProviderFromModelId } from '@/utils/aiProviderPresentation';
 import {
   appendVisibleTextBeforeAssistantOutputArtifacts,
   createAssistantOutputArtifactStreamState,
@@ -167,6 +168,8 @@ export function useChat(options: UseChatOptions = {}) {
     a.message === b.message &&
     (a.state || '') === (b.state || '') &&
     (a.tool || '') === (b.tool || '') &&
+    (a.provider || '') === (b.provider || '') &&
+    (a.model || '') === (b.model || '') &&
     (a.attempt || 0) === (b.attempt || 0) &&
     (a.maxAttempts || 0) === (b.maxAttempts || 0) &&
     (a.retryAfterMs || 0) === (b.retryAfterMs || 0);
@@ -185,13 +188,38 @@ export function useChat(options: UseChatOptions = {}) {
 
   const isStreamIdleWorkflowStatus = (status?: WorkflowStatus) => status?.phase === 'stream_idle';
 
+  const workflowStatusProvider = (
+    message: Pick<ChatMessage, 'model' | 'workflowStatus'> | undefined,
+    status: WorkflowStatus | undefined,
+  ) => {
+    const provider = status?.provider?.trim() || message?.workflowStatus?.provider?.trim();
+    if (provider) return provider;
+    const model =
+      status?.model?.trim() || message?.workflowStatus?.model?.trim() || message?.model?.trim();
+    return model ? getProviderFromModelId(model) : '';
+  };
+
   // stream_idle is transport liveness, but it must be visible as the latest
   // active progress state instead of leaving the user on a stale phase label.
   const visibleWorkflowStatusForHeartbeat = (
-    _current: WorkflowStatus | undefined,
+    message: Pick<ChatMessage, 'model' | 'workflowStatus'> | undefined,
     next: WorkflowStatus,
   ): WorkflowStatus => {
-    return next;
+    if (!isStreamIdleWorkflowStatus(next)) return next;
+
+    const provider = workflowStatusProvider(message, next);
+    if (!provider) return next;
+
+    return {
+      ...next,
+      provider,
+      model:
+        next.model?.trim() ||
+        message?.workflowStatus?.model?.trim() ||
+        message?.model?.trim() ||
+        undefined,
+      message: `${getAIProviderDisplayName(provider)} is still working; waiting for more response data.`,
+    };
   };
 
   const setAssistantWorkflowStatus = (
@@ -204,7 +232,7 @@ export function useChat(options: UseChatOptions = {}) {
       prev.map((msg) => {
         if (msg.id !== assistantId) return msg;
         if (msg.isStreaming === false) return msg;
-        const visibleStatus = visibleWorkflowStatusForHeartbeat(msg.workflowStatus, workflowStatus);
+        const visibleStatus = visibleWorkflowStatusForHeartbeat(msg, workflowStatus);
         if (workflowStatusesMatch(msg.workflowStatus, visibleStatus)) return msg;
         return { ...msg, workflowStatus: visibleStatus };
       }),
@@ -236,12 +264,14 @@ export function useChat(options: UseChatOptions = {}) {
     return events.filter((event) => event.type !== 'workflow_status');
   };
 
-  const isLocalPromptSendEvent = (event: StreamDisplayEvent) =>
-    event.type === 'workflow_status' && event.workflowStatus?.phase === 'request_send';
+  const isLocalPromptProgressEvent = (event: StreamDisplayEvent) =>
+    event.type === 'workflow_status' &&
+    (event.workflowStatus?.phase === 'request_send' ||
+      event.workflowStatus?.phase === 'request_wait');
 
-  const streamEventsWithoutLocalPromptSendRows = (
+  const streamEventsWithoutLocalPromptProgressRows = (
     events: StreamDisplayEvent[] | undefined,
-  ): StreamDisplayEvent[] => (events || []).filter((event) => !isLocalPromptSendEvent(event));
+  ): StreamDisplayEvent[] => (events || []).filter((event) => !isLocalPromptProgressEvent(event));
 
   const streamEventsWithoutTransientRows = (
     events: StreamDisplayEvent[] | undefined,
@@ -402,7 +432,7 @@ export function useChat(options: UseChatOptions = {}) {
     const events =
       nextEvent.type === 'workflow_status' || nextEvent.type === 'model_switch'
         ? msg.streamEvents || []
-        : streamEventsWithoutLocalPromptSendRows(msg.streamEvents);
+        : streamEventsWithoutLocalPromptProgressRows(msg.streamEvents);
 
     // For content events, merge consecutive content into one
     if (nextEvent.type === 'content' && events.length > 0) {
@@ -454,9 +484,11 @@ export function useChat(options: UseChatOptions = {}) {
     msg: ChatMessage,
     workflowStatus: WorkflowStatus,
   ): ChatMessage => {
-    const events = msg.streamEvents || [];
+    const events = isLocalPromptProgressEvent({ type: 'workflow_status', workflowStatus })
+      ? msg.streamEvents || []
+      : streamEventsWithoutLocalPromptProgressRows(msg.streamEvents);
     const now = Date.now();
-    const visibleStatus = visibleWorkflowStatusForHeartbeat(msg.workflowStatus, workflowStatus);
+    const visibleStatus = visibleWorkflowStatusForHeartbeat(msg, workflowStatus);
     const nextEvent = withStreamEventTiming(
       {
         type: 'workflow_status',
@@ -504,8 +536,9 @@ export function useChat(options: UseChatOptions = {}) {
       };
     }
 
+    const msgWithFilteredEvents = { ...msg, streamEvents: events };
     return {
-      ...addStreamEvent(msg, nextEvent),
+      ...addStreamEvent(msgWithFilteredEvents, nextEvent),
       workflowStatusHistory: appendWorkflowStatusHistory(msg.workflowStatusHistory, visibleStatus),
     };
   };
@@ -541,7 +574,7 @@ export function useChat(options: UseChatOptions = {}) {
     const model = route.trim();
     if (!model) return msg;
     const failedModel = options.failedModel?.trim();
-    const streamEvents = streamEventsWithoutLocalPromptSendRows(msg.streamEvents);
+    const streamEvents = streamEventsWithoutLocalPromptProgressRows(msg.streamEvents);
     const duplicate = streamEvents.some(
       (event) =>
         event.type === 'model_switch' &&
@@ -962,6 +995,8 @@ export function useChat(options: UseChatOptions = {}) {
     if (!message) return null;
     const state = typeof record.state === 'string' ? record.state.trim() : '';
     const tool = typeof record.tool === 'string' ? record.tool.trim() : '';
+    const provider = typeof record.provider === 'string' ? record.provider.trim() : '';
+    const model = extractWorkflowModel(record);
     const attempt = positiveNumber(record.attempt);
     const maxAttempts = positiveNumber(record.max_attempts ?? record.maxAttempts);
     const retryAfterMs = positiveNumber(record.retry_after_ms ?? record.retryAfterMs);
@@ -971,6 +1006,8 @@ export function useChat(options: UseChatOptions = {}) {
       phase: phase || undefined,
       state: state || undefined,
       tool: tool || undefined,
+      provider: provider || undefined,
+      model: model || undefined,
       attempt,
       maxAttempts,
       retryAfterMs,
@@ -1198,26 +1235,22 @@ export function useChat(options: UseChatOptions = {}) {
         : null;
       if (!workflowStatus && !routeEvent) return;
 
-      if (routeEvent) {
-        setMessages((prev) =>
-          prev.map((msg) => {
-            if (msg.id !== assistantId) return msg;
-            return withModelRouteEvent(msg, routeEvent.model, {
+      setMessages((prev) =>
+        prev.map((msg) => {
+          if (msg.id !== assistantId) return msg;
+          let next = msg;
+          if (routeEvent) {
+            next = withModelRouteEvent(next, routeEvent.model, {
               modelEvent: routeEvent.modelEvent,
             });
-          }),
-        );
-      }
-      if (workflowStatus) {
-        setMessages((prev) =>
-          prev.map((msg) => {
-            if (msg.id !== assistantId) return msg;
-            if (msg.isStreaming === false) return msg;
-            return withWorkflowStatusEvent(msg, workflowStatus);
-          }),
-        );
-        setAssistantWorkflowStatus(assistantId, requestId, workflowStatus);
-      }
+          }
+          if (workflowStatus && next.isStreaming !== false) {
+            next = withWorkflowStatusEvent(next, workflowStatus);
+          }
+          return next;
+        }),
+      );
+      if (workflowStatus) setAssistantWorkflowStatus(assistantId, requestId, workflowStatus);
       return;
     }
 

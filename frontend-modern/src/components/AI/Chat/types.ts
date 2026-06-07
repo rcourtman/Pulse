@@ -137,6 +137,8 @@ export interface WorkflowStatus {
   message: string;
   state?: string;
   tool?: string;
+  provider?: string;
+  model?: string;
   attempt?: number;
   maxAttempts?: number;
   retryAfterMs?: number;
