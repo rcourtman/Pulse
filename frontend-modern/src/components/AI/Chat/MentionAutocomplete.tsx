@@ -38,6 +38,12 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
     setSelectedIndex(0);
   });
 
+  const consumeMentionKey = (e: KeyboardEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+  };
+
   // Handle keyboard navigation
   const handleKeyDown = (e: KeyboardEvent) => {
     if (!props.visible) return;
@@ -46,22 +52,22 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
 
     switch (e.key) {
       case 'ArrowDown':
-        e.preventDefault();
+        consumeMentionKey(e);
         setSelectedIndex((i) => Math.min(i + 1, resources.length - 1));
         break;
       case 'ArrowUp':
-        e.preventDefault();
+        consumeMentionKey(e);
         setSelectedIndex((i) => Math.max(i - 1, 0));
         break;
       case 'Enter':
       case 'Tab':
-        e.preventDefault();
+        consumeMentionKey(e);
         if (resources[selectedIndex()]) {
           props.onSelect(resources[selectedIndex()]);
         }
         break;
       case 'Escape':
-        e.preventDefault();
+        consumeMentionKey(e);
         props.onClose();
         break;
     }

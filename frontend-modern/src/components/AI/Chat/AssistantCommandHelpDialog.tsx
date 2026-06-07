@@ -17,9 +17,15 @@ interface AssistantCommandHelpDialogProps {
 }
 
 export function AssistantCommandHelpDialog(props: AssistantCommandHelpDialogProps) {
+  const consumeDialogCloseKey = (event: KeyboardEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+  };
+
   const handleKeyDown = (event: KeyboardEvent) => {
     if (event.key !== 'Escape') return;
-    event.preventDefault();
+    consumeDialogCloseKey(event);
     props.onClose();
   };
 

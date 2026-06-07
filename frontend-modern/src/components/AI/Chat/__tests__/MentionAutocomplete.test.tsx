@@ -261,6 +261,25 @@ describe('MentionAutocomplete', () => {
       expect(onClose).toHaveBeenCalledOnce();
     });
 
+    it('consumes owned keyboard events before later document handlers see them', () => {
+      const onClose = vi.fn();
+      renderAutocomplete({ onClose });
+      const laterDocumentHandler = vi.fn();
+      document.addEventListener('keydown', laterDocumentHandler);
+
+      const escapeEvent = new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        key: 'Escape',
+      });
+      document.dispatchEvent(escapeEvent);
+
+      document.removeEventListener('keydown', laterDocumentHandler);
+      expect(escapeEvent.defaultPrevented).toBe(true);
+      expect(laterDocumentHandler).not.toHaveBeenCalled();
+      expect(onClose).toHaveBeenCalledOnce();
+    });
+
     it('does not respond to keyboard events when not visible', () => {
       const onSelect = vi.fn();
       const onClose = vi.fn();

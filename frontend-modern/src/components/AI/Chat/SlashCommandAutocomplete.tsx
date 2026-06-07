@@ -65,34 +65,35 @@ export function SlashCommandAutocomplete(props: SlashCommandAutocompleteProps) {
     props.onSelect(command);
   };
 
+  const consumeCommandKey = (event: KeyboardEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+  };
+
   const handleKeyDown = (event: KeyboardEvent) => {
     if (!props.visible) return;
 
     const options = commands();
     switch (event.key) {
       case 'ArrowDown':
-        event.preventDefault();
-        event.stopPropagation();
+        consumeCommandKey(event);
         setSelectedIndex((index) => Math.min(index + 1, Math.max(0, options.length - 1)));
         break;
       case 'ArrowUp':
-        event.preventDefault();
-        event.stopPropagation();
+        consumeCommandKey(event);
         setSelectedIndex((index) => Math.max(index - 1, 0));
         break;
       case 'Enter':
-        event.preventDefault();
-        event.stopPropagation();
+        consumeCommandKey(event);
         selectCommand(options[selectedIndex()]);
         break;
       case 'Tab':
-        event.preventDefault();
-        event.stopPropagation();
+        consumeCommandKey(event);
         selectCommand(options[selectedIndex()]);
         break;
       case 'Escape':
-        event.preventDefault();
-        event.stopPropagation();
+        consumeCommandKey(event);
         props.onClose();
         break;
     }

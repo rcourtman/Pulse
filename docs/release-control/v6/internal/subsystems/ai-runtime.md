@@ -224,6 +224,18 @@ runtime cost control, and shared AI transport surfaces.
    to the composer, and leave ordinary prompts or already-submitted local
    command actions untouched. Closing the popup must not leave `/mo`, `/new`, or
    another executable command token behind for the next Enter press.
+   Prompt-owned popups must consume their local keyboard commands before global
+   drawer handlers can reinterpret them. The same OpenCode autocomplete source
+   registers prompt-scoped previous/next/hide/select/complete commands in
+   `packages/opencode/src/cli/cmd/tui/component/prompt/autocomplete.tsx`
+   (lines 600-658), and OpenCode's help dialog binds Escape as a dialog-local
+   close command in
+   `packages/opencode/src/cli/cmd/tui/ui/dialog-help.tsx` (lines 11-16).
+   Pulse adapts that by having slash autocomplete, resource mention
+   autocomplete, and Assistant command help prevent default handling and stop
+   later document-level keyboard handlers for their owned navigation,
+   selection, and close keys. Escape inside those local surfaces must close the
+   local popup/dialog only; it must not also close the Assistant drawer.
    Failed-turn retry is part of that same local chat-runtime boundary: a
    retryable in-memory assistant error may replay the original user turn's
    structured mentions, finding id, approval override, handoff resources,
