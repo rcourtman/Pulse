@@ -3,6 +3,7 @@ package servicediscovery
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -39,6 +40,66 @@ func FormatSingleForAIContext(d *ResourceDiscovery) string {
 		return ""
 	}
 	return formatSingleDiscovery(d)
+}
+
+// FormatCloudSafeContext returns the operational discovery context that is safe
+// to send to a CLOUD model: service identity, the access pattern, and
+// operational paths — WITHOUT PII (hostname, IP, bind addresses, alias). It is
+// intended for the chat sanitizer to include in cloud-routed summaries so the
+// Assistant stays useful on cloud models while genuinely sensitive fields stay
+// redacted. Local routing should keep using FormatForAIContext (full context).
+//
+// Safe by construction: it reads only non-identifying fields and never emits
+// Hostname or any address. Port numbers are included without their bind
+// addresses. Returns "" when there is no usable identity.
+func FormatCloudSafeContext(d *ResourceDiscovery) string {
+	if d == nil {
+		return ""
+	}
+
+	name := strings.TrimSpace(d.ServiceName)
+	if name == "" {
+		name = strings.TrimSpace(d.ServiceType)
+	}
+	if name == "" {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString("Service: " + name)
+	if v := strings.TrimSpace(d.ServiceVersion); v != "" {
+		sb.WriteString(" (" + v + ")")
+	}
+	sb.WriteString("\n")
+
+	if d.Category != "" && d.Category != CategoryUnknown {
+		sb.WriteString("Category: " + string(d.Category) + "\n")
+	}
+	if access := strings.TrimSpace(d.CLIAccess); access != "" {
+		sb.WriteString("Access: " + access + "\n")
+	}
+	if len(d.ConfigPaths) > 0 {
+		sb.WriteString("Config paths: " + strings.Join(d.ConfigPaths, ", ") + "\n")
+	}
+	if len(d.DataPaths) > 0 {
+		sb.WriteString("Data paths: " + strings.Join(d.DataPaths, ", ") + "\n")
+	}
+	if len(d.LogPaths) > 0 {
+		sb.WriteString("Log paths: " + strings.Join(d.LogPaths, ", ") + "\n")
+	}
+	if len(d.Ports) > 0 {
+		nums := make([]string, 0, len(d.Ports))
+		for _, p := range d.Ports {
+			if p.Port > 0 {
+				nums = append(nums, strconv.Itoa(p.Port))
+			}
+		}
+		if len(nums) > 0 {
+			sb.WriteString("Ports: " + strings.Join(nums, ", ") + "\n")
+		}
+	}
+
+	return strings.TrimSpace(sb.String())
 }
 
 // formatSingleDiscovery formats a single discovery entry.

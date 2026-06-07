@@ -286,3 +286,33 @@ func TestFilterImportantFactsLimit(t *testing.T) {
 		t.Fatalf("service-control fact was dropped by the cap")
 	}
 }
+
+func TestFormatCloudSafeContext(t *testing.T) {
+	if FormatCloudSafeContext(nil) != "" {
+		t.Fatalf("expected empty cloud-safe context for nil discovery")
+	}
+
+	d := &ResourceDiscovery{
+		Hostname:    "ha-prod.internal",
+		ServiceType: "home-assistant",
+		ServiceName: "Home Assistant",
+		Category:    CategoryHomeAuto,
+		CLIAccess:   "pct exec 101 -- docker exec homeassistant bash",
+		ConfigPaths: []string{"/config/automations.yaml"},
+		Ports:       []PortInfo{{Port: 8123, Protocol: "tcp", Address: "192.168.0.127"}},
+	}
+	out := FormatCloudSafeContext(d)
+
+	// Operational context the cloud Assistant needs to be useful.
+	for _, want := range []string{"Home Assistant", "docker exec homeassistant", "/config/automations.yaml", "8123"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("cloud-safe context missing %q\n--- output ---\n%s", want, out)
+		}
+	}
+	// PII must NEVER reach a cloud model.
+	for _, bad := range []string{"ha-prod.internal", "192.168.0.127"} {
+		if strings.Contains(out, bad) {
+			t.Errorf("cloud-safe context leaked PII %q\n--- output ---\n%s", bad, out)
+		}
+	}
+}
