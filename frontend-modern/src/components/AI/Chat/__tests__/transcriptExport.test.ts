@@ -153,6 +153,34 @@ describe('Assistant transcript export', () => {
     expect(transcript).toContain('No active alerts');
   });
 
+  it('exports persisted tool calls before reconstructed assistant answer text', () => {
+    const transcript = formatAssistantTranscript({
+      messages: [
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: 'I checked the resource.',
+          timestamp,
+          toolCalls: [
+            {
+              name: 'pulse_read',
+              input: JSON.stringify({ target: 'vm-100' }),
+              output: 'Resource is running',
+              success: true,
+            },
+          ],
+        },
+      ],
+      generatedAt: timestamp,
+    });
+
+    const toolIndex = transcript.indexOf('[tool:read]');
+    const answerIndex = transcript.indexOf('I checked the resource.');
+    expect(toolIndex).toBeGreaterThan(-1);
+    expect(answerIndex).toBeGreaterThan(-1);
+    expect(toolIndex).toBeLessThan(answerIndex);
+  });
+
   it('formats initially selected model route events distinctly from fallback switches', () => {
     const transcript = formatAssistantTranscript({
       messages: [

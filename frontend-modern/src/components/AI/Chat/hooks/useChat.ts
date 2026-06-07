@@ -1135,14 +1135,14 @@ export function useChat(options: UseChatOptions = {}) {
     toolCalls?: PersistedToolCall[],
   ): StreamDisplayEvent[] | undefined => {
     const events: StreamDisplayEvent[] = [];
-    if (content.trim()) {
-      events.push({ type: 'content', content });
-    }
     for (const tool of toolCalls || []) {
       events.push({
         type: 'tool',
         tool: normalizePersistedToolExecution(tool),
       });
+    }
+    if (content.trim()) {
+      events.push({ type: 'content', content });
     }
     return events.length > 0 ? events : undefined;
   };

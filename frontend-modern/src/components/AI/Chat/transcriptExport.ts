@@ -287,14 +287,14 @@ const appendAssistantStreamEvents = (
     }
   }
 
-  if (!contentAppended) {
-    appendBlock(lines, visibleAssistantContent(message));
-  }
-
   if (!toolAppended) {
     for (const tool of message.toolCalls || []) {
       appendBlock(lines, formatCompletedTool(tool, options.includeToolOutput === true));
     }
+  }
+
+  if (!contentAppended) {
+    appendBlock(lines, visibleAssistantContent(message));
   }
 
   if (!pendingToolAppended) {

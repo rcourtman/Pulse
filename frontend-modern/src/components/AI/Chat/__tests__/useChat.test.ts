@@ -2753,11 +2753,11 @@ describe('useChat', () => {
       expect(msgs[0].content).toBe('hello');
       expect(msgs[1].toolCalls).toHaveLength(1);
       expect(msgs[1].streamEvents).toEqual([
-        { type: 'content', content: 'hi there' },
         {
           type: 'tool',
           tool: { name: 'test', input: '{}', output: 'ok', success: true },
         },
+        { type: 'content', content: 'hi there' },
       ]);
       expect(msgs[1].timestamp).toBeInstanceOf(Date);
       dispose();
@@ -2873,7 +2873,6 @@ describe('useChat', () => {
       expect(assistant.model).toBe('openai:gpt-4');
       expect(assistant.content).toBe('I checked the resource.');
       expect(assistant.streamEvents).toEqual([
-        { type: 'content', content: 'I checked the resource.' },
         {
           type: 'tool',
           tool: {
@@ -2883,6 +2882,7 @@ describe('useChat', () => {
             success: true,
           },
         },
+        { type: 'content', content: 'I checked the resource.' },
       ]);
       dispose();
     });
