@@ -865,6 +865,60 @@ describe('MessageItem', () => {
       ).not.toBeInTheDocument();
     });
 
+    it('lets provider retry workflow activity cut through live transcript pacing', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(1_200);
+
+      const workflowStatusHistory = [
+        {
+          phase: 'request_start',
+          message: 'Preparing Pulse context.',
+          startedAt: 1_000,
+        },
+        {
+          phase: 'provider_start',
+          message: 'OpenRouter is starting the response.',
+          startedAt: 1_100,
+        },
+        {
+          phase: 'provider_retry',
+          message: 'Provider connection failed before any output; retrying.',
+          attempt: 2,
+          maxAttempts: 3,
+          retryAfterMs: 3200,
+          startedAt: 1_200,
+        },
+      ];
+
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            isStreaming: true,
+            pendingTools: [],
+            workflowStatusHistory,
+            streamEvents: [
+              {
+                type: 'workflow_status',
+                workflowStatus: workflowStatusHistory[2],
+              },
+            ],
+            workflowStatus: workflowStatusHistory[2],
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(
+        screen.getByText(
+          'Provider connection failed before any output; retrying. · attempt 2/3 · retrying in 3.2s',
+        ),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('Preparing Pulse context.')).not.toBeInTheDocument();
+      expect(screen.queryByText('OpenRouter is starting the response.')).not.toBeInTheDocument();
+    });
+
     it('keeps separated transcript workflow rows tied to their own streamed status', () => {
       vi.useFakeTimers();
       vi.setSystemTime(2_000);

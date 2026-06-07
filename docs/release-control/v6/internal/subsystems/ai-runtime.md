@@ -2257,12 +2257,13 @@ hidden server log. The referenced OpenCode source at fetched `dev` commit
 `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx`. Pulse adapts
 that contract at the owning stream boundary: `WorkflowStateData` carries
 `attempt`, `max_attempts`, and `retry_after_ms`, and `AgenticLoop` emits
-`provider_retry` before sleeping between transient pre-output provider
-attempts. The frontend active-turn footer and live transcript workflow row
-render that same typed workflow state as compact attempt/backoff progress,
-counting down `retry_after_ms` from `started_at` while the turn remains active,
-so the user sees Pulse moving through a retry instead of staring at an obsolete
-provider-wait message.
+  `provider_retry` before sleeping between transient pre-output provider
+  attempts. The frontend active-turn footer and live transcript workflow row
+  render that same typed workflow state immediately as compact attempt/backoff
+  progress, counting down `retry_after_ms` from `started_at` while the turn
+  remains active, so the user sees Pulse moving through a retry instead of
+  staring at an obsolete provider-wait message. Retry workflow states are not
+  held behind workflow-history pacing.
 
 Assistant workflow progress is also a live typed activity row while a turn is
 in flight, not only hidden footer state. The referenced OpenCode source at
@@ -2280,12 +2281,14 @@ same typed status, and visible assistant content, reasoning, tool,
 approval/question, terminal `done`, and terminal `error` events clear that row.
 The frontend now also keeps a bounded live-only `workflowStatusHistory` for the
 active assistant message so the reducer preserves state continuity while
-backend preparation, context, provider-start, retry, and fallback labels are
-being replaced. The shared workflow-status presentation helper owns both the
-transcript row and the active-turn composer footer so the two live surfaces show
-the latest canonical workflow state immediately. The transcript and footer
-therefore show current motion while the provider is starting, retrying, or
-reasoning, but completed answers do not retain stale internal-progress prose.
+  backend preparation, context, and provider-start labels are being replaced. The
+  shared workflow-status presentation helper owns both the transcript row and the
+  active-turn composer footer so the two live surfaces show the latest canonical
+  workflow state immediately. Retry/backoff and stream-idle liveness states cut
+  through pacing because they are current route health, not neutral setup motion.
+  The transcript and footer therefore show current motion while the provider is
+  starting, retrying, or reasoning, but completed answers do not retain stale
+  internal-progress prose.
 Stream-idle heartbeats are part of that same visible workflow state. When the
 frontend knows the selected provider/model route from the backend workflow event
 or the streaming assistant message, the idle heartbeat must render as

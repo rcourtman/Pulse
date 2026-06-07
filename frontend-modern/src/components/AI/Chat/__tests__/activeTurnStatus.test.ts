@@ -296,6 +296,101 @@ describe('getAssistantActiveTurnStatus', () => {
     });
   });
 
+  it('lets provider retry workflow progress cut through active turn pacing', () => {
+    const workflowStatusHistory = [
+      {
+        phase: 'request_start',
+        message: 'Preparing Pulse context.',
+        startedAt: 1_000,
+      },
+      {
+        phase: 'provider_start',
+        message: 'OpenRouter is starting the response.',
+        startedAt: 1_100,
+      },
+      {
+        phase: 'provider_retry',
+        message: 'Provider connection failed before any output; retrying.',
+        attempt: 2,
+        maxAttempts: 3,
+        retryAfterMs: 3200,
+        startedAt: 1_200,
+      },
+    ];
+
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            isStreaming: true,
+            workflowStatusHistory,
+            workflowStatus: workflowStatusHistory[2],
+            streamEvents: [
+              {
+                type: 'workflow_status',
+                workflowStatus: workflowStatusHistory[2],
+                startedAt: 1_200,
+                updatedAt: 1_200,
+              },
+            ],
+          }),
+        ],
+        true,
+        1_200,
+      ),
+    ).toEqual({
+      type: 'thinking',
+      text: 'Provider connection failed before any output; retrying. · attempt 2/3 · retrying in 3.2s',
+      startedAt: 1_200,
+    });
+  });
+
+  it('lets stream idle liveness cut through active turn pacing', () => {
+    const workflowStatusHistory = [
+      {
+        phase: 'request_start',
+        message: 'Preparing Pulse context.',
+        startedAt: 1_000,
+      },
+      {
+        phase: 'provider_start',
+        message: 'OpenRouter is starting the response.',
+        startedAt: 1_100,
+      },
+      {
+        phase: 'stream_idle',
+        message: 'OpenRouter is still working; waiting for more response data.',
+        startedAt: 1_200,
+      },
+    ];
+
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            isStreaming: true,
+            workflowStatusHistory,
+            workflowStatus: workflowStatusHistory[2],
+            streamEvents: [
+              {
+                type: 'workflow_status',
+                workflowStatus: workflowStatusHistory[2],
+                startedAt: 1_200,
+                updatedAt: 1_200,
+              },
+            ],
+          }),
+        ],
+        true,
+        1_200,
+      ),
+    ).toEqual({
+      type: 'thinking',
+      text: 'OpenRouter is still working; waiting for more response data.',
+      startedAt: 1_200,
+    });
+  });
+
   it('prefers workflow progress over selected model route evidence', () => {
     const startedAt = Date.now() - 1_000;
     expect(

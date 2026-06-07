@@ -22,6 +22,16 @@ const workflowStatusesMatch = (a?: WorkflowStatus, b?: WorkflowStatus) =>
 const isDurableStreamBoundary = (event: StreamDisplayEvent) =>
   event.type !== 'workflow_status' && event.type !== 'model_switch';
 
+const immediateWorkflowStatusPhases = new Set(['provider_retry', 'stream_idle']);
+
+const isImmediateWorkflowStatus = (status?: WorkflowStatus) => {
+  const phase = status?.phase?.trim().toLowerCase();
+  return (
+    (phase ? immediateWorkflowStatusPhases.has(phase) : false) ||
+    Boolean(status?.attempt || status?.retryAfterMs)
+  );
+};
+
 const latestWorkflowEventIndex = (
   events: StreamDisplayEvent[] | undefined,
   currentStatus: WorkflowStatus | undefined,
@@ -79,6 +89,8 @@ export const pacedWorkflowStatusForDisplay = (
   events: StreamDisplayEvent[] | undefined,
   now?: number,
 ): WorkflowStatus | undefined => {
+  if (isImmediateWorkflowStatus(currentStatus)) return currentStatus;
+
   const workflowIndex = latestWorkflowEventIndex(events, currentStatus);
   if (workflowIndex >= 0 && hasEarlierDurableBoundary(events, workflowIndex)) {
     return currentStatus;
