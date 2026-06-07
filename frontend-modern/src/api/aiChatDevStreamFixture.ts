@@ -11,6 +11,17 @@ export const AI_CHAT_DEV_STREAM_FIXTURE_PROMPTS = [
   '/fixture skipped-tool',
 ] as const;
 
+const AI_CHAT_DEV_STREAM_FIXTURE_ALIASES: Record<
+  string,
+  (typeof AI_CHAT_DEV_STREAM_FIXTURE_PROMPTS)[number]
+> = {
+  '/fixture burst-tool': '/fixture tool-burst',
+};
+
+const availableFixtureNames = AI_CHAT_DEV_STREAM_FIXTURE_PROMPTS.map((prompt) =>
+  prompt.replace('/fixture ', ''),
+);
+
 const DEFAULT_DEV_FIXTURE_STEP_DELAY_MS = 140;
 const TEST_FIXTURE_STEP_DELAY_MS = 0;
 
@@ -24,8 +35,18 @@ export interface AIChatDevStreamFixtureOptions {
 
 const normalizeFixturePrompt = (prompt: string) => prompt.trim().toLowerCase().replace(/\s+/g, ' ');
 
-export const isAIChatDevStreamFixturePrompt = (prompt: string): boolean => {
+const canonicalizeFixturePrompt = (prompt: string) => {
   const normalized = normalizeFixturePrompt(prompt);
+  return AI_CHAT_DEV_STREAM_FIXTURE_ALIASES[normalized] || normalized;
+};
+
+const isAIChatDevStreamFixtureCommand = (prompt: string): boolean => {
+  const normalized = normalizeFixturePrompt(prompt);
+  return normalized === '/fixture' || normalized.startsWith('/fixture ');
+};
+
+export const isAIChatDevStreamFixturePrompt = (prompt: string): boolean => {
+  const normalized = canonicalizeFixturePrompt(prompt);
   return AI_CHAT_DEV_STREAM_FIXTURE_PROMPTS.some((fixturePrompt) => fixturePrompt === normalized);
 };
 
@@ -70,6 +91,26 @@ const waitForFixtureStep = (delayMs: number, signal?: AbortSignal) => {
 };
 
 const assistantFixtureModel = (model?: string) => model?.trim() || 'dev:assistant-stream-fixture';
+
+const buildUnknownFixtureEvents = (prompt: string): AIChatStreamEvent[] => [
+  {
+    type: 'session',
+    data: { id: 'dev-fixture-unknown' },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'request_start',
+      message: 'Checking local Assistant fixture.',
+    },
+  },
+  {
+    type: 'error',
+    data: {
+      message: `Unknown Assistant fixture "${prompt}". Available fixtures: ${availableFixtureNames.join(', ')}.`,
+    },
+  },
+];
 
 const buildDeviceCountFixtureEvents = (model?: string): AIChatStreamEvent[] => [
   {
@@ -532,8 +573,8 @@ const fixtureStepDelay = (
 export const maybeRunAIChatDevStreamFixture = async (
   options: AIChatDevStreamFixtureOptions,
 ): Promise<boolean> => {
-  const normalizedPrompt = normalizeFixturePrompt(options.prompt);
-  if (!isAIChatDevStreamFixtureAvailable() || !isAIChatDevStreamFixturePrompt(normalizedPrompt)) {
+  const normalizedPrompt = canonicalizeFixturePrompt(options.prompt);
+  if (!isAIChatDevStreamFixtureAvailable() || !isAIChatDevStreamFixtureCommand(options.prompt)) {
     return false;
   }
 
@@ -542,7 +583,9 @@ export const maybeRunAIChatDevStreamFixture = async (
     (import.meta.env.MODE === 'test'
       ? TEST_FIXTURE_STEP_DELAY_MS
       : DEFAULT_DEV_FIXTURE_STEP_DELAY_MS);
-  const events = buildFixtureEvents(normalizedPrompt, options.model);
+  const events = isAIChatDevStreamFixturePrompt(normalizedPrompt)
+    ? buildFixtureEvents(normalizedPrompt, options.model)
+    : buildUnknownFixtureEvents(normalizeFixturePrompt(options.prompt));
 
   for (let index = 0; index < events.length; index += 1) {
     const event = events[index];

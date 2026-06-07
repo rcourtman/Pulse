@@ -241,6 +241,59 @@ describe('AIChatAPI', () => {
     });
   });
 
+  it('accepts the burst-tool alias for the tool-burst dev stream fixture', async () => {
+    const onEvent = vi.fn();
+
+    await AIChatAPI.chat('/fixture burst-tool', undefined, 'openrouter:qwen/qwen3.7-plus', onEvent);
+
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'session',
+      'workflow_state',
+      'workflow_state',
+      'tool_start',
+      'tool_end',
+      'content',
+      'done',
+    ]);
+    expect(onEvent.mock.calls[0][0]).toMatchObject({
+      type: 'session',
+      data: { id: 'dev-fixture-tool-burst' },
+    });
+    expect(onEvent.mock.calls[6][0]).toMatchObject({
+      type: 'done',
+      data: {
+        session_id: 'dev-fixture-tool-burst',
+        model: 'openrouter:qwen/qwen3.7-plus',
+      },
+    });
+  });
+
+  it('fails unknown dev fixture prompts locally instead of sending them to a provider', async () => {
+    const onEvent = vi.fn();
+
+    await AIChatAPI.chat('/fixture typo-check', undefined, 'openrouter:qwen/qwen3.7-plus', onEvent);
+
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'session',
+      'workflow_state',
+      'error',
+    ]);
+    expect(onEvent.mock.calls[2][0]).toMatchObject({
+      type: 'error',
+      data: {
+        message: expect.stringContaining('Unknown Assistant fixture "/fixture typo-check"'),
+      },
+    });
+    expect(onEvent.mock.calls[2][0]).toMatchObject({
+      type: 'error',
+      data: {
+        message: expect.stringContaining('tool-burst'),
+      },
+    });
+  });
+
   it('runs the pending-tool dev stream fixture without opening a provider request', async () => {
     const onEvent = vi.fn();
 
