@@ -2327,11 +2327,21 @@ remaining authenticated utility tabs.
 The shared command palette now follows that same owner split.
 `frontend-modern/src/components/shared/CommandPaletteModal.tsx` stays the
 render shell, `frontend-modern/src/components/shared/useCommandPaletteState.ts`
-owns query state, open-reset/focus lifecycle, route-path wiring, and Enter-key
-selection, and `frontend-modern/src/components/shared/commandPaletteModel.ts`
+owns query state, selected-row keyboard state, open-reset/focus lifecycle,
+route-path wiring, and command selection, and
+`frontend-modern/src/components/shared/commandPaletteModel.ts`
 owns canonical command construction plus query normalization and filtering
 policy. Future command-palette work should extend those owners instead of
 pushing route construction or search policy back into the shared shell.
+The OpenCode reference for this interaction is
+`packages/opencode/src/cli/cmd/run/footer.command.tsx` at `origin/dev`
+`e82542b8023a8374f29c23b70ec019c8f256354e`, where `RunCommandMenuBody`
+builds and filters command rows, holds selected menu state via
+`createFooterMenuState`, resets selection as the query changes, and routes
+keyboard movement and selection through `handleKey`. Pulse adapts that contract
+by keeping command construction in the shared palette model and command
+execution in the shared palette state / Assistant store instead of moving
+editor-specific command routing into the render shell.
 Assistant command-palette actions are shell requests, not duplicated chat
 logic. New session, session picker, model picker, Undo, and Redo commands must
 flow through the shared `frontend-modern/src/stores/aiChat.ts` command request

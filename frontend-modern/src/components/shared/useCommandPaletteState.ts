@@ -26,6 +26,7 @@ export function useCommandPaletteState(props: CommandPaletteModalProps) {
   const navigate = useNavigate();
   const [query, setQuery] = createSignal('');
   const [inputRef, setInputRef] = createSignal<HTMLInputElement>();
+  const [selectedIndex, setSelectedIndex] = createSignal(0);
 
   const requestAssistantCommand = (action: AIChatCommandRequestAction) => {
     runAfterPaletteSelection(() => aiChatStore.requestCommand(action));
@@ -66,22 +67,69 @@ export function useCommandPaletteState(props: CommandPaletteModalProps) {
     props.onClose();
   };
 
-  const handleInputKeyDown = (event: KeyboardEvent) => {
-    if (event.key !== 'Enter') return;
-    const first = filteredCommands()[0];
-    if (!first) return;
-    event.preventDefault();
-    handleSelect(first);
+  const moveSelection = (offset: number) => {
+    const total = filteredCommands().length;
+    if (total <= 0) return;
+    setSelectedIndex((index) => (((index + offset) % total) + total) % total);
   };
+
+  const handleInputKeyDown = (event: KeyboardEvent) => {
+    const total = filteredCommands().length;
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        moveSelection(1);
+        return;
+      case 'ArrowUp':
+        event.preventDefault();
+        moveSelection(-1);
+        return;
+      case 'PageDown':
+        event.preventDefault();
+        moveSelection(5);
+        return;
+      case 'PageUp':
+        event.preventDefault();
+        moveSelection(-5);
+        return;
+      case 'Home':
+        event.preventDefault();
+        setSelectedIndex(0);
+        return;
+      case 'End':
+        event.preventDefault();
+        setSelectedIndex(Math.max(0, total - 1));
+        return;
+      case 'Enter': {
+        const selected = filteredCommands()[selectedIndex()] ?? filteredCommands()[0];
+        if (!selected) return;
+        event.preventDefault();
+        handleSelect(selected);
+        return;
+      }
+    }
+  };
+
+  createEffect(() => {
+    query();
+    setSelectedIndex(0);
+  });
+
+  createEffect(() => {
+    const total = filteredCommands().length;
+    setSelectedIndex((index) => (total > 0 ? Math.min(index, total - 1) : 0));
+  });
 
   createEffect(() => {
     if (props.isOpen) {
       setQuery('');
+      setSelectedIndex(0);
       queueMicrotask(() => inputRef()?.focus());
       return;
     }
 
     setQuery('');
+    setSelectedIndex(0);
   });
 
   return {
@@ -89,6 +137,8 @@ export function useCommandPaletteState(props: CommandPaletteModalProps) {
     handleInputKeyDown,
     handleSelect,
     query,
+    selectedIndex,
+    setSelectedIndex,
     setInputRef,
     setQuery,
   };

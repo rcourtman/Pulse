@@ -42,27 +42,37 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
           when={commandPalette.filteredCommands().length > 0}
           fallback={<div class="px-3 py-8 text-center text-sm text-muted">No matches found.</div>}
         >
-          <For each={commandPalette.filteredCommands()}>
-            {(command) => (
-              <button
-                type="button"
-                class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-base-content hover:bg-surface-hover"
-                onClick={() => handleSelect(command)}
-              >
-                <div>
-                  <div class="font-medium">{command.label}</div>
-                  <Show when={command.description}>
-                    <div class="text-xs text-muted">{command.description}</div>
-                  </Show>
-                </div>
-                <Show when={command.shortcut}>
-                  <span class="rounded border border-border-subtle bg-base px-2 py-1 text-[10px] font-medium text-base-content">
-                    {command.shortcut}
-                  </span>
-                </Show>
-              </button>
-            )}
-          </For>
+          <div role="listbox" aria-label="Command palette results">
+            <For each={commandPalette.filteredCommands()}>
+              {(command, index) => {
+                const selected = () => commandPalette.selectedIndex() === index();
+                return (
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={selected()}
+                    class={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-base-content outline-none transition-colors hover:bg-surface-hover focus:bg-surface-hover ${
+                      selected() ? 'bg-surface-hover' : ''
+                    }`}
+                    onClick={() => handleSelect(command)}
+                    onMouseEnter={() => commandPalette.setSelectedIndex(index())}
+                  >
+                    <div>
+                      <div class="font-medium">{command.label}</div>
+                      <Show when={command.description}>
+                        <div class="text-xs text-muted">{command.description}</div>
+                      </Show>
+                    </div>
+                    <Show when={command.shortcut}>
+                      <span class="rounded border border-border-subtle bg-base px-2 py-1 text-[10px] font-medium text-base-content">
+                        {command.shortcut}
+                      </span>
+                    </Show>
+                  </button>
+                );
+              }}
+            </For>
+          </div>
         </Show>
       </div>
     </Dialog>

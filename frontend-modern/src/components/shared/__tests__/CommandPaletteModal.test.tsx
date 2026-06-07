@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.tsx?raw';
 import commandPaletteModelSource from '@/components/shared/commandPaletteModel.ts?raw';
@@ -130,10 +130,120 @@ describe('CommandPaletteModal', () => {
     expect(screen.getByText('Go to vSphere Networks')).toBeInTheDocument();
     expect(screen.getByText('/vmware/networks')).toBeInTheDocument();
 
-    const commandLabels = screen.getAllByRole('button').map((button) => button.textContent ?? '');
+    const commandLabels = screen.getAllByRole('option').map((button) => button.textContent ?? '');
     expect(commandLabels.findIndex((label) => label.includes('Open Pulse Assistant'))).toBe(0);
     expect(commandLabels.findIndex((label) => label.includes('Go to Proxmox'))).toBeLessThan(
       commandLabels.findIndex((label) => label.includes('Go to Machines')),
+    );
+  });
+
+  it('moves the selected command before Enter selection', async () => {
+    const onClose = vi.fn();
+    const openAssistant = vi.spyOn(aiChatStore, 'open').mockImplementation(() => {});
+    const requestCommand = vi.spyOn(aiChatStore, 'requestCommand').mockImplementation(() => {});
+    render(() => (
+      <CommandPaletteModal
+        isOpen={true}
+        onClose={onClose}
+        platformVisibility={platformVisibility}
+      />
+    ));
+
+    const input = screen.getByPlaceholderText('Type a command or search...');
+    expect(screen.getByRole('option', { name: /Open Pulse Assistant/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    await fireEvent.keyDown(input, { key: 'ArrowDown' });
+
+    expect(screen.getByRole('option', { name: /Show Assistant commands/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    await fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(requestCommand).toHaveBeenCalledWith('help');
+    });
+    expect(openAssistant).not.toHaveBeenCalled();
+  });
+
+  it('keeps the selected command across command-list recomputes before Enter selection', async () => {
+    const onClose = vi.fn();
+    const openAssistant = vi.spyOn(aiChatStore, 'open').mockImplementation(() => {});
+    const requestCommand = vi.spyOn(aiChatStore, 'requestCommand').mockImplementation(() => {});
+    const [visibilityVersion, setVisibilityVersion] = createSignal(0);
+    const dynamicPlatformVisibility = () => {
+      visibilityVersion();
+      return platformVisibility();
+    };
+    render(() => (
+      <CommandPaletteModal
+        isOpen={true}
+        onClose={onClose}
+        platformVisibility={dynamicPlatformVisibility}
+      />
+    ));
+
+    const input = screen.getByPlaceholderText('Type a command or search...');
+    await fireEvent.keyDown(input, { key: 'ArrowDown' });
+
+    expect(screen.getByRole('option', { name: /Show Assistant commands/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    setVisibilityVersion(1);
+
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: /Show Assistant commands/ })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+    });
+
+    await fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(requestCommand).toHaveBeenCalledWith('help');
+    });
+    expect(openAssistant).not.toHaveBeenCalled();
+  });
+
+  it('wraps command palette keyboard movement', async () => {
+    render(() => (
+      <CommandPaletteModal
+        isOpen={true}
+        onClose={vi.fn()}
+        platformVisibility={platformVisibility}
+      />
+    ));
+
+    const input = screen.getByPlaceholderText('Type a command or search...');
+
+    await fireEvent.keyDown(input, { key: 'ArrowUp' });
+
+    expect(screen.getByRole('option', { name: /Go to Settings/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    await fireEvent.keyDown(input, { key: 'Home' });
+
+    expect(screen.getByRole('option', { name: /Open Pulse Assistant/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    await fireEvent.keyDown(input, { key: 'End' });
+
+    expect(screen.getByRole('option', { name: /Go to Settings/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
     );
   });
 
