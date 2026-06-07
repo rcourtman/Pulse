@@ -1,4 +1,5 @@
 import { Component, Show, For, createEffect, createMemo, createSignal } from 'solid-js';
+import ArrowDownIcon from 'lucide-solid/icons/arrow-down';
 import { MessageItem } from './MessageItem';
 import type { ChatSession } from '@/api/aiChat';
 import type { QueuedFollowUp } from './hooks/useChat';
@@ -58,6 +59,11 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
 
   const updatePinnedToBottom = () => {
     setIsPinnedToBottom(isContainerNearBottom());
+  };
+
+  const jumpToLatest = () => {
+    setIsPinnedToBottom(true);
+    messagesEndRef?.scrollIntoView({ behavior: 'smooth' });
   };
 
   const textActivityFingerprint = (value?: string) =>
@@ -191,93 +197,106 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
   });
 
   return (
-    <div
-      ref={containerRef}
-      class="flex-1 overflow-y-auto px-4 py-3 bg-surface"
-      data-testid="assistant-message-list"
-      onScroll={updatePinnedToBottom}
-    >
-      <Show
-        when={props.messages.length === 0 && recentSessions().length > 0 && props.onLoadSession}
+    <div class="relative flex-1 min-h-0 bg-surface">
+      <div
+        ref={containerRef}
+        class="h-full overflow-y-auto px-4 py-3 bg-surface"
+        data-testid="assistant-message-list"
+        onScroll={updatePinnedToBottom}
       >
-        <section class="mb-3 w-full" aria-label="Recent Assistant sessions">
-          <div class="mb-2 text-[11px] font-semibold uppercase text-muted">Recent sessions</div>
-          <div class="space-y-1.5">
-            <For each={recentSessions()}>
-              {(session) => {
-                const handoffLabel = () => formatSessionHandoffLabel(session);
-                return (
-                  <button
-                    type="button"
-                    class="w-full rounded-md border border-border bg-surface px-3 py-2 text-left transition-colors hover:border-blue-300 hover:bg-surface-alt focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                    onClick={() => props.onLoadSession?.(session.id)}
-                    aria-label={`Resume ${session.title || 'Untitled Assistant session'}`}
-                  >
-                    <div class="truncate text-sm font-medium text-base-content">
-                      {session.title || 'Untitled'}
-                    </div>
-                    <div class="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-muted">
-                      <span>{formatSessionMessageCount(session.message_count)}</span>
-                      <Show when={handoffLabel()}>
-                        {(label) => (
-                          <>
-                            <span aria-hidden="true">/</span>
-                            <span class="truncate">{label()}</span>
-                          </>
-                        )}
-                      </Show>
-                    </div>
-                  </button>
-                );
-              }}
-            </For>
-          </div>
-        </section>
+        <Show
+          when={props.messages.length === 0 && recentSessions().length > 0 && props.onLoadSession}
+        >
+          <section class="mb-3 w-full" aria-label="Recent Assistant sessions">
+            <div class="mb-2 text-[11px] font-semibold uppercase text-muted">Recent sessions</div>
+            <div class="space-y-1.5">
+              <For each={recentSessions()}>
+                {(session) => {
+                  const handoffLabel = () => formatSessionHandoffLabel(session);
+                  return (
+                    <button
+                      type="button"
+                      class="w-full rounded-md border border-border bg-surface px-3 py-2 text-left transition-colors hover:border-blue-300 hover:bg-surface-alt focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                      onClick={() => props.onLoadSession?.(session.id)}
+                      aria-label={`Resume ${session.title || 'Untitled Assistant session'}`}
+                    >
+                      <div class="truncate text-sm font-medium text-base-content">
+                        {session.title || 'Untitled'}
+                      </div>
+                      <div class="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-muted">
+                        <span>{formatSessionMessageCount(session.message_count)}</span>
+                        <Show when={handoffLabel()}>
+                          {(label) => (
+                            <>
+                              <span aria-hidden="true">/</span>
+                              <span class="truncate">{label()}</span>
+                            </>
+                          )}
+                        </Show>
+                      </div>
+                    </button>
+                  );
+                }}
+              </For>
+            </div>
+          </section>
+        </Show>
+
+        {/* Messages */}
+        <For each={props.messages}>
+          {(message) => {
+            const queuedMeta = createMemo(() => queuedFollowUpMetaByMessageId().get(message.id));
+            return (
+              <MessageItem
+                message={message}
+                onApprove={(approval) => props.onApprove(message.id, approval)}
+                onSkip={(toolId) => props.onSkip(message.id, toolId)}
+                onAnswerQuestion={(question, answers) =>
+                  props.onAnswerQuestion(message.id, question, answers)
+                }
+                onSkipQuestion={(questionId) => props.onSkipQuestion(message.id, questionId)}
+                onRetry={props.onRetry}
+                onChangeModel={props.onChangeModel}
+                getModelRouteLabel={props.getModelRouteLabel}
+                modelRouteAlternative={props.getModelRouteAlternative?.(message)}
+                onUseModelRoute={props.onUseModelRoute}
+                queuedPosition={queuedMeta()?.position}
+                queuedCount={queuedMeta()?.count}
+                onEditQueued={
+                  queuedMeta() && props.onEditQueuedFollowUp
+                    ? () => {
+                        const meta = queuedMeta();
+                        if (meta) props.onEditQueuedFollowUp?.(meta.id);
+                      }
+                    : undefined
+                }
+                onCancelQueued={
+                  queuedMeta() && props.onCancelQueuedFollowUp
+                    ? () => {
+                        const meta = queuedMeta();
+                        if (meta) props.onCancelQueuedFollowUp?.(meta.id);
+                      }
+                    : undefined
+                }
+              />
+            );
+          }}
+        </For>
+
+        {/* Scroll anchor */}
+        <div ref={messagesEndRef} class="h-1" />
+      </div>
+      <Show when={props.messages.length > 0 && !isPinnedToBottom()}>
+        <button
+          type="button"
+          class="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content shadow-lg transition-colors hover:bg-surface-alt focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+          onClick={jumpToLatest}
+          aria-label="Jump to latest Assistant message"
+        >
+          <ArrowDownIcon class="h-3.5 w-3.5" aria-hidden="true" />
+          <span>Latest</span>
+        </button>
       </Show>
-
-      {/* Messages */}
-      <For each={props.messages}>
-        {(message) => {
-          const queuedMeta = createMemo(() => queuedFollowUpMetaByMessageId().get(message.id));
-          return (
-            <MessageItem
-              message={message}
-              onApprove={(approval) => props.onApprove(message.id, approval)}
-              onSkip={(toolId) => props.onSkip(message.id, toolId)}
-              onAnswerQuestion={(question, answers) =>
-                props.onAnswerQuestion(message.id, question, answers)
-              }
-              onSkipQuestion={(questionId) => props.onSkipQuestion(message.id, questionId)}
-              onRetry={props.onRetry}
-              onChangeModel={props.onChangeModel}
-              getModelRouteLabel={props.getModelRouteLabel}
-              modelRouteAlternative={props.getModelRouteAlternative?.(message)}
-              onUseModelRoute={props.onUseModelRoute}
-              queuedPosition={queuedMeta()?.position}
-              queuedCount={queuedMeta()?.count}
-              onEditQueued={
-                queuedMeta() && props.onEditQueuedFollowUp
-                  ? () => {
-                      const meta = queuedMeta();
-                      if (meta) props.onEditQueuedFollowUp?.(meta.id);
-                    }
-                  : undefined
-              }
-              onCancelQueued={
-                queuedMeta() && props.onCancelQueuedFollowUp
-                  ? () => {
-                      const meta = queuedMeta();
-                      if (meta) props.onCancelQueuedFollowUp?.(meta.id);
-                    }
-                  : undefined
-              }
-            />
-          );
-        }}
-      </For>
-
-      {/* Scroll anchor */}
-      <div ref={messagesEndRef} class="h-1" />
     </div>
   );
 };

@@ -192,7 +192,7 @@ runtime cost control, and shared AI transport surfaces.
    is typed end to end.
    The transcript viewport is part of the same live activity contract. The
    referenced OpenCode source at fetched `origin/dev` commit
-   `4519a1da329c1a4fc384054e7203ba7d06928205` forwards reducer commits into
+   `1025540fcc2a69609a0131a7168300205656d728` forwards reducer commits into
    terminal scrollback in
    `packages/opencode/src/cli/cmd/run/stream.ts` (lines 140-145) and renders
    bottom-sticky activity in
@@ -201,7 +201,10 @@ runtime cost control, and shared AI transport surfaces.
    by tracking whether the browser transcript is pinned to the live bottom
    before streamed content or tool rows grow, continuing to follow active
    output while pinned, and preserving the operator's scroll position after
-   they intentionally scroll away from live activity.
+   they intentionally scroll away from live activity. When the transcript is
+   unpinned while messages exist, the drawer must expose an accessible
+   jump-to-latest command that returns the operator to the live bottom without
+   requiring a manual scroll gesture.
    Composer prompt history is also drawer-local chat-runtime state: the drawer
    may persist a bounded local history of submitted prompt text and structured
    mentions for ArrowUp/ArrowDown recall, but that history must not persist or

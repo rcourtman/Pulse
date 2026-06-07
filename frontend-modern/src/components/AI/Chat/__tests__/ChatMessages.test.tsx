@@ -599,6 +599,55 @@ describe('ChatMessages', () => {
       expect(scrollIntoView).not.toHaveBeenCalled();
     });
 
+    it('shows a jump to latest control when the user scrolls away from messages', () => {
+      render(() => <ChatMessages messages={[makeMessage({ id: 'msg-1' })]} {...makeHandlers()} />);
+      const scrollContainer = screen.getByTestId('assistant-message-list');
+
+      expect(
+        screen.queryByRole('button', { name: 'Jump to latest Assistant message' }),
+      ).not.toBeInTheDocument();
+
+      setScrollMetrics(scrollContainer, {
+        scrollTop: 100,
+        scrollHeight: 1000,
+        clientHeight: 200,
+      });
+      fireEvent.scroll(scrollContainer);
+
+      expect(
+        screen.getByRole('button', { name: 'Jump to latest Assistant message' }),
+      ).toBeInTheDocument();
+    });
+
+    it('jumps back to live output and hides the control when selected', () => {
+      render(() => <ChatMessages messages={[makeMessage({ id: 'msg-1' })]} {...makeHandlers()} />);
+      const scrollContainer = screen.getByTestId('assistant-message-list');
+      const scrollIntoView = Element.prototype.scrollIntoView as ReturnType<typeof vi.fn>;
+
+      setScrollMetrics(scrollContainer, {
+        scrollTop: 100,
+        scrollHeight: 1000,
+        clientHeight: 200,
+      });
+      fireEvent.scroll(scrollContainer);
+      scrollIntoView.mockClear();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Jump to latest Assistant message' }));
+
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth' });
+      expect(
+        screen.queryByRole('button', { name: 'Jump to latest Assistant message' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('does not show the jump to latest control in an empty transcript', () => {
+      render(() => <ChatMessages messages={[]} {...makeHandlers()} />);
+
+      expect(
+        screen.queryByRole('button', { name: 'Jump to latest Assistant message' }),
+      ).not.toBeInTheDocument();
+    });
+
     it('does not call scrollIntoView when messages list is empty', () => {
       // Reset the mock to clear any prior calls
       (Element.prototype.scrollIntoView as ReturnType<typeof vi.fn>).mockClear();
@@ -613,8 +662,10 @@ describe('ChatMessages', () => {
     it('renders the scrollable container with correct classes', () => {
       const { container } = render(() => <ChatMessages messages={[]} {...makeHandlers()} />);
 
-      const scrollContainer = container.firstElementChild;
-      expect(scrollContainer).toHaveClass('flex-1', 'overflow-y-auto');
+      const viewport = container.firstElementChild;
+      const scrollContainer = screen.getByTestId('assistant-message-list');
+      expect(viewport).toHaveClass('relative', 'flex-1', 'min-h-0');
+      expect(scrollContainer).toHaveClass('h-full', 'overflow-y-auto');
       expect(scrollContainer).toHaveAttribute('data-testid', 'assistant-message-list');
     });
   });
