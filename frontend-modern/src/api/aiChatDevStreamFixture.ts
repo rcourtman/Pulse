@@ -462,6 +462,8 @@ const buildProviderRetryFixtureEvents = (): AIChatStreamEvent[] => [
       message: 'DeepSeek failed before output; retrying through OpenRouter.',
       provider: 'deepseek',
       model: 'deepseek:deepseek-chat',
+      failed_model: 'deepseek:deepseek-chat',
+      next_model: 'openrouter:deepseek/deepseek-chat',
       attempt: 2,
       max_attempts: 3,
       retry_after_ms: 3200,

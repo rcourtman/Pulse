@@ -410,7 +410,9 @@ describe('AIChatAPI', () => {
         phase: 'provider_retry',
         message: 'DeepSeek failed before output; retrying through OpenRouter.',
         attempt: 2,
+        failed_model: 'deepseek:deepseek-chat',
         max_attempts: 3,
+        next_model: 'openrouter:deepseek/deepseek-chat',
         retry_after_ms: 3200,
       },
     });

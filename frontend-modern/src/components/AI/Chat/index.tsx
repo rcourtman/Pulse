@@ -248,6 +248,12 @@ interface AssistantFallbackRouteAdoptionCandidate {
   failedModel: string;
 }
 
+interface AssistantFallbackRouteNotice extends AssistantFallbackRouteAdoptionCandidate {
+  failedModelLabel: string;
+  messageId: string;
+  routeLabel: string;
+}
+
 const PROVIDER_ROUTE_FAILURE_PATTERN =
   /\b(ai provider|provider endpoint|provider credentials|provider api key|provider connection|selected provider url|provider url|model route|openrouter|openai|anthropic|deepseek|gemini|ollama|api key|rate limit|quota|credits?|upstream|llm|429|402)\b/i;
 const LOCAL_ASSISTANT_FAILURE_PATTERN = /\bUnknown Assistant fixture\b|\bAvailable fixtures:\b/i;
@@ -704,6 +710,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [chatOverrideModel, setChatOverrideModel] = createSignal('');
   const pendingFallbackRouteAdoptions = new Map<string, AssistantFallbackRouteAdoptionCandidate>();
   const adoptedFallbackRouteMessageIds = new Set<string>();
+  const [fallbackRouteNotice, setFallbackRouteNotice] =
+    createSignal<AssistantFallbackRouteNotice | null>(null);
   const [providerReadiness, setProviderReadiness] = createSignal<ChatProviderReadinessState>({
     status: 'idle',
     provider: '',
@@ -1999,6 +2007,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (options.rememberRecent !== false) {
       rememberRecentModel(modelId);
     }
+    setFallbackRouteNotice(null);
   };
 
   const recentModelRouteByDirection = (direction: 1 | -1) =>
@@ -2167,6 +2176,15 @@ export const AIChat: Component<AIChatProps> = (props) => {
       adoptedFallbackRouteMessageIds.add(message.id);
       pendingFallbackRouteAdoptions.delete(message.id);
       selectModel(candidate.route);
+      const routeLabel = formatChatMessageModelRoute(candidate.route);
+      const failedModelLabel = formatChatMessageModelRoute(pending.failedModel);
+      setFallbackRouteNotice({
+        ...candidate,
+        failedModelLabel,
+        messageId: message.id,
+        routeLabel,
+      });
+      notificationStore.success(`Assistant model route switched to ${routeLabel}`, 2500);
     }
   });
 
@@ -2902,6 +2920,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const submittedInput = readComposerInputForSubmit();
     const prompt = submittedInput.trim();
     if (!prompt) return;
+    setFallbackRouteNotice(null);
     composerSubmitDispatchLocked = true;
     queueMicrotask(() => {
       composerSubmitDispatchLocked = false;
@@ -3230,6 +3249,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     resetPromptHistoryNavigation();
     setEditingQueuedFollowUp(null);
     setRestoredPromptDraft(null);
+    setFallbackRouteNotice(null);
     setRedoLastTurnAvailable(false);
     aiChatStore.clearContext?.();
     setShowSessions(false);
@@ -3451,6 +3471,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
         resetPromptHistoryNavigation();
         setEditingQueuedFollowUp(null);
         setRestoredPromptDraft(null);
+        setFallbackRouteNotice(null);
         setRedoLastTurnAvailable(false);
       }
     } catch (_error) {
@@ -4242,7 +4263,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
           {/* Input */}
           <div class="border-t border-border bg-surface px-4 py-3">
-            <Show when={currentStatus() || chat.queuedFollowUpCount() > 0}>
+            <Show when={currentStatus() || fallbackRouteNotice() || chat.queuedFollowUpCount() > 0}>
               <div
                 class="mb-2 overflow-hidden rounded-md border border-blue-200 bg-blue-50 text-blue-800 shadow-sm dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200"
                 data-testid="assistant-activity-dock"
@@ -4279,10 +4300,44 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     </span>
                   </div>
                 </Show>
+                <Show when={fallbackRouteNotice()}>
+                  {(notice) => (
+                    <div
+                      class={`flex min-h-8 min-w-0 items-center gap-2 px-2.5 py-1.5 text-xs ${
+                        currentStatus() ? 'border-t border-blue-200/70 dark:border-blue-900/60' : ''
+                      }`}
+                      role="status"
+                      aria-label="Assistant fallback route adopted"
+                      aria-live="polite"
+                    >
+                      <CheckIcon
+                        class="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-300"
+                        aria-hidden="true"
+                      />
+                      <span class="min-w-0 flex-1 truncate font-medium">
+                        Using {notice().routeLabel} after fallback from {notice().failedModelLabel}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFallbackRouteNotice(null);
+                          focusComposer();
+                        }}
+                        class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-900 dark:text-blue-200 dark:hover:bg-blue-900/50"
+                        title="Dismiss fallback route notice"
+                        aria-label="Dismiss fallback route notice"
+                      >
+                        <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    </div>
+                  )}
+                </Show>
                 <Show when={chat.queuedFollowUpCount() > 0}>
                   <div
                     class={`px-2.5 py-1.5 ${
-                      currentStatus() ? 'border-t border-blue-200/70 dark:border-blue-900/60' : ''
+                      currentStatus() || fallbackRouteNotice()
+                        ? 'border-t border-blue-200/70 dark:border-blue-900/60'
+                        : ''
                     }`}
                     role="status"
                     aria-label="Queued follow-up messages"

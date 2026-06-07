@@ -4270,6 +4270,16 @@ describe('AIChat', () => {
       await waitFor(() => {
         expect(mockChat.setModel).toHaveBeenCalledWith('openrouter:deepseek/deepseek-v4-pro');
       });
+      expect(
+        screen.getByRole('status', { name: 'Assistant fallback route adopted' }),
+      ).toHaveTextContent('after fallback from');
+      expect(
+        screen.getByRole('button', { name: 'Dismiss fallback route notice' }),
+      ).toBeInTheDocument();
+      expect(mockNotificationStore.success).toHaveBeenCalledWith(
+        expect.stringContaining('Assistant model route switched to'),
+        2500,
+      );
       expect(localStorage.getItem('pulse:ai_chat_models_by_session')).toBe(
         JSON.stringify({ 'session-1': 'openrouter:deepseek/deepseek-v4-pro' }),
       );
