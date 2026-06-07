@@ -290,6 +290,36 @@ describe('ToolExecutionBlock', () => {
     expect(screen.queryByText(/"target_host"/)).not.toBeInTheDocument();
   });
 
+  it('copies the sanitized visible command preview without opening raw details', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+
+    render(() => (
+      <ToolExecutionBlock
+        tool={makeTool({
+          name: 'pulse_read',
+          input: '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
+          output: '42',
+        })}
+      />
+    ));
+
+    const trigger = getToolDetailsTrigger();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy tool command' }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith('ls /dev | wc -l');
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Copied tool command' })).toBeInTheDocument();
+    });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText(/"target_host"/)).not.toBeInTheDocument();
+  });
+
   it('wraps completed command summaries instead of truncating the visible action row', () => {
     render(() => (
       <ToolExecutionBlock
@@ -344,6 +374,35 @@ describe('ToolExecutionBlock', () => {
     );
     expect(preview).not.toHaveTextContent('secret-token');
     expect(preview).not.toHaveTextContent('hunter2');
+  });
+
+  it('copies the redacted visible command preview rather than the raw command', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+
+    render(() => (
+      <ToolExecutionBlock
+        tool={makeTool({
+          name: 'pulse_read',
+          input:
+            '{"action":"exec","command":"curl -H \\"Authorization: Bearer secret-token\\" --password hunter2 https://example.local"}',
+          output: '200',
+        })}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy tool command' }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(
+        'curl -H "Authorization: Bearer [redacted-secret]" --password [redacted-secret] https://example.local',
+      );
+    });
+    expect(writeText).not.toHaveBeenCalledWith(expect.stringContaining('secret-token'));
+    expect(writeText).not.toHaveBeenCalledWith(expect.stringContaining('hunter2'));
   });
 
   it('renders Pulse read log input as a readable log action', () => {
@@ -750,6 +809,36 @@ describe('PendingToolBlock', () => {
 
     expect(screen.getByText('Inspect devices on current resource')).toBeInTheDocument();
     expect(screen.getByLabelText('Tool command')).toHaveTextContent('$ lsblk -o NAME,SIZE');
+    expect(screen.queryByText(/"command"/)).not.toBeInTheDocument();
+  });
+
+  it('copies a pending visible command preview without opening raw details', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+
+    render(() => (
+      <PendingToolBlock
+        tool={makePending({
+          name: 'pulse_read',
+          input:
+            '{"action":"exec","target_host":"current_resource","command":"lsblk -o NAME,SIZE"}',
+        })}
+      />
+    ));
+
+    const trigger = getToolDetailsTrigger();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy tool command' }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith('lsblk -o NAME,SIZE');
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Copied tool command' })).toBeInTheDocument();
+    });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByText(/"command"/)).not.toBeInTheDocument();
   });
 

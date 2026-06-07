@@ -172,14 +172,59 @@ const ToolInputSummary: Component<ToolInputSummaryProps> = (props) => {
 };
 
 const ToolCommandPreview: Component<ToolCommandPreviewProps> = (props) => (
-  <code
-    data-testid="tool-command-preview"
-    aria-label="Tool command"
-    class="mt-1 block whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-muted"
-  >
-    {props.preview}
-  </code>
+  <VisibleToolCommandPreview preview={props.preview} />
 );
+
+const VisibleToolCommandPreview: Component<ToolCommandPreviewProps> = (props) => {
+  const [copied, setCopied] = createSignal(false);
+  let copiedResetTimer: number | undefined;
+  const copyLabel = () => (copied() ? 'Copied tool command' : 'Copy tool command');
+  const commandText = () => props.preview.replace(/^\$\s*/, '').trim() || props.preview.trim();
+
+  const copyCommand = async (event: MouseEvent) => {
+    event.stopPropagation();
+    const text = commandText();
+    if (!text) return;
+    const ok = await copyToClipboard(text);
+    if (!ok) return;
+    setCopied(true);
+    if (copiedResetTimer) window.clearTimeout(copiedResetTimer);
+    copiedResetTimer = window.setTimeout(() => setCopied(false), 1500);
+  };
+
+  const handleKeyDown = (event: KeyboardEvent) => {
+    event.stopPropagation();
+  };
+
+  onCleanup(() => {
+    if (copiedResetTimer) window.clearTimeout(copiedResetTimer);
+  });
+
+  return (
+    <div class="mt-1 flex min-w-0 items-start gap-1.5">
+      <code
+        data-testid="tool-command-preview"
+        aria-label="Tool command"
+        class="min-w-0 flex-1 whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-muted"
+      >
+        {props.preview}
+      </code>
+      <button
+        type="button"
+        class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+        onClick={(event) => void copyCommand(event)}
+        onMouseDown={(event) => event.stopPropagation()}
+        onKeyDown={handleKeyDown}
+        title={copyLabel()}
+        aria-label={copyLabel()}
+      >
+        <Show when={copied()} fallback={<CopyIcon class="h-3 w-3" aria-hidden="true" />}>
+          <CheckIcon class="h-3 w-3 text-emerald-600" aria-hidden="true" />
+        </Show>
+      </button>
+    </div>
+  );
+};
 
 const normalizeDetailText = (value?: string) => value?.trim() ?? '';
 
@@ -301,7 +346,9 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
   const hiddenOutputSummary = createMemo(() =>
     outputPreview() ? '' : formatHiddenOutputSummary(outputText()),
   );
-  const hiddenOutputBadgeLabel = createMemo(() => (hiddenOutputSummary() ? 'output available' : ''));
+  const hiddenOutputBadgeLabel = createMemo(() =>
+    hiddenOutputSummary() ? 'output available' : '',
+  );
   const hasInput = createMemo(() => detailInputText().trim().length > 0);
   const hasOutput = createMemo(() => hasReadableToolOutput(outputText()));
   const hasDetails = createMemo(() => hasInput() || hasOutput());

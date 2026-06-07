@@ -56,7 +56,7 @@ func TestResolveConfiguredChatModelOffline_ReplacesSpecializedChatModelWithStabl
 	}
 }
 
-func TestOpenRouterEquivalentChatModel_MapsDirectProviderRoutes(t *testing.T) {
+func TestGatewayEquivalentChatModels_MapsConfiguredGatewayEquivalentRoutes(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.AIConfig{
@@ -96,23 +96,23 @@ func TestOpenRouterEquivalentChatModel_MapsDirectProviderRoutes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := OpenRouterEquivalentChatModel(cfg, tt.model)
-			if !ok {
-				t.Fatalf("OpenRouterEquivalentChatModel(%q) ok = false, want true", tt.model)
+			got := GatewayEquivalentChatModels(cfg, tt.model)
+			if len(got) != 1 {
+				t.Fatalf("GatewayEquivalentChatModels(%q) length = %d, want 1: %#v", tt.model, len(got), got)
 			}
-			if got != tt.want {
-				t.Fatalf("OpenRouterEquivalentChatModel(%q) = %q, want %q", tt.model, got, tt.want)
+			if got[0] != tt.want {
+				t.Fatalf("GatewayEquivalentChatModels(%q)[0] = %q, want %q", tt.model, got[0], tt.want)
 			}
 		})
 	}
 }
 
-func TestOpenRouterEquivalentChatModel_RejectsUnavailableOrNonGatewayRoutes(t *testing.T) {
+func TestGatewayEquivalentChatModels_RejectsUnavailableOrNonEquivalentRoutes(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.AIConfig{DeepSeekAPIKey: "deepseek-test"}
-	if got, ok := OpenRouterEquivalentChatModel(cfg, "deepseek:deepseek-v4-pro"); ok || got != "" {
-		t.Fatalf("OpenRouterEquivalentChatModel without OpenRouter = %q, %v; want empty false", got, ok)
+	if got := GatewayEquivalentChatModels(cfg, "deepseek:deepseek-v4-pro"); len(got) != 0 {
+		t.Fatalf("GatewayEquivalentChatModels without gateway = %#v, want empty", got)
 	}
 
 	cfg.OpenRouterAPIKey = "sk-or-test"
@@ -122,28 +122,8 @@ func TestOpenRouterEquivalentChatModel_RejectsUnavailableOrNonGatewayRoutes(t *t
 		"quickstart:minimax-2.5m",
 		"deepseek:deepseek-embed",
 	} {
-		if got, ok := OpenRouterEquivalentChatModel(cfg, model); ok || got != "" {
-			t.Fatalf("OpenRouterEquivalentChatModel(%q) = %q, %v; want empty false", model, got, ok)
-		}
-	}
-}
-
-func TestGatewayEquivalentChatModels_ReturnsConfiguredGatewayRoutes(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.AIConfig{
-		OpenRouterAPIKey: "sk-or-test",
-		DeepSeekAPIKey:   "deepseek-test",
-	}
-
-	got := GatewayEquivalentChatModels(cfg, "deepseek:deepseek-v4-pro")
-	want := []string{"openrouter:deepseek/deepseek-v4-pro"}
-	if len(got) != len(want) {
-		t.Fatalf("GatewayEquivalentChatModels length = %d, want %d: %#v", len(got), len(want), got)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("GatewayEquivalentChatModels[%d] = %q, want %q", i, got[i], want[i])
+		if got := GatewayEquivalentChatModels(cfg, model); len(got) != 0 {
+			t.Fatalf("GatewayEquivalentChatModels(%q) = %#v, want empty", model, got)
 		}
 	}
 }

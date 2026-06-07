@@ -112,17 +112,21 @@ func ResolveConfiguredChatProviderModelOffline(cfg *config.AIConfig, provider st
 }
 
 type gatewayEquivalentResolver struct {
-	resolve func(cfg *config.AIConfig, model string) (string, bool)
+	gatewayProvider  string
+	ownerForProvider func(provider string) string
 }
 
 var gatewayEquivalentResolvers = []gatewayEquivalentResolver{
-	{resolve: openRouterEquivalentChatModel},
+	{
+		gatewayProvider:  config.AIProviderOpenRouter,
+		ownerForProvider: openRouterOwnerForProvider,
+	},
 }
 
 // GatewayEquivalentChatModels maps a configured direct-provider chat model to
-// equivalent routes through configured gateway providers. Provider-specific
-// route syntax belongs in this model-resolution registry; chat execution should
-// consume the returned candidates without hardcoding a gateway.
+// equivalent routes through configured gateway providers. Gateway route syntax
+// belongs in this model-resolution registry; chat execution consumes candidates
+// without encoding provider-specific fallback policy.
 func GatewayEquivalentChatModels(cfg *config.AIConfig, model string) []string {
 	if cfg == nil {
 		return nil
@@ -147,16 +151,9 @@ func GatewayEquivalentChatModels(cfg *config.AIConfig, model string) []string {
 	return routes
 }
 
-// OpenRouterEquivalentChatModel maps a configured direct-provider chat model to
-// the same vendor/model route through OpenRouter when that gateway is configured.
-// It never calls a live model catalog; unsupported gateway routes simply fail as
-// normal provider attempts and the chat fallback planner can continue.
-func OpenRouterEquivalentChatModel(cfg *config.AIConfig, model string) (string, bool) {
-	return openRouterEquivalentChatModel(cfg, model)
-}
-
-func openRouterEquivalentChatModel(cfg *config.AIConfig, model string) (string, bool) {
-	if cfg == nil || !cfg.HasProvider(config.AIProviderOpenRouter) {
+func (r gatewayEquivalentResolver) resolve(cfg *config.AIConfig, model string) (string, bool) {
+	gatewayProvider := strings.TrimSpace(r.gatewayProvider)
+	if cfg == nil || gatewayProvider == "" || r.ownerForProvider == nil || !cfg.HasProvider(gatewayProvider) {
 		return "", false
 	}
 	provider, modelName := config.ParseModelString(strings.TrimSpace(model))
@@ -164,16 +161,16 @@ func openRouterEquivalentChatModel(cfg *config.AIConfig, model string) (string, 
 	if provider == "" || modelName == "" {
 		return "", false
 	}
-	if provider == config.AIProviderOpenRouter ||
+	if provider == gatewayProvider ||
 		provider == config.AIProviderOllama ||
 		provider == config.AIProviderQuickstart {
 		return "", false
 	}
-	openRouterOwner := openRouterOwnerForProvider(provider)
-	if openRouterOwner == "" {
+	gatewayOwner := strings.TrimSpace(r.ownerForProvider(provider))
+	if gatewayOwner == "" {
 		return "", false
 	}
-	candidate := config.FormatModelString(config.AIProviderOpenRouter, openRouterOwner+"/"+strings.TrimPrefix(modelName, openRouterOwner+"/"))
+	candidate := config.FormatModelString(gatewayProvider, gatewayOwner+"/"+strings.TrimPrefix(modelName, gatewayOwner+"/"))
 	if !IsModelUsableForChatWithConfig(cfg, candidate) {
 		return "", false
 	}

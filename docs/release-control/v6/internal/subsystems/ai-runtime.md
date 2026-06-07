@@ -158,9 +158,9 @@ runtime cost control, and shared AI transport surfaces.
    active stream becomes idle. Queued follow-ups must snapshot the effective
    model route at enqueue time so a later model/provider switch cannot silently
    reroute an already-queued user turn; explicit failed-turn recovery actions
-   such as `Retry via OpenRouter` must pass their selected route as an override
-   instead of relying on ambient selector state. The referenced OpenCode source
-   at fetched `origin/dev` commit
+   labelled from a configured provider route must pass that selected route as an
+   override instead of relying on ambient selector state. The referenced
+   OpenCode source at fetched `origin/dev` commit
    `1399323b78a04229d9bfe00c7436d7f41770fda8` keeps current, recent, and
    selected models as structured `{ providerID, modelID }` values in
    `packages/opencode/src/cli/cmd/tui/component/dialog-model.tsx` and
@@ -447,14 +447,16 @@ runtime cost control, and shared AI transport surfaces.
    chat route or a stable provider default without calling provider model
    catalogs before the selected stream starts. Catalog-backed recommendation
    belongs to settings/model-list flows, not `/api/ai/chat` first-response
-   startup. When the selected direct-provider route fails before visible output
-   and OpenRouter is configured, fallback planning should first try the same
-   vendor/model through the OpenRouter route where a deterministic gateway id
-   can be formed, such as `deepseek:deepseek-v4-pro` to
-   `openrouter:deepseek/deepseek-v4-pro`, before falling back to unrelated
-   provider defaults. That same-model gateway planning must remain catalog-free
-   and may continue to the next configured provider if the gateway attempt also
-   fails before visible output. Once visible output has streamed, Pulse must
+   startup. When the selected direct-provider route fails before visible output,
+   fallback planning may first try configured gateway-equivalent candidates
+   returned by `internal/ai/modelresolution` when they preserve the same
+   provider/model family through a deterministic route string, before falling
+   back to unrelated configured provider defaults. That same-model gateway
+   planning must remain catalog-free, capability-driven, and may continue to the
+   next configured provider if a gateway attempt also fails before visible
+   output; chat execution and frontend UI must never encode user-specific
+   network assumptions or named-provider failover rules. Once visible output has
+   streamed, Pulse must
    not silently switch providers for that turn; the error belongs to the visible
    attempt and is surfaced through normal failed-turn recovery. Assistant
    startup retry behavior must be route-aware: when another provider/model
@@ -1038,7 +1040,8 @@ runtime cost control, and shared AI transport surfaces.
    operator action label as the primary row and adding a sanitized `$ ...`
    command preview below it when the tool input carries a shell command; raw
    provider envelopes such as `pulse_read(...)`, raw JSON, and full command
-   output remain Details-only.
+   output remain Details-only. Any visible command-copy affordance must copy
+   that same sanitized command preview rather than the raw provider/tool input.
    The referenced OpenCode source at
    commit
    `9ed17da55ab1f7360cc0e01075f763e27fa899e9` also renders pending tool rows

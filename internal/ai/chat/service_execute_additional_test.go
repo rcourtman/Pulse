@@ -924,7 +924,7 @@ func TestService_ExecuteStream_FallsBackWhenPrimaryProviderFailsBeforeVisibleOut
 	}
 }
 
-func TestService_ExecuteStream_FallsBackToSameModelOpenRouterGatewayBeforeDefaults(t *testing.T) {
+func TestService_ExecuteStream_FallsBackToSameModelGatewayRouteBeforeDefaults(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewSessionStore(tmpDir)
 	if err != nil {
@@ -942,7 +942,7 @@ func TestService_ExecuteStream_FallsBackToSameModelOpenRouterGatewayBeforeDefaul
 		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
 			callback(providers.StreamEvent{
 				Type: "content",
-				Data: providers.ContentEvent{Text: "OPENROUTER_OK"},
+				Data: providers.ContentEvent{Text: "GATEWAY_OK"},
 			})
 			callback(providers.StreamEvent{
 				Type: "done",
@@ -974,7 +974,7 @@ func TestService_ExecuteStream_FallsBackToSameModelOpenRouterGatewayBeforeDefaul
 	var fallbackNextModel string
 	var doneModel string
 	err = service.ExecuteStream(context.Background(), ExecuteRequest{
-		SessionID: "fallback-to-openrouter-same-model",
+		SessionID: "fallback-to-same-model-gateway",
 		Prompt:    "reply",
 	}, func(event StreamEvent) {
 		switch event.Type {
@@ -1003,14 +1003,14 @@ func TestService_ExecuteStream_FallsBackToSameModelOpenRouterGatewayBeforeDefaul
 	if err != nil {
 		t.Fatalf("ExecuteStream failed: %v", err)
 	}
-	if got := content.String(); got != "OPENROUTER_OK" {
-		t.Fatalf("content = %q, want OpenRouter fallback response", got)
+	if got := content.String(); got != "GATEWAY_OK" {
+		t.Fatalf("content = %q, want gateway fallback response", got)
 	}
 	if fallbackNextModel != "openrouter:deepseek/deepseek-v4-pro" {
-		t.Fatalf("fallback next model = %q, want same-model OpenRouter route", fallbackNextModel)
+		t.Fatalf("fallback next model = %q, want same-model gateway route", fallbackNextModel)
 	}
 	if doneModel != "openrouter:deepseek/deepseek-v4-pro" {
-		t.Fatalf("done model = %q, want same-model OpenRouter route", doneModel)
+		t.Fatalf("done model = %q, want same-model gateway route", doneModel)
 	}
 	if got := primaryCalls.Load(); got != 1 {
 		t.Fatalf("primary provider calls = %d, want one fast-fail call before fallback", got)
