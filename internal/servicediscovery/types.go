@@ -159,6 +159,7 @@ type ResourceDiscovery struct {
 	FingerprintedAt          time.Time `json:"fingerprinted_at,omitempty"`           // When fingerprint was captured
 	FingerprintSchemaVersion int       `json:"fingerprint_schema_version,omitempty"` // Schema version when fingerprint was captured
 	CLIAccessVersion         int       `json:"cli_access_version,omitempty"`         // Version of CLI access pattern format
+	DiscoveryEngineVersion   int       `json:"discovery_engine_version,omitempty"`   // Discovery engine version that produced this result
 
 	// Raw data for debugging/re-analysis
 	RawCommandOutput map[string]string `json:"raw_command_output,omitempty"`
@@ -407,6 +408,13 @@ const FingerprintSchemaVersion = 3 // v3: Removed IP addresses (DHCP churn cause
 // When a discovery has an older version, its CLIAccess field is regenerated
 // to use the new instructional format.
 const CLIAccessVersion = 2 // v2: Changed from shell commands to pulse_control instructions
+
+// DiscoveryEngineVersion is incremented when the discovery engine's logic
+// changes enough that older cached results are worth re-running. Unlike
+// CLIAccessVersion it is NOT auto-upgraded on read — a stale value means the
+// discovery genuinely predates the current engine, so the panel can flag it for
+// a refresh. Bump this when identification/scan behavior changes materially.
+const DiscoveryEngineVersion = 1 // v1: surface fast-path + distinctive-port + nested-container access topology
 
 type ContainerFingerprint struct {
 	ResourceID    string    `json:"resource_id"`

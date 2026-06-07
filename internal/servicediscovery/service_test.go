@@ -2112,6 +2112,11 @@ func TestService_RunManualDiscoveryRefreshRepairsFreshUnknownKnownService(t *tes
 	if discovery.SuggestedURL != "http://esphome:6052" {
 		t.Fatalf("expected stored ESPHome URL, got %q", discovery.SuggestedURL)
 	}
+	// A freshly produced discovery carries the current engine version so the panel
+	// can flag pre-upgrade (stale) data even within the time-based freshness window.
+	if discovery.DiscoveryEngineVersion != DiscoveryEngineVersion {
+		t.Fatalf("expected engine version %d stamped, got %d", DiscoveryEngineVersion, discovery.DiscoveryEngineVersion)
+	}
 }
 
 func TestService_DiscoverResource_URLSuggestionSource_Primary(t *testing.T) {

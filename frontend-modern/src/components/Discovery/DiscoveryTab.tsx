@@ -35,6 +35,11 @@ import { useDiscoveryTabState } from './useDiscoveryTabState';
 import { orderFactsByActionability } from './factOrdering';
 import { deriveCliCommand } from './cliCommand';
 
+// Keep in sync with backend servicediscovery.DiscoveryEngineVersion. A discovery
+// with a lower (or absent) version predates the current discovery engine, so its
+// data is stale even if still within the time-based freshness window.
+const CURRENT_DISCOVERY_ENGINE_VERSION = 1;
+
 interface DiscoveryTabProps {
   resourceType: ResourceType;
   agentId?: string;
@@ -159,6 +164,14 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
     const current = discovery();
     if (!current) return null;
     return deriveCliCommand(props.resourceType, current.resource_id, current.cli_access);
+  });
+  // Stale when produced by an engine older than the current one — the time-based
+  // freshness window can still call it "fresh" even though re-running would yield
+  // materially better data.
+  const isStaleDiscovery = createMemo(() => {
+    const current = discovery();
+    if (!current) return false;
+    return (current.discovery_engine_version ?? 0) < CURRENT_DISCOVERY_ENGINE_VERSION;
   });
   const commandSettingsTarget = getDiscoveryCommandSettingsTarget();
   const apiAccessSettingsTarget = getDiscoveryApiAccessSettingsTarget();
@@ -720,6 +733,17 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
         <Show when={validDiscovery()}>
           {(d) => (
             <div class="space-y-4">
+              <Show when={isStaleDiscovery()}>
+                <div class="rounded border border-amber-200 bg-amber-50/80 p-3 shadow-sm dark:border-amber-800/50 dark:bg-amber-900/20">
+                  <div class="flex items-start gap-2">
+                    <TriangleAlertIcon class="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+                    <p class="text-xs text-amber-800 dark:text-amber-200">
+                      This was discovered by an earlier version of Pulse. Re-run discovery for
+                      improved identification and access details.
+                    </p>
+                  </div>
+                </div>
+              </Show>
               {/* Service Header */}
               <div class="rounded border border-border bg-surface p-3 shadow-sm">
                 <div class="flex items-start justify-between">

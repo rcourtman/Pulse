@@ -90,6 +90,7 @@ export interface ResourceDiscovery {
   fingerprint?: string; // Hash when discovery was done
   fingerprinted_at?: string; // When fingerprint was captured
   fingerprint_schema_version?: number; // Schema version when fingerprint was captured
+  discovery_engine_version?: number; // Engine version that produced this result; absent/old => stale, re-run for better results
   // Auto-suggested web interface URL
   suggested_url?: string;
   suggested_url_source_code?: string;
