@@ -134,6 +134,11 @@ Assistant local stream fixtures are part of the same frontend API contract:
 `frontend-modern/src/api/aiChatDevStreamFixture.ts` may short-circuit only
 explicit `/fixture ...` prompts in development or test mode, must emit the same
 typed stream event sequence as live chat, and must never open a provider request.
+Fixtures used for visible stream proof must pace status/tool/content events
+enough for the browser to paint the intermediate state, including keeping the
+`/fixture tool-burst` running tool row visible before the matching `tool_end`;
+unit tests may explicitly disable that pace, but the live dev fixture must not
+collapse to the terminal row.
 Fixtures that emit consecutive context/read/query tool events must keep those
 events as ordinary typed `tool_start` / `tool_end` activity and must not encode
 obsolete grouped-context wording in fixture answer content. The fixture payload
@@ -1076,10 +1081,11 @@ the canonical monitored-system blocked payload.
    Assistant chat stream workflow-state payloads are part of this same
    frontend API-client boundary. `workflow_state` events must keep `phase`,
    `message`, `state`, and `tool` stable, selected-route starts may carry
-   `provider` and `model`, and provider fallback transitions may additionally
-   carry `failed_provider`, `failed_model`, `next_provider`, and `next_model` so
-   diagnostics can identify the exact route change without expanding the visible
-   operator message. The selected-route `provider_start` message is operator
+   `provider` and `model`, and selected-route retry may carry `attempt`,
+   `max_attempts`, and `retry_after_ms`; automatic provider fallback metadata
+   (`provider_fallback`, `failed_provider`, `failed_model`, `next_provider`,
+   `next_model`) is retired from `/api/ai/chat` stream payloads. The
+   selected-route `provider_start` message is operator
    progress copy and must be active/in-progress wording such as
    `<Provider> is starting the response.` while the typed `provider` and `model`
    fields carry the exact route identity. The generated

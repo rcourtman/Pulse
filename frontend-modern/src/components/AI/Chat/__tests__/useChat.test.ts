@@ -223,6 +223,58 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('promotes a quiet sent prompt to a local waiting status before backend activity arrives', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(1_000);
+      let resolveChat!: () => void;
+      mockChat.mockReturnValue(
+        new Promise<void>((resolve) => {
+          resolveChat = resolve;
+        }),
+      );
+
+      const { value: chat, dispose } = withRoot(() => useChat());
+      const result = chat.sendMessage('test');
+
+      expect(chat.messages()[1]).toMatchObject({
+        role: 'assistant',
+        isStreaming: true,
+        workflowStatus: {
+          phase: 'request_send',
+          message: 'Sending prompt.',
+          startedAt: 1_000,
+        },
+      });
+
+      await vi.advanceTimersByTimeAsync(899);
+      expect(chat.messages()[1].workflowStatus).toMatchObject({
+        phase: 'request_send',
+        message: 'Sending prompt.',
+      });
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(chat.messages()[1]).toMatchObject({
+        workflowStatus: {
+          phase: 'request_wait',
+          message: 'Waiting for assistant.',
+          startedAt: 1_000,
+        },
+        streamEvents: [
+          expect.objectContaining({
+            type: 'workflow_status',
+            workflowStatus: expect.objectContaining({
+              phase: 'request_wait',
+              message: 'Waiting for assistant.',
+            }),
+          }),
+        ],
+      });
+
+      resolveChat();
+      await result;
+      dispose();
+    });
+
     it('clears the visible active turn before conversation refresh finishes', async () => {
       let resolveRefresh!: () => void;
       let sendResolved = false;

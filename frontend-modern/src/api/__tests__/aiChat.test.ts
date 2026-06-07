@@ -15,6 +15,7 @@ vi.mock('@/utils/logger', () => ({
 }));
 
 import { AIChatAPI, createAIChatStreamPaintCheckpointPredicate } from '@/api/aiChat';
+import { maybeRunAIChatDevStreamFixture } from '@/api/aiChatDevStreamFixture';
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
 
@@ -239,6 +240,62 @@ describe('AIChatAPI', () => {
         success: true,
       },
     });
+  });
+
+  it('keeps the tool-burst fixture running state visible when fixture pacing is enabled', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const onEvent = vi.fn();
+
+    const streamPromise = maybeRunAIChatDevStreamFixture({
+      prompt: '/fixture tool-burst',
+      model: 'openrouter:deepseek/deepseek-chat',
+      onEvent,
+      stepDelayMs: 25,
+    });
+
+    await flushMicrotasks();
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual(['session']);
+
+    await vi.advanceTimersByTimeAsync(25);
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'session',
+      'workflow_state',
+    ]);
+
+    await vi.advanceTimersByTimeAsync(25);
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'session',
+      'workflow_state',
+      'workflow_state',
+    ]);
+
+    await vi.advanceTimersByTimeAsync(25);
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'session',
+      'workflow_state',
+      'workflow_state',
+      'tool_start',
+    ]);
+
+    await vi.advanceTimersByTimeAsync(419);
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'session',
+      'workflow_state',
+      'workflow_state',
+      'tool_start',
+    ]);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'session',
+      'workflow_state',
+      'workflow_state',
+      'tool_start',
+      'tool_end',
+    ]);
+
+    await vi.runAllTimersAsync();
+    await expect(streamPromise).resolves.toBe(true);
   });
 
   it('runs the send-hold dev stream fixture without opening a provider request', async () => {

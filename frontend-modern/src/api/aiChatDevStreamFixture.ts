@@ -31,6 +31,7 @@ const availableFixtureNames = AI_CHAT_DEV_STREAM_FIXTURE_PROMPTS.map((prompt) =>
 
 const DEFAULT_DEV_FIXTURE_STEP_DELAY_MS = 140;
 const TEST_FIXTURE_STEP_DELAY_MS = 0;
+const TOOL_BURST_RUNNING_VISIBLE_MS = 420;
 
 export interface AIChatDevStreamFixtureOptions {
   model?: string;
@@ -933,7 +934,9 @@ const fixtureStepDelay = (
   }
   if (normalizedPrompt === '/fixture pending-tool') return defaultDelayMs;
   if (normalizedPrompt !== '/fixture tool-burst') return defaultDelayMs;
-  if (event.type === 'tool_start') return 0;
+  if (event.type === 'tool_start') {
+    return Math.max(defaultDelayMs, TOOL_BURST_RUNNING_VISIBLE_MS);
+  }
   return defaultDelayMs;
 };
 

@@ -2173,7 +2173,9 @@ referenced OpenCode source at fetched `dev` commit
 maps `turn.send` and `turn.wait` to live footer status at lines 133-145, and
 `packages/opencode/src/cli/cmd/run/stream.transport.ts` promotes quiet
 post-send periods to `waiting for assistant` at lines 1350-1357. Pulse keeps
-that send/wait distinction in the live chat turn while preserving the Pulse
+that send/wait distinction in the live chat turn by promoting an unreplaced
+local `request_send` status to local `request_wait` / `Waiting for assistant`
+before any backend-visible SSE activity arrives, while preserving the Pulse
 transcript rule that only backend workflow, route, content, and tool evidence
 remain once real activity exists.
 
