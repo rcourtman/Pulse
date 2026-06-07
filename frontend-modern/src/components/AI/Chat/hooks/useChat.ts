@@ -53,8 +53,8 @@ const latestExplicitModelRouteFromTranscript = (messages: ChatMessage[]): string
 };
 
 const createInitialAssistantWorkflowStatus = (startedAt = Date.now()): WorkflowStatus => ({
-  phase: 'request_start',
-  message: 'Preparing Pulse context.',
+  phase: 'request_send',
+  message: 'Sending prompt.',
   startedAt,
 });
 
@@ -222,6 +222,13 @@ export function useChat(options: UseChatOptions = {}) {
     return events.filter((event) => event.type !== 'workflow_status');
   };
 
+  const isLocalPromptSendEvent = (event: StreamDisplayEvent) =>
+    event.type === 'workflow_status' && event.workflowStatus?.phase === 'request_send';
+
+  const streamEventsWithoutLocalPromptSendRows = (
+    events: StreamDisplayEvent[] | undefined,
+  ): StreamDisplayEvent[] => (events || []).filter((event) => !isLocalPromptSendEvent(event));
+
   const streamEventsWithoutTransientRows = (
     events: StreamDisplayEvent[] | undefined,
   ): StreamDisplayEvent[] | undefined => {
@@ -377,7 +384,10 @@ export function useChat(options: UseChatOptions = {}) {
 
   const addStreamEvent = (msg: ChatMessage, event: StreamDisplayEvent): ChatMessage => {
     const nextEvent = withStreamEventTiming(event);
-    const events = msg.streamEvents || [];
+    const events =
+      nextEvent.type === 'workflow_status' || nextEvent.type === 'model_switch'
+        ? msg.streamEvents || []
+        : streamEventsWithoutLocalPromptSendRows(msg.streamEvents);
 
     // For content events, merge consecutive content into one
     if (nextEvent.type === 'content' && events.length > 0) {
@@ -518,7 +528,8 @@ export function useChat(options: UseChatOptions = {}) {
     const model = route.trim();
     if (!model) return msg;
     const failedModel = options.failedModel?.trim();
-    const duplicate = (msg.streamEvents || []).some(
+    const streamEvents = streamEventsWithoutLocalPromptSendRows(msg.streamEvents);
+    const duplicate = streamEvents.some(
       (event) =>
         event.type === 'model_switch' &&
         event.model?.trim() === model &&
@@ -526,9 +537,9 @@ export function useChat(options: UseChatOptions = {}) {
         streamModelEventKind(event) === options.modelEvent,
     );
     if (duplicate) {
-      return { ...msg, model };
+      return { ...msg, model, streamEvents };
     }
-    const events = msg.streamEvents || [];
+    const events = streamEvents;
     if (options.modelEvent === 'selected' && !failedModel) {
       const replaceableIndex = replaceableSelectedModelEventIndex(events);
       if (replaceableIndex >= 0) {
@@ -1786,18 +1797,29 @@ export function useChat(options: UseChatOptions = {}) {
 
     const assistantId = generateId();
     const initialWorkflowStatus = createInitialAssistantWorkflowStatus(turnStartedAt);
-    const initialStreamEvents: StreamDisplayEvent[] = requestModel
-      ? [
-          withStreamEventTiming(
-            {
-              type: 'model_switch',
-              model: requestModel,
-              modelEvent: 'selected',
-            },
-            turnStartedAt,
-          ),
-        ]
-      : [];
+    const initialStreamEvents: StreamDisplayEvent[] = [
+      ...(requestModel
+        ? [
+            withStreamEventTiming(
+              {
+                type: 'model_switch' as const,
+                model: requestModel,
+                modelEvent: 'selected' as const,
+              },
+              turnStartedAt,
+            ),
+          ]
+        : []),
+      withStreamEventTiming(
+        {
+          type: 'workflow_status',
+          workflowStatus: initialWorkflowStatus,
+          startedAt: initialWorkflowStatus.startedAt,
+          updatedAt: initialWorkflowStatus.startedAt,
+        },
+        turnStartedAt,
+      ),
+    ];
     const streamingMessage: ChatMessage = {
       id: assistantId,
       role: 'assistant',
@@ -1809,7 +1831,7 @@ export function useChat(options: UseChatOptions = {}) {
       toolCalls: [],
       streamEvents: initialStreamEvents,
       workflowStatus: initialWorkflowStatus,
-      workflowStatusHistory: [initialWorkflowStatus],
+      workflowStatusHistory: [],
     };
 
     if (options?.queuedMessageId) {

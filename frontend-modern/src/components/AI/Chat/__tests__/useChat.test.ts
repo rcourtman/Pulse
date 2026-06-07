@@ -205,9 +205,10 @@ describe('useChat', () => {
         content: '',
         isStreaming: true,
         pendingTools: [],
+        workflowStatusHistory: [],
         workflowStatus: {
-          phase: 'request_start',
-          message: 'Preparing Pulse context.',
+          phase: 'request_send',
+          message: 'Sending prompt.',
         },
       });
       expect(mockCreateSession).not.toHaveBeenCalled();
@@ -305,9 +306,10 @@ describe('useChat', () => {
         role: 'assistant',
         model: 'openrouter:qwen/qwen3.7-plus',
         isStreaming: true,
+        workflowStatusHistory: [],
         workflowStatus: {
-          phase: 'request_start',
-          message: 'Preparing Pulse context.',
+          phase: 'request_send',
+          message: 'Sending prompt.',
         },
       });
       expect(assistant.streamEvents).toEqual([
@@ -315,6 +317,13 @@ describe('useChat', () => {
           type: 'model_switch',
           model: 'openrouter:qwen/qwen3.7-plus',
           modelEvent: 'selected',
+        }),
+        expect.objectContaining({
+          type: 'workflow_status',
+          workflowStatus: expect.objectContaining({
+            phase: 'request_send',
+            message: 'Sending prompt.',
+          }),
         }),
       ]);
 
@@ -1465,7 +1474,6 @@ describe('useChat', () => {
         }),
       ]);
       expect(assistant.workflowStatusHistory?.map((status) => status.message)).toEqual([
-        'Preparing Pulse context.',
         'Reading current Pulse inventory with pulse_query.',
         'Built compact inventory context for the model.',
         'OpenRouter is starting the response.',
@@ -1586,6 +1594,13 @@ describe('useChat', () => {
           type: 'model_switch',
           model: 'openrouter:qwen/qwen3.7-plus',
           modelEvent: 'selected',
+        }),
+        expect.objectContaining({
+          type: 'workflow_status',
+          workflowStatus: expect.objectContaining({
+            phase: 'request_send',
+            message: 'Sending prompt.',
+          }),
         }),
       ]);
 

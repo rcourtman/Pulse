@@ -633,6 +633,10 @@ runtime cost control, and shared AI transport surfaces.
    The local `stream-idle` fixture must exercise the real `stream_idle`
    workflow state after selected-provider startup so browser proof of visible
    idle liveness does not depend on making a real provider pause on demand.
+   The local `send-hold` fixture must exercise the local prompt-send boundary
+   by emitting the session event and then holding before the first backend
+   `workflow_state`, so browser proof can capture `Sending prompt.` without
+   depending on real provider latency.
    This fixture is a local development primitive, not a product mode: it must
    not bypass backend governance in production, persist as a server session, or
    introduce any UI-only event shape that real providers cannot emit.
@@ -2137,6 +2141,23 @@ transcript row and the active-turn composer footer so the two live surfaces show
 the latest canonical workflow state immediately. The transcript and footer
 therefore show current motion while the provider is starting, retrying, or
 reasoning, but completed answers do not retain stale internal-progress prose.
+Prompt dispatch itself is also a visible live state: before any backend
+workflow event returns, the frontend seeds the active assistant turn with a
+local `request_send` / `Sending prompt.` workflow row after any selected-model
+row. That row is explicitly transient: it is the current live state but does
+not enter the paced backend workflow history, the first backend workflow state
+may replace it, and content, thinking, tool, approval, question, model-route,
+done, or error evidence removes it from the durable transcript. This adapts the
+referenced OpenCode source at fetched `dev` commit
+`e82542b8023a8374f29c23b70ec019c8f256354e`, where
+`packages/opencode/src/cli/cmd/run/runtime.queue.ts` emits `turn.send` with
+`sending prompt` at lines 174-184, `packages/opencode/src/cli/cmd/run/footer.ts`
+maps `turn.send` and `turn.wait` to live footer status at lines 133-145, and
+`packages/opencode/src/cli/cmd/run/stream.transport.ts` promotes quiet
+post-send periods to `waiting for assistant` at lines 1350-1357. Pulse keeps
+that send/wait distinction in the live chat turn while preserving the Pulse
+transcript rule that only backend workflow, route, content, and tool evidence
+remain once real activity exists.
 
 Assistant drawer shell status follows the same OpenCode-referenced separation
 between prompt-adjacent operational status and transcript content. The

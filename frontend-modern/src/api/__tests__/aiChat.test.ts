@@ -241,6 +241,52 @@ describe('AIChatAPI', () => {
     });
   });
 
+  it('runs the send-hold dev stream fixture without opening a provider request', async () => {
+    const onEvent = vi.fn();
+
+    await AIChatAPI.chat(
+      '/fixture send-hold',
+      undefined,
+      'openrouter:qwen/qwen3.7-plus',
+      onEvent,
+    );
+
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'session',
+      'workflow_state',
+      'workflow_state',
+      'content',
+      'done',
+    ]);
+    expect(onEvent.mock.calls[0][0]).toMatchObject({
+      type: 'session',
+      data: { id: 'dev-fixture-send-hold' },
+    });
+    expect(onEvent.mock.calls[2][0]).toMatchObject({
+      type: 'workflow_state',
+      data: {
+        phase: 'provider_start',
+        message: 'OpenRouter is starting the response.',
+        provider: 'openrouter',
+        model: 'openrouter:qwen/qwen3.7-plus',
+      },
+    });
+    expect(onEvent.mock.calls[3][0]).toMatchObject({
+      type: 'content',
+      data: {
+        text: expect.stringContaining('inspect the local prompt-send state'),
+      },
+    });
+    expect(onEvent.mock.calls[4][0]).toMatchObject({
+      type: 'done',
+      data: {
+        session_id: 'dev-fixture-send-hold',
+        model: 'openrouter:qwen/qwen3.7-plus',
+      },
+    });
+  });
+
   it('accepts the burst-tool alias for the tool-burst dev stream fixture', async () => {
     const onEvent = vi.fn();
 

@@ -3,6 +3,7 @@ import type { AIChatStreamEvent } from './generated/aiChatEvents';
 export const AI_CHAT_DEV_STREAM_FIXTURE_PROMPTS = [
   '/fixture devices',
   '/fixture assistant-stream',
+  '/fixture send-hold',
   '/fixture tool-burst',
   '/fixture context-group',
   '/fixture status-boundary',
@@ -189,6 +190,44 @@ const buildDeviceCountFixtureEvents = (model?: string): AIChatStreamEvent[] => [
       model: assistantFixtureModel(model),
       input_tokens: 4358,
       output_tokens: 943,
+    },
+  },
+];
+
+const buildSendHoldFixtureEvents = (model?: string): AIChatStreamEvent[] => [
+  {
+    type: 'session',
+    data: { id: 'dev-fixture-send-hold' },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'request_start',
+      message: 'Preparing Pulse context.',
+    },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'provider_start',
+      message: 'OpenRouter is starting the response.',
+      provider: 'openrouter',
+      model: assistantFixtureModel(model),
+    },
+  },
+  {
+    type: 'content',
+    data: {
+      text: 'The send-hold fixture paused long enough to inspect the local prompt-send state before backend workflow activity.',
+    },
+  },
+  {
+    type: 'done',
+    data: {
+      session_id: 'dev-fixture-send-hold',
+      model: assistantFixtureModel(model),
+      input_tokens: 32,
+      output_tokens: 18,
     },
   },
 ];
@@ -780,6 +819,9 @@ const buildFixtureEvents = (prompt: string, model?: string): AIChatStreamEvent[]
   if (normalized === '/fixture tool-burst') {
     return buildToolBurstFixtureEvents(model);
   }
+  if (normalized === '/fixture send-hold') {
+    return buildSendHoldFixtureEvents(model);
+  }
   if (normalized === '/fixture context-group') {
     return buildContextGroupFixtureEvents(model);
   }
@@ -819,6 +861,9 @@ const fixtureStepDelay = (
   }
   if (normalizedPrompt === '/fixture pending-tool' && event.type === 'tool_progress') {
     return 2200;
+  }
+  if (normalizedPrompt === '/fixture send-hold' && event.type === 'session') {
+    return 1400;
   }
   if (normalizedPrompt === '/fixture context-group' && event.type === 'tool_start') {
     return 900;
