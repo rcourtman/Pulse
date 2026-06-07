@@ -439,8 +439,12 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	// Retry loop for transient errors (connection resets, 429, 5xx)
 	var respBody []byte
 	var lastErr error
+	maxRetries := openaiMaxRetries
+	if req.FastFailProviderStartup() {
+		maxRetries = 0
+	}
 
-	for attempt := 0; attempt <= openaiMaxRetries; attempt++ {
+	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
 			// Exponential backoff: 2s, 4s, 8s
 			backoff := openaiInitialBackoff * time.Duration(1<<(attempt-1))
@@ -523,7 +527,7 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	}
 
 	if lastErr != nil {
-		return nil, fmt.Errorf("request failed after %d retries: %w", openaiMaxRetries, lastErr)
+		return nil, fmt.Errorf("request failed after %d retries: %w", maxRetries, lastErr)
 	}
 
 	var openaiResp openaiResponse
@@ -907,8 +911,12 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	if streamClient == nil {
 		streamClient = c.client
 	}
+	maxRetries := openaiStreamMaxRetries
+	if req.FastFailProviderStartup() {
+		maxRetries = 0
+	}
 
-	for attempt := 0; attempt <= openaiStreamMaxRetries; attempt++ {
+	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
 			backoff := openaiStreamInitialBackoff * time.Duration(1<<(attempt-1))
 			log.Warn().
@@ -971,7 +979,7 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	}
 
 	if lastErr != nil {
-		return fmt.Errorf("request failed after %d stream retries: %w", openaiStreamMaxRetries, lastErr)
+		return fmt.Errorf("request failed after %d stream retries: %w", maxRetries, lastErr)
 	}
 	defer resp.Body.Close()
 

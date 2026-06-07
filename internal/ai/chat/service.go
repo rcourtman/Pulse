@@ -817,7 +817,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		emitChatProviderFallback(streamCallback, selectedModel, initialFallbackModel)
 	}
 
-	runAttempt := func(attempt chatProviderAttempt) ([]Message, *AgenticLoop, bool, error) {
+	runAttempt := func(attempt chatProviderAttempt, hasFallback bool) ([]Message, *AgenticLoop, bool, error) {
 		attemptProvider := attempt.Provider
 		if attemptProvider == nil {
 			if strings.TrimSpace(attempt.Model) == "" {
@@ -850,6 +850,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		loop := NewAgenticLoop(attemptProvider, executor, systemPrompt)
 		loop.SetOrgID(s.orgID)
 		loop.SetAutonomousMode(autonomousMode)
+		loop.SetFastFailProviderStartup(hasFallback)
 		loop.SetPreferSummaryOnlyQueries(assistantToolScope == assistantTurnToolScopeQueryOnly)
 		sanitizerOptions := []modelboundary.RequestSanitizerOption{}
 		if modelBoundaryAllowedInventoryContext != "" {
@@ -924,7 +925,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	for attemptIndex, attempt := range attempts {
 		var attemptVisible bool
 		lastAttemptModel = attempt.Model
-		resultMessages, loop, attemptVisible, streamErr = runAttempt(attempt)
+		resultMessages, loop, attemptVisible, streamErr = runAttempt(attempt, attemptIndex < len(attempts)-1)
 		if streamErr == nil {
 			selectedModel = attempt.Model
 			break

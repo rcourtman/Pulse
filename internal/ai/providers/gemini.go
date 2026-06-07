@@ -424,8 +424,13 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	// Retry loop for transient errors
 	var respBody []byte
 	var lastErr error
+	maxRetries := geminiMaxRetries
 
-	for attempt := 0; attempt <= geminiMaxRetries; attempt++ {
+	if req.FastFailProviderStartup() {
+		maxRetries = 0
+	}
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
 			// Exponential backoff: 2s, 4s, 8s
 			backoff := geminiInitialBackoff * time.Duration(1<<(attempt-1))
@@ -506,7 +511,7 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	}
 
 	if lastErr != nil {
-		return nil, fmt.Errorf("request failed after %d retries: %w", geminiMaxRetries, lastErr)
+		return nil, fmt.Errorf("request failed after %d retries: %w", maxRetries, lastErr)
 	}
 
 	var geminiResp geminiResponse
@@ -826,8 +831,13 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	// Retry loop for transient errors (matching non-streaming Chat behavior)
 	var resp *http.Response
 	var lastErr error
+	maxRetries := geminiMaxRetries
 
-	for attempt := 0; attempt <= geminiMaxRetries; attempt++ {
+	if req.FastFailProviderStartup() {
+		maxRetries = 0
+	}
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
 		// Bail out early if the parent context is already cancelled
 		if ctx.Err() != nil {
 			if lastErr != nil {
@@ -898,7 +908,7 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	}
 
 	if lastErr != nil {
-		return fmt.Errorf("request failed after %d retries: %w", geminiMaxRetries, lastErr)
+		return fmt.Errorf("request failed after %d retries: %w", maxRetries, lastErr)
 	}
 
 	if resp.StatusCode != http.StatusOK {

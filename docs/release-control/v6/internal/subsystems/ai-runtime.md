@@ -343,7 +343,23 @@ runtime cost control, and shared AI transport surfaces.
    fails before visible output. Once visible output has streamed, Pulse must
    not silently switch providers for that turn; the error belongs to the visible
    attempt and is surfaced through normal failed-turn recovery. Assistant
-   completion events must carry the effective model route that actually
+   startup retry behavior must be route-aware: when another provider/model
+   attempt is already queued for the same user turn, non-final attempts must
+   fast-fail before visible output instead of spending hidden same-route retry
+   and backoff time. In that mode, provider-owned startup retries and the
+   agentic loop's retry of the same provider turn are disabled for the
+   non-final attempt, and the wait for the first visible provider event is
+   bounded so `provider_fallback` can reach the browser quickly. The final
+   queued attempt keeps normal provider retry behavior because there is no
+   later route to hand off to. The referenced OpenCode source at fetched
+   `origin/dev` commit `1025540fcc2a69609a0131a7168300205656d728` models retry
+   as explicit session activity through `RetryError` and `Retried` in
+   `packages/core/src/session/event.ts` and renders retry status in
+   `packages/ui/src/components/session-retry.tsx`; Pulse adapts that principle
+   by surfacing route changes through workflow/model rows and by yielding to
+   the next configured route quickly instead of hiding repeated startup
+   retries behind a static waiting label.
+   Assistant completion events must carry the effective model route that actually
    completed the turn, and the drawer must update the in-flight transcript row
    when `provider_fallback` names the next route so message labels, cost
    context, retry decisions, and model-route recovery do not continue to point

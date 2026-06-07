@@ -181,6 +181,26 @@ func TestOpenAIClient_ChatStream_RetriesTransientStartupError(t *testing.T) {
 	assert.Equal(t, "ok", content)
 }
 
+func TestOpenAIClient_ChatStream_FastFailSkipsTransientStartupRetry(t *testing.T) {
+	client := NewOpenAIClient("sk-test", "gpt-4", "https://example.invalid/v1", 0)
+	attempts := 0
+	client.streamClient = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			attempts++
+			return nil, io.ErrUnexpectedEOF
+		}),
+	}
+
+	err := client.ChatStream(context.Background(), ChatRequest{
+		Messages:            []Message{{Role: "user", Content: "Hi"}},
+		ProviderStartupMode: ProviderStartupFastFailBeforeVisibleOutput,
+	}, func(StreamEvent) {})
+
+	require.Error(t, err)
+	assert.Equal(t, 1, attempts)
+	assert.Contains(t, err.Error(), "request failed after 0 stream retries")
+}
+
 func TestNewOpenAIClient_BoundsStreamResponseHeaderTimeout(t *testing.T) {
 	client := NewOpenAIClient("sk-test", "gpt-4", "https://api.openai.com/v1", 0)
 	transport, ok := client.streamClient.Transport.(*http.Transport)

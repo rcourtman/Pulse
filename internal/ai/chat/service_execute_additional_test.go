@@ -746,13 +746,17 @@ func TestService_ExecuteStream_FallsBackWhenPrimaryProviderFailsBeforeVisibleOut
 		t.Fatalf("failed to create session store: %v", err)
 	}
 
+	var primaryStartupMode providers.ProviderStartupMode
+	var fallbackStartupMode providers.ProviderStartupMode
 	primary := &stubServiceProvider{
 		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			primaryStartupMode = req.ProviderStartupMode
 			return errors.New("API error (401): unauthorized")
 		},
 	}
 	fallback := &stubServiceProvider{
 		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			fallbackStartupMode = req.ProviderStartupMode
 			callback(providers.StreamEvent{
 				Type: "content",
 				Data: providers.ContentEvent{Text: "PULSE_OK"},
@@ -832,6 +836,12 @@ func TestService_ExecuteStream_FallsBackWhenPrimaryProviderFailsBeforeVisibleOut
 	if doneModel != "gemini:gemini-test" {
 		t.Fatalf("done model = %q, want fallback model", doneModel)
 	}
+	if primaryStartupMode != providers.ProviderStartupFastFailBeforeVisibleOutput {
+		t.Fatalf("primary startup mode = %q, want fast-fail before fallback", primaryStartupMode)
+	}
+	if fallbackStartupMode != providers.ProviderStartupDefault {
+		t.Fatalf("fallback startup mode = %q, want provider default", fallbackStartupMode)
+	}
 
 	messages, err := store.GetMessages("fallback-before-visible-output")
 	if err != nil {
@@ -851,8 +861,10 @@ func TestService_ExecuteStream_FallsBackToSameModelOpenRouterGatewayBeforeDefaul
 		t.Fatalf("failed to create session store: %v", err)
 	}
 
+	var primaryCalls atomic.Int32
 	primary := &stubServiceProvider{
 		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			primaryCalls.Add(1)
 			return errors.New("dial tcp: i/o timeout")
 		},
 	}
@@ -929,6 +941,9 @@ func TestService_ExecuteStream_FallsBackToSameModelOpenRouterGatewayBeforeDefaul
 	}
 	if doneModel != "openrouter:deepseek/deepseek-v4-pro" {
 		t.Fatalf("done model = %q, want same-model OpenRouter route", doneModel)
+	}
+	if got := primaryCalls.Load(); got != 1 {
+		t.Fatalf("primary provider calls = %d, want one fast-fail call before fallback", got)
 	}
 }
 
