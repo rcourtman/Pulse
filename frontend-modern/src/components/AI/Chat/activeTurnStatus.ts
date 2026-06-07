@@ -43,7 +43,16 @@ const formatRetryDelay = (milliseconds?: number): string => {
   return `${Math.round(minutes)}m`;
 };
 
-const formatRetryStatusSuffix = (status?: WorkflowStatus): string => {
+const remainingRetryDelay = (status?: WorkflowStatus, now?: number): number | undefined => {
+  const retryAfterMs = status?.retryAfterMs;
+  if (!Number.isFinite(retryAfterMs) || !retryAfterMs || retryAfterMs <= 0) return undefined;
+  const startedAt = status?.startedAt;
+  if (typeof now !== 'number' || !Number.isFinite(now)) return retryAfterMs;
+  if (typeof startedAt !== 'number' || !Number.isFinite(startedAt)) return retryAfterMs;
+  return Math.max(0, retryAfterMs - Math.max(0, now - startedAt));
+};
+
+const formatRetryStatusSuffix = (status?: WorkflowStatus, now?: number): string => {
   const parts: string[] = [];
   if (status?.attempt && status.maxAttempts) {
     parts.push(`attempt ${status.attempt}/${status.maxAttempts}`);
@@ -51,15 +60,16 @@ const formatRetryStatusSuffix = (status?: WorkflowStatus): string => {
     parts.push(`attempt ${status.attempt}`);
   }
 
-  const retryDelay = formatRetryDelay(status?.retryAfterMs);
-  if (retryDelay) {
-    parts.push(`retrying in ${retryDelay}`);
+  const retryDelayMs = remainingRetryDelay(status, now);
+  if (retryDelayMs !== undefined) {
+    const retryDelay = formatRetryDelay(retryDelayMs);
+    parts.push(retryDelay ? `retrying in ${retryDelay}` : 'retrying now');
   }
 
   return parts.length > 0 ? ` · ${parts.join(' · ')}` : '';
 };
 
-export const formatAssistantWorkflowStatus = (status?: WorkflowStatus): string => {
+export const formatAssistantWorkflowStatus = (status?: WorkflowStatus, now?: number): string => {
   const message = status?.message?.trim();
   if (!message) return '';
 
@@ -69,7 +79,7 @@ export const formatAssistantWorkflowStatus = (status?: WorkflowStatus): string =
     toolLabel && !message.includes(tool || '') && !messageContainsToolLabel(message, toolLabel)
       ? ` · ${toolLabel}`
       : '';
-  const retrySuffix = formatRetryStatusSuffix(status);
+  const retrySuffix = formatRetryStatusSuffix(status, now);
 
   return `${message}${toolSuffix}${retrySuffix}`;
 };
@@ -214,6 +224,7 @@ const toolCancelStatusText = (event: StreamDisplayEvent): string => {
 
 const latestStreamActivityStatus = (
   events?: StreamDisplayEvent[],
+  now?: number,
 ): AssistantActiveTurnStatusCandidate | null => {
   const completedToolKeys = new Set<string>();
   let current: AssistantActiveTurnStatusCandidate | null = null;
@@ -264,7 +275,7 @@ const latestStreamActivityStatus = (
         break;
       }
       case 'workflow_status': {
-        const text = formatAssistantWorkflowStatus(event.workflowStatus);
+        const text = formatAssistantWorkflowStatus(event.workflowStatus, now);
         if (text) {
           candidate = {
             type: event.workflowStatus?.tool ? 'tool' : 'thinking',
@@ -338,8 +349,9 @@ const latestStreamActivityStatus = (
 
 const workflowStatusCandidate = (
   status: WorkflowStatus | undefined,
+  now?: number,
 ): AssistantActiveTurnStatusCandidate | null => {
-  const text = formatAssistantWorkflowStatus(status);
+  const text = formatAssistantWorkflowStatus(status, now);
   if (!text) return null;
   return {
     type: status?.tool ? 'tool' : 'thinking',
@@ -379,6 +391,7 @@ const hasVisibleAssistantOutput = (message: ChatMessage): boolean => {
 export const getAssistantActiveTurnStatus = (
   messages: ChatMessage[],
   isLoading: boolean,
+  now?: number,
 ): AssistantActiveTurnStatus | null => {
   if (!isLoading) return null;
 
@@ -394,7 +407,7 @@ export const getAssistantActiveTurnStatus = (
   if (statePendingToolCandidate) {
     statusCandidates.push(statePendingToolCandidate);
   }
-  const eventStatusCandidate = latestStreamActivityStatus(assistantMessage.streamEvents);
+  const eventStatusCandidate = latestStreamActivityStatus(assistantMessage.streamEvents, now);
   if (eventStatusCandidate) {
     statusCandidates.push(eventStatusCandidate);
   } else {
@@ -405,7 +418,7 @@ export const getAssistantActiveTurnStatus = (
     }
   }
   if (assistantMessage.isStreaming !== false) {
-    const workflowCandidate = workflowStatusCandidate(assistantMessage.workflowStatus);
+    const workflowCandidate = workflowStatusCandidate(assistantMessage.workflowStatus, now);
     if (
       workflowCandidate &&
       !(isInitialRequestStartStatus(assistantMessage.workflowStatus) && eventStatusCandidate)

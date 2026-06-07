@@ -358,7 +358,11 @@ runtime cost control, and shared AI transport surfaces.
    `packages/ui/src/components/session-retry.tsx`; Pulse adapts that principle
    by surfacing route changes through workflow/model rows and by yielding to
    the next configured route quickly instead of hiding repeated startup
-   retries behind a static waiting label.
+   retries behind a static waiting label. Provider retry workflow states that
+   include `retry_after_ms` must render as live countdowns derived from the
+   workflow `started_at` timestamp while the turn is active, matching
+   OpenCode's visible retry wait behavior instead of freezing the first retry
+   label.
    Assistant completion events must carry the effective model route that actually
    completed the turn, and the drawer must update the in-flight transcript row
    when `provider_fallback` names the next route so message labels, cost
@@ -504,7 +508,10 @@ runtime cost control, and shared AI transport surfaces.
    same typed `StreamEvent` objects (`session`, `workflow_state`, `thinking`,
    `tool_start`, `tool_progress`, `tool_cancel`, `tool_end`, `content`,
    `done`) through the normal `useChat` reducer rather than rendering a
-   separate mock transcript.
+   separate mock transcript. The local `provider-retry` fixture must exercise
+   the real `provider_retry` workflow state, including attempt metadata and
+   `retry_after_ms`, so browser proof of retry countdown behavior does not
+   depend on external provider availability or API spend.
    This fixture is a local development primitive, not a product mode: it must
    not bypass backend governance in production, persist as a server session, or
    introduce any UI-only event shape that real providers cannot emit.
@@ -1890,9 +1897,11 @@ hidden server log. The referenced OpenCode source at fetched `dev` commit
 that contract at the owning stream boundary: `WorkflowStateData` carries
 `attempt`, `max_attempts`, and `retry_after_ms`, and `AgenticLoop` emits
 `provider_retry` before sleeping between transient pre-output provider
-attempts. The frontend active-turn footer renders that same typed workflow state
-as compact attempt/backoff progress, so the user sees Pulse moving through a
-retry instead of staring at an obsolete provider-wait message.
+attempts. The frontend active-turn footer and live transcript workflow row
+render that same typed workflow state as compact attempt/backoff progress,
+counting down `retry_after_ms` from `started_at` while the turn remains active,
+so the user sees Pulse moving through a retry instead of staring at an obsolete
+provider-wait message.
 
 Assistant workflow progress is also a live typed activity row while a turn is
 in flight, not only hidden footer state. The referenced OpenCode source at

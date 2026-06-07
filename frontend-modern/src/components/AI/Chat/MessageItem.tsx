@@ -378,7 +378,10 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     onCleanup(() => window.clearInterval(interval));
   });
   const formatWorkflowStatus = (status?: WorkflowStatus, includeElapsed = false) => {
-    const message = formatAssistantWorkflowStatus(status);
+    const message = formatAssistantWorkflowStatus(
+      status,
+      props.message.isStreaming ? statusNow() : undefined,
+    );
     if (!message) return '';
     let elapsedSuffix = '';
     if (includeElapsed && status?.startedAt) {
@@ -587,8 +590,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
 
                       <Match
                         when={
-                          evt.type === 'workflow_status' &&
-                          shouldRenderWorkflowStatusEvent(evt)
+                          evt.type === 'workflow_status' && shouldRenderWorkflowStatusEvent(evt)
                         }
                       >
                         <div

@@ -29,9 +29,7 @@ vi.mock('../ToolExecutionBlock', () => ({
       {props.tool.input}
     </div>
   ),
-  ToolCancellationBlock: (props: {
-    tool: { name: string; input: string; reason?: string };
-  }) => (
+  ToolCancellationBlock: (props: { tool: { name: string; input: string; reason?: string } }) => (
     <div role="status" aria-label="Assistant tool canceled">
       <span>{props.tool.name.replace(/^pulse_/, '')}</span>
       <span>skipped</span>
@@ -647,6 +645,50 @@ describe('MessageItem', () => {
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
     });
 
+    it('counts down provider retry workflow rows while the turn is live', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(2_300);
+
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            isStreaming: true,
+            pendingTools: [],
+            streamEvents: [
+              {
+                type: 'workflow_status',
+                workflowStatus: {
+                  phase: 'provider_retry',
+                  message: 'Provider connection failed before any output; retrying.',
+                  attempt: 2,
+                  maxAttempts: 3,
+                  retryAfterMs: 3200,
+                  startedAt: 1_000,
+                },
+              },
+            ],
+            workflowStatus: {
+              phase: 'provider_retry',
+              message: 'Provider connection failed before any output; retrying.',
+              attempt: 2,
+              maxAttempts: 3,
+              retryAfterMs: 3200,
+              startedAt: 1_000,
+            },
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(
+        screen.getByText(
+          /Provider connection failed before any output; retrying\. · attempt 2\/3 · retrying in 1\.9s/,
+        ),
+      ).toBeInTheDocument();
+    });
+
     it('shows the latest burst workflow activity through one live transcript row', () => {
       const workflowStatusHistory = [
         {
@@ -992,8 +1034,7 @@ describe('MessageItem', () => {
           toolCancel: {
             id: 'tool-1',
             name: 'pulse_read',
-            input:
-              '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
+            input: '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
             reason: 'current_resource unavailable',
           },
         },

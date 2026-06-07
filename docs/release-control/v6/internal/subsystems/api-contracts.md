@@ -571,7 +571,11 @@ payload shape change when the portal presents compact client rows.
 	sequence must exercise a buffered `tool_start` -> `tool_end` burst with no
 	provider delay between the two events, followed by a paced content/terminal
 	step, so browser proof can verify that fast command activity remains
-	perceptible without a real provider request.
+	perceptible without a real provider request. At least one fixture-backed
+	Assistant sequence must exercise `provider_retry` with `attempt`,
+	`max_attempts`, and `retry_after_ms` metadata plus a paced retry window, so
+	browser proof can verify visible retry countdown behavior without a real
+	provider request, VPN dependency, or API spend.
 34. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
     Legacy Assistant SSE routes in this handler that still use the older
     execute envelope, including `/api/ai/execute/stream` and

@@ -467,7 +467,10 @@ beforeEach(() => {
   localStorage.clear();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 // ── Tests ──────────────────────────────────────────────────────────────────
 
@@ -4605,6 +4608,35 @@ describe('AIChat', () => {
         'Planning governed action and safety checks before execution. · exec',
       );
       expect(screen.queryByText('Generating response...')).not.toBeInTheDocument();
+    });
+
+    it('shows live provider retry countdowns in the active turn status', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(2_300);
+      mockChat.isLoading.mockReturnValue(true);
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'msg-1',
+          role: 'assistant' as const,
+          content: '',
+          timestamp: new Date(1_000),
+          isStreaming: true,
+          streamEvents: [],
+          workflowStatus: {
+            phase: 'provider_retry',
+            message: 'Provider connection failed before any output; retrying.',
+            attempt: 2,
+            maxAttempts: 3,
+            retryAfterMs: 3200,
+            startedAt: 1_000,
+          },
+        },
+      ]);
+      renderChat();
+
+      expect(screen.getByLabelText('Assistant active turn status')).toHaveTextContent(
+        'Provider connection failed before any output; retrying. · attempt 2/3 · retrying in 1.9s',
+      );
     });
 
     it('prefers the selected model route over placeholder request-start progress', () => {

@@ -859,14 +859,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const textBeforeCursor = text.slice(0, cursor);
     const textAfterCursor = text.slice(cursor);
     return (
-      textBeforeCursor.startsWith('/') &&
-      !/\s/.test(textBeforeCursor) &&
-      !textAfterCursor.trim()
+      textBeforeCursor.startsWith('/') && !/\s/.test(textBeforeCursor) && !textAfterCursor.trim()
     );
   };
 
   const closeSlashCommandAutocomplete = (options?: { clearTransientDraft?: boolean }) => {
-    const shouldClearDraft = Boolean(options?.clearTransientDraft && isTransientSlashCommandDraft());
+    const shouldClearDraft = Boolean(
+      options?.clearTransientDraft && isTransientSlashCommandDraft(),
+    );
     setSlashCommandActive(false);
     setSlashCommandQuery('');
     if (!shouldClearDraft) return;
@@ -2232,7 +2232,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
     onCleanup(() => window.clearInterval(interval));
   });
   const currentStatusText = createMemo(() => {
-    const status = currentStatus();
+    const status =
+      getAssistantActiveTurnStatus(chat.messages(), chat.isLoading(), currentStatusNow()) ||
+      currentStatus();
     if (!status) return '';
     if (!status.startedAt) return status.text;
     const elapsedSeconds = Math.max(0, Math.floor((currentStatusNow() - status.startedAt) / 1000));

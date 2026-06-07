@@ -4,6 +4,7 @@ export const AI_CHAT_DEV_STREAM_FIXTURE_PROMPTS = [
   '/fixture devices',
   '/fixture assistant-stream',
   '/fixture tool-burst',
+  '/fixture provider-retry',
   '/fixture compacted-artifact',
   '/fixture skipped-tool',
 ] as const;
@@ -161,10 +162,8 @@ const buildSkippedToolFixtureEvents = (model?: string): AIChatStreamEvent[] => [
     data: {
       id: 'fixture-tool-skipped',
       name: 'pulse_read',
-      input:
-        '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
-      raw_input:
-        'pulse_read(target_host="current_resource", command="ls /dev | wc -l")',
+      input: '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
+      raw_input: 'pulse_read(target_host="current_resource", command="ls /dev | wc -l")',
     },
   },
   {
@@ -217,10 +216,8 @@ const buildToolBurstFixtureEvents = (model?: string): AIChatStreamEvent[] => [
     data: {
       id: 'fixture-tool-burst',
       name: 'pulse_read',
-      input:
-        '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
-      raw_input:
-        'pulse_read(target_host="current_resource", command="ls /dev | wc -l")',
+      input: '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
+      raw_input: 'pulse_read(target_host="current_resource", command="ls /dev | wc -l")',
     },
   },
   {
@@ -228,10 +225,8 @@ const buildToolBurstFixtureEvents = (model?: string): AIChatStreamEvent[] => [
     data: {
       id: 'fixture-tool-burst',
       name: 'pulse_read',
-      input:
-        '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
-      raw_input:
-        'pulse_read(target_host="current_resource", command="ls /dev | wc -l")',
+      input: '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
+      raw_input: 'pulse_read(target_host="current_resource", command="ls /dev | wc -l")',
       output: '4358',
       success: true,
     },
@@ -249,6 +244,65 @@ const buildToolBurstFixtureEvents = (model?: string): AIChatStreamEvent[] => [
       model: assistantFixtureModel(model),
       input_tokens: 64,
       output_tokens: 31,
+    },
+  },
+];
+
+const buildProviderRetryFixtureEvents = (): AIChatStreamEvent[] => [
+  {
+    type: 'session',
+    data: { id: 'dev-fixture-provider-retry' },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'request_start',
+      message: 'Preparing Pulse context.',
+    },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'provider_start',
+      message: 'Sent request to DeepSeek; waiting for the first token.',
+      provider: 'deepseek',
+      model: 'deepseek:deepseek-chat',
+    },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'provider_retry',
+      message: 'DeepSeek failed before output; retrying through OpenRouter.',
+      provider: 'deepseek',
+      model: 'deepseek:deepseek-chat',
+      attempt: 2,
+      max_attempts: 3,
+      retry_after_ms: 3200,
+    },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'provider_start',
+      message: 'Retrying through OpenRouter with deepseek/deepseek-chat.',
+      provider: 'openrouter',
+      model: 'openrouter:deepseek/deepseek-chat',
+    },
+  },
+  {
+    type: 'content',
+    data: {
+      text: 'The provider retry fixture switched to OpenRouter after the direct provider failed before output.',
+    },
+  },
+  {
+    type: 'done',
+    data: {
+      session_id: 'dev-fixture-provider-retry',
+      model: 'openrouter:deepseek/deepseek-chat',
+      input_tokens: 73,
+      output_tokens: 29,
     },
   },
 ];
@@ -323,6 +377,9 @@ const buildFixtureEvents = (prompt: string, model?: string): AIChatStreamEvent[]
   if (normalized === '/fixture tool-burst') {
     return buildToolBurstFixtureEvents(model);
   }
+  if (normalized === '/fixture provider-retry') {
+    return buildProviderRetryFixtureEvents();
+  }
   return buildDeviceCountFixtureEvents(model);
 };
 
@@ -331,6 +388,14 @@ const fixtureStepDelay = (
   event: AIChatStreamEvent,
   defaultDelayMs: number,
 ): number => {
+  if (defaultDelayMs <= 0) return 0;
+  if (
+    normalizedPrompt === '/fixture provider-retry' &&
+    event.type === 'workflow_state' &&
+    event.data.phase === 'provider_retry'
+  ) {
+    return 1600;
+  }
   if (normalizedPrompt !== '/fixture tool-burst') return defaultDelayMs;
   if (event.type === 'tool_start') return 0;
   return defaultDelayMs;

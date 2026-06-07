@@ -183,6 +183,58 @@ describe('getAssistantActiveTurnStatus', () => {
     });
   });
 
+  it('counts provider retry delay down from workflow start time', () => {
+    const startedAt = 1_000;
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            workflowStatus: {
+              phase: 'provider_retry',
+              message: 'Provider connection failed before any output; retrying.',
+              attempt: 2,
+              maxAttempts: 2,
+              retryAfterMs: 3200,
+              startedAt,
+            },
+          }),
+        ],
+        true,
+        2_300,
+      ),
+    ).toEqual({
+      type: 'thinking',
+      text: 'Provider connection failed before any output; retrying. · attempt 2/2 · retrying in 1.9s',
+      startedAt,
+    });
+  });
+
+  it('keeps provider retry status explicit when the retry delay has elapsed', () => {
+    const startedAt = 1_000;
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            workflowStatus: {
+              phase: 'provider_retry',
+              message: 'Provider connection failed before any output; retrying.',
+              attempt: 2,
+              maxAttempts: 2,
+              retryAfterMs: 3200,
+              startedAt,
+            },
+          }),
+        ],
+        true,
+        4_500,
+      ),
+    ).toEqual({
+      type: 'thinking',
+      text: 'Provider connection failed before any output; retrying. · attempt 2/2 · retrying now',
+      startedAt,
+    });
+  });
+
   it('prefers live tool progress over generic tool labels', () => {
     expect(
       getAssistantActiveTurnStatus(
