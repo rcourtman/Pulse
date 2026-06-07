@@ -77,6 +77,21 @@ func formatSingleDiscovery(d *ResourceDiscovery) string {
 		sb.WriteString(fmt.Sprintf("- **Log Paths:** %s\n", strings.Join(d.LogPaths, ", ")))
 	}
 
+	// Docker bind mounts — where the container's paths actually live on the
+	// host. A container path like /config is meaningless for editing or backing
+	// up persistent files without its host source, so surface the mapping so the
+	// assistant can act on the real files, not the ephemeral container view.
+	if len(d.DockerMounts) > 0 {
+		sb.WriteString("- **Docker Mounts (host -> container):**\n")
+		for _, m := range d.DockerMounts {
+			line := fmt.Sprintf("  - %s -> %s", m.Source, m.Destination)
+			if m.ReadOnly {
+				line += " (read-only)"
+			}
+			sb.WriteString(line + "\n")
+		}
+	}
+
 	// Ports
 	if len(d.Ports) > 0 {
 		var ports []string
