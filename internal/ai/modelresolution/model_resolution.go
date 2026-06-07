@@ -18,8 +18,11 @@ func ResolveConfiguredModel(ctx context.Context, cfg *config.AIConfig) (string, 
 	}
 
 	explicit := strings.TrimSpace(cfg.GetModel())
-	if explicit != "" && IsModelUsableWithConfig(cfg, explicit) {
-		return explicit, nil
+	if explicit != "" {
+		if IsModelUsableWithConfig(cfg, explicit) {
+			return explicit, nil
+		}
+		return "", selectedModelProviderError(cfg, explicit)
 	}
 
 	configuredProviders := cfg.GetConfiguredProviders()
@@ -43,10 +46,11 @@ func ResolveConfiguredChatModel(ctx context.Context, cfg *config.AIConfig) (stri
 		return explicit, nil
 	}
 	if explicit != "" {
-		provider, _ := config.ParseModelString(explicit)
-		if provider != "" && cfg.HasProvider(provider) && provider != config.AIProviderQuickstart {
-			return ResolveConfiguredChatProviderModel(ctx, cfg, provider)
+		provider, err := selectedModelProvider(cfg, explicit)
+		if err != nil {
+			return "", err
 		}
+		return ResolveConfiguredChatProviderModel(ctx, cfg, provider)
 	}
 
 	configuredProviders := cfg.GetConfiguredProviders()
@@ -71,10 +75,11 @@ func ResolveConfiguredChatModelOffline(cfg *config.AIConfig) (string, error) {
 		return explicit, nil
 	}
 	if explicit != "" {
-		provider, _ := config.ParseModelString(explicit)
-		if provider != "" && cfg.HasProvider(provider) && provider != config.AIProviderQuickstart {
-			return ResolveConfiguredChatProviderModelOffline(cfg, provider)
+		provider, err := selectedModelProvider(cfg, explicit)
+		if err != nil {
+			return "", err
 		}
+		return ResolveConfiguredChatProviderModelOffline(cfg, provider)
 	}
 
 	configuredProviders := cfg.GetConfiguredProviders()
@@ -83,6 +88,32 @@ func ResolveConfiguredChatModelOffline(cfg *config.AIConfig) (string, error) {
 	}
 
 	return ResolveConfiguredChatProviderModelOffline(cfg, configuredProviders[0])
+}
+
+func selectedModelProvider(cfg *config.AIConfig, model string) (string, error) {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return "", fmt.Errorf("selected model route is empty")
+	}
+	provider, _ := config.ParseModelString(model)
+	provider = strings.TrimSpace(provider)
+	if provider == "" {
+		return "", fmt.Errorf("selected model route %q does not name a provider", model)
+	}
+	if provider == config.AIProviderQuickstart {
+		return "", fmt.Errorf("quickstart provider is retired; configure a provider API key or Ollama")
+	}
+	if cfg == nil || !cfg.HasProvider(provider) {
+		return "", fmt.Errorf("%s provider is not configured for selected model route %q", provider, model)
+	}
+	return provider, nil
+}
+
+func selectedModelProviderError(cfg *config.AIConfig, model string) error {
+	if _, err := selectedModelProvider(cfg, model); err != nil {
+		return err
+	}
+	return fmt.Errorf("selected model route %q is not usable with the current Pulse Assistant config", strings.TrimSpace(model))
 }
 
 // ResolveConfiguredChatProviderModelOffline resolves a chat-suitable model for

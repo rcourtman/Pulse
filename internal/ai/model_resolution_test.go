@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
@@ -145,6 +146,24 @@ func TestResolveConfiguredChatProviderModel_SkipsSpecializedPreferredModel(t *te
 	}
 	if want := "openai:gpt-4o"; got != want {
 		t.Fatalf("ResolveConfiguredChatProviderModel() = %q, want %q", got, want)
+	}
+}
+
+func TestResolveConfiguredModel_RejectsExplicitUnconfiguredRoute(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.AIConfig{
+		Enabled:          true,
+		OpenRouterAPIKey: "sk-or-test",
+		Model:            "deepseek:deepseek-v4-pro",
+	}
+
+	got, err := ResolveConfiguredModel(context.Background(), cfg)
+	if err == nil {
+		t.Fatalf("ResolveConfiguredModel() error = nil, got model %q", got)
+	}
+	if !strings.Contains(err.Error(), "deepseek provider is not configured") {
+		t.Fatalf("ResolveConfiguredModel() error = %q, want DeepSeek provider configuration error", err)
 	}
 }
 

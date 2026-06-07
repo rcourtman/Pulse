@@ -1,6 +1,7 @@
 package modelresolution
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -53,6 +54,40 @@ func TestResolveConfiguredChatModelOffline_ReplacesSpecializedChatModelWithStabl
 	}
 	if want := config.DefaultModelForProvider(config.AIProviderOpenAI); got != want {
 		t.Fatalf("ResolveConfiguredChatModelOffline() = %q, want %q", got, want)
+	}
+}
+
+func TestResolveConfiguredChatModelOffline_RejectsExplicitUnconfiguredRoute(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.AIConfig{
+		OpenRouterAPIKey: "sk-or-test",
+		ChatModel:        "deepseek:deepseek-v4-pro",
+	}
+
+	got, err := ResolveConfiguredChatModelOffline(cfg)
+	if err == nil {
+		t.Fatalf("ResolveConfiguredChatModelOffline() error = nil, got model %q", got)
+	}
+	if !strings.Contains(err.Error(), "deepseek provider is not configured") {
+		t.Fatalf("ResolveConfiguredChatModelOffline() error = %q, want DeepSeek provider configuration error", err)
+	}
+}
+
+func TestResolveConfiguredChatModelOffline_RejectsDetectedUnconfiguredRoute(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.AIConfig{
+		OllamaBaseURL: "http://localhost:11434",
+		ChatModel:     "gpt-4",
+	}
+
+	got, err := ResolveConfiguredChatModelOffline(cfg)
+	if err == nil {
+		t.Fatalf("ResolveConfiguredChatModelOffline() error = nil, got model %q", got)
+	}
+	if !strings.Contains(err.Error(), "openai provider is not configured") {
+		t.Fatalf("ResolveConfiguredChatModelOffline() error = %q, want OpenAI provider configuration error", err)
 	}
 }
 

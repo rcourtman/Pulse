@@ -604,7 +604,7 @@ func TestService_LoadConfig(t *testing.T) {
 		t.Error("Expected nil provider when AI is disabled")
 	}
 
-	// 3. Smart fallback (Anthropic model set, but only OpenAI key configured)
+	// 3. Explicit route mismatch fails closed instead of silently switching providers.
 	cfgV = config.AIConfig{
 		Enabled:      true,
 		Model:        "anthropic:claude-3-opus-20240229",
@@ -612,11 +612,11 @@ func TestService_LoadConfig(t *testing.T) {
 	}
 	_ = persistence.SaveAIConfig(cfgV)
 	err = svc.LoadConfig()
-	if svc.provider == nil {
-		t.Fatal("Expected non-nil provider after smart fallback")
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
 	}
-	if svc.provider.Name() != config.AIProviderOpenAI {
-		t.Errorf("Expected provider to fallback to openai, got %s", svc.provider.Name())
+	if svc.provider != nil {
+		t.Fatalf("expected no provider after explicit unconfigured route, got %s", svc.provider.Name())
 	}
 }
 
@@ -2276,8 +2276,8 @@ func TestService_LoadConfig_WithDisabledAI(t *testing.T) {
 	}
 }
 
-func TestService_LoadConfig_SmartFallback(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "pulse-loadconfig-smart-*")
+func TestService_LoadConfig_ExplicitRouteMismatchLeavesProviderNil(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pulse-loadconfig-explicit-route-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -2285,8 +2285,8 @@ func TestService_LoadConfig_SmartFallback(t *testing.T) {
 
 	persistence := config.NewConfigPersistence(tmpDir)
 
-	// Config with Anthropic model selected but only OpenAI configured
-	// NewForModel("anthropic:...") will fail, triggering smart fallback to OpenAI
+	// Config with Anthropic model selected but only OpenAI configured.
+	// Pulse must not silently switch the saved route to a configured provider.
 	cfg := config.AIConfig{
 		Enabled:      true,
 		Model:        "anthropic:claude-3-opus",
@@ -2300,11 +2300,8 @@ func TestService_LoadConfig_SmartFallback(t *testing.T) {
 		t.Fatalf("LoadConfig failed: %v", err)
 	}
 
-	if svc.provider == nil {
-		t.Fatal("Expected provider to be set via smart fallback")
-	}
-	if svc.provider.Name() != "openai" {
-		t.Errorf("Expected openai provider, got %s", svc.provider.Name())
+	if svc.provider != nil {
+		t.Fatalf("expected provider to remain nil for explicit unconfigured route, got %s", svc.provider.Name())
 	}
 }
 
@@ -2366,8 +2363,8 @@ func TestService_LoadConfig_UnknownModelWithOllamaConfigured(t *testing.T) {
 	}
 }
 
-func TestService_LoadConfig_SmartFallback_Variants(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "pulse-loadconfig-fallback-variants-*")
+func TestService_LoadConfig_ExplicitRouteRequiresMatchingProvider(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pulse-loadconfig-explicit-route-variants-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -2376,15 +2373,15 @@ func TestService_LoadConfig_SmartFallback_Variants(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmpDir)
 
 	providers := []struct {
-		name   string
-		key    string
-		expect string
+		name         string
+		wantProvider string
 	}{
-		{"anthropic", "AnthropicAPIKey", "anthropic"},
-		{"openrouter", "OpenRouterAPIKey", "openai"}, // OpenRouter uses OpenAI client
-		{"gemini", "GeminiAPIKey", "gemini"},
-		{"deepseek", "DeepSeekAPIKey", "openai"}, // DeepSeek uses OpenAI client
-		{"ollama", "OllamaBaseURL", "ollama"},
+		{name: "openai", wantProvider: "openai"},
+		{name: "anthropic"},
+		{name: "openrouter"},
+		{name: "gemini"},
+		{name: "deepseek"},
+		{name: "ollama"},
 	}
 
 	for _, p := range providers {
@@ -2396,6 +2393,8 @@ func TestService_LoadConfig_SmartFallback_Variants(t *testing.T) {
 
 			// Set the specific key
 			switch p.name {
+			case "openai":
+				cfg.OpenAIAPIKey = "key"
 			case "anthropic":
 				cfg.AnthropicAPIKey = "key"
 			case "openrouter":
@@ -2415,8 +2414,14 @@ func TestService_LoadConfig_SmartFallback_Variants(t *testing.T) {
 				t.Fatalf("LoadConfig failed: %v", err)
 			}
 
-			if svc.provider == nil || svc.provider.Name() != p.expect {
-				t.Errorf("Expected %s provider via fallback, got %v", p.expect, svc.provider)
+			if p.wantProvider == "" {
+				if svc.provider != nil {
+					t.Fatalf("expected no provider for openai route with only %s configured, got %s", p.name, svc.provider.Name())
+				}
+				return
+			}
+			if svc.provider == nil || svc.provider.Name() != p.wantProvider {
+				t.Errorf("expected %s provider for matching explicit route, got %v", p.wantProvider, svc.provider)
 			}
 		})
 	}

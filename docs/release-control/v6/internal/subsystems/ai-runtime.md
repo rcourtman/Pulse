@@ -2543,6 +2543,13 @@ configured without a concrete model selection,
 provider's live catalog at runtime using the shared provider metadata policy
 instead of reviving static vendor constants in config defaults, service
 fallbacks, or frontend setup flows.
+Explicit saved model routes fail closed when their provider is not configured
+or cannot be initialized. Pulse may not replace an operator-selected route such
+as `deepseek:*`, `openrouter:*`, or `openai:*` with another configured provider
+default during settings load, Assistant chat startup, or service initialization.
+Provider-owned defaults are allowed only when no explicit route exists, or when
+the same configured provider needs its governed chat-suitable/default model
+because live catalog lookup failed or the explicit model is unsuitable for chat.
 That same provider-model ownership also governs live-catalog failure fallback:
 when runtime client construction fails, test credentials intentionally block a
 provider catalog, or a provider returns no usable models, the effective BYOK

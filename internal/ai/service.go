@@ -1634,41 +1634,12 @@ func (s *Service) LoadConfig() error {
 
 			nextProvider, providerErr := providers.NewForModel(cfg, selectedModel)
 			if providerErr != nil {
-				// Smart fallback: if selected provider isn't configured but OTHER providers are,
-				// automatically switch to a model from a configured provider.
-				// This prevents confusing errors when the user has e.g. DeepSeek configured
-				// but the model is still set to an Anthropic model.
-				configuredProviders := cfg.GetConfiguredProviders()
-				if len(configuredProviders) > 0 {
-					fallbackProvider := configuredProviders[0]
-					fallbackModel, _ := ResolveConfiguredProviderModel(modelResolutionCtx, cfg, fallbackProvider)
-
-					if fallbackModel != "" {
-						log.Warn().
-							Str("selected_model", selectedModel).
-							Str("selected_provider", selectedProvider).
-							Str("fallback_model", fallbackModel).
-							Str("fallback_provider", fallbackProvider).
-							Msg("Selected provider not configured - automatically falling back to configured provider")
-
-						nextProvider, providerErr = providers.NewForModel(cfg, fallbackModel)
-						if providerErr == nil {
-							selectedModel = fallbackModel
-							selectedProvider = fallbackProvider
-						} else {
-							log.Error().Err(providerErr).Str("fallback_model", fallbackModel).Msg("failed to create fallback provider")
-						}
-					}
-				}
-
-				if nextProvider == nil {
-					log.Warn().
-						Err(providerErr).
-						Str("selected_model", selectedModel).
-						Str("selected_provider", selectedProvider).
-						Strs("configured_providers", cfg.GetConfiguredProviders()).
-						Msg("AI enabled but no providers configured")
-				}
+				log.Warn().
+					Err(providerErr).
+					Str("selected_model", selectedModel).
+					Str("selected_provider", selectedProvider).
+					Strs("configured_providers", cfg.GetConfiguredProviders()).
+					Msg("AI enabled but selected provider could not be initialized")
 			}
 
 			providerClient = nextProvider
