@@ -343,10 +343,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
     if (!preview || summary.startsWith('$ ') || preview === summary) return '';
     return preview;
   });
-  const shouldPreviewOutput = createMemo(() => props.tool.success === false);
-  const outputPreview = createMemo(() =>
-    shouldPreviewOutput() ? formatOutputPreview(outputText()) : '',
-  );
+  const outputPreview = createMemo(() => formatOutputPreview(outputText()));
   const hiddenOutputSummary = createMemo(() =>
     outputPreview() ? '' : formatHiddenOutputSummary(outputText()),
   );

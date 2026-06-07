@@ -307,6 +307,7 @@ describe('ToolExecutionBlock', () => {
 
     expect(screen.getByText('Inspect devices on current resource')).toBeInTheDocument();
     expect(screen.getByLabelText('Tool command')).toHaveTextContent('$ ls /dev | wc -l');
+    expect(screen.getByLabelText('Tool output preview')).toHaveTextContent('42');
     expect(screen.queryByText(/"target_host"/)).not.toBeInTheDocument();
   });
 
@@ -471,15 +472,13 @@ describe('ToolExecutionBlock', () => {
 
   // --- Output display ---
 
-  it('keeps successful short plain-text output behind details', () => {
+  it('previews successful short plain-text output while keeping full details available', () => {
     render(() => <ToolExecutionBlock tool={makeTool({ output: 'hello world' })} />);
-    expect(screen.queryByLabelText('Tool output preview')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Tool output available: 11 chars output')).toHaveTextContent(
-      'output available',
-    );
+    expect(screen.getByLabelText('Tool output preview')).toHaveTextContent('hello world');
+    expect(screen.queryByText('11 chars output')).not.toBeInTheDocument();
     fireEvent.click(getToolDetailsTrigger());
     expect(screen.getByText('Output')).toBeInTheDocument();
-    expect(screen.getByText('hello world')).toBeInTheDocument();
+    expect(screen.getAllByText('hello world')).toHaveLength(2);
   });
 
   it('does not preview structured JSON output by default', () => {
@@ -500,7 +499,7 @@ describe('ToolExecutionBlock', () => {
     expect(getToolDetailsTrigger()).toBeInTheDocument();
   });
 
-  it('keeps successful long plain-text output behind details', () => {
+  it('previews successful plain-text output with a bounded visible snippet', () => {
     const { container } = render(() => (
       <ToolExecutionBlock
         tool={makeTool({
@@ -510,22 +509,20 @@ describe('ToolExecutionBlock', () => {
     ));
 
     const text = container.textContent || '';
-    expect(screen.queryByLabelText('Tool output preview')).not.toBeInTheDocument();
-    expect(text).not.toContain('line 5');
-    expect(screen.getByLabelText('Tool output available: 5 lines output')).toHaveTextContent(
-      'output available',
+    expect(screen.getByLabelText('Tool output preview')).toHaveTextContent(
+      'line 1 line 2 line 3 line 4 ...',
     );
+    expect(text).not.toContain('line 5');
     expect(screen.queryByText('5 lines output')).not.toBeInTheDocument();
     expect(getToolDetailsTrigger()).toBeInTheDocument();
   });
 
-  it('hides long successful single-line output without showing raw output counts', () => {
+  it('previews long successful single-line output without showing raw output counts', () => {
     render(() => <ToolExecutionBlock tool={makeTool({ output: 'x'.repeat(160) })} />);
 
-    expect(screen.queryByLabelText('Tool output preview')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Tool output available: 160 chars output')).toHaveTextContent(
-      'output available',
-    );
+    const preview = screen.getByLabelText('Tool output preview');
+    expect(preview).toHaveTextContent(/\.\.\.$/);
+    expect(preview.textContent || '').not.toHaveLength(160);
     expect(screen.queryByText('160 chars output')).not.toBeInTheDocument();
   });
 
@@ -553,10 +550,7 @@ describe('ToolExecutionBlock', () => {
 
     expect(screen.getByText('Inspect devices on current resource')).toBeInTheDocument();
     expect(screen.getByLabelText('Tool command')).toHaveTextContent('$ ls /dev | wc -l');
-    expect(screen.queryByLabelText('Tool output preview')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Tool output available: 2 chars output')).toHaveTextContent(
-      'output available',
-    );
+    expect(screen.getByLabelText('Tool output preview')).toHaveTextContent('42');
   });
 
   it('hides output that is only whitespace', () => {

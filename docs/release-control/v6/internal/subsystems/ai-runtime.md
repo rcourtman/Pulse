@@ -270,13 +270,12 @@ remain visible/inspectable.
    (`ToolView.output`, lines 40-44; tool display hooks, lines 117-123), and
    commits allowed tool output into scrollback in
    `packages/opencode/src/cli/cmd/run/session-data.ts` (lines 960-964). Pulse
-   completed rows must expose compact output metadata for hidden successful
-   outputs while keeping raw output behind the existing details disclosure, and
-   those raw input/output details must be copyable from the disclosure without
-   expanding the default transcript. Failed tool output may stay visible as a
-   bounded inline preview because it is the operator-facing failure reason;
-   successful command output belongs in details unless the Assistant answer
-   explicitly summarizes it as normal response text.
+   completed rows must expose safe bounded plain-text output previews when they
+   can be rendered without turning the transcript into a raw terminal dump,
+   while keeping the full raw output behind the existing details disclosure.
+   Structured, binary, unavailable, or otherwise noisy output may collapse to
+   compact output metadata. Raw input/output details must remain copyable from
+   the disclosure without expanding the default transcript.
    Completed Assistant context summaries must use the same operator-facing
    tool-input presentation as the visible tool rows, not raw internal tool
    identifiers. A completed `pulse_read` device inspection should therefore
@@ -696,11 +695,10 @@ remain visible/inspectable.
    output unless `showGenericToolOutput` is enabled, and bounds output-heavy
    blocks with `packages/opencode/src/cli/cmd/tui/util/collapse-tool-output.ts`.
    Pulse adapts that by keeping the completed tool action visible in the
-   transcript, keeping successful raw output behind Details, and surfacing only
-   short failed plain-text output as a preview when it is actionable. Structured
-   JSON, unavailable output, successful command output, and the full raw payload
-   stay behind Details. This preserves evidence for inspection without letting
-   command output compete with the Assistant answer flow.
+   transcript, rendering only short safe plain-text output previews inline, and
+   keeping structured JSON, unavailable output, noisy output, and the full raw
+   payload behind Details. This preserves evidence for inspection without
+   letting command output compete with the Assistant answer flow.
    The row itself owns the details trigger, not a tiny adjacent text action:
    completed tool rows with inspectable input or output must expose
    `aria-expanded`, keyboard activation, and a chevron affordance on the row
