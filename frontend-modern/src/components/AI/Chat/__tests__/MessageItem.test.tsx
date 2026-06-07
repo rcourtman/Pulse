@@ -1447,7 +1447,7 @@ describe('MessageItem', () => {
   });
 
   describe('context tools display', () => {
-    it('groups consecutive context checks into one expandable transcript row', () => {
+    it('shows consecutive completed context checks as individual transcript rows', () => {
       const events: StreamDisplayEvent[] = [
         {
           type: 'tool',
@@ -1480,17 +1480,20 @@ describe('MessageItem', () => {
         />
       ));
 
-      expect(screen.getByTestId('context-tool-group')).toHaveTextContent('Context gathered');
-      expect(screen.getByTestId('context-tool-group')).toHaveTextContent('2 context checks');
-      expect(screen.queryByTestId('tool-execution-block')).not.toBeInTheDocument();
-      expect(screen.queryByText('Context used')).not.toBeInTheDocument();
-
-      fireEvent.click(screen.getByRole('button', { name: /Context gathered/i }));
-
       expect(screen.getAllByTestId('tool-execution-block')).toHaveLength(2);
+      expect(screen.getAllByTestId('tool-execution-block')[0]).toHaveAttribute(
+        'data-tool-name',
+        'pulse_read',
+      );
+      expect(screen.getAllByTestId('tool-execution-block')[1]).toHaveAttribute(
+        'data-tool-name',
+        'pulse_get_metrics',
+      );
+      expect(screen.queryByTestId('context-tool-group')).not.toBeInTheDocument();
+      expect(screen.queryByText('Context used')).not.toBeInTheDocument();
     });
 
-    it('shows consecutive pending context checks as one active expandable transcript row', () => {
+    it('shows consecutive pending context checks as individual live transcript rows', () => {
       const events: StreamDisplayEvent[] = [
         {
           type: 'pending_tool',
@@ -1523,13 +1526,16 @@ describe('MessageItem', () => {
         />
       ));
 
-      expect(screen.getByTestId('context-tool-group')).toHaveTextContent('Gathering context');
-      expect(screen.getByTestId('context-tool-group')).toHaveTextContent('2 context checks');
-      expect(screen.queryByTestId('pending-tool-block')).not.toBeInTheDocument();
-
-      fireEvent.click(screen.getByRole('button', { name: /Gathering context/i }));
-
       expect(screen.getAllByTestId('pending-tool-block')).toHaveLength(2);
+      expect(screen.getAllByTestId('pending-tool-block')[0]).toHaveAttribute(
+        'data-tool-name',
+        'pulse_get_resource_details',
+      );
+      expect(screen.getAllByTestId('pending-tool-block')[1]).toHaveAttribute(
+        'data-tool-name',
+        'pulse_get_metrics_history',
+      );
+      expect(screen.queryByTestId('context-tool-group')).not.toBeInTheDocument();
     });
 
     it('keeps action tools visible as individual transcript rows', () => {
@@ -1569,47 +1575,7 @@ describe('MessageItem', () => {
       expect(screen.getAllByTestId('tool-execution-block')).toHaveLength(2);
     });
 
-    it('shows "Context used" with unique tool summaries when context checks are not grouped', () => {
-      const events: StreamDisplayEvent[] = [
-        {
-          type: 'tool',
-          tool: {
-            name: 'pulse_read',
-            input: '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
-            output: 'ok',
-            success: true,
-          },
-        },
-        { type: 'content', content: 'I checked the device node count.' },
-        {
-          type: 'tool',
-          tool: {
-            name: 'pulse_get_metrics',
-            input: '{"action":"history","resource":"vm-101"}',
-            output: 'ok',
-            success: true,
-          },
-        },
-      ];
-
-      render(() => (
-        <MessageItem
-          message={makeMessage({
-            role: 'assistant',
-            streamEvents: events,
-            isStreaming: false,
-          })}
-          {...makeHandlers()}
-        />
-      ));
-
-      expect(screen.getByText('Context used')).toBeInTheDocument();
-      expect(screen.getByText('Inspect devices on current resource')).toBeInTheDocument();
-      expect(screen.getByText('history')).toBeInTheDocument();
-      expect(screen.queryByText('read')).not.toBeInTheDocument();
-    });
-
-    it('deduplicates tool summaries in context footer', () => {
+    it('does not duplicate visible context rows with a context footer', () => {
       const events: StreamDisplayEvent[] = [
         {
           type: 'tool',
@@ -1648,8 +1614,8 @@ describe('MessageItem', () => {
         />
       ));
 
-      expect(screen.getAllByText('Inspect devices on current resource')).toHaveLength(1);
-      expect(screen.getByText('get metrics')).toBeInTheDocument();
+      expect(screen.getAllByTestId('tool-execution-block')).toHaveLength(3);
+      expect(screen.queryByText('Context used')).not.toBeInTheDocument();
     });
 
     it('does not show context tools section when streaming', () => {
@@ -1691,7 +1657,7 @@ describe('MessageItem', () => {
       expect(screen.queryByText('Context used')).not.toBeInTheDocument();
     });
 
-    it('formats tool names correctly (strips pulse_ prefix and replaces underscores)', () => {
+    it('passes prefixed tool names through to visible tool rows', () => {
       const events: StreamDisplayEvent[] = [
         {
           type: 'tool',
@@ -1715,10 +1681,13 @@ describe('MessageItem', () => {
         />
       ));
 
-      expect(screen.getByText('get container status')).toBeInTheDocument();
+      expect(screen.getByTestId('tool-execution-block')).toHaveAttribute(
+        'data-tool-name',
+        'pulse_get_container_status',
+      );
     });
 
-    it('handles tool names without pulse_ prefix', () => {
+    it('passes tool names without pulse_ prefix through to visible tool rows', () => {
       const events: StreamDisplayEvent[] = [
         {
           type: 'tool',
@@ -1737,7 +1706,10 @@ describe('MessageItem', () => {
         />
       ));
 
-      expect(screen.getByText('run command')).toBeInTheDocument();
+      expect(screen.getByTestId('tool-execution-block')).toHaveAttribute(
+        'data-tool-name',
+        'run_command',
+      );
     });
   });
 

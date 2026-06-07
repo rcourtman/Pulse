@@ -307,6 +307,13 @@ describe('AIChatAPI', () => {
         success: true,
       },
     });
+    expect(onEvent.mock.calls[7][0]).toMatchObject({
+      type: 'content',
+      data: {
+        text: expect.stringContaining('separate visible activity rows'),
+      },
+    });
+    expect(onEvent.mock.calls[7][0].data.text).not.toContain('one compact context activity row');
     expect(onEvent.mock.calls[8][0]).toMatchObject({
       type: 'done',
       data: {

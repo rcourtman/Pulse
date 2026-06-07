@@ -358,7 +358,7 @@ const buildContextGroupFixtureEvents = (model?: string): AIChatStreamEvent[] => 
   {
     type: 'content',
     data: {
-      text: 'The context-group fixture gathered the resource identity and recent CPU history as one compact context activity row.',
+      text: 'The context fixture gathered the resource identity and recent CPU history as separate visible activity rows.',
     },
   },
   {

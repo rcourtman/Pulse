@@ -10,7 +10,6 @@ import {
   onCleanup,
 } from 'solid-js';
 import CheckIcon from 'lucide-solid/icons/check';
-import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import CircleAlertIcon from 'lucide-solid/icons/circle-alert';
 import ClockIcon from 'lucide-solid/icons/clock';
 import CopyIcon from 'lucide-solid/icons/copy';
@@ -32,27 +31,16 @@ import {
   latestWorkflowStatus,
   normalizeWorkflowStatusSequence,
 } from './workflowStatusPresentation';
-import {
-  isPlaceholderToolInputSummary,
-  parseToolInputSummary,
-  toolValueText,
-} from './toolPresentation';
 import type {
   ChatMessage,
   ModelRouteRecoveryOption,
   PendingApproval,
   PendingQuestion,
-  PendingTool,
   StreamDisplayEvent,
-  ToolExecution,
   WorkflowStatus,
 } from './types';
-import {
-  AI_CHAT_ASSISTANT_MESSAGE_LABEL,
-  AI_CHAT_CONTEXT_USED_LABEL,
-} from '@/utils/aiChatPresentation';
+import { AI_CHAT_ASSISTANT_MESSAGE_LABEL } from '@/utils/aiChatPresentation';
 import { formatAIModelRouteLabel } from '@/utils/aiProviderPresentation';
-import { formatIdentifierLabel } from '@/utils/textPresentation';
 
 interface MessageItemProps {
   message: ChatMessage;
@@ -98,94 +86,6 @@ const markdownClass =
 
 const TEXT_RENDER_PACE_MS = 24;
 const TEXT_RENDER_SNAP = /[\s.,!?;:)\]]/;
-
-type ContextToolStreamEvent =
-  | (StreamDisplayEvent & { type: 'pending_tool'; pendingTool: PendingTool })
-  | (StreamDisplayEvent & { type: 'tool'; tool: ToolExecution });
-
-type DisplayStreamItem =
-  | { kind: 'event'; event: StreamDisplayEvent }
-  | { kind: 'context_tool_group'; events: ContextToolStreamEvent[]; key: string };
-
-const CONTEXT_TOOL_NAMES = new Set([
-  'read',
-  'query',
-  'fetch_url',
-  'get_infrastructure_state',
-  'get_active_alerts',
-  'get_metrics',
-  'get_metrics_history',
-  'get_baselines',
-  'get_patterns',
-  'get_disk_health',
-  'get_storage',
-  'get_storage_config',
-  'get_resource_details',
-]);
-
-const normalizedContextToolName = (name?: string) => name?.trim().replace(/^pulse_/, '') || '';
-
-const isContextToolName = (name?: string) =>
-  CONTEXT_TOOL_NAMES.has(normalizedContextToolName(name));
-
-const asContextToolStreamEvent = (event: StreamDisplayEvent): ContextToolStreamEvent | null => {
-  if (
-    event.type === 'pending_tool' &&
-    event.pendingTool &&
-    isContextToolName(event.pendingTool.name)
-  ) {
-    return event as ContextToolStreamEvent;
-  }
-  if (event.type === 'tool' && event.tool && isContextToolName(event.tool.name)) {
-    return event as ContextToolStreamEvent;
-  }
-  return null;
-};
-
-const contextToolEventKey = (event: ContextToolStreamEvent) =>
-  [
-    event.type,
-    event.toolId,
-    event.type === 'pending_tool' ? event.pendingTool.id : event.tool.name,
-    event.startedAt,
-    event.updatedAt,
-  ]
-    .map((value) => String(value ?? ''))
-    .join(':');
-
-const groupContextToolStreamItems = (events: StreamDisplayEvent[]): DisplayStreamItem[] => {
-  const items: DisplayStreamItem[] = [];
-  let pendingGroup: ContextToolStreamEvent[] = [];
-
-  const flushGroup = () => {
-    if (pendingGroup.length >= 2) {
-      items.push({
-        kind: 'context_tool_group',
-        events: pendingGroup,
-        key: `context-tool:${pendingGroup.map(contextToolEventKey).join('|')}`,
-      });
-    } else {
-      for (const event of pendingGroup) {
-        items.push({ kind: 'event', event });
-      }
-    }
-    pendingGroup = [];
-  };
-
-  for (const event of events) {
-    const contextToolEvent = asContextToolStreamEvent(event);
-    if (contextToolEvent) {
-      pendingGroup.push(contextToolEvent);
-      continue;
-    }
-
-    flushGroup();
-    items.push({ kind: 'event', event });
-  }
-
-  flushGroup();
-  return items;
-};
 
 const textRenderStep = (size: number) => {
   if (size <= 12) return 2;
@@ -332,88 +232,6 @@ const AssistantMarkdownBlock: Component<{
   );
 };
 
-const ContextToolActivityGroup: Component<{
-  events: ContextToolStreamEvent[];
-  live: boolean;
-}> = (props) => {
-  const [expanded, setExpanded] = createSignal(false);
-  const active = createMemo(() => props.events.some((event) => event.type === 'pending_tool'));
-  const count = createMemo(() => props.events.length);
-  const countLabel = createMemo(() => `${count()} context ${count() === 1 ? 'check' : 'checks'}`);
-  const statusLabel = createMemo(() => (active() ? 'Gathering context' : 'Context gathered'));
-  const title = createMemo(() => `${statusLabel()} · ${countLabel()}`);
-  const toggle = () => setExpanded((value) => !value);
-
-  return (
-    <div
-      class="my-1 overflow-hidden rounded-md border border-blue-200 bg-blue-50/60 text-[11px] dark:border-blue-900/60 dark:bg-blue-950/20"
-      data-testid="context-tool-group"
-      role="group"
-      aria-label={title()}
-    >
-      <button
-        type="button"
-        class="flex w-full min-w-0 items-center gap-2 px-2.5 py-2 text-left transition-colors hover:bg-blue-100/60 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:ring-inset dark:hover:bg-blue-950/30"
-        aria-expanded={expanded()}
-        onClick={toggle}
-      >
-        <span
-          class={`h-1.5 w-1.5 shrink-0 rounded-full ${
-            active() ? 'animate-pulse bg-blue-500' : 'bg-emerald-500'
-          }`}
-          aria-hidden="true"
-        />
-        <span class="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted">
-          {statusLabel()}
-        </span>
-        <span class="min-w-0 truncate text-[12px] font-medium text-base-content">
-          {countLabel()}
-        </span>
-        <ChevronRightIcon
-          class={`ml-auto h-3.5 w-3.5 shrink-0 text-muted transition-transform ${
-            expanded() ? 'rotate-90' : ''
-          }`}
-          aria-hidden="true"
-        />
-      </button>
-      <Show when={expanded()}>
-        <div class="border-t border-blue-200/70 px-2 py-1.5 dark:border-blue-900/60">
-          <For each={props.events}>
-            {(event) => {
-              const pendingTool = event.type === 'pending_tool' ? event.pendingTool : undefined;
-              const tool = event.type === 'tool' ? event.tool : undefined;
-
-              return (
-                <Switch>
-                  <Match when={pendingTool}>
-                    {(pending) => <PendingToolBlock tool={pending()} />}
-                  </Match>
-                  <Match when={tool}>
-                    {(completedTool) => (
-                      <ToolExecutionBlock
-                        startedAt={event.startedAt}
-                        completedAt={event.updatedAt}
-                        live={props.live}
-                        tool={{
-                          name: completedTool().name || 'unknown',
-                          input: completedTool().input || '{}',
-                          rawInput: completedTool().rawInput,
-                          output: completedTool().output || '',
-                          success: completedTool().success ?? true,
-                        }}
-                      />
-                    )}
-                  </Match>
-                </Switch>
-              );
-            }}
-          </For>
-        </div>
-      </Show>
-    </div>
-  );
-};
-
 /**
  * MessageItem - Renders a single message in the chat.
  *
@@ -440,10 +258,6 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
   // whitespace-trimmed pieces. See groupStreamEventsForDisplay for the rationale.
   const groupedEvents = createMemo(() =>
     groupStreamEventsForDisplay(props.message.streamEvents || []),
-  );
-  const displayStreamItems = createMemo(() => groupContextToolStreamItems(groupedEvents()));
-  const hasContextToolActivityGroup = createMemo(() =>
-    displayStreamItems().some((item) => item.kind === 'context_tool_group'),
   );
   const isSelectedModelRouteEvent = (evt: StreamDisplayEvent) =>
     evt.type === 'model_switch' && evt.modelEvent === 'selected' && !evt.failedModel?.trim();
@@ -510,27 +324,6 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
       .slice(0, index)
       .every((evt) => evt.type === 'thinking');
 
-  const contextToolSummaries = createMemo(() => {
-    const events = props.message.streamEvents || [];
-    const summaries = new Set<string>();
-
-    for (const evt of events) {
-      if (evt.type === 'tool' && evt.tool?.name) {
-        const summary = parseToolInputSummary(
-          toolValueText(evt.tool.input),
-          evt.tool.name,
-          evt.tool.rawInput,
-        );
-        const label =
-          summary && !isPlaceholderToolInputSummary(summary)
-            ? summary
-            : formatIdentifierLabel(evt.tool.name, { stripPrefix: 'pulse_' });
-        summaries.add(label);
-      }
-    }
-
-    return Array.from(summaries);
-  });
   const visibleMessageContent = () =>
     stripAssistantOutputArtifacts(props.message.content || '').text;
   const modelRouteLabel = (route?: string) => {
@@ -765,23 +558,13 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
 
               {/* Stream events - chronological display */}
               <Show when={hasRenderableStreamEvents()}>
-                <For each={displayStreamItems()}>
-                  {(item, index) => {
-                    const contextGroup = item.kind === 'context_tool_group' ? item : undefined;
-                    const evt = item.kind === 'event' ? item.event : undefined;
+                <For each={groupedEvents()}>
+                  {(evt, index) => {
                     const contentText = () =>
                       stripAssistantOutputArtifacts(evt?.content || '').text;
 
                     return (
                       <Switch>
-                        <Match when={contextGroup}>
-                          {(group) => (
-                            <ContextToolActivityGroup
-                              events={group().events}
-                              live={props.message.isStreaming === true}
-                            />
-                          )}
-                        </Match>
                         <Match
                           when={
                             evt?.type === 'thinking' &&
@@ -1018,30 +801,6 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
               {/* Streaming cursor */}
               <Show when={isStreamingText() && !isWaitingForFirstToken()}>
                 <span class="inline-block w-1.5 h-4 ml-0.5 align-middle bg-blue-500 dark:bg-blue-400 animate-pulse rounded-full" />
-              </Show>
-
-              <Show
-                when={
-                  !props.message.isStreaming &&
-                  !hasContextToolActivityGroup() &&
-                  contextToolSummaries().length > 0
-                }
-              >
-                <div class="mt-4 pt-3 border-t border-border-subtle flex flex-wrap gap-2">
-                  <span class="text-[10px] uppercase font-semibold text-muted">
-                    {AI_CHAT_CONTEXT_USED_LABEL}
-                  </span>
-                  <div class="flex flex-wrap gap-1.5">
-                    {contextToolSummaries().map((summary) => (
-                      <span
-                        class="max-w-[18rem] truncate px-1.5 py-0.5 rounded text-[10px] bg-surface-hover text-muted border border-border font-medium"
-                        title={summary}
-                      >
-                        {summary}
-                      </span>
-                    ))}
-                  </div>
-                </div>
               </Show>
             </div>
           </div>

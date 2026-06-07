@@ -1364,6 +1364,20 @@ runtime cost control, and shared AI transport surfaces.
    out` cannot read like assistant output. Cost and context-limit percentages
    stay absent until the runtime exposes those values through a governed
    contract.
+   Assistant tool activity is visible transcript activity, not a hidden context
+   footer. The referenced OpenCode source at fetched `origin/dev` commit
+   `e82542b8023a8374f29c23b70ec019c8f256354e`
+   `packages/opencode/src/cli/cmd/run/types.ts` defines append-only
+   `StreamCommit` rows for assistant, reasoning, tool, and system sources at
+   lines 284-312, while
+   `packages/opencode/src/cli/cmd/run/footer.ts` queues commits and only
+   coalesces consecutive progress chunks for the same part/tool at lines
+   512-545. Pulse adapts that contract by rendering each Assistant
+   `pending_tool`, completed `tool`, and `tool_cancel` event as its own
+   chronological transcript row. Tool inputs, command previews, progress text,
+   and outputs may remain collapsed inside the row, but context/read/query
+   tools must not be replaced by a generic grouped footer that makes several
+   operations appear all at once.
 7. Keep AI chat presentation helpers aligned through `frontend-modern/src/components/AI/Chat/` and the shared `frontend-modern/src/utils/textPresentation.ts`
 8. Keep assistant drawer context, session, and org-switch reset state aligned through the shared `frontend-modern/src/stores/aiChat.ts` boundary instead of letting `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, or feature callers fork their own assistant shell state
    That shared drawer ownership also covers passive resource reads while the
@@ -2002,6 +2016,13 @@ runtime cost control, and shared AI transport surfaces.
     named by their source rather than as generic dashboard briefs.
 
 ## Current State
+
+Assistant tool activity now follows an OpenCode-referenced chronological row
+model where appropriate for Pulse. Consecutive context/read/query tools render
+as visible transcript rows in arrival order instead of being replaced by a
+grouped context footer, while command previews, inputs, progress, and large
+outputs remain contained inside each tool row. This keeps the user-facing stream
+feeling active without dumping large command output into the default answer.
 
 Assistant provider retries are a first-class visible workflow state, not a
 hidden server log. The referenced OpenCode source at fetched `dev` commit
