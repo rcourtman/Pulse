@@ -463,6 +463,7 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
   const consumePickerKey = (event: KeyboardEvent) => {
     event.preventDefault();
     event.stopPropagation();
+    event.stopImmediatePropagation();
   };
 
   const focusOptionRelativeTo = (optionKey: string, offset: number) => {

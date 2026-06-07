@@ -363,6 +363,42 @@ describe('AIModelPicker', () => {
     expect(onParentKeyDown).not.toHaveBeenCalled();
   });
 
+  it('consumes picker-owned search keys before later document handlers see them', async () => {
+    render(() => (
+      <AIModelPicker
+        models={models}
+        selectedModel="openrouter:minimax/minimax-m2.5"
+        onModelSelect={vi.fn()}
+        title="Select shared default model"
+      />
+    ));
+
+    const button = screen.getByTitle('Select shared default model');
+    fireEvent.click(button);
+
+    const searchInput = screen.getByPlaceholderText('Search or enter model ID');
+    await waitFor(() => {
+      expect(document.activeElement).toBe(searchInput);
+    });
+
+    const laterDocumentHandler = vi.fn();
+    document.addEventListener('keydown', laterDocumentHandler);
+    const escapeEvent = new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'Escape',
+    });
+
+    searchInput.dispatchEvent(escapeEvent);
+
+    document.removeEventListener('keydown', laterDocumentHandler);
+    expect(escapeEvent.defaultPrevented).toBe(true);
+    expect(laterDocumentHandler).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole('listbox', { name: 'Select shared default model' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('moves keyboard focus to the first filtered result while searching', async () => {
     render(() => (
       <AIModelPicker
@@ -423,6 +459,47 @@ describe('AIModelPicker', () => {
       expect(document.activeElement).toBe(button);
     });
     expect(onParentKeyDown).not.toHaveBeenCalled();
+  });
+
+  it('consumes picker-owned option keys before later document handlers see them', async () => {
+    render(() => (
+      <AIModelPicker
+        models={models}
+        selectedModel="openrouter:minimax/minimax-m2.5"
+        onModelSelect={vi.fn()}
+        title="Select shared default model"
+      />
+    ));
+
+    fireEvent.click(screen.getByTitle('Select shared default model'));
+
+    const searchInput = screen.getByPlaceholderText('Search or enter model ID');
+    const currentOption = screen.getByRole('option', {
+      name: 'MiniMax: MiniMax M2.5 via OpenRouter, Current. Current OpenRouter model. openrouter:minimax/minimax-m2.5',
+    });
+    const nextOption = screen.getByRole('option', {
+      name: 'GPT-5.1 Mini. openai:gpt-5.1-mini',
+    });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(searchInput);
+    });
+    fireEvent.keyDown(searchInput, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(currentOption);
+
+    const laterDocumentHandler = vi.fn();
+    document.addEventListener('keydown', laterDocumentHandler);
+    const arrowDownEvent = new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'ArrowDown',
+    });
+
+    currentOption.dispatchEvent(arrowDownEvent);
+
+    document.removeEventListener('keydown', laterDocumentHandler);
+    expect(arrowDownEvent.defaultPrevented).toBe(true);
+    expect(laterDocumentHandler).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(nextOption);
   });
 
   it('constrains the dropdown to the available mobile viewport height', () => {
