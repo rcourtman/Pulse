@@ -2205,6 +2205,14 @@ Queued follow-up pressure is part of that active-turn state: the frontend
 derives the count from queued user transcript turns, appends it to the primary
 active Assistant headline while a turn is running, and keeps the separate
 queued-follow-up row actionable for reorder/cancel operations.
+That suffix must compose with live workflow pacing rather than disabling it:
+when backend workflow states arrive in a burst, the active headline still walks
+through the paced status sequence while retaining the queued follow-up count.
+This preserves the OpenCode-referenced live-part feel from
+`packages/tui/src/routes/session/index.tsx` lines 1492-1503 and the running
+tool metadata updates in `packages/opencode/src/session/tools.ts` lines 54-63,
+while adapting the interaction to Pulse's single active-turn plus queued
+follow-up safety model.
 
 Assistant command access follows the same OpenCode-referenced footer principle:
 commands are reachable from prompt-adjacent chrome, not only from a hidden slash

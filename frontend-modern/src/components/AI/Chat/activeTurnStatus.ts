@@ -573,24 +573,24 @@ const initialRequestStatus = (
   };
 };
 
-const queuedFollowUpCount = (messages: ChatMessage[]): number =>
+export const getAssistantQueuedFollowUpCount = (messages: ChatMessage[]): number =>
   messages.reduce(
     (count, message) =>
       message.role === 'user' && message.delivery === 'queued' ? count + 1 : count,
     0,
   );
 
-const queuedFollowUpSuffix = (messages: ChatMessage[]): string => {
-  const count = queuedFollowUpCount(messages);
+export const getAssistantQueuedFollowUpStatusSuffix = (messages: ChatMessage[]): string => {
+  const count = getAssistantQueuedFollowUpCount(messages);
   if (count <= 0) return '';
   return ` · ${count} ${count === 1 ? 'follow-up' : 'follow-ups'} queued`;
 };
 
-const withQueuedFollowUpStatus = (
+export const withAssistantQueuedFollowUpStatus = (
   status: AssistantActiveTurnStatus,
   messages: ChatMessage[],
 ): AssistantActiveTurnStatus => {
-  const suffix = queuedFollowUpSuffix(messages);
+  const suffix = getAssistantQueuedFollowUpStatusSuffix(messages);
   if (!suffix) return status;
   return {
     ...status,
@@ -607,7 +607,7 @@ export const getAssistantActiveTurnStatus = (
 
   const assistantMessage = [...messages].reverse().find((message) => message.role === 'assistant');
   if (!assistantMessage) {
-    return withQueuedFollowUpStatus(initialRequestStatus(messages), messages);
+    return withAssistantQueuedFollowUpStatus(initialRequestStatus(messages), messages);
   }
 
   const statusCandidates: AssistantActiveTurnStatusCandidate[] = [];
@@ -647,7 +647,7 @@ export const getAssistantActiveTurnStatus = (
   );
 
   if (freshestStatus) {
-    return withQueuedFollowUpStatus(
+    return withAssistantQueuedFollowUpStatus(
       {
         type: freshestStatus.type,
         text: freshestStatus.text,
@@ -658,11 +658,11 @@ export const getAssistantActiveTurnStatus = (
   }
 
   if (hasVisibleAssistantOutput(assistantMessage)) {
-    return withQueuedFollowUpStatus(
+    return withAssistantQueuedFollowUpStatus(
       { type: 'generating', text: 'Generating response' },
       messages,
     );
   }
 
-  return withQueuedFollowUpStatus(initialRequestStatus(messages, assistantMessage), messages);
+  return withAssistantQueuedFollowUpStatus(initialRequestStatus(messages, assistantMessage), messages);
 };

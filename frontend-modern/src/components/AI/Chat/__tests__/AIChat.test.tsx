@@ -5284,6 +5284,79 @@ describe('AIChat', () => {
       expect(status).not.toHaveTextContent('Reading current Pulse inventory with pulse_query.');
     });
 
+    it('paces burst workflow progress without dropping queued follow-up pressure', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(1_200);
+      const [isLoading, setIsLoading] = createSignal(false);
+      const [messages, setMessages] = createSignal<ChatMessage[]>([]);
+      const workflowStatusHistory = [
+        {
+          phase: 'request_start',
+          message: 'Preparing Pulse context.',
+          startedAt: 1_000,
+        },
+        {
+          phase: 'context',
+          message: 'Reading current Pulse inventory with pulse_query.',
+          tool: 'pulse_query',
+          startedAt: 1_100,
+        },
+        {
+          phase: 'provider_start',
+          message: 'OpenRouter is starting the response.',
+          startedAt: 1_200,
+        },
+      ];
+      mockChat.isLoading.mockImplementation(() => isLoading());
+      mockChat.messages.mockImplementation(() => messages());
+      mockChat.queuedFollowUpCount.mockReturnValue(1);
+      renderChat();
+
+      setIsLoading(true);
+      setMessages([
+        {
+          id: 'assistant-1',
+          role: 'assistant' as const,
+          content: '',
+          timestamp: new Date(),
+          isStreaming: true,
+          workflowStatusHistory,
+          workflowStatus: workflowStatusHistory[2],
+          streamEvents: [
+            {
+              type: 'workflow_status',
+              workflowStatus: workflowStatusHistory[2],
+              startedAt: 1_200,
+              updatedAt: 1_200,
+            },
+          ],
+        },
+        {
+          id: 'queued-user-1',
+          role: 'user' as const,
+          content: 'follow up',
+          timestamp: new Date(),
+          delivery: 'queued',
+        },
+      ]);
+
+      const status = screen.getByLabelText('Assistant active turn status');
+      expect(status).toHaveTextContent('Preparing Pulse context. · 1 follow-up queued');
+      expect(status).not.toHaveTextContent('OpenRouter is starting the response.');
+
+      await vi.advanceTimersByTimeAsync(650);
+      expect(status).toHaveTextContent(
+        'Reading current Pulse inventory. · 1 follow-up queued',
+      );
+      expect(status).not.toHaveTextContent('pulse_query');
+
+      await vi.advanceTimersByTimeAsync(650);
+      expect(status).toHaveTextContent(
+        'OpenRouter is starting the response. · 1 follow-up queued',
+      );
+      expect(status).not.toHaveTextContent('Preparing Pulse context.');
+    });
+
     it('keeps pending tool progress visible in the active turn status', () => {
       mockChat.isLoading.mockReturnValue(true);
       mockChat.messages.mockReturnValue([

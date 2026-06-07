@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { formatAssistantWorkflowStatus, getAssistantActiveTurnStatus } from '../activeTurnStatus';
+import {
+  formatAssistantWorkflowStatus,
+  getAssistantActiveTurnStatus,
+  withAssistantQueuedFollowUpStatus,
+} from '../activeTurnStatus';
 import type { ChatMessage } from '../types';
 
 const assistantMessage = (overrides: Partial<ChatMessage> = {}): ChatMessage => ({
@@ -62,6 +66,27 @@ describe('getAssistantActiveTurnStatus', () => {
     ).toEqual({
       type: 'thinking',
       text: 'Sending prompt · 1 follow-up queued',
+      startedAt: 1_000,
+    });
+  });
+
+  it('applies queued follow-up pressure to an existing active status', () => {
+    expect(
+      withAssistantQueuedFollowUpStatus(
+        {
+          type: 'thinking',
+          text: 'OpenRouter is starting the response.',
+          startedAt: 1_000,
+        },
+        [
+          assistantMessage({ isStreaming: true }),
+          userMessage({ id: 'user-2', content: 'First follow-up', delivery: 'queued' }),
+          userMessage({ id: 'user-3', content: 'Second follow-up', delivery: 'queued' }),
+        ],
+      ),
+    ).toEqual({
+      type: 'thinking',
+      text: 'OpenRouter is starting the response. · 2 follow-ups queued',
       startedAt: 1_000,
     });
   });
