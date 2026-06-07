@@ -1515,6 +1515,108 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('replaces a provisional selected-model row when provider startup confirms a different route', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() =>
+        useChat({
+          sessionId: 's',
+          defaultModel: () => 'openrouter:qwen/qwen3.7-plus',
+        }),
+      );
+
+      await chat.sendMessage('hi');
+      let assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.streamEvents).toEqual([
+        expect.objectContaining({
+          type: 'model_switch',
+          model: 'openrouter:qwen/qwen3.7-plus',
+          modelEvent: 'selected',
+        }),
+      ]);
+
+      const fire = getFireEvent();
+      fire({
+        type: 'workflow_state',
+        data: {
+          phase: 'prepare',
+          message: 'Preparing Pulse context.',
+        },
+      });
+      fire({
+        type: 'workflow_state',
+        data: {
+          phase: 'provider_start',
+          message: 'Sent request to DeepSeek; waiting for the first token.',
+          provider: 'deepseek',
+          model: 'deepseek:deepseek-chat',
+        },
+      });
+
+      assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.model).toBe('deepseek:deepseek-chat');
+      expect(assistant.streamEvents?.map((event) => event.type)).toEqual([
+        'model_switch',
+        'workflow_status',
+      ]);
+      expect(assistant.streamEvents?.filter((event) => event.type === 'model_switch')).toEqual([
+        expect.objectContaining({
+          type: 'model_switch',
+          model: 'deepseek:deepseek-chat',
+          modelEvent: 'selected',
+        }),
+      ]);
+      expect(
+        assistant.streamEvents?.some((event) => event.model === 'openrouter:qwen/qwen3.7-plus'),
+      ).toBe(false);
+
+      dispose();
+    });
+
+    it('keeps prior selected-model evidence after durable assistant content starts', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() =>
+        useChat({
+          sessionId: 's',
+          defaultModel: () => 'openrouter:qwen/qwen3.7-plus',
+        }),
+      );
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+      fire({ type: 'content', data: 'Partial answer.' });
+      fire({
+        type: 'workflow_state',
+        data: {
+          phase: 'provider_start',
+          message: 'Sent request to DeepSeek; waiting for the first token.',
+          provider: 'deepseek',
+          model: 'deepseek:deepseek-chat',
+        },
+      });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.streamEvents?.map((event) => event.type)).toEqual([
+        'model_switch',
+        'content',
+        'model_switch',
+        'workflow_status',
+      ]);
+      expect(assistant.streamEvents?.filter((event) => event.type === 'model_switch')).toEqual([
+        expect.objectContaining({
+          type: 'model_switch',
+          model: 'openrouter:qwen/qwen3.7-plus',
+          modelEvent: 'selected',
+        }),
+        expect.objectContaining({
+          type: 'model_switch',
+          model: 'deepseek:deepseek-chat',
+          modelEvent: 'selected',
+        }),
+      ]);
+
+      dispose();
+    });
+
     it('keeps the local request-start status when an early idle heartbeat arrives', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));

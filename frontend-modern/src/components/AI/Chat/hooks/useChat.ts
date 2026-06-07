@@ -428,6 +428,24 @@ export function useChat(options: UseChatOptions = {}) {
     return model && failed && model !== failed ? 'fallback' : 'switch';
   };
 
+  const isDurableAssistantStreamBoundary = (event: StreamDisplayEvent): boolean =>
+    event.type !== 'workflow_status' && event.type !== 'model_switch';
+
+  const replaceableSelectedModelEventIndex = (events: StreamDisplayEvent[]): number => {
+    for (let index = events.length - 1; index >= 0; index -= 1) {
+      const event = events[index];
+      if (isDurableAssistantStreamBoundary(event)) return -1;
+      if (
+        event.type === 'model_switch' &&
+        streamModelEventKind(event) === 'selected' &&
+        !event.failedModel?.trim()
+      ) {
+        return index;
+      }
+    }
+    return -1;
+  };
+
   const withModelRouteEvent = (
     msg: ChatMessage,
     route: string,
@@ -445,6 +463,26 @@ export function useChat(options: UseChatOptions = {}) {
     );
     if (duplicate) {
       return { ...msg, model };
+    }
+    const events = msg.streamEvents || [];
+    if (options.modelEvent === 'selected' && !failedModel) {
+      const replaceableIndex = replaceableSelectedModelEventIndex(events);
+      if (replaceableIndex >= 0) {
+        const replacement = withStreamEventTiming({
+          type: 'model_switch',
+          model,
+          modelEvent: 'selected',
+        });
+        return {
+          ...msg,
+          model,
+          streamEvents: [
+            ...events.slice(0, replaceableIndex),
+            replacement,
+            ...events.slice(replaceableIndex + 1),
+          ],
+        };
+      }
     }
     const updated = addStreamEvent(msg, {
       type: 'model_switch',

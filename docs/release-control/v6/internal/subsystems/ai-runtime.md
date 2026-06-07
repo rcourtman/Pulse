@@ -216,6 +216,11 @@ runtime cost control, and shared AI transport surfaces.
    known at turn creation, Pulse must seed a selected-model stream event before
    backend/provider activity arrives so the transcript and active-turn footer
    show concrete route motion instead of a generic request-start wait.
+   If backend/provider startup immediately confirms a different selected route
+   before any durable assistant content, thinking, tool, approval, or question
+   evidence arrives, that confirmed route replaces the provisional local
+   selected-model row rather than stacking multiple "Using ..." rows. Once a
+   durable boundary exists, later route events are preserved chronologically.
    Placeholder `request_start` workflow statuses remain fallback activity only:
    once selected-model, provider, tool, thinking, approval, question, or content
    activity is visible, the placeholder must not outrank it in the footer or
