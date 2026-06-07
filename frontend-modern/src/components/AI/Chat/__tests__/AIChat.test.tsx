@@ -5478,7 +5478,7 @@ describe('AIChat', () => {
       expect(status).not.toHaveTextContent('Using Qwen: Qwen3.7 Plus via OpenRouter');
     });
 
-    it('paces replacing workflow progress in the active turn status footer', async () => {
+    it('uses the latest replacing workflow progress in the active turn status footer', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(1_200);
       const [isLoading, setIsLoading] = createSignal(false);
@@ -5527,22 +5527,12 @@ describe('AIChat', () => {
       ]);
 
       const status = screen.getByLabelText('Assistant active turn status');
-      expect(status).toHaveTextContent('Preparing Pulse context.');
-      expect(status).not.toHaveTextContent('OpenRouter is starting the response.');
-      expect(status).not.toHaveTextContent('Reading current Pulse inventory.');
-
-      vi.advanceTimersByTime(1_000);
-      await waitFor(() => expect(status).toHaveTextContent('Reading current Pulse inventory.'));
-      expect(status).not.toHaveTextContent('Preparing Pulse context.');
-      expect(status).not.toHaveTextContent('OpenRouter is starting the response.');
-
-      vi.advanceTimersByTime(1_000);
       await waitFor(() => expect(status).toHaveTextContent('OpenRouter is starting the response.'));
       expect(status).not.toHaveTextContent('Preparing Pulse context.');
       expect(status).not.toHaveTextContent('Reading current Pulse inventory.');
     });
 
-    it('paces replacing workflow progress without dropping queued follow-up pressure', async () => {
+    it('uses the latest replacing workflow progress without dropping queued follow-up pressure', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(1_200);
       const [isLoading, setIsLoading] = createSignal(false);
@@ -5599,16 +5589,11 @@ describe('AIChat', () => {
       ]);
 
       const status = screen.getByLabelText('Assistant active turn status');
-      expect(status).toHaveTextContent('Preparing Pulse context. · 1 follow-up queued');
-      expect(status).not.toHaveTextContent('OpenRouter is starting the response.');
-      expect(status).not.toHaveTextContent('Reading current Pulse inventory.');
-
-      vi.advanceTimersByTime(1_000);
       await waitFor(() =>
-        expect(status).toHaveTextContent('Reading current Pulse inventory. · 1 follow-up queued'),
+        expect(status).toHaveTextContent('OpenRouter is starting the response. · 1 follow-up queued'),
       );
       expect(status).not.toHaveTextContent('Preparing Pulse context.');
-      expect(status).not.toHaveTextContent('OpenRouter is starting the response.');
+      expect(status).not.toHaveTextContent('Reading current Pulse inventory.');
     });
 
     it('keeps pending tool progress visible in the active turn status', () => {

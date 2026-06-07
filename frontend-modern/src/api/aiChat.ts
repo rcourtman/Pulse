@@ -151,7 +151,7 @@ export interface ToolCall {
 
 export type StreamEvent = AIChatStreamEvent;
 
-const AI_CHAT_STREAM_TEXT_PAINT_CHECKPOINT_INTERVAL = 16;
+const AI_CHAT_STREAM_TEXT_PAINT_CHECKPOINT_INTERVAL = 4;
 const AI_CHAT_STREAM_TEXT_EVENT_TYPES = new Set(['content', 'thinking']);
 
 const isAIChatStreamTextEvent = (event: Pick<StreamEvent, 'type'>): boolean =>

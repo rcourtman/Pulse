@@ -1,0 +1,1 @@
+export const WORKFLOW_STATUS_REFRESH_MS = 300;

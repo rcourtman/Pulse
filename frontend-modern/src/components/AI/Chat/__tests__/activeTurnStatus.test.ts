@@ -244,7 +244,7 @@ describe('getAssistantActiveTurnStatus', () => {
     });
   });
 
-  it('paces burst workflow progress in the active turn footer', () => {
+  it('uses the latest replacing workflow progress in the active turn footer', () => {
     const workflowStatusHistory = [
       {
         phase: 'request_start',
@@ -281,22 +281,12 @@ describe('getAssistantActiveTurnStatus', () => {
 
     expect(getAssistantActiveTurnStatus(messages, true, 1_200)).toEqual({
       type: 'thinking',
-      text: 'Preparing Pulse context.',
-      startedAt: 1_000,
-    });
-    expect(getAssistantActiveTurnStatus(messages, true, 1_900)).toEqual({
-      type: 'tool',
-      text: 'Reading current Pulse inventory.',
-      startedAt: 1_100,
-    });
-    expect(getAssistantActiveTurnStatus(messages, true, 2_800)).toEqual({
-      type: 'thinking',
       text: 'OpenRouter is starting the response.',
       startedAt: 1_200,
     });
   });
 
-  it('lets provider retry workflow progress cut through active turn pacing', () => {
+  it('uses provider retry workflow progress as the latest active turn status', () => {
     const workflowStatusHistory = [
       {
         phase: 'request_start',
@@ -345,7 +335,7 @@ describe('getAssistantActiveTurnStatus', () => {
     });
   });
 
-  it('lets stream idle liveness cut through active turn pacing', () => {
+  it('uses stream idle liveness as the latest active turn status', () => {
     const workflowStatusHistory = [
       {
         phase: 'request_start',

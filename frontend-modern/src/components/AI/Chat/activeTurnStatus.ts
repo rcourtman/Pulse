@@ -8,7 +8,6 @@ import {
   parseToolInputSummary,
   toolValueText,
 } from './toolPresentation';
-import { pacedWorkflowStatusForDisplay } from './workflowStatusPacing';
 
 export type AssistantActiveTurnStatusKind = 'thinking' | 'tool' | 'generating';
 
@@ -364,7 +363,6 @@ const completedToolStatusText = (event: StreamDisplayEvent): string => {
 const latestStreamActivityStatus = (
   events?: StreamDisplayEvent[],
   now?: number,
-  workflowStatusHistory?: WorkflowStatus[],
 ): AssistantActiveTurnStatusCandidate | null => {
   const completedToolKeys = new Set<string>();
   let current: AssistantActiveTurnStatusCandidate | null = null;
@@ -426,12 +424,7 @@ const latestStreamActivityStatus = (
         break;
       }
       case 'workflow_status': {
-        const workflowStatus = pacedWorkflowStatusForDisplay(
-          workflowStatusHistory,
-          event.workflowStatus,
-          events,
-          now,
-        );
+        const workflowStatus = event.workflowStatus;
         const text = formatAssistantWorkflowStatus(workflowStatus, now);
         if (text) {
           candidate = {
@@ -628,7 +621,6 @@ export const getAssistantActiveTurnStatus = (
   const eventStatusCandidate = latestStreamActivityStatus(
     assistantMessage.streamEvents,
     now,
-    assistantMessage.workflowStatusHistory,
   );
   if (eventStatusCandidate) {
     statusCandidates.push(eventStatusCandidate);
@@ -640,12 +632,7 @@ export const getAssistantActiveTurnStatus = (
     }
   }
   if (assistantMessage.isStreaming !== false) {
-    const displayedWorkflowStatus = pacedWorkflowStatusForDisplay(
-      assistantMessage.workflowStatusHistory,
-      assistantMessage.workflowStatus,
-      assistantMessage.streamEvents,
-      now,
-    );
+    const displayedWorkflowStatus = assistantMessage.workflowStatus;
     const workflowCandidate = workflowStatusCandidate(displayedWorkflowStatus, now);
     if (
       workflowCandidate &&

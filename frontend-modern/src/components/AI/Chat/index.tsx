@@ -154,6 +154,7 @@ import { SlashCommandAutocomplete } from './SlashCommandAutocomplete';
 import {
   getAssistantActiveTurnStatus,
 } from './activeTurnStatus';
+import { WORKFLOW_STATUS_REFRESH_MS } from './workflowStatusDisplay';
 import { getLastAssistantAnswerText } from './assistantAnswerText';
 import {
   getNextAssistantRecentModelRoute,
@@ -2364,7 +2365,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const status = currentStatus();
     if (!status?.startedAt) return;
     setCurrentStatusNow(Date.now());
-    const interval = window.setInterval(() => setCurrentStatusNow(Date.now()), 1000);
+    const interval = window.setInterval(
+      () => setCurrentStatusNow(Date.now()),
+      WORKFLOW_STATUS_REFRESH_MS,
+    );
     onCleanup(() => window.clearInterval(interval));
   });
   const currentStatusText = createMemo(() => {

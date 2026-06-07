@@ -76,7 +76,10 @@ Assistant live workflow status follows OpenCode's current-state timeline
 model: history may persist for audit/session state, but live transcript rows
 and the active-turn footer render the latest replacing workflow status
 immediately. Pulse must not replay stale status history through artificial
-timers when the stream already has a newer workflow/tool state.
+timers when the stream already has a newer workflow/tool state. Frontend
+display code may refresh elapsed-time suffixes while a turn is active, but
+status selection must read the current workflow status directly rather than
+deriving an older display status from `workflowStatusHistory`.
 
 1. Add or change chat runtime, Patrol orchestration, findings generation, or remediation behavior through `internal/ai/`
 2. Add or change canonical AI provider config, provider-scoped model selection, or runtime auth/base-URL defaults through `internal/config/ai.go`.

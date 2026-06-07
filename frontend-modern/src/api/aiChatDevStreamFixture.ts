@@ -402,7 +402,7 @@ const buildWorkflowBurstFixtureEvents = (model?: string): AIChatStreamEvent[] =>
   {
     type: 'content',
     data: {
-      text: 'The workflow-burst fixture held the live status long enough to show paced status movement.',
+      text: 'The workflow-burst fixture held live status events long enough to show latest-status replacement.',
     },
   },
   {

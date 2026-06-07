@@ -78,11 +78,11 @@ describe('AIChatAPI', () => {
     await flushMicrotasks();
   };
 
-  it('uses immediate and periodic paint checkpoints for text while yielding every progress event', () => {
+  it('uses low-latency paint checkpoints for text while yielding every progress event', () => {
     const shouldYield = createAIChatStreamPaintCheckpointPredicate();
 
     expect(shouldYield({ type: 'content' })).toBe(true);
-    for (let index = 0; index < 14; index += 1) {
+    for (let index = 0; index < 2; index += 1) {
       expect(shouldYield({ type: 'content' })).toBe(false);
     }
     expect(shouldYield({ type: 'content' })).toBe(true);

@@ -572,7 +572,7 @@ payload shape change when the portal presents compact client rows.
 	    Cold Assistant streams must include a typed `session` event backed by
 	    `internal/ai/chat.SessionData` as soon as the HTTP SSE writer is ready and
 	    an immediate neutral `workflow_state` preparation event before backend
-	    handoff recovery, model resolution, provider fallback planning, context
+	    handoff recovery, model resolution, selected-route retry planning, context
 	    prefetch, inventory reads, or user-visible provider output so the frontend
 	    can bind the backend-created session and show live progress without a
 	    separate create-session request. That cold-stream model resolution must use

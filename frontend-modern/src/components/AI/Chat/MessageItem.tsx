@@ -27,7 +27,7 @@ import { getAssistantAnswerText } from './assistantAnswerText';
 import { stripAssistantOutputArtifacts } from './assistantOutputHygiene';
 import { formatAssistantWorkflowStatus } from './activeTurnStatus';
 import { groupStreamEventsForDisplay } from './streamEventGrouping';
-import { pacedWorkflowStatusForDisplay } from './workflowStatusPacing';
+import { WORKFLOW_STATUS_REFRESH_MS } from './workflowStatusDisplay';
 import type {
   ChatMessage,
   ModelRouteRecoveryOption,
@@ -371,7 +371,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     const status = currentWorkflowStatus();
     if (!props.message.isStreaming || !status?.startedAt) return;
     setStatusNow(Date.now());
-    const interval = window.setInterval(() => setStatusNow(Date.now()), 1000);
+    const interval = window.setInterval(() => setStatusNow(Date.now()), WORKFLOW_STATUS_REFRESH_MS);
     onCleanup(() => window.clearInterval(interval));
   });
   const formatWorkflowStatus = (status?: WorkflowStatus, includeElapsed = false) => {
@@ -389,15 +389,8 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     }
     return `${message}${elapsedSuffix}`;
   };
-  const displayedWorkflowStatus = (status?: WorkflowStatus) =>
-    pacedWorkflowStatusForDisplay(
-      props.message.workflowStatusHistory,
-      status,
-      groupedEvents(),
-      props.message.isStreaming ? statusNow() : undefined,
-    );
   const workflowStatusText = createMemo(() =>
-    formatWorkflowStatus(displayedWorkflowStatus(currentWorkflowStatus()), true),
+    formatWorkflowStatus(currentWorkflowStatus(), true),
   );
   const shouldShowHeaderWorkflowStatus = () =>
     props.message.isStreaming &&
@@ -588,9 +581,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                     const contentText = () =>
                       stripAssistantOutputArtifacts(evt?.content || '').text;
                     const visibleWorkflowStatus = () =>
-                      evt?.type === 'workflow_status'
-                        ? displayedWorkflowStatus(evt.workflowStatus)
-                        : undefined;
+                      evt?.type === 'workflow_status' ? evt.workflowStatus : undefined;
 
                     return (
                       <Switch>
