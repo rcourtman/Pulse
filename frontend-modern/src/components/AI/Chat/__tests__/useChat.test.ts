@@ -1331,7 +1331,7 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('surfaces obsolete provider fallback workflow metadata without switching routes', async () => {
+    it('surfaces obsolete provider route-switch workflow metadata without switching routes', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() =>
         useChat({ sessionId: 's', model: 'openrouter:openai/gpt-4o-mini' }),
@@ -1355,7 +1355,7 @@ describe('useChat', () => {
       expect(assistant.workflowStatus).toEqual(
         expect.objectContaining({
           phase: 'provider_fallback_rejected',
-          message: 'Provider fallback metadata received; selected route unchanged.',
+          message: 'Provider route-switch metadata ignored; selected route unchanged.',
         }),
       );
       expect(assistant.streamEvents).toEqual(
@@ -1364,7 +1364,7 @@ describe('useChat', () => {
             type: 'workflow_status',
             workflowStatus: expect.objectContaining({
               phase: 'provider_fallback_rejected',
-              message: 'Provider fallback metadata received; selected route unchanged.',
+              message: 'Provider route-switch metadata ignored; selected route unchanged.',
             }),
           }),
         ]),
@@ -1454,7 +1454,7 @@ describe('useChat', () => {
       expect(assistant.workflowStatus).toEqual(
         expect.objectContaining({
           phase: 'provider_fallback_rejected',
-          message: 'Provider fallback metadata received; selected route unchanged.',
+          message: 'Provider route-switch metadata ignored; selected route unchanged.',
         }),
       );
       expect(assistant.streamEvents).not.toEqual(

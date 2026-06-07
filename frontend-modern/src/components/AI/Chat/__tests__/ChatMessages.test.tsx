@@ -429,6 +429,7 @@ describe('ChatMessages', () => {
     it('forwards message-specific route recovery options for failed turns', () => {
       const routeAlternative: ModelRouteRecoveryOption = {
         id: 'openrouter:deepseek/deepseek-v4-pro',
+        kind: 'same-model-route',
         label: 'DeepSeek: DeepSeek V4 Pro via OpenRouter',
         provider: 'openrouter',
         providerLabel: 'OpenRouter',

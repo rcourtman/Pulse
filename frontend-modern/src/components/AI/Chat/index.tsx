@@ -434,8 +434,10 @@ const findProviderReadinessAlternative = (args: {
     sortedCandidates[0];
   if (!candidate) return null;
 
+  const candidateKey = normalizeComparableModelKey(candidate.model.id);
   return {
     id: candidate.model.id,
+    kind: candidateKey === selectedKey ? 'same-model-route' : 'alternate-model-route',
     label: formatAIModelRouteLabel(candidate.model),
     provider: candidate.provider,
     providerLabel: getAIProviderDisplayName(candidate.provider),
@@ -2226,6 +2228,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const alternative = providerReadinessAlternative();
     if (!alternative) return;
     switchToModelRoute(alternative.id);
+  };
+
+  const providerReadinessAlternativeButtonLabel = () => {
+    const alternative = providerReadinessAlternative();
+    if (!alternative) return '';
+    return alternative.kind === 'same-model-route'
+      ? `Use ${alternative.providerLabel} route`
+      : `Use ${alternative.providerLabel} model route`;
   };
 
   createEffect(() => {
@@ -4209,10 +4219,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
                             type="button"
                             onClick={switchToProviderReadinessAlternative}
                             class="inline-flex max-w-[11rem] items-center gap-1.5 rounded-md border border-current/20 bg-surface px-2 py-1 text-[10px] font-medium text-base-content hover:bg-surface-hover"
-                            aria-label={`Use ${alternative().providerLabel} provider route`}
+                            aria-label={providerReadinessAlternativeButtonLabel()}
                             title={alternative().label}
                           >
-                            <span class="truncate">Use {alternative().providerLabel}</span>
+                            <span class="truncate">{providerReadinessAlternativeButtonLabel()}</span>
                           </button>
                         )}
                       </Show>

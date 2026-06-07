@@ -220,7 +220,7 @@ describe('Assistant transcript export', () => {
     expect(toolIndex).toBeLessThan(answerIndex);
   });
 
-  it('formats initially selected model route events distinctly from fallback switches', () => {
+  it('formats initially selected model route events distinctly from route switches', () => {
     const transcript = formatAssistantTranscript({
       messages: [
         {

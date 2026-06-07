@@ -454,7 +454,7 @@ remain visible/inspectable.
    treating provider/model changes as explicit session events in
    `packages/core/src/session/event.ts` and
    `packages/opencode/src/session/prompt.ts`. Pulse adapts that behavior for the
-   drawer instead of implementing automatic cross-provider fallback.
+   drawer instead of implementing automatic cross-provider route switching.
    Primary interactive chat model resolution must use the explicit configured
    chat route or a stable provider default without calling provider model
    catalogs before the selected stream starts. Catalog-backed recommendation
@@ -484,8 +484,8 @@ remain visible/inspectable.
    they come from explicit route recovery or restored historical data, but the UI
    must label them neutrally as selected or switched routes rather than as
    automatic provider fallback, and completing a streamed route-switch row must
-   not promote a fallback route into the active model selection without an
-   explicit user action.
+   not promote that route into the active model selection without an explicit
+   user action.
    Interactive Assistant streams must establish the session ID and emit the
    `session` event once as soon as the HTTP SSE writer is ready, before finding
    handoff recovery, model resolution, selected-provider startup,
@@ -2156,6 +2156,20 @@ autocomplete hides unavailable local commands, command help may show them
 disabled with a reason, and manual slash submissions respect the same
 availability before running local session actions.
 
+Assistant provider-route recovery must read as explicit operator action, not
+automatic fallback. The OpenCode reference at fetched `origin/dev` commit
+`914a643` retries the selected provider/model route through
+`packages/opencode/src/session/retry.ts` and
+`packages/opencode/src/session/processor.ts` by passing
+`input.model.providerID` into `SessionRetry.policy`, renders retry state in
+`packages/ui/src/components/session-retry.tsx`, and records provider/model
+changes as explicit `ModelSwitched` session events in
+`packages/core/src/session/event.ts` plus `packages/opencode/src/session/prompt.ts`.
+Pulse adapts that by keeping same-route retry visible, ignoring obsolete
+provider route-switch metadata without changing the selected route, and labeling
+failed-turn or readiness recovery buttons as explicit route/model-route choices
+instead of implying automatic route adoption.
+
 Assistant tool activity now follows an OpenCode-referenced chronological row
 model where appropriate for Pulse. Consecutive context/read/query tools render
 as visible transcript rows in arrival order instead of being replaced by a
@@ -2247,8 +2261,9 @@ the prompt and active/retry/interrupt state in the prompt footer in
 `packages/tui/src/component/prompt/index.tsx`, with broader system status kept
 in `packages/tui/src/routes/session/footer.tsx`. Pulse adapts that pattern for
 the web drawer by keeping model route, recent-route cycling, control mode,
-last-turn usage, active workflow progress, queued follow-ups, fallback notices,
-and the autonomous control warning in the input-adjacent composer/status rail.
+last-turn usage, active workflow progress, queued follow-ups, route-recovery
+notices, and the autonomous control warning in the input-adjacent
+composer/status rail.
 Those items stay visible and actionable, but they do not compete with the
 transcript as separate top-of-drawer banners unless they are provider readiness
 or scoped handoff context surfaces with their own governed content.

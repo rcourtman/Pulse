@@ -230,6 +230,7 @@ describe('MessageItem', () => {
           onChangeModel={onChangeModel}
           modelRouteAlternative={{
             id: 'openrouter:deepseek/deepseek-v4-pro',
+            kind: 'same-model-route',
             label: 'DeepSeek: DeepSeek V4 Pro via OpenRouter',
             provider: 'openrouter',
             providerLabel: 'OpenRouter',
@@ -243,9 +244,9 @@ describe('MessageItem', () => {
       expect(alert.textContent).toContain('billing or quota reasons');
 
       const retryViaOpenRouter = screen.getByRole('button', {
-        name: 'Retry via OpenRouter provider route',
+        name: 'Retry with OpenRouter route',
       });
-      expect(retryViaOpenRouter).toHaveTextContent('Retry via OpenRouter');
+      expect(retryViaOpenRouter).toHaveTextContent('Retry with OpenRouter route');
       fireEvent.click(retryViaOpenRouter);
       expect(onUseModelRoute).toHaveBeenCalledWith('openrouter:deepseek/deepseek-v4-pro', 'msg-1');
 

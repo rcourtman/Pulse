@@ -360,6 +360,13 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     if (!model) return '';
     return props.getModelRouteLabel?.(model) || formatAIModelRouteLabel(model);
   };
+  const modelRouteRecoveryButtonLabel = () => {
+    const alternative = props.modelRouteAlternative;
+    if (!alternative) return '';
+    return alternative.kind === 'same-model-route'
+      ? `Retry with ${alternative.providerLabel} route`
+      : `Retry with ${alternative.providerLabel} model route`;
+  };
   const hasPreviousModelRoute = (event: StreamDisplayEvent) => {
     const model = event.model?.trim();
     const failed = event.failedModel?.trim();
@@ -804,12 +811,12 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                             onClick={() =>
                               props.onUseModelRoute?.(alternative().id, props.message.id)
                             }
-                            aria-label={`Retry via ${alternative().providerLabel} provider route`}
+                            aria-label={modelRouteRecoveryButtonLabel()}
                             title={alternative().label}
                             class="inline-flex max-w-[14rem] items-center gap-1.5 rounded-md border border-red-300 bg-white/80 px-2 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 dark:border-red-800 dark:bg-red-950/20 dark:text-red-300 dark:hover:bg-red-900/40"
                           >
                             <CpuIcon class="h-3.5 w-3.5" />
-                            <span class="truncate">Retry via {alternative().providerLabel}</span>
+                            <span class="truncate">{modelRouteRecoveryButtonLabel()}</span>
                           </button>
                         )}
                       </Show>

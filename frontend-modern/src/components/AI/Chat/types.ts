@@ -185,6 +185,7 @@ export interface ChatMessage {
 
 export interface ModelRouteRecoveryOption {
   id: string;
+  kind: 'same-model-route' | 'alternate-model-route';
   label: string;
   provider: string;
   providerLabel: string;

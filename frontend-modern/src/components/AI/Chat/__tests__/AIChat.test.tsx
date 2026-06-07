@@ -288,7 +288,9 @@ vi.mock('../ChatMessages', () => ({
                 props.onUseModelRoute?.(recovery().alternative.id, recovery().failedMessage.id)
               }
             >
-              Retry via {recovery().alternative.providerLabel}
+              {recovery().alternative.kind === 'same-model-route'
+                ? `Retry with ${recovery().alternative.providerLabel} route`
+                : `Retry with ${recovery().alternative.providerLabel} model route`}
             </button>
           )}
         </Show>
@@ -853,6 +855,13 @@ describe('AIChat', () => {
 
       fireEvent.click(await screen.findByTestId('mock-use-model-route'));
 
+      const props = mockChatMessagesProps[mockChatMessagesProps.length - 1];
+      const alternative = props.getModelRouteAlternative?.(mockChat.messages()[0]);
+      expect(alternative).toMatchObject({
+        id: 'openrouter:deepseek/deepseek-v4-pro',
+        kind: 'same-model-route',
+        provider: 'openrouter',
+      });
       expect(mockChat.setModel).toHaveBeenCalledWith('openrouter:deepseek/deepseek-v4-pro');
       expect(mockChat.retryMessage).toHaveBeenCalledWith('assistant-error-1', {
         model: 'openrouter:deepseek/deepseek-v4-pro',
@@ -917,7 +926,7 @@ describe('AIChat', () => {
       expect(screen.queryByTestId('mock-use-model-route')).not.toBeInTheDocument();
     });
 
-    it('falls back to another configured provider after equivalent routes have already failed', async () => {
+    it('offers an explicit alternate model route after equivalent routes have already failed', async () => {
       const openRouterFailure: ChatMessage = {
         id: 'assistant-error-openrouter',
         role: 'assistant',
@@ -980,6 +989,7 @@ describe('AIChat', () => {
 
       expect(alternative).toMatchObject({
         id: 'openai:gpt-4o',
+        kind: 'alternate-model-route',
         provider: 'openai',
         providerLabel: 'OpenAI',
       });
@@ -1230,9 +1240,9 @@ describe('AIChat', () => {
       renderChat();
 
       const switchButton = await screen.findByRole('button', {
-        name: 'Use OpenRouter provider route',
+        name: 'Use OpenRouter route',
       });
-      expect(switchButton).toHaveTextContent('Use OpenRouter');
+      expect(switchButton).toHaveTextContent('Use OpenRouter route');
 
       fireEvent.click(switchButton);
 
@@ -1281,7 +1291,7 @@ describe('AIChat', () => {
       renderChat();
 
       await screen.findByRole('button', {
-        name: 'Use OpenRouter provider route',
+        name: 'Use OpenRouter route',
       });
 
       const textarea = screen.getByPlaceholderText(
@@ -4648,7 +4658,7 @@ describe('AIChat', () => {
       ]);
 
       expect(
-        screen.queryByRole('status', { name: 'Assistant fallback route adopted' }),
+        screen.queryByRole('status', { name: 'Assistant model route switch adopted' }),
       ).not.toBeInTheDocument();
       expect(mockChat.setModel).not.toHaveBeenCalledWith('openrouter:deepseek/deepseek-v4-pro');
       expect(mockNotificationStore.success).not.toHaveBeenCalledWith(
