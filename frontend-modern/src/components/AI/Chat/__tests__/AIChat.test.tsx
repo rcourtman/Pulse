@@ -4990,9 +4990,13 @@ describe('AIChat', () => {
         },
       ]);
       renderChat();
+      const activityDock = screen.getByTestId('assistant-activity-dock');
+
+      expect(activityDock).toContainElement(screen.getByLabelText('Assistant active turn status'));
       expect(screen.getByLabelText('Assistant active turn status')).toHaveTextContent(
         'Generating response',
       );
+      expect(activityDock).toContainElement(screen.getByLabelText('Queued follow-up messages'));
       expect(screen.getByText('1 follow-up queued')).toBeInTheDocument();
     });
 

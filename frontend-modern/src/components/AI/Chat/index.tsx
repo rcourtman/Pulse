@@ -4240,163 +4240,118 @@ export const AIChat: Component<AIChatProps> = (props) => {
             onLoadSession={handleLoadSession}
           />
 
-          {/* Status indicator bar */}
-          <Show when={currentStatus()}>
-            <div
-              class="px-4 py-2 bg-surface-alt border-t border-border flex min-w-0 items-center gap-2.5 text-xs"
-              role="status"
-              aria-label="Assistant active turn status"
-              aria-live="polite"
-            >
-              {/* Status icon based on type */}
-              <Show when={currentStatus()?.type === 'thinking'}>
-                <div class="flex items-center justify-center w-4 h-4">
-                  <svg
-                    class="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 animate-pulse"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-                    />
-                  </svg>
-                </div>
-              </Show>
-              <Show when={currentStatus()?.type === 'tool'}>
-                <div class="flex items-center justify-center w-4 h-4">
-                  <svg
-                    class="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 animate-spin"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      class="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      stroke-width="3"
-                    />
-                    <path
-                      class="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    />
-                  </svg>
-                </div>
-              </Show>
-              <Show when={currentStatus()?.type === 'generating'}>
-                <div class="flex items-center justify-center w-4 h-4">
-                  <svg
-                    class="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                    />
-                  </svg>
-                </div>
-              </Show>
-
-              <span class="min-w-0 truncate text-muted font-medium">{currentStatusText()}</span>
-
-              {/* Subtle animated dots */}
-              <div class="flex gap-0.5 ml-1">
-                <span
-                  class="w-1 h-1 rounded-full bg-slate-400 animate-bounce"
-                  style="animation-delay: 0ms; animation-duration: 1s"
-                />
-                <span
-                  class="w-1 h-1 rounded-full bg-slate-400 animate-bounce"
-                  style="animation-delay: 150ms; animation-duration: 1s"
-                />
-                <span
-                  class="w-1 h-1 rounded-full bg-slate-400 animate-bounce"
-                  style="animation-delay: 300ms; animation-duration: 1s"
-                />
-              </div>
-            </div>
-          </Show>
-
           {/* Input */}
           <div class="border-t border-border bg-surface px-4 py-3">
-            <Show when={chat.queuedFollowUpCount() > 0}>
+            <Show when={currentStatus() || chat.queuedFollowUpCount() > 0}>
               <div
-                class="mb-2 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-blue-800 shadow-sm dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200"
-                role="status"
-                aria-label="Queued follow-up messages"
+                class="mb-2 overflow-hidden rounded-md border border-blue-200 bg-blue-50 text-blue-800 shadow-sm dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200"
+                data-testid="assistant-activity-dock"
               >
-                <div class="flex min-h-7 items-center gap-2">
-                  <ClockIcon class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  <span class="min-w-0 flex-1 truncate text-xs font-medium">
-                    {pluralizeCount(chat.queuedFollowUpCount(), 'follow-up', 'follow-ups')} queued
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      chat.clearQueuedFollowUps();
-                      focusComposer();
-                    }}
-                    class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-900 dark:text-blue-200 dark:hover:bg-blue-900/50"
-                    title="Clear queued follow-ups"
-                    aria-label="Clear queued follow-up messages"
+                <Show when={currentStatus()}>
+                  <div
+                    class="flex min-h-8 min-w-0 items-center gap-2 px-2.5 py-1.5 text-xs"
+                    role="status"
+                    aria-label="Assistant active turn status"
+                    aria-live="polite"
                   >
-                    <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                  </button>
-                </div>
-                <div class="mt-1 max-h-24 space-y-1 overflow-y-auto">
-                  <For each={chat.queuedFollowUps()}>
-                    {(queued, index) => {
-                      const preview = () => queuedFollowUpPreview(queued.prompt);
-                      return (
-                        <div class="flex min-h-7 items-center gap-2 rounded-md bg-white/70 px-2 py-1 text-xs text-blue-900 dark:bg-blue-900/30 dark:text-blue-100">
-                          <span class="min-w-0 flex-1 truncate">{preview()}</span>
-                          <Show when={chat.queuedFollowUpCount() > 1 && index() > 0}>
-                            <button
-                              type="button"
-                              onClick={() => sendQueuedFollowUpNext(queued.id)}
-                              class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60"
-                              title="Send queued follow-up next"
-                              aria-label={`Send queued follow-up next: ${preview()}`}
-                            >
-                              <SendIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                            </button>
-                          </Show>
-                          <button
-                            type="button"
-                            onClick={() => editQueuedFollowUp(queued.id)}
-                            class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60"
-                            title="Edit queued follow-up"
-                            aria-label={`Edit queued follow-up: ${preview()}`}
-                          >
-                            <PencilIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              chat.cancelQueuedFollowUp(queued.id);
-                              focusComposer();
-                            }}
-                            class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60"
-                            title="Remove queued follow-up"
-                            aria-label={`Remove queued follow-up: ${preview()}`}
-                          >
-                            <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                          </button>
-                        </div>
-                      );
-                    }}
-                  </For>
-                </div>
+                    <LoaderCircleIcon
+                      class={`h-3.5 w-3.5 shrink-0 ${
+                        currentStatus()?.type === 'generating'
+                          ? 'text-emerald-500 dark:text-emerald-300'
+                          : 'animate-spin text-blue-600 dark:text-blue-300'
+                      }`}
+                      aria-hidden="true"
+                    />
+                    <span class="min-w-0 flex-1 truncate font-medium">{currentStatusText()}</span>
+                    <span class="flex shrink-0 gap-0.5" aria-hidden="true">
+                      <span
+                        class="h-1 w-1 rounded-full bg-blue-400 animate-bounce"
+                        style="animation-delay: 0ms; animation-duration: 1s"
+                      />
+                      <span
+                        class="h-1 w-1 rounded-full bg-blue-400 animate-bounce"
+                        style="animation-delay: 150ms; animation-duration: 1s"
+                      />
+                      <span
+                        class="h-1 w-1 rounded-full bg-blue-400 animate-bounce"
+                        style="animation-delay: 300ms; animation-duration: 1s"
+                      />
+                    </span>
+                  </div>
+                </Show>
+                <Show when={chat.queuedFollowUpCount() > 0}>
+                  <div
+                    class={`px-2.5 py-1.5 ${
+                      currentStatus() ? 'border-t border-blue-200/70 dark:border-blue-900/60' : ''
+                    }`}
+                    role="status"
+                    aria-label="Queued follow-up messages"
+                  >
+                    <div class="flex min-h-7 items-center gap-2">
+                      <ClockIcon class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      <span class="min-w-0 flex-1 truncate text-xs font-medium">
+                        {pluralizeCount(chat.queuedFollowUpCount(), 'follow-up', 'follow-ups')}{' '}
+                        queued
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          chat.clearQueuedFollowUps();
+                          focusComposer();
+                        }}
+                        class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-900 dark:text-blue-200 dark:hover:bg-blue-900/50"
+                        title="Clear queued follow-ups"
+                        aria-label="Clear queued follow-up messages"
+                      >
+                        <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    </div>
+                    <div class="mt-1 max-h-24 space-y-1 overflow-y-auto">
+                      <For each={chat.queuedFollowUps()}>
+                        {(queued, index) => {
+                          const preview = () => queuedFollowUpPreview(queued.prompt);
+                          return (
+                            <div class="flex min-h-7 items-center gap-2 rounded-md bg-white/70 px-2 py-1 text-xs text-blue-900 dark:bg-blue-900/30 dark:text-blue-100">
+                              <span class="min-w-0 flex-1 truncate">{preview()}</span>
+                              <Show when={chat.queuedFollowUpCount() > 1 && index() > 0}>
+                                <button
+                                  type="button"
+                                  onClick={() => sendQueuedFollowUpNext(queued.id)}
+                                  class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60"
+                                  title="Send queued follow-up next"
+                                  aria-label={`Send queued follow-up next: ${preview()}`}
+                                >
+                                  <SendIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                                </button>
+                              </Show>
+                              <button
+                                type="button"
+                                onClick={() => editQueuedFollowUp(queued.id)}
+                                class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60"
+                                title="Edit queued follow-up"
+                                aria-label={`Edit queued follow-up: ${preview()}`}
+                              >
+                                <PencilIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  chat.cancelQueuedFollowUp(queued.id);
+                                  focusComposer();
+                                }}
+                                class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60"
+                                title="Remove queued follow-up"
+                                aria-label={`Remove queued follow-up: ${preview()}`}
+                              >
+                                <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                              </button>
+                            </div>
+                          );
+                        }}
+                      </For>
+                    </div>
+                  </div>
+                </Show>
               </div>
             </Show>
             <form
