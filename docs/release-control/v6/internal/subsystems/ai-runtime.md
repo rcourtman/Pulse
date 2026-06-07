@@ -532,6 +532,11 @@ runtime cost control, and shared AI transport surfaces.
    `session.next.tool.progress`, line 317; `session.next.tool.success`, line
    328; `session.next.tool.failed`, line 350), so Pulse's shared browser SSE
    consumer must treat opted-in Assistant progress events as paint checkpoints.
+   Pulse's active-turn status ranking must also treat terminal `tool_end`
+   events as fresh visible activity, adapting OpenCode's in-place
+   completed/error tool-part mutation by replacing stale provider-start footer
+   copy with completed or failed tool activity while still preferring any
+   separate unresolved pending tool over a terminal sibling tool.
    `frontend-modern/src/api/streaming.ts` must yield through an
    animation-frame-backed browser paint checkpoint, with a bounded timer
    fallback for inactive tabs, before draining the next opted-in event; a plain

@@ -385,6 +385,112 @@ describe('getAssistantActiveTurnStatus', () => {
     });
   });
 
+  it('surfaces completed tool activity over stale provider-start progress', () => {
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            isStreaming: true,
+            workflowStatus: {
+              phase: 'provider_start',
+              message: 'Sent request to OpenRouter; waiting for the first token.',
+              startedAt: 1_000,
+            },
+            streamEvents: [
+              {
+                type: 'workflow_status',
+                workflowStatus: {
+                  phase: 'provider_start',
+                  message: 'Sent request to OpenRouter; waiting for the first token.',
+                  startedAt: 1_000,
+                },
+                startedAt: 1_000,
+                updatedAt: 1_000,
+              },
+              {
+                type: 'pending_tool',
+                toolId: 'tool-1',
+                pendingTool: {
+                  id: 'tool-1',
+                  name: 'pulse_read',
+                  input:
+                    '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
+                  status: 'running',
+                  startedAt: 1_100,
+                  updatedAt: 1_100,
+                },
+                startedAt: 1_100,
+                updatedAt: 1_100,
+              },
+              {
+                type: 'tool',
+                toolId: 'tool-1',
+                tool: {
+                  name: 'pulse_read',
+                  input:
+                    '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
+                  output: '4358',
+                  success: true,
+                },
+                startedAt: 1_100,
+                updatedAt: 1_300,
+              },
+            ],
+          }),
+        ],
+        true,
+      ),
+    ).toEqual({
+      type: 'tool',
+      text: 'Completed Inspect devices on current resource',
+    });
+  });
+
+  it('surfaces failed completed-tool activity over stale provider-start progress', () => {
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            isStreaming: true,
+            workflowStatus: {
+              phase: 'provider_start',
+              message: 'Sent request to OpenRouter; waiting for the first token.',
+              startedAt: 1_000,
+            },
+            streamEvents: [
+              {
+                type: 'workflow_status',
+                workflowStatus: {
+                  phase: 'provider_start',
+                  message: 'Sent request to OpenRouter; waiting for the first token.',
+                  startedAt: 1_000,
+                },
+                startedAt: 1_000,
+                updatedAt: 1_000,
+              },
+              {
+                type: 'tool',
+                toolId: 'tool-1',
+                tool: {
+                  name: 'pulse_get_nodes',
+                  input: '{}',
+                  output: 'permission denied',
+                  success: false,
+                },
+                startedAt: 1_100,
+                updatedAt: 1_300,
+              },
+            ],
+          }),
+        ],
+        true,
+      ),
+    ).toEqual({
+      type: 'tool',
+      text: 'Failed get nodes',
+    });
+  });
+
   it('surfaces neutral workflow progress while a turn is active', () => {
     expect(
       getAssistantActiveTurnStatus(

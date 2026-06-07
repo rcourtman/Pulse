@@ -19,6 +19,7 @@ export interface AssistantActiveTurnStatus {
 interface AssistantActiveTurnStatusCandidate extends AssistantActiveTurnStatus {
   activityAt?: number;
   placeholder?: boolean;
+  terminalTool?: boolean;
   order: number;
 }
 
@@ -234,9 +235,7 @@ const latestPendingToolActivity = (tool?: PendingTool): number =>
   tool?.updatedAt ?? tool?.startedAt ?? 0;
 
 const isSelectedModelRouteEvent = (event: StreamDisplayEvent): boolean =>
-  event.type === 'model_switch' &&
-  event.modelEvent === 'selected' &&
-  !event.failedModel?.trim();
+  event.type === 'model_switch' && event.modelEvent === 'selected' && !event.failedModel?.trim();
 
 const pendingToolCandidate = (
   tool: PendingTool | undefined,
@@ -250,6 +249,7 @@ const pendingToolCandidate = (
     text,
     startedAt: tool?.startedAt,
     activityAt,
+    terminalTool: false,
     order,
   };
 };
@@ -302,6 +302,13 @@ const isFresherStatusCandidate = (
   if (candidate.placeholder !== current.placeholder) {
     return current.placeholder === true;
   }
+  if (
+    candidate.type === 'tool' &&
+    current.type === 'tool' &&
+    candidate.terminalTool !== current.terminalTool
+  ) {
+    return current.terminalTool === true;
+  }
   const candidateTime = candidate.activityAt;
   const currentTime = current.activityAt;
   if (candidateTime !== undefined && currentTime !== undefined && candidateTime !== currentTime) {
@@ -317,6 +324,15 @@ const toolCancelStatusText = (event: StreamDisplayEvent): string => {
   const label = formatToolName(name);
   const reason = event.toolCancel?.reason?.trim();
   return reason ? `Skipped ${label}: ${reason}` : `Skipped ${label}`;
+};
+
+const completedToolStatusText = (event: StreamDisplayEvent): string => {
+  const tool = event.tool;
+  if (!tool) return '';
+  const inputSummary = parseToolInputSummary(toolValueText(tool.input), tool.name, tool.rawInput);
+  const toolActivity = isPlaceholderToolInputSummary(inputSummary) ? '' : inputSummary;
+  const label = toolActivity || formatToolName(tool.name);
+  return tool.success === false ? `Failed ${label}` : `Completed ${label}`;
 };
 
 const latestStreamActivityStatus = (
@@ -336,6 +352,16 @@ const latestStreamActivityStatus = (
         for (const key of toolCompletionKeys(event)) {
           completedToolKeys.add(key);
         }
+        const text = completedToolStatusText(event);
+        if (text) {
+          candidate = {
+            type: 'tool',
+            text,
+            activityAt: eventActivityAt(event),
+            terminalTool: true,
+            order: index,
+          };
+        }
         break;
       }
       case 'tool_cancel': {
@@ -347,6 +373,7 @@ const latestStreamActivityStatus = (
           text: toolCancelStatusText(event),
           startedAt: event.startedAt,
           activityAt: eventActivityAt(event),
+          terminalTool: true,
           order: index,
         };
         break;

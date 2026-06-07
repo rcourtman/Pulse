@@ -4971,6 +4971,56 @@ describe('AIChat', () => {
       );
     });
 
+    it('shows completed tool activity instead of stale provider wait in the active turn status', () => {
+      mockChat.isLoading.mockReturnValue(true);
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'msg-1',
+          role: 'assistant' as const,
+          content: '',
+          timestamp: new Date(),
+          isStreaming: true,
+          workflowStatus: {
+            phase: 'provider_start',
+            message: 'Sent request to OpenRouter; waiting for the first token.',
+            startedAt: 1_000,
+          },
+          streamEvents: [
+            {
+              type: 'workflow_status',
+              workflowStatus: {
+                phase: 'provider_start',
+                message: 'Sent request to OpenRouter; waiting for the first token.',
+                startedAt: 1_000,
+              },
+              startedAt: 1_000,
+              updatedAt: 1_000,
+            },
+            {
+              type: 'tool',
+              toolId: 'tool-1',
+              tool: {
+                name: 'pulse_read',
+                input:
+                  '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
+                output: '4358',
+                success: true,
+              },
+              startedAt: 1_100,
+              updatedAt: 1_300,
+            },
+          ],
+        },
+      ]);
+      renderChat();
+      expect(screen.getByLabelText('Assistant active turn status')).toHaveTextContent(
+        'Completed Inspect devices on current resource',
+      );
+      expect(screen.getByLabelText('Assistant active turn status')).not.toHaveTextContent(
+        'Sent request to OpenRouter; waiting for the first token.',
+      );
+    });
+
     it('shows generating status when assistant content is streaming', () => {
       mockChat.isLoading.mockReturnValue(true);
       mockChat.messages.mockReturnValue([
