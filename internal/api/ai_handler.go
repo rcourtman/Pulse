@@ -55,10 +55,7 @@ type AIService interface {
 	ClearModelHandoffContext(ctx context.Context, sessionID string) error
 	AbortSession(ctx context.Context, sessionID string) error
 	SummarizeSession(ctx context.Context, sessionID string) (map[string]interface{}, error)
-	GetSessionDiff(ctx context.Context, sessionID string) (map[string]interface{}, error)
 	ForkSession(ctx context.Context, sessionID string) (*chat.Session, error)
-	RevertSession(ctx context.Context, sessionID string) (map[string]interface{}, error)
-	UnrevertSession(ctx context.Context, sessionID string) (map[string]interface{}, error)
 	UndoLastTurn(ctx context.Context, sessionID string) (*chat.SessionTurnUndoResult, error)
 	RedoLastTurn(ctx context.Context, sessionID string) (*chat.SessionTurnRedoResult, error)
 	AnswerQuestion(ctx context.Context, questionID string, answers []chat.QuestionAnswer) error
@@ -2973,28 +2970,9 @@ func (h *AIHandler) HandleSummarize(w http.ResponseWriter, r *http.Request, sess
 }
 
 // HandleDiff handles GET /api/ai/sessions/{id}/diff
-// Returns file changes made during the session
+// Rejects OpenCode-style file diff requests; Pulse sessions do not own code-file changes.
 func (h *AIHandler) HandleDiff(w http.ResponseWriter, r *http.Request, sessionID string) {
-	ctx := r.Context()
-	if !h.IsRunning(ctx) {
-		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
-		return
-	}
-
-	svc := h.GetService(ctx)
-	if svc == nil {
-		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
-		return
-	}
-
-	diff, err := svc.GetSessionDiff(ctx, sessionID)
-	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(diff)
+	writeAssistantSessionFileChangesUnsupported(w)
 }
 
 // HandleFork handles POST /api/ai/sessions/{id}/fork
@@ -3071,53 +3049,23 @@ func (h *AIHandler) HandleRedoLastTurn(w http.ResponseWriter, r *http.Request, s
 }
 
 // HandleRevert handles POST /api/ai/sessions/{id}/revert
-// Reverts file changes from the session
+// Rejects OpenCode-style file revert requests; Pulse actions use governed history.
 func (h *AIHandler) HandleRevert(w http.ResponseWriter, r *http.Request, sessionID string) {
-	ctx := r.Context()
-	if !h.IsRunning(ctx) {
-		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
-		return
-	}
-
-	svc := h.GetService(ctx)
-	if svc == nil {
-		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
-		return
-	}
-
-	result, err := svc.RevertSession(ctx, sessionID)
-	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	writeAssistantSessionFileChangesUnsupported(w)
 }
 
 // HandleUnrevert handles POST /api/ai/sessions/{id}/unrevert
-// Restores previously reverted changes
+// Rejects OpenCode-style file unrevert requests; Pulse actions use governed history.
 func (h *AIHandler) HandleUnrevert(w http.ResponseWriter, r *http.Request, sessionID string) {
-	ctx := r.Context()
-	if !h.IsRunning(ctx) {
-		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
-		return
-	}
+	writeAssistantSessionFileChangesUnsupported(w)
+}
 
-	svc := h.GetService(ctx)
-	if svc == nil {
-		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
-		return
-	}
-
-	result, err := svc.UnrevertSession(ctx, sessionID)
-	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+func writeAssistantSessionFileChangesUnsupported(w http.ResponseWriter) {
+	http.Error(
+		w,
+		"Pulse Assistant sessions do not own file diffs or file-change revert. Use governed action history for infrastructure changes.",
+		http.StatusNotImplemented,
+	)
 }
 
 // AnswerQuestionRequest represents a request to answer a question

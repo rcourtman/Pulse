@@ -59,17 +59,8 @@ func (s *capturingAIService) AbortSession(ctx context.Context, sessionID string)
 func (s *capturingAIService) SummarizeSession(ctx context.Context, sessionID string) (map[string]interface{}, error) {
 	return nil, nil
 }
-func (s *capturingAIService) GetSessionDiff(ctx context.Context, sessionID string) (map[string]interface{}, error) {
-	return nil, nil
-}
 func (s *capturingAIService) ForkSession(ctx context.Context, sessionID string) (*chat.Session, error) {
 	return &chat.Session{ID: "fork"}, nil
-}
-func (s *capturingAIService) RevertSession(ctx context.Context, sessionID string) (map[string]interface{}, error) {
-	return nil, nil
-}
-func (s *capturingAIService) UnrevertSession(ctx context.Context, sessionID string) (map[string]interface{}, error) {
-	return nil, nil
 }
 func (s *capturingAIService) UndoLastTurn(ctx context.Context, sessionID string) (*chat.SessionTurnUndoResult, error) {
 	return &chat.SessionTurnUndoResult{Success: true, SessionID: sessionID}, nil

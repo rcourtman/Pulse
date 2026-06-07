@@ -318,6 +318,24 @@ describe('settings architecture guardrails', () => {
     expect(aiProviderConfigurationSectionSource).not.toContain('extraField()');
   });
 
+  it('keeps Assistant session maintenance limited to Pulse-owned session actions', () => {
+    expect(aiChatMaintenanceSectionSource).toContain('Summarize session');
+    expect(aiChatMaintenanceSectionSource).toContain('handleSessionSummarize');
+    expect(aiChatMaintenanceSectionSource).toContain(
+      'Summarize a specific Pulse Assistant session',
+    );
+
+    expect(aiChatMaintenanceSectionSource).not.toContain('View session changes');
+    expect(aiChatMaintenanceSectionSource).not.toContain('Revert changes');
+    expect(aiChatMaintenanceSectionSource).not.toContain('handleSessionDiff');
+    expect(aiChatMaintenanceSectionSource).not.toContain('handleSessionRevert');
+    expect(aiSettingsStateSource).not.toContain('handleSessionDiff');
+    expect(aiSettingsStateSource).not.toContain('handleSessionRevert');
+    expect(aiSettingsStateSource).not.toContain('showDiffModal');
+    expect(aiSettingsStateSource).not.toContain('diffFiles');
+    expect(aiSettingsDialogsSource).not.toContain('Session file changes');
+  });
+
   it('keeps Patrol tool-call preflight wired through the canonical settings state', () => {
     // The Verify Patrol button must drive the canonical
     // /api/ai/patrol/preflight endpoint via the typed runPatrolPreflight

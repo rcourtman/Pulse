@@ -131,12 +131,6 @@ export const AISettings: Component = () => {
       </SettingsPanel>
 
       <AISettingsDialogs
-        showDiffModal={state.showDiffModal}
-        setShowDiffModal={state.setShowDiffModal}
-        diffFiles={state.diffFiles}
-        diffSummary={state.diffSummary}
-        diffSessionLabel={state.diffSessionLabel}
-        formatDiffStats={state.formatDiffStats}
         showSetupModal={state.showSetupModal}
         setupProvider={state.setupProvider}
         setSetupProvider={state.setSetupProvider}

@@ -983,10 +983,11 @@ Streaming variant of execute (used by the UI for incremental responses).
 - `GET /api/ai/sessions/{id}/messages`
 - `POST /api/ai/sessions/{id}/abort`
 - `POST /api/ai/sessions/{id}/summarize`
-- `GET /api/ai/sessions/{id}/diff`
 - `POST /api/ai/sessions/{id}/fork`
-- `POST /api/ai/sessions/{id}/revert`
-- `POST /api/ai/sessions/{id}/unrevert`
+- Legacy OpenCode-style file-change routes (`GET /api/ai/sessions/{id}/diff`,
+  `POST /api/ai/sessions/{id}/revert`, `POST /api/ai/sessions/{id}/unrevert`)
+  return `501 Not Implemented`; Pulse Assistant sessions do not own file diffs
+  or file-level revert.
 
 ### Question Answers
 - `POST /api/ai/question/{id}/answer`

@@ -3357,13 +3357,6 @@ func (s *Service) AnswerQuestion(ctx context.Context, questionID string, answers
 	return agenticLoop.AnswerQuestion(questionID, answers)
 }
 
-// Stub methods for features not yet implemented
-
-// GetSessionDiff returns file changes
-func (s *Service) GetSessionDiff(ctx context.Context, sessionID string) (map[string]interface{}, error) {
-	return map[string]interface{}{"status": "not_implemented"}, nil
-}
-
 // ForkSession creates a branch
 func (s *Service) ForkSession(ctx context.Context, sessionID string) (*Session, error) {
 	s.mu.RLock()
@@ -3375,16 +3368,6 @@ func (s *Service) ForkSession(ctx context.Context, sessionID string) (*Session, 
 	}
 
 	return sessions.Fork(sessionID)
-}
-
-// RevertSession reverts changes
-func (s *Service) RevertSession(ctx context.Context, sessionID string) (map[string]interface{}, error) {
-	return map[string]interface{}{"status": "not_implemented"}, nil
-}
-
-// UnrevertSession restores reverted changes
-func (s *Service) UnrevertSession(ctx context.Context, sessionID string) (map[string]interface{}, error) {
-	return map[string]interface{}{"status": "not_implemented"}, nil
 }
 
 // UndoLastTurn removes the latest user turn from the durable chat session.

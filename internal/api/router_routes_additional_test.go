@@ -165,8 +165,6 @@ func TestRouteAISessions_Summarize(t *testing.T) {
 
 func TestRouteAISessions_Diff(t *testing.T) {
 	mockSvc := &MockAIService{}
-	mockSvc.On("IsRunning").Return(true)
-	mockSvc.On("GetSessionDiff", mock.Anything, "session-1").Return(map[string]interface{}{"diff": "ok"}, nil)
 
 	handler := &AIHandler{}
 	setUnexportedField(t, handler, "defaultService", mockSvc)
@@ -177,8 +175,8 @@ func TestRouteAISessions_Diff(t *testing.T) {
 
 	router.routeAISessions(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	if rec.Code != http.StatusNotImplemented {
+		t.Fatalf("expected status %d, got %d", http.StatusNotImplemented, rec.Code)
 	}
 	mockSvc.AssertExpectations(t)
 }
@@ -255,8 +253,6 @@ func TestRouteAISessions_RedoLastTurn(t *testing.T) {
 
 func TestRouteAISessions_Revert(t *testing.T) {
 	mockSvc := &MockAIService{}
-	mockSvc.On("IsRunning").Return(true)
-	mockSvc.On("RevertSession", mock.Anything, "session-1").Return(map[string]interface{}{"reverted": true}, nil)
 
 	handler := &AIHandler{}
 	setUnexportedField(t, handler, "defaultService", mockSvc)
@@ -267,16 +263,14 @@ func TestRouteAISessions_Revert(t *testing.T) {
 
 	router.routeAISessions(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	if rec.Code != http.StatusNotImplemented {
+		t.Fatalf("expected status %d, got %d", http.StatusNotImplemented, rec.Code)
 	}
 	mockSvc.AssertExpectations(t)
 }
 
 func TestRouteAISessions_Unrevert(t *testing.T) {
 	mockSvc := &MockAIService{}
-	mockSvc.On("IsRunning").Return(true)
-	mockSvc.On("UnrevertSession", mock.Anything, "session-1").Return(map[string]interface{}{"unreverted": true}, nil)
 
 	handler := &AIHandler{}
 	setUnexportedField(t, handler, "defaultService", mockSvc)
@@ -287,8 +281,8 @@ func TestRouteAISessions_Unrevert(t *testing.T) {
 
 	router.routeAISessions(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	if rec.Code != http.StatusNotImplemented {
+		t.Fatalf("expected status %d, got %d", http.StatusNotImplemented, rec.Code)
 	}
 	mockSvc.AssertExpectations(t)
 }

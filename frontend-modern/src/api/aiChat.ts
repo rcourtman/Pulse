@@ -200,20 +200,6 @@ export interface Agent {
   };
 }
 
-// File change from a session
-export interface FileChange {
-  path: string;
-  status: 'added' | 'modified' | 'deleted';
-  added: number;
-  removed: number;
-}
-
-// Session diff showing all file changes
-export interface SessionDiff {
-  files: FileChange[];
-  summary?: string;
-}
-
 export class AIChatAPI {
   private static baseUrl = '/api/ai';
 
@@ -321,13 +307,6 @@ export class AIChatAPI {
     }) as Promise<ChatSessionCompactionResult>;
   }
 
-  // Get file changes/diff for a session
-  static async getSessionDiff(sessionId: string): Promise<SessionDiff> {
-    return apiFetchJSON(
-      `${this.baseUrl}/sessions/${encodeURIComponent(sessionId)}/diff`,
-    ) as Promise<SessionDiff>;
-  }
-
   // Fork a session (create a branch point)
   static async forkSession(sessionId: string): Promise<ChatSession> {
     return apiFetchJSON(`${this.baseUrl}/sessions/${encodeURIComponent(sessionId)}/fork`, {
@@ -347,20 +326,6 @@ export class AIChatAPI {
     return apiFetchJSON(`${this.baseUrl}/sessions/${encodeURIComponent(sessionId)}/redo`, {
       method: 'POST',
     }) as Promise<ChatSessionRedoResult>;
-  }
-
-  // Revert session changes
-  static async revertSession(sessionId: string): Promise<{ success: boolean }> {
-    return apiFetchJSON(`${this.baseUrl}/sessions/${encodeURIComponent(sessionId)}/revert`, {
-      method: 'POST',
-    }) as Promise<{ success: boolean }>;
-  }
-
-  // Unrevert session changes (redo)
-  static async unrevertSession(sessionId: string): Promise<{ success: boolean }> {
-    return apiFetchJSON(`${this.baseUrl}/sessions/${encodeURIComponent(sessionId)}/unrevert`, {
-      method: 'POST',
-    }) as Promise<{ success: boolean }>;
   }
 
   // Stream chat - the main chat interface

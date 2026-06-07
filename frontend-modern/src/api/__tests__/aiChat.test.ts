@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import aiChatSource from '../aiChat.ts?raw';
 
 vi.mock('@/utils/apiClient', () => ({
   apiFetchJSON: vi.fn(),
@@ -956,6 +957,22 @@ describe('AIChatAPI', () => {
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/sessions/session%2Froot/summarize', {
       method: 'POST',
     });
+  });
+
+  it('does not expose unsupported file-change session operations from the browser client', () => {
+    expect('getSessionDiff' in AIChatAPI).toBe(false);
+    expect('revertSession' in AIChatAPI).toBe(false);
+    expect('unrevertSession' in AIChatAPI).toBe(false);
+
+    expect(aiChatSource).toContain('/summarize');
+    expect(aiChatSource).toContain('/fork');
+    expect(aiChatSource).toContain('/undo');
+    expect(aiChatSource).toContain('/redo');
+    expect(aiChatSource).not.toContain('SessionDiff');
+    expect(aiChatSource).not.toContain('FileChange');
+    expect(aiChatSource).not.toContain('/diff');
+    expect(aiChatSource).not.toContain('/revert');
+    expect(aiChatSource).not.toContain('/unrevert');
   });
 
   it('preserves restored Assistant tool evidence on session messages', async () => {

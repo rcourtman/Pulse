@@ -128,16 +128,6 @@ export function getAISessionSummarizeErrorMessage(message?: string | null) {
   return detail || 'Unable to summarize the session.';
 }
 
-export function getAISessionDiffErrorMessage(message?: string | null) {
-  const detail = (message || '').trim();
-  return detail || 'Unable to load the session diff.';
-}
-
-export function getAISessionRevertErrorMessage(message?: string | null) {
-  const detail = (message || '').trim();
-  return detail || 'Unable to revert the session.';
-}
-
 export function getAISettingsSaveErrorMessage(message?: string | null) {
   const detail = (message || '').trim();
   return detail || 'Unable to save Assistant & Patrol settings.';

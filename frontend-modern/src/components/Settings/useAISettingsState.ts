@@ -1,7 +1,7 @@
 import { createMemo, createSignal, onMount } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { AIAPI } from '@/api/ai';
-import { AIChatAPI, type ChatSession, type FileChange } from '@/api/aiChat';
+import { AIChatAPI, type ChatSession } from '@/api/aiChat';
 import { runDiscoveryRefresh } from '@/api/discovery';
 import { runPatrolPreflight, type PatrolPreflightResponse } from '@/api/patrol';
 import {
@@ -30,8 +30,6 @@ import {
   getAICredentialsClearErrorMessage,
   getAIOAuthErrorMessage,
   getAIChatSessionsLoadErrorMessage,
-  getAISessionDiffErrorMessage,
-  getAISessionRevertErrorMessage,
   getAISessionSummarizeErrorMessage,
   getAIModelsLoadErrorMessage,
   getAISettingsReadinessPresentation,
@@ -227,11 +225,6 @@ export const useAISettingsState = () => {
   const [chatSessionsError, setChatSessionsError] = createSignal('');
   const [selectedSessionId, setSelectedSessionId] = createSignal('');
   const [sessionActionLoading, setSessionActionLoading] = createSignal<string | null>(null);
-
-  const [showDiffModal, setShowDiffModal] = createSignal(false);
-  const [diffFiles, setDiffFiles] = createSignal<FileChange[]>([]);
-  const [diffSummary, setDiffSummary] = createSignal('');
-  const [diffSessionLabel, setDiffSessionLabel] = createSignal('');
 
   const [expandedProviders, setExpandedProviders] = createSignal<Set<AIProvider>>(
     new Set(['anthropic']),
@@ -480,8 +473,6 @@ export const useAISettingsState = () => {
     const timeLabel = updatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     return `${session.title || 'Untitled'} - ${session.message_count} msgs - ${dateLabel} ${timeLabel}`;
   };
-
-  const formatDiffStats = (change: FileChange) => `+${change.added} -${change.removed}`;
 
   const handleCloseSetupModal = () => {
     setShowSetupModal(false);
@@ -758,61 +749,6 @@ export const useAISettingsState = () => {
       logger.error('[AISettings] Failed to summarize session:', error);
       notificationStore.error(
         getAISessionSummarizeErrorMessage(error instanceof Error ? error.message : ''),
-      );
-    } finally {
-      setSessionActionLoading(null);
-    }
-  };
-
-  const handleSessionDiff = async () => {
-    const sessionId = selectedSessionId();
-    if (!sessionId) {
-      notificationStore.info('Select a chat session first.');
-      return;
-    }
-
-    setSessionActionLoading('diff');
-    try {
-      const diff = await AIChatAPI.getSessionDiff(sessionId);
-      const files = diff.files || [];
-      if (files.length === 0) {
-        setDiffFiles([]);
-        setDiffSummary('');
-        setShowDiffModal(false);
-        notificationStore.info('No file changes in this session.');
-        return;
-      }
-      setDiffFiles(files);
-      setDiffSummary(diff.summary || '');
-      const session = selectedChatSession();
-      setDiffSessionLabel(session ? session.title || 'Untitled session' : 'Selected session');
-      setShowDiffModal(true);
-    } catch (error) {
-      logger.error('[AISettings] Failed to get session diff:', error);
-      notificationStore.error(
-        getAISessionDiffErrorMessage(error instanceof Error ? error.message : ''),
-      );
-    } finally {
-      setSessionActionLoading(null);
-    }
-  };
-
-  const handleSessionRevert = async () => {
-    const sessionId = selectedSessionId();
-    if (!sessionId) {
-      notificationStore.info('Select a chat session first.');
-      return;
-    }
-    if (!confirm('Revert all changes from this session? This cannot be undone.')) return;
-
-    setSessionActionLoading('revert');
-    try {
-      await AIChatAPI.revertSession(sessionId);
-      notificationStore.success('Session changes reverted.');
-    } catch (error) {
-      logger.error('[AISettings] Failed to revert session:', error);
-      notificationStore.error(
-        getAISessionRevertErrorMessage(error instanceof Error ? error.message : ''),
       );
     } finally {
       setSessionActionLoading(null);
@@ -1164,13 +1100,9 @@ export const useAISettingsState = () => {
     chatSessions,
     chatSessionsError,
     chatSessionsLoading,
-    diffFiles,
-    diffSessionLabel,
-    diffSummary,
     discoveryRunRunning,
     expandedProviders,
     form,
-    formatDiffStats,
     formatSessionLabel,
     handleClearProvider,
     handleCloseSetupModal,
@@ -1178,8 +1110,6 @@ export const useAISettingsState = () => {
     handleEnabledToggle,
     handleRunDiscoveryRefresh,
     handleSave,
-    handleSessionDiff,
-    handleSessionRevert,
     handleSessionSummarize,
     handleSetupSubmit,
     handleTest,
@@ -1214,7 +1144,6 @@ export const useAISettingsState = () => {
     setSetupProvider,
     setShowAdvancedModels,
     setShowChatMaintenance,
-    setShowDiffModal,
     setShowDiscoverySettings,
     setShowSetupModal,
     settings,
@@ -1225,7 +1154,6 @@ export const useAISettingsState = () => {
     setupSaving,
     showAdvancedModels,
     showChatMaintenance,
-    showDiffModal,
     showDiscoverySettings,
     showSetupModal,
     showUpgradePrompts,

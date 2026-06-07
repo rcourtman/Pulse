@@ -505,6 +505,15 @@ payload shape change when the portal presents compact client rows.
 	    shared `AIChatAPI.undoLastTurn(sessionId)` and
 	    `AIChatAPI.redoLastTurn(sessionId)` helpers so path encoding and response
 	    shape stay canonical.
+	    OpenCode-style file diff/revert session routes are deliberately not part
+	    of Pulse's supported Assistant session contract: Pulse sessions do not own
+	    local code-file edits, and infrastructure mutations must be reviewed
+	    through governed approval/action history. Browser clients must not expose
+	    or call `GET /api/ai/sessions/{id}/diff`,
+	    `POST /api/ai/sessions/{id}/revert`, or
+	    `POST /api/ai/sessions/{id}/unrevert`; legacy direct calls to those routes
+	    return `501 Not Implemented` with an explicit unsupported message rather
+	    than a placeholder success payload.
 	    Resource-context follow-up turns are different from Patrol-run rehydration:
 	    browser-safe `handoff_metadata.kind=resource_context` must not replace a
     stored rich handoff envelope with a partial metadata-only envelope, and the

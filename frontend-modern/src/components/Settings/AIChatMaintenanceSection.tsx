@@ -57,8 +57,8 @@ export const AIChatMaintenanceSection: Component<AIChatMaintenanceSectionProps> 
       <Show when={state.showChatMaintenance()}>
         <div class="px-3 py-3 bg-surface border-t border-border space-y-3">
           <p class="text-xs text-muted">
-            Summarize, inspect, or revert a specific Pulse Assistant session. It does not change
-            Patrol settings or your shared provider and model defaults.
+            Summarize a specific Pulse Assistant session without changing Patrol settings or your
+            shared provider and model defaults.
           </p>
           <div class="flex items-center justify-between">
             <label class="text-xs font-medium text-muted">Session</label>
@@ -122,25 +122,9 @@ export const AIChatMaintenanceSection: Component<AIChatMaintenanceSectionProps> 
                 ? 'Summarizing...'
                 : 'Summarize session'}
             </button>
-            <button
-              type="button"
-              onClick={state.handleSessionDiff}
-              disabled={!state.selectedSessionId() || state.sessionActionLoading() !== null}
-              class="w-full sm:w-auto min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded border border-border bg-surface text-base-content hover:bg-surface-hover disabled:opacity-50"
-            >
-              {state.sessionActionLoading() === 'diff' ? 'Loading...' : 'View session changes'}
-            </button>
-            <button
-              type="button"
-              onClick={state.handleSessionRevert}
-              disabled={!state.selectedSessionId() || state.sessionActionLoading() !== null}
-              class="w-full sm:w-auto min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900 disabled:opacity-50"
-            >
-              {state.sessionActionLoading() === 'revert' ? 'Reverting...' : 'Revert changes'}
-            </button>
           </div>
           <p class="text-[10px] text-muted">
-            These actions apply to the selected chat session only.
+            This action applies to the selected chat session only.
           </p>
         </div>
       </Show>

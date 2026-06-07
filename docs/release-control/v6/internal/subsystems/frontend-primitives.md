@@ -998,7 +998,11 @@ not a replacement status card, CTA band, or page-local nested card.
     as execution permissions and session maintenance, must stay explicitly
     labeled as Pulse Assistant controls, while Patrol schedule and autonomy
     continue to live on Patrol-owned surfaces rather than drifting back into
-    the shared settings shell. Shared/default model choices may remain on the
+    the shared settings shell. Session maintenance in that shell is limited to
+    Pulse-owned conversation operations such as summarization; OpenCode-style
+    file diff, revert, or unrevert actions must not appear in Settings unless
+    Pulse owns a real governed infrastructure action-history/reversal contract
+    for the affected resources. Shared/default model choices may remain on the
     combined shell only when Assistant, Patrol, and Discovery overrides are
     presented as explicit per-surface overrides instead of a generic advanced
     AI bucket. Each per-surface override must fall back to the shared default

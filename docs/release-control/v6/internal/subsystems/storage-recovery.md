@@ -221,6 +221,12 @@ state only. A restored prompt or restored message count may help an operator
 continue a protected-item investigation, but it must not become backup coverage
 evidence, recovery freshness, restore entitlement, storage-owner identity,
 approval policy, or a provider-local recovery command handoff.
+Legacy OpenCode-style Assistant file-change routes under
+`/api/ai/sessions/{id}/diff`, `/revert`, and `/unrevert` are not
+storage/recovery rollback operations. If those routes are called directly, the
+API must fail them as unsupported rather than presenting file diffs or reverts
+as backup rollback, restore eligibility, recovery freshness, storage-owner
+identity, or provider-local recovery authority.
 Mock-mode Assistant chat startup through `internal/api/ai_handler.go` is also
 only adjacent AI/runtime proof for storage/recovery consumers. The handler may
 enable the Assistant runtime in memory during mock mode so the typed mock SSE

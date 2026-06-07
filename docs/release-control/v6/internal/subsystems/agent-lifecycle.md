@@ -1560,6 +1560,12 @@ The restored prompt, redo availability flag, and restored message count are
 conversation repair metadata only; lifecycle-adjacent surfaces must not treat
 them as agent enrollment state, command authorization, update readiness, or
 fleet-control evidence.
+Legacy OpenCode-style Assistant file-change routes under
+`/api/ai/sessions/{id}/diff`, `/revert`, and `/unrevert` are not
+agent-lifecycle operations. If those routes are called directly, the API must
+fail them as unsupported rather than presenting file diffs or reverts as
+agent command rollback, enrollment repair, update rollback, or fleet-control
+authority.
 That same shared dependency now also assumes hosted cloud handoff authorizes
 tenant org access before browser lifecycle continues. Lifecycle-adjacent opens
 into hosted workspaces may depend on `internal/api/cloud_handoff_handlers.go`,

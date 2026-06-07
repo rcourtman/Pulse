@@ -1107,7 +1107,6 @@
         "frontend-modern/src/utils/aiCostPresentation.ts",
         "frontend-modern/src/utils/aiProviderHealthPresentation.ts",
         "frontend-modern/src/utils/aiProviderPresentation.ts",
-        "frontend-modern/src/utils/aiSessionDiffPresentation.ts",
         "internal/api/ai_handler.go",
         "internal/api/ai_handlers.go",
         "internal/api/ai_intelligence_handlers.go",
@@ -1184,8 +1183,7 @@
               "frontend-modern/src/utils/aiChatPresentation.ts",
               "frontend-modern/src/utils/aiControlLevelPresentation.ts",
               "frontend-modern/src/utils/aiProviderHealthPresentation.ts",
-              "frontend-modern/src/utils/aiProviderPresentation.ts",
-              "frontend-modern/src/utils/aiSessionDiffPresentation.ts"
+              "frontend-modern/src/utils/aiProviderPresentation.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -1194,7 +1192,6 @@
               "frontend-modern/src/utils/__tests__/aiControlLevelPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/aiProviderHealthPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/aiProviderPresentation.test.ts",
-              "frontend-modern/src/utils/__tests__/aiSessionDiffPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
             ]
           },

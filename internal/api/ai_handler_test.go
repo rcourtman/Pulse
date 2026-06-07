@@ -154,27 +154,12 @@ func (m *MockAIService) SummarizeSession(ctx context.Context, sessionID string) 
 	return args.Get(0).(map[string]interface{}), args.Error(1)
 }
 
-func (m *MockAIService) GetSessionDiff(ctx context.Context, sessionID string) (map[string]interface{}, error) {
-	args := m.Called(ctx, sessionID)
-	return args.Get(0).(map[string]interface{}), args.Error(1)
-}
-
 func (m *MockAIService) ForkSession(ctx context.Context, sessionID string) (*chat.Session, error) {
 	args := m.Called(ctx, sessionID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*chat.Session), args.Error(1)
-}
-
-func (m *MockAIService) RevertSession(ctx context.Context, sessionID string) (map[string]interface{}, error) {
-	args := m.Called(ctx, sessionID)
-	return args.Get(0).(map[string]interface{}), args.Error(1)
-}
-
-func (m *MockAIService) UnrevertSession(ctx context.Context, sessionID string) (map[string]interface{}, error) {
-	args := m.Called(ctx, sessionID)
-	return args.Get(0).(map[string]interface{}), args.Error(1)
 }
 
 func (m *MockAIService) UndoLastTurn(ctx context.Context, sessionID string) (*chat.SessionTurnUndoResult, error) {
@@ -2273,17 +2258,13 @@ func TestHandleChat_BindsExecutionToRequestContext(t *testing.T) {
 	}
 }
 
-func TestHandleDiff_Error(t *testing.T) {
+func TestHandleDiff_Unsupported(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
-	mockSvc := new(MockAIService)
-	h.defaultService = mockSvc
-	mockSvc.On("IsRunning").Return(true)
-	mockSvc.On("GetSessionDiff", mock.Anything, "s1").Return((map[string]interface{})(nil), assert.AnError)
 
 	req := httptest.NewRequest("GET", "/api/ai/sessions/s1/diff", nil)
 	w := httptest.NewRecorder()
 	h.HandleDiff(w, req, "s1")
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusNotImplemented, w.Code)
 }
 
 func TestHandleFork_Error(t *testing.T) {
@@ -2299,30 +2280,22 @@ func TestHandleFork_Error(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
-func TestHandleRevert_Error(t *testing.T) {
+func TestHandleRevert_Unsupported(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
-	mockSvc := new(MockAIService)
-	h.defaultService = mockSvc
-	mockSvc.On("IsRunning").Return(true)
-	mockSvc.On("RevertSession", mock.Anything, "s1").Return((map[string]interface{})(nil), assert.AnError)
 
 	req := httptest.NewRequest("POST", "/api/ai/sessions/s1/revert", nil)
 	w := httptest.NewRecorder()
 	h.HandleRevert(w, req, "s1")
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusNotImplemented, w.Code)
 }
 
-func TestHandleUnrevert_Error(t *testing.T) {
+func TestHandleUnrevert_Unsupported(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
-	mockSvc := new(MockAIService)
-	h.defaultService = mockSvc
-	mockSvc.On("IsRunning").Return(true)
-	mockSvc.On("UnrevertSession", mock.Anything, "s1").Return((map[string]interface{})(nil), assert.AnError)
 
 	req := httptest.NewRequest("POST", "/api/ai/sessions/s1/unrevert", nil)
 	w := httptest.NewRecorder()
 	h.HandleUnrevert(w, req, "s1")
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusNotImplemented, w.Code)
 }
 
 func TestHandleStatus_NotRunning(t *testing.T) {
@@ -2410,19 +2383,6 @@ func TestHandleSummarize_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
-func TestHandleDiff_Success(t *testing.T) {
-	h := newTestAIHandler(&config.Config{}, nil, nil)
-	mockSvc := new(MockAIService)
-	h.defaultService = mockSvc
-	mockSvc.On("IsRunning").Return(true)
-	mockSvc.On("GetSessionDiff", mock.Anything, "s1").Return(map[string]interface{}{"diff": "test"}, nil)
-
-	req := httptest.NewRequest("GET", "/api/ai/sessions/s1/diff", nil)
-	w := httptest.NewRecorder()
-	h.HandleDiff(w, req, "s1")
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
 func TestHandleFork_Success(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
@@ -2433,32 +2393,6 @@ func TestHandleFork_Success(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/ai/sessions/s1/fork", nil)
 	w := httptest.NewRecorder()
 	h.HandleFork(w, req, "s1")
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestHandleRevert_Success(t *testing.T) {
-	h := newTestAIHandler(&config.Config{}, nil, nil)
-	mockSvc := new(MockAIService)
-	h.defaultService = mockSvc
-	mockSvc.On("IsRunning").Return(true)
-	mockSvc.On("RevertSession", mock.Anything, "s1").Return(map[string]interface{}{"reverted": true}, nil)
-
-	req := httptest.NewRequest("POST", "/api/ai/sessions/s1/revert", nil)
-	w := httptest.NewRecorder()
-	h.HandleRevert(w, req, "s1")
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestHandleUnrevert_Success(t *testing.T) {
-	h := newTestAIHandler(&config.Config{}, nil, nil)
-	mockSvc := new(MockAIService)
-	h.defaultService = mockSvc
-	mockSvc.On("IsRunning").Return(true)
-	mockSvc.On("UnrevertSession", mock.Anything, "s1").Return(map[string]interface{}{"unreverted": true}, nil)
-
-	req := httptest.NewRequest("POST", "/api/ai/sessions/s1/unrevert", nil)
-	w := httptest.NewRecorder()
-	h.HandleUnrevert(w, req, "s1")
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 

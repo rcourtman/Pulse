@@ -14,8 +14,6 @@ const testConnectionMock = vi.fn();
 const runDiscoveryRefreshMock = vi.fn();
 const listSessionsMock = vi.fn();
 const summarizeSessionMock = vi.fn();
-const getSessionDiffMock = vi.fn();
-const revertSessionMock = vi.fn();
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
 const notificationInfoMock = vi.fn();
@@ -43,8 +41,6 @@ vi.mock('@/api/aiChat', () => ({
   AIChatAPI: {
     listSessions: (...args: unknown[]) => listSessionsMock(...args),
     summarizeSession: (...args: unknown[]) => summarizeSessionMock(...args),
-    getSessionDiff: (...args: unknown[]) => getSessionDiffMock(...args),
-    revertSession: (...args: unknown[]) => revertSessionMock(...args),
   },
 }));
 
@@ -120,8 +116,6 @@ const resetAllMocks = () => {
   runDiscoveryRefreshMock.mockReset();
   listSessionsMock.mockReset();
   summarizeSessionMock.mockReset();
-  getSessionDiffMock.mockReset();
-  revertSessionMock.mockReset();
   notificationSuccessMock.mockReset();
   notificationErrorMock.mockReset();
   notificationInfoMock.mockReset();
@@ -161,8 +155,6 @@ const setupDefaultMocks = () => {
   });
   listSessionsMock.mockResolvedValue([]);
   summarizeSessionMock.mockResolvedValue(undefined);
-  getSessionDiffMock.mockResolvedValue({ files: [], summary: '' });
-  revertSessionMock.mockResolvedValue(undefined);
   presentationPolicyHidesUpgradePromptsMock.mockReturnValue(false);
 };
 

@@ -38,12 +38,11 @@ leave the transcript without exposing hidden provider/tool metadata.
 14. `frontend-modern/src/utils/aiCostPresentation.ts`
 15. `frontend-modern/src/utils/aiProviderHealthPresentation.ts`
 16. `frontend-modern/src/utils/aiProviderPresentation.ts`
-17. `frontend-modern/src/utils/aiSessionDiffPresentation.ts`
-18. `frontend-modern/src/utils/textPresentation.ts`
-19. `frontend-modern/src/stores/aiRuntimeState.ts`
-20. `frontend-modern/src/stores/aiChat.ts`
-21. `docs/AI.md`
-22. `pkg/aicontracts/investigation.go`
+17. `frontend-modern/src/utils/textPresentation.ts`
+18. `frontend-modern/src/stores/aiRuntimeState.ts`
+19. `frontend-modern/src/stores/aiChat.ts`
+20. `docs/AI.md`
+21. `pkg/aicontracts/investigation.go`
 
 ## Shared Boundaries
 
@@ -1264,6 +1263,14 @@ leave the transcript without exposing hidden provider/tool metadata.
    tool-result relationships remain intact inside the fork. Forking must not
    mutate the source session, must continue through normal session list/load
    contracts, and must not return `not_implemented` from the local runtime.
+   OpenCode-style session file diff/revert workflows do not apply to Pulse
+   Assistant sessions: Pulse does not own local code-file edits, and
+   infrastructure mutations are governed through approval/action history. The
+   Settings maintenance surface must not advertise session file changes or
+   session revert actions, and legacy direct calls to
+   `/api/ai/sessions/{id}/diff`, `/revert`, and `/unrevert` must fail
+   explicitly with `501 Not Implemented` rather than returning a success-shaped
+   placeholder.
    The picker trigger and result rows are part of that source-backed workflow:
    the trigger must expose its accessible name and expanded state, opening the
    picker must focus search, and each result must be a keyboard-addressable
@@ -1375,7 +1382,7 @@ leave the transcript without exposing hidden provider/tool metadata.
    require an explicit `allow_broad_scope` request from a dedicated rule
    management surface.
 5. Add or change AI usage/cost dashboard presentation through `frontend-modern/src/components/AI/AICostDashboard.tsx` and `frontend-modern/src/utils/aiCostPresentation.ts`
-6. Add or change AI provider, control-level, or chat/session presentation through `frontend-modern/src/components/AI/Chat/`, `frontend-modern/src/utils/aiProviderPresentation.ts`, `frontend-modern/src/utils/aiProviderHealthPresentation.ts`, `frontend-modern/src/utils/aiControlLevelPresentation.ts`, `frontend-modern/src/utils/aiChatPresentation.ts`, and `frontend-modern/src/utils/aiSessionDiffPresentation.ts`
+6. Add or change AI provider, control-level, or chat/session presentation through `frontend-modern/src/components/AI/Chat/`, `frontend-modern/src/utils/aiProviderPresentation.ts`, `frontend-modern/src/utils/aiProviderHealthPresentation.ts`, `frontend-modern/src/utils/aiControlLevelPresentation.ts`, and `frontend-modern/src/utils/aiChatPresentation.ts`
    AI provider/model presentation must preserve the model transport route when
    the selected provider is a gateway. OpenRouter-routed model IDs such as
    `openrouter:deepseek/...` must render with an explicit `via OpenRouter`
@@ -2693,12 +2700,11 @@ helpers used across chat, settings, and usage surfaces.
 `frontend-modern/src/utils/aiProviderPresentation.ts`,
 `frontend-modern/src/utils/aiProviderHealthPresentation.ts`,
 `frontend-modern/src/utils/aiControlLevelPresentation.ts`,
-`frontend-modern/src/utils/aiChatPresentation.ts`,
-`frontend-modern/src/utils/aiSessionDiffPresentation.ts` are the canonical owners
+`frontend-modern/src/utils/aiChatPresentation.ts` are the canonical owners
 for provider naming, provider health labels, control-level semantics,
 chat drawer title/subtitle, launcher title/aria copy, session-menu labeling,
 discovery hint framing, chat/session empty states, assistant message and
-question-card labels, and session-diff badges.
+question-card labels.
 Settings and chat surfaces must consume those helpers instead of keeping local
 AI wording or model/provider inference branches.
 Assistant chat must not render Pulse-authored explore pre-pass cards or

@@ -524,24 +524,11 @@ func TestService_ExtendedMethods(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, res)
 
-	// 3. Unimplemented methods return safely
-	res, err = service.GetSessionDiff(ctx, "s1")
-	assert.NoError(t, err)
-	assert.Equal(t, "not_implemented", res["status"])
-
-	res, err = service.RevertSession(ctx, "s1")
-	assert.NoError(t, err)
-	assert.Equal(t, "not_implemented", res["status"])
-
-	res, err = service.UnrevertSession(ctx, "s1")
-	assert.NoError(t, err)
-	assert.Equal(t, "not_implemented", res["status"])
-
-	// 4. ForkSession returns error
+	// 3. ForkSession returns error
 	_, err = service.ForkSession(ctx, "s1")
 	assert.Error(t, err)
 
-	// 5. GetBaseURL
+	// 4. GetBaseURL
 	url := service.GetBaseURL()
 	assert.Equal(t, "", url)
 

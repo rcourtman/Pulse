@@ -12,8 +12,6 @@ import {
   getAIChatSessionsLoadingState,
   getAIModelsLoadErrorMessage,
   getAIProviderTestResultTextClass,
-  getAISessionDiffErrorMessage,
-  getAISessionRevertErrorMessage,
   getAISessionSummarizeErrorMessage,
   getAISettingsLoadErrorMessage,
   getAISettingsLoadingState,
@@ -121,10 +119,6 @@ describe('aiSettingsPresentation', () => {
   it('returns canonical ai settings operational failure copy', () => {
     expect(getAISessionSummarizeErrorMessage()).toBe('Unable to summarize the session.');
     expect(getAISessionSummarizeErrorMessage('provider offline')).toBe('provider offline');
-    expect(getAISessionDiffErrorMessage()).toBe('Unable to load the session diff.');
-    expect(getAISessionDiffErrorMessage('git unavailable')).toBe('git unavailable');
-    expect(getAISessionRevertErrorMessage()).toBe('Unable to revert the session.');
-    expect(getAISessionRevertErrorMessage('conflict')).toBe('conflict');
     expect(getAISettingsSaveErrorMessage()).toBe('Unable to save Assistant & Patrol settings.');
     expect(getAISettingsSaveErrorMessage('bad request')).toBe('bad request');
     expect(getAICredentialsClearErrorMessage()).toBe('Unable to clear credentials.');

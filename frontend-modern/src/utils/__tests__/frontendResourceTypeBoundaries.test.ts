@@ -3483,8 +3483,6 @@ describe('frontend resource type boundaries', () => {
     expect(aiSettingsSource).toContain('getAIModelsLoadErrorMessage');
     expect(aiSettingsSource).toContain('getAIChatSessionsLoadErrorMessage');
     expect(aiSettingsSource).toContain('getAISessionSummarizeErrorMessage');
-    expect(aiSettingsSource).toContain('getAISessionDiffErrorMessage');
-    expect(aiSettingsSource).toContain('getAISessionRevertErrorMessage');
     expect(aiSettingsSource).toContain('getAISettingsSaveErrorMessage');
     expect(aiSettingsSource).toContain('getAICredentialsClearErrorMessage');
     expect(aiSettingsSource).toContain('getAISettingsToggleErrorMessage');
