@@ -878,7 +878,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		emitWorkflowState(
 			streamCallback,
 			"provider_start",
-			fmt.Sprintf("Sent request to %s; waiting for the first token.", providerLabelForAttempt(attempt)),
+			fmt.Sprintf("%s is starting the response.", providerLabelForAttempt(attempt)),
 			sessionFSMState(sessionFSM),
 			"",
 			withWorkflowModelRoute(attempt.Model),

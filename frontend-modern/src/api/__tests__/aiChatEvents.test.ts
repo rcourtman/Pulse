@@ -45,7 +45,7 @@ describe('AI chat stream event contract', () => {
   it('exposes selected provider and model metadata on workflow state events', () => {
     const workflow: WorkflowStateData = {
       phase: 'provider_start',
-      message: 'Sent request to OpenRouter; waiting for the first token.',
+      message: 'OpenRouter is starting the response.',
       provider: 'openrouter',
       model: 'openrouter:qwen/qwen3.7-plus',
     };

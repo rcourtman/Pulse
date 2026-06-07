@@ -1062,7 +1062,10 @@ the canonical monitored-system blocked payload.
    `provider` and `model`, and provider fallback transitions may additionally
    carry `failed_provider`, `failed_model`, `next_provider`, and `next_model` so
    diagnostics can identify the exact route change without expanding the visible
-   operator message. The generated
+   operator message. The selected-route `provider_start` message is operator
+   progress copy and must be active/in-progress wording such as
+   `<Provider> is starting the response.` while the typed `provider` and `model`
+   fields carry the exact route identity. The generated
    `frontend-modern/src/api/generated/aiChatEvents.ts` type must stay derived
    from `internal/ai/chat/types.go` through `scripts/generate-types.go`, and
    frontend API tests must pin any new generated SSE fields, including live

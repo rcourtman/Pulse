@@ -1443,20 +1443,20 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'provider_start',
-          message: 'Sent request to OpenRouter; waiting for the first token.',
+          message: 'OpenRouter is starting the response.',
         },
       });
       assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.workflowStatus).toEqual(
         expect.objectContaining({
-          message: 'Sent request to OpenRouter; waiting for the first token.',
+          message: 'OpenRouter is starting the response.',
         }),
       );
       expect(assistant.streamEvents).toEqual([
         expect.objectContaining({
           type: 'workflow_status',
           workflowStatus: expect.objectContaining({
-            message: 'Sent request to OpenRouter; waiting for the first token.',
+            message: 'OpenRouter is starting the response.',
           }),
         }),
       ]);
@@ -1464,7 +1464,7 @@ describe('useChat', () => {
         'Preparing Pulse context.',
         'Reading current Pulse inventory with pulse_query.',
         'Built compact inventory context for the model.',
-        'Sent request to OpenRouter; waiting for the first token.',
+        'OpenRouter is starting the response.',
       ]);
 
       dispose();
@@ -1481,7 +1481,7 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'provider_start',
-          message: 'Sent request to OpenRouter; waiting for the first token.',
+          message: 'OpenRouter is starting the response.',
         },
       });
       fire({
@@ -1524,7 +1524,7 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'provider_start',
-          message: 'Sent request to OpenRouter; waiting for the first token.',
+          message: 'OpenRouter is starting the response.',
           provider: 'openrouter',
           model: 'openrouter:qwen/qwen3.7-plus',
         },
@@ -1533,7 +1533,7 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'provider_start',
-          message: 'Sent request to OpenRouter; waiting for the first token.',
+          message: 'OpenRouter is starting the response.',
           provider: 'openrouter',
           model: 'openrouter:qwen/qwen3.7-plus',
         },
@@ -1558,7 +1558,7 @@ describe('useChat', () => {
           type: 'workflow_status',
           workflowStatus: expect.objectContaining({
             phase: 'provider_start',
-            message: 'Sent request to OpenRouter; waiting for the first token.',
+            message: 'OpenRouter is starting the response.',
           }),
         }),
       );
@@ -1597,7 +1597,7 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'provider_start',
-          message: 'Sent request to DeepSeek; waiting for the first token.',
+          message: 'DeepSeek is starting the response.',
           provider: 'deepseek',
           model: 'deepseek:deepseek-chat',
         },
@@ -1639,7 +1639,7 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'provider_start',
-          message: 'Sent request to DeepSeek; waiting for the first token.',
+          message: 'DeepSeek is starting the response.',
           provider: 'deepseek',
           model: 'deepseek:deepseek-chat',
         },
@@ -1714,7 +1714,7 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'provider_start',
-          message: 'Sent request to OpenRouter; waiting for the first token.',
+          message: 'OpenRouter is starting the response.',
         },
       });
       fire({ type: 'content', data: 'Here is the answer.' });
@@ -1731,7 +1731,7 @@ describe('useChat', () => {
           type: 'workflow_status',
           workflowStatus: expect.objectContaining({
             phase: 'provider_start',
-            message: 'Sent request to OpenRouter; waiting for the first token.',
+            message: 'OpenRouter is starting the response.',
           }),
         }),
       );
@@ -1784,7 +1784,7 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'provider_start',
-          message: 'Sent request to OpenRouter; waiting for the first token.',
+          message: 'OpenRouter is starting the response.',
         },
       });
       fire({ type: 'tool_start', data: { id: 'tool-1', name: 'pulse_alerts', input: '{}' } });
@@ -2418,7 +2418,7 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'provider_start',
-          message: 'Sent request to OpenRouter; waiting for the first token.',
+          message: 'OpenRouter is starting the response.',
         },
       });
       fire({ type: 'content', data: 'partial response' });
@@ -2480,7 +2480,7 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'provider_start',
-          message: 'Sent request to OpenRouter; waiting for the first token.',
+          message: 'OpenRouter is starting the response.',
         },
       });
       fire({ type: 'content', data: 'partial response' });

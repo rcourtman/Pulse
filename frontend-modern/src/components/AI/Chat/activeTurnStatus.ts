@@ -513,6 +513,41 @@ const hasVisibleAssistantOutput = (message: ChatMessage): boolean => {
   });
 };
 
+const messageTimestampMs = (message?: ChatMessage): number | undefined => {
+  const timestamp = message?.timestamp;
+  if (!(timestamp instanceof Date)) return undefined;
+  const value = timestamp.getTime();
+  return Number.isFinite(value) ? value : undefined;
+};
+
+const latestSentUserMessage = (messages: ChatMessage[]): ChatMessage | undefined => {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role === 'user' && message.delivery !== 'queued') {
+      return message;
+    }
+  }
+  return undefined;
+};
+
+const activeTurnStartedAt = (
+  messages: ChatMessage[],
+  assistantMessage?: ChatMessage,
+): number | undefined =>
+  messageTimestampMs(assistantMessage) ?? messageTimestampMs(latestSentUserMessage(messages));
+
+const initialRequestStatus = (
+  messages: ChatMessage[],
+  assistantMessage?: ChatMessage,
+): AssistantActiveTurnStatus => {
+  const startedAt = activeTurnStartedAt(messages, assistantMessage);
+  return {
+    type: 'thinking',
+    text: 'Sending prompt',
+    ...(startedAt !== undefined ? { startedAt } : {}),
+  };
+};
+
 export const getAssistantActiveTurnStatus = (
   messages: ChatMessage[],
   isLoading: boolean,
@@ -522,7 +557,7 @@ export const getAssistantActiveTurnStatus = (
 
   const assistantMessage = [...messages].reverse().find((message) => message.role === 'assistant');
   if (!assistantMessage) {
-    return { type: 'thinking', text: 'Waiting for assistant' };
+    return initialRequestStatus(messages);
   }
 
   const statusCandidates: AssistantActiveTurnStatusCandidate[] = [];
@@ -573,5 +608,5 @@ export const getAssistantActiveTurnStatus = (
     return { type: 'generating', text: 'Generating response' };
   }
 
-  return { type: 'thinking', text: 'Waiting for assistant' };
+  return initialRequestStatus(messages, assistantMessage);
 };

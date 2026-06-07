@@ -10,15 +10,59 @@ const assistantMessage = (overrides: Partial<ChatMessage> = {}): ChatMessage => 
   ...overrides,
 });
 
+const userMessage = (overrides: Partial<ChatMessage> = {}): ChatMessage => ({
+  id: 'user-1',
+  role: 'user',
+  content: 'Check the current node',
+  timestamp: new Date(),
+  ...overrides,
+});
+
 describe('getAssistantActiveTurnStatus', () => {
   it('stays quiet when no Assistant turn is active', () => {
     expect(getAssistantActiveTurnStatus([], false)).toBeNull();
   });
 
-  it('shows a waiting state before the first assistant event arrives', () => {
+  it('shows an active send state before the first assistant event arrives', () => {
     expect(getAssistantActiveTurnStatus([], true)).toEqual({
       type: 'thinking',
-      text: 'Waiting for assistant',
+      text: 'Sending prompt',
+    });
+  });
+
+  it('tracks startup timing from the submitted user turn', () => {
+    expect(
+      getAssistantActiveTurnStatus(
+        [userMessage({ timestamp: new Date(1_000) })],
+        true,
+        4_000,
+      ),
+    ).toEqual({
+      type: 'thinking',
+      text: 'Sending prompt',
+      startedAt: 1_000,
+    });
+  });
+
+  it('does not let queued follow-ups reset the active turn startup time', () => {
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          userMessage({ id: 'user-1', timestamp: new Date(1_000), delivery: 'sent' }),
+          userMessage({
+            id: 'user-2',
+            content: 'Follow up',
+            timestamp: new Date(5_000),
+            delivery: 'queued',
+          }),
+        ],
+        true,
+        6_000,
+      ),
+    ).toEqual({
+      type: 'thinking',
+      text: 'Sending prompt',
+      startedAt: 1_000,
     });
   });
 
@@ -102,7 +146,7 @@ describe('getAssistantActiveTurnStatus', () => {
           assistantMessage({
             workflowStatus: {
               phase: 'provider_start',
-              message: 'Sent request to OpenRouter; waiting for the first token.',
+              message: 'OpenRouter is starting the response.',
               startedAt,
             },
           }),
@@ -111,7 +155,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'thinking',
-      text: 'Sent request to OpenRouter; waiting for the first token.',
+      text: 'OpenRouter is starting the response.',
       startedAt,
     });
   });
@@ -127,7 +171,7 @@ describe('getAssistantActiveTurnStatus', () => {
                 type: 'workflow_status',
                 workflowStatus: {
                   phase: 'provider_start',
-                  message: 'Sent request to OpenRouter; waiting for the first token.',
+                  message: 'OpenRouter is starting the response.',
                   startedAt: 1_000,
                 },
                 startedAt: 1_000,
@@ -393,7 +437,7 @@ describe('getAssistantActiveTurnStatus', () => {
             isStreaming: true,
             workflowStatus: {
               phase: 'provider_start',
-              message: 'Sent request to OpenRouter; waiting for the first token.',
+              message: 'OpenRouter is starting the response.',
               startedAt: 1_000,
             },
             streamEvents: [
@@ -401,7 +445,7 @@ describe('getAssistantActiveTurnStatus', () => {
                 type: 'workflow_status',
                 workflowStatus: {
                   phase: 'provider_start',
-                  message: 'Sent request to OpenRouter; waiting for the first token.',
+                  message: 'OpenRouter is starting the response.',
                   startedAt: 1_000,
                 },
                 startedAt: 1_000,
@@ -454,7 +498,7 @@ describe('getAssistantActiveTurnStatus', () => {
             isStreaming: true,
             workflowStatus: {
               phase: 'provider_start',
-              message: 'Sent request to OpenRouter; waiting for the first token.',
+              message: 'OpenRouter is starting the response.',
               startedAt: 1_000,
             },
             streamEvents: [
@@ -462,7 +506,7 @@ describe('getAssistantActiveTurnStatus', () => {
                 type: 'workflow_status',
                 workflowStatus: {
                   phase: 'provider_start',
-                  message: 'Sent request to OpenRouter; waiting for the first token.',
+                  message: 'OpenRouter is starting the response.',
                   startedAt: 1_000,
                 },
                 startedAt: 1_000,
@@ -536,7 +580,7 @@ describe('getAssistantActiveTurnStatus', () => {
           assistantMessage({
             workflowStatus: {
               phase: 'provider_start',
-              message: 'Sent request to OpenRouter; waiting for the first token.',
+              message: 'OpenRouter is starting the response.',
               startedAt: 1_000,
             },
             streamEvents: [

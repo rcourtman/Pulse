@@ -5064,7 +5064,25 @@ describe('AIChat', () => {
       mockChat.messages.mockReturnValue([]);
       renderChat();
       expect(screen.getByLabelText('Assistant active turn status')).toHaveTextContent(
-        'Waiting for assistant',
+        'Sending prompt',
+      );
+    });
+
+    it('shows startup elapsed time once the submitted prompt timestamp is known', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(5_000);
+      mockChat.isLoading.mockReturnValue(true);
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'user-1',
+          role: 'user' as const,
+          content: 'Check current resource',
+          timestamp: new Date(1_000),
+        },
+      ]);
+      renderChat();
+      expect(screen.getByLabelText('Assistant active turn status')).toHaveTextContent(
+        'Sending prompt (4s)',
       );
     });
 
@@ -5082,7 +5100,7 @@ describe('AIChat', () => {
       ]);
       renderChat();
       expect(screen.getByLabelText('Assistant active turn status')).toHaveTextContent(
-        'Waiting for assistant',
+        'Sending prompt',
       );
       expect(screen.queryByText('Generating response...')).not.toBeInTheDocument();
     });
@@ -5206,7 +5224,7 @@ describe('AIChat', () => {
         },
         {
           phase: 'provider_start',
-          message: 'Sent request to OpenRouter; waiting for the first token.',
+          message: 'OpenRouter is starting the response.',
           startedAt: 1_200,
         },
       ];
@@ -5238,7 +5256,7 @@ describe('AIChat', () => {
       const status = screen.getByLabelText('Assistant active turn status');
       expect(status).toHaveTextContent('Preparing Pulse context.');
       expect(status).not.toHaveTextContent(
-        'Sent request to OpenRouter; waiting for the first token.',
+        'OpenRouter is starting the response.',
       );
 
       await vi.advanceTimersByTimeAsync(650);
@@ -5246,7 +5264,7 @@ describe('AIChat', () => {
       expect(status).not.toHaveTextContent('pulse_query');
 
       await vi.advanceTimersByTimeAsync(650);
-      expect(status).toHaveTextContent('Sent request to OpenRouter; waiting for the first token.');
+      expect(status).toHaveTextContent('OpenRouter is starting the response.');
       expect(status).not.toHaveTextContent('Preparing Pulse context.');
       expect(status).not.toHaveTextContent('Reading current Pulse inventory with pulse_query.');
     });
@@ -5279,7 +5297,7 @@ describe('AIChat', () => {
           isStreaming: true,
           workflowStatus: {
             phase: 'provider_start',
-            message: 'Sent request to OpenRouter; waiting for the first token.',
+            message: 'OpenRouter is starting the response.',
             startedAt: 1_000,
           },
           streamEvents: [
@@ -5287,7 +5305,7 @@ describe('AIChat', () => {
               type: 'workflow_status',
               workflowStatus: {
                 phase: 'provider_start',
-                message: 'Sent request to OpenRouter; waiting for the first token.',
+                message: 'OpenRouter is starting the response.',
                 startedAt: 1_000,
               },
               startedAt: 1_000,
@@ -5314,7 +5332,7 @@ describe('AIChat', () => {
         'Completed Inspect devices on current resource',
       );
       expect(screen.getByLabelText('Assistant active turn status')).not.toHaveTextContent(
-        'Sent request to OpenRouter; waiting for the first token.',
+        'OpenRouter is starting the response.',
       );
     });
 
@@ -5347,14 +5365,14 @@ describe('AIChat', () => {
           streamEvents: [{ type: 'content', content: 'I checked the first source.' }],
           workflowStatus: {
             phase: 'provider_start',
-            message: 'Sent request to OpenRouter; waiting for the first token.',
+            message: 'OpenRouter is starting the response.',
             startedAt: Date.now() - 5_000,
           },
         },
       ]);
       renderChat();
       expect(screen.getByLabelText('Assistant active turn status')).toHaveTextContent(
-        'Sent request to OpenRouter; waiting for the first token.',
+        'OpenRouter is starting the response.',
       );
     });
 

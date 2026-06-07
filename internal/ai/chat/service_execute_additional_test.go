@@ -683,7 +683,7 @@ func TestService_ExecuteStream_EmitsProviderStartupBeforeProviderCall(t *testing
 		}
 		if data.Phase == "provider_start" {
 			providerStartSeen.Store(true)
-			if data.Message != "Sent request to OpenRouter; waiting for the first token." {
+			if data.Message != "OpenRouter is starting the response." {
 				t.Fatalf("provider_start message = %q", data.Message)
 			}
 			if data.Provider != config.AIProviderOpenRouter {

@@ -514,6 +514,10 @@ runtime cost control, and shared AI transport surfaces.
    turns, and selected-provider startup. These events are runtime progress, not
    Assistant-authored analysis, and they must not become keyword routers,
    explore pre-passes, or instructions that choose the model's next action.
+   Selected-provider startup copy must describe the provider route as actively
+   starting the response (for example, `<Provider> is starting the response.`)
+   rather than as a passive wait label, while preserving the same
+   `provider_start` phase and concrete model-route payload.
    The HTTP chat stream handler also owns visible idle progress for silent
    intervals after the stream has opened: if no client-visible Assistant event
    reaches the browser for the governed idle interval while execution is still
@@ -550,6 +554,11 @@ runtime cost control, and shared AI transport surfaces.
    superseded. Live workflow and pending-tool activity must retain a per-state
    start timestamp so the drawer can show elapsed wait/run time for long
    provider starts and tool calls instead of repeating a timeless waiting label.
+   If the UI enters a loading turn before the assistant shell or first
+   `workflow_state` exists, the active-turn footer must show the active startup
+   status `Sending prompt` and derive elapsed time from the submitted, non-queued
+   user turn or assistant shell timestamp. Queued follow-up messages must not
+   reset that active-turn startup clock.
    The referenced OpenCode source at fetched `origin/dev` commit
    `0875203a6c726d7a37b5ffbb770cc433c98e7cd6` mutates typed message parts as
    events arrive in `packages/opencode/src/cli/cmd/tui/context/sync.tsx`

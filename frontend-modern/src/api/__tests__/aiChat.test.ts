@@ -218,7 +218,7 @@ describe('AIChatAPI', () => {
       type: 'workflow_state',
       data: {
         phase: 'provider_start',
-        message: 'Sent request to OpenRouter; waiting for the first token.',
+        message: 'OpenRouter is starting the response.',
         model: 'openrouter:deepseek/deepseek-chat',
       },
     });
@@ -365,7 +365,7 @@ describe('AIChatAPI', () => {
       type: 'workflow_state',
       data: {
         phase: 'provider_start',
-        message: 'Sent request to OpenRouter; waiting for the first token.',
+        message: 'OpenRouter is starting the response.',
         model: 'openrouter:qwen/qwen3.7-plus',
       },
     });
@@ -525,7 +525,7 @@ describe('AIChatAPI', () => {
       type: 'workflow_state',
       data: {
         phase: 'provider_start',
-        message: 'Sent request to OpenRouter; waiting for the first token.',
+        message: 'OpenRouter is starting the response.',
         provider: 'openrouter',
         model: 'openrouter:qwen/qwen3.7-plus',
       },

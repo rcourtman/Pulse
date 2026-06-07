@@ -255,7 +255,7 @@ const buildToolBurstFixtureEvents = (model?: string): AIChatStreamEvent[] => [
     type: 'workflow_state',
     data: {
       phase: 'provider_start',
-      message: 'Sent request to OpenRouter; waiting for the first token.',
+      message: 'OpenRouter is starting the response.',
       model: assistantFixtureModel(model),
     },
   },
@@ -417,7 +417,7 @@ const buildStatusBoundaryFixtureEvents = (model?: string): AIChatStreamEvent[] =
     type: 'workflow_state',
     data: {
       phase: 'provider_start',
-      message: 'Sent request to OpenRouter; waiting for the first token.',
+      message: 'OpenRouter is starting the response.',
       model: assistantFixtureModel(model),
     },
   },
@@ -518,7 +518,7 @@ const buildProviderRetryFixtureEvents = (): AIChatStreamEvent[] => [
     type: 'workflow_state',
     data: {
       phase: 'provider_start',
-      message: 'Sent request to DeepSeek; waiting for the first token.',
+      message: 'DeepSeek is starting the response.',
       provider: 'deepseek',
       model: 'deepseek:deepseek-chat',
     },
@@ -579,7 +579,7 @@ const buildStreamIdleFixtureEvents = (model?: string): AIChatStreamEvent[] => [
     type: 'workflow_state',
     data: {
       phase: 'provider_start',
-      message: 'Sent request to OpenRouter; waiting for the first token.',
+      message: 'OpenRouter is starting the response.',
       provider: 'openrouter',
       model: assistantFixtureModel(model),
     },
@@ -624,7 +624,7 @@ const buildQueueHoldFixtureEvents = (model?: string): AIChatStreamEvent[] => [
     type: 'workflow_state',
     data: {
       phase: 'provider_start',
-      message: 'Sent request to OpenRouter; waiting for the first token.',
+      message: 'OpenRouter is starting the response.',
       provider: 'openrouter',
       model: assistantFixtureModel(model),
     },

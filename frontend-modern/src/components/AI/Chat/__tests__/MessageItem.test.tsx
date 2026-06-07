@@ -755,7 +755,7 @@ describe('MessageItem', () => {
         },
         {
           phase: 'provider_start',
-          message: 'Sent request to OpenRouter; waiting for the first token.',
+          message: 'OpenRouter is starting the response.',
           startedAt: 1_200,
         },
       ];
@@ -785,7 +785,7 @@ describe('MessageItem', () => {
         screen.queryByText(/Reading current Pulse inventory with pulse_query\./),
       ).not.toBeInTheDocument();
       expect(
-        screen.getByText(/Sent request to OpenRouter; waiting for the first token\./),
+        screen.getByText(/OpenRouter is starting the response\./),
       ).toBeInTheDocument();
     });
 
@@ -802,7 +802,7 @@ describe('MessageItem', () => {
         },
         {
           phase: 'provider_start',
-          message: 'Sent request to OpenRouter; waiting for the first token.',
+          message: 'OpenRouter is starting the response.',
           startedAt: 1_300,
         },
       ];
@@ -843,7 +843,7 @@ describe('MessageItem', () => {
       expect(screen.getByText('Reading current Pulse inventory.')).toBeInTheDocument();
       expect(screen.getByText('3 devices found')).toBeInTheDocument();
       expect(
-        screen.getByText('Sent request to OpenRouter; waiting for the first token.'),
+        screen.getByText('OpenRouter is starting the response.'),
       ).toBeInTheDocument();
       expect(screen.queryByText(/pulse_query/)).not.toBeInTheDocument();
     });
@@ -859,7 +859,7 @@ describe('MessageItem', () => {
             streamEvents: [{ type: 'content', content: 'Partial answer' }],
             workflowStatus: {
               phase: 'provider_start',
-              message: 'Sent request to OpenRouter; waiting for the first token.',
+              message: 'OpenRouter is starting the response.',
             },
           })}
           {...makeHandlers()}
@@ -868,7 +868,7 @@ describe('MessageItem', () => {
 
       expect(screen.getByText('Partial answer')).toBeInTheDocument();
       expect(
-        screen.queryByText('Sent request to OpenRouter; waiting for the first token.'),
+        screen.queryByText('OpenRouter is starting the response.'),
       ).not.toBeInTheDocument();
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
     });
@@ -886,7 +886,7 @@ describe('MessageItem', () => {
                 type: 'workflow_status',
                 workflowStatus: {
                   phase: 'provider_start',
-                  message: 'Sent request to OpenRouter; waiting for the first token.',
+                  message: 'OpenRouter is starting the response.',
                 },
               },
               { type: 'content', content: 'Partial answer' },
@@ -897,7 +897,7 @@ describe('MessageItem', () => {
       ));
 
       expect(
-        screen.getByText('Sent request to OpenRouter; waiting for the first token.'),
+        screen.getByText('OpenRouter is starting the response.'),
       ).toBeInTheDocument();
       expect(screen.getByText('Partial answer')).toBeInTheDocument();
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
