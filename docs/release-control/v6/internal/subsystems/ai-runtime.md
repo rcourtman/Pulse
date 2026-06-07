@@ -135,6 +135,12 @@ runtime cost control, and shared AI transport surfaces.
    user turn as well as final assistant turns, and the browser chat runtime must
    restore the latest explicit `provider:model` route from loaded session
    messages before publishing the loaded session ID to drawer/session storage.
+   During an active Assistant turn, the drawer must keep the effective model
+   route visible next to the live turn status using the route recorded on the
+   streaming assistant message first and the selected route only as a fallback;
+   live progress text remains the activity description, while route identity is
+   separate compact chrome so provider/model state stays inspectable without
+   polluting status copy.
    Legacy bare model names, provider response IDs without a Pulse route prefix,
    URLs, and malformed route strings must be ignored so loading older sessions
    cannot corrupt the active selector. The referenced OpenCode source at fetched

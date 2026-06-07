@@ -15,6 +15,7 @@ import SquareIcon from 'lucide-solid/icons/square';
 import ClockIcon from 'lucide-solid/icons/clock';
 import ClipboardCopyIcon from 'lucide-solid/icons/clipboard-copy';
 import CopyIcon from 'lucide-solid/icons/copy';
+import CpuIcon from 'lucide-solid/icons/cpu';
 import DownloadIcon from 'lucide-solid/icons/download';
 import GitForkIcon from 'lucide-solid/icons/git-fork';
 import PencilIcon from 'lucide-solid/icons/pencil';
@@ -230,6 +231,11 @@ interface AssistantProviderRouteHealthPresentation {
   title: string;
   className: string;
   dotClassName: string;
+}
+
+interface AssistantActiveRoutePresentation {
+  label: string;
+  title: string;
 }
 
 interface PromptHistoryEntry {
@@ -2501,6 +2507,23 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (elapsedSeconds < 2) return status.text;
     return `${status.text} (${elapsedSeconds}s)`;
   });
+  const activeTurnRoute = createMemo<AssistantActiveRoutePresentation | null>(() => {
+    if (!currentStatus()) return null;
+    const model = activeAssistantMessage()?.model?.trim() || selectedChatModel().trim();
+    if (!model) return null;
+    const label = formatChatMessageModelRoute(model);
+    if (!label) return null;
+    const provider = providerForModelRoute(model);
+    const providerLabel = provider ? getAIProviderDisplayName(provider) : '';
+    return {
+      label,
+      title: compactText([
+        'Active Assistant model route',
+        label,
+        providerLabel ? `Provider: ${providerLabel}` : undefined,
+      ]).join('. '),
+    };
+  });
   const lastAssistantUsage = createMemo(() => {
     const messages = chat.messages();
     for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -4504,6 +4527,19 @@ export const AIChat: Component<AIChatProps> = (props) => {
                         />
                       </span>
                     </div>
+                    <Show when={activeTurnRoute()}>
+                      {(route) => (
+                        <div
+                          class="inline-flex h-7 min-w-0 max-w-[42%] shrink items-center gap-1.5 rounded-md border border-border-subtle bg-surface px-2 text-[10px] font-medium text-muted"
+                          role="status"
+                          aria-label="Assistant active model route"
+                          title={route().title}
+                        >
+                          <CpuIcon class="h-3 w-3 shrink-0 text-blue-500" aria-hidden="true" />
+                          <span class="min-w-0 truncate">{route().label}</span>
+                        </div>
+                      )}
+                    </Show>
                     <button
                       type="button"
                       onClick={stopActiveResponse}

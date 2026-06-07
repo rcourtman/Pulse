@@ -5151,6 +5151,39 @@ describe('AIChat', () => {
       expect(screen.queryByText('Generating response...')).not.toBeInTheDocument();
     });
 
+    it('shows the active model route beside active turn progress', () => {
+      mockChat.isLoading.mockReturnValue(true);
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'msg-1',
+          role: 'assistant' as const,
+          content: '',
+          timestamp: new Date(),
+          isStreaming: true,
+          model: 'openrouter:qwen/qwen3.7-plus',
+          streamEvents: [],
+          workflowStatus: {
+            phase: 'context',
+            message: 'Reading current Pulse inventory.',
+            state: 'READING',
+            tool: 'pulse_query',
+          },
+        },
+      ]);
+      renderChat();
+
+      const status = screen.getByLabelText('Assistant active turn status');
+      expect(status).toHaveTextContent('Reading current Pulse inventory.');
+      expect(status).not.toHaveTextContent('Qwen');
+
+      const route = screen.getByLabelText('Assistant active model route');
+      expect(route).toHaveTextContent('Qwen: Qwen3.7 Plus via OpenRouter');
+      expect(route).toHaveAttribute(
+        'title',
+        expect.stringContaining('Active Assistant model route'),
+      );
+    });
+
     it('shows live provider retry countdowns in the active turn status', () => {
       vi.useFakeTimers();
       vi.setSystemTime(2_300);
