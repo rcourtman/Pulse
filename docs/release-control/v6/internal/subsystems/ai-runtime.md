@@ -926,7 +926,7 @@ runtime cost control, and shared AI transport surfaces.
    refresh/search is still running, and loading/error states must stay inside
    the picker instead of making the main send path look busy. The referenced
    OpenCode source at fetched `origin/dev` commit
-   `1399323b78a04229d9bfe00c7436d7f41770fda8` implements
+   `4519a1da329c1a4fc384054e7203ba7d06928205` implements
    `SessionSwitcherDialog` in
    `packages/opencode/src/cli/cmd/tui/feature-plugins/session/dialog.tsx` with
    `createDebouncedSignal("", 150)`,
@@ -954,8 +954,12 @@ runtime cost control, and shared AI transport surfaces.
    The picker trigger and result rows are part of that source-backed workflow:
    the trigger must expose its accessible name and expanded state, opening the
    picker must focus search, and each result must be a keyboard-addressable
-   option with list navigation and a named delete action instead of a
-   mouse-only row.
+   option with up/down, page, home/end, and Escape navigation from both the
+   focused search field and focused result rows. Session-picker Escape is a
+   local close path that returns focus to the session trigger and must consume
+   the keypress so the App-level Assistant drawer Escape guard does not also
+   close the whole drawer. Delete remains a named row action instead of a
+   mouse-only affordance.
    Assistant session rename is part of that same source-backed session
    workflow. The referenced OpenCode source in
    `packages/opencode/src/cli/cmd/tui/component/dialog-session-list.tsx`

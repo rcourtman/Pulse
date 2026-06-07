@@ -2744,6 +2744,66 @@ describe('AIChat', () => {
       });
     });
 
+    it('supports page, home, end, and Escape from session picker search', async () => {
+      const onClose = vi.fn();
+      const onParentKeyDown = vi.fn();
+      const pageSessions = Array.from({ length: 12 }, (_, index) => ({
+        id: `session-${index}`,
+        title: `Page Session ${index}`,
+        created_at: '',
+        updated_at: '',
+        message_count: index + 1,
+      }));
+      mockAIChatAPI.listSessions.mockResolvedValue(pageSessions);
+
+      render(() => (
+        <div onKeyDown={onParentKeyDown}>
+          <AIChat onClose={onClose} />
+        </div>
+      ));
+      await waitFor(() => {
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalled();
+      });
+
+      const sessionButton = screen.getByTitle('Pulse Assistant sessions');
+      fireEvent.click(sessionButton);
+      const searchInput = await screen.findByPlaceholderText('Search sessions...');
+      const optionFor = (index: number) =>
+        screen.getByRole('option', {
+          name: `Resume Page Session ${index}, ${index + 1} ${index === 0 ? 'message' : 'messages'}`,
+        });
+
+      await waitFor(() => {
+        expect(document.activeElement).toBe(searchInput);
+      });
+
+      fireEvent.keyDown(searchInput, { key: 'PageDown' });
+      expect(document.activeElement).toBe(optionFor(10));
+
+      searchInput.focus();
+      fireEvent.keyDown(searchInput, { key: 'PageUp' });
+      expect(document.activeElement).toBe(optionFor(11));
+
+      searchInput.focus();
+      fireEvent.keyDown(searchInput, { key: 'End' });
+      expect(document.activeElement).toBe(optionFor(11));
+
+      searchInput.focus();
+      fireEvent.keyDown(searchInput, { key: 'Home' });
+      expect(document.activeElement).toBe(optionFor(0));
+
+      searchInput.focus();
+      fireEvent.keyDown(searchInput, { key: 'Escape' });
+      await waitFor(() => {
+        expect(
+          screen.queryByRole('dialog', { name: 'Pulse Assistant sessions' }),
+        ).not.toBeInTheDocument();
+        expect(document.activeElement).toBe(sessionButton);
+      });
+      expect(onParentKeyDown).not.toHaveBeenCalled();
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
     it('pins sessions above the recency groups and persists the choice', async () => {
       mockAIChatAPI.listSessions.mockResolvedValue([
         {

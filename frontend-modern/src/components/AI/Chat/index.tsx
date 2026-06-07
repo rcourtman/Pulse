@@ -1225,6 +1225,17 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const focusSessionSearch = () => {
     queueMicrotask(() => sessionSearchInputRef?.focus());
   };
+  const focusSessionTriggerAfterClose = () => {
+    const trigger = sessionButtonRef;
+    if (!trigger) return;
+    window.setTimeout(() => trigger.focus(), 0);
+  };
+  const closeSessionPickerAndFocusTrigger = () => {
+    setShowSessions(false);
+    setSessionRefreshLoading(false);
+    resetSessionSearch();
+    focusSessionTriggerAfterClose();
+  };
   const focusSessionRenameInput = () => {
     queueMicrotask(() => {
       sessionRenameInputRef?.focus();
@@ -1255,6 +1266,20 @@ export const AIChat: Component<AIChatProps> = (props) => {
     return true;
   };
 
+  const focusSessionOptionFromSearchByOffset = (offset: number) => {
+    const sessionList = sessionPickerSessions();
+    if (sessionList.length === 0) return false;
+    let nextIndex = offset;
+    if (nextIndex < 0) nextIndex = sessionList.length - 1;
+    if (nextIndex >= sessionList.length) nextIndex = 0;
+    return focusSessionOptionAtIndex(nextIndex);
+  };
+
+  const consumeSessionPickerKey = (event: KeyboardEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
   const focusSessionOptionRelativeTo = (sessionId: string, offset: number) => {
     const sessionList = sessionPickerSessions();
     const currentIndex = sessionList.findIndex((session) => session.id === sessionId);
@@ -1265,19 +1290,32 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const handleSessionSearchKeyDown = (event: KeyboardEvent) => {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     if (event.key === 'ArrowDown' && focusSessionOptionAtIndex(0)) {
-      event.preventDefault();
+      consumeSessionPickerKey(event);
       return;
     }
     if (event.key === 'ArrowUp' && focusSessionOptionAtIndex(sessionPickerSessions().length - 1)) {
-      event.preventDefault();
+      consumeSessionPickerKey(event);
+      return;
+    }
+    if (event.key === 'PageDown' && focusSessionOptionFromSearchByOffset(10)) {
+      consumeSessionPickerKey(event);
+      return;
+    }
+    if (event.key === 'PageUp' && focusSessionOptionFromSearchByOffset(-10)) {
+      consumeSessionPickerKey(event);
+      return;
+    }
+    if (event.key === 'Home' && focusSessionOptionAtIndex(0)) {
+      consumeSessionPickerKey(event);
+      return;
+    }
+    if (event.key === 'End' && focusSessionOptionAtIndex(sessionPickerSessions().length - 1)) {
+      consumeSessionPickerKey(event);
       return;
     }
     if (event.key === 'Escape') {
-      event.preventDefault();
-      setShowSessions(false);
-      setSessionRefreshLoading(false);
-      resetSessionSearch();
-      sessionButtonRef?.focus();
+      consumeSessionPickerKey(event);
+      closeSessionPickerAndFocusTrigger();
     }
   };
 
@@ -1288,35 +1326,32 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
 
     if (event.key === 'ArrowDown' && focusSessionOptionRelativeTo(sessionId, 1)) {
-      event.preventDefault();
+      consumeSessionPickerKey(event);
       return;
     }
     if (event.key === 'ArrowUp' && focusSessionOptionRelativeTo(sessionId, -1)) {
-      event.preventDefault();
+      consumeSessionPickerKey(event);
       return;
     }
     if (event.key === 'Home' && focusSessionOptionAtIndex(0)) {
-      event.preventDefault();
+      consumeSessionPickerKey(event);
       return;
     }
     if (event.key === 'End' && focusSessionOptionAtIndex(sessionPickerSessions().length - 1)) {
-      event.preventDefault();
+      consumeSessionPickerKey(event);
       return;
     }
     if (event.key === 'PageDown' && focusSessionOptionRelativeTo(sessionId, 10)) {
-      event.preventDefault();
+      consumeSessionPickerKey(event);
       return;
     }
     if (event.key === 'PageUp' && focusSessionOptionRelativeTo(sessionId, -10)) {
-      event.preventDefault();
+      consumeSessionPickerKey(event);
       return;
     }
     if (event.key === 'Escape') {
-      event.preventDefault();
-      setShowSessions(false);
-      setSessionRefreshLoading(false);
-      resetSessionSearch();
-      sessionButtonRef?.focus();
+      consumeSessionPickerKey(event);
+      closeSessionPickerAndFocusTrigger();
     }
   };
 
@@ -3451,6 +3486,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                         value={sessionSearchQuery()}
                         onChange={setSessionSearchQuery}
                         onKeyDown={handleSessionSearchKeyDown}
+                        clearOnFocusedEscape={false}
                         placeholder={AI_CHAT_SESSION_SEARCH_PLACEHOLDER}
                         title={AI_CHAT_SESSION_SEARCH_TITLE}
                         inputClass="py-1.5 text-xs"
