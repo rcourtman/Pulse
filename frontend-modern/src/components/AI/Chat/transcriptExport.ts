@@ -14,6 +14,7 @@ import { groupStreamEventsForDisplay } from './streamEventGrouping';
 import {
   getToolLabel,
   isPlaceholderToolInputSummary,
+  parseToolCommandPreview,
   parseToolInputSummary,
   pendingToolActionLabel,
   toolValueText,
@@ -88,6 +89,9 @@ const formatToolInputSummary = (name: string, input: unknown, rawInput?: string)
   return summary;
 };
 
+const formatToolCommandPreview = (name: string, input: unknown, rawInput?: string): string =>
+  parseToolCommandPreview(toolValueText(input), name, rawInput).trim();
+
 const formatToolOutput = (output: unknown): string => {
   const text = toolValueText(output).replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
   if (!text) return '';
@@ -100,33 +104,38 @@ const formatToolOutput = (output: unknown): string => {
 const formatCompletedTool = (tool: ToolExecution, includeOutput: boolean): string => {
   const label = getToolLabel(tool.name);
   const summary = formatToolInputSummary(tool.name, tool.input, tool.rawInput);
+  const command = formatToolCommandPreview(tool.name, tool.input, tool.rawInput);
   const status = tool.success ? 'completed' : 'failed';
   const line = compactText([`[tool:${label}]${summary ? ` ${summary}` : ''}`, status]);
   const output = includeOutput ? formatToolOutput(tool.output) : '';
-  return output ? `${line}\n${output}` : line;
+  return [line, command, output].filter(Boolean).join('\n');
 };
 
 const formatPendingTool = (tool: PendingTool): string => {
   const label = getToolLabel(tool.name);
   const parsedSummary = formatToolInputSummary(tool.name, tool.input, tool.rawInput);
   const summary = parsedSummary || pendingToolActionLabel(tool.name);
+  const command = formatToolCommandPreview(tool.name, tool.input, tool.rawInput);
   const status = tool.status || 'pending';
-  return compactText([
+  const line = compactText([
     `[tool:${label}] ${summary}`,
     status,
     tool.progress?.trim() ? `progress: ${tool.progress.trim()}` : undefined,
   ]);
+  return [line, command].filter(Boolean).join('\n');
 };
 
 const formatCanceledTool = (tool: ToolCancellation): string => {
   const label = getToolLabel(tool.name);
   const parsedSummary = formatToolInputSummary(tool.name, tool.input, tool.rawInput);
   const summary = parsedSummary || pendingToolActionLabel(tool.name);
-  return compactText([
+  const command = formatToolCommandPreview(tool.name, tool.input, tool.rawInput);
+  const line = compactText([
     `[tool:${label}] ${summary}`,
     'skipped',
     tool.reason?.trim() ? `reason: ${tool.reason.trim()}` : undefined,
   ]);
+  return [line, command].filter(Boolean).join('\n');
 };
 
 const formatWorkflowStatus = (status?: WorkflowStatus): string => {

@@ -1028,6 +1028,15 @@ leave the transcript without exposing hidden provider/tool metadata.
    through transport-sized copy in the compact row. Pulse adapts that by keeping
    exact output type/size in the accessible label and Details panel while the
    visible compact badge says only `output available`.
+   The 2026-06-07 transcript command-evidence slice rechecked OpenCode
+   `origin/dev` commit `e82542b8023a8374f29c23b70ec019c8f256354e` in
+   `packages/opencode/src/cli/cmd/run/session-data.ts`: OpenCode keeps tool
+   activity readable in session history while stripping shell echo noise from
+   assistant text. Pulse adapts that by including the same sanitized `$ command`
+   preview shown in live read-tool rows in copied/exported Assistant transcripts.
+   Transcripts must still exclude raw provider call syntax such as
+   `pulse_read(...)`, raw JSON tool payloads, obvious command secrets, and
+   unbounded raw tool output by default.
    The 2026-06-07 active-dock pacing slice rechecked current OpenCode
    `origin/dev` commit `e82542b8023a8374f29c23b70ec019c8f256354e` in
    `packages/tui/src/feature-plugins/system/session-v2.tsx`: `InlineTool`

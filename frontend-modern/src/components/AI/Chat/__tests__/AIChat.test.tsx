@@ -621,7 +621,7 @@ describe('AIChat', () => {
       expect(transcript).toContain('how many devices in this');
       expect(transcript).toContain('[tool:read]');
       expect(transcript).toContain('Inspect devices on current resource');
-      expect(transcript).not.toContain('ls /dev | wc -l');
+      expect(transcript).toContain('$ ls /dev | wc -l');
       expect(transcript).toContain('There are 4,358 entries in /dev.');
       expect(transcript).not.toContain('pulse_read');
       await waitFor(() => {

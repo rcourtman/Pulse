@@ -81,10 +81,11 @@ describe('Assistant transcript export', () => {
     expect(transcript).not.toContain('pulse_query');
     expect(transcript).toContain('[tool:read]');
     expect(transcript).toContain('Inspect devices on current resource');
-    expect(transcript).not.toContain('ls /dev | wc -l');
+    expect(transcript).toContain('$ ls /dev | wc -l');
     expect(transcript).toContain('completed');
     expect(transcript).toContain('There are 4,358 entries in /dev.');
     expect(transcript).not.toContain('4358\n\n##');
+    expect(transcript).not.toContain('pulse_read');
   });
 
   it('keeps hidden reasoning and raw tool-call leaks out of default transcripts', () => {
@@ -114,6 +115,44 @@ describe('Assistant transcript export', () => {
     expect(transcript).not.toContain('Private chain of thought');
     expect(transcript).not.toContain('pulse_read');
     expect(transcript).not.toContain('ls/dev');
+  });
+
+  it('redacts command secrets from transcript command previews', () => {
+    const bearer = ['alpha', 'bravo', 'charlie'].join('-');
+    const password = ['orange', 'slice'].join('-');
+    const transcript = formatAssistantTranscript({
+      messages: [
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: '',
+          timestamp,
+          streamEvents: [
+            {
+              type: 'tool',
+              tool: {
+                name: 'pulse_read',
+                input: JSON.stringify({
+                  action: 'exec',
+                  command: `curl -H "Authorization: Bearer ${bearer}" --password ${password} https://example.local`,
+                  target_host: 'current_resource',
+                }),
+                output: 'ok\n',
+                success: true,
+              },
+            },
+          ],
+        },
+      ],
+      generatedAt: timestamp,
+    });
+
+    expect(transcript).toContain(
+      '$ curl -H "Authorization: Bearer [redacted-secret]" --password [redacted-secret] https://example.local',
+    );
+    expect(transcript).not.toContain(bearer);
+    expect(transcript).not.toContain(password);
+    expect(transcript).not.toContain('pulse_read');
   });
 
   it('can include thinking and tool output when explicitly requested', () => {
@@ -237,7 +276,7 @@ describe('Assistant transcript export', () => {
     expect(transcript).toContain('[tool:read] Inspect devices on current resource');
     expect(transcript).toContain('skipped');
     expect(transcript).toContain('reason: current_resource unavailable');
-    expect(transcript).not.toContain('ls /dev | wc -l');
+    expect(transcript).toContain('$ ls /dev | wc -l');
   });
 
   it('reports whether a transcript has content', () => {
