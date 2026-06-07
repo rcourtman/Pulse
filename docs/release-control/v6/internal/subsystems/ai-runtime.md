@@ -70,6 +70,12 @@ is still streaming and newer concrete activity has arrived. Pending tools,
 skipped/canceled tools, failed tools, and completed-turn tool details must
 remain visible/inspectable.
 
+Assistant live workflow status follows OpenCode's current-state timeline
+model: history may persist for audit/session state, but live transcript rows
+and the active-turn footer render the latest replacing workflow status
+immediately. Pulse must not replay stale status history through artificial
+timers when the stream already has a newer workflow/tool state.
+
 1. Add or change chat runtime, Patrol orchestration, findings generation, or remediation behavior through `internal/ai/`
 2. Add or change canonical AI provider config, provider-scoped model selection, or runtime auth/base-URL defaults through `internal/config/ai.go`.
    Ollama request keep-alive is a provider runtime option owned by this path:
@@ -1206,14 +1212,18 @@ remain visible/inspectable.
    metadata, provider internals, and shell command claims remain out of scope
    for normal inventory answers. The Assistant transcript should show compact
    activity as work happens: local context reads, governed tool names, provider
-   routing, fallback, and first-token waiting must appear as a replacing live
-   status/header status rather than a dead-looking wait state or a dumped list
-   of transient phases. Hide or collapse unsafe details and bulky outputs, but
-   do not hide the fact that Pulse is running a local read, invoking a governed
-   tool, or waiting on a provider. Stream-idle heartbeats must inherit the
-   selected provider/model route when Pulse has that route, so the visible row
-   reads as route-specific liveness instead of falling back to generic
-   Assistant waiting copy. If a query-only
+   routing, fallback, and first-token waiting must appear as the latest
+   replacing live status/header status rather than a dead-looking wait state, a
+   dumped list of transient phases, or a delayed replay of stale status history.
+   This adapts the referenced OpenCode source at fetched `origin/dev` commit
+   `914a643`, where the app session timeline derives visible activity from the
+   current session status and streamed message/tool parts instead of pacing old
+   status labels back through the UI. Hide or collapse unsafe details and bulky
+   outputs, but do not hide the fact that Pulse is running a local read,
+   invoking a governed tool, or waiting on a provider. Stream-idle heartbeats
+   must inherit the selected provider/model route when Pulse has that route, so
+   the visible row reads as route-specific liveness instead of falling back to
+   generic Assistant waiting copy. If a query-only
    turn still reaches a model-owned `pulse_query` topology call, omitting
    `summary_only` must default to summary-only before execution; detailed
    topology remains available in the full governed path or when the model

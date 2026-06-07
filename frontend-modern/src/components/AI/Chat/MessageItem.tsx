@@ -27,7 +27,6 @@ import { getAssistantAnswerText } from './assistantAnswerText';
 import { stripAssistantOutputArtifacts } from './assistantOutputHygiene';
 import { formatAssistantWorkflowStatus } from './activeTurnStatus';
 import { groupStreamEventsForDisplay } from './streamEventGrouping';
-import { createPacedWorkflowStatus, workflowStatusRenderKey } from './workflowStatusPresentation';
 import type {
   ChatMessage,
   ModelRouteRecoveryOption,
@@ -285,27 +284,6 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
   };
   const shouldRenderWorkflowStatusEvent = (evt: StreamDisplayEvent) =>
     !!formatAssistantWorkflowStatus(evt.workflowStatus);
-  const renderableWorkflowStatusEvents = createMemo(() =>
-    groupedEvents().filter(
-      (evt) => evt.type === 'workflow_status' && shouldRenderWorkflowStatusEvent(evt),
-    ),
-  );
-  const latestRenderableWorkflowStatusEventKey = createMemo(() => {
-    const workflowEvents = renderableWorkflowStatusEvents();
-    return workflowStatusRenderKey(workflowEvents[workflowEvents.length - 1]?.workflowStatus);
-  });
-  const pacedWorkflowStatus = createPacedWorkflowStatus(
-    () => [...(props.message.workflowStatusHistory || []), props.message.workflowStatus],
-    { enabled: () => props.message.isStreaming === true },
-  );
-  const shouldPaceWorkflowStatusRow = (evt: StreamDisplayEvent) =>
-    props.message.isStreaming === true &&
-    renderableWorkflowStatusEvents().length === 1 &&
-    workflowStatusRenderKey(evt.workflowStatus) === latestRenderableWorkflowStatusEventKey();
-  const workflowStatusForEvent = (evt: StreamDisplayEvent): WorkflowStatus | undefined => {
-    if (!shouldPaceWorkflowStatusRow(evt)) return evt.workflowStatus;
-    return pacedWorkflowStatus.status() || evt.workflowStatus;
-  };
   const isRenderableStreamEvent = (evt: StreamDisplayEvent) => {
     switch (evt.type) {
       case 'thinking':
@@ -386,9 +364,10 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     !props.message.content.trim() &&
     !hasRenderableStreamEvents() &&
     !props.message.error;
+  const currentWorkflowStatus = () => props.message.workflowStatus;
   const [statusNow, setStatusNow] = createSignal(Date.now());
   createEffect(() => {
-    const status = pacedWorkflowStatus.status();
+    const status = currentWorkflowStatus();
     if (!props.message.isStreaming || !status?.startedAt) return;
     setStatusNow(Date.now());
     const interval = window.setInterval(() => setStatusNow(Date.now()), 1000);
@@ -410,7 +389,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     return `${message}${elapsedSuffix}`;
   };
   const workflowStatusText = createMemo(() =>
-    formatWorkflowStatus(pacedWorkflowStatus.status(), true),
+    formatWorkflowStatus(currentWorkflowStatus(), true),
   );
   const shouldShowHeaderWorkflowStatus = () =>
     props.message.isStreaming &&
@@ -601,7 +580,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                     const contentText = () =>
                       stripAssistantOutputArtifacts(evt?.content || '').text;
                     const visibleWorkflowStatus = () =>
-                      evt?.type === 'workflow_status' ? workflowStatusForEvent(evt) : undefined;
+                      evt?.type === 'workflow_status' ? evt.workflowStatus : undefined;
 
                     return (
                       <Switch>

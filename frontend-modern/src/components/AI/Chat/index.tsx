@@ -151,9 +151,7 @@ import { ModelSelector } from './ModelSelector';
 import { MentionAutocomplete, type MentionResource } from './MentionAutocomplete';
 import { SlashCommandAutocomplete } from './SlashCommandAutocomplete';
 import {
-  formatAssistantWorkflowStatus,
   getAssistantActiveTurnStatus,
-  withAssistantQueuedFollowUpStatus,
 } from './activeTurnStatus';
 import { getLastAssistantAnswerText } from './assistantAnswerText';
 import {
@@ -174,7 +172,6 @@ import {
   formatAssistantTranscript,
   hasAssistantTranscriptContent,
 } from './transcriptExport';
-import { createPacedWorkflowStatus } from './workflowStatusPresentation';
 import type {
   ChatMessage,
   ModelRouteRecoveryOption,
@@ -2349,61 +2346,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
     return undefined;
   });
-  const displayedActiveWorkflowStatus = createPacedWorkflowStatus(
-    () => {
-      const message = activeAssistantMessage();
-      if (!message) return [];
-      return [...(message.workflowStatusHistory || []), message.workflowStatus];
-    },
-    { enabled: () => chat.isLoading() },
-  ).status;
   const [currentStatusNow, setCurrentStatusNow] = createSignal(Date.now());
   const currentStatus = createMemo(() => {
-    const status = getAssistantActiveTurnStatus(
-      chat.messages(),
-      chat.isLoading(),
-      currentStatusNow(),
-    );
-    const message = activeAssistantMessage();
-    const latestWorkflow = message?.workflowStatus;
-    const pacedWorkflowStatus = displayedActiveWorkflowStatus();
-    if (!status || !latestWorkflow || !pacedWorkflowStatus) return status;
-    const messages = chat.messages();
-
-    const latestWorkflowText = formatAssistantWorkflowStatus(latestWorkflow, currentStatusNow());
-    const expectedType = latestWorkflow.tool ? 'tool' : 'thinking';
-    const statusStartedAt = status.startedAt;
-    const workflowStartedAt = latestWorkflow.startedAt;
-    const latestWorkflowStatus = withAssistantQueuedFollowUpStatus(
-      {
-        type: expectedType,
-        text: latestWorkflowText,
-        ...(workflowStartedAt !== undefined ? { startedAt: workflowStartedAt } : {}),
-      },
-      messages,
-    );
-    if (
-      !latestWorkflowText ||
-      status.text !== latestWorkflowStatus.text ||
-      status.type !== latestWorkflowStatus.type ||
-      (statusStartedAt !== undefined &&
-        workflowStartedAt !== undefined &&
-        statusStartedAt !== workflowStartedAt)
-    ) {
-      return status;
-    }
-
-    const pacedText = formatAssistantWorkflowStatus(pacedWorkflowStatus, currentStatusNow());
-    if (!pacedText) return status;
-    return withAssistantQueuedFollowUpStatus(
-      {
-        ...status,
-        type: pacedWorkflowStatus.tool ? 'tool' : 'thinking',
-        text: pacedText,
-        startedAt: pacedWorkflowStatus.startedAt,
-      },
-      messages,
-    );
+    return getAssistantActiveTurnStatus(chat.messages(), chat.isLoading(), currentStatusNow());
   });
   createEffect(() => {
     const status = currentStatus();
