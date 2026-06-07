@@ -123,7 +123,7 @@ describe('SlashCommandAutocomplete', () => {
     );
   });
 
-  it('omits disabled commands from prompt autocomplete', () => {
+  it('renders an empty state when visible command search has no enabled options', () => {
     render(() => (
       <SlashCommandAutocomplete
         availability={{
@@ -140,7 +140,55 @@ describe('SlashCommandAutocomplete', () => {
       />
     ));
 
-    expect(screen.queryByRole('listbox', { name: 'Assistant commands' })).not.toBeInTheDocument();
+    expect(screen.getByRole('listbox', { name: 'Assistant commands' })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('No Assistant commands match /compact');
     expect(screen.queryByRole('option', { name: /\/compact/ })).not.toBeInTheDocument();
+  });
+
+  it('consumes selection keys without selecting when no commands match', () => {
+    const onSelect = vi.fn();
+    render(() => (
+      <SlashCommandAutocomplete
+        query="not-a-command"
+        visible
+        position={{ top: 58, left: 0 }}
+        onClose={vi.fn()}
+        onSelect={onSelect}
+      />
+    ));
+    const laterDocumentHandler = vi.fn();
+    document.addEventListener('keydown', laterDocumentHandler);
+
+    const enterEvent = new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'Enter',
+    });
+    document.dispatchEvent(enterEvent);
+
+    document.removeEventListener('keydown', laterDocumentHandler);
+    expect(enterEvent.defaultPrevented).toBe(true);
+    expect(laterDocumentHandler).not.toHaveBeenCalled();
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'No Assistant commands match /not-a-command',
+    );
+  });
+
+  it('does not render persistent keyboard shortcut hints', () => {
+    render(() => (
+      <SlashCommandAutocomplete
+        query=""
+        visible
+        position={{ top: 58, left: 0 }}
+        onClose={vi.fn()}
+        onSelect={vi.fn()}
+      />
+    ));
+
+    expect(screen.queryByText('up/down')).not.toBeInTheDocument();
+    expect(screen.queryByText('navigate')).not.toBeInTheDocument();
+    expect(screen.queryByText('enter')).not.toBeInTheDocument();
+    expect(screen.queryByText('run')).not.toBeInTheDocument();
   });
 });

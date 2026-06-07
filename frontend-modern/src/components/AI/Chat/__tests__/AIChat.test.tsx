@@ -1765,6 +1765,26 @@ describe('AIChat', () => {
       expect(screen.queryByRole('option', { name: /Run \/compact/ })).not.toBeInTheDocument();
     });
 
+    it('keeps unknown slash command searches open without sending a provider prompt', () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+
+      fireEvent.input(textarea, { target: { value: '/not-a-command' } });
+
+      expect(screen.getByRole('listbox', { name: 'Assistant commands' })).toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'No Assistant commands match /not-a-command',
+      );
+
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+      expect(textarea.value).toBe('/not-a-command');
+      expect(screen.getByRole('listbox', { name: 'Assistant commands' })).toBeInTheDocument();
+    });
+
     it('explains unavailable manual slash commands without sending a provider prompt', async () => {
       renderChat();
       const textarea = screen.getByPlaceholderText(

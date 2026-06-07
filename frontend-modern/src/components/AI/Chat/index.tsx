@@ -3112,15 +3112,21 @@ export const AIChat: Component<AIChatProps> = (props) => {
     ) {
       const query = textBeforeCursor.slice(1);
       setSlashCommandQuery(query);
-      const hasMatches =
+      const hasEnabledMatches =
         filterAssistantSlashCommands(query, 1, {
           availability: assistantCommandAvailability(),
         }).length > 0;
-      setSlashCommandActive(hasMatches);
-      if (hasMatches) {
+      const hasAnyMatches =
+        filterAssistantSlashCommands(query, 1, {
+          availability: assistantCommandAvailability(),
+          includeDisabled: true,
+        }).length > 0;
+      const shouldShowSlashCommands = hasEnabledMatches || !hasAnyMatches;
+      setSlashCommandActive(shouldShowSlashCommands);
+      if (shouldShowSlashCommands) {
         setMentionActive(false);
       }
-      return hasMatches;
+      return shouldShowSlashCommands;
     }
 
     setSlashCommandActive(false);

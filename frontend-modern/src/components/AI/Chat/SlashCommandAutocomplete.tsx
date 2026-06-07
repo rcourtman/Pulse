@@ -63,6 +63,10 @@ export function SlashCommandAutocomplete(props: SlashCommandAutocompleteProps) {
       availability: props.availability,
     }),
   );
+  const emptyMessage = createMemo(() => {
+    const query = props.query.trim();
+    return query ? `No Assistant commands match /${query}` : 'No Assistant commands available';
+  });
 
   createEffect(() => {
     props.query;
@@ -125,7 +129,7 @@ export function SlashCommandAutocomplete(props: SlashCommandAutocompleteProps) {
   });
 
   return (
-    <Show when={props.visible && commands().length > 0}>
+    <Show when={props.visible}>
       <div
         class="absolute z-50 min-w-[280px] max-w-[420px] overflow-hidden rounded-md border border-border bg-surface shadow-sm"
         style={{
@@ -137,54 +141,55 @@ export function SlashCommandAutocomplete(props: SlashCommandAutocompleteProps) {
       >
         <div class="border-b border-border px-3 py-2 text-xs font-medium text-muted">Commands</div>
         <div class="max-h-[260px] overflow-y-auto" role="listbox" aria-label="Assistant commands">
-          <For each={commands()}>
-            {(command, index) => (
-              <button
-                type="button"
-                role="option"
-                aria-selected={index() === selectedIndex()}
-                aria-label={`Run /${command.name}: ${command.description}`}
-                class={`flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors hover:bg-surface-hover ${
-                  index() === selectedIndex() ? 'bg-surface-hover' : ''
-                }`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  selectCommand(command);
-                }}
-                onMouseEnter={() => setSelectedIndex(index())}
-              >
-                <span class="mt-0.5 text-muted">
-                  <AssistantSlashCommandIcon action={command.action} />
-                </span>
-                <span class="min-w-0 flex-1">
-                  <span class="flex min-w-0 items-center gap-2">
-                    <span class="font-mono text-xs font-semibold text-base-content">
-                      /{command.name}
-                    </span>
-                    <Show when={command.aliases?.length}>
-                      <span class="truncate text-[10px] text-muted">
-                        {getAssistantSlashCommandTokens(command)
-                          .slice(1)
-                          .map((alias) => `/${alias}`)
-                          .join(', ')}
+          <Show
+            when={commands().length > 0}
+            fallback={
+              <div class="px-3 py-3 text-xs text-muted" role="status">
+                {emptyMessage()}
+              </div>
+            }
+          >
+            <For each={commands()}>
+              {(command, index) => (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={index() === selectedIndex()}
+                  aria-label={`Run /${command.name}: ${command.description}`}
+                  class={`flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors hover:bg-surface-hover ${
+                    index() === selectedIndex() ? 'bg-surface-hover' : ''
+                  }`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    selectCommand(command);
+                  }}
+                  onMouseEnter={() => setSelectedIndex(index())}
+                >
+                  <span class="mt-0.5 text-muted">
+                    <AssistantSlashCommandIcon action={command.action} />
+                  </span>
+                  <span class="min-w-0 flex-1">
+                    <span class="flex min-w-0 items-center gap-2">
+                      <span class="font-mono text-xs font-semibold text-base-content">
+                        /{command.name}
                       </span>
-                    </Show>
+                      <Show when={command.aliases?.length}>
+                        <span class="truncate text-[10px] text-muted">
+                          {getAssistantSlashCommandTokens(command)
+                            .slice(1)
+                            .map((alias) => `/${alias}`)
+                            .join(', ')}
+                        </span>
+                      </Show>
+                    </span>
+                    <span class="mt-0.5 block truncate text-xs text-muted">
+                      {command.description}
+                    </span>
                   </span>
-                  <span class="mt-0.5 block truncate text-xs text-muted">
-                    {command.description}
-                  </span>
-                </span>
-              </button>
-            )}
-          </For>
-        </div>
-        <div class="flex items-center gap-2 border-t border-border px-3 py-1.5 text-xs text-muted">
-          <span class="rounded bg-surface-hover px-1.5 py-0.5 text-[10px]">up/down</span>
-          navigate
-          <span class="rounded bg-surface-hover px-1.5 py-0.5 text-[10px]">enter</span>
-          run
-          <span class="rounded bg-surface-hover px-1.5 py-0.5 text-[10px]">esc</span>
-          close
+                </button>
+              )}
+            </For>
+          </Show>
         </div>
       </div>
     </Show>

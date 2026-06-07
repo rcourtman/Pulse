@@ -393,7 +393,7 @@ remain visible/inspectable.
    icon controls or ambiguous short labels.
    The slash command autocomplete is a command-discovery surface, not just a
    text shortcut hint. The referenced OpenCode source at fetched `origin/dev`
-   commit `e82542b8023a8374f29c23b70ec019c8f256354e` advertises session
+   commit `914a643` advertises session
    commands such as `/models`, `/new`, `/sessions`, `/compact`, `/export`, and
    `/connect` in `packages/tui/src/feature-plugins/home/tips-view.tsx` lines
    179-192, while each command registration carries a command title, category,
@@ -402,7 +402,16 @@ remain visible/inspectable.
    Assistant command set in the scrollable slash list instead of silently
    capping discovery to the first few commands, and every listed command row
    must carry a matching icon so `/compact`, `/undo`, `/redo`, and other
-   lower-frequency actions do not appear as unfinished blank rows.
+   lower-frequency actions do not appear as unfinished blank rows. OpenCode's
+   current app prompt popover keeps unmatched slash searches inside the prompt
+   surface and renders an empty-command state in
+   `packages/app/src/components/prompt-input/slash-popover.tsx` (fetched
+   `origin/dev` commit `914a643`, lines 96-100); Pulse adapts that by keeping
+   genuinely unmatched `/...` drafts open with a clear empty state while still
+   hiding disabled-only command matches so manual Enter can explain why the local
+   command is unavailable. The slash list must avoid persistent visible keyboard
+   shortcut instruction footers; owned key handling is proven by behavior and
+   accessible command state instead of extra instructional chrome.
    Slash autocomplete close semantics are owned by that same prompt command
    surface. The referenced OpenCode source at fetched `origin/dev` commit
    `4519a1da329c1a4fc384054e7203ba7d06928205` clears a transient slash
