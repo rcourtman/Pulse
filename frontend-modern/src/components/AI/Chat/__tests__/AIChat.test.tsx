@@ -4709,7 +4709,7 @@ describe('AIChat', () => {
       );
     });
 
-    it('prefers the selected model route over placeholder request-start progress', () => {
+    it('prefers workflow progress over selected model route evidence', () => {
       const startedAt = Date.now() - 1_000;
       mockChat.isLoading.mockReturnValue(true);
       mockChat.messages.mockReturnValue([
@@ -4748,8 +4748,8 @@ describe('AIChat', () => {
       renderChat();
 
       const status = screen.getByLabelText('Assistant active turn status');
-      expect(status).toHaveTextContent('Using Qwen: Qwen3.7 Plus via OpenRouter');
-      expect(status).not.toHaveTextContent('Preparing Pulse context.');
+      expect(status).toHaveTextContent('Preparing Pulse context.');
+      expect(status).not.toHaveTextContent('Using Qwen: Qwen3.7 Plus via OpenRouter');
     });
 
     it('shows the latest burst workflow progress immediately in the active turn status footer', () => {

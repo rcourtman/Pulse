@@ -261,6 +261,8 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
   const groupedEvents = createMemo(() =>
     groupStreamEventsForDisplay(props.message.streamEvents || []),
   );
+  const isSelectedModelRouteEvent = (evt: StreamDisplayEvent) =>
+    evt.type === 'model_switch' && evt.modelEvent === 'selected' && !evt.failedModel?.trim();
   const isConcreteStreamActivity = (evt: StreamDisplayEvent) => {
     switch (evt.type) {
       case 'workflow_status':
@@ -279,7 +281,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
       case 'tool_cancel':
         return !!evt.toolCancel;
       case 'model_switch':
-        return !!evt.model?.trim();
+        return !!evt.model?.trim() && !isSelectedModelRouteEvent(evt);
       case 'approval':
         return !!evt.approval;
       case 'question':

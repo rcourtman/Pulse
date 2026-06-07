@@ -233,6 +233,11 @@ const activePendingToolFromEvents = (events?: StreamDisplayEvent[]): PendingTool
 const latestPendingToolActivity = (tool?: PendingTool): number =>
   tool?.updatedAt ?? tool?.startedAt ?? 0;
 
+const isSelectedModelRouteEvent = (event: StreamDisplayEvent): boolean =>
+  event.type === 'model_switch' &&
+  event.modelEvent === 'selected' &&
+  !event.failedModel?.trim();
+
 const pendingToolCandidate = (
   tool: PendingTool | undefined,
   order: number,
@@ -422,6 +427,7 @@ const latestStreamActivityStatus = (
             text,
             startedAt: event.startedAt,
             activityAt: eventActivityAt(event),
+            placeholder: isSelectedModelRouteEvent(event),
             order: index,
           };
         }
@@ -513,7 +519,11 @@ export const getAssistantActiveTurnStatus = (
     const workflowCandidate = workflowStatusCandidate(assistantMessage.workflowStatus, now);
     if (
       workflowCandidate &&
-      !(isInitialRequestStartStatus(assistantMessage.workflowStatus) && eventStatusCandidate)
+      !(
+        isInitialRequestStartStatus(assistantMessage.workflowStatus) &&
+        eventStatusCandidate &&
+        eventStatusCandidate.placeholder !== true
+      )
     ) {
       statusCandidates.push(workflowCandidate);
     }

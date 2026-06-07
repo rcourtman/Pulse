@@ -928,7 +928,7 @@ describe('MessageItem', () => {
       ).toHaveTextContent('Using Qwen 3.7 Plus via OpenRouter');
     });
 
-    it('hides placeholder request-start rows once the selected model route is visible', () => {
+    it('keeps request-start progress visible next to selected model route evidence', () => {
       const events: StreamDisplayEvent[] = [
         {
           type: 'model_switch',
@@ -968,7 +968,7 @@ describe('MessageItem', () => {
       expect(
         screen.getByRole('status', { name: 'Assistant model route selected' }),
       ).toHaveTextContent('Using Qwen 3.7 Plus via OpenRouter');
-      expect(screen.queryByText('Preparing Pulse context.')).not.toBeInTheDocument();
+      expect(screen.getByText(/Preparing Pulse context\./)).toBeInTheDocument();
     });
 
     it('renders provider fallback model switches with failed and next routes', () => {

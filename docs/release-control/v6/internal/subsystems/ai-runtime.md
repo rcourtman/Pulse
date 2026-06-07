@@ -225,10 +225,15 @@ runtime cost control, and shared AI transport surfaces.
    export status lines must normalize internal tool identifiers such as
    `pulse_query`, `pulse_read`, and `pulse_exec` into operator-facing activity
    labels, while preserving the raw typed event payload for Details/debug paths.
-   Placeholder `request_start` workflow statuses remain fallback activity only:
-   once selected-model, provider, tool, thinking, approval, question, or content
-   activity is visible, the placeholder must not outrank it in the footer or
-   render beside it as a duplicate transcript row. The generated frontend SSE
+   Selected-model route rows are typed route evidence, not live activity. They
+   may render immediately while the backend/provider stream is still quiet, but
+   they must not hide or outrank workflow progress once a `request_start`,
+   provider, tool, thinking, approval, question, or content activity is
+   available. This follows the referenced OpenCode separation between session
+   status and model/tool transcript events at fetched `origin/dev` commit
+   `31c099be435d59bd6749ace7a9f2bb2245e6d3fa`: Pulse keeps the selected route
+   visible as durable evidence while the active-turn footer and live workflow
+   rows answer what the assistant is doing now. The generated frontend SSE
    contract must include workflow `provider` and `model` fields so
    selected-route activity is typed end to end.
    The transcript viewport is part of the same live activity contract. The

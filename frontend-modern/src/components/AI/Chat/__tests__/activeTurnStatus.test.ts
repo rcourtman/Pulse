@@ -116,7 +116,7 @@ describe('getAssistantActiveTurnStatus', () => {
     });
   });
 
-  it('prefers the selected model route over the generic request-start status', () => {
+  it('prefers workflow progress over selected model route evidence', () => {
     const startedAt = Date.now() - 1_000;
     expect(
       getAssistantActiveTurnStatus(
@@ -153,7 +153,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'thinking',
-      text: 'Using Qwen: Qwen3.7 Plus via OpenRouter',
+      text: 'Preparing Pulse context.',
       startedAt,
     });
   });
