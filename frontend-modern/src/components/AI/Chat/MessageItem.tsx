@@ -38,6 +38,7 @@ import type {
 } from './types';
 import { AI_CHAT_ASSISTANT_MESSAGE_LABEL } from '@/utils/aiChatPresentation';
 import { formatAIModelRouteLabel } from '@/utils/aiProviderPresentation';
+import { copyToClipboard } from '@/utils/clipboard';
 
 interface MessageItemProps {
   message: ChatMessage;
@@ -418,64 +419,90 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     }
   });
 
-  // Copy-to-clipboard for a completed assistant answer.
+  // Copy-to-clipboard for completed transcript messages.
   const [copied, setCopied] = createSignal(false);
-  const copyableMessageText = () => getAssistantAnswerText(props.message);
-  const canCopy = () => !props.message.isStreaming && !!copyableMessageText();
-  const copyMessage = async () => {
-    const text = copyableMessageText();
-    try {
-      await navigator.clipboard?.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // Clipboard can be unavailable (permissions / insecure context); fail quietly.
+  let copiedResetTimer: ReturnType<typeof setTimeout> | undefined;
+  const copyButtonLabel = () => (copied() ? 'Copied message' : 'Copy message');
+  const copyableMessageText = () => {
+    if (isUser()) {
+      const text = props.message.content || '';
+      return text.trim() ? text : '';
     }
+    return getAssistantAnswerText(props.message);
   };
+  const canCopy = () => !props.message.isStreaming && !!copyableMessageText();
+  const copyMessage = async (event?: MouseEvent) => {
+    event?.stopPropagation();
+    const text = copyableMessageText();
+    if (!text) return;
+    const ok = await copyToClipboard(text);
+    if (!ok) return;
+    setCopied(true);
+    if (copiedResetTimer) clearTimeout(copiedResetTimer);
+    copiedResetTimer = setTimeout(() => setCopied(false), 1500);
+  };
+  onCleanup(() => {
+    if (copiedResetTimer) clearTimeout(copiedResetTimer);
+  });
 
   return (
     <div class={`${isUser() ? 'flex justify-end' : ''} mb-4`}>
       {/* User message - compact bubble */}
       <Show when={isUser()}>
-        <div
-          class={`max-w-[85%] px-4 py-2.5 rounded-md rounded-br-sm shadow-sm ${
-            isQueuedUserMessage()
-              ? 'border border-blue-200 bg-blue-50 text-blue-950 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100'
-              : 'bg-blue-600 text-white'
-          }`}
-        >
-          <p class="text-sm whitespace-pre-wrap">{props.message.content}</p>
-          <Show when={isQueuedUserMessage()}>
-            <div
-              class="mt-1.5 flex flex-wrap items-center justify-end gap-1.5 text-[11px] font-medium text-blue-700 dark:text-blue-300"
-              role="status"
+        <div class="group flex max-w-[85%] items-start justify-end gap-2">
+          <Show when={canCopy()}>
+            <button
+              type="button"
+              onClick={(event) => void copyMessage(event)}
+              aria-label={copyButtonLabel()}
+              title={copyButtonLabel()}
+              class="mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content focus:opacity-100 group-hover:opacity-100"
             >
-              <ClockIcon class="h-3 w-3" aria-hidden="true" />
-              <span>{queuedStatusLabel()}</span>
-              <Show when={props.onEditQueued}>
-                <button
-                  type="button"
-                  onClick={() => props.onEditQueued?.()}
-                  aria-label="Edit queued follow-up"
-                  title="Edit queued follow-up"
-                  class="inline-flex h-5 w-5 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:text-blue-200 dark:hover:bg-blue-900/60"
-                >
-                  <PencilIcon class="h-3 w-3" aria-hidden="true" />
-                </button>
+              <Show when={copied()} fallback={<CopyIcon class="h-3.5 w-3.5" aria-hidden="true" />}>
+                <CheckIcon class="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />
               </Show>
-              <Show when={props.onCancelQueued}>
-                <button
-                  type="button"
-                  onClick={() => props.onCancelQueued?.()}
-                  aria-label="Remove queued follow-up"
-                  title="Remove queued follow-up"
-                  class="inline-flex h-5 w-5 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:text-blue-200 dark:hover:bg-blue-900/60"
-                >
-                  <XIcon class="h-3 w-3" aria-hidden="true" />
-                </button>
-              </Show>
-            </div>
+            </button>
           </Show>
+          <div
+            class={`min-w-0 px-4 py-2.5 rounded-md rounded-br-sm shadow-sm ${
+              isQueuedUserMessage()
+                ? 'border border-blue-200 bg-blue-50 text-blue-950 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100'
+                : 'bg-blue-600 text-white'
+            }`}
+          >
+            <p class="text-sm whitespace-pre-wrap">{props.message.content}</p>
+            <Show when={isQueuedUserMessage()}>
+              <div
+                class="mt-1.5 flex flex-wrap items-center justify-end gap-1.5 text-[11px] font-medium text-blue-700 dark:text-blue-300"
+                role="status"
+              >
+                <ClockIcon class="h-3 w-3" aria-hidden="true" />
+                <span>{queuedStatusLabel()}</span>
+                <Show when={props.onEditQueued}>
+                  <button
+                    type="button"
+                    onClick={() => props.onEditQueued?.()}
+                    aria-label="Edit queued follow-up"
+                    title="Edit queued follow-up"
+                    class="inline-flex h-5 w-5 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:text-blue-200 dark:hover:bg-blue-900/60"
+                  >
+                    <PencilIcon class="h-3 w-3" aria-hidden="true" />
+                  </button>
+                </Show>
+                <Show when={props.onCancelQueued}>
+                  <button
+                    type="button"
+                    onClick={() => props.onCancelQueued?.()}
+                    aria-label="Remove queued follow-up"
+                    title="Remove queued follow-up"
+                    class="inline-flex h-5 w-5 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:text-blue-200 dark:hover:bg-blue-900/60"
+                  >
+                    <XIcon class="h-3 w-3" aria-hidden="true" />
+                  </button>
+                </Show>
+              </div>
+            </Show>
+          </div>
         </div>
       </Show>
 
@@ -522,9 +549,9 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
               <Show when={canCopy()}>
                 <button
                   type="button"
-                  onClick={copyMessage}
-                  aria-label={copied() ? 'Copied' : 'Copy message'}
-                  title={copied() ? 'Copied' : 'Copy message'}
+                  onClick={(event) => void copyMessage(event)}
+                  aria-label={copyButtonLabel()}
+                  title={copyButtonLabel()}
                   class="ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content focus:opacity-100 group-hover:opacity-100"
                 >
                   <Show

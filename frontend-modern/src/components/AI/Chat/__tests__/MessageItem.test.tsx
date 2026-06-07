@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { cleanup, render, screen, fireEvent } from '@solidjs/testing-library';
+import { cleanup, render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { MessageItem } from '../MessageItem';
 import type { ChatMessage, PendingApproval, PendingQuestion, StreamDisplayEvent } from '../types';
@@ -100,6 +100,7 @@ vi.mock('../../aiChatUtils', () => ({
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
@@ -336,7 +337,7 @@ describe('MessageItem', () => {
   });
 
   describe('copy button', () => {
-    it('copies the message content when clicked', () => {
+    it('copies the assistant message content when clicked', async () => {
       const writeText = vi.fn().mockResolvedValue(undefined);
       Object.defineProperty(navigator, 'clipboard', {
         value: { writeText },
@@ -352,7 +353,62 @@ describe('MessageItem', () => {
 
       const copy = screen.getByRole('button', { name: /copy message/i });
       fireEvent.click(copy);
-      expect(writeText).toHaveBeenCalledWith('The cluster is healthy.');
+      await waitFor(() => {
+        expect(writeText).toHaveBeenCalledWith('The cluster is healthy.');
+      });
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Copied message' })).toBeInTheDocument();
+      });
+    });
+
+    it('copies user message content from the transcript row', async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText },
+        configurable: true,
+      });
+
+      render(() => (
+        <MessageItem
+          message={makeMessage({ role: 'user', content: 'how many devices in this host?' })}
+          {...makeHandlers()}
+        />
+      ));
+
+      const copy = screen.getByRole('button', { name: /copy message/i });
+      fireEvent.click(copy);
+      await waitFor(() => {
+        expect(writeText).toHaveBeenCalledWith('how many devices in this host?');
+      });
+      expect(screen.getByText('how many devices in this host?')).toBeInTheDocument();
+    });
+
+    it('uses the fallback clipboard path when direct clipboard writes fail', async () => {
+      const writeText = vi.fn().mockRejectedValue(new Error('blocked'));
+      const execCommand = vi.fn().mockReturnValue(true);
+      Object.defineProperty(document, 'execCommand', {
+        value: execCommand,
+        configurable: true,
+      });
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText },
+        configurable: true,
+      });
+
+      render(() => (
+        <MessageItem
+          message={makeMessage({ role: 'assistant', content: 'Fallback copy content.' })}
+          {...makeHandlers()}
+        />
+      ));
+
+      fireEvent.click(screen.getByRole('button', { name: /copy message/i }));
+
+      await waitFor(() => {
+        expect(writeText).toHaveBeenCalledWith('Fallback copy content.');
+        expect(execCommand).toHaveBeenCalledWith('copy');
+        expect(screen.getByRole('button', { name: 'Copied message' })).toBeInTheDocument();
+      });
     });
 
     it('does not show a copy button while streaming', () => {
@@ -855,9 +911,7 @@ describe('MessageItem', () => {
 
       expect(screen.getByText('Reading current Pulse inventory.')).toBeInTheDocument();
       expect(screen.getByText('3 devices found')).toBeInTheDocument();
-      expect(
-        screen.getByText('OpenRouter is starting the response.'),
-      ).toBeInTheDocument();
+      expect(screen.getByText('OpenRouter is starting the response.')).toBeInTheDocument();
       expect(screen.queryByText(/pulse_query/)).not.toBeInTheDocument();
     });
 
@@ -880,9 +934,7 @@ describe('MessageItem', () => {
       ));
 
       expect(screen.getByText('Partial answer')).toBeInTheDocument();
-      expect(
-        screen.queryByText('OpenRouter is starting the response.'),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByText('OpenRouter is starting the response.')).not.toBeInTheDocument();
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
     });
 
@@ -909,9 +961,7 @@ describe('MessageItem', () => {
         />
       ));
 
-      expect(
-        screen.getByText('OpenRouter is starting the response.'),
-      ).toBeInTheDocument();
+      expect(screen.getByText('OpenRouter is starting the response.')).toBeInTheDocument();
       expect(screen.getByText('Partial answer')).toBeInTheDocument();
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
     });

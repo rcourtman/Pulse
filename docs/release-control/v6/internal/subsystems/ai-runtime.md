@@ -16,7 +16,9 @@
 ## Purpose
 
 Own Pulse Assistant and Patrol backend runtime behavior, AI orchestration,
-runtime cost control, and shared AI transport surfaces.
+runtime cost control, shared AI transport surfaces, and browser-visible
+Assistant transcript actions that define what visible operator/model text can
+leave the transcript without exposing hidden provider/tool metadata.
 
 ## Canonical Files
 
@@ -1309,6 +1311,16 @@ runtime cost control, and shared AI transport surfaces.
    the keypress so the App-level Assistant drawer Escape guard does not also
    close the whole drawer. Delete remains a named row action instead of a
    mouse-only affordance.
+   Message-level copy is part of the same OpenCode-aligned message action
+   surface, but Pulse must keep it browser-safe and role-neutral rather than
+   implying unsupported message-level fork/revert semantics. The referenced
+   OpenCode source in `packages/tui/src/routes/session/dialog-message.tsx`
+   exposes `message.copy` by collecting non-synthetic text parts for the
+   selected message. Pulse adapts that by allowing visible user and completed
+   assistant transcript rows to copy their own visible text through the shared
+   clipboard fallback helper; hidden reasoning, raw tool input/output, provider
+   envelopes, and scoped handoff metadata remain excluded unless the operator
+   explicitly opens a raw Details surface.
    Assistant session rename is part of that same source-backed session
    workflow. The referenced OpenCode source in
    `packages/opencode/src/cli/cmd/tui/component/dialog-session-list.tsx`
