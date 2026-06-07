@@ -789,6 +789,65 @@ describe('MessageItem', () => {
       ).toBeInTheDocument();
     });
 
+    it('keeps separated transcript workflow rows tied to their own streamed status', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(2_000);
+
+      const workflowStatusHistory = [
+        {
+          phase: 'context',
+          message: 'Reading current Pulse inventory with pulse_query.',
+          tool: 'pulse_query',
+          startedAt: 1_100,
+        },
+        {
+          phase: 'provider_start',
+          message: 'Sent request to OpenRouter; waiting for the first token.',
+          startedAt: 1_300,
+        },
+      ];
+
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            isStreaming: true,
+            pendingTools: [],
+            workflowStatusHistory,
+            streamEvents: [
+              {
+                type: 'workflow_status',
+                workflowStatus: workflowStatusHistory[0],
+              },
+              {
+                type: 'tool',
+                tool: {
+                  name: 'pulse_query',
+                  input: '{}',
+                  output: '3 devices found',
+                  success: true,
+                },
+              },
+              {
+                type: 'workflow_status',
+                workflowStatus: workflowStatusHistory[1],
+              },
+            ],
+            workflowStatus: workflowStatusHistory[1],
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(screen.getByText('Reading current Pulse inventory.')).toBeInTheDocument();
+      expect(screen.getByText('3 devices found')).toBeInTheDocument();
+      expect(
+        screen.getByText('Sent request to OpenRouter; waiting for the first token.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/pulse_query/)).not.toBeInTheDocument();
+    });
+
     it('hides stale workflow progress after visible content starts', () => {
       render(() => (
         <MessageItem

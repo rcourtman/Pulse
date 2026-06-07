@@ -5,6 +5,7 @@ export const AI_CHAT_DEV_STREAM_FIXTURE_PROMPTS = [
   '/fixture assistant-stream',
   '/fixture tool-burst',
   '/fixture context-group',
+  '/fixture status-boundary',
   '/fixture pending-tool',
   '/fixture provider-retry',
   '/fixture stream-idle',
@@ -372,6 +373,71 @@ const buildContextGroupFixtureEvents = (model?: string): AIChatStreamEvent[] => 
   },
 ];
 
+const buildStatusBoundaryFixtureEvents = (model?: string): AIChatStreamEvent[] => [
+  {
+    type: 'session',
+    data: { id: 'dev-fixture-status-boundary' },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'request_start',
+      message: 'Preparing Pulse context.',
+    },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'context',
+      message: 'Reading current Pulse inventory with pulse_query.',
+      tool: 'pulse_query',
+    },
+  },
+  {
+    type: 'tool_start',
+    data: {
+      id: 'fixture-tool-status-boundary',
+      name: 'pulse_query',
+      input: '{"query":"devices"}',
+      raw_input: 'pulse_query(query="devices")',
+    },
+  },
+  {
+    type: 'tool_end',
+    data: {
+      id: 'fixture-tool-status-boundary',
+      name: 'pulse_query',
+      input: '{"query":"devices"}',
+      raw_input: 'pulse_query(query="devices")',
+      output: '{"devices":3,"source":"fixture"}',
+      success: true,
+    },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'provider_start',
+      message: 'Sent request to OpenRouter; waiting for the first token.',
+      model: assistantFixtureModel(model),
+    },
+  },
+  {
+    type: 'content',
+    data: {
+      text: 'The status-boundary fixture kept the inventory status row stable before the provider wait row.',
+    },
+  },
+  {
+    type: 'done',
+    data: {
+      session_id: 'dev-fixture-status-boundary',
+      model: assistantFixtureModel(model),
+      input_tokens: 74,
+      output_tokens: 21,
+    },
+  },
+];
+
 const buildPendingToolFixtureEvents = (model?: string): AIChatStreamEvent[] => [
   {
     type: 'session',
@@ -716,6 +782,9 @@ const buildFixtureEvents = (prompt: string, model?: string): AIChatStreamEvent[]
   }
   if (normalized === '/fixture context-group') {
     return buildContextGroupFixtureEvents(model);
+  }
+  if (normalized === '/fixture status-boundary') {
+    return buildStatusBoundaryFixtureEvents(model);
   }
   if (normalized === '/fixture pending-tool') {
     return buildPendingToolFixtureEvents(model);

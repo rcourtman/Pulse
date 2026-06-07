@@ -27,10 +27,6 @@ import { getAssistantAnswerText } from './assistantAnswerText';
 import { stripAssistantOutputArtifacts } from './assistantOutputHygiene';
 import { formatAssistantWorkflowStatus, isInitialRequestStartStatus } from './activeTurnStatus';
 import { groupStreamEventsForDisplay } from './streamEventGrouping';
-import {
-  latestWorkflowStatus,
-  normalizeWorkflowStatusSequence,
-} from './workflowStatusPresentation';
 import type {
   ChatMessage,
   ModelRouteRecoveryOption,
@@ -383,19 +379,6 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
   const workflowStatusText = createMemo(() =>
     formatWorkflowStatus(props.message.workflowStatus, true),
   );
-  const workflowStatusSequence = (status?: WorkflowStatus) =>
-    normalizeWorkflowStatusSequence([...(props.message.workflowStatusHistory || []), status]);
-  const WorkflowStatusText: Component<{
-    status?: WorkflowStatus;
-    includeElapsed?: boolean;
-  }> = (statusProps) => {
-    const statuses = createMemo(() => workflowStatusSequence(statusProps.status));
-    const displayedStatus = createMemo(() => latestWorkflowStatus(statuses()));
-    const text = createMemo(() =>
-      formatWorkflowStatus(displayedStatus(), statusProps.includeElapsed),
-    );
-    return <>{text()}</>;
-  };
   const shouldShowHeaderWorkflowStatus = () =>
     props.message.isStreaming &&
     !isWaitingForFirstToken() &&
@@ -511,9 +494,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                   aria-live="polite"
                 >
                   <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500 animate-pulse" />
-                  <span class="truncate">
-                    <WorkflowStatusText status={props.message.workflowStatus} includeElapsed />
-                  </span>
+                  <span class="truncate">{workflowStatusText()}</span>
                 </span>
               </Show>
               <Show when={canCopy()}>
@@ -549,9 +530,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                     />
                   </span>
                   <Show when={workflowStatusText()} fallback={<span>Thinking...</span>}>
-                    <span>
-                      <WorkflowStatusText status={props.message.workflowStatus} includeElapsed />
-                    </span>
+                    <span>{workflowStatusText()}</span>
                   </Show>
                 </div>
               </Show>
@@ -599,10 +578,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                               aria-hidden="true"
                             />
                             <span class="min-w-0 truncate">
-                              <WorkflowStatusText
-                                status={evt?.workflowStatus}
-                                includeElapsed={props.message.isStreaming}
-                              />
+                              {formatWorkflowStatus(evt?.workflowStatus, props.message.isStreaming)}
                             </span>
                           </div>
                         </Match>
