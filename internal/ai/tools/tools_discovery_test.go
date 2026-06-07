@@ -358,6 +358,98 @@ func TestExecuteGetDiscovery_CanonicalAppContainerUsesDockerProviderType(t *test
 	assert.Equal(t, "http://192.0.2.10:8080", payload["suggested_url"])
 }
 
+func TestBuildDiscoveryToolResponse_IncludesBindMounts(t *testing.T) {
+	req := discoveryResourceRequest{
+		resourceType: "app-container",
+		resourceID:   "abc123",
+		targetID:     "agent-1",
+	}
+	discovery := &ResourceDiscoveryInfo{
+		ID:           "docker:agent-1:abc123",
+		ResourceType: "docker",
+		ResourceID:   "abc123",
+		TargetID:     "agent-1",
+		Hostname:     "docker-host-1",
+		ServiceType:  "homeassistant",
+		BindMounts: []DiscoveryMount{
+			{
+				ContainerName: "homeassistant",
+				Source:        "/opt/appdata/homeassistant",
+				Destination:   "/config",
+				Type:          "bind",
+				ReadOnly:      true,
+			},
+		},
+	}
+
+	resp := buildDiscoveryToolResponse(req, discovery)
+
+	rawMounts, ok := resp["bind_mounts"].([]map[string]interface{})
+	if !ok {
+		t.Fatalf("expected bind_mounts to be []map[string]interface{}, got %T", resp["bind_mounts"])
+	}
+	if assert.Len(t, rawMounts, 1) {
+		mount := rawMounts[0]
+		assert.Equal(t, "/opt/appdata/homeassistant", mount["source"])
+		assert.Equal(t, "/config", mount["destination"])
+		assert.Equal(t, "homeassistant", mount["container_name"])
+		assert.Equal(t, "bind", mount["type"])
+		assert.Equal(t, true, mount["read_only"])
+	}
+}
+
+func TestBuildDiscoveryToolResponse_OmitsBindMountsWhenEmpty(t *testing.T) {
+	req := discoveryResourceRequest{
+		resourceType: "vm",
+		resourceID:   "101",
+		targetID:     "node1",
+	}
+	discovery := &ResourceDiscoveryInfo{
+		ID:           "vm:node1:101",
+		ResourceType: "vm",
+		ResourceID:   "101",
+		TargetID:     "node1",
+		Hostname:     "vm-101",
+	}
+
+	resp := buildDiscoveryToolResponse(req, discovery)
+	assert.NotContains(t, resp, "bind_mounts")
+}
+
+func TestBuildDiscoveryToolResponse_OmitsOptionalMountFields(t *testing.T) {
+	req := discoveryResourceRequest{
+		resourceType: "app-container",
+		resourceID:   "abc123",
+		targetID:     "agent-1",
+	}
+	discovery := &ResourceDiscoveryInfo{
+		ID:           "docker:agent-1:abc123",
+		ResourceType: "docker",
+		ResourceID:   "abc123",
+		TargetID:     "agent-1",
+		BindMounts: []DiscoveryMount{
+			{
+				Source:      "/srv/data",
+				Destination: "/data",
+			},
+		},
+	}
+
+	resp := buildDiscoveryToolResponse(req, discovery)
+	rawMounts, ok := resp["bind_mounts"].([]map[string]interface{})
+	if !ok {
+		t.Fatalf("expected bind_mounts to be []map[string]interface{}, got %T", resp["bind_mounts"])
+	}
+	if assert.Len(t, rawMounts, 1) {
+		mount := rawMounts[0]
+		assert.Equal(t, "/srv/data", mount["source"])
+		assert.Equal(t, "/data", mount["destination"])
+		assert.NotContains(t, mount, "container_name")
+		assert.NotContains(t, mount, "type")
+		assert.NotContains(t, mount, "read_only")
+	}
+}
+
 func TestExecuteRunDiscovery_ForcesFreshDiscovery(t *testing.T) {
 	provider := &stubDiscoveryProvider{
 		triggerResp: &ResourceDiscoveryInfo{

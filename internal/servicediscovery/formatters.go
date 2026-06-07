@@ -352,6 +352,17 @@ func FormatForRemediation(d *ResourceDiscovery) string {
 		sb.WriteString("\n")
 	}
 
+	// Data directories — where persistent data lives (backup targets, disk-full
+	// triage, restore points). FormatForAIContext surfaces these; remediation
+	// must too.
+	if len(d.DataPaths) > 0 {
+		sb.WriteString("### Data Directories\n")
+		for _, p := range d.DataPaths {
+			sb.WriteString(fmt.Sprintf("- `%s`\n", p))
+		}
+		sb.WriteString("\n")
+	}
+
 	// Bind mounts — edit or back up persistent files at the HOST source; the
 	// container only sees the destination path, so without this a fix written
 	// "to /config" would not survive a container recreate.

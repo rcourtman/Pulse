@@ -223,6 +223,7 @@ func TestFormatForRemediationSurfacesControlAndMounts(t *testing.T) {
 		ServiceName:  "Home Assistant",
 		CLIAccess:    "docker exec homeassistant bash",
 		ConfigPaths:  []string{"/config/automations.yaml"},
+		DataPaths:    []string{"/config/.storage"},
 		DockerMounts: []DockerBindMount{
 			{ContainerName: "homeassistant", Source: "/opt/ha/config", Destination: "/config", Type: "bind"},
 		},
@@ -238,6 +239,7 @@ func TestFormatForRemediationSurfacesControlAndMounts(t *testing.T) {
 		"docker restart homeassistant", // service-control fact
 		"/opt/ha/config",               // host bind-mount source
 		"/config/automations.yaml",     // config file to edit
+		"/config/.storage",             // data directory (backup/restore target)
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("remediation context missing %q\n--- output ---\n%s", want, out)

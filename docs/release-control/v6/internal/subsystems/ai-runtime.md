@@ -2149,10 +2149,12 @@ draft. The referenced OpenCode source at fetched `dev` commit
 with suggested actions, slash commands, and search) and keeps the footer command
 entry discoverable from `packages/opencode/src/cli/cmd/run/footer.view.tsx`.
 Pulse adapts that pattern for the web drawer by exposing the existing Assistant
-commands dialog from the composer chrome. The button must use the same
-`ASSISTANT_SLASH_COMMANDS` registry, `AssistantCommandHelpDialog`, and
-`executeSlashCommand` path as `/help` and `/commands`; it must not introduce a
-second command registry or a separate provider-bound prompt path.
+commands dialog from the composer chrome and making that dialog searchable and
+keyboard-selectable. The button, slash-triggered help, dialog search, and
+keyboard selection must use the same `ASSISTANT_SLASH_COMMANDS` registry,
+`filterAssistantSlashCommands`, `AssistantCommandHelpDialog`, and
+`executeSlashCommand` path as `/help` and `/commands`; they must not introduce
+a second command registry or a separate provider-bound prompt path.
 
 Primary nav moved to governed platform/runtime destinations on 2026-05-16 and
 was clarified on 2026-05-25 through `frontend-modern/src/App.tsx` and

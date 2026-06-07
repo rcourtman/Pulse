@@ -524,6 +524,31 @@ func buildDiscoveryToolResponse(req discoveryResourceRequest, discovery *Resourc
 		response["ports"] = ports
 	}
 
+	// Add Docker bind mounts if present. A container path like /config is
+	// meaningless for editing or backing up persistent files without its host
+	// source, so surface the host->container mapping so the model can act on the
+	// real files, not the ephemeral container view.
+	if len(discovery.BindMounts) > 0 {
+		bindMounts := make([]map[string]interface{}, 0, len(discovery.BindMounts))
+		for _, m := range discovery.BindMounts {
+			mount := map[string]interface{}{
+				"source":      m.Source,
+				"destination": m.Destination,
+			}
+			if m.ContainerName != "" {
+				mount["container_name"] = m.ContainerName
+			}
+			if m.Type != "" {
+				mount["type"] = m.Type
+			}
+			if m.ReadOnly {
+				mount["read_only"] = m.ReadOnly
+			}
+			bindMounts = append(bindMounts, mount)
+		}
+		response["bind_mounts"] = bindMounts
+	}
+
 	return response
 }
 

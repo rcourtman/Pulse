@@ -1761,10 +1761,10 @@ describe('AIChat', () => {
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
       expect(screen.getByRole('dialog', { name: 'Assistant commands' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /\/models/ })).toHaveTextContent(
+      expect(screen.getByRole('option', { name: /\/models/ })).toHaveTextContent(
         'Choose or set the model route (/model provider:model-id)',
       );
-      expect(screen.getByRole('button', { name: /\/status/ })).toHaveTextContent(
+      expect(screen.getByRole('option', { name: /\/status/ })).toHaveTextContent(
         'Check the selected model route',
       );
       expect(mockChat.sendMessage).not.toHaveBeenCalled();
@@ -1778,7 +1778,7 @@ describe('AIChat', () => {
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
       expect(screen.getByRole('dialog', { name: 'Assistant commands' })).toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: /\/models/ }));
+      fireEvent.click(screen.getByRole('option', { name: /\/models/ }));
 
       await waitFor(() => {
         expect(
