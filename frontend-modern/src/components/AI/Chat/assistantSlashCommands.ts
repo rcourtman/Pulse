@@ -1,7 +1,13 @@
+import {
+  AI_CHAT_DEV_STREAM_FIXTURE_ALIAS_NAMES,
+  AI_CHAT_DEV_STREAM_FIXTURE_NAMES,
+} from '@/api/aiChatDevStreamFixture';
+
 export type AssistantSlashCommandAction =
   | 'compact'
   | 'copy'
   | 'export'
+  | 'fixture'
   | 'fork'
   | 'help'
   | 'models'
@@ -15,9 +21,12 @@ export type AssistantSlashCommandAction =
 export interface AssistantSlashCommand {
   action: AssistantSlashCommandAction;
   aliases?: string[];
+  acceptsArgs?: boolean;
   disabled?: boolean;
   disabledReason?: string;
   description: string;
+  insertText?: string;
+  keywords?: string[];
   name: string;
 }
 
@@ -27,13 +36,43 @@ export type AssistantSlashCommandAvailability = Partial<
 
 export interface AssistantSlashCommandFilterOptions {
   availability?: AssistantSlashCommandAvailability;
+  includeDevCommands?: boolean;
   includeDisabled?: boolean;
+}
+
+export interface AssistantSlashCommandParseOptions {
+  includeDevCommands?: boolean;
 }
 
 export interface ParsedAssistantSlashCommand {
   action: AssistantSlashCommandAction;
   args: string;
 }
+
+const isAssistantDevCommandSurfaceEnabled = () =>
+  import.meta.env.DEV || import.meta.env.MODE === 'test';
+
+const includeDevCommandsForOptions = (includeDevCommands?: boolean) =>
+  includeDevCommands ?? isAssistantDevCommandSurfaceEnabled();
+
+const DEV_ASSISTANT_SLASH_COMMANDS: AssistantSlashCommand[] = [
+  {
+    name: 'fixture',
+    aliases: ['fixtures'],
+    acceptsArgs: true,
+    action: 'fixture',
+    description: 'Run a local stream fixture by name (/fixture provider-retry)',
+    insertText: '/fixture ',
+    keywords: [
+      'dev',
+      'local',
+      'stream',
+      'test',
+      ...AI_CHAT_DEV_STREAM_FIXTURE_NAMES,
+      ...AI_CHAT_DEV_STREAM_FIXTURE_ALIAS_NAMES,
+    ],
+  },
+];
 
 export const ASSISTANT_SLASH_COMMANDS: AssistantSlashCommand[] = [
   {
@@ -63,6 +102,7 @@ export const ASSISTANT_SLASH_COMMANDS: AssistantSlashCommand[] = [
   {
     name: 'models',
     aliases: ['model', 'mo'],
+    acceptsArgs: true,
     action: 'models',
     description: 'Open model search or set a route (/model qwen or /model provider:model-id)',
   },
@@ -105,15 +145,28 @@ export const ASSISTANT_SLASH_COMMANDS: AssistantSlashCommand[] = [
   },
 ];
 
-const commandByToken = new Map<string, AssistantSlashCommandAction>(
-  ASSISTANT_SLASH_COMMANDS.flatMap((command) => [
-    [command.name, command.action],
+const assistantSlashCommandsForOptions = (includeDevCommands?: boolean): AssistantSlashCommand[] =>
+  includeDevCommandsForOptions(includeDevCommands)
+    ? [...ASSISTANT_SLASH_COMMANDS, ...DEV_ASSISTANT_SLASH_COMMANDS]
+    : ASSISTANT_SLASH_COMMANDS;
+
+const commandEntriesForOptions = (
+  includeDevCommands?: boolean,
+): Array<readonly [string, AssistantSlashCommandAction]> =>
+  assistantSlashCommandsForOptions(includeDevCommands).flatMap((command) => [
+    [command.name, command.action] as const,
     ...(command.aliases || []).map((alias) => [alias, command.action] as const),
-  ]),
-);
+  ]);
+
+const commandByToken = (includeDevCommands?: boolean) =>
+  new Map<string, AssistantSlashCommandAction>(commandEntriesForOptions(includeDevCommands));
+
+const commandForAction = (action: AssistantSlashCommandAction, includeDevCommands?: boolean) =>
+  assistantSlashCommandsForOptions(includeDevCommands).find((command) => command.action === action);
 
 export const parseAssistantSlashCommandInput = (
   input: string,
+  options: AssistantSlashCommandParseOptions = {},
 ): ParsedAssistantSlashCommand | null => {
   const trimmed = input.trim();
   if (!trimmed.startsWith('/')) return null;
@@ -124,17 +177,21 @@ export const parseAssistantSlashCommandInput = (
 
   const token = match[1].toLowerCase();
   if (!token) return null;
-  const action = commandByToken.get(token);
+  const action = commandByToken(options.includeDevCommands).get(token);
   if (!action) return null;
 
   const args = (match[2] || '').trim();
-  if (args && action !== 'models') return null;
+  const command = commandForAction(action, options.includeDevCommands);
+  if (args && !command?.acceptsArgs) return null;
 
   return { action, args };
 };
 
-export const parseAssistantSlashCommand = (input: string): AssistantSlashCommandAction | null => {
-  const parsed = parseAssistantSlashCommandInput(input);
+export const parseAssistantSlashCommand = (
+  input: string,
+  options: AssistantSlashCommandParseOptions = {},
+): AssistantSlashCommandAction | null => {
+  const parsed = parseAssistantSlashCommandInput(input, options);
   if (!parsed || parsed.args) return null;
   return parsed.action;
 };
@@ -156,11 +213,21 @@ const commandWithAvailability = (
   };
 };
 
+const keywordMatchesQuery = (keyword: string, query: string) => {
+  const normalizedKeyword = keyword.toLowerCase();
+  return (
+    normalizedKeyword === query ||
+    normalizedKeyword.startsWith(`${query}-`) ||
+    normalizedKeyword.startsWith(`${query}_`)
+  );
+};
+
 const commandMatchesQuery = (command: AssistantSlashCommand, query: string) => {
   if (!query) return true;
   if (command.name.toLowerCase().includes(query)) return true;
   if (command.description.toLowerCase().includes(query)) return true;
-  return commandAliases(command).some((alias) => alias.toLowerCase().includes(query));
+  if (commandAliases(command).some((alias) => alias.toLowerCase().includes(query))) return true;
+  return (command.keywords || []).some((keyword) => keywordMatchesQuery(keyword, query));
 };
 
 const commandMatchScore = (command: AssistantSlashCommand, query: string) => {
@@ -179,13 +246,13 @@ export const getAssistantSlashCommandTokens = (command: AssistantSlashCommand): 
 
 export const filterAssistantSlashCommands = (
   query: string,
-  limit = ASSISTANT_SLASH_COMMANDS.length,
+  limit?: number,
   options: AssistantSlashCommandFilterOptions = {},
 ): AssistantSlashCommand[] => {
   const normalizedQuery = normalizeSlashQuery(query);
-  return ASSISTANT_SLASH_COMMANDS.map((command) =>
-    commandWithAvailability(command, options.availability),
-  )
+  const commands = assistantSlashCommandsForOptions(options.includeDevCommands);
+  return commands
+    .map((command) => commandWithAvailability(command, options.availability))
     .filter((command) => options.includeDisabled || !command.disabled)
     .filter((command) => commandMatchesQuery(command, normalizedQuery))
     .map((command, index) => ({ command, index }))
@@ -195,6 +262,6 @@ export const filterAssistantSlashCommands = (
         commandMatchScore(right.command, normalizedQuery);
       return scoreDelta || left.index - right.index;
     })
-    .slice(0, limit)
+    .slice(0, limit ?? commands.length)
     .map(({ command }) => command);
 };

@@ -32,6 +32,17 @@ describe('AssistantCommandHelpDialog', () => {
     );
   });
 
+  it('finds local stream fixtures from command help search', () => {
+    render(() => <AssistantCommandHelpDialog onClose={vi.fn()} onRunCommand={vi.fn()} />);
+
+    fireEvent.input(screen.getByLabelText('Search Assistant commands'), {
+      target: { value: 'provider-retry' },
+    });
+
+    expect(screen.getByRole('option', { name: /\/fixture/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /\/fixture/ })).toHaveTextContent('/fixture');
+  });
+
   it('moves command selection with arrow keys before running', () => {
     const onRunCommand = vi.fn();
     render(() => <AssistantCommandHelpDialog onClose={vi.fn()} onRunCommand={onRunCommand} />);

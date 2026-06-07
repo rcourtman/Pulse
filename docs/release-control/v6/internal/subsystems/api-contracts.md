@@ -134,6 +134,10 @@ Assistant local stream fixtures are part of the same frontend API contract:
 `frontend-modern/src/api/aiChatDevStreamFixture.ts` may short-circuit only
 explicit `/fixture ...` prompts in development or test mode, must emit the same
 typed stream event sequence as live chat, and must never open a provider request.
+That helper also owns the exported fixture-name and alias catalog consumed by
+Assistant command discovery; frontend command surfaces may search and insert
+`/fixture` from those exports, but they must not duplicate the fixture registry
+or advertise fixture commands in production.
 Fixtures used for visible stream proof must pace status/tool/content events
 enough for the browser to paint the intermediate state, including keeping the
 `/fixture tool-burst` running tool row visible before the matching `tool_end`;

@@ -3,6 +3,7 @@ import ActivityIcon from 'lucide-solid/icons/activity';
 import ClockIcon from 'lucide-solid/icons/clock';
 import CopyIcon from 'lucide-solid/icons/copy';
 import DownloadIcon from 'lucide-solid/icons/download';
+import FlaskConicalIcon from 'lucide-solid/icons/flask-conical';
 import GitForkIcon from 'lucide-solid/icons/git-fork';
 import KeyRoundIcon from 'lucide-solid/icons/key-round';
 import Minimize2Icon from 'lucide-solid/icons/minimize-2';
@@ -47,6 +48,8 @@ export const AssistantSlashCommandIcon = (props: { action: AssistantSlashCommand
       return <CopyIcon class="h-4 w-4" aria-hidden="true" />;
     case 'export':
       return <DownloadIcon class="h-4 w-4" aria-hidden="true" />;
+    case 'fixture':
+      return <FlaskConicalIcon class="h-4 w-4" aria-hidden="true" />;
     case 'fork':
       return <GitForkIcon class="h-4 w-4" aria-hidden="true" />;
     case 'undo':
@@ -155,7 +158,9 @@ export function SlashCommandAutocomplete(props: SlashCommandAutocompleteProps) {
                   type="button"
                   role="option"
                   aria-selected={index() === selectedIndex()}
-                  aria-label={`Run /${command.name}: ${command.description}`}
+                  aria-label={`${
+                    command.insertText ? 'Insert' : 'Run'
+                  } /${command.name}: ${command.description}`}
                   class={`flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors hover:bg-surface-hover ${
                     index() === selectedIndex() ? 'bg-surface-hover' : ''
                   }`}

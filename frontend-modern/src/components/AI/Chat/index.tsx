@@ -2863,6 +2863,43 @@ export const AIChat: Component<AIChatProps> = (props) => {
     setShowCommandHelp(true);
   };
 
+  const insertSlashCommandDraft = (command: AssistantSlashCommand) => {
+    const nextInput = command.insertText || `/${command.name}`;
+    setShowCommandHelp(false);
+    setSlashCommandActive(false);
+    setSlashCommandQuery('');
+    setInput(nextInput);
+    queueMicrotask(() => {
+      if (textareaRef) {
+        textareaRef.selectionStart = nextInput.length;
+        textareaRef.selectionEnd = nextInput.length;
+      }
+      resizeTextarea();
+      focusComposer();
+    });
+  };
+
+  const runAssistantFixtureSlashCommand = (args: string) => {
+    const fixturePrompt = args.trim() ? `/fixture ${args.trim()}` : '/fixture';
+    const submittedMentions: MentionResource[] = [];
+    const sendPromise = chat.sendMessage(fixturePrompt, undefined, undefined);
+    addPromptHistoryEntry(fixturePrompt, submittedMentions);
+    resetPromptHistoryNavigation();
+    sendPromise
+      .then((ok) => {
+        if (!ok) {
+          restoreFailedSubmitDraft(fixturePrompt, submittedMentions);
+        }
+      })
+      .catch((error) => {
+        logger.warn('[AIChat] Failed to run Assistant fixture command:', error);
+        restoreFailedSubmitDraft(fixturePrompt, submittedMentions);
+      });
+    clearLocalComposerCommand();
+    setShowCommandHelp(false);
+    return true;
+  };
+
   const executeSlashCommand = (command: AssistantSlashCommandAction, args = '') => {
     const commandArgs = args.trim();
     const disabledReason = disabledAssistantCommandReason(command);
@@ -2880,6 +2917,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
         clearLocalComposerCommand();
       }
       return consumed;
+    }
+
+    if (command === 'fixture') {
+      return runAssistantFixtureSlashCommand(commandArgs);
     }
 
     clearLocalComposerCommand();
@@ -3129,12 +3170,20 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const handleSlashCommandSelect = (command: AssistantSlashCommand) => {
     setSlashCommandActive(false);
     setSlashCommandQuery('');
+    if (command.insertText) {
+      insertSlashCommandDraft(command);
+      return;
+    }
     setInput(`/${command.name}`);
     executeSlashCommand(command.action);
   };
 
   const handleCommandHelpRun = (command: AssistantSlashCommand) => {
     setShowCommandHelp(false);
+    if (command.insertText) {
+      queueMicrotask(() => insertSlashCommandDraft(command));
+      return;
+    }
     queueMicrotask(() => executeSlashCommand(command.action));
   };
 

@@ -697,6 +697,14 @@ timers when the stream already has a newer workflow/tool state.
    the real `provider_retry` workflow state, including attempt metadata and
    `retry_after_ms`, so browser proof of retry countdown behavior does not
    depend on external provider availability or API spend.
+   Dev/test fixture prompts are also part of the Assistant command-discovery
+   surface: slash autocomplete and Assistant command help must expose an
+   insertable `/fixture` command in development/test builds, search it by
+   canonical fixture names such as `provider-retry`, and submit completed
+   `/fixture <name>` prompts through the normal chat send path so
+   `maybeRunAIChatDevStreamFixture` remains the single local execution boundary.
+   Production command surfaces must omit that dev command instead of advertising
+   a fixture mode that the runtime will not intercept.
    The local `stream-idle` fixture must exercise the real `stream_idle`
    workflow state after selected-provider startup so browser proof of visible
    idle liveness does not depend on making a real provider pause on demand.

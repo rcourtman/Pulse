@@ -26,9 +26,14 @@ const AI_CHAT_DEV_STREAM_FIXTURE_ALIASES: Record<
   '/fixture queued-follow-up': '/fixture queue-drain',
 };
 
-const availableFixtureNames = AI_CHAT_DEV_STREAM_FIXTURE_PROMPTS.map((prompt) =>
+export const AI_CHAT_DEV_STREAM_FIXTURE_NAMES = AI_CHAT_DEV_STREAM_FIXTURE_PROMPTS.map((prompt) =>
   prompt.replace('/fixture ', ''),
 );
+export const AI_CHAT_DEV_STREAM_FIXTURE_ALIAS_NAMES = Object.keys(
+  AI_CHAT_DEV_STREAM_FIXTURE_ALIASES,
+).map((prompt) => prompt.replace('/fixture ', ''));
+
+const availableFixtureNames = AI_CHAT_DEV_STREAM_FIXTURE_NAMES;
 
 const DEFAULT_DEV_FIXTURE_STEP_DELAY_MS = 140;
 const TEST_FIXTURE_STEP_DELAY_MS = 0;
@@ -656,7 +661,7 @@ const buildLongOutputFixtureEvents = (model?: string): AIChatStreamEvent[] => [
   {
     type: 'content',
     data: {
-      text: 'The long-output fixture kept a bounded plain-text tool preview visible while preserving the full output in details.',
+      text: 'The long-output fixture kept the full tool output available in details without flooding the transcript.',
     },
   },
   {

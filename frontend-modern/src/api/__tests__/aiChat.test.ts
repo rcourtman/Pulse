@@ -16,7 +16,11 @@ vi.mock('@/utils/logger', () => ({
 }));
 
 import { AIChatAPI, createAIChatStreamPaintCheckpointPredicate } from '@/api/aiChat';
-import { maybeRunAIChatDevStreamFixture } from '@/api/aiChatDevStreamFixture';
+import {
+  AI_CHAT_DEV_STREAM_FIXTURE_ALIAS_NAMES,
+  AI_CHAT_DEV_STREAM_FIXTURE_NAMES,
+  maybeRunAIChatDevStreamFixture,
+} from '@/api/aiChatDevStreamFixture';
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
 
@@ -302,10 +306,7 @@ describe('AIChatAPI', () => {
     expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual(['session']);
 
     await vi.advanceTimersByTimeAsync(25);
-    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
-      'session',
-      'workflow_state',
-    ]);
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual(['session', 'workflow_state']);
 
     await vi.advanceTimersByTimeAsync(25);
     expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
@@ -550,6 +551,13 @@ describe('AIChatAPI', () => {
         message: expect.stringContaining('tool-burst'),
       },
     });
+  });
+
+  it('exports fixture names and aliases for command discovery', () => {
+    expect(AI_CHAT_DEV_STREAM_FIXTURE_NAMES).toContain('provider-retry');
+    expect(AI_CHAT_DEV_STREAM_FIXTURE_NAMES).toContain('send-hold');
+    expect(AI_CHAT_DEV_STREAM_FIXTURE_NAMES).not.toContain('/fixture provider-retry');
+    expect(AI_CHAT_DEV_STREAM_FIXTURE_ALIAS_NAMES).toEqual(['burst-tool', 'queued-follow-up']);
   });
 
   it('runs the pending-tool dev stream fixture without opening a provider request', async () => {

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@solidjs/testing-library';
-import { ASSISTANT_SLASH_COMMANDS } from '../assistantSlashCommands';
+import { filterAssistantSlashCommands } from '../assistantSlashCommands';
 import { SlashCommandAutocomplete } from '../SlashCommandAutocomplete';
 
 afterEach(cleanup);
@@ -69,6 +69,7 @@ describe('SlashCommandAutocomplete', () => {
 
   it('wraps keyboard selection from the first command to the last command', () => {
     const onSelect = vi.fn();
+    const lastCommand = filterAssistantSlashCommands('').at(-1);
     render(() => (
       <SlashCommandAutocomplete
         query=""
@@ -96,8 +97,8 @@ describe('SlashCommandAutocomplete', () => {
 
     expect(onSelect).toHaveBeenCalledWith(
       expect.objectContaining({
-        action: 'redo',
-        name: 'redo',
+        action: lastCommand?.action,
+        name: lastCommand?.name,
       }),
     );
   });
@@ -113,14 +114,31 @@ describe('SlashCommandAutocomplete', () => {
       />
     ));
 
+    const activeCommands = filterAssistantSlashCommands('');
     const options = screen.getAllByRole('option');
-    expect(options).toHaveLength(ASSISTANT_SLASH_COMMANDS.length);
+    expect(options).toHaveLength(activeCommands.length);
     expect(options.map((option) => option.getAttribute('aria-label'))).toContain(
       'Run /compact: Summarize older turns and keep this session moving',
     );
-    expect(container.querySelectorAll('[role="option"] svg')).toHaveLength(
-      ASSISTANT_SLASH_COMMANDS.length,
-    );
+    expect(container.querySelectorAll('[role="option"] svg')).toHaveLength(activeCommands.length);
+  });
+
+  it('surfaces dev stream fixtures through slash command search', () => {
+    render(() => (
+      <SlashCommandAutocomplete
+        query="provider-retry"
+        visible
+        position={{ top: 58, left: 0 }}
+        onClose={vi.fn()}
+        onSelect={vi.fn()}
+      />
+    ));
+
+    expect(
+      screen.getByRole('option', {
+        name: /Insert \/fixture: Run a local stream fixture by name/,
+      }),
+    ).toBeInTheDocument();
   });
 
   it('renders an empty state when visible command search has no enabled options', () => {

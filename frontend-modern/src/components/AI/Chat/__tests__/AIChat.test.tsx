@@ -906,7 +906,7 @@ describe('AIChat', () => {
         role: 'assistant',
         content: '',
         error:
-          'Unknown Assistant fixture "/fixture typo-check". Available fixtures: devices, assistant-stream, tool-burst, context-group, pending-tool, long-output, provider-retry, stream-idle, queue-hold, queue-drain, compacted-artifact, skipped-tool.',
+          'Unknown Assistant fixture "/fixture typo-check". Available fixtures: devices, assistant-stream, send-hold, tool-burst, workflow-burst, context-group, status-boundary, pending-tool, long-output, provider-retry, stream-idle, queue-hold, queue-drain, compacted-artifact, skipped-tool.',
         timestamp: new Date('2026-06-05T10:00:00Z'),
         model: 'openrouter:qwen/qwen3.7-plus',
         streamEvents: [
@@ -1334,9 +1334,7 @@ describe('AIChat', () => {
         undefined,
         undefined,
       );
-      expect(mockChat.setModel).not.toHaveBeenCalledWith(
-        'openrouter:deepseek/deepseek-v4-pro',
-      );
+      expect(mockChat.setModel).not.toHaveBeenCalledWith('openrouter:deepseek/deepseek-v4-pro');
       expect(
         screen.queryByRole('status', { name: 'Assistant provider readiness route adopted' }),
       ).not.toBeInTheDocument();
@@ -1782,6 +1780,38 @@ describe('AIChat', () => {
       });
       expect(screen.queryByRole('listbox', { name: 'Assistant commands' })).not.toBeInTheDocument();
       expect(mockChat.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('inserts the local fixture command from slash suggestions without sending yet', async () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+
+      fireEvent.input(textarea, { target: { value: '/fi' } });
+
+      expect(screen.getByRole('option', { name: /Insert \/fixture/ })).toBeInTheDocument();
+
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      await waitFor(() => expect(textarea.value).toBe('/fixture '));
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('runs a local fixture slash command through the normal chat send path', async () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+
+      fireEvent.input(textarea, { target: { value: '/fixture provider-retry' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(mockChat.sendMessage).toHaveBeenCalledWith(
+          '/fixture provider-retry',
+          undefined,
+          undefined,
+        );
+      });
     });
 
     it('omits unavailable session commands from slash suggestions', () => {
@@ -5502,16 +5532,12 @@ describe('AIChat', () => {
       expect(status).not.toHaveTextContent('Reading current Pulse inventory.');
 
       vi.advanceTimersByTime(1_000);
-      await waitFor(() =>
-        expect(status).toHaveTextContent('Reading current Pulse inventory.'),
-      );
+      await waitFor(() => expect(status).toHaveTextContent('Reading current Pulse inventory.'));
       expect(status).not.toHaveTextContent('Preparing Pulse context.');
       expect(status).not.toHaveTextContent('OpenRouter is starting the response.');
 
       vi.advanceTimersByTime(1_000);
-      await waitFor(() =>
-        expect(status).toHaveTextContent('OpenRouter is starting the response.'),
-      );
+      await waitFor(() => expect(status).toHaveTextContent('OpenRouter is starting the response.'));
       expect(status).not.toHaveTextContent('Preparing Pulse context.');
       expect(status).not.toHaveTextContent('Reading current Pulse inventory.');
     });
@@ -5579,9 +5605,7 @@ describe('AIChat', () => {
 
       vi.advanceTimersByTime(1_000);
       await waitFor(() =>
-        expect(status).toHaveTextContent(
-          'Reading current Pulse inventory. · 1 follow-up queued',
-        ),
+        expect(status).toHaveTextContent('Reading current Pulse inventory. · 1 follow-up queued'),
       );
       expect(status).not.toHaveTextContent('Preparing Pulse context.');
       expect(status).not.toHaveTextContent('OpenRouter is starting the response.');

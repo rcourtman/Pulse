@@ -32,6 +32,8 @@ describe('assistantSlashCommands', () => {
     expect(parseAssistantSlashCommand('/fork')).toBe('fork');
     expect(parseAssistantSlashCommand('/undo')).toBe('undo');
     expect(parseAssistantSlashCommand('/redo')).toBe('redo');
+    expect(parseAssistantSlashCommand('/fixture')).toBe('fixture');
+    expect(parseAssistantSlashCommand('/fixtures')).toBe('fixture');
   });
 
   it('normalizes casing and surrounding whitespace', () => {
@@ -61,7 +63,19 @@ describe('assistantSlashCommands', () => {
     expect(parseAssistantSlashCommand('/model openrouter:qwen/qwen3.7-plus')).toBeNull();
   });
 
-  it('does not parse arguments for non-model commands', () => {
+  it('parses dev fixture commands with stream fixture arguments', () => {
+    expect(parseAssistantSlashCommandInput('/fixture provider-retry')).toEqual({
+      action: 'fixture',
+      args: 'provider-retry',
+    });
+    expect(parseAssistantSlashCommandInput('/fixtures queued-follow-up')).toEqual({
+      action: 'fixture',
+      args: 'queued-follow-up',
+    });
+    expect(parseAssistantSlashCommand('/fixture provider-retry')).toBeNull();
+  });
+
+  it('does not parse arguments for commands that do not accept them', () => {
     expect(parseAssistantSlashCommandInput('/copy this sentence')).toBeNull();
     expect(parseAssistantSlashCommandInput('/status now')).toBeNull();
   });
@@ -80,6 +94,7 @@ describe('assistantSlashCommands', () => {
       'fork',
       'undo',
       'redo',
+      'fixture',
     ]);
     expect(filterAssistantSlashCommands('resume').map((command) => command.name)).toEqual([
       'sessions',
@@ -90,6 +105,7 @@ describe('assistantSlashCommands', () => {
     expect(filterAssistantSlashCommands('provider').map((command) => command.name)).toEqual([
       'providers',
       'models',
+      'fixture',
     ]);
     expect(filterAssistantSlashCommands('connect').map((command) => command.name)).toEqual([
       'providers',
@@ -100,6 +116,27 @@ describe('assistantSlashCommands', () => {
     expect(filterAssistantSlashCommands('commands').map((command) => command.name)).toEqual([
       'help',
     ]);
+    expect(filterAssistantSlashCommands('provider-retry').map((command) => command.name)).toEqual([
+      'fixture',
+    ]);
+  });
+
+  it('keeps dev fixture commands out of production command surfaces', () => {
+    expect(
+      filterAssistantSlashCommands('', undefined, {
+        includeDevCommands: false,
+      }).map((command) => command.name),
+    ).not.toContain('fixture');
+    expect(
+      filterAssistantSlashCommands('provider-retry', undefined, {
+        includeDevCommands: false,
+      }),
+    ).toEqual([]);
+    expect(
+      parseAssistantSlashCommandInput('/fixture provider-retry', {
+        includeDevCommands: false,
+      }),
+    ).toBeNull();
   });
 
   it('filters disabled commands from the prompt slash list by default', () => {
@@ -154,5 +191,7 @@ describe('assistantSlashCommands', () => {
     ]);
     const status = filterAssistantSlashCommands('status')[0];
     expect(getAssistantSlashCommandTokens(status)).toEqual(['status', 'runtime', 'health']);
+    const fixture = filterAssistantSlashCommands('fixture')[0];
+    expect(getAssistantSlashCommandTokens(fixture)).toEqual(['fixture', 'fixtures']);
   });
 });
