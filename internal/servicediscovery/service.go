@@ -1793,6 +1793,18 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 			CurrentStep:     "Identified from resource name (fast path)",
 			PercentComplete: 90,
 		})
+	} else if identity, evidence, ok := inferSurfaceIdentityFromPorts(analysisReq.CommandOutputs["listening_ports"]); ok {
+		// Second fast path: an un-named workload often exposes a distinctive
+		// listening port that identifies it (8123→HA, 32400→Plex). Skip the
+		// model here too — a distinctive port is a high-confidence signal, and
+		// the configured model may be slow enough to time out otherwise.
+		result = surfaceIdentityResponse(identity, evidence)
+		s.broadcastProgress(&DiscoveryProgress{
+			ResourceID:      resourceID,
+			Status:          DiscoveryStatusRunning,
+			CurrentStep:     "Identified from listening port (fast path)",
+			PercentComplete: 90,
+		})
 	} else if metadataOnly {
 		result = metadataOnlyDiscoveryAbstention()
 	} else {

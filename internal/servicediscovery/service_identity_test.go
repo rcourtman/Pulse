@@ -92,3 +92,33 @@ func TestWithNestedDockerAccess(t *testing.T) {
 		t.Fatalf("expected layered docker exec path, got %q", out)
 	}
 }
+
+func TestInferSurfaceIdentityFromPorts(t *testing.T) {
+	haSS := "State Recv-Q Send-Q Local-Address:Port Peer:Port Process\n" +
+		"LISTEN 0 4096 0.0.0.0:8123 0.0.0.0:* users:((\"python3\",pid=1234,fd=10))\n" +
+		"LISTEN 0 128 127.0.0.1:22 0.0.0.0:*"
+	cases := []struct {
+		name     string
+		output   string
+		wantType string
+		wantOK   bool
+	}{
+		{"HA by distinctive port 8123", haSS, "home-assistant", true},
+		{"postgres by 5432", "LISTEN 0 244 0.0.0.0:5432 0.0.0.0:*", "postgresql", true},
+		{"plex by 32400", "LISTEN 0 128 *:32400 *:*", "plex", true},
+		{"ambiguous ports only do not match", "LISTEN 0 128 0.0.0.0:80\nLISTEN 0 128 0.0.0.0:443\nLISTEN 0 128 0.0.0.0:22", "", false},
+		{"empty output", "", "", false},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			id, _, ok := inferSurfaceIdentityFromPorts(tc.output)
+			if ok != tc.wantOK {
+				t.Fatalf("inferSurfaceIdentityFromPorts ok=%v, want %v", ok, tc.wantOK)
+			}
+			if ok && id.ServiceType != tc.wantType {
+				t.Fatalf("inferSurfaceIdentityFromPorts type=%q, want %q", id.ServiceType, tc.wantType)
+			}
+		})
+	}
+}
