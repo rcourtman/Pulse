@@ -54,6 +54,11 @@ describe('DiscoveryTab', () => {
     cleanup();
     vi.clearAllMocks();
     vi.mocked(AIAPI.getSettings).mockResolvedValue(aiSettingsWithDiscovery(true));
+    // clearAllMocks wipes call history but not mockResolvedValue impls, so a
+    // test that configures a provider would otherwise bleed into later
+    // no-provider tests. Reset to an empty DiscoveryInfo (no provider) between
+    // tests — behaviorally the same as the factory's null for these assertions.
+    vi.mocked(discoveryApi.getDiscoveryInfo).mockResolvedValue({});
   });
 
   it('keeps run action visible while discovery lookup is still loading', async () => {
@@ -162,6 +167,8 @@ describe('DiscoveryTab', () => {
     };
     vi.mocked(discoveryApi.getDiscovery).mockResolvedValue(discovered);
     vi.mocked(discoveryApi.triggerDiscovery).mockResolvedValue(discovered);
+    // A provider must be configured for the run action to be enabled.
+    vi.mocked(discoveryApi.getDiscoveryInfo).mockResolvedValue(discoveryInfoWithProvider());
 
     render(() => (
       <DiscoveryTab
@@ -183,6 +190,27 @@ describe('DiscoveryTab', () => {
         hostname: 'pve1',
       });
     });
+  });
+
+  it('disables the run action until an AI provider is configured', async () => {
+    vi.mocked(discoveryApi.getDiscovery).mockResolvedValue(null);
+    // No provider configured (default getDiscoveryInfo → null): a scan would be
+    // guaranteed to fail, so the run affordance must be disabled, matching the
+    // tab-wide "AI provider not configured" banner.
+
+    render(() => (
+      <DiscoveryTab
+        resourceType="agent"
+        agentId="agent-1"
+        resourceId="agent-1"
+        hostname="pve1"
+        showManualRunAction
+      />
+    ));
+
+    const runButton = await screen.findByRole('button', { name: 'Run Discovery' });
+    await waitFor(() => expect(runButton).toBeDisabled());
+    expect(discoveryApi.triggerDiscovery).not.toHaveBeenCalled();
   });
 
   it('surfaces the AI-provider prerequisite before command guidance', async () => {

@@ -127,8 +127,13 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
     }),
   );
 
+  // Gate every run affordance on a configured provider: discovery uses the AI
+  // to analyze evidence, so without a provider a scan is guaranteed to fail —
+  // the tab-wide banner already tells the user to configure one before
+  // scanning. (Command/connectivity gaps are surfaced separately, not blocked
+  // here, since their backend semantics are murkier.)
   const canTriggerDiscovery = createMemo(
-    () => discoveryFeatureEnabled() && Boolean(targetAgentId()),
+    () => discoveryFeatureEnabled() && aiProviderConfigured() && Boolean(targetAgentId()),
   );
 
   const [discovery, { refetch, mutate }] = createResource(
