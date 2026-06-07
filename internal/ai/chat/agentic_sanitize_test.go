@@ -231,8 +231,8 @@ func TestAppendVisibleContentBeforeToolLeak_ClearsCompactedPreludeWhenSplit(t *t
 	if leakFound {
 		t.Fatal("first compacted chunk should not be classified as a tool leak by itself")
 	}
-	if delta != first || builder.String() != first {
-		t.Fatalf("unexpected first compacted delta=%q builder=%q", delta, builder.String())
+	if delta != "" || builder.String() != "" || pending != first {
+		t.Fatalf("compacted prelude should be held, got delta=%q builder=%q pending=%q", delta, builder.String(), pending)
 	}
 
 	delta, leakFound = appendVisibleContentBeforeToolLeak(
@@ -245,6 +245,18 @@ func TestAppendVisibleContentBeforeToolLeak_ClearsCompactedPreludeWhenSplit(t *t
 	}
 	if delta != "" || builder.String() != "" || pending != "" {
 		t.Fatalf("compacted prelude should be cleared after split leak, got delta=%q builder=%q pending=%q", delta, builder.String(), pending)
+	}
+}
+
+func TestFlushPendingVisibleContent_DropsCompactedPrelude(t *testing.T) {
+	var builder strings.Builder
+	pending := "Thisisbadmodelspacingbutitistheactualanswerbecauseitneverturnsintoatoolcall."
+
+	if visible := flushPendingVisibleContent(&builder, &pending); visible != "" {
+		t.Fatalf("compacted pending text should stay hidden, got %q", visible)
+	}
+	if builder.String() != "" || pending != "" {
+		t.Fatalf("compacted pending text should not enter builder, got builder=%q pending=%q", builder.String(), pending)
 	}
 }
 

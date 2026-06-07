@@ -247,6 +247,12 @@ func appendVisibleContentBeforeToolLeak(
 	candidate := existing + text
 	idx := toolCallArtifactIndex(candidate)
 	if idx < 0 {
+		if existing == "" && isCompactedToolPrelude(text) {
+			if pending != nil {
+				*pending = text
+			}
+			return "", false
+		}
 		visible, held := splitTrailingPotentialToolNamePrefix(text)
 		if pending != nil {
 			*pending = held
@@ -279,6 +285,9 @@ func flushPendingVisibleContent(builder *strings.Builder, pending *string) strin
 	}
 	visible := *pending
 	*pending = ""
+	if isCompactedToolPrelude(visible) {
+		return ""
+	}
 	return appendSanitizedVisibleDelta(builder, visible)
 }
 

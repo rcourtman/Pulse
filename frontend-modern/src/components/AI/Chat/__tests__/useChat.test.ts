@@ -1088,7 +1088,7 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('flushes held compacted prose on done when no tool-call leak follows', async () => {
+    it('does not flush held compacted prose on done when no tool-call leak follows', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
 
@@ -1103,10 +1103,8 @@ describe('useChat', () => {
       fire({ type: 'done', data: {} });
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
-      expect(assistant.content).toBe(compacted);
-      expect(assistant.streamEvents?.filter((e) => e.type === 'content')).toMatchObject([
-        { type: 'content', content: compacted },
-      ]);
+      expect(assistant.content).toBe('');
+      expect(assistant.streamEvents?.filter((e) => e.type === 'content')).toEqual([]);
       expect(assistant.isStreaming).toBe(false);
       dispose();
     });
@@ -1137,6 +1135,34 @@ describe('useChat', () => {
       expect(assistant.content).not.toContain('pulse_read');
       expect(assistant.content).not.toContain('raw arguments');
       expect(assistant.streamEvents?.map((e) => e.type)).toEqual(['content', 'tool', 'content']);
+      dispose();
+    });
+
+    it('does not render compacted pre-tool artifact text when a governed tool row follows', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('how many devices in this');
+      const fire = getFireEvent();
+      const compacted =
+        "I'llcheckthedevicenodesinsidethecontainertoanswerthat.Letmecounttheentriesin/devandlisttheblockdevices.";
+
+      fire({ type: 'content', data: compacted });
+      fire({ type: 'tool_start', data: { id: 'tool-1', name: 'pulse_read', input: '{}' } });
+      fire({
+        type: 'tool_end',
+        data: { id: 'tool-1', name: 'pulse_read', input: '{}', output: '4358', success: true },
+      });
+      fire({ type: 'content', data: 'There are 4,358 entries under /dev.' });
+      fire({ type: 'done', data: {} });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.content).toBe('There are 4,358 entries under /dev.');
+      expect(assistant.content).not.toContain("I'llcheck");
+      expect(assistant.streamEvents?.filter((e) => e.type === 'content')).toMatchObject([
+        { type: 'content', content: 'There are 4,358 entries under /dev.' },
+      ]);
+      expect(assistant.streamEvents?.map((e) => e.type)).toEqual(['tool', 'content']);
       dispose();
     });
 

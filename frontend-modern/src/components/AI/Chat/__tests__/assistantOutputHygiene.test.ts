@@ -92,7 +92,7 @@ describe('stripAssistantOutputArtifacts', () => {
     expect(flushPendingAssistantOutputText(state)).toBe('');
   });
 
-  it('flushes held compacted prose when no tool leak follows before stream end', () => {
+  it('drops held compacted prose when no tool leak follows before stream end', () => {
     const state = createAssistantOutputArtifactStreamState();
     const content =
       "Thisisbadmodelspacingbutitistheactualanswerbecauseitneverturnsintoatoolcall.";
@@ -101,7 +101,7 @@ describe('stripAssistantOutputArtifacts', () => {
       text: '',
       stripped: false,
     });
-    expect(flushPendingAssistantOutputText(state)).toBe(content);
+    expect(flushPendingAssistantOutputText(state)).toBe('');
   });
 
   it('releases a held prefix when the next delta proves it is normal prose', () => {

@@ -845,7 +845,14 @@ runtime cost control, and shared AI transport surfaces.
    proven to be normal answer text or stripped when a raw tool-call marker
    arrives; it must not flash as run-on prose such as
    `I'llcheckthedevicenodes...` while the actual governed tool row is still
-   being assembled.
+   being assembled, and it must not be promoted to final assistant answer text
+   when the stream reaches `done` without proving a normal answer. The
+   referenced OpenCode source at fetched `origin/dev` commit
+   `1025540fcc2a69609a0131a7168300205656d728` keeps rendered answer text as
+   typed text parts in `packages/ui/src/components/message-part.tsx` and uses
+   `createPacedValue` only as a presentation-layer reveal; Pulse adapts that by
+   preserving typed content exactly while suppressing malformed compacted
+   tool-prelude residue rather than inventing spaces or storing it as prose.
    A pre-tool assistant preamble such as "I'll check that" does not satisfy the
    final-answer contract after Pulse executes tools. The final-response guard
    must require non-empty assistant text after the latest user/tool-result
@@ -1103,11 +1110,14 @@ runtime cost control, and shared AI transport surfaces.
    frontend rendering. Compacted no-whitespace internal prelude text attached
    to a leaked tool invocation is part of that same artifact and must be
    suppressed or retracted from the current stream segment instead of rendered
-   as assistant prose. Drawer-level loading/progress status must stay scoped to
-   the active turn and must collapse back to quiet when the turn is idle; it may
-   mirror the latest active tool/workflow state as a compact heartbeat, but raw
-   outputs, restored evidence, errors, and completed details stay in the
-   transcript row that owns the turn. Completed tool rows in the drawer may show
+   as assistant prose; if that compacted prelude is still pending when the
+   stream closes, terminal flush must drop it rather than turning unreadable
+   provider residue into the final answer. Drawer-level loading/progress status
+   must stay scoped to the active turn and must collapse back to quiet when the
+   turn is idle; it may mirror the latest active tool/workflow state as a
+   compact heartbeat, but raw outputs, restored evidence, errors, and completed
+   details stay in the transcript row that owns the turn. Completed tool rows in
+   the drawer may show
    compact tool name, action summary, status, and an
    explicit details affordance, but raw tool input/output JSON must not render
    in the default transcript. Token accounting and other provider metadata

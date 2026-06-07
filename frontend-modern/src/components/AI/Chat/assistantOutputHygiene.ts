@@ -117,6 +117,9 @@ export function flushPendingAssistantOutputText(state: AssistantOutputArtifactSt
   }
   const text = state.pendingText;
   state.pendingText = '';
+  if (isCompactedToolPrelude(text)) {
+    return '';
+  }
   state.visibleText += text;
   return text;
 }

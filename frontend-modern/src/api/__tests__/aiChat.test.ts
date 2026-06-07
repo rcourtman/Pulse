@@ -194,6 +194,54 @@ describe('AIChatAPI', () => {
     });
   });
 
+  it('runs the compacted-artifact dev stream fixture without opening a provider request', async () => {
+    const onEvent = vi.fn();
+
+    await AIChatAPI.chat(
+      '/fixture compacted-artifact',
+      undefined,
+      'openrouter:deepseek/deepseek-chat',
+      onEvent,
+    );
+
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'session',
+      'workflow_state',
+      'content',
+      'tool_start',
+      'tool_end',
+      'content',
+      'done',
+    ]);
+    expect(onEvent.mock.calls[2][0]).toMatchObject({
+      type: 'content',
+      data: {
+        text: expect.stringContaining("I'llcheckthedevicenodes"),
+      },
+    });
+    expect(onEvent.mock.calls[3][0]).toMatchObject({
+      type: 'tool_start',
+      data: {
+        id: 'fixture-tool-compacted',
+        name: 'pulse_read',
+      },
+    });
+    expect(onEvent.mock.calls[5][0]).toMatchObject({
+      type: 'content',
+      data: {
+        text: expect.stringContaining('4,358 entries'),
+      },
+    });
+    expect(onEvent.mock.calls[6][0]).toMatchObject({
+      type: 'done',
+      data: {
+        session_id: 'dev-fixture-compacted-artifact',
+        model: 'openrouter:deepseek/deepseek-chat',
+      },
+    });
+  });
+
   it('lets the browser paint the first visible text delta before draining a coalesced chat chunk', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const requestAnimationFrame = installAnimationFrame();

@@ -3,6 +3,7 @@ import type { AIChatStreamEvent } from './generated/aiChatEvents';
 export const AI_CHAT_DEV_STREAM_FIXTURE_PROMPTS = [
   '/fixture devices',
   '/fixture assistant-stream',
+  '/fixture compacted-artifact',
   '/fixture skipped-tool',
 ] as const;
 
@@ -190,8 +191,70 @@ const buildSkippedToolFixtureEvents = (model?: string): AIChatStreamEvent[] => [
   },
 ];
 
+const buildCompactedArtifactFixtureEvents = (model?: string): AIChatStreamEvent[] => [
+  {
+    type: 'session',
+    data: { id: 'dev-fixture-compacted-artifact' },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'request_start',
+      message: 'Preparing Pulse context.',
+    },
+  },
+  {
+    type: 'content',
+    data: {
+      text: "I'llcheckthedevicenodesinsidethecontainertoanswerthat.Letmecounttheentriesin/devandlisttheblockdevices.",
+    },
+  },
+  {
+    type: 'tool_start',
+    data: {
+      id: 'fixture-tool-compacted',
+      name: 'pulse_read',
+      input:
+        '{"target_host":"current_resource","command":"ls /dev | wc -l && lsblk -d -o NAME,TYPE,SIZE"}',
+      raw_input:
+        'pulse_read(target_host="current_resource", command="ls /dev | wc -l && lsblk -d -o NAME,TYPE,SIZE")',
+    },
+  },
+  {
+    type: 'tool_end',
+    data: {
+      id: 'fixture-tool-compacted',
+      name: 'pulse_read',
+      input:
+        '{"target_host":"current_resource","command":"ls /dev | wc -l && lsblk -d -o NAME,TYPE,SIZE"}',
+      raw_input:
+        'pulse_read(target_host="current_resource", command="ls /dev | wc -l && lsblk -d -o NAME,TYPE,SIZE")',
+      output: ['4358', 'NAME    TYPE SIZE', 'sda     disk 1.8T', 'nvme0n1 disk 931.5G'].join('\n'),
+      success: true,
+    },
+  },
+  {
+    type: 'content',
+    data: {
+      text: 'There are 4,358 entries under `/dev`, including 2 block devices: `sda` and `nvme0n1`.',
+    },
+  },
+  {
+    type: 'done',
+    data: {
+      session_id: 'dev-fixture-compacted-artifact',
+      model: assistantFixtureModel(model),
+      input_tokens: 96,
+      output_tokens: 42,
+    },
+  },
+];
+
 const buildFixtureEvents = (prompt: string, model?: string): AIChatStreamEvent[] => {
   const normalized = normalizeFixturePrompt(prompt);
+  if (normalized === '/fixture compacted-artifact') {
+    return buildCompactedArtifactFixtureEvents(model);
+  }
   if (normalized === '/fixture skipped-tool') {
     return buildSkippedToolFixtureEvents(model);
   }

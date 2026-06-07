@@ -564,7 +564,10 @@ payload shape change when the portal presents compact client rows.
 	with completed arguments through the normal `tool_progress` event.
 	At least one fixture-backed Assistant tool sequence must exercise the
 	skipped-tool lifecycle by resolving a visible `tool_start` row through
-	`tool_cancel` instead of hiding the activity.
+	`tool_cancel` instead of hiding the activity. At least one fixture-backed
+	Assistant tool sequence must exercise compacted provider artifact
+	suppression by emitting compacted pre-tool content before a governed tool row
+	and final normal answer content.
 34. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
     Legacy Assistant SSE routes in this handler that still use the older
     execute envelope, including `/api/ai/execute/stream` and
