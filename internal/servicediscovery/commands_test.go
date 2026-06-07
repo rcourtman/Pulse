@@ -80,33 +80,31 @@ func TestCommandsAndTemplates(t *testing.T) {
 	}
 }
 
-func TestDockerMountsCommandAvoidsExtraTextUtilities(t *testing.T) {
-	lxcCmds := GetCommandsForResource(ResourceTypeSystemContainer)
-	vmCmds := GetCommandsForResource(ResourceTypeVM)
-
-	findByName := func(cmds []DiscoveryCommand, name string) string {
-		for _, cmd := range cmds {
-			if cmd.Name == name {
-				return cmd.Command
+func TestGuestCommandSetsAreSurfaceOnly(t *testing.T) {
+	// Discovery is a fast surface index (identity + how-to-reach), not a deep
+	// scan. Guest command sets must stay light and must NOT include the deep
+	// enumeration commands — the Assistant knows standard service layouts and
+	// fetches specifics on demand. See discovery-assistant-goal.
+	deep := map[string]bool{
+		"installed_packages": true,
+		"config_files":       true,
+		"docker_mounts":      true,
+		"hardware_info":      true,
+		"gpu_devices":        true,
+		"disk_usage":         true,
+		"cron_jobs":          true,
+		"docker_check":       true,
+	}
+	for _, rt := range []ResourceType{ResourceTypeSystemContainer, ResourceTypeVM, ResourceTypeDocker} {
+		cmds := GetCommandsForResource(rt)
+		if len(cmds) == 0 || len(cmds) > 6 {
+			t.Errorf("%s surface command set should be small (1-6 commands), got %d", rt, len(cmds))
+		}
+		for _, c := range cmds {
+			if deep[c.Name] {
+				t.Errorf("%s should not run deep command %q in a surface scan", rt, c.Name)
 			}
 		}
-		return ""
-	}
-
-	lxcMounts := findByName(lxcCmds, "docker_mounts")
-	vmMounts := findByName(vmCmds, "docker_mounts")
-
-	if lxcMounts == "" || vmMounts == "" {
-		t.Fatalf("expected docker_mounts command for both LXC and VM")
-	}
-	if lxcMounts != vmMounts {
-		t.Fatalf("expected shared docker_mounts command, got lxc=%q vm=%q", lxcMounts, vmMounts)
-	}
-	if strings.Contains(lxcMounts, "sed ") || strings.Contains(lxcMounts, "grep ") {
-		t.Fatalf("docker_mounts should not depend on sed/grep: %s", lxcMounts)
-	}
-	if !strings.Contains(lxcMounts, "name=${name#/}") {
-		t.Fatalf("expected shell-native container name trimming, got: %s", lxcMounts)
 	}
 }
 

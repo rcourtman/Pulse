@@ -43,10 +43,6 @@ type DiscoveryCommand struct {
 	Optional    bool     `json:"optional"`    // If true, don't fail if command fails
 }
 
-// dockerMountsCommand collects Docker mount metadata without relying on extra
-// text utilities (sed/grep), which may be missing in minimal guest images.
-const dockerMountsCommand = `sh -c 'docker ps -q 2>/dev/null | head -15 | while read -r id; do name=$(docker inspect --format "{{.Name}}" "$id" 2>/dev/null); name=${name#/}; [ -n "$name" ] || name="$id"; echo "CONTAINER:$name"; docker inspect --format "{{range .Mounts}}{{.Source}}|{{.Destination}}|{{.Type}}{{println}}{{end}}" "$id" 2>/dev/null || true; done; echo docker_mounts_done'`
-
 // GetCommandsForResource returns the commands to run for a given resource type.
 func GetCommandsForResource(resourceType ResourceType) []DiscoveryCommand {
 	switch resourceType {
@@ -105,62 +101,12 @@ func getSystemContainerCommands() []DiscoveryCommand {
 			Categories:  []string{"service"},
 			Optional:    true,
 		},
-		{
-			Name:        "disk_usage",
-			Command:     "df -h 2>/dev/null | head -15",
-			Description: "Disk usage and mount points",
-			Categories:  []string{"storage"},
-			Optional:    true,
-		},
-		{
-			Name:        "docker_check",
-			Command:     "docker ps --format '{{.Names}}: {{.Image}} ({{.Status}})' 2>/dev/null | head -20 || echo 'no_docker'",
-			Description: "Docker containers if running",
-			Categories:  []string{"service", "container"},
-			Optional:    true,
-		},
-		{
-			Name:        "docker_mounts",
-			Command:     dockerMountsCommand,
-			Description: "Docker container bind mounts (source -> destination)",
-			Categories:  []string{"config", "storage"},
-			Optional:    true,
-		},
-		{
-			Name:        "installed_packages",
-			Command:     "dpkg -l 2>/dev/null | grep -E '^ii' | awk '{print $2}' | head -50 || rpm -qa 2>/dev/null | head -50 || apk list --installed 2>/dev/null | head -50",
-			Description: "Installed packages",
-			Categories:  []string{"version", "service"},
-			Optional:    true,
-		},
-		{
-			Name:        "config_files",
-			Command:     "find /etc -name '*.conf' -o -name '*.yml' -o -name '*.yaml' -o -name '*.json' 2>/dev/null | head -30",
-			Description: "Configuration files",
-			Categories:  []string{"config"},
-			Optional:    true,
-		},
-		{
-			Name:        "cron_jobs",
-			Command:     "crontab -l 2>/dev/null | grep -v '^#' | head -10 || ls -la /etc/cron.d/ 2>/dev/null | head -10",
-			Description: "Scheduled jobs",
-			Categories:  []string{"service"},
-			Optional:    true,
-		},
-		{
-			Name:        "hardware_info",
-			Command:     "lspci 2>/dev/null | head -20 || echo 'no_lspci'",
-			Description: "Hardware devices (e.g., Coral TPU)",
-			Categories:  []string{"hardware"},
-			Optional:    true,
-		},
-		{
-			Name:        "gpu_devices",
-			Command:     "ls -la /dev/dri/ 2>/dev/null; ls -la /dev/apex* 2>/dev/null; nvidia-smi -L 2>/dev/null || echo 'no_gpu'",
-			Description: "GPU and TPU devices",
-			Categories:  []string{"hardware"},
-			Optional:    true,
-		},
+		// Surface discovery only: identity + how-to-reach. Deep enumeration
+		// (installed packages, config-file trees, hardware/GPU, bind mounts,
+		// disk, cron) is intentionally omitted — it bloats the evidence payload
+		// and slows AI analysis, and it re-derives what the Assistant already
+		// knows about standard services. Specifics are fetched on demand via
+		// agent commands when actually needed. See discovery-assistant-goal.
 	}
 }
 
@@ -202,41 +148,10 @@ func getVMCommands() []DiscoveryCommand {
 			Categories:  []string{"service"},
 			Optional:    true,
 		},
-		{
-			Name:        "disk_usage",
-			Command:     "df -h 2>/dev/null | head -15",
-			Description: "Disk usage and mount points",
-			Categories:  []string{"storage"},
-			Optional:    true,
-		},
-		{
-			Name:        "docker_check",
-			Command:     "docker ps --format '{{.Names}}: {{.Image}} ({{.Status}})' 2>/dev/null | head -20 || echo 'no_docker'",
-			Description: "Docker containers if running",
-			Categories:  []string{"service", "container"},
-			Optional:    true,
-		},
-		{
-			Name:        "docker_mounts",
-			Command:     dockerMountsCommand,
-			Description: "Docker container bind mounts (source -> destination)",
-			Categories:  []string{"config", "storage"},
-			Optional:    true,
-		},
-		{
-			Name:        "hardware_info",
-			Command:     "lspci 2>/dev/null | head -20",
-			Description: "PCI hardware devices",
-			Categories:  []string{"hardware"},
-			Optional:    true,
-		},
-		{
-			Name:        "gpu_devices",
-			Command:     "ls -la /dev/dri/ 2>/dev/null; nvidia-smi -L 2>/dev/null || echo 'no_gpu'",
-			Description: "GPU devices",
-			Categories:  []string{"hardware"},
-			Optional:    true,
-		},
+		// Surface discovery only — identity + how-to-reach. Deep enumeration
+		// (disk, nested docker + bind mounts, hardware/GPU) is omitted and
+		// fetched on demand via agent commands when needed. See
+		// getSystemContainerCommands / discovery-assistant-goal.
 	}
 }
 
@@ -272,13 +187,8 @@ func getDockerCommands() []DiscoveryCommand {
 			Categories:  []string{"config"},
 			Optional:    true,
 		},
-		{
-			Name:        "config_files",
-			Command:     "find /config /data /app /etc -maxdepth 2 -name '*.conf' -o -name '*.yml' -o -name '*.yaml' -o -name '*.json' 2>/dev/null | head -20",
-			Description: "Configuration files",
-			Categories:  []string{"config"},
-			Optional:    true,
-		},
+		// Surface discovery only — config-file enumeration omitted; the
+		// Assistant fetches specifics on demand. See discovery-assistant-goal.
 	}
 }
 
