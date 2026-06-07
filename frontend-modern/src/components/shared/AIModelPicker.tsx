@@ -81,6 +81,7 @@ const CUSTOM_RECENT_MODEL_DESCRIPTION = 'Recent custom model route';
 const MODEL_ROUTE_PROVIDER_RE = /^[a-z][a-z0-9_-]*$/i;
 const CURRENT_SELECTION_LABEL = 'Current';
 const DEFAULT_OPTION_KEY = '__default__';
+const SHOW_OLDER_MODELS_OPTION_KEY = '__show_older_models__';
 
 type ResolvedModelRoute = {
   id: string;
@@ -117,8 +118,7 @@ const modelRouteSecondaryId = (entry: ResolvedModelRoute) => {
 const CurrentSelectionBadge: Component = () => (
   <span class="shrink-0 rounded border border-blue-200 bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-blue-700 dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-200">
     {' '}
-    {CURRENT_SELECTION_LABEL}
-    {' '}
+    {CURRENT_SELECTION_LABEL}{' '}
   </span>
 );
 
@@ -285,6 +285,9 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
         keys.push(optionKeyForModel(model.id));
       }
     }
+    if (hiddenModelCount() > 0 && !searchQuery().trim()) {
+      keys.push(SHOW_OLDER_MODELS_OPTION_KEY);
+    }
     return keys;
   });
   const currentOptionKey = createMemo(() => {
@@ -301,6 +304,9 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
     const modelKey = optionKeyForModel(selected);
     return displayedOptionKeys().includes(modelKey) ? modelKey : '';
   });
+  const showOlderModelsOptionLabel = createMemo(() =>
+    showAllModels() ? 'Hide older models' : `Show ${hiddenModelCount()} older models`,
+  );
 
   const selectedLabel = createMemo(() => {
     const selected = selectedModel();
@@ -515,6 +521,12 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
   ) => {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
 
+    if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+      consumePickerKey(event);
+      event.currentTarget.click();
+      return;
+    }
+
     if (event.key === 'ArrowDown' && focusOptionRelativeTo(optionKey, 1)) {
       consumePickerKey(event);
       return;
@@ -543,14 +555,6 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
       consumePickerKey(event);
       closePickerAndFocusTrigger();
     }
-  };
-
-  const handleShowAllModelsKeyDown = (
-    event: KeyboardEvent & { currentTarget: HTMLButtonElement },
-  ) => {
-    if (event.key !== 'Escape' || event.altKey || event.ctrlKey || event.metaKey) return;
-    consumePickerKey(event);
-    closePickerAndFocusTrigger();
   };
 
   createEffect(() => {
@@ -679,11 +683,9 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
                 onKeyDown={(event) => handleOptionKeyDown(event, DEFAULT_OPTION_KEY)}
                 role="option"
                 aria-selected={!selectedModel()}
-                aria-label={optionAriaLabel(
-                  props.defaultOption!.label,
-                  !selectedModel(),
-                  [props.defaultOption!.description],
-                )}
+                aria-label={optionAriaLabel(props.defaultOption!.label, !selectedModel(), [
+                  props.defaultOption!.description,
+                ])}
                 class={optionClass(!selectedModel())}
               >
                 <div class="flex min-w-0 items-center gap-2">
@@ -888,16 +890,20 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
               <div class="mt-1 border-t border-border pt-1">
                 <button
                   type="button"
+                  ref={(button) => {
+                    optionRefs.set(SHOW_OLDER_MODELS_OPTION_KEY, button);
+                  }}
                   onClick={() => setShowAllModels(!showAllModels())}
-                  onKeyDown={handleShowAllModelsKeyDown}
+                  onKeyDown={(event) => handleOptionKeyDown(event, SHOW_OLDER_MODELS_OPTION_KEY)}
+                  role="option"
+                  aria-selected={false}
+                  aria-label={showOlderModelsOptionLabel()}
                   class="flex w-full items-center gap-1.5 px-3 py-2 text-left text-xs text-muted hover:bg-surface-hover hover:text-base-content"
                 >
                   <ChevronDownIcon
                     class={`h-3 w-3 transition-transform ${showAllModels() ? 'rotate-180' : ''}`}
                   />
-                  {showAllModels()
-                    ? 'Hide older models'
-                    : `Show ${hiddenModelCount()} older models`}
+                  {showOlderModelsOptionLabel()}
                 </button>
               </div>
             </Show>

@@ -127,9 +127,9 @@ describe('AIModelPicker', () => {
     const button = screen.getByTitle('Select shared default model');
     expect(button.textContent).toContain('Qwen: Qwen3.7 Plus via OpenRouter · default');
     expect(button.textContent).not.toContain('OpenRouterdefault');
-    expect(
-      screen.getByRole('button', { name: 'Qwen: Qwen3.7 Plus via OpenRouter, default' }),
-    ).toBe(button);
+    expect(screen.getByRole('button', { name: 'Qwen: Qwen3.7 Plus via OpenRouter, default' })).toBe(
+      button,
+    );
   });
 
   it('marks the selected catalog row as current in the model list', () => {
@@ -195,7 +195,9 @@ describe('AIModelPicker', () => {
 
     expect(button.getAttribute('aria-controls')?.endsWith('-listbox')).toBe(true);
     expect(screen.getByRole('dialog', { name: 'Select shared default model' })).toBeInTheDocument();
-    expect(screen.getByRole('listbox', { name: 'Select shared default model' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('listbox', { name: 'Select shared default model' }),
+    ).toBeInTheDocument();
   });
 
   it('moves keyboard focus from search through model options', async () => {
@@ -217,6 +219,9 @@ describe('AIModelPicker', () => {
     const nextOption = screen.getByRole('option', {
       name: 'GPT-5.1 Mini. openai:gpt-5.1-mini',
     });
+    const showOlderOption = screen.getByRole('option', {
+      name: 'Show 1 older models',
+    });
 
     await waitFor(() => {
       expect(document.activeElement).toBe(searchInput);
@@ -232,10 +237,71 @@ describe('AIModelPicker', () => {
     expect(document.activeElement).toBe(currentOption);
 
     fireEvent.keyDown(currentOption, { key: 'End' });
+    expect(document.activeElement).toBe(showOlderOption);
+
+    fireEvent.keyDown(showOlderOption, { key: 'ArrowUp' });
     expect(document.activeElement).toBe(nextOption);
 
     fireEvent.keyDown(nextOption, { key: 'Home' });
     expect(document.activeElement).toBe(currentOption);
+  });
+
+  it('activates focused options from the keyboard', async () => {
+    const onModelSelect = vi.fn();
+    render(() => (
+      <AIModelPicker
+        models={models}
+        selectedModel="openrouter:minimax/minimax-m2.5"
+        onModelSelect={onModelSelect}
+        title="Select shared default model"
+      />
+    ));
+
+    fireEvent.click(screen.getByTitle('Select shared default model'));
+
+    const searchInput = screen.getByPlaceholderText('Search or enter model ID');
+    const currentOption = screen.getByRole('option', {
+      name: 'MiniMax: MiniMax M2.5 via OpenRouter, Current. Current OpenRouter model. openrouter:minimax/minimax-m2.5',
+    });
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(searchInput);
+    });
+
+    fireEvent.keyDown(searchInput, { key: 'ArrowDown' });
+    fireEvent.keyDown(currentOption, { key: 'Enter' });
+
+    expect(onModelSelect).toHaveBeenCalledWith('openrouter:minimax/minimax-m2.5');
+  });
+
+  it('reveals older catalog rows from the focused disclosure option', async () => {
+    render(() => (
+      <AIModelPicker
+        models={models}
+        selectedModel="openrouter:minimax/minimax-m2.5"
+        onModelSelect={vi.fn()}
+        title="Select shared default model"
+      />
+    ));
+
+    fireEvent.click(screen.getByTitle('Select shared default model'));
+
+    const searchInput = screen.getByPlaceholderText('Search or enter model ID');
+    const showOlderOption = screen.getByRole('option', {
+      name: 'Show 1 older models',
+    });
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(searchInput);
+    });
+
+    fireEvent.keyDown(searchInput, { key: 'End' });
+    expect(document.activeElement).toBe(showOlderOption);
+
+    fireEvent.keyDown(showOlderOption, { key: 'Enter' });
+
+    expect(screen.getByRole('option', { name: 'Hide older models' })).toBeInTheDocument();
+    expect(screen.getByText('Legacy Model V1 via OpenRouter')).toBeInTheDocument();
   });
 
   it('supports page, home, end, and Escape from the search field', async () => {
@@ -288,7 +354,9 @@ describe('AIModelPicker', () => {
 
     searchInput.focus();
     fireEvent.keyDown(searchInput, { key: 'Escape' });
-    expect(screen.queryByRole('listbox', { name: 'Select shared default model' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('listbox', { name: 'Select shared default model' }),
+    ).not.toBeInTheDocument();
     await waitFor(() => {
       expect(document.activeElement).toBe(button);
     });
@@ -583,7 +651,11 @@ describe('AIModelPicker', () => {
         modelSections={[
           {
             title: 'Recent',
-            modelIds: ['openrouter:', 'https://openrouter.ai/models/foo', 'openrouter:custom/model'],
+            modelIds: [
+              'openrouter:',
+              'https://openrouter.ai/models/foo',
+              'openrouter:custom/model',
+            ],
           },
         ]}
       />

@@ -3567,6 +3567,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "frontend-modern/src/components/shared/__tests__/AIModelPicker.test.tsx",
               "frontend-modern/src/components/shared/__tests__/CommandPaletteModal.test.tsx",
               "frontend-modern/src/components/shared/__tests__/ContainerUpdateBadge.test.tsx",
               "frontend-modern/src/components/shared/__tests__/Dialog.test.tsx",

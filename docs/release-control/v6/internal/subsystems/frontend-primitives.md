@@ -1021,13 +1021,14 @@ not a replacement status card, CTA band, or page-local nested card.
     and it must flip above its trigger when prompt/composer chrome leaves
     insufficient room below. Caller-owned alignment may choose left or right
     anchoring, but the shared picker still owns the fixed-position dropdown,
-    viewport cap, search shell, and result list sizing. Chat-owned selectors
-    must reuse this shared picker instead of carrying a parallel dropdown
-    implementation. Recent/priority model sections, external
-    open-and-focus requests, selected older model visibility, route labels, and
-    explicit `provider:model` custom-route validation belong to the shared
-    picker so Assistant, settings, and future model-selection surfaces do not
-    drift apart. Unknown custom or recent routes may remain visible only when
+    viewport cap, search shell, result list sizing, and keyboard navigation
+    model. Chat-owned selectors must reuse this shared picker instead of
+    carrying a parallel dropdown implementation. Recent/priority model
+    sections, external open-and-focus requests, selected older model visibility,
+    route labels, explicit `provider:model` custom-route validation, and
+    catalog-disclosure rows belong to the shared picker so Assistant, settings,
+    and future model-selection surfaces do not drift apart. Unknown custom or
+    recent routes may remain visible only when
     they have a valid non-empty provider and model segment; malformed route
     strings such as empty provider/model values, URL-shaped text, whitespace,
     or path-only payloads must be dropped instead of becoming selectable model
@@ -1038,8 +1039,9 @@ not a replacement status card, CTA band, or page-local nested card.
     a named search/listbox surface: opening it must focus search, the trigger
     must expose its owned listbox while expanded, and keyboard movement from
     search through the option rows must support current-row focus,
-    filtered-result focus, up/down, page, home/end, and Escape return to the
-    trigger so model choice does not depend on mouse interaction. Picker-owned
+    filtered-result focus, catalog-disclosure focus, up/down, page, home/end,
+    Enter/Space activation, and Escape return to the trigger so model choice and
+    catalog expansion do not depend on mouse interaction. Picker-owned
     navigation keys, including Escape, must be consumed by the picker so parent
     shells do not also treat the same keypress as drawer or page-level Escape.
     Gateway-routed model choices must not look like direct-provider choices:
