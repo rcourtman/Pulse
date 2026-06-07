@@ -33,10 +33,10 @@ const generateId = () => Math.random().toString(36).substring(2, 9);
 type AssistantInterruption = NonNullable<ChatMessage['interruption']>;
 const WORKFLOW_STATUS_HISTORY_LIMIT = 8;
 
-const createInitialAssistantWorkflowStatus = (): WorkflowStatus => ({
+const createInitialAssistantWorkflowStatus = (startedAt = Date.now()): WorkflowStatus => ({
   phase: 'request_start',
   message: 'Preparing Pulse context.',
-  startedAt: Date.now(),
+  startedAt,
 });
 
 export interface UseChatOptions {
@@ -1593,26 +1593,39 @@ export function useChat(options: UseChatOptions = {}) {
     // Echo the user's message before any network work. Cold sessions can spend
     // noticeable time creating the server-side session; the chat surface should
     // still feel immediate.
+    const turnStartedAt = Date.now();
     const userMessage: ChatMessage = {
       id: options?.queuedMessageId || generateId(),
       role: 'user',
       content: trimmedPrompt,
-      timestamp: new Date(),
+      timestamp: new Date(turnStartedAt),
       request: buildRequestContext(mentions, findingId, requestSendOptions),
     };
 
     const assistantId = generateId();
-    const initialWorkflowStatus = createInitialAssistantWorkflowStatus();
+    const initialWorkflowStatus = createInitialAssistantWorkflowStatus(turnStartedAt);
+    const initialStreamEvents: StreamDisplayEvent[] = requestModel
+      ? [
+          withStreamEventTiming(
+            {
+              type: 'model_switch',
+              model: requestModel,
+              modelEvent: 'selected',
+            },
+            turnStartedAt,
+          ),
+        ]
+      : [];
     const streamingMessage: ChatMessage = {
       id: assistantId,
       role: 'assistant',
       content: '',
-      timestamp: new Date(),
+      timestamp: new Date(turnStartedAt),
       model: requestModel || undefined,
       isStreaming: true,
       pendingTools: [],
       toolCalls: [],
-      streamEvents: [],
+      streamEvents: initialStreamEvents,
       workflowStatus: initialWorkflowStatus,
       workflowStatusHistory: [initialWorkflowStatus],
     };

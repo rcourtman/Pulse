@@ -116,6 +116,48 @@ describe('getAssistantActiveTurnStatus', () => {
     });
   });
 
+  it('prefers the selected model route over the generic request-start status', () => {
+    const startedAt = Date.now() - 1_000;
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            isStreaming: true,
+            workflowStatus: {
+              phase: 'request_start',
+              message: 'Preparing Pulse context.',
+              startedAt,
+            },
+            streamEvents: [
+              {
+                type: 'model_switch',
+                model: 'openrouter:qwen/qwen3.7-plus',
+                modelEvent: 'selected',
+                startedAt,
+                updatedAt: startedAt,
+              },
+              {
+                type: 'workflow_status',
+                workflowStatus: {
+                  phase: 'request_start',
+                  message: 'Preparing Pulse context.',
+                  startedAt,
+                },
+                startedAt,
+                updatedAt: startedAt + 50,
+              },
+            ],
+          }),
+        ],
+        true,
+      ),
+    ).toEqual({
+      type: 'thinking',
+      text: 'Using Qwen: Qwen3.7 Plus via OpenRouter',
+      startedAt,
+    });
+  });
+
   it('surfaces provider retry attempt and backoff metadata in the active footer', () => {
     const startedAt = Date.now() - 2_000;
     expect(

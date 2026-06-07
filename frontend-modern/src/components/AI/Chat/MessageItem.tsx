@@ -25,7 +25,7 @@ import { QuestionCard } from './QuestionCard';
 import { ThinkingBlock } from './ThinkingBlock';
 import { getAssistantAnswerText } from './assistantAnswerText';
 import { stripAssistantOutputArtifacts } from './assistantOutputHygiene';
-import { formatAssistantWorkflowStatus } from './activeTurnStatus';
+import { formatAssistantWorkflowStatus, isInitialRequestStartStatus } from './activeTurnStatus';
 import { groupStreamEventsForDisplay } from './streamEventGrouping';
 import {
   latestWorkflowStatus,
@@ -261,12 +261,43 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
   const groupedEvents = createMemo(() =>
     groupStreamEventsForDisplay(props.message.streamEvents || []),
   );
+  const isConcreteStreamActivity = (evt: StreamDisplayEvent) => {
+    switch (evt.type) {
+      case 'workflow_status':
+        return (
+          !isInitialRequestStartStatus(evt.workflowStatus) &&
+          !!formatAssistantWorkflowStatus(evt.workflowStatus)
+        );
+      case 'thinking':
+        return !!evt.thinking?.trim();
+      case 'content':
+        return !!stripAssistantOutputArtifacts(evt.content || '').text;
+      case 'tool':
+        return !!evt.tool;
+      case 'pending_tool':
+        return !!evt.pendingTool;
+      case 'model_switch':
+        return !!evt.model?.trim();
+      case 'approval':
+        return !!evt.approval;
+      case 'question':
+        return !!evt.question;
+      default:
+        return false;
+    }
+  };
+  const hasConcreteStreamActivity = createMemo(() =>
+    groupedEvents().some(isConcreteStreamActivity),
+  );
+  const shouldRenderWorkflowStatusEvent = (evt: StreamDisplayEvent) =>
+    !!formatAssistantWorkflowStatus(evt.workflowStatus) &&
+    (!isInitialRequestStartStatus(evt.workflowStatus) || !hasConcreteStreamActivity());
   const isRenderableStreamEvent = (evt: StreamDisplayEvent) => {
     switch (evt.type) {
       case 'thinking':
         return !!evt.thinking?.trim();
       case 'workflow_status':
-        return !!formatAssistantWorkflowStatus(evt.workflowStatus);
+        return shouldRenderWorkflowStatusEvent(evt);
       case 'content':
         return !!stripAssistantOutputArtifacts(evt.content || '').text;
       case 'tool':
@@ -553,7 +584,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                       <Match
                         when={
                           evt.type === 'workflow_status' &&
-                          formatAssistantWorkflowStatus(evt.workflowStatus)
+                          shouldRenderWorkflowStatusEvent(evt)
                         }
                       >
                         <div

@@ -844,6 +844,49 @@ describe('MessageItem', () => {
       ).toHaveTextContent('Using Qwen 3.7 Plus via OpenRouter');
     });
 
+    it('hides placeholder request-start rows once the selected model route is visible', () => {
+      const events: StreamDisplayEvent[] = [
+        {
+          type: 'model_switch',
+          model: 'openrouter:qwen/qwen3.7-plus',
+          modelEvent: 'selected',
+          startedAt: 1_000,
+          updatedAt: 1_000,
+        },
+        {
+          type: 'workflow_status',
+          workflowStatus: {
+            phase: 'request_start',
+            message: 'Preparing Pulse context.',
+            startedAt: 1_000,
+          },
+          startedAt: 1_000,
+          updatedAt: 1_050,
+        },
+      ];
+
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            isStreaming: true,
+            streamEvents: events,
+            workflowStatus: events[1].workflowStatus,
+          })}
+          getModelRouteLabel={(model) =>
+            model === 'openrouter:qwen/qwen3.7-plus' ? 'Qwen 3.7 Plus via OpenRouter' : model
+          }
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(
+        screen.getByRole('status', { name: 'Assistant model route selected' }),
+      ).toHaveTextContent('Using Qwen 3.7 Plus via OpenRouter');
+      expect(screen.queryByText('Preparing Pulse context.')).not.toBeInTheDocument();
+    });
+
     it('renders provider fallback model switches with failed and next routes', () => {
       const events: StreamDisplayEvent[] = [
         {

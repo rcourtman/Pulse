@@ -183,7 +183,7 @@ runtime cost control, and shared AI transport surfaces.
    from the disclosure without expanding the default transcript.
    Live workflow activity is also active turn state, not disposable waiting
 	   copy. The referenced OpenCode source at fetched `origin/dev` commit
-	   `4519a1da329c1a4fc384054e7203ba7d06928205` defines model, shell, step,
+	   `1025540fcc2a69609a0131a7168300205656d728` defines model, shell, step,
 	   and tool lifecycle events in `packages/core/src/session/event.ts` (model
 	   switched lines 62-70; shell started/ended lines 151-174; tool lifecycle
 	   lines 340-392), projects them into durable message/part rows in
@@ -198,9 +198,16 @@ runtime cost control, and shared AI transport surfaces.
    arrives. Burst workflow statuses may still replace one another until a
    durable stream boundary appears, and terminal cleanup on done/error/Stop
    may remove transient workflow-status rows while preserving typed
-   model-switch and tool evidence. The generated frontend SSE contract must
-   include workflow `provider` and `model` fields so selected-route activity
-   is typed end to end.
+   model-switch and tool evidence. When the selected model route is already
+   known at turn creation, Pulse must seed a selected-model stream event before
+   backend/provider activity arrives so the transcript and active-turn footer
+   show concrete route motion instead of a generic request-start wait.
+   Placeholder `request_start` workflow statuses remain fallback activity only:
+   once selected-model, provider, tool, thinking, approval, question, or content
+   activity is visible, the placeholder must not outrank it in the footer or
+   render beside it as a duplicate transcript row. The generated frontend SSE
+   contract must include workflow `provider` and `model` fields so
+   selected-route activity is typed end to end.
    The transcript viewport is part of the same live activity contract. The
    referenced OpenCode source at fetched `origin/dev` commit
    `1025540fcc2a69609a0131a7168300205656d728` forwards reducer commits into

@@ -280,6 +280,42 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('shows the selected model route immediately while the first backend event is pending', async () => {
+      let resolveChat!: () => void;
+      mockChat.mockReturnValue(
+        new Promise<void>((resolve) => {
+          resolveChat = resolve;
+        }),
+      );
+
+      const { value: chat, dispose } = withRoot(() =>
+        useChat({ defaultModel: () => 'openrouter:qwen/qwen3.7-plus' }),
+      );
+      const result = chat.sendMessage('hello');
+
+      const assistant = chat.messages()[1];
+      expect(assistant).toMatchObject({
+        role: 'assistant',
+        model: 'openrouter:qwen/qwen3.7-plus',
+        isStreaming: true,
+        workflowStatus: {
+          phase: 'request_start',
+          message: 'Preparing Pulse context.',
+        },
+      });
+      expect(assistant.streamEvents).toEqual([
+        expect.objectContaining({
+          type: 'model_switch',
+          model: 'openrouter:qwen/qwen3.7-plus',
+          modelEvent: 'selected',
+        }),
+      ]);
+
+      resolveChat();
+      await result;
+      dispose();
+    });
+
     it('reuses existing session', async () => {
       mockChat.mockResolvedValue(undefined);
 
@@ -1222,17 +1258,24 @@ describe('useChat', () => {
           retryAfterMs: 200,
         }),
       );
-      expect(assistant.streamEvents).toEqual([
-        expect.objectContaining({
-          type: 'workflow_status',
-          workflowStatus: expect.objectContaining({
-            phase: 'provider_retry',
-            attempt: 2,
-            maxAttempts: 2,
-            retryAfterMs: 200,
+      expect(assistant.streamEvents).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'model_switch',
+            model: 'openrouter:openai/gpt-4o-mini',
+            modelEvent: 'selected',
           }),
-        }),
-      ]);
+          expect.objectContaining({
+            type: 'workflow_status',
+            workflowStatus: expect.objectContaining({
+              phase: 'provider_retry',
+              attempt: 2,
+              maxAttempts: 2,
+              retryAfterMs: 200,
+            }),
+          }),
+        ]),
+      );
       dispose();
     });
 

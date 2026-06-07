@@ -18,6 +18,7 @@ export interface AssistantActiveTurnStatus {
 
 interface AssistantActiveTurnStatusCandidate extends AssistantActiveTurnStatus {
   activityAt?: number;
+  placeholder?: boolean;
   order: number;
 }
 
@@ -183,6 +184,9 @@ const isFresherStatusCandidate = (
   current: AssistantActiveTurnStatusCandidate | null,
 ): boolean => {
   if (!current) return true;
+  if (candidate.placeholder !== current.placeholder) {
+    return current.placeholder === true;
+  }
   const candidateTime = candidate.activityAt;
   const currentTime = current.activityAt;
   if (candidateTime !== undefined && currentTime !== undefined && candidateTime !== currentTime) {
@@ -239,6 +243,7 @@ const latestStreamActivityStatus = (
             text,
             startedAt: event.workflowStatus?.startedAt || event.startedAt,
             activityAt: eventActivityAt(event),
+            placeholder: isInitialRequestStartStatus(event.workflowStatus),
             order: index,
           };
         }
@@ -317,6 +322,9 @@ const workflowStatusCandidate = (
   };
 };
 
+export const isInitialRequestStartStatus = (status?: WorkflowStatus): boolean =>
+  status?.phase === 'request_start';
+
 const modelSwitchStatusText = (event: StreamDisplayEvent): string => {
   const model = event.model?.trim();
   if (!model) return '';
@@ -369,7 +377,10 @@ export const getAssistantActiveTurnStatus = (
   }
   if (assistantMessage.isStreaming !== false) {
     const workflowCandidate = workflowStatusCandidate(assistantMessage.workflowStatus);
-    if (workflowCandidate) {
+    if (
+      workflowCandidate &&
+      !(isInitialRequestStartStatus(assistantMessage.workflowStatus) && eventStatusCandidate)
+    ) {
       statusCandidates.push(workflowCandidate);
     }
   }
