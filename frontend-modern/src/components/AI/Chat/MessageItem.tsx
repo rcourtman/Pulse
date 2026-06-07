@@ -70,6 +70,7 @@ interface MessageItemProps {
   onUseModelRoute?: (modelId: string, messageId?: string) => void;
   queuedPosition?: number;
   queuedCount?: number;
+  queuedPaused?: boolean;
   onEditQueued?: () => void;
   onCancelQueued?: () => void;
 }
@@ -426,10 +427,11 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     if (!isQueuedUserMessage()) return '';
     const position = props.queuedPosition;
     const count = props.queuedCount;
+    const state = props.queuedPaused ? 'Paused' : 'Queued';
     if (position && count && count > 1) {
-      return `Queued ${position} of ${count}`;
+      return `${state} ${position} of ${count}`;
     }
-    return 'Queued';
+    return state;
   });
 
   // Group stream events into display blocks. Content collapses into a single

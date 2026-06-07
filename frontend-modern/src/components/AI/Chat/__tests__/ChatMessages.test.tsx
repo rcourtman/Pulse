@@ -26,6 +26,7 @@ let capturedMessageItemProps: Array<{
   onUseModelRoute?: (modelId: string, messageId?: string) => void;
   queuedPosition?: number;
   queuedCount?: number;
+  queuedPaused?: boolean;
   onEditQueued?: () => void;
   onCancelQueued?: () => void;
 }> = [];
@@ -46,6 +47,7 @@ vi.mock('../MessageItem', () => ({
     onUseModelRoute?: (modelId: string, messageId?: string) => void;
     queuedPosition?: number;
     queuedCount?: number;
+    queuedPaused?: boolean;
     onEditQueued?: () => void;
     onCancelQueued?: () => void;
   }) => {
@@ -286,12 +288,48 @@ describe('ChatMessages', () => {
 
       expect(firstQueued).toMatchObject({ queuedPosition: 1, queuedCount: 2 });
       expect(secondQueued).toMatchObject({ queuedPosition: 2, queuedCount: 2 });
+      expect(firstQueued?.queuedPaused).toBe(false);
+      expect(secondQueued?.queuedPaused).toBe(false);
 
       firstQueued?.onEditQueued?.();
       secondQueued?.onCancelQueued?.();
 
       expect(onEditQueuedFollowUp).toHaveBeenCalledWith('queue-1');
       expect(onCancelQueuedFollowUp).toHaveBeenCalledWith('queue-2');
+    });
+
+    it('passes paused queue state to queued message items', () => {
+      const queuedFollowUps: QueuedFollowUp[] = [
+        {
+          id: 'queue-1',
+          messageId: 'queued-user-1',
+          prompt: 'paused queued turn',
+          timestamp: new Date('2026-03-01T12:01:00Z'),
+        },
+      ];
+
+      render(() => (
+        <ChatMessages
+          messages={[
+            makeMessage({
+              id: 'queued-user-1',
+              role: 'user',
+              content: 'paused queued turn',
+              delivery: 'queued',
+            }),
+          ]}
+          {...makeHandlers()}
+          queuedFollowUps={queuedFollowUps}
+          queuedFollowUpsPaused
+        />
+      ));
+
+      const queuedItem = capturedMessageItemProps.find((p) => p.message.id === 'queued-user-1');
+      expect(queuedItem).toMatchObject({
+        queuedPosition: 1,
+        queuedCount: 1,
+        queuedPaused: true,
+      });
     });
 
     it('renders the scroll anchor element', () => {

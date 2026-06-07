@@ -187,6 +187,25 @@ describe('MessageItem', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Remove queued follow-up' }));
       expect(onCancelQueued).toHaveBeenCalledTimes(1);
     });
+
+    it('renders paused queued user messages distinctly', () => {
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'user',
+            content: 'follow up after stop',
+            delivery: 'queued',
+          })}
+          {...makeHandlers()}
+          queuedPosition={2}
+          queuedCount={3}
+          queuedPaused
+        />
+      ));
+
+      expect(screen.getByText('follow up after stop')).toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent('Paused 2 of 3');
+    });
   });
 
   describe('error block', () => {

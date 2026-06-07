@@ -31,6 +31,7 @@ interface ChatMessagesProps {
   getModelRouteAlternative?: (message: ChatMessage) => ModelRouteRecoveryOption | null;
   onUseModelRoute?: (modelId: string, messageId?: string) => void;
   queuedFollowUps?: QueuedFollowUp[];
+  queuedFollowUpsPaused?: boolean;
   onEditQueuedFollowUp?: (id: string) => void;
   onCancelQueuedFollowUp?: (id: string) => void;
   // Dashboard props
@@ -172,6 +173,7 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
           id: entry.id,
           position: index + 1,
           count: entries.length,
+          paused: Boolean(props.queuedFollowUpsPaused),
         },
       ]),
     );
@@ -271,6 +273,7 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
                 onUseModelRoute={props.onUseModelRoute}
                 queuedPosition={queuedMeta()?.position}
                 queuedCount={queuedMeta()?.count}
+                queuedPaused={queuedMeta()?.paused}
                 onEditQueued={
                   queuedMeta() && props.onEditQueuedFollowUp
                     ? () => {

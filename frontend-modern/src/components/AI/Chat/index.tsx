@@ -4293,6 +4293,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
             getModelRouteAlternative={getFailedTurnModelRouteAlternative}
             onUseModelRoute={switchToModelRoute}
             queuedFollowUps={chat.queuedFollowUps()}
+            queuedFollowUpsPaused={chat.queuedFollowUpsPaused()}
             onEditQueuedFollowUp={editQueuedFollowUp}
             onCancelQueuedFollowUp={(id) => {
               chat.cancelQueuedFollowUp(id);
@@ -4434,7 +4435,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       <ClockIcon class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                       <span class="min-w-0 flex-1 truncate text-xs font-medium">
                         {pluralizeCount(chat.queuedFollowUpCount(), 'follow-up', 'follow-ups')}{' '}
-                        queued
+                        {chat.queuedFollowUpsPaused() ? 'paused' : 'queued'}
                       </span>
                       <button
                         type="button"
@@ -4463,6 +4464,17 @@ export const AIChat: Component<AIChatProps> = (props) => {
                                   class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60"
                                   title="Send queued follow-up next"
                                   aria-label={`Send queued follow-up next: ${preview()}`}
+                                >
+                                  <SendIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                                </button>
+                              </Show>
+                              <Show when={chat.queuedFollowUpsPaused() && index() === 0}>
+                                <button
+                                  type="button"
+                                  onClick={() => sendQueuedFollowUpNext(queued.id)}
+                                  class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60"
+                                  title="Resume queued follow-up"
+                                  aria-label={`Resume queued follow-up: ${preview()}`}
                                 >
                                   <SendIcon class="h-3.5 w-3.5" aria-hidden="true" />
                                 </button>

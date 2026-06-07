@@ -82,6 +82,7 @@ export function useChat(options: UseChatOptions = {}) {
   const [sessionId, setSessionId] = createSignal(options.sessionId || '');
   const [model, setModel] = createSignal(options.model || '');
   const [queuedFollowUps, setQueuedFollowUps] = createSignal<QueuedFollowUp[]>([]);
+  const [queuedFollowUpsPaused, setQueuedFollowUpsPaused] = createSignal(false);
 
   const effectiveModelRoute = (sendOptions?: Pick<SendMessageOptions, 'model'>) => {
     const explicitModel = sendOptions?.model?.trim();
@@ -263,14 +264,26 @@ export function useChat(options: UseChatOptions = {}) {
   const cancelQueuedFollowUp = (id: string) => {
     const item = queuedFollowUps().find((entry) => entry.id === id);
     if (!item) return;
-    setQueuedFollowUps((prev) => prev.filter((entry) => entry.id !== id));
+    setQueuedFollowUps((prev) => {
+      const next = prev.filter((entry) => entry.id !== id);
+      if (next.length === 0) {
+        setQueuedFollowUpsPaused(false);
+      }
+      return next;
+    });
     removeQueuedMessages(new Set([item.messageId]));
   };
 
   const takeQueuedFollowUp = (id: string): QueuedFollowUp | undefined => {
     const item = queuedFollowUps().find((entry) => entry.id === id);
     if (!item) return undefined;
-    setQueuedFollowUps((prev) => prev.filter((entry) => entry.id !== id));
+    setQueuedFollowUps((prev) => {
+      const next = prev.filter((entry) => entry.id !== id);
+      if (next.length === 0) {
+        setQueuedFollowUpsPaused(false);
+      }
+      return next;
+    });
     removeQueuedMessages(new Set([item.messageId]));
     return item;
   };
@@ -312,6 +325,7 @@ export function useChat(options: UseChatOptions = {}) {
   const clearQueuedFollowUps = () => {
     const messageIds = new Set(queuedFollowUps().map((entry) => entry.messageId));
     setQueuedFollowUps([]);
+    setQueuedFollowUpsPaused(false);
     removeQueuedMessages(messageIds);
   };
 
@@ -322,7 +336,9 @@ export function useChat(options: UseChatOptions = {}) {
 
   // Stop/cancel current request
   const stop = () => {
-    clearQueuedFollowUps();
+    if (queuedFollowUps().length > 0) {
+      setQueuedFollowUpsPaused(true);
+    }
     void cancelActiveRequest('stopped');
   };
 
@@ -1689,6 +1705,7 @@ export function useChat(options: UseChatOptions = {}) {
 
     setMessages((prev) => [...prev, queuedUserMessage]);
     setQueuedFollowUps((prev) => [...prev, queuedFollowUp]);
+    setQueuedFollowUpsPaused(false);
     logger.debug('[useChat] Queued follow-up while assistant response is streaming', {
       queuedFollowUpId: id,
     });
@@ -1849,7 +1866,7 @@ export function useChat(options: UseChatOptions = {}) {
   };
 
   async function drainQueuedFollowUps() {
-    if (isDrainingQueuedFollowUps || isLoading()) return;
+    if (isDrainingQueuedFollowUps || isLoading() || queuedFollowUpsPaused()) return;
 
     isDrainingQueuedFollowUps = true;
     try {
@@ -1867,7 +1884,7 @@ export function useChat(options: UseChatOptions = {}) {
       isDrainingQueuedFollowUps = false;
     }
 
-    if (queuedFollowUps().length > 0 && !isLoading()) {
+    if (queuedFollowUps().length > 0 && !isLoading() && !queuedFollowUpsPaused()) {
       queueMicrotask(() => {
         void drainQueuedFollowUps();
       });
@@ -1897,6 +1914,7 @@ export function useChat(options: UseChatOptions = {}) {
       return promoteQueuedFollowUp(id);
     }
 
+    setQueuedFollowUpsPaused(false);
     setQueuedFollowUps((prev) => prev.filter((entry) => entry.id !== id));
     return startMessageSend(item.prompt, item.mentions, item.findingId, item.sendOptions, {
       queuedMessageId: item.messageId,
@@ -1907,6 +1925,7 @@ export function useChat(options: UseChatOptions = {}) {
   const clearMessages = () => {
     void cancelActiveRequest();
     setQueuedFollowUps([]);
+    setQueuedFollowUpsPaused(false);
     setMessages([]);
     setSessionId(''); // Clear session so next message creates a new one
   };
@@ -1915,6 +1934,7 @@ export function useChat(options: UseChatOptions = {}) {
   const loadSession = async (id: string): Promise<boolean> => {
     void cancelActiveRequest();
     setQueuedFollowUps([]);
+    setQueuedFollowUpsPaused(false);
     try {
       const msgs = await AIChatAPI.getMessages(id);
       setMessages(
@@ -1952,6 +1972,7 @@ export function useChat(options: UseChatOptions = {}) {
   const newSession = async (): Promise<boolean> => {
     void cancelActiveRequest();
     setQueuedFollowUps([]);
+    setQueuedFollowUpsPaused(false);
     setSessionId('');
     setMessages([]);
     return true;
@@ -2166,14 +2187,16 @@ export function useChat(options: UseChatOptions = {}) {
   // Useful for sending follow-up messages after approvals
   const waitForIdle = (timeoutMs = 30000): Promise<boolean> => {
     return new Promise((resolve) => {
-      if (!isLoading() && queuedFollowUps().length === 0 && !isDrainingQueuedFollowUps) {
+      const hasPendingQueuedDrain = queuedFollowUps().length > 0 && !queuedFollowUpsPaused();
+      if (!isLoading() && !hasPendingQueuedDrain && !isDrainingQueuedFollowUps) {
         resolve(true);
         return;
       }
 
       const startTime = Date.now();
       const checkInterval = setInterval(() => {
-        if (!isLoading() && queuedFollowUps().length === 0 && !isDrainingQueuedFollowUps) {
+        const hasPendingQueuedDrain = queuedFollowUps().length > 0 && !queuedFollowUpsPaused();
+        if (!isLoading() && !hasPendingQueuedDrain && !isDrainingQueuedFollowUps) {
           clearInterval(checkInterval);
           resolve(true);
         } else if (Date.now() - startTime > timeoutMs) {
@@ -2219,6 +2242,7 @@ export function useChat(options: UseChatOptions = {}) {
     model,
     setModel,
     queuedFollowUps,
+    queuedFollowUpsPaused,
     queuedFollowUpCount: () => queuedFollowUps().length,
     sendMessage,
     sendQueuedFollowUpNow,

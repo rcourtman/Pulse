@@ -26,6 +26,7 @@ const {
     getModelRouteAlternative?: (message: ChatMessage) => ModelRouteRecoveryOption | null;
     onUseModelRoute?: (modelId: string, messageId?: string) => void;
     queuedFollowUps?: QueuedFollowUp[];
+    queuedFollowUpsPaused?: boolean;
     onEditQueuedFollowUp?: (id: string) => void;
     onCancelQueuedFollowUp?: (id: string) => void;
   }> = [];
@@ -43,6 +44,7 @@ const {
     model: vi.fn(() => ''),
     setModel: vi.fn(),
     queuedFollowUps: vi.fn((): QueuedFollowUp[] => []),
+    queuedFollowUpsPaused: vi.fn(() => false),
     queuedFollowUpCount: vi.fn(() => 0),
     sendMessage: vi.fn().mockResolvedValue(true),
     retryMessage: vi.fn(),
@@ -240,6 +242,7 @@ vi.mock('../ChatMessages', () => ({
     getModelRouteAlternative?: (message: ChatMessage) => ModelRouteRecoveryOption | null;
     onUseModelRoute?: (modelId: string, messageId?: string) => void;
     queuedFollowUps?: QueuedFollowUp[];
+    queuedFollowUpsPaused?: boolean;
     onEditQueuedFollowUp?: (id: string) => void;
     onCancelQueuedFollowUp?: (id: string) => void;
   }) => {
@@ -426,6 +429,7 @@ beforeEach(() => {
   mockChat.sessionId.mockReturnValue('');
   mockChat.model.mockReturnValue('');
   mockChat.queuedFollowUps.mockReturnValue([]);
+  mockChat.queuedFollowUpsPaused.mockReturnValue(false);
   mockChat.queuedFollowUpCount.mockReturnValue(0);
   mockChat.sendMessage.mockResolvedValue(true);
   mockChat.sendQueuedFollowUpNow.mockResolvedValue(true);
@@ -2407,6 +2411,33 @@ describe('AIChat', () => {
       expect(mockChat.clearQueuedFollowUps).toHaveBeenCalledTimes(1);
     });
 
+    it('shows paused queued follow-ups and lets the first one resume', () => {
+      mockChat.queuedFollowUpCount.mockReturnValue(1);
+      mockChat.queuedFollowUpsPaused.mockReturnValue(true);
+      mockChat.queuedFollowUps.mockReturnValue([
+        {
+          id: 'queued-paused-1',
+          messageId: 'msg-queued-paused-1',
+          prompt: 'paused queued prompt',
+          timestamp: new Date(),
+        },
+      ]);
+      renderChat();
+
+      expect(screen.getByRole('status', { name: 'Queued follow-up messages' })).toHaveTextContent(
+        '1 follow-up paused',
+      );
+      expect(mockChatMessagesProps.at(-1)?.queuedFollowUpsPaused).toBe(true);
+
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: 'Resume queued follow-up: paused queued prompt',
+        }),
+      );
+
+      expect(mockChat.sendQueuedFollowUpNow).toHaveBeenCalledWith('queued-paused-1');
+    });
+
     it('lets a later queued follow-up be promoted to send next', async () => {
       mockChat.queuedFollowUpCount.mockReturnValue(2);
       mockChat.queuedFollowUps.mockReturnValue([
@@ -2458,6 +2489,7 @@ describe('AIChat', () => {
 
       const chatMessagesProps = mockChatMessagesProps.at(-1);
       expect(chatMessagesProps?.queuedFollowUps).toBe(queuedFollowUps);
+      expect(chatMessagesProps?.queuedFollowUpsPaused).toBe(false);
 
       chatMessagesProps?.onEditQueuedFollowUp?.('queued-row-1');
       expect(mockChat.takeQueuedFollowUp).toHaveBeenCalledWith('queued-row-1');
