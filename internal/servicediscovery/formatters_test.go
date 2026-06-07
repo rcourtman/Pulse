@@ -214,6 +214,37 @@ func TestFormatScopeHint(t *testing.T) {
 	}
 }
 
+func TestFormatForRemediationSurfacesControlAndMounts(t *testing.T) {
+	d := &ResourceDiscovery{
+		ID:           MakeResourceID(ResourceTypeDocker, "nuc", "homeassistant"),
+		ResourceType: ResourceTypeDocker,
+		Hostname:     "nuc",
+		ServiceType:  "home-assistant",
+		ServiceName:  "Home Assistant",
+		CLIAccess:    "docker exec homeassistant bash",
+		ConfigPaths:  []string{"/config/automations.yaml"},
+		DockerMounts: []DockerBindMount{
+			{ContainerName: "homeassistant", Source: "/opt/ha/config", Destination: "/config", Type: "bind"},
+		},
+		Facts: []DiscoveryFact{
+			{Category: FactCategoryService, Key: "restart", Value: "docker restart homeassistant", Confidence: 0.9},
+		},
+	}
+
+	out := FormatForRemediation(d)
+	// Remediation must tell you how to restart the service and where to edit its
+	// files on the host — the two core fix actions, previously both missing.
+	for _, want := range []string{
+		"docker restart homeassistant", // service-control fact
+		"/opt/ha/config",               // host bind-mount source
+		"/config/automations.yaml",     // config file to edit
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("remediation context missing %q\n--- output ---\n%s", want, out)
+		}
+	}
+}
+
 func TestFilterImportantFactsLimit(t *testing.T) {
 	var facts []DiscoveryFact
 	for i := 0; i < 10; i++ {

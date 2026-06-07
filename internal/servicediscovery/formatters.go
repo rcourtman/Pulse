@@ -326,11 +326,43 @@ func FormatForRemediation(d *ResourceDiscovery) string {
 		sb.WriteString("\n\n")
 	}
 
+	// Service control — how to restart/reload the workload, the core remediation
+	// action. Previously remediation context surfaced only hardware facts, so it
+	// never told you how to actually restart the thing it was helping you fix.
+	var serviceFacts []DiscoveryFact
+	for _, f := range d.Facts {
+		if f.Category == FactCategoryService {
+			serviceFacts = append(serviceFacts, f)
+		}
+	}
+	if len(serviceFacts) > 0 {
+		sb.WriteString("### Service Control\n")
+		for _, f := range serviceFacts {
+			sb.WriteString(fmt.Sprintf("- %s: %s\n", f.Key, f.Value))
+		}
+		sb.WriteString("\n")
+	}
+
 	// Config paths for potential fixes
 	if len(d.ConfigPaths) > 0 {
 		sb.WriteString("### Configuration Files\n")
 		for _, p := range d.ConfigPaths {
 			sb.WriteString(fmt.Sprintf("- `%s`\n", p))
+		}
+		sb.WriteString("\n")
+	}
+
+	// Bind mounts — edit or back up persistent files at the HOST source; the
+	// container only sees the destination path, so without this a fix written
+	// "to /config" would not survive a container recreate.
+	if len(d.DockerMounts) > 0 {
+		sb.WriteString("### Bind Mounts (host -> container)\n")
+		for _, m := range d.DockerMounts {
+			line := fmt.Sprintf("- `%s` -> `%s`", m.Source, m.Destination)
+			if m.ReadOnly {
+				line += " (read-only)"
+			}
+			sb.WriteString(line + "\n")
 		}
 		sb.WriteString("\n")
 	}
