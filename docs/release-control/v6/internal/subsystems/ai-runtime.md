@@ -137,8 +137,17 @@ runtime cost control, and shared AI transport surfaces.
    selected models as structured `{ providerID, modelID }` values in
    `packages/opencode/src/cli/cmd/tui/component/dialog-model.tsx` and
    `packages/opencode/src/provider/provider.ts`, so Pulse must preserve the
-   equivalent route identity for queued and retried turns. OpenCode's
-   `DialogModel` feeds current, recent, favorite, and provider model rows into
+   equivalent route identity for queued and retried turns. Queue-drain UX
+   verification must have a deterministic local fixture path so agents can
+   test queued follow-up echo, hold, drain, and tool-row replacement without
+   opening a real provider stream. The referenced OpenCode source at fetched
+   `origin/dev` commit `31c099be435d59bd6749ace7a9f2bb2245e6d3fa` emits
+   local demo tool events through
+   `packages/opencode/src/cli/cmd/run/demo.ts` (`startTool` and `doneTool`,
+   lines 451-525; demo command routing, lines 1039-1076); Pulse adapts that by
+   keeping `/fixture queue-hold` and `/fixture queued-follow-up` fully local
+   browser fixtures for queue interaction proof. OpenCode's `DialogModel` feeds
+   current, recent, favorite, and provider model rows into
    `DialogSelect`, while `DialogSelect` maintains a selected row and handles
    up/down/page/home/end/return navigation. The fetched OpenCode
    `origin/dev` commit `31c099be435d59bd6749ace7a9f2bb2245e6d3fa` keeps those

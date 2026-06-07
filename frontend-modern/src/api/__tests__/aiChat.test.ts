@@ -508,6 +508,54 @@ describe('AIChatAPI', () => {
     });
   });
 
+  it('runs the queued follow-up drain fixture without opening a provider request', async () => {
+    const onEvent = vi.fn();
+
+    await AIChatAPI.chat(
+      '/fixture queued-follow-up',
+      undefined,
+      'openrouter:qwen/qwen3.7-plus',
+      onEvent,
+    );
+
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'session',
+      'workflow_state',
+      'workflow_state',
+      'tool_start',
+      'tool_end',
+      'content',
+      'done',
+    ]);
+    expect(onEvent.mock.calls[0][0]).toMatchObject({
+      type: 'session',
+      data: { id: 'dev-fixture-queue-drain' },
+    });
+    expect(onEvent.mock.calls[2][0]).toMatchObject({
+      type: 'workflow_state',
+      data: {
+        phase: 'context',
+        message: 'Replaying queued turn without opening a provider request.',
+        tool: 'pulse_query',
+      },
+    });
+    expect(onEvent.mock.calls[3][0]).toMatchObject({
+      type: 'tool_start',
+      data: {
+        id: 'fixture-tool-queue-drain',
+        name: 'pulse_query',
+      },
+    });
+    expect(onEvent.mock.calls[6][0]).toMatchObject({
+      type: 'done',
+      data: {
+        session_id: 'dev-fixture-queue-drain',
+        model: 'openrouter:qwen/qwen3.7-plus',
+      },
+    });
+  });
+
   it('runs the compacted-artifact dev stream fixture without opening a provider request', async () => {
     const onEvent = vi.fn();
 

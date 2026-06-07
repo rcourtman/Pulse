@@ -107,6 +107,7 @@ product API routes free of maintainer commercial analytics.
 67. `internal/api/ai_intelligence_handlers.go`
 68. `frontend-modern/src/api/ai.ts`
 69. `frontend-modern/src/api/aiChat.ts`
+69a. `frontend-modern/src/api/aiChatDevStreamFixture.ts`
 70. `frontend-modern/src/api/patrol.ts`
 71. `frontend-modern/src/api/generated/aiChatEvents.ts`
 72. `internal/api/agent_exec_token_binding.go`
@@ -123,6 +124,13 @@ Provider retry progress must use typed fields (`attempt`, `max_attempts`,
 `retry_after_ms`) on that same event instead of frontend-only string parsing or
 provider-specific ad hoc events; the Assistant UI may format those fields, but
 must not invent retry progress that the stream contract did not carry.
+Assistant local stream fixtures are part of the same frontend API contract:
+`frontend-modern/src/api/aiChatDevStreamFixture.ts` may short-circuit only
+explicit `/fixture ...` prompts in development or test mode, must emit the same
+typed stream event sequence as live chat, and must never open a provider request.
+Queue verification fixtures must cover both the active hold turn and the queued
+drain turn so UX proof can exercise queued follow-up ordering and tool rows
+without consuming external model quota.
 
 Infrastructure settings copied agent commands are a shared API/payload boundary
 even when the final command string is assembled in the browser. Selected-row

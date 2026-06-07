@@ -840,7 +840,7 @@ describe('AIChat', () => {
         role: 'assistant',
         content: '',
         error:
-          'Unknown Assistant fixture "/fixture typo-check". Available fixtures: devices, assistant-stream, tool-burst, context-group, pending-tool, provider-retry, stream-idle, compacted-artifact, skipped-tool.',
+          'Unknown Assistant fixture "/fixture typo-check". Available fixtures: devices, assistant-stream, tool-burst, context-group, pending-tool, provider-retry, stream-idle, queue-hold, queue-drain, compacted-artifact, skipped-tool.',
         timestamp: new Date('2026-06-05T10:00:00Z'),
         model: 'openrouter:qwen/qwen3.7-plus',
         streamEvents: [

@@ -9,6 +9,7 @@ export const AI_CHAT_DEV_STREAM_FIXTURE_PROMPTS = [
   '/fixture provider-retry',
   '/fixture stream-idle',
   '/fixture queue-hold',
+  '/fixture queue-drain',
   '/fixture compacted-artifact',
   '/fixture skipped-tool',
 ] as const;
@@ -18,6 +19,7 @@ const AI_CHAT_DEV_STREAM_FIXTURE_ALIASES: Record<
   (typeof AI_CHAT_DEV_STREAM_FIXTURE_PROMPTS)[number]
 > = {
   '/fixture burst-tool': '/fixture tool-burst',
+  '/fixture queued-follow-up': '/fixture queue-drain',
 };
 
 const availableFixtureNames = AI_CHAT_DEV_STREAM_FIXTURE_PROMPTS.map((prompt) =>
@@ -571,7 +573,7 @@ const buildQueueHoldFixtureEvents = (model?: string): AIChatStreamEvent[] => [
   {
     type: 'content',
     data: {
-      text: 'The queue-hold fixture kept the turn active long enough to inspect queued follow-up controls.',
+      text: 'The queue-hold fixture kept the turn active long enough to inspect queued follow-up controls. Queue `/fixture queued-follow-up` while this is running to test the drain offline.',
     },
   },
   {
@@ -581,6 +583,63 @@ const buildQueueHoldFixtureEvents = (model?: string): AIChatStreamEvent[] => [
       model: assistantFixtureModel(model),
       input_tokens: 44,
       output_tokens: 23,
+    },
+  },
+];
+
+const buildQueueDrainFixtureEvents = (model?: string): AIChatStreamEvent[] => [
+  {
+    type: 'session',
+    data: { id: 'dev-fixture-queue-drain' },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'request_start',
+      message: 'Draining queued follow-up through the local fixture.',
+    },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'context',
+      message: 'Replaying queued turn without opening a provider request.',
+      tool: 'pulse_query',
+    },
+  },
+  {
+    type: 'tool_start',
+    data: {
+      id: 'fixture-tool-queue-drain',
+      name: 'pulse_query',
+      input: '{"query":"queued follow-up smoke check"}',
+      raw_input: 'pulse_query(query="queued follow-up smoke check")',
+    },
+  },
+  {
+    type: 'tool_end',
+    data: {
+      id: 'fixture-tool-queue-drain',
+      name: 'pulse_query',
+      input: '{"query":"queued follow-up smoke check"}',
+      raw_input: 'pulse_query(query="queued follow-up smoke check")',
+      output: '{"queued":true,"drained_offline":true}',
+      success: true,
+    },
+  },
+  {
+    type: 'content',
+    data: {
+      text: 'The queued follow-up drained through the local fixture without opening a provider request.',
+    },
+  },
+  {
+    type: 'done',
+    data: {
+      session_id: 'dev-fixture-queue-drain',
+      model: assistantFixtureModel(model),
+      input_tokens: 37,
+      output_tokens: 21,
     },
   },
 ];
@@ -669,6 +728,9 @@ const buildFixtureEvents = (prompt: string, model?: string): AIChatStreamEvent[]
   }
   if (normalized === '/fixture queue-hold') {
     return buildQueueHoldFixtureEvents(model);
+  }
+  if (normalized === '/fixture queue-drain') {
+    return buildQueueDrainFixtureEvents(model);
   }
   return buildDeviceCountFixtureEvents(model);
 };
