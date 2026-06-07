@@ -31,6 +31,11 @@ import {
   latestWorkflowStatus,
   normalizeWorkflowStatusSequence,
 } from './workflowStatusPresentation';
+import {
+  isPlaceholderToolInputSummary,
+  parseToolInputSummary,
+  toolValueText,
+} from './toolPresentation';
 import type {
   ChatMessage,
   ModelRouteRecoveryOption,
@@ -326,17 +331,26 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
       .slice(0, index)
       .every((evt) => evt.type === 'thinking');
 
-  const contextTools = createMemo(() => {
+  const contextToolSummaries = createMemo(() => {
     const events = props.message.streamEvents || [];
-    const names = new Set<string>();
+    const summaries = new Set<string>();
 
     for (const evt of events) {
       if (evt.type === 'tool' && evt.tool?.name) {
-        names.add(evt.tool.name);
+        const summary = parseToolInputSummary(
+          toolValueText(evt.tool.input),
+          evt.tool.name,
+          evt.tool.rawInput,
+        );
+        const label =
+          summary && !isPlaceholderToolInputSummary(summary)
+            ? summary
+            : formatIdentifierLabel(evt.tool.name, { stripPrefix: 'pulse_' });
+        summaries.add(label);
       }
     }
 
-    return Array.from(names);
+    return Array.from(summaries);
   });
   const visibleMessageContent = () =>
     stripAssistantOutputArtifacts(props.message.content || '').text;
@@ -802,15 +816,18 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                 <span class="inline-block w-1.5 h-4 ml-0.5 align-middle bg-blue-500 dark:bg-blue-400 animate-pulse rounded-full" />
               </Show>
 
-              <Show when={!props.message.isStreaming && contextTools().length > 0}>
+              <Show when={!props.message.isStreaming && contextToolSummaries().length > 0}>
                 <div class="mt-4 pt-3 border-t border-border-subtle flex flex-wrap gap-2">
                   <span class="text-[10px] uppercase font-semibold text-muted">
                     {AI_CHAT_CONTEXT_USED_LABEL}
                   </span>
                   <div class="flex flex-wrap gap-1.5">
-                    {contextTools().map((name) => (
-                      <span class="px-1.5 py-0.5 rounded text-[10px] bg-surface-hover text-muted border border-border font-medium">
-                        {formatIdentifierLabel(name, { stripPrefix: 'pulse_' })}
+                    {contextToolSummaries().map((summary) => (
+                      <span
+                        class="max-w-[18rem] truncate px-1.5 py-0.5 rounded text-[10px] bg-surface-hover text-muted border border-border font-medium"
+                        title={summary}
+                      >
+                        {summary}
                       </span>
                     ))}
                   </div>

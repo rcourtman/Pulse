@@ -1428,15 +1428,25 @@ describe('MessageItem', () => {
   });
 
   describe('context tools display', () => {
-    it('shows "Context used" with unique tool names when not streaming', () => {
+    it('shows "Context used" with unique tool summaries when not streaming', () => {
       const events: StreamDisplayEvent[] = [
         {
           type: 'tool',
-          tool: { name: 'pulse_get_nodes', input: '{}', output: 'ok', success: true },
+          tool: {
+            name: 'pulse_read',
+            input: '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
+            output: 'ok',
+            success: true,
+          },
         },
         {
           type: 'tool',
-          tool: { name: 'pulse_get_metrics', input: '{}', output: 'ok', success: true },
+          tool: {
+            name: 'pulse_get_metrics',
+            input: '{"action":"history","resource":"vm-101"}',
+            output: 'ok',
+            success: true,
+          },
         },
       ];
 
@@ -1452,20 +1462,30 @@ describe('MessageItem', () => {
       ));
 
       expect(screen.getByText('Context used')).toBeInTheDocument();
-      // Shared identifier formatter strips 'pulse_' and replaces underscores
-      expect(screen.getByText('get nodes')).toBeInTheDocument();
-      expect(screen.getByText('get metrics')).toBeInTheDocument();
+      expect(screen.getByText('Inspect devices on current resource')).toBeInTheDocument();
+      expect(screen.getByText('history')).toBeInTheDocument();
+      expect(screen.queryByText('read')).not.toBeInTheDocument();
     });
 
-    it('deduplicates tool names in context footer', () => {
+    it('deduplicates tool summaries in context footer', () => {
       const events: StreamDisplayEvent[] = [
         {
           type: 'tool',
-          tool: { name: 'pulse_get_nodes', input: '{}', output: 'first', success: true },
+          tool: {
+            name: 'pulse_read',
+            input: '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
+            output: 'first',
+            success: true,
+          },
         },
         {
           type: 'tool',
-          tool: { name: 'pulse_get_nodes', input: '{}', output: 'second', success: true },
+          tool: {
+            name: 'pulse_read',
+            input: '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
+            output: 'second',
+            success: true,
+          },
         },
         {
           type: 'tool',
@@ -1484,9 +1504,8 @@ describe('MessageItem', () => {
         />
       ));
 
-      // Should show 2 unique tool names, not 3
-      const toolLabels = screen.getAllByText(/get (nodes|metrics)/);
-      expect(toolLabels.length).toBe(2);
+      expect(screen.getAllByText('Inspect devices on current resource')).toHaveLength(1);
+      expect(screen.getByText('get metrics')).toBeInTheDocument();
     });
 
     it('does not show context tools section when streaming', () => {

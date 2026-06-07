@@ -195,6 +195,12 @@ runtime cost control, and shared AI transport surfaces.
    structured, or binary outputs while keeping raw output behind the existing
    details disclosure, and those raw input/output details must be copyable
    from the disclosure without expanding the default transcript.
+   Completed Assistant context summaries must use the same operator-facing
+   tool-input presentation as the visible tool rows, not raw internal tool
+   identifiers. A completed `pulse_read` device inspection should therefore
+   summarize as the inspected resource/action, while raw tool names such as
+   `pulse_read` or bare fallback labels such as `read` remain fallback-only
+   debug/detail vocabulary.
    Live workflow activity is also active turn state, not disposable waiting
 	   copy. The referenced OpenCode source at fetched `origin/dev` commit
 	   `1025540fcc2a69609a0131a7168300205656d728` defines model, shell, step,
