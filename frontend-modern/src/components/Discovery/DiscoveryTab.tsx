@@ -99,6 +99,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
     copiedDiscoveryValue,
     discovery,
     discoveryFeatureKnownDisabled,
+    discoveryReadiness,
     discoveryInfo,
     editingNotes,
     handleCopyDiscoveryValue,
@@ -516,9 +517,45 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
               </Show>
             </div>
 
-            {/* Connection Status Warning - Show when commands are needed but not available */}
-            <Show when={props.resourceType === 'agent' && !connectedAgents.loading}>
-              <Show when={props.commandsEnabled === false}>
+            {/* Connection Status Warning - driven by the canonical readiness
+                verdict so the most-fundamental missing prerequisite (provider →
+                commands → connectivity) is the one surfaced, in one place. */}
+            <Show
+              when={
+                props.resourceType === 'agent' &&
+                !connectedAgents.loading &&
+                !discoveryInfo.loading
+              }
+            >
+              <Show when={discoveryReadiness().status === 'needs_ai_provider'}>
+                <div class="mb-4 mx-auto max-w-md rounded-md border border-amber-200 bg-amber-50 p-3 text-left dark:border-amber-800 dark:bg-amber-900">
+                  <div class="flex items-start gap-2">
+                    <svg
+                      class="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                      />
+                    </svg>
+                    <div class="text-xs">
+                      <p class="font-medium text-amber-800 dark:text-amber-200">
+                        AI provider not configured
+                      </p>
+                      <p class="text-amber-700 dark:text-amber-300 mt-0.5">
+                        Discovery needs an AI provider to analyze what is running. Configure one in
+                        Settings -&gt; AI before scanning.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </Show>
+              <Show when={discoveryReadiness().status === 'needs_commands'}>
                 <div class="mb-4 mx-auto max-w-md rounded-md border border-amber-200 bg-amber-50 p-3 text-left dark:border-amber-800 dark:bg-amber-900">
                   <div class="flex items-start gap-2">
                     <svg
@@ -549,7 +586,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                   </div>
                 </div>
               </Show>
-              <Show when={props.commandsEnabled === true && !hasConnectedAgent()}>
+              <Show when={discoveryReadiness().status === 'needs_connected_agent'}>
                 <div class="mb-4 mx-auto max-w-md rounded-md border border-amber-200 bg-amber-50 p-3 text-left dark:border-amber-800 dark:bg-amber-900">
                   <div class="flex items-start gap-2">
                     <svg
@@ -585,6 +622,10 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                   </div>
                 </div>
               </Show>
+              {/* Kept literal, not `status === 'ready'`: the readiness verdict
+                  treats unknown command state as ready (don't-block), but this
+                  green "connected" claim must require a genuinely connected
+                  agent with commands explicitly enabled. */}
               <Show when={props.commandsEnabled === true && hasConnectedAgent()}>
                 <div class="mb-4 mx-auto max-w-md rounded-md border border-green-200 bg-green-50 p-3 text-left dark:border-green-800 dark:bg-green-900">
                   <div class="flex items-center gap-2">

@@ -35,6 +35,20 @@ import { getDiscoveryProvenanceTitle } from '@/utils/discoveryPresentation';
 const aiSettingsWithDiscovery = (discovery_enabled: boolean) =>
   ({ discovery_enabled }) as Awaited<ReturnType<typeof AIAPI.getSettings>>;
 
+// A configured analysis provider — the most-fundamental discovery prerequisite.
+// Command/connectivity guidance only surfaces once a provider exists, so tests
+// that exercise those later states must establish this first.
+const discoveryInfoWithProvider = () => ({
+  ai_provider: {
+    provider: 'anthropic',
+    model: 'claude-haiku-4-5',
+    is_local: false,
+    label: 'Cloud (Anthropic)',
+  },
+  commands: [],
+  command_categories: [],
+});
+
 describe('DiscoveryTab', () => {
   afterEach(() => {
     cleanup();
@@ -171,8 +185,27 @@ describe('DiscoveryTab', () => {
     });
   });
 
+  it('surfaces the AI-provider prerequisite before command guidance', async () => {
+    vi.mocked(discoveryApi.getDiscovery).mockResolvedValue(null);
+    // Default getDiscoveryInfo mock returns null → no provider configured.
+
+    render(() => (
+      <DiscoveryTab
+        resourceType="agent"
+        agentId="agent-1"
+        resourceId="agent-1"
+        hostname="pve1"
+        commandsEnabled={false}
+      />
+    ));
+
+    expect(await screen.findByText('AI provider not configured')).toBeInTheDocument();
+    expect(screen.queryByText('Commands not enabled')).not.toBeInTheDocument();
+  });
+
   it('uses canonical settings copy for disabled command guidance', async () => {
     vi.mocked(discoveryApi.getDiscovery).mockResolvedValue(null);
+    vi.mocked(discoveryApi.getDiscoveryInfo).mockResolvedValue(discoveryInfoWithProvider());
 
     render(() => (
       <DiscoveryTab
@@ -194,6 +227,7 @@ describe('DiscoveryTab', () => {
 
   it('uses canonical API Access copy for missing command connection guidance', async () => {
     vi.mocked(discoveryApi.getDiscovery).mockResolvedValue(null);
+    vi.mocked(discoveryApi.getDiscoveryInfo).mockResolvedValue(discoveryInfoWithProvider());
 
     render(() => (
       <DiscoveryTab

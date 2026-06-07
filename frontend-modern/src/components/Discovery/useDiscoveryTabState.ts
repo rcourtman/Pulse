@@ -16,6 +16,7 @@ import {
 } from '@/utils/discoveryPresentation';
 import { copyToClipboard } from '@/utils/clipboard';
 import { toDiscoveryAPIResourceType } from '@/utils/discoveryTarget';
+import { computeDiscoveryReadiness, type DiscoveryReadiness } from './discoveryReadiness';
 
 export interface DiscoveryTabStateProps {
   resourceType: ResourceType;
@@ -106,6 +107,26 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
 
     return agents.length === 1;
   });
+
+  // Whether an AI provider is configured to analyze discovery evidence. The
+  // info fetch only resolves an `ai_provider` when one has credentials, so an
+  // absent provider (or a still-loading fetch) reads as "not configured".
+  const aiProviderConfigured = createMemo(
+    () => !discoveryInfo.loading && Boolean(discoveryInfo()?.ai_provider),
+  );
+
+  // Single prerequisite verdict — the canonical source every surface should
+  // render from instead of re-deriving disabled/provider/commands/connectivity
+  // ad hoc. Ordered most-fundamental-first inside computeDiscoveryReadiness.
+  const discoveryReadiness = createMemo<DiscoveryReadiness>(() =>
+    computeDiscoveryReadiness({
+      discoveryEnabled: discoveryFeatureEnabled(),
+      aiProviderConfigured: aiProviderConfigured(),
+      commandsEnabled: props.commandsEnabled,
+      hasConnectedAgent: hasConnectedAgent(),
+    }),
+  );
+
   const canTriggerDiscovery = createMemo(
     () => discoveryFeatureEnabled() && Boolean(targetAgentId()),
   );
@@ -320,6 +341,7 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
     copiedDiscoveryValue,
     discovery,
     discoveryFeatureKnownDisabled,
+    discoveryReadiness,
     discoveryInfo,
     editingNotes,
     handleSaveNotes,
