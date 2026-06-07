@@ -1459,6 +1459,20 @@ runtime cost control, and shared AI transport surfaces.
    and outputs may remain collapsed inside the row, but context/read/query
    tools must not be replaced by a generic grouped footer that makes several
    operations appear all at once.
+   Queued follow-up turns are active session pressure, not hidden backlog.
+   The referenced OpenCode source at fetched `origin/dev` commit
+   `e82542b8023a8374f29c23b70ec019c8f256354e`
+   `packages/opencode/src/tool/todowrite.txt` describes status tracking as
+   surfacing progress to the user at line 1 and requires status updates in real
+   time rather than batched completion at line 25, while
+   `packages/opencode/src/session/tools.ts` updates running tool metadata with
+   title, status, input, and start time at lines 54-63. Pulse adapts that
+   session-activity pattern by keeping queued follow-ups visible in the
+   Assistant activity dock and appending the queued count to the active-turn
+   headline while the current response is streaming. The queued row may retain
+   edit, remove, promote, resume, and clear controls, but the primary headline
+   must not imply the user's just-submitted follow-up disappeared behind a
+   generic `Generating response` state.
 7. Keep AI chat presentation helpers aligned through `frontend-modern/src/components/AI/Chat/` and the shared `frontend-modern/src/utils/textPresentation.ts`
 8. Keep assistant drawer context, session, and org-switch reset state aligned through the shared `frontend-modern/src/stores/aiChat.ts` boundary instead of letting `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, or feature callers fork their own assistant shell state
    That shared drawer ownership also covers passive resource reads while the
@@ -2187,6 +2201,10 @@ and the autonomous control warning in the input-adjacent composer/status rail.
 Those items stay visible and actionable, but they do not compete with the
 transcript as separate top-of-drawer banners unless they are provider readiness
 or scoped handoff context surfaces with their own governed content.
+Queued follow-up pressure is part of that active-turn state: the frontend
+derives the count from queued user transcript turns, appends it to the primary
+active Assistant headline while a turn is running, and keeps the separate
+queued-follow-up row actionable for reorder/cancel operations.
 
 Assistant command access follows the same OpenCode-referenced footer principle:
 commands are reachable from prompt-adjacent chrome, not only from a hidden slash

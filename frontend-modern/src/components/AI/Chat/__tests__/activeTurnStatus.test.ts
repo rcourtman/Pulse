@@ -61,7 +61,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'thinking',
-      text: 'Sending prompt',
+      text: 'Sending prompt · 1 follow-up queued',
       startedAt: 1_000,
     });
   });
@@ -807,6 +807,33 @@ describe('getAssistantActiveTurnStatus', () => {
     ).toEqual({
       type: 'generating',
       text: 'Generating response',
+    });
+  });
+
+  it('surfaces queued follow-up pressure in the active status headline', () => {
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            content: 'Partial answer',
+            isStreaming: true,
+          }),
+          userMessage({
+            id: 'queued-1',
+            content: 'Follow up once',
+            delivery: 'queued',
+          }),
+          userMessage({
+            id: 'queued-2',
+            content: 'Follow up twice',
+            delivery: 'queued',
+          }),
+        ],
+        true,
+      ),
+    ).toEqual({
+      type: 'generating',
+      text: 'Generating response · 2 follow-ups queued',
     });
   });
 

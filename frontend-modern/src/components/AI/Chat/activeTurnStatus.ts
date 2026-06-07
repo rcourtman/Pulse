@@ -573,6 +573,31 @@ const initialRequestStatus = (
   };
 };
 
+const queuedFollowUpCount = (messages: ChatMessage[]): number =>
+  messages.reduce(
+    (count, message) =>
+      message.role === 'user' && message.delivery === 'queued' ? count + 1 : count,
+    0,
+  );
+
+const queuedFollowUpSuffix = (messages: ChatMessage[]): string => {
+  const count = queuedFollowUpCount(messages);
+  if (count <= 0) return '';
+  return ` · ${count} ${count === 1 ? 'follow-up' : 'follow-ups'} queued`;
+};
+
+const withQueuedFollowUpStatus = (
+  status: AssistantActiveTurnStatus,
+  messages: ChatMessage[],
+): AssistantActiveTurnStatus => {
+  const suffix = queuedFollowUpSuffix(messages);
+  if (!suffix) return status;
+  return {
+    ...status,
+    text: `${status.text}${suffix}`,
+  };
+};
+
 export const getAssistantActiveTurnStatus = (
   messages: ChatMessage[],
   isLoading: boolean,
@@ -582,7 +607,7 @@ export const getAssistantActiveTurnStatus = (
 
   const assistantMessage = [...messages].reverse().find((message) => message.role === 'assistant');
   if (!assistantMessage) {
-    return initialRequestStatus(messages);
+    return withQueuedFollowUpStatus(initialRequestStatus(messages), messages);
   }
 
   const statusCandidates: AssistantActiveTurnStatusCandidate[] = [];
@@ -622,16 +647,22 @@ export const getAssistantActiveTurnStatus = (
   );
 
   if (freshestStatus) {
-    return {
-      type: freshestStatus.type,
-      text: freshestStatus.text,
-      startedAt: freshestStatus.startedAt,
-    };
+    return withQueuedFollowUpStatus(
+      {
+        type: freshestStatus.type,
+        text: freshestStatus.text,
+        startedAt: freshestStatus.startedAt,
+      },
+      messages,
+    );
   }
 
   if (hasVisibleAssistantOutput(assistantMessage)) {
-    return { type: 'generating', text: 'Generating response' };
+    return withQueuedFollowUpStatus(
+      { type: 'generating', text: 'Generating response' },
+      messages,
+    );
   }
 
-  return initialRequestStatus(messages, assistantMessage);
+  return withQueuedFollowUpStatus(initialRequestStatus(messages, assistantMessage), messages);
 };

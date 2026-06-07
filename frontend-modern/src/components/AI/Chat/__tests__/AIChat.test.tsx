@@ -5433,7 +5433,7 @@ describe('AIChat', () => {
 
       expect(activityDock).toContainElement(screen.getByLabelText('Assistant active turn status'));
       expect(screen.getByLabelText('Assistant active turn status')).toHaveTextContent(
-        'Generating response',
+        'Generating response · 1 follow-up queued',
       );
       expect(activityDock).toContainElement(screen.getByLabelText('Queued follow-up messages'));
       expect(screen.getByText('1 follow-up queued')).toBeInTheDocument();
