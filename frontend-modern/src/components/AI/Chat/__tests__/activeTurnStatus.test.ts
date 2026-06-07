@@ -116,6 +116,45 @@ describe('getAssistantActiveTurnStatus', () => {
     });
   });
 
+  it('surfaces stream-idle liveness over stale provider-start progress', () => {
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            isStreaming: true,
+            streamEvents: [
+              {
+                type: 'workflow_status',
+                workflowStatus: {
+                  phase: 'provider_start',
+                  message: 'Sent request to OpenRouter; waiting for the first token.',
+                  startedAt: 1_000,
+                },
+                startedAt: 1_000,
+                updatedAt: 1_000,
+              },
+              {
+                type: 'workflow_status',
+                workflowStatus: {
+                  phase: 'stream_idle',
+                  message: 'Assistant is still working; waiting for the next stream event.',
+                  startedAt: 2_000,
+                },
+                startedAt: 2_000,
+                updatedAt: 2_000,
+              },
+            ],
+          }),
+        ],
+        true,
+      ),
+    ).toEqual({
+      type: 'thinking',
+      text: 'Assistant is still working; waiting for the next stream event.',
+      startedAt: 2_000,
+    });
+  });
+
   it('prefers workflow progress over selected model route evidence', () => {
     const startedAt = Date.now() - 1_000;
     expect(

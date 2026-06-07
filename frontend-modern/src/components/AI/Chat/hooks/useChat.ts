@@ -151,18 +151,13 @@ export function useChat(options: UseChatOptions = {}) {
 
   const isStreamIdleWorkflowStatus = (status?: WorkflowStatus) => status?.phase === 'stream_idle';
 
-  // stream_idle is transport liveness, not a new Assistant step.
+  // stream_idle is transport liveness, but it must be visible as the latest
+  // active progress state instead of leaving the user on a stale phase label.
   const visibleWorkflowStatusForHeartbeat = (
-    current: WorkflowStatus | undefined,
+    _current: WorkflowStatus | undefined,
     next: WorkflowStatus,
   ): WorkflowStatus => {
-    if (!isStreamIdleWorkflowStatus(next)) return next;
-    if (!current || isStreamIdleWorkflowStatus(current)) return next;
-
-    return {
-      ...current,
-      startedAt: current.startedAt || next.startedAt,
-    };
+    return next;
   };
 
   const setAssistantWorkflowStatus = (

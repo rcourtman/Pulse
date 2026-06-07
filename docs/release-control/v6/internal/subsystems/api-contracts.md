@@ -580,7 +580,10 @@ payload shape change when the portal presents compact client rows.
 	Assistant sequence must exercise `provider_retry` with `attempt`,
 	`max_attempts`, and `retry_after_ms` metadata plus a paced retry window, so
 	browser proof can verify visible retry countdown behavior without a real
-	provider request, VPN dependency, or API spend.
+	provider request, VPN dependency, or API spend. At least one fixture-backed
+	Assistant sequence must exercise `stream_idle` after selected-provider
+	startup, so browser proof can verify visible idle liveness without forcing a
+	real provider to pause on demand.
 34. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
     Legacy Assistant SSE routes in this handler that still use the older
     execute envelope, including `/api/ai/execute/stream` and

@@ -546,6 +546,9 @@ runtime cost control, and shared AI transport surfaces.
    the real `provider_retry` workflow state, including attempt metadata and
    `retry_after_ms`, so browser proof of retry countdown behavior does not
    depend on external provider availability or API spend.
+   The local `stream-idle` fixture must exercise the real `stream_idle`
+   workflow state after selected-provider startup so browser proof of visible
+   idle liveness does not depend on making a real provider pause on demand.
    This fixture is a local development primitive, not a product mode: it must
    not bypass backend governance in production, persist as a server session, or
    introduce any UI-only event shape that real providers cannot emit.

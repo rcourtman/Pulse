@@ -1419,7 +1419,7 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('keeps the provider wait visible when an idle heartbeat arrives', async () => {
+    it('replaces provider wait with visible idle progress when an idle heartbeat arrives', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
 
@@ -1444,8 +1444,8 @@ describe('useChat', () => {
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.workflowStatus).toEqual(
         expect.objectContaining({
-          phase: 'provider_start',
-          message: 'Sent request to OpenRouter; waiting for the first token.',
+          phase: 'stream_idle',
+          message: 'Assistant is still working; waiting for the next stream event.',
         }),
       );
       expect(assistant.streamEvents).toHaveLength(1);
@@ -1453,8 +1453,8 @@ describe('useChat', () => {
         expect.objectContaining({
           type: 'workflow_status',
           workflowStatus: expect.objectContaining({
-            phase: 'provider_start',
-            message: 'Sent request to OpenRouter; waiting for the first token.',
+            phase: 'stream_idle',
+            message: 'Assistant is still working; waiting for the next stream event.',
           }),
         }),
       );
@@ -1617,7 +1617,7 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('keeps the local request-start status when an early idle heartbeat arrives', async () => {
+    it('replaces local request-start status with visible idle progress', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
 
@@ -1635,16 +1635,16 @@ describe('useChat', () => {
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.workflowStatus).toEqual(
         expect.objectContaining({
-          phase: 'request_start',
-          message: 'Preparing Pulse context.',
+          phase: 'stream_idle',
+          message: 'Assistant is still working; waiting for the next stream event.',
         }),
       );
       expect(assistant.streamEvents).toEqual([
         expect.objectContaining({
           type: 'workflow_status',
           workflowStatus: expect.objectContaining({
-            phase: 'request_start',
-            message: 'Preparing Pulse context.',
+            phase: 'stream_idle',
+            message: 'Assistant is still working; waiting for the next stream event.',
           }),
         }),
       ]);

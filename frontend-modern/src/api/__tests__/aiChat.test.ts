@@ -332,6 +332,50 @@ describe('AIChatAPI', () => {
     });
   });
 
+  it('runs the stream-idle dev stream fixture without opening a provider request', async () => {
+    const onEvent = vi.fn();
+
+    await AIChatAPI.chat(
+      '/fixture stream-idle',
+      undefined,
+      'openrouter:qwen/qwen3.7-plus',
+      onEvent,
+    );
+
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'session',
+      'workflow_state',
+      'workflow_state',
+      'workflow_state',
+      'content',
+      'done',
+    ]);
+    expect(onEvent.mock.calls[2][0]).toMatchObject({
+      type: 'workflow_state',
+      data: {
+        phase: 'provider_start',
+        message: 'Sent request to OpenRouter; waiting for the first token.',
+        provider: 'openrouter',
+        model: 'openrouter:qwen/qwen3.7-plus',
+      },
+    });
+    expect(onEvent.mock.calls[3][0]).toMatchObject({
+      type: 'workflow_state',
+      data: {
+        phase: 'stream_idle',
+        message: 'Assistant is still working; waiting for the next stream event.',
+      },
+    });
+    expect(onEvent.mock.calls[5][0]).toMatchObject({
+      type: 'done',
+      data: {
+        session_id: 'dev-fixture-stream-idle',
+        model: 'openrouter:qwen/qwen3.7-plus',
+      },
+    });
+  });
+
   it('runs the compacted-artifact dev stream fixture without opening a provider request', async () => {
     const onEvent = vi.fn();
 
