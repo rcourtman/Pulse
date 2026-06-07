@@ -558,7 +558,9 @@ runtime cost control, and shared AI transport surfaces.
    `workflow_state` exists, the active-turn footer must show the active startup
    status `Sending prompt` and derive elapsed time from the submitted, non-queued
    user turn or assistant shell timestamp. Queued follow-up messages must not
-   reset that active-turn startup clock.
+   reset that active-turn startup clock. The same active-turn footer owns the
+   Stop affordance while a response is running, so interruption remains attached
+   to the live status row instead of hiding only in the composer action cluster.
    The referenced OpenCode source at fetched `origin/dev` commit
    `0875203a6c726d7a37b5ffbb770cc433c98e7cd6` mutates typed message parts as
    events arrive in `packages/opencode/src/cli/cmd/tui/context/sync.tsx`

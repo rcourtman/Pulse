@@ -4491,33 +4491,52 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 <Show when={currentStatus()}>
                   <div
                     class="flex min-h-8 min-w-0 items-center gap-2 px-2.5 py-1.5 text-xs"
-                    role="status"
-                    aria-label="Assistant active turn status"
-                    aria-live="polite"
                   >
-                    <LoaderCircleIcon
-                      class={`h-3.5 w-3.5 shrink-0 ${
-                        currentStatus()?.type === 'generating'
-                          ? 'text-emerald-500 dark:text-emerald-300'
-                          : 'animate-spin text-blue-600 dark:text-blue-300'
+                    <div
+                      class="flex min-w-0 flex-1 items-center gap-2"
+                      role="status"
+                      aria-label="Assistant active turn status"
+                      aria-live="polite"
+                    >
+                      <LoaderCircleIcon
+                        class={`h-3.5 w-3.5 shrink-0 ${
+                          currentStatus()?.type === 'generating'
+                            ? 'text-emerald-500 dark:text-emerald-300'
+                            : 'animate-spin text-blue-600 dark:text-blue-300'
+                        }`}
+                        aria-hidden="true"
+                      />
+                      <span class="min-w-0 flex-1 truncate font-medium">
+                        {currentStatusText()}
+                      </span>
+                      <span class="flex shrink-0 gap-0.5" aria-hidden="true">
+                        <span
+                          class="h-1 w-1 rounded-full bg-blue-400 animate-bounce"
+                          style="animation-delay: 0ms; animation-duration: 1s"
+                        />
+                        <span
+                          class="h-1 w-1 rounded-full bg-blue-400 animate-bounce"
+                          style="animation-delay: 150ms; animation-duration: 1s"
+                        />
+                        <span
+                          class="h-1 w-1 rounded-full bg-blue-400 animate-bounce"
+                          style="animation-delay: 300ms; animation-duration: 1s"
+                        />
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={stopActiveResponse}
+                      class={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border bg-surface text-base-content shadow-sm transition-colors hover:bg-surface-hover ${
+                        interruptArmed()
+                          ? 'border-blue-400 ring-2 ring-blue-500/30'
+                          : 'border-border'
                       }`}
-                      aria-hidden="true"
-                    />
-                    <span class="min-w-0 flex-1 truncate font-medium">{currentStatusText()}</span>
-                    <span class="flex shrink-0 gap-0.5" aria-hidden="true">
-                      <span
-                        class="h-1 w-1 rounded-full bg-blue-400 animate-bounce"
-                        style="animation-delay: 0ms; animation-duration: 1s"
-                      />
-                      <span
-                        class="h-1 w-1 rounded-full bg-blue-400 animate-bounce"
-                        style="animation-delay: 150ms; animation-duration: 1s"
-                      />
-                      <span
-                        class="h-1 w-1 rounded-full bg-blue-400 animate-bounce"
-                        style="animation-delay: 300ms; animation-duration: 1s"
-                      />
-                    </span>
+                      title={interruptArmed() ? 'Stop response armed' : 'Stop'}
+                      aria-label={interruptArmed() ? 'Stop response armed' : 'Stop response'}
+                    >
+                      <SquareIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
                   </div>
                 </Show>
                 <Show when={autonomousWarningVisible()}>
@@ -4748,7 +4767,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   onKeyDown={handleKeyDown}
                   placeholder={AI_CHAT_INPUT_PLACEHOLDER}
                   rows={1}
-                  class="max-h-40 min-h-[54px] flex-1 resize-none bg-transparent px-3.5 py-3.5 pr-24 text-sm leading-5 text-base-content placeholder-slate-400 focus:outline-none"
+                  class="max-h-40 min-h-[54px] flex-1 resize-none bg-transparent px-3.5 py-3.5 pr-14 text-sm leading-5 text-base-content placeholder-slate-400 focus:outline-none"
                 />
                 <div data-mention-autocomplete>
                   <MentionAutocomplete
@@ -4768,21 +4787,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   visible={slashCommandActive()}
                 />
                 <div class="absolute bottom-2 right-2 flex items-center gap-1.5">
-                  <Show when={chat.isLoading()}>
-                    <button
-                      type="button"
-                      onClick={stopActiveResponse}
-                      class={`flex h-9 w-9 items-center justify-center rounded-md border bg-surface text-base-content shadow-sm transition-colors hover:bg-surface-hover ${
-                        interruptArmed()
-                          ? 'border-blue-400 ring-2 ring-blue-500/30'
-                          : 'border-border'
-                      }`}
-                      title={interruptArmed() ? 'Stop response armed' : 'Stop'}
-                      aria-label={interruptArmed() ? 'Stop response armed' : 'Stop response'}
-                    >
-                      <SquareIcon class="h-4 w-4" />
-                    </button>
-                  </Show>
                   <button
                     type="submit"
                     disabled={!input().trim()}

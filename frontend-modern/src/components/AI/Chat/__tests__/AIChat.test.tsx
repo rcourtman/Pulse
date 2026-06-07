@@ -2427,7 +2427,8 @@ describe('AIChat', () => {
     it('shows stop button when loading', () => {
       mockChat.isLoading.mockReturnValue(true);
       renderChat();
-      expect(screen.getByTitle('Stop')).toBeInTheDocument();
+      const activityDock = screen.getByTestId('assistant-activity-dock');
+      expect(activityDock).toContainElement(screen.getByTitle('Stop'));
       expect(screen.getByRole('button', { name: 'Queue follow-up' })).toBeInTheDocument();
     });
 
@@ -2446,7 +2447,9 @@ describe('AIChat', () => {
       fireEvent.keyDown(textarea, { key: 'Escape' });
 
       expect(mockChat.stop).not.toHaveBeenCalled();
-      expect(screen.getByTitle('Stop response armed')).toBeInTheDocument();
+      expect(screen.getByTestId('assistant-activity-dock')).toContainElement(
+        screen.getByTitle('Stop response armed'),
+      );
 
       fireEvent.keyDown(textarea, { key: 'Escape' });
 
