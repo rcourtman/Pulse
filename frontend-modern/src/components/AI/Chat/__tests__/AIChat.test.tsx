@@ -5344,7 +5344,7 @@ describe('AIChat', () => {
       ]);
       renderChat();
       expect(screen.getByLabelText('Assistant active turn status')).toHaveTextContent(
-        'Completed Inspect devices on current resource',
+        'Completed $ ls /dev | wc -l',
       );
       expect(screen.getByLabelText('Assistant active turn status')).not.toHaveTextContent(
         'OpenRouter is starting the response.',

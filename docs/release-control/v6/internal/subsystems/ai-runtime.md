@@ -602,6 +602,21 @@ runtime cost control, and shared AI transport surfaces.
    completed/error tool-part mutation by replacing stale provider-start footer
    copy with completed or failed tool activity while still preferring any
    separate unresolved pending tool over a terminal sibling tool.
+   Read-only shell-backed Assistant tools must expose the redacted `$ ...`
+   command preview in the active-turn status while the tool is running and when
+   its terminal row replaces stale workflow copy; friendly intent labels may
+   remain inside tool cards, but the live dock must not hide a known read-only
+   command behind generic "running command" text. Write/control commands remain
+   governed by approval and action surfaces rather than gaining a free-form live
+   shell shortcut. The referenced OpenCode source at fetched `origin/dev` commit
+   `e82542b8023a8374f29c23b70ec019c8f256354e` records shell commands as visible
+   commits in `packages/opencode/src/cli/cmd/run/session-data.ts`
+   (`startShell`, lines 690-702; `session.next.shell.started`, lines 783-795;
+   `session.next.shell.ended`, lines 803-821) and keeps non-shell tool status
+   visible through `toolStatus` on running tool parts (lines 932-942). Pulse
+   adapts that shell visibility by reusing its redacted read-only command
+   preview in the browser-safe active-turn status instead of exposing raw
+   outputs, secrets, or unrestricted control commands.
    `frontend-modern/src/api/streaming.ts` must yield through an
    animation-frame-backed browser paint checkpoint, with a bounded timer
    fallback for inactive tabs, before draining the next opted-in event; a plain

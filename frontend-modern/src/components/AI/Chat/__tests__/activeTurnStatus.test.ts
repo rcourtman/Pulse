@@ -106,7 +106,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'tool',
-      text: 'Running Inspect devices on current resource',
+      text: 'Running $ ls /dev | wc -l',
       startedAt,
     });
   });
@@ -134,7 +134,32 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'tool',
-      text: 'Running Inspect devices on current resource',
+      text: 'Running $ ls /dev | wc -l',
+    });
+  });
+
+  it('redacts sensitive read-only command previews in the active turn status', () => {
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            pendingTools: [
+              {
+                id: 'tool-1',
+                name: 'pulse_read',
+                input:
+                  '{"action":"exec","target_host":"current_resource","command":"curl -H \\"Authorization: Bearer secret-token\\" --password hunter2 https://example.local"}',
+                status: 'running',
+              },
+            ],
+          }),
+        ],
+        true,
+      ),
+    ).toEqual({
+      type: 'tool',
+      text:
+        'Running $ curl -H "Authorization: Bearer [redacted-secret]" --password [redacted-secret] https://example.local',
     });
   });
 
@@ -486,7 +511,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'tool',
-      text: 'Completed Inspect devices on current resource',
+      text: 'Completed $ ls /dev | wc -l',
     });
   });
 

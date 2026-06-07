@@ -4,6 +4,7 @@ import { formatAIModelRouteLabel } from '@/utils/aiProviderPresentation';
 import { extractReasoningSummaryTitle } from './reasoningSummary';
 import {
   isPlaceholderToolInputSummary,
+  parseToolCommandPreview,
   parseToolInputSummary,
   toolValueText,
 } from './toolPresentation';
@@ -180,11 +181,17 @@ export const formatAssistantWorkflowStatus = (status?: WorkflowStatus, now?: num
 const formatPendingToolStatus = (tool?: PendingTool): string => {
   if (!tool) return '';
 
+  const commandPreview = parseToolCommandPreview(
+    toolValueText(tool.input),
+    tool.name,
+    tool.rawInput,
+  );
   const progress = tool.progress?.trim();
-  if (progress) return progress;
+  if (progress && (!commandPreview || !isGenericToolProgress(progress))) return progress;
 
   const inputSummary = parseToolInputSummary(toolValueText(tool.input), tool.name, tool.rawInput);
-  const toolActivity = isPlaceholderToolInputSummary(inputSummary) ? '' : inputSummary;
+  const toolActivity =
+    commandPreview || (isPlaceholderToolInputSummary(inputSummary) ? '' : inputSummary);
   if (toolActivity) {
     if (tool.status === 'waiting') return `Waiting on ${toolActivity}`;
     return `Running ${toolActivity}`;
@@ -326,11 +333,29 @@ const toolCancelStatusText = (event: StreamDisplayEvent): string => {
   return reason ? `Skipped ${label}: ${reason}` : `Skipped ${label}`;
 };
 
+const isGenericToolProgress = (progress: string): boolean => {
+  const normalized = progress.trim().toLowerCase().replace(/\s+/g, ' ');
+  return (
+    normalized === 'running' ||
+    normalized === 'running.' ||
+    normalized === 'running command' ||
+    normalized === 'running command.' ||
+    normalized === 'running read-only command' ||
+    normalized === 'running read-only command.'
+  );
+};
+
 const completedToolStatusText = (event: StreamDisplayEvent): string => {
   const tool = event.tool;
   if (!tool) return '';
   const inputSummary = parseToolInputSummary(toolValueText(tool.input), tool.name, tool.rawInput);
-  const toolActivity = isPlaceholderToolInputSummary(inputSummary) ? '' : inputSummary;
+  const commandPreview = parseToolCommandPreview(
+    toolValueText(tool.input),
+    tool.name,
+    tool.rawInput,
+  );
+  const toolActivity =
+    commandPreview || (isPlaceholderToolInputSummary(inputSummary) ? '' : inputSummary);
   const label = toolActivity || formatToolName(tool.name);
   return tool.success === false ? `Failed ${label}` : `Completed ${label}`;
 };
