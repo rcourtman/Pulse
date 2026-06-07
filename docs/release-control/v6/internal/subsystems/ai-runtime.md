@@ -501,10 +501,10 @@ timers when the stream already has a newer workflow/tool state.
    `provider_fallback`, `failed_provider`, `failed_model`, `next_provider`, or
    `next_model` workflow metadata. Once visible output has streamed, Pulse must
    also keep the failure on that visible attempt rather than silently changing
-   route mid-turn. The frontend must not hide stale/legacy
-   `provider_fallback` metadata if a nonconforming stream supplies it; it must
-   surface a rejected-route workflow status while keeping the selected route
-   unchanged and must not infer a model switch from `next_model`. Provider retry
+   route mid-turn. Frontend reducers must discard stale or nonconforming
+   `provider_fallback` workflow metadata without rendering a rejected-route
+   status, switching routes, or inferring a model switch from `next_model`.
+   Provider retry
    workflow states that include `retry_after_ms`
    must render as live countdowns derived from the workflow `started_at`
    timestamp while the turn is active, matching OpenCode's visible retry wait

@@ -140,6 +140,7 @@ import {
 } from '@/utils/resourceIdentity';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import {
+  latestExplicitModelRouteFromTranscript,
   useChat,
   type QueuedFollowUp,
   type RestoredPromptDraft,
@@ -2237,6 +2238,15 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
   createEffect(() => {
     const sessionId = chat.sessionId();
+    const transcriptModel = latestExplicitModelRouteFromTranscript(chat.messages());
+    if (transcriptModel && sessionId) {
+      updateStoredModel(sessionId, transcriptModel);
+      if (chat.model() !== transcriptModel) {
+        chat.setModel(transcriptModel);
+      }
+      return;
+    }
+
     const storedModel = getStoredModel(sessionId);
     if (storedModel) {
       if (chat.model() !== storedModel) {

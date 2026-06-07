@@ -640,7 +640,12 @@ describe('AIChatAPI', () => {
   it('runs the provider-retry dev stream fixture without opening a provider request', async () => {
     const onEvent = vi.fn();
 
-    await AIChatAPI.chat('/fixture provider-retry', undefined, 'deepseek:deepseek-chat', onEvent);
+    await AIChatAPI.chat(
+      '/fixture provider-retry',
+      undefined,
+      'openrouter:deepseek/deepseek-chat',
+      onEvent,
+    );
 
     expect(apiFetchMock).not.toHaveBeenCalled();
     expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
@@ -656,6 +661,8 @@ describe('AIChatAPI', () => {
       data: {
         phase: 'provider_retry',
         message: 'Provider connection failed before any output; retrying.',
+        provider: 'openrouter',
+        model: 'openrouter:deepseek/deepseek-chat',
         attempt: 2,
         max_attempts: 3,
         retry_after_ms: 3200,
@@ -665,7 +672,7 @@ describe('AIChatAPI', () => {
       type: 'done',
       data: {
         session_id: 'dev-fixture-provider-retry',
-        model: 'deepseek:deepseek-chat',
+        model: 'openrouter:deepseek/deepseek-chat',
       },
     });
   });

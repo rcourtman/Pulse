@@ -250,6 +250,33 @@ vi.mock('@solidjs/router', () => ({
 }));
 
 vi.mock('../hooks/useChat', () => ({
+  latestExplicitModelRouteFromTranscript: (messages: ChatMessage[]) => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      const requestRoute = message.request?.model?.trim() || '';
+      if (/^[a-z][a-z0-9_-]*:.+/i.test(requestRoute) && !requestRoute.includes('://')) {
+        return requestRoute;
+      }
+
+      const messageRoute = message.model?.trim() || '';
+      const isRouteSwitch = message.streamEvents?.some(
+        (event) =>
+          event.type === 'model_switch' &&
+          event.model?.trim() === messageRoute &&
+          Boolean(event.failedModel?.trim()) &&
+          event.modelEvent !== 'selected',
+      );
+      if (
+        messageRoute &&
+        /^[a-z][a-z0-9_-]*:.+/i.test(messageRoute) &&
+        !messageRoute.includes('://') &&
+        !isRouteSwitch
+      ) {
+        return messageRoute;
+      }
+    }
+    return '';
+  },
   useChat: () => mockChat,
 }));
 
@@ -4593,6 +4620,73 @@ describe('AIChat', () => {
       await waitFor(() => {
         expect(mockChat.setModel).toHaveBeenCalledWith('openrouter:deepseek/deepseek-v4-pro');
       });
+    });
+
+    it('lets active transcript route evidence override stale session model storage', async () => {
+      const [selectedModel, setSelectedModel] = createSignal('openrouter:deepseek/deepseek-chat');
+      localStorage.setItem(
+        'pulse:ai_chat_models_by_session',
+        JSON.stringify({ 'session-1': 'openrouter:deepseek/deepseek-chat' }),
+      );
+      mockChat.sessionId.mockReturnValue('session-1');
+      mockChat.model.mockImplementation(() => selectedModel());
+      mockChat.setModel.mockImplementation((modelId: string) => {
+        setSelectedModel(modelId);
+      });
+      mockChat.isLoading.mockReturnValue(true);
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'user-1',
+          role: 'user',
+          content: '/fixture provider-retry',
+          timestamp: new Date('2026-06-07T21:58:00Z'),
+          model: 'openrouter:qwen/qwen3.7-plus',
+        },
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: '',
+          timestamp: new Date('2026-06-07T21:58:01Z'),
+          model: 'openrouter:qwen/qwen3.7-plus',
+          isStreaming: true,
+          workflowStatus: {
+            phase: 'provider_retry',
+            message: 'Provider connection failed before any output; retrying.',
+            provider: 'openrouter',
+            model: 'openrouter:qwen/qwen3.7-plus',
+          },
+          streamEvents: [
+            {
+              type: 'model_switch',
+              model: 'openrouter:qwen/qwen3.7-plus',
+              modelEvent: 'selected',
+            },
+            {
+              type: 'workflow_status',
+              workflowStatus: {
+                phase: 'provider_retry',
+                message: 'Provider connection failed before any output; retrying.',
+                provider: 'openrouter',
+                model: 'openrouter:qwen/qwen3.7-plus',
+              },
+            },
+          ],
+        },
+      ]);
+
+      renderChat();
+
+      await waitFor(() => {
+        expect(mockChat.setModel).toHaveBeenCalledWith('openrouter:qwen/qwen3.7-plus');
+      });
+      expect(mockChat.setModel).not.toHaveBeenCalledWith('openrouter:deepseek/deepseek-chat');
+      expect(localStorage.getItem('pulse:ai_chat_models_by_session')).toBe(
+        JSON.stringify({ 'session-1': 'openrouter:qwen/qwen3.7-plus' }),
+      );
+      expect(screen.getByTestId('model-selector')).toHaveAttribute(
+        'data-selected',
+        'openrouter:qwen/qwen3.7-plus',
+      );
     });
 
     it('passes stored recent model routes to the model selector', () => {

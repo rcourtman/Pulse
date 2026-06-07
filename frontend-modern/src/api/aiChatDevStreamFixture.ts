@@ -101,6 +101,34 @@ const waitForFixtureStep = (delayMs: number, signal?: AbortSignal) => {
 
 const assistantFixtureModel = (model?: string) => model?.trim() || 'dev:assistant-stream-fixture';
 
+const providerFromFixtureModel = (model: string): string => {
+  const separator = model.indexOf(':');
+  const provider = separator > 0 ? model.slice(0, separator).trim() : '';
+  return provider || 'dev';
+};
+
+const providerDisplayNameForFixture = (provider: string): string => {
+  switch (provider) {
+    case 'openrouter':
+      return 'OpenRouter';
+    case 'deepseek':
+      return 'DeepSeek';
+    case 'anthropic':
+      return 'Anthropic';
+    case 'gemini':
+      return 'Gemini';
+    case 'ollama':
+      return 'Ollama';
+    default:
+      return (
+        provider
+          .replace(/[-_]+/g, ' ')
+          .replace(/\b[a-z]/g, (letter) => letter.toUpperCase())
+          .trim() || 'Assistant'
+      );
+  }
+};
+
 const buildUnknownFixtureEvents = (prompt: string): AIChatStreamEvent[] => [
   {
     type: 'session',
@@ -642,55 +670,61 @@ const buildLongOutputFixtureEvents = (model?: string): AIChatStreamEvent[] => [
   },
 ];
 
-const buildProviderRetryFixtureEvents = (): AIChatStreamEvent[] => [
-  {
-    type: 'session',
-    data: { id: 'dev-fixture-provider-retry' },
-  },
-  {
-    type: 'workflow_state',
-    data: {
-      phase: 'request_start',
-      message: 'Preparing Pulse context.',
+const buildProviderRetryFixtureEvents = (model?: string): AIChatStreamEvent[] => {
+  const selectedModel = assistantFixtureModel(model);
+  const selectedProvider = providerFromFixtureModel(selectedModel);
+  const selectedProviderLabel = providerDisplayNameForFixture(selectedProvider);
+
+  return [
+    {
+      type: 'session',
+      data: { id: 'dev-fixture-provider-retry' },
     },
-  },
-  {
-    type: 'workflow_state',
-    data: {
-      phase: 'provider_start',
-      message: 'DeepSeek is starting the response.',
-      provider: 'deepseek',
-      model: 'deepseek:deepseek-chat',
+    {
+      type: 'workflow_state',
+      data: {
+        phase: 'request_start',
+        message: 'Preparing Pulse context.',
+      },
     },
-  },
-  {
-    type: 'workflow_state',
-    data: {
-      phase: 'provider_retry',
-      message: 'Provider connection failed before any output; retrying.',
-      provider: 'deepseek',
-      model: 'deepseek:deepseek-chat',
-      attempt: 2,
-      max_attempts: 3,
-      retry_after_ms: 3200,
+    {
+      type: 'workflow_state',
+      data: {
+        phase: 'provider_start',
+        message: `${selectedProviderLabel} is starting the response.`,
+        provider: selectedProvider,
+        model: selectedModel,
+      },
     },
-  },
-  {
-    type: 'content',
-    data: {
-      text: 'The provider retry fixture retried the selected route after a transient startup failure.',
+    {
+      type: 'workflow_state',
+      data: {
+        phase: 'provider_retry',
+        message: 'Provider connection failed before any output; retrying.',
+        provider: selectedProvider,
+        model: selectedModel,
+        attempt: 2,
+        max_attempts: 3,
+        retry_after_ms: 3200,
+      },
     },
-  },
-  {
-    type: 'done',
-    data: {
-      session_id: 'dev-fixture-provider-retry',
-      model: 'deepseek:deepseek-chat',
-      input_tokens: 73,
-      output_tokens: 29,
+    {
+      type: 'content',
+      data: {
+        text: 'The provider retry fixture retried the selected route after a transient startup failure.',
+      },
     },
-  },
-];
+    {
+      type: 'done',
+      data: {
+        session_id: 'dev-fixture-provider-retry',
+        model: selectedModel,
+        input_tokens: 73,
+        output_tokens: 29,
+      },
+    },
+  ];
+};
 
 const buildStreamIdleFixtureEvents = (model?: string): AIChatStreamEvent[] => [
   {
@@ -928,7 +962,7 @@ const buildFixtureEvents = (prompt: string, model?: string): AIChatStreamEvent[]
     return buildLongOutputFixtureEvents(model);
   }
   if (normalized === '/fixture provider-retry') {
-    return buildProviderRetryFixtureEvents();
+    return buildProviderRetryFixtureEvents(model);
   }
   if (normalized === '/fixture stream-idle') {
     return buildStreamIdleFixtureEvents(model);

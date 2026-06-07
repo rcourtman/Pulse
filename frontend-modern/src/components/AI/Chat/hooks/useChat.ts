@@ -37,7 +37,17 @@ type AssistantInterruption = NonNullable<ChatMessage['interruption']>;
 const WORKFLOW_STATUS_HISTORY_LIMIT = 8;
 const LOCAL_ASSISTANT_WAIT_STATUS_DELAY_MS = 900;
 
-const latestExplicitModelRouteFromTranscript = (messages: ChatMessage[]): string => {
+const messageModelCameFromRouteSwitch = (message: ChatMessage, modelRoute: string): boolean =>
+  Boolean(
+    message.streamEvents?.some((event) => {
+      if (event.type !== 'model_switch') return false;
+      if ((event.model?.trim() || '') !== modelRoute) return false;
+      if (!event.failedModel?.trim()) return false;
+      return event.modelEvent !== 'selected';
+    }),
+  );
+
+export const latestExplicitModelRouteFromTranscript = (messages: ChatMessage[]): string => {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
     const requestModel = message.request?.model?.trim() || '';
@@ -46,7 +56,11 @@ const latestExplicitModelRouteFromTranscript = (messages: ChatMessage[]): string
     }
 
     const messageModel = message.model?.trim() || '';
-    if (messageModel && isAssistantExplicitModelRoute(messageModel)) {
+    if (
+      messageModel &&
+      isAssistantExplicitModelRoute(messageModel) &&
+      !messageModelCameFromRouteSwitch(message, messageModel)
+    ) {
       return messageModel;
     }
   }
