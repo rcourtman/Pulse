@@ -1356,23 +1356,44 @@ export function useChat(options: UseChatOptions = {}) {
               clearSuppressedOutputBoundary(assistantId);
               const data = event.data as {
                 id?: string;
-                name: string;
-                input: string;
+                name?: string;
+                input?: string;
                 raw_input?: string;
-                output: string;
-                success: boolean;
+                output?: string;
+                success?: boolean;
               };
               const pendingTools = msg.pendingTools || [];
               const events = msg.streamEvents || [];
 
-              const normalizedEndName = normalizeChatToolName(data.name || '');
+              const explicitEndName = data.name?.trim() || '';
+              const normalizedExplicitEndName = normalizeChatToolName(explicitEndName);
 
               // Find the matching pending tool (prefer tool ID, then fall back to name).
               const resolvedPendingIndex = data.id
                 ? pendingTools.findIndex((t) => t.id === data.id)
-                : pendingTools.findIndex(
-                    (t) => normalizeChatToolName(t.name) === normalizedEndName,
-                  );
+                : normalizedExplicitEndName
+                  ? pendingTools.findIndex(
+                      (t) => normalizeChatToolName(t.name) === normalizedExplicitEndName,
+                    )
+                  : pendingTools.length === 1
+                    ? 0
+                    : -1;
+              const resolvedPendingTool =
+                resolvedPendingIndex >= 0 ? pendingTools[resolvedPendingIndex] : undefined;
+              const completedToolId = data.id || resolvedPendingTool?.id;
+              const completedToolName = explicitEndName || resolvedPendingTool?.name || 'unknown';
+              const normalizedEndName = normalizeChatToolName(completedToolName);
+              const completedInput =
+                data.input && data.input.trim() ? data.input : resolvedPendingTool?.input || '{}';
+              const completedRawInput = data.raw_input ?? resolvedPendingTool?.rawInput;
+              const matchesCompletedTool = (toolId?: string, toolName?: string) => {
+                if (data.id && toolId === data.id) return true;
+                if (completedToolId && toolId === completedToolId) return true;
+                return (
+                  normalizedEndName !== '' &&
+                  normalizeChatToolName(toolName || '') === normalizedEndName
+                );
+              };
               const updatedPending =
                 resolvedPendingIndex >= 0
                   ? [
@@ -1382,9 +1403,9 @@ export function useChat(options: UseChatOptions = {}) {
                   : pendingTools;
 
               const newToolCall: ToolExecution = {
-                name: data.name || 'unknown',
-                input: data.input || '{}',
-                rawInput: data.raw_input,
+                name: completedToolName,
+                input: completedInput,
+                rawInput: completedRawInput,
                 output: data.output || '',
                 success: data.success ?? true,
               };
@@ -1395,9 +1416,7 @@ export function useChat(options: UseChatOptions = {}) {
               const hasApproval = events.some(
                 (evt) =>
                   evt.type === 'approval' &&
-                  (data.id
-                    ? evt.approval?.toolId === data.id
-                    : normalizeChatToolName(evt.approval?.toolName || '') === normalizedEndName),
+                  matchesCompletedTool(evt.approval?.toolId, evt.approval?.toolName),
               );
 
               let updatedEvents: typeof events;
@@ -1406,17 +1425,13 @@ export function useChat(options: UseChatOptions = {}) {
                 updatedEvents = events.filter((evt) => {
                   if (
                     evt.type === 'pending_tool' &&
-                    (data.id
-                      ? evt.toolId === data.id
-                      : normalizeChatToolName(evt.pendingTool?.name || '') === normalizedEndName)
+                    matchesCompletedTool(evt.toolId, evt.pendingTool?.name)
                   ) {
                     return false;
                   }
                   if (
                     evt.type === 'approval' &&
-                    (data.id
-                      ? evt.approval?.toolId === data.id
-                      : normalizeChatToolName(evt.approval?.toolName || '') === normalizedEndName)
+                    matchesCompletedTool(evt.approval?.toolId, evt.approval?.toolName)
                   ) {
                     return false;
                   }
@@ -1426,8 +1441,8 @@ export function useChat(options: UseChatOptions = {}) {
                 updatedEvents.push({
                   type: 'tool',
                   tool: newToolCall,
-                  toolId: data.id,
-                  startedAt: pendingTools[resolvedPendingIndex]?.startedAt,
+                  toolId: completedToolId,
+                  startedAt: resolvedPendingTool?.startedAt,
                   updatedAt: completedAt,
                 });
               } else {
@@ -1440,14 +1455,12 @@ export function useChat(options: UseChatOptions = {}) {
                   const evt = events[i];
                   if (
                     evt.type === 'pending_tool' &&
-                    (data.id
-                      ? evt.toolId === data.id
-                      : normalizeChatToolName(evt.pendingTool?.name || '') === normalizedEndName)
+                    matchesCompletedTool(evt.toolId, evt.pendingTool?.name)
                   ) {
                     updatedEvents[i] = {
                       type: 'tool',
                       tool: newToolCall,
-                      toolId: data.id,
+                      toolId: completedToolId,
                       startedAt: evt.pendingTool?.startedAt || evt.startedAt,
                       updatedAt: completedAt,
                     };
@@ -1459,7 +1472,7 @@ export function useChat(options: UseChatOptions = {}) {
                   updatedEvents.push({
                     type: 'tool',
                     tool: newToolCall,
-                    toolId: data.id,
+                    toolId: completedToolId,
                     updatedAt: completedAt,
                   });
                 }
@@ -1467,9 +1480,7 @@ export function useChat(options: UseChatOptions = {}) {
 
               // Also remove from pendingApprovals if present
               const updatedApprovals = (msg.pendingApprovals || []).filter((a) =>
-                data.id
-                  ? a.toolId !== data.id
-                  : normalizeChatToolName(a.toolName || '') !== normalizedEndName,
+                !matchesCompletedTool(a.toolId, a.toolName),
               );
 
               return {

@@ -2045,6 +2045,62 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('preserves pending tool identity when terminal updates omit name and input', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+      const input = '{"action":"exec","command":"ls /dev | wc -l","target_host":"current_resource"}';
+
+      fire({
+        type: 'tool_start',
+        data: {
+          id: 'tool-1',
+          name: 'pulse_read',
+          input,
+          raw_input: input,
+        },
+      });
+      fire({
+        type: 'tool_end',
+        data: {
+          id: 'tool-1',
+          output: '4358',
+          success: true,
+        },
+      });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.pendingTools).toHaveLength(0);
+      expect(assistant.toolCalls).toEqual([
+        {
+          name: 'pulse_read',
+          input,
+          rawInput: input,
+          output: '4358',
+          success: true,
+        },
+      ]);
+      expect(assistant.streamEvents?.filter((event) => event.type === 'pending_tool')).toHaveLength(
+        0,
+      );
+      expect(assistant.streamEvents?.filter((event) => event.type === 'tool')).toEqual([
+        expect.objectContaining({
+          type: 'tool',
+          toolId: 'tool-1',
+          tool: {
+            name: 'pulse_read',
+            input,
+            rawInput: input,
+            output: '4358',
+            success: true,
+          },
+        }),
+      ]);
+      dispose();
+    });
+
     it('processes tool_end — resolves by normalized name when no ID', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
