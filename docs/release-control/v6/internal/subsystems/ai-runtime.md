@@ -632,7 +632,23 @@ runtime cost control, and shared AI transport surfaces.
    `provider:model` routes that the backend chat stream can execute. Unknown
    recent or custom Pulse routes may survive catalog hydration only when they
    still have a valid provider/model shape; malformed route strings must not
-   become selectable chat routes. The referenced OpenCode source at commit
+   become selectable chat routes. The 2026-06-07 fast-model-route slice
+   rechecked OpenCode `origin/dev` commit
+   `31c099be435d59bd6749ace7a9f2bb2245e6d3fa`: the TUI command registry
+   exposes `model.list` as `/models` plus `/mo` and hidden
+   `model.cycle_recent` / `model.cycle_recent_reverse` commands in
+   `packages/tui/src/app.tsx` lines 725-751, the app command registry exposes
+   `model.choose` as `/model` with keybind `mod+'` in
+   `packages/app/src/pages/session/use-session-commands.tsx` lines 514-522,
+   and `DialogModel` promotes favorites/recents before provider catalog rows
+   in `packages/tui/src/component/dialog-model.tsx` lines 23-54. Pulse adapts
+   that command model by letting the composer consume `/model <provider:model>`
+   as a local route switch, `/model default` as an inherited-default reset, and
+   `/model next` / `/model previous` as recent-route cycling without sending
+   those command strings to the provider. Malformed `/model ...` arguments must
+   remain editable in the composer with a local correction message rather than
+   being silently cleared or treated as assistant prompts. The referenced
+   OpenCode source at commit
    `9ed17da55ab1f7360cc0e01075f763e27fa899e9`
    `packages/opencode/src/cli/cmd/tui/component/dialog-model.tsx` passes the
    current structured model route into `DialogSelect` at lines 146-171, and

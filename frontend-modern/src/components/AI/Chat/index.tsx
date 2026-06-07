@@ -155,7 +155,7 @@ import {
 } from './assistantModelRoutes';
 import {
   filterAssistantSlashCommands,
-  parseAssistantSlashCommand,
+  parseAssistantSlashCommandInput,
   type AssistantSlashCommand,
   type AssistantSlashCommandAction,
 } from './assistantSlashCommands';
@@ -193,6 +193,8 @@ const STRUCTURED_PATROL_CONTEXT_TARGETS = new Set(['patrol-configuration', 'patr
 const STRUCTURED_RESOURCE_CONTEXT_HANDOFF_KINDS = new Set(['resource_context']);
 const AI_CHAT_CYCLE_RECENT_MODEL_LABEL = 'Cycle recent Assistant model';
 const AI_CHAT_CONTROL_LEVEL_ORDER: AIControlLevel[] = ['read_only', 'controlled', 'autonomous'];
+const AI_CHAT_MODEL_SLASH_HELP =
+  'Use /model provider:model-id, /model default, /model next, or /model previous.';
 
 type SessionPickerSection = {
   title: string;
@@ -1974,22 +1976,89 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
   };
 
-  const nextRecentModelRoute = createMemo(() =>
+  const recentModelRouteByDirection = (direction: 1 | -1) =>
     getNextAssistantRecentModelRoute({
       currentModel: selectedChatModel(),
+      direction,
       recentModelIds: recentModelIds(),
-    }),
-  );
+    });
+  const nextRecentModelRoute = createMemo(() => recentModelRouteByDirection(1));
   const nextRecentModelRouteLabel = createMemo(() => {
     const next = nextRecentModelRoute();
     return next ? formatChatMessageModelRoute(next) : '';
   });
 
-  const cycleRecentModelRoute = () => {
-    const next = nextRecentModelRoute();
+  const cycleRecentModelRoute = (direction: 1 | -1 = 1) => {
+    const next = recentModelRouteByDirection(direction);
     if (!next) return;
     selectModel(next, { rememberRecent: false });
     focusComposer();
+  };
+
+  const runModelSlashCommand = (argument: string) => {
+    const target = argument.trim();
+    if (!target) {
+      setShowSessions(false);
+      setShowCommandHelp(false);
+      setSessionRefreshLoading(false);
+      resetSessionSearch();
+      setModelSelectorOpenRequest((value) => value + 1);
+      return true;
+    }
+
+    const normalizedTarget = target.toLowerCase();
+    if (normalizedTarget === 'default' || normalizedTarget === 'configured') {
+      selectModel('', { rememberRecent: false });
+      notificationStore.success('Assistant model route set to default', 2000);
+      focusComposer();
+      return true;
+    }
+
+    if (normalizedTarget === 'next' || normalizedTarget === 'recent') {
+      const next = recentModelRouteByDirection(1);
+      if (!next) {
+        notificationStore.info('No recent Assistant model route to cycle to.', 2000);
+        focusComposer();
+        return true;
+      }
+      selectModel(next, { rememberRecent: false });
+      notificationStore.success(
+        `Assistant model route set to ${formatChatMessageModelRoute(next)}`,
+        2000,
+      );
+      focusComposer();
+      return true;
+    }
+
+    if (normalizedTarget === 'previous' || normalizedTarget === 'prev') {
+      const previous = recentModelRouteByDirection(-1);
+      if (!previous) {
+        notificationStore.info('No previous Assistant model route to cycle to.', 2000);
+        focusComposer();
+        return true;
+      }
+      selectModel(previous, { rememberRecent: false });
+      notificationStore.success(
+        `Assistant model route set to ${formatChatMessageModelRoute(previous)}`,
+        2000,
+      );
+      focusComposer();
+      return true;
+    }
+
+    if (!isAssistantExplicitModelRoute(target)) {
+      notificationStore.error(AI_CHAT_MODEL_SLASH_HELP);
+      focusComposer();
+      return false;
+    }
+
+    selectModel(target);
+    notificationStore.success(
+      `Assistant model route set to ${formatChatMessageModelRoute(target)}`,
+      2000,
+    );
+    focusComposer();
+    return true;
   };
 
   const openModelSelectorFromError = () => {
@@ -2727,7 +2796,16 @@ export const AIChat: Component<AIChatProps> = (props) => {
     });
   };
 
-  const executeSlashCommand = (command: AssistantSlashCommandAction) => {
+  const executeSlashCommand = (command: AssistantSlashCommandAction, args = '') => {
+    const commandArgs = args.trim();
+    if (command === 'models' && commandArgs) {
+      const consumed = runModelSlashCommand(commandArgs);
+      if (consumed) {
+        clearLocalComposerCommand();
+      }
+      return consumed;
+    }
+
     clearLocalComposerCommand();
 
     switch (command) {
@@ -2780,6 +2858,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
         void handleRedoLastTurn();
         break;
     }
+    return true;
   };
 
   createEffect(() => {
@@ -2805,9 +2884,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (submittedInput !== input()) {
       setInput(submittedInput);
     }
-    const slashCommand = parseAssistantSlashCommand(prompt);
+    const slashCommand = parseAssistantSlashCommandInput(prompt);
     if (slashCommand) {
-      executeSlashCommand(slashCommand);
+      executeSlashCommand(slashCommand.action, slashCommand.args);
       return;
     }
     setSlashCommandActive(false);
@@ -4376,7 +4455,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 />
                 <button
                   type="button"
-                  onClick={cycleRecentModelRoute}
+                  onClick={() => cycleRecentModelRoute()}
                   disabled={!nextRecentModelRoute()}
                   class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:text-base-content disabled:cursor-not-allowed disabled:opacity-45"
                   title={

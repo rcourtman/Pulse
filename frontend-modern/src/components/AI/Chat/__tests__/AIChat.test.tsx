@@ -1643,7 +1643,7 @@ describe('AIChat', () => {
 
       expect(screen.getByRole('dialog', { name: 'Assistant commands' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /\/models/ })).toHaveTextContent(
-        'Choose the model and provider route',
+        'Choose or set the model route (/model provider:model-id)',
       );
       expect(screen.getByRole('button', { name: /\/status/ })).toHaveTextContent(
         'Check the selected model route',
@@ -1797,6 +1797,73 @@ describe('AIChat', () => {
         expect(screen.getByTestId('model-selector')).toHaveAttribute('data-open-request', '1');
       });
       expect(mockChat.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('sets an explicit model route from /model without sending a provider prompt', async () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+
+      fireEvent.input(textarea, {
+        target: { value: '/model openrouter:deepseek/deepseek-v4-pro' },
+      });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(mockChat.setModel).toHaveBeenCalledWith('openrouter:deepseek/deepseek-v4-pro');
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+      await waitFor(() => expect(textarea.value).toBe(''));
+    });
+
+    it('returns to the configured default model from /model default', async () => {
+      mockChat.model.mockReturnValue('openrouter:qwen/qwen3.7-plus');
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+
+      fireEvent.input(textarea, { target: { value: '/model default' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(mockChat.setModel).toHaveBeenCalledWith('');
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+      await waitFor(() => expect(textarea.value).toBe(''));
+    });
+
+    it('cycles recent model routes from /model next without opening the picker', async () => {
+      localStorage.setItem(
+        'pulse:ai_chat_recent_models',
+        JSON.stringify(['openrouter:anthropic/claude-sonnet-4.5', 'openrouter:qwen/qwen3.7-plus']),
+      );
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+
+      fireEvent.input(textarea, { target: { value: '/model next' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(mockChat.setModel).toHaveBeenCalledWith('openrouter:anthropic/claude-sonnet-4.5');
+      expect(screen.getByTestId('model-selector')).toHaveAttribute('data-open-request', '0');
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+      await waitFor(() => expect(textarea.value).toBe(''));
+    });
+
+    it('keeps invalid /model route drafts editable instead of sending them', async () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+
+      fireEvent.input(textarea, { target: { value: '/model qwen3.7-plus' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(mockChat.setModel).not.toHaveBeenCalled();
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+      expect(mockNotificationStore.error).toHaveBeenCalledWith(
+        'Use /model provider:model-id, /model default, /model next, or /model previous.',
+      );
+      expect(textarea.value).toBe('/model qwen3.7-plus');
     });
 
     it('checks selected provider status from /status without sending a provider prompt', async () => {

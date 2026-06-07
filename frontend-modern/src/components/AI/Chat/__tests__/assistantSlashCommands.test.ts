@@ -3,6 +3,7 @@ import {
   filterAssistantSlashCommands,
   getAssistantSlashCommandTokens,
   parseAssistantSlashCommand,
+  parseAssistantSlashCommandInput,
 } from '../assistantSlashCommands';
 
 describe('assistantSlashCommands', () => {
@@ -40,6 +41,27 @@ describe('assistantSlashCommands', () => {
     expect(parseAssistantSlashCommand('/unknown')).toBeNull();
     expect(parseAssistantSlashCommand('/ copy')).toBeNull();
     expect(parseAssistantSlashCommand('/copy this sentence')).toBeNull();
+  });
+
+  it('parses model commands with route arguments for local composer handling', () => {
+    expect(parseAssistantSlashCommandInput('/model openrouter:qwen/qwen3.7-plus')).toEqual({
+      action: 'models',
+      args: 'openrouter:qwen/qwen3.7-plus',
+    });
+    expect(parseAssistantSlashCommandInput('/models default')).toEqual({
+      action: 'models',
+      args: 'default',
+    });
+    expect(parseAssistantSlashCommandInput('/mo previous')).toEqual({
+      action: 'models',
+      args: 'previous',
+    });
+    expect(parseAssistantSlashCommand('/model openrouter:qwen/qwen3.7-plus')).toBeNull();
+  });
+
+  it('does not parse arguments for non-model commands', () => {
+    expect(parseAssistantSlashCommandInput('/copy this sentence')).toBeNull();
+    expect(parseAssistantSlashCommandInput('/status now')).toBeNull();
   });
 
   it('filters commands by canonical name, alias, and description', () => {

@@ -18,6 +18,11 @@ export interface AssistantSlashCommand {
   name: string;
 }
 
+export interface ParsedAssistantSlashCommand {
+  action: AssistantSlashCommandAction;
+  args: string;
+}
+
 export const ASSISTANT_SLASH_COMMANDS: AssistantSlashCommand[] = [
   {
     name: 'help',
@@ -41,7 +46,7 @@ export const ASSISTANT_SLASH_COMMANDS: AssistantSlashCommand[] = [
     name: 'models',
     aliases: ['model', 'mo'],
     action: 'models',
-    description: 'Choose the model and provider route',
+    description: 'Choose or set the model route (/model provider:model-id)',
   },
   {
     name: 'providers',
@@ -89,14 +94,31 @@ const commandByToken = new Map<string, AssistantSlashCommandAction>(
   ]),
 );
 
-export const parseAssistantSlashCommand = (input: string): AssistantSlashCommandAction | null => {
+export const parseAssistantSlashCommandInput = (
+  input: string,
+): ParsedAssistantSlashCommand | null => {
   const trimmed = input.trim();
   if (!trimmed.startsWith('/')) return null;
 
-  const token = trimmed.slice(1).toLowerCase();
-  if (!token || /\s/.test(token)) return null;
+  const body = trimmed.slice(1);
+  const match = body.match(/^(\S+)(?:\s+([\s\S]*))?$/);
+  if (!match) return null;
 
-  return commandByToken.get(token) ?? null;
+  const token = match[1].toLowerCase();
+  if (!token) return null;
+  const action = commandByToken.get(token);
+  if (!action) return null;
+
+  const args = (match[2] || '').trim();
+  if (args && action !== 'models') return null;
+
+  return { action, args };
+};
+
+export const parseAssistantSlashCommand = (input: string): AssistantSlashCommandAction | null => {
+  const parsed = parseAssistantSlashCommandInput(input);
+  if (!parsed || parsed.args) return null;
+  return parsed.action;
 };
 
 const normalizeSlashQuery = (query: string) => query.trim().toLowerCase();
