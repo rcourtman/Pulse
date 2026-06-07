@@ -254,6 +254,12 @@ interface AssistantFallbackRouteNotice extends AssistantFallbackRouteAdoptionCan
   routeLabel: string;
 }
 
+interface AssistantProviderReadinessRouteNotice {
+  failedProviderLabel: string;
+  failedRouteLabel: string;
+  routeLabel: string;
+}
+
 const PROVIDER_ROUTE_FAILURE_PATTERN =
   /\b(ai provider|provider endpoint|provider credentials|provider api key|provider connection|selected provider url|provider url|model route|openrouter|openai|anthropic|deepseek|gemini|ollama|api key|rate limit|quota|credits?|upstream|llm|429|402)\b/i;
 const LOCAL_ASSISTANT_FAILURE_PATTERN = /\bUnknown Assistant fixture\b|\bAvailable fixtures:\b/i;
@@ -712,6 +718,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const adoptedFallbackRouteMessageIds = new Set<string>();
   const [fallbackRouteNotice, setFallbackRouteNotice] =
     createSignal<AssistantFallbackRouteNotice | null>(null);
+  const [providerReadinessRouteNotice, setProviderReadinessRouteNotice] =
+    createSignal<AssistantProviderReadinessRouteNotice | null>(null);
   const [providerReadiness, setProviderReadiness] = createSignal<ChatProviderReadinessState>({
     status: 'idle',
     provider: '',
@@ -1651,6 +1659,25 @@ export const AIChat: Component<AIChatProps> = (props) => {
     return match?.provider?.trim() || getProviderFromModelId(normalized);
   };
 
+  const surfaceProviderReadinessRouteAdoption = (args: {
+    failedProvider: string;
+    failedRoute: string;
+    route: string;
+  }) => {
+    const routeLabel = formatChatMessageModelRoute(args.route);
+    const failedRouteLabel = formatChatMessageModelRoute(args.failedRoute);
+    const failedProviderLabel = getAIProviderDisplayName(args.failedProvider) || 'selected';
+    setProviderReadinessRouteNotice({
+      failedProviderLabel,
+      failedRouteLabel,
+      routeLabel,
+    });
+    notificationStore.success(
+      `Assistant model route switched to ${routeLabel} after ${failedProviderLabel} provider check`,
+      2500,
+    );
+  };
+
   const hasCurrentTranscript = createMemo(() => hasAssistantTranscriptContent(chat.messages()));
   const lastAssistantAnswerText = createMemo(() => getLastAssistantAnswerText(chat.messages()));
   const hasLastAssistantAnswer = createMemo(() => !!lastAssistantAnswerText());
@@ -2008,6 +2035,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       rememberRecentModel(modelId);
     }
     setFallbackRouteNotice(null);
+    setProviderReadinessRouteNotice(null);
   };
 
   const recentModelRouteByDirection = (direction: 1 | -1) =>
@@ -2122,6 +2150,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const readiness = providerReadiness();
     if (readiness.status !== 'error') return null;
 
+    const failedRoute = selectedChatModel().trim();
     const currentProvider = selectedChatProvider().trim();
     const failedProvider = readiness.provider.trim();
     if (failedProvider && currentProvider && failedProvider !== currentProvider) {
@@ -2132,6 +2161,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (!alternative) return null;
 
     selectModel(alternative.id);
+    surfaceProviderReadinessRouteAdoption({
+      failedProvider: failedProvider || currentProvider || providerForModelRoute(failedRoute),
+      failedRoute,
+      route: alternative.id,
+    });
     return alternative;
   };
 
@@ -2482,7 +2516,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
       return;
     }
 
+    const failedRoute = current;
     selectModel(override);
+    surfaceProviderReadinessRouteAdoption({
+      failedProvider: failedProvider || currentProvider,
+      failedRoute,
+      route: override,
+    });
   });
 
   // Click outside handler to close all dropdowns
@@ -2921,6 +2961,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const prompt = submittedInput.trim();
     if (!prompt) return;
     setFallbackRouteNotice(null);
+    setProviderReadinessRouteNotice(null);
     composerSubmitDispatchLocked = true;
     queueMicrotask(() => {
       composerSubmitDispatchLocked = false;
@@ -3250,6 +3291,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     setEditingQueuedFollowUp(null);
     setRestoredPromptDraft(null);
     setFallbackRouteNotice(null);
+    setProviderReadinessRouteNotice(null);
     setRedoLastTurnAvailable(false);
     aiChatStore.clearContext?.();
     setShowSessions(false);
@@ -3472,6 +3514,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
         setEditingQueuedFollowUp(null);
         setRestoredPromptDraft(null);
         setFallbackRouteNotice(null);
+        setProviderReadinessRouteNotice(null);
         setRedoLastTurnAvailable(false);
       }
     } catch (_error) {
@@ -4263,7 +4306,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
           {/* Input */}
           <div class="border-t border-border bg-surface px-4 py-3">
-            <Show when={currentStatus() || fallbackRouteNotice() || chat.queuedFollowUpCount() > 0}>
+            <Show
+              when={
+                currentStatus() ||
+                fallbackRouteNotice() ||
+                providerReadinessRouteNotice() ||
+                chat.queuedFollowUpCount() > 0
+              }
+            >
               <div
                 class="mb-2 overflow-hidden rounded-md border border-blue-200 bg-blue-50 text-blue-800 shadow-sm dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200"
                 data-testid="assistant-activity-dock"
@@ -4332,10 +4382,48 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     </div>
                   )}
                 </Show>
+                <Show when={providerReadinessRouteNotice()}>
+                  {(notice) => (
+                    <div
+                      class={`flex min-h-8 min-w-0 items-center gap-2 px-2.5 py-1.5 text-xs ${
+                        currentStatus() || fallbackRouteNotice()
+                          ? 'border-t border-blue-200/70 dark:border-blue-900/60'
+                          : ''
+                      }`}
+                      role="status"
+                      aria-label="Assistant provider readiness route adopted"
+                      aria-live="polite"
+                    >
+                      <CheckIcon
+                        class="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-300"
+                        aria-hidden="true"
+                      />
+                      <span class="min-w-0 flex-1 truncate font-medium">
+                        Using {notice().routeLabel} after {notice().failedProviderLabel} provider
+                        check failed
+                        <Show when={notice().failedRouteLabel}>
+                          {(failedRouteLabel) => <> for {failedRouteLabel()}</>}
+                        </Show>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProviderReadinessRouteNotice(null);
+                          focusComposer();
+                        }}
+                        class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-900 dark:text-blue-200 dark:hover:bg-blue-900/50"
+                        title="Dismiss provider route notice"
+                        aria-label="Dismiss provider route notice"
+                      >
+                        <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    </div>
+                  )}
+                </Show>
                 <Show when={chat.queuedFollowUpCount() > 0}>
                   <div
                     class={`px-2.5 py-1.5 ${
-                      currentStatus() || fallbackRouteNotice()
+                      currentStatus() || fallbackRouteNotice() || providerReadinessRouteNotice()
                         ? 'border-t border-blue-200/70 dark:border-blue-900/60'
                         : ''
                     }`}

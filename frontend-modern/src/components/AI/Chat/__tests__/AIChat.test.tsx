@@ -1099,6 +1099,13 @@ describe('AIChat', () => {
         );
         expect(mockChat.setModel).toHaveBeenCalledWith('gemini:gemini-3.1-flash-lite');
       });
+      expect(
+        screen.getByRole('status', { name: 'Assistant provider readiness route adopted' }),
+      ).toHaveTextContent('Using gemini-3.1-flash-lite after OpenRouter provider check failed');
+      expect(mockNotificationStore.success).toHaveBeenCalledWith(
+        expect.stringContaining('after OpenRouter provider check'),
+        2500,
+      );
     });
 
     it('sends user input when the readiness issue reports a provider-qualified model', async () => {
@@ -1254,6 +1261,16 @@ describe('AIChat', () => {
       );
       expect(mockChat.setModel.mock.invocationCallOrder[0]).toBeLessThan(
         mockChat.sendMessage.mock.invocationCallOrder[0],
+      );
+      const notice = screen.getByRole('status', {
+        name: 'Assistant provider readiness route adopted',
+      });
+      expect(notice).toHaveTextContent('Using DeepSeek: DeepSeek V4 Pro via OpenRouter');
+      expect(notice).toHaveTextContent('after DeepSeek provider check failed');
+      expect(notice).toHaveTextContent('for DeepSeek V4 Pro');
+      expect(mockNotificationStore.success).toHaveBeenCalledWith(
+        expect.stringContaining('after DeepSeek provider check'),
+        2500,
       );
       expect(textarea.value).toBe('');
     });
