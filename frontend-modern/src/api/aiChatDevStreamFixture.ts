@@ -94,10 +94,8 @@ const buildDeviceCountFixtureEvents = (model?: string): AIChatStreamEvent[] => [
     data: {
       id: 'fixture-tool-devices',
       name: 'pulse_read',
-      input:
-        '{"target_host":"current_resource","command":"ls /dev | wc -l && lsblk -d -o NAME,TYPE,SIZE"}',
-      raw_input:
-        'pulse_read(target_host="current_resource", command="ls /dev | wc -l && lsblk -d -o NAME,TYPE,SIZE")',
+      input: '{}',
+      raw_input: 'pulse_read(target_host="current_resource", command="ls /dev | wc',
     },
   },
   {

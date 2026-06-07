@@ -129,6 +129,8 @@ describe('AIChatAPI', () => {
       data: {
         id: 'fixture-tool-devices',
         name: 'pulse_read',
+        input: '{}',
+        raw_input: 'pulse_read(target_host="current_resource", command="ls /dev | wc',
       },
     });
     expect(onEvent.mock.calls[7][0]).toMatchObject({

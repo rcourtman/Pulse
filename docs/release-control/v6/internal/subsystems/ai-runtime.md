@@ -622,11 +622,16 @@ runtime cost control, and shared AI transport surfaces.
    row instead of persisting a failed tool card. If a terminal `tool_end`
    reaches the browser without a matching pending row, the frontend must still
    append the completed row instead of dropping the only visible tool evidence.
-   While streamed arguments are still invalid or incomplete JSON, the frontend
-   must use the `raw_input`
+   While streamed arguments are still invalid, incomplete JSON, or incomplete
+   provider-style function-call input, the frontend must use the `raw_input`
    fragment to show a safe partial command/path/query summary instead of a
    blank `{}` request row, then replace it with the structured summary once
-   parsing succeeds.
+   parsing succeeds. The 2026-06-07 Pulse slice rechecked OpenCode
+   `origin/dev` commit `effd27b23900720a53e965396ff1a105c1f7e9c8`:
+   `packages/opencode/src/session/processor.ts` lines 431-451 append
+   `tool-input-delta` text to the same call, and
+   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx` lines 276-294
+   render and mutate that pending tool part as input arrives.
    The referenced OpenCode source at fetched `origin/dev` commit
    `1399323b78a04229d9bfe00c7436d7f41770fda8` keeps tool invocations as durable
    message parts in `packages/opencode/src/session/processor.ts`

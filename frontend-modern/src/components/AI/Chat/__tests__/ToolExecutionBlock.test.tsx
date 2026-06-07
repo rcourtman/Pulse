@@ -658,6 +658,22 @@ describe('PendingToolBlock', () => {
     expect(screen.queryByText(/pulse_read\(/)).not.toBeInTheDocument();
   });
 
+  it('uses raw partial provider-style input while pending Pulse read arguments are still streaming', () => {
+    render(() => (
+      <PendingToolBlock
+        tool={makePending({
+          name: 'pulse_read',
+          input: '{}',
+          rawInput: 'pulse_read(target_host="current_resource", command="ls /dev | wc',
+        })}
+      />
+    ));
+
+    expect(screen.getByText('Inspect devices on current resource')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tool command')).toHaveTextContent('$ ls /dev | wc');
+    expect(screen.queryByText(/pulse_read\(/)).not.toBeInTheDocument();
+  });
+
   it('uses raw partial input while pending Pulse read command JSON is still streaming', () => {
     render(() => (
       <PendingToolBlock

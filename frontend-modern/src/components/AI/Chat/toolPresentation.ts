@@ -197,13 +197,26 @@ const formatCommandActivitySummary = (record: Record<string, unknown>, mode: 're
   return `$ ${inlineValue(command, 64)}${target}`;
 };
 
-const parseFunctionStyleToolInput = (input: string) => {
-  const match = /^([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([\s\S]*)\)\s*$/.exec(input.trim());
+const parseFunctionStyleToolInput = (input: string, options?: { allowPartial?: boolean }) => {
+  const trimmed = input.trim();
+  const allowPartial = options?.allowPartial === true;
+  const match = (
+    allowPartial
+      ? /^([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([\s\S]*)$/
+      : /^([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([\s\S]*)\)\s*$/
+  ).exec(trimmed);
   if (!match) return null;
 
   const args: Record<string, unknown> = {};
-  const body = match[2] || '';
+  let body = match[2] || '';
+  const rightTrimmed = body.trimEnd();
+  if (allowPartial && rightTrimmed.endsWith(')')) {
+    body = rightTrimmed.slice(0, -1);
+  }
   let index = 0;
+
+  const partialResult = () =>
+    allowPartial && Object.keys(args).length > 0 ? { name: match[1], args } : null;
 
   const skipWhitespace = () => {
     while (index < body.length && /\s/.test(body[index])) index += 1;
@@ -220,6 +233,10 @@ const parseFunctionStyleToolInput = (input: string) => {
           index += 2;
           continue;
         }
+        if (allowPartial) {
+          index += 1;
+          break;
+        }
         return null;
       }
       if (char === quote) {
@@ -229,7 +246,7 @@ const parseFunctionStyleToolInput = (input: string) => {
       value += char;
       index += 1;
     }
-    return null;
+    return allowPartial ? value : null;
   };
 
   while (index < body.length) {
@@ -242,14 +259,15 @@ const parseFunctionStyleToolInput = (input: string) => {
     }
 
     const keyMatch = /^[a-zA-Z_][a-zA-Z0-9_]*/.exec(body.slice(index));
-    if (!keyMatch) return null;
+    if (!keyMatch) return partialResult();
     const key = keyMatch[0];
     index += key.length;
 
     skipWhitespace();
-    if (body[index] !== '=') return null;
+    if (body[index] !== '=') return partialResult();
     index += 1;
     skipWhitespace();
+    if (index >= body.length) return partialResult();
 
     const quote = body[index];
     let value: unknown;
@@ -258,9 +276,15 @@ const parseFunctionStyleToolInput = (input: string) => {
       if (value === null) return null;
     } else {
       const start = index;
-      while (index < body.length && body[index] !== ',') index += 1;
+      while (
+        index < body.length &&
+        body[index] !== ',' &&
+        (allowPartial ? body[index] !== ')' : true)
+      ) {
+        index += 1;
+      }
       const rawValue = body.slice(start, index).trim();
-      if (!rawValue) return null;
+      if (!rawValue) return partialResult();
       if (rawValue === 'true') value = true;
       else if (rawValue === 'false') value = false;
       else if (rawValue === 'null') value = null;
@@ -270,9 +294,17 @@ const parseFunctionStyleToolInput = (input: string) => {
 
     args[key] = value;
     skipWhitespace();
-    if (index < body.length && body[index] !== ',') return null;
+    if (body[index] === ',') {
+      index += 1;
+      continue;
+    }
+    if (allowPartial && body[index] === ')') break;
+    if (index < body.length) {
+      return partialResult();
+    }
   }
 
+  if (allowPartial && Object.keys(args).length === 0) return null;
   return { name: match[1], args };
 };
 
@@ -292,6 +324,11 @@ const parseStructuredInputRecord = (input: string) => {
   const functionCall = parseFunctionStyleToolInput(trimmed);
   if (functionCall) {
     return { name: functionCall.name, record: functionCall.args };
+  }
+
+  const partialFunctionCall = parseFunctionStyleToolInput(trimmed, { allowPartial: true });
+  if (partialFunctionCall) {
+    return { name: partialFunctionCall.name, record: partialFunctionCall.args };
   }
 
   return null;
@@ -480,7 +517,7 @@ export const parseToolInputSummary = (input: string, toolName?: string, rawInput
   if (!trimmed) return '';
 
   const directSummary = parseStructuredInputSummary(trimmed, toolName, rawInput);
-  if (directSummary) {
+  if (directSummary && !isPlaceholderToolInputSummary(directSummary)) {
     return directSummary;
   }
 
@@ -489,6 +526,10 @@ export const parseToolInputSummary = (input: string, toolName?: string, rawInput
     if (rawSummary && !isPlaceholderToolInputSummary(rawSummary)) {
       return rawSummary;
     }
+  }
+
+  if (directSummary) {
+    return directSummary;
   }
 
   return formatIdentifierLabel(trimmed, { maxLength: 28 });
