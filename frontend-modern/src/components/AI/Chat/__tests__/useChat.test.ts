@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { createRoot } from 'solid-js';
+import { createEffect, createRoot } from 'solid-js';
 
 // Mock dependencies before importing
 vi.mock('@/api/aiChat', () => ({
@@ -2760,6 +2760,90 @@ describe('useChat', () => {
         },
       ]);
       expect(msgs[1].timestamp).toBeInstanceOf(Date);
+      dispose();
+    });
+
+    it('restores the latest explicit model route before publishing the loaded session id', async () => {
+      mockGetMessages.mockResolvedValue([
+        {
+          id: 'msg-1',
+          role: 'user',
+          content: 'first',
+          timestamp: '2024-01-01T00:00:00Z',
+          model: 'deepseek:deepseek-v4-pro',
+        },
+        {
+          id: 'msg-2',
+          role: 'assistant',
+          content: 'first answer',
+          timestamp: '2024-01-01T00:00:01Z',
+          model: 'deepseek:deepseek-v4-pro',
+        },
+        {
+          id: 'msg-3',
+          role: 'user',
+          content: 'continue through OpenRouter',
+          timestamp: '2024-01-01T00:00:02Z',
+          model: 'openrouter:qwen/qwen3.7-plus',
+        },
+        {
+          id: 'msg-4',
+          role: 'assistant',
+          content: 'latest answer',
+          timestamp: '2024-01-01T00:00:03Z',
+        },
+      ]);
+
+      const sessionModelSnapshots: Array<{ sessionId: string; model: string }> = [];
+      const { value: chat, dispose } = withRoot(() => {
+        const chat = useChat({ model: 'openai:gpt-4o' });
+        createEffect(() => {
+          const loadedSessionId = chat.sessionId();
+          if (loadedSessionId) {
+            sessionModelSnapshots.push({ sessionId: loadedSessionId, model: chat.model() });
+          }
+        });
+        return chat;
+      });
+
+      const loaded = await chat.loadSession('sess-42');
+      await Promise.resolve();
+
+      expect(loaded).toBe(true);
+      expect(chat.model()).toBe('openrouter:qwen/qwen3.7-plus');
+      expect(sessionModelSnapshots).toContainEqual({
+        sessionId: 'sess-42',
+        model: 'openrouter:qwen/qwen3.7-plus',
+      });
+      dispose();
+    });
+
+    it('keeps the current model when loaded history only has legacy model names', async () => {
+      mockGetMessages.mockResolvedValue([
+        {
+          id: 'msg-1',
+          role: 'user',
+          content: 'hello',
+          timestamp: '2024-01-01T00:00:00Z',
+          model: 'gpt-4o',
+        },
+        {
+          id: 'msg-2',
+          role: 'assistant',
+          content: 'hi there',
+          timestamp: '2024-01-01T00:00:01Z',
+          model: 'openai/gpt-4o-mini',
+        },
+      ]);
+
+      const { value: chat, dispose } = withRoot(() =>
+        useChat({ model: 'deepseek:deepseek-v4-pro' }),
+      );
+
+      const loaded = await chat.loadSession('sess-legacy-models');
+
+      expect(loaded).toBe(true);
+      expect(chat.model()).toBe('deepseek:deepseek-v4-pro');
       dispose();
     });
 

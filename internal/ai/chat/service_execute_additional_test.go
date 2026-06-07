@@ -408,6 +408,76 @@ func TestService_ExecuteStream_Success(t *testing.T) {
 	}
 }
 
+func TestService_ExecuteStream_StoresSelectedModelRouteOnUserTurn(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	const selectedRoute = "openrouter:qwen/qwen3.7-plus"
+	provider := &stubServiceProvider{
+		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: "restored route answer"},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{InputTokens: 1, OutputTokens: 1},
+			})
+			return nil
+		},
+	}
+
+	service := NewService(Config{
+		AIConfig: &config.AIConfig{ChatModel: "openai:gpt-4o"},
+	})
+	service.sessions = store
+	service.provider = provider
+	var requestedProviderModel string
+	service.providerFactory = func(model string) (providers.StreamingProvider, error) {
+		requestedProviderModel = model
+		if model == selectedRoute {
+			return provider, nil
+		}
+		return nil, errors.New("unexpected model " + model)
+	}
+	service.started = true
+
+	err = service.ExecuteStream(context.Background(), ExecuteRequest{
+		SessionID: "sess-selected-model",
+		Prompt:    "continue with this provider",
+		Model:     selectedRoute,
+	}, func(StreamEvent) {})
+	if err != nil {
+		t.Fatalf("ExecuteStream failed: %v", err)
+	}
+	if requestedProviderModel != selectedRoute {
+		t.Fatalf("provider factory model = %q, want %q", requestedProviderModel, selectedRoute)
+	}
+
+	messages, err := store.GetMessages("sess-selected-model")
+	if err != nil {
+		t.Fatalf("GetMessages failed: %v", err)
+	}
+	if len(messages) < 2 {
+		t.Fatalf("expected at least 2 messages, got %d", len(messages))
+	}
+	if messages[0].Role != "user" {
+		t.Fatalf("first message role = %q, want user", messages[0].Role)
+	}
+	if messages[0].Model != selectedRoute {
+		t.Fatalf("user message model = %q, want %q", messages[0].Model, selectedRoute)
+	}
+	if messages[1].Role != "assistant" {
+		t.Fatalf("second message role = %q, want assistant", messages[1].Role)
+	}
+	if messages[1].Model != selectedRoute {
+		t.Fatalf("assistant message model = %q, want %q", messages[1].Model, selectedRoute)
+	}
+}
+
 func TestServiceExecuteStreamMockModeStreamsToolFixtureWithoutProviderCall(t *testing.T) {
 	originalMockMode := mockruntime.IsEnabled()
 	t.Cleanup(func() { mockruntime.SetEnabled(originalMockMode) })

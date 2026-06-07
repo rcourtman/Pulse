@@ -18,6 +18,7 @@ import {
   stripAssistantOutputArtifacts,
   type AssistantOutputArtifactStreamState,
 } from '../assistantOutputHygiene';
+import { isAssistantExplicitModelRoute } from '../assistantModelRoutes';
 import type {
   ChatMessage,
   ToolExecution,
@@ -32,6 +33,23 @@ import type {
 const generateId = () => Math.random().toString(36).substring(2, 9);
 type AssistantInterruption = NonNullable<ChatMessage['interruption']>;
 const WORKFLOW_STATUS_HISTORY_LIMIT = 8;
+
+const latestExplicitModelRouteFromTranscript = (messages: ChatMessage[]): string => {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    const requestModel = message.request?.model?.trim() || '';
+    if (requestModel && isAssistantExplicitModelRoute(requestModel)) {
+      return requestModel;
+    }
+
+    const messageModel = message.model?.trim() || '';
+    if (messageModel && isAssistantExplicitModelRoute(messageModel)) {
+      return messageModel;
+    }
+  }
+
+  return '';
+};
 
 const createInitialAssistantWorkflowStatus = (startedAt = Date.now()): WorkflowStatus => ({
   phase: 'request_start',
@@ -1937,27 +1955,30 @@ export function useChat(options: UseChatOptions = {}) {
     setQueuedFollowUpsPaused(false);
     try {
       const msgs = await AIChatAPI.getMessages(id);
-      setMessages(
-        msgs.map((m) => {
-          const persistedToolCalls = m.tool_calls || [];
-          const toolCalls = persistedToolCalls.map(normalizePersistedToolExecution);
-          const content =
-            m.role === 'assistant' ? stripAssistantOutputArtifacts(m.content).text : m.content;
-          const streamEvents =
-            m.role === 'assistant'
-              ? buildPersistedStreamEvents(content, persistedToolCalls)
-              : undefined;
-          return {
-            id: m.id,
-            role: m.role,
-            content,
-            timestamp: new Date(m.timestamp),
-            model: m.model,
-            toolCalls,
-            streamEvents,
-          };
-        }),
-      );
+      const loadedMessages = msgs.map((m) => {
+        const persistedToolCalls = m.tool_calls || [];
+        const toolCalls = persistedToolCalls.map(normalizePersistedToolExecution);
+        const content =
+          m.role === 'assistant' ? stripAssistantOutputArtifacts(m.content).text : m.content;
+        const streamEvents =
+          m.role === 'assistant'
+            ? buildPersistedStreamEvents(content, persistedToolCalls)
+            : undefined;
+        return {
+          id: m.id,
+          role: m.role,
+          content,
+          timestamp: new Date(m.timestamp),
+          model: m.model,
+          toolCalls,
+          streamEvents,
+        };
+      });
+      const restoredModel = latestExplicitModelRouteFromTranscript(loadedMessages);
+      if (restoredModel) {
+        setModel(restoredModel);
+      }
+      setMessages(loadedMessages);
       setSessionId(id);
       return true;
     } catch (error) {

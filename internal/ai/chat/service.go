@@ -572,11 +572,43 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		}
 	}
 
+	// Determine which model/provider attempts to use for this request before
+	// persisting the turn, so session history can restore the same model route.
+	cfgSnapshot := (*config.AIConfig)(nil)
+	configuredModel := ""
+	overrideModel := strings.TrimSpace(req.Model)
+	var baseExecutor *tools.PulseToolExecutor
+	var configuredProvider providers.StreamingProvider
+	autonomousMode := false
+	effectiveControlLevel := tools.ControlLevelReadOnly
+	s.mu.RLock()
+	cfgSnapshot = s.cfg
+	baseExecutor = s.executor
+	configuredProvider = s.provider
+	unifiedResourceProvider := s.unifiedResourceProvider
+	autonomousMode = s.autonomousMode
+	effectiveControlLevel = s.effectiveControlLevelLocked()
+	s.mu.RUnlock()
+
+	if cfgSnapshot != nil {
+		if resolved, resolveErr := modelresolution.ResolveConfiguredChatModelOffline(cfgSnapshot); resolveErr == nil {
+			configuredModel = strings.TrimSpace(resolved)
+		} else {
+			configuredModel = strings.TrimSpace(cfgSnapshot.GetChatModel())
+			log.Warn().Err(resolveErr).Msg("[ChatService] Unable to resolve configured chat model")
+		}
+	}
+	selectedModel := configuredModel
+	if overrideModel != "" {
+		selectedModel = overrideModel
+	}
+
 	// Add user message
 	userMsg := Message{
 		ID:        uuid.New().String(),
 		Role:      "user",
 		Content:   req.Prompt,
+		Model:     selectedModel,
 		Timestamp: time.Now(),
 	}
 	if err := sessions.AddMessage(session.ID, userMsg); err != nil {
@@ -618,31 +650,6 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	handoffContext = sanitizeHandoffContextForResourcePolicy(handoffContext, handoffResources, handoffResourceProvider)
 	injectHandoffContextIntoLatestUserMessage(messages, handoffContext)
 
-	// Determine which model/provider attempts to use for this request.
-	cfgSnapshot := (*config.AIConfig)(nil)
-	configuredModel := ""
-	overrideModel := strings.TrimSpace(req.Model)
-	var baseExecutor *tools.PulseToolExecutor
-	var configuredProvider providers.StreamingProvider
-	autonomousMode := false
-	effectiveControlLevel := tools.ControlLevelReadOnly
-	s.mu.RLock()
-	cfgSnapshot = s.cfg
-	baseExecutor = s.executor
-	configuredProvider = s.provider
-	unifiedResourceProvider := s.unifiedResourceProvider
-	autonomousMode = s.autonomousMode
-	effectiveControlLevel = s.effectiveControlLevelLocked()
-	s.mu.RUnlock()
-
-	if cfgSnapshot != nil {
-		if resolved, resolveErr := modelresolution.ResolveConfiguredChatModelOffline(cfgSnapshot); resolveErr == nil {
-			configuredModel = strings.TrimSpace(resolved)
-		} else {
-			configuredModel = strings.TrimSpace(cfgSnapshot.GetChatModel())
-			log.Warn().Err(resolveErr).Msg("[ChatService] Unable to resolve configured chat model")
-		}
-	}
 	s.hydrateHandoffResources(session.ID, handoffResources, sessions, unifiedResourceProvider)
 
 	// Per-request autonomous mode override (used by investigation to avoid
@@ -651,10 +658,6 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		autonomousMode = *req.AutonomousMode
 	}
 	effectiveControlLevel = controlLevelForRequestAutonomousMode(effectiveControlLevel, req.AutonomousMode)
-	selectedModel := configuredModel
-	if overrideModel != "" {
-		selectedModel = overrideModel
-	}
 	hasModelHandoffContext := handoffContext != "" ||
 		len(handoffResources) > 0 ||
 		len(handoffActions) > 0 ||

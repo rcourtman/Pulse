@@ -108,6 +108,20 @@ runtime cost control, and shared AI transport surfaces.
    overrides the configured chat model after the operator changes provider
    settings; stale blank-session defaults must be ignored and cleaned on mount
    so routes such as OpenRouter become visible and effective immediately.
+   Assistant session model continuity is transcript-owned, not ambient UI state.
+   `internal/ai/chat` must persist the effective selected model route on the
+   user turn as well as final assistant turns, and the browser chat runtime must
+   restore the latest explicit `provider:model` route from loaded session
+   messages before publishing the loaded session ID to drawer/session storage.
+   Legacy bare model names, provider response IDs without a Pulse route prefix,
+   URLs, and malformed route strings must be ignored so loading older sessions
+   cannot corrupt the active selector. The referenced OpenCode source at fetched
+   `origin/dev` commit `2006259a02a87edf9e37f253cbddf3188309026b` restores
+   local session model state from the latest user message in
+   `packages/app/src/pages/session.tsx` lines 361-368 through
+   `packages/app/src/pages/session/session-model-helpers.ts`; Pulse adapts that
+   pattern by using its persisted explicit route contract rather than terminal
+   provider/model objects.
    Follow-up sends during an active Assistant response are chat-runtime queue
    state by default. The drawer must accept and echo the user's follow-up as a
    queued user turn without aborting or replacing the active model stream, must
