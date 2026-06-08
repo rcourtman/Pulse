@@ -320,8 +320,8 @@ vi.mock('../ChatMessages', () => ({
               }
             >
               {recovery().alternative.kind === 'same-model-route'
-                ? `Retry with ${recovery().alternative.providerLabel} route`
-                : `Retry with ${recovery().alternative.providerLabel} model route`}
+                ? `Switch to ${recovery().alternative.providerLabel} route and retry`
+                : `Switch to ${recovery().alternative.providerLabel} model route and retry`}
             </button>
           )}
         </Show>
@@ -1234,6 +1234,27 @@ describe('AIChat', () => {
       expect(document.activeElement).toBe(textarea);
     });
 
+    it('treats provider readiness request failures as recoverable route status', async () => {
+      const readinessError = new Error('Model provider does not match test provider');
+      mockAIAPI.testProvider.mockRejectedValueOnce(readinessError);
+
+      renderChat();
+
+      await screen.findByText('Selected model route issue');
+
+      expect(screen.getByLabelText('Assistant selected model route status')).toHaveTextContent(
+        'Pulse could not verify the selected model route.',
+      );
+      expect(logger.warn).toHaveBeenCalledWith(
+        '[AIChat] Failed to check selected provider readiness:',
+        readinessError,
+      );
+      expect(logger.error).not.toHaveBeenCalledWith(
+        '[AIChat] Failed to check selected provider readiness:',
+        readinessError,
+      );
+    });
+
     it('offers an equivalent configured-provider route when the selected provider fails', async () => {
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'deepseek:deepseek-v4-pro',
@@ -1279,9 +1300,9 @@ describe('AIChat', () => {
       renderChat();
 
       const switchButton = await screen.findByRole('button', {
-        name: 'Use OpenRouter route',
+        name: 'Switch to OpenRouter route',
       });
-      expect(switchButton).toHaveTextContent('Use OpenRouter route');
+      expect(switchButton).toHaveTextContent('Switch to OpenRouter route');
 
       fireEvent.click(switchButton);
 
@@ -1330,7 +1351,7 @@ describe('AIChat', () => {
       renderChat();
 
       await screen.findByRole('button', {
-        name: 'Use OpenRouter route',
+        name: 'Switch to OpenRouter route',
       });
 
       const textarea = screen.getByPlaceholderText(

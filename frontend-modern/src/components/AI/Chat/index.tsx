@@ -1973,7 +1973,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       });
     } catch (error) {
       if (requestId !== providerReadinessRequestId) return;
-      logger.error('[AIChat] Failed to check selected provider readiness:', error);
+      logger.warn('[AIChat] Failed to check selected provider readiness:', error);
       setProviderReadiness({
         status: 'error',
         provider,
@@ -2234,8 +2234,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const alternative = providerReadinessAlternative();
     if (!alternative) return '';
     return alternative.kind === 'same-model-route'
-      ? `Use ${alternative.providerLabel} route`
-      : `Use ${alternative.providerLabel} model route`;
+      ? `Switch to ${alternative.providerLabel} route`
+      : `Switch to ${alternative.providerLabel} model route`;
   };
 
   createEffect(() => {

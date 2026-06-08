@@ -252,9 +252,9 @@ describe('MessageItem', () => {
       expect(alert.textContent).toContain('billing or quota reasons');
 
       const retryViaOpenRouter = screen.getByRole('button', {
-        name: 'Retry with OpenRouter route',
+        name: 'Switch to OpenRouter route and retry',
       });
-      expect(retryViaOpenRouter).toHaveTextContent('Retry with OpenRouter route');
+      expect(retryViaOpenRouter).toHaveTextContent('Switch to OpenRouter route and retry');
       fireEvent.click(retryViaOpenRouter);
       expect(onUseModelRoute).toHaveBeenCalledWith('openrouter:deepseek/deepseek-v4-pro', 'msg-1');
 

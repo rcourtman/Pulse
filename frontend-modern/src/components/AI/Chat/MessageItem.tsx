@@ -374,8 +374,8 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     const alternative = props.modelRouteAlternative;
     if (!alternative) return '';
     return alternative.kind === 'same-model-route'
-      ? `Retry with ${alternative.providerLabel} route`
-      : `Retry with ${alternative.providerLabel} model route`;
+      ? `Switch to ${alternative.providerLabel} route and retry`
+      : `Switch to ${alternative.providerLabel} model route and retry`;
   };
   const hasPreviousModelRoute = (event: StreamDisplayEvent) => {
     const model = event.model?.trim();
