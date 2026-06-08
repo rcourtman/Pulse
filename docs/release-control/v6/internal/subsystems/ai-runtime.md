@@ -2358,6 +2358,18 @@ message) rather than `chat.isLoading()` so it persists for the whole turn:
 `isLoading` flips false at visible-turn-complete, which previously made the dock
 flash its status for a frame and vanish.
 
+Prompt length must not gate tool availability. `assistantPromptLooksConversational`
+(`internal/ai/chat/service.go`) classifies only explicit greeting/meta prompts
+("hi", "thanks", "who are you") as conversational/text-only; it must not withhold
+tools from a turn merely because the prompt is short. Short prompts are usually
+resource lookups ("hows esphome", "check frigate", "grafana cpu") that need the
+query/read/metrics tools to answer from Pulse data — withholding tools by word
+count made the Assistant tell the user it had "no infrastructure context or
+diagnostic tools" and ask them to run `docker ps` themselves, for a resource
+Pulse already inventories. Tool selection stays model-owned: offer the tools and
+let the model decide whether to use them, rather than pre-deciding from prompt
+keywords/length that no tools are needed.
+
 When the model runs tools but returns no final narrative, the deterministic
 fallback summary (`buildAutomaticFallbackSummary` in
 `internal/ai/chat/agentic_final.go`) must read as a clean operator message, not a

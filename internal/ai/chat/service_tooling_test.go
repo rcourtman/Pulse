@@ -271,6 +271,38 @@ func TestToolsForAssistantTurn_AlertPromptsKeepFullManifest(t *testing.T) {
 	}
 }
 
+func TestToolsForAssistantTurn_ShortResourceLookupGetsTools(t *testing.T) {
+	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
+		StateProvider: fakeStateProvider{},
+		AgentServer:   fakeAgentServer{},
+		ReadState:     &fakeCanonicalReadState{},
+		ControlLevel:  tools.ControlLevelControlled,
+	})
+	svc := &Service{executor: exec}
+
+	// Short prompts that name a resource are lookups, not chit-chat. They must be
+	// offered tools so the Assistant can inspect the resource from Pulse data
+	// instead of telling the user it has no way to check.
+	for _, prompt := range []string{"hows esphome", "check frigate", "grafana cpu", "esphome status"} {
+		toolsList := svc.toolsForAssistantTurn(prompt, false, false, false)
+		if len(toolsList) == 0 {
+			t.Fatalf("short resource lookup %q was offered no tools", prompt)
+		}
+		promptText := svc.buildSystemPromptForOfferedTools(toolsList)
+		if strings.Contains(promptText, "No Pulse tools are offered for this turn") {
+			t.Fatalf("short resource lookup %q got the text-only tool boundary, got %q", prompt, promptText)
+		}
+	}
+
+	// Explicit greetings / meta-questions remain text-only.
+	for _, prompt := range []string{"hi", "hello there", "thanks", "who are you"} {
+		toolsList := svc.toolsForAssistantTurn(prompt, false, false, false)
+		if len(toolsList) != 0 {
+			t.Fatalf("conversational prompt %q should be text-only, got %d tools", prompt, len(toolsList))
+		}
+	}
+}
+
 func TestToolsForAssistantTurn_ModelHandoffKeepsFullManifest(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
 		StateProvider: fakeStateProvider{},

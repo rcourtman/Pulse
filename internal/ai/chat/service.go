@@ -4492,7 +4492,13 @@ func assistantPromptLooksConversational(normalized string) bool {
 	}) {
 		return true
 	}
-	return len(strings.Fields(trimmed)) <= 3
+	// Do NOT treat a prompt as conversational just because it is short. Short
+	// prompts are usually resource lookups ("hows esphome", "check frigate",
+	// "grafana cpu") that NEED tools — withholding tools by word count made the
+	// Assistant tell the user it had no way to inspect their infrastructure.
+	// Only the explicit greeting/meta patterns above are conversational; let the
+	// model decide whether to actually use the tools it is offered.
+	return false
 }
 
 func assistantPromptContainsAny(normalized string, needles []string) bool {
