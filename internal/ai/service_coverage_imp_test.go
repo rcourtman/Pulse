@@ -2,6 +2,9 @@ package ai
 
 import (
 	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -203,6 +206,70 @@ func TestService_AnalyzeForDiscovery(t *testing.T) {
 	}
 	if calls != 0 {
 		t.Fatalf("expected provider not to be called when budget exceeded, got %d calls", calls)
+	}
+}
+
+func TestService_AnalyzeForDiscoveryDoesNotFallbackToAnotherConfiguredProvider(t *testing.T) {
+	var alternateProviderCalls int
+	alternateProviderServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		alternateProviderCalls++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"id":"chatcmpl-fallback",
+			"object":"chat.completion",
+			"choices":[{"message":{"role":"assistant","content":"fallback discovery response"},"finish_reason":"stop"}],
+			"usage":{"prompt_tokens":1,"completion_tokens":1}
+		}`))
+	}))
+	defer alternateProviderServer.Close()
+
+	selectedProviderCalls := 0
+	svc := NewService(nil, nil)
+	svc.provider = &mockProvider{
+		chatFunc: func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
+			selectedProviderCalls++
+			return nil, errors.New("selected discovery route unavailable")
+		},
+		nameFunc: func() string { return "selected-provider" },
+	}
+	svc.cfg = &config.AIConfig{
+		Enabled:       true,
+		OpenAIAPIKey:  "openai-test",
+		OpenAIBaseURL: alternateProviderServer.URL,
+	}
+
+	_, err := svc.AnalyzeForDiscovery(context.Background(), "test discovery")
+	if err == nil || !strings.Contains(err.Error(), "selected discovery route unavailable") {
+		t.Fatalf("expected selected route failure, got %v", err)
+	}
+	if selectedProviderCalls != 1 {
+		t.Fatalf("selected provider calls = %d, want 1", selectedProviderCalls)
+	}
+	if alternateProviderCalls != 0 {
+		t.Fatalf("alternate provider calls = %d, want no hidden provider fallback", alternateProviderCalls)
+	}
+}
+
+func TestService_AnalyzeForDiscoveryExplicitModelProviderCreationFailsClosed(t *testing.T) {
+	defaultProviderCalls := 0
+	svc := NewService(nil, nil)
+	svc.provider = &mockProvider{
+		chatFunc: func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
+			defaultProviderCalls++
+			return &providers.ChatResponse{Content: "default provider response"}, nil
+		},
+	}
+	svc.cfg = &config.AIConfig{
+		Enabled:        true,
+		DiscoveryModel: config.FormatModelString(config.AIProviderDeepSeek, config.DeepSeekModelV4Pro),
+	}
+
+	_, err := svc.AnalyzeForDiscovery(context.Background(), "test discovery")
+	if err == nil || !strings.Contains(err.Error(), "discovery provider for selected model") {
+		t.Fatalf("expected selected discovery provider configuration error, got %v", err)
+	}
+	if defaultProviderCalls != 0 {
+		t.Fatalf("default provider calls = %d, want no stale provider fallback", defaultProviderCalls)
 	}
 }
 

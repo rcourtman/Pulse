@@ -3525,12 +3525,13 @@ func (s *Service) GetKnowledgeStore() *knowledge.Store {
 // It sends a prompt to the AI using the discovery model (optimized for cost).
 // Dynamically creates a provider matching the discovery model to avoid using a
 // stale or mismatched global provider (e.g., when the user selects a different
-// model per-session in chat). Falls back to other configured providers on failure.
+// model per-session in chat). Discovery uses the selected route only: provider
+// failures fail closed instead of silently trying another configured provider.
 func (s *Service) AnalyzeForDiscovery(ctx context.Context, prompt string) (string, error) {
 	s.mu.RLock()
 	cfg := s.cfg
 	costStore := s.costStore
-	fallbackProvider := s.provider // keep as last resort
+	defaultProvider := s.provider
 	s.mu.RUnlock()
 
 	if cfg == nil || !cfg.Enabled {
@@ -3560,11 +3561,10 @@ func (s *Service) AnalyzeForDiscovery(ctx context.Context, prompt string) (strin
 		var providerErr error
 		provider, providerErr = providers.NewForModel(cfg, model)
 		if providerErr != nil {
-			log.Debug().Err(providerErr).Str("model", model).Msg("[Discovery] Could not create provider for discovery model, using default")
-			provider = fallbackProvider
+			return "", fmt.Errorf("discovery provider for selected model %q is not configured: %w", model, providerErr)
 		}
 	} else {
-		provider = fallbackProvider
+		provider = defaultProvider
 	}
 
 	if provider == nil {
@@ -3583,55 +3583,8 @@ func (s *Service) AnalyzeForDiscovery(ctx context.Context, prompt string) (strin
 		discoveryReq = sanitizer(discoveryReq)
 	}
 	resp, err := provider.Chat(ctx, discoveryReq)
-
-	// If the primary provider fails (e.g., rate limited), try other configured providers
 	if err != nil {
-		primaryErr := err
-		primaryProvider, _ := config.ParseModelString(model)
-
-		for _, altProviderName := range cfg.GetConfiguredProviders() {
-			if altProviderName == primaryProvider {
-				continue // skip the one that just failed
-			}
-			if err := s.enforceBudget("discovery"); err != nil {
-				return "", err
-			}
-
-			altModel, resolveErr := ResolveConfiguredProviderModel(ctx, cfg, altProviderName)
-			if resolveErr != nil || altModel == "" {
-				continue
-			}
-
-			altProvider, createErr := providers.NewForModel(cfg, altModel)
-			if createErr != nil {
-				continue
-			}
-
-			log.Info().
-				Str("failed_provider", primaryProvider).
-				Str("fallback_provider", altProviderName).
-				Str("fallback_model", altModel).
-				Msg("[Discovery] Primary provider failed, trying fallback")
-
-			altReq := providers.ChatRequest{
-				Messages:  messages,
-				Model:     altModel,
-				MaxTokens: discoveryResponseTokenBudget,
-			}
-			if sanitizer := s.requestSanitizerForModel(altModel); sanitizer != nil {
-				altReq = sanitizer(altReq)
-			}
-			resp, err = altProvider.Chat(ctx, altReq)
-			if err == nil {
-				model = altModel
-				provider = altProvider
-				break
-			}
-		}
-
-		if err != nil {
-			return "", fmt.Errorf("discovery analysis failed: %w (primary error: %v)", err, primaryErr)
-		}
+		return "", fmt.Errorf("discovery analysis failed on selected provider route: %w", err)
 	}
 
 	// Track cost if cost store is available

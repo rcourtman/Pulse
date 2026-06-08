@@ -45,8 +45,8 @@ export const aiHelpContent: HelpContent[] = [
       '- Natural language infrastructure queries\n' +
       '- Automated troubleshooting suggestions\n' +
       '- Alert investigation assistance\n\n' +
-      'You can configure multiple providers and Pulse will use the primary provider ' +
-      'with fallback to others if unavailable.',
+      'You can configure multiple providers and choose the route for Assistant, Patrol, and discovery. ' +
+      'Pulse retries the selected route when appropriate and asks you to switch routes explicitly if that provider is unavailable.',
     related: ['ai.openai.baseUrl', 'ai.ollama.baseUrl', 'ai.ollama.keepAlive'],
     addedInVersion: 'v4.0.0',
   },
