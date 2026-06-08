@@ -26,6 +26,7 @@ import (
 
 type stubServiceProvider struct {
 	streamFn func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error
+	chatFn   func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error)
 }
 
 type sessionAwareStateProvider struct {
@@ -322,6 +323,9 @@ func TestService_ListSessionsRefreshesHandoffActionSummary(t *testing.T) {
 }
 
 func (s *stubServiceProvider) Chat(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
+	if s.chatFn != nil {
+		return s.chatFn(ctx, req)
+	}
 	return &providers.ChatResponse{Content: "ok", Model: req.Model}, nil
 }
 

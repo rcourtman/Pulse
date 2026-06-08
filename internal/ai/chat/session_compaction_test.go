@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
@@ -106,6 +108,68 @@ func TestServiceSummarizeSessionUsesProviderAndCompactsTranscript(t *testing.T) 
 	require.NoError(t, err)
 	require.Contains(t, messages[0].Content, "Earlier turns established storage health")
 	require.NotContains(t, messages[0].Content, "sk-live-secret-value")
+	provider.AssertExpectations(t)
+}
+
+func TestServiceSummarizeSessionRedactsResourceIdentifiersForCloud(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	require.NoError(t, err)
+	session, err := store.Create()
+	require.NoError(t, err)
+	seedCompactionSession(t, store, session.ID)
+	// The persisted transcript carries the raw resource hostname the user typed,
+	// regardless of how the live turn was redacted. Compaction must not ship it
+	// to a cloud model.
+	require.NoError(t, store.AddMessage(session.ID, Message{
+		ID:      "vault-turn",
+		Role:    "user",
+		Content: "check vault.lan health please",
+	}))
+	require.NoError(t, store.AddMessage(session.ID, Message{
+		ID:      "vault-answer",
+		Role:    "assistant",
+		Content: "Acknowledged.",
+	}))
+
+	unifiedProvider := handoffUnifiedProvider{resources: map[unifiedresources.ResourceType][]unifiedresources.Resource{
+		unifiedresources.ResourceTypeAgent: {{
+			ID:       "agent/vault",
+			Name:     "vault",
+			Type:     unifiedresources.ResourceTypeAgent,
+			Status:   unifiedresources.StatusOnline,
+			Tags:     []string{"secret"}, // -> Restricted -> identifiers redacted
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"vault.lan"}},
+		}},
+	}}
+
+	var capturedPrompt string
+	provider := &MockProvider{}
+	provider.On("Chat", mock.Anything, mock.MatchedBy(func(req providers.ChatRequest) bool {
+		if len(req.Messages) == 1 {
+			capturedPrompt = req.Messages[0].Content
+		}
+		return true
+	})).Return(&providers.ChatResponse{
+		Content: "Compacted summary.",
+		Model:   "openrouter:test-model",
+	}, nil).Once()
+	provider.On("Name").Return("mock-provider").Maybe()
+
+	service := &Service{
+		started:                 true,
+		sessions:                store,
+		provider:                provider,
+		cfg:                     &config.AIConfig{ChatModel: "openrouter:test-model", CloudContextPrivacy: config.CloudContextPrivacyRedacted},
+		unifiedResourceProvider: unifiedProvider,
+	}
+
+	_, err = service.SummarizeSession(context.Background(), session.ID)
+	require.NoError(t, err)
+	require.NotEmpty(t, capturedPrompt)
+	// The transcript reached the model (proves the turn ran) but the resource
+	// hostname was redacted at the model boundary by the privacy dial.
+	require.Contains(t, capturedPrompt, "Prompt turn 1")
+	require.NotContains(t, capturedPrompt, "vault.lan")
 	provider.AssertExpectations(t)
 }
 

@@ -147,6 +147,17 @@ deriving an older display status from `workflowStatusHistory`.
      backstop for any context arriving via tool results, handoff text, or user text.
    Local (Ollama) routing is unaffected and always receives full context
    (`RequestSanitizerForModel` returns nil for local models).
+   UNIVERSAL backstop rule: EVERY code path that sends infrastructure-derived
+   content to an external model MUST install the dial-aware
+   `modelboundary.RequestSanitizerForModel` (with `RedactLocalOnlyResourcesOnly()`
+   at the `full` dial) before the provider request — not only the interactive
+   agentic loop. This explicitly includes session compaction
+   (`internal/ai/chat/session_compaction.go` `SummarizeSession`), which sends the
+   PERSISTED transcript (original user prompts and tool outputs carry raw
+   identifiers regardless of how the live turns were redacted). A new model-bound
+   request path that skips the sanitizer is a leak and is not permitted. (Static
+   capability probes with no resource content, e.g. the Patrol preflight self-test,
+   are exempt only because their payload is fixed and carries no identifiers.)
    Redaction-placeholder hygiene: Pulse-authored model-bound directives (the
    resource-context handoff instructions in `internal/ai/chat/service.go` and
    `internal/ai/chat/plain_text_resource_context.go`) must NOT inject the literal

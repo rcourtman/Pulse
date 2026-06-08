@@ -9,8 +9,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/modelboundary"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 const (
@@ -77,6 +79,7 @@ func (s *Service) SummarizeSession(ctx context.Context, sessionID string) (map[s
 	provider := s.provider
 	cfgSnapshot := s.cfg
 	costStore := s.costStore
+	unifiedResourceProvider := s.unifiedResourceProvider
 	s.mu.RUnlock()
 
 	if !started {
@@ -127,7 +130,7 @@ func (s *Service) SummarizeSession(ctx context.Context, sessionID string) (map[s
 	compactCtx, cancel := context.WithTimeout(ctx, sessionCompactionTimeout)
 	defer cancel()
 
-	response, err := provider.Chat(compactCtx, providers.ChatRequest{
+	compactionRequest := providers.ChatRequest{
 		System:      sessionCompactionSystemPrompt,
 		ExecutionID: "session-compaction:" + normalizedSessionID,
 		MaxTokens:   1600,
@@ -137,7 +140,27 @@ func (s *Service) SummarizeSession(ctx context.Context, sessionID string) (map[s
 			Content: "Compact this Pulse Assistant transcript into a handoff summary for the next turn.\n\n" +
 				transcript,
 		}},
-	})
+	}
+
+	// The transcript is built from PERSISTED messages (original user prompts and
+	// tool outputs), which carry raw resource identifiers regardless of how the
+	// live turns were redacted. Run it through the same dial-aware model-boundary
+	// sanitizer as a normal turn so compaction never leaks identifiers to a cloud
+	// model: redacted/local_only strip them, full keeps the local-only floor, and
+	// local (Ollama) is unaffected (RequestSanitizerForModel returns nil).
+	sanitizerOptions := []modelboundary.RequestSanitizerOption{}
+	cloudPrivacyLevel := config.CloudContextPrivacyRedacted
+	if cfgSnapshot != nil {
+		cloudPrivacyLevel = cfgSnapshot.GetCloudContextPrivacy()
+	}
+	if cloudPrivacyLevel == config.CloudContextPrivacyFull {
+		sanitizerOptions = append(sanitizerOptions, modelboundary.RedactLocalOnlyResourcesOnly())
+	}
+	if sanitizer := modelboundary.RequestSanitizerForModel(requestModel, unifiedResourceProvider, sanitizerOptions...); sanitizer != nil {
+		compactionRequest = sanitizer(compactionRequest)
+	}
+
+	response, err := provider.Chat(compactCtx, compactionRequest)
 	if err != nil {
 		return nil, fmt.Errorf("compact session: %w", err)
 	}
