@@ -389,6 +389,8 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     return `${modelRouteLabel(event.failedModel)} -> ${modelRouteLabel(event.model)}`;
   };
   const messageModelLabel = () => modelRouteLabel(props.message.model);
+  const queuedModelRouteLabel = () =>
+    isQueuedUserMessage() ? modelRouteLabel(props.message.request?.model) : '';
   const messageDurationLabel = () =>
     props.message.isStreaming
       ? ''
@@ -506,6 +508,16 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
               >
                 <ClockIcon class="h-3 w-3" aria-hidden="true" />
                 <span>{queuedStatusLabel()}</span>
+                <Show when={queuedModelRouteLabel()}>
+                  {(label) => (
+                    <span
+                      class="inline-flex max-w-[12rem] items-center rounded border border-blue-200 bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200"
+                      title={props.message.request?.model}
+                    >
+                      <span class="truncate">{label()}</span>
+                    </span>
+                  )}
+                </Show>
                 <Show when={props.onEditQueued}>
                   <button
                     type="button"

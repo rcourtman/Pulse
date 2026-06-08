@@ -1639,6 +1639,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const match = aiRuntimeModels().find((candidate) => candidate.id === normalized);
     return match ? formatAIModelRouteLabel(match) : formatAIModelRouteLabel(normalized);
   };
+  const queuedFollowUpRouteLabel = (queued: QueuedFollowUp) => {
+    const model = queued.sendOptions?.model?.trim();
+    return model ? formatChatMessageModelRoute(model) : '';
+  };
 
   const providerForModelRoute = (modelId: string) => {
     const normalized = modelId.trim();
@@ -4614,18 +4618,35 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       <For each={chat.queuedFollowUps()}>
                         {(queued, index) => {
                           const preview = () => queuedFollowUpPreview(queued.prompt);
+                          const routeLabel = () => queuedFollowUpRouteLabel(queued);
+                          const rowLabel = () =>
+                            routeLabel()
+                              ? `Queued follow-up: ${preview()}. Route: ${routeLabel()}. Press Enter to edit or Delete to remove.`
+                              : `Queued follow-up: ${preview()}. Press Enter to edit or Delete to remove.`;
                           return (
                             <div
                               class="flex min-h-7 items-center gap-2 rounded-md bg-white/70 px-2 py-1 text-xs text-blue-900 outline-none transition-colors focus:bg-white focus:ring-2 focus:ring-blue-500/40 dark:bg-blue-900/30 dark:text-blue-100 dark:focus:bg-blue-900/50"
                               role="listitem"
                               tabIndex={0}
-                              aria-label={`Queued follow-up: ${preview()}. Press Enter to edit or Delete to remove.`}
+                              aria-label={rowLabel()}
                               data-testid="assistant-queued-follow-up-row"
                               onKeyDown={(event) =>
                                 handleQueuedFollowUpRowKeyDown(event, queued.id)
                               }
                             >
-                              <span class="min-w-0 flex-1 truncate">{preview()}</span>
+                              <span class="min-w-0 flex-1">
+                                <span class="block truncate">{preview()}</span>
+                                <Show when={routeLabel()}>
+                                  {(label) => (
+                                    <span
+                                      class="block truncate text-[10px] font-medium text-blue-700 dark:text-blue-200"
+                                      title={queued.sendOptions?.model}
+                                    >
+                                      Route: {label()}
+                                    </span>
+                                  )}
+                                </Show>
+                              </span>
                               <Show when={chat.queuedFollowUpCount() > 1 && index() > 0}>
                                 <button
                                   type="button"

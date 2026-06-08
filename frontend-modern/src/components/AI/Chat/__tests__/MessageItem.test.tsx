@@ -175,8 +175,14 @@ describe('MessageItem', () => {
             role: 'user',
             content: 'follow up after this',
             delivery: 'queued',
+            request: { model: 'openrouter:qwen/qwen3.7-plus' },
           })}
           {...makeHandlers()}
+          getModelRouteLabel={(modelId) =>
+            modelId === 'openrouter:qwen/qwen3.7-plus'
+              ? 'Qwen 3.7 Plus via OpenRouter'
+              : modelId
+          }
           queuedPosition={2}
           queuedCount={3}
           onEditQueued={onEditQueued}
@@ -186,6 +192,7 @@ describe('MessageItem', () => {
 
       expect(screen.getByText('follow up after this')).toBeInTheDocument();
       expect(screen.getByRole('status')).toHaveTextContent('Queued 2 of 3');
+      expect(screen.getByRole('status')).toHaveTextContent('Qwen 3.7 Plus via OpenRouter');
 
       fireEvent.click(screen.getByRole('button', { name: 'Edit queued follow-up' }));
       expect(onEditQueued).toHaveBeenCalledTimes(1);

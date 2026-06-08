@@ -2724,13 +2724,23 @@ describe('AIChat', () => {
       await waitFor(() => expect(document.activeElement).toBe(textarea));
     });
 
-    it('shows queued follow-up count and clears queued follow-ups', () => {
+    it('shows queued follow-up count, route identity, and clears queued follow-ups', async () => {
+      mockAIAPI.getModels.mockResolvedValue({
+        models: [
+          {
+            id: 'openrouter:qwen/qwen3.7-plus',
+            name: 'Qwen: Qwen3.7 Plus',
+            provider: 'openrouter',
+          },
+        ],
+      });
       mockChat.queuedFollowUpCount.mockReturnValue(2);
       mockChat.queuedFollowUps.mockReturnValue([
         {
           id: 'queued-1',
           messageId: 'msg-queued-1',
           prompt: 'first queued prompt',
+          sendOptions: { model: 'openrouter:qwen/qwen3.7-plus' },
           timestamp: new Date(),
         },
         {
@@ -2747,6 +2757,9 @@ describe('AIChat', () => {
       );
       expect(screen.getByText('first queued prompt')).toBeInTheDocument();
       expect(screen.getByText('second queued prompt')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('Route: Qwen: Qwen3.7 Plus via OpenRouter')).toBeInTheDocument();
+      });
 
       fireEvent.click(screen.getByRole('button', { name: 'Clear queued follow-up messages' }));
 

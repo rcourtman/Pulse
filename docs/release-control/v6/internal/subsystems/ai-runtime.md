@@ -194,9 +194,11 @@ deriving an older display status from `workflowStatusHistory`.
    controls plus clear-all, and must drain queued turns in order only after the
    active stream becomes idle. Queued follow-ups must snapshot the effective
    model route at enqueue time so a later model/provider switch cannot silently
-   reroute an already-queued user turn; explicit failed-turn recovery actions
-   labelled from a configured provider route must pass that selected route as an
-   override instead of relying on ambient selector state. The referenced
+   reroute an already-queued user turn, and both the transcript queued-user row
+   and composer-adjacent queue row must surface that snapshotted route label when
+   it exists; explicit failed-turn recovery actions labelled from a configured
+   provider route must pass that selected route as an override instead of
+   relying on ambient selector state. The referenced
    OpenCode source at fetched `origin/dev` commit
    `1399323b78a04229d9bfe00c7436d7f41770fda8` keeps current, recent, and
    selected models as structured `{ providerID, modelID }` values in
@@ -873,9 +875,9 @@ deriving an older display status from `workflowStatusHistory`.
    removal through `FooterApi.onQueuedRemove`, and are removed from the visible
    queue before their own turn begins. Pulse's Assistant drawer adapts that
    behavior by keeping queued follow-ups in the transcript, showing queue
-   position plus edit/remove controls on each queued user row, and draining
-   those rows through the existing chat-runtime queue without aborting the
-   active model stream.
+   position, snapshotted model-route identity, and edit/remove controls on each
+   queued user row, and draining those rows through the existing chat-runtime
+   queue without aborting the active model stream.
    The referenced OpenCode source at fetched `origin/dev` commit
    `09d9cf01f93798939c1284fbe974b6e1f4d2759d` registers the
    `session.interrupt` command while a turn is non-idle in
