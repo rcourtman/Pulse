@@ -43,6 +43,19 @@ describe('AssistantCommandHelpDialog', () => {
     expect(screen.getByRole('option', { name: /\/fixture/ })).toHaveTextContent('/fixture');
   });
 
+  it('finds queued follow-up management from command help search', () => {
+    render(() => <AssistantCommandHelpDialog onClose={vi.fn()} onRunCommand={vi.fn()} />);
+
+    fireEvent.input(screen.getByLabelText('Search Assistant commands'), {
+      target: { value: 'queued' },
+    });
+
+    expect(screen.getByRole('option', { name: /\/queue/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /\/queue/ })).toHaveTextContent(
+      'Manage queued follow-ups',
+    );
+  });
+
   it('moves command selection with arrow keys before running', () => {
     const onRunCommand = vi.fn();
     render(() => <AssistantCommandHelpDialog onClose={vi.fn()} onRunCommand={onRunCommand} />);
@@ -66,7 +79,7 @@ describe('AssistantCommandHelpDialog', () => {
     expect(screen.getByText('Model')).toBeInTheDocument();
     expect(screen.getByText('Transcript')).toBeInTheDocument();
     expect(screen.getByText('Help')).toBeInTheDocument();
-    expect(screen.getAllByRole('option')).toHaveLength(13);
+    expect(screen.getAllByRole('option')).toHaveLength(14);
   });
 
   it('hides command group headers once help search is filtered', () => {

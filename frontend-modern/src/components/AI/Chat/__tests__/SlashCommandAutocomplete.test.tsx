@@ -120,6 +120,9 @@ describe('SlashCommandAutocomplete', () => {
     expect(options.map((option) => option.getAttribute('aria-label'))).toContain(
       'Run /compact: Summarize older turns and keep this session moving',
     );
+    expect(options.map((option) => option.getAttribute('aria-label'))).toContain(
+      'Run /queue: Manage queued follow-ups',
+    );
     expect(container.querySelectorAll('[role="option"] svg')).toHaveLength(activeCommands.length);
     expect(screen.getByText('Session')).toBeInTheDocument();
     expect(screen.getByText('Model')).toBeInTheDocument();

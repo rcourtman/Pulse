@@ -629,6 +629,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [editingQueuedFollowUp, setEditingQueuedFollowUp] = createSignal<QueuedFollowUp | null>(
     null,
   );
+  const [queuedFollowUpCommandTargetId, setQueuedFollowUpCommandTargetId] = createSignal<
+    string | null
+  >(null);
   const [restoredPromptDraft, setRestoredPromptDraft] = createSignal<RestoredPromptDraft | null>(
     null,
   );
@@ -700,8 +703,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
   let textareaRef: HTMLTextAreaElement | undefined;
   let transcriptFallbackTextareaRef: HTMLTextAreaElement | undefined;
   let interruptArmTimeout: ReturnType<typeof setTimeout> | undefined;
+  let queuedFollowUpCommandTargetTimeout: ReturnType<typeof setTimeout> | undefined;
   let composerSubmitDispatchLocked = false;
   let handledAssistantCommandRequestId = 0;
+  const queuedFollowUpRowRefs = new Map<string, HTMLDivElement>();
 
   const focusComposer = () => {
     queueMicrotask(() => {
@@ -715,6 +720,19 @@ export const AIChat: Component<AIChatProps> = (props) => {
       interruptArmTimeout = undefined;
     }
     setInterruptArmed(false);
+  };
+
+  const markQueuedFollowUpCommandTarget = (id: string | null) => {
+    if (queuedFollowUpCommandTargetTimeout) {
+      clearTimeout(queuedFollowUpCommandTargetTimeout);
+      queuedFollowUpCommandTargetTimeout = undefined;
+    }
+    setQueuedFollowUpCommandTargetId(id);
+    if (!id) return;
+    queuedFollowUpCommandTargetTimeout = setTimeout(() => {
+      queuedFollowUpCommandTargetTimeout = undefined;
+      setQueuedFollowUpCommandTargetId((current) => (current === id ? null : current));
+    }, 2500);
   };
 
   const armKeyboardInterrupt = () => {
@@ -1557,6 +1575,45 @@ export const AIChat: Component<AIChatProps> = (props) => {
     });
   };
 
+  const focusQueuedFollowUps = () => {
+    const firstQueued = chat.queuedFollowUps()[0];
+    const findQueuedRow = () =>
+      (firstQueued ? queuedFollowUpRowRefs.get(firstQueued.id) : undefined) ||
+      document.querySelector<HTMLElement>('[data-testid="assistant-queued-follow-up-row"]');
+    const queuedRow = findQueuedRow();
+    const targetQueuedId =
+      firstQueued?.id ?? queuedRow?.dataset.assistantQueuedFollowUpId ?? null;
+
+    if (!firstQueued && !queuedRow) {
+      markQueuedFollowUpCommandTarget(null);
+      notificationStore.info('No queued follow-ups.', 2000);
+      focusComposer();
+      return;
+    }
+
+    setShowSessions(false);
+    setShowCommandHelp(false);
+    setSessionRefreshLoading(false);
+    resetSessionSearch();
+    markQueuedFollowUpCommandTarget(targetQueuedId);
+    const focusRow = () => {
+      const row = findQueuedRow();
+      if (!row) return;
+      row.scrollIntoView({ block: 'nearest' });
+      row.focus({ preventScroll: true });
+      if (document.activeElement !== row) {
+        row.querySelector<HTMLElement>('button:not(:disabled)')?.focus({ preventScroll: true });
+      }
+    };
+    queueMicrotask(focusRow);
+    window.requestAnimationFrame(() => {
+      focusRow();
+    });
+    window.setTimeout(focusRow, 0);
+    window.setTimeout(focusRow, 50);
+    window.setTimeout(focusRow, 150);
+  };
+
   const handleQueuedFollowUpRowKeyDown = (
     event: KeyboardEvent & { currentTarget: HTMLDivElement },
     id: string,
@@ -1729,6 +1786,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
       disabled: !canRedoLastTurn(),
       reason: 'No undone Assistant turn is available.',
     },
+    queue: {
+      disabled: chat.queuedFollowUpCount() === 0,
+      reason: chat.queuedFollowUpCount() === 0 ? 'No queued follow-ups.' : undefined,
+    },
     status: {
       disabled: providerReadiness().status === 'checking',
       reason: 'Route health check already running.',
@@ -1744,6 +1805,19 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const state = assistantCommandAvailability()[command];
     return state?.disabled ? state.reason || 'Assistant command is unavailable right now.' : '';
   };
+
+  createEffect(() => {
+    const validQueuedIds = new Set(chat.queuedFollowUps().map((queued) => queued.id));
+    for (const queuedId of queuedFollowUpRowRefs.keys()) {
+      if (!validQueuedIds.has(queuedId)) {
+        queuedFollowUpRowRefs.delete(queuedId);
+      }
+    }
+    const targetQueuedId = queuedFollowUpCommandTargetId();
+    if (targetQueuedId && !validQueuedIds.has(targetQueuedId)) {
+      markQueuedFollowUpCommandTarget(null);
+    }
+  });
 
   const buildCurrentTranscript = (generatedAt = new Date()) => {
     const sessionId = chat.sessionId().trim();
@@ -2604,6 +2678,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
           (Boolean(node.closest('[data-mention-autocomplete]')) ||
             Boolean(node.closest('[data-slash-command-autocomplete]'))),
       );
+      const isInsideComposer = Boolean(target.closest('[data-assistant-composer]'));
       // Only close if click is outside dropdown containers
       if (!isInsideDropdown && !isInsideComposerPopup) {
         setShowSessions(false);
@@ -2612,10 +2687,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
         setShowControlMenu(false);
       }
       // Close mention autocomplete when clicking outside
-      if (!target.closest('[data-mention-autocomplete]') && !target.closest('textarea')) {
+      if (!target.closest('[data-mention-autocomplete]') && !isInsideComposer) {
         setMentionActive(false);
       }
-      if (!target.closest('[data-slash-command-autocomplete]') && !target.closest('textarea')) {
+      if (!target.closest('[data-slash-command-autocomplete]') && !isInsideComposer) {
         closeSlashCommandAutocomplete({ clearTransientDraft: true });
       }
     };
@@ -2625,6 +2700,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
       document.removeEventListener('click', handleClickOutside);
       aiChatStore.registerInput?.(null);
       clearInterruptArm();
+      if (queuedFollowUpCommandTargetTimeout) {
+        clearTimeout(queuedFollowUpCommandTargetTimeout);
+      }
     });
   });
 
@@ -2923,7 +3001,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
     return input();
   };
 
-  const clearLocalComposerCommand = () => {
+  const clearLocalComposerCommand = (options: { refocusComposer?: boolean } = {}) => {
+    const shouldRefocusComposer = options.refocusComposer !== false;
     stashedComposerDraft = null;
     setEditingQueuedFollowUp(null);
     setRestoredPromptDraft(null);
@@ -2935,7 +3014,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
     resetPromptHistoryNavigation();
     queueMicrotask(() => {
       resizeTextarea();
-      focusComposer();
+      if (shouldRefocusComposer) {
+        focusComposer();
+      }
     });
   };
 
@@ -3018,7 +3099,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       return runAssistantFixtureSlashCommand(commandArgs);
     }
 
-    clearLocalComposerCommand();
+    clearLocalComposerCommand({ refocusComposer: command !== 'queue' });
 
     switch (command) {
       case 'new':
@@ -3027,6 +3108,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
         break;
       case 'sessions':
         runSessionsSlashCommand(commandArgs);
+        break;
+      case 'queue':
+        focusQueuedFollowUps();
         break;
       case 'compact':
         setShowCommandHelp(false);
@@ -4641,10 +4725,21 @@ export const AIChat: Component<AIChatProps> = (props) => {
                           return (
                             <div
                               class="flex min-h-7 items-center gap-2 rounded-md bg-white/70 px-2 py-1 text-xs text-blue-900 outline-none transition-colors focus:bg-white focus:ring-2 focus:ring-blue-500/40 dark:bg-blue-900/30 dark:text-blue-100 dark:focus:bg-blue-900/50"
+                              classList={{
+                                'bg-blue-50 ring-2 ring-blue-500/60 dark:bg-blue-800/50':
+                                  queuedFollowUpCommandTargetId() === queued.id,
+                              }}
+                              ref={(element) => {
+                                queuedFollowUpRowRefs.set(queued.id, element);
+                              }}
                               role="listitem"
                               tabIndex={0}
                               aria-label={rowLabel()}
                               data-testid="assistant-queued-follow-up-row"
+                              data-assistant-queued-follow-up-id={queued.id}
+                              data-assistant-queue-command-target={
+                                queuedFollowUpCommandTargetId() === queued.id ? 'true' : undefined
+                              }
                               onKeyDown={(event) =>
                                 handleQueuedFollowUpRowKeyDown(event, queued.id)
                               }
@@ -4715,6 +4810,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
               </div>
             </Show>
             <form
+              data-assistant-composer
               onSubmit={(e) => {
                 e.preventDefault();
                 handleSubmit();

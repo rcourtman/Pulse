@@ -16,6 +16,9 @@ describe('assistantSlashCommands', () => {
     expect(parseAssistantSlashCommand('/sessions')).toBe('sessions');
     expect(parseAssistantSlashCommand('/resume')).toBe('sessions');
     expect(parseAssistantSlashCommand('/continue')).toBe('sessions');
+    expect(parseAssistantSlashCommand('/queue')).toBe('queue');
+    expect(parseAssistantSlashCommand('/queued')).toBe('queue');
+    expect(parseAssistantSlashCommand('/prompts')).toBe('queue');
     expect(parseAssistantSlashCommand('/compact')).toBe('compact');
     expect(parseAssistantSlashCommand('/summarize')).toBe('compact');
     expect(parseAssistantSlashCommand('/models')).toBe('models');
@@ -101,6 +104,7 @@ describe('assistantSlashCommands', () => {
     expect(filterAssistantSlashCommands('').map((command) => command.name)).toEqual([
       'new',
       'sessions',
+      'queue',
       'compact',
       'fork',
       'undo',
@@ -115,6 +119,10 @@ describe('assistantSlashCommands', () => {
     ]);
     expect(filterAssistantSlashCommands('resume').map((command) => command.name)).toEqual([
       'sessions',
+    ]);
+    expect(filterAssistantSlashCommands('queued').map((command) => command.name)).toEqual([
+      'queue',
+      'fixture',
     ]);
     expect(filterAssistantSlashCommands('summarize').map((command) => command.name)).toEqual([
       'compact',
@@ -149,13 +157,13 @@ describe('assistantSlashCommands', () => {
       'Developer',
     ]);
     expect(groups.map((group) => group.items.map((item) => item.command.name))).toEqual([
-      ['new', 'sessions', 'compact', 'fork', 'undo', 'redo'],
+      ['new', 'sessions', 'queue', 'compact', 'fork', 'undo', 'redo'],
       ['models', 'providers', 'status'],
       ['copy', 'export'],
       ['help'],
       ['fixture'],
     ]);
-    expect(groups[1].items[0].index).toBe(6);
+    expect(groups[1].items[0].index).toBe(7);
   });
 
   it('keeps dev fixture commands out of production command surfaces', () => {
@@ -215,6 +223,8 @@ describe('assistantSlashCommands', () => {
     expect(getAssistantSlashCommandTokens(help)).toEqual(['help', 'commands']);
     const sessions = filterAssistantSlashCommands('resume')[0];
     expect(getAssistantSlashCommandTokens(sessions)).toEqual(['sessions', 'resume', 'continue']);
+    const queue = filterAssistantSlashCommands('queued')[0];
+    expect(getAssistantSlashCommandTokens(queue)).toEqual(['queue', 'queued', 'prompts']);
     const compact = filterAssistantSlashCommands('summarize')[0];
     expect(getAssistantSlashCommandTokens(compact)).toEqual(['compact', 'summarize']);
     const models = filterAssistantSlashCommands('mo')[0];

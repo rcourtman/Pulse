@@ -37,6 +37,8 @@ export const AssistantSlashCommandIcon = (props: { action: AssistantSlashCommand
       return <PlusIcon class="h-4 w-4" aria-hidden="true" />;
     case 'sessions':
       return <ClockIcon class="h-4 w-4" aria-hidden="true" />;
+    case 'queue':
+      return <ClockIcon class="h-4 w-4" aria-hidden="true" />;
     case 'compact':
       return <Minimize2Icon class="h-4 w-4" aria-hidden="true" />;
     case 'models':

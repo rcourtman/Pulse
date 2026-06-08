@@ -2817,6 +2817,84 @@ describe('AIChat', () => {
       expect(mockChat.clearQueuedFollowUps).toHaveBeenCalledTimes(1);
     });
 
+    it('focuses the first queued follow-up from the queue slash command', async () => {
+      mockChat.queuedFollowUpCount.mockReturnValue(2);
+      mockChat.queuedFollowUps.mockReturnValue([
+        {
+          id: 'queued-1',
+          messageId: 'msg-queued-1',
+          prompt: 'first queued prompt',
+          timestamp: new Date(),
+        },
+        {
+          id: 'queued-2',
+          messageId: 'msg-queued-2',
+          prompt: 'second queued prompt',
+          timestamp: new Date(),
+        },
+      ]);
+      renderChat();
+
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+      fireEvent.input(textarea, { target: { value: '/queue' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      const queuedRow = screen.getByRole('listitem', {
+        name: 'Queued follow-up: first queued prompt. Press Enter to edit or Delete to remove.',
+      });
+
+      await waitFor(() => expect(document.activeElement).toBe(queuedRow));
+      expect(queuedRow).toHaveAttribute(
+        'data-assistant-queue-command-target',
+        'true',
+      );
+      expect(textarea.value).toBe('');
+    });
+
+    it('runs the queue slash command from the composer send button', async () => {
+      mockChat.queuedFollowUpCount.mockReturnValue(1);
+      mockChat.queuedFollowUps.mockReturnValue([
+        {
+          id: 'queued-click',
+          messageId: 'msg-queued-click',
+          prompt: 'clicked queued prompt',
+          timestamp: new Date(),
+        },
+      ]);
+      renderChat();
+
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+      fireEvent.input(textarea, { target: { value: '/queue' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+      const queuedRow = screen.getByRole('listitem', {
+        name: 'Queued follow-up: clicked queued prompt. Press Enter to edit or Delete to remove.',
+      });
+
+      await waitFor(() =>
+        expect(queuedRow).toHaveAttribute('data-assistant-queue-command-target', 'true'),
+      );
+      expect(textarea.value).toBe('');
+    });
+
+    it('explains the queue slash command when no follow-ups are queued', async () => {
+      renderChat();
+
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+      fireEvent.input(textarea, { target: { value: '/queue' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(mockNotificationStore.info).toHaveBeenCalledWith('No queued follow-ups.', 2000);
+      await waitFor(() => expect(document.activeElement).toBe(textarea));
+      expect(textarea.value).toBe('');
+    });
+
     it('shows paused queued follow-ups and lets the first one resume', () => {
       mockChat.queuedFollowUpCount.mockReturnValue(1);
       mockChat.queuedFollowUpsPaused.mockReturnValue(true);

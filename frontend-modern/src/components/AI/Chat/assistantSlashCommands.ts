@@ -13,6 +13,7 @@ export type AssistantSlashCommandAction =
   | 'models'
   | 'new'
   | 'providers'
+  | 'queue'
   | 'redo'
   | 'status'
   | 'undo'
@@ -106,6 +107,14 @@ export const ASSISTANT_SLASH_COMMANDS: AssistantSlashCommand[] = [
     action: 'sessions',
     category: 'Session',
     description: 'Search or resume Assistant sessions (/sessions backup)',
+  },
+  {
+    name: 'queue',
+    aliases: ['queued', 'prompts'],
+    action: 'queue',
+    category: 'Session',
+    description: 'Manage queued follow-ups',
+    keywords: ['follow-up', 'follow-ups', 'queued', 'prompt', 'prompts'],
   },
   {
     name: 'compact',
