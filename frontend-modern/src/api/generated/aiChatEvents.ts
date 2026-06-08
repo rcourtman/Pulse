@@ -121,6 +121,8 @@ export interface ToolStartData {
   name: string;
   input: string;
   raw_input?: string;
+  phase?: string;
+  message?: string;
 }
 
 export interface WorkflowStateData {

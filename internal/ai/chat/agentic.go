@@ -292,6 +292,7 @@ func emitToolStartEvent(callback StreamCallback, id, name string, input map[stri
 		Name:     name,
 		Input:    inputStr,
 		RawInput: rawInput,
+		Phase:    "running",
 	})
 	callback(StreamEvent{Type: "tool_start", Data: jsonData})
 }

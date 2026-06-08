@@ -561,6 +561,9 @@ func TestServiceExecuteStreamMockModeStreamsToolFixtureWithoutProviderCall(t *te
 	if toolStart.ID != mockAssistantQueryToolID || toolStart.Name != mockAssistantQueryToolName {
 		t.Fatalf("tool_start = %#v, want mock pulse_query", toolStart)
 	}
+	if toolStart.Phase != "running" {
+		t.Fatalf("tool_start phase = %q, want running", toolStart.Phase)
+	}
 
 	var toolProgress ToolProgressData
 	if err := json.Unmarshal(events[4].Data, &toolProgress); err != nil {
@@ -584,6 +587,9 @@ func TestServiceExecuteStreamMockModeStreamsToolFixtureWithoutProviderCall(t *te
 	}
 	if readToolStart.ID != mockAssistantReadToolID || readToolStart.Name != mockAssistantReadToolName {
 		t.Fatalf("read tool_start = %#v, want mock pulse_read", readToolStart)
+	}
+	if readToolStart.Phase != "running" {
+		t.Fatalf("read tool_start phase = %q, want running", readToolStart.Phase)
 	}
 
 	var readToolProgress ToolProgressData

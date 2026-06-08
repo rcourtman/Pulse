@@ -760,11 +760,15 @@ export function useChat(options: UseChatOptions = {}) {
       name?: string;
       input?: string;
       raw_input?: string;
+      phase?: string;
+      message?: string;
     },
   ): ChatMessage => {
     const normalizedName = normalizeChatToolName(data.name || '');
     const pendingTools = msg.pendingTools || [];
     const now = Date.now();
+    const status = normalizePendingToolStatus(data.phase);
+    const progress = data.message?.trim() || undefined;
 
     const matchesTool = (tool?: PendingTool, toolId?: string) => {
       if (!tool) return false;
@@ -792,8 +796,8 @@ export function useChat(options: UseChatOptions = {}) {
         name: data.name || tool.name,
         input: data.input || tool.input,
         rawInput: data.raw_input || tool.rawInput,
-        status: tool.status || 'pending',
-        progress: tool.progress,
+        status: data.phase ? status : tool.status || status,
+        progress: progress || tool.progress,
         startedAt: tool.startedAt || now,
         updatedAt: now,
       };
@@ -806,7 +810,8 @@ export function useChat(options: UseChatOptions = {}) {
         name: data.name || 'unknown',
         input: data.input || '{}',
         rawInput: data.raw_input,
-        status: 'pending',
+        status,
+        progress,
         startedAt: now,
         updatedAt: now,
       };

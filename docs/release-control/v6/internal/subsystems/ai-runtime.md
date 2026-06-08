@@ -2295,6 +2295,14 @@ for running tools and a later completed/error commit instead of only surfacing a
 batched terminal transcript. Pulse adapts that as an in-memory UI settle window
 because Pulse transcripts persist completed tool facts, not OpenCode scrollback
 commit phases.
+The 2026-06-08 live-tool-start slice rechecked OpenCode source at fetched `dev`
+commit `3867fa2bad0e644166e360e2e99cfe426fe71105`:
+`packages/opencode/src/session/processor.ts` creates the visible tool part in
+`ensureToolCall` (lines 299-349) and moves that same part to `running` on
+`tool-call` (lines 507-521). Pulse adapts that by making `ToolStartData`
+self-describing live activity: `tool_start` must carry a running phase when
+execution is visible, and the frontend must render a new start row as running
+immediately even if `tool_progress` arrives in a later paint.
 
 Assistant provider retries are a first-class visible workflow state, not a
 hidden server log. The referenced OpenCode source at fetched `dev` commit

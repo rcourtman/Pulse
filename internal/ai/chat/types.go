@@ -295,6 +295,8 @@ type ToolStartData struct {
 	Name     string `json:"name"`
 	Input    string `json:"input"`               // JSON string of input parameters
 	RawInput string `json:"raw_input,omitempty"` // Unmodified JSON input
+	Phase    string `json:"phase,omitempty"`     // pending | running | waiting
+	Message  string `json:"message,omitempty"`   // Compact user-facing status text
 }
 
 // ToolProgressData is the data for "tool_progress" events.

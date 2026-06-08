@@ -6,6 +6,7 @@ import type {
   SessionData,
   ToolCancelData,
   ToolProgressData,
+  ToolStartData,
   WorkflowStateData,
 } from '@/api/generated/aiChatEvents';
 
@@ -81,6 +82,25 @@ describe('AI chat stream event contract', () => {
     expect(event.data.message).toBe('Reading inventory.');
     expect(aiChatEventsSource).toContain('export interface ToolProgressData');
     expect(aiChatEventsSource).toContain("type: 'tool_progress'");
+  });
+
+  it('exposes live tool start state as a typed stream contract', () => {
+    const start: ToolStartData = {
+      id: 'tool-1',
+      name: 'pulse_read',
+      input: '{"action":"exec","command":"ls /dev | wc -l"}',
+      raw_input: '{"action":"exec","command":"ls /dev | wc -l"}',
+      phase: 'running',
+      message: 'Reading target.',
+    };
+    const event: AIChatStreamEvent = { type: 'tool_start', data: start };
+
+    expect(event.data.phase).toBe('running');
+    expect(event.data.message).toBe('Reading target.');
+    expect(aiChatEventsSource).toContain('export interface ToolStartData');
+    expect(aiChatEventsSource).toContain("type: 'tool_start'");
+    expect(aiChatEventsSource).toContain('phase?: string');
+    expect(aiChatEventsSource).toContain('message?: string');
   });
 
   it('exposes pending tool cancellation as a typed stream contract', () => {

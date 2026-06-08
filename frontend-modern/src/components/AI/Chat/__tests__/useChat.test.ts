@@ -2032,7 +2032,8 @@ describe('useChat', () => {
         name: 'get_logs',
         input: '{}',
         rawInput: undefined,
-        status: 'pending',
+        status: 'running',
+        progress: undefined,
         startedAt: expect.any(Number),
         updatedAt: expect.any(Number),
       });
@@ -2043,6 +2044,48 @@ describe('useChat', () => {
           startedAt: expect.any(Number),
           updatedAt: expect.any(Number),
         }),
+      );
+      dispose();
+    });
+
+    it('uses tool_start status and progress as immediate live activity', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+
+      fire({
+        type: 'tool_start',
+        data: {
+          id: 'tool-1',
+          name: 'pulse_read',
+          input: '{"command":"ls /dev"}',
+          phase: 'running',
+          message: 'Reading target.',
+        },
+      });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.pendingTools).toHaveLength(1);
+      expect(assistant.pendingTools![0]).toMatchObject({
+        id: 'tool-1',
+        name: 'pulse_read',
+        input: '{"command":"ls /dev"}',
+        status: 'running',
+        progress: 'Reading target.',
+      });
+      expect(assistant.streamEvents).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'pending_tool',
+            toolId: 'tool-1',
+            pendingTool: expect.objectContaining({
+              status: 'running',
+              progress: 'Reading target.',
+            }),
+          }),
+        ]),
       );
       dispose();
     });

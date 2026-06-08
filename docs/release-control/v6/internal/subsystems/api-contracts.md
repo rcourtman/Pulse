@@ -1105,8 +1105,8 @@ the canonical monitored-system blocked payload.
    `frontend-modern/src/api/generated/aiChatEvents.ts` type must stay derived
    from `internal/ai/chat/types.go` through `scripts/generate-types.go`, and
    frontend API tests must pin any new generated SSE fields, including live
-   tool-progress payload fields such as `phase` and `message` and pending tool
-   cancellation payloads such as `reason`.
+   tool-start and tool-progress payload fields such as `phase` and `message`
+   and pending tool cancellation payloads such as `reason`.
    That same shared org-management client boundary now owns target-consent
    sharing semantics across `frontend-modern/src/api/orgs.ts`,
    `internal/api/org_handlers.go`, and the shared org route wiring. Cross-org

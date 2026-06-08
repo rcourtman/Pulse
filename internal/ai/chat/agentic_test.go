@@ -206,9 +206,15 @@ func TestAgenticLoop(t *testing.T) {
 		}).Once()
 
 		var streamTypes []string
+		var startEvents []ToolStartData
 		var progressEvents []ToolProgressData
 		results, err := loop.Execute(ctx, sessionID, messages, func(event StreamEvent) {
 			streamTypes = append(streamTypes, event.Type)
+			if event.Type == "tool_start" {
+				var data ToolStartData
+				_ = json.Unmarshal(event.Data, &data)
+				startEvents = append(startEvents, data)
+			}
 			if event.Type == "tool_progress" {
 				var data ToolProgressData
 				_ = json.Unmarshal(event.Data, &data)
@@ -218,6 +224,9 @@ func TestAgenticLoop(t *testing.T) {
 		assert.NoError(t, err)
 		require.Len(t, results, 3) // assistant tool call, tool result, final response
 		assert.Equal(t, "I found 2 nodes.", results[2].Content)
+		require.Len(t, startEvents, 1, "expected tool execution to emit a live start event")
+		assert.Equal(t, "call_123", startEvents[0].ID)
+		assert.Equal(t, "running", startEvents[0].Phase)
 		require.Len(t, progressEvents, 1, "expected tool execution to emit a running progress event")
 		assert.Equal(t, "call_123", progressEvents[0].ID)
 		assert.Equal(t, "list_nodes", progressEvents[0].Name)
