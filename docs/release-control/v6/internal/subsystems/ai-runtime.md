@@ -2314,6 +2314,20 @@ markdown) on every content delta. Positional keying is correct here precisely
 because the list is append-only; a list that could reorder or key by identity
 must not use `<Index>`.
 
+The streaming answer block itself renders by morphing the DOM, not by replacing
+`innerHTML` on every tick. `renderMarkdown` re-parses the full (DOMPurify-
+sanitized) answer on each paced reveal; assigning that to `innerHTML` rebuilds
+the entire prose subtree, so a multi-paragraph or list/table answer flickers and
+reflows every earlier line as it streams. `AssistantMarkdownBlock` instead feeds
+the sanitized HTML to `morphMarkdownInto`
+(`frontend-modern/src/components/AI/Chat/markdownMorph.ts`), which reconciles old
+and new trees in place: structurally-identical nodes are left untouched, same-tag
+nodes are morphed (recursing into children so a growing `<ol>`/`<table>` keeps
+its earlier `<li>`/`<tr>` and only the last one updates), and the growing tail
+block updates its text node rather than being rebuilt. The morph is a rendering
+optimization only — `renderMarkdown` remains the sole sanitization gate and the
+morph must never be fed unsanitized HTML.
+
 Assistant slash-command availability is part of the command runtime contract,
 not only visual polish. The OpenCode reference at fetched `origin/dev` commit
 `c495635` filters prompt slash commands through the registered command catalog

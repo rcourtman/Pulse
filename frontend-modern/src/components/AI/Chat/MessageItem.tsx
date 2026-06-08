@@ -19,6 +19,7 @@ import RotateCcwIcon from 'lucide-solid/icons/rotate-ccw';
 import SparklesIcon from 'lucide-solid/icons/sparkles';
 import XIcon from 'lucide-solid/icons/x';
 import { renderMarkdown } from '../aiChatUtils';
+import { morphMarkdownInto } from './markdownMorph';
 import { PendingToolBlock, ToolCancellationBlock, ToolExecutionBlock } from './ToolExecutionBlock';
 import { ApprovalCard } from './ApprovalCard';
 import { QuestionCard } from './QuestionCard';
@@ -214,14 +215,17 @@ const AssistantMarkdownBlock: Component<{
     () => props.paceKey,
   );
 
-  return (
-    <div
-      class={markdownClass}
-      aria-live={props.streaming ? 'polite' : undefined}
-      // eslint-disable-next-line solid/no-innerhtml
-      innerHTML={renderMarkdown(visibleText())}
-    />
-  );
+  let container: HTMLDivElement | undefined;
+  // Morph the rendered markdown into the container instead of replacing
+  // innerHTML each tick. renderMarkdown already sanitizes (DOMPurify); the morph
+  // keeps the stable prefix of blocks so a streaming answer doesn't rebuild and
+  // reflow every earlier paragraph on every delta. See markdownMorph.ts.
+  createEffect(() => {
+    const html = renderMarkdown(visibleText());
+    if (container) morphMarkdownInto(container, html);
+  });
+
+  return <div ref={container} class={markdownClass} aria-live={props.streaming ? 'polite' : undefined} />;
 };
 
 /**
