@@ -21,6 +21,8 @@ export interface AssistantActiveTurnStatus {
 interface AssistantActiveTurnStatusCandidate extends AssistantActiveTurnStatus {
   activityAt?: number;
   placeholder?: boolean;
+  currentWorkflow?: boolean;
+  genericContent?: boolean;
   terminalTool?: boolean;
   order: number;
 }
@@ -325,6 +327,8 @@ const isFresherStatusCandidate = (
   ) {
     return current.terminalTool === true;
   }
+  if (candidate.currentWorkflow && current.genericContent) return true;
+  if (candidate.genericContent && current.currentWorkflow) return false;
   const candidateTime = candidate.activityAt;
   const currentTime = current.activityAt;
   if (candidateTime !== undefined && currentTime !== undefined && candidateTime !== currentTime) {
@@ -454,6 +458,7 @@ const latestStreamActivityStatus = (
             text: 'Generating response',
             startedAt: event.startedAt,
             activityAt: eventActivityAt(event),
+            genericContent: true,
             order: index,
           };
         }
@@ -518,6 +523,7 @@ const workflowStatusCandidate = (
     text,
     startedAt: status?.startedAt,
     activityAt: status?.startedAt,
+    currentWorkflow: true,
     order: Number.MAX_SAFE_INTEGER,
   };
 };

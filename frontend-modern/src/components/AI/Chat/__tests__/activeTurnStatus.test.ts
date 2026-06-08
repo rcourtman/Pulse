@@ -363,6 +363,48 @@ describe('getAssistantActiveTurnStatus', () => {
     });
   });
 
+  it('keeps current provider retry liveness ahead of later generic content status', () => {
+    const retryStatus = {
+      phase: 'provider_retry',
+      message: 'Provider connection failed before any output; retrying.',
+      attempt: 2,
+      maxAttempts: 3,
+      retryAfterMs: 3200,
+      startedAt: 1_200,
+    };
+
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            isStreaming: true,
+            workflowStatus: retryStatus,
+            streamEvents: [
+              {
+                type: 'workflow_status',
+                workflowStatus: retryStatus,
+                startedAt: 1_200,
+                updatedAt: 1_200,
+              },
+              {
+                type: 'content',
+                content: 'The selected route recovered after the retry.',
+                startedAt: 1_300,
+                updatedAt: 1_300,
+              },
+            ],
+          }),
+        ],
+        true,
+        2_300,
+      ),
+    ).toEqual({
+      type: 'retrying',
+      text: 'Provider connection failed before any output; retrying. · attempt 2/3 · retrying in 2.1s',
+      startedAt: 1_200,
+    });
+  });
+
   it('uses stream idle liveness as the latest active turn status', () => {
     const workflowStatusHistory = [
       {
@@ -401,6 +443,45 @@ describe('getAssistantActiveTurnStatus', () => {
         ],
         true,
         1_200,
+      ),
+    ).toEqual({
+      type: 'thinking',
+      text: 'OpenRouter is still working; waiting for more response data.',
+      startedAt: 1_200,
+    });
+  });
+
+  it('keeps current stream-idle liveness ahead of later generic content status', () => {
+    const idleStatus = {
+      phase: 'stream_idle',
+      message: 'OpenRouter is still working; waiting for more response data.',
+      startedAt: 1_200,
+    };
+
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            isStreaming: true,
+            workflowStatus: idleStatus,
+            streamEvents: [
+              {
+                type: 'workflow_status',
+                workflowStatus: idleStatus,
+                startedAt: 1_200,
+                updatedAt: 1_200,
+              },
+              {
+                type: 'content',
+                content: 'First provider token.',
+                startedAt: 1_300,
+                updatedAt: 1_300,
+              },
+            ],
+          }),
+        ],
+        true,
+        1_400,
       ),
     ).toEqual({
       type: 'thinking',
