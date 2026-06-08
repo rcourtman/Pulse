@@ -209,7 +209,7 @@ describe('useChat', () => {
         workflowStatusHistory: [],
         workflowStatus: {
           phase: 'request_wait',
-          message: 'Assistant is starting the response.',
+          message: 'Waiting for assistant.',
         },
       });
       expect(mockCreateSession).not.toHaveBeenCalled();
@@ -242,7 +242,7 @@ describe('useChat', () => {
         isStreaming: true,
         workflowStatus: {
           phase: 'request_wait',
-          message: 'Assistant is starting the response.',
+          message: 'Waiting for assistant.',
           startedAt: 1_000,
         },
       });
@@ -250,14 +250,14 @@ describe('useChat', () => {
       await vi.advanceTimersByTimeAsync(899);
       expect(chat.messages()[1].workflowStatus).toMatchObject({
         phase: 'request_wait',
-        message: 'Assistant is starting the response.',
+        message: 'Waiting for assistant.',
       });
 
       await vi.advanceTimersByTimeAsync(1);
       expect(chat.messages()[1]).toMatchObject({
         workflowStatus: {
           phase: 'request_wait',
-          message: 'Assistant is starting the response.',
+          message: 'Waiting for assistant.',
           startedAt: 1_000,
         },
         streamEvents: [
@@ -265,7 +265,7 @@ describe('useChat', () => {
             type: 'workflow_status',
             workflowStatus: expect.objectContaining({
               phase: 'request_wait',
-              message: 'Assistant is starting the response.',
+              message: 'Waiting for assistant.',
             }),
           }),
         ],
@@ -362,7 +362,7 @@ describe('useChat', () => {
         workflowStatusHistory: [],
         workflowStatus: {
           phase: 'request_wait',
-          message: 'OpenRouter is starting the response.',
+          message: 'Waiting for assistant.',
           provider: 'openrouter',
           model: 'openrouter:qwen/qwen3.7-plus',
         },
@@ -377,7 +377,7 @@ describe('useChat', () => {
           type: 'workflow_status',
           workflowStatus: expect.objectContaining({
             phase: 'request_wait',
-            message: 'OpenRouter is starting the response.',
+            message: 'Waiting for assistant.',
             provider: 'openrouter',
             model: 'openrouter:qwen/qwen3.7-plus',
           }),
@@ -407,7 +407,7 @@ describe('useChat', () => {
       const assistant = chat.messages()[1];
       expect(assistant.workflowStatus).toMatchObject({
         phase: 'request_wait',
-        message: 'OpenRouter is starting the response.',
+        message: 'Waiting for assistant.',
         provider: 'openrouter',
         model: 'openrouter:qwen/qwen3.7-plus',
         startedAt: 2_000,
@@ -422,7 +422,7 @@ describe('useChat', () => {
           type: 'workflow_status',
           workflowStatus: expect.objectContaining({
             phase: 'request_wait',
-            message: 'OpenRouter is starting the response.',
+            message: 'Waiting for assistant.',
             provider: 'openrouter',
             model: 'openrouter:qwen/qwen3.7-plus',
           }),
@@ -1461,7 +1461,7 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'provider_retry',
-          message: 'Provider connection failed before any output; retrying.',
+          message: 'Selected route connection failed before any output; retrying.',
           attempt: 2,
           max_attempts: 2,
           retry_after_ms: 200,
@@ -1472,7 +1472,7 @@ describe('useChat', () => {
       expect(assistant.workflowStatus).toEqual(
         expect.objectContaining({
           phase: 'provider_retry',
-          message: 'Provider connection failed before any output; retrying.',
+          message: 'Selected route connection failed before any output; retrying.',
           attempt: 2,
           maxAttempts: 2,
           retryAfterMs: 200,
@@ -1598,27 +1598,27 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'provider_start',
-          message: 'OpenRouter is starting the response.',
+          message: 'Waiting for assistant.',
         },
       });
       assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.workflowStatus).toEqual(
         expect.objectContaining({
-          message: 'OpenRouter is starting the response.',
+          message: 'Waiting for assistant.',
         }),
       );
       expect(assistant.streamEvents).toEqual([
         expect.objectContaining({
           type: 'workflow_status',
           workflowStatus: expect.objectContaining({
-            message: 'OpenRouter is starting the response.',
+            message: 'Waiting for assistant.',
           }),
         }),
       ]);
       expect(assistant.workflowStatusHistory?.map((status) => status.message)).toEqual([
         'Reading current Pulse inventory with pulse_query.',
         'Built compact inventory context for the model.',
-        'OpenRouter is starting the response.',
+        'Waiting for assistant.',
       ]);
 
       dispose();
@@ -1635,7 +1635,7 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'provider_start',
-          message: 'OpenRouter is starting the response.',
+          message: 'Waiting for assistant.',
           provider: 'openrouter',
           model: 'openrouter:qwen/qwen3.7-plus',
         },
@@ -1723,7 +1723,7 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'provider_start',
-          message: 'OpenRouter is starting the response.',
+          message: 'Waiting for assistant.',
           provider: 'openrouter',
           model: 'openrouter:qwen/qwen3.7-plus',
         },
@@ -1732,7 +1732,7 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'provider_start',
-          message: 'OpenRouter is starting the response.',
+          message: 'Waiting for assistant.',
           provider: 'openrouter',
           model: 'openrouter:qwen/qwen3.7-plus',
         },
@@ -1757,7 +1757,7 @@ describe('useChat', () => {
           type: 'workflow_status',
           workflowStatus: expect.objectContaining({
             phase: 'provider_start',
-            message: 'OpenRouter is starting the response.',
+            message: 'Waiting for assistant.',
           }),
         }),
       );
@@ -1786,7 +1786,7 @@ describe('useChat', () => {
           type: 'workflow_status',
           workflowStatus: expect.objectContaining({
             phase: 'request_wait',
-            message: 'OpenRouter is starting the response.',
+            message: 'Waiting for assistant.',
             provider: 'openrouter',
             model: 'openrouter:qwen/qwen3.7-plus',
           }),
@@ -1805,7 +1805,7 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'provider_start',
-          message: 'DeepSeek is starting the response.',
+          message: 'Waiting for assistant.',
           provider: 'deepseek',
           model: 'deepseek:deepseek-chat',
         },
@@ -1847,7 +1847,7 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'provider_start',
-          message: 'DeepSeek is starting the response.',
+          message: 'Waiting for assistant.',
           provider: 'deepseek',
           model: 'deepseek:deepseek-chat',
         },
@@ -1922,7 +1922,7 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'provider_start',
-          message: 'OpenRouter is starting the response.',
+          message: 'Waiting for assistant.',
         },
       });
       fire({ type: 'content', data: 'Here is the answer.' });
@@ -1939,7 +1939,7 @@ describe('useChat', () => {
           type: 'workflow_status',
           workflowStatus: expect.objectContaining({
             phase: 'provider_start',
-            message: 'OpenRouter is starting the response.',
+            message: 'Waiting for assistant.',
           }),
         }),
       );
@@ -1992,7 +1992,7 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'provider_start',
-          message: 'OpenRouter is starting the response.',
+          message: 'Waiting for assistant.',
         },
       });
       fire({ type: 'tool_start', data: { id: 'tool-1', name: 'pulse_alerts', input: '{}' } });
@@ -2876,7 +2876,7 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'provider_start',
-          message: 'OpenRouter is starting the response.',
+          message: 'Waiting for assistant.',
         },
       });
       fire({ type: 'content', data: 'partial response' });
@@ -2944,7 +2944,7 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'provider_start',
-          message: 'OpenRouter is starting the response.',
+          message: 'Waiting for assistant.',
         },
       });
       fire({ type: 'content', data: 'partial response' });
@@ -4130,7 +4130,7 @@ describe('useChat', () => {
         type: 'workflow_state',
         data: {
           phase: 'provider_start',
-          message: 'OpenRouter is starting the response.',
+          message: 'Waiting for assistant.',
         },
       });
       fire({ type: 'tool_start', data: { id: 'a', name: 'pulse_read', input: '{}' } });
@@ -4157,7 +4157,7 @@ describe('useChat', () => {
           type: 'workflow_status',
           workflowStatus: expect.objectContaining({
             phase: 'provider_start',
-            message: 'OpenRouter is starting the response.',
+            message: 'Waiting for assistant.',
           }),
         }),
       );

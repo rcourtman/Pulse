@@ -114,28 +114,6 @@ const providerFromFixtureModel = (model: string): string => {
   return provider || 'dev';
 };
 
-const providerDisplayNameForFixture = (provider: string): string => {
-  switch (provider) {
-    case 'openrouter':
-      return 'OpenRouter';
-    case 'deepseek':
-      return 'DeepSeek';
-    case 'anthropic':
-      return 'Anthropic';
-    case 'gemini':
-      return 'Gemini';
-    case 'ollama':
-      return 'Ollama';
-    default:
-      return (
-        provider
-          .replace(/[-_]+/g, ' ')
-          .replace(/\b[a-z]/g, (letter) => letter.toUpperCase())
-          .trim() || 'Assistant'
-      );
-  }
-};
-
 const buildUnknownFixtureEvents = (prompt: string): AIChatStreamEvent[] => [
   {
     type: 'session',
@@ -248,7 +226,7 @@ const buildSendHoldFixtureEvents = (model?: string): AIChatStreamEvent[] => [
     type: 'workflow_state',
     data: {
       phase: 'provider_start',
-      message: 'OpenRouter is starting the response.',
+      message: 'Waiting for assistant.',
       provider: 'openrouter',
       model: assistantFixtureModel(model),
     },
@@ -332,7 +310,7 @@ const buildToolBurstFixtureEvents = (model?: string): AIChatStreamEvent[] => [
     type: 'workflow_state',
     data: {
       phase: 'provider_start',
-      message: 'OpenRouter is starting the response.',
+      message: 'Waiting for assistant.',
       model: assistantFixtureModel(model),
     },
   },
@@ -458,7 +436,7 @@ const buildWorkflowBurstFixtureEvents = (model?: string): AIChatStreamEvent[] =>
     type: 'workflow_state',
     data: {
       phase: 'provider_start',
-      message: 'OpenRouter is starting the response.',
+      message: 'Waiting for assistant.',
       model: assistantFixtureModel(model),
     },
   },
@@ -600,7 +578,7 @@ const buildStatusBoundaryFixtureEvents = (model?: string): AIChatStreamEvent[] =
     type: 'workflow_state',
     data: {
       phase: 'provider_start',
-      message: 'OpenRouter is starting the response.',
+      message: 'Waiting for assistant.',
       model: assistantFixtureModel(model),
     },
   },
@@ -801,7 +779,6 @@ const buildLongOutputFixtureEvents = (model?: string): AIChatStreamEvent[] => [
 const buildProviderRetryFixtureEvents = (model?: string): AIChatStreamEvent[] => {
   const selectedModel = assistantFixtureModel(model);
   const selectedProvider = providerFromFixtureModel(selectedModel);
-  const selectedProviderLabel = providerDisplayNameForFixture(selectedProvider);
 
   return [
     {
@@ -819,7 +796,7 @@ const buildProviderRetryFixtureEvents = (model?: string): AIChatStreamEvent[] =>
       type: 'workflow_state',
       data: {
         phase: 'provider_start',
-        message: `${selectedProviderLabel} is starting the response.`,
+        message: 'Waiting for assistant.',
         provider: selectedProvider,
         model: selectedModel,
       },
@@ -828,7 +805,7 @@ const buildProviderRetryFixtureEvents = (model?: string): AIChatStreamEvent[] =>
       type: 'workflow_state',
       data: {
         phase: 'provider_retry',
-        message: 'Provider connection failed before any output; retrying.',
+        message: 'Selected route connection failed before any output; retrying.',
         provider: selectedProvider,
         model: selectedModel,
         attempt: 2,
@@ -870,7 +847,7 @@ const buildStreamIdleFixtureEvents = (model?: string): AIChatStreamEvent[] => [
     type: 'workflow_state',
     data: {
       phase: 'provider_start',
-      message: 'OpenRouter is starting the response.',
+      message: 'Waiting for assistant.',
       provider: 'openrouter',
       model: assistantFixtureModel(model),
     },
@@ -915,7 +892,7 @@ const buildQueueHoldFixtureEvents = (model?: string): AIChatStreamEvent[] => [
     type: 'workflow_state',
     data: {
       phase: 'provider_start',
-      message: 'OpenRouter is starting the response.',
+      message: 'Waiting for assistant.',
       provider: 'openrouter',
       model: assistantFixtureModel(model),
     },

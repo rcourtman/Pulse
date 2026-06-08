@@ -77,23 +77,13 @@ const routeAwareWorkflowStatusFields = (modelRoute?: string) => {
   };
 };
 
-const routeProviderLabel = (modelRoute?: string) => {
-  const model = modelRoute?.trim() || '';
-  if (!model) return '';
-  const provider = getProviderFromModelId(model);
-  return provider ? getAIProviderDisplayName(provider) : '';
-};
-
 const createAssistantRouteStartWorkflowStatus = (
   modelRoute?: string,
   startedAt = Date.now(),
 ): WorkflowStatus => {
-  const providerLabel = routeProviderLabel(modelRoute);
   return {
     phase: 'request_wait',
-    message: providerLabel
-      ? `${providerLabel} is starting the response.`
-      : 'Assistant is starting the response.',
+    message: 'Waiting for assistant.',
     ...routeAwareWorkflowStatusFields(modelRoute),
     startedAt,
   };

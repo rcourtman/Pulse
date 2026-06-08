@@ -432,7 +432,7 @@ func TestAgenticLoop_RetriesProviderStreamBeforeEvents(t *testing.T) {
 	if retry.RetryAfterMS != 200 {
 		t.Fatalf("retry backoff = %dms, want 200ms", retry.RetryAfterMS)
 	}
-	if retry.Message != "Provider connection failed before any output; retrying." {
+	if retry.Message != "Selected route connection failed before any output; retrying." {
 		t.Fatalf("retry message = %q", retry.Message)
 	}
 	if len(results) != 1 || results[0].Content != "hello" {

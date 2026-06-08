@@ -36,7 +36,7 @@ describe('AI chat stream event contract', () => {
   it('exposes selected provider and model metadata on workflow state events', () => {
     const workflow: WorkflowStateData = {
       phase: 'provider_start',
-      message: 'OpenRouter is starting the response.',
+      message: 'Waiting for assistant.',
       provider: 'openrouter',
       model: 'openrouter:qwen/qwen3.7-plus',
     };
@@ -51,7 +51,7 @@ describe('AI chat stream event contract', () => {
   it('exposes provider retry metadata on workflow state events', () => {
     const workflow: WorkflowStateData = {
       phase: 'provider_retry',
-      message: 'Provider connection failed before any output; retrying.',
+      message: 'Selected route connection failed before any output; retrying.',
       state: 'investigating',
       attempt: 2,
       max_attempts: 2,

@@ -224,7 +224,7 @@ describe('AIChatAPI', () => {
       type: 'workflow_state',
       data: {
         phase: 'provider_start',
-        message: 'OpenRouter is starting the response.',
+        message: 'Waiting for assistant.',
         model: 'openrouter:deepseek/deepseek-chat',
       },
     });
@@ -327,7 +327,7 @@ describe('AIChatAPI', () => {
       type: 'workflow_state',
       data: {
         phase: 'provider_start',
-        message: 'OpenRouter is starting the response.',
+        message: 'Waiting for assistant.',
         model: 'openrouter:qwen/qwen3.7-plus',
       },
     });
@@ -414,7 +414,7 @@ describe('AIChatAPI', () => {
       type: 'workflow_state',
       data: {
         phase: 'provider_start',
-        message: 'OpenRouter is starting the response.',
+        message: 'Waiting for assistant.',
         provider: 'openrouter',
         model: 'openrouter:qwen/qwen3.7-plus',
       },
@@ -558,7 +558,7 @@ describe('AIChatAPI', () => {
       type: 'workflow_state',
       data: {
         phase: 'provider_start',
-        message: 'OpenRouter is starting the response.',
+        message: 'Waiting for assistant.',
         model: 'openrouter:qwen/qwen3.7-plus',
       },
     });
@@ -776,7 +776,7 @@ describe('AIChatAPI', () => {
       type: 'workflow_state',
       data: {
         phase: 'provider_retry',
-        message: 'Provider connection failed before any output; retrying.',
+        message: 'Selected route connection failed before any output; retrying.',
         provider: 'openrouter',
         model: 'openrouter:deepseek/deepseek-chat',
         attempt: 2,
@@ -816,7 +816,7 @@ describe('AIChatAPI', () => {
       type: 'workflow_state',
       data: {
         phase: 'provider_start',
-        message: 'OpenRouter is starting the response.',
+        message: 'Waiting for assistant.',
         provider: 'openrouter',
         model: 'openrouter:qwen/qwen3.7-plus',
       },

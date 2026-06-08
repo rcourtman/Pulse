@@ -72,7 +72,7 @@ describe('getAssistantActiveTurnStatus', () => {
       withAssistantQueuedFollowUpStatus(
         {
           type: 'thinking',
-          text: 'OpenRouter is starting the response.',
+          text: 'Waiting for assistant.',
           startedAt: 1_000,
         },
         [
@@ -83,7 +83,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'thinking',
-      text: 'OpenRouter is starting the response.',
+      text: 'Waiting for assistant.',
       queuedFollowUpCount: 2,
       startedAt: 1_000,
     });
@@ -219,7 +219,7 @@ describe('getAssistantActiveTurnStatus', () => {
           assistantMessage({
             workflowStatus: {
               phase: 'provider_start',
-              message: 'OpenRouter is starting the response.',
+              message: 'Waiting for assistant.',
               startedAt,
             },
           }),
@@ -228,7 +228,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'thinking',
-      text: 'OpenRouter is starting the response.',
+      text: 'Waiting for assistant.',
       startedAt,
     });
   });
@@ -244,7 +244,7 @@ describe('getAssistantActiveTurnStatus', () => {
                 type: 'workflow_status',
                 workflowStatus: {
                   phase: 'provider_start',
-                  message: 'OpenRouter is starting the response.',
+                  message: 'Waiting for assistant.',
                   startedAt: 1_000,
                 },
                 startedAt: 1_000,
@@ -287,7 +287,7 @@ describe('getAssistantActiveTurnStatus', () => {
       },
       {
         phase: 'provider_start',
-        message: 'OpenRouter is starting the response.',
+        message: 'Waiting for assistant.',
         startedAt: 1_200,
       },
     ];
@@ -309,7 +309,7 @@ describe('getAssistantActiveTurnStatus', () => {
 
     expect(getAssistantActiveTurnStatus(messages, true, 1_200)).toEqual({
       type: 'thinking',
-      text: 'OpenRouter is starting the response.',
+      text: 'Waiting for assistant.',
       startedAt: 1_200,
     });
   });
@@ -323,12 +323,12 @@ describe('getAssistantActiveTurnStatus', () => {
       },
       {
         phase: 'provider_start',
-        message: 'OpenRouter is starting the response.',
+        message: 'Waiting for assistant.',
         startedAt: 1_100,
       },
       {
         phase: 'provider_retry',
-        message: 'Provider connection failed before any output; retrying.',
+        message: 'Selected route connection failed before any output; retrying.',
         attempt: 2,
         maxAttempts: 3,
         retryAfterMs: 3200,
@@ -358,7 +358,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'retrying',
-      text: 'Provider connection failed before any output; retrying. · attempt 2/3 · retrying in 3.2s',
+      text: 'Selected route connection failed before any output; retrying. · attempt 2/3 · retrying in 3.2s',
       startedAt: 1_200,
     });
   });
@@ -366,7 +366,7 @@ describe('getAssistantActiveTurnStatus', () => {
   it('keeps current provider retry liveness ahead of later generic content status', () => {
     const retryStatus = {
       phase: 'provider_retry',
-      message: 'Provider connection failed before any output; retrying.',
+      message: 'Selected route connection failed before any output; retrying.',
       attempt: 2,
       maxAttempts: 3,
       retryAfterMs: 3200,
@@ -400,7 +400,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'retrying',
-      text: 'Provider connection failed before any output; retrying. · attempt 2/3 · retrying in 2.1s',
+      text: 'Selected route connection failed before any output; retrying. · attempt 2/3 · retrying in 2.1s',
       startedAt: 1_200,
     });
   });
@@ -414,7 +414,7 @@ describe('getAssistantActiveTurnStatus', () => {
       },
       {
         phase: 'provider_start',
-        message: 'OpenRouter is starting the response.',
+        message: 'Waiting for assistant.',
         startedAt: 1_100,
       },
       {
@@ -540,7 +540,7 @@ describe('getAssistantActiveTurnStatus', () => {
           assistantMessage({
             workflowStatus: {
               phase: 'provider_retry',
-              message: 'Provider connection failed before any output; retrying.',
+              message: 'Selected route connection failed before any output; retrying.',
               attempt: 2,
               maxAttempts: 2,
               retryAfterMs: 200,
@@ -552,7 +552,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'retrying',
-      text: 'Provider connection failed before any output; retrying. · attempt 2/2 · retrying in 200ms',
+      text: 'Selected route connection failed before any output; retrying. · attempt 2/2 · retrying in 200ms',
       startedAt,
     });
   });
@@ -565,7 +565,7 @@ describe('getAssistantActiveTurnStatus', () => {
           assistantMessage({
             workflowStatus: {
               phase: 'provider_retry',
-              message: 'Provider connection failed before any output; retrying.',
+              message: 'Selected route connection failed before any output; retrying.',
               attempt: 2,
               maxAttempts: 2,
               retryAfterMs: 3200,
@@ -578,7 +578,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'retrying',
-      text: 'Provider connection failed before any output; retrying. · attempt 2/2 · retrying in 1.9s',
+      text: 'Selected route connection failed before any output; retrying. · attempt 2/2 · retrying in 1.9s',
       startedAt,
     });
   });
@@ -591,7 +591,7 @@ describe('getAssistantActiveTurnStatus', () => {
           assistantMessage({
             workflowStatus: {
               phase: 'provider_retry',
-              message: 'Provider connection failed before any output; retrying.',
+              message: 'Selected route connection failed before any output; retrying.',
               attempt: 2,
               maxAttempts: 2,
               retryAfterMs: 3200,
@@ -604,7 +604,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'retrying',
-      text: 'Provider connection failed before any output; retrying. · attempt 2/2 · retrying now',
+      text: 'Selected route connection failed before any output; retrying. · attempt 2/2 · retrying now',
       startedAt,
     });
   });
@@ -728,7 +728,7 @@ describe('getAssistantActiveTurnStatus', () => {
             isStreaming: true,
             workflowStatus: {
               phase: 'provider_start',
-              message: 'OpenRouter is starting the response.',
+              message: 'Waiting for assistant.',
               startedAt: 1_000,
             },
             streamEvents: [
@@ -736,7 +736,7 @@ describe('getAssistantActiveTurnStatus', () => {
                 type: 'workflow_status',
                 workflowStatus: {
                   phase: 'provider_start',
-                  message: 'OpenRouter is starting the response.',
+                  message: 'Waiting for assistant.',
                   startedAt: 1_000,
                 },
                 startedAt: 1_000,
@@ -789,7 +789,7 @@ describe('getAssistantActiveTurnStatus', () => {
             isStreaming: true,
             workflowStatus: {
               phase: 'provider_start',
-              message: 'OpenRouter is starting the response.',
+              message: 'Waiting for assistant.',
               startedAt: 1_000,
             },
             streamEvents: [
@@ -797,7 +797,7 @@ describe('getAssistantActiveTurnStatus', () => {
                 type: 'workflow_status',
                 workflowStatus: {
                   phase: 'provider_start',
-                  message: 'OpenRouter is starting the response.',
+                  message: 'Waiting for assistant.',
                   startedAt: 1_000,
                 },
                 startedAt: 1_000,
@@ -871,7 +871,7 @@ describe('getAssistantActiveTurnStatus', () => {
           assistantMessage({
             workflowStatus: {
               phase: 'provider_start',
-              message: 'OpenRouter is starting the response.',
+              message: 'Waiting for assistant.',
               startedAt: 1_000,
             },
             streamEvents: [

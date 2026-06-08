@@ -122,18 +122,18 @@ func sessionFSMState(fsm *SessionFSM) string {
 
 func providerRetryStatusMessage(err error) string {
 	if err == nil {
-		return "Provider stream interrupted before any output; retrying."
+		return "Selected route stream interrupted before any output; retrying."
 	}
 	msg := strings.ToLower(strings.TrimSpace(err.Error()))
 	switch {
 	case strings.Contains(msg, "rate limit"), strings.Contains(msg, "too many requests"), strings.Contains(msg, "429"):
-		return "Provider is rate limiting the request; retrying."
+		return "Selected route is rate limiting the request; retrying."
 	case strings.Contains(msg, "timeout"), strings.Contains(msg, "timed out"), strings.Contains(msg, "deadline"):
-		return "Provider timed out before any output; retrying."
+		return "Selected route timed out before any output; retrying."
 	case strings.Contains(msg, "connection"), strings.Contains(msg, "broken pipe"), strings.Contains(msg, "eof"):
-		return "Provider connection failed before any output; retrying."
+		return "Selected route connection failed before any output; retrying."
 	default:
-		return "Provider stream interrupted before any output; retrying."
+		return "Selected route stream interrupted before any output; retrying."
 	}
 }
 

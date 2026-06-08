@@ -3563,7 +3563,7 @@ func TestContract_AISettingsOllamaAuthJSONSnapshot(t *testing.T) {
 
 	aiCfg := config.NewDefaultAIConfig()
 	aiCfg.Enabled = true
-	aiCfg.Model = "openai:gpt-4o"
+	aiCfg.Model = "ollama:llama3"
 	aiCfg.PatrolModel = "ollama:llama3"
 	aiCfg.OllamaBaseURL = "http://ollama.example:11434"
 	aiCfg.OllamaUsername = "unai"
@@ -10608,24 +10608,24 @@ func TestContract_ChatStreamEventJSONSnapshots(t *testing.T) {
 			name: "workflow_state_provider_start",
 			event: mustStreamEvent(t, "workflow_state", chat.WorkflowStateData{
 				Phase:    "provider_start",
-				Message:  "OpenRouter is starting the response.",
+				Message:  "Waiting for assistant.",
 				State:    "investigating",
 				Provider: "openrouter",
 				Model:    "openrouter:qwen/qwen3.7-plus",
 			}),
-			want: `{"type":"workflow_state","data":{"phase":"provider_start","message":"OpenRouter is starting the response.","state":"investigating","provider":"openrouter","model":"openrouter:qwen/qwen3.7-plus"}}`,
+			want: `{"type":"workflow_state","data":{"phase":"provider_start","message":"Waiting for assistant.","state":"investigating","provider":"openrouter","model":"openrouter:qwen/qwen3.7-plus"}}`,
 		},
 		{
 			name: "workflow_state_provider_retry",
 			event: mustStreamEvent(t, "workflow_state", chat.WorkflowStateData{
 				Phase:        "provider_retry",
-				Message:      "Provider connection failed before any output; retrying.",
+				Message:      "Selected route connection failed before any output; retrying.",
 				State:        "investigating",
 				Attempt:      2,
 				MaxAttempts:  2,
 				RetryAfterMS: 200,
 			}),
-			want: `{"type":"workflow_state","data":{"phase":"provider_retry","message":"Provider connection failed before any output; retrying.","state":"investigating","attempt":2,"max_attempts":2,"retry_after_ms":200}}`,
+			want: `{"type":"workflow_state","data":{"phase":"provider_retry","message":"Selected route connection failed before any output; retrying.","state":"investigating","attempt":2,"max_attempts":2,"retry_after_ms":200}}`,
 		},
 		{
 			name: "workflow_state_stream_idle",

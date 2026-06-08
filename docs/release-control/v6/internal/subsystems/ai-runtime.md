@@ -177,7 +177,11 @@ deriving an older display status from `workflowStatusHistory`.
    streaming assistant message first and the selected route only as a fallback;
    live progress text remains the activity description, while route identity is
    separate compact chrome so provider/model state stays inspectable without
-   polluting status copy.
+   polluting status copy. Provider-start copy must stay route-neutral
+   ("Waiting for assistant.") because selected-route identity belongs in the
+   route chrome and stream metadata, not in transient activity text; retry copy
+   must say Pulse is retrying the selected route, not imply automatic provider
+   or model fallback.
    Legacy bare model names, provider response IDs without a Pulse route prefix,
    URLs, and malformed route strings must be ignored so loading older sessions
    cannot corrupt the active selector. The referenced OpenCode source at fetched

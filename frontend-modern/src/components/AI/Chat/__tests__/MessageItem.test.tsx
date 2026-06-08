@@ -738,7 +738,7 @@ describe('MessageItem', () => {
                 type: 'workflow_status',
                 workflowStatus: {
                   phase: 'provider_retry',
-                  message: 'Provider connection failed before any output; retrying.',
+                  message: 'Selected route connection failed before any output; retrying.',
                   attempt: 2,
                   maxAttempts: 3,
                   retryAfterMs: 1200,
@@ -747,7 +747,7 @@ describe('MessageItem', () => {
             ],
             workflowStatus: {
               phase: 'provider_retry',
-              message: 'Provider connection failed before any output; retrying.',
+              message: 'Selected route connection failed before any output; retrying.',
               attempt: 2,
               maxAttempts: 3,
               retryAfterMs: 1200,
@@ -759,7 +759,7 @@ describe('MessageItem', () => {
 
       expect(
         screen.getByText(
-          'Provider connection failed before any output; retrying. · attempt 2/3 · retrying in 1.2s',
+          'Selected route connection failed before any output; retrying. · attempt 2/3 · retrying in 1.2s',
         ),
       ).toBeInTheDocument();
       expect(screen.getByRole('status')).toHaveAttribute('data-status-kind', 'retrying');
@@ -782,7 +782,7 @@ describe('MessageItem', () => {
                 type: 'workflow_status',
                 workflowStatus: {
                   phase: 'provider_retry',
-                  message: 'Provider connection failed before any output; retrying.',
+                  message: 'Selected route connection failed before any output; retrying.',
                   attempt: 2,
                   maxAttempts: 3,
                   retryAfterMs: 3200,
@@ -792,7 +792,7 @@ describe('MessageItem', () => {
             ],
             workflowStatus: {
               phase: 'provider_retry',
-              message: 'Provider connection failed before any output; retrying.',
+              message: 'Selected route connection failed before any output; retrying.',
               attempt: 2,
               maxAttempts: 3,
               retryAfterMs: 3200,
@@ -805,7 +805,7 @@ describe('MessageItem', () => {
 
       expect(
         screen.getByText(
-          /Provider connection failed before any output; retrying\. · attempt 2\/3 · retrying in 1\.9s/,
+          /Selected route connection failed before any output; retrying\. · attempt 2\/3 · retrying in 1\.9s/,
         ),
       ).toBeInTheDocument();
       expect(screen.getByRole('status')).toHaveAttribute('data-status-kind', 'retrying');
@@ -829,7 +829,7 @@ describe('MessageItem', () => {
         },
         {
           phase: 'provider_start',
-          message: 'OpenRouter is starting the response.',
+          message: 'Waiting for assistant.',
           startedAt: 1_200,
         },
       ];
@@ -855,13 +855,13 @@ describe('MessageItem', () => {
       ));
 
       expect(screen.getByText(/Preparing Pulse context\./)).toBeInTheDocument();
-      expect(screen.queryByText(/OpenRouter is starting the response\./)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Waiting for assistant\./)).not.toBeInTheDocument();
 
       await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_PACE_MS);
       expect(screen.getByText(/Reading current Pulse inventory\./)).toBeInTheDocument();
 
       await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_PACE_MS);
-      expect(screen.getByText(/OpenRouter is starting the response\./)).toBeInTheDocument();
+      expect(screen.getByText(/Waiting for assistant\./)).toBeInTheDocument();
       expect(screen.queryByText(/Preparing Pulse context\./)).not.toBeInTheDocument();
       expect(
         screen.queryByText(/Reading current Pulse inventory\./),
@@ -880,12 +880,12 @@ describe('MessageItem', () => {
         },
         {
           phase: 'provider_start',
-          message: 'OpenRouter is starting the response.',
+          message: 'Waiting for assistant.',
           startedAt: 1_100,
         },
         {
           phase: 'provider_retry',
-          message: 'Provider connection failed before any output; retrying.',
+          message: 'Selected route connection failed before any output; retrying.',
           attempt: 2,
           maxAttempts: 3,
           retryAfterMs: 3200,
@@ -916,14 +916,14 @@ describe('MessageItem', () => {
       expect(screen.getByText('Preparing Pulse context.')).toBeInTheDocument();
 
       await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_PACE_MS);
-      expect(screen.getByText('OpenRouter is starting the response.')).toBeInTheDocument();
+      expect(screen.getByText('Waiting for assistant.')).toBeInTheDocument();
 
       await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_PACE_MS);
       expect(
-        screen.getByText(/Provider connection failed before any output; retrying\. · attempt 2\/3/),
+        screen.getByText(/Selected route connection failed before any output; retrying\. · attempt 2\/3/),
       ).toBeInTheDocument();
       expect(screen.queryByText('Preparing Pulse context.')).not.toBeInTheDocument();
-      expect(screen.queryByText('OpenRouter is starting the response.')).not.toBeInTheDocument();
+      expect(screen.queryByText('Waiting for assistant.')).not.toBeInTheDocument();
     });
 
     it('keeps separated transcript workflow rows tied to their own streamed status', () => {
@@ -939,7 +939,7 @@ describe('MessageItem', () => {
         },
         {
           phase: 'provider_start',
-          message: 'OpenRouter is starting the response.',
+          message: 'Waiting for assistant.',
           startedAt: 1_300,
         },
       ];
@@ -979,7 +979,7 @@ describe('MessageItem', () => {
 
       expect(screen.getByText('Reading current Pulse inventory.')).toBeInTheDocument();
       expect(screen.getByText('3 devices found')).toBeInTheDocument();
-      expect(screen.getByText('OpenRouter is starting the response.')).toBeInTheDocument();
+      expect(screen.getByText('Waiting for assistant.')).toBeInTheDocument();
       expect(screen.queryByText(/pulse_query/)).not.toBeInTheDocument();
     });
 
@@ -994,7 +994,7 @@ describe('MessageItem', () => {
             streamEvents: [{ type: 'content', content: 'Partial answer' }],
             workflowStatus: {
               phase: 'provider_start',
-              message: 'OpenRouter is starting the response.',
+              message: 'Waiting for assistant.',
             },
           })}
           {...makeHandlers()}
@@ -1002,7 +1002,7 @@ describe('MessageItem', () => {
       ));
 
       expect(screen.getByText('Partial answer')).toBeInTheDocument();
-      expect(screen.queryByText('OpenRouter is starting the response.')).not.toBeInTheDocument();
+      expect(screen.queryByText('Waiting for assistant.')).not.toBeInTheDocument();
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
     });
 
@@ -1019,7 +1019,7 @@ describe('MessageItem', () => {
                 type: 'workflow_status',
                 workflowStatus: {
                   phase: 'provider_start',
-                  message: 'OpenRouter is starting the response.',
+                  message: 'Waiting for assistant.',
                 },
               },
               { type: 'content', content: 'Partial answer' },
@@ -1029,7 +1029,7 @@ describe('MessageItem', () => {
         />
       ));
 
-      expect(screen.getByText('OpenRouter is starting the response.')).toBeInTheDocument();
+      expect(screen.getByText('Waiting for assistant.')).toBeInTheDocument();
       expect(screen.getByText('Partial answer')).toBeInTheDocument();
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
     });
@@ -1047,7 +1047,7 @@ describe('MessageItem', () => {
                 type: 'workflow_status',
                 workflowStatus: {
                   phase: 'provider_start',
-                  message: 'OpenRouter is starting the response.',
+                  message: 'Waiting for assistant.',
                 },
               },
               { type: 'content', content: 'Inventory has 3 devices.' },
@@ -1057,7 +1057,7 @@ describe('MessageItem', () => {
         />
       ));
 
-      expect(screen.getByText('OpenRouter is starting the response.')).toBeInTheDocument();
+      expect(screen.getByText('Waiting for assistant.')).toBeInTheDocument();
       expect(screen.getByText('Inventory has 3 devices.')).toBeInTheDocument();
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
     });

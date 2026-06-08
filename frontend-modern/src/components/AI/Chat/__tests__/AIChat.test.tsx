@@ -4936,7 +4936,7 @@ describe('AIChat', () => {
           isStreaming: true,
           workflowStatus: {
             phase: 'provider_retry',
-            message: 'Provider connection failed before any output; retrying.',
+            message: 'Selected route connection failed before any output; retrying.',
             provider: 'openrouter',
             model: 'openrouter:qwen/qwen3.7-plus',
           },
@@ -4950,7 +4950,7 @@ describe('AIChat', () => {
               type: 'workflow_status',
               workflowStatus: {
                 phase: 'provider_retry',
-                message: 'Provider connection failed before any output; retrying.',
+                message: 'Selected route connection failed before any output; retrying.',
                 provider: 'openrouter',
                 model: 'openrouter:qwen/qwen3.7-plus',
               },
@@ -5675,7 +5675,7 @@ describe('AIChat', () => {
           streamEvents: [],
           workflowStatus: {
             phase: 'provider_retry',
-            message: 'Provider connection failed before any output; retrying.',
+            message: 'Selected route connection failed before any output; retrying.',
             attempt: 2,
             maxAttempts: 3,
             retryAfterMs: 3200,
@@ -5686,7 +5686,7 @@ describe('AIChat', () => {
       renderChat();
 
       expect(screen.getByLabelText('Assistant active turn status')).toHaveTextContent(
-        'Provider connection failed before any output; retrying. · attempt 2/3 · retrying in 1.9s',
+        'Selected route connection failed before any output; retrying. · attempt 2/3 · retrying in 1.9s',
       );
       expect(
         screen.getByTestId('assistant-activity-dock').querySelector('[data-status-kind="retrying"]'),
@@ -5755,7 +5755,7 @@ describe('AIChat', () => {
         },
         {
           phase: 'provider_start',
-          message: 'OpenRouter is starting the response.',
+          message: 'Waiting for assistant.',
           startedAt: 1_200,
         },
       ];
@@ -5786,13 +5786,13 @@ describe('AIChat', () => {
 
       const status = screen.getByLabelText('Assistant active turn status');
       await waitFor(() => expect(status).toHaveTextContent('Preparing Pulse context.'));
-      expect(status).not.toHaveTextContent('OpenRouter is starting the response.');
+      expect(status).not.toHaveTextContent('Waiting for assistant.');
 
       await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_PACE_MS);
       expect(status).toHaveTextContent('Reading current Pulse inventory.');
 
       await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_PACE_MS);
-      expect(status).toHaveTextContent('OpenRouter is starting the response.');
+      expect(status).toHaveTextContent('Waiting for assistant.');
       expect(status).not.toHaveTextContent('Preparing Pulse context.');
       expect(status).not.toHaveTextContent('Reading current Pulse inventory.');
     });
@@ -5816,7 +5816,7 @@ describe('AIChat', () => {
         },
         {
           phase: 'provider_start',
-          message: 'OpenRouter is starting the response.',
+          message: 'Waiting for assistant.',
           startedAt: 1_200,
         },
       ];
@@ -5859,14 +5859,14 @@ describe('AIChat', () => {
       expect(screen.getByLabelText('Queued follow-up messages')).toHaveTextContent(
         '1 follow-up queued',
       );
-      expect(status).not.toHaveTextContent('OpenRouter is starting the response.');
+      expect(status).not.toHaveTextContent('Waiting for assistant.');
 
       await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_PACE_MS);
       expect(status).toHaveTextContent('Reading current Pulse inventory.');
       expect(status).not.toHaveTextContent('follow-up queued');
 
       await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_PACE_MS);
-      expect(status).toHaveTextContent('OpenRouter is starting the response.');
+      expect(status).toHaveTextContent('Waiting for assistant.');
       expect(status).not.toHaveTextContent('follow-up queued');
       expect(status).not.toHaveTextContent('Preparing Pulse context.');
       expect(status).not.toHaveTextContent('Reading current Pulse inventory.');
@@ -5900,7 +5900,7 @@ describe('AIChat', () => {
           isStreaming: true,
           workflowStatus: {
             phase: 'provider_start',
-            message: 'OpenRouter is starting the response.',
+            message: 'Waiting for assistant.',
             startedAt: 1_000,
           },
           streamEvents: [
@@ -5908,7 +5908,7 @@ describe('AIChat', () => {
               type: 'workflow_status',
               workflowStatus: {
                 phase: 'provider_start',
-                message: 'OpenRouter is starting the response.',
+                message: 'Waiting for assistant.',
                 startedAt: 1_000,
               },
               startedAt: 1_000,
@@ -5935,7 +5935,7 @@ describe('AIChat', () => {
         'Completed $ ls /dev | wc -l',
       );
       expect(screen.getByLabelText('Assistant active turn status')).not.toHaveTextContent(
-        'OpenRouter is starting the response.',
+        'Waiting for assistant.',
       );
     });
 
@@ -5968,14 +5968,14 @@ describe('AIChat', () => {
           streamEvents: [{ type: 'content', content: 'I checked the first source.' }],
           workflowStatus: {
             phase: 'provider_start',
-            message: 'OpenRouter is starting the response.',
+            message: 'Waiting for assistant.',
             startedAt: Date.now() - 5_000,
           },
         },
       ]);
       renderChat();
       expect(screen.getByLabelText('Assistant active turn status')).toHaveTextContent(
-        'OpenRouter is starting the response.',
+        'Waiting for assistant.',
       );
     });
 

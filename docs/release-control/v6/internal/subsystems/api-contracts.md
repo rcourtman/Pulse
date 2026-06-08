@@ -124,7 +124,11 @@ Provider retry progress must use typed fields (`attempt`, `max_attempts`,
 `retry_after_ms`) on that same event instead of frontend-only string parsing or
 provider-specific ad hoc events; the Assistant UI may format those fields, but
 must not invent retry progress that the stream contract did not carry. Assistant
-chat stream payloads must not expose automatic provider fallback metadata:
+`provider_start` status text must remain route-neutral (`Waiting for
+assistant.`) while selected route identity travels through the typed `provider`
+and `model` fields. `provider_retry` status text must describe a selected-route
+retry, not a provider fallback or hidden route switch. Assistant chat stream
+payloads must not expose automatic provider fallback metadata:
 `workflow_state` may carry the selected `provider` and `model` plus same-route
 retry fields, but `provider_fallback`, `failed_provider`, `failed_model`,
 `next_provider`, and `next_model` are retired from the generated stream event

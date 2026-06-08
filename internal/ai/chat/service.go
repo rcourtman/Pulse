@@ -867,7 +867,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		emitWorkflowState(
 			streamCallback,
 			"provider_start",
-			fmt.Sprintf("%s is starting the response.", providerLabelForAttempt(attempt)),
+			"Waiting for assistant.",
 			sessionFSMState(sessionFSM),
 			"",
 			withWorkflowModelRoute(attempt.Model),
@@ -3030,36 +3030,6 @@ func emitChatProviderError(callback StreamCallback, err error) {
 	}
 	data, _ := json.Marshal(ErrorData{Message: fallbackProviderStreamErrorMessage(err)})
 	callback(StreamEvent{Type: "error", Data: data})
-}
-
-func providerLabel(provider string) string {
-	switch strings.ToLower(strings.TrimSpace(provider)) {
-	case config.AIProviderAnthropic:
-		return "Anthropic"
-	case config.AIProviderOpenAI:
-		return "OpenAI"
-	case config.AIProviderOpenRouter:
-		return "OpenRouter"
-	case config.AIProviderDeepSeek:
-		return "DeepSeek"
-	case config.AIProviderGemini:
-		return "Gemini"
-	case config.AIProviderOllama:
-		return "Ollama"
-	default:
-		return provider
-	}
-}
-
-func providerLabelForAttempt(attempt chatProviderAttempt) string {
-	provider := ""
-	if strings.TrimSpace(attempt.Model) != "" {
-		provider, _ = config.ParseModelString(strings.TrimSpace(attempt.Model))
-	}
-	if strings.TrimSpace(provider) == "" {
-		return "the selected provider"
-	}
-	return providerLabel(provider)
 }
 
 func (s *Service) createPatrolProviderForModel(modelStr string) (providers.StreamingProvider, error) {
