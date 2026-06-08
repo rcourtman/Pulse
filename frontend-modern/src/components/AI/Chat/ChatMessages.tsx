@@ -1,4 +1,5 @@
 import { Component, Show, For, createEffect, createMemo, createSignal } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import ArrowDownIcon from 'lucide-solid/icons/arrow-down';
 import { MessageItem } from './MessageItem';
 import type { ChatSession } from '@/api/aiChat';
@@ -51,6 +52,23 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
   let messagesEndRef: HTMLDivElement | undefined;
   let containerRef: HTMLDivElement | undefined;
   const [isPinnedToBottom, setIsPinnedToBottom] = createSignal(true);
+
+  // useChat hands us a fresh, immutably-rebuilt message array on every stream
+  // event (each content chunk, workflow-status change, tool update spreads a new
+  // message object). Rendering that array directly through <For>, which keys by
+  // object reference, tears down and recreates the whole MessageItem on every
+  // event — the visible flashing / rows popping in and out and the transcript
+  // jumping up and down during a turn.
+  //
+  // Reconcile the incoming array into a keyed store mirror so each message keeps
+  // a stable identity across updates (matched by id). MessageItem already reads
+  // every field through `() => props.message.x` accessors, so once it stops
+  // re-mounting, only the genuinely changed text/rows update in place. This keeps
+  // the streaming transcript stable the way OpenCode's timeline is.
+  const [mirroredMessages, setMirroredMessages] = createStore<ChatMessage[]>([]);
+  createEffect(() => {
+    setMirroredMessages(reconcile(props.messages, { key: 'id', merge: false }));
+  });
 
   const isContainerNearBottom = () => {
     if (!containerRef) return true;
@@ -254,7 +272,7 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
         </Show>
 
         {/* Messages */}
-        <For each={props.messages}>
+        <For each={mirroredMessages}>
           {(message) => {
             const queuedMeta = createMemo(() => queuedFollowUpMetaByMessageId().get(message.id));
             return (

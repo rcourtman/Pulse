@@ -2289,6 +2289,20 @@ constructed at service start, so anything that must stay fresh per turn
 carries no PII and is therefore safe on cloud-routed turns regardless of the
 operational-context sharing opt-in.
 
+The streaming transcript list reconciles messages by `id` rather than rendering
+the raw message array by reference. `useChat` rebuilds its message array
+immutably on every stream event (each content chunk, workflow-status change, and
+tool update spreads a brand-new message object), so a reference-keyed `<For>`
+would tear down and recreate the whole `MessageItem` on every event — the
+visible flashing, rows popping in and out, and transcript jumping up and down
+during a turn. `ChatMessages` (`frontend-modern/src/components/AI/Chat/ChatMessages.tsx`)
+reconciles the incoming array into a keyed `solid-js/store` mirror so each
+message keeps a stable identity across updates; `MessageItem` already reads every
+field through accessors, so only the genuinely changed text/rows update in place.
+This keeps the live transcript stable the way OpenCode's timeline is. (Residual
+in-place churn remains in the per-message stream-event/tool-row list, which is a
+separate, narrower follow-up.)
+
 Assistant slash-command availability is part of the command runtime contract,
 not only visual polish. The OpenCode reference at fetched `origin/dev` commit
 `c495635` filters prompt slash commands through the registered command catalog

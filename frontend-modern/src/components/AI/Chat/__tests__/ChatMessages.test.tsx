@@ -708,4 +708,36 @@ describe('ChatMessages', () => {
       expect(scrollContainer).toHaveAttribute('data-testid', 'assistant-message-list');
     });
   });
+
+  describe('streaming stability', () => {
+    // useChat hands ChatMessages a freshly-rebuilt array on every stream event,
+    // with a brand-new message object (same id) each time. The list must
+    // reconcile by id so a streaming message keeps its DOM node instead of being
+    // torn down and recreated on every tick — that re-mount churn is the visible
+    // flashing / rows popping in and out this guards against.
+    it('keeps a streaming message mounted in place across rebuilt arrays', () => {
+      const [msgs, setMsgs] = createSignal<ChatMessage[]>([
+        makeMessage({ id: 'm1', role: 'assistant', content: 'Hel', isStreaming: true }),
+      ]);
+      render(() => <ChatMessages messages={msgs()} {...makeHandlers()} />);
+
+      const nodeBefore = screen.getByTestId('message-item-m1');
+      expect(nodeBefore).toHaveTextContent('Hel');
+      const instancesForM1 = () =>
+        capturedMessageItemProps.filter((p) => p.message.id === 'm1').length;
+      expect(instancesForM1()).toBe(1);
+
+      // Next stream tick: a brand-new message object, same id, more content.
+      setMsgs([
+        makeMessage({ id: 'm1', role: 'assistant', content: 'Hello world', isStreaming: true }),
+      ]);
+
+      const nodeAfter = screen.getByTestId('message-item-m1');
+      // Same DOM element instance: reconciled in place, not recreated.
+      expect(nodeAfter).toBe(nodeBefore);
+      expect(nodeAfter).toHaveTextContent('Hello world');
+      // MessageItem was instantiated exactly once for this id across both renders.
+      expect(instancesForM1()).toBe(1);
+    });
+  });
 });
