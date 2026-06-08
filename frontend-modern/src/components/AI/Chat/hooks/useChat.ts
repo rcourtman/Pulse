@@ -68,17 +68,50 @@ export const latestExplicitModelRouteFromTranscript = (messages: ChatMessage[]):
   return '';
 };
 
-const createInitialAssistantWorkflowStatus = (startedAt = Date.now()): WorkflowStatus => ({
-  phase: 'request_send',
-  message: 'Sending prompt.',
-  startedAt,
-});
+const routeAwareWorkflowStatusFields = (modelRoute?: string) => {
+  const model = modelRoute?.trim() || '';
+  if (!model) return {};
+  const provider = getProviderFromModelId(model);
+  return {
+    model,
+    ...(provider ? { provider } : {}),
+  };
+};
 
-const createLocalAssistantWaitWorkflowStatus = (startedAt = Date.now()): WorkflowStatus => ({
-  phase: 'request_wait',
-  message: 'Waiting for assistant.',
-  startedAt,
-});
+const routeProviderLabel = (modelRoute?: string) => {
+  const model = modelRoute?.trim() || '';
+  if (!model) return '';
+  const provider = getProviderFromModelId(model);
+  return provider ? getAIProviderDisplayName(provider) : '';
+};
+
+const createInitialAssistantWorkflowStatus = (
+  modelRoute?: string,
+  startedAt = Date.now(),
+): WorkflowStatus => {
+  const providerLabel = routeProviderLabel(modelRoute);
+  return {
+    phase: 'request_send',
+    message: providerLabel ? `Sending prompt to ${providerLabel}.` : 'Sending prompt.',
+    ...routeAwareWorkflowStatusFields(modelRoute),
+    startedAt,
+  };
+};
+
+const createLocalAssistantWaitWorkflowStatus = (
+  modelRoute?: string,
+  startedAt = Date.now(),
+): WorkflowStatus => {
+  const providerLabel = routeProviderLabel(modelRoute);
+  return {
+    phase: 'request_wait',
+    message: providerLabel
+      ? `${providerLabel} is starting the response.`
+      : 'Waiting for assistant.',
+    ...routeAwareWorkflowStatusFields(modelRoute),
+    startedAt,
+  };
+};
 
 export interface UseChatOptions {
   sessionId?: string;
@@ -1834,7 +1867,7 @@ export function useChat(options: UseChatOptions = {}) {
     };
 
     const assistantId = generateId();
-    const initialWorkflowStatus = createInitialAssistantWorkflowStatus(turnStartedAt);
+    const initialWorkflowStatus = createInitialAssistantWorkflowStatus(requestModel, turnStartedAt);
     const initialStreamEvents: StreamDisplayEvent[] = [
       ...(requestModel
         ? [
@@ -1897,7 +1930,7 @@ export function useChat(options: UseChatOptions = {}) {
     const promoteLocalWaitStatus = () => {
       localAssistantWaitStatusTimer = undefined;
       if (requestId !== activeRequestId) return;
-      const waitStatus = createLocalAssistantWaitWorkflowStatus(turnStartedAt);
+      const waitStatus = createLocalAssistantWaitWorkflowStatus(requestModel, turnStartedAt);
       setMessages((prev) =>
         prev.map((msg) => {
           if (msg.id !== assistantId) return msg;

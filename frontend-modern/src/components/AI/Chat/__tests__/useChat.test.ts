@@ -362,7 +362,9 @@ describe('useChat', () => {
         workflowStatusHistory: [],
         workflowStatus: {
           phase: 'request_send',
-          message: 'Sending prompt.',
+          message: 'Sending prompt to OpenRouter.',
+          provider: 'openrouter',
+          model: 'openrouter:qwen/qwen3.7-plus',
         },
       });
       expect(assistant.streamEvents).toEqual([
@@ -375,7 +377,56 @@ describe('useChat', () => {
           type: 'workflow_status',
           workflowStatus: expect.objectContaining({
             phase: 'request_send',
-            message: 'Sending prompt.',
+            message: 'Sending prompt to OpenRouter.',
+            provider: 'openrouter',
+            model: 'openrouter:qwen/qwen3.7-plus',
+          }),
+        }),
+      ]);
+
+      resolveChat();
+      await result;
+      dispose();
+    });
+
+    it('promotes a quiet selected route to provider startup progress', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(2_000);
+      let resolveChat!: () => void;
+      mockChat.mockReturnValue(
+        new Promise<void>((resolve) => {
+          resolveChat = resolve;
+        }),
+      );
+
+      const { value: chat, dispose } = withRoot(() =>
+        useChat({ defaultModel: () => 'openrouter:qwen/qwen3.7-plus' }),
+      );
+      const result = chat.sendMessage('hello');
+
+      await vi.advanceTimersByTimeAsync(900);
+
+      const assistant = chat.messages()[1];
+      expect(assistant.workflowStatus).toMatchObject({
+        phase: 'request_wait',
+        message: 'OpenRouter is starting the response.',
+        provider: 'openrouter',
+        model: 'openrouter:qwen/qwen3.7-plus',
+        startedAt: 2_000,
+      });
+      expect(assistant.streamEvents).toEqual([
+        expect.objectContaining({
+          type: 'model_switch',
+          model: 'openrouter:qwen/qwen3.7-plus',
+          modelEvent: 'selected',
+        }),
+        expect.objectContaining({
+          type: 'workflow_status',
+          workflowStatus: expect.objectContaining({
+            phase: 'request_wait',
+            message: 'OpenRouter is starting the response.',
+            provider: 'openrouter',
+            model: 'openrouter:qwen/qwen3.7-plus',
           }),
         }),
       ]);
@@ -1713,7 +1764,9 @@ describe('useChat', () => {
           type: 'workflow_status',
           workflowStatus: expect.objectContaining({
             phase: 'request_send',
-            message: 'Sending prompt.',
+            message: 'Sending prompt to OpenRouter.',
+            provider: 'openrouter',
+            model: 'openrouter:qwen/qwen3.7-plus',
           }),
         }),
       ]);
