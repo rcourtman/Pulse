@@ -1902,7 +1902,7 @@ func buildResourceContextHandoffDirective(handoffResources []HandoffResource, me
 		"[Resource Context Handoff Instructions]",
 		"Source: Pulse resource drawer handoff",
 		"Selected Resource: The attached handoff resource is the user's current selected resource. Do not ask which server, service, container, VM, or resource the user means.",
-		"Tool Target Handle: When you need a read-only tool against the attached resource, use target_host=\"current_resource\" or resource_id=\"current_resource\". Do not copy 'redacted by policy' into any tool argument.",
+		"Tool Target Handle: When you need a read-only tool against the attached resource, use target_host=\"current_resource\" or resource_id=\"current_resource\". Do not copy a withheld or placeholder label into any tool argument.",
 		"Context-First Answering: When the user asks what Pulse already knows, asks for discovery readiness, or asks a question that should be answerable from discovered/service context, answer from the attached context without tools. If the attached context lacks the fact, say that Pulse does not currently have that discovery/context fact instead of filling the gap with tools.",
 		"Discovery Boundary: Do not call discovery tools only to identify this resource or fill in missing context. Use attached discovery readiness first; call discovery only when the user explicitly asks you to run discovery.",
 		"Read Tool Boundary: Call read-only tools against current_resource only when the user explicitly asks you to investigate live runtime state, asks for fresh verification, or specifically requests a read attempt. Do not use read or mixed tools just to improve a context summary.",

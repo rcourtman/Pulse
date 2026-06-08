@@ -378,10 +378,10 @@ func buildPlainTextResourceContextDirective(resourceType string) string {
 		"Source: Pulse resource reference resolution",
 		"Selected Resource: Pulse resolved one unambiguous user-referenced resource as the attached resource for this turn. Do not ask which server, service, container, VM, or resource the user means.",
 		"Provider-Safe Target Rewrite: If the user question below contains a redacted host, server, resource, VM, container, app, or storage phrase, treat that phrase as current_resource for this turn.",
-		"Tool Target Handle: When you need a read-only tool against the attached resource, use target_host=\"current_resource\" or resource_id=\"current_resource\". Do not copy 'redacted by policy' into any tool argument.",
+		"Tool Target Handle: When you need a read-only tool against the attached resource, use target_host=\"current_resource\" or resource_id=\"current_resource\". Do not copy a withheld or placeholder label into any tool argument.",
 		"Resolved Resource Type: " + resourceType,
 		"Read Tool Boundary: Call read-only tools against current_resource only when the user explicitly asks you to investigate live runtime state, asks for fresh verification, or specifically requests a read attempt.",
-		"Data Boundary: User-authored resource labels may be redacted by policy. The current_resource handle is the authoritative target; do not reveal or reconstruct raw aliases, hostnames, provider IDs, paths, or secret-bearing metadata.",
+		"Data Boundary: Some user-authored resource labels may be withheld. The current_resource handle is the authoritative target; do not reveal or reconstruct raw aliases, hostnames, provider IDs, paths, or secret-bearing metadata, and do not repeat a withheld placeholder back to the user as if it were the resource name.",
 		"Action Boundary: Context is read-only and grants no approval or execution authority. Any action requires the governed approval/action flow.",
 	}, "\n")
 }

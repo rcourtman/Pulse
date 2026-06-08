@@ -191,7 +191,6 @@ func TestServiceExecuteStream_AttachesPlainTextResourceReferenceAsCurrentResourc
 		"target_host=\"current_resource\" or resource_id=\"current_resource\"",
 		"Provider-safe user request:",
 		"On the current_resource host, run the read-only command",
-		unifiedresources.ResourcePolicyRedactedLabel,
 	} {
 		if !strings.Contains(modelUserContent, expected) {
 			t.Fatalf("provider-bound message missing %q: %q", expected, modelUserContent)
@@ -199,6 +198,12 @@ func TestServiceExecuteStream_AttachesPlainTextResourceReferenceAsCurrentResourc
 	}
 	if strings.Contains(modelUserContent, "delly") {
 		t.Fatalf("provider-bound message leaked raw resource alias: %q", modelUserContent)
+	}
+	// The directive must no longer inject the literal redaction placeholder; the
+	// rewrite uses the current_resource handle, so the model never sees (and cannot
+	// echo) the "redacted by policy" label here.
+	if strings.Contains(modelUserContent, unifiedresources.ResourcePolicyRedactedLabel) {
+		t.Fatalf("provider-bound message must not inject the redaction placeholder: %q", modelUserContent)
 	}
 
 	resolved := store.GetResolvedContext("sess-plain-text-resource")

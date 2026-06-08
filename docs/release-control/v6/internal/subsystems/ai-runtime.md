@@ -139,6 +139,15 @@ deriving an older display status from `workflowStatusHistory`.
      backstop for any context arriving via tool results, handoff text, or user text.
    Local (Ollama) routing is unaffected and always receives full context
    (`RequestSanitizerForModel` returns nil for local models).
+   Redaction-placeholder hygiene: Pulse-authored model-bound directives (the
+   resource-context handoff instructions in `internal/ai/chat/service.go` and
+   `internal/ai/chat/plain_text_resource_context.go`) must NOT inject the literal
+   redaction placeholder (`unifiedresources.ResourcePolicyRedactedLabel`,
+   "redacted by policy") into the prompt — naming it makes the model echo it back
+   as if it were a resource name. Directives reference withheld labels neutrally
+   ("a withheld or placeholder label") and must instruct the model not to repeat a
+   withheld placeholder back to the user as the resource identity; the
+   `current_resource` handle remains the authoritative target.
    The dial must be operator-reachable, not config-file-only. `/api/settings/ai`
    round-trips `cloud_context_privacy` field-by-field exactly like
    `discovery_enabled`: `internal/api/ai_handlers.go` always serializes the
