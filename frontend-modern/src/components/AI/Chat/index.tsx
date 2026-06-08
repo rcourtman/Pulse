@@ -2437,6 +2437,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
       currentStatusNow(),
     );
   });
+  const activityDockQueuedFollowUpCount = createMemo(() =>
+    Math.max(currentStatus()?.queuedFollowUpCount || 0, chat.queuedFollowUpCount()),
+  );
   createEffect(() => {
     const status = currentStatus();
     if (!status?.startedAt) return;
@@ -4491,7 +4494,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
               when={
                 currentStatus() ||
                 autonomousWarningVisible() ||
-                chat.queuedFollowUpCount() > 0
+                activityDockQueuedFollowUpCount() > 0
               }
             >
               <div
@@ -4593,7 +4596,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     </button>
                   </div>
                 </Show>
-                <Show when={chat.queuedFollowUpCount() > 0}>
+                <Show when={activityDockQueuedFollowUpCount() > 0}>
                   <div
                     class={`px-2.5 py-1.5 ${
                       currentStatus() || autonomousWarningVisible()
@@ -4606,7 +4609,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     <div class="flex min-h-7 items-center gap-2">
                       <ClockIcon class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                       <span class="min-w-0 flex-1 truncate text-xs font-medium">
-                        {pluralizeCount(chat.queuedFollowUpCount(), 'follow-up', 'follow-ups')}{' '}
+                        {pluralizeCount(
+                          activityDockQueuedFollowUpCount(),
+                          'follow-up',
+                          'follow-ups',
+                        )}{' '}
                         {chat.queuedFollowUpsPaused() ? 'paused' : 'queued'}
                       </span>
                       <button

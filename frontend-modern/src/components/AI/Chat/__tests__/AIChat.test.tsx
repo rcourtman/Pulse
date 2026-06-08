@@ -5679,16 +5679,20 @@ describe('AIChat', () => {
       ]);
 
       const status = screen.getByLabelText('Assistant active turn status');
-      await waitFor(() =>
-        expect(status).toHaveTextContent('Preparing Pulse context. · 1 follow-up queued'),
+      await waitFor(() => expect(status).toHaveTextContent('Preparing Pulse context.'));
+      expect(status).not.toHaveTextContent('follow-up queued');
+      expect(screen.getByLabelText('Queued follow-up messages')).toHaveTextContent(
+        '1 follow-up queued',
       );
       expect(status).not.toHaveTextContent('OpenRouter is starting the response.');
 
       await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_PACE_MS);
-      expect(status).toHaveTextContent('Reading current Pulse inventory. · 1 follow-up queued');
+      expect(status).toHaveTextContent('Reading current Pulse inventory.');
+      expect(status).not.toHaveTextContent('follow-up queued');
 
       await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_PACE_MS);
-      expect(status).toHaveTextContent('OpenRouter is starting the response. · 1 follow-up queued');
+      expect(status).toHaveTextContent('OpenRouter is starting the response.');
+      expect(status).not.toHaveTextContent('follow-up queued');
       expect(status).not.toHaveTextContent('Preparing Pulse context.');
       expect(status).not.toHaveTextContent('Reading current Pulse inventory.');
     });
@@ -5842,7 +5846,10 @@ describe('AIChat', () => {
 
       expect(activityDock).toContainElement(screen.getByLabelText('Assistant active turn status'));
       expect(screen.getByLabelText('Assistant active turn status')).toHaveTextContent(
-        'Generating response · 1 follow-up queued',
+        'Generating response',
+      );
+      expect(screen.getByLabelText('Assistant active turn status')).not.toHaveTextContent(
+        'follow-up queued',
       );
       expect(activityDock).toContainElement(screen.getByLabelText('Queued follow-up messages'));
       expect(screen.getByText('1 follow-up queued')).toBeInTheDocument();

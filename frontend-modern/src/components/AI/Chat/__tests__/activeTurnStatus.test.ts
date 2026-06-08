@@ -61,7 +61,8 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'thinking',
-      text: 'Sending prompt · 1 follow-up queued',
+      text: 'Sending prompt',
+      queuedFollowUpCount: 1,
       startedAt: 1_000,
     });
   });
@@ -82,7 +83,8 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'thinking',
-      text: 'OpenRouter is starting the response. · 2 follow-ups queued',
+      text: 'OpenRouter is starting the response.',
+      queuedFollowUpCount: 2,
       startedAt: 1_000,
     });
   });
@@ -1016,7 +1018,8 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'generating',
-      text: 'Generating response · 2 follow-ups queued',
+      text: 'Generating response',
+      queuedFollowUpCount: 2,
     });
   });
 

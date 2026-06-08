@@ -15,6 +15,7 @@ export interface AssistantActiveTurnStatus {
   text: string;
   type: AssistantActiveTurnStatusKind;
   startedAt?: number;
+  queuedFollowUpCount?: number;
 }
 
 interface AssistantActiveTurnStatusCandidate extends AssistantActiveTurnStatus {
@@ -581,21 +582,15 @@ export const getAssistantQueuedFollowUpCount = (messages: ChatMessage[]): number
     0,
   );
 
-export const getAssistantQueuedFollowUpStatusSuffix = (messages: ChatMessage[]): string => {
-  const count = getAssistantQueuedFollowUpCount(messages);
-  if (count <= 0) return '';
-  return ` · ${count} ${count === 1 ? 'follow-up' : 'follow-ups'} queued`;
-};
-
 export const withAssistantQueuedFollowUpStatus = (
   status: AssistantActiveTurnStatus,
   messages: ChatMessage[],
 ): AssistantActiveTurnStatus => {
-  const suffix = getAssistantQueuedFollowUpStatusSuffix(messages);
-  if (!suffix) return status;
+  const count = getAssistantQueuedFollowUpCount(messages);
+  if (count <= 0) return status;
   return {
     ...status,
-    text: `${status.text}${suffix}`,
+    queuedFollowUpCount: count,
   };
 };
 
