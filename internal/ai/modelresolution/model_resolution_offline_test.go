@@ -40,7 +40,7 @@ func TestResolveConfiguredChatModelOffline_UsesStableProviderDefault(t *testing.
 	}
 }
 
-func TestResolveConfiguredChatModelOffline_ReplacesSpecializedChatModelWithStableDefault(t *testing.T) {
+func TestResolveConfiguredChatModelOffline_RejectsSpecializedExplicitChatModel(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.AIConfig{
@@ -49,11 +49,11 @@ func TestResolveConfiguredChatModelOffline_ReplacesSpecializedChatModelWithStabl
 	}
 
 	got, err := ResolveConfiguredChatModelOffline(cfg)
-	if err != nil {
-		t.Fatalf("ResolveConfiguredChatModelOffline() error = %v", err)
+	if err == nil {
+		t.Fatalf("ResolveConfiguredChatModelOffline() error = nil, got model %q", got)
 	}
-	if want := config.DefaultModelForProvider(config.AIProviderOpenAI); got != want {
-		t.Fatalf("ResolveConfiguredChatModelOffline() = %q, want %q", got, want)
+	if !strings.Contains(err.Error(), "selected chat model route") || !strings.Contains(err.Error(), "gpt-realtime-2") {
+		t.Fatalf("ResolveConfiguredChatModelOffline() error = %q, want selected chat model route error", err)
 	}
 }
 

@@ -220,6 +220,20 @@ func TestService_CreateProvider(t *testing.T) {
 	}
 }
 
+func TestServiceCreateProviderRejectsUnusableConfiguredChatModelWithoutRewrite(t *testing.T) {
+	cfg := &config.AIConfig{
+		OpenAIAPIKey: "sk-test",
+		ChatModel:    "openai:gpt-realtime-2",
+	}
+	service := &Service{cfg: cfg}
+
+	provider, err := service.createProvider()
+	assert.Error(t, err)
+	assert.Nil(t, provider)
+	assert.Contains(t, err.Error(), "selected chat model route")
+	assert.Equal(t, "openai:gpt-realtime-2", cfg.ChatModel)
+}
+
 func TestService_ExecuteStream_Failures(t *testing.T) {
 	service := &Service{}
 	err := service.ExecuteStream(context.Background(), ExecuteRequest{}, nil)

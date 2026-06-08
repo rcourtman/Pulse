@@ -3688,7 +3688,7 @@ func (s *Service) createProvider() (providers.StreamingProvider, error) {
 	if chatModel == "" {
 		return nil, fmt.Errorf("no chat model configured")
 	}
-	if strings.TrimSpace(s.cfg.ChatModel) == "" || !modelresolution.IsModelUsableForChatWithConfig(s.cfg, s.cfg.GetChatModel()) {
+	if strings.TrimSpace(s.cfg.ChatModel) == "" {
 		s.cfg.ChatModel = chatModel
 	}
 

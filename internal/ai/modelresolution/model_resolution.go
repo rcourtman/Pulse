@@ -46,11 +46,7 @@ func ResolveConfiguredChatModel(ctx context.Context, cfg *config.AIConfig) (stri
 		return explicit, nil
 	}
 	if explicit != "" {
-		provider, err := selectedModelProvider(cfg, explicit)
-		if err != nil {
-			return "", err
-		}
-		return ResolveConfiguredChatProviderModel(ctx, cfg, provider)
+		return "", selectedChatModelProviderError(cfg, explicit)
 	}
 
 	configuredProviders := cfg.GetConfiguredProviders()
@@ -75,11 +71,7 @@ func ResolveConfiguredChatModelOffline(cfg *config.AIConfig) (string, error) {
 		return explicit, nil
 	}
 	if explicit != "" {
-		provider, err := selectedModelProvider(cfg, explicit)
-		if err != nil {
-			return "", err
-		}
-		return ResolveConfiguredChatProviderModelOffline(cfg, provider)
+		return "", selectedChatModelProviderError(cfg, explicit)
 	}
 
 	configuredProviders := cfg.GetConfiguredProviders()
@@ -114,6 +106,13 @@ func selectedModelProviderError(cfg *config.AIConfig, model string) error {
 		return err
 	}
 	return fmt.Errorf("selected model route %q is not usable with the current Pulse Assistant config", strings.TrimSpace(model))
+}
+
+func selectedChatModelProviderError(cfg *config.AIConfig, model string) error {
+	if _, err := selectedModelProvider(cfg, model); err != nil {
+		return err
+	}
+	return fmt.Errorf("selected chat model route %q is not usable for Assistant chat with the current Pulse Assistant config", strings.TrimSpace(model))
 }
 
 // ResolveConfiguredChatProviderModelOffline resolves a chat-suitable model for

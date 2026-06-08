@@ -149,6 +149,24 @@ func TestResolveConfiguredChatProviderModel_SkipsSpecializedPreferredModel(t *te
 	}
 }
 
+func TestResolveConfiguredChatModel_RejectsSpecializedExplicitChatModel(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.AIConfig{
+		Enabled:      true,
+		OpenAIAPIKey: "sk-test",
+		ChatModel:    "openai:gpt-realtime-2",
+	}
+
+	got, err := ResolveConfiguredChatModel(context.Background(), cfg)
+	if err == nil {
+		t.Fatalf("ResolveConfiguredChatModel() error = nil, got model %q", got)
+	}
+	if !strings.Contains(err.Error(), "selected chat model route") || !strings.Contains(err.Error(), "gpt-realtime-2") {
+		t.Fatalf("ResolveConfiguredChatModel() error = %q, want selected chat model route error", err)
+	}
+}
+
 func TestResolveConfiguredModel_RejectsExplicitUnconfiguredRoute(t *testing.T) {
 	t.Parallel()
 

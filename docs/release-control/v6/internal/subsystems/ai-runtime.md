@@ -508,11 +508,14 @@ deriving an older display status from `workflowStatusHistory`.
    `packages/opencode/src/session/prompt.ts`. Pulse adapts that behavior for the
    drawer instead of implementing automatic cross-provider route switching.
    Primary interactive chat model resolution must use the explicit configured
-   chat route or a stable provider default without calling provider model
-   catalogs before the selected stream starts. Catalog-backed recommendation
-   belongs to settings/model-list and explicit route-recovery flows, not
-   `/api/ai/chat` first-response startup. Once the selected provider route
-   starts, transient pre-output transport failures may retry the same route and
+   chat route or, when no explicit chat route exists, a stable provider default
+   without calling provider model catalogs before the selected stream starts. If
+   an explicit chat route is unconfigured, retired, or recognized as a
+   specialized non-chat endpoint, `/api/ai/chat` must fail that selected route
+   visibly instead of substituting a same-provider default. Catalog-backed
+   recommendation belongs to settings/model-list and explicit route-recovery
+   flows, not `/api/ai/chat` first-response startup. Once the selected provider
+   route starts, transient pre-output transport failures may retry the same route and
    must surface a `provider_retry` workflow state with `attempt`,
    `max_attempts`, and `retry_after_ms` before sleeping. If same-route retry is
    exhausted before visible output, Pulse must emit a normal provider error and
