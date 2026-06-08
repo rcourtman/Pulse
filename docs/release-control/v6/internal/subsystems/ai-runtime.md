@@ -714,6 +714,10 @@ deriving an older display status from `workflowStatusHistory`.
    the real `provider_retry` workflow state, including attempt metadata and
    `retry_after_ms`, so browser proof of retry countdown behavior does not
    depend on external provider availability or API spend.
+   The local `tool-chain` fixture must exercise consecutive tool activity with
+   paced `tool_start` -> `tool_progress` -> `tool_end` transitions for one
+   tool followed by a second live tool, so browser proof can verify completed
+   rows compact while the next tool row replaces the active motion.
    Dev/test fixture prompts are also part of the Assistant command-discovery
    surface: slash autocomplete and Assistant command help must expose an
    insertable `/fixture` command in development/test builds, search it by

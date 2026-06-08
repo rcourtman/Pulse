@@ -5,6 +5,7 @@ export const AI_CHAT_DEV_STREAM_FIXTURE_PROMPTS = [
   '/fixture assistant-stream',
   '/fixture send-hold',
   '/fixture tool-burst',
+  '/fixture tool-chain',
   '/fixture reasoning-leak',
   '/fixture workflow-burst',
   '/fixture context-group',
@@ -347,6 +348,109 @@ const buildToolBurstFixtureEvents = (model?: string): AIChatStreamEvent[] => [
       model: assistantFixtureModel(model),
       input_tokens: 64,
       output_tokens: 31,
+    },
+  },
+];
+
+const buildToolChainFixtureEvents = (model?: string): AIChatStreamEvent[] => [
+  {
+    type: 'session',
+    data: { id: 'dev-fixture-tool-chain' },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'request_start',
+      message: 'Preparing Pulse context.',
+    },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'provider_start',
+      message: 'Waiting for assistant.',
+      model: assistantFixtureModel(model),
+    },
+  },
+  {
+    type: 'tool_start',
+    data: {
+      id: 'fixture-tool-chain-inventory',
+      name: 'pulse_query',
+      input: '{"query":"current resource inventory"}',
+      raw_input: 'pulse_query(query="current resource inventory")',
+      phase: 'running',
+      message: 'Reading current Pulse inventory.',
+    },
+  },
+  {
+    type: 'tool_progress',
+    data: {
+      id: 'fixture-tool-chain-inventory',
+      name: 'pulse_query',
+      input: '{"query":"current resource inventory"}',
+      raw_input: 'pulse_query(query="current resource inventory")',
+      phase: 'running',
+      message: 'Summarizing inventory facts.',
+    },
+  },
+  {
+    type: 'tool_end',
+    data: {
+      id: 'fixture-tool-chain-inventory',
+      name: 'pulse_query',
+      input: '{"query":"current resource inventory"}',
+      raw_input: 'pulse_query(query="current resource inventory")',
+      output: '{"resources":3,"alerts":1,"source":"fixture"}',
+      success: true,
+    },
+  },
+  {
+    type: 'tool_start',
+    data: {
+      id: 'fixture-tool-chain-read',
+      name: 'pulse_read',
+      input: '{"target_host":"current_resource","command":"ls /dev | wc -l"}',
+      raw_input: 'pulse_read(target_host="current_resource", command="ls /dev | wc -l")',
+      phase: 'running',
+      message: 'Running read-only command.',
+    },
+  },
+  {
+    type: 'tool_progress',
+    data: {
+      id: 'fixture-tool-chain-read',
+      name: 'pulse_read',
+      input: '{"target_host":"current_resource","command":"ls /dev | wc -l"}',
+      raw_input: 'pulse_read(target_host="current_resource", command="ls /dev | wc -l")',
+      phase: 'running',
+      message: 'Collecting command output.',
+    },
+  },
+  {
+    type: 'tool_end',
+    data: {
+      id: 'fixture-tool-chain-read',
+      name: 'pulse_read',
+      input: '{"target_host":"current_resource","command":"ls /dev | wc -l"}',
+      raw_input: 'pulse_read(target_host="current_resource", command="ls /dev | wc -l")',
+      output: '4358',
+      success: true,
+    },
+  },
+  {
+    type: 'content',
+    data: {
+      text: 'The tool-chain fixture kept each tool start, progress update, completion, and replacement visible without opening a provider request.',
+    },
+  },
+  {
+    type: 'done',
+    data: {
+      session_id: 'dev-fixture-tool-chain',
+      model: assistantFixtureModel(model),
+      input_tokens: 97,
+      output_tokens: 35,
     },
   },
 ];
@@ -1048,6 +1152,9 @@ const buildFixtureEvents = (prompt: string, model?: string): AIChatStreamEvent[]
   if (normalized === '/fixture tool-burst') {
     return buildToolBurstFixtureEvents(model);
   }
+  if (normalized === '/fixture tool-chain') {
+    return buildToolChainFixtureEvents(model);
+  }
   if (normalized === '/fixture reasoning-leak') {
     return buildReasoningLeakFixtureEvents(model);
   }
@@ -1132,6 +1239,17 @@ const fixtureStepDelay = (
     event.data.phase === 'provider_start'
   ) {
     return 2400;
+  }
+  if (normalizedPrompt === '/fixture tool-chain') {
+    if (event.type === 'tool_start') {
+      return 1400;
+    }
+    if (event.type === 'tool_progress') {
+      return 900;
+    }
+    if (event.type === 'tool_end') {
+      return 450;
+    }
   }
   if (normalizedPrompt === '/fixture long-output' && event.type === 'content') {
     return 1800;

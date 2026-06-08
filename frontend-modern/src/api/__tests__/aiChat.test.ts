@@ -393,6 +393,139 @@ describe('AIChatAPI', () => {
     await expect(streamPromise).resolves.toBe(true);
   });
 
+  it('runs the tool-chain dev stream fixture without opening a provider request', async () => {
+    const onEvent = vi.fn();
+
+    await AIChatAPI.chat(
+      '/fixture tool-chain',
+      undefined,
+      'openrouter:qwen/qwen3.7-plus',
+      onEvent,
+    );
+
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'session',
+      'workflow_state',
+      'workflow_state',
+      'tool_start',
+      'tool_progress',
+      'tool_end',
+      'tool_start',
+      'tool_progress',
+      'tool_end',
+      'content',
+      'done',
+    ]);
+    expect(onEvent.mock.calls[0][0]).toMatchObject({
+      type: 'session',
+      data: { id: 'dev-fixture-tool-chain' },
+    });
+    expect(onEvent.mock.calls[3][0]).toMatchObject({
+      type: 'tool_start',
+      data: {
+        id: 'fixture-tool-chain-inventory',
+        name: 'pulse_query',
+        phase: 'running',
+        message: 'Reading current Pulse inventory.',
+      },
+    });
+    expect(onEvent.mock.calls[6][0]).toMatchObject({
+      type: 'tool_start',
+      data: {
+        id: 'fixture-tool-chain-read',
+        name: 'pulse_read',
+        phase: 'running',
+        message: 'Running read-only command.',
+      },
+    });
+    expect(onEvent.mock.calls[10][0]).toMatchObject({
+      type: 'done',
+      data: {
+        session_id: 'dev-fixture-tool-chain',
+        model: 'openrouter:qwen/qwen3.7-plus',
+      },
+    });
+  });
+
+  it('paces the tool-chain fixture so each live tool step is inspectable', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const onEvent = vi.fn();
+
+    const streamPromise = maybeRunAIChatDevStreamFixture({
+      prompt: '/fixture tool-chain',
+      model: 'openrouter:deepseek/deepseek-chat',
+      onEvent,
+      stepDelayMs: 25,
+    });
+    const eventTypes = () => onEvent.mock.calls.map(([event]) => event.type);
+
+    await flushMicrotasks();
+    expect(eventTypes()).toEqual(['session']);
+
+    await vi.advanceTimersByTimeAsync(75);
+    expect(eventTypes()).toEqual([
+      'session',
+      'workflow_state',
+      'workflow_state',
+      'tool_start',
+    ]);
+
+    await vi.advanceTimersByTimeAsync(1399);
+    expect(eventTypes()).toEqual([
+      'session',
+      'workflow_state',
+      'workflow_state',
+      'tool_start',
+    ]);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(eventTypes()).toEqual([
+      'session',
+      'workflow_state',
+      'workflow_state',
+      'tool_start',
+      'tool_progress',
+    ]);
+
+    await vi.advanceTimersByTimeAsync(900);
+    expect(eventTypes()).toEqual([
+      'session',
+      'workflow_state',
+      'workflow_state',
+      'tool_start',
+      'tool_progress',
+      'tool_end',
+    ]);
+
+    await vi.advanceTimersByTimeAsync(450);
+    expect(eventTypes()).toEqual([
+      'session',
+      'workflow_state',
+      'workflow_state',
+      'tool_start',
+      'tool_progress',
+      'tool_end',
+      'tool_start',
+    ]);
+
+    await vi.runAllTimersAsync();
+    await expect(streamPromise).resolves.toBe(true);
+    expect(eventTypes()).toEqual([
+      'session',
+      'workflow_state',
+      'workflow_state',
+      'tool_start',
+      'tool_progress',
+      'tool_end',
+      'tool_start',
+      'tool_progress',
+      'tool_end',
+      'content',
+      'done',
+    ]);
+  });
+
   it('runs the send-hold dev stream fixture without opening a provider request', async () => {
     const onEvent = vi.fn();
 
@@ -605,6 +738,7 @@ describe('AIChatAPI', () => {
   it('exports fixture names and aliases for command discovery', () => {
     expect(AI_CHAT_DEV_STREAM_FIXTURE_NAMES).toContain('provider-retry');
     expect(AI_CHAT_DEV_STREAM_FIXTURE_NAMES).toContain('send-hold');
+    expect(AI_CHAT_DEV_STREAM_FIXTURE_NAMES).toContain('tool-chain');
     expect(AI_CHAT_DEV_STREAM_FIXTURE_NAMES).toContain('command-tool');
     expect(AI_CHAT_DEV_STREAM_FIXTURE_NAMES).toContain('reasoning-leak');
     expect(AI_CHAT_DEV_STREAM_FIXTURE_NAMES).not.toContain('/fixture provider-retry');

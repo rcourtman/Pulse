@@ -153,6 +153,10 @@ enough for the browser to paint the intermediate state, including keeping the
 `/fixture tool-burst` running tool row visible before the matching `tool_end`;
 unit tests may explicitly disable that pace, but the live dev fixture must not
 collapse to the terminal row.
+The `/fixture tool-chain` stream must pace consecutive
+`tool_start`/`tool_progress`/`tool_end` transitions across at least two tools,
+so browser proof can stop on a completed compact row plus the next live running
+row without a provider request.
 Fixtures that emit consecutive context/read/query tool events must keep those
 events as ordinary typed `tool_start` / `tool_end` activity and must not encode
 obsolete grouped-context wording in fixture answer content. The fixture payload
@@ -646,7 +650,10 @@ payload shape change when the portal presents compact client rows.
 	provider delay between the two events, followed by a paced content/terminal
 	step, so browser proof can verify that fast command activity remains
 	perceptible without a real provider request. At least one fixture-backed
-	Assistant sequence must exercise `provider_retry` with `attempt`,
+	Assistant tool sequence must exercise consecutive multi-tool activity with a
+	paced completed first row followed by a live second row, so browser proof can
+	verify replacement/compaction motion without provider timing. At least one
+	fixture-backed Assistant sequence must exercise `provider_retry` with `attempt`,
 	`max_attempts`, and `retry_after_ms` metadata plus a paced retry window, so
 	browser proof can verify visible retry countdown behavior without a real
 	provider request, VPN dependency, or API spend. At least one fixture-backed
