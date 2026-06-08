@@ -1837,6 +1837,7 @@ func TestService_ExecuteStream_HandoffContextIsModelOnly(t *testing.T) {
 			ID:        "vm-100",
 			Type:      unifiedresources.ResourceTypeVM,
 			Name:      "web-server",
+			Tags:      []string{"sensitive"},
 			Status:    unifiedresources.StatusWarning,
 			LastSeen:  actionNow.Add(-5 * time.Minute),
 			UpdatedAt: actionNow.Add(-2 * time.Minute),

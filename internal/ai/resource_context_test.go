@@ -80,6 +80,7 @@ func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 		ID:       "vm-100",
 		Name:     "web-vm",
 		Type:     unifiedresources.ResourceTypeVM,
+		Tags:     []string{"database"},
 		ParentID: &nodeWithAgentID,
 		Status:   unifiedresources.StatusOnline,
 		Identity: unifiedresources.ResourceIdentity{
@@ -97,6 +98,7 @@ func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 		ID:       "ct-200",
 		Name:     "db-ct",
 		Type:     unifiedresources.ResourceTypeSystemContainer,
+		Tags:     []string{"database"},
 		ParentID: &nodeWithAgentID,
 		Status:   unifiedresources.StatusOffline,
 		Proxmox: &unifiedresources.ProxmoxData{
@@ -107,6 +109,7 @@ func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 		ID:       "dock-300",
 		Name:     "redis",
 		Type:     unifiedresources.ResourceTypeAppContainer,
+		Tags:     []string{"database"},
 		ParentID: &dockerHostID,
 		Status:   unifiedresources.StatusOnline,
 		Metrics: &unifiedresources.ResourceMetrics{
@@ -117,6 +120,7 @@ func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 		ID:       "dock-301",
 		Name:     "cache",
 		Type:     unifiedresources.ResourceTypeAppContainer,
+		Tags:     []string{"database"},
 		ParentID: &dockerHostID,
 		Status:   unifiedresources.StatusOffline,
 	}
@@ -124,6 +128,7 @@ func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 		ID:       "vm-999",
 		Name:     "mystery",
 		Type:     unifiedresources.ResourceTypeVM,
+		Tags:     []string{"database"},
 		ParentID: &unknownParentID,
 		Status:   unifiedresources.StatusOnline,
 		Proxmox: &unifiedresources.ProxmoxData{
@@ -134,6 +139,7 @@ func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 		ID:     "orphan-1",
 		Name:   "orphan",
 		Type:   unifiedresources.ResourceTypeSystemContainer,
+		Tags:   []string{"database"},
 		Status: unifiedresources.StatusOnline,
 		Identity: unifiedresources.ResourceIdentity{
 			IPAddresses: []string{"172.16.0.5"},
@@ -398,6 +404,7 @@ func TestBuildUnifiedResourceContextUsesAISafeSummaryForSensitiveResources(t *te
 		ID:     "prod-west:101",
 		Name:   "finance-db",
 		Type:   unifiedresources.ResourceTypeVM,
+		Tags:   []string{"database"},
 		Status: unifiedresources.StatusOnline,
 		Identity: unifiedresources.ResourceIdentity{
 			ClusterName: "prod-west",
@@ -459,6 +466,7 @@ func TestBuildUnifiedResourceContextRedactsSensitiveAlertMessageText(t *testing.
 		ID:     "prod-west:101",
 		Name:   "finance-db",
 		Type:   unifiedresources.ResourceTypeVM,
+		Tags:   []string{"database"},
 		Status: unifiedresources.StatusWarning,
 		Identity: unifiedresources.ResourceIdentity{
 			Hostnames:   []string{"finance-db.internal"},

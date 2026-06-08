@@ -20,10 +20,14 @@ func TestSummarizePolicyPosture(t *testing.T) {
 			Status: StatusOnline,
 		},
 		{
+			// A plain VM is now Internal; a workload that holds protected data is
+			// escalated to Sensitive via its tag (the canonical way to mark a
+			// homelab/SMB workload sensitive after the default recalibration).
 			ID:     "sensitive-1",
 			Name:   "db-1",
 			Type:   ResourceTypeVM,
 			Status: StatusOnline,
+			Tags:   []string{"database"},
 			Identity: ResourceIdentity{
 				Hostnames:   []string{"db.internal"},
 				IPAddresses: []string{"10.0.0.10"},

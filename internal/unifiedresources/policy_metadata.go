@@ -135,23 +135,18 @@ func classifyResourceSensitivity(resource Resource) ResourceSensitivity {
 		return ResourceSensitivityRestricted
 	}
 
+	// Sensitivity is calibrated for Pulse's audience (homelab / SMB). Ordinary
+	// compute workloads — VMs, containers, pods, k8s deployments/services, docker
+	// services — are NOT sensitive by default: a workload's name and private LAN
+	// IP are not secrets, and redacting them on cloud models cripples the
+	// Assistant ("redacted by policy" everywhere). They classify as Internal
+	// (cloud-summary, no redaction) and only escalate via the tag checks above
+	// (database, backup, customer-data, secret, ...) or the explicit
+	// secret/PMG/RBAC types below. Data-at-rest, configuration, RBAC, and storage
+	// resources stay Sensitive because they can carry secret material or expose
+	// the contents/locations of protected data.
 	switch CanonicalResourceType(resource.Type) {
-	case ResourceTypeVM,
-		ResourceTypeSystemContainer,
-		ResourceTypeAppContainer,
-		ResourceTypePod,
-		ResourceTypeK8sDeployment,
-		ResourceTypeK8sReplicaSet,
-		ResourceTypeK8sNamespace,
-		ResourceTypeK8sService,
-		ResourceTypeK8sStatefulSet,
-		ResourceTypeK8sDaemonSet,
-		ResourceTypeK8sJob,
-		ResourceTypeK8sCronJob,
-		ResourceTypeK8sIngress,
-		ResourceTypeK8sEndpointSlice,
-		ResourceTypeK8sNetworkPolicy,
-		ResourceTypeK8sPV,
+	case ResourceTypeK8sPV,
 		ResourceTypeK8sPVC,
 		ResourceTypeK8sStorageClass,
 		ResourceTypeK8sConfigMap,
@@ -160,13 +155,6 @@ func classifyResourceSensitivity(resource Resource) ResourceSensitivity {
 		ResourceTypeK8sClusterRole,
 		ResourceTypeK8sRoleBinding,
 		ResourceTypeK8sClusterRoleBinding,
-		ResourceTypeK8sResourceQuota,
-		ResourceTypeK8sLimitRange,
-		ResourceTypeK8sPDB,
-		ResourceTypeK8sHPA,
-		ResourceTypeK8sEvent,
-		ResourceTypeDockerService,
-		ResourceTypeDockerSwarmNode,
 		ResourceTypeDockerConfig,
 		ResourceTypeStorage,
 		ResourceTypeNetwork,

@@ -20,6 +20,7 @@ func TestBuildUnifiedResourcePolicyContext(t *testing.T) {
 			ID:     "sensitive-1",
 			Name:   "db-1",
 			Type:   unifiedresources.ResourceTypeVM,
+			Tags:   []string{"database"},
 			Status: unifiedresources.StatusOnline,
 			Identity: unifiedresources.ResourceIdentity{
 				Hostnames:   []string{"db.internal"},

@@ -337,6 +337,7 @@ func TestAgenticLoop(t *testing.T) {
 				Name:   "vm-one",
 				Node:   "node1",
 				Status: "running",
+				Tags:   []string{"database"},
 				CPU:    0.5,
 				CPUs:   4,
 				Memory: models.Memory{

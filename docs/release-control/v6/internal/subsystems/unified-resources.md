@@ -401,6 +401,22 @@ container inventory table.
    carry key names, but Secret values are outside the unified resource contract.
    Because Secret names and key names can disclose intent, `k8s-secret` policy
    metadata must classify them as `restricted` with `local-only` routing.
+   Resource sensitivity classification (`classifyResourceSensitivity` in
+   `internal/unifiedresources/policy_metadata.go`) is calibrated for Pulse's
+   homelab/SMB audience: an ordinary compute workload's name and private LAN IP
+   are not secrets, so VMs, system/app containers, pods, Kubernetes workload
+   objects (Deployments, ReplicaSets, StatefulSets, DaemonSets, Services, Jobs,
+   CronJobs, Ingresses, Namespaces, ...), Docker services, and Swarm nodes
+   classify as `internal` (cloud-summary, no redaction) and are visible to cloud
+   models. Redacting them by default reduced the cloud Assistant to "redacted by
+   policy" noise. Escalation to `sensitive`/`restricted` is by tag (`database`,
+   `backup`, `customer-data`, `secret`, `pii`, ...) or by genuinely sensitive
+   TYPE: data-at-rest and storage (`storage`, `pbs`, `ceph`, `physical-disk`,
+   `network-share`, `network`, k8s `pv`/`pvc`/`storage-class`), configuration
+   (`docker-config`, `k8s-configmap`), and security (k8s RBAC roles/bindings and
+   service accounts, k8s/docker secrets, PMG). The rule of thumb: a workload's
+   identity is not sensitive by default; data, configuration, and security
+   resources are.
    Kubernetes Node inventory is an API-native resource surface, not merely
    overview chrome: `/kubernetes/nodes` must expose the bespoke node table while
    the overview may still include the same rows for cluster orientation.

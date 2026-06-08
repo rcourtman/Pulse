@@ -176,6 +176,7 @@ func TestCloudSafeContextSurvivesModelBoundarySanitizer(t *testing.T) {
 		ID:   "system-container:node1:101",
 		Type: unifiedresources.ResourceTypeSystemContainer,
 		Name: "homeassistant",
+		Tags: []string{"sensitive"},
 		Identity: unifiedresources.ResourceIdentity{
 			Hostnames:   []string{"delly-ha-host"},
 			IPAddresses: []string{"192.168.0.101"},

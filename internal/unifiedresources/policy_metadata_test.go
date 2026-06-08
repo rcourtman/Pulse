@@ -73,6 +73,46 @@ func TestRefreshPolicyMetadata_ClassifiesInfrastructureAsInternal(t *testing.T) 
 	}
 }
 
+func TestRefreshPolicyMetadata_PlainComputeWorkloadsAreInternalNotRedacted(t *testing.T) {
+	// Recalibrated default: ordinary compute workloads (VMs, containers, pods)
+	// are Internal — cloud-summary, no redaction — so their names/IPs are visible
+	// to cloud models. Only tags or genuinely sensitive types escalate.
+	for _, rt := range []ResourceType{
+		ResourceTypeVM,
+		ResourceTypeSystemContainer,
+		ResourceTypeAppContainer,
+		ResourceTypePod,
+	} {
+		resource := Resource{
+			ID:     "wl-1",
+			Name:   "grafana",
+			Type:   rt,
+			Status: StatusOnline,
+			Identity: ResourceIdentity{
+				Hostnames:   []string{"grafana.lan"},
+				IPAddresses: []string{"192.168.1.20"},
+			},
+		}
+		RefreshPolicyMetadata(&resource)
+		if got := resource.Policy.Sensitivity; got != ResourceSensitivityInternal {
+			t.Fatalf("%s sensitivity = %q, want Internal", rt, got)
+		}
+		if got := resource.Policy.Routing.Scope; got != ResourceRoutingScopeCloudSummary {
+			t.Fatalf("%s routing scope = %q, want cloud-summary", rt, got)
+		}
+		if len(resource.Policy.Routing.Redact) != 0 {
+			t.Fatalf("%s should not redact any field, got %#v", rt, resource.Policy.Routing.Redact)
+		}
+	}
+
+	// A tag still escalates a workload that holds protected data.
+	tagged := Resource{ID: "wl-2", Name: "postgres", Type: ResourceTypeAppContainer, Tags: []string{"database"}}
+	RefreshPolicyMetadata(&tagged)
+	if got := tagged.Policy.Sensitivity; got != ResourceSensitivitySensitive {
+		t.Fatalf("database-tagged workload sensitivity = %q, want Sensitive", got)
+	}
+}
+
 func TestRefreshPolicyMetadata_ClassifiesKubernetesSecretAsRestricted(t *testing.T) {
 	resource := Resource{
 		ID:     "k8s-secret-1",

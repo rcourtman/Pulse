@@ -444,6 +444,7 @@ func TestIntelligence_SummarizePolicyPostureUsesSharedHelper(t *testing.T) {
 			ID:     "sensitive-1",
 			Name:   "db-1",
 			Type:   ur.ResourceTypeVM,
+			Tags:   []string{"database"},
 			Status: ur.StatusOnline,
 			Identity: ur.ResourceIdentity{
 				Hostnames:   []string{"db.internal"},

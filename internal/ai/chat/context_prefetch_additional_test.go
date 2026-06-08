@@ -619,7 +619,7 @@ func TestContextPrefetcher_FormatContextSummary_TrueNASAppUsesNativeResourceRead
 
 func TestContextPrefetcher_PrefetchStructuredMentions(t *testing.T) {
 	state := models.StateSnapshot{
-		VMs: []models.VM{{ID: "vm-1", Name: "alpha", VMID: 101, Node: "node1"}},
+		VMs: []models.VM{{ID: "vm-1", Name: "alpha", VMID: 101, Node: "node1", Tags: []string{"database"}}},
 	}
 	provider := &mockDiscoveryProvider{existing: map[string]*tools.ResourceDiscoveryInfo{
 		"vm:node1:101": {

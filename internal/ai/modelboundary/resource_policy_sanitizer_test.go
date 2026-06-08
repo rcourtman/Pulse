@@ -114,6 +114,7 @@ func TestRequestSanitizerForModelAllowsPulseGeneratedInventoryExportOnly(t *test
 		ID:   "vm-100",
 		Type: unifiedresources.ResourceTypeVM,
 		Name: "vm1",
+		Tags: []string{"sensitive"},
 		Identity: unifiedresources.ResourceIdentity{
 			Hostnames: []string{"vm1"},
 		},

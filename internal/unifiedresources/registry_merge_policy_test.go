@@ -314,6 +314,42 @@ func TestTrueNASNetworkSharePolicyAndParentRelationship(t *testing.T) {
 	}
 }
 
+func TestComputeWorkloadPolicyIsInternalUnlessEscalated(t *testing.T) {
+	// Recalibrated default: ordinary compute workloads are Internal (cloud-summary,
+	// no redaction) so the cloud Assistant can see their names/IPs. Only a tag (or
+	// a genuinely sensitive type) escalates them to Sensitive/redacted.
+	plain := Resource{
+		ID:     "vm-100",
+		Name:   "grafana",
+		Type:   ResourceTypeVM,
+		Status: StatusOnline,
+		Identity: ResourceIdentity{
+			Hostnames:   []string{"grafana.lan"},
+			IPAddresses: []string{"192.168.1.20"},
+		},
+	}
+	RefreshPolicyMetadata(&plain)
+	if plain.Policy == nil || plain.Policy.Sensitivity != ResourceSensitivityInternal {
+		t.Fatalf("plain VM policy = %+v, want Internal", plain.Policy)
+	}
+	if plain.Policy.Routing.Scope != ResourceRoutingScopeCloudSummary {
+		t.Fatalf("plain VM routing = %q, want cloud-summary", plain.Policy.Routing.Scope)
+	}
+	if len(plain.Policy.Routing.Redact) != 0 {
+		t.Fatalf("plain VM should not redact, got %+v", plain.Policy.Routing.Redact)
+	}
+
+	escalated := plain
+	escalated.Tags = []string{"database"}
+	RefreshPolicyMetadata(&escalated)
+	if escalated.Policy.Sensitivity != ResourceSensitivitySensitive {
+		t.Fatalf("database-tagged VM = %q, want Sensitive", escalated.Policy.Sensitivity)
+	}
+	if !containsRedactionHint(escalated.Policy.Routing.Redact, ResourceRedactionHostname) {
+		t.Fatalf("escalated VM should redact hostname, got %+v", escalated.Policy.Routing.Redact)
+	}
+}
+
 func containsDataSource(sources []DataSource, want DataSource) bool {
 	for _, source := range sources {
 		if source == want {

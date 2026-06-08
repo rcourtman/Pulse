@@ -1443,7 +1443,7 @@ func TestExecuteQuerySurfacesIncludeGovernedMetadata(t *testing.T) {
 			{ID: "node1", Name: "node1.internal", Status: "online"},
 		},
 		VMs: []models.VM{
-			{ID: "qemu/pve1/node1/100", VMID: 100, Name: "finance-vm", Status: "running", Node: "node1.internal"},
+			{ID: "qemu/pve1/node1/100", VMID: 100, Name: "finance-vm", Status: "running", Node: "node1.internal", Tags: []string{"database"}},
 		},
 	}
 
