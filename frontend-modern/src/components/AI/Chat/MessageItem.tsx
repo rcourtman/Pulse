@@ -1,7 +1,7 @@
 import {
   Component,
   Show,
-  For,
+  Index,
   Switch,
   Match,
   createEffect,
@@ -649,37 +649,38 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
 
               {/* Stream events - chronological display */}
               <Show when={hasRenderableStreamEvents()}>
-                <For each={groupedEvents()}>
+                <Index each={groupedEvents()}>
                   {(evt, index) => {
                     const contentText = () =>
-                      stripAssistantOutputArtifacts(evt?.content || '').text;
+                      stripAssistantOutputArtifacts(evt()?.content || '').text;
                     const visibleWorkflowStatus = () =>
-                      evt?.type === 'workflow_status'
-                        ? shouldPaceWorkflowStatusEvent(evt, index())
-                          ? pacedWorkflowStatus() || evt.workflowStatus
-                          : evt.workflowStatus
+                      evt()?.type === 'workflow_status'
+                        ? shouldPaceWorkflowStatusEvent(evt(), index)
+                          ? pacedWorkflowStatus() || evt().workflowStatus
+                          : evt().workflowStatus
                         : undefined;
 
                     return (
                       <Switch>
                         <Match
                           when={
-                            evt?.type === 'thinking' &&
-                            evt.thinking?.trim() &&
-                            isLeadingThinkingEvent(index())
+                            evt()?.type === 'thinking' &&
+                            evt().thinking?.trim() &&
+                            isLeadingThinkingEvent(index)
                           }
                         >
                           <ThinkingBlock
-                            content={evt?.thinking || ''}
+                            content={evt()?.thinking || ''}
                             isStreaming={props.message.isStreaming}
-                            startedAt={evt?.startedAt}
-                            updatedAt={evt?.updatedAt}
+                            startedAt={evt()?.startedAt}
+                            updatedAt={evt()?.updatedAt}
                           />
                         </Match>
 
                         <Match
                           when={
-                            evt?.type === 'workflow_status' && shouldRenderWorkflowStatusEvent(evt)
+                            evt()?.type === 'workflow_status' &&
+                            shouldRenderWorkflowStatusEvent(evt())
                           }
                         >
                           <div
@@ -709,22 +710,22 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                           </div>
                         </Match>
 
-                        <Match when={evt?.type === 'pending_tool' ? evt.pendingTool : undefined}>
+                        <Match when={evt()?.type === 'pending_tool' ? evt().pendingTool : undefined}>
                           {(pendingTool) => <PendingToolBlock tool={pendingTool()} />}
                         </Match>
 
-                        <Match when={evt?.type === 'tool_cancel' ? evt.toolCancel : undefined}>
+                        <Match when={evt()?.type === 'tool_cancel' ? evt().toolCancel : undefined}>
                           {(toolCancel) => <ToolCancellationBlock tool={toolCancel()} />}
                         </Match>
 
-                        <Match when={evt?.type === 'tool' ? evt.tool : undefined}>
+                        <Match when={evt()?.type === 'tool' ? evt().tool : undefined}>
                           {(tool) => (
                             <ToolExecutionBlock
-                              startedAt={evt?.startedAt}
-                              completedAt={evt?.updatedAt}
+                              startedAt={evt()?.startedAt}
+                              completedAt={evt()?.updatedAt}
                               live={props.message.isStreaming}
-                              settleUntil={evt?.settleUntil}
-                              compact={shouldCompactCompletedToolEvent(evt, index())}
+                              settleUntil={evt()?.settleUntil}
+                              compact={shouldCompactCompletedToolEvent(evt(), index)}
                               tool={{
                                 name: tool().name || 'unknown',
                                 input: tool().input || '{}',
@@ -737,7 +738,9 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                         </Match>
 
                         <Match
-                          when={evt?.type === 'model_switch' && evt.model?.trim() ? evt : undefined}
+                          when={
+                            evt()?.type === 'model_switch' && evt().model?.trim() ? evt() : undefined
+                          }
                         >
                           {(modelEvent) => {
                             const event = modelEvent();
@@ -789,15 +792,15 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                         </Match>
 
                         {/* Content/text block */}
-                        <Match when={evt?.type === 'content' && contentText()}>
+                        <Match when={evt()?.type === 'content' && contentText()}>
                           <AssistantMarkdownBlock
                             text={contentText()}
                             streaming={props.message.isStreaming}
-                            paceKey={`${props.message.id}:stream:${index()}`}
+                            paceKey={`${props.message.id}:stream:${index}`}
                           />
                         </Match>
 
-                        <Match when={evt?.type === 'approval' ? evt.approval : undefined}>
+                        <Match when={evt()?.type === 'approval' ? evt().approval : undefined}>
                           {(approval) => (
                             <div class="my-4">
                               <ApprovalCard
@@ -809,7 +812,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                           )}
                         </Match>
 
-                        <Match when={evt?.type === 'question' ? evt.question : undefined}>
+                        <Match when={evt()?.type === 'question' ? evt().question : undefined}>
                           {(question) => (
                             <div class="my-4">
                               <QuestionCard
@@ -823,7 +826,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                       </Switch>
                     );
                   }}
-                </For>
+                </Index>
               </Show>
               {/* Fallback */}
               <Show when={visibleMessageContent() && !hasRenderableStreamEvents()}>

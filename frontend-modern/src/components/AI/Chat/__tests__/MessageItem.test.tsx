@@ -2241,4 +2241,35 @@ describe('MessageItem', () => {
       expect(prose).not.toBeInTheDocument();
     });
   });
+
+  describe('streaming row stability', () => {
+    // useChat rebuilds the streamEvents array on every stream tick, and
+    // groupStreamEventsForDisplay remaps blocks to fresh objects. Rendering that
+    // through a reference-keyed <For> re-mounted each row on every tick — tool
+    // rows and the streaming answer block flashing. The list is append-ordered,
+    // so it must render through <Index> (positional keying): a row keeps its DOM
+    // node across event-object rebuilds at a stable position, and only its
+    // changed fields update in place.
+    it('keeps a tool row mounted in place as its event object is rebuilt mid-stream', () => {
+      const toolEvent = (output: string): StreamDisplayEvent => ({
+        type: 'tool',
+        tool: { name: 'pulse_query', input: '{}', output, success: true },
+      });
+      const [msg, setMsg] = createSignal<ChatMessage>(
+        makeMessage({ role: 'assistant', content: '', isStreaming: true, streamEvents: [toolEvent('a')] }),
+      );
+      render(() => <MessageItem message={msg()} {...makeHandlers()} />);
+
+      const nodeBefore = screen.getByTestId('tool-execution-block');
+
+      // Next stream tick: brand-new array + brand-new tool event object (output
+      // grew), same position. <For> would recreate the row; <Index> keeps it.
+      setMsg(
+        makeMessage({ role: 'assistant', content: '', isStreaming: true, streamEvents: [toolEvent('ab')] }),
+      );
+
+      const nodeAfter = screen.getByTestId('tool-execution-block');
+      expect(nodeAfter).toBe(nodeBefore);
+    });
+  });
 });

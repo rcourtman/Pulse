@@ -2299,9 +2299,20 @@ during a turn. `ChatMessages` (`frontend-modern/src/components/AI/Chat/ChatMessa
 reconciles the incoming array into a keyed `solid-js/store` mirror so each
 message keeps a stable identity across updates; `MessageItem` already reads every
 field through accessors, so only the genuinely changed text/rows update in place.
-This keeps the live transcript stable the way OpenCode's timeline is. (Residual
-in-place churn remains in the per-message stream-event/tool-row list, which is a
-separate, narrower follow-up.)
+This keeps the live transcript stable the way OpenCode's timeline is.
+
+The same stability rule applies one level down, to the per-message
+stream-event/tool-row list inside `MessageItem`. `groupStreamEventsForDisplay`
+remaps blocks to fresh objects on every tick and `StreamDisplayEvent` carries no
+id, but the grouped list is strictly append-ordered (the grouper only pushes new
+blocks or mutates the open content/thinking block in place — it never inserts
+mid-list or reorders). It therefore renders through `<Index>` (positional
+keying), not a reference-keyed `<For>`: each row keeps its DOM node across
+event-object rebuilds at a stable position, so the streaming answer block and
+completed tool rows update in place instead of re-mounting (and re-parsing
+markdown) on every content delta. Positional keying is correct here precisely
+because the list is append-only; a list that could reorder or key by identity
+must not use `<Index>`.
 
 Assistant slash-command availability is part of the command runtime contract,
 not only visual polish. The OpenCode reference at fetched `origin/dev` commit
