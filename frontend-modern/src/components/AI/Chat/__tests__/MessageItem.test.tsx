@@ -1537,6 +1537,31 @@ describe('MessageItem', () => {
       expect(prose().innerHTML).toContain('A readable streaming answer lands over a few frames.');
     });
 
+    it('paces the first batched streaming content block instead of dumping it at once', async () => {
+      vi.useFakeTimers();
+      const content = 'A batched provider response should still reveal progressively.';
+
+      const { container } = render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            content,
+            isStreaming: true,
+            streamEvents: [{ type: 'content', content }],
+          })}
+          {...makeHandlers()}
+        />
+      ));
+      const prose = () => container.querySelector('.prose') as HTMLElement;
+
+      expect(prose().innerHTML).toContain('<p>A ');
+      expect(prose().innerHTML).not.toContain('provider response');
+
+      await vi.runAllTimersAsync();
+
+      expect(prose().innerHTML).toContain(content);
+    });
+
     it('strips serialized tool-call text from content blocks', () => {
       const events: StreamDisplayEvent[] = [
         {

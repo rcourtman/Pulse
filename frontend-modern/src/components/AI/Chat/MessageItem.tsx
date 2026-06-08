@@ -137,13 +137,21 @@ const createPacedText = (getText: () => string, live: () => boolean, cacheKey: (
     cancelPacedTextCleanup(initialKey);
   }
   const cachedText = initialKey ? pacedTextCache.get(initialKey) : undefined;
+  const initialLiveText = () => {
+    if (!initialText) return initialText;
+    if (initialText.length <= 48) return initialText;
+    const end = nextPacedTextIndex(initialText, 0);
+    return end < initialText.length ? initialText.slice(0, end) : initialText;
+  };
   const initialValue =
     live() &&
     cachedText &&
     initialText.startsWith(cachedText) &&
-    cachedText.length < initialText.length
+    cachedText.length <= initialText.length
       ? cachedText
-      : initialText;
+      : live()
+        ? initialLiveText()
+        : initialText;
   const [value, setValue] = createSignal(initialValue);
   let shown = initialValue;
   let timeout: ReturnType<typeof setTimeout> | undefined;

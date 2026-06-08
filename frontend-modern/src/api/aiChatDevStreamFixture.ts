@@ -1091,6 +1091,9 @@ const fixtureStepDelay = (
   ) {
     return 2400;
   }
+  if (normalizedPrompt === '/fixture long-output' && event.type === 'content') {
+    return 1800;
+  }
   if (normalizedPrompt === '/fixture pending-tool') return defaultDelayMs;
   if (normalizedPrompt !== '/fixture tool-burst') return defaultDelayMs;
   if (event.type === 'tool_start') {
