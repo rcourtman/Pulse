@@ -2274,7 +2274,20 @@ export const AIChat: Component<AIChatProps> = (props) => {
         setControlLevel('read_only');
         return;
       }
-      await Promise.all([refreshSessions(), loadAIRuntimeSettings(), loadAIRuntimeModels()]);
+      const [sessionsResult, settingsResult, modelsResult] = await Promise.allSettled([
+        refreshSessions(),
+        loadAIRuntimeSettings(),
+        loadAIRuntimeModels(),
+      ]);
+      if (sessionsResult.status === 'rejected') {
+        logger.error('[AIChat] Failed to load sessions:', sessionsResult.reason);
+      }
+      if (settingsResult.status === 'rejected') {
+        logger.error('[AIChat] Failed to load AI settings:', settingsResult.reason);
+      }
+      if (modelsResult.status === 'rejected') {
+        logger.debug('[AIChat] Model catalog unavailable during initialization:', modelsResult.reason);
+      }
     } catch (error) {
       logger.error('[AIChat] Failed to initialize:', error);
     }

@@ -4,6 +4,7 @@ import { Show, createSignal } from 'solid-js';
 import type { ChatMessage, ModelInfo, ModelRouteRecoveryOption } from '../types';
 import type { QueuedFollowUp } from '../hooks/useChat';
 import { WORKFLOW_STATUS_PACE_MS } from '../workflowStatusDisplay';
+import { logger } from '@/utils/logger';
 
 // ── Hoisted mocks (vi.mock factories reference these) ──────────────────────
 
@@ -37,6 +38,7 @@ const {
     recentModelIds?: string[];
     openRequest?: number;
     initialSearchQuery?: string;
+    error?: string;
     onManageProviders?: () => void;
     onModelSelect?: (modelId: string) => void;
   }> = [];
@@ -335,6 +337,7 @@ vi.mock('../ModelSelector', () => ({
     recentModelIds?: string[];
     openRequest?: number;
     initialSearchQuery?: string;
+    error?: string;
     onManageProviders?: () => void;
     onModelSelect?: (modelId: string) => void;
   }) => {
@@ -347,6 +350,7 @@ vi.mock('../ModelSelector', () => ({
         data-open-request={String(props.openRequest || 0)}
         data-initial-search={props.initialSearchQuery || ''}
         data-recent-models={(props.recentModelIds || []).join('|')}
+        data-error={props.error || ''}
       />
     );
   },
@@ -4319,6 +4323,32 @@ describe('AIChat', () => {
         expect(mockAIAPI.getSettings).toHaveBeenCalledTimes(1);
         expect(mockAIAPI.getModels).toHaveBeenCalledTimes(1);
       });
+    });
+
+    it('keeps Assistant initialized when the model catalog fails on mount', async () => {
+      const modelCatalogError = new Error('Model catalog unavailable');
+      mockAIAPI.getModels.mockRejectedValue(modelCatalogError);
+
+      renderChat();
+
+      await waitFor(() => {
+        expect(mockAIChatAPI.getStatus).toHaveBeenCalledTimes(1);
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalledWith({ limit: 30 });
+        expect(mockAIAPI.getSettings).toHaveBeenCalledTimes(1);
+        expect(mockAIAPI.getModels).toHaveBeenCalledTimes(1);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('model-selector')).toHaveAttribute(
+          'data-error',
+          'Model catalog unavailable',
+        );
+      });
+      expect(mockAIAPI.testProvider).toHaveBeenCalledWith('openai', 'gpt-4');
+      expect(logger.error).not.toHaveBeenCalledWith(
+        '[AIChat] Failed to initialize:',
+        modelCatalogError,
+      );
     });
 
     it('does not load sessions, settings, or models when AI is not running', async () => {

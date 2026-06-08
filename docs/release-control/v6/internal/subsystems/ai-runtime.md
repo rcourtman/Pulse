@@ -2247,6 +2247,19 @@ provider route-switch metadata without changing the selected route, and labeling
 failed-turn or readiness recovery buttons as explicit route/model-route choices
 instead of implying automatic route adoption.
 
+Assistant model-catalog failure is selector-local state, not a drawer
+initialization failure. The OpenCode reference at fetched `dev` commit
+`3867fa2bad0e644166e360e2e99cfe426fe71105`
+`packages/opencode/src/cli/error.ts` lines 58-69 formats missing model/catalog
+state as an operator-facing model-selection problem with a list-models hint,
+while `packages/opencode/src/session/llm.ts` lines 96-104 resolves the
+selected provider/model route independently for the stream. Pulse adapts that
+by letting Assistant sessions, settings, route health, and the composer finish
+opening when `/api/ai/models` fails; the catalog error stays attached to the
+model selector and may be refreshed explicitly, but startup must not log or
+render a broad Assistant initialization failure, and it must not replace the
+selected model route.
+
 Assistant completed-turn chrome is route-owned summary, not raw usage output.
 The OpenCode reference at fetched `dev` commit
 `3867fa2bad0e644166e360e2e99cfe426fe71105` imports `turnSummaryCommit` in
