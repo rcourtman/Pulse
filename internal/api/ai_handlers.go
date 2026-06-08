@@ -2302,6 +2302,12 @@ type AISettingsResponse struct {
 	// Discovery settings
 	DiscoveryEnabled       bool `json:"discovery_enabled"`                  // true if discovery is enabled
 	DiscoveryIntervalHours int  `json:"discovery_interval_hours,omitempty"` // Hours between auto-scans (0 = manual only)
+	// Cloud operational-context sharing - when true, PII-free operational
+	// context (access commands, config/data/log paths, ports) for governed
+	// resources is shared with cloud models so the Assistant can give
+	// resource-specific guidance. Identifying fields stay redacted; local
+	// (Ollama) models always receive full context regardless of this flag.
+	ShareOperationalContextWithCloud bool `json:"share_operational_context_with_cloud"`
 	// Current Patrol runtime readiness after this settings snapshot is applied.
 	PatrolReadiness *PatrolReadinessResponse `json:"patrol_readiness,omitempty"`
 	// Most recent Patrol tool-call preflight outcome, surfaced so the UI
@@ -2398,6 +2404,9 @@ type AISettingsUpdateRequest struct {
 	// Discovery settings
 	DiscoveryEnabled       *bool `json:"discovery_enabled,omitempty"`        // Enable discovery
 	DiscoveryIntervalHours *int  `json:"discovery_interval_hours,omitempty"` // Hours between auto-scans (0 = manual only)
+	// Cloud operational-context sharing - opt in to share PII-free operational
+	// context for governed resources with cloud models (nil = don't update).
+	ShareOperationalContextWithCloud *bool `json:"share_operational_context_with_cloud,omitempty"`
 }
 
 // AssistantEnabled reports whether the Pulse Assistant affordance should be
@@ -2507,26 +2516,27 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		UseProactiveThresholds:        settings.UseProactiveThresholds,
 		AvailableModels:               nil, // Now populated via /api/ai/models endpoint
 		// Multi-provider configuration
-		AnthropicConfigured:    settings.HasProvider(config.AIProviderAnthropic),
-		OpenAIConfigured:       settings.HasProvider(config.AIProviderOpenAI),
-		OpenRouterConfigured:   settings.HasProvider(config.AIProviderOpenRouter),
-		DeepSeekConfigured:     settings.HasProvider(config.AIProviderDeepSeek),
-		GeminiConfigured:       settings.HasProvider(config.AIProviderGemini),
-		OllamaConfigured:       settings.HasProvider(config.AIProviderOllama),
-		OllamaBaseURL:          settings.GetBaseURLForProvider(config.AIProviderOllama),
-		OllamaUsername:         settings.OllamaUsername,
-		OllamaPasswordSet:      settings.OllamaPassword != "",
-		OllamaKeepAlive:        settings.GetOllamaKeepAlive(),
-		OpenAIBaseURL:          settings.OpenAIBaseURL,
-		ConfiguredProviders:    settings.GetConfiguredProviders(),
-		CostBudgetUSD30d:       settings.CostBudgetUSD30d,
-		RequestTimeoutSeconds:  settings.RequestTimeoutSeconds,
-		ControlLevel:           settings.GetEffectiveControlLevel(hasAutoFixFeature),
-		ProtectedGuests:        settings.GetProtectedGuests(),
-		DiscoveryEnabled:       settings.IsDiscoveryEnabled(),
-		DiscoveryIntervalHours: settings.DiscoveryIntervalHours,
-		PatrolPreflight:        cachedPatrolPreflightSnapshot(aiService),
-		PatrolReadiness:        ptrToPatrolReadiness(h.buildPatrolReadiness(ctx, aiService, h.getPatrolService(ctx) != nil)),
+		AnthropicConfigured:              settings.HasProvider(config.AIProviderAnthropic),
+		OpenAIConfigured:                 settings.HasProvider(config.AIProviderOpenAI),
+		OpenRouterConfigured:             settings.HasProvider(config.AIProviderOpenRouter),
+		DeepSeekConfigured:               settings.HasProvider(config.AIProviderDeepSeek),
+		GeminiConfigured:                 settings.HasProvider(config.AIProviderGemini),
+		OllamaConfigured:                 settings.HasProvider(config.AIProviderOllama),
+		OllamaBaseURL:                    settings.GetBaseURLForProvider(config.AIProviderOllama),
+		OllamaUsername:                   settings.OllamaUsername,
+		OllamaPasswordSet:                settings.OllamaPassword != "",
+		OllamaKeepAlive:                  settings.GetOllamaKeepAlive(),
+		OpenAIBaseURL:                    settings.OpenAIBaseURL,
+		ConfiguredProviders:              settings.GetConfiguredProviders(),
+		CostBudgetUSD30d:                 settings.CostBudgetUSD30d,
+		RequestTimeoutSeconds:            settings.RequestTimeoutSeconds,
+		ControlLevel:                     settings.GetEffectiveControlLevel(hasAutoFixFeature),
+		ProtectedGuests:                  settings.GetProtectedGuests(),
+		DiscoveryEnabled:                 settings.IsDiscoveryEnabled(),
+		DiscoveryIntervalHours:           settings.DiscoveryIntervalHours,
+		ShareOperationalContextWithCloud: settings.ShouldShareOperationalContextWithCloud(),
+		PatrolPreflight:                  cachedPatrolPreflightSnapshot(aiService),
+		PatrolReadiness:                  ptrToPatrolReadiness(h.buildPatrolReadiness(ctx, aiService, h.getPatrolService(ctx) != nil)),
 	}.NormalizeCollections()
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -2850,6 +2860,11 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.DiscoveryIntervalHours = 24
 	}
 
+	// Handle cloud operational-context sharing (nil = don't update)
+	if req.ShareOperationalContextWithCloud != nil {
+		settings.ShareOperationalContextWithCloud = *req.ShareOperationalContextWithCloud
+	}
+
 	if aiSettingsRequireModelResolution(settings) {
 		resolvedModel, resolveErr := ai.ResolveConfiguredModel(r.Context(), settings)
 		if resolveErr != nil {
@@ -2960,25 +2975,26 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		UseProactiveThresholds:        settings.UseProactiveThresholds,
 		AvailableModels:               nil, // Now populated via /api/ai/models endpoint
 		// Multi-provider configuration
-		AnthropicConfigured:    settings.HasProvider(config.AIProviderAnthropic),
-		OpenAIConfigured:       settings.HasProvider(config.AIProviderOpenAI),
-		OpenRouterConfigured:   settings.HasProvider(config.AIProviderOpenRouter),
-		DeepSeekConfigured:     settings.HasProvider(config.AIProviderDeepSeek),
-		GeminiConfigured:       settings.HasProvider(config.AIProviderGemini),
-		OllamaConfigured:       settings.HasProvider(config.AIProviderOllama),
-		OllamaBaseURL:          settings.GetBaseURLForProvider(config.AIProviderOllama),
-		OllamaUsername:         settings.OllamaUsername,
-		OllamaPasswordSet:      settings.OllamaPassword != "",
-		OllamaKeepAlive:        settings.GetOllamaKeepAlive(),
-		OpenAIBaseURL:          settings.OpenAIBaseURL,
-		ConfiguredProviders:    settings.GetConfiguredProviders(),
-		RequestTimeoutSeconds:  settings.RequestTimeoutSeconds,
-		ControlLevel:           settings.GetEffectiveControlLevel(hasAutoFixFeature),
-		ProtectedGuests:        settings.GetProtectedGuests(),
-		DiscoveryEnabled:       settings.DiscoveryEnabled,
-		DiscoveryIntervalHours: settings.DiscoveryIntervalHours,
-		PatrolReadiness:        ptrToPatrolReadiness(patrolReadiness),
-		PatrolPreflight:        cachedPatrolPreflightSnapshot(aiService),
+		AnthropicConfigured:              settings.HasProvider(config.AIProviderAnthropic),
+		OpenAIConfigured:                 settings.HasProvider(config.AIProviderOpenAI),
+		OpenRouterConfigured:             settings.HasProvider(config.AIProviderOpenRouter),
+		DeepSeekConfigured:               settings.HasProvider(config.AIProviderDeepSeek),
+		GeminiConfigured:                 settings.HasProvider(config.AIProviderGemini),
+		OllamaConfigured:                 settings.HasProvider(config.AIProviderOllama),
+		OllamaBaseURL:                    settings.GetBaseURLForProvider(config.AIProviderOllama),
+		OllamaUsername:                   settings.OllamaUsername,
+		OllamaPasswordSet:                settings.OllamaPassword != "",
+		OllamaKeepAlive:                  settings.GetOllamaKeepAlive(),
+		OpenAIBaseURL:                    settings.OpenAIBaseURL,
+		ConfiguredProviders:              settings.GetConfiguredProviders(),
+		RequestTimeoutSeconds:            settings.RequestTimeoutSeconds,
+		ControlLevel:                     settings.GetEffectiveControlLevel(hasAutoFixFeature),
+		ProtectedGuests:                  settings.GetProtectedGuests(),
+		DiscoveryEnabled:                 settings.DiscoveryEnabled,
+		DiscoveryIntervalHours:           settings.DiscoveryIntervalHours,
+		ShareOperationalContextWithCloud: settings.ShouldShareOperationalContextWithCloud(),
+		PatrolReadiness:                  ptrToPatrolReadiness(patrolReadiness),
+		PatrolPreflight:                  cachedPatrolPreflightSnapshot(aiService),
 	}.NormalizeCollections()
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {

@@ -518,6 +518,18 @@ not a replacement status card, CTA band, or page-local nested card.
    apply controlled `value` props after options are mounted so settings panels
    such as workload discovery show the persisted option instead of falling back
    to the first option while the collapsed summary shows a different value.
+   The Assistant runtime-control toggles in
+   `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx` —
+   workload discovery and the `Share operational context with cloud models`
+   cloud operational-context opt-in — are settings-shell chrome bound to the
+   canonical `useAISettingsState` form and `/api/settings/ai` payload, not
+   local browser state. Each must bind its shared `Toggle` to a
+   `state.form.*` field, round-trip through the field-by-field settings payload
+   (the cloud opt-in's `share_operational_context_with_cloud` mirrors
+   `discovery_enabled` and defaults off), and source its label, help, and
+   summary copy from
+   `frontend-modern/src/utils/aiSettingsPresentation.ts` rather than inlining
+   strings or reaching for a bespoke fetch outside the canonical payload.
 3. Add feature-specific presentation only when no shared primitive should own it.
    Feature surfaces under `frontend-modern/src/features/` that display
    product labels must consume the owning subsystem's presentation utilities

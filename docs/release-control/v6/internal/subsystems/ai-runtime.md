@@ -110,6 +110,24 @@ deriving an older display status from `workflowStatusHistory`.
    `context_prefetch.go` must instruct the Assistant to disclose the redaction in
    its reply and point at the `Share operational context with cloud models`
    setting, rather than silently degrading the answer.
+   The opt-in must be operator-reachable, not config-file-only. `/api/settings/ai`
+   round-trips `share_operational_context_with_cloud` field-by-field exactly like
+   `discovery_enabled`: `internal/api/ai_handlers.go` always serializes the
+   current value on the settings response from
+   `settings.ShouldShareOperationalContextWithCloud()` (no `omitempty`, so a
+   toggle can bind to the concrete boolean) and applies the optional request
+   `*bool` on update, leaving the persisted opt-in untouched when the field is
+   omitted. The operator surface is the `Share operational context with cloud
+   models` toggle in the Assistant runtime controls
+   (`frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx`),
+   bound to the canonical `useAISettingsState` form and the
+   `frontend-modern/src/api/ai.ts` `AISettings` / `AISettingsUpdateRequest`
+   payload contract. The toggle defaults off, carries the PII-free scope and
+   Ollama-always-full-context caveats in its help copy
+   (`getAISettingsCloudContextSharingHelpContent` in
+   `frontend-modern/src/utils/aiSettingsPresentation.ts`), and must not be
+   reimplemented as a local-only browser flag or a bespoke fetch outside the
+   canonical settings payload.
 3. Add or change Pulse Assistant request flow through `internal/api/ai_handler.go`, `frontend-modern/src/api/ai.ts`, and `frontend-modern/src/api/aiChat.ts`
    Assistant session compaction is a runtime-backed session workflow, not a
    local waiting message, transcript-only UI action, or stubbed summarize

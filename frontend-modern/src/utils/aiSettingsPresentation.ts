@@ -54,6 +54,23 @@ export function getAISettingsWorkloadDiscoverySummary() {
   } as const;
 }
 
+export const AI_SETTINGS_CLOUD_CONTEXT_SHARING_LABEL =
+  'Share operational context with cloud models';
+
+export function getAISettingsCloudContextSharingHelpContent() {
+  return {
+    title: 'Sharing operational context with cloud models',
+    description:
+      'When on, Pulse shares PII-free operational context — access commands, config/data/log paths, and port numbers for discovered services — with cloud models (Anthropic, OpenAI, etc.) so the Assistant can give resource-specific guidance instead of generic advice. Identifying fields (hostnames, IP addresses, aliases, platform IDs) always stay redacted. Default off. Local Ollama models always receive full context regardless of this setting.',
+  } as const;
+}
+
+export function getAISettingsCloudContextSharingSummary() {
+  return {
+    text: 'Off by default: cloud models receive a terse redacted summary, so Assistant answers stay generic on cloud routes. Turning this on shares cloud-safe operational details (commands, paths, ports) while hostnames, IPs, and aliases remain redacted.',
+  } as const;
+}
+
 export function getAISettingsSetupDialogPresentation(): AISettingsSetupDialogPresentation {
   return {
     ariaLabel: 'Set up Assistant and Patrol',

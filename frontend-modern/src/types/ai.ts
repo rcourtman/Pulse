@@ -82,6 +82,10 @@ export interface AISettings {
   discovery_enabled?: boolean;
   discovery_interval_hours?: number;
 
+  // Cloud operational-context sharing - when true, PII-free operational
+  // context for governed resources is shared with cloud models.
+  share_operational_context_with_cloud?: boolean;
+
   // Current Pulse Patrol runtime readiness for this settings snapshot
   patrol_readiness?: PatrolReadiness;
   // Most recent Patrol tool-call preflight result, recorded by Pulse so
@@ -155,6 +159,10 @@ export interface AISettingsUpdateRequest {
   // AI Discovery settings
   discovery_enabled?: boolean;
   discovery_interval_hours?: number;
+
+  // Cloud operational-context sharing - opt in to share PII-free operational
+  // context for governed resources with cloud models.
+  share_operational_context_with_cloud?: boolean;
 }
 
 export interface AITestResult {

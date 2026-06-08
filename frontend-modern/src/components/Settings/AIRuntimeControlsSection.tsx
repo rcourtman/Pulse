@@ -14,6 +14,9 @@ import {
 } from '@/utils/aiControlLevelPresentation';
 import {
   AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE,
+  AI_SETTINGS_CLOUD_CONTEXT_SHARING_LABEL,
+  getAISettingsCloudContextSharingHelpContent,
+  getAISettingsCloudContextSharingSummary,
   getAISettingsWorkloadDiscoveryHelpContent,
   getAISettingsWorkloadDiscoverySummary,
 } from '@/utils/aiSettingsPresentation';
@@ -151,6 +154,23 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
             <p class="text-[10px] text-muted">{getAISettingsWorkloadDiscoverySummary().text}</p>
           </div>
         </Show>
+      </div>
+
+      <div class="space-y-2 p-3 rounded-md border border-border bg-surface-alt">
+        <div class="flex items-center justify-between gap-2">
+          <label class="text-xs font-medium text-base-content flex items-center gap-1.5">
+            {AI_SETTINGS_CLOUD_CONTEXT_SHARING_LABEL}
+            <HelpIcon inline={getAISettingsCloudContextSharingHelpContent()} size="xs" />
+          </label>
+          <Toggle
+            checked={state.form.shareOperationalContextWithCloud}
+            onChange={(event) =>
+              state.setForm('shareOperationalContextWithCloud', event.currentTarget.checked)
+            }
+            disabled={state.saving()}
+          />
+        </div>
+        <p class="text-[10px] text-muted">{getAISettingsCloudContextSharingSummary().text}</p>
       </div>
 
       <div class="flex items-center gap-3 p-3 rounded-md border border-border bg-surface-alt">

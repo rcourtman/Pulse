@@ -379,6 +379,25 @@ describe('settings architecture guardrails', () => {
     expect(aiRuntimeControlsSectionSource).not.toContain("fetch('/api/discovery/run");
   });
 
+  it('keeps the cloud operational-context opt-in wired through the canonical settings state', () => {
+    // The "Share operational context with cloud models" toggle must bind to the
+    // canonical AI settings form/store and round-trip the API field rather than
+    // reaching for a bespoke fetch or local-only flag.
+    expect(aiRuntimeControlsSectionSource).toContain('AI_SETTINGS_CLOUD_CONTEXT_SHARING_LABEL');
+    expect(aiRuntimeControlsSectionSource).toContain('getAISettingsCloudContextSharingHelpContent');
+    expect(aiRuntimeControlsSectionSource).toContain('state.form.shareOperationalContextWithCloud');
+    expect(aiRuntimeControlsSectionSource).toContain(
+      "state.setForm('shareOperationalContextWithCloud', event.currentTarget.checked)",
+    );
+    expect(aiSettingsStateSource).toContain('shareOperationalContextWithCloud');
+    expect(aiSettingsStateSource).toContain(
+      'payload.share_operational_context_with_cloud = form.shareOperationalContextWithCloud;',
+    );
+    expect(aiSettingsStateSource).toContain(
+      'shareOperationalContextWithCloud: data.share_operational_context_with_cloud ?? false,',
+    );
+  });
+
   it('hydrates the Patrol preflight panel from the cached settings snapshot', () => {
     // The cached preflight outcome arrives on /api/settings/ai as
     // patrol_preflight; loadSettings and updateSettings must project it

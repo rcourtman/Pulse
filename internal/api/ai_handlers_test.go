@@ -494,6 +494,89 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestAISettingsHandler_ShareOperationalContextWithCloud_RoundTrip(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	getShareFlag := func(t *testing.T) bool {
+		t.Helper()
+		req := newLoopbackRequest(http.MethodGet, "/api/settings/ai", nil)
+		rec := httptest.NewRecorder()
+		handler.HandleGetAISettings(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		// The field is always serialized (no omitempty) so the operator UI can
+		// bind a toggle to its concrete value.
+		if !strings.Contains(rec.Body.String(), `"share_operational_context_with_cloud":`) {
+			t.Fatalf("expected share_operational_context_with_cloud in GET body, got %s", rec.Body.String())
+		}
+		var resp AISettingsResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		return resp.ShareOperationalContextWithCloud
+	}
+
+	updateShareFlag := func(t *testing.T, req AISettingsUpdateRequest) AISettingsResponse {
+		t.Helper()
+		body, _ := json.Marshal(req)
+		httpReq := newLoopbackRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		handler.HandleUpdateAISettings(rec, httpReq)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("PUT status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		var resp AISettingsResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		return resp
+	}
+
+	// Default off before any save.
+	if getShareFlag(t) {
+		t.Fatalf("expected default share_operational_context_with_cloud=false")
+	}
+
+	// Enabling AI alongside the opt-in must round-trip the flag as true.
+	resp := updateShareFlag(t, AISettingsUpdateRequest{
+		Enabled:                          ptr(true),
+		Model:                            ptr("ollama:llama3"),
+		OllamaBaseURL:                    ptr("http://localhost:11434"),
+		ShareOperationalContextWithCloud: ptr(true),
+	})
+	if !resp.ShareOperationalContextWithCloud {
+		t.Fatalf("expected PUT response share_operational_context_with_cloud=true, got %+v", resp)
+	}
+	if !getShareFlag(t) {
+		t.Fatalf("expected persisted share_operational_context_with_cloud=true after enabling")
+	}
+
+	// Omitting the field (nil pointer) must leave the persisted opt-in untouched.
+	resp = updateShareFlag(t, AISettingsUpdateRequest{Model: ptr("ollama:llama3")})
+	if !resp.ShareOperationalContextWithCloud {
+		t.Fatalf("expected omitted field to preserve opt-in, got %+v", resp)
+	}
+	if !getShareFlag(t) {
+		t.Fatalf("expected persisted opt-in to survive an unrelated save")
+	}
+
+	// Explicit false turns the opt-in back off.
+	resp = updateShareFlag(t, AISettingsUpdateRequest{ShareOperationalContextWithCloud: ptr(false)})
+	if resp.ShareOperationalContextWithCloud {
+		t.Fatalf("expected PUT response share_operational_context_with_cloud=false, got %+v", resp)
+	}
+	if getShareFlag(t) {
+		t.Fatalf("expected persisted share_operational_context_with_cloud=false after opt-out")
+	}
+}
+
 func TestAISettingsHandler_GetSettingsClampsPaidControlsToEntitlements(t *testing.T) {
 	t.Parallel()
 

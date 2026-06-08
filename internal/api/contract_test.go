@@ -1335,6 +1335,7 @@ func TestContract_AISettingsUpdateProviderResolutionJSONSnapshot(t *testing.T) {
 		"control_level":"read_only",
 		"protected_guests":[],
 		"discovery_enabled":false,
+		"share_operational_context_with_cloud":false,
 		"patrol_readiness":{
 			"status":"warning",
 			"ready":true,
@@ -1479,6 +1480,7 @@ func TestContract_AISettingsBYOKOverrideDoesNotExposeQuickstartInventoryJSONSnap
 		"control_level":"read_only",
 		"protected_guests":[],
 		"discovery_enabled":false,
+		"share_operational_context_with_cloud":false,
 		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
 
@@ -3484,6 +3486,7 @@ func TestContract_HostedAISettingsDoesNotAutoBootstrapQuickstartJSONSnapshot(t *
 		"control_level":"read_only",
 		"protected_guests":[],
 		"discovery_enabled":false,
+		"share_operational_context_with_cloud":false,
 		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
 
@@ -3547,6 +3550,7 @@ func TestContract_AISettingsRetiredQuickstartAliasJSONSnapshot(t *testing.T) {
 		"control_level":"read_only",
 		"protected_guests":[],
 		"discovery_enabled":false,
+		"share_operational_context_with_cloud":false,
 		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
 
@@ -3615,6 +3619,7 @@ func TestContract_AISettingsOllamaAuthJSONSnapshot(t *testing.T) {
 		"control_level":"read_only",
 		"protected_guests":[],
 		"discovery_enabled":false,
+		"share_operational_context_with_cloud":false,
 		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
 
@@ -4176,6 +4181,7 @@ func TestContract_HostedTenantAISettingsDoesNotAutoBootstrapQuickstartJSONSnapsh
 		"control_level":"read_only",
 		"protected_guests":[],
 		"discovery_enabled":false,
+		"share_operational_context_with_cloud":false,
 		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
 

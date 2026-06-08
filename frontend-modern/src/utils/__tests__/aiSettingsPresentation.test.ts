@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE,
   AI_SETTINGS_ASSISTANT_SESSIONS_TITLE,
+  AI_SETTINGS_CLOUD_CONTEXT_SHARING_LABEL,
   AI_SETTINGS_MODEL_OVERRIDES_TITLE,
   AI_SETTINGS_PANEL_DESCRIPTION,
   AI_SETTINGS_PANEL_TITLE,
   getAICredentialsClearErrorMessage,
+  getAISettingsCloudContextSharingHelpContent,
+  getAISettingsCloudContextSharingSummary,
   getAIOAuthErrorMessage,
   getAIChatSessionsEmptyState,
   getAIChatSessionsLoadErrorMessage,
@@ -40,6 +43,17 @@ describe('aiSettingsPresentation', () => {
     });
     expect(getAISettingsWorkloadDiscoverySummary()).toEqual({
       text: 'Workload discovery stores concrete service context for Assistant chat and Patrol verification, so responses and findings can reference real services and commands instead of generic advice.',
+    });
+    expect(AI_SETTINGS_CLOUD_CONTEXT_SHARING_LABEL).toBe(
+      'Share operational context with cloud models',
+    );
+    expect(getAISettingsCloudContextSharingHelpContent()).toEqual({
+      title: 'Sharing operational context with cloud models',
+      description:
+        'When on, Pulse shares PII-free operational context — access commands, config/data/log paths, and port numbers for discovered services — with cloud models (Anthropic, OpenAI, etc.) so the Assistant can give resource-specific guidance instead of generic advice. Identifying fields (hostnames, IP addresses, aliases, platform IDs) always stay redacted. Default off. Local Ollama models always receive full context regardless of this setting.',
+    });
+    expect(getAISettingsCloudContextSharingSummary()).toEqual({
+      text: 'Off by default: cloud models receive a terse redacted summary, so Assistant answers stay generic on cloud routes. Turning this on shares cloud-safe operational details (commands, paths, ports) while hostnames, IPs, and aliases remain redacted.',
     });
     expect(getAISettingsSetupDialogPresentation()).toEqual({
       ariaLabel: 'Set up Assistant and Patrol',

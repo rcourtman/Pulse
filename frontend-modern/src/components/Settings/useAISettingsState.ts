@@ -303,6 +303,7 @@ export const useAISettingsState = () => {
     protectedGuests: '' as string,
     discoveryEnabled: false,
     discoveryIntervalHours: 0,
+    shareOperationalContextWithCloud: false,
   });
 
   const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
@@ -378,6 +379,7 @@ export const useAISettingsState = () => {
         protectedGuests: '',
         discoveryEnabled: false,
         discoveryIntervalHours: 0,
+        shareOperationalContextWithCloud: false,
       });
       return;
     }
@@ -410,6 +412,7 @@ export const useAISettingsState = () => {
       protectedGuests: Array.isArray(data.protected_guests) ? data.protected_guests.join(', ') : '',
       discoveryEnabled: data.discovery_enabled ?? false,
       discoveryIntervalHours: data.discovery_interval_hours ?? 0,
+      shareOperationalContextWithCloud: data.share_operational_context_with_cloud ?? false,
     });
 
     const configured = new Set<AIProvider>();
@@ -881,6 +884,7 @@ export const useAISettingsState = () => {
 
       payload.discovery_enabled = form.discoveryEnabled;
       payload.discovery_interval_hours = form.discoveryIntervalHours;
+      payload.share_operational_context_with_cloud = form.shareOperationalContextWithCloud;
 
       const updated = await AIAPI.updateSettings(payload);
       setSettings(updated);
