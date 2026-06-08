@@ -93,38 +93,50 @@ export function getAIChatProviderReadinessPresentation(args: {
   message?: string;
   providerLabel?: string;
   recommendation?: string;
+  routeLabel?: string;
   status: AIChatProviderReadinessStatus;
   summary?: string;
 }): AIChatProviderReadinessPresentation {
   const providerLabel = args.providerLabel?.trim() || 'Selected';
+  const routeLabel = args.routeLabel?.trim();
+  const providerSuffix =
+    providerLabel && providerLabel.toLowerCase() !== 'selected' ? ` through ${providerLabel}` : '';
+  const fallbackSubject =
+    providerLabel.toLowerCase() === 'selected'
+      ? 'Selected model route'
+      : `${providerLabel} provider route`;
   if (args.status === 'checking') {
     return {
       tone: 'checking',
-      title: `Verifying ${providerLabel} provider`,
-      body: 'Pulse is checking the selected provider route in the background.',
+      title: routeLabel ? 'Verifying selected model route' : `Verifying ${fallbackSubject}`,
+      body: routeLabel
+        ? `Pulse is checking ${routeLabel}${providerSuffix}.`
+        : 'Pulse is checking the selected model route.',
     };
   }
 
   if (args.status === 'ready') {
     return {
       tone: 'ready',
-      title: `${providerLabel} provider ready`,
+      title: routeLabel ? 'Selected model route ready' : `${fallbackSubject} ready`,
       body:
         args.summary?.trim() ||
         args.message?.trim() ||
-        'Pulse can reach the selected provider route.',
+        (routeLabel
+          ? `Pulse can reach ${routeLabel}${providerSuffix}.`
+          : 'Pulse can reach the selected model route.'),
     };
   }
 
   const body =
     args.summary?.trim() ||
     args.message?.trim() ||
-    'Pulse could not verify the selected provider route.';
+    'Pulse could not verify the selected model route.';
   const recommendation = args.recommendation?.trim() || undefined;
 
   return {
     tone: 'error',
-    title: `${providerLabel} provider issue`,
+    title: routeLabel ? 'Selected model route issue' : `${fallbackSubject} issue`,
     body,
     recommendation,
   };

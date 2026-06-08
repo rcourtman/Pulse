@@ -444,7 +444,7 @@ async function waitForProviderCheckSettled() {
     expect(mockAIAPI.testProvider).toHaveBeenCalled();
   });
   await waitFor(() => {
-    expect(screen.queryByText('Verifying OpenAI provider')).not.toBeInTheDocument();
+    expect(screen.queryByText('Verifying selected model route')).not.toBeInTheDocument();
   });
   await waitFor(() => {
     expect(screen.getByRole('button', { name: 'Send message' })).not.toBeDisabled();
@@ -1055,12 +1055,15 @@ describe('AIChat', () => {
 
       await waitFor(() => {
         expect(mockAIAPI.testProvider).toHaveBeenCalledWith('deepseek', 'deepseek:deepseek-v4-pro');
-        expect(screen.getByLabelText('Assistant provider status')).toHaveTextContent(
-          'DeepSeek provider issue',
+        expect(screen.getByLabelText('Assistant selected model route status')).toHaveTextContent(
+          'Selected model route issue',
         );
       });
-      expect(screen.getByLabelText('Assistant provider status')).toHaveTextContent(
+      expect(screen.getByLabelText('Assistant selected model route status')).toHaveTextContent(
         'Pulse could not maintain a healthy connection to this provider.',
+      );
+      expect(screen.getByLabelText('Assistant selected model route status')).toHaveTextContent(
+        'This route stays selected until you choose another route.',
       );
       expect(screen.getByRole('link', { name: /Open settings/ })).toHaveAttribute(
         'href',
@@ -1068,7 +1071,7 @@ describe('AIChat', () => {
       );
     });
 
-    it('shows pending selected-provider checks in the composer without blocking input', async () => {
+    it('shows pending selected-route checks in the composer without blocking input', async () => {
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'openai:gpt-4',
         chat_model: '',
@@ -1083,9 +1086,11 @@ describe('AIChat', () => {
       await waitFor(() => {
         expect(mockAIAPI.testProvider).toHaveBeenCalledWith('openai', 'openai:gpt-4');
       });
-      expect(screen.queryByText('Verifying OpenAI provider')).not.toBeInTheDocument();
-      expect(screen.queryByLabelText('Assistant provider status')).not.toBeInTheDocument();
-      expect(screen.getByLabelText('Assistant provider route health')).toHaveTextContent(
+      expect(screen.queryByText('Verifying selected model route')).not.toBeInTheDocument();
+      expect(
+        screen.queryByLabelText('Assistant selected model route status'),
+      ).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Assistant selected model route health')).toHaveTextContent(
         'Checking OpenAI',
       );
 
@@ -1106,7 +1111,7 @@ describe('AIChat', () => {
       expect(document.activeElement).toBe(textarea);
     });
 
-    it('sends user input while a selected provider issue is unresolved', async () => {
+    it('sends user input while a selected model route issue is unresolved', async () => {
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'deepseek:deepseek-v4-pro',
         chat_model: '',
@@ -1127,7 +1132,7 @@ describe('AIChat', () => {
 
       renderChat();
 
-      await screen.findByText('DeepSeek provider issue');
+      await screen.findByText('Selected model route issue');
       const textarea = screen.getByPlaceholderText(
         'Ask about your infrastructure...',
       ) as HTMLTextAreaElement;
@@ -1177,8 +1182,8 @@ describe('AIChat', () => {
       expect(
         screen.queryByRole('status', { name: 'Assistant provider readiness route adopted' }),
       ).not.toBeInTheDocument();
-      expect(screen.getByLabelText('Assistant provider status')).toHaveTextContent(
-        'OpenRouter provider issue',
+      expect(screen.getByLabelText('Assistant selected model route status')).toHaveTextContent(
+        'Selected model route issue',
       );
       expect(mockNotificationStore.success).not.toHaveBeenCalledWith(
         expect.stringContaining('after OpenRouter provider check'),
@@ -1207,7 +1212,7 @@ describe('AIChat', () => {
 
       renderChat();
 
-      await screen.findByText('OpenAI provider issue');
+      await screen.findByText('Selected model route issue');
       const textarea = screen.getByPlaceholderText(
         'Ask about your infrastructure...',
       ) as HTMLTextAreaElement;
@@ -1375,14 +1380,16 @@ describe('AIChat', () => {
       renderChat();
 
       await waitFor(() => {
-        expect(screen.getByText('DeepSeek provider issue')).toBeInTheDocument();
+        expect(screen.getByText('Selected model route issue')).toBeInTheDocument();
       });
 
-      fireEvent.click(screen.getByRole('button', { name: 'Retry provider check' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Retry route check' }));
 
       await waitFor(() => {
         expect(mockAIAPI.testProvider).toHaveBeenCalledTimes(2);
-        expect(screen.queryByLabelText('Assistant provider status')).not.toBeInTheDocument();
+        expect(
+          screen.queryByLabelText('Assistant selected model route status'),
+        ).not.toBeInTheDocument();
       });
     });
 
@@ -2148,7 +2155,9 @@ describe('AIChat', () => {
           'openrouter:deepseek/deepseek-v4-pro',
         );
       });
-      expect(screen.queryByLabelText('Assistant provider status')).not.toBeInTheDocument();
+      expect(
+        screen.queryByLabelText('Assistant selected model route status'),
+      ).not.toBeInTheDocument();
       mockAIAPI.testProvider.mockClear();
 
       const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
@@ -2163,14 +2172,14 @@ describe('AIChat', () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByLabelText('Assistant provider status')).toHaveTextContent(
-          'OpenRouter provider ready',
+        expect(screen.getByLabelText('Assistant selected model route status')).toHaveTextContent(
+          'Selected model route ready',
         );
       });
-      const status = screen.getByLabelText('Assistant provider status');
+      const status = screen.getByLabelText('Assistant selected model route status');
       expect(status).toHaveTextContent('Connection successful');
       expect(status).toHaveTextContent('Route:');
-      expect(screen.getByRole('button', { name: 'Hide provider status' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Hide route status' })).toBeInTheDocument();
       expect(mockChat.sendMessage).not.toHaveBeenCalled();
     });
 
@@ -5603,9 +5612,7 @@ describe('AIChat', () => {
       expect(status).not.toHaveTextContent('OpenRouter is starting the response.');
 
       await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_PACE_MS);
-      expect(status).toHaveTextContent(
-        'Reading current Pulse inventory. · 1 follow-up queued',
-      );
+      expect(status).toHaveTextContent('Reading current Pulse inventory. · 1 follow-up queued');
 
       await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_PACE_MS);
       expect(status).toHaveTextContent('OpenRouter is starting the response. · 1 follow-up queued');

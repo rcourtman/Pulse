@@ -1880,6 +1880,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const providerReadinessPresentation = createMemo(() => {
     const readiness = providerReadiness();
     const visible = providerReadinessVisible();
+    const routeLabel = readiness.model?.trim() ? formatChatMessageModelRoute(readiness.model) : '';
     if (!readiness.provider || readiness.status === 'idle') {
       return null;
     }
@@ -1898,6 +1899,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
             ? 'checking'
             : 'error',
       providerLabel: getAIProviderDisplayName(readiness.provider),
+      routeLabel,
       message: readiness.message,
       summary: readiness.summary,
       recommendation: readiness.recommendation,
@@ -1986,9 +1988,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
         provider,
         model,
         message: 'Provider check failed',
-        summary: 'Pulse could not verify the selected provider route.',
+        summary: 'Pulse could not verify the selected model route.',
         recommendation:
-          'Check provider settings and network reachability, then retry the provider check.',
+          'Check provider settings and network reachability, then retry the route check.',
         action: 'open_provider_settings',
       });
     }
@@ -4245,7 +4247,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-100'
                       : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100'
                 }`}
-                aria-label="Assistant provider status"
+                aria-label="Assistant selected model route status"
               >
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div class="flex min-w-0 items-start gap-2.5">
@@ -4263,10 +4265,20 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       <div class="mt-0.5 leading-5">{presentation().body}</div>
                       <Show when={providerReadiness().model}>
                         {(model) => (
-                          <div class="mt-0.5 truncate text-[10px] leading-5 text-muted">
+                          <div
+                            class="mt-0.5 truncate text-[10px] leading-5 text-muted"
+                            title={`Selected route ID: ${model()}`}
+                          >
                             Route: {formatAIModelRouteLabel(model())}
                           </div>
                         )}
+                      </Show>
+                      <Show
+                        when={providerReadiness().status === 'error' && providerReadiness().model}
+                      >
+                        <div class="mt-0.5 text-[10px] leading-5 text-muted">
+                          This route stays selected until you choose another route.
+                        </div>
                       </Show>
                       <Show when={presentation().recommendation}>
                         {(recommendation) => <div class="mt-0.5 leading-5">{recommendation()}</div>}
@@ -4284,7 +4296,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
                             aria-label={providerReadinessAlternativeButtonLabel()}
                             title={alternative().label}
                           >
-                            <span class="truncate">{providerReadinessAlternativeButtonLabel()}</span>
+                            <span class="truncate">
+                              {providerReadinessAlternativeButtonLabel()}
+                            </span>
                           </button>
                         )}
                       </Show>
@@ -4293,7 +4307,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                         onClick={retrySelectedProviderReadiness}
                         disabled={providerReadiness().status === 'checking'}
                         class="inline-flex items-center gap-1.5 rounded-md border border-current/20 bg-surface px-2 py-1 text-[10px] font-medium text-base-content hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
-                        aria-label="Retry provider check"
+                        aria-label="Retry route check"
                       >
                         <RefreshCwIcon class="h-3.5 w-3.5" />
                         <span>{AI_CHAT_PROVIDER_READINESS_RETRY_LABEL}</span>
@@ -4310,7 +4324,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                           type="button"
                           onClick={() => setProviderReadinessVisible(false)}
                           class="inline-flex items-center gap-1.5 rounded-md border border-current/20 bg-surface px-2 py-1 text-[10px] font-medium text-base-content hover:bg-surface-hover"
-                          aria-label="Hide provider status"
+                          aria-label="Hide route status"
                         >
                           <XIcon class="h-3.5 w-3.5" />
                           <span>Hide</span>
@@ -4710,7 +4724,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   {(health) => (
                     <div
                       role="status"
-                      aria-label="Assistant provider route health"
+                      aria-label="Assistant selected model route health"
                       aria-live="polite"
                       title={health().title}
                       class={`inline-flex h-7 max-w-[11rem] shrink-0 items-center gap-1.5 rounded-md border px-2 text-[10px] font-medium ${health().className}`}

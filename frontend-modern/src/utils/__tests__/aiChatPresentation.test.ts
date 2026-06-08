@@ -133,12 +133,13 @@ describe('aiChatPresentation', () => {
       getAIChatProviderReadinessPresentation({
         status: 'error',
         providerLabel: 'DeepSeek',
+        routeLabel: 'DeepSeek: DeepSeek V4 Pro',
         summary: 'Pulse could not maintain a healthy connection to this provider.',
         recommendation: 'Check provider reachability.',
       }),
     ).toEqual({
       tone: 'error',
-      title: 'DeepSeek provider issue',
+      title: 'Selected model route issue',
       body: 'Pulse could not maintain a healthy connection to this provider.',
       recommendation: 'Check provider reachability.',
     });
@@ -147,18 +148,20 @@ describe('aiChatPresentation', () => {
       getAIChatProviderReadinessPresentation({
         status: 'checking',
         providerLabel: 'OpenRouter',
+        routeLabel: 'DeepSeek: DeepSeek V4 Pro via OpenRouter',
       }).title,
-    ).toBe('Verifying OpenRouter provider');
+    ).toBe('Verifying selected model route');
 
     expect(
       getAIChatProviderReadinessPresentation({
         status: 'ready',
         providerLabel: 'OpenRouter',
+        routeLabel: 'DeepSeek: DeepSeek V4 Pro via OpenRouter',
         message: 'Connection successful',
       }),
     ).toEqual({
       tone: 'ready',
-      title: 'OpenRouter provider ready',
+      title: 'Selected model route ready',
       body: 'Connection successful',
     });
   });
