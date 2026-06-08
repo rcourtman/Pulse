@@ -73,12 +73,25 @@ tools, failed tools, and completed-turn tool details must remain
 visible/inspectable; failed output may render inline because it is actionable.
 
 Assistant live workflow status follows OpenCode's current-state timeline
-model: history may persist for audit/session state, but live transcript rows
-and the active-turn footer render the latest replacing workflow status
-immediately. Pulse must not replay stale status history through artificial
-timers when the stream already has a newer workflow/tool state. Frontend
-display code may refresh elapsed-time suffixes while a turn is active, but
-status selection must read the current workflow status directly rather than
+model. CANONICAL (supersedes the per-row transcript-status rules elsewhere in
+this contract): live workflow status is FOOTER-OWNED and must never be narrated
+into the scrolling transcript. OpenCode keeps "the model is doing X" in a single
+pinned footer line and puts only durable artifacts (user text, reasoning, tool
+calls, the answer) in the timeline; Pulse mirrors that by rendering the latest
+replacing workflow status ONLY in the activity dock above the composer
+(`currentStatus` / `assistant-activity-dock` in
+`frontend-modern/src/components/AI/Chat/index.tsx`) and never as a transcript
+row or message-header chip — `shouldRenderWorkflowStatusEvent` and
+`shouldShowHeaderWorkflowStatus` in
+`frontend-modern/src/components/AI/Chat/MessageItem.tsx` are hard-`false`. The
+dock must stay up for the whole turn: it is gated on the streaming assistant
+message (`assistantTurnActive`), not `chat.isLoading()`, because loading flips
+false at visible-turn-complete and would make the footer flash and vanish.
+History may persist for audit/session state, but the dock renders the latest
+replacing status immediately. Pulse must not replay stale status history through
+artificial timers when the stream already has a newer workflow/tool state.
+Frontend display code may refresh elapsed-time suffixes while a turn is active,
+but status selection must read the current workflow status directly rather than
 deriving an older display status from `workflowStatusHistory`.
 
 1. Add or change chat runtime, Patrol orchestration, findings generation, or remediation behavior through `internal/ai/`
@@ -2327,6 +2340,23 @@ its earlier `<li>`/`<tr>` and only the last one updates), and the growing tail
 block updates its text node rather than being rebuilt. The morph is a rendering
 optimization only — `renderMarkdown` remains the sole sanitization gate and the
 morph must never be fed unsanitized HTML.
+
+Live workflow status is footer-owned, not a transcript artifact (the OpenCode
+restraint model — see the canonical statement in Extension Points, which
+supersedes the older per-row transcript-status rules in this contract). Earlier
+Pulse rendered "Preparing context / Reading inventory / Counting / Waiting for
+assistant / retrying" both as transcript rows AND in the activity dock, so the
+chat narrated every internal step into the timeline. Now `MessageItem` never
+renders workflow status — neither the per-event `role="status"` row
+(`shouldRenderWorkflowStatusEvent` is `false`) nor the early-phase header chip
+(`shouldShowHeaderWorkflowStatus` is `false`). The transcript carries only
+durable artifacts (reasoning, tool calls, model-route rows, the answer). The
+single live "assistant is working" indicator is the activity dock above the
+composer, which shows a spinner + the current status + the model route + Stop.
+The dock is gated on `assistantTurnActive` (loading OR a streaming assistant
+message) rather than `chat.isLoading()` so it persists for the whole turn:
+`isLoading` flips false at visible-turn-complete, which previously made the dock
+flash its status for a frame and vanish.
 
 Assistant slash-command availability is part of the command runtime contract,
 not only visual polish. The OpenCode reference at fetched `origin/dev` commit

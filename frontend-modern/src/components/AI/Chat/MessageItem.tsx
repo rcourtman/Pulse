@@ -281,8 +281,15 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
         return false;
     }
   };
-  const shouldRenderWorkflowStatusEvent = (evt: StreamDisplayEvent) =>
-    !!formatAssistantWorkflowStatus(evt.workflowStatus);
+  // Live workflow status ("Preparing context", "Reading inventory", "Counting
+  // results", retrying, ...) is transient working-state, not a transcript
+  // artifact. OpenCode keeps that in a single pinned footer spinner and never
+  // narrates it into the scrolling timeline; Pulse surfaces the same live status
+  // in the activity dock above the composer (currentStatus in index.tsx). So the
+  // transcript itself shows only durable artifacts — reasoning, tool calls, and
+  // the answer — and never renders workflow_status rows. Keep the predicate so
+  // the gating/grouping code paths stay intact, but never render the row.
+  const shouldRenderWorkflowStatusEvent = (_evt: StreamDisplayEvent) => false;
   const isRenderableStreamEvent = (evt: StreamDisplayEvent) => {
     switch (evt.type) {
       case 'thinking':
@@ -452,12 +459,19 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
   const workflowStatusText = createMemo(() =>
     formatWorkflowStatus(currentWorkflowStatus(), true),
   );
+  // Workflow status is footer-owned (the activity dock in index.tsx), never shown
+  // in the transcript — not as a per-event row (shouldRenderWorkflowStatusEvent)
+  // and not as this early-phase header chip. During the empty-content window the
+  // transcript stays blank while the dock spinner conveys the live status, which
+  // is the OpenCode model. Keep the predicate so its inputs stay referenced, but
+  // never render the chip.
   const shouldShowHeaderWorkflowStatus = () =>
     props.message.isStreaming &&
     !isWaitingForFirstToken() &&
     !visibleMessageContent().trim() &&
     !hasRenderableStreamEvents() &&
-    !!workflowStatusText();
+    !!workflowStatusText() &&
+    false;
   const interruptionLabel = createMemo(() => {
     switch (props.message.interruption) {
       case 'replaced':

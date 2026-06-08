@@ -2,7 +2,6 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { MessageItem } from '../MessageItem';
-import { WORKFLOW_STATUS_PACE_MS } from '../workflowStatusDisplay';
 import type { ChatMessage, PendingApproval, PendingQuestion, StreamDisplayEvent } from '../types';
 
 // Mock child components to isolate MessageItem logic
@@ -725,7 +724,7 @@ describe('MessageItem', () => {
       expect(screen.queryByText(/pulse_query/)).not.toBeInTheDocument();
     });
 
-    it('shows live workflow progress as a transcript activity row', () => {
+    it('does not render live workflow progress as a transcript row (footer-owned)', () => {
       render(() => (
         <MessageItem
           message={makeMessage({
@@ -757,19 +756,11 @@ describe('MessageItem', () => {
         />
       ));
 
-      expect(
-        screen.getByText(
-          'Selected route connection failed before any output; retrying. · attempt 2/3 · retrying in 1.2s',
-        ),
-      ).toBeInTheDocument();
-      expect(screen.getByRole('status')).toHaveAttribute('data-status-kind', 'retrying');
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
     });
 
-    it('counts down provider retry workflow rows while the turn is live', () => {
-      vi.useFakeTimers();
-      vi.setSystemTime(2_300);
-
+    it('does not render provider retry workflow rows in the transcript (footer-owned)', () => {
       render(() => (
         <MessageItem
           message={makeMessage({
@@ -803,18 +794,10 @@ describe('MessageItem', () => {
         />
       ));
 
-      expect(
-        screen.getByText(
-          /Selected route connection failed before any output; retrying\. · attempt 2\/3 · retrying in 1\.9s/,
-        ),
-      ).toBeInTheDocument();
-      expect(screen.getByRole('status')).toHaveAttribute('data-status-kind', 'retrying');
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
     });
 
-    it('paces replacing workflow activity through one live transcript row', async () => {
-      vi.useFakeTimers();
-      vi.setSystemTime(1_200);
-
+    it('does not render replacing workflow activity in the transcript (footer-owned)', () => {
       const workflowStatusHistory = [
         {
           phase: 'request_start',
@@ -854,24 +837,10 @@ describe('MessageItem', () => {
         />
       ));
 
-      expect(screen.getByText(/Preparing Pulse context\./)).toBeInTheDocument();
-      expect(screen.queryByText(/Waiting for assistant\./)).not.toBeInTheDocument();
-
-      await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_PACE_MS);
-      expect(screen.getByText(/Reading current Pulse inventory\./)).toBeInTheDocument();
-
-      await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_PACE_MS);
-      expect(screen.getByText(/Waiting for assistant\./)).toBeInTheDocument();
-      expect(screen.queryByText(/Preparing Pulse context\./)).not.toBeInTheDocument();
-      expect(
-        screen.queryByText(/Reading current Pulse inventory\./),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
     });
 
-    it('paces provider retry workflow activity into the live transcript status', async () => {
-      vi.useFakeTimers();
-      vi.setSystemTime(1_200);
-
+    it('does not render provider retry workflow activity in the transcript (footer-owned)', () => {
       const workflowStatusHistory = [
         {
           phase: 'request_start',
@@ -913,23 +882,10 @@ describe('MessageItem', () => {
         />
       ));
 
-      expect(screen.getByText('Preparing Pulse context.')).toBeInTheDocument();
-
-      await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_PACE_MS);
-      expect(screen.getByText('Waiting for assistant.')).toBeInTheDocument();
-
-      await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_PACE_MS);
-      expect(
-        screen.getByText(/Selected route connection failed before any output; retrying\. · attempt 2\/3/),
-      ).toBeInTheDocument();
-      expect(screen.queryByText('Preparing Pulse context.')).not.toBeInTheDocument();
-      expect(screen.queryByText('Waiting for assistant.')).not.toBeInTheDocument();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
     });
 
-    it('keeps separated transcript workflow rows tied to their own streamed status', () => {
-      vi.useFakeTimers();
-      vi.setSystemTime(2_000);
-
+    it('does not render separated workflow rows in the transcript while keeping tool evidence (footer-owned)', () => {
       const workflowStatusHistory = [
         {
           phase: 'context',
@@ -977,9 +933,9 @@ describe('MessageItem', () => {
         />
       ));
 
-      expect(screen.getByText('Reading current Pulse inventory.')).toBeInTheDocument();
+      expect(screen.queryByText('Reading current Pulse inventory.')).not.toBeInTheDocument();
       expect(screen.getByText('3 devices found')).toBeInTheDocument();
-      expect(screen.getByText('Waiting for assistant.')).toBeInTheDocument();
+      expect(screen.queryByText('Waiting for assistant.')).not.toBeInTheDocument();
       expect(screen.queryByText(/pulse_query/)).not.toBeInTheDocument();
     });
 
@@ -1006,7 +962,7 @@ describe('MessageItem', () => {
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
     });
 
-    it('keeps transcript workflow activity visible before streamed content', () => {
+    it('does not render workflow activity as a transcript row before streamed content (footer-owned)', () => {
       render(() => (
         <MessageItem
           message={makeMessage({
@@ -1029,12 +985,12 @@ describe('MessageItem', () => {
         />
       ));
 
-      expect(screen.getByText('Waiting for assistant.')).toBeInTheDocument();
+      expect(screen.queryByText('Waiting for assistant.')).not.toBeInTheDocument();
       expect(screen.getByText('Partial answer')).toBeInTheDocument();
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
     });
 
-    it('keeps completed transcript workflow activity visible after the turn finishes', () => {
+    it('does not render completed workflow activity as a transcript row after the turn finishes (footer-owned)', () => {
       render(() => (
         <MessageItem
           message={makeMessage({
@@ -1057,12 +1013,12 @@ describe('MessageItem', () => {
         />
       ));
 
-      expect(screen.getByText('Waiting for assistant.')).toBeInTheDocument();
+      expect(screen.queryByText('Waiting for assistant.')).not.toBeInTheDocument();
       expect(screen.getByText('Inventory has 3 devices.')).toBeInTheDocument();
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
     });
 
-    it('keeps completed request-start activity visible beside skipped tool evidence', () => {
+    it('does not render request-start activity as a transcript row beside skipped tool evidence (footer-owned)', () => {
       render(() => (
         <MessageItem
           message={makeMessage({
@@ -1102,7 +1058,7 @@ describe('MessageItem', () => {
         />
       ));
 
-      expect(screen.getByText('Preparing Pulse context.')).toBeInTheDocument();
+      expect(screen.queryByText('Preparing Pulse context.')).not.toBeInTheDocument();
       expect(screen.getByText('current_resource unavailable')).toBeInTheDocument();
       expect(
         screen.getByText(
@@ -1214,7 +1170,7 @@ describe('MessageItem', () => {
       ).toHaveTextContent('Using Qwen 3.7 Plus via OpenRouter');
     });
 
-    it('keeps request-start progress visible next to selected model route evidence', () => {
+    it('does not render request-start progress as a transcript row next to selected model route evidence (footer-owned)', () => {
       const events: StreamDisplayEvent[] = [
         {
           type: 'model_switch',
@@ -1254,7 +1210,7 @@ describe('MessageItem', () => {
       expect(
         screen.getByRole('status', { name: 'Assistant model route selected' }),
       ).toHaveTextContent('Using Qwen 3.7 Plus via OpenRouter');
-      expect(screen.getByText(/Preparing Pulse context\./)).toBeInTheDocument();
+      expect(screen.queryByText(/Preparing Pulse context\./)).not.toBeInTheDocument();
     });
 
     it('renders model route switches with previous and next routes', () => {

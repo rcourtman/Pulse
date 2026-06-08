@@ -2434,8 +2434,25 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
     return '';
   });
+  // The activity dock is Pulse's single live "assistant is working" footer (the
+  // OpenCode model: live status lives in a pinned footer, never narrated into the
+  // transcript). It must stay up for the whole turn. `chat.isLoading()` flips
+  // false at visible-turn-complete (as soon as the answer is shown), which is too
+  // early — so the dock would flash its status for a moment and vanish. Gate the
+  // dock on the streaming assistant message instead, which stays true until the
+  // turn fully settles.
+  const assistantTurnActive = createMemo(() => {
+    if (chat.isLoading()) return true;
+    const messages = chat.messages();
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message.role === 'assistant') return message.isStreaming !== false;
+      if (message.role === 'user') return false;
+    }
+    return false;
+  });
   const activeAssistantMessage = createMemo(() => {
-    if (!chat.isLoading()) return undefined;
+    if (!assistantTurnActive()) return undefined;
     const messages = chat.messages();
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       const message = messages[index];
@@ -2464,7 +2481,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   });
   const pacedActiveWorkflowStatus = createPacedWorkflowStatus(
     activeWorkflowStatusHistory,
-    () => chat.isLoading() && activeWorkflowStatusHistory().length > 1,
+    () => assistantTurnActive() && activeWorkflowStatusHistory().length > 1,
     activeWorkflowStatusPaceSequenceKey,
   );
   const messagesWithPacedActiveWorkflowStatus = createMemo(() => {
@@ -2489,7 +2506,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const currentStatus = createMemo(() => {
     return getAssistantActiveTurnStatus(
       messagesWithPacedActiveWorkflowStatus(),
-      chat.isLoading(),
+      assistantTurnActive(),
       currentStatusNow(),
     );
   });
