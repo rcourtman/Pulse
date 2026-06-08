@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-li
 import { Show, createSignal } from 'solid-js';
 import type { ChatMessage, ModelInfo, ModelRouteRecoveryOption } from '../types';
 import type { QueuedFollowUp } from '../hooks/useChat';
+import { WORKFLOW_STATUS_PACE_MS } from '../workflowStatusDisplay';
 
 // ── Hoisted mocks (vi.mock factories reference these) ──────────────────────
 
@@ -5478,7 +5479,7 @@ describe('AIChat', () => {
       expect(status).not.toHaveTextContent('Using Qwen: Qwen3.7 Plus via OpenRouter');
     });
 
-    it('uses the latest replacing workflow progress in the active turn status footer', async () => {
+    it('paces replacing workflow progress in the active turn status footer', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(1_200);
       const [isLoading, setIsLoading] = createSignal(false);
@@ -5527,12 +5528,19 @@ describe('AIChat', () => {
       ]);
 
       const status = screen.getByLabelText('Assistant active turn status');
-      await waitFor(() => expect(status).toHaveTextContent('OpenRouter is starting the response.'));
+      await waitFor(() => expect(status).toHaveTextContent('Preparing Pulse context.'));
+      expect(status).not.toHaveTextContent('OpenRouter is starting the response.');
+
+      await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_PACE_MS);
+      expect(status).toHaveTextContent('Reading current Pulse inventory.');
+
+      await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_PACE_MS);
+      expect(status).toHaveTextContent('OpenRouter is starting the response.');
       expect(status).not.toHaveTextContent('Preparing Pulse context.');
       expect(status).not.toHaveTextContent('Reading current Pulse inventory.');
     });
 
-    it('uses the latest replacing workflow progress without dropping queued follow-up pressure', async () => {
+    it('paces replacing workflow progress without dropping queued follow-up pressure', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(1_200);
       const [isLoading, setIsLoading] = createSignal(false);
@@ -5590,8 +5598,17 @@ describe('AIChat', () => {
 
       const status = screen.getByLabelText('Assistant active turn status');
       await waitFor(() =>
-        expect(status).toHaveTextContent('OpenRouter is starting the response. · 1 follow-up queued'),
+        expect(status).toHaveTextContent('Preparing Pulse context. · 1 follow-up queued'),
       );
+      expect(status).not.toHaveTextContent('OpenRouter is starting the response.');
+
+      await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_PACE_MS);
+      expect(status).toHaveTextContent(
+        'Reading current Pulse inventory. · 1 follow-up queued',
+      );
+
+      await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_PACE_MS);
+      expect(status).toHaveTextContent('OpenRouter is starting the response. · 1 follow-up queued');
       expect(status).not.toHaveTextContent('Preparing Pulse context.');
       expect(status).not.toHaveTextContent('Reading current Pulse inventory.');
     });

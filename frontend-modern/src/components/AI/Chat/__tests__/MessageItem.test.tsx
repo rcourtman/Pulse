@@ -2,6 +2,7 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { MessageItem } from '../MessageItem';
+import { WORKFLOW_STATUS_PACE_MS } from '../workflowStatusDisplay';
 import type { ChatMessage, PendingApproval, PendingQuestion, StreamDisplayEvent } from '../types';
 
 // Mock child components to isolate MessageItem logic
@@ -801,7 +802,7 @@ describe('MessageItem', () => {
       ).toBeInTheDocument();
     });
 
-    it('renders the latest replacing workflow activity through one live transcript row', () => {
+    it('paces replacing workflow activity through one live transcript row', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(1_200);
 
@@ -844,6 +845,13 @@ describe('MessageItem', () => {
         />
       ));
 
+      expect(screen.getByText(/Preparing Pulse context\./)).toBeInTheDocument();
+      expect(screen.queryByText(/OpenRouter is starting the response\./)).not.toBeInTheDocument();
+
+      await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_PACE_MS);
+      expect(screen.getByText(/Reading current Pulse inventory\./)).toBeInTheDocument();
+
+      await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_PACE_MS);
       expect(screen.getByText(/OpenRouter is starting the response\./)).toBeInTheDocument();
       expect(screen.queryByText(/Preparing Pulse context\./)).not.toBeInTheDocument();
       expect(
@@ -851,7 +859,7 @@ describe('MessageItem', () => {
       ).not.toBeInTheDocument();
     });
 
-    it('uses provider retry workflow activity as the latest live transcript status', () => {
+    it('paces provider retry workflow activity into the live transcript status', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(1_200);
 
@@ -896,10 +904,14 @@ describe('MessageItem', () => {
         />
       ));
 
+      expect(screen.getByText('Preparing Pulse context.')).toBeInTheDocument();
+
+      await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_PACE_MS);
+      expect(screen.getByText('OpenRouter is starting the response.')).toBeInTheDocument();
+
+      await vi.advanceTimersByTimeAsync(WORKFLOW_STATUS_PACE_MS);
       expect(
-        screen.getByText(
-          'Provider connection failed before any output; retrying. · attempt 2/3 · retrying in 3.2s',
-        ),
+        screen.getByText(/Provider connection failed before any output; retrying\. · attempt 2\/3/),
       ).toBeInTheDocument();
       expect(screen.queryByText('Preparing Pulse context.')).not.toBeInTheDocument();
       expect(screen.queryByText('OpenRouter is starting the response.')).not.toBeInTheDocument();

@@ -154,7 +154,11 @@ import { SlashCommandAutocomplete } from './SlashCommandAutocomplete';
 import {
   getAssistantActiveTurnStatus,
 } from './activeTurnStatus';
-import { WORKFLOW_STATUS_REFRESH_MS } from './workflowStatusDisplay';
+import {
+  createPacedWorkflowStatus,
+  replaceLatestWorkflowStatusEventForDisplay,
+  WORKFLOW_STATUS_REFRESH_MS,
+} from './workflowStatusDisplay';
 import { getLastAssistantAnswerText } from './assistantAnswerText';
 import {
   getNextAssistantRecentModelRoute,
@@ -2357,9 +2361,53 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
     return undefined;
   });
+  const activeWorkflowStatusHistory = createMemo(() => {
+    const message = activeAssistantMessage();
+    if (!message || message.isStreaming === false) return [];
+    return message.workflowStatusHistory || (message.workflowStatus ? [message.workflowStatus] : []);
+  });
+  const activeWorkflowStatusPaceSequenceKey = createMemo(() => {
+    const message = activeAssistantMessage();
+    const first = activeWorkflowStatusHistory()[0];
+    return [
+      message?.id,
+      first?.phase,
+      first?.message,
+      first?.startedAt,
+    ]
+      .map((value) => String(value ?? ''))
+      .join(':');
+  });
+  const pacedActiveWorkflowStatus = createPacedWorkflowStatus(
+    activeWorkflowStatusHistory,
+    () => chat.isLoading() && activeWorkflowStatusHistory().length > 1,
+    activeWorkflowStatusPaceSequenceKey,
+  );
+  const messagesWithPacedActiveWorkflowStatus = createMemo(() => {
+    const activeMessage = activeAssistantMessage();
+    const workflowStatus = pacedActiveWorkflowStatus();
+    const messages = chat.messages();
+    if (!activeMessage || !workflowStatus) return messages;
+
+    return messages.map((message) => {
+      if (message.id !== activeMessage.id) return message;
+      return {
+        ...message,
+        workflowStatus,
+        streamEvents: replaceLatestWorkflowStatusEventForDisplay(
+          message.streamEvents,
+          workflowStatus,
+        ),
+      };
+    });
+  });
   const [currentStatusNow, setCurrentStatusNow] = createSignal(Date.now());
   const currentStatus = createMemo(() => {
-    return getAssistantActiveTurnStatus(chat.messages(), chat.isLoading(), currentStatusNow());
+    return getAssistantActiveTurnStatus(
+      messagesWithPacedActiveWorkflowStatus(),
+      chat.isLoading(),
+      currentStatusNow(),
+    );
   });
   createEffect(() => {
     const status = currentStatus();

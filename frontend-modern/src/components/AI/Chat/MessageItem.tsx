@@ -27,7 +27,10 @@ import { getAssistantAnswerText } from './assistantAnswerText';
 import { stripAssistantOutputArtifacts } from './assistantOutputHygiene';
 import { formatAssistantWorkflowStatus } from './activeTurnStatus';
 import { groupStreamEventsForDisplay } from './streamEventGrouping';
-import { WORKFLOW_STATUS_REFRESH_MS } from './workflowStatusDisplay';
+import {
+  createPacedWorkflowStatus,
+  WORKFLOW_STATUS_REFRESH_MS,
+} from './workflowStatusDisplay';
 import type {
   ChatMessage,
   ModelRouteRecoveryOption,
@@ -315,6 +318,50 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     groupedEvents()
       .slice(eventIndex + 1)
       .some((evt) => evt.type !== 'model_switch' && isConcreteStreamActivity(evt));
+  const isDurableWorkflowBoundary = (evt: StreamDisplayEvent) => {
+    switch (evt.type) {
+      case 'content':
+        return !!stripAssistantOutputArtifacts(evt.content || '').text;
+      case 'tool':
+        return !!evt.tool;
+      case 'pending_tool':
+        return !!evt.pendingTool;
+      case 'tool_cancel':
+        return !!evt.toolCancel;
+      case 'approval':
+        return !!evt.approval;
+      case 'question':
+        return !!evt.question;
+      default:
+        return false;
+    }
+  };
+  const hasDurableWorkflowBoundaryAround = (eventIndex: number) =>
+    groupedEvents().some((evt, index) => index !== eventIndex && isDurableWorkflowBoundary(evt));
+  const liveWorkflowStatusHistory = createMemo(() =>
+    props.message.isStreaming === true ? props.message.workflowStatusHistory || [] : [],
+  );
+  const workflowStatusPaceSequenceKey = createMemo(() => {
+    const first = liveWorkflowStatusHistory()[0];
+    return [
+      props.message.id,
+      first?.phase,
+      first?.message,
+      first?.startedAt,
+    ]
+      .map((value) => String(value ?? ''))
+      .join(':');
+  });
+  const pacedWorkflowStatus = createPacedWorkflowStatus(
+    liveWorkflowStatusHistory,
+    () => props.message.isStreaming === true && liveWorkflowStatusHistory().length > 1,
+    workflowStatusPaceSequenceKey,
+  );
+  const shouldPaceWorkflowStatusEvent = (evt: StreamDisplayEvent, eventIndex: number) =>
+    props.message.isStreaming === true &&
+    evt.type === 'workflow_status' &&
+    liveWorkflowStatusHistory().length > 1 &&
+    !hasDurableWorkflowBoundaryAround(eventIndex);
   const shouldCompactCompletedToolEvent = (evt: StreamDisplayEvent, eventIndex: number) =>
     evt.type === 'tool' &&
     props.message.isStreaming === true &&
@@ -581,7 +628,11 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                     const contentText = () =>
                       stripAssistantOutputArtifacts(evt?.content || '').text;
                     const visibleWorkflowStatus = () =>
-                      evt?.type === 'workflow_status' ? evt.workflowStatus : undefined;
+                      evt?.type === 'workflow_status'
+                        ? shouldPaceWorkflowStatusEvent(evt, index())
+                          ? pacedWorkflowStatus() || evt.workflowStatus
+                          : evt.workflowStatus
+                        : undefined;
 
                     return (
                       <Switch>
