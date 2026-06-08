@@ -49,7 +49,7 @@ func TestBuildUnifiedResourcePolicyContext(t *testing.T) {
 		},
 	})
 
-	context := buildUnifiedResourcePolicyContext(unifiedresources.SummarizePolicyPosture(resources), "")
+	context := buildUnifiedResourcePolicyContext(unifiedresources.SummarizePolicyPosture(resources), "", "redacted")
 
 	if !context.hasGovernedResources() {
 		t.Fatal("expected governed posture")
@@ -104,7 +104,7 @@ func TestBuildUnifiedResourcePolicyContextExternalModel(t *testing.T) {
 	}
 	resources := unifiedresources.RefreshCanonicalMetadataSlice([]unifiedresources.Resource{localOnly, cloudSummary})
 
-	context := buildUnifiedResourcePolicyContext(unifiedresources.SummarizePolicyPosture(resources), "openai:gpt-4o")
+	context := buildUnifiedResourcePolicyContext(unifiedresources.SummarizePolicyPosture(resources), "openai:gpt-4o", "redacted")
 
 	if !context.externalModel {
 		t.Fatal("expected external model handling")
@@ -124,11 +124,78 @@ func TestBuildUnifiedResourcePolicyContextExternalModel(t *testing.T) {
 		t.Fatalf("expected external handling summary, got %q", joined)
 	}
 
-	localContext := buildUnifiedResourcePolicyContext(unifiedresources.SummarizePolicyPosture(resources), "ollama:llama3")
+	localContext := buildUnifiedResourcePolicyContext(unifiedresources.SummarizePolicyPosture(resources), "ollama:llama3", "redacted")
 	if localContext.externalModel {
 		t.Fatal("expected ollama destination to stay local")
 	}
 	if !localContext.includeResourceDetails(resources[0]) {
 		t.Fatal("expected local model context to include local-only resource details")
+	}
+}
+
+func TestUnifiedResourcePolicyContext_ResourceLabelDialAware(t *testing.T) {
+	resources := unifiedresources.RefreshCanonicalMetadataSlice([]unifiedresources.Resource{
+		{ // Sensitive -> local-first (shown at full)
+			ID: "vm-1", Name: "finance-vm", Type: unifiedresources.ResourceTypeVM,
+			Status: unifiedresources.StatusOnline, Tags: []string{"sensitive"},
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"finance.lan"}},
+		},
+		{ // Restricted -> local-only (hard floor, redacted even at full)
+			ID: "agent-1", Name: "vault", Type: unifiedresources.ResourceTypeAgent,
+			Status: unifiedresources.StatusOnline, Tags: []string{"secret"},
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"vault.lan"}},
+		},
+		{ // Internal -> cloud-summary (real name everywhere)
+			ID: "vm-2", Name: "web", Type: unifiedresources.ResourceTypeVM,
+			Status: unifiedresources.StatusOnline,
+		},
+	})
+	sens, restr, intern := resources[0], resources[1], resources[2]
+	posture := unifiedresources.SummarizePolicyPosture(resources)
+	label := func(ctx unifiedResourcePolicyContext, r unifiedresources.Resource) string {
+		return ctx.resourceLabel(r.Name, r.AISafeSummary, r.Policy)
+	}
+	// The governed (non-real-name) rendering for a redacted resource — the AI-safe
+	// summary when present, else the bare placeholder. The real-resource name must
+	// never equal this.
+	governed := func(r unifiedresources.Resource) string {
+		return unifiedresources.ResourcePolicyLabel(r.Name, r.AISafeSummary, r.Policy)
+	}
+	if governed(sens) == "finance-vm" || governed(restr) == "vault" {
+		t.Fatalf("test fixture invalid: governed labels should not be the real names (sens=%q restr=%q)", governed(sens), governed(restr))
+	}
+
+	// Local model: everything shows its real name (local is always full).
+	local := buildUnifiedResourcePolicyContext(posture, "ollama:llama3", "redacted")
+	if got := label(local, sens); got != "finance-vm" {
+		t.Fatalf("local sensitive label = %q, want real name", got)
+	}
+	if got := label(local, restr); got != "vault" {
+		t.Fatalf("local restricted label = %q, want real name", got)
+	}
+
+	// Cloud + full: sensitive shows its real name, restricted stays governed
+	// (local-only hard floor), internal shows.
+	full := buildUnifiedResourcePolicyContext(posture, "openai:gpt-4o", "full")
+	if got := label(full, sens); got != "finance-vm" {
+		t.Fatalf("cloud-full sensitive label = %q, want real name", got)
+	}
+	if got := label(full, restr); got != governed(restr) {
+		t.Fatalf("cloud-full restricted label = %q, want governed floor %q", got, governed(restr))
+	}
+	if got := label(full, intern); got != "web" {
+		t.Fatalf("cloud-full internal label = %q, want real name", got)
+	}
+
+	// Cloud + redacted: both governed resources are redacted; internal still shows.
+	red := buildUnifiedResourcePolicyContext(posture, "openai:gpt-4o", "redacted")
+	if got := label(red, sens); got != governed(sens) {
+		t.Fatalf("cloud-redacted sensitive label = %q, want governed %q", got, governed(sens))
+	}
+	if got := label(red, restr); got != governed(restr) {
+		t.Fatalf("cloud-redacted restricted label = %q, want governed %q", got, governed(restr))
+	}
+	if got := label(red, intern); got != "web" {
+		t.Fatalf("cloud-redacted internal label = %q, want real name", got)
 	}
 }

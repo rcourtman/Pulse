@@ -115,10 +115,18 @@ deriving an older display status from `workflowStatusHistory`.
    off/absent → `redacted`) without mutating the boolean, so existing installs
    keep their current cloud behavior. A fresh install defaults to `full` so a
    self-hosted Pulse answers with real resource detail out of the box.
-   The redaction seam reads the dial directly at `internal/ai/chat/service.go`,
-   resolving `cloudPrivacyLevel` once per turn (failing closed to `redacted` when
-   no config snapshot is available) and threading it into both the proactive
-   prefetch and the model-boundary sanitizer:
+   The redaction seam reads the dial directly across THREE model-bound paths,
+   each resolving the dial and failing closed to `redacted` when no config
+   snapshot is available: the proactive prefetch and the model-boundary sanitizer
+   (`internal/ai/chat/service.go`, `cloudPrivacyLevel` once per turn), AND the
+   broad inventory-context builder (`internal/ai/resource_context.go`
+   `buildUnifiedResourceContextForModel` → `unifiedResourcePolicyContext.resourceLabel`).
+   The inventory builder MUST render resource display names through the dial, not
+   the unconditional `unifiedresources.ResourcePolicyLabel`: known-local (Ollama)
+   destinations always get real names; cloud destinations get real names only at
+   `full` and only for resources not routed `ResourceRoutingScopeLocalOnly` (the
+   same hard floor); an unknown/empty destination fails closed to the governed
+   label. All three paths enforce the same posture:
    - `full`: the model-bound resource-policy sanitizer is invoked with
      `modelboundary.RedactLocalOnlyResourcesOnly()`, so real identifiers (hostname,
      IP, alias, name) for ordinary (Internal) and Sensitive (local-first) resources

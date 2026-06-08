@@ -12,6 +12,8 @@ import (
 type unifiedResourcePolicyContext struct {
 	posture           *unifiedresources.PolicyPostureSummary
 	externalModel     bool
+	localModel        bool
+	cloudPrivacy      string
 	sensitivityCounts map[unifiedresources.ResourceSensitivity]int
 	routingCounts     map[unifiedresources.ResourceRoutingScope]int
 	localOnlyCount    int
@@ -19,9 +21,12 @@ type unifiedResourcePolicyContext struct {
 	redactionLabels   []string
 }
 
-func buildUnifiedResourcePolicyContext(posture *unifiedresources.PolicyPostureSummary, destinationModel string) unifiedResourcePolicyContext {
+func buildUnifiedResourcePolicyContext(posture *unifiedresources.PolicyPostureSummary, destinationModel, cloudPrivacy string) unifiedResourcePolicyContext {
+	normalizedPrivacy, _ := config.NormalizeCloudContextPrivacy(cloudPrivacy)
 	context := unifiedResourcePolicyContext{
 		externalModel:     unifiedResourceContextUsesExternalModel(destinationModel),
+		localModel:        unifiedResourceContextUsesLocalModel(destinationModel),
+		cloudPrivacy:      normalizedPrivacy,
 		posture:           posture,
 		sensitivityCounts: map[unifiedresources.ResourceSensitivity]int{},
 		routingCounts:     map[unifiedresources.ResourceRoutingScope]int{},
@@ -54,6 +59,18 @@ func unifiedResourceContextUsesExternalModel(destinationModel string) bool {
 	return provider != config.AIProviderOllama
 }
 
+// unifiedResourceContextUsesLocalModel reports whether the destination is a KNOWN
+// local (Ollama) model. An empty/unknown destination is neither external nor
+// local, so it fails closed to redaction rather than being treated as local.
+func unifiedResourceContextUsesLocalModel(destinationModel string) bool {
+	destinationModel = strings.TrimSpace(destinationModel)
+	if destinationModel == "" {
+		return false
+	}
+	provider, _ := config.ParseModelString(destinationModel)
+	return provider == config.AIProviderOllama
+}
+
 func (context unifiedResourcePolicyContext) hasGovernedResources() bool {
 	return context.posture != nil && context.posture.TotalResources > 0
 }
@@ -63,6 +80,43 @@ func (context unifiedResourcePolicyContext) includeResourceDetails(resource unif
 		return true
 	}
 	return resource.Policy.Routing.Scope != unifiedresources.ResourceRoutingScopeLocalOnly
+}
+
+// resourceLabel renders a resource's display name for the model-bound inventory
+// context, honoring the cloud_context_privacy dial. Local models always get the
+// real name (local is always full). For cloud models, the "full" dial shows real
+// names EXCEPT for resources the engine routes local-only (the hard floor, which
+// stays redacted even at full); "redacted"/"local_only" fall back to the governed
+// label. This is the inventory-context half of the dial — the prefetch and the
+// model-boundary sanitizer enforce the same posture on their paths.
+func (context unifiedResourcePolicyContext) resourceLabel(name, aiSafeSummary string, policy *unifiedresources.ResourcePolicy) string {
+	if context.allowsRealIdentifier(policy) {
+		if trimmed := strings.TrimSpace(name); trimmed != "" {
+			return trimmed
+		}
+	}
+	return unifiedresources.ResourcePolicyLabel(name, aiSafeSummary, policy)
+}
+
+// allowsRealIdentifier reports whether the real resource identifier may be shown
+// for this destination given the dial. Known-local (Ollama) => always. Cloud =>
+// only at "full" and only when the resource is not routed local-only. An
+// unknown/empty destination fails closed to redaction (it could reach a cloud
+// model), preserving the historical safe default for the no-destination path.
+func (context unifiedResourcePolicyContext) allowsRealIdentifier(policy *unifiedresources.ResourcePolicy) bool {
+	if context.localModel {
+		return true
+	}
+	if !context.externalModel {
+		return false
+	}
+	if context.cloudPrivacy != config.CloudContextPrivacyFull {
+		return false
+	}
+	if policy != nil && policy.Routing.Scope == unifiedresources.ResourceRoutingScopeLocalOnly {
+		return false
+	}
+	return true
 }
 
 func (context unifiedResourcePolicyContext) filterDetailedResources(resources []unifiedresources.Resource) []unifiedresources.Resource {
