@@ -35,7 +35,6 @@ import type {
 const generateId = () => Math.random().toString(36).substring(2, 9);
 type AssistantInterruption = NonNullable<ChatMessage['interruption']>;
 const WORKFLOW_STATUS_HISTORY_LIMIT = 8;
-const LOCAL_ASSISTANT_WAIT_STATUS_DELAY_MS = 900;
 
 const messageModelCameFromRouteSwitch = (message: ChatMessage, modelRoute: string): boolean =>
   Boolean(
@@ -85,20 +84,7 @@ const routeProviderLabel = (modelRoute?: string) => {
   return provider ? getAIProviderDisplayName(provider) : '';
 };
 
-const createInitialAssistantWorkflowStatus = (
-  modelRoute?: string,
-  startedAt = Date.now(),
-): WorkflowStatus => {
-  const providerLabel = routeProviderLabel(modelRoute);
-  return {
-    phase: 'request_send',
-    message: providerLabel ? `Sending prompt to ${providerLabel}.` : 'Sending prompt.',
-    ...routeAwareWorkflowStatusFields(modelRoute),
-    startedAt,
-  };
-};
-
-const createLocalAssistantWaitWorkflowStatus = (
+const createAssistantRouteStartWorkflowStatus = (
   modelRoute?: string,
   startedAt = Date.now(),
 ): WorkflowStatus => {
@@ -107,7 +93,7 @@ const createLocalAssistantWaitWorkflowStatus = (
     phase: 'request_wait',
     message: providerLabel
       ? `${providerLabel} is starting the response.`
-      : 'Waiting for assistant.',
+      : 'Assistant is starting the response.',
     ...routeAwareWorkflowStatusFields(modelRoute),
     startedAt,
   };
@@ -179,13 +165,6 @@ export function useChat(options: UseChatOptions = {}) {
   let abortControllerRef: AbortController | null = null;
   let activeRequestId = 0;
   let pendingBackendAbort: Promise<void> | null = null;
-  let localAssistantWaitStatusTimer: ReturnType<typeof setTimeout> | undefined;
-
-  const clearLocalAssistantWaitStatusTimer = () => {
-    if (localAssistantWaitStatusTimer === undefined) return;
-    clearTimeout(localAssistantWaitStatusTimer);
-    localAssistantWaitStatusTimer = undefined;
-  };
   let isDrainingQueuedFollowUps = false;
   const suppressedRawContentMessageIds = new Set<string>();
   const outputArtifactStreamStates = new Map<string, AssistantOutputArtifactStreamState>();
@@ -335,7 +314,6 @@ export function useChat(options: UseChatOptions = {}) {
       abortControllerRef.abort();
       abortControllerRef = null;
     }
-    clearLocalAssistantWaitStatusTimer();
     activeRequestId += 1;
 
     setMessages((prev) =>
@@ -1872,7 +1850,10 @@ export function useChat(options: UseChatOptions = {}) {
     };
 
     const assistantId = generateId();
-    const initialWorkflowStatus = createInitialAssistantWorkflowStatus(requestModel, turnStartedAt);
+    const initialWorkflowStatus = createAssistantRouteStartWorkflowStatus(
+      requestModel,
+      turnStartedAt,
+    );
     const initialStreamEvents: StreamDisplayEvent[] = [
       ...(requestModel
         ? [
@@ -1932,31 +1913,9 @@ export function useChat(options: UseChatOptions = {}) {
     abortControllerRef = abortController;
     let visibleTurnCompleted = false;
 
-    const promoteLocalWaitStatus = () => {
-      localAssistantWaitStatusTimer = undefined;
-      if (requestId !== activeRequestId) return;
-      const waitStatus = createLocalAssistantWaitWorkflowStatus(requestModel, turnStartedAt);
-      setMessages((prev) =>
-        prev.map((msg) => {
-          if (msg.id !== assistantId) return msg;
-          if (msg.isStreaming === false) return msg;
-          if (msg.workflowStatus?.phase !== 'request_send') return msg;
-          const updated = withWorkflowStatusEvent(msg, waitStatus);
-          return { ...updated, workflowStatus: waitStatus };
-        }),
-      );
-    };
-
-    clearLocalAssistantWaitStatusTimer();
-    localAssistantWaitStatusTimer = setTimeout(
-      promoteLocalWaitStatus,
-      LOCAL_ASSISTANT_WAIT_STATUS_DELAY_MS,
-    );
-
     const completeVisibleTurn = () => {
       if (requestId !== activeRequestId || visibleTurnCompleted) return;
       visibleTurnCompleted = true;
-      clearLocalAssistantWaitStatusTimer();
       abortControllerRef = null;
       setIsLoading(false);
       if (options?.drainAfter !== false) {
@@ -1972,9 +1931,6 @@ export function useChat(options: UseChatOptions = {}) {
         currentSessionId || undefined,
         requestModel || undefined,
         (event: StreamEvent) => {
-          if (event.type !== 'session') {
-            clearLocalAssistantWaitStatusTimer();
-          }
           processEvent(assistantId, requestId, event);
         },
         abortController.signal,

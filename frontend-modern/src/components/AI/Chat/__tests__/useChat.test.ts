@@ -208,8 +208,8 @@ describe('useChat', () => {
         pendingTools: [],
         workflowStatusHistory: [],
         workflowStatus: {
-          phase: 'request_send',
-          message: 'Sending prompt.',
+          phase: 'request_wait',
+          message: 'Assistant is starting the response.',
         },
       });
       expect(mockCreateSession).not.toHaveBeenCalled();
@@ -224,7 +224,7 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('promotes a quiet sent prompt to a local waiting status before backend activity arrives', async () => {
+    it('starts a quiet sent prompt with local waiting status before backend activity arrives', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(1_000);
       let resolveChat!: () => void;
@@ -241,23 +241,23 @@ describe('useChat', () => {
         role: 'assistant',
         isStreaming: true,
         workflowStatus: {
-          phase: 'request_send',
-          message: 'Sending prompt.',
+          phase: 'request_wait',
+          message: 'Assistant is starting the response.',
           startedAt: 1_000,
         },
       });
 
       await vi.advanceTimersByTimeAsync(899);
       expect(chat.messages()[1].workflowStatus).toMatchObject({
-        phase: 'request_send',
-        message: 'Sending prompt.',
+        phase: 'request_wait',
+        message: 'Assistant is starting the response.',
       });
 
       await vi.advanceTimersByTimeAsync(1);
       expect(chat.messages()[1]).toMatchObject({
         workflowStatus: {
           phase: 'request_wait',
-          message: 'Waiting for assistant.',
+          message: 'Assistant is starting the response.',
           startedAt: 1_000,
         },
         streamEvents: [
@@ -265,7 +265,7 @@ describe('useChat', () => {
             type: 'workflow_status',
             workflowStatus: expect.objectContaining({
               phase: 'request_wait',
-              message: 'Waiting for assistant.',
+              message: 'Assistant is starting the response.',
             }),
           }),
         ],
@@ -361,8 +361,8 @@ describe('useChat', () => {
         isStreaming: true,
         workflowStatusHistory: [],
         workflowStatus: {
-          phase: 'request_send',
-          message: 'Sending prompt to OpenRouter.',
+          phase: 'request_wait',
+          message: 'OpenRouter is starting the response.',
           provider: 'openrouter',
           model: 'openrouter:qwen/qwen3.7-plus',
         },
@@ -376,8 +376,8 @@ describe('useChat', () => {
         expect.objectContaining({
           type: 'workflow_status',
           workflowStatus: expect.objectContaining({
-            phase: 'request_send',
-            message: 'Sending prompt to OpenRouter.',
+            phase: 'request_wait',
+            message: 'OpenRouter is starting the response.',
             provider: 'openrouter',
             model: 'openrouter:qwen/qwen3.7-plus',
           }),
@@ -389,7 +389,7 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('promotes a quiet selected route to provider startup progress', async () => {
+    it('starts a quiet selected route with provider startup progress', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(2_000);
       let resolveChat!: () => void;
@@ -403,8 +403,6 @@ describe('useChat', () => {
         useChat({ defaultModel: () => 'openrouter:qwen/qwen3.7-plus' }),
       );
       const result = chat.sendMessage('hello');
-
-      await vi.advanceTimersByTimeAsync(900);
 
       const assistant = chat.messages()[1];
       expect(assistant.workflowStatus).toMatchObject({
@@ -1404,7 +1402,7 @@ describe('useChat', () => {
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.model).toBe('openrouter:openai/gpt-4o-mini');
-      expect(assistant.workflowStatus?.phase).toBe('request_send');
+      expect(assistant.workflowStatus?.phase).toBe('request_wait');
       expect(assistant.streamEvents).not.toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -1497,7 +1495,7 @@ describe('useChat', () => {
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.model).toBe('openrouter:openai/gpt-4o-mini');
-      expect(assistant.workflowStatus?.phase).toBe('request_send');
+      expect(assistant.workflowStatus?.phase).toBe('request_wait');
       expect(assistant.streamEvents).not.toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -1763,8 +1761,8 @@ describe('useChat', () => {
         expect.objectContaining({
           type: 'workflow_status',
           workflowStatus: expect.objectContaining({
-            phase: 'request_send',
-            message: 'Sending prompt to OpenRouter.',
+            phase: 'request_wait',
+            message: 'OpenRouter is starting the response.',
             provider: 'openrouter',
             model: 'openrouter:qwen/qwen3.7-plus',
           }),
