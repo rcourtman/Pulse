@@ -4,6 +4,7 @@ import {
   type AssistantSlashCommandAvailability,
   filterAssistantSlashCommands,
   getAssistantSlashCommandTokens,
+  groupAssistantSlashCommands,
   type AssistantSlashCommand,
 } from './assistantSlashCommands';
 import { AssistantSlashCommandIcon } from './SlashCommandAutocomplete';
@@ -32,6 +33,8 @@ export function AssistantCommandHelpDialog(props: AssistantCommandHelpDialogProp
       includeDisabled: true,
     }),
   );
+  const groupedCommands = createMemo(() => groupAssistantSlashCommands(commands()));
+  const shouldGroupCommands = createMemo(() => !commandSearchQuery().trim());
   const selectedCommand = () => commands()[selectedCommandIndex()];
 
   const consumeDialogCloseKey = (event: KeyboardEvent) => {
@@ -159,55 +162,70 @@ export function AssistantCommandHelpDialog(props: AssistantCommandHelpDialogProp
               </div>
             }
           >
-            <For each={commands()}>
-              {(command, index) => {
-                const aliases = () => getAssistantSlashCommandTokens(command).slice(1);
-                return (
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={index() === selectedCommandIndex()}
-                    aria-disabled={command.disabled ? 'true' : undefined}
-                    disabled={command.disabled}
-                    class={`flex w-full items-start gap-3 rounded-md px-3 py-2.5 text-left transition-colors focus:outline-none ${
-                      command.disabled
-                        ? 'cursor-not-allowed opacity-55'
-                        : 'hover:bg-surface-hover focus:bg-surface-hover'
-                    } ${index() === selectedCommandIndex() ? 'bg-surface-hover' : ''}`}
-                    onClick={() => {
-                      if (command.disabled) return;
-                      props.onRunCommand(command);
-                    }}
-                    onMouseEnter={() => setSelectedCommandIndex(index())}
-                  >
-                    <span class="mt-0.5 text-muted">
-                      <AssistantSlashCommandIcon action={command.action} />
-                    </span>
-                    <span class="min-w-0 flex-1">
-                      <span class="flex min-w-0 flex-wrap items-center gap-2">
-                        <span class="font-mono text-xs font-semibold text-base-content">
-                          /{command.name}
-                        </span>
-                        <Show when={aliases().length > 0}>
-                          <span class="min-w-0 truncate text-[10px] text-muted">
-                            {aliases()
-                              .map((alias) => `/${alias}`)
-                              .join(', ')}
+            <For each={groupedCommands()}>
+              {(group) => (
+                <>
+                  <Show when={shouldGroupCommands()}>
+                    <div
+                      role="presentation"
+                      class="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase text-muted"
+                    >
+                      {group.category}
+                    </div>
+                  </Show>
+                  <For each={group.items}>
+                    {(item) => {
+                      const command = item.command;
+                      const aliases = () => getAssistantSlashCommandTokens(command).slice(1);
+                      return (
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={item.index === selectedCommandIndex()}
+                          aria-disabled={command.disabled ? 'true' : undefined}
+                          disabled={command.disabled}
+                          class={`flex w-full items-start gap-3 rounded-md px-3 py-2.5 text-left transition-colors focus:outline-none ${
+                            command.disabled
+                              ? 'cursor-not-allowed opacity-55'
+                              : 'hover:bg-surface-hover focus:bg-surface-hover'
+                          } ${item.index === selectedCommandIndex() ? 'bg-surface-hover' : ''}`}
+                          onClick={() => {
+                            if (command.disabled) return;
+                            props.onRunCommand(command);
+                          }}
+                          onMouseEnter={() => setSelectedCommandIndex(item.index)}
+                        >
+                          <span class="mt-0.5 text-muted">
+                            <AssistantSlashCommandIcon action={command.action} />
                           </span>
-                        </Show>
-                      </span>
-                      <span class="mt-0.5 block text-xs leading-5 text-muted">
-                        {command.description}
-                      </span>
-                      <Show when={command.disabled && command.disabledReason}>
-                        <span class="mt-0.5 block text-[11px] leading-4 text-muted">
-                          {command.disabledReason}
-                        </span>
-                      </Show>
-                    </span>
-                  </button>
-                );
-              }}
+                          <span class="min-w-0 flex-1">
+                            <span class="flex min-w-0 flex-wrap items-center gap-2">
+                              <span class="font-mono text-xs font-semibold text-base-content">
+                                /{command.name}
+                              </span>
+                              <Show when={aliases().length > 0}>
+                                <span class="min-w-0 truncate text-[10px] text-muted">
+                                  {aliases()
+                                    .map((alias) => `/${alias}`)
+                                    .join(', ')}
+                                </span>
+                              </Show>
+                            </span>
+                            <span class="mt-0.5 block text-xs leading-5 text-muted">
+                              {command.description}
+                            </span>
+                            <Show when={command.disabled && command.disabledReason}>
+                              <span class="mt-0.5 block text-[11px] leading-4 text-muted">
+                                {command.disabledReason}
+                              </span>
+                            </Show>
+                          </span>
+                        </button>
+                      );
+                    }}
+                  </For>
+                </>
+              )}
             </For>
           </Show>
         </div>

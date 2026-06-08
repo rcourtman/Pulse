@@ -18,10 +18,18 @@ export type AssistantSlashCommandAction =
   | 'undo'
   | 'sessions';
 
+export type AssistantSlashCommandCategory =
+  | 'Session'
+  | 'Model'
+  | 'Transcript'
+  | 'Help'
+  | 'Developer';
+
 export interface AssistantSlashCommand {
   action: AssistantSlashCommandAction;
   aliases?: string[];
   acceptsArgs?: boolean;
+  category: AssistantSlashCommandCategory;
   disabled?: boolean;
   disabledReason?: string;
   description: string;
@@ -49,6 +57,14 @@ export interface ParsedAssistantSlashCommand {
   args: string;
 }
 
+export interface AssistantSlashCommandGroup {
+  category: AssistantSlashCommandCategory;
+  items: Array<{
+    command: AssistantSlashCommand;
+    index: number;
+  }>;
+}
+
 const isAssistantDevCommandSurfaceEnabled = () =>
   import.meta.env.DEV || import.meta.env.MODE === 'test';
 
@@ -61,6 +77,7 @@ const DEV_ASSISTANT_SLASH_COMMANDS: AssistantSlashCommand[] = [
     aliases: ['fixtures'],
     acceptsArgs: true,
     action: 'fixture',
+    category: 'Developer',
     description: 'Run a local stream fixture by name (/fixture provider-retry)',
     insertText: '/fixture ',
     keywords: [
@@ -76,15 +93,10 @@ const DEV_ASSISTANT_SLASH_COMMANDS: AssistantSlashCommand[] = [
 
 export const ASSISTANT_SLASH_COMMANDS: AssistantSlashCommand[] = [
   {
-    name: 'help',
-    aliases: ['commands'],
-    action: 'help',
-    description: 'Show Assistant commands',
-  },
-  {
     name: 'new',
     aliases: ['clear'],
     action: 'new',
+    category: 'Session',
     description: 'Start a blank Assistant session',
   },
   {
@@ -92,57 +104,74 @@ export const ASSISTANT_SLASH_COMMANDS: AssistantSlashCommand[] = [
     aliases: ['resume', 'continue'],
     acceptsArgs: true,
     action: 'sessions',
+    category: 'Session',
     description: 'Search or resume Assistant sessions (/sessions backup)',
   },
   {
     name: 'compact',
     aliases: ['summarize'],
     action: 'compact',
+    category: 'Session',
     description: 'Summarize older turns and keep this session moving',
+  },
+  {
+    name: 'fork',
+    action: 'fork',
+    category: 'Session',
+    description: 'Fork this session into a new copy',
+  },
+  {
+    name: 'undo',
+    action: 'undo',
+    category: 'Session',
+    description: 'Restore the last prompt for editing',
+  },
+  {
+    name: 'redo',
+    action: 'redo',
+    category: 'Session',
+    description: 'Restore the last undone turn',
   },
   {
     name: 'models',
     aliases: ['model', 'mo'],
     acceptsArgs: true,
     action: 'models',
+    category: 'Model',
     description: 'Open model search or set a route (/model openrouter/qwen or provider:model-id)',
   },
   {
     name: 'providers',
     aliases: ['connect', 'settings', 'keys'],
     action: 'providers',
+    category: 'Model',
     description: 'Open Assistant provider settings',
   },
   {
     name: 'status',
     aliases: ['runtime', 'health'],
     action: 'status',
+    category: 'Model',
     description: 'Check the selected model route',
   },
   {
     name: 'copy',
     action: 'copy',
+    category: 'Transcript',
     description: 'Copy the current transcript',
   },
   {
     name: 'export',
     action: 'export',
+    category: 'Transcript',
     description: 'Download the current transcript',
   },
   {
-    name: 'fork',
-    action: 'fork',
-    description: 'Fork this session into a new copy',
-  },
-  {
-    name: 'undo',
-    action: 'undo',
-    description: 'Restore the last prompt for editing',
-  },
-  {
-    name: 'redo',
-    action: 'redo',
-    description: 'Restore the last undone turn',
+    name: 'help',
+    aliases: ['commands'],
+    action: 'help',
+    category: 'Help',
+    description: 'Show Assistant commands',
   },
 ];
 
@@ -244,6 +273,20 @@ export const getAssistantSlashCommandTokens = (command: AssistantSlashCommand): 
   command.name,
   ...commandAliases(command),
 ];
+
+export const groupAssistantSlashCommands = (
+  commands: AssistantSlashCommand[],
+): AssistantSlashCommandGroup[] => {
+  const groups: AssistantSlashCommandGroup[] = [];
+  for (const [index, command] of commands.entries()) {
+    const lastGroup = groups[groups.length - 1];
+    if (!lastGroup || lastGroup.category !== command.category) {
+      groups.push({ category: command.category, items: [] });
+    }
+    groups[groups.length - 1].items.push({ command, index });
+  }
+  return groups;
+};
 
 export const filterAssistantSlashCommands = (
   query: string,

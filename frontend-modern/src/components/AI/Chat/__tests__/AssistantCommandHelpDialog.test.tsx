@@ -47,16 +47,37 @@ describe('AssistantCommandHelpDialog', () => {
     const onRunCommand = vi.fn();
     render(() => <AssistantCommandHelpDialog onClose={vi.fn()} onRunCommand={onRunCommand} />);
 
-    const newCommand = screen.getByRole('option', { name: /\/new/ });
-    expect(newCommand).toHaveAttribute('aria-selected', 'false');
+    const sessionsCommand = screen.getByRole('option', { name: /\/sessions/ });
+    expect(sessionsCommand).toHaveAttribute('aria-selected', 'false');
 
     fireEvent.keyDown(document, { key: 'ArrowDown' });
-    expect(newCommand).toHaveAttribute('aria-selected', 'true');
+    expect(sessionsCommand).toHaveAttribute('aria-selected', 'true');
 
     fireEvent.keyDown(document, { key: 'Enter' });
     expect(onRunCommand).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'new', name: 'new' }),
+      expect.objectContaining({ action: 'sessions', name: 'sessions' }),
     );
+  });
+
+  it('groups unfiltered commands by purpose without making headers selectable', () => {
+    render(() => <AssistantCommandHelpDialog onClose={vi.fn()} onRunCommand={vi.fn()} />);
+
+    expect(screen.getByText('Session')).toBeInTheDocument();
+    expect(screen.getByText('Model')).toBeInTheDocument();
+    expect(screen.getByText('Transcript')).toBeInTheDocument();
+    expect(screen.getByText('Help')).toBeInTheDocument();
+    expect(screen.getAllByRole('option')).toHaveLength(13);
+  });
+
+  it('hides command group headers once help search is filtered', () => {
+    render(() => <AssistantCommandHelpDialog onClose={vi.fn()} onRunCommand={vi.fn()} />);
+
+    fireEvent.input(screen.getByLabelText('Search Assistant commands'), {
+      target: { value: 'runtime' },
+    });
+
+    expect(screen.getByRole('option', { name: /\/status/ })).toBeInTheDocument();
+    expect(screen.queryByText('Model')).not.toBeInTheDocument();
   });
 
   it('shows disabled commands in help without running them', () => {

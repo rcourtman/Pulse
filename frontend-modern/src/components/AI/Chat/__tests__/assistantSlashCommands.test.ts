@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   filterAssistantSlashCommands,
   getAssistantSlashCommandTokens,
+  groupAssistantSlashCommands,
   parseAssistantSlashCommand,
   parseAssistantSlashCommandInput,
 } from '../assistantSlashCommands';
@@ -98,18 +99,18 @@ describe('assistantSlashCommands', () => {
 
   it('filters commands by canonical name, alias, and description', () => {
     expect(filterAssistantSlashCommands('').map((command) => command.name)).toEqual([
-      'help',
       'new',
       'sessions',
       'compact',
+      'fork',
+      'undo',
+      'redo',
       'models',
       'providers',
       'status',
       'copy',
       'export',
-      'fork',
-      'undo',
-      'redo',
+      'help',
       'fixture',
     ]);
     expect(filterAssistantSlashCommands('resume').map((command) => command.name)).toEqual([
@@ -135,6 +136,26 @@ describe('assistantSlashCommands', () => {
     expect(filterAssistantSlashCommands('provider-retry').map((command) => command.name)).toEqual([
       'fixture',
     ]);
+  });
+
+  it('groups the unfiltered command surface by user task area', () => {
+    const groups = groupAssistantSlashCommands(filterAssistantSlashCommands(''));
+
+    expect(groups.map((group) => group.category)).toEqual([
+      'Session',
+      'Model',
+      'Transcript',
+      'Help',
+      'Developer',
+    ]);
+    expect(groups.map((group) => group.items.map((item) => item.command.name))).toEqual([
+      ['new', 'sessions', 'compact', 'fork', 'undo', 'redo'],
+      ['models', 'providers', 'status'],
+      ['copy', 'export'],
+      ['help'],
+      ['fixture'],
+    ]);
+    expect(groups[1].items[0].index).toBe(6);
   });
 
   it('keeps dev fixture commands out of production command surfaces', () => {

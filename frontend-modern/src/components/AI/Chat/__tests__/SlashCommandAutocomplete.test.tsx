@@ -121,6 +121,25 @@ describe('SlashCommandAutocomplete', () => {
       'Run /compact: Summarize older turns and keep this session moving',
     );
     expect(container.querySelectorAll('[role="option"] svg')).toHaveLength(activeCommands.length);
+    expect(screen.getByText('Session')).toBeInTheDocument();
+    expect(screen.getByText('Model')).toBeInTheDocument();
+    expect(screen.getByText('Transcript')).toBeInTheDocument();
+    expect(screen.getByText('Developer')).toBeInTheDocument();
+  });
+
+  it('hides command group headers once the user filters', () => {
+    render(() => (
+      <SlashCommandAutocomplete
+        query="runtime"
+        visible
+        position={{ top: 58, left: 0 }}
+        onClose={vi.fn()}
+        onSelect={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByRole('option', { name: /\/status/ })).toBeInTheDocument();
+    expect(screen.queryByText('Model')).not.toBeInTheDocument();
   });
 
   it('surfaces dev stream fixtures through slash command search', () => {
