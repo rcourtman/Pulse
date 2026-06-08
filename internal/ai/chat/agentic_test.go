@@ -436,6 +436,30 @@ func TestAgenticLoop_UpdateTools(t *testing.T) {
 	assert.True(t, hasMetrics)
 }
 
+func TestAgenticLoop_SystemPromptIncludesCurrentTime(t *testing.T) {
+	mockProvider := &MockProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	loop := NewAgenticLoop(mockProvider, executor, "BASE PROMPT BODY")
+
+	prompt := loop.getSystemPrompt()
+
+	// The base prompt must still be present...
+	if !strings.Contains(prompt, "BASE PROMPT BODY") {
+		t.Fatalf("expected base prompt to be preserved, got %q", prompt)
+	}
+	// ...alongside a fresh current-time block so the Assistant can answer
+	// time/date questions without a clock-less deflection or a target-host demand.
+	if !strings.Contains(prompt, "CURRENT TIME:") {
+		t.Fatalf("expected system prompt to carry CURRENT TIME, got %q", prompt)
+	}
+	if !strings.Contains(prompt, fmt.Sprintf("%d", time.Now().Year())) {
+		t.Fatalf("expected system prompt to carry the current year, got %q", prompt)
+	}
+	if !strings.Contains(prompt, "do not run a command or ask for a target host just to") {
+		t.Fatalf("expected system prompt to tell the model not to deflect time questions, got %q", prompt)
+	}
+}
+
 func TestAgenticLoop_AnswerQuestion(t *testing.T) {
 	mockProvider := &MockProvider{}
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})

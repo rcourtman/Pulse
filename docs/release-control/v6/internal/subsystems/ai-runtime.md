@@ -2278,6 +2278,17 @@ deriving an older display status from `workflowStatusHistory`.
 
 ## Current State
 
+The per-turn Assistant system prompt carries the current wall-clock time (the
+Pulse server clock) so the Assistant answers "what time/date is it" directly
+instead of deflecting ("I don't have access to a real-time clock") or demanding
+a `target_host` just to run `date`. The timestamp is appended in
+`AgenticLoop.getSystemPrompt` (`internal/ai/chat/agentic_prompt.go`) rather than
+baked into `baseSystemPrompt`: the base prompt is frozen when the loop is
+constructed at service start, so anything that must stay fresh per turn
+(execution mode, current time) is appended on each turn. The current time
+carries no PII and is therefore safe on cloud-routed turns regardless of the
+operational-context sharing opt-in.
+
 Assistant slash-command availability is part of the command runtime contract,
 not only visual polish. The OpenCode reference at fetched `origin/dev` commit
 `c495635` filters prompt slash commands through the registered command catalog
