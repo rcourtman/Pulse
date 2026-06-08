@@ -1109,6 +1109,30 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('keeps content-channel reasoning and raw tool-call leaks out of assistant content', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('how many devices?');
+      const fire = getFireEvent();
+
+      fire({
+        type: 'content',
+        data: 'Thinking\nWe need to inspect the prompt and count device nodes first.',
+      });
+      fire({
+        type: 'content',
+        data: '\npulse_read(target_host="current_resource", command="ls /dev | wc -l")',
+      });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.content).toBe('');
+      expect(assistant.streamEvents?.filter((event) => event.type === 'content') ?? []).toEqual(
+        [],
+      );
+      dispose();
+    });
+
     it('processes thinking events — merges consecutive thinking', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));

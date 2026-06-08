@@ -30,6 +30,10 @@ const functionToolCallLeakRe = /(?:^|[^a-zA-Z0-9_])([a-zA-Z_][a-zA-Z0-9_]*)[ \t\
 const minimaxToolCallLeakRe = /^minimax:tool_call\b/m;
 const visibleInternalToolIdentifierRe =
   /`?\b((?:pulse|patrol)_[a-zA-Z0-9_]+|run_command)\b`?(?:[ \t]+(tool|command|query|call))?/g;
+const internalReasoningHeadingRe =
+  /^\s*(?:#{1,6}[ \t]*)?(thinking|thoughts?|reasoning|analysis)[ \t]*:?[ \t]*(?:\r?\n|$)/i;
+const internalReasoningCueRe =
+  /\b(?:we need to|i need to|let me|let's|need to|the user (?:asks|asked|is asking)|user question|before answering|before responding|tool call|call the|use the|inspect the prompt)\b/i;
 
 const VISIBLE_INTERNAL_TOOL_IDENTIFIER_LABELS: Record<string, string> = {
   patrol_collect: 'collection',
@@ -65,7 +69,7 @@ export function stripAssistantOutputArtifacts(content: string): {
   }
   const visiblePrefix = content.slice(0, idx).trim();
   return {
-    text: isCompactedToolPrelude(visiblePrefix)
+    text: shouldSuppressBeforeAssistantOutputArtifact(visiblePrefix)
       ? ''
       : normalizeAssistantVisibleInternalIdentifiers(visiblePrefix),
     stripped: true,
@@ -93,7 +97,7 @@ export function appendVisibleTextBeforeAssistantOutputArtifacts(
   const candidate = existingRawText + text;
   const idx = assistantOutputArtifactIndex(candidate);
   if (idx < 0) {
-    if (!existingRawText && isCompactedToolPrelude(text)) {
+    if (!existingRawText && shouldHoldPotentialAssistantOutputPrelude(text)) {
       state.pendingText = text;
       return { text: '', stripped: false };
     }
@@ -107,7 +111,7 @@ export function appendVisibleTextBeforeAssistantOutputArtifacts(
   }
 
   const safeText = candidate.slice(0, idx).trimEnd();
-  if (isCompactedToolPrelude(safeText)) {
+  if (shouldSuppressBeforeAssistantOutputArtifact(safeText)) {
     const previousVisibleText = state.visibleText;
     state.visibleText = '';
     state.rawVisibleText = '';
@@ -142,7 +146,7 @@ export function flushPendingAssistantOutputText(state: AssistantOutputArtifactSt
   }
   const text = state.pendingText;
   state.pendingText = '';
-  if (isCompactedToolPrelude(text)) {
+  if (shouldSuppressBeforeAssistantOutputArtifact(text)) {
     return '';
   }
   const normalizedText = normalizeAssistantVisibleInternalIdentifiers(text);
@@ -272,4 +276,37 @@ function isCompactedToolPrelude(content: string): boolean {
   if (letters < 16) return false;
   if (whitespace === 0) return true;
   return letters >= 48 && whitespace <= 1;
+}
+
+function shouldSuppressBeforeAssistantOutputArtifact(content: string): boolean {
+  return isCompactedToolPrelude(content) || isContentChannelReasoningPrelude(content);
+}
+
+function shouldHoldPotentialAssistantOutputPrelude(content: string): boolean {
+  return isCompactedToolPrelude(content) || isPotentialContentChannelReasoningPrelude(content);
+}
+
+function isContentChannelReasoningPrelude(content: string): boolean {
+  const trimmed = content.trim();
+  if (!trimmed) return false;
+
+  const match = trimmed.match(internalReasoningHeadingRe);
+  if (!match) return false;
+
+  const body = trimmed.slice(match[0].length).trim();
+  if (!body) return true;
+  if (internalReasoningCueRe.test(body)) return true;
+
+  const words = body.split(/\s+/).filter(Boolean);
+  return words.length >= 8;
+}
+
+function isPotentialContentChannelReasoningPrelude(content: string): boolean {
+  const trimmed = content.trimStart();
+  if (!trimmed) return false;
+
+  const lower = trimmed.toLowerCase();
+  if (lower.length < 'thinking'.length && 'thinking'.startsWith(lower)) return true;
+
+  return internalReasoningHeadingRe.test(trimmed);
 }

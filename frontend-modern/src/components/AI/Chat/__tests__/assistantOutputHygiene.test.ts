@@ -45,6 +45,17 @@ describe('stripAssistantOutputArtifacts', () => {
     expect(result.stripped).toBe(true);
   });
 
+  it('suppresses content-channel reasoning preludes before raw function-call leaks', () => {
+    const result = stripAssistantOutputArtifacts(
+      'Thinking\nWe need to interpret the user question and count the device nodes.\npulse_read(target_host="current_resource", command="ls /dev | wc -l")',
+    );
+
+    expect(result).toEqual({
+      text: '',
+      stripped: true,
+    });
+  });
+
   it('leaves ordinary prose and unrelated function calls alone', () => {
     expect(stripAssistantOutputArtifacts('Call helper(target="x") in the example.')).toEqual({
       text: 'Call helper(target="x") in the example.',
@@ -110,6 +121,59 @@ describe('stripAssistantOutputArtifacts', () => {
 
     expect(appendVisibleTextBeforeAssistantOutputArtifacts(state, content)).toEqual({
       text: '',
+      stripped: false,
+    });
+    expect(flushPendingAssistantOutputText(state)).toBe('');
+  });
+
+  it('holds content-channel reasoning preludes so they never flash before tool leaks', () => {
+    const state = createAssistantOutputArtifactStreamState();
+
+    expect(
+      appendVisibleTextBeforeAssistantOutputArtifacts(
+        state,
+        'Thinking\nWe need to count device nodes before answering.',
+      ),
+    ).toEqual({
+      text: '',
+      stripped: false,
+    });
+    expect(
+      appendVisibleTextBeforeAssistantOutputArtifacts(
+        state,
+        '\npulse_read(target_host="current_resource", command="ls /dev | wc -l")',
+      ),
+    ).toEqual({
+      text: '',
+      stripped: true,
+    });
+    expect(flushPendingAssistantOutputText(state)).toBe('');
+  });
+
+  it('drops held content-channel reasoning if no answer text follows before stream end', () => {
+    const state = createAssistantOutputArtifactStreamState();
+
+    expect(
+      appendVisibleTextBeforeAssistantOutputArtifacts(
+        state,
+        'Thinking\nWe need to inspect the prompt before answering.',
+      ),
+    ).toEqual({
+      text: '',
+      stripped: false,
+    });
+    expect(flushPendingAssistantOutputText(state)).toBe('');
+  });
+
+  it('releases normal prose that only starts with a similar word', () => {
+    const state = createAssistantOutputArtifactStreamState();
+
+    expect(appendVisibleTextBeforeAssistantOutputArtifacts(state, 'Think')).toEqual({
+      text: '',
+      stripped: false,
+    });
+    expect(appendVisibleTextBeforeAssistantOutputArtifacts(state, ' about the result this way.')).toEqual({
+      text: 'Think about the result this way.',
       stripped: false,
     });
     expect(flushPendingAssistantOutputText(state)).toBe('');

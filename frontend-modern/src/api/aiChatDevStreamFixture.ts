@@ -5,6 +5,7 @@ export const AI_CHAT_DEV_STREAM_FIXTURE_PROMPTS = [
   '/fixture assistant-stream',
   '/fixture send-hold',
   '/fixture tool-burst',
+  '/fixture reasoning-leak',
   '/fixture workflow-burst',
   '/fixture context-group',
   '/fixture status-boundary',
@@ -368,6 +369,67 @@ const buildToolBurstFixtureEvents = (model?: string): AIChatStreamEvent[] => [
       model: assistantFixtureModel(model),
       input_tokens: 64,
       output_tokens: 31,
+    },
+  },
+];
+
+const buildReasoningLeakFixtureEvents = (model?: string): AIChatStreamEvent[] => [
+  {
+    type: 'session',
+    data: { id: 'dev-fixture-reasoning-leak' },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'request_start',
+      message: 'Preparing Pulse context.',
+    },
+  },
+  {
+    type: 'content',
+    data: {
+      text: 'Thinking\nWe need to inspect the prompt and count device nodes before answering.',
+    },
+  },
+  {
+    type: 'content',
+    data: {
+      text: '\npulse_read(target_host="current_resource", command="ls /dev | wc -l")',
+    },
+  },
+  {
+    type: 'tool_start',
+    data: {
+      id: 'fixture-tool-reasoning-leak',
+      name: 'pulse_read',
+      input: '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
+      raw_input: 'pulse_read(target_host="current_resource", command="ls /dev | wc -l")',
+    },
+  },
+  {
+    type: 'tool_end',
+    data: {
+      id: 'fixture-tool-reasoning-leak',
+      name: 'pulse_read',
+      input: '{"action":"exec","target_host":"current_resource","command":"ls /dev | wc -l"}',
+      raw_input: 'pulse_read(target_host="current_resource", command="ls /dev | wc -l")',
+      output: '4358',
+      success: true,
+    },
+  },
+  {
+    type: 'content',
+    data: {
+      text: 'There are 4,358 entries under `/dev`.',
+    },
+  },
+  {
+    type: 'done',
+    data: {
+      session_id: 'dev-fixture-reasoning-leak',
+      model: assistantFixtureModel(model),
+      input_tokens: 88,
+      output_tokens: 24,
     },
   },
 ];
@@ -1008,6 +1070,9 @@ const buildFixtureEvents = (prompt: string, model?: string): AIChatStreamEvent[]
   }
   if (normalized === '/fixture tool-burst') {
     return buildToolBurstFixtureEvents(model);
+  }
+  if (normalized === '/fixture reasoning-leak') {
+    return buildReasoningLeakFixtureEvents(model);
   }
   if (normalized === '/fixture workflow-burst') {
     return buildWorkflowBurstFixtureEvents(model);
