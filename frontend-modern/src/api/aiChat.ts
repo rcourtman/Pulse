@@ -151,6 +151,10 @@ export interface ToolCall {
 
 export type StreamEvent = AIChatStreamEvent;
 
+export interface AIChatStreamLifecycle {
+  onStreamOpen?: () => void;
+}
+
 const AI_CHAT_STREAM_TEXT_PAINT_CHECKPOINT_INTERVAL = 4;
 const AI_CHAT_STREAM_TEXT_EVENT_TYPES = new Set(['content', 'thinking']);
 
@@ -342,6 +346,7 @@ export class AIChatAPI {
     handoffResources?: ChatHandoffResource[],
     handoffActions?: ChatHandoffAction[],
     handoffMetadata?: ChatHandoffMetadata,
+    lifecycle?: AIChatStreamLifecycle,
   ): Promise<void> {
     logger.debug('[AI Chat] Starting chat stream', { prompt: prompt.substring(0, 50) });
 
@@ -393,6 +398,7 @@ export class AIChatAPI {
     });
 
     await assertAPIResponseOK(response, `Request failed with status ${response.status}`);
+    lifecycle?.onStreamOpen?.();
 
     await consumeJSONEventStream<StreamEvent>(response, {
       onEvent: (event) => {

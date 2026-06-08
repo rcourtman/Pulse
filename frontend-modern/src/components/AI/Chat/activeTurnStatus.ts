@@ -529,7 +529,7 @@ const workflowStatusCandidate = (
 };
 
 export const isInitialRequestStartStatus = (status?: WorkflowStatus): boolean =>
-  status?.phase === 'request_start';
+  status?.phase === 'request_start' || status?.phase === 'request_send';
 
 const modelSwitchStatusText = (event: StreamDisplayEvent): string => {
   const model = event.model?.trim();
@@ -584,7 +584,7 @@ const initialRequestStatus = (
   const startedAt = activeTurnStartedAt(messages, assistantMessage);
   return {
     type: 'thinking',
-    text: 'Sending prompt',
+    text: 'Sending prompt.',
     ...(startedAt !== undefined ? { startedAt } : {}),
   };
 };

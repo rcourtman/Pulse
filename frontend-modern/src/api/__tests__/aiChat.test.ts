@@ -1007,6 +1007,52 @@ describe('AIChatAPI', () => {
     expect(releaseLock).toHaveBeenCalledTimes(1);
   });
 
+  it('notifies when the chat stream opens before delivering stream events', async () => {
+    const encoder = new TextEncoder();
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce({
+        done: false,
+        value: encoder.encode('data: {"type":"content","data":{"text":"First"}}\n\n'),
+      })
+      .mockResolvedValueOnce({ done: true, value: undefined });
+    const releaseLock = vi.fn();
+    const order: string[] = [];
+    const onEvent = vi.fn((event: { type: string }) => {
+      order.push(event.type);
+    });
+    const onStreamOpen = vi.fn(() => {
+      order.push('stream-open');
+    });
+
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: {
+        getReader: () => ({ read, releaseLock }),
+      },
+    } as unknown as Response);
+
+    await AIChatAPI.chat(
+      'hello',
+      undefined,
+      undefined,
+      onEvent,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { onStreamOpen },
+    );
+
+    expect(onStreamOpen).toHaveBeenCalledOnce();
+    expect(order).toEqual(['stream-open', 'content', 'done']);
+    expect(releaseLock).toHaveBeenCalledTimes(1);
+  });
+
   it('preserves safe handoff summaries on listed chat sessions', async () => {
     const session = {
       id: 'session-operator-briefing',

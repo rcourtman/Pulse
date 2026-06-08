@@ -77,7 +77,19 @@ const routeAwareWorkflowStatusFields = (modelRoute?: string) => {
   };
 };
 
-const createAssistantRouteStartWorkflowStatus = (
+const createAssistantRouteSendWorkflowStatus = (
+  modelRoute?: string,
+  startedAt = Date.now(),
+): WorkflowStatus => {
+  return {
+    phase: 'request_send',
+    message: 'Sending prompt.',
+    ...routeAwareWorkflowStatusFields(modelRoute),
+    startedAt,
+  };
+};
+
+const createAssistantRouteWaitWorkflowStatus = (
   modelRoute?: string,
   startedAt = Date.now(),
 ): WorkflowStatus => {
@@ -204,6 +216,9 @@ export function useChat(options: UseChatOptions = {}) {
 
   const isStreamIdleWorkflowStatus = (status?: WorkflowStatus) => status?.phase === 'stream_idle';
 
+  const isLocalPromptProgressStatus = (status?: WorkflowStatus) =>
+    status?.phase === 'request_send' || status?.phase === 'request_wait';
+
   const workflowStatusProvider = (
     message: Pick<ChatMessage, 'model' | 'workflowStatus'> | undefined,
     status: WorkflowStatus | undefined,
@@ -275,8 +290,7 @@ export function useChat(options: UseChatOptions = {}) {
 
   const isLocalPromptProgressEvent = (event: StreamDisplayEvent) =>
     event.type === 'workflow_status' &&
-    (event.workflowStatus?.phase === 'request_send' ||
-      event.workflowStatus?.phase === 'request_wait');
+    isLocalPromptProgressStatus(event.workflowStatus);
 
   const streamEventsWithoutLocalPromptProgressRows = (
     events: StreamDisplayEvent[] | undefined,
@@ -292,6 +306,60 @@ export function useChat(options: UseChatOptions = {}) {
         event.type !== 'pending_tool' &&
         event.type !== 'approval' &&
         event.type !== 'question',
+    );
+  };
+
+  const replaceLocalPromptProgressEvent = (
+    events: StreamDisplayEvent[] | undefined,
+    workflowStatus: WorkflowStatus,
+  ): StreamDisplayEvent[] => {
+    const currentEvents = events || [];
+    const now = Date.now();
+    const nextEvent = withStreamEventTiming(
+      {
+        type: 'workflow_status',
+        workflowStatus,
+        startedAt: workflowStatus.startedAt,
+        updatedAt: workflowStatus.startedAt,
+      },
+      now,
+    );
+
+    for (let index = currentEvents.length - 1; index >= 0; index -= 1) {
+      const event = currentEvents[index];
+      if (event.type !== 'workflow_status') continue;
+      if (!isLocalPromptProgressStatus(event.workflowStatus)) break;
+      return [
+        ...currentEvents.slice(0, index),
+        {
+          ...nextEvent,
+          startedAt: nextEvent.startedAt || event.startedAt,
+        },
+        ...currentEvents.slice(index + 1),
+      ];
+    }
+
+    return [...currentEvents, nextEvent];
+  };
+
+  const promoteAssistantRouteWaitStatus = (
+    assistantId: string,
+    requestId: number,
+    modelRoute?: string,
+  ) => {
+    if (requestId !== activeRequestId) return;
+    const workflowStatus = createAssistantRouteWaitWorkflowStatus(modelRoute);
+    setMessages((prev) =>
+      prev.map((msg) => {
+        if (msg.id !== assistantId) return msg;
+        if (msg.isStreaming === false) return msg;
+        if (!isLocalPromptProgressStatus(msg.workflowStatus)) return msg;
+        return {
+          ...msg,
+          streamEvents: replaceLocalPromptProgressEvent(msg.streamEvents, workflowStatus),
+          workflowStatus,
+        };
+      }),
     );
   };
 
@@ -1861,7 +1929,7 @@ export function useChat(options: UseChatOptions = {}) {
     };
 
     const assistantId = generateId();
-    const initialWorkflowStatus = createAssistantRouteStartWorkflowStatus(
+    const initialWorkflowStatus = createAssistantRouteSendWorkflowStatus(
       requestModel,
       turnStartedAt,
     );
@@ -1952,6 +2020,9 @@ export function useChat(options: UseChatOptions = {}) {
         requestSendOptions?.handoffResources,
         requestSendOptions?.handoffActions,
         requestSendOptions?.handoffMetadata,
+        {
+          onStreamOpen: () => promoteAssistantRouteWaitStatus(assistantId, requestId, requestModel),
+        },
       );
       if (requestId !== activeRequestId) {
         return false;

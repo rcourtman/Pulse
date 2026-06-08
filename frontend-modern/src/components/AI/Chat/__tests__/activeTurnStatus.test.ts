@@ -30,7 +30,7 @@ describe('getAssistantActiveTurnStatus', () => {
   it('shows an active send state before the first assistant event arrives', () => {
     expect(getAssistantActiveTurnStatus([], true)).toEqual({
       type: 'thinking',
-      text: 'Sending prompt',
+      text: 'Sending prompt.',
     });
   });
 
@@ -39,7 +39,7 @@ describe('getAssistantActiveTurnStatus', () => {
       getAssistantActiveTurnStatus([userMessage({ timestamp: new Date(1_000) })], true, 4_000),
     ).toEqual({
       type: 'thinking',
-      text: 'Sending prompt',
+      text: 'Sending prompt.',
       startedAt: 1_000,
     });
   });
@@ -61,7 +61,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'thinking',
-      text: 'Sending prompt',
+      text: 'Sending prompt.',
       queuedFollowUpCount: 1,
       startedAt: 1_000,
     });

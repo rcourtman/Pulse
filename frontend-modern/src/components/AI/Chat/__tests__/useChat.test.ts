@@ -47,6 +47,10 @@ const mockNotifyError = notificationStore.error as ReturnType<typeof vi.fn>;
 
 type TestStreamEvent = StreamEvent | { type: string; data?: unknown };
 type TestStreamDispatch = (event: TestStreamEvent) => void;
+type TestStreamLifecycle = { onStreamOpen?: () => void };
+
+const latestStreamLifecycle = (): TestStreamLifecycle | undefined =>
+  mockChat.mock.calls.at(-1)?.[12] as TestStreamLifecycle | undefined;
 
 function dispatchTestStreamEvent(
   onEvent: (event: StreamEvent) => void,
@@ -208,8 +212,8 @@ describe('useChat', () => {
         pendingTools: [],
         workflowStatusHistory: [],
         workflowStatus: {
-          phase: 'request_wait',
-          message: 'Waiting for assistant.',
+          phase: 'request_send',
+          message: 'Sending prompt.',
         },
       });
       expect(mockCreateSession).not.toHaveBeenCalled();
@@ -224,7 +228,7 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('starts a quiet sent prompt with local waiting status before backend activity arrives', async () => {
+    it('starts with local prompt-send status and promotes it when the stream opens', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(1_000);
       let resolveChat!: () => void;
@@ -241,24 +245,25 @@ describe('useChat', () => {
         role: 'assistant',
         isStreaming: true,
         workflowStatus: {
-          phase: 'request_wait',
-          message: 'Waiting for assistant.',
+          phase: 'request_send',
+          message: 'Sending prompt.',
           startedAt: 1_000,
         },
       });
 
       await vi.advanceTimersByTimeAsync(899);
       expect(chat.messages()[1].workflowStatus).toMatchObject({
-        phase: 'request_wait',
-        message: 'Waiting for assistant.',
+        phase: 'request_send',
+        message: 'Sending prompt.',
       });
 
       await vi.advanceTimersByTimeAsync(1);
+      latestStreamLifecycle()?.onStreamOpen?.();
       expect(chat.messages()[1]).toMatchObject({
         workflowStatus: {
           phase: 'request_wait',
           message: 'Waiting for assistant.',
-          startedAt: 1_000,
+          startedAt: 1_900,
         },
         streamEvents: [
           expect.objectContaining({
@@ -361,8 +366,8 @@ describe('useChat', () => {
         isStreaming: true,
         workflowStatusHistory: [],
         workflowStatus: {
-          phase: 'request_wait',
-          message: 'Waiting for assistant.',
+          phase: 'request_send',
+          message: 'Sending prompt.',
           provider: 'openrouter',
           model: 'openrouter:qwen/qwen3.7-plus',
         },
@@ -376,8 +381,8 @@ describe('useChat', () => {
         expect.objectContaining({
           type: 'workflow_status',
           workflowStatus: expect.objectContaining({
-            phase: 'request_wait',
-            message: 'Waiting for assistant.',
+            phase: 'request_send',
+            message: 'Sending prompt.',
             provider: 'openrouter',
             model: 'openrouter:qwen/qwen3.7-plus',
           }),
@@ -406,13 +411,22 @@ describe('useChat', () => {
 
       const assistant = chat.messages()[1];
       expect(assistant.workflowStatus).toMatchObject({
+        phase: 'request_send',
+        message: 'Sending prompt.',
+        provider: 'openrouter',
+        model: 'openrouter:qwen/qwen3.7-plus',
+        startedAt: 2_000,
+      });
+      latestStreamLifecycle()?.onStreamOpen?.();
+      const openedAssistant = chat.messages()[1];
+      expect(openedAssistant.workflowStatus).toMatchObject({
         phase: 'request_wait',
         message: 'Waiting for assistant.',
         provider: 'openrouter',
         model: 'openrouter:qwen/qwen3.7-plus',
         startedAt: 2_000,
       });
-      expect(assistant.streamEvents).toEqual([
+      expect(openedAssistant.streamEvents).toEqual([
         expect.objectContaining({
           type: 'model_switch',
           model: 'openrouter:qwen/qwen3.7-plus',
@@ -1076,7 +1090,17 @@ describe('useChat', () => {
           _session: string,
           _model: string | undefined,
           onEvent: (e: StreamEvent) => void,
+          _signal?: AbortSignal,
+          _mentions?: ChatMention[],
+          _findingId?: string,
+          _autonomousMode?: boolean,
+          _handoffContext?: string,
+          _handoffResources?: unknown[],
+          _handoffActions?: unknown[],
+          _handoffMetadata?: unknown,
+          lifecycle?: TestStreamLifecycle,
         ) => {
+          lifecycle?.onStreamOpen?.();
           fireEvent = (event) => dispatchTestStreamEvent(onEvent, event);
           return Promise.resolve();
         },

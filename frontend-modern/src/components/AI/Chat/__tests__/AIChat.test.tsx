@@ -5577,7 +5577,7 @@ describe('AIChat', () => {
       ]);
       renderChat();
       expect(screen.getByLabelText('Assistant active turn status')).toHaveTextContent(
-        'Sending prompt (4s)',
+        'Sending prompt. (4s)',
       );
     });
 

@@ -625,7 +625,7 @@ deriving an older display status from `workflowStatusHistory`.
    an opaque `output available` badge when a safe preview can be rendered.
    If the UI enters a loading turn before the assistant shell or first
    `workflow_state` exists, the active-turn footer must show the active startup
-   status `Sending prompt` and derive elapsed time from the submitted, non-queued
+   status `Sending prompt.` and derive elapsed time from the submitted, non-queued
    user turn or assistant shell timestamp. Queued follow-up messages must not
    reset that active-turn startup clock. The same active-turn footer owns the
    Stop affordance while a response is running, so interruption remains attached
@@ -2372,9 +2372,10 @@ maps `turn.send` and `turn.wait` to live footer status at lines 133-145, and
 post-send periods to `waiting for assistant` at lines 1350-1357. Pulse keeps
 that send/wait distinction in the live chat turn by promoting an unreplaced
 local `request_send` status to local `request_wait` / `Waiting for assistant`
-before any backend-visible SSE activity arrives, while preserving the Pulse
-transcript rule that only backend workflow, route, content, and tool evidence
-remain once real activity exists.
+when the browser API client receives an open SSE response but before any parsed
+backend-visible SSE activity arrives, while preserving the Pulse transcript
+rule that only backend workflow, route, content, and tool evidence remain once
+real activity exists.
 
 Assistant drawer shell status follows the same OpenCode-referenced separation
 between prompt-adjacent operational status and transcript content. The

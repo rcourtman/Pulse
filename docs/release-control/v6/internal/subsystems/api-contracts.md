@@ -134,6 +134,12 @@ retry fields, but `provider_fallback`, `failed_provider`, `failed_model`,
 `next_provider`, and `next_model` are retired from the generated stream event
 contract. Cross-route recovery belongs to explicit failed-turn actions, not
 hidden `/api/ai/chat` stream mutation.
+The frontend chat stream client may expose a local stream-open lifecycle hook
+for UI state, but that hook is not a backend `workflow_state` payload. It must
+fire only after `/api/ai/chat` returns an OK event-stream response and before
+the first parsed SSE event is delivered to the reducer, allowing the Assistant
+drawer to promote local `request_send` status to local `request_wait` without
+inventing provider activity.
 Assistant local stream fixtures are part of the same frontend API contract:
 `frontend-modern/src/api/aiChatDevStreamFixture.ts` may short-circuit only
 explicit `/fixture ...` prompts in development or test mode, must emit the same
