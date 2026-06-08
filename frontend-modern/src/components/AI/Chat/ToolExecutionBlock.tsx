@@ -345,17 +345,15 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
   });
   const outputPreview = createMemo(() => formatOutputPreview(outputText()));
   const showInlineOutputPreview = createMemo(
-    () => props.tool.success === false && outputPreview().length > 0,
+    () => !settlingFastCompletion() && outputPreview().length > 0,
   );
   const hiddenOutputSummary = createMemo(() =>
-    showInlineOutputPreview() ? '' : formatHiddenOutputSummary(outputText()),
+    !props.compact && showInlineOutputPreview() ? '' : formatHiddenOutputSummary(outputText()),
   );
   const hiddenOutputBadgeSummary = createMemo(() =>
     settlingFastCompletion() ? '' : hiddenOutputSummary(),
   );
-  const hiddenOutputBadgeLabel = createMemo(() =>
-    hiddenOutputBadgeSummary() ? 'output available' : '',
-  );
+  const hiddenOutputBadgeLabel = createMemo(() => hiddenOutputBadgeSummary());
   const hasInput = createMemo(() => detailInputText().trim().length > 0);
   const hasOutput = createMemo(() => hasReadableToolOutput(outputText()));
   const hasDetails = createMemo(() => hasInput() || hasOutput());
@@ -551,12 +549,17 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
       </div>
 
       <Show when={showInlineOutputPreview()}>
-        <pre
-          class="border-t border-border-subtle bg-surface-alt px-3 py-2 font-mono text-[11px] leading-5 text-base-content whitespace-pre-wrap break-words"
-          aria-label="Tool output preview"
-        >
-          {outputPreview()}
-        </pre>
+        <div class="border-t border-border-subtle bg-surface-alt">
+          <div class="px-3 pt-2 text-[9px] font-semibold uppercase tracking-wide text-muted">
+            Output preview
+          </div>
+          <pre
+            class="px-3 pb-2 pt-1 font-mono text-[11px] leading-5 text-base-content whitespace-pre-wrap break-words"
+            aria-label="Tool output preview"
+          >
+            {outputPreview()}
+          </pre>
+        </div>
       </Show>
 
       <Show when={showDetails() && hasDetails()}>
