@@ -1146,6 +1146,35 @@ describe('AIChatAPI', () => {
     clearTimeoutSpy.mockRestore();
   });
 
+  it('rejects stalled chat stream reads instead of emitting synthetic completion', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const read = vi.fn(
+      () => new Promise<ReadableStreamReadResult<Uint8Array>>(() => undefined),
+    );
+    const releaseLock = vi.fn();
+    const onEvent = vi.fn();
+
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: {
+        getReader: () => ({ read, releaseLock }),
+      },
+    } as unknown as Response);
+
+    const streamPromise = AIChatAPI.chat('hello', undefined, undefined, onEvent);
+    const expectedRejection = expect(streamPromise).rejects.toThrow(
+      'Pulse Assistant stream timed out waiting for provider data.',
+    );
+    await flushMicrotasks();
+    await vi.advanceTimersByTimeAsync(300000);
+
+    await expectedRejection;
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(releaseLock).toHaveBeenCalledTimes(1);
+    expect(onEvent).not.toHaveBeenCalledWith({ type: 'done' });
+    expect(logger.warn).toHaveBeenCalledWith('[AI Chat] Stream timeout');
+  });
+
   it('ignores invalid chat stream events through the shared JSON-text helper', async () => {
     const encoder = new TextEncoder();
     const read = vi

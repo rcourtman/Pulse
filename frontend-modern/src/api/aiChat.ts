@@ -408,6 +408,7 @@ export class AIChatAPI {
       },
       onTimeout: () => {
         logger.warn('[AI Chat] Stream timeout');
+        throw new Error('Pulse Assistant stream timed out waiting for provider data.');
       },
       onComplete: () => {
         onEvent({ type: 'done' });

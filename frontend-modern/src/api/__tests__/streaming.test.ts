@@ -235,4 +235,39 @@ describe('consumeJSONEventStream', () => {
     await streamPromise;
     expect(events).toEqual(['tool_start', 'tool_progress', 'done']);
   });
+
+  it('surfaces stalled read timeouts without reporting normal completion', async () => {
+    vi.useFakeTimers();
+    const read = vi.fn(
+      () => new Promise<ReadableStreamReadResult<Uint8Array>>(() => undefined),
+    );
+    const releaseLock = vi.fn();
+    const onEvent = vi.fn();
+    const onTimeout = vi.fn();
+    const onComplete = vi.fn();
+
+    const streamPromise = consumeJSONEventStream<{ type: string }>(
+      {
+        body: {
+          getReader: () => ({ read, releaseLock }),
+        },
+      } as unknown as Response,
+      {
+        onEvent,
+        onTimeout,
+        onComplete,
+        timeoutMs: 1000,
+      },
+    );
+
+    await flushMicrotasks();
+    await vi.advanceTimersByTimeAsync(1000);
+    await streamPromise;
+
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(onTimeout).toHaveBeenCalledTimes(1);
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(onEvent).not.toHaveBeenCalled();
+    expect(releaseLock).toHaveBeenCalledTimes(1);
+  });
 });

@@ -65,6 +65,12 @@ export async function consumeJSONEventStream<T>(
   let buffer = '';
   const timeoutMs = options.timeoutMs ?? 300000;
   let lastEventTime = Date.now();
+  let timedOut = false;
+
+  const markTimedOut = () => {
+    timedOut = true;
+    options.onTimeout?.();
+  };
 
   const readWithTimeout = async (): Promise<ReadableStreamReadResult<Uint8Array>> => {
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -122,7 +128,7 @@ export async function consumeJSONEventStream<T>(
   try {
     for (;;) {
       if (Date.now() - lastEventTime > timeoutMs) {
-        options.onTimeout?.();
+        markTimedOut();
         break;
       }
 
@@ -131,6 +137,7 @@ export async function consumeJSONEventStream<T>(
         result = await readWithTimeout();
       } catch (error) {
         if ((error as Error).message === 'Read timeout') {
+          markTimedOut();
           break;
         }
         throw error;
@@ -146,6 +153,10 @@ export async function consumeJSONEventStream<T>(
       if (await processMessages(buffer)) {
         return;
       }
+    }
+
+    if (timedOut) {
+      return;
     }
 
     const trailing = buffer.trim();
