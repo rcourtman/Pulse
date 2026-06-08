@@ -2133,6 +2133,120 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('ignores duplicate tool_progress events without refreshing live activity', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(10_000);
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+
+      fire({ type: 'tool_start', data: { id: 'tool-1', name: 'pulse_read', input: '{}' } });
+      vi.setSystemTime(10_100);
+      fire({
+        type: 'tool_progress',
+        data: {
+          id: 'tool-1',
+          name: 'pulse_read',
+          input: '{}',
+          raw_input: '{"command":"ls /dev"}',
+          phase: 'running',
+          message: 'Running command.',
+        },
+      });
+
+      let assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      const firstPendingTool = assistant.pendingTools![0];
+      const firstPendingToolEvent = assistant.streamEvents?.find((e) => e.type === 'pending_tool');
+      expect(firstPendingTool.updatedAt).toBe(10_100);
+      expect(firstPendingToolEvent?.updatedAt).toBe(10_000);
+      expect(firstPendingToolEvent?.pendingTool?.updatedAt).toBe(10_100);
+
+      vi.setSystemTime(20_000);
+      fire({
+        type: 'tool_progress',
+        data: {
+          id: 'tool-1',
+          name: 'pulse_read',
+          input: '{}',
+          raw_input: '{"command":"ls /dev"}',
+          phase: 'running',
+          message: 'Running command.',
+        },
+      });
+
+      assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      const duplicatePendingToolEvents = assistant.streamEvents?.filter(
+        (e) => e.type === 'pending_tool',
+      );
+      expect(assistant.pendingTools).toHaveLength(1);
+      expect(assistant.pendingTools![0]).toBe(firstPendingTool);
+      expect(assistant.pendingTools![0].updatedAt).toBe(10_100);
+      expect(duplicatePendingToolEvents).toHaveLength(1);
+      expect(duplicatePendingToolEvents![0]).toBe(firstPendingToolEvent);
+      expect(duplicatePendingToolEvents![0].updatedAt).toBe(10_000);
+      expect(duplicatePendingToolEvents![0].pendingTool?.updatedAt).toBe(10_100);
+      dispose();
+    });
+
+    it('keeps changed tool_progress updates as fresh live activity', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(30_000);
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+
+      fire({ type: 'tool_start', data: { id: 'tool-1', name: 'pulse_read', input: '{}' } });
+      vi.setSystemTime(30_100);
+      fire({
+        type: 'tool_progress',
+        data: {
+          id: 'tool-1',
+          name: 'pulse_read',
+          input: '{}',
+          raw_input: '{"command":"ls /dev"}',
+          phase: 'running',
+          message: 'Running command.',
+        },
+      });
+      vi.setSystemTime(30_500);
+      fire({
+        type: 'tool_progress',
+        data: {
+          id: 'tool-1',
+          name: 'pulse_read',
+          input: '{}',
+          raw_input: '{"command":"ls /dev"}',
+          phase: 'running',
+          message: 'Reading output.',
+        },
+      });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      const pendingToolEvents = assistant.streamEvents?.filter((e) => e.type === 'pending_tool');
+      expect(assistant.pendingTools).toHaveLength(1);
+      expect(assistant.pendingTools![0]).toMatchObject({
+        id: 'tool-1',
+        status: 'running',
+        progress: 'Reading output.',
+        updatedAt: 30_500,
+      });
+      expect(pendingToolEvents).toHaveLength(1);
+      expect(pendingToolEvents![0]).toMatchObject({
+        toolId: 'tool-1',
+        updatedAt: 30_000,
+        pendingTool: expect.objectContaining({
+          id: 'tool-1',
+          progress: 'Reading output.',
+          updatedAt: 30_500,
+        }),
+      });
+      dispose();
+    });
+
     it('deduplicates repeated tool_start events without regressing live progress', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));

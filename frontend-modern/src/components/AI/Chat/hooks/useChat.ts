@@ -639,6 +639,14 @@ export function useChat(options: UseChatOptions = {}) {
     return 'running';
   };
 
+  const hasSamePendingToolActivity = (current: PendingTool, next: PendingTool): boolean =>
+    current.id === next.id &&
+    current.name === next.name &&
+    current.input === next.input &&
+    current.rawInput === next.rawInput &&
+    current.status === next.status &&
+    current.progress === next.progress;
+
   const replacePendingToolStreamEvents = (
     events: StreamDisplayEvent[],
     resolvedTool: PendingTool,
@@ -847,6 +855,7 @@ export function useChat(options: UseChatOptions = {}) {
 
     let resolvedTool: PendingTool | undefined;
     let replacedTool = false;
+    let activityChanged = false;
     const updatedPendingTools: PendingTool[] = [];
 
     for (const tool of pendingTools) {
@@ -858,7 +867,14 @@ export function useChat(options: UseChatOptions = {}) {
         continue;
       }
       replacedTool = true;
-      resolvedTool = mergeTool(tool);
+      const mergedTool = mergeTool(tool);
+      if (hasSamePendingToolActivity(tool, mergedTool)) {
+        resolvedTool = tool;
+        updatedPendingTools.push(tool);
+        continue;
+      }
+      activityChanged = true;
+      resolvedTool = mergedTool;
       updatedPendingTools.push(resolvedTool);
     }
 
@@ -873,7 +889,12 @@ export function useChat(options: UseChatOptions = {}) {
         startedAt: now,
         updatedAt: now,
       };
+      activityChanged = true;
       updatedPendingTools.push(resolvedTool);
+    }
+
+    if (!activityChanged && resolvedTool) {
+      return msg;
     }
 
     return {
