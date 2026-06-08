@@ -23,6 +23,7 @@ type allUnifiedResourceProvider interface {
 
 type requestSanitizerOptions struct {
 	resourcePolicyAllowedText []string
+	localOnlyFloorOnly        bool
 }
 
 // RequestSanitizerOption scopes model-bound sanitizer behavior for
@@ -43,6 +44,23 @@ func AllowResourcePolicyText(values ...string) RequestSanitizerOption {
 	}
 }
 
+// RedactLocalOnlyResourcesOnly narrows the resource-identifier redaction pass to
+// the hard floor: resources the policy engine routes local-only (Restricted
+// sensitivity / "never leaves the local trust boundary"). Identifiers for all
+// other resources — ordinary (Internal) and Sensitive (local-first) — may then
+// reach a cloud model. It is the model-boundary half of the "full"
+// cloud_context_privacy level: the operator chose to share real infrastructure
+// detail, but an explicit local-only classification still must not be overridden
+// by a blanket dial. Prompt-secret sanitation (API keys, passwords, tokens) ALWAYS
+// still runs — credentials never cross the model boundary regardless of this
+// option. Callers must only set this from the persisted privacy dial, never from
+// raw user text.
+func RedactLocalOnlyResourcesOnly() RequestSanitizerOption {
+	return func(opts *requestSanitizerOptions) {
+		opts.localOnlyFloorOnly = true
+	}
+}
+
 // RequestSanitizerForModel returns a sanitizer for non-local model traffic.
 // It is intentionally applied at the final provider transport boundary so
 // operator-entered prompts, handoff text, tool-result turns, and provider-bound
@@ -57,7 +75,14 @@ func RequestSanitizerForModel(model string, provider UnifiedResourceProvider, op
 			opt(&options)
 		}
 	}
+	// At the "full" dial the operator opted into sharing real resource identifiers,
+	// so the redaction pass narrows to the local-only floor (resources that must
+	// never leave the local trust boundary); everything else flows. Otherwise the
+	// pass covers every policied resource. Prompt-secret sanitation below always runs.
 	resources := resourcePolicySanitizerResources(provider)
+	if options.localOnlyFloorOnly {
+		resources = localOnlyRoutedResources(resources)
+	}
 	return func(req providers.ChatRequest) providers.ChatRequest {
 		req = sanitizeProviderRequestForPromptSecrets(req)
 		if len(resources) == 0 {
@@ -126,6 +151,22 @@ func resourcesWithPolicy(resources []unifiedresources.Resource) []unifiedresourc
 			continue
 		}
 		filtered = append(filtered, resource)
+	}
+	return filtered
+}
+
+// localOnlyRoutedResources keeps only resources the policy engine routes
+// local-only — the "never leaves the local trust boundary" floor that the "full"
+// cloud_context_privacy dial must not override.
+func localOnlyRoutedResources(resources []unifiedresources.Resource) []unifiedresources.Resource {
+	filtered := make([]unifiedresources.Resource, 0, len(resources))
+	for _, resource := range resources {
+		if resource.Policy == nil {
+			continue
+		}
+		if resource.Policy.Routing.Scope == unifiedresources.ResourceRoutingScopeLocalOnly {
+			filtered = append(filtered, resource)
+		}
 	}
 	return filtered
 }

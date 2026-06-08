@@ -149,6 +149,64 @@ func TestRequestSanitizerForModelAllowsPulseGeneratedInventoryExportOnly(t *test
 	}
 }
 
+func TestRequestSanitizerForModel_RedactLocalOnlyResourcesOnlyKeepsFloorAndSecrets(t *testing.T) {
+	// The "full" cloud_context_privacy level. A Sensitive (local-first) resource's
+	// identifiers may reach the cloud model, but a Restricted (local-only) resource
+	// stays redacted as a hard floor, and credentials are always stripped.
+	sensitiveVM := unifiedresources.Resource{
+		ID:   "vm-200",
+		Type: unifiedresources.ResourceTypeVM,
+		Name: "finance-vm",
+		Tags: []string{"sensitive"}, // -> Sensitive -> local-first (flows at full)
+		Identity: unifiedresources.ResourceIdentity{
+			Hostnames:   []string{"finance-vm.lan"},
+			IPAddresses: []string{"10.0.0.7"},
+		},
+		Proxmox: &unifiedresources.ProxmoxData{VMID: 200, NodeName: "node1"},
+	}
+	restrictedAgent := unifiedresources.Resource{
+		ID:   "agent/vault",
+		Type: unifiedresources.ResourceTypeAgent,
+		Name: "vault",
+		Tags: []string{"secret"}, // -> Restricted -> local-only (hard floor)
+		Identity: unifiedresources.ResourceIdentity{
+			Hostnames:   []string{"vault.lan"},
+			IPAddresses: []string{"10.0.0.9"},
+		},
+	}
+	provider := policySanitizerProvider{resources: []unifiedresources.Resource{sensitiveVM, restrictedAgent}}
+
+	req := providers.ChatRequest{
+		System: "finance-vm.lan is 10.0.0.7; vault.lan is 10.0.0.9. Authorization: Bearer sk-leaked-secret-token",
+	}
+
+	// Default (redacted): BOTH resources' identifiers are stripped.
+	redacted := RequestSanitizerForModel("openai:gpt-4o", provider)(req)
+	for _, identifier := range []string{"finance-vm.lan", "10.0.0.7", "vault.lan", "10.0.0.9"} {
+		if strings.Contains(redacted.System, identifier) {
+			t.Fatalf("default sanitizer must redact identifier %q, got: %s", identifier, redacted.System)
+		}
+	}
+
+	// Full (local-only floor): the Sensitive resource's identifiers flow...
+	full := RequestSanitizerForModel("openai:gpt-4o", provider, RedactLocalOnlyResourcesOnly())(req)
+	for _, identifier := range []string{"finance-vm.lan", "10.0.0.7"} {
+		if !strings.Contains(full.System, identifier) {
+			t.Fatalf("full sanitizer must preserve sensitive (non-local-only) identifier %q, got: %s", identifier, full.System)
+		}
+	}
+	// ...but the Restricted (local-only) resource stays redacted as the hard floor...
+	for _, identifier := range []string{"vault.lan", "10.0.0.9"} {
+		if strings.Contains(full.System, identifier) {
+			t.Fatalf("full sanitizer must keep the local-only floor for %q, got: %s", identifier, full.System)
+		}
+	}
+	// ...and the credential is STILL redacted, even at full.
+	if strings.Contains(full.System, "sk-leaked-secret-token") {
+		t.Fatalf("full sanitizer must still redact the bearer token, got: %s", full.System)
+	}
+}
+
 func TestRequestSanitizerForModelSkipsLocalModel(t *testing.T) {
 	resource := unifiedresources.Resource{
 		ID:     "agent/pve-secret",

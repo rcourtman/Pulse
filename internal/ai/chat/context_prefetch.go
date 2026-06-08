@@ -7,28 +7,46 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
-// CloudContextPolicy controls whether governed resource context may be shared
-// with a cloud-routed model as PII-free operational context. Both fields must
-// be true for the cloud-safe operational context to be injected; the zero value
-// preserves the historical terse-redaction behavior for governed resources.
+// CloudContextPolicy governs how much governed-resource context reaches a
+// cloud-routed model for this turn, driven by the AIConfig.CloudContextPrivacy
+// dial. The zero value (no cloud routing) preserves the local-model behavior of
+// injecting full context.
 type CloudContextPolicy struct {
-	// CloudRouting reports that this turn routes to an external (cloud) provider,
-	// where governed resource identity is otherwise redacted to a terse summary.
+	// CloudRouting reports that this turn routes to an external (cloud) provider.
 	CloudRouting bool
-	// ShareOperationalContext reports that the operator opted in via
-	// AIConfig.ShareOperationalContextWithCloud.
-	ShareOperationalContext bool
+	// Level is the persisted cloud_context_privacy dial value (full | redacted |
+	// local_only). An empty or unknown value fails closed to redacted.
+	Level string
+}
+
+// level normalizes the dial, failing closed to "redacted" for empty/unknown
+// values so a missing setting never widens what reaches a cloud model.
+func (p CloudContextPolicy) level() string {
+	switch p.Level {
+	case config.CloudContextPrivacyFull, config.CloudContextPrivacyRedacted, config.CloudContextPrivacyLocalOnly:
+		return p.Level
+	default:
+		return config.CloudContextPrivacyRedacted
+	}
 }
 
 // sharesCloudOperationalContext reports whether governed resources should have
-// their PII-free operational context injected for this turn.
+// their PII-free operational context injected for this cloud turn. True for the
+// full and redacted levels; local_only sends no infrastructure context at all.
 func (p CloudContextPolicy) sharesCloudOperationalContext() bool {
-	return p.CloudRouting && p.ShareOperationalContext
+	return p.CloudRouting && p.level() != config.CloudContextPrivacyLocalOnly
+}
+
+// suppressesCloudContext reports whether ALL proactive infrastructure context
+// must be withheld from this cloud turn (the local_only level).
+func (p CloudContextPolicy) suppressesCloudContext() bool {
+	return p.CloudRouting && p.level() == config.CloudContextPrivacyLocalOnly
 }
 
 // ResourceMention represents a detected resource mention in a user message
@@ -171,6 +189,17 @@ func (p *ContextPrefetcher) PrefetchWithCloudPolicy(ctx context.Context, message
 	log.Info().
 		Int("mentions_found", len(mentions)).
 		Msg("[ContextPrefetch] Found resource mentions in message")
+
+	// local_only: send NO infrastructure context to the cloud model. Resolve the
+	// mentions (so routing validation still recognizes them) but inject only a
+	// transparency directive instead of any resource detail, and skip discovery.
+	if cloudPolicy.suppressesCloudContext() {
+		log.Info().Int("mentions", len(mentions)).Msg("[ContextPrefetch] Cloud privacy=local_only; withholding all infra context")
+		return &PrefetchedContext{
+			Mentions: mentions,
+			Summary:  localOnlyCloudContextDirective(),
+		}
+	}
 
 	// Gather discovery data for each mention
 	var discoveries []*tools.ResourceDiscoveryInfo
@@ -730,13 +759,10 @@ func (p *ContextPrefetcher) formatContextSummaryWithPolicy(mentions []ResourceMe
 					continue
 				}
 			}
+			// full / redacted without discovery data falls back to the terse
+			// governed summary. local_only never reaches here — it is withheld
+			// entirely upstream in PrefetchWithCloudPolicy.
 			sb.WriteString(unifiedresources.FormatResourcePolicyGovernedSummary(mention.AISafeSummary, mention.Policy))
-			// Transparency: when context was withheld because this turn routes to
-			// a cloud model and sharing is off, instruct the Assistant to say so
-			// and point at the opt-in.
-			if cloudPolicy.CloudRouting && !cloudPolicy.ShareOperationalContext {
-				sb.WriteString(cloudRedactionTransparencyDirective())
-			}
 			continue
 		}
 
@@ -954,16 +980,16 @@ func formatCloudSafeGovernedBlock(cloudSafe string) string {
 	return sb.String()
 }
 
-// cloudRedactionTransparencyDirective instructs the Assistant to disclose, in
-// its reply, that resource-specific operational context was withheld because the
-// turn routes to a cloud model with sharing disabled, and to point at the
-// opt-in. Pulse's privacy posture is only trustworthy if the redaction is
-// visible to the user rather than silently degrading the answer.
-func cloudRedactionTransparencyDirective() string {
+// localOnlyCloudContextDirective is injected in place of all resource detail when
+// the operator set Cloud model privacy to "local_only": no infrastructure context
+// is sent to the cloud model. It instructs the Assistant to disclose this rather
+// than silently giving a generic answer, and to point at the remedy. Pulse's
+// privacy posture is only trustworthy when the withholding is visible to the user.
+func localOnlyCloudContextDirective() string {
 	return strings.Join([]string{
-		"[Cloud routing transparency]",
-		"This resource's operational details (access commands, config/data/log paths, ports) were withheld because this chat routes to a cloud model and operational-context sharing with cloud models is off.",
-		"In your reply, tell the user you cannot give resource-specific steps for this reason, and that they can enable \"Share operational context with cloud models\" in Settings → AI (or use a local Ollama model) to get specific guidance. Do not fabricate the withheld details.",
+		"=== PULSE CLOUD PRIVACY: LOCAL ONLY ===",
+		"No infrastructure context for the mentioned resources was sent to this cloud model because Cloud model privacy is set to \"Local only\".",
+		"In your reply, tell the user you cannot give resource-specific steps for this reason, and that they can either switch the Assistant to a local (Ollama) model or change Cloud model privacy in Settings → Assistant & Patrol to \"Full\" or \"Redacted\". Do not fabricate the withheld details.",
 		"",
 		"",
 	}, "\n")

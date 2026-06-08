@@ -676,12 +676,21 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		Str("prompt", req.Prompt[:min(50, len(req.Prompt))]).
 		Msg("[ChatService] Checking prefetcher")
 
+	// Resolve the cloud_context_privacy dial once for this turn. It governs both
+	// the proactive context prefetch and the model-boundary sanitizer below.
+	// Fail closed to "redacted" when no config snapshot is available so a missing
+	// setting never widens what reaches a cloud model.
+	cloudPrivacyLevel := config.CloudContextPrivacyRedacted
+	if cfgSnapshot != nil {
+		cloudPrivacyLevel = cfgSnapshot.GetCloudContextPrivacy()
+	}
+
 	mentionsFound := false
 	var modelBoundaryAllowedCloudContext []string
 	if prefetcher != nil {
 		cloudContextPolicy := CloudContextPolicy{
-			CloudRouting:            modelboundary.ModelUsesExternalProvider(selectedModel),
-			ShareOperationalContext: cfgSnapshot.ShouldShareOperationalContextWithCloud(),
+			CloudRouting: modelboundary.ModelUsesExternalProvider(selectedModel),
+			Level:        cloudPrivacyLevel,
 		}
 		prefetchCtx := prefetcher.PrefetchWithCloudPolicy(ctx, req.Prompt, req.Mentions, cloudContextPolicy)
 		if prefetchCtx != nil {
@@ -859,6 +868,15 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		// were a raw identifier. FormatCloudSafeContext already excludes PII.
 		if len(modelBoundaryAllowedCloudContext) > 0 {
 			sanitizerOptions = append(sanitizerOptions, modelboundary.AllowResourcePolicyText(modelBoundaryAllowedCloudContext...))
+		}
+		// Cloud model privacy = "full": the operator chose to share real resource
+		// identifiers, so the model-boundary identifier redaction narrows to the
+		// local-only floor (Restricted resources that must never leave local stay
+		// redacted even at full). Prompt-secret sanitation (credentials) still runs
+		// unconditionally. Local models never reach this sanitizer
+		// (RequestSanitizerForModel returns nil).
+		if cloudPrivacyLevel == config.CloudContextPrivacyFull {
+			sanitizerOptions = append(sanitizerOptions, modelboundary.RedactLocalOnlyResourcesOnly())
 		}
 		loop.SetRequestSanitizer(modelboundary.RequestSanitizerForModel(attempt.Model, unifiedResourceProvider, sanitizerOptions...))
 		loop.SetSuppressProviderErrorEvents(true)

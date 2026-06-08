@@ -107,31 +107,38 @@ deriving an older display status from `workflowStatusHistory`.
    `GetCloudContextPrivacy` / `NormalizeCloudContextPrivacy`) with three levels:
    `full` (default), `redacted`, and `local_only`. It supersedes the legacy
    boolean `AIConfig.ShareOperationalContextWithCloud`
-   (`ShouldShareOperationalContextWithCloud`), which is retained only as the
-   field the redaction seam still reads until the dial is wired into the seam
-   directly (privacy-redesign increment 2). `/api/settings/ai` keeps the legacy
-   boolean in sync with the dial (`full` → true, `redacted`/`local_only` →
-   false), and `internal/config` config load migrates the dial out of the legacy
-   boolean for pre-dial configs (legacy on → `full`, off/absent → `redacted`)
-   without mutating the boolean, so existing installs keep their current cloud
-   behavior. A fresh install defaults to `full` so a self-hosted Pulse answers
-   with real resource detail out of the box.
-   The redaction seam behavior is unchanged by the dial's introduction. When
-   sharing is on AND the turn routes to an external provider, governed-resource
-   context built in `internal/ai/chat/context_prefetch.go` must carry the PII-free
-   operational context from `servicediscovery.FormatCloudSafeContext` (service
-   identity, access command, config/data/log paths, port numbers) in place of the
-   terse governed summary, and the model-bound resource-policy sanitizer in
-   `internal/ai/chat/service.go` must allow-list those exact spans via
-   `modelboundary.AllowResourcePolicyText` so they are not re-stripped at the
-   provider boundary. Genuinely identifying fields — hostname, IP, bind address,
-   alias, and platform ID — must never be emitted by that cloud-safe path and
-   stay redacted regardless of the dial. Local (Ollama) routing is unaffected and
-   always receives full context. Transparency is mandatory: when governed
-   operational context is withheld because a cloud turn is not on `full`,
-   `context_prefetch.go` must instruct the Assistant to disclose the redaction in
-   its reply and point at the `Cloud model privacy` setting, rather than silently
-   degrading the answer.
+   (`ShouldShareOperationalContextWithCloud`), which is retained only for API
+   back-compat and is no longer read by the redaction seam. `/api/settings/ai`
+   keeps the legacy boolean in sync with the dial (`full` → true,
+   `redacted`/`local_only` → false), and `internal/config` config load migrates
+   the dial out of the legacy boolean for pre-dial configs (legacy on → `full`,
+   off/absent → `redacted`) without mutating the boolean, so existing installs
+   keep their current cloud behavior. A fresh install defaults to `full` so a
+   self-hosted Pulse answers with real resource detail out of the box.
+   The redaction seam reads the dial directly at `internal/ai/chat/service.go`,
+   resolving `cloudPrivacyLevel` once per turn (failing closed to `redacted` when
+   no config snapshot is available) and threading it into both the proactive
+   prefetch and the model-boundary sanitizer:
+   - `full`: the model-bound resource-policy sanitizer is invoked with
+     `modelboundary.RedactLocalOnlyResourcesOnly()`, so real identifiers (hostname,
+     IP, alias, name) for ordinary (Internal) and Sensitive (local-first) resources
+     reach the cloud model, while resources the policy engine routes
+     `ResourceRoutingScopeLocalOnly` (Restricted) stay redacted as a HARD FLOOR a
+     blanket dial must never override. Prompt-secret sanitation (credentials) always
+     runs — credentials never cross the boundary at any level.
+   - `redacted`: the sanitizer redacts every policied resource's identifiers as
+     before, and `internal/ai/chat/context_prefetch.go` surfaces the PII-free
+     operational context from `servicediscovery.FormatCloudSafeContext` (service
+     identity, access command, config/data/log paths, ports) for governed
+     resources, allow-listed through `modelboundary.AllowResourcePolicyText` so it
+     is not re-stripped. Identifying fields stay redacted.
+   - `local_only`: `context_prefetch.go` injects NO proactive infrastructure
+     context for the cloud turn (only a transparency directive telling the
+     Assistant to disclose the withholding and point at the `Cloud model privacy`
+     setting / a local model), and the sanitizer still redacts identifiers as a
+     backstop for any context arriving via tool results, handoff text, or user text.
+   Local (Ollama) routing is unaffected and always receives full context
+   (`RequestSanitizerForModel` returns nil for local models).
    The dial must be operator-reachable, not config-file-only. `/api/settings/ai`
    round-trips `cloud_context_privacy` field-by-field exactly like
    `discovery_enabled`: `internal/api/ai_handlers.go` always serializes the

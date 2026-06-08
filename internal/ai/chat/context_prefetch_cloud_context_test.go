@@ -7,6 +7,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/modelboundary"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -58,13 +59,16 @@ func homeAssistantDiscovery() *tools.ResourceDiscoveryInfo {
 	}
 }
 
-func TestPrefetcherCloudContext_OptInSharesAccessPathWithoutPII(t *testing.T) {
+func TestPrefetcherCloudContext_RedactedSharesAccessPathWithoutPII(t *testing.T) {
 	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}), nil)
 
+	// The "redacted" level shares the PII-free operational context for governed
+	// resources: useful commands/paths/ports reach the model, identifying
+	// hostnames/IPs do not.
 	summary, spans := prefetcher.formatContextSummaryWithPolicy(
 		[]ResourceMention{governedHomeAssistantMention()},
 		[]*tools.ResourceDiscoveryInfo{homeAssistantDiscovery()},
-		CloudContextPolicy{CloudRouting: true, ShareOperationalContext: true},
+		CloudContextPolicy{CloudRouting: true, Level: config.CloudContextPrivacyRedacted},
 	)
 
 	// The operational access path reaches the model.
@@ -103,55 +107,97 @@ func TestPrefetcherCloudContext_OptInSharesAccessPathWithoutPII(t *testing.T) {
 	}
 }
 
-func TestPrefetcherCloudContext_OptOutKeepsRedaction(t *testing.T) {
+func TestPrefetcherCloudContext_FullKeepsGovernedPIIFreeInPrefetch(t *testing.T) {
 	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}), nil)
 
+	// Even at "full", the proactive prefetch keeps genuinely-governed resources
+	// PII-free (the model-boundary sanitizer is where full opens identifiers up).
+	// So a governed resource still surfaces only the cloud-safe operational span.
 	summary, spans := prefetcher.formatContextSummaryWithPolicy(
 		[]ResourceMention{governedHomeAssistantMention()},
 		[]*tools.ResourceDiscoveryInfo{homeAssistantDiscovery()},
-		CloudContextPolicy{CloudRouting: true, ShareOperationalContext: false},
+		CloudContextPolicy{CloudRouting: true, Level: config.CloudContextPrivacyFull},
 	)
 
-	// Current redaction holds: no access path, no paths.
-	if strings.Contains(summary, "pct exec") {
-		t.Fatalf("opt-out cloud summary must withhold the access path, got:\n%s", summary)
+	if !strings.Contains(summary, "pct exec 101 -- docker exec homeassistant") {
+		t.Fatalf("full prefetch must include the access path, got:\n%s", summary)
 	}
-	if strings.Contains(summary, "/config/automations.yaml") {
-		t.Fatalf("opt-out cloud summary must withhold config paths, got:\n%s", summary)
+	if strings.Contains(summary, "delly-ha-host") || strings.Contains(summary, "192.168.0.101") {
+		t.Fatalf("full prefetch must not leak governed PII, got:\n%s", summary)
+	}
+	if len(spans) != 1 {
+		t.Fatalf("expected one cloud-safe span at full, got %d: %#v", len(spans), spans)
+	}
+}
+
+func TestPrefetcherCloudContext_RedactedWithoutDiscoveryKeepsGovernedSummary(t *testing.T) {
+	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}), nil)
+
+	// Redacted with no discovery data falls back to the terse governed summary —
+	// and never emits the obsolete opt-in transparency string.
+	summary, spans := prefetcher.formatContextSummaryWithPolicy(
+		[]ResourceMention{governedHomeAssistantMention()},
+		nil,
+		CloudContextPolicy{CloudRouting: true, Level: config.CloudContextPrivacyRedacted},
+	)
+
+	if strings.Contains(summary, "pct exec") {
+		t.Fatalf("redacted-without-discovery must withhold the access path, got:\n%s", summary)
 	}
 	if !strings.Contains(summary, unifiedresources.ResourcePolicyGovernedSummaryFooter()) {
-		t.Fatalf("opt-out cloud summary must keep the governed redaction, got:\n%s", summary)
+		t.Fatalf("redacted-without-discovery must keep the governed redaction, got:\n%s", summary)
 	}
-
-	// Transparency: the Assistant is told to disclose the redaction + opt-in.
-	if !strings.Contains(summary, "Share operational context with cloud models") {
-		t.Fatalf("opt-out cloud summary must disclose the opt-in setting, got:\n%s", summary)
+	if strings.Contains(summary, "Share operational context with cloud models") {
+		t.Fatalf("obsolete opt-in transparency string must not appear, got:\n%s", summary)
 	}
-
 	if len(spans) != 0 {
-		t.Fatalf("opt-out must not return cloud-safe spans, got %#v", spans)
+		t.Fatalf("redacted-without-discovery must not return cloud-safe spans, got %#v", spans)
 	}
 }
 
 func TestPrefetcherCloudContext_LocalRoutingUnaffected(t *testing.T) {
 	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}), nil)
 
-	// Local routing (Ollama): not a cloud turn, so no transparency directive and
-	// no cloud-safe injection — behavior matches the historical governed path.
+	// Local routing (Ollama): not a cloud turn, so no cloud-safe injection —
+	// behavior matches the historical governed path.
 	summary, spans := prefetcher.formatContextSummaryWithPolicy(
 		[]ResourceMention{governedHomeAssistantMention()},
 		[]*tools.ResourceDiscoveryInfo{homeAssistantDiscovery()},
-		CloudContextPolicy{CloudRouting: false, ShareOperationalContext: true},
+		CloudContextPolicy{CloudRouting: false, Level: config.CloudContextPrivacyFull},
 	)
 
-	if strings.Contains(summary, "Share operational context with cloud models") {
-		t.Fatalf("local routing must not emit the cloud transparency directive, got:\n%s", summary)
-	}
 	if !strings.Contains(summary, unifiedresources.ResourcePolicyGovernedSummaryFooter()) {
 		t.Fatalf("local routing must keep the governed prefetch redaction, got:\n%s", summary)
 	}
 	if len(spans) != 0 {
 		t.Fatalf("local routing must not return cloud-safe spans, got %#v", spans)
+	}
+}
+
+func TestCloudContextPolicy_LevelSemantics(t *testing.T) {
+	cases := []struct {
+		name           string
+		policy         CloudContextPolicy
+		wantShares     bool
+		wantSuppresses bool
+	}{
+		{"full cloud", CloudContextPolicy{CloudRouting: true, Level: config.CloudContextPrivacyFull}, true, false},
+		{"redacted cloud", CloudContextPolicy{CloudRouting: true, Level: config.CloudContextPrivacyRedacted}, true, false},
+		{"local_only cloud", CloudContextPolicy{CloudRouting: true, Level: config.CloudContextPrivacyLocalOnly}, false, true},
+		{"empty level fails closed to redacted", CloudContextPolicy{CloudRouting: true, Level: ""}, true, false},
+		{"unknown level fails closed to redacted", CloudContextPolicy{CloudRouting: true, Level: "bogus"}, true, false},
+		{"full but local routing shares nothing extra", CloudContextPolicy{CloudRouting: false, Level: config.CloudContextPrivacyFull}, false, false},
+		{"local_only but local routing never suppresses", CloudContextPolicy{CloudRouting: false, Level: config.CloudContextPrivacyLocalOnly}, false, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.policy.sharesCloudOperationalContext(); got != tc.wantShares {
+				t.Fatalf("sharesCloudOperationalContext() = %v, want %v", got, tc.wantShares)
+			}
+			if got := tc.policy.suppressesCloudContext(); got != tc.wantSuppresses {
+				t.Fatalf("suppressesCloudContext() = %v, want %v", got, tc.wantSuppresses)
+			}
+		})
 	}
 }
 

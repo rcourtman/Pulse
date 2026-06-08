@@ -2597,7 +2597,12 @@ func TestService_ExecuteStream_HandoffResourceRelationshipContextIsModelOnly(t *
 	loop := NewAgenticLoop(provider, executor, "system")
 
 	svc := &Service{
-		cfg:                     &config.AIConfig{ChatModel: "openai:test"},
+		// Redacted cloud privacy: governed identities must be stripped at the
+		// external-provider boundary (the behavior this test pins). With the dial
+		// at "full" the local-only floor would still protect Restricted resources,
+		// but Sensitive ones would flow — that path is covered by the modelboundary
+		// sanitizer tests.
+		cfg:                     &config.AIConfig{ChatModel: "openai:test", CloudContextPrivacy: config.CloudContextPrivacyRedacted},
 		sessions:                store,
 		executor:                executor,
 		agenticLoop:             loop,
