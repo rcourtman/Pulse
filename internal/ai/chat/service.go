@@ -677,10 +677,16 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		Msg("[ChatService] Checking prefetcher")
 
 	mentionsFound := false
+	var modelBoundaryAllowedCloudContext []string
 	if prefetcher != nil {
-		prefetchCtx := prefetcher.Prefetch(ctx, req.Prompt, req.Mentions)
+		cloudContextPolicy := CloudContextPolicy{
+			CloudRouting:            modelboundary.ModelUsesExternalProvider(selectedModel),
+			ShareOperationalContext: cfgSnapshot.ShouldShareOperationalContextWithCloud(),
+		}
+		prefetchCtx := prefetcher.PrefetchWithCloudPolicy(ctx, req.Prompt, req.Mentions, cloudContextPolicy)
 		if prefetchCtx != nil {
 			mentionsFound = len(prefetchCtx.Mentions) > 0
+			modelBoundaryAllowedCloudContext = prefetchCtx.CloudSafeContextSpans
 		}
 		if prefetchCtx != nil && prefetchCtx.Summary != "" {
 			log.Info().
@@ -847,6 +853,12 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		sanitizerOptions := []modelboundary.RequestSanitizerOption{}
 		if modelBoundaryAllowedInventoryContext != "" {
 			sanitizerOptions = append(sanitizerOptions, modelboundary.AllowResourcePolicyText(modelBoundaryAllowedInventoryContext))
+		}
+		// Preserve the PII-free operational context injected for opted-in cloud
+		// turns so the resource-policy sanitizer does not re-strip it as if it
+		// were a raw identifier. FormatCloudSafeContext already excludes PII.
+		if len(modelBoundaryAllowedCloudContext) > 0 {
+			sanitizerOptions = append(sanitizerOptions, modelboundary.AllowResourcePolicyText(modelBoundaryAllowedCloudContext...))
 		}
 		loop.SetRequestSanitizer(modelboundary.RequestSanitizerForModel(attempt.Model, unifiedResourceProvider, sanitizerOptions...))
 		loop.SetSuppressProviderErrorEvents(true)

@@ -103,6 +103,16 @@ type AIConfig struct {
 	// Discovery settings - controls automatic infrastructure discovery
 	DiscoveryEnabled       bool `json:"discovery_enabled"`                  // Enable infrastructure discovery
 	DiscoveryIntervalHours int  `json:"discovery_interval_hours,omitempty"` // Hours between automatic re-scans (0 = manual only, default: 0)
+
+	// Cloud operational-context sharing - controls whether PII-free operational
+	// context (service identity, access commands, config/data/log paths, port
+	// numbers) for governed resources may be sent to CLOUD models. Default false:
+	// cloud-routed governed resources are redacted to a terse summary, which makes
+	// the Assistant unable to give resource-specific guidance on cloud models.
+	// Opting in shares the cloud-safe operational context while genuinely
+	// identifying fields (hostname, IP, alias, platform ID) stay redacted. Local
+	// (Ollama) models always receive full context and are unaffected by this flag.
+	ShareOperationalContextWithCloud bool `json:"share_operational_context_with_cloud,omitempty"`
 }
 
 // AIProvider constants
@@ -898,4 +908,15 @@ func (c *AIConfig) GetDiscoveryInterval() time.Duration {
 		return 0 // Manual only
 	}
 	return time.Duration(c.DiscoveryIntervalHours) * time.Hour
+}
+
+// ShouldShareOperationalContextWithCloud reports whether PII-free operational
+// context for governed resources may be sent to cloud models. Nil-safe and
+// defaults to false so cloud routing keeps the terse governed redaction unless
+// the operator explicitly opts in.
+func (c *AIConfig) ShouldShareOperationalContextWithCloud() bool {
+	if c == nil {
+		return false
+	}
+	return c.ShareOperationalContextWithCloud
 }

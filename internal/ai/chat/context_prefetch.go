@@ -7,9 +7,29 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
+	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
+
+// CloudContextPolicy controls whether governed resource context may be shared
+// with a cloud-routed model as PII-free operational context. Both fields must
+// be true for the cloud-safe operational context to be injected; the zero value
+// preserves the historical terse-redaction behavior for governed resources.
+type CloudContextPolicy struct {
+	// CloudRouting reports that this turn routes to an external (cloud) provider,
+	// where governed resource identity is otherwise redacted to a terse summary.
+	CloudRouting bool
+	// ShareOperationalContext reports that the operator opted in via
+	// AIConfig.ShareOperationalContextWithCloud.
+	ShareOperationalContext bool
+}
+
+// sharesCloudOperationalContext reports whether governed resources should have
+// their PII-free operational context injected for this turn.
+func (p CloudContextPolicy) sharesCloudOperationalContext() bool {
+	return p.CloudRouting && p.ShareOperationalContext
+}
 
 // ResourceMention represents a detected resource mention in a user message
 type ResourceMention struct {
@@ -44,6 +64,11 @@ type PrefetchedContext struct {
 	Mentions    []ResourceMention
 	Discoveries []*tools.ResourceDiscoveryInfo
 	Summary     string // Formatted summary for AI consumption
+	// CloudSafeContextSpans holds the exact PII-free operational-context blocks
+	// injected for cloud routing. The caller must allow-list these spans through
+	// the model-bound resource-policy sanitizer so they are not re-stripped at
+	// the provider boundary.
+	CloudSafeContextSpans []string
 }
 
 // ContextPrefetcher proactively gathers context based on user message content
@@ -90,9 +115,21 @@ func resourceRequiresReadOnlyGuidance(resourceType string, supportsControl bool)
 }
 
 // Prefetch gathers context only for explicit structured mentions selected by
-// the user. Plain chat text is left untouched so the selected model decides
-// whether it needs tools or more context.
+// the user, using the default (cloud-redacting) policy. Plain chat text is left
+// untouched so the selected model decides whether it needs tools or more
+// context.
 func (p *ContextPrefetcher) Prefetch(ctx context.Context, message string, structuredMentions []StructuredMention) *PrefetchedContext {
+	return p.PrefetchWithCloudPolicy(ctx, message, structuredMentions, CloudContextPolicy{})
+}
+
+// PrefetchWithCloudPolicy is Prefetch with an explicit cloud-context policy.
+// When the policy opts in for a cloud-routed turn, governed resources that would
+// otherwise be reduced to a terse redacted summary instead carry PII-free
+// operational context (service identity, access commands, paths, ports) via
+// servicediscovery.FormatCloudSafeContext. Genuinely identifying fields
+// (hostname, IP, alias, platform ID) are never emitted by that formatter and
+// stay redacted at the model boundary.
+func (p *ContextPrefetcher) PrefetchWithCloudPolicy(ctx context.Context, message string, structuredMentions []StructuredMention, cloudPolicy CloudContextPolicy) *PrefetchedContext {
 	log.Info().
 		Bool("hasReadState", p.readState != nil).
 		Bool("hasDiscoveryProvider", p.discoveryProvider != nil).
@@ -139,7 +176,13 @@ func (p *ContextPrefetcher) Prefetch(ctx context.Context, message string, struct
 	var discoveries []*tools.ResourceDiscoveryInfo
 	if p.discoveryProvider != nil {
 		for _, mention := range mentions {
-			if unifiedresources.ResourcePolicyRequiresGovernedSummary(mention.Policy) {
+			// Governed resources are normally summarized without discovery. When
+			// the operator opted in to cloud operational-context sharing for a
+			// cloud-routed turn, gather discovery anyway so the cloud-safe
+			// formatter can surface the PII-free access path instead of a terse
+			// redaction. PII is stripped by FormatCloudSafeContext itself.
+			if unifiedresources.ResourcePolicyRequiresGovernedSummary(mention.Policy) &&
+				!cloudPolicy.sharesCloudOperationalContext() {
 				continue
 			}
 			discovery, err := p.getOrTriggerDiscovery(ctx, mention)
@@ -157,12 +200,13 @@ func (p *ContextPrefetcher) Prefetch(ctx context.Context, message string, struct
 	}
 
 	// Format the context summary
-	summary := p.formatContextSummary(mentions, discoveries)
+	summary, cloudSafeSpans := p.formatContextSummaryWithPolicy(mentions, discoveries, cloudPolicy)
 
 	return &PrefetchedContext{
-		Mentions:    mentions,
-		Discoveries: discoveries,
-		Summary:     summary,
+		Mentions:              mentions,
+		Discoveries:           discoveries,
+		Summary:               summary,
+		CloudSafeContextSpans: cloudSafeSpans,
 	}
 }
 
@@ -639,11 +683,23 @@ func (p *ContextPrefetcher) getOrTriggerDiscovery(ctx context.Context, mention R
 }
 
 // formatContextSummary creates a formatted summary of the gathered context
+// using the default (cloud-redacting) policy.
 func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, discoveries []*tools.ResourceDiscoveryInfo) string {
+	summary, _ := p.formatContextSummaryWithPolicy(mentions, discoveries, CloudContextPolicy{})
+	return summary
+}
+
+// formatContextSummaryWithPolicy formats the gathered context and, when the
+// cloud policy opts in for a cloud-routed turn, replaces the terse governed
+// redaction with PII-free operational context. It returns the summary plus the
+// exact cloud-safe spans the caller must allow-list through the model-bound
+// resource-policy sanitizer.
+func (p *ContextPrefetcher) formatContextSummaryWithPolicy(mentions []ResourceMention, discoveries []*tools.ResourceDiscoveryInfo, cloudPolicy CloudContextPolicy) (string, []string) {
 	if len(mentions) == 0 {
-		return ""
+		return "", nil
 	}
 
+	var cloudSafeSpans []string
 	var sb strings.Builder
 	sb.WriteString("=== PULSE MONITORING DATA (AUTHORITATIVE) ===\n")
 	sb.WriteString("This is verified data from Pulse monitoring sources. Canonical resource policy is enforced below.\n")
@@ -659,13 +715,30 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 	}
 
 	for _, mention := range mentions {
-		if unifiedresources.ResourcePolicyRequiresGovernedSummary(mention.Policy) {
-			sb.WriteString(unifiedresources.FormatResourcePolicyGovernedSummary(mention.AISafeSummary, mention.Policy))
-			continue
-		}
-
 		key := fmt.Sprintf("%s:%s:%s", tools.CanonicalDiscoveryResourceType(mention.ResourceType), mention.TargetID, mention.ResourceID)
 		discovery, hasDiscovery := discoveryMap[key]
+
+		if unifiedresources.ResourcePolicyRequiresGovernedSummary(mention.Policy) {
+			// Cloud opt-in: surface PII-free operational context instead of the
+			// terse redaction so the Assistant can give resource-specific
+			// guidance on cloud models. FormatCloudSafeContext never emits
+			// hostname/IP/alias, so genuine PII stays withheld.
+			if cloudPolicy.sharesCloudOperationalContext() && hasDiscovery {
+				if cloudSafe := cloudSafeOperationalContext(discovery); cloudSafe != "" {
+					sb.WriteString(formatCloudSafeGovernedBlock(cloudSafe))
+					cloudSafeSpans = append(cloudSafeSpans, cloudSafe)
+					continue
+				}
+			}
+			sb.WriteString(unifiedresources.FormatResourcePolicyGovernedSummary(mention.AISafeSummary, mention.Policy))
+			// Transparency: when context was withheld because this turn routes to
+			// a cloud model and sharing is off, instruct the Assistant to say so
+			// and point at the opt-in.
+			if cloudPolicy.CloudRouting && !cloudPolicy.ShareOperationalContext {
+				sb.WriteString(cloudRedactionTransparencyDirective())
+			}
+			continue
+		}
 
 		hint := readRoutingHintForMention(mention)
 
@@ -842,5 +915,56 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 		sb.WriteString("\n")
 	}
 
+	return sb.String(), cloudSafeSpans
+}
+
+// cloudSafeOperationalContext bridges the prefetcher's discovery DTO to the
+// canonical servicediscovery cloud-safe formatter. The result carries service
+// identity, the access command, and config/data/log paths plus port numbers but
+// never hostname, IP, alias, or bind-address — it is safe to send to a cloud
+// model when the operator has opted in.
+func cloudSafeOperationalContext(d *tools.ResourceDiscoveryInfo) string {
+	if d == nil {
+		return ""
+	}
+	ports := make([]servicediscovery.PortInfo, 0, len(d.Ports))
+	for _, p := range d.Ports {
+		ports = append(ports, servicediscovery.PortInfo{Port: p.Port, Protocol: p.Protocol})
+	}
+	return servicediscovery.FormatCloudSafeContext(&servicediscovery.ResourceDiscovery{
+		ServiceType:    d.ServiceType,
+		ServiceName:    d.ServiceName,
+		ServiceVersion: d.ServiceVersion,
+		Category:       servicediscovery.ServiceCategory(d.Category),
+		CLIAccess:      d.CLIAccess,
+		ConfigPaths:    d.ConfigPaths,
+		DataPaths:      d.DataPaths,
+		LogPaths:       d.LogPaths,
+		Ports:          ports,
+	})
+}
+
+// formatCloudSafeGovernedBlock wraps the cloud-safe operational context with a
+// heading that tells the model PII is still withheld for cloud routing.
+func formatCloudSafeGovernedBlock(cloudSafe string) string {
+	var sb strings.Builder
+	sb.WriteString("## Governed resource (operational context shared for cloud)\n")
+	sb.WriteString(cloudSafe)
+	sb.WriteString("\nHostnames, IP addresses, aliases, and platform IDs remain withheld by canonical resource policy for cloud routing.\n\n")
 	return sb.String()
+}
+
+// cloudRedactionTransparencyDirective instructs the Assistant to disclose, in
+// its reply, that resource-specific operational context was withheld because the
+// turn routes to a cloud model with sharing disabled, and to point at the
+// opt-in. Pulse's privacy posture is only trustworthy if the redaction is
+// visible to the user rather than silently degrading the answer.
+func cloudRedactionTransparencyDirective() string {
+	return strings.Join([]string{
+		"[Cloud routing transparency]",
+		"This resource's operational details (access commands, config/data/log paths, ports) were withheld because this chat routes to a cloud model and operational-context sharing with cloud models is off.",
+		"In your reply, tell the user you cannot give resource-specific steps for this reason, and that they can enable \"Share operational context with cloud models\" in Settings → AI (or use a local Ollama model) to get specific guidance. Do not fabricate the withheld details.",
+		"",
+		"",
+	}, "\n")
 }

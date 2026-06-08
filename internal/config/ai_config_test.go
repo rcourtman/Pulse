@@ -2,9 +2,49 @@ package config
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestAIConfig_ShouldShareOperationalContextWithCloud(t *testing.T) {
+	if (*AIConfig)(nil).ShouldShareOperationalContextWithCloud() {
+		t.Fatalf("nil config must not share operational context with cloud")
+	}
+
+	// Default (opt-out): a fresh config must not share operational context.
+	if NewDefaultAIConfig().ShouldShareOperationalContextWithCloud() {
+		t.Fatalf("default config must keep cloud operational-context sharing off")
+	}
+	if (&AIConfig{}).ShouldShareOperationalContextWithCloud() {
+		t.Fatalf("zero-value config must keep cloud operational-context sharing off")
+	}
+
+	// Explicit opt-in is honored.
+	if !(&AIConfig{ShareOperationalContextWithCloud: true}).ShouldShareOperationalContextWithCloud() {
+		t.Fatalf("opt-in config must report cloud operational-context sharing on")
+	}
+
+	// The flag round-trips through JSON and is omitted when off.
+	off, err := json.Marshal(&AIConfig{})
+	if err != nil {
+		t.Fatalf("marshal off: %v", err)
+	}
+	if got := string(off); strings.Contains(got, "share_operational_context_with_cloud") {
+		t.Fatalf("off flag must be omitted from JSON, got %q", got)
+	}
+	on, err := json.Marshal(&AIConfig{ShareOperationalContextWithCloud: true})
+	if err != nil {
+		t.Fatalf("marshal on: %v", err)
+	}
+	var decoded AIConfig
+	if err := json.Unmarshal(on, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !decoded.ShouldShareOperationalContextWithCloud() {
+		t.Fatalf("on flag must round-trip through JSON, got %q", string(on))
+	}
+}
 
 func TestEffectiveControlLevelForEntitlement(t *testing.T) {
 	tests := []struct {

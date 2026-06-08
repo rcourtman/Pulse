@@ -88,6 +88,28 @@ deriving an older display status from `workflowStatusHistory`.
    and `internal/ai/providers/ollama.go` is the only layer that turns it into
    the Ollama `keep_alive` request field. An empty configured value means
    Pulse omits `keep_alive` so the Ollama server default applies.
+   Cloud operational-context sharing is a runtime privacy option owned by this
+   path: `internal/config/ai.go` stores
+   `AIConfig.ShareOperationalContextWithCloud` (default false, surfaced through
+   `ShouldShareOperationalContextWithCloud`). The default keeps governed
+   resources reduced to the terse policy redaction on cloud-routed turns, which
+   is correct for privacy but leaves the Assistant unable to give
+   resource-specific guidance on cloud models. When the operator opts in AND the
+   turn routes to an external provider, governed-resource context built in
+   `internal/ai/chat/context_prefetch.go` must carry the PII-free operational
+   context from `servicediscovery.FormatCloudSafeContext` (service identity,
+   access command, config/data/log paths, port numbers) in place of the terse
+   governed summary, and the model-bound resource-policy sanitizer in
+   `internal/ai/chat/service.go` must allow-list those exact spans via
+   `modelboundary.AllowResourcePolicyText` so they are not re-stripped at the
+   provider boundary. Genuinely identifying fields — hostname, IP, bind address,
+   alias, and platform ID — must never be emitted by that cloud-safe path and
+   stay redacted regardless of the opt-in. Local (Ollama) routing is unaffected
+   and always receives full context. Transparency is mandatory: when governed
+   operational context is withheld because a cloud turn has sharing off,
+   `context_prefetch.go` must instruct the Assistant to disclose the redaction in
+   its reply and point at the `Share operational context with cloud models`
+   setting, rather than silently degrading the answer.
 3. Add or change Pulse Assistant request flow through `internal/api/ai_handler.go`, `frontend-modern/src/api/ai.ts`, and `frontend-modern/src/api/aiChat.ts`
    Assistant session compaction is a runtime-backed session workflow, not a
    local waiting message, transcript-only UI action, or stubbed summarize
