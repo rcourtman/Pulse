@@ -556,6 +556,7 @@ describe('AIChatAPI', () => {
   it('exports fixture names and aliases for command discovery', () => {
     expect(AI_CHAT_DEV_STREAM_FIXTURE_NAMES).toContain('provider-retry');
     expect(AI_CHAT_DEV_STREAM_FIXTURE_NAMES).toContain('send-hold');
+    expect(AI_CHAT_DEV_STREAM_FIXTURE_NAMES).toContain('command-tool');
     expect(AI_CHAT_DEV_STREAM_FIXTURE_NAMES).not.toContain('/fixture provider-retry');
     expect(AI_CHAT_DEV_STREAM_FIXTURE_ALIAS_NAMES).toEqual(['burst-tool', 'queued-follow-up']);
   });
@@ -603,6 +604,63 @@ describe('AIChatAPI', () => {
       type: 'done',
       data: {
         session_id: 'dev-fixture-pending-tool',
+        model: 'openrouter:deepseek/deepseek-chat',
+      },
+    });
+  });
+
+  it('runs the command-tool dev stream fixture without opening a provider request', async () => {
+    const onEvent = vi.fn();
+
+    await AIChatAPI.chat(
+      '/fixture command-tool',
+      undefined,
+      'openrouter:deepseek/deepseek-chat',
+      onEvent,
+    );
+
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'session',
+      'workflow_state',
+      'tool_start',
+      'tool_progress',
+      'tool_end',
+      'content',
+      'done',
+    ]);
+    expect(onEvent.mock.calls[2][0]).toMatchObject({
+      type: 'tool_start',
+      data: {
+        id: 'fixture-tool-command',
+        name: 'pulse_run_command',
+        input: '{}',
+        raw_input: expect.stringContaining('systemctl restart nginx'),
+      },
+    });
+    expect(onEvent.mock.calls[3][0]).toMatchObject({
+      type: 'tool_progress',
+      data: {
+        id: 'fixture-tool-command',
+        name: 'pulse_run_command',
+        phase: 'running',
+        message: 'Running command.',
+        input: expect.stringContaining('systemctl restart nginx'),
+      },
+    });
+    expect(onEvent.mock.calls[4][0]).toMatchObject({
+      type: 'tool_end',
+      data: {
+        id: 'fixture-tool-command',
+        name: 'pulse_run_command',
+        output: 'queued',
+        success: true,
+      },
+    });
+    expect(onEvent.mock.calls[6][0]).toMatchObject({
+      type: 'done',
+      data: {
+        session_id: 'dev-fixture-command-tool',
         model: 'openrouter:deepseek/deepseek-chat',
       },
     });

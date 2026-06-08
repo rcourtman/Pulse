@@ -155,6 +155,38 @@ describe('Assistant transcript export', () => {
     expect(transcript).not.toContain('pulse_read');
   });
 
+  it('exports governed command activity with a separate command preview', () => {
+    const transcript = formatAssistantTranscript({
+      messages: [
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: '',
+          timestamp,
+          streamEvents: [
+            {
+              type: 'tool',
+              tool: {
+                name: 'pulse_run_command',
+                input: JSON.stringify({
+                  command: 'systemctl restart nginx',
+                  target_host: 'tower',
+                }),
+                output: 'queued',
+                success: true,
+              },
+            },
+          ],
+        },
+      ],
+      generatedAt: timestamp,
+    });
+
+    expect(transcript).toContain('[tool:cmd] Run command on tower');
+    expect(transcript).toContain('$ systemctl restart nginx');
+    expect(transcript).not.toContain('"target_host"');
+  });
+
   it('can include thinking and tool output when explicitly requested', () => {
     const messages: ChatMessage[] = [
       {

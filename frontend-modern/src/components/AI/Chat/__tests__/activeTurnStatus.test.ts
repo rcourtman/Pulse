@@ -159,6 +159,32 @@ describe('getAssistantActiveTurnStatus', () => {
     });
   });
 
+  it('surfaces pending governed command input in the active turn status', () => {
+    const startedAt = Date.now() - 5_000;
+    expect(
+      getAssistantActiveTurnStatus(
+        [
+          assistantMessage({
+            pendingTools: [
+              {
+                id: 'tool-1',
+                name: 'pulse_run_command',
+                input: '{"target_host":"tower","command":"systemctl restart nginx"}',
+                status: 'running',
+                startedAt,
+              },
+            ],
+          }),
+        ],
+        true,
+      ),
+    ).toEqual({
+      type: 'tool',
+      text: 'Running $ systemctl restart nginx',
+      startedAt,
+    });
+  });
+
   it('redacts sensitive read-only command previews in the active turn status', () => {
     expect(
       getAssistantActiveTurnStatus(

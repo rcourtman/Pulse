@@ -179,22 +179,19 @@ const shellCommandIntentLabel = (command: string) => {
   return '';
 };
 
-const isComplexShellCommand = (command: string) =>
-  command.length > 48 || /[;&|`<>]/.test(command) || /\$\(|\${/.test(command);
-
 const formatCommandActivitySummary = (record: Record<string, unknown>, mode: 'read' | 'write') => {
   const command = normalizedShellCommand(stringField(record, ['command', 'cmd']));
   if (!command) return '';
 
   const target = targetSuffix(record);
   const intent = shellCommandIntentLabel(command);
+  if (mode === 'write') {
+    return `Run command${target}`;
+  }
   if (mode === 'read' && intent) {
     return `${intent}${target}`;
   }
-  if (mode === 'read' && isComplexShellCommand(command)) {
-    return `Read with shell command${target}`;
-  }
-  return `$ ${inlineValue(command, 64)}${target}`;
+  return `Run read-only command${target}`;
 };
 
 const parseFunctionStyleToolInput = (input: string, options?: { allowPartial?: boolean }) => {
@@ -536,13 +533,15 @@ export const parseToolInputSummary = (input: string, toolName?: string, rawInput
 };
 
 const commandPreviewForRecord = (record: Record<string, unknown>, toolName?: string) => {
-  if (normalizedToolName(toolName) !== 'read') return '';
+  const tool = normalizedToolName(toolName);
+  if (tool !== 'read' && tool !== 'run_command' && tool !== 'control') return '';
   const command = stringField(record, ['command', 'cmd']);
   return command ? formatShellCommandPreview(command) : '';
 };
 
 const partialCommandPreview = (input: string | undefined, toolName?: string) => {
-  if (normalizedToolName(toolName) !== 'read') return '';
+  const tool = normalizedToolName(toolName);
+  if (tool !== 'read' && tool !== 'run_command' && tool !== 'control') return '';
   const command = extractPartialJSONStringField(input || '', ['command', 'cmd']);
   return command ? formatShellCommandPreview(command) : '';
 };

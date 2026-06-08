@@ -457,7 +457,13 @@ describe('ToolExecutionBlock', () => {
     expect(screen.getByText('logs jellyfin on jellyfin')).toBeInTheDocument();
   });
 
-  it('renders governed command input as the command being run', () => {
+  it('renders governed command input as readable activity with a copyable command', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+
     render(() => (
       <ToolExecutionBlock
         tool={makeTool({
@@ -468,7 +474,14 @@ describe('ToolExecutionBlock', () => {
       />
     ));
 
-    expect(screen.getByText('$ systemctl restart nginx on tower')).toBeInTheDocument();
+    expect(screen.getByText('Run command on tower')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tool command')).toHaveTextContent('$ systemctl restart nginx');
+    expect(screen.queryByText(/"target_host"/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy tool command' }));
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith('systemctl restart nginx');
+    });
   });
 
   it('uses structured raw input over backend command display strings', () => {
@@ -483,7 +496,8 @@ describe('ToolExecutionBlock', () => {
       />
     ));
 
-    expect(screen.getByText('$ systemctl restart nginx on tower')).toBeInTheDocument();
+    expect(screen.getByText('Run command on tower')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tool command')).toHaveTextContent('$ systemctl restart nginx');
     expect(screen.queryByText('Running: systemctl restart nginx')).not.toBeInTheDocument();
   });
 
@@ -976,7 +990,8 @@ describe('PendingToolBlock', () => {
       />
     ));
 
-    expect(screen.getByText('$ systemctl restart nginx on tower')).toBeInTheDocument();
+    expect(screen.getByText('Run command on tower')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tool command')).toHaveTextContent('$ systemctl restart nginx');
     expect(screen.queryByText('Running: systemctl restart nginx')).not.toBeInTheDocument();
   });
 

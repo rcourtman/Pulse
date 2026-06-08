@@ -9,6 +9,7 @@ export const AI_CHAT_DEV_STREAM_FIXTURE_PROMPTS = [
   '/fixture context-group',
   '/fixture status-boundary',
   '/fixture pending-tool',
+  '/fixture command-tool',
   '/fixture long-output',
   '/fixture provider-retry',
   '/fixture stream-idle',
@@ -622,6 +623,66 @@ const buildPendingToolFixtureEvents = (model?: string): AIChatStreamEvent[] => [
   },
 ];
 
+const buildCommandToolFixtureEvents = (model?: string): AIChatStreamEvent[] => [
+  {
+    type: 'session',
+    data: { id: 'dev-fixture-command-tool' },
+  },
+  {
+    type: 'workflow_state',
+    data: {
+      phase: 'request_start',
+      message: 'Preparing Pulse context.',
+    },
+  },
+  {
+    type: 'tool_start',
+    data: {
+      id: 'fixture-tool-command',
+      name: 'pulse_run_command',
+      input: '{}',
+      raw_input: 'pulse_run_command(target_host="tower", command="systemctl restart nginx',
+    },
+  },
+  {
+    type: 'tool_progress',
+    data: {
+      id: 'fixture-tool-command',
+      name: 'pulse_run_command',
+      phase: 'running',
+      message: 'Running command.',
+      input: '{"target_host":"tower","command":"systemctl restart nginx"}',
+      raw_input: 'pulse_run_command(target_host="tower", command="systemctl restart nginx")',
+    },
+  },
+  {
+    type: 'tool_end',
+    data: {
+      id: 'fixture-tool-command',
+      name: 'pulse_run_command',
+      input: '{"target_host":"tower","command":"systemctl restart nginx"}',
+      raw_input: 'pulse_run_command(target_host="tower", command="systemctl restart nginx")',
+      output: 'queued',
+      success: true,
+    },
+  },
+  {
+    type: 'content',
+    data: {
+      text: 'The command-tool fixture kept the governed command row readable with a separate command preview.',
+    },
+  },
+  {
+    type: 'done',
+    data: {
+      session_id: 'dev-fixture-command-tool',
+      model: assistantFixtureModel(model),
+      input_tokens: 71,
+      output_tokens: 25,
+    },
+  },
+];
+
 const buildLongOutputFixtureEvents = (model?: string): AIChatStreamEvent[] => [
   {
     type: 'session',
@@ -962,6 +1023,9 @@ const buildFixtureEvents = (prompt: string, model?: string): AIChatStreamEvent[]
   }
   if (normalized === '/fixture pending-tool') {
     return buildPendingToolFixtureEvents(model);
+  }
+  if (normalized === '/fixture command-tool') {
+    return buildCommandToolFixtureEvents(model);
   }
   if (normalized === '/fixture long-output') {
     return buildLongOutputFixtureEvents(model);
