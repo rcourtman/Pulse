@@ -379,22 +379,23 @@ describe('settings architecture guardrails', () => {
     expect(aiRuntimeControlsSectionSource).not.toContain("fetch('/api/discovery/run");
   });
 
-  it('keeps the cloud operational-context opt-in wired through the canonical settings state', () => {
-    // The "Share operational context with cloud models" toggle must bind to the
-    // canonical AI settings form/store and round-trip the API field rather than
+  it('keeps the cloud model privacy dial wired through the canonical settings state', () => {
+    // The "Cloud model privacy" dial must bind to the canonical AI settings
+    // form/store and round-trip the cloud_context_privacy API field rather than
     // reaching for a bespoke fetch or local-only flag.
-    expect(aiRuntimeControlsSectionSource).toContain('AI_SETTINGS_CLOUD_CONTEXT_SHARING_LABEL');
-    expect(aiRuntimeControlsSectionSource).toContain('getAISettingsCloudContextSharingHelpContent');
-    expect(aiRuntimeControlsSectionSource).toContain('state.form.shareOperationalContextWithCloud');
+    expect(aiRuntimeControlsSectionSource).toContain('AI_SETTINGS_CLOUD_CONTEXT_PRIVACY_LABEL');
+    expect(aiRuntimeControlsSectionSource).toContain('getAISettingsCloudContextPrivacyHelpContent');
+    expect(aiRuntimeControlsSectionSource).toContain('getAISettingsCloudContextPrivacyOptions');
+    expect(aiRuntimeControlsSectionSource).toContain('state.form.cloudContextPrivacy');
     expect(aiRuntimeControlsSectionSource).toContain(
-      "state.setForm('shareOperationalContextWithCloud', event.currentTarget.checked)",
+      "state.setForm('cloudContextPrivacy', e.currentTarget.value as CloudContextPrivacy)",
     );
-    expect(aiSettingsStateSource).toContain('shareOperationalContextWithCloud');
+    expect(aiSettingsStateSource).toContain('cloudContextPrivacy');
     expect(aiSettingsStateSource).toContain(
-      'payload.share_operational_context_with_cloud = form.shareOperationalContextWithCloud;',
+      'payload.cloud_context_privacy = form.cloudContextPrivacy;',
     );
     expect(aiSettingsStateSource).toContain(
-      'shareOperationalContextWithCloud: data.share_operational_context_with_cloud ?? false,',
+      "cloudContextPrivacy: data.cloud_context_privacy ?? 'full',",
     );
   });
 

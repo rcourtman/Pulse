@@ -46,6 +46,59 @@ func TestAIConfig_ShouldShareOperationalContextWithCloud(t *testing.T) {
 	}
 }
 
+func TestAIConfig_GetCloudContextPrivacy(t *testing.T) {
+	// Nil-safe and defaults to the homelab-friendly "full" posture.
+	if got := (*AIConfig)(nil).GetCloudContextPrivacy(); got != CloudContextPrivacyFull {
+		t.Fatalf("nil config cloud privacy = %q, want %q", got, CloudContextPrivacyFull)
+	}
+	// A fresh config opts into full context so the Assistant answers with detail.
+	if got := NewDefaultAIConfig().GetCloudContextPrivacy(); got != CloudContextPrivacyFull {
+		t.Fatalf("default config cloud privacy = %q, want %q", got, CloudContextPrivacyFull)
+	}
+	// Empty/unset normalizes to full.
+	if got := (&AIConfig{}).GetCloudContextPrivacy(); got != CloudContextPrivacyFull {
+		t.Fatalf("zero-value cloud privacy = %q, want %q", got, CloudContextPrivacyFull)
+	}
+
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{CloudContextPrivacyFull, CloudContextPrivacyFull},
+		{CloudContextPrivacyRedacted, CloudContextPrivacyRedacted},
+		{CloudContextPrivacyLocalOnly, CloudContextPrivacyLocalOnly},
+		{" Redacted ", CloudContextPrivacyRedacted}, // trimmed + lowercased
+		{"LOCAL_ONLY", CloudContextPrivacyLocalOnly},
+		{"bogus", CloudContextPrivacyFull}, // unknown values fall back to the safe default
+	}
+	for _, tc := range cases {
+		if got := (&AIConfig{CloudContextPrivacy: tc.in}).GetCloudContextPrivacy(); got != tc.want {
+			t.Fatalf("GetCloudContextPrivacy(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestNormalizeCloudContextPrivacy(t *testing.T) {
+	cases := []struct {
+		in        string
+		want      string
+		wantValid bool
+	}{
+		{"", CloudContextPrivacyFull, true},
+		{"full", CloudContextPrivacyFull, true},
+		{"redacted", CloudContextPrivacyRedacted, true},
+		{"local_only", CloudContextPrivacyLocalOnly, true},
+		{"  FULL  ", CloudContextPrivacyFull, true},
+		{"nonsense", CloudContextPrivacyFull, false},
+	}
+	for _, tc := range cases {
+		got, valid := NormalizeCloudContextPrivacy(tc.in)
+		if got != tc.want || valid != tc.wantValid {
+			t.Fatalf("NormalizeCloudContextPrivacy(%q) = (%q, %v), want (%q, %v)", tc.in, got, valid, tc.want, tc.wantValid)
+		}
+	}
+}
+
 func TestEffectiveControlLevelForEntitlement(t *testing.T) {
 	tests := []struct {
 		name              string
@@ -950,6 +1003,9 @@ func TestNewDefaultAIConfig(t *testing.T) {
 	}
 	if !config.PatrolAnomalyTriggersEnabled {
 		t.Error("Default anomaly-triggered patrols should be enabled")
+	}
+	if config.CloudContextPrivacy != CloudContextPrivacyFull {
+		t.Errorf("Default cloud context privacy should be %q, got %q", CloudContextPrivacyFull, config.CloudContextPrivacy)
 	}
 }
 

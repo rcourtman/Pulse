@@ -23,7 +23,13 @@ import { hasFeature, loadRuntimeCapabilities } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { notificationStore } from '@/stores/notifications';
-import type { AISettings as AISettingsType, AIProvider, AuthMethod, ModelInfo } from '@/types/ai';
+import type {
+  AISettings as AISettingsType,
+  AIProvider,
+  AuthMethod,
+  CloudContextPrivacy,
+  ModelInfo,
+} from '@/types/ai';
 import { normalizeAIControlLevel, type AIControlLevel } from '@/utils/aiControlLevelPresentation';
 import { getAIProviderDisplayName, getProviderFromModelId } from '@/utils/aiProviderPresentation';
 import {
@@ -303,7 +309,7 @@ export const useAISettingsState = () => {
     protectedGuests: '' as string,
     discoveryEnabled: false,
     discoveryIntervalHours: 0,
-    shareOperationalContextWithCloud: false,
+    cloudContextPrivacy: 'full' as CloudContextPrivacy,
   });
 
   const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
@@ -379,7 +385,7 @@ export const useAISettingsState = () => {
         protectedGuests: '',
         discoveryEnabled: false,
         discoveryIntervalHours: 0,
-        shareOperationalContextWithCloud: false,
+        cloudContextPrivacy: 'full' as CloudContextPrivacy,
       });
       return;
     }
@@ -412,7 +418,7 @@ export const useAISettingsState = () => {
       protectedGuests: Array.isArray(data.protected_guests) ? data.protected_guests.join(', ') : '',
       discoveryEnabled: data.discovery_enabled ?? false,
       discoveryIntervalHours: data.discovery_interval_hours ?? 0,
-      shareOperationalContextWithCloud: data.share_operational_context_with_cloud ?? false,
+      cloudContextPrivacy: data.cloud_context_privacy ?? 'full',
     });
 
     const configured = new Set<AIProvider>();
@@ -884,7 +890,7 @@ export const useAISettingsState = () => {
 
       payload.discovery_enabled = form.discoveryEnabled;
       payload.discovery_interval_hours = form.discoveryIntervalHours;
-      payload.share_operational_context_with_cloud = form.shareOperationalContextWithCloud;
+      payload.cloud_context_privacy = form.cloudContextPrivacy;
 
       const updated = await AIAPI.updateSettings(payload);
       setSettings(updated);

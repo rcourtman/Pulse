@@ -518,16 +518,17 @@ not a replacement status card, CTA band, or page-local nested card.
    apply controlled `value` props after options are mounted so settings panels
    such as workload discovery show the persisted option instead of falling back
    to the first option while the collapsed summary shows a different value.
-   The Assistant runtime-control toggles in
-   `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx` —
-   workload discovery and the `Share operational context with cloud models`
-   cloud operational-context opt-in — are settings-shell chrome bound to the
-   canonical `useAISettingsState` form and `/api/settings/ai` payload, not
-   local browser state. Each must bind its shared `Toggle` to a
-   `state.form.*` field, round-trip through the field-by-field settings payload
-   (the cloud opt-in's `share_operational_context_with_cloud` mirrors
-   `discovery_enabled` and defaults off), and source its label, help, and
-   summary copy from
+   The Assistant runtime controls in
+   `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx` — the
+   workload discovery `Toggle` and the `Cloud model privacy` 3-option dial — are
+   settings-shell chrome bound to the canonical `useAISettingsState` form and
+   `/api/settings/ai` payload, not local browser state. Each must bind to a
+   `state.form.*` field and round-trip through the field-by-field settings
+   payload: discovery via its `Toggle`, and cloud model privacy via the shared
+   `FormSelect` primitive bound to `state.form.cloudContextPrivacy` and the
+   `cloud_context_privacy` payload field (which mirrors `discovery_enabled`'s
+   field-by-field round-trip and defaults to `full`). Both must source their
+   label, help, option, and summary copy from
    `frontend-modern/src/utils/aiSettingsPresentation.ts` rather than inlining
    strings or reaching for a bespoke fetch outside the canonical payload.
 3. Add feature-specific presentation only when no shared primitive should own it.

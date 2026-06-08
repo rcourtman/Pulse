@@ -664,12 +664,16 @@ payload shape change when the portal presents compact client rows.
 	then pacing the first backend `workflow_state` long enough for browser proof
 	to verify immediate visible activity without opening a provider request.
 34. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
-    The AI settings payload on `/api/settings/ai` round-trips
-    `share_operational_context_with_cloud` field-by-field alongside
-    `discovery_enabled`: the settings response always serializes the boolean
-    (no `omitempty`) so the operator UI can bind a toggle to its concrete
-    value, the update request carries it as an optional `*bool`, and an omitted
-    field leaves the persisted opt-in unchanged rather than resetting it.
+    The AI settings payload on `/api/settings/ai` round-trips the
+    `cloud_context_privacy` dial field-by-field alongside `discovery_enabled`:
+    the settings response always serializes the string (no `omitempty`) so the
+    operator UI can bind a 3-option control to its concrete value, the update
+    request carries it as an optional `*string` validated against the
+    `full`/`redacted`/`local_only` set (unknown values are rejected with 400),
+    and an omitted field leaves the persisted dial unchanged rather than
+    resetting it. The dial supersedes the legacy
+    `share_operational_context_with_cloud` boolean, which the handler keeps in
+    sync (`full` → true, otherwise false) and still serializes for back-compat.
     Legacy Assistant SSE routes in this handler that still use the older
     execute envelope, including `/api/ai/execute/stream` and
     `/api/ai/investigate-alert`, must preserve their existing top-level

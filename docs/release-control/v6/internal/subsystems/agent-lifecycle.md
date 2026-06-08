@@ -1662,10 +1662,11 @@ Visible `stream_idle` workflow progress on that same legacy Assistant SSE
 route, and on `/api/ai/execute/stream`, is likewise Assistant/API transport
 liveness only. It must not be reused as agent heartbeat, enrollment progress,
 installer status, command websocket liveness, or fleet freshness evidence.
-The `/api/settings/ai` `share_operational_context_with_cloud` opt-in is an
-Assistant privacy/runtime setting governing whether PII-free operational
-context reaches cloud models; it is not agent enrollment config, installer
-readiness, command reachability, or any fleet-control capability signal.
+The `/api/settings/ai` `cloud_context_privacy` dial (and the legacy
+`share_operational_context_with_cloud` boolean it supersedes) is an Assistant
+privacy/runtime setting governing how much infrastructure context reaches cloud
+models; it is not agent enrollment config, installer readiness, command
+reachability, or any fleet-control capability signal.
 Patrol finding chat handoffs follow the same ownership split: when
 `/api/ai/chat` resolves a `finding_id` into model-only Patrol briefing,
 resource, or action context, the backend-enforced `autonomous_mode:false`

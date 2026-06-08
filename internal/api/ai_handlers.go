@@ -2308,6 +2308,11 @@ type AISettingsResponse struct {
 	// resource-specific guidance. Identifying fields stay redacted; local
 	// (Ollama) models always receive full context regardless of this flag.
 	ShareOperationalContextWithCloud bool `json:"share_operational_context_with_cloud"`
+	// Cloud context privacy dial - the canonical control for what infrastructure
+	// context cloud models may see: "full" (default), "redacted", or "local_only".
+	// Always serialized so the operator UI binds a 3-option control to the
+	// concrete value. Local (Ollama) models always receive full context.
+	CloudContextPrivacy string `json:"cloud_context_privacy"`
 	// Current Patrol runtime readiness after this settings snapshot is applied.
 	PatrolReadiness *PatrolReadinessResponse `json:"patrol_readiness,omitempty"`
 	// Most recent Patrol tool-call preflight outcome, surfaced so the UI
@@ -2407,6 +2412,11 @@ type AISettingsUpdateRequest struct {
 	// Cloud operational-context sharing - opt in to share PII-free operational
 	// context for governed resources with cloud models (nil = don't update).
 	ShareOperationalContextWithCloud *bool `json:"share_operational_context_with_cloud,omitempty"`
+	// Cloud context privacy dial - canonical control for cloud model context
+	// ("full" | "redacted" | "local_only"; nil = don't update). When provided it
+	// supersedes share_operational_context_with_cloud and the handler keeps that
+	// legacy flag in sync (full -> true, redacted/local_only -> false).
+	CloudContextPrivacy *string `json:"cloud_context_privacy,omitempty"`
 }
 
 // AssistantEnabled reports whether the Pulse Assistant affordance should be
@@ -2535,6 +2545,7 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		DiscoveryEnabled:                 settings.IsDiscoveryEnabled(),
 		DiscoveryIntervalHours:           settings.DiscoveryIntervalHours,
 		ShareOperationalContextWithCloud: settings.ShouldShareOperationalContextWithCloud(),
+		CloudContextPrivacy:              settings.GetCloudContextPrivacy(),
 		PatrolPreflight:                  cachedPatrolPreflightSnapshot(aiService),
 		PatrolReadiness:                  ptrToPatrolReadiness(h.buildPatrolReadiness(ctx, aiService, h.getPatrolService(ctx) != nil)),
 	}.NormalizeCollections()
@@ -2865,6 +2876,23 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.ShareOperationalContextWithCloud = *req.ShareOperationalContextWithCloud
 	}
 
+	// Handle the cloud context privacy dial (nil = don't update). When provided it
+	// is the canonical control and supersedes share_operational_context_with_cloud:
+	// the handler keeps the legacy flag (still read by the redaction seam until the
+	// dial is wired into the seam directly) in sync so behavior tracks the dial's
+	// full/redacted axis. The dial's deeper semantics (real identifiers on "full",
+	// dropping all infra context on "local_only") land in privacy-redesign
+	// increment 2; here local_only conservatively maps to the redacted seam state.
+	if req.CloudContextPrivacy != nil {
+		normalized, valid := config.NormalizeCloudContextPrivacy(*req.CloudContextPrivacy)
+		if !valid {
+			http.Error(w, "invalid cloud_context_privacy: must be full, redacted, or local_only", http.StatusBadRequest)
+			return
+		}
+		settings.CloudContextPrivacy = normalized
+		settings.ShareOperationalContextWithCloud = normalized == config.CloudContextPrivacyFull
+	}
+
 	if aiSettingsRequireModelResolution(settings) {
 		resolvedModel, resolveErr := ai.ResolveConfiguredModel(r.Context(), settings)
 		if resolveErr != nil {
@@ -2993,6 +3021,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		DiscoveryEnabled:                 settings.DiscoveryEnabled,
 		DiscoveryIntervalHours:           settings.DiscoveryIntervalHours,
 		ShareOperationalContextWithCloud: settings.ShouldShareOperationalContextWithCloud(),
+		CloudContextPrivacy:              settings.GetCloudContextPrivacy(),
 		PatrolReadiness:                  ptrToPatrolReadiness(patrolReadiness),
 		PatrolPreflight:                  cachedPatrolPreflightSnapshot(aiService),
 	}.NormalizeCollections()

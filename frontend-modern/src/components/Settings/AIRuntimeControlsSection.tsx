@@ -1,5 +1,6 @@
-import { Component, Show } from 'solid-js';
+import { Component, For, Show } from 'solid-js';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
+import type { CloudContextPrivacy } from '@/types/ai';
 import type { AIControlLevel } from '@/utils/aiControlLevelPresentation';
 import type { AISettingsState } from '@/components/Settings/useAISettingsState';
 import { HelpIcon } from '@/components/shared/HelpIcon';
@@ -14,9 +15,10 @@ import {
 } from '@/utils/aiControlLevelPresentation';
 import {
   AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE,
-  AI_SETTINGS_CLOUD_CONTEXT_SHARING_LABEL,
-  getAISettingsCloudContextSharingHelpContent,
-  getAISettingsCloudContextSharingSummary,
+  AI_SETTINGS_CLOUD_CONTEXT_PRIVACY_LABEL,
+  getAISettingsCloudContextPrivacyHelpContent,
+  getAISettingsCloudContextPrivacyOptions,
+  getAISettingsCloudContextPrivacySummary,
   getAISettingsWorkloadDiscoveryHelpContent,
   getAISettingsWorkloadDiscoverySummary,
 } from '@/utils/aiSettingsPresentation';
@@ -157,20 +159,30 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
       </div>
 
       <div class="space-y-2 p-3 rounded-md border border-border bg-surface-alt">
-        <div class="flex items-center justify-between gap-2">
-          <label class="text-xs font-medium text-base-content flex items-center gap-1.5">
-            {AI_SETTINGS_CLOUD_CONTEXT_SHARING_LABEL}
-            <HelpIcon inline={getAISettingsCloudContextSharingHelpContent()} size="xs" />
-          </label>
-          <Toggle
-            checked={state.form.shareOperationalContextWithCloud}
-            onChange={(event) =>
-              state.setForm('shareOperationalContextWithCloud', event.currentTarget.checked)
-            }
-            disabled={state.saving()}
-          />
-        </div>
-        <p class="text-[10px] text-muted">{getAISettingsCloudContextSharingSummary().text}</p>
+        <FormSelect
+          id="ai-cloud-context-privacy-select"
+          label={
+            <span class="flex items-center gap-1.5">
+              {AI_SETTINGS_CLOUD_CONTEXT_PRIVACY_LABEL}
+              <HelpIcon inline={getAISettingsCloudContextPrivacyHelpContent()} size="xs" />
+            </span>
+          }
+          value={state.form.cloudContextPrivacy}
+          onChange={(e) =>
+            state.setForm('cloudContextPrivacy', e.currentTarget.value as CloudContextPrivacy)
+          }
+          disabled={state.saving()}
+          fieldBaseClass="flex flex-col gap-1.5"
+          labelClass="text-xs font-medium text-base-content"
+          selectBaseClass="min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded bg-surface"
+        >
+          <For each={getAISettingsCloudContextPrivacyOptions()}>
+            {(option) => <option value={option.value}>{option.label}</option>}
+          </For>
+        </FormSelect>
+        <p class="text-[10px] text-muted">
+          {getAISettingsCloudContextPrivacySummary(state.form.cloudContextPrivacy).text}
+        </p>
       </div>
 
       <div class="flex items-center gap-3 p-3 rounded-md border border-border bg-surface-alt">

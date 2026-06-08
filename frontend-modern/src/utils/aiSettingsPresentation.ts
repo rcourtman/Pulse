@@ -1,3 +1,5 @@
+import type { CloudContextPrivacy } from '@/types/ai';
+
 export interface AISettingsReadinessPresentation {
   containerClassName: string;
   dotClassName: string;
@@ -54,21 +56,61 @@ export function getAISettingsWorkloadDiscoverySummary() {
   } as const;
 }
 
-export const AI_SETTINGS_CLOUD_CONTEXT_SHARING_LABEL =
-  'Share operational context with cloud models';
+export const AI_SETTINGS_CLOUD_CONTEXT_PRIVACY_LABEL = 'Cloud model privacy';
 
-export function getAISettingsCloudContextSharingHelpContent() {
+export function getAISettingsCloudContextPrivacyHelpContent() {
   return {
-    title: 'Sharing operational context with cloud models',
+    title: 'What cloud models can see',
     description:
-      'When on, Pulse shares PII-free operational context — access commands, config/data/log paths, and port numbers for discovered services — with cloud models (Anthropic, OpenAI, etc.) so the Assistant can give resource-specific guidance instead of generic advice. Identifying fields (hostnames, IP addresses, aliases, platform IDs) always stay redacted. Default off. Local Ollama models always receive full context regardless of this setting.',
+      'When the Assistant runs on a cloud model (Anthropic, OpenAI, OpenRouter, and similar), this dial controls how much of your real infrastructure it includes in the request. Local models (Ollama) always receive full context regardless of this setting. Most self-hosted setups keep this on Full so the Assistant can answer with real detail; raise the privacy level if you would rather limit what leaves your network.',
   } as const;
 }
 
-export function getAISettingsCloudContextSharingSummary() {
-  return {
-    text: 'Off by default: cloud models receive a terse redacted summary, so Assistant answers stay generic on cloud routes. Turning this on shares cloud-safe operational details (commands, paths, ports) while hostnames, IPs, and aliases remain redacted.',
-  } as const;
+export interface AISettingsCloudContextPrivacyOption {
+  value: CloudContextPrivacy;
+  label: string;
+  description: string;
+}
+
+export function getAISettingsCloudContextPrivacyOptions(): readonly AISettingsCloudContextPrivacyOption[] {
+  return [
+    {
+      value: 'full',
+      label: 'Full — answer with real detail',
+      description:
+        'Cloud models receive your infrastructure context so the Assistant gives resource-specific answers instead of generic advice. Best for a private, self-hosted Pulse.',
+    },
+    {
+      value: 'redacted',
+      label: 'Redacted — hide identifying detail',
+      description:
+        'Cloud models receive operational context like service commands, paths, and ports, but identifying details such as hostnames, IP addresses, and aliases are removed before the request leaves Pulse.',
+    },
+    {
+      value: 'local_only',
+      label: 'Local only — send nothing to cloud',
+      description:
+        'Cloud models receive no infrastructure context. Switch the Assistant to a local model to get resource-specific answers.',
+    },
+  ] as const;
+}
+
+export function getAISettingsCloudContextPrivacySummary(value: CloudContextPrivacy) {
+  switch (value) {
+    case 'redacted':
+      return {
+        text: 'Cloud models get cloud-safe operational details (commands, paths, ports); hostnames, IP addresses, and aliases are redacted.',
+      } as const;
+    case 'local_only':
+      return {
+        text: 'No infrastructure context is sent to cloud models. Use a local model for resource-specific answers.',
+      } as const;
+    case 'full':
+    default:
+      return {
+        text: 'Cloud models receive your infrastructure context so answers stay specific. Choose Redacted or Local only to limit what leaves Pulse.',
+      } as const;
+  }
 }
 
 export function getAISettingsSetupDialogPresentation(): AISettingsSetupDialogPresentation {

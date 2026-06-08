@@ -101,43 +101,56 @@ deriving an older display status from `workflowStatusHistory`.
    and `internal/ai/providers/ollama.go` is the only layer that turns it into
    the Ollama `keep_alive` request field. An empty configured value means
    Pulse omits `keep_alive` so the Ollama server default applies.
-   Cloud operational-context sharing is a runtime privacy option owned by this
-   path: `internal/config/ai.go` stores
-   `AIConfig.ShareOperationalContextWithCloud` (default false, surfaced through
-   `ShouldShareOperationalContextWithCloud`). The default keeps governed
-   resources reduced to the terse policy redaction on cloud-routed turns, which
-   is correct for privacy but leaves the Assistant unable to give
-   resource-specific guidance on cloud models. When the operator opts in AND the
-   turn routes to an external provider, governed-resource context built in
-   `internal/ai/chat/context_prefetch.go` must carry the PII-free operational
-   context from `servicediscovery.FormatCloudSafeContext` (service identity,
-   access command, config/data/log paths, port numbers) in place of the terse
-   governed summary, and the model-bound resource-policy sanitizer in
+   Cloud context privacy is a runtime privacy option owned by this path. The
+   canonical operator control is the `cloud_context_privacy` dial in
+   `internal/config/ai.go` (`AIConfig.CloudContextPrivacy`, normalized through
+   `GetCloudContextPrivacy` / `NormalizeCloudContextPrivacy`) with three levels:
+   `full` (default), `redacted`, and `local_only`. It supersedes the legacy
+   boolean `AIConfig.ShareOperationalContextWithCloud`
+   (`ShouldShareOperationalContextWithCloud`), which is retained only as the
+   field the redaction seam still reads until the dial is wired into the seam
+   directly (privacy-redesign increment 2). `/api/settings/ai` keeps the legacy
+   boolean in sync with the dial (`full` → true, `redacted`/`local_only` →
+   false), and `internal/config` config load migrates the dial out of the legacy
+   boolean for pre-dial configs (legacy on → `full`, off/absent → `redacted`)
+   without mutating the boolean, so existing installs keep their current cloud
+   behavior. A fresh install defaults to `full` so a self-hosted Pulse answers
+   with real resource detail out of the box.
+   The redaction seam behavior is unchanged by the dial's introduction. When
+   sharing is on AND the turn routes to an external provider, governed-resource
+   context built in `internal/ai/chat/context_prefetch.go` must carry the PII-free
+   operational context from `servicediscovery.FormatCloudSafeContext` (service
+   identity, access command, config/data/log paths, port numbers) in place of the
+   terse governed summary, and the model-bound resource-policy sanitizer in
    `internal/ai/chat/service.go` must allow-list those exact spans via
    `modelboundary.AllowResourcePolicyText` so they are not re-stripped at the
    provider boundary. Genuinely identifying fields — hostname, IP, bind address,
    alias, and platform ID — must never be emitted by that cloud-safe path and
-   stay redacted regardless of the opt-in. Local (Ollama) routing is unaffected
-   and always receives full context. Transparency is mandatory: when governed
-   operational context is withheld because a cloud turn has sharing off,
+   stay redacted regardless of the dial. Local (Ollama) routing is unaffected and
+   always receives full context. Transparency is mandatory: when governed
+   operational context is withheld because a cloud turn is not on `full`,
    `context_prefetch.go` must instruct the Assistant to disclose the redaction in
-   its reply and point at the `Share operational context with cloud models`
-   setting, rather than silently degrading the answer.
-   The opt-in must be operator-reachable, not config-file-only. `/api/settings/ai`
-   round-trips `share_operational_context_with_cloud` field-by-field exactly like
+   its reply and point at the `Cloud model privacy` setting, rather than silently
+   degrading the answer.
+   The dial must be operator-reachable, not config-file-only. `/api/settings/ai`
+   round-trips `cloud_context_privacy` field-by-field exactly like
    `discovery_enabled`: `internal/api/ai_handlers.go` always serializes the
-   current value on the settings response from
-   `settings.ShouldShareOperationalContextWithCloud()` (no `omitempty`, so a
-   toggle can bind to the concrete boolean) and applies the optional request
-   `*bool` on update, leaving the persisted opt-in untouched when the field is
-   omitted. The operator surface is the `Share operational context with cloud
-   models` toggle in the Assistant runtime controls
+   current value on the settings response from `settings.GetCloudContextPrivacy()`
+   (no `omitempty`, so a 3-option control can bind to the concrete value),
+   validates the optional request `*string` against
+   `config.NormalizeCloudContextPrivacy` (rejecting unknown values with 400),
+   leaves the persisted dial untouched when the field is omitted, and syncs the
+   legacy boolean from the chosen level. The operator surface is the `Cloud model
+   privacy` 3-option control in the Assistant runtime controls
    (`frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx`),
-   bound to the canonical `useAISettingsState` form and the
-   `frontend-modern/src/api/ai.ts` `AISettings` / `AISettingsUpdateRequest`
-   payload contract. The toggle defaults off, carries the PII-free scope and
-   Ollama-always-full-context caveats in its help copy
-   (`getAISettingsCloudContextSharingHelpContent` in
+   bound to the canonical `useAISettingsState` form and the `AISettings` /
+   `AISettingsUpdateRequest` payload contract in
+   `frontend-modern/src/types/ai.ts` (consumed by
+   `frontend-modern/src/api/ai.ts`). The dial defaults to `full`, carries the
+   privacy-level and Ollama-always-full-context caveats in its help and per-option
+   copy (`getAISettingsCloudContextPrivacyHelpContent` /
+   `getAISettingsCloudContextPrivacyOptions` /
+   `getAISettingsCloudContextPrivacySummary` in
    `frontend-modern/src/utils/aiSettingsPresentation.ts`), and must not be
    reimplemented as a local-only browser flag or a bespoke fetch outside the
    canonical settings payload.

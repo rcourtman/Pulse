@@ -577,6 +577,110 @@ func TestAISettingsHandler_ShareOperationalContextWithCloud_RoundTrip(t *testing
 	}
 }
 
+func TestAISettingsHandler_CloudContextPrivacy_RoundTrip(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	getSettings := func(t *testing.T) AISettingsResponse {
+		t.Helper()
+		req := newLoopbackRequest(http.MethodGet, "/api/settings/ai", nil)
+		rec := httptest.NewRecorder()
+		handler.HandleGetAISettings(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		// The dial is always serialized (no omitempty) so the operator UI can bind
+		// a 3-option control to its concrete value.
+		if !strings.Contains(rec.Body.String(), `"cloud_context_privacy":`) {
+			t.Fatalf("expected cloud_context_privacy in GET body, got %s", rec.Body.String())
+		}
+		var resp AISettingsResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		return resp
+	}
+
+	updateSettings := func(t *testing.T, req AISettingsUpdateRequest) (AISettingsResponse, int) {
+		t.Helper()
+		body, _ := json.Marshal(req)
+		httpReq := newLoopbackRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		handler.HandleUpdateAISettings(rec, httpReq)
+		var resp AISettingsResponse
+		if rec.Code == http.StatusOK {
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+		}
+		return resp, rec.Code
+	}
+
+	// A fresh install defaults to the "full" posture.
+	if got := getSettings(t).CloudContextPrivacy; got != config.CloudContextPrivacyFull {
+		t.Fatalf("expected default cloud_context_privacy=full, got %q", got)
+	}
+
+	// Selecting "redacted" persists and syncs the legacy share flag off (the
+	// redaction seam still reads it until the dial is wired into the seam directly).
+	resp, code := updateSettings(t, AISettingsUpdateRequest{
+		Enabled:             ptr(true),
+		Model:               ptr("ollama:llama3"),
+		OllamaBaseURL:       ptr("http://localhost:11434"),
+		CloudContextPrivacy: ptr(config.CloudContextPrivacyRedacted),
+	})
+	if code != http.StatusOK {
+		t.Fatalf("PUT redacted status = %d", code)
+	}
+	if resp.CloudContextPrivacy != config.CloudContextPrivacyRedacted {
+		t.Fatalf("expected response cloud_context_privacy=redacted, got %q", resp.CloudContextPrivacy)
+	}
+	if resp.ShareOperationalContextWithCloud {
+		t.Fatalf("expected redacted to sync legacy share flag off")
+	}
+	if got := getSettings(t); got.CloudContextPrivacy != config.CloudContextPrivacyRedacted || got.ShareOperationalContextWithCloud {
+		t.Fatalf("expected persisted redacted + share off, got %+v", got)
+	}
+
+	// "full" persists and syncs the legacy share flag on.
+	resp, code = updateSettings(t, AISettingsUpdateRequest{CloudContextPrivacy: ptr(config.CloudContextPrivacyFull)})
+	if code != http.StatusOK {
+		t.Fatalf("PUT full status = %d", code)
+	}
+	if resp.CloudContextPrivacy != config.CloudContextPrivacyFull || !resp.ShareOperationalContextWithCloud {
+		t.Fatalf("expected full + share on, got %+v", resp)
+	}
+
+	// "local_only" persists and (until increment 2) maps the legacy seam to off.
+	resp, code = updateSettings(t, AISettingsUpdateRequest{CloudContextPrivacy: ptr(config.CloudContextPrivacyLocalOnly)})
+	if code != http.StatusOK {
+		t.Fatalf("PUT local_only status = %d", code)
+	}
+	if resp.CloudContextPrivacy != config.CloudContextPrivacyLocalOnly || resp.ShareOperationalContextWithCloud {
+		t.Fatalf("expected local_only + share off, got %+v", resp)
+	}
+
+	// Omitting the field leaves the persisted dial untouched.
+	resp, code = updateSettings(t, AISettingsUpdateRequest{Model: ptr("ollama:llama3")})
+	if code != http.StatusOK {
+		t.Fatalf("PUT omitted status = %d", code)
+	}
+	if resp.CloudContextPrivacy != config.CloudContextPrivacyLocalOnly {
+		t.Fatalf("expected omitted field to preserve local_only, got %q", resp.CloudContextPrivacy)
+	}
+
+	// An unrecognized value is rejected rather than silently coerced.
+	_, code = updateSettings(t, AISettingsUpdateRequest{CloudContextPrivacy: ptr("bogus")})
+	if code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid cloud_context_privacy, got %d", code)
+	}
+}
+
 func TestAISettingsHandler_GetSettingsClampsPaidControlsToEntitlements(t *testing.T) {
 	t.Parallel()
 
