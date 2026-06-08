@@ -65,6 +65,7 @@ export function SlashCommandAutocomplete(props: SlashCommandAutocompleteProps) {
   const commands = createMemo(() =>
     filterAssistantSlashCommands(props.query, undefined, {
       availability: props.availability,
+      includeDisabled: true,
     }),
   );
   const groupedCommands = createMemo(() => groupAssistantSlashCommands(commands()));
@@ -174,10 +175,21 @@ export function SlashCommandAutocomplete(props: SlashCommandAutocompleteProps) {
                           type="button"
                           role="option"
                           aria-selected={item.index === selectedIndex()}
+                          aria-disabled={command.disabled ? 'true' : undefined}
                           aria-label={`${
-                            command.insertText ? 'Insert' : 'Run'
-                          } /${command.name}: ${command.description}`}
-                          class={`flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors hover:bg-surface-hover ${
+                            command.disabled
+                              ? 'Unavailable'
+                              : command.insertText
+                                ? 'Insert'
+                                : 'Run'
+                          } /${command.name}: ${command.description}${
+                            command.disabledReason ? `. ${command.disabledReason}` : ''
+                          }`}
+                          class={`flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors ${
+                            command.disabled
+                              ? 'cursor-not-allowed opacity-60'
+                              : 'hover:bg-surface-hover'
+                          } ${
                             item.index === selectedIndex() ? 'bg-surface-hover' : ''
                           }`}
                           onClick={(event) => {
@@ -206,6 +218,11 @@ export function SlashCommandAutocomplete(props: SlashCommandAutocompleteProps) {
                             <span class="mt-0.5 block truncate text-xs text-muted">
                               {command.description}
                             </span>
+                            <Show when={command.disabledReason}>
+                              <span class="mt-1 block truncate text-[11px] text-warning">
+                                {command.disabledReason}
+                              </span>
+                            </Show>
                           </span>
                         </button>
                       );

@@ -160,7 +160,7 @@ describe('SlashCommandAutocomplete', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders an empty state when visible command search has no enabled options', () => {
+  it('renders disabled matching commands with the unavailable reason', () => {
     render(() => (
       <SlashCommandAutocomplete
         availability={{
@@ -178,8 +178,12 @@ describe('SlashCommandAutocomplete', () => {
     ));
 
     expect(screen.getByRole('listbox', { name: 'Assistant commands' })).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('No Assistant commands match /compact');
-    expect(screen.queryByRole('option', { name: /\/compact/ })).not.toBeInTheDocument();
+    const option = screen.getByRole('option', {
+      name: /Unavailable \/compact: Summarize older turns and keep this session moving\. Requires transcript content\./,
+    });
+    expect(option).toHaveAttribute('aria-disabled', 'true');
+    expect(option).toHaveTextContent('Requires transcript content.');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   it('consumes selection keys without selecting when no commands match', () => {

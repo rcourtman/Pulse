@@ -1826,14 +1826,18 @@ describe('AIChat', () => {
       });
     });
 
-    it('omits unavailable session commands from slash suggestions', () => {
+    it('shows unavailable session commands with their disabled reason', () => {
       renderChat();
       const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
 
       fireEvent.input(textarea, { target: { value: '/compact' } });
 
-      expect(screen.queryByRole('listbox', { name: 'Assistant commands' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('option', { name: /Run \/compact/ })).not.toBeInTheDocument();
+      expect(screen.getByRole('listbox', { name: 'Assistant commands' })).toBeInTheDocument();
+      const option = screen.getByRole('option', {
+        name: /Unavailable \/compact: Summarize older turns and keep this session moving\. Requires a saved Assistant session\./,
+      });
+      expect(option).toHaveAttribute('aria-disabled', 'true');
+      expect(option).toHaveTextContent('Requires a saved Assistant session.');
     });
 
     it('keeps unknown slash command searches open without sending a provider prompt', () => {

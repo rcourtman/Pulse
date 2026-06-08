@@ -168,7 +168,6 @@ import {
 } from './assistantModelRoutes';
 import {
   type AssistantSlashCommandAvailability,
-  filterAssistantSlashCommands,
   parseAssistantSlashCommandInput,
   type AssistantSlashCommand,
   type AssistantSlashCommandAction,
@@ -3203,21 +3202,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
     ) {
       const query = textBeforeCursor.slice(1);
       setSlashCommandQuery(query);
-      const hasEnabledMatches =
-        filterAssistantSlashCommands(query, 1, {
-          availability: assistantCommandAvailability(),
-        }).length > 0;
-      const hasAnyMatches =
-        filterAssistantSlashCommands(query, 1, {
-          availability: assistantCommandAvailability(),
-          includeDisabled: true,
-        }).length > 0;
-      const shouldShowSlashCommands = hasEnabledMatches || !hasAnyMatches;
-      setSlashCommandActive(shouldShowSlashCommands);
-      if (shouldShowSlashCommands) {
-        setMentionActive(false);
-      }
-      return shouldShowSlashCommands;
+      setSlashCommandActive(true);
+      setMentionActive(false);
+      return true;
     }
 
     setSlashCommandActive(false);
