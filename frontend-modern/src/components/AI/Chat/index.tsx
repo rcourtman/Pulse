@@ -75,7 +75,6 @@ import {
   AI_CHAT_FORK_SESSION_LOADING_MESSAGE,
   AI_CHAT_FORK_SESSION_SUCCESS_MESSAGE,
   AI_CHAT_INPUT_PLACEHOLDER,
-  AI_CHAT_LAST_TURN_USAGE_LABEL,
   AI_CHAT_NEW_SESSION_BUTTON_TITLE,
   AI_CHAT_NEW_SESSION_MENU_ARIA_LABEL,
   AI_CHAT_NEW_SESSION_MENU_LABEL,
@@ -134,6 +133,7 @@ import {
 import { normalizeChatMentionKeyPart } from '@/utils/chatIdentifiers';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import { copyToClipboard } from '@/utils/clipboard';
+import { getAssistantTurnSummary } from './assistantTurnSummary';
 import {
   getPreferredResourceDisplayName,
   getPreferredResourceHostname,
@@ -255,11 +255,6 @@ interface ComposerDraftStash {
   restoredPromptDraft: RestoredPromptDraft | null;
 }
 
-interface AssistantUsageSummary {
-  label: string;
-  title: string;
-}
-
 interface TranscriptCopyFallback {
   generatedAt: Date;
   transcript: string;
@@ -296,35 +291,6 @@ const compactText = (items: Array<string | undefined>): string[] =>
 
 const pluralizeCount = (count: number, singular: string, plural: string) =>
   `${count} ${count === 1 ? singular : plural}`;
-
-const tokenNumberFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
-
-const normalizeAssistantTokenCount = (value: number | undefined): number => {
-  if (!Number.isFinite(value) || !value || value < 0) return 0;
-  return Math.floor(value);
-};
-
-const formatAssistantTokenCount = (count: number): string => tokenNumberFormat.format(count);
-
-const getAssistantUsageSummary = (message: ChatMessage): AssistantUsageSummary | null => {
-  if (message.role !== 'assistant' || message.isStreaming) return null;
-  const input = normalizeAssistantTokenCount(message.tokens?.input);
-  const output = normalizeAssistantTokenCount(message.tokens?.output);
-  if (output <= 0) return null;
-
-  const total = input + output;
-  const totalLabel = `${formatAssistantTokenCount(total)} ${total === 1 ? 'token' : 'tokens'}`;
-  const titleDetail = [
-    `${formatAssistantTokenCount(total)} total`,
-    `${formatAssistantTokenCount(input)} input`,
-    `${formatAssistantTokenCount(output)} output`,
-  ].join(', ');
-
-  return {
-    label: `Last turn: ${totalLabel}`,
-    title: `${AI_CHAT_LAST_TURN_USAGE_LABEL}: ${titleDetail}`,
-  };
-};
 
 const normalizePromptHistoryEntry = (value: unknown): PromptHistoryEntry | null => {
   if (!value || typeof value !== 'object') return null;
@@ -2475,11 +2441,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
       ]).join('. '),
     };
   });
-  const lastAssistantUsage = createMemo(() => {
+  const lastAssistantTurnSummary = createMemo(() => {
     const messages = chat.messages();
     for (let index = messages.length - 1; index >= 0; index -= 1) {
-      const usage = getAssistantUsageSummary(messages[index]);
-      if (usage) return usage;
+      const summary = getAssistantTurnSummary(messages[index], {
+        getModelRouteLabel: formatChatMessageModelRoute,
+      });
+      if (summary) return summary;
     }
     return null;
   });
@@ -4917,14 +4885,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 </div>
               </div>
 
-              <Show when={lastAssistantUsage()}>
-                {(usage) => (
+              <Show when={lastAssistantTurnSummary()}>
+                {(summary) => (
                   <div
-                    class="flex h-5 min-w-0 items-center justify-end self-end text-[10px] font-medium text-muted sm:h-7 sm:max-w-[12rem] sm:shrink-0 sm:self-auto"
-                    aria-label={usage().title}
-                    title={usage().title}
+                    class="flex h-5 min-w-0 items-center justify-end self-end text-[10px] font-medium text-muted sm:h-7 sm:max-w-[14rem] sm:shrink-0 sm:self-auto"
+                    aria-label={summary().title}
+                    title={summary().title}
                   >
-                    <span class="truncate">{usage().label}</span>
+                    <span class="truncate">{summary().label}</span>
                   </div>
                 )}
               </Show>

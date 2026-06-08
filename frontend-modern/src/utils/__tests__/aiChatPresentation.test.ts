@@ -21,7 +21,7 @@ import {
   AI_CHAT_DRAWER_SUBTITLE,
   AI_CHAT_DRAWER_TITLE,
   AI_CHAT_LAUNCHER_ARIA_LABEL,
-  AI_CHAT_LAST_TURN_USAGE_LABEL,
+  AI_CHAT_LAST_TURN_SUMMARY_LABEL,
   AI_CHAT_MODEL_SELECTOR_EMPTY_STATE,
   AI_CHAT_NEW_SESSION_BUTTON_TITLE,
   AI_CHAT_NEW_SESSION_MENU_ARIA_LABEL,
@@ -116,7 +116,7 @@ describe('aiChatPresentation', () => {
     expect(AI_CHAT_QUESTION_CARD_TITLE).toBe('Pulse Assistant needs your input');
     expect(AI_CHAT_ASSISTANT_MESSAGE_LABEL).toBe('Pulse Assistant');
     expect(AI_CHAT_CONTEXT_USED_LABEL).toBe('Context used');
-    expect(AI_CHAT_LAST_TURN_USAGE_LABEL).toBe('Last assistant turn usage');
+    expect(AI_CHAT_LAST_TURN_SUMMARY_LABEL).toBe('Last assistant turn summary');
     expect(AI_CHAT_PROVIDER_READINESS_SETTINGS_HREF).toBe('/settings/system-ai');
     expect(AI_CHAT_PROVIDER_READINESS_SETTINGS_LABEL).toBe('Open settings');
     expect(AI_CHAT_PROVIDER_READINESS_RETRY_LABEL).toBe('Retry');

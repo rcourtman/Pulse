@@ -1515,8 +1515,9 @@ deriving an older display status from `workflowStatusHistory`.
    The session route injects that prompt through
    `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx`
    `session_prompt` lines 1313-1333. Pulse adapts that by keeping the active
-   model route selector, control-mode selector, and last-turn usage in composer
-   chrome while the drawer header stays limited to drawer/session commands.
+   model route selector, control-mode selector, and last-turn summary in
+   composer chrome while the drawer header stays limited to drawer/session
+   commands.
    Empty Assistant sessions are prompt-first transcript surfaces, not product
    marketing or instruction panels. The referenced OpenCode source at commit
    `9ed17da55ab1f7360cc0e01075f763e27fa899e9`
@@ -1536,20 +1537,23 @@ deriving an older display status from `workflowStatusHistory`.
    than token counts. Pulse Assistant rows adapt that by keeping visible token
    accounting out of the transcript while showing a compact completed-turn
    duration beside the effective model label once a turn reaches `done`,
-   `error`, or user interruption. Runtime token usage may surface in the
-   composer chrome instead: OpenCode commit
-   `9ed17da55ab1f7360cc0e01075f763e27fa899e9`
-   `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx` derives
-   prompt usage from the last assistant message with output tokens in `Prompt`
-   lines 246-264 and renders it in the prompt footer at lines 1652-1667. Pulse
-   adapts that source-backed contract by deriving the latest completed
-   `ChatMessage.tokens` with positive output tokens and rendering only the
-   backend-proven total token count as low-priority Assistant composer chrome.
-   The input/output split remains in the footer title/accessibility text, not
-   the visible transcript or composer copy, so shorthand such as `4358 in · 943
-   out` cannot read like assistant output. Cost and context-limit percentages
-   stay absent until the runtime exposes those values through a governed
-   contract.
+   `error`, or user interruption. Runtime token usage may surface in
+   low-priority composer chrome instead, but the completed-turn surface is a
+   route summary rather than a token counter: the referenced OpenCode source at
+   fetched `dev` commit `3867fa2bad0e644166e360e2e99cfe426fe71105` imports
+   `turnSummaryCommit` in
+   `packages/opencode/src/cli/cmd/run/scrollback.surface.ts` lines 19-20, and
+   `packages/opencode/src/cli/cmd/run/turn-summary.ts` lines 5-46 renders a
+   final system summary from agent, model, and duration. Pulse adapts that by
+   deriving the latest non-streaming assistant `ChatMessage`, rendering the
+   effective provider/model route, completed-turn duration, and backend-proven
+   total token count in the composer footer. The input/output split remains in
+   the footer title/accessibility text, not the visible transcript or composer
+   copy, so shorthand such as `4358 in · 943 out` cannot read like assistant
+   output. If provider usage is missing, the route and duration remain visible;
+   active streaming turns never become the completed-turn summary. Cost and
+   context-limit percentages stay absent until the runtime exposes those values
+   through a governed contract.
    Assistant tool activity is visible transcript activity, not a hidden context
    footer. The referenced OpenCode source at fetched `origin/dev` commit
    `e82542b8023a8374f29c23b70ec019c8f256354e`
@@ -2242,6 +2246,18 @@ Pulse adapts that by keeping same-route retry visible, ignoring obsolete
 provider route-switch metadata without changing the selected route, and labeling
 failed-turn or readiness recovery buttons as explicit route/model-route choices
 instead of implying automatic route adoption.
+
+Assistant completed-turn chrome is route-owned summary, not raw usage output.
+The OpenCode reference at fetched `dev` commit
+`3867fa2bad0e644166e360e2e99cfe426fe71105` imports `turnSummaryCommit` in
+`packages/opencode/src/cli/cmd/run/scrollback.surface.ts` lines 19-20, while
+`packages/opencode/src/cli/cmd/run/turn-summary.ts` lines 5-46 emits a final
+system summary with agent, model, and duration. Pulse adapts that by deriving
+the latest completed, non-streaming assistant turn and surfacing its effective
+provider/model route, duration, and backend-proven token total in low-priority
+composer chrome. Input/output usage remains title/accessibility detail only,
+missing provider usage does not hide route and duration, and active streaming
+turns never appear as the completed-turn summary.
 
 Assistant tool activity now follows an OpenCode-referenced chronological row
 model where appropriate for Pulse. Consecutive context/read/query tools render

@@ -5894,42 +5894,45 @@ describe('AIChat', () => {
     });
   });
 
-  // ── Last-turn usage footer ────────────────────────────────────────────────
+  // ── Last-turn summary footer ───────────────────────────────────────────────
 
-  describe('last-turn usage footer', () => {
-    it('shows completed assistant token usage in the composer chrome', () => {
+  describe('last-turn summary footer', () => {
+    it('shows completed assistant route, duration, and token usage in the composer chrome', () => {
       mockChat.messages.mockReturnValue([
         {
           id: 'asst-1',
           role: 'assistant' as const,
           content: 'Done.',
-          timestamp: new Date(),
-          completedAt: new Date(),
+          timestamp: new Date('2026-06-06T12:00:00Z'),
+          completedAt: new Date('2026-06-06T12:00:03Z'),
           isStreaming: false,
+          model: 'openrouter:qwen/qwen3.7-plus',
           tokens: { input: 500, output: 200 },
         },
       ]);
 
       renderChat();
 
-      const usage = screen.getByLabelText(/Last assistant turn usage/);
-      expect(usage).toHaveTextContent('Last turn: 700 tokens');
-      expect(usage).not.toHaveTextContent('500 in');
-      expect(usage).not.toHaveTextContent('200 out');
-      expect(usage).toHaveAttribute(
+      const summary = screen.getByLabelText(/Last assistant turn summary/);
+      expect(summary).toHaveTextContent(
+        'Last turn: Qwen: Qwen3.7 Plus via OpenRouter · 3s · 700 tokens',
+      );
+      expect(summary).not.toHaveTextContent('500 in');
+      expect(summary).not.toHaveTextContent('200 out');
+      expect(summary).toHaveAttribute(
         'title',
-        'Last assistant turn usage: 700 total, 500 input, 200 output',
+        'Last assistant turn summary: Model: Qwen: Qwen3.7 Plus via OpenRouter. Duration: 3s. Usage: 700 total, 500 input, 200 output',
       );
     });
 
-    it('uses the latest completed assistant turn with output tokens', () => {
+    it('uses the latest completed assistant turn and skips the active streaming turn', () => {
       mockChat.messages.mockReturnValue([
         {
           id: 'asst-1',
           role: 'assistant' as const,
           content: 'Earlier result.',
-          timestamp: new Date(),
-          completedAt: new Date(),
+          timestamp: new Date('2026-06-06T12:00:00Z'),
+          completedAt: new Date('2026-06-06T12:00:02Z'),
           isStreaming: false,
           tokens: { input: 100, output: 50 },
         },
@@ -5945,29 +5948,50 @@ describe('AIChat', () => {
 
       renderChat();
 
-      const usage = screen.getByLabelText(/Last assistant turn usage/);
-      expect(usage).toHaveTextContent('Last turn: 150 tokens');
-      expect(usage).not.toHaveTextContent('100 in');
-      expect(usage).not.toHaveTextContent('50 out');
-      expect(usage).not.toHaveTextContent('1,700 tokens');
+      const summary = screen.getByLabelText(/Last assistant turn summary/);
+      expect(summary).toHaveTextContent('Last turn: 2s · 150 tokens');
+      expect(summary).not.toHaveTextContent('100 in');
+      expect(summary).not.toHaveTextContent('50 out');
+      expect(summary).not.toHaveTextContent('1,700 tokens');
     });
 
-    it('does not show usage before an assistant turn has output tokens', () => {
+    it('still summarizes completed turns when token usage is missing', () => {
       mockChat.messages.mockReturnValue([
         {
           id: 'asst-1',
           role: 'assistant' as const,
-          content: '',
-          timestamp: new Date(),
-          completedAt: new Date(),
+          content: 'Done.',
+          timestamp: new Date('2026-06-06T12:00:00Z'),
+          completedAt: new Date('2026-06-06T12:00:05Z'),
           isStreaming: false,
+          model: 'deepseek:deepseek-chat',
           tokens: { input: 500, output: 0 },
         },
       ]);
 
       renderChat();
 
-      expect(screen.queryByLabelText(/Last assistant turn usage/)).not.toBeInTheDocument();
+      const summary = screen.getByLabelText(/Last assistant turn summary/);
+      expect(summary).toHaveTextContent('Last turn: DeepSeek: DeepSeek Chat · 5s');
+      expect(summary).not.toHaveTextContent('tokens');
+    });
+
+    it('does not show the summary for an active streaming turn', () => {
+      mockChat.messages.mockReturnValue([
+        {
+          id: 'asst-1',
+          role: 'assistant' as const,
+          content: 'Streaming.',
+          timestamp: new Date('2026-06-06T12:00:00Z'),
+          isStreaming: true,
+          model: 'openrouter:qwen/qwen3.7-plus',
+          tokens: { input: 500, output: 200 },
+        },
+      ]);
+
+      renderChat();
+
+      expect(screen.queryByLabelText(/Last assistant turn summary/)).not.toBeInTheDocument();
     });
   });
 
