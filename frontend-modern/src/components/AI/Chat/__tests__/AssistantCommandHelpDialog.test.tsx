@@ -80,7 +80,7 @@ describe('AssistantCommandHelpDialog', () => {
     expect(screen.queryByText('Model')).not.toBeInTheDocument();
   });
 
-  it('shows disabled commands in help without running them', () => {
+  it('keeps disabled commands selectable so the caller can explain them', () => {
     const onRunCommand = vi.fn();
     render(() => (
       <AssistantCommandHelpDialog
@@ -101,11 +101,13 @@ describe('AssistantCommandHelpDialog', () => {
 
     const compactCommand = screen.getByRole('option', { name: /\/compact/ });
     expect(compactCommand).toHaveAttribute('aria-disabled', 'true');
-    expect(compactCommand).toBeDisabled();
+    expect(compactCommand).not.toBeDisabled();
     expect(screen.getByText('Requires transcript content.')).toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: 'Enter' });
-    expect(onRunCommand).not.toHaveBeenCalled();
+    expect(onRunCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'compact', name: 'compact' }),
+    );
   });
 
   it('consumes Escape as a local dialog close command', () => {

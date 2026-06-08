@@ -1926,6 +1926,32 @@ describe('AIChat', () => {
       expect(mockChat.sendMessage).not.toHaveBeenCalled();
     });
 
+    it('explains unavailable commands selected from Assistant command help', async () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+
+      fireEvent.input(textarea, { target: { value: '/commands' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(screen.getByRole('dialog', { name: 'Assistant commands' })).toBeInTheDocument();
+      fireEvent.input(screen.getByLabelText('Search Assistant commands'), {
+        target: { value: 'compact' },
+      });
+      fireEvent.click(screen.getByRole('option', { name: /\/compact/ }));
+
+      await waitFor(() => {
+        expect(
+          screen.queryByRole('dialog', { name: 'Assistant commands' }),
+        ).not.toBeInTheDocument();
+        expect(mockNotificationStore.info).toHaveBeenCalledWith(
+          'Requires a saved Assistant session.',
+          2000,
+        );
+      });
+      expect(mockAIChatAPI.summarizeSession).not.toHaveBeenCalled();
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+    });
+
     it('opens Assistant provider settings from /connect without sending a provider prompt', async () => {
       const onClose = vi.fn();
       renderChat(onClose);

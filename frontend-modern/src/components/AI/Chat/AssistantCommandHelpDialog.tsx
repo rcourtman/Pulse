@@ -80,7 +80,7 @@ export function AssistantCommandHelpDialog(props: AssistantCommandHelpDialogProp
       case 'Enter': {
         consumeDialogCloseKey(event);
         const command = selectedCommand();
-        if (!command || command.disabled) return;
+        if (!command) return;
         props.onRunCommand(command);
         break;
       }
@@ -183,14 +183,12 @@ export function AssistantCommandHelpDialog(props: AssistantCommandHelpDialogProp
                           role="option"
                           aria-selected={item.index === selectedCommandIndex()}
                           aria-disabled={command.disabled ? 'true' : undefined}
-                          disabled={command.disabled}
                           class={`flex w-full items-start gap-3 rounded-md px-3 py-2.5 text-left transition-colors focus:outline-none ${
                             command.disabled
-                              ? 'cursor-not-allowed opacity-55'
+                              ? 'cursor-help opacity-55'
                               : 'hover:bg-surface-hover focus:bg-surface-hover'
                           } ${item.index === selectedCommandIndex() ? 'bg-surface-hover' : ''}`}
                           onClick={() => {
-                            if (command.disabled) return;
                             props.onRunCommand(command);
                           }}
                           onMouseEnter={() => setSelectedCommandIndex(item.index)}
