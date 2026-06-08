@@ -26,7 +26,7 @@ import { ThinkingBlock } from './ThinkingBlock';
 import { getAssistantAnswerText } from './assistantAnswerText';
 import { stripAssistantOutputArtifacts } from './assistantOutputHygiene';
 import { formatAssistantTurnDuration } from './assistantTurnSummary';
-import { formatAssistantWorkflowStatus } from './activeTurnStatus';
+import { assistantWorkflowStatusKind, formatAssistantWorkflowStatus } from './activeTurnStatus';
 import { groupStreamEventsForDisplay } from './streamEventGrouping';
 import {
   createPacedWorkflowStatus,
@@ -429,6 +429,22 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     }
     return `${message}${elapsedSuffix}`;
   };
+  const workflowStatusToneClass = (status?: WorkflowStatus) => {
+    const kind = assistantWorkflowStatusKind(status);
+    if (kind === 'retrying') {
+      return 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200';
+    }
+    if (kind === 'tool') {
+      return 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200';
+    }
+    return 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200';
+  };
+  const workflowStatusDotClass = (status?: WorkflowStatus) => {
+    const kind = assistantWorkflowStatusKind(status);
+    if (kind === 'retrying') return 'bg-amber-500';
+    if (kind === 'tool') return 'bg-blue-500';
+    return 'bg-blue-500';
+  };
   const workflowStatusText = createMemo(() =>
     formatWorkflowStatus(currentWorkflowStatus(), true),
   );
@@ -578,11 +594,18 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
               </Show>
               <Show when={shouldShowHeaderWorkflowStatus()}>
                 <span
-                  class="inline-flex min-w-0 max-w-[18rem] items-center gap-1.5 rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200"
+                  class={`inline-flex min-w-0 max-w-[18rem] items-center gap-1.5 rounded border px-1.5 py-0.5 text-[10px] font-medium ${workflowStatusToneClass(
+                    currentWorkflowStatus(),
+                  )}`}
                   title={workflowStatusText()}
                   aria-live="polite"
+                  data-status-kind={assistantWorkflowStatusKind(currentWorkflowStatus())}
                 >
-                  <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500 animate-pulse" />
+                  <span
+                    class={`h-1.5 w-1.5 shrink-0 rounded-full animate-pulse ${workflowStatusDotClass(
+                      currentWorkflowStatus(),
+                    )}`}
+                  />
                   <span class="truncate">{workflowStatusText()}</span>
                 </span>
               </Show>
@@ -660,16 +683,21 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                           }
                         >
                           <div
-                            class="my-1 inline-flex max-w-full items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200"
+                            class={`my-1 inline-flex max-w-full items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium ${workflowStatusToneClass(
+                              visibleWorkflowStatus(),
+                            )}`}
                             role="status"
                             aria-live="polite"
                             title={formatWorkflowStatus(
                               visibleWorkflowStatus(),
                               props.message.isStreaming,
                             )}
+                            data-status-kind={assistantWorkflowStatusKind(visibleWorkflowStatus())}
                           >
                             <span
-                              class="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500 animate-pulse"
+                              class={`h-1.5 w-1.5 shrink-0 rounded-full animate-pulse ${workflowStatusDotClass(
+                                visibleWorkflowStatus(),
+                              )}`}
                               aria-hidden="true"
                             />
                             <span class="min-w-0 truncate">

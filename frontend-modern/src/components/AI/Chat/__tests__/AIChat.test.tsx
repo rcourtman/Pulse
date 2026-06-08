@@ -5559,6 +5559,9 @@ describe('AIChat', () => {
       expect(screen.getByLabelText('Assistant active turn status')).toHaveTextContent(
         'Provider connection failed before any output; retrying. · attempt 2/3 · retrying in 1.9s',
       );
+      expect(
+        screen.getByTestId('assistant-activity-dock').querySelector('[data-status-kind="retrying"]'),
+      ).not.toBeNull();
     });
 
     it('prefers workflow progress over selected model route evidence', () => {

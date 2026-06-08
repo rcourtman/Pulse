@@ -2441,6 +2441,25 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (elapsedSeconds < 2) return status.text;
     return `${status.text} (${elapsedSeconds}s)`;
   });
+  const currentStatusKind = createMemo(() => currentStatus()?.type);
+  const currentStatusRowClass = createMemo(() => {
+    if (currentStatusKind() === 'retrying') {
+      return 'bg-amber-50/80 text-amber-900 dark:bg-amber-950/25 dark:text-amber-100';
+    }
+    return '';
+  });
+  const currentStatusIconClass = createMemo(() => {
+    if (currentStatusKind() === 'retrying') {
+      return 'animate-spin text-amber-600 dark:text-amber-300';
+    }
+    if (currentStatusKind() === 'generating') {
+      return 'text-emerald-500 dark:text-emerald-300';
+    }
+    return 'animate-spin text-blue-600 dark:text-blue-300';
+  });
+  const currentStatusDotClass = createMemo(() =>
+    currentStatusKind() === 'retrying' ? 'bg-amber-400' : 'bg-blue-400',
+  );
   const activeTurnRoute = createMemo<AssistantActiveRoutePresentation | null>(() => {
     if (!currentStatus()) return null;
     const model = activeAssistantMessage()?.model?.trim() || selectedChatModel().trim();
@@ -4487,33 +4506,42 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 data-testid="assistant-activity-dock"
               >
                 <Show when={currentStatus()}>
-                  <div class="flex min-h-8 min-w-0 items-center gap-2 px-2.5 py-1.5 text-xs">
+                  <div
+                    class={`flex min-h-8 min-w-0 items-center gap-2 px-2.5 py-1.5 text-xs ${currentStatusRowClass()}`}
+                    data-status-kind={currentStatusKind()}
+                  >
                     <div
                       class="flex min-w-0 flex-1 items-center gap-2"
                       role="status"
                       aria-label="Assistant active turn status"
                       aria-live="polite"
                     >
-                      <LoaderCircleIcon
-                        class={`h-3.5 w-3.5 shrink-0 ${
-                          currentStatus()?.type === 'generating'
-                            ? 'text-emerald-500 dark:text-emerald-300'
-                            : 'animate-spin text-blue-600 dark:text-blue-300'
-                        }`}
-                        aria-hidden="true"
-                      />
+                      <Show
+                        when={currentStatusKind() === 'retrying'}
+                        fallback={
+                          <LoaderCircleIcon
+                            class={`h-3.5 w-3.5 shrink-0 ${currentStatusIconClass()}`}
+                            aria-hidden="true"
+                          />
+                        }
+                      >
+                        <RefreshCwIcon
+                          class={`h-3.5 w-3.5 shrink-0 ${currentStatusIconClass()}`}
+                          aria-hidden="true"
+                        />
+                      </Show>
                       <span class="min-w-0 flex-1 truncate font-medium">{currentStatusText()}</span>
                       <span class="flex shrink-0 gap-0.5" aria-hidden="true">
                         <span
-                          class="h-1 w-1 rounded-full bg-blue-400 animate-bounce"
+                          class={`h-1 w-1 rounded-full animate-bounce ${currentStatusDotClass()}`}
                           style="animation-delay: 0ms; animation-duration: 1s"
                         />
                         <span
-                          class="h-1 w-1 rounded-full bg-blue-400 animate-bounce"
+                          class={`h-1 w-1 rounded-full animate-bounce ${currentStatusDotClass()}`}
                           style="animation-delay: 150ms; animation-duration: 1s"
                         />
                         <span
-                          class="h-1 w-1 rounded-full bg-blue-400 animate-bounce"
+                          class={`h-1 w-1 rounded-full animate-bounce ${currentStatusDotClass()}`}
                           style="animation-delay: 300ms; animation-duration: 1s"
                         />
                       </span>

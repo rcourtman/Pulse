@@ -348,6 +348,10 @@ deriving an older display status from `workflowStatusHistory`.
    export status lines must normalize internal tool identifiers such as
    `pulse_query`, `pulse_read`, and `pulse_exec` into operator-facing activity
    labels, while preserving the raw typed event payload for Details/debug paths.
+   Provider retry states are a distinct live activity kind: a `provider_retry`
+   workflow status must render as retrying in the active-turn footer and live
+   workflow row so the operator sees selected-route recovery in progress rather
+   than another generic waiting/thinking state.
    Assistant-authored visible answer prose is part of the same boundary: model
    text may describe the action in operator vocabulary such as "read command"
    or "inventory lookup", but raw internal identifiers such as `pulse_read`

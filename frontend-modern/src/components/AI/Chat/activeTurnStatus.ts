@@ -9,7 +9,7 @@ import {
   toolValueText,
 } from './toolPresentation';
 
-export type AssistantActiveTurnStatusKind = 'thinking' | 'tool' | 'generating';
+export type AssistantActiveTurnStatusKind = 'thinking' | 'tool' | 'generating' | 'retrying';
 
 export interface AssistantActiveTurnStatus {
   text: string;
@@ -202,6 +202,14 @@ const formatPendingToolStatus = (tool?: PendingTool): string => {
   if (tool.status === 'waiting') return `Waiting on ${toolLabel}`;
 
   return `Running ${toolLabel}`;
+};
+
+export const assistantWorkflowStatusKind = (
+  status?: WorkflowStatus,
+): AssistantActiveTurnStatusKind => {
+  if (status?.phase === 'provider_retry') return 'retrying';
+  if (status?.tool) return 'tool';
+  return 'thinking';
 };
 
 const activePendingToolFromEvents = (events?: StreamDisplayEvent[]): PendingTool | undefined => {
@@ -429,7 +437,7 @@ const latestStreamActivityStatus = (
         const text = formatAssistantWorkflowStatus(workflowStatus, now);
         if (text) {
           candidate = {
-            type: workflowStatus?.tool ? 'tool' : 'thinking',
+            type: assistantWorkflowStatusKind(workflowStatus),
             text,
             startedAt: workflowStatus?.startedAt || event.startedAt,
             activityAt: eventActivityAt(event),
@@ -506,7 +514,7 @@ const workflowStatusCandidate = (
   const text = formatAssistantWorkflowStatus(status, now);
   if (!text) return null;
   return {
-    type: status?.tool ? 'tool' : 'thinking',
+    type: assistantWorkflowStatusKind(status),
     text,
     startedAt: status?.startedAt,
     activityAt: status?.startedAt,

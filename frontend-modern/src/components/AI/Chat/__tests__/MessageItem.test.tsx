@@ -762,6 +762,7 @@ describe('MessageItem', () => {
           'Provider connection failed before any output; retrying. · attempt 2/3 · retrying in 1.2s',
         ),
       ).toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveAttribute('data-status-kind', 'retrying');
       expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
     });
 
@@ -807,6 +808,7 @@ describe('MessageItem', () => {
           /Provider connection failed before any output; retrying\. · attempt 2\/3 · retrying in 1\.9s/,
         ),
       ).toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveAttribute('data-status-kind', 'retrying');
     });
 
     it('paces replacing workflow activity through one live transcript row', async () => {

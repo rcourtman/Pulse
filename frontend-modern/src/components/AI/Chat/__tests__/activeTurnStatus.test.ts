@@ -357,7 +357,7 @@ describe('getAssistantActiveTurnStatus', () => {
         1_200,
       ),
     ).toEqual({
-      type: 'thinking',
+      type: 'retrying',
       text: 'Provider connection failed before any output; retrying. · attempt 2/3 · retrying in 3.2s',
       startedAt: 1_200,
     });
@@ -470,7 +470,7 @@ describe('getAssistantActiveTurnStatus', () => {
         true,
       ),
     ).toEqual({
-      type: 'thinking',
+      type: 'retrying',
       text: 'Provider connection failed before any output; retrying. · attempt 2/2 · retrying in 200ms',
       startedAt,
     });
@@ -496,7 +496,7 @@ describe('getAssistantActiveTurnStatus', () => {
         2_300,
       ),
     ).toEqual({
-      type: 'thinking',
+      type: 'retrying',
       text: 'Provider connection failed before any output; retrying. · attempt 2/2 · retrying in 1.9s',
       startedAt,
     });
@@ -522,7 +522,7 @@ describe('getAssistantActiveTurnStatus', () => {
         4_500,
       ),
     ).toEqual({
-      type: 'thinking',
+      type: 'retrying',
       text: 'Provider connection failed before any output; retrying. · attempt 2/2 · retrying now',
       startedAt,
     });
