@@ -90,8 +90,9 @@ export const ASSISTANT_SLASH_COMMANDS: AssistantSlashCommand[] = [
   {
     name: 'sessions',
     aliases: ['resume', 'continue'],
+    acceptsArgs: true,
     action: 'sessions',
-    description: 'Open Assistant session history',
+    description: 'Search or resume Assistant sessions (/sessions backup)',
   },
   {
     name: 'compact',

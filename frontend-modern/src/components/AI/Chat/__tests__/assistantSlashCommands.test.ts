@@ -63,6 +63,22 @@ describe('assistantSlashCommands', () => {
     expect(parseAssistantSlashCommand('/model openrouter:qwen/qwen3.7-plus')).toBeNull();
   });
 
+  it('parses session commands with search arguments for local composer handling', () => {
+    expect(parseAssistantSlashCommandInput('/sessions backup patrol')).toEqual({
+      action: 'sessions',
+      args: 'backup patrol',
+    });
+    expect(parseAssistantSlashCommandInput('/resume blinds automation')).toEqual({
+      action: 'sessions',
+      args: 'blinds automation',
+    });
+    expect(parseAssistantSlashCommandInput('/continue router')).toEqual({
+      action: 'sessions',
+      args: 'router',
+    });
+    expect(parseAssistantSlashCommand('/sessions backup patrol')).toBeNull();
+  });
+
   it('parses dev fixture commands with stream fixture arguments', () => {
     expect(parseAssistantSlashCommandInput('/fixture provider-retry')).toEqual({
       action: 'fixture',

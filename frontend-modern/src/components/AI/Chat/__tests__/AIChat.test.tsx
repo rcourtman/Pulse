@@ -2046,6 +2046,42 @@ describe('AIChat', () => {
       expect(mockChat.sendMessage).not.toHaveBeenCalled();
     });
 
+    it('searches Assistant sessions from /sessions arguments without sending a provider prompt', async () => {
+      mockAIChatAPI.listSessions
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          {
+            id: 's-backup',
+            title: 'Backup Patrol Follow-up',
+            created_at: '',
+            updated_at: '',
+            message_count: 3,
+          },
+        ]);
+
+      renderChat();
+      await waitFor(() => {
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalledWith({ limit: 30 });
+      });
+      mockAIChatAPI.listSessions.mockClear();
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+
+      fireEvent.input(textarea, { target: { value: '/sessions backup' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      const searchInput = await screen.findByPlaceholderText('Search sessions...');
+      await waitFor(() => {
+        expect(searchInput).toHaveValue('backup');
+        expect(document.activeElement).toBe(searchInput);
+      });
+      await waitFor(() => {
+        expect(mockAIChatAPI.listSessions).toHaveBeenCalledWith({ search: 'backup', limit: 30 });
+        expect(screen.getByText('Backup Patrol Follow-up')).toBeInTheDocument();
+      });
+      expect(mockAIChatAPI.listSessions).not.toHaveBeenCalledWith({ limit: 30 });
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+    });
+
     it('opens the model selector from /models without sending a provider prompt', async () => {
       renderChat();
       const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');

@@ -1270,7 +1270,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
     resetSessionRename();
   };
   const focusSessionSearch = () => {
-    queueMicrotask(() => sessionSearchInputRef?.focus());
+    queueMicrotask(() => {
+      sessionSearchInputRef?.focus();
+      window.setTimeout(() => sessionSearchInputRef?.focus(), 0);
+    });
   };
   const focusSessionTriggerAfterClose = () => {
     const trigger = sessionButtonRef;
@@ -2954,6 +2957,15 @@ export const AIChat: Component<AIChatProps> = (props) => {
     return true;
   };
 
+  const runSessionsSlashCommand = (args: string) => {
+    setShowCommandHelp(false);
+    if (args.trim()) {
+      void openSessionPicker(args);
+      return;
+    }
+    void handleToggleSessions();
+  };
+
   const executeSlashCommand = (command: AssistantSlashCommandAction, args = '') => {
     const commandArgs = args.trim();
     const disabledReason = disabledAssistantCommandReason(command);
@@ -2985,8 +2997,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
         void handleNewConversation();
         break;
       case 'sessions':
-        setShowCommandHelp(false);
-        void handleToggleSessions();
+        runSessionsSlashCommand(commandArgs);
         break;
       case 'compact':
         setShowCommandHelp(false);
@@ -3490,15 +3501,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
   };
 
-  const handleToggleSessions = async () => {
-    const next = !showSessions();
-    if (!next) {
-      setShowSessions(false);
-      setSessionRefreshLoading(false);
-      resetSessionSearch();
-      return;
-    }
-
+  const openSessionPicker = async (initialSearchQuery = '') => {
     if (sessionButtonRef) {
       const rect = sessionButtonRef.getBoundingClientRect();
       setSessionDropdownPosition({
@@ -3507,9 +3510,19 @@ export const AIChat: Component<AIChatProps> = (props) => {
       });
     }
 
+    const searchQuery = initialSearchQuery.trim();
     resetSessionSearch();
+    if (searchQuery) {
+      setSessionSearchQuery(searchQuery);
+    }
     setShowSessions(true);
     focusSessionSearch();
+
+    if (searchQuery) {
+      setSessionRefreshLoading(false);
+      return;
+    }
+
     setSessionRefreshLoading(true);
 
     try {
@@ -3520,6 +3533,18 @@ export const AIChat: Component<AIChatProps> = (props) => {
     } finally {
       setSessionRefreshLoading(false);
     }
+  };
+
+  const handleToggleSessions = async () => {
+    const next = !showSessions();
+    if (!next) {
+      setShowSessions(false);
+      setSessionRefreshLoading(false);
+      resetSessionSearch();
+      return;
+    }
+
+    await openSessionPicker();
   };
 
   const formatSessionPickerMessageCount = (count: number) =>
