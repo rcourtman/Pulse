@@ -154,8 +154,12 @@ deriving an older display status from `workflowStatusHistory`.
    selected-route retry/error contract is the only live recovery path until an
    operator explicitly chooses another route. The Assistant
    `/model` command therefore has two owned paths: an exact `provider:model-id`
-   argument selects that route directly, while a partial argument opens the
-   shared model picker with the search text prefilled.
+   argument selects that route directly, and an OpenCode-style
+   `provider/model-id` argument is accepted only when the provider prefix is a
+   known Pulse provider before being normalized back to canonical
+   `provider:model-id` storage. Partial or unknown slash text opens the shared
+   model picker with the search text prefilled instead of becoming a hidden
+   route guess.
    Assistant model-selection defaults are settings-owned: the drawer may persist
    explicit model selections only for concrete session IDs, while blank-session
    chat defaults must flow from `/api/settings/ai` `chat_model` or `model`.

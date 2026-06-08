@@ -163,6 +163,7 @@ import { getLastAssistantAnswerText } from './assistantAnswerText';
 import {
   getNextAssistantRecentModelRoute,
   isAssistantExplicitModelRoute,
+  normalizeAssistantModelRouteArgument,
   normalizeAssistantRecentModelRoutes,
 } from './assistantModelRoutes';
 import {
@@ -1648,6 +1649,24 @@ export const AIChat: Component<AIChatProps> = (props) => {
     return match?.provider?.trim() || getProviderFromModelId(model);
   });
 
+  const knownAssistantModelProviders = createMemo(() => {
+    const providers = new Set<string>();
+    const addProvider = (provider: string) => {
+      const normalized = provider.trim();
+      if (normalized) providers.add(normalized);
+    };
+
+    for (const provider of aiRuntimeSettings()?.configured_providers || []) {
+      addProvider(provider);
+    }
+    for (const model of aiRuntimeModels()) {
+      addProvider(resolveRuntimeModelProvider(model));
+    }
+
+    addProvider(selectedChatProvider());
+    return Array.from(providers);
+  });
+
   const formatChatMessageModelRoute = (modelId: string) => {
     const normalized = modelId.trim();
     if (!normalized) return '';
@@ -2200,15 +2219,19 @@ export const AIChat: Component<AIChatProps> = (props) => {
       return true;
     }
 
-    if (!isAssistantExplicitModelRoute(target)) {
+    const modelRoute = normalizeAssistantModelRouteArgument(
+      target,
+      knownAssistantModelProviders(),
+    );
+    if (!modelRoute) {
       openModelSelector(target);
       focusComposer();
       return true;
     }
 
-    selectModel(target);
+    selectModel(modelRoute);
     notificationStore.success(
-      `Assistant model route set to ${formatChatMessageModelRoute(target)}`,
+      `Assistant model route set to ${formatChatMessageModelRoute(modelRoute)}`,
       2000,
     );
     focusComposer();

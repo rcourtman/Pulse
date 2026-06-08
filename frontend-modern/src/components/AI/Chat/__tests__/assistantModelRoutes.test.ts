@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getNextAssistantRecentModelRoute,
   isAssistantExplicitModelRoute,
+  normalizeAssistantModelRouteArgument,
   normalizeAssistantRecentModelRoutes,
 } from '../assistantModelRoutes';
 
@@ -14,6 +15,20 @@ describe('assistantModelRoutes', () => {
     expect(isAssistantExplicitModelRoute(':qwen/qwen3.7-plus')).toBe(false);
     expect(isAssistantExplicitModelRoute('https://openrouter.ai/models/qwen')).toBe(false);
     expect(isAssistantExplicitModelRoute('openrouter:/qwen/qwen3.7-plus')).toBe(false);
+  });
+
+  it('normalizes OpenCode-style provider/model arguments to canonical routes', () => {
+    expect(
+      normalizeAssistantModelRouteArgument('openrouter/qwen/qwen3.7-plus', ['openrouter']),
+    ).toBe('openrouter:qwen/qwen3.7-plus');
+    expect(
+      normalizeAssistantModelRouteArgument('openrouter:qwen/qwen3.7-plus', ['openrouter']),
+    ).toBe('openrouter:qwen/qwen3.7-plus');
+    expect(normalizeAssistantModelRouteArgument('qwen/qwen3.7-plus', ['openrouter'])).toBeNull();
+    expect(normalizeAssistantModelRouteArgument('openrouter/qwen/qwen3.7-plus')).toBeNull();
+    expect(
+      normalizeAssistantModelRouteArgument('https://openrouter.ai/models/qwen', ['openrouter']),
+    ).toBeNull();
   });
 
   it('normalizes recent routes by trimming, filtering, deduping, and capping', () => {

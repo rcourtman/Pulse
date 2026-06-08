@@ -1891,7 +1891,7 @@ describe('AIChat', () => {
 
       expect(screen.getByRole('dialog', { name: 'Assistant commands' })).toBeInTheDocument();
       expect(screen.getByRole('option', { name: /\/models/ })).toHaveTextContent(
-        'Open model search or set a route (/model qwen or /model provider:model-id)',
+        'Open model search or set a route (/model openrouter/qwen or provider:model-id)',
       );
       expect(screen.getByRole('option', { name: /\/status/ })).toHaveTextContent(
         'Check the selected model route',
@@ -2108,6 +2108,43 @@ describe('AIChat', () => {
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
       expect(mockChat.setModel).toHaveBeenCalledWith('openrouter:deepseek/deepseek-v4-pro');
+      expect(mockChat.sendMessage).not.toHaveBeenCalled();
+      await waitFor(() => expect(textarea.value).toBe(''));
+    });
+
+    it('sets an OpenCode-style provider/model route from /model without sending a provider prompt', async () => {
+      mockAIAPI.getSettings.mockResolvedValue({
+        model: 'openai:gpt-4o',
+        chat_model: '',
+        control_level: 'read_only',
+        autonomous_mode: false,
+        discovery_enabled: true,
+        configured_providers: ['openai', 'openrouter'],
+      });
+      mockAIAPI.getModels.mockResolvedValue({
+        models: [
+          {
+            id: 'openrouter:qwen/qwen3.7-plus',
+            name: 'Qwen: Qwen3.7 Plus',
+            provider: 'openrouter',
+            notable: true,
+          },
+        ],
+      });
+      renderChat();
+      await waitFor(() => {
+        expect(mockAIAPI.getModels).toHaveBeenCalled();
+      });
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+
+      fireEvent.input(textarea, {
+        target: { value: '/model openrouter/qwen/qwen3.7-plus' },
+      });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(mockChat.setModel).toHaveBeenCalledWith('openrouter:qwen/qwen3.7-plus');
       expect(mockChat.sendMessage).not.toHaveBeenCalled();
       await waitFor(() => expect(textarea.value).toBe(''));
     });

@@ -14,6 +14,33 @@ export const isAssistantExplicitModelRoute = (modelId: string) => {
   return MODEL_ROUTE_PROVIDER_RE.test(provider) && Boolean(model.trim()) && !model.startsWith('/');
 };
 
+export const normalizeAssistantModelRouteArgument = (
+  modelId: string,
+  knownProviders: string[] = [],
+): string | null => {
+  const candidate = modelId.trim();
+  if (isAssistantExplicitModelRoute(candidate)) return candidate;
+  if (!candidate || /\s/.test(candidate) || candidate.includes('://')) return null;
+
+  const separator = candidate.indexOf('/');
+  if (separator <= 0 || separator === candidate.length - 1) return null;
+
+  const provider = candidate.slice(0, separator);
+  const model = candidate.slice(separator + 1);
+  if (!MODEL_ROUTE_PROVIDER_RE.test(provider) || !model.trim() || model.startsWith('/')) {
+    return null;
+  }
+
+  const providerSet = new Set(
+    knownProviders.map((knownProvider) => knownProvider.trim().toLowerCase()).filter(Boolean),
+  );
+  if (providerSet.size === 0 || !providerSet.has(provider.toLowerCase())) {
+    return null;
+  }
+
+  return `${provider}:${model}`;
+};
+
 export const normalizeAssistantRecentModelRoutes = (values: unknown[], limit: number): string[] => {
   const seen = new Set<string>();
   const routes: string[] = [];
