@@ -2358,6 +2358,17 @@ message) rather than `chat.isLoading()` so it persists for the whole turn:
 `isLoading` flips false at visible-turn-complete, which previously made the dock
 flash its status for a frame and vanish.
 
+When the model runs tools but returns no final narrative, the deterministic
+fallback summary (`buildAutomaticFallbackSummary` in
+`internal/ai/chat/agentic_final.go`) must read as a clean operator message, not a
+dump of internals. It names the tools it ran by their real tool name resolved
+from the assistant tool calls (`pulse_` prefix stripped) — never the opaque
+provider call id (`call_…`/`toolu_…`/`fc_…`), which must not leak into
+chat-visible text — and it must not append raw tool output / result snippets.
+The earlier form ("I completed N successful check(s) using call_27f0f389…, …
+automatic summary. Latest successful result snippet: {…raw JSON…}") is forbidden:
+provider call ids and raw tool JSON are not operator-facing answer content.
+
 Assistant slash-command availability is part of the command runtime contract,
 not only visual polish. The OpenCode reference at fetched `origin/dev` commit
 `c495635` filters prompt slash commands through the registered command catalog

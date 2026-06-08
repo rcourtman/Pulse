@@ -161,7 +161,7 @@ func TestEnsureFinalTextResponse(t *testing.T) {
 	if len(result2) != 3 {
 		t.Fatalf("expected fallback summary message when provider errors")
 	}
-	if !strings.Contains(result2[len(result2)-1].Content, "automatic summary") {
+	if !strings.Contains(result2[len(result2)-1].Content, "didn't return a written summary") {
 		t.Fatalf("expected deterministic fallback summary, got %q", result2[len(result2)-1].Content)
 	}
 
@@ -182,8 +182,13 @@ func TestEnsureFinalTextResponse(t *testing.T) {
 	if len(result3) != 3 {
 		t.Fatalf("expected fallback summary when provider returns empty content")
 	}
-	if !strings.Contains(result3[len(result3)-1].Content, "Latest successful result snippet") {
-		t.Fatalf("expected fallback summary to include tool snippet")
+	fallback3 := result3[len(result3)-1].Content
+	if !strings.Contains(fallback3, "didn't return a written summary") {
+		t.Fatalf("expected clean fallback summary, got %q", fallback3)
+	}
+	// The fallback must not dump raw tool output / result snippets into the chat.
+	if strings.Contains(fallback3, "cpu ok") || strings.Contains(fallback3, "result snippet") {
+		t.Fatalf("fallback summary must not include raw tool output, got %q", fallback3)
 	}
 }
 
@@ -327,11 +332,40 @@ func TestBuildAutomaticFallbackSummary(t *testing.T) {
 		{Role: "user", ToolResult: &ToolResult{ToolUseID: "pulse_query_1", Content: "containers ok", IsError: false}},
 		{Role: "user", ToolResult: &ToolResult{ToolUseID: "pulse_read_0", Content: "read failed", IsError: true}},
 	})
-	if !strings.Contains(summary, "2 successful check(s)") {
+	if !strings.Contains(summary, "I ran 2 checks") {
 		t.Fatalf("unexpected fallback summary: %q", summary)
 	}
-	if !strings.Contains(summary, "pulse_query") {
-		t.Fatalf("expected tool name in fallback summary")
+	// Tool name is surfaced operator-facing (pulse_ prefix stripped), never the
+	// raw provider call id.
+	if !strings.Contains(summary, "query") {
+		t.Fatalf("expected tool name in fallback summary, got %q", summary)
+	}
+	if !strings.Contains(summary, "1 tool error") {
+		t.Fatalf("expected error count in fallback summary, got %q", summary)
+	}
+}
+
+func TestBuildAutomaticFallbackSummary_UsesToolNamesNotCallIDsOrRawOutput(t *testing.T) {
+	// Reproduces the real OpenRouter shape that produced the ugly chat dump:
+	// tool results carry opaque provider call ids, and the real tool name lives
+	// on the assistant tool call. The fallback must name the tools, not leak the
+	// call ids, and must not dump raw tool output into chat-visible text.
+	summary := buildAutomaticFallbackSummary([]Message{
+		{Role: "assistant", ToolCalls: []ToolCall{
+			{ID: "call_27f0f389aba4652a1e292dc", Name: "pulse_query"},
+			{ID: "call_66a4659a104b4ee7807201cb", Name: "pulse_metrics"},
+		}},
+		{Role: "user", ToolResult: &ToolResult{ToolUseID: "call_27f0f389aba4652a1e292dc", Content: `{"nodes":2}`, IsError: false}},
+		{Role: "user", ToolResult: &ToolResult{ToolUseID: "call_66a4659a104b4ee7807201cb", Content: `{"cpuPct":12}`, IsError: false}},
+	})
+	if strings.Contains(summary, "call_") {
+		t.Fatalf("fallback summary must not leak provider call ids, got %q", summary)
+	}
+	if !strings.Contains(summary, "query") || !strings.Contains(summary, "metrics") {
+		t.Fatalf("expected real tool names in fallback summary, got %q", summary)
+	}
+	if strings.Contains(summary, "nodes") || strings.Contains(summary, "cpuPct") || strings.Contains(summary, "{") {
+		t.Fatalf("fallback summary must not dump raw tool output, got %q", summary)
 	}
 }
 

@@ -168,7 +168,19 @@ func buildAutomaticFallbackSummary(resultMessages []Message) string {
 	successCount := 0
 	errorCount := 0
 	toolCounts := make(map[string]int)
-	lastSuccessSnippet := ""
+
+	// Resolve provider tool-call ids to the real tool name so the summary names
+	// the checks (query, metrics, ...) instead of leaking raw `call_…` ids.
+	idToName := make(map[string]string)
+	for _, msg := range resultMessages {
+		for _, call := range msg.ToolCalls {
+			id := strings.TrimSpace(call.ID)
+			name := strings.TrimSpace(call.Name)
+			if id != "" && name != "" {
+				idToName[id] = name
+			}
+		}
+	}
 
 	for _, msg := range resultMessages {
 		if msg.ToolResult == nil {
@@ -179,12 +191,8 @@ func buildAutomaticFallbackSummary(resultMessages []Message) string {
 			continue
 		}
 		successCount++
-		if tool := normalizeToolUseID(msg.ToolResult.ToolUseID); tool != "" {
-			toolCounts[tool]++
-		}
-		content := strings.TrimSpace(msg.ToolResult.Content)
-		if content != "" {
-			lastSuccessSnippet = compactSnippet(content, 360)
+		if name := fallbackToolDisplayName(msg.ToolResult.ToolUseID, idToName); name != "" {
+			toolCounts[name]++
 		}
 	}
 
@@ -220,17 +228,46 @@ func buildAutomaticFallbackSummary(resultMessages []Message) string {
 		toolList = strings.Join(names, ", ")
 	}
 
+	checkWord := "checks"
+	if successCount == 1 {
+		checkWord = "check"
+	}
 	summary := fmt.Sprintf(
-		"I completed %d successful check(s) using %s. The model didn't provide a final narrative, so this is an automatic summary.",
-		successCount, toolList,
+		"I ran %d %s (%s) but the model didn't return a written summary this time. Ask me again and I'll pull the results together.",
+		successCount, checkWord, toolList,
 	)
 	if errorCount > 0 {
-		summary += fmt.Sprintf(" There were %d tool error(s) during this run.", errorCount)
-	}
-	if lastSuccessSnippet != "" {
-		summary += "\n\nLatest successful result snippet:\n" + lastSuccessSnippet
+		errWord := "errors"
+		if errorCount == 1 {
+			errWord = "error"
+		}
+		summary += fmt.Sprintf(" %d tool %s occurred during the run.", errorCount, errWord)
 	}
 	return summary
+}
+
+// fallbackToolDisplayName resolves an operator-facing tool name for the
+// automatic fallback summary. It prefers the real tool name from the assistant's
+// tool call (idToName), and only falls back to the tool-use id when that id
+// itself reads like a tool name — never an opaque provider call id
+// (`call_…`, `toolu_…`, `fc_…`), which must not leak into chat-visible text.
+func fallbackToolDisplayName(toolUseID string, idToName map[string]string) string {
+	if name := strings.TrimSpace(idToName[strings.TrimSpace(toolUseID)]); name != "" {
+		return displayToolName(name)
+	}
+	normalized := normalizeToolUseID(toolUseID)
+	lower := strings.ToLower(normalized)
+	if normalized == "" ||
+		strings.HasPrefix(lower, "call_") ||
+		strings.HasPrefix(lower, "toolu_") ||
+		strings.HasPrefix(lower, "fc_") {
+		return ""
+	}
+	return displayToolName(normalized)
+}
+
+func displayToolName(name string) string {
+	return strings.TrimPrefix(strings.TrimSpace(name), "pulse_")
 }
 
 func normalizeToolUseID(toolUseID string) string {
@@ -251,15 +288,4 @@ func normalizeToolUseID(toolUseID string) string {
 		}
 	}
 	return toolUseID[:lastUnderscore]
-}
-
-func compactSnippet(content string, maxLen int) string {
-	compact := strings.Join(strings.Fields(content), " ")
-	if len(compact) <= maxLen {
-		return compact
-	}
-	if maxLen <= 3 {
-		return compact[:maxLen]
-	}
-	return compact[:maxLen-3] + "..."
 }
