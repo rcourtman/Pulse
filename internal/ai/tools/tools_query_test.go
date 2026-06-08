@@ -1969,3 +1969,23 @@ func TestExecuteGetGuestConfig_RejectsLegacyResourceTypes(t *testing.T) {
 		})
 	}
 }
+
+func TestResourceTypeFromCanonicalID(t *testing.T) {
+	// Canonical handles are "<type>-<hex hash>"; the type must be recoverable so a
+	// `get` call that passes only the handle (no separate resource_type) succeeds
+	// instead of failing visibly with "resource_type is required".
+	cases := map[string]string{
+		"system-container-599a2e3f1b2c4d5e": "system-container",
+		"vm-0123456789abcdef":               "vm",
+		"docker-container-deadbeefcafe1234": "docker-container",
+		"network-share-aabbccddeeff0011":    "network-share",
+		"102":                               "", // bare numeric VMID still needs a type
+		"esphome":                           "", // a plain name is not a canonical handle
+		"":                                  "",
+	}
+	for id, want := range cases {
+		if got := resourceTypeFromCanonicalID(id); got != want {
+			t.Fatalf("resourceTypeFromCanonicalID(%q) = %q, want %q", id, got, want)
+		}
+	}
+}

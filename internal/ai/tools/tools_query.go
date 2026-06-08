@@ -4556,6 +4556,30 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 	return NewJSONResult(response), nil
 }
 
+// resourceTypeFromCanonicalID extracts the resource type from a canonical
+// resource id of the form "<type>-<hex hash>" (unifiedresources/ids.go builds
+// ids as "<type>-<hex(sha256[:8])>"). The hash segment is unambiguous because no
+// resource-type word is all-hex, so the type is everything before the trailing
+// hex segment. Returns "" when the id is not a canonical handle (e.g. a bare
+// numeric VMID), in which case the caller still requires an explicit type.
+func resourceTypeFromCanonicalID(id string) string {
+	id = strings.TrimSpace(id)
+	idx := strings.LastIndex(id, "-")
+	if idx <= 0 || idx >= len(id)-1 {
+		return ""
+	}
+	suffix := id[idx+1:]
+	if len(suffix) < 7 || len(suffix) > 64 {
+		return ""
+	}
+	for _, r := range suffix {
+		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f')) {
+			return ""
+		}
+	}
+	return id[:idx]
+}
+
 func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
 	resourceType, _ := args["resource_type"].(string)
 	resourceID, _ := args["resource_id"].(string)
@@ -4570,6 +4594,19 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 		resourceType = canonicalQueryTypeForResolvedResource(resource)
 		resourceTypeRaw = resourceType
 		resourceID = canonicalQueryIDForResolvedResource(resource)
+	}
+
+	if resourceType == "" {
+		// Models often pass a single canonical handle ("system-container-<hash>")
+		// as resource_id without a separate resource_type, because the handle
+		// already encodes the type (unifiedresources/ids.go: "<type>-<hash>").
+		// Infer the type from it instead of failing the call — otherwise the model
+		// burns one or more visibly-failed "resource_type is required" tool calls
+		// before recovering with the numeric id.
+		if inferred := resourceTypeFromCanonicalID(resourceID); inferred != "" {
+			resourceType = canonicalQueryResourceType(inferred)
+			resourceTypeRaw = inferred
+		}
 	}
 
 	if resourceType == "" {

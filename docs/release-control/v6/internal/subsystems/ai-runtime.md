@@ -2370,6 +2370,16 @@ Pulse already inventories. Tool selection stays model-owned: offer the tools and
 let the model decide whether to use them, rather than pre-deciding from prompt
 keywords/length that no tools are needed.
 
+The `pulse_query` `get` action (`executeGetResource` in
+`internal/ai/tools/tools_query.go`) must accept a canonical resource handle
+(`<type>-<hash>`, e.g. `system-container-599a2e3…`) as `resource_id` without a
+separate `resource_type` and infer the type from the handle, because that is how
+a model naturally references a resource it read from context. Failing such a call
+with "resource_type is required" burns visibly-failed tool calls in the
+transcript before the model recovers with the numeric id. The type is recovered
+from the trailing hex hash segment (no type word is all-hex); a bare numeric
+VMID still requires an explicit `resource_type`.
+
 When the model runs tools but returns no final narrative, the deterministic
 fallback summary (`buildAutomaticFallbackSummary` in
 `internal/ai/chat/agentic_final.go`) must read as a clean operator message, not a
