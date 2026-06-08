@@ -888,7 +888,10 @@ not a replacement status card, CTA band, or page-local nested card.
     blocking shared dialog owns the viewport: closed launcher affordances must
     hide until the dialog clears, and the shell must close any already-open
     assistant drawer instead of leaving background assistant controls visibly
-    active behind the modal.
+    active behind the modal. Non-critical app-shell prompts, including
+    promotional or feedback prompts, must not use the shared blocking dialog
+    stack because they must not suppress Pulse Assistant access or look like
+    required operational acknowledgement.
     AI-owned frontend surfaces that need shared settings or model-catalog
     truth must route those reads through
     `frontend-modern/src/stores/aiRuntimeState.ts` rather than each feature

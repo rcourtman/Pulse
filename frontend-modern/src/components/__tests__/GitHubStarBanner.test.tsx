@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { dialogStackHasBlockingDialog } from '@/components/shared/useDialogState';
 import gitHubStarBannerSource from '../GitHubStarBanner.tsx?raw';
 
 /* ------------------------------------------------------------------ */
@@ -77,13 +78,19 @@ describe('GitHubStarBanner', () => {
     expect(gitHubStarBannerSource).not.toContain('useResources');
   });
 
+  it('renders as a non-modal prompt so Assistant remains available', () => {
+    expect(gitHubStarBannerSource).not.toContain('<Dialog');
+    expect(gitHubStarBannerSource).toContain('aria-live="polite"');
+    expect(gitHubStarBannerSource).toContain('z-30');
+  });
+
   it('does not render on the first day infrastructure is seen (records first-seen date)', async () => {
     vi.setSystemTime(new Date('2026-03-01T12:00:00Z'));
     setResourceCount(3);
 
     await renderBanner();
 
-    // Should not show modal
+    // Should not show prompt
     expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
 
     // Should have recorded today as first-seen date
@@ -180,7 +187,7 @@ describe('GitHubStarBanner', () => {
 
   /* ---------- Dismiss (X button) ---------- */
 
-  it('hides the modal and persists dismissal when the X button is clicked', async () => {
+  it('hides the prompt and persists dismissal when the X button is clicked', async () => {
     vi.setSystemTime(new Date('2026-03-05T12:00:00Z'));
     localStorage.setItem(FIRST_SEEN_KEY, '2026-03-01');
     setResourceCount(3);
@@ -234,7 +241,7 @@ describe('GitHubStarBanner', () => {
 
   /* ---------- Maybe later (snooze) ---------- */
 
-  it('hides the modal and sets a 7-day snooze when "Maybe later" is clicked', async () => {
+  it('hides the prompt and sets a 7-day snooze when "Maybe later" is clicked', async () => {
     vi.setSystemTime(new Date('2026-03-05T12:00:00Z'));
     localStorage.setItem(FIRST_SEEN_KEY, '2026-03-01');
     setResourceCount(3);
@@ -258,22 +265,26 @@ describe('GitHubStarBanner', () => {
     expect(localStorage.getItem(DISMISSED_KEY)).not.toBe('true');
   });
 
-  it('uses the shared dialog close path to snooze on Escape', async () => {
+  it('snoozes on Escape without registering as a blocking dialog', async () => {
     vi.setSystemTime(new Date('2026-03-05T12:00:00Z'));
     localStorage.setItem(FIRST_SEEN_KEY, '2026-03-01');
     setResourceCount(3);
 
+    expect(dialogStackHasBlockingDialog()).toBe(false);
     await renderBanner();
 
     await waitFor(() => {
-      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(screen.getByText('Enjoying Pulse?')).toBeInTheDocument();
     });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(dialogStackHasBlockingDialog()).toBe(false);
 
     fireEvent.keyDown(document, { key: 'Escape' });
 
     await waitFor(() => {
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
     });
+    expect(dialogStackHasBlockingDialog()).toBe(false);
     expect(localStorage.getItem(SNOOZED_KEY)).toBe('2026-03-12');
     expect(localStorage.getItem(DISMISSED_KEY)).not.toBe('true');
   });

@@ -1,10 +1,9 @@
-import { createSignal, createEffect } from 'solid-js';
+import { Show, createSignal, createEffect, onCleanup } from 'solid-js';
 import {
   createLocalStorageBooleanSignal,
   createLocalStorageStringSignal,
   STORAGE_KEYS,
 } from '@/utils/localStorage';
-import { Dialog } from '@/components/shared/Dialog';
 import { useWebSocket } from '@/contexts/appRuntime';
 import GithubIcon from 'lucide-solid/icons/github';
 import StarIcon from 'lucide-solid/icons/star';
@@ -103,70 +102,75 @@ export function GitHubStarBanner() {
     setShowModal(false);
   };
 
-  return (
-    <Dialog
-      isOpen={showModal()}
-      onClose={handleMaybeLater}
-      panelClass="max-w-md"
-      ariaLabelledBy="github-star-title"
-    >
-      <div class="w-full overflow-hidden">
-        {/* Header with close button */}
-        <div class="flex justify-end p-3 pb-0">
-          <button
-            onClick={handleDismiss}
-            class="p-1.5 hover:bg-surface-hover rounded-md text-slate-400 hover:text-muted transition-colors"
-            title="Don't show again"
-            aria-label="Close and don't show again"
-            type="button"
-          >
-            <XIcon class="w-5 h-5" />
-          </button>
-        </div>
+  createEffect(() => {
+    if (!showModal()) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      handleMaybeLater();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    onCleanup(() => document.removeEventListener('keydown', handleKeyDown));
+  });
 
-        {/* Content */}
-        <div class="px-6 pb-6 text-center">
-          {/* Icon */}
-          <div class="flex justify-center mb-4">
-            <div class="relative">
-              <div class="w-16 h-16 bg-surface-hover rounded-full flex items-center justify-center">
-                <GithubIcon class="w-8 h-8 text-base-content" />
-              </div>
-              <div class="absolute -top-1 -right-1 w-7 h-7 bg-yellow-400 rounded-full flex items-center justify-center shadow-sm">
-                <StarIcon class="w-4 h-4 text-yellow-800" />
-              </div>
+  return (
+    <Show when={showModal()}>
+      <section
+        class="fixed left-4 right-20 bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] z-30 max-w-md overflow-hidden rounded-lg border border-border bg-surface text-base-content shadow-xl md:right-auto md:bottom-4"
+        aria-labelledby="github-star-title"
+        aria-live="polite"
+      >
+        <div class="flex items-start gap-3 p-4">
+          <div
+            class="relative mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-hover"
+            aria-hidden="true"
+          >
+            <GithubIcon class="h-5 w-5 text-base-content" />
+            <div class="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-yellow-400 shadow-sm">
+              <StarIcon class="h-3 w-3 text-yellow-800" />
             </div>
           </div>
 
-          {/* Text */}
-          <h2 id="github-star-title" class="text-xl font-semibold text-base-content mb-2">
-            Enjoying Pulse?
-          </h2>
-          <p class="text-muted mb-6 leading-relaxed">
-            Pulse is built and maintained by an independent developer. If it's been useful for
-            monitoring your infrastructure, a GitHub star helps more than you'd think.
-          </p>
-
-          {/* Buttons */}
-          <div class="flex flex-col gap-3">
-            <button
-              onClick={handleStarClick}
-              class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
-              type="button"
-            >
-              <StarIcon class="w-4 h-4" />
-              Star on GitHub
-            </button>
-            <button
-              onClick={handleMaybeLater}
-              class="w-full px-4 py-2 text-sm text-muted hover:text-base-content transition-colors"
-              type="button"
-            >
-              Maybe later
-            </button>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-start gap-2">
+              <div class="min-w-0 flex-1">
+                <h2 id="github-star-title" class="text-sm font-semibold text-base-content">
+                  Enjoying Pulse?
+                </h2>
+                <p class="mt-1 text-xs leading-5 text-muted">
+                  Pulse is built and maintained by an independent developer. If it's been useful
+                  for monitoring your infrastructure, a GitHub star helps more than you'd think.
+                </p>
+              </div>
+              <button
+                onClick={handleDismiss}
+                class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content"
+                title="Don't show again"
+                aria-label="Close and don't show again"
+                type="button"
+              >
+                <XIcon class="h-4 w-4" />
+              </button>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button
+                onClick={handleStarClick}
+                class="inline-flex min-h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                type="button"
+              >
+                <StarIcon class="h-4 w-4" />
+                Star on GitHub
+              </button>
+              <button
+                onClick={handleMaybeLater}
+                class="inline-flex min-h-9 items-center justify-center rounded-md px-3 py-2 text-sm text-muted transition-colors hover:bg-surface-hover hover:text-base-content"
+                type="button"
+              >
+                Maybe later
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    </Dialog>
+      </section>
+    </Show>
   );
 }
