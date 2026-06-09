@@ -433,7 +433,11 @@ func Run(ctx context.Context, version string) error {
 		reaper.OnBeforeDelete = func(orgID string) error {
 			return router.CleanupTenant(ctx, orgID)
 		}
-		go reaper.Run(ctx)
+		go func() {
+			if err := reaper.Run(ctx); err != nil {
+				log.Error().Err(err).Msg("Hosted tenant reaper exited with error")
+			}
+		}()
 		log.Info().Msg("Hosted tenant reaper started")
 	}
 
@@ -803,7 +807,9 @@ shutdown:
 
 	// Ensure mock-mode background update ticker is stopped before process exit.
 	if mock.IsMockEnabled() {
-		mock.SetEnabled(false)
+		if err := mock.SetEnabled(false); err != nil {
+			log.Warn().Err(err).Msg("Failed to disable mock mode during shutdown")
+		}
 	}
 
 	cancel()

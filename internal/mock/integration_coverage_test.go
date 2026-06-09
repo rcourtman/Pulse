@@ -178,12 +178,16 @@ func TestSetEnabledNoOpBehaviorForInitAndRuntime(t *testing.T) {
 		t.Fatalf("failed to seed env: %v", err)
 	}
 
-	setEnabled(false, true)
+	if err := setEnabled(false, true); err != nil {
+		t.Fatalf("setEnabled: %v", err)
+	}
 	if got := os.Getenv("PULSE_MOCK_MODE"); got != "preserve" {
 		t.Fatalf("expected init no-op to preserve env, got %q", got)
 	}
 
-	setEnabled(false, false)
+	if err := setEnabled(false, false); err != nil {
+		t.Fatalf("setEnabled: %v", err)
+	}
 	if got := os.Getenv("PULSE_MOCK_MODE"); got != "false" {
 		t.Fatalf("expected runtime no-op to write false env, got %q", got)
 	}
@@ -278,21 +282,21 @@ func TestSetEnabledUsesCurrentConfigInsteadOfReloadingEnv(t *testing.T) {
 	prevCfg := GetConfig()
 	t.Cleanup(func() {
 		SetMockConfig(prevCfg)
-		SetEnabled(prevEnabled)
+		mustSetEnabled(t, prevEnabled)
 	})
 
 	t.Setenv("PULSE_MOCK_NODES", "9")
 	t.Setenv("PULSE_MOCK_VMS_PER_NODE", "7")
 	t.Setenv("PULSE_MOCK_LXCS_PER_NODE", "6")
 
-	SetEnabled(false)
+	mustSetEnabled(t, false)
 
 	custom := DefaultConfig
 	custom.NodeCount = 2
 	custom.VMsPerNode = 1
 	custom.LXCsPerNode = 1
 	SetMockConfig(custom)
-	SetEnabled(true)
+	mustSetEnabled(t, true)
 
 	got := GetConfig()
 	if got.NodeCount != custom.NodeCount || got.VMsPerNode != custom.VMsPerNode || got.LXCsPerNode != custom.LXCsPerNode {

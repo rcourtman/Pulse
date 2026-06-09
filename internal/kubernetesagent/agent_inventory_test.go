@@ -77,7 +77,9 @@ func TestCollectNativePolicyConfigAndAutoscalingInventory(t *testing.T) {
 	})
 
 	metadataScheme := metadatafake.NewTestScheme()
-	metav1.AddMetaToScheme(metadataScheme)
+	if err := metav1.AddMetaToScheme(metadataScheme); err != nil {
+		t.Fatalf("add meta to scheme: %v", err)
+	}
 	metadataClient := metadatafake.NewSimpleMetadataClient(
 		metadataScheme,
 		&metav1.PartialObjectMetadata{

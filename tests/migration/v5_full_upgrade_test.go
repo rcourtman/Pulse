@@ -170,7 +170,7 @@ func newMigrationTestServer(t *testing.T, dataDir string) *httptest.Server {
 	t.Helper()
 
 	t.Setenv("PULSE_MOCK_MODE", "true")
-	mock.SetEnabled(true)
+	require.NoError(t, mock.SetEnabled(true), "enable mock mode")
 
 	cfg := &config.Config{
 		ConfigPath:     dataDir,
@@ -192,7 +192,7 @@ func newMigrationTestServer(t *testing.T, dataDir string) *httptest.Server {
 	var err error
 	monitor, err = monitoring.New(cfg)
 	require.NoError(t, err, "monitor should initialize against v5 data dir")
-	monitor.SetMockMode(true)
+	require.NoError(t, monitor.SetMockMode(true), "set monitor mock mode")
 
 	hub.SetStateGetter(func(orgID string) interface{} {
 		return monitor.GetState().ToFrontend()
@@ -218,7 +218,9 @@ func newMigrationTestServer(t *testing.T, dataDir string) *httptest.Server {
 		monitor.StopDiscoveryService()
 		monitor.Stop()
 		hub.Stop()
-		mock.SetEnabled(false)
+		if err := mock.SetEnabled(false); err != nil {
+			t.Errorf("disable mock mode: %v", err)
+		}
 	})
 
 	return srv

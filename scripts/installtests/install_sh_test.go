@@ -1084,7 +1084,7 @@ func TestAPIDeregistrationCurl(t *testing.T) {
 		gotPath = r.URL.Path
 		gotHeaders = r.Header.Clone()
 		body, _ := io.ReadAll(r.Body)
-		json.Unmarshal(body, &gotBody)
+		_ = json.Unmarshal(body, &gotBody)
 		w.WriteHeader(200)
 		w.Write([]byte(`{"success":true}`))
 	}))
@@ -1143,7 +1143,7 @@ func TestAPIDeregistrationCurlWithoutToken(t *testing.T) {
 		gotPath = r.URL.Path
 		gotHeaders = r.Header.Clone()
 		body, _ := io.ReadAll(r.Body)
-		json.Unmarshal(body, &gotBody)
+		_ = json.Unmarshal(body, &gotBody)
 		w.WriteHeader(200)
 		w.Write([]byte(`{"success":true}`))
 	}))

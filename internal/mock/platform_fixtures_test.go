@@ -12,8 +12,8 @@ import (
 
 func TestUnifiedResourceSnapshotIncludesPlatformFixtures(t *testing.T) {
 	previous := IsMockEnabled()
-	SetEnabled(true)
-	t.Cleanup(func() { SetEnabled(previous) })
+	mustSetEnabled(t, true)
+	t.Cleanup(func() { mustSetEnabled(t, previous) })
 
 	graph := CurrentFixtureGraph()
 	legacyName := ""
@@ -72,8 +72,8 @@ func TestUnifiedResourceSnapshotIncludesPlatformFixtures(t *testing.T) {
 
 func TestUnifiedResourceSnapshotIncludesRuntimeNativeTabFixtures(t *testing.T) {
 	previous := IsMockEnabled()
-	SetEnabled(true)
-	t.Cleanup(func() { SetEnabled(previous) })
+	mustSetEnabled(t, true)
+	t.Cleanup(func() { mustSetEnabled(t, previous) })
 
 	resources, _ := UnifiedResourceSnapshot()
 	counts := make(map[unifiedresources.ResourceType]int)
@@ -110,8 +110,8 @@ func TestUnifiedResourceSnapshotIncludesRuntimeNativeTabFixtures(t *testing.T) {
 
 func TestUnifiedResourceSnapshotParentsDemoProxmoxWorkloads(t *testing.T) {
 	previous := IsMockEnabled()
-	SetEnabled(true)
-	t.Cleanup(func() { SetEnabled(previous) })
+	mustSetEnabled(t, true)
+	t.Cleanup(func() { mustSetEnabled(t, previous) })
 
 	resources, _ := UnifiedResourceSnapshot()
 	agentsByID := make(map[string]unifiedresources.Resource)

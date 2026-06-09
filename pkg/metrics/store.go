@@ -332,7 +332,7 @@ func (s *Store) ensureMetricsUniqueIndex() error {
 	if txErr != nil {
 		return fmt.Errorf("begin dedupe transaction: %w", txErr)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	_, txErr = tx.Exec(`
 		DELETE FROM metrics
@@ -396,7 +396,7 @@ func (s *Store) migrateLegacyHostResourceType() {
 		log.Warn().Err(err).Msg("Failed to start legacy host->agent metrics migration")
 		return
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Reinsert legacy rows with canonical type, keeping any existing canonical
 	// records when duplicates collide with the unique index.
@@ -780,7 +780,7 @@ func (s *Store) writeBatch(metrics []bufferedMetric) {
 			max_value = excluded.max_value
 	`)
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		log.Error().Err(err).
 			Str("component", "metrics_store").
 			Str("action", "prepare_write_stmt").
@@ -1583,7 +1583,7 @@ func (s *Store) rollupTier(fromTier, toTier Tier, bucketSize, minAge time.Durati
 		log.Error().Err(err).Str("tier", string(fromTier)).Msg("Failed to begin rollup transaction")
 		return
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	_, err = tx.Exec(`
 		INSERT OR IGNORE INTO metrics (resource_type, resource_id, metric_type, value, min_value, max_value, timestamp, tier)
@@ -1630,7 +1630,7 @@ func (s *Store) rollupCandidate(resourceType, resourceID, metricType string, fro
 	if err != nil {
 		return
 	}
-	defer itx.Rollback()
+	defer func() { _ = itx.Rollback() }()
 
 	// Aggregate data into buckets
 	_, err = itx.Exec(`
@@ -1659,7 +1659,13 @@ func (s *Store) rollupCandidate(resourceType, resourceID, metricType string, fro
 		return
 	}
 
-	itx.Commit()
+	if err := itx.Commit(); err != nil {
+		log.Warn().Err(err).
+			Str("resource", resourceID).
+			Str("from", string(fromTier)).
+			Str("to", string(toTier)).
+			Msg("Failed to commit rollup transaction")
+	}
 }
 
 func (s *Store) getMetaInt(key string) (int64, bool) {

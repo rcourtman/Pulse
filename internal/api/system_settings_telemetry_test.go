@@ -308,8 +308,8 @@ func TestTelemetryUpdate_NoMutationOnPersistFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		os.Chmod(tempDir, 0700)
-		os.Chmod(systemFile, 0600)
+		_ = os.Chmod(tempDir, 0700)    // restore so TempDir cleanup works
+		_ = os.Chmod(systemFile, 0600) // restore so TempDir cleanup works
 	})
 
 	body, _ := json.Marshal(map[string]interface{}{"telemetryEnabled": false})

@@ -659,8 +659,8 @@ func TestPollVMsWithNodes_SkipsNativeGuestMetricWritesInMockMode(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 
 	previous := mock.IsMockEnabled()
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(previous) })
+	mustSetMockEnabled(t, true)
+	t.Cleanup(func() { mustSetMockEnabled(t, previous) })
 
 	mon := newTestPVEMonitor("test")
 	defer mon.alertManager.Stop()
@@ -707,8 +707,8 @@ func TestRecordGuestMetric_SkipsNativeWritesInMockMode(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 
 	previous := mock.IsMockEnabled()
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(previous) })
+	mustSetMockEnabled(t, true)
+	t.Cleanup(func() { mustSetMockEnabled(t, previous) })
 
 	mon := newTestPVEMonitor("test")
 	defer mon.alertManager.Stop()

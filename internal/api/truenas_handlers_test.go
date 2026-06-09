@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -35,7 +34,7 @@ func (c *fakeTrueNASClient) Close() {}
 
 func TestTrueNASHandlers_HandleAdd_Success(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
-	setMockModeForTrueNASTest(t, false)
+	setMockModeForTest(t, false)
 
 	handler, persistence, _ := newTrueNASHandlersForTest(t, nil)
 
@@ -79,7 +78,7 @@ func TestTrueNASHandlers_HandleAdd_Success(t *testing.T) {
 func TestTrueNASHandlers_HandleAdd_ValidationAndFeatureGate(t *testing.T) {
 	t.Run("missing host", func(t *testing.T) {
 		setTrueNASFeatureForTest(t, true)
-		setMockModeForTrueNASTest(t, false)
+		setMockModeForTest(t, false)
 		handler, _, _ := newTrueNASHandlersForTest(t, nil)
 
 		body := marshalTrueNASRequest(t, map[string]any{
@@ -96,7 +95,7 @@ func TestTrueNASHandlers_HandleAdd_ValidationAndFeatureGate(t *testing.T) {
 
 	t.Run("feature disabled", func(t *testing.T) {
 		setTrueNASFeatureForTest(t, false)
-		setMockModeForTrueNASTest(t, false)
+		setMockModeForTest(t, false)
 		handler, _, _ := newTrueNASHandlersForTest(t, nil)
 
 		body := marshalTrueNASRequest(t, map[string]any{
@@ -118,7 +117,7 @@ func TestTrueNASHandlers_HandleAdd_ValidationAndFeatureGate(t *testing.T) {
 
 func TestTrueNASHandlers_HandleAdd_BlocksNewCountedSystemAtLimit(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
-	setMockModeForTrueNASTest(t, false)
+	setMockModeForTest(t, false)
 	setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 	handler, persistence, monitor := newTrueNASHandlersForTest(t, nil)
@@ -188,7 +187,7 @@ func TestTrueNASHandlers_HandleAdd_ReturnsUnavailableWhenSupplementalInventoryNo
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			setTrueNASFeatureForTest(t, true)
-			setMockModeForTrueNASTest(t, false)
+			setMockModeForTest(t, false)
 			setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 			handler, persistence, monitor := newTrueNASHandlersForTest(t, nil)
@@ -220,7 +219,7 @@ func TestTrueNASHandlers_HandleAdd_ReturnsUnavailableWhenSupplementalInventoryNo
 
 func TestTrueNASHandlers_HandleAdd_DoesNotCountDisabledConnectionAtLimit(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
-	setMockModeForTrueNASTest(t, false)
+	setMockModeForTest(t, false)
 	setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 	handler, persistence, monitor := newTrueNASHandlersForTest(t, nil)
@@ -275,7 +274,7 @@ func TestTrueNASHandlers_HandleAdd_DoesNotCountDisabledConnectionAtLimit(t *test
 
 func TestTrueNASHandlers_HandleAdd_AllowsDisabledConnectionWhenUsageUnavailable(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
-	setMockModeForTrueNASTest(t, false)
+	setMockModeForTest(t, false)
 	setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 	handler, persistence, monitor := newTrueNASHandlersForTest(t, nil)
@@ -311,7 +310,7 @@ func TestTrueNASHandlers_HandleAdd_AllowsDisabledConnectionWhenUsageUnavailable(
 
 func TestTrueNASHandlers_HandleAdd_AllowsCanonicalOverlapAtLimit(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
-	setMockModeForTrueNASTest(t, false)
+	setMockModeForTest(t, false)
 	setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 	handler, persistence, monitor := newTrueNASHandlersForTest(t, nil)
@@ -412,7 +411,7 @@ func TestTrueNASHandlers_HandleList_RedactsSensitiveFields(t *testing.T) {
 
 func TestTrueNASHandlers_HandleList_ReturnsMockConnectionsInMockMode(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
-	setMockModeForTrueNASTest(t, true)
+	setMockModeForTest(t, true)
 
 	handler, _, _ := newTrueNASHandlersForTest(t, nil)
 
@@ -525,7 +524,7 @@ func TestTrueNASHandlers_HandleList_IncludesPollAndObservedSummary(t *testing.T)
 
 func TestTrueNASHandlers_HandleDelete_RemovesAndHandlesUnknownID(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
-	setMockModeForTrueNASTest(t, false)
+	setMockModeForTest(t, false)
 
 	handler, persistence, _ := newTrueNASHandlersForTest(t, nil)
 	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{
@@ -562,7 +561,7 @@ func TestTrueNASHandlers_HandleDelete_RemovesAndHandlesUnknownID(t *testing.T) {
 
 func TestTrueNASHandlers_HandleUpdate_PreservesMaskedSecretsAndReplacesFields(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
-	setMockModeForTrueNASTest(t, false)
+	setMockModeForTest(t, false)
 
 	handler, persistence, _ := newTrueNASHandlersForTest(t, nil)
 	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{
@@ -630,7 +629,7 @@ func TestTrueNASHandlers_HandleUpdate_PreservesMaskedSecretsAndReplacesFields(t 
 
 func TestTrueNASHandlers_HandleUpdate_BlocksProjectedNetNewSystemAtLimit(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
-	setMockModeForTrueNASTest(t, false)
+	setMockModeForTest(t, false)
 	setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 	handler, persistence, monitor := newTrueNASHandlersForTest(t, nil)
@@ -728,7 +727,7 @@ func TestTrueNASHandlers_HandleUpdate_ReturnsUnavailableWhenSupplementalInventor
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			setTrueNASFeatureForTest(t, true)
-			setMockModeForTrueNASTest(t, false)
+			setMockModeForTest(t, false)
 			setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 			handler, persistence, monitor := newTrueNASHandlersForTest(t, nil)
@@ -774,7 +773,7 @@ func TestTrueNASHandlers_HandleUpdate_ReturnsUnavailableWhenSupplementalInventor
 
 func TestTrueNASHandlers_HandleUpdate_AllowsDisablingConnectionWhenUsageUnavailable(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
-	setMockModeForTrueNASTest(t, false)
+	setMockModeForTest(t, false)
 	setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 	handler, persistence, monitor := newTrueNASHandlersForTest(t, nil)
@@ -829,7 +828,7 @@ func TestTrueNASHandlers_HandleUpdate_AllowsDisablingConnectionWhenUsageUnavaila
 
 func TestTrueNASHandlers_HandleUpdate_UnknownID(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
-	setMockModeForTrueNASTest(t, false)
+	setMockModeForTest(t, false)
 
 	handler, _, _ := newTrueNASHandlersForTest(t, nil)
 
@@ -1444,15 +1443,6 @@ func setTrueNASFeatureForTest(t *testing.T, enabled bool) {
 	truenas.SetFeatureEnabled(enabled)
 	t.Cleanup(func() {
 		truenas.SetFeatureEnabled(previous)
-	})
-}
-
-func setMockModeForTrueNASTest(t *testing.T, enabled bool) {
-	t.Helper()
-	previous := mock.IsMockEnabled()
-	mock.SetEnabled(enabled)
-	t.Cleanup(func() {
-		mock.SetEnabled(previous)
 	})
 }
 

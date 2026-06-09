@@ -455,10 +455,14 @@ func TestHandleGetMockMode(t *testing.T) {
 	prevEnabled := mock.IsMockEnabled()
 	t.Cleanup(func() {
 		mock.SetMockConfig(prevConfig)
-		mock.SetEnabled(prevEnabled)
+		if err := mock.SetEnabled(prevEnabled); err != nil {
+			t.Errorf("restore mock mode: %v", err)
+		}
 	})
 
-	mock.SetEnabled(false)
+	if err := mock.SetEnabled(false); err != nil {
+		t.Fatalf("disable mock mode: %v", err)
+	}
 	mock.SetMockConfig(mock.MockConfig{
 		NodeCount:     3,
 		RandomMetrics: false,
@@ -491,7 +495,9 @@ func TestHandleGetMockMode(t *testing.T) {
 func TestHandleUpdateMockMode_InvokesChangeHook(t *testing.T) {
 	prevEnabled := mock.IsMockEnabled()
 	t.Cleanup(func() {
-		mock.SetEnabled(prevEnabled)
+		if err := mock.SetEnabled(prevEnabled); err != nil {
+			t.Errorf("restore mock mode: %v", err)
+		}
 	})
 
 	handler := newTestConfigHandlers(t, &config.Config{DataPath: t.TempDir()})

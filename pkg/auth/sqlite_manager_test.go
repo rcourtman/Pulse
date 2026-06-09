@@ -333,15 +333,21 @@ func TestSQLiteManagerCircularInheritance(t *testing.T) {
 
 	// Create role A
 	roleA := Role{ID: "role-a", Name: "Role A", Permissions: []Permission{{Action: "read", Resource: "a"}}}
-	m.SaveRole(roleA)
+	if err := m.SaveRole(roleA); err != nil {
+		t.Fatalf("SaveRole: %v", err)
+	}
 
 	// Create role B with parent A
 	roleB := Role{ID: "role-b", Name: "Role B", ParentID: "role-a", Permissions: []Permission{{Action: "read", Resource: "b"}}}
-	m.SaveRole(roleB)
+	if err := m.SaveRole(roleB); err != nil {
+		t.Fatalf("SaveRole: %v", err)
+	}
 
 	// Create role C with parent B
 	roleC := Role{ID: "role-c", Name: "Role C", ParentID: "role-b", Permissions: []Permission{{Action: "read", Resource: "c"}}}
-	m.SaveRole(roleC)
+	if err := m.SaveRole(roleC); err != nil {
+		t.Fatalf("SaveRole: %v", err)
+	}
 
 	// Try to make A inherit from C (creating cycle)
 	roleA.ParentID = "role-c"
@@ -435,8 +441,12 @@ func TestSQLiteManagerPersistence(t *testing.T) {
 		ParentID:    RoleViewer,
 		Permissions: []Permission{{Action: "write", Resource: "persist", Effect: EffectAllow}},
 	}
-	m1.SaveRole(role)
-	m1.AssignRole("persist-user", "persist-role")
+	if err := m1.SaveRole(role); err != nil {
+		t.Fatalf("SaveRole: %v", err)
+	}
+	if err := m1.AssignRole("persist-user", "persist-role"); err != nil {
+		t.Fatalf("AssignRole: %v", err)
+	}
 	m1.Close()
 
 	// Reopen and verify
@@ -544,7 +554,9 @@ func TestSQLiteManagerChangeLogRetention(t *testing.T) {
 			Name:        "Retention Test " + string(rune('a'+i)),
 			Permissions: []Permission{{Action: "read", Resource: "test"}},
 		}
-		m.SaveRole(role)
+		if err := m.SaveRole(role); err != nil {
+			t.Fatalf("SaveRole: %v", err)
+		}
 		// Add slight delay to ensure different timestamps
 		time.Sleep(10 * time.Millisecond)
 	}

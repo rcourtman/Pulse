@@ -498,9 +498,9 @@ func TestBuildFixtureStateIncludesKubernetesNetworkingInventory(t *testing.T) {
 }
 
 func TestMockStateIncludesHostAgents(t *testing.T) {
-	SetEnabled(true)
+	mustSetEnabled(t, true)
 	t.Cleanup(func() {
-		SetEnabled(false)
+		mustSetEnabled(t, false)
 	})
 
 	state := CurrentFixtureGraph().State

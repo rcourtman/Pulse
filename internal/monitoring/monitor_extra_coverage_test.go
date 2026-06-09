@@ -30,8 +30,8 @@ func TestMonitor_GetConnectionStatuses_MockMode_Extra(t *testing.T) {
 	}
 	defer m.alertManager.Stop()
 
-	m.SetMockMode(true)
-	defer m.SetMockMode(false)
+	mustSetMonitorMockMode(t, m, true)
+	defer mustSetMonitorMockMode(t, m, false)
 
 	statuses := m.GetConnectionStatuses()
 	if statuses == nil {
@@ -158,13 +158,13 @@ func TestMonitor_SetMockMode_Advanced_Extra(t *testing.T) {
 	defer m.alertManager.Stop()
 
 	// Switch to mock mode
-	m.SetMockMode(true)
+	mustSetMonitorMockMode(t, m, true)
 	if !mock.IsMockEnabled() {
 		t.Error("Mock mode should be enabled")
 	}
 
 	// Switch back
-	m.SetMockMode(false)
+	mustSetMonitorMockMode(t, m, false)
 	if mock.IsMockEnabled() {
 		t.Error("Mock mode should be disabled")
 	}
@@ -2359,8 +2359,8 @@ func TestMonitor_Start_Extra(t *testing.T) {
 	defer m.alertManager.Stop()
 
 	// Use MockMode to skip discovery
-	m.SetMockMode(true)
-	defer m.SetMockMode(false)
+	mustSetMonitorMockMode(t, m, true)
+	defer mustSetMonitorMockMode(t, m, false)
 	m.mockMetricsCancel = func() {} // Skip mock metrics seeding to keep Start responsive in tests.
 
 	ctx, cancel := context.WithCancel(context.Background())

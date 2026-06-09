@@ -18,8 +18,14 @@ func TestSaveNodesConfig_Scenarios(t *testing.T) {
 
 	// 1. Mock mode enabled
 	t.Run("MockModeEnabled", func(t *testing.T) {
-		mock.SetEnabled(true)
-		defer mock.SetEnabled(false)
+		if err := mock.SetEnabled(true); err != nil {
+			t.Fatalf("enable mock mode: %v", err)
+		}
+		defer func() {
+			if err := mock.SetEnabled(false); err != nil {
+				t.Errorf("disable mock mode: %v", err)
+			}
+		}()
 
 		err := cp.SaveNodesConfig([]PVEInstance{{Host: "test"}}, nil, nil)
 		assert.NoError(t, err)

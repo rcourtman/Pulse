@@ -678,17 +678,17 @@ func TestSeedMockMetricsHistory_UsesCanonicalMockFixtureGraphForLegacyAndProvide
 	previous := mock.IsMockEnabled()
 	previousConfig := mock.GetConfig()
 	t.Cleanup(func() {
-		mock.SetEnabled(false)
+		mustSetMockEnabled(t, false)
 		mock.SetMockConfig(previousConfig)
 		if previous {
-			mock.SetEnabled(true)
+			mustSetMockEnabled(t, true)
 			mock.SetMockConfig(previousConfig)
 		}
 	})
 
-	mock.SetEnabled(false)
+	mustSetMockEnabled(t, false)
 	mock.SetMockConfig(compactMockFixtureConfig())
-	mock.SetEnabled(true)
+	mustSetMockEnabled(t, true)
 
 	graph := mock.CurrentFixtureGraph()
 	if len(graph.State.Nodes) == 0 {
@@ -700,7 +700,7 @@ func TestSeedMockMetricsHistory_UsesCanonicalMockFixtureGraphForLegacyAndProvide
 	if len(graph.PlatformFixtures.VMware.Hosts) == 0 {
 		t.Fatal("expected canonical mock graph to include VMware fixtures")
 	}
-	mock.SetEnabled(false)
+	mustSetMockEnabled(t, false)
 
 	now := time.Now()
 	seedDuration := boundedMockHistoryProofWindow
@@ -760,10 +760,10 @@ func TestStartMockMetricsSampler_DoesNotClearExistingMetricsStoreData(t *testing
 	previousEnabled := mock.IsMockEnabled()
 	previousConfig := mock.GetConfig()
 	t.Cleanup(func() {
-		mock.SetEnabled(false)
+		mustSetMockEnabled(t, false)
 		mock.SetMockConfig(previousConfig)
 		if previousEnabled {
-			mock.SetEnabled(true)
+			mustSetMockEnabled(t, true)
 			mock.SetMockConfig(previousConfig)
 		}
 	})
@@ -793,9 +793,9 @@ func TestStartMockMetricsSampler_DoesNotClearExistingMetricsStoreData(t *testing
 		},
 	})
 
-	mock.SetEnabled(false)
+	mustSetMockEnabled(t, false)
 	mock.SetMockConfig(compactMockFixtureConfig())
-	mock.SetEnabled(true)
+	mustSetMockEnabled(t, true)
 
 	monitor := &Monitor{
 		metricsHistory: NewMetricsHistory(1000, 24*time.Hour),
@@ -834,10 +834,10 @@ func TestStartAndStopMockMetricsSampler_ClearStaleMockChartCaches(t *testing.T) 
 	previousEnabled := mock.IsMockEnabled()
 	previousConfig := mock.GetConfig()
 	t.Cleanup(func() {
-		mock.SetEnabled(false)
+		mustSetMockEnabled(t, false)
 		mock.SetMockConfig(previousConfig)
 		if previousEnabled {
-			mock.SetEnabled(true)
+			mustSetMockEnabled(t, true)
 			mock.SetMockConfig(previousConfig)
 		}
 	})
@@ -854,9 +854,9 @@ func TestStartAndStopMockMetricsSampler_ClearStaleMockChartCaches(t *testing.T) 
 	cfg.K8sPodsPerCluster = 0
 	cfg.K8sDeploymentsPerCluster = 0
 
-	mock.SetEnabled(false)
+	mustSetMockEnabled(t, false)
 	mock.SetMockConfig(cfg)
-	mock.SetEnabled(true)
+	mustSetMockEnabled(t, true)
 
 	monitor := &Monitor{
 		metricsHistory: NewMetricsHistory(128, 24*time.Hour),
@@ -915,19 +915,19 @@ func TestStartMockMetricsSampler_SeedsCanonicalMockResourceHistory(t *testing.T)
 	previousEnabled := mock.IsMockEnabled()
 	previousConfig := mock.GetConfig()
 	t.Cleanup(func() {
-		mock.SetEnabled(false)
+		mustSetMockEnabled(t, false)
 		mock.SetMockConfig(previousConfig)
 		if previousEnabled {
-			mock.SetEnabled(true)
+			mustSetMockEnabled(t, true)
 			mock.SetMockConfig(previousConfig)
 		}
 	})
 
 	cfg := compactMockChartFixtureConfig()
 
-	mock.SetEnabled(false)
+	mustSetMockEnabled(t, false)
 	mock.SetMockConfig(cfg)
-	mock.SetEnabled(true)
+	mustSetMockEnabled(t, true)
 
 	resources, _ := mock.UnifiedResourceSnapshot()
 	if len(resources) == 0 {

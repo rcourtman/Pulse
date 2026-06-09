@@ -311,7 +311,9 @@ func (m *SQLiteManager) loadRolePermissions(roleID string) []Permission {
 		}
 
 		if conditions.Valid && conditions.String != "" {
-			json.Unmarshal([]byte(conditions.String), &perm.Conditions)
+			if err := json.Unmarshal([]byte(conditions.String), &perm.Conditions); err != nil {
+				log.Error().Err(err).Msg("Failed to parse permission conditions")
+			}
 		}
 
 		perms = append(perms, perm)
@@ -396,7 +398,7 @@ func (m *SQLiteManager) SaveRoleWithContext(role Role, username string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Upsert role
 	_, err = tx.Exec(`
@@ -644,7 +646,7 @@ func (m *SQLiteManager) UpdateUserRolesWithContext(username string, roleIDs []st
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Delete existing assignments
 	_, err = tx.Exec("DELETE FROM rbac_user_assignments WHERE username = ?", username)
@@ -912,7 +914,9 @@ func (m *SQLiteManager) migrateFromFiles(dataDir string) error {
 
 	// Check if migration is needed
 	var roleCount int
-	m.db.QueryRow("SELECT COUNT(*) FROM rbac_roles WHERE is_built_in = 0").Scan(&roleCount)
+	if err := m.db.QueryRow("SELECT COUNT(*) FROM rbac_roles WHERE is_built_in = 0").Scan(&roleCount); err != nil {
+		log.Warn().Err(err).Msg("Failed to count custom roles before migration")
+	}
 	if roleCount > 0 {
 		return nil // Already have custom roles, skip migration
 	}
@@ -931,7 +935,9 @@ func (m *SQLiteManager) migrateFromFiles(dataDir string) error {
 			log.Info().Int("count", len(roles)).Msg("Migrated roles from file")
 
 			// Rename old file
-			os.Rename(rolesFile, rolesFile+".bak")
+			if err := os.Rename(rolesFile, rolesFile+".bak"); err != nil {
+				log.Warn().Err(err).Msg("Failed to rename migrated roles file")
+			}
 		}
 	}
 
@@ -947,7 +953,9 @@ func (m *SQLiteManager) migrateFromFiles(dataDir string) error {
 			log.Info().Int("count", len(assignments)).Msg("Migrated assignments from file")
 
 			// Rename old file
-			os.Rename(assignmentsFile, assignmentsFile+".bak")
+			if err := os.Rename(assignmentsFile, assignmentsFile+".bak"); err != nil {
+				log.Warn().Err(err).Msg("Failed to rename migrated assignments file")
+			}
 		}
 	}
 

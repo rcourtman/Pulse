@@ -37,9 +37,9 @@ func TestLoadMockConfigRejectsInvalidValues(t *testing.T) {
 }
 
 func TestSetMockConfigNormalizesInvalidValues(t *testing.T) {
-	SetEnabled(false)
+	mustSetEnabled(t, false)
 	t.Cleanup(func() {
-		SetEnabled(false)
+		mustSetEnabled(t, false)
 		SetMockConfig(DefaultConfig)
 	})
 

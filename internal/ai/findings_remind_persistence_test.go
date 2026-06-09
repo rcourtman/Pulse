@@ -30,7 +30,7 @@ func TestFindingsPersistenceAdapter_PreservesRemindAt(t *testing.T) {
 		ResourceType:    "storage",
 		Node:            "node1",
 		Title:           "Storage growth trending toward full",
-		Description:    "Pool tank approaching threshold",
+		Description:     "Pool tank approaching threshold",
 		Source:          "ai-analysis",
 		DetectedAt:      now.Add(-2 * time.Hour),
 		LastSeenAt:      now,

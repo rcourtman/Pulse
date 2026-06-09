@@ -7,18 +7,13 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 )
 
 func TestRouterMockMode_SeedsTrueNASAndVMwareSupplementalResources(t *testing.T) {
-	previous := mock.IsMockEnabled()
-	mock.SetEnabled(true)
-	t.Cleanup(func() {
-		mock.SetEnabled(previous)
-	})
+	setMockModeForTest(t, true)
 
 	cfg := &config.Config{DataPath: t.TempDir()}
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
@@ -71,11 +66,7 @@ func TestRouterMockMode_SeedsTrueNASAndVMwareSupplementalResources(t *testing.T)
 }
 
 func TestRouterMockMode_SeedsVMwareSupplementalActivity(t *testing.T) {
-	previous := mock.IsMockEnabled()
-	mock.SetEnabled(true)
-	t.Cleanup(func() {
-		mock.SetEnabled(previous)
-	})
+	setMockModeForTest(t, true)
 
 	adapter := mockSupplementalRecordsAdapter{source: unified.SourceVMware}
 	changes := adapter.SupplementalChanges(nil, "default")

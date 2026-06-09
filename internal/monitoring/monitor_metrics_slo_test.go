@@ -58,10 +58,10 @@ func TestStartMockMetricsSampler_PrewarmsDefaultWorkloadChartCaches(t *testing.T
 	previousEnabled := mock.IsMockEnabled()
 	previousConfig := mock.GetConfig()
 	t.Cleanup(func() {
-		mock.SetEnabled(false)
+		mustSetMockEnabled(t, false)
 		mock.SetMockConfig(previousConfig)
 		if previousEnabled {
-			mock.SetEnabled(true)
+			mustSetMockEnabled(t, true)
 			mock.SetMockConfig(previousConfig)
 		}
 	})
@@ -75,9 +75,9 @@ func TestStartMockMetricsSampler_PrewarmsDefaultWorkloadChartCaches(t *testing.T
 	cfg.K8sNodesPerCluster = 1
 	cfg.K8sPodsPerCluster = 1
 
-	mock.SetEnabled(false)
+	mustSetMockEnabled(t, false)
 	mock.SetMockConfig(cfg)
-	mock.SetEnabled(true)
+	mustSetMockEnabled(t, true)
 
 	monitor := &Monitor{
 		metricsHistory: NewMetricsHistory(128, 24*time.Hour),
@@ -537,17 +537,17 @@ func TestGetStorageSummaryCapacityTrend_MockAvoidsPerPoolChartCacheFanout(t *tes
 	previousEnabled := mock.IsMockEnabled()
 	previousConfig := mock.GetConfig()
 	t.Cleanup(func() {
-		mock.SetEnabled(false)
+		mustSetMockEnabled(t, false)
 		mock.SetMockConfig(previousConfig)
 		if previousEnabled {
-			mock.SetEnabled(true)
+			mustSetMockEnabled(t, true)
 			mock.SetMockConfig(previousConfig)
 		}
 	})
 
-	mock.SetEnabled(false)
+	mustSetMockEnabled(t, false)
 	mock.SetMockConfig(previousConfig)
-	mock.SetEnabled(true)
+	mustSetMockEnabled(t, true)
 
 	monitor := newChartFallbackTestMonitor(t)
 	points, oldestTimestamp := monitor.GetStorageSummaryCapacityTrend(24 * time.Hour)
@@ -729,8 +729,8 @@ func TestSLO_GetGuestMetricsForChart_WithNativeHistoryFallback(t *testing.T) {
 
 func TestSLO_GetGuestMetricsForChartBatch_DoesNotStitchSparseStoreTailOntoCoveredInMemorySeries(t *testing.T) {
 	previous := mock.IsMockEnabled()
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(previous) })
+	mustSetMockEnabled(t, true)
+	t.Cleanup(func() { mustSetMockEnabled(t, previous) })
 
 	monitor := newChartFallbackTestMonitor(t)
 	now := time.Now().UTC().Truncate(time.Second)
@@ -772,8 +772,8 @@ func TestSLO_GetGuestMetricsForChartBatch_DoesNotStitchSparseStoreTailOntoCovere
 
 func TestMockChartCacheInvalidatesAfterMockHistoryRefresh(t *testing.T) {
 	previous := mock.IsMockEnabled()
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(previous) })
+	mustSetMockEnabled(t, true)
+	t.Cleanup(func() { mustSetMockEnabled(t, previous) })
 
 	monitor := newChartFallbackTestMonitor(t)
 	now := time.Now().UTC().Truncate(time.Second)

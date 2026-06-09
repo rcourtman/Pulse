@@ -55,7 +55,9 @@ func TestGetOrCreateInstallID_ReusesExisting(t *testing.T) {
 func TestGetOrCreateInstallID_RegeneratesInvalid(t *testing.T) {
 	dir := t.TempDir()
 	// Write garbage.
-	os.WriteFile(filepath.Join(dir, installIDFile), []byte("not-a-uuid\n"), 0600)
+	if err := os.WriteFile(filepath.Join(dir, installIDFile), []byte("not-a-uuid\n"), 0600); err != nil {
+		t.Fatalf("write install id file: %v", err)
+	}
 
 	id := getOrCreateInstallIDAt(dir, time.Date(2026, 3, 28, 12, 0, 0, 0, time.UTC))
 	if id == "" || id == "not-a-uuid" {
@@ -283,7 +285,7 @@ func TestSend_Success(t *testing.T) {
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
-		json.Unmarshal(body, &lastPing)
+		_ = json.Unmarshal(body, &lastPing)
 		received.Add(1)
 		w.WriteHeader(http.StatusNoContent)
 	}))

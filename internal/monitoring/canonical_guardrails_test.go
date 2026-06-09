@@ -1072,8 +1072,8 @@ func TestMonitoringRuntimeAvoidsLegacyMockPartialHelpers(t *testing.T) {
 
 func TestMockOwnedUnifiedMetricSyncDefersToCanonicalSamplerInMockMode(t *testing.T) {
 	previous := mock.IsMockEnabled()
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(previous) })
+	mustSetMockEnabled(t, true)
+	t.Cleanup(func() { mustSetMockEnabled(t, previous) })
 
 	if !shouldSkipMockOwnedUnifiedMetricSync(unifiedresources.Resource{
 		Sources: []unifiedresources.DataSource{unifiedresources.SourceTrueNAS},
@@ -1091,7 +1091,7 @@ func TestMockOwnedUnifiedMetricSyncDefersToCanonicalSamplerInMockMode(t *testing
 		t.Fatal("expected all mock-owned resources to defer to the canonical mock sampler")
 	}
 
-	mock.SetEnabled(false)
+	mustSetMockEnabled(t, false)
 	if shouldSkipMockOwnedUnifiedMetricSync(unifiedresources.Resource{
 		Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker},
 	}) {

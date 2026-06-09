@@ -14,10 +14,10 @@ func TestSetMockConfigNormalizesInvalidAndOversizedValues(t *testing.T) {
 	prevEnabled := IsMockEnabled()
 	t.Cleanup(func() {
 		SetMockConfig(prevConfig)
-		SetEnabled(prevEnabled)
+		mustSetEnabled(t, prevEnabled)
 	})
 
-	SetEnabled(false)
+	mustSetEnabled(t, false)
 
 	overlong := strings.Repeat("a", maxMockHighLoadNodeChars+1)
 	SetMockConfig(MockConfig{

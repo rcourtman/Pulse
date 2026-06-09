@@ -1275,7 +1275,7 @@ func TestRun(t *testing.T) {
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		run(ctx, []string{"-token", "T", "-enable-host=false"}, func(s string) string { return "" })
+		_ = run(ctx, []string{"-token", "T", "-enable-host=false"}, func(s string) string { return "" })
 	})
 
 	t.Run("auto-detect podman", func(t *testing.T) {
@@ -1290,7 +1290,7 @@ func TestRun(t *testing.T) {
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		run(ctx, []string{"-token", "T", "-enable-host=false"}, func(s string) string { return "" })
+		_ = run(ctx, []string{"-token", "T", "-enable-host=false"}, func(s string) string { return "" })
 	})
 
 	t.Run("goroutine error", func(t *testing.T) {

@@ -430,8 +430,8 @@ func TestMonitorUnifiedResourceSnapshotPrefersStoreFreshness(t *testing.T) {
 }
 
 func TestMonitorGetUnifiedReadStateOrSnapshotUsesCanonicalMockUnifiedResources(t *testing.T) {
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(false) })
+	mustSetMockEnabled(t, true)
+	t.Cleanup(func() { mustSetMockEnabled(t, false) })
 
 	graph := mock.CurrentFixtureGraph()
 	legacyName := ""
@@ -487,8 +487,8 @@ func TestMonitorGetUnifiedReadStateOrSnapshotUsesCanonicalMockUnifiedResources(t
 }
 
 func TestMonitorBuildBroadcastFrontendStateUsesCanonicalMockUnifiedResources(t *testing.T) {
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(false) })
+	mustSetMockEnabled(t, true)
+	t.Cleanup(func() { mustSetMockEnabled(t, false) })
 
 	graph := mock.CurrentFixtureGraph()
 	legacyName := ""

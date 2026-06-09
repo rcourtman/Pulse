@@ -1706,8 +1706,8 @@ func TestApplyHostReportPersistsPhysicalDiskIOMetricsForAgentDisks(t *testing.T)
 
 func TestApplyHostReportSkipsMetricsAndSMARTWritesInMockMode(t *testing.T) {
 	previous := mock.IsMockEnabled()
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(previous) })
+	mustSetMockEnabled(t, true)
+	t.Cleanup(func() { mustSetMockEnabled(t, previous) })
 
 	storeCfg := metrics.DefaultConfig(t.TempDir())
 	storeCfg.WriteBufferSize = 1

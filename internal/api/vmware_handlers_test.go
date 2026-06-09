@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -34,7 +33,7 @@ func (c *fakeVMwareClient) Close() {}
 
 func TestVMwareHandlers_HandleAdd_Success(t *testing.T) {
 	setVMwareFeatureForTest(t, true)
-	setMockModeForVMwareTest(t, false)
+	setMockModeForTest(t, false)
 
 	handler, persistence := newVMwareHandlersForTest(t)
 
@@ -81,7 +80,7 @@ func TestVMwareHandlers_HandleAdd_Success(t *testing.T) {
 func TestVMwareHandlers_HandleAdd_ValidationAndFeatureGate(t *testing.T) {
 	t.Run("missing host", func(t *testing.T) {
 		setVMwareFeatureForTest(t, true)
-		setMockModeForVMwareTest(t, false)
+		setMockModeForTest(t, false)
 		handler, _ := newVMwareHandlersForTest(t)
 
 		body := marshalVMwareRequest(t, map[string]any{
@@ -99,7 +98,7 @@ func TestVMwareHandlers_HandleAdd_ValidationAndFeatureGate(t *testing.T) {
 
 	t.Run("feature disabled", func(t *testing.T) {
 		setVMwareFeatureForTest(t, false)
-		setMockModeForVMwareTest(t, false)
+		setMockModeForTest(t, false)
 		handler, _ := newVMwareHandlersForTest(t)
 
 		body := marshalVMwareRequest(t, map[string]any{
@@ -122,7 +121,7 @@ func TestVMwareHandlers_HandleAdd_ValidationAndFeatureGate(t *testing.T) {
 
 func TestVMwareHandlers_HandleAdd_BlocksProjectedNetNewSystemsAtLimit(t *testing.T) {
 	setVMwareFeatureForTest(t, true)
-	setMockModeForVMwareTest(t, false)
+	setMockModeForTest(t, false)
 	setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 	handler, persistence := newVMwareHandlersForTest(t)
@@ -216,7 +215,7 @@ func TestVMwareHandlers_HandleAdd_ReturnsUnavailableBeforePreviewingInventory(t 
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			setVMwareFeatureForTest(t, true)
-			setMockModeForVMwareTest(t, false)
+			setMockModeForTest(t, false)
 			setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 			handler, persistence := newVMwareHandlersForTest(t)
@@ -262,7 +261,7 @@ func TestVMwareHandlers_HandleAdd_ReturnsUnavailableBeforePreviewingInventory(t 
 
 func TestVMwareHandlers_HandleAdd_DoesNotCountDisabledConnectionAtLimit(t *testing.T) {
 	setVMwareFeatureForTest(t, true)
-	setMockModeForVMwareTest(t, false)
+	setMockModeForTest(t, false)
 	setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 	handler, persistence := newVMwareHandlersForTest(t)
@@ -328,7 +327,7 @@ func TestVMwareHandlers_HandleAdd_DoesNotCountDisabledConnectionAtLimit(t *testi
 
 func TestVMwareHandlers_HandleAdd_AllowsDisabledConnectionWhenUsageUnavailable(t *testing.T) {
 	setVMwareFeatureForTest(t, true)
-	setMockModeForVMwareTest(t, false)
+	setMockModeForTest(t, false)
 	setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 	handler, persistence := newVMwareHandlersForTest(t)
@@ -377,7 +376,7 @@ func TestVMwareHandlers_HandleAdd_AllowsDisabledConnectionWhenUsageUnavailable(t
 
 func TestVMwareHandlers_HandleAdd_AllowsCanonicalOverlapAtLimit(t *testing.T) {
 	setVMwareFeatureForTest(t, true)
-	setMockModeForVMwareTest(t, false)
+	setMockModeForTest(t, false)
 	setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 	handler, persistence := newVMwareHandlersForTest(t)
@@ -519,7 +518,7 @@ func TestVMwareHandlers_HandleList_RedactsSensitiveFieldsAndIncludesRuntimeSumma
 
 func TestVMwareHandlers_HandleList_ReturnsMockConnectionsInMockMode(t *testing.T) {
 	setVMwareFeatureForTest(t, true)
-	setMockModeForVMwareTest(t, true)
+	setMockModeForTest(t, true)
 
 	handler, _ := newVMwareHandlersForTest(t)
 
@@ -554,7 +553,7 @@ func TestVMwareHandlers_HandleList_ReturnsMockConnectionsInMockMode(t *testing.T
 
 func TestVMwareHandlers_HandleDelete_RemovesAndClearsRuntimeSummary(t *testing.T) {
 	setVMwareFeatureForTest(t, true)
-	setMockModeForVMwareTest(t, false)
+	setMockModeForTest(t, false)
 
 	handler, persistence := newVMwareHandlersForTest(t)
 	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{
@@ -652,7 +651,7 @@ func TestVMwareHandlers_HandleList_CarriesDegradedObservedSummary(t *testing.T) 
 
 func TestVMwareHandlers_HandleUpdate_PreservesMaskedSecretsAndReplacesFields(t *testing.T) {
 	setVMwareFeatureForTest(t, true)
-	setMockModeForVMwareTest(t, false)
+	setMockModeForTest(t, false)
 
 	handler, persistence := newVMwareHandlersForTest(t)
 	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{
@@ -720,7 +719,7 @@ func TestVMwareHandlers_HandleUpdate_PreservesMaskedSecretsAndReplacesFields(t *
 
 func TestVMwareHandlers_HandleUpdate_BlocksProjectedNetNewSystemsAtLimit(t *testing.T) {
 	setVMwareFeatureForTest(t, true)
-	setMockModeForVMwareTest(t, false)
+	setMockModeForTest(t, false)
 	setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 	handler, persistence := newVMwareHandlersForTest(t)
@@ -851,7 +850,7 @@ func TestVMwareHandlers_HandleUpdate_ReturnsUnavailableBeforePreviewingInventory
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			setVMwareFeatureForTest(t, true)
-			setMockModeForVMwareTest(t, false)
+			setMockModeForTest(t, false)
 			setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 			handler, persistence := newVMwareHandlersForTest(t)
@@ -910,7 +909,7 @@ func TestVMwareHandlers_HandleUpdate_ReturnsUnavailableBeforePreviewingInventory
 
 func TestVMwareHandlers_HandleUpdate_AllowsDisablingConnectionWhenUsageUnavailable(t *testing.T) {
 	setVMwareFeatureForTest(t, true)
-	setMockModeForVMwareTest(t, false)
+	setMockModeForTest(t, false)
 	setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 	handler, persistence := newVMwareHandlersForTest(t)
@@ -1693,15 +1692,6 @@ func setVMwareFeatureForTest(t *testing.T, enabled bool) {
 	vmware.SetFeatureEnabled(enabled)
 	t.Cleanup(func() {
 		vmware.SetFeatureEnabled(previous)
-	})
-}
-
-func setMockModeForVMwareTest(t *testing.T, enabled bool) {
-	t.Helper()
-	previous := mock.IsMockEnabled()
-	mock.SetEnabled(enabled)
-	t.Cleanup(func() {
-		mock.SetEnabled(previous)
 	})
 }
 

@@ -14,7 +14,8 @@ import (
 // Cycle 1: baseline -- no findings emitted.
 // Cycle 2: digest changed -- watcher emits one finding; store accepts it.
 // Cycle 3: same digest, window elapsed, no restarts -- watcher returns a
-//          resolve sentinel; ResolveWithReason marks the finding AutoResolved.
+//
+//	resolve sentinel; ResolveWithReason marks the finding AutoResolved.
 func TestUpdateSafetyEmit_FullCycle(t *testing.T) {
 	store := NewFindingsStore()
 	w := newUpdateSafetyWatcher()

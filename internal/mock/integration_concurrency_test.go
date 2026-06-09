@@ -6,22 +6,24 @@ import (
 )
 
 func TestSetEnabledDisableDoesNotDeadlockWhenUpdateIsBlocked(t *testing.T) {
-	SetEnabled(false)
+	mustSetEnabled(t, false)
 	t.Cleanup(func() {
-		SetEnabled(false)
+		mustSetEnabled(t, false)
 	})
 
 	cfg := DefaultConfig
 	cfg.RandomMetrics = true
 	SetMockConfig(cfg)
-	SetEnabled(true)
+	mustSetEnabled(t, true)
 
 	dataMu.Lock()
 	time.Sleep(currentMockUpdateInterval() + 250*time.Millisecond)
 
 	done := make(chan struct{})
 	go func() {
-		SetEnabled(false)
+		if err := SetEnabled(false); err != nil {
+			t.Errorf("SetEnabled(false): %v", err)
+		}
 		close(done)
 	}()
 

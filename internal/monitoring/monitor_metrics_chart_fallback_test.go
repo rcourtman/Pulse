@@ -478,8 +478,8 @@ func TestGetPhysicalDiskTemperatureCharts_UsesNativeHistoryWhenStoreCoverageShal
 
 func TestGetPhysicalDiskTemperatureCharts_PrefersSeededMockHistoryInMockMode(t *testing.T) {
 	previous := mock.IsMockEnabled()
-	mock.SetEnabled(true)
-	defer mock.SetEnabled(previous)
+	mustSetMockEnabled(t, true)
+	defer mustSetMockEnabled(t, previous)
 
 	graph := mock.CurrentFixtureGraph()
 	if len(graph.PlatformFixtures.TrueNAS.Disks) == 0 {
@@ -532,8 +532,8 @@ func TestGetPhysicalDiskTemperatureCharts_PrefersSeededMockHistoryInMockMode(t *
 
 func TestGetGuestMetricsForChart_UsesCanonicalMockSamplerInMockMode(t *testing.T) {
 	previous := mock.IsMockEnabled()
-	mock.SetEnabled(true)
-	defer mock.SetEnabled(previous)
+	mustSetMockEnabled(t, true)
+	defer mustSetMockEnabled(t, previous)
 
 	monitor := newChartFallbackTestMonitor(t)
 	now := time.Now().UTC().Truncate(time.Second)
@@ -550,8 +550,8 @@ func TestGetGuestMetricsForChart_UsesCanonicalMockSamplerInMockMode(t *testing.T
 
 func TestGetGuestMetricsForChart_PrefersSeededMockHistoryInMockMode(t *testing.T) {
 	previous := mock.IsMockEnabled()
-	mock.SetEnabled(true)
-	defer mock.SetEnabled(previous)
+	mustSetMockEnabled(t, true)
+	defer mustSetMockEnabled(t, previous)
 
 	monitor := newChartFallbackTestMonitor(t)
 	now := time.Now().UTC().Truncate(time.Second)
@@ -579,8 +579,8 @@ func TestGetGuestMetricsForChart_PrefersSeededMockHistoryInMockMode(t *testing.T
 
 func TestGetGuestMetricsForChartBatch_PrefersSeededMockHistoryInMockMode(t *testing.T) {
 	previous := mock.IsMockEnabled()
-	mock.SetEnabled(true)
-	defer mock.SetEnabled(previous)
+	mustSetMockEnabled(t, true)
+	defer mustSetMockEnabled(t, previous)
 
 	monitor := newChartFallbackTestMonitor(t)
 	now := time.Now().UTC().Truncate(time.Second)
@@ -611,8 +611,8 @@ func TestGetGuestMetricsForChartBatch_PrefersSeededMockHistoryInMockMode(t *test
 
 func TestGetGuestMetricsForChartBatch_DownsamplesDenseSeededMockHistory(t *testing.T) {
 	previous := mock.IsMockEnabled()
-	mock.SetEnabled(true)
-	defer mock.SetEnabled(previous)
+	mustSetMockEnabled(t, true)
+	defer mustSetMockEnabled(t, previous)
 
 	monitor := newChartFallbackTestMonitor(t)
 	now := time.Now().UTC().Truncate(time.Minute)
@@ -640,8 +640,8 @@ func TestGetGuestMetricsForChartBatch_DownsamplesDenseSeededMockHistory(t *testi
 
 func TestGetStorageMetricsForChart_UsesCanonicalMockSamplerInMockMode(t *testing.T) {
 	previous := mock.IsMockEnabled()
-	mock.SetEnabled(true)
-	defer mock.SetEnabled(previous)
+	mustSetMockEnabled(t, true)
+	defer mustSetMockEnabled(t, previous)
 
 	graph := mock.CurrentFixtureGraph()
 	if len(graph.State.Storage) == 0 {
@@ -670,8 +670,8 @@ func TestGetStorageMetricsForChart_UsesCanonicalMockSamplerInMockMode(t *testing
 
 func TestGetStorageMetricsForChart_PrefersSeededMockHistoryInMockMode(t *testing.T) {
 	previous := mock.IsMockEnabled()
-	mock.SetEnabled(true)
-	defer mock.SetEnabled(previous)
+	mustSetMockEnabled(t, true)
+	defer mustSetMockEnabled(t, previous)
 
 	monitor := newChartFallbackTestMonitor(t)
 	now := time.Now().UTC().Truncate(time.Second)
@@ -707,8 +707,8 @@ func TestGetStorageMetricsForChart_PrefersSeededMockHistoryInMockMode(t *testing
 
 func TestGetStorageMetricsForChart_DownsamplesDenseSeededMockHistory(t *testing.T) {
 	previous := mock.IsMockEnabled()
-	mock.SetEnabled(true)
-	defer mock.SetEnabled(previous)
+	mustSetMockEnabled(t, true)
+	defer mustSetMockEnabled(t, previous)
 
 	monitor := newChartFallbackTestMonitor(t)
 	now := time.Now().UTC().Truncate(time.Minute)

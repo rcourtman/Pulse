@@ -196,8 +196,8 @@ func TestApplyDockerReportUsesTokenToDisambiguateAgentIDCollisions(t *testing.T)
 
 func TestApplyDockerReportSkipsMetricsHistoryInMockMode(t *testing.T) {
 	previous := mock.IsMockEnabled()
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(previous) })
+	mustSetMockEnabled(t, true)
+	t.Cleanup(func() { mustSetMockEnabled(t, previous) })
 
 	monitor := newTestMonitor(t)
 	report := agentsdocker.Report{

@@ -162,7 +162,7 @@ func TestHandleResetAICostHistory_BackupRenameFail(t *testing.T) {
 		t.Fatalf("chmod: %v", err)
 	}
 	t.Cleanup(func() {
-		os.Chmod(tmp, 0755) // restore so TempDir cleanup works
+		_ = os.Chmod(tmp, 0755) // restore so TempDir cleanup works
 	})
 
 	handler := newTestAISettingsHandler(cfg, persistence, nil)

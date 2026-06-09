@@ -6,9 +6,9 @@ import (
 )
 
 func TestSetEnabledDisableDoesNotDeadlockWhenLoopNeedsStateLock(t *testing.T) {
-	SetEnabled(false)
+	mustSetEnabled(t, false)
 	t.Cleanup(func() {
-		SetEnabled(false)
+		mustSetEnabled(t, false)
 	})
 
 	dataMu.Lock()
@@ -26,7 +26,9 @@ func TestSetEnabledDisableDoesNotDeadlockWhenLoopNeedsStateLock(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		SetEnabled(false)
+		if err := SetEnabled(false); err != nil {
+			t.Errorf("SetEnabled(false): %v", err)
+		}
 		close(done)
 	}()
 

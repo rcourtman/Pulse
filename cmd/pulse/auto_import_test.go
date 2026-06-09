@@ -136,7 +136,9 @@ func TestPerformAutoImport_FileNormalizeError(t *testing.T) {
 	t.Setenv("PULSE_INIT_CONFIG_PASSPHRASE", "pass")
 
 	importFile := filepath.Join(dir, "empty.enc")
-	os.WriteFile(importFile, []byte("   "), 0600)
+	if err := os.WriteFile(importFile, []byte("   "), 0600); err != nil {
+		t.Fatalf("write import file: %v", err)
+	}
 	t.Setenv("PULSE_INIT_CONFIG_FILE", importFile)
 
 	if err := server.PerformAutoImport(); err == nil {

@@ -49,9 +49,9 @@ func TestPDMAlertBridge_NilSourceIsNoOp(t *testing.T) {
 
 // TestPDMAlertBridge_SeedOfflineOnlineCycle drives the bridge through three
 // snapshots:
-//   1. seed   -- node online, first observation, nothing emitted.
-//   2. offline -- node transitions to offline, one finding emitted.
-//   3. online  -- node returns to online, one resolve sentinel emitted.
+//  1. seed   -- node online, first observation, nothing emitted.
+//  2. offline -- node transitions to offline, one finding emitted.
+//  3. online  -- node returns to online, one resolve sentinel emitted.
 func TestPDMAlertBridge_SeedOfflineOnlineCycle(t *testing.T) {
 	src := &fakePDMSource{
 		snapshots: [][]pdmResource{

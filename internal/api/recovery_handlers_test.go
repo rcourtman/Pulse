@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	_ "modernc.org/sqlite"
@@ -101,11 +100,7 @@ func TestParseRecoveryItemResourceIDQuery(t *testing.T) {
 }
 
 func TestHandleListPointsAcceptsCanonicalPlatformQuery(t *testing.T) {
-	prevMock := mock.IsMockEnabled()
-	mock.SetEnabled(true)
-	t.Cleanup(func() {
-		mock.SetEnabled(prevMock)
-	})
+	setMockModeForTest(t, true)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/recovery/points?platform=truenas&limit=500", nil)
 	rec := httptest.NewRecorder()
@@ -178,11 +173,7 @@ func TestBuildRecoveryPointPayloadExposesCanonicalItemRefField(t *testing.T) {
 }
 
 func TestHandleListRollupsExposeCanonicalPlatformsPayload(t *testing.T) {
-	prevMock := mock.IsMockEnabled()
-	mock.SetEnabled(true)
-	t.Cleanup(func() {
-		mock.SetEnabled(prevMock)
-	})
+	setMockModeForTest(t, true)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/recovery/rollups?platform=truenas&limit=500", nil)
 	rec := httptest.NewRecorder()

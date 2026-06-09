@@ -114,7 +114,9 @@ func newIntegrationServerWithRuntimeMode(
 	if err != nil {
 		t.Fatalf("failed to create monitor: %v", err)
 	}
-	monitor.SetMockMode(mockMode)
+	if err := monitor.SetMockMode(mockMode); err != nil {
+		t.Fatalf("failed to set monitor mock mode: %v", err)
+	}
 
 	hub.SetStateGetter(func(orgID string) interface{} {
 		return monitor.BuildFrontendState()

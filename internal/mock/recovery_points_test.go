@@ -10,8 +10,8 @@ import (
 
 func TestCurrentFixtureGraphReturnsDefensiveCopies(t *testing.T) {
 	previous := IsMockEnabled()
-	SetEnabled(true)
-	t.Cleanup(func() { SetEnabled(previous) })
+	mustSetEnabled(t, true)
+	t.Cleanup(func() { mustSetEnabled(t, previous) })
 
 	graph := CurrentFixtureGraph()
 	if len(graph.State.Nodes) == 0 {
@@ -77,8 +77,8 @@ func TestCurrentFixtureGraphReturnsDefensiveCopies(t *testing.T) {
 
 func TestFixtureGraphRecoveryPointsDeriveSubjectsFromCurrentGraph(t *testing.T) {
 	previous := IsMockEnabled()
-	SetEnabled(true)
-	t.Cleanup(func() { SetEnabled(previous) })
+	mustSetEnabled(t, true)
+	t.Cleanup(func() { mustSetEnabled(t, previous) })
 
 	graph := CurrentFixtureGraph()
 	if len(graph.State.KubernetesClusters) == 0 {
@@ -161,8 +161,8 @@ func TestFixtureGraphRecoveryPointsDeriveSubjectsFromCurrentGraph(t *testing.T) 
 
 func TestFixtureGraphRecoveryPointsKeepTrueNASArtifactsFreshForDemoMode(t *testing.T) {
 	previous := IsMockEnabled()
-	SetEnabled(true)
-	t.Cleanup(func() { SetEnabled(previous) })
+	mustSetEnabled(t, true)
+	t.Cleanup(func() { mustSetEnabled(t, previous) })
 
 	points := CurrentFixtureGraph().RecoveryPoints()
 	if len(points) == 0 {
@@ -189,8 +189,8 @@ func TestFixtureGraphRecoveryPointsKeepTrueNASArtifactsFreshForDemoMode(t *testi
 
 func TestFixtureGraphRecoveryPointsUseReadableKubernetesPVCUIDs(t *testing.T) {
 	previous := IsMockEnabled()
-	SetEnabled(true)
-	t.Cleanup(func() { SetEnabled(previous) })
+	mustSetEnabled(t, true)
+	t.Cleanup(func() { mustSetEnabled(t, previous) })
 
 	points := CurrentFixtureGraph().RecoveryPoints()
 	if len(points) == 0 {

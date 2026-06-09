@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
-	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -512,9 +511,7 @@ func TestHandleCharts_StatsDebugMetadata(t *testing.T) {
 }
 
 func TestHandleCharts_UsesCanonicalMockUnifiedReadStateForVMwareHosts(t *testing.T) {
-	prevMock := mock.IsMockEnabled()
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(prevMock) })
+	setMockModeForTest(t, true)
 
 	fixtures := vmware.DefaultFixtures()
 	if len(fixtures.Hosts) == 0 {
@@ -707,9 +704,7 @@ func TestHandleInfrastructureCharts_MetricFilter(t *testing.T) {
 }
 
 func TestHandleInfrastructureCharts_UsesCanonicalMockUnifiedReadStateForVMwareHosts(t *testing.T) {
-	prevMock := mock.IsMockEnabled()
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(prevMock) })
+	setMockModeForTest(t, true)
 
 	fixtures := vmware.DefaultFixtures()
 	if len(fixtures.Hosts) == 0 {
@@ -1210,9 +1205,7 @@ func TestHandleWorkloadsSummaryCharts_UsesCanonicalWorkloadIDsForVMwareVMs(t *te
 }
 
 func TestHandleWorkloadCharts_IncludesKubernetesPods(t *testing.T) {
-	prevMock := mock.IsMockEnabled()
-	mock.SetEnabled(false)
-	t.Cleanup(func() { mock.SetEnabled(prevMock) })
+	setMockModeForTest(t, false)
 
 	monitor, state, _ := newTestMonitor(t)
 	state.Nodes = []models.Node{{
@@ -1279,9 +1272,7 @@ func TestHandleWorkloadCharts_IncludesKubernetesPods(t *testing.T) {
 }
 
 func TestHandleWorkloadsSummaryCharts_IncludesKubernetesPods(t *testing.T) {
-	prevMock := mock.IsMockEnabled()
-	mock.SetEnabled(false)
-	t.Cleanup(func() { mock.SetEnabled(prevMock) })
+	setMockModeForTest(t, false)
 
 	monitor, state, _ := newTestMonitor(t)
 	state.KubernetesClusters = []models.KubernetesCluster{{

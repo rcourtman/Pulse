@@ -88,8 +88,7 @@ func TestMetricsHistoryFallbackUsesLivePoint(t *testing.T) {
 }
 
 func TestMetricsHistoryFallbackMockDiskSynthesizesSeries(t *testing.T) {
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(false) })
+	setMockModeForTest(t, true)
 
 	state := mock.CurrentFixtureGraph().State
 	var disk models.PhysicalDisk

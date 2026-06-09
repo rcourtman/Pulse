@@ -227,7 +227,9 @@ func TestMonitoredSystemLedgerNilSystemsBecomesEmptyArray(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 	var decoded map[string]interface{}
-	json.Unmarshal(data, &decoded)
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
 	systems, ok := decoded["systems"].([]interface{})
 	if !ok {
 		t.Fatalf("systems is not an array: %T", decoded["systems"])

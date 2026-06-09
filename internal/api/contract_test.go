@@ -2004,9 +2004,7 @@ func TestContract_InfrastructureChartsHonorExplicitMetricFilters(t *testing.T) {
 }
 
 func TestContract_MockChartRoutesUseCanonicalMockUnifiedReadStateForVMwareHosts(t *testing.T) {
-	prevMock := mock.IsMockEnabled()
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(prevMock) })
+	setMockModeForTest(t, true)
 
 	fixtures := vmware.DefaultFixtures()
 	if len(fixtures.Hosts) == 0 {
@@ -2472,19 +2470,16 @@ func TestContract_GenerateStyledMockSeries_UsesTimestampBasedCurve(t *testing.T)
 }
 
 func TestContract_PlatformMockToggleRebindsRuntimeConnectionsAndResources(t *testing.T) {
-	t.Setenv("PULSE_MOCK_MODE", "false")
-	prevMock := mock.IsMockEnabled()
-	mock.SetEnabled(false)
-	t.Cleanup(func() {
-		mock.SetEnabled(prevMock)
-	})
+	setMockModeForTest(t, false)
 
 	cfg := &config.Config{DataPath: t.TempDir()}
 	monitor, err := monitoring.New(cfg)
 	if err != nil {
 		t.Fatalf("new monitor: %v", err)
 	}
-	monitor.SetMockMode(false)
+	if err := monitor.SetMockMode(false); err != nil {
+		t.Fatalf("set monitor mock mode: %v", err)
+	}
 
 	router := NewRouter(cfg, monitor, nil, nil, nil, "1.0.0")
 	t.Cleanup(func() {
@@ -2582,11 +2577,7 @@ func TestContract_PlatformMockConnectionListsUseSharedFixtureMetadata(t *testing
 	setTrueNASFeatureForTest(t, true)
 	setVMwareFeatureForTest(t, true)
 
-	prevMock := mock.IsMockEnabled()
-	mock.SetEnabled(true)
-	t.Cleanup(func() {
-		mock.SetEnabled(prevMock)
-	})
+	setMockModeForTest(t, true)
 
 	t.Run("truenas", func(t *testing.T) {
 		fixture := mock.DefaultTrueNASConnectionFixture()
@@ -6274,10 +6265,14 @@ func TestContract_RecoveryPointsMockPathReturnsCanonicalProviderBackedFixtures(t
 	previousEnabled := mock.IsMockEnabled()
 	previousConfig := mock.GetConfig()
 	t.Cleanup(func() {
-		mock.SetEnabled(false)
+		if err := mock.SetEnabled(false); err != nil {
+			t.Errorf("disable mock mode: %v", err)
+		}
 		mock.SetMockConfig(previousConfig)
 		if previousEnabled {
-			mock.SetEnabled(true)
+			if err := mock.SetEnabled(true); err != nil {
+				t.Errorf("restore mock mode: %v", err)
+			}
 			mock.SetMockConfig(previousConfig)
 		}
 	})
@@ -6293,8 +6288,12 @@ func TestContract_RecoveryPointsMockPathReturnsCanonicalProviderBackedFixtures(t
 	t.Setenv("PULSE_MOCK_K8S_PODS", "0")
 	t.Setenv("PULSE_MOCK_K8S_DEPLOYMENTS", "0")
 
-	mock.SetEnabled(false)
-	mock.SetEnabled(true)
+	if err := mock.SetEnabled(false); err != nil {
+		t.Fatalf("disable mock mode: %v", err)
+	}
+	if err := mock.SetEnabled(true); err != nil {
+		t.Fatalf("enable mock mode: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/recovery/points?platform=truenas&limit=10", nil)
 	rec := httptest.NewRecorder()
@@ -7096,7 +7095,7 @@ func TestContract_HostReportAdmissionPreservesRestartContinuityAtLimit(t *testin
 func TestContract_PlatformConnectionWritesIgnoreUsageUnavailableWithCapsRetired(t *testing.T) {
 	t.Run("truenas add", func(t *testing.T) {
 		setTrueNASFeatureForTest(t, true)
-		setMockModeForTrueNASTest(t, false)
+		setMockModeForTest(t, false)
 		setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 		handler, _, monitor := newTrueNASHandlersForTest(t, nil)
@@ -7123,7 +7122,7 @@ func TestContract_PlatformConnectionWritesIgnoreUsageUnavailableWithCapsRetired(
 
 	t.Run("vmware add", func(t *testing.T) {
 		setVMwareFeatureForTest(t, true)
-		setMockModeForVMwareTest(t, false)
+		setMockModeForTest(t, false)
 		setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 		handler, _ := newVMwareHandlersForTest(t)
@@ -7166,7 +7165,7 @@ func TestContract_PlatformConnectionWritesIgnoreUsageUnavailableWithCapsRetired(
 func TestContract_DisabledPlatformConnectionWritesBypassUnavailableUsageGate(t *testing.T) {
 	t.Run("truenas add", func(t *testing.T) {
 		setTrueNASFeatureForTest(t, true)
-		setMockModeForTrueNASTest(t, false)
+		setMockModeForTest(t, false)
 		setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 		handler, _, monitor := newTrueNASHandlersForTest(t, nil)
@@ -7194,7 +7193,7 @@ func TestContract_DisabledPlatformConnectionWritesBypassUnavailableUsageGate(t *
 
 	t.Run("truenas update", func(t *testing.T) {
 		setTrueNASFeatureForTest(t, true)
-		setMockModeForTrueNASTest(t, false)
+		setMockModeForTest(t, false)
 		setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 		handler, persistence, monitor := newTrueNASHandlersForTest(t, nil)
@@ -7233,7 +7232,7 @@ func TestContract_DisabledPlatformConnectionWritesBypassUnavailableUsageGate(t *
 
 	t.Run("vmware add", func(t *testing.T) {
 		setVMwareFeatureForTest(t, true)
-		setMockModeForVMwareTest(t, false)
+		setMockModeForTest(t, false)
 		setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 		handler, _ := newVMwareHandlersForTest(t)
@@ -7274,7 +7273,7 @@ func TestContract_DisabledPlatformConnectionWritesBypassUnavailableUsageGate(t *
 
 	t.Run("vmware update", func(t *testing.T) {
 		setVMwareFeatureForTest(t, true)
-		setMockModeForVMwareTest(t, false)
+		setMockModeForTest(t, false)
 		setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 		handler, persistence := newVMwareHandlersForTest(t)
@@ -11702,9 +11701,7 @@ func TestContract_ResourceListUsesDeterministicNameTieBreakers(t *testing.T) {
 }
 
 func TestContract_StateAndResourceListShareCanonicalMockResourceContract(t *testing.T) {
-	t.Setenv("PULSE_MOCK_MODE", "true")
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(false) })
+	setMockModeForTest(t, true)
 
 	dataPath := t.TempDir()
 	hashedPassword, err := authpkg.HashPassword("password")

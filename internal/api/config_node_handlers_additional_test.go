@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -17,8 +16,7 @@ import (
 // TestHandleGetNodes_MockMode_UsesReadState verifies that the mock-mode branch
 // of handleGetNodes uses ReadState typed accessors instead of GetState().
 func TestHandleGetNodes_MockMode_UsesReadState(t *testing.T) {
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(false) })
+	setMockModeForTest(t, true)
 
 	// Create a monitor with a resource store populated via ReadState.
 	monitor := &monitoring.Monitor{}
@@ -107,8 +105,7 @@ func TestHandleGetNodes_MockMode_UsesReadState(t *testing.T) {
 // (no resource store wired), the handler returns an empty node list without
 // calling GetState(). This replaced the former GetState() fallback test.
 func TestHandleGetNodes_MockMode_NilReadState(t *testing.T) {
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(false) })
+	setMockModeForTest(t, true)
 
 	// Monitor with state but no resource store — GetUnifiedReadState() returns nil.
 	monitor := &monitoring.Monitor{}
@@ -157,8 +154,7 @@ func TestConfigHandlers_getMonitor_Legacy(t *testing.T) {
 // and the ReadState adapter with different names. Since the handler uses ReadState
 // exclusively (no GetState fallback), only ReadState names should appear.
 func TestHandleGetNodes_MockMode_ReadStateTakesPriority(t *testing.T) {
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(false) })
+	setMockModeForTest(t, true)
 
 	monitor := &monitoring.Monitor{}
 

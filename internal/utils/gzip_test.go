@@ -122,7 +122,7 @@ func TestDecompressBodyIfGzipped_BombProtection(t *testing.T) {
 	gz, _ := gzip.NewWriterLevel(&buf, gzip.BestCompression)
 	// Write 2KB of zeros (compresses very well)
 	payload := make([]byte, 2048)
-	gz.Write(payload)
+	_, _ = gz.Write(payload)
 	gz.Close()
 
 	req, _ := http.NewRequest("POST", "/", bytes.NewReader(buf.Bytes()))

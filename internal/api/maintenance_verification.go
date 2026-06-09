@@ -20,36 +20,36 @@ import (
 // Verification Report" name; the underlying loop substrate is
 // implementation detail and is not exposed verbatim.
 type maintenanceVerificationReportAPI struct {
-	ID                string                                   `json:"id"`
-	ResourceID        string                                   `json:"resourceId"`
-	Trigger           string                                   `json:"trigger"`
-	Goal              string                                   `json:"goal,omitempty"`
-	Status            string                                   `json:"status"`
-	StartedAt         time.Time                                `json:"startedAt"`
-	CompletedAt       time.Time                                `json:"completedAt"`
-	WindowStartedAt   *time.Time                               `json:"windowStartedAt,omitempty"`
-	WindowEndedAt     *time.Time                               `json:"windowEndedAt,omitempty"`
-	Evidence          maintenanceVerificationEvidenceAPI       `json:"evidence"`
-	LinkedFindingIDs  []string                                 `json:"linkedFindingIds"`
-	LinkedAlertIDs    []string                                 `json:"linkedAlertIds"`
-	LinkedActionIDs   []string                                 `json:"linkedActionIds"`
-	LinkedPatrolRunID string                                   `json:"linkedPatrolRunId,omitempty"`
-	Recommendation    string                                   `json:"recommendation,omitempty"`
-	UserOutcome       string                                   `json:"userOutcome,omitempty"`
-	ReviewedAt        *time.Time                               `json:"reviewedAt,omitempty"`
-	ReviewedBy        string                                   `json:"reviewedBy,omitempty"`
-	ReviewNote        string                                   `json:"reviewNote,omitempty"`
+	ID                string                             `json:"id"`
+	ResourceID        string                             `json:"resourceId"`
+	Trigger           string                             `json:"trigger"`
+	Goal              string                             `json:"goal,omitempty"`
+	Status            string                             `json:"status"`
+	StartedAt         time.Time                          `json:"startedAt"`
+	CompletedAt       time.Time                          `json:"completedAt"`
+	WindowStartedAt   *time.Time                         `json:"windowStartedAt,omitempty"`
+	WindowEndedAt     *time.Time                         `json:"windowEndedAt,omitempty"`
+	Evidence          maintenanceVerificationEvidenceAPI `json:"evidence"`
+	LinkedFindingIDs  []string                           `json:"linkedFindingIds"`
+	LinkedAlertIDs    []string                           `json:"linkedAlertIds"`
+	LinkedActionIDs   []string                           `json:"linkedActionIds"`
+	LinkedPatrolRunID string                             `json:"linkedPatrolRunId,omitempty"`
+	Recommendation    string                             `json:"recommendation,omitempty"`
+	UserOutcome       string                             `json:"userOutcome,omitempty"`
+	ReviewedAt        *time.Time                         `json:"reviewedAt,omitempty"`
+	ReviewedBy        string                             `json:"reviewedBy,omitempty"`
+	ReviewNote        string                             `json:"reviewNote,omitempty"`
 }
 
 type maintenanceVerificationEvidenceAPI struct {
-	OperatorStateSummary           string                                  `json:"operatorStateSummary,omitempty"`
-	ActiveCriticalAlerts           int                                     `json:"activeCriticalAlerts"`
-	ActiveWarningAlerts            int                                     `json:"activeWarningAlerts"`
-	ActiveCriticalFindings         int                                     `json:"activeCriticalFindings"`
-	ActiveWarningFindings          int                                     `json:"activeWarningFindings"`
-	FailedActionsSinceWindowStart  int                                     `json:"failedActionsSinceWindowStart"`
-	MetricRecovery                 *maintenanceVerificationMetricRecoveryAPI `json:"metricRecovery,omitempty"`
-	PatrolRunTODO                  string                                  `json:"patrolRunTodo,omitempty"`
+	OperatorStateSummary          string                                    `json:"operatorStateSummary,omitempty"`
+	ActiveCriticalAlerts          int                                       `json:"activeCriticalAlerts"`
+	ActiveWarningAlerts           int                                       `json:"activeWarningAlerts"`
+	ActiveCriticalFindings        int                                       `json:"activeCriticalFindings"`
+	ActiveWarningFindings         int                                       `json:"activeWarningFindings"`
+	FailedActionsSinceWindowStart int                                       `json:"failedActionsSinceWindowStart"`
+	MetricRecovery                *maintenanceVerificationMetricRecoveryAPI `json:"metricRecovery,omitempty"`
+	PatrolRunTODO                 string                                    `json:"patrolRunTodo,omitempty"`
 }
 
 type maintenanceVerificationMetricRecoveryAPI struct {

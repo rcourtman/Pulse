@@ -177,7 +177,7 @@ func BenchmarkAuthorize(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		req := requests[i%len(requests)]
-		authorizer.Authorize(req.ctx, req.action, req.resource)
+		_, _ = authorizer.Authorize(req.ctx, req.action, req.resource)
 	}
 }
 

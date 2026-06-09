@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
@@ -60,8 +59,8 @@ func TestNew_MockModeClientInitializationRespectsKeepRealPollingSetting(t *testi
 
 	t.Run("disabled_by_default", func(t *testing.T) {
 		t.Setenv(mockKeepRealPollingEnv, "")
-		mock.SetEnabled(true)
-		t.Cleanup(func() { mock.SetEnabled(false) })
+		mustSetMockEnabled(t, true)
+		t.Cleanup(func() { mustSetMockEnabled(t, false) })
 
 		withClientStub(t, func(called *bool) {
 			monitor, err := New(makeConfig(t.TempDir()))
@@ -81,8 +80,8 @@ func TestNew_MockModeClientInitializationRespectsKeepRealPollingSetting(t *testi
 
 	t.Run("disabled_via_env", func(t *testing.T) {
 		t.Setenv(mockKeepRealPollingEnv, "false")
-		mock.SetEnabled(true)
-		t.Cleanup(func() { mock.SetEnabled(false) })
+		mustSetMockEnabled(t, true)
+		t.Cleanup(func() { mustSetMockEnabled(t, false) })
 
 		withClientStub(t, func(called *bool) {
 			monitor, err := New(makeConfig(t.TempDir()))

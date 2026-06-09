@@ -600,9 +600,9 @@ func TestSyncUnifiedAppContainerMetricsSkipsMockOwnedTrueNASHistoryWhenMockEnabl
 	})
 
 	previousMock := mock.IsMockEnabled()
-	mock.SetEnabled(true)
+	mustSetMockEnabled(t, true)
 	t.Cleanup(func() {
-		mock.SetEnabled(previousMock)
+		mustSetMockEnabled(t, previousMock)
 	})
 
 	cfg := metrics.DefaultConfig(t.TempDir())
@@ -696,9 +696,9 @@ func TestSyncUnifiedAgentMetricsSkipsMockOwnedProviderHistoryWhenMockEnabled(t *
 	})
 
 	previousMock := mock.IsMockEnabled()
-	mock.SetEnabled(true)
+	mustSetMockEnabled(t, true)
 	t.Cleanup(func() {
-		mock.SetEnabled(previousMock)
+		mustSetMockEnabled(t, previousMock)
 	})
 
 	cfg := metrics.DefaultConfig(t.TempDir())
@@ -957,9 +957,9 @@ func TestSyncUnifiedStorageAndDiskMetricsSkipMockOwnedTrueNASHistoryWhenMockEnab
 	})
 
 	previousMock := mock.IsMockEnabled()
-	mock.SetEnabled(true)
+	mustSetMockEnabled(t, true)
 	t.Cleanup(func() {
-		mock.SetEnabled(previousMock)
+		mustSetMockEnabled(t, previousMock)
 	})
 
 	cfg := metrics.DefaultConfig(t.TempDir())

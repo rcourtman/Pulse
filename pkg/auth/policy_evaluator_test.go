@@ -26,7 +26,9 @@ func TestPolicyEvaluator(t *testing.T) {
 
 	t.Run("Allow permission works", func(t *testing.T) {
 		ctx := WithUser(context.Background(), "allow-user")
-		m.UpdateUserRoles("allow-user", []string{"allow-role"})
+		if err := m.UpdateUserRoles("allow-user", []string{"allow-role"}); err != nil {
+			t.Fatalf("UpdateUserRoles: %v", err)
+		}
 
 		allowed, err := evaluator.Authorize(ctx, "read", "nodes")
 		if err != nil {
@@ -51,7 +53,9 @@ func TestPolicyEvaluator(t *testing.T) {
 
 	t.Run("Deny takes precedence over allow", func(t *testing.T) {
 		ctx := WithUser(context.Background(), "deny-user")
-		m.UpdateUserRoles("deny-user", []string{"deny-role"})
+		if err := m.UpdateUserRoles("deny-user", []string{"deny-role"}); err != nil {
+			t.Fatalf("UpdateUserRoles: %v", err)
+		}
 
 		// deny-role has allow on nodes:* but deny on nodes:production
 		allowed, err := evaluator.Authorize(ctx, "write", "nodes:test")
@@ -73,7 +77,9 @@ func TestPolicyEvaluator(t *testing.T) {
 
 	t.Run("Multiple roles combined", func(t *testing.T) {
 		ctx := WithUser(context.Background(), "multi-user")
-		m.UpdateUserRoles("multi-user", []string{"allow-role", "extra-role"})
+		if err := m.UpdateUserRoles("multi-user", []string{"allow-role", "extra-role"}); err != nil {
+			t.Fatalf("UpdateUserRoles: %v", err)
+		}
 
 		// allow-role grants read:nodes, extra-role grants write:alerts
 		allowed, err := evaluator.Authorize(ctx, "read", "nodes")
@@ -153,8 +159,12 @@ func TestPolicyEvaluatorWithAttributes(t *testing.T) {
 			},
 		},
 	}
-	m.SaveRole(condRole)
-	m.UpdateUserRoles("cond-user", []string{"cond-role"})
+	if err := m.SaveRole(condRole); err != nil {
+		t.Fatalf("SaveRole: %v", err)
+	}
+	if err := m.UpdateUserRoles("cond-user", []string{"cond-role"}); err != nil {
+		t.Fatalf("UpdateUserRoles: %v", err)
+	}
 
 	t.Run("Condition matches", func(t *testing.T) {
 		ctx := WithUser(context.Background(), "cond-user")
@@ -237,7 +247,9 @@ func TestPolicyEvaluatorWithInheritance(t *testing.T) {
 		Name:        "Parent",
 		Permissions: []Permission{{Action: "read", Resource: "base"}},
 	}
-	m.SaveRole(parentRole)
+	if err := m.SaveRole(parentRole); err != nil {
+		t.Fatalf("SaveRole: %v", err)
+	}
 
 	// Create child role
 	childRole := Role{
@@ -246,9 +258,13 @@ func TestPolicyEvaluatorWithInheritance(t *testing.T) {
 		ParentID:    "parent",
 		Permissions: []Permission{{Action: "write", Resource: "child"}},
 	}
-	m.SaveRole(childRole)
+	if err := m.SaveRole(childRole); err != nil {
+		t.Fatalf("SaveRole: %v", err)
+	}
 
-	m.UpdateUserRoles("inherit-user", []string{"child"})
+	if err := m.UpdateUserRoles("inherit-user", []string{"child"}); err != nil {
+		t.Fatalf("UpdateUserRoles: %v", err)
+	}
 
 	t.Run("Inherited permission works", func(t *testing.T) {
 		ctx := WithUser(context.Background(), "inherit-user")
@@ -293,7 +309,9 @@ func TestRBACAuthorizer(t *testing.T) {
 
 	// Setup
 	setupTestRoles(t, m)
-	m.UpdateUserRoles("normal-user", []string{"allow-role"})
+	if err := m.UpdateUserRoles("normal-user", []string{"allow-role"}); err != nil {
+		t.Fatalf("UpdateUserRoles: %v", err)
+	}
 
 	t.Run("Normal user authorization", func(t *testing.T) {
 		ctx := WithUser(context.Background(), "normal-user")
