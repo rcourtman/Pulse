@@ -2029,6 +2029,41 @@ create_lxc_container() {
     exit 0
 }
 
+# Extract the PVE API token secret from `pveum user token add` output. Prefers
+# the deterministic JSON form (`pveum ... --output-format json`) and falls back
+# to the legacy box-drawing table layout, mirroring the hardened web-setup
+# render path (internal/api/setup_script_render.go) so token capture does not
+# silently fail or mis-parse when pveum's table formatting drifts across
+# versions/locales (#1312).
+extract_pve_token_value() {
+    local token_output="$1"
+    local token_value=""
+
+    token_value=$(printf '%s\n' "$token_output" | sed -n 's/.*"value"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
+    if [[ -n "$token_value" ]]; then
+        printf '%s\n' "$token_value"
+        return 0
+    fi
+
+    # Legacy table form: normalize the box-drawing column separator to a plain
+    # pipe (byte-wise via sed, so it is locale-independent) before splitting, so
+    # extraction works regardless of the host locale.
+    printf '%s\n' "$token_output" | sed 's/│/|/g' | awk -F'|' '
+        function trim(value) {
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+            return value
+        }
+        {
+            key = trim($2)
+            value = trim($3)
+            if (key == "value" && value != "") {
+                print value
+                exit
+            }
+        }
+    '
+}
+
 auto_register_pve_node() {
     local ctid="$1"
     local pulse_ip="$2"
@@ -2333,9 +2368,16 @@ PY
 
     local token_output=""
     set +e
-    token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 2>&1)
+    token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 --output-format json 2>&1)
     local token_status=$?
     set -e
+    # Older pveum builds reject --output-format; fall back to the legacy table form.
+    if [[ $token_status -ne 0 ]] && printf '%s\n' "$token_output" | grep -Eqi 'unknown option|unknown command|no such option|unable to parse option|output-format'; then
+        set +e
+        token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 2>&1)
+        token_status=$?
+        set -e
+    fi
     if [[ $token_status -ne 0 ]]; then
         AUTO_NODE_REGISTER_ERROR="failed to create token"
         print_warn "Unable to create monitoring API token; skipping automatic node registration"
@@ -2343,7 +2385,7 @@ PY
     fi
 
     local token_value
-    token_value=$(awk -F'│' '/[[:space:]]value[[:space:]]/{col=$3; gsub(/^[[:space:]]+|[[:space:]]+$/, "", col); print col}' <<<"$token_output" | tail -n1 | tr -d '\r')
+    token_value=$(extract_pve_token_value "$token_output" | tail -n1 | tr -d '\r')
     if [[ -z "$token_value" ]]; then
         AUTO_NODE_REGISTER_ERROR="token value unavailable"
         print_warn "Failed to extract token value from pveum output; skipping automatic node registration"

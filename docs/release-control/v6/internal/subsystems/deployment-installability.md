@@ -1504,7 +1504,15 @@ also validate the returned canonical `type`, normalized `host`, and live
 registration cannot drift onto a stale or mismatched bootstrap response.
 Install-time PVE auto-registration must also create privilege-separated
 Pulse-managed monitor tokens and mirror effective ACLs to the concrete token id
-rather than relying on user-only grants or shared-token inheritance. A
+rather than relying on user-only grants or shared-token inheritance. That same
+install-time token creation must extract the token secret deterministically: it
+must request the machine-readable `pveum ... --output-format json` form first
+and parse the `value` field, falling back to the legacy box-drawing table
+layout only when an older pveum rejects the JSON flag — matching the hardened
+web-setup render path (`internal/api/setup_script_render.go`) so token capture
+does not silently fail or mis-parse when pveum's table formatting drifts across
+versions/locales. `scripts/installtests/root_install_sh_test.go` is the owned
+proof surface for that install-time extraction. A
 non-empty `expires` field alone is not sufficient; the installer must reject
 bootstrap responses whose expiry is already in the past. That same bootstrap
 consumer must also fail closed unless the runtime-owned setup metadata is

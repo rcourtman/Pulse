@@ -723,6 +723,85 @@ func TestRootInstallUninstallWiresSensorProxyCleanup(t *testing.T) {
 	}
 }
 
+// TestRootInstallExtractsPveTokenValue guards the #44/#1312 token-extraction
+// hardening for the install-time auto-register path: token capture must prefer
+// the deterministic `pveum --output-format json` form and parse the `value`
+// field, while still recovering from the legacy box-drawing table layout that
+// older pveum builds emit, so it does not silently fail or mis-parse when
+// pveum's table formatting drifts.
+func TestRootInstallExtractsPveTokenValue(t *testing.T) {
+	fn := extractRootInstallShellFunction(t, "extract_pve_token_value")
+
+	const secret = "12345678-1234-1234-1234-1234567890ab"
+
+	jsonOutput := `{"full-tokenid":"pulse-monitor@pve!pulse-x","info":{"privsep":"1"},"value":"` + secret + `"}`
+	tableOutput := "" +
+		"┌──────────────┬──────────────────────────────────────┐\n" +
+		"│ key          │ value                                │\n" +
+		"╞══════════════╪══════════════════════════════════════╡\n" +
+		"│ full-tokenid │ pulse-monitor@pve!pulse-x            │\n" +
+		"├──────────────┼──────────────────────────────────────┤\n" +
+		"│ info         │ {\"privsep\":\"1\"}                       │\n" +
+		"├──────────────┼──────────────────────────────────────┤\n" +
+		"│ value        │ " + secret + " │\n" +
+		"└──────────────┴──────────────────────────────────────┘\n"
+
+	cases := []struct {
+		name   string
+		output string
+		want   string
+	}{
+		{"json", jsonOutput, secret},
+		{"table", tableOutput, secret},
+		{"garbage", "no token here\n", ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			script := fn + "\nextract_pve_token_value \"$TOKEN_OUTPUT\"\n"
+			cmd := exec.Command("bash", "-c", script)
+			cmd.Env = append(os.Environ(), "TOKEN_OUTPUT="+tc.output)
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("extract_pve_token_value failed: %v\n%s", err, out)
+			}
+			if got := strings.TrimSpace(string(out)); got != tc.want {
+				t.Fatalf("extract_pve_token_value(%s) = %q, want %q", tc.name, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRootInstallAutoRegisterPrefersJsonTokenForm pins that the install-time
+// auto-register path requests the JSON form first and keeps the legacy table
+// form only as an explicit fallback (so the secure-installer contract pin on
+// the bare form stays satisfied).
+func TestRootInstallAutoRegisterPrefersJsonTokenForm(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
+	if err != nil {
+		t.Fatalf("read root install.sh: %v", err)
+	}
+	script := string(content)
+
+	required := []string{
+		`pveum user token add pulse-monitor@pve "$token_name" --privsep 1 --output-format json 2>&1`,
+		`pveum user token add pulse-monitor@pve "$token_name" --privsep 1 2>&1`,
+		`token_value=$(extract_pve_token_value "$token_output"`,
+		`extract_pve_token_value() {`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing hardened token-extraction contract: %s", needle)
+		}
+	}
+
+	jsonIdx := strings.Index(script, `--privsep 1 --output-format json 2>&1`)
+	bareIdx := strings.Index(script, "\n        token_output=$(pveum user token add pulse-monitor@pve \"$token_name\" --privsep 1 2>&1)")
+	if jsonIdx < 0 || bareIdx < 0 || jsonIdx > bareIdx {
+		t.Fatalf("expected JSON token form to precede the legacy table fallback (json=%d bare=%d)", jsonIdx, bareIdx)
+	}
+}
+
 func TestRootInstallDeployAgentScriptsDeploysSignatureSidecars(t *testing.T) {
 	extractDir := t.TempDir()
 	installDir := t.TempDir()
