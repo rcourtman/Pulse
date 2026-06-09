@@ -2328,6 +2328,22 @@ deriving an older display status from `workflowStatusHistory`.
 
 ## Current State
 
+The interaction-quality scenario corpus
+(`internal/ai/chat/interaction_scenario_corpus_test.go`) is the canonical
+regression home for chat-feel promises, mirroring the Discovery corpus
+(`internal/servicediscovery/scenario_corpus_test.go`). Each scenario drives a
+full `ExecuteStream` turn against a scripted provider and pins the
+browser-facing event stream — ordered event types, forbidden event types,
+answer-text teeth, and payload teeth — for the user-visible promises shipped
+in the OpenCode-restraint arc: clean plain/greeting turns with no tool noise,
+compact tool events with real tool names, the clean no-narrative fallback
+sentence (no raw JSON or provider call ids), invisible pre-event provider
+retries, and exactly one clear error event on terminal provider failure.
+Interaction-quality fixes must land with a corpus scenario stating the
+promise that would fail without the fix, so loop refactors (including
+Patrol-phase work on the shared agentic loop) cannot silently regress the
+chat feel.
+
 The Assistant system prompt's missing-target policy is resolve-before-asking
 (`buildSystemPromptWithToolGovernance`, `internal/ai/chat/service.go`): a
 command or diagnostic request that names no target sends the model to
