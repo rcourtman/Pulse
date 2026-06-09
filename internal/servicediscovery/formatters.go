@@ -118,6 +118,12 @@ func formatSingleDiscovery(d *ResourceDiscovery) string {
 	sb.WriteString(fmt.Sprintf("- **Type:** %s\n", d.ResourceType))
 	sb.WriteString(fmt.Sprintf("- **Target:** %s\n", firstNonEmpty(d.Hostname, d.TargetID)))
 
+	// Freshness so the model (local/full path) can caveat staleness rather than
+	// presenting a cached scan as current — parity with the cloud-safe path.
+	if !d.UpdatedAt.IsZero() {
+		sb.WriteString(fmt.Sprintf("- **Last Discovered:** %s\n", FormatDiscoveryAge(d)))
+	}
+
 	if d.ServiceVersion != "" {
 		sb.WriteString(fmt.Sprintf("- **Version:** %s\n", d.ServiceVersion))
 	}

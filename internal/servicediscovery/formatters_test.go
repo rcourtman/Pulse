@@ -329,3 +329,21 @@ func TestFormatCloudSafeContext(t *testing.T) {
 		t.Errorf("cloud-safe context must report discovery age\n--- output ---\n%s", freshOut)
 	}
 }
+
+func TestFormatSingleDiscovery_IncludesFreshness(t *testing.T) {
+	d := &ResourceDiscovery{
+		ID:           MakeResourceID(ResourceTypeSystemContainer, "node1", "101"),
+		ResourceType: ResourceTypeSystemContainer,
+		ServiceName:  "Home Assistant",
+	}
+	// No timestamp -> no freshness line (parity with the cloud-safe path).
+	if strings.Contains(formatSingleDiscovery(d), "Last Discovered:") {
+		t.Fatalf("expected no freshness line when UpdatedAt is zero")
+	}
+	// Known timestamp -> the local/full path reports discovery age.
+	d.UpdatedAt = time.Now().Add(-3 * time.Hour)
+	out := formatSingleDiscovery(d)
+	if !strings.Contains(out, "**Last Discovered:** 3 hours ago") {
+		t.Fatalf("expected freshness line in single-discovery output, got:\n%s", out)
+	}
+}
