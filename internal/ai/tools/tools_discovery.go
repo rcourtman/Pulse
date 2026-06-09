@@ -482,15 +482,25 @@ func buildDiscoveryToolResponse(req discoveryResourceRequest, discovery *Resourc
 		response["log_paths"] = responseLogPaths
 	}
 
-	// Add facts if present
+	// Add facts if present. Carry each fact's provenance — the source that
+	// produced it and its confidence — so the model can attribute and weight
+	// what it reports ("Debian 12, per /etc/os-release") instead of stating
+	// bare facts the user cannot trace. Both are optional and omitted when empty.
 	if len(discovery.Facts) > 0 {
-		facts := make([]map[string]string, 0, len(discovery.Facts))
+		facts := make([]map[string]interface{}, 0, len(discovery.Facts))
 		for _, f := range discovery.Facts {
-			facts = append(facts, map[string]string{
+			fact := map[string]interface{}{
 				"category": f.Category,
 				"key":      f.Key,
 				"value":    f.Value,
-			})
+			}
+			if f.Source != "" {
+				fact["source"] = f.Source
+			}
+			if f.Confidence > 0 {
+				fact["confidence"] = f.Confidence
+			}
+			facts = append(facts, fact)
 		}
 		response["facts"] = facts
 	}

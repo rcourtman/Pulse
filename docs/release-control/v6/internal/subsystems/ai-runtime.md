@@ -1875,6 +1875,10 @@ deriving an older display status from `workflowStatusHistory`.
    `ActionPlan.Preflight` dry-run boundary through
    `internal/ai/tools/action_audit.go` rather than leaving dry-run availability
    as chat-only text.
+   The `pulse_discovery` tool response must carry each discovered fact's
+   provenance — the `source` that produced it and its `confidence` — alongside
+   the fact's category/key/value, so the model can attribute and weight what it
+   reports instead of stating untraceable facts. Both are omitted when empty.
    When the shared registry blocks a control tool in read-only mode, its
    operator guidance must point to Assistant & Patrol settings and the Pulse
    Assistant Permissions Control mode, not legacy Pulse Assistant settings

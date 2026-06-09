@@ -450,6 +450,42 @@ func TestBuildDiscoveryToolResponse_OmitsOptionalMountFields(t *testing.T) {
 	}
 }
 
+func TestBuildDiscoveryToolResponse_IncludesFactProvenance(t *testing.T) {
+	req := discoveryResourceRequest{
+		resourceType: "system-container",
+		resourceID:   "101",
+		targetID:     "node1",
+	}
+	discovery := &ResourceDiscoveryInfo{
+		ID:           "system-container:node1:101",
+		ResourceType: "system-container",
+		ResourceID:   "101",
+		TargetID:     "node1",
+		Facts: []DiscoveryFact{
+			{Category: "version", Key: "os", Value: "Debian 12", Source: "/etc/os-release", Confidence: 0.95},
+			{Category: "service", Key: "unit", Value: "home-assistant.service"}, // no source/confidence
+		},
+	}
+
+	resp := buildDiscoveryToolResponse(req, discovery)
+
+	rawFacts, ok := resp["facts"].([]map[string]interface{})
+	if !ok {
+		t.Fatalf("expected facts to be []map[string]interface{}, got %T", resp["facts"])
+	}
+	if assert.Len(t, rawFacts, 2) {
+		// A fact with provenance carries source + confidence so the model can
+		// attribute and weight it.
+		assert.Equal(t, "Debian 12", rawFacts[0]["value"])
+		assert.Equal(t, "/etc/os-release", rawFacts[0]["source"])
+		assert.Equal(t, 0.95, rawFacts[0]["confidence"])
+		// A fact without provenance omits the optional fields cleanly.
+		assert.Equal(t, "home-assistant.service", rawFacts[1]["value"])
+		assert.NotContains(t, rawFacts[1], "source")
+		assert.NotContains(t, rawFacts[1], "confidence")
+	}
+}
+
 func TestExecuteRunDiscovery_ForcesFreshDiscovery(t *testing.T) {
 	provider := &stubDiscoveryProvider{
 		triggerResp: &ResourceDiscoveryInfo{
