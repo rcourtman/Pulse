@@ -2778,9 +2778,15 @@ func resourceIdentityNeedsCommandEvidence(rt ResourceType) bool {
 // instead of a fabricated guess. CLIAccess is left empty so the platform-correct
 // access command is generated downstream rather than invented by the model.
 func metadataOnlyDiscoveryAbstention() *AIAnalysisResponse {
+	// This abstention is only reached when command scanning is already enabled
+	// (see commandScanAttempted in DiscoverResource) but the host agent returned
+	// no command output — so the honest cause is the agent not being reachable
+	// for execution, NOT a disabled "Pulse Commands" toggle. Do not tell the user
+	// to enable something that is already on; point them at agent connectivity and
+	// the agent:exec token scope instead.
 	return &AIAnalysisResponse{
 		Confidence: 0,
-		Reasoning:  "Discovery could not run commands on this resource, so its service was not identified. Enable \"Pulse Commands\" for the host agent (Settings → Infrastructure) to run real discovery instead of guessing.",
+		Reasoning:  "Discovery couldn't collect command output from inside this resource, so its service wasn't identified. Pulse Commands are enabled, but the host agent returned no results — make sure the host agent is connected and its API token has the \"agent:exec\" scope.",
 	}
 }
 
