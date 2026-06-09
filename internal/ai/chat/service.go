@@ -663,7 +663,6 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		len(handoffActions) > 0 ||
 		handoffFindingID != "" ||
 		!handoffMetadataEmpty(handoffMetadata)
-	assistantToolScope := assistantToolScopeForPrompt(req.Prompt, hasModelHandoffContext)
 
 	// Proactively gather context for mentioned resources
 	s.mu.RLock()
@@ -747,7 +746,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	// context with its provider-safe prompt rewrite
 	// (injectPlainTextResourceContextIntoLatestUserMessage replaces the user
 	// message content), and the model loses the prefetched context entirely.
-	if assistantToolScope == assistantTurnToolScopeFull && !mentionsFound {
+	if !mentionsFound {
 		if attachPlainTextAssistantResourceContext(session.ID, messages, sessions, unifiedResourceProvider, readState, req.Prompt) {
 			mentionsFound = true
 		}
@@ -774,11 +773,15 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 			Msg("[ChatService] Advanced FSM to READING — prefetched mentions count as resolution")
 	}
 
-	// Run agentic loop
-	modelBoundaryAllowedInventoryContext := ""
-	if assistantToolScope == assistantTurnToolScopeQueryOnly {
-		emitWorkflowState(streamCallback, "context", "Reading current Pulse inventory with pulse_query.", "", "pulse_query")
-		if assistantPromptRequestsDeterministicInventoryCount(normalizeAssistantToolRoutingPrompt(req.Prompt)) {
+	// Deterministic count-only inventory prompts answer locally from canonical
+	// state (route pulse:local-inventory) before any provider attempt. This is
+	// a Pulse-owned answer shortcut, not tool selection: every turn that
+	// reaches the model carries the full governed manifest. The
+	// needs-full-manifest check only suppresses the shortcut — its false
+	// positives fail safe, to the selected model.
+	if !hasModelHandoffContext {
+		if assistantPromptQualifiesForLocalInventoryCount(normalizeAssistantToolRoutingPrompt(req.Prompt)) {
+			emitWorkflowState(streamCallback, "context", "Reading current Pulse inventory with pulse_query.", "", "pulse_query")
 			if answer, ok := s.directAssistantInventoryCountAnswer(ctx, baseExecutor); ok {
 				emitWorkflowState(streamCallback, "context_ready", "Counted current Pulse inventory.", "", "pulse_query")
 				s.streamDirectAssistantAnswer(sessions, session.ID, answer, streamCallback)
@@ -788,20 +791,14 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 				return nil
 			}
 		}
-		if summaryContext := s.prefetchAssistantInventoryTopologyContext(ctx, baseExecutor); summaryContext != "" {
-			modelBoundaryAllowedInventoryContext = summaryContext
-			injectHandoffContextIntoLatestUserMessage(messages, summaryContext)
-			assistantToolScope = assistantTurnToolScopeTextOnly
-			emitWorkflowState(streamCallback, "context_ready", "Built compact inventory context for the model.", "", "pulse_query")
-			log.Debug().
-				Str("session_id", session.ID).
-				Msg("[ChatService] Prefetched canonical inventory summary for query-only Assistant turn")
-		}
 	}
-	filteredTools := s.toolsForAssistantTurnWithScope(assistantToolScope, autonomousMode, false)
+	// Run agentic loop. Tool selection is model-owned: the turn always carries
+	// the full governed manifest, and the selected model decides whether to
+	// answer directly, ask, or call tools. The only manifest-boundary
+	// exception is the contract-sanctioned context-only resource handoff turn.
+	filteredTools := s.toolsForExecutionMode(autonomousMode, false)
 	if resourceContextTurnIsContextOnly(req.Prompt, handoffResources, handoffMetadata) {
 		filteredTools = []providers.Tool{}
-		assistantToolScope = assistantTurnToolScopeTextOnly
 		log.Debug().
 			Str("session_id", session.ID).
 			Msg("[ChatService] Withholding tools for context-only resource handoff turn")
@@ -859,11 +856,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		loop := NewAgenticLoop(attemptProvider, executor, systemPrompt)
 		loop.SetOrgID(s.orgID)
 		loop.SetAutonomousMode(autonomousMode)
-		loop.SetPreferSummaryOnlyQueries(assistantToolScope == assistantTurnToolScopeQueryOnly)
 		sanitizerOptions := []modelboundary.RequestSanitizerOption{}
-		if modelBoundaryAllowedInventoryContext != "" {
-			sanitizerOptions = append(sanitizerOptions, modelboundary.AllowResourcePolicyText(modelBoundaryAllowedInventoryContext))
-		}
 		// Preserve the PII-free operational context injected for opted-in cloud
 		// turns so the resource-policy sanitizer does not re-strip it as if it
 		// were a raw identifier. FormatCloudSafeContext already excludes PII.
@@ -992,49 +985,6 @@ func injectHandoffContextIntoLatestUserMessage(messages []Message, handoffContex
 		messages[idx].Content = contextText + "\n\n---\nUser message: " + userText
 		return
 	}
-}
-
-func (s *Service) prefetchAssistantInventoryTopologyContext(ctx context.Context, executor *tools.PulseToolExecutor) string {
-	if contextText := strings.TrimSpace(s.prefetchAssistantInventoryTopologyContextFromReadState()); contextText != "" {
-		return assistantInventoryTopologyContextPreamble(contextText) + "\n" +
-			truncateToolResultForModel(contextText)
-	}
-	if executor == nil {
-		return ""
-	}
-	result, err := executor.ExecuteTool(ctx, "pulse_query", map[string]interface{}{
-		"action":                          "topology",
-		"summary_only":                    false,
-		"max_proxmox_nodes":               0,
-		"max_vms_per_node":                0,
-		"max_containers_per_node":         0,
-		"max_docker_hosts":                0,
-		"max_docker_containers_per_host":  0,
-		"max_k8s_clusters":                0,
-		"max_k8s_nodes_per_cluster":       0,
-		"max_k8s_deployments_per_cluster": 0,
-		"max_k8s_pods_per_cluster":        0,
-	})
-	if err != nil || result.IsError {
-		log.Debug().
-			Err(err).
-			Bool("tool_error", result.IsError).
-			Msg("[ChatService] Unable to prefetch Assistant inventory summary")
-		return ""
-	}
-	resultText := strings.TrimSpace(FormatToolResult(result))
-	if resultText == "" {
-		return ""
-	}
-	contextText := resultText
-	var topology tools.TopologyResponse
-	if err := json.Unmarshal([]byte(resultText), &topology); err == nil {
-		if inventoryText, marshalErr := marshalAssistantInventoryTopologyContext(topology.NormalizeCollections()); marshalErr == nil && strings.TrimSpace(inventoryText) != "" {
-			contextText = inventoryText
-		}
-	}
-	return assistantInventoryTopologyContextPreamble(contextText) + "\n" +
-		truncateToolResultForModel(contextText)
 }
 
 func (s *Service) prefetchAssistantInventoryTopologyContextFromReadState() string {
@@ -1242,6 +1192,18 @@ func assistantInventoryIncludedContextTotal(context assistantInventoryTopologyCo
 		counts.k8sNodes +
 		counts.k8sDeployments +
 		counts.k8sPods
+}
+
+type assistantInventoryTopologyCounts struct {
+	proxmoxNodes     int
+	vms              int
+	systemContainers int
+	dockerHosts      int
+	dockerContainers int
+	k8sClusters      int
+	k8sNodes         int
+	k8sDeployments   int
+	k8sPods          int
 }
 
 func assistantInventoryIncludedContextCounts(context assistantInventoryTopologyContext) assistantInventoryTopologyCounts {
@@ -1543,60 +1505,6 @@ type assistantInventoryKubernetesPod struct {
 	OwnerName   string `json:"owner_name,omitempty"`
 }
 
-func assistantInventoryTopologyContextPreamble(resultText string) string {
-	var lines []string
-	lines = append(lines,
-		"Pulse inventory summary from current canonical resource state, including per-node and workload detail where available.",
-		"Use this context to answer the user's count, overview, status, list, or inventory-breakdown question. Do not claim shell inspection or host command execution.",
-		"The answer_label fields are UI-visible inventory labels. Copy answer_label exactly when listing nodes, VMs, system containers, Docker containers, Kubernetes nodes, deployments, or pods.",
-		"Do not shorten answer_label values or substitute generic labels like Node 1, VM 100, or CT 101 when an answer_label is available.",
-		"Do not include raw secrets, config values, IP addresses, routing metadata, provider internals, or shell command claims in the answer.",
-	)
-
-	var topology tools.TopologyResponse
-	if err := json.Unmarshal([]byte(resultText), &topology); err != nil {
-		lines = append(lines, "Completeness: The topology detail could not be counted before the model request; if the payload is marked TRUNCATED, say which details may be omitted instead of claiming every workload is listed.")
-		return strings.Join(lines, "\n")
-	}
-	topology = topology.NormalizeCollections()
-	included := assistantInventoryIncludedTopologyCounts(topology)
-	complete := !toolResultWouldTruncateForModel(resultText) &&
-		included.proxmoxNodes >= topology.Summary.TotalNodes &&
-		included.vms >= topology.Summary.TotalVMs &&
-		included.systemContainers >= topology.Summary.TotalSystemContainers &&
-		included.dockerHosts >= topology.Summary.TotalDockerHosts &&
-		included.dockerContainers >= topology.Summary.TotalDockerContainers &&
-		included.k8sClusters >= topology.Summary.TotalK8sClusters &&
-		included.k8sNodes >= topology.Summary.TotalK8sNodes &&
-		included.k8sDeployments >= topology.Summary.TotalK8sDeployments &&
-		included.k8sPods >= topology.Summary.TotalK8sPods
-	if complete {
-		lines = append(lines, "Completeness: The topology detail below includes every Proxmox node, VM, system container, Docker host/container, and Kubernetes resource currently visible in Pulse.")
-	} else {
-		lines = append(lines, fmt.Sprintf("Completeness: The topology detail below may be capped or context-truncated. Included detail counts are nodes=%d/%d, VMs=%d/%d, system_containers=%d/%d, docker_hosts=%d/%d, docker_containers=%d/%d, k8s_clusters=%d/%d, k8s_nodes=%d/%d, k8s_deployments=%d/%d, k8s_pods=%d/%d. If included counts do not match totals or a TRUNCATED marker appears, say what may be omitted instead of claiming every workload is listed.",
-			included.proxmoxNodes,
-			topology.Summary.TotalNodes,
-			included.vms,
-			topology.Summary.TotalVMs,
-			included.systemContainers,
-			topology.Summary.TotalSystemContainers,
-			included.dockerHosts,
-			topology.Summary.TotalDockerHosts,
-			included.dockerContainers,
-			topology.Summary.TotalDockerContainers,
-			included.k8sClusters,
-			topology.Summary.TotalK8sClusters,
-			included.k8sNodes,
-			topology.Summary.TotalK8sNodes,
-			included.k8sDeployments,
-			topology.Summary.TotalK8sDeployments,
-			included.k8sPods,
-			topology.Summary.TotalK8sPods,
-		))
-	}
-	return strings.Join(lines, "\n")
-}
-
 func assistantInventoryNodeAnswerLabel(name string) string {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -1634,43 +1542,6 @@ func statusIsRunningOrOnline(status string) bool {
 	default:
 		return false
 	}
-}
-
-type assistantInventoryTopologyCounts struct {
-	proxmoxNodes     int
-	vms              int
-	systemContainers int
-	dockerHosts      int
-	dockerContainers int
-	k8sClusters      int
-	k8sNodes         int
-	k8sDeployments   int
-	k8sPods          int
-}
-
-func assistantInventoryIncludedTopologyCounts(topology tools.TopologyResponse) assistantInventoryTopologyCounts {
-	counts := assistantInventoryTopologyCounts{
-		proxmoxNodes: len(topology.Proxmox.Nodes),
-		dockerHosts:  len(topology.Docker.Hosts),
-		k8sClusters:  len(topology.Kubernetes.Clusters),
-	}
-	for _, node := range topology.Proxmox.Nodes {
-		counts.vms += len(node.VMs)
-		counts.systemContainers += len(node.Containers)
-	}
-	for _, host := range topology.Docker.Hosts {
-		counts.dockerContainers += len(host.Containers)
-	}
-	for _, cluster := range topology.Kubernetes.Clusters {
-		counts.k8sNodes += len(cluster.Nodes)
-		counts.k8sDeployments += len(cluster.Deployments)
-		counts.k8sPods += len(cluster.Pods)
-	}
-	return counts
-}
-
-func toolResultWouldTruncateForModel(text string) bool {
-	return MaxToolResultCharsLimit > 0 && len(text) > MaxToolResultCharsLimit
 }
 
 func sanitizeHandoffContextForResourcePolicy(handoffContext string, handoffResources []HandoffResource, provider tools.UnifiedResourceProvider) string {
@@ -4133,86 +4004,15 @@ func (s *Service) toolsForExecutionMode(autonomousMode bool, patrolMode bool) []
 	return filtered
 }
 
-type assistantTurnToolScope string
-
-const (
-	assistantTurnToolScopeFull      assistantTurnToolScope = "full"
-	assistantTurnToolScopeQueryOnly assistantTurnToolScope = "query-only"
-	assistantTurnToolScopeTextOnly  assistantTurnToolScope = "text-only"
-)
-
 const assistantLocalInventoryModelRoute = "pulse:local-inventory"
 
-func (s *Service) toolsForAssistantTurn(prompt string, autonomousMode bool, patrolMode bool, hasModelContext bool) []providers.Tool {
-	scope := assistantToolScopeForPrompt(prompt, hasModelContext)
-	return s.toolsForAssistantTurnWithScope(scope, autonomousMode, patrolMode)
-}
-
-func (s *Service) toolsForAssistantTurnWithScope(scope assistantTurnToolScope, autonomousMode bool, patrolMode bool) []providers.Tool {
-	fullTools := s.toolsForExecutionMode(autonomousMode, patrolMode)
-	if patrolMode {
-		return fullTools
-	}
-
-	switch scope {
-	case assistantTurnToolScopeTextOnly:
-		log.Debug().
-			Str("tool_scope", string(scope)).
-			Bool("autonomous", autonomousMode).
-			Msg("[toolsForAssistantTurn] Withholding tools for direct text turn")
-		return []providers.Tool{}
-	case assistantTurnToolScopeQueryOnly:
-		allowed := map[string]bool{"pulse_query": true}
-		if !autonomousMode {
-			allowed[pulseQuestionToolName] = true
-		}
-		filtered := filterProviderToolsByName(fullTools, allowed)
-		log.Debug().
-			Str("tool_scope", string(scope)).
-			Int("tool_manifest_count", len(filtered)).
-			Bool("autonomous", autonomousMode).
-			Msg("[toolsForAssistantTurn] Scoped Assistant turn to canonical query tools")
-		return filtered
-	default:
-		return fullTools
-	}
-}
-
-func filterProviderToolsByName(providerTools []providers.Tool, allowed map[string]bool) []providers.Tool {
-	if len(providerTools) == 0 || len(allowed) == 0 {
-		return []providers.Tool{}
-	}
-	filtered := make([]providers.Tool, 0, len(providerTools))
-	for _, tool := range providerTools {
-		if allowed[tool.Name] {
-			filtered = append(filtered, tool)
-		}
-	}
-	return filtered
-}
-
-func assistantToolScopeForPrompt(prompt string, hasModelContext bool) assistantTurnToolScope {
-	if hasModelContext {
-		return assistantTurnToolScopeFull
-	}
-	normalized := normalizeAssistantToolRoutingPrompt(prompt)
-	if normalized == "" {
-		return assistantTurnToolScopeTextOnly
-	}
-	if assistantPromptRequestsDirectText(normalized) || assistantPromptDisallowsToolUse(normalized) {
-		return assistantTurnToolScopeTextOnly
-	}
-	if assistantPromptNeedsFullToolManifest(normalized) {
-		return assistantTurnToolScopeFull
-	}
-	if assistantPromptIsInventoryQuery(normalized) {
-		return assistantTurnToolScopeQueryOnly
-	}
-	if assistantPromptLooksConversational(normalized) {
-		return assistantTurnToolScopeTextOnly
-	}
-	return assistantTurnToolScopeFull
-}
+// Tool selection is model-owned: interactive Assistant turns always carry the
+// full governed manifest from toolsForExecutionMode, and the selected model
+// decides whether to answer directly, ask, or call tools. The prompt
+// classifiers below survive ONLY to gate the deterministic count-only
+// inventory shortcut (pulse:local-inventory), which answers before any
+// provider attempt — they must never be used to withhold or filter tools on a
+// turn that reaches the model.
 
 func normalizeAssistantToolRoutingPrompt(prompt string) string {
 	normalized := strings.ToLower(strings.TrimSpace(prompt))
@@ -4242,39 +4042,21 @@ func normalizeAssistantToolRoutingPrompt(prompt string) string {
 	return " " + strings.Join(strings.Fields(replacer.Replace(normalized)), " ") + " "
 }
 
-func assistantPromptRequestsDirectText(normalized string) bool {
-	return assistantPromptContainsAny(normalized, []string{
-		" reply exactly ",
-		" respond exactly ",
-		" answer exactly ",
-		" say exactly ",
-		" output exactly ",
-		" print exactly ",
-		" echo exactly ",
-		" repeat exactly ",
-		" just say ",
-		" say only ",
-		" reply only ",
-		" respond only ",
-	})
+// assistantPromptQualifiesForLocalInventoryCount gates the deterministic
+// count-only inventory shortcut. It must stay conservative: any hint of
+// intent beyond a pure inventory count (commands, logs, metrics, actions,
+// explicit tool requests, qualifiers like "errors") sends the turn to the
+// selected model with the full governed manifest instead.
+func assistantPromptQualifiesForLocalInventoryCount(normalized string) bool {
+	return !assistantPromptNeedsFullToolManifest(normalized) &&
+		assistantPromptRequestsDeterministicInventoryCount(normalized)
 }
 
-func assistantPromptDisallowsToolUse(normalized string) bool {
-	return assistantPromptContainsAny(normalized, []string{
-		" no tools ",
-		" without tools ",
-		" without using tools ",
-		" do not use tools ",
-		" don't use tools ",
-		" dont use tools ",
-		" before using tools ",
-		" before using any tools ",
-		" before you use tools ",
-		" before calling tools ",
-		" before you call tools ",
-	})
-}
-
+// assistantPromptNeedsFullToolManifest reports that a prompt carries intent
+// beyond a pure inventory count (commands, logs, metrics, actions, explicit
+// tool requests) and therefore must reach the selected model instead of the
+// local count shortcut. A false positive here just sends the turn to the
+// model with full tools — the safe direction.
 func assistantPromptNeedsFullToolManifest(normalized string) bool {
 	if assistantPromptExplicitlyRequestsToolUse(normalized) || assistantPromptLooksLikeShellRead(normalized) {
 		return true
@@ -4490,31 +4272,6 @@ func assistantPromptRequestsDeterministicInventoryCount(normalized string) bool 
 		" number ",
 		" number of ",
 	})
-}
-
-func assistantPromptLooksConversational(normalized string) bool {
-	trimmed := strings.TrimSpace(normalized)
-	if trimmed == "" {
-		return true
-	}
-	if assistantPromptContainsAny(normalized, []string{
-		" hello ",
-		" hi ",
-		" hey ",
-		" thanks ",
-		" thank you ",
-		" who are you ",
-		" what can you do ",
-	}) {
-		return true
-	}
-	// Do NOT treat a prompt as conversational just because it is short. Short
-	// prompts are usually resource lookups ("hows esphome", "check frigate",
-	// "grafana cpu") that NEED tools — withholding tools by word count made the
-	// Assistant tell the user it had no way to inspect their infrastructure.
-	// Only the explicit greeting/meta patterns above are conversational; let the
-	// model decide whether to actually use the tools it is offered.
-	return false
 }
 
 func assistantPromptContainsAny(normalized string, needles []string) bool {

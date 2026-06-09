@@ -397,29 +397,6 @@ func TestExecuteToolSafely_RecoversPanic(t *testing.T) {
 	}
 }
 
-func TestNormalizeSummaryOnlyPulseQueryInput_DefaultsTopologyForQueryOnlyTurns(t *testing.T) {
-	input := map[string]interface{}{"action": "topology", "include": "all"}
-
-	got := normalizeSummaryOnlyPulseQueryInput(true, "pulse_query", input)
-
-	if got["summary_only"] != true {
-		t.Fatalf("expected summary_only=true, got %#v", got)
-	}
-	if _, exists := input["summary_only"]; exists {
-		t.Fatalf("normalization must not mutate provider-owned input map: %#v", input)
-	}
-}
-
-func TestNormalizeSummaryOnlyPulseQueryInput_PreservesExplicitTopologyChoice(t *testing.T) {
-	input := map[string]interface{}{"action": "topology", "summary_only": false}
-
-	got := normalizeSummaryOnlyPulseQueryInput(true, "pulse_query", input)
-
-	if got["summary_only"] != false {
-		t.Fatalf("expected summary_only=false to remain explicit, got %#v", got)
-	}
-}
-
 func TestAgenticLoop_RetriesProviderStreamBeforeEvents(t *testing.T) {
 	provider := &stubStreamingProvider{}
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})

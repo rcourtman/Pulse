@@ -1436,7 +1436,7 @@ func TestService_ExecuteStream_InventoryCountAnswersFromCanonicalStateWithoutPro
 	}
 }
 
-func TestService_ExecuteStream_PrefetchedInventoryIncludesCompleteTopologyDetail(t *testing.T) {
+func TestService_ExecuteStream_InventoryBreakdownIsModelOwned(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewSessionStore(tmpDir)
 	if err != nil {
@@ -1530,45 +1530,27 @@ func TestService_ExecuteStream_PrefetchedInventoryIncludesCompleteTopologyDetail
 	if err != nil {
 		t.Fatalf("ExecuteStream failed: %v", err)
 	}
-	if len(capturedReq.Tools) != 0 {
-		t.Fatalf("expected prefetched inventory detail turn to withhold tools, got %d", len(capturedReq.Tools))
+	// Tool selection is model-owned: inventory detail/breakdown prompts reach
+	// the selected model with the full governed manifest and an unmodified
+	// user message. Pulse must not prefetch topology into the prompt or
+	// withhold tools — the model calls pulse_query itself.
+	if len(capturedReq.Tools) == 0 {
+		t.Fatal("expected inventory breakdown turn to carry the full governed manifest")
 	}
 	if len(capturedReq.Messages) == 0 {
 		t.Fatal("expected provider request messages")
 	}
 	lastMessage := capturedReq.Messages[len(capturedReq.Messages)-1].Content
-	for _, want := range []string{
-		"per-node and workload detail",
-		"answer_label fields are UI-visible inventory labels",
-		"Do not shorten answer_label values",
-		"includes every Proxmox node, VM, system container",
-		`"proxmox":{"nodes":[`,
-		`"nodes":[`,
-		`"answer_label":"Node node1"`,
-		`"name":"node1"`,
-		`"vms":[`,
-		`"answer_label":"VM 100 vm1"`,
-		`"name":"vm1"`,
-		`"containers":[`,
-		`"answer_label":"CT 201 ct1"`,
-		`"name":"ct1"`,
-		`"answer_label":"CT 213 ct13"`,
-		`"name":"ct13"`,
-		"User message: give me a detailed inventory breakdown by node",
-	} {
-		if !strings.Contains(lastMessage, want) {
-			t.Fatalf("expected prefetched inventory context to contain %q, got %q", want, lastMessage)
-		}
+	if !strings.Contains(lastMessage, "give me a detailed inventory breakdown by node") {
+		t.Fatalf("expected user prompt to reach the model, got %q", lastMessage)
 	}
 	for _, forbidden := range []string{
-		`"policy":`,
-		`"ai_safe_summary"`,
-		`"routing":`,
-		`"sensitivity":`,
-		`redacted`,
+		"per-node and workload detail",
+		`"proxmox":{"nodes":[`,
+		`"answer_label":`,
 	} {
 		if strings.Contains(lastMessage, forbidden) {
-			t.Fatalf("expected prefetched inventory context to omit policy metadata %q, got %q", forbidden, lastMessage)
+			t.Fatalf("expected no Pulse-injected topology prefetch in the user message, found %q in %q", forbidden, lastMessage)
 		}
 	}
 }

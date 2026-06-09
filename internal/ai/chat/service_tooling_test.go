@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -123,199 +124,100 @@ func TestToolsForExecutionMode_InteractiveExposesGovernedTools(t *testing.T) {
 	}
 }
 
-func TestToolsForAssistantTurn_DirectTextWithholdsTools(t *testing.T) {
-	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
-		StateProvider: fakeStateProvider{},
-		AgentServer:   fakeAgentServer{},
-		ReadState:     &fakeCanonicalReadState{},
-		ControlLevel:  tools.ControlLevelControlled,
+func TestService_ExecuteStream_ToolManifestIsModelOwned(t *testing.T) {
+	// Tool selection is model-owned: every interactive turn that reaches the
+	// selected model carries the same full governed manifest, regardless of
+	// prompt wording. These prompts were previously keyword-scoped to
+	// text-only or query-only manifests (greetings, exact-reply diagnostics,
+	// "before using tools" phrasing, inventory breakdown wording, short
+	// lookups) — the model now sees the same tools as diagnostic/action
+	// prompts and decides for itself whether to use them.
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	var toolCounts []int
+	provider := &stubServiceProvider{
+		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			toolCounts = append(toolCounts, len(req.Tools))
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "ok"}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{InputTokens: 1, OutputTokens: 1}})
+			return nil
+		},
+	}
+
+	service := NewService(Config{
+		AIConfig:      &config.AIConfig{ControlLevel: config.ControlLevelControlled},
+		StateProvider: &mockStateProvider{},
+		AgentServer:   &mockAgentServer{},
 	})
+	service.sessions = store
+	service.provider = provider
+	service.started = true
 
-	svc := &Service{executor: exec}
-	toolsList := svc.toolsForAssistantTurn("Reply exactly: PULSE_CHAT_OK", false, false, false)
-
-	if len(toolsList) != 0 {
-		t.Fatalf("expected direct text turn to withhold tools, got %#v", toolNameSet(toolsList))
-	}
-	prompt := svc.buildSystemPromptForOfferedTools(toolsList)
-	if strings.Contains(prompt, "pulse_query") || strings.Contains(prompt, "pulse_read") {
-		t.Fatalf("expected text-only system prompt not to advertise tools, got %q", prompt)
-	}
-	if !strings.Contains(prompt, "No Pulse tools are offered for this turn") {
-		t.Fatalf("expected text-only system prompt to state the tool boundary, got %q", prompt)
-	}
-}
-
-func TestToolsForAssistantTurn_InventoryCountUsesQueryOnly(t *testing.T) {
-	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
-		StateProvider: fakeStateProvider{},
-		AgentServer:   fakeAgentServer{},
-		ReadState:     &fakeCanonicalReadState{},
-		ControlLevel:  tools.ControlLevelControlled,
-	})
-
-	svc := &Service{executor: exec}
-	toolsList := svc.toolsForAssistantTurn("how many devices in this", false, false, false)
-	set := toolNameSet(toolsList)
-
-	if !set["pulse_query"] {
-		t.Fatalf("expected inventory count prompt to expose pulse_query, got %#v", set)
-	}
-	if !set[pulseQuestionToolName] {
-		t.Fatalf("expected interactive inventory prompt to keep clarification available, got %#v", set)
-	}
-	for _, blocked := range []string{"pulse_read", "pulse_control", "pulse_file_edit", "pulse_docker"} {
-		if set[blocked] {
-			t.Fatalf("expected inventory count prompt not to expose %s, got %#v", blocked, set)
-		}
-	}
-
-	prompt := svc.buildSystemPromptForOfferedTools(toolsList)
-	if !strings.Contains(prompt, "pulse_query: mode=read") {
-		t.Fatalf("expected query-only system prompt to advertise pulse_query, got %q", prompt)
-	}
-	if strings.Contains(prompt, "pulse_read") || strings.Contains(prompt, "pulse_control") {
-		t.Fatalf("expected query-only system prompt not to advertise shell/control tools, got %q", prompt)
-	}
-}
-
-func TestToolsForAssistantTurn_ExplicitCommandCountKeepsFullManifest(t *testing.T) {
-	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
-		StateProvider: fakeStateProvider{},
-		AgentServer:   fakeAgentServer{},
-		ReadState:     &fakeCanonicalReadState{},
-		ControlLevel:  tools.ControlLevelControlled,
-	})
-
-	svc := &Service{executor: exec}
-	toolsList := svc.toolsForAssistantTurn("Use read-only tools only. On node delly, count entries in /dev with `ls /dev | wc -l`; answer with the number only.", false, false, false)
-	set := toolNameSet(toolsList)
-
-	for _, required := range []string{"pulse_read", "pulse_query", pulseQuestionToolName} {
-		if !set[required] {
-			t.Fatalf("expected explicit command count prompt to expose %s, got %#v", required, set)
-		}
-	}
-}
-
-func TestToolsForAssistantTurn_InventoryBreakdownUsesQueryOnly(t *testing.T) {
-	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
-		StateProvider: fakeStateProvider{},
-		AgentServer:   fakeAgentServer{},
-		ReadState:     &fakeCanonicalReadState{},
-		ControlLevel:  tools.ControlLevelControlled,
-	})
-
-	svc := &Service{executor: exec}
-	toolsList := svc.toolsForAssistantTurn("give me a detailed inventory breakdown by node", false, false, false)
-	set := toolNameSet(toolsList)
-
-	if !set["pulse_query"] {
-		t.Fatalf("expected inventory breakdown prompt to expose pulse_query, got %#v", set)
-	}
-	for _, blocked := range []string{"pulse_read", "pulse_control", "pulse_file_edit", "pulse_docker"} {
-		if set[blocked] {
-			t.Fatalf("expected inventory breakdown prompt not to expose %s, got %#v", blocked, set)
-		}
-	}
-}
-
-func TestToolsForAssistantTurn_ActionAndDiagnosticsKeepFullManifest(t *testing.T) {
-	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
-		StateProvider: fakeStateProvider{},
-		AgentServer:   fakeAgentServer{},
-		ReadState:     &fakeCanonicalReadState{},
-		ControlLevel:  tools.ControlLevelControlled,
-	})
-
-	svc := &Service{executor: exec}
-	for _, prompt := range []string{
-		"show me the logs for vm 100",
-		"restart vm 100",
-		"diagnose high cpu on minipc",
-	} {
-		toolsList := svc.toolsForAssistantTurn(prompt, false, false, false)
-		set := toolNameSet(toolsList)
-		if !set["pulse_read"] || !set["pulse_control"] || !set["pulse_query"] {
-			t.Fatalf("expected full manifest for %q, got %#v", prompt, set)
-		}
-	}
-}
-
-func TestToolsForAssistantTurn_AlertPromptsKeepFullManifest(t *testing.T) {
-	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
-		StateProvider: fakeStateProvider{},
-		AgentServer:   fakeAgentServer{},
-		ReadState:     &fakeCanonicalReadState{},
-		ControlLevel:  tools.ControlLevelControlled,
-	})
-
-	svc := &Service{executor: exec}
-	for _, prompt := range []string{
+	prompts := []string{
+		"hi",
+		"thanks",
+		"Reply exactly: PULSE_CHAT_OK",
+		"Before using any tools, tell me your plan.",
+		"give me a detailed inventory breakdown by node",
+		"hows esphome",
 		"Alerts count",
-		"active alerts",
-		"findings count",
-	} {
-		toolsList := svc.toolsForAssistantTurn(prompt, false, false, false)
-		set := toolNameSet(toolsList)
-		if !set["pulse_alerts"] || !set["pulse_query"] {
-			t.Fatalf("expected full manifest for %q, got %#v", prompt, set)
+		"show me the logs for vm 100",
+	}
+	for i, prompt := range prompts {
+		if err := service.ExecuteStream(context.Background(), ExecuteRequest{
+			SessionID: fmt.Sprintf("model-owned-manifest-%d", i),
+			Prompt:    prompt,
+		}, func(StreamEvent) {}); err != nil {
+			t.Fatalf("ExecuteStream(%q) failed: %v", prompt, err)
 		}
-		promptText := svc.buildSystemPromptForOfferedTools(toolsList)
-		if strings.Contains(promptText, "No Pulse tools are offered for this turn") {
-			t.Fatalf("expected alert prompt to avoid text-only tool boundary, got %q", promptText)
+	}
+
+	if len(toolCounts) != len(prompts) {
+		t.Fatalf("toolCounts = %#v, want %d provider calls", toolCounts, len(prompts))
+	}
+	for i, count := range toolCounts {
+		if count == 0 {
+			t.Fatalf("prompt %q reached the model with no tools; the manifest must be model-owned", prompts[i])
 		}
-		if !strings.Contains(promptText, "pulse_alerts: mode=mixed") {
-			t.Fatalf("expected alert prompt system prompt to advertise pulse_alerts, got %q", promptText)
+		if count != toolCounts[0] {
+			t.Fatalf("prompt %q got %d tools, want the same governed manifest (%d) for every turn", prompts[i], count, toolCounts[0])
 		}
 	}
 }
 
-func TestToolsForAssistantTurn_ShortResourceLookupGetsTools(t *testing.T) {
-	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
-		StateProvider: fakeStateProvider{},
-		AgentServer:   fakeAgentServer{},
-		ReadState:     &fakeCanonicalReadState{},
-		ControlLevel:  tools.ControlLevelControlled,
-	})
-	svc := &Service{executor: exec}
-
-	// Short prompts that name a resource are lookups, not chit-chat. They must be
-	// offered tools so the Assistant can inspect the resource from Pulse data
-	// instead of telling the user it has no way to check.
-	for _, prompt := range []string{"hows esphome", "check frigate", "grafana cpu", "esphome status"} {
-		toolsList := svc.toolsForAssistantTurn(prompt, false, false, false)
-		if len(toolsList) == 0 {
-			t.Fatalf("short resource lookup %q was offered no tools", prompt)
-		}
-		promptText := svc.buildSystemPromptForOfferedTools(toolsList)
-		if strings.Contains(promptText, "No Pulse tools are offered for this turn") {
-			t.Fatalf("short resource lookup %q got the text-only tool boundary, got %q", prompt, promptText)
-		}
+func TestAssistantPromptQualifiesForLocalInventoryCount(t *testing.T) {
+	// The deterministic count-only inventory shortcut is the single surviving
+	// prompt-classified path, and it only answers locally — it never decides
+	// what tools the model sees. The gate must stay conservative: any hint of
+	// intent beyond a pure count sends the turn to the model.
+	tests := []struct {
+		prompt string
+		want   bool
+	}{
+		{"how many devices in this", true},
+		{"how many vms do i have", true},
+		{"container count", true},
+		// Qualified counts must reach the model with full tools.
+		{"how many vms have errors", false},
+		{"how many containers are using high cpu", false},
+		// Explicit operator tool intent is the contract escape hatch.
+		{"Use read-only tools only. On node delly, count entries in /dev with `ls /dev | wc -l`; answer with the number only.", false},
+		// Detail/breakdown prompts are not count-only.
+		{"give me a detailed inventory breakdown by node", false},
+		// Not inventory counts at all.
+		{"hows esphome", false},
+		{"hi", false},
+		{"Alerts count", false},
 	}
-
-	// Explicit greetings / meta-questions remain text-only.
-	for _, prompt := range []string{"hi", "hello there", "thanks", "who are you"} {
-		toolsList := svc.toolsForAssistantTurn(prompt, false, false, false)
-		if len(toolsList) != 0 {
-			t.Fatalf("conversational prompt %q should be text-only, got %d tools", prompt, len(toolsList))
+	for _, tt := range tests {
+		normalized := normalizeAssistantToolRoutingPrompt(tt.prompt)
+		if got := assistantPromptQualifiesForLocalInventoryCount(normalized); got != tt.want {
+			t.Fatalf("assistantPromptQualifiesForLocalInventoryCount(%q) = %v, want %v", tt.prompt, got, tt.want)
 		}
-	}
-}
-
-func TestToolsForAssistantTurn_ModelHandoffKeepsFullManifest(t *testing.T) {
-	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
-		StateProvider: fakeStateProvider{},
-		AgentServer:   fakeAgentServer{},
-		ReadState:     &fakeCanonicalReadState{},
-		ControlLevel:  tools.ControlLevelControlled,
-	})
-
-	svc := &Service{executor: exec}
-	toolsList := svc.toolsForAssistantTurn("Reply exactly: PULSE_CHAT_OK", false, false, true)
-	set := toolNameSet(toolsList)
-	if !set["pulse_read"] || !set["pulse_control"] || !set["pulse_query"] {
-		t.Fatalf("expected model handoff turns to keep full manifest, got %#v", set)
 	}
 }
 

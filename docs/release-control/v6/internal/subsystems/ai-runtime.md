@@ -1262,33 +1262,33 @@ deriving an older display status from `workflowStatusHistory`.
    surfacing failed-turn recovery, but a stalled route must not leave the user
    in an opaque first-token or mid-answer wait for the full provider timeout.
    Assistant turn tool exposure is backend-owned runtime behavior, not a
-   provider whim or frontend polish concern. Normal diagnostic, log, command,
-   repair, and governed-action prompts keep the full governed tool manifest so
-   the selected model owns investigation and action choice inside Pulse policy.
-   Direct text turns such as exact-reply diagnostics must withhold tools and
-   use a scoped system prompt that does not advertise unavailable tools.
-   Short alert and finding prompts are not direct-text turns: prompts such as
-   "Alerts count", "active alerts", or "findings count" must keep the full
-   governed manifest, including `pulse_alerts`, so the selected model can
-   choose the canonical Pulse alert/finding tool instead of receiving a
-   no-tools system prompt and asking the operator to paste context Pulse
-   already owns.
-   Inventory, count, overview, status, list, and breakdown prompts that only
-   need canonical Pulse resource state must expose the canonical
-   query/clarification path instead of shell/read/control tools, so prompts
-   like "how many devices in this" and "give me an inventory breakdown by node"
-   route toward Pulse inventory rather than `/dev` inspection. Those query-only
-   turns may prefetch canonical topology context before the model request,
-   including aggregate counts plus per-node and workload detail where available,
-   and then withhold tools so the first visible answer is fast and cannot drift
-   into shell inspection. The prefetch contract must tell the provider whether
-   the topology detail is complete or context-truncated, and should pass a
-   compact user-visible inventory payload rather than raw governed tool JSON so
-   policy metadata cannot cause providers to hide ordinary topology labels.
-   Deterministic count-only inventory prompts are a stricter case of that same
-   contract: when canonical topology state already carries the complete
-   aggregate counts, `internal/ai/chat` should answer locally by streaming
-   normal typed assistant content and `done` before provider attempt creation.
+   provider whim or frontend polish concern, and it is model-owned at the
+   manifest boundary: every interactive turn that reaches the selected model
+   carries the full governed tool manifest from `toolsForExecutionMode`, and
+   the model decides whether to answer directly, ask a clarification, or call
+   tools inside Pulse policy. Pulse must not classify prompt wording into
+   text-only or query-only tool scopes — greetings, exact-reply diagnostics,
+   "no tools"/"before using tools" phrasing, inventory/count/list/breakdown
+   wording, alert/finding wording, and prompt length are all model-visible
+   text, not Pulse routing signals. The former `assistantToolScopeForPrompt`
+   keyword router, its query-only manifest filter, its conversational/
+   direct-text text-only scopes, and its query-only topology prefetch (inject
+   compact inventory into the user message, then withhold tools) are removed
+   and must not be reintroduced; that family withheld tools from real lookups
+   ("hows esphome") and zeroed the manifest on false-positive phrases
+   ("before using any tools, tell me your plan"). The only manifest-boundary
+   exception is the contract-sanctioned context-only resource handoff turn
+   (see Completion Obligations). `TestService_ExecuteStream_ToolManifestIsModelOwned`
+   (`internal/ai/chat/service_tooling_test.go`) and
+   `TestService_ExecuteStream_InventoryBreakdownIsModelOwned`
+   (`internal/ai/chat/service_execute_additional_test.go`) are the regression
+   proofs that previously-scoped prompt families all reach the model with the
+   same governed manifest and an unmodified user message.
+   Deterministic count-only inventory prompts remain the single Pulse-owned
+   local answer shortcut, and it is an answer path, not tool selection: when
+   canonical topology state already carries the complete aggregate counts,
+   `internal/ai/chat` should answer locally by streaming normal typed
+   assistant content and `done` before provider attempt creation.
    This adapts the referenced OpenCode `message.ts` and `processor.ts` typed
    part/delta model at commit `fa2b63f850fc0a23bec2bdff9e660450d3fe7913`:
    locally owned text is still transcript text, but it must not wait on a
@@ -1296,31 +1296,26 @@ deriving an older display status from `workflowStatusHistory`.
    The completion metadata for that path should identify the effective route
    as `pulse:local-inventory` so the transcript label reflects Pulse-owned
    local runtime output instead of the operator's selected remote model.
-   Explicit operator tool intent is the escape hatch from this shortcut, not a
-   Pulse-authored tool choice: prompts that ask to use tools, request a
-   read-only attempt, or provide a shell/read command or path such as
-   `ls /dev | wc -l` must keep the full governed Assistant tool manifest and
-   reach the selected model/provider instead of answering from local inventory.
-   Pulse may classify that turn as full-manifest, but the selected model still
-   decides whether to call `pulse_read`, answer directly, or ask a
-   clarification. This adapts the referenced OpenCode source at fetched
+   Explicit or qualified operator intent is the escape hatch from this
+   shortcut, not a Pulse-authored tool choice: prompts that ask to use tools,
+   request a read-only attempt, provide a shell/read command or path such as
+   `ls /dev | wc -l`, or qualify the count beyond pure inventory ("how many
+   vms have errors") must reach the selected model/provider with the full
+   governed Assistant tool manifest instead of answering from local
+   inventory. Prompt classification
+   (`assistantPromptQualifiesForLocalInventoryCount` in
+   `internal/ai/chat/service.go`) may only suppress the shortcut and send the
+   turn to the model — its false positives fail safe, to the model — and the
+   selected model still decides whether to call `pulse_read`, answer
+   directly, or ask a clarification. This adapts the referenced OpenCode
+   source at fetched
    `origin/dev` commit `4519a1da329c1a4fc384054e7203ba7d06928205`, where
    `packages/core/src/session/message-updater.ts` mutates tool input, called,
    progress, success, and failed states as typed session events (lines
    247-318), by preserving the operator's explicit tool intent until Pulse can
    stream a visible `tool_start` / `tool_progress` / `tool_end` path instead of
    collapsing the turn into unrelated inventory prose.
-   The compact payload must include exact `answer_label` fields for nodes and
-   workloads; the provider-facing instruction must tell the model to copy those
-   labels exactly instead of substituting generic labels like `Node 1`, `VM
-   100`, or `CT 101`. For external model routes, only this exact
-   Pulse-generated compact inventory context may bypass resource-label text
-   redaction; operator prompts, handoff text, tool payloads, raw IDs, IPs,
-   config, and secret-like text remain governed by the model-bound sanitizer.
-   The normal inventory fast-path prompt must not seed provider output with
-   redaction vocabulary; raw secrets, config values, IP addresses, routing
-   metadata, provider internals, and shell command claims remain out of scope
-   for normal inventory answers. The Assistant transcript should show compact
+   The Assistant transcript should show compact
    activity as work happens: local context reads, governed tool names, provider
    routing, fallback, and first-token waiting must appear as the latest
    replacing live status/header status rather than a dead-looking wait state, a
@@ -1333,11 +1328,11 @@ deriving an older display status from `workflowStatusHistory`.
    invoking a governed tool, or waiting on a provider. Stream-idle heartbeats
    must inherit the selected provider/model route when Pulse has that route, so
    the visible row reads as route-specific liveness instead of falling back to
-   generic Assistant waiting copy. If a query-only
-   turn still reaches a model-owned `pulse_query` topology call, omitting
-   `summary_only` must default to summary-only before execution; detailed
-   topology remains available in the full governed path or when the model
-   explicitly asks for detail. Assistant answer style should stay operational
+   generic Assistant waiting copy. Pulse must not rewrite the inputs of a
+   model-chosen tool call (the former summary-only `pulse_query` topology
+   input default is removed with the query-only scope); `pulse_query`
+   defaults are owned by the tool definition the model sees, not by
+   post-hoc input mutation. Assistant answer style should stay operational
    and must not use emoji, warning icons, or decorative symbols unless the user
    explicitly asks for that tone.
    The system prompt for a turn must describe only the tools actually offered to the
@@ -2383,17 +2378,21 @@ message) rather than `chat.isLoading()` so it persists for the whole turn:
 `isLoading` flips false at visible-turn-complete, which previously made the dock
 flash its status for a frame and vanish.
 
-Prompt length must not gate tool availability. `assistantPromptLooksConversational`
-(`internal/ai/chat/service.go`) classifies only explicit greeting/meta prompts
-("hi", "thanks", "who are you") as conversational/text-only; it must not withhold
-tools from a turn merely because the prompt is short. Short prompts are usually
-resource lookups ("hows esphome", "check frigate", "grafana cpu") that need the
-query/read/metrics tools to answer from Pulse data — withholding tools by word
-count made the Assistant tell the user it had "no infrastructure context or
-diagnostic tools" and ask them to run `docker ps` themselves, for a resource
-Pulse already inventories. Tool selection stays model-owned: offer the tools and
-let the model decide whether to use them, rather than pre-deciding from prompt
-keywords/length that no tools are needed.
+Prompt wording must not gate tool availability at all. The greeting/meta
+text-only classifier (`assistantPromptLooksConversational`) is removed along
+with the rest of the `assistantToolScopeForPrompt` keyword router: even "hi"
+or "thanks" turns carry the full governed manifest, because tools offered is
+not tools used — the model answers a greeting without calling anything, while
+short prompts that look conversational to a keyword list are usually resource
+lookups ("hows esphome", "check frigate", "grafana cpu") that need the
+query/read/metrics tools to answer from Pulse data. Withholding tools by word
+count or greeting keywords made the Assistant tell the user it had "no
+infrastructure context or diagnostic tools" and ask them to run `docker ps`
+themselves, for a resource Pulse already inventories. Tool selection stays
+model-owned: offer the tools and let the model decide whether to use them,
+rather than pre-deciding from prompt keywords/length that no tools are
+needed. `TestService_ExecuteStream_ToolManifestIsModelOwned` is the
+regression proof.
 
 The `pulse_query` `get` action (`executeGetResource` in
 `internal/ai/tools/tools_query.go`) must accept a canonical resource handle
