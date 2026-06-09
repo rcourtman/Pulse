@@ -25,6 +25,14 @@ func (r *Router) validateAgentExecToken(token string, agentID string, hostname s
 	record, ok := r.config.ValidateAPIToken(token)
 	if !ok {
 		config.Mu.Unlock()
+		// This is the branch a stale-enrollment agent hits: it holds a token
+		// from a prior install that this server no longer recognises. It was
+		// previously the only rejection path with no log, which made a looping
+		// "Invalid token" agent impossible to diagnose without reading source.
+		log.Warn().
+			Str("agent_id", requestedID).
+			Str("hostname", requestedHost).
+			Msg("Agent exec token not recognized by this server — re-run the agent installer to re-enroll this agent")
 		return false
 	}
 

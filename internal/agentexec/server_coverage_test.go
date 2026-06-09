@@ -173,6 +173,39 @@ func TestHandleWebSocket_InvalidTokenRejectionSendFailure(t *testing.T) {
 	waitFor(t, 2*time.Second, func() bool { return !s.IsAgentConnected("a1") })
 }
 
+func TestHandleWebSocket_RejectionMessageIsActionable(t *testing.T) {
+	// The agent logs the rejection message verbatim, so it must tell the operator
+	// how to fix it (re-enroll / agent:exec scope) rather than the opaque
+	// "Invalid token" that previously left a stale-enrollment agent retrying
+	// forever with no actionable signal.
+	s := NewServer(func(string, string, string) bool { return false })
+	ts := newWSServer(t, s)
+	defer ts.Close()
+
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID:  "a1",
+		Hostname: "host1",
+		Token:    "bad",
+	}))
+
+	payload := wsReadRegisteredPayload(t, conn)
+	if payload.Success {
+		t.Fatalf("expected registration to be rejected")
+	}
+	if payload.Message == "Invalid token" {
+		t.Fatalf("rejection message must not be the bare opaque 'Invalid token'")
+	}
+	if !strings.Contains(payload.Message, "re-run the agent installer") {
+		t.Fatalf("rejection message should point the operator at re-enrollment, got: %q", payload.Message)
+	}
+}
+
 func TestHandleWebSocket_RegistrationAckSendFailure(t *testing.T) {
 	origWriteTextMessage := writeTextMessage
 	t.Cleanup(func() { writeTextMessage = origWriteTextMessage })

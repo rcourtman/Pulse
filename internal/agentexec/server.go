@@ -433,7 +433,12 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Validate token
 	if !s.validateToken(reg.Token, reg.AgentID, reg.Hostname) {
 		log.Warn().Str("agent_id", reg.AgentID).Msg("Agent registration rejected: invalid token")
-		rejectedMsg, err := NewMessage(MsgTypeRegistered, "", RegisteredPayload{Success: false, Message: "Invalid token"})
+		// Actionable message instead of a bare "Invalid token": the agent logs
+		// this verbatim, and the dominant causes (token not recognised, or not
+		// bound to this agent) are both fixed by re-enrolling, while a token
+		// that exists but lacks the scope is named explicitly. Avoids the silent
+		// retry loop that previously gave operators nothing to act on.
+		rejectedMsg, err := NewMessage(MsgTypeRegistered, "", RegisteredPayload{Success: false, Message: "agent token not authorized for command execution — re-run the agent installer to enroll an agent:exec-scoped token"})
 		if err != nil {
 			log.Warn().Err(err).Str("agent_id", reg.AgentID).Msg("Failed to encode rejection message")
 			conn.Close()
