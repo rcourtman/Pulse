@@ -4,6 +4,7 @@ import {
   PROXMOX_TAB_SPECS,
   buildProxmoxPageModel,
   buildVisibleProxmoxTabSpecs,
+  filterProxmoxNodesForSearch,
   getResourceVersion,
   resolveProxmoxPlatformScope,
 } from '../proxmoxPageModel';
@@ -29,6 +30,44 @@ describe('proxmoxPageModel', () => {
       'ceph',
       'mail',
     ]);
+  });
+
+  describe('filterProxmoxNodesForSearch', () => {
+    const minipc = makeResource({
+      id: 'minipc',
+      type: 'agent',
+      proxmox: { nodeName: 'minipc', clusterName: 'homelab' },
+    });
+    const delly = makeResource({
+      id: 'delly',
+      type: 'agent',
+      proxmox: { nodeName: 'delly', clusterName: 'homelab' },
+    });
+    const debianGo = makeResource({
+      id: 'system-container-112',
+      type: 'system-container',
+      name: 'debian-go',
+      proxmox: { vmid: 112, nodeName: 'minipc' },
+    });
+
+    it('returns every node when the search term is empty', () => {
+      expect(filterProxmoxNodesForSearch([minipc, delly], [debianGo], '')).toEqual([
+        minipc,
+        delly,
+      ]);
+    });
+
+    it('keeps the host node of a matching guest so a guest search does not empty the nodes table', () => {
+      // Regression: searching a guest name used to filter the nodes table to
+      // nothing, surfacing the "No Proxmox VE nodes" empty state even though the
+      // guest's host node exists and the guest is listed below.
+      const result = filterProxmoxNodesForSearch([minipc, delly], [debianGo], 'debian-go');
+      expect(result).toEqual([minipc]);
+    });
+
+    it('still matches a node by its own name', () => {
+      expect(filterProxmoxNodesForSearch([minipc, delly], [debianGo], 'delly')).toEqual([delly]);
+    });
   });
 
   it('builds a Proxmox-first estate model from canonical v6 resources', () => {

@@ -23,7 +23,6 @@ import { getPlatformIcon } from '@/features/platformPage/platformIcon';
 import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { STORAGE_KEYS } from '@/utils/localStorage';
-import { resourceMatchesSearch } from '@/utils/resourceSearchMatch';
 import {
   PlatformErrorState,
   PlatformSectionTabs,
@@ -41,6 +40,7 @@ import {
   PROXMOX_TAB_SPECS,
   buildProxmoxPageModel,
   buildVisibleProxmoxTabSpecs,
+  filterProxmoxNodesForSearch,
   type ProxmoxPageModel,
   type ProxmoxPageTabId,
 } from './proxmoxPageModel';
@@ -247,11 +247,13 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
       workloadsState.surfaceInitialDataReceived() &&
       workloadsState.allGuests().length > 0,
   );
-  const filteredNodes = createMemo(() => {
-    const term = workloadsState.search();
-    if (!term.trim()) return props.model().pveNodes;
-    return props.model().pveNodes.filter((node) => resourceMatchesSearch(node, term));
-  });
+  const filteredNodes = createMemo(() =>
+    filterProxmoxNodesForSearch(
+      props.model().pveNodes,
+      props.model().guests,
+      workloadsState.search(),
+    ),
+  );
 
   return (
     <div class="space-y-4">
