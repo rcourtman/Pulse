@@ -713,10 +713,18 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 {discovery()?.ai_reasoning ||
                   "Discovery completed but couldn't identify a known service."}
               </p>
-              <Show when={discovery()?.ai_reasoning && props.commandsEnabled !== true}>
+              {/* The abstention only fires when command scanning is already
+                  enabled, so the fix is agent connectivity + the agent:exec
+                  token scope — link both entry points rather than telling the
+                  user to enable a toggle that is already on. */}
+              <Show when={discovery()?.ai_reasoning}>
                 <p class="text-xs mt-2">
                   <a href={commandSettingsTarget.href} class="underline hover:no-underline">
-                    Open {commandSettingsTarget.label}
+                    {commandSettingsTarget.label}
+                  </a>
+                  {' · '}
+                  <a href={apiAccessSettingsTarget.href} class="underline hover:no-underline">
+                    {apiAccessSettingsTarget.label}
                   </a>
                 </p>
               </Show>

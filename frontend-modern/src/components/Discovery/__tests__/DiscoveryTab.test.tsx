@@ -164,7 +164,7 @@ describe('DiscoveryTab', () => {
       user_secrets: {},
       confidence: 0,
       ai_reasoning:
-        'Discovery could not run commands on this resource, so its service was not identified. Enable "Pulse Commands" for the host agent (Settings → Infrastructure) to run real discovery instead of guessing.',
+        'Discovery couldn\'t collect command output from inside this resource, so its service wasn\'t identified. Pulse Commands are enabled, but the host agent returned no results — make sure the host agent is connected and its API token has the "agent:exec" scope.',
       discovered_at: '2026-06-09T00:00:00Z',
       updated_at: '2026-06-09T00:00:00Z',
       scan_duration: 0,
@@ -180,9 +180,14 @@ describe('DiscoveryTab', () => {
     ));
 
     expect(await screen.findByText('Service not identified')).toBeInTheDocument();
-    expect(screen.getByText(/Discovery could not run commands on this resource/i)).toBeInTheDocument();
-    const settingsLink = screen.getByRole('link', { name: /Open Settings → Infrastructure/i });
-    expect(settingsLink).toHaveAttribute('href', '/settings/infrastructure');
+    // The abstention reason must be surfaced, and it must NOT tell the user to
+    // enable a command toggle that is already on.
+    expect(screen.getByText(/Pulse Commands are enabled, but the host agent returned no results/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Enable "Pulse Commands"/i)).toBeNull();
+    const infraLink = screen.getByRole('link', { name: 'Settings → Infrastructure' });
+    expect(infraLink).toHaveAttribute('href', '/settings/infrastructure');
+    const apiAccessLink = screen.getByRole('link', { name: 'Settings → API Access' });
+    expect(apiAccessLink).toHaveAttribute('href', '/settings/security/api');
     expect(
       screen.queryByText("Discovery completed but couldn't identify a known service"),
     ).toBeNull();
