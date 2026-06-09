@@ -1810,6 +1810,11 @@ deriving an older display status from `workflowStatusHistory`.
    caveat staleness rather than presenting cached operational detail as current.
    The handoff path must not withhold operational context that the `@`-mention
    path delivers.
+   The base Assistant system prompt must instruct the model to use this
+   provenance: briefly attribute facts drawn from Pulse context to their source
+   (a discovered fact's source, a metric/event timestamp), caveat stale or cached
+   context instead of presenting it as current, and keep attribution concise and
+   inline rather than citing every sentence.
    Patrol deterministic triage signals are prioritized evidence seeds for the
    configured model; they must not be described as a Pulse-authored final
    diagnosis, proof that unflagged resources are healthy, or a reason to

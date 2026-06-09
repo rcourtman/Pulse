@@ -365,6 +365,23 @@ func TestBuildSystemPrompt_DoesNotClaimGenericVMControl(t *testing.T) {
 	}
 }
 
+func TestBuildSystemPrompt_IncludesProvenanceGuidance(t *testing.T) {
+	svc := &Service{}
+
+	prompt := svc.buildSystemPrompt()
+
+	for _, expected := range []string{
+		"## GROUNDING & PROVENANCE",
+		"attribute it briefly so the user can trust and verify it",
+		"Do not present stale or cached context as current",
+		"Keep attribution concise and inline",
+	} {
+		if !strings.Contains(prompt, expected) {
+			t.Fatalf("expected provenance guidance %q in system prompt, got %q", expected, prompt)
+		}
+	}
+}
+
 func TestBuildSystemPrompt_CurrentResourceRequiresResourceHandoff(t *testing.T) {
 	svc := &Service{}
 
