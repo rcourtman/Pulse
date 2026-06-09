@@ -2328,6 +2328,28 @@ deriving an older display status from `workflowStatusHistory`.
 
 ## Current State
 
+Finding identity is the LLM-assigned key (resource+category+key hash → ID),
+and key collisions are surfaced, not forked: when a same-ID re-detection's
+title shares essentially no keywords with the existing finding's title
+(`keywordOverlap` at or below `findingIdentityShiftMaxTitleOverlap`,
+`internal/ai/findings.go`), the merge proceeds — the latest report still owns
+the text, because key forking would split LLM rephrasings of one real issue
+into duplicate findings — but `FindingsStore.Add` appends a
+`content_replaced` lifecycle event preserving the previous and new titles in
+metadata and logs the collision. This keeps the operator timeline honest
+when a distinct issue reuses an existing finding's identity (including the
+resolved case, where the reactivation otherwise reads as a regression of the
+old issue: both `content_replaced` and `regressed` events appear).
+Rephrasings and identical re-detections stay event-free per the
+heartbeat-not-transition rule. The shared lifecycle presentation
+(`frontend-modern/src/utils/aiFindingPresentation.ts`,
+patrol-intelligence subsystem) renders unknown lifecycle types through the
+identifier-formatter fallback, so the event reads "Content replaced" today;
+a dedicated label is patrol-intelligence UI work and lands with that
+subsystem's own ceremony.
+`TestFindingsStore_KeyCollisionRecordsContentReplacedEvent` and its
+companion tests (`internal/ai/findings_lifecycle_test.go`) pin the behavior.
+
 The interaction-quality scenario corpus
 (`internal/ai/chat/interaction_scenario_corpus_test.go`) is the canonical
 regression home for chat-feel promises, mirroring the Discovery corpus

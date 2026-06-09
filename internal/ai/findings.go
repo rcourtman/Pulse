@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
@@ -72,6 +74,13 @@ func CategorySupportsStaleAutoResolve(category FindingCategory) bool {
 		return false
 	}
 }
+
+// findingIdentityShiftMaxTitleOverlap is the keyword-overlap (Jaccard) bar
+// below which a same-ID re-detection's title counts as a substantially
+// different report (a key collision) rather than a rephrasing of the same
+// issue. Rephrasings share core keywords (resource names, symptom nouns) and
+// land well above this; genuinely distinct issues rarely share any.
+const findingIdentityShiftMaxTitleOverlap = 0.2
 
 // DismissReasonWillFixLater marks a finding as "I will fix this later" — an
 // operational commitment with an implicit deadline. See Finding.RemindAt.
@@ -1452,6 +1461,32 @@ func (s *FindingsStore) Add(f *Finding) bool {
 				existing.UserNote = ""
 			}
 			existing.AcknowledgedAt = nil
+		}
+
+		// Same-key re-detections normally describe the same issue, but the
+		// LLM-assigned key can collide: a substantially different report
+		// arriving under an existing finding's identity overwrites its text
+		// below, silently absorbing a distinct issue into this finding's
+		// history (and, on a resolved finding, counting it as a regression
+		// of the old issue). Key forking would be worse — LLM rephrasings
+		// would split one real issue into duplicate findings — so the merge
+		// stands, and the identity shift is recorded honestly in the
+		// lifecycle with the previous title preserved. Detection compares
+		// title keyword overlap: resource/category/key are equal by
+		// construction, so the text is the only discriminating signal, and
+		// plain rephrasings of the same issue share core keywords.
+		if existing.Title != "" && f.Title != "" && existing.Title != f.Title &&
+			keywordOverlap(existing.Title, f.Title) <= findingIdentityShiftMaxTitleOverlap {
+			log.Info().
+				Str("finding_id", existing.ID).
+				Str("key", existing.Key).
+				Str("previous_title", existing.Title).
+				Str("new_title", f.Title).
+				Msg("Finding key collision: re-detection replaced this finding's content with a substantially different report")
+			s.appendLifecycleLocked(existing, "content_replaced",
+				"Re-detected with substantially different details; the previous report's title is preserved in this event",
+				existing.LoopState, existing.LoopState,
+				map[string]string{"previous_title": existing.Title, "new_title": f.Title})
 		}
 
 		// Update existing finding

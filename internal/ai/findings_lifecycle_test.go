@@ -273,3 +273,129 @@ func TestFindingsStore_BlocksInvalidLoopStateTransition(t *testing.T) {
 		t.Fatalf("expected loop_transition_violation, got %q", last.Type)
 	}
 }
+
+// --- Key-collision identity-shift events ----------------------------------
+//
+// The LLM-assigned finding key can collide: a substantially different report
+// for the same resource+category+key lands on the existing finding's ID and
+// overwrites its text. The merge is intentional (key forking would split LLM
+// rephrasings of one issue into duplicate findings), but the identity shift
+// must be recorded honestly as a content_replaced lifecycle event carrying
+// the previous title.
+
+func newCollisionFinding(title, description string) *Finding {
+	return &Finding{
+		ID:           "lf-collision",
+		Key:          "restart-loop",
+		ResourceID:   "vm-100",
+		ResourceName: "vm-100",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryReliability,
+		Title:        title,
+		Description:  description,
+	}
+}
+
+func findLifecycleEvents(f *Finding, typ string) []FindingLifecycleEvent {
+	var events []FindingLifecycleEvent
+	for _, e := range f.Lifecycle {
+		if e.Type == typ {
+			events = append(events, e)
+		}
+	}
+	return events
+}
+
+func TestFindingsStore_KeyCollisionRecordsContentReplacedEvent(t *testing.T) {
+	store := NewFindingsStore()
+	store.Add(newCollisionFinding(
+		"frigate service stuck in restart loop",
+		"frigate restarts every 30s after OOM kill",
+	))
+
+	// A distinct issue arrives under the same resource+category+key.
+	store.Add(newCollisionFinding(
+		"homeassistant zigbee bridge crashing repeatedly",
+		"zigbee2mqtt bridge exits with USB disconnect errors",
+	))
+
+	got := store.Get("lf-collision")
+	if got == nil {
+		t.Fatal("expected merged finding to exist")
+	}
+	events := findLifecycleEvents(got, "content_replaced")
+	if len(events) != 1 {
+		t.Fatalf("expected exactly one content_replaced event, got %d (lifecycle=%+v)", len(events), got.Lifecycle)
+	}
+	if events[0].Metadata["previous_title"] != "frigate service stuck in restart loop" {
+		t.Fatalf("expected previous title preserved in event meta, got %q", events[0].Metadata["previous_title"])
+	}
+	if events[0].Metadata["new_title"] != "homeassistant zigbee bridge crashing repeatedly" {
+		t.Fatalf("expected new title in event meta, got %q", events[0].Metadata["new_title"])
+	}
+	// Merge semantics are unchanged: the latest report owns the text.
+	if got.Title != "homeassistant zigbee bridge crashing repeatedly" {
+		t.Fatalf("expected merge to keep overwriting the title, got %q", got.Title)
+	}
+}
+
+func TestFindingsStore_RephrasedRedetectionDoesNotRecordContentReplaced(t *testing.T) {
+	store := NewFindingsStore()
+	store.Add(newCollisionFinding(
+		"frigate service stuck in restart loop",
+		"frigate restarts every 30s after OOM kill",
+	))
+
+	// Same issue, rephrased — shares the core keywords (frigate, restart).
+	store.Add(newCollisionFinding(
+		"frigate container keeps hitting a restart loop",
+		"the frigate container restarts continuously after an OOM kill",
+	))
+
+	got := store.Get("lf-collision")
+	if events := findLifecycleEvents(got, "content_replaced"); len(events) != 0 {
+		t.Fatalf("rephrasing of the same issue must not record content_replaced, got %+v", events)
+	}
+}
+
+func TestFindingsStore_IdenticalRedetectionDoesNotRecordContentReplaced(t *testing.T) {
+	store := NewFindingsStore()
+	store.Add(newCollisionFinding("frigate service stuck in restart loop", "d"))
+	store.Add(newCollisionFinding("frigate service stuck in restart loop", "d"))
+
+	got := store.Get("lf-collision")
+	if events := findLifecycleEvents(got, "content_replaced"); len(events) != 0 {
+		t.Fatalf("identical re-detection must not record content_replaced, got %+v", events)
+	}
+}
+
+func TestFindingsStore_KeyCollisionOnResolvedFindingRecordsBothEvents(t *testing.T) {
+	// The worst collision damage: a distinct new issue reusing a RESOLVED
+	// finding's identity counts as a regression of the old issue. The
+	// regression accounting stands (merge semantics), but the lifecycle must
+	// show the content shift so the "regression" can be read for what it is.
+	store := NewFindingsStore()
+	store.Add(newCollisionFinding(
+		"frigate service stuck in restart loop",
+		"frigate restarts every 30s after OOM kill",
+	))
+	if !store.Resolve("lf-collision", false) {
+		t.Fatal("expected resolve to succeed")
+	}
+
+	store.Add(newCollisionFinding(
+		"homeassistant zigbee bridge crashing repeatedly",
+		"zigbee2mqtt bridge exits with USB disconnect errors",
+	))
+
+	got := store.Get("lf-collision")
+	if got.ResolvedAt != nil {
+		t.Fatal("expected finding to be reactivated")
+	}
+	if len(findLifecycleEvents(got, "content_replaced")) != 1 {
+		t.Fatalf("expected content_replaced on resolved-finding collision, lifecycle=%+v", got.Lifecycle)
+	}
+	if len(findLifecycleEvents(got, "regressed")) != 1 {
+		t.Fatalf("expected regressed event to remain, lifecycle=%+v", got.Lifecycle)
+	}
+}
