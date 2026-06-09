@@ -4737,6 +4737,93 @@ main() {
     fi
 }
 
+# Legacy pulse-sensor-proxy footprint (v4/v5). install.sh never installs the
+# sensor-proxy in v6 — the unified agent replaced it — but a Proxmox host that
+# was upgraded from v5 may still carry it. These paths mirror the LOCAL subset
+# of scripts/uninstall-sensor-proxy.sh so a full `--uninstall` on such a host
+# leaves nothing behind: binary, units, runtime/state, service user, and —
+# security-relevant — the managed SSH keys in root's authorized_keys. The
+# cluster-wide key removal and Proxmox API-user deletion stay behind the
+# explicit standalone script (we print a pointer to it).
+SENSOR_PROXY_BINARY_PATH="${PULSE_SENSOR_PROXY_BINARY_PATH:-/usr/local/bin/pulse-sensor-proxy}"
+SENSOR_PROXY_INSTALL_ROOT="${PULSE_SENSOR_PROXY_INSTALL_ROOT:-/opt/pulse/sensor-proxy}"
+SENSOR_PROXY_RUNTIME_DIR="${PULSE_SENSOR_PROXY_RUNTIME_DIR:-/run/pulse-sensor-proxy}"
+SENSOR_PROXY_WORK_DIR="${PULSE_SENSOR_PROXY_WORK_DIR:-/var/lib/pulse-sensor-proxy}"
+SENSOR_PROXY_CONFIG_DIR="${PULSE_SENSOR_PROXY_CONFIG_DIR:-/etc/pulse-sensor-proxy}"
+SENSOR_PROXY_LOG_DIR="${PULSE_SENSOR_PROXY_LOG_DIR:-/var/log/pulse/sensor-proxy}"
+SENSOR_PROXY_SERVICE_USER="${PULSE_SENSOR_PROXY_SERVICE_USER:-pulse-sensor-proxy}"
+SENSOR_PROXY_AUTHORIZED_KEYS_PATH="${PULSE_SENSOR_PROXY_AUTHORIZED_KEYS_PATH:-/root/.ssh/authorized_keys}"
+SENSOR_PROXY_SYSTEMD_DIR="${PULSE_SENSOR_PROXY_SYSTEMD_DIR:-/etc/systemd/system}"
+
+local_sensor_proxy_present() {
+    [[ -e "$SENSOR_PROXY_BINARY_PATH" ]] && return 0
+    [[ -e "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-proxy.service" ]] && return 0
+    [[ -d "$SENSOR_PROXY_INSTALL_ROOT" ]] && return 0
+    [[ -d "$SENSOR_PROXY_WORK_DIR" ]] && return 0
+    [[ -d "$SENSOR_PROXY_CONFIG_DIR" ]] && return 0
+    return 1
+}
+
+remove_local_sensor_proxy_managed_keys() {
+    local auth_file="$SENSOR_PROXY_AUTHORIZED_KEYS_PATH"
+    local tmp_file=""
+    [[ -f "$auth_file" ]] || return 0
+    tmp_file=$(mktemp) || return 0
+    grep -v -E '# pulse-(managed|proxy)-key$' "$auth_file" >"$tmp_file" 2>/dev/null || true
+    if cmp -s "$tmp_file" "$auth_file"; then
+        rm -f "$tmp_file"
+        return 0
+    fi
+    chmod --reference="$auth_file" "$tmp_file" 2>/dev/null || chmod 600 "$tmp_file" 2>/dev/null || true
+    chown --reference="$auth_file" "$tmp_file" 2>/dev/null || true
+    mv "$tmp_file" "$auth_file"
+    echo "Removed legacy pulse-sensor-proxy SSH key entries from $auth_file"
+}
+
+cleanup_local_sensor_proxy() {
+    local_sensor_proxy_present || return 0
+
+    echo "Removing legacy pulse-sensor-proxy footprint from this host..."
+
+    local unit=""
+    for unit in \
+        pulse-sensor-proxy.service \
+        pulse-sensor-proxy-selfheal.timer \
+        pulse-sensor-proxy-selfheal.service \
+        pulse-sensor-cleanup.path \
+        pulse-sensor-cleanup.service; do
+        systemctl stop "$unit" >/dev/null 2>&1 || true
+        systemctl disable "$unit" >/dev/null 2>&1 || true
+    done
+
+    rm -f "$SENSOR_PROXY_BINARY_PATH"
+    rm -f /usr/local/bin/pulse-sensor-cleanup.sh
+    rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-proxy.service"
+    rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-proxy-selfheal.service"
+    rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-proxy-selfheal.timer"
+    rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-cleanup.service"
+    rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-cleanup.path"
+    rm -rf "$SENSOR_PROXY_RUNTIME_DIR"
+    rm -rf "$SENSOR_PROXY_INSTALL_ROOT"
+    rm -rf "$SENSOR_PROXY_WORK_DIR"
+    rm -rf "$SENSOR_PROXY_CONFIG_DIR"
+    rm -rf "$SENSOR_PROXY_LOG_DIR"
+
+    remove_local_sensor_proxy_managed_keys
+
+    if id -u "$SENSOR_PROXY_SERVICE_USER" >/dev/null 2>&1; then
+        userdel --remove "$SENSOR_PROXY_SERVICE_USER" >/dev/null 2>&1 || userdel "$SENSOR_PROXY_SERVICE_USER" >/dev/null 2>&1 || true
+    fi
+    if getent group "$SENSOR_PROXY_SERVICE_USER" >/dev/null 2>&1; then
+        groupdel "$SENSOR_PROXY_SERVICE_USER" >/dev/null 2>&1 || true
+    fi
+
+    echo "Removed legacy pulse-sensor-proxy footprint from this host."
+    echo "If this host belongs to a Proxmox cluster, run the full cleanup on the"
+    echo "other nodes (and to remove the pulse-monitor@pam API user):"
+    echo "  curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/uninstall-sensor-proxy.sh | bash -s -- --purge --remove-proxmox-access"
+}
+
 # Uninstall function
 uninstall_pulse() {
     check_root
@@ -4787,7 +4874,11 @@ uninstall_pulse() {
         echo "Removing pulse user..."
         userdel pulse 2>/dev/null || true
     fi
-    
+
+    # Remove any leftover legacy pulse-sensor-proxy footprint on this host so a
+    # full uninstall on a v5-upgraded Proxmox host leaves nothing behind.
+    cleanup_local_sensor_proxy
+
     # Reload systemd
     systemctl daemon-reload
     

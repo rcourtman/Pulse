@@ -573,6 +573,156 @@ func TestOperatorInstallDocsAvoidUnverifiedBootstrapAndFloatingImageTags(t *test
 // proxies the top-level GitHub install.sh asset, which is the SERVER installer
 // (not the agent installer) and rejects the wizard's --url/--token-file flags.
 // The Docker image deploys these sidecars; deploy_agent_scripts must too.
+// TestRootInstallUninstallCleansLegacySensorProxy guards #34: `install.sh
+// --uninstall` on a Proxmox host that was upgraded from v5 must remove the
+// leftover pulse-sensor-proxy footprint locally — binary, units, runtime/state,
+// service user, and (security-relevant) the managed SSH keys in root's
+// authorized_keys — so a "complete uninstall" leaves nothing behind. Cluster-
+// wide key removal and Proxmox API-user deletion stay behind the explicit
+// standalone scripts/uninstall-sensor-proxy.sh, which we only point users to.
+func TestRootInstallUninstallCleansLegacySensorProxy(t *testing.T) {
+	tmp := t.TempDir()
+
+	binPath := filepath.Join(tmp, "bin", "pulse-sensor-proxy")
+	systemdDir := filepath.Join(tmp, "systemd")
+	unitPath := filepath.Join(systemdDir, "pulse-sensor-proxy.service")
+	authKeys := filepath.Join(tmp, "authorized_keys")
+	marker := filepath.Join(tmp, "calls.log")
+
+	for _, dir := range []string{filepath.Dir(binPath), systemdDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", dir, err)
+		}
+	}
+	if err := os.WriteFile(binPath, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write binary: %v", err)
+	}
+	if err := os.WriteFile(unitPath, []byte("[Unit]\n"), 0o644); err != nil {
+		t.Fatalf("write unit: %v", err)
+	}
+	authContent := "ssh-ed25519 AAAA keepme@admin\n" +
+		"ssh-ed25519 BBBB # pulse-managed-key\n" +
+		"ssh-ed25519 CCCC # pulse-proxy-key\n" +
+		"ssh-rsa DDDD keep-this-too\n"
+	if err := os.WriteFile(authKeys, []byte(authContent), 0o600); err != nil {
+		t.Fatalf("write authorized_keys: %v", err)
+	}
+
+	env := `
+		set -uo pipefail
+		SENSOR_PROXY_BINARY_PATH="` + binPath + `"
+		SENSOR_PROXY_SYSTEMD_DIR="` + systemdDir + `"
+		SENSOR_PROXY_INSTALL_ROOT="` + filepath.Join(tmp, "sensor-proxy") + `"
+		SENSOR_PROXY_RUNTIME_DIR="` + filepath.Join(tmp, "run") + `"
+		SENSOR_PROXY_WORK_DIR="` + filepath.Join(tmp, "work") + `"
+		SENSOR_PROXY_CONFIG_DIR="` + filepath.Join(tmp, "config") + `"
+		SENSOR_PROXY_LOG_DIR="` + filepath.Join(tmp, "log") + `"
+		SENSOR_PROXY_SERVICE_USER="pulse-sensor-proxy-test"
+		SENSOR_PROXY_AUTHORIZED_KEYS_PATH="` + authKeys + `"
+		systemctl() { return 0; }
+		userdel() { echo "userdel $*" >>"` + marker + `"; return 0; }
+		groupdel() { echo "groupdel $*" >>"` + marker + `"; return 0; }
+		id() { return 0; }
+		getent() { return 0; }
+	`
+
+	funcs := extractRootInstallShellFunction(t, "local_sensor_proxy_present") + "\n" +
+		extractRootInstallShellFunction(t, "remove_local_sensor_proxy_managed_keys") + "\n" +
+		extractRootInstallShellFunction(t, "cleanup_local_sensor_proxy")
+
+	out, err := exec.Command("bash", "-c", env+funcs+"\ncleanup_local_sensor_proxy\n").CombinedOutput()
+	if err != nil {
+		t.Fatalf("cleanup_local_sensor_proxy failed: %v\n%s", err, out)
+	}
+
+	if _, statErr := os.Stat(binPath); !os.IsNotExist(statErr) {
+		t.Fatalf("expected sensor-proxy binary removed, stat err = %v", statErr)
+	}
+	if _, statErr := os.Stat(unitPath); !os.IsNotExist(statErr) {
+		t.Fatalf("expected sensor-proxy unit removed, stat err = %v", statErr)
+	}
+
+	keysAfter, err := os.ReadFile(authKeys)
+	if err != nil {
+		t.Fatalf("read authorized_keys after cleanup: %v", err)
+	}
+	keysText := string(keysAfter)
+	if strings.Contains(keysText, "pulse-managed-key") || strings.Contains(keysText, "pulse-proxy-key") {
+		t.Fatalf("expected managed/proxy SSH keys stripped, got:\n%s", keysText)
+	}
+	for _, keep := range []string{"keepme@admin", "keep-this-too"} {
+		if !strings.Contains(keysText, keep) {
+			t.Fatalf("expected unrelated SSH key %q preserved, got:\n%s", keep, keysText)
+		}
+	}
+
+	markerBytes, err := os.ReadFile(marker)
+	if err != nil {
+		t.Fatalf("expected userdel/groupdel to run: %v", err)
+	}
+	if !strings.Contains(string(markerBytes), "userdel") {
+		t.Fatalf("expected service user removal, got marker:\n%s", markerBytes)
+	}
+
+	if !strings.Contains(string(out), "uninstall-sensor-proxy.sh") {
+		t.Fatalf("expected pointer to standalone cluster cleanup script, got:\n%s", out)
+	}
+
+	// Presence-gated: a host with no sensor-proxy footprint is a silent no-op.
+	empty := t.TempDir()
+	noopEnv := `
+		set -uo pipefail
+		SENSOR_PROXY_BINARY_PATH="` + filepath.Join(empty, "pulse-sensor-proxy") + `"
+		SENSOR_PROXY_SYSTEMD_DIR="` + empty + `"
+		SENSOR_PROXY_INSTALL_ROOT="` + filepath.Join(empty, "sensor-proxy") + `"
+		SENSOR_PROXY_RUNTIME_DIR="` + filepath.Join(empty, "run") + `"
+		SENSOR_PROXY_WORK_DIR="` + filepath.Join(empty, "work") + `"
+		SENSOR_PROXY_CONFIG_DIR="` + filepath.Join(empty, "config") + `"
+		SENSOR_PROXY_LOG_DIR="` + filepath.Join(empty, "log") + `"
+		SENSOR_PROXY_SERVICE_USER="pulse-sensor-proxy-test"
+		SENSOR_PROXY_AUTHORIZED_KEYS_PATH="` + filepath.Join(empty, "authorized_keys") + `"
+		systemctl() { return 0; }
+		userdel() { return 0; }
+		groupdel() { return 0; }
+		id() { return 0; }
+		getent() { return 0; }
+	`
+	noopOut, err := exec.Command("bash", "-c", noopEnv+funcs+"\ncleanup_local_sensor_proxy\n").CombinedOutput()
+	if err != nil {
+		t.Fatalf("cleanup_local_sensor_proxy no-op path failed: %v\n%s", err, noopOut)
+	}
+	if strings.TrimSpace(string(noopOut)) != "" {
+		t.Fatalf("expected silent no-op when no footprint present, got:\n%s", noopOut)
+	}
+}
+
+// TestRootInstallUninstallWiresSensorProxyCleanup pins that uninstall_pulse
+// actually invokes the local sensor-proxy cleanup (the functional test above
+// only exercises the helper in isolation).
+func TestRootInstallUninstallWiresSensorProxyCleanup(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
+	if err != nil {
+		t.Fatalf("read root install.sh: %v", err)
+	}
+
+	uninstall := extractRootInstallShellFunction(t, "uninstall_pulse")
+	if !strings.Contains(uninstall, "cleanup_local_sensor_proxy") {
+		t.Fatalf("uninstall_pulse does not invoke cleanup_local_sensor_proxy:\n%s", uninstall)
+	}
+
+	script := string(content)
+	for _, needle := range []string{
+		`cleanup_local_sensor_proxy() {`,
+		`local_sensor_proxy_present() {`,
+		`remove_local_sensor_proxy_managed_keys() {`,
+		`# pulse-(managed|proxy)-key$`,
+	} {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing sensor-proxy cleanup contract: %s", needle)
+		}
+	}
+}
+
 func TestRootInstallDeployAgentScriptsDeploysSignatureSidecars(t *testing.T) {
 	extractDir := t.TempDir()
 	installDir := t.TempDir()

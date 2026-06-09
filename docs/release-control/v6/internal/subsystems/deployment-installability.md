@@ -1114,6 +1114,18 @@ installs too: the root `install.sh`, generated update helper, and
 identity across install, update, reset, uninstall, and timer/service wiring so
 stable and preview Pulse runtimes can coexist on one host without drifting back
 onto the default `pulse.service` paths.
+That same server-installer uninstall must also leave no legacy companion
+footprint behind on the host: `install.sh --uninstall` removes the local
+`pulse-sensor-proxy` artifacts a v5-era Proxmox host may still carry — the
+binary, its systemd units, runtime/state directories, the dedicated service
+user/group, and the managed `# pulse-managed-key` / `# pulse-proxy-key` entries
+in root's `authorized_keys` — through one installer-owned
+`cleanup_local_sensor_proxy` helper that is presence-gated (a silent no-op when
+no proxy was installed). The aggressive cluster-wide authorized_keys removal and
+`pulse-monitor@pam` API-user deletion stay behind the explicit standalone
+`scripts/uninstall-sensor-proxy.sh`, which the installer only prints a pointer
+to. `scripts/installtests/root_install_sh_test.go` is the owned proof surface
+for that local sensor-proxy cleanup.
 That same server-installer boundary also owns release trust fail-closed: the
 root `install.sh`, its generated update helper, and
 `scripts/pulse-auto-update.sh` must verify downloaded release tarballs and
