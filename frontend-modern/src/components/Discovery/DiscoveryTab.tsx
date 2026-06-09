@@ -728,7 +728,10 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                   </a>
                 </p>
               </Show>
-              <Show when={discovery()?.updated_at}>
+              {/* Only show recency here when the "Discovery run" control block
+                  (which already states "Last run: X ago") isn't rendered, so the
+                  tab shows the timestamp once rather than twice. */}
+              <Show when={discovery()?.updated_at && !showManualRunAction()}>
                 <p class="text-xs text-muted mt-2">
                   Last scanned: {formatDiscoveryAge(discovery()!.updated_at)}
                 </p>
@@ -806,7 +809,10 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 </Show>
                 <div class="mt-3 flex flex-wrap gap-2 text-[10px] text-muted">
                   <DiscoveryProvenanceMarker label={getDiscoveryObservedSourceLabel()} />
-                  <Show when={d().updated_at}>
+                  {/* Recency is stated once in the "Discovery run" control block
+                      ("Last run: X ago") whenever it's rendered; only repeat it
+                      here when that block is absent. */}
+                  <Show when={d().updated_at && !showManualRunAction()}>
                     <span class="rounded border border-border bg-surface-alt px-2 py-0.5">
                       Last observed {formatDiscoveryAge(d().updated_at)}
                     </span>

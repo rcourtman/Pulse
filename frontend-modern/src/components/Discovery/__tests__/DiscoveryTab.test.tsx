@@ -246,6 +246,54 @@ describe('DiscoveryTab', () => {
     });
   });
 
+  it('states discovery recency once when the run-control block is present', async () => {
+    // The "Discovery run" control block already states "Last run: X ago", so the
+    // identified-service card must not repeat the same timestamp as
+    // "Last observed X ago" — recency should appear once in the tab body.
+    const discovered: ResourceDiscovery = {
+      id: 'discovery-1',
+      resource_type: 'agent',
+      resource_id: 'agent-1',
+      target_id: 'agent-1',
+      agent_id: 'agent-1',
+      hostname: 'pve1',
+      service_type: 'database',
+      service_name: 'postgresql',
+      service_version: '16.1',
+      category: 'database',
+      cli_access: 'psql',
+      facts: [],
+      config_paths: [],
+      data_paths: [],
+      log_paths: [],
+      ports: [],
+      user_notes: '',
+      user_secrets: {},
+      confidence: 0.72,
+      ai_reasoning: '',
+      discovered_at: '2026-04-15T00:00:00Z',
+      updated_at: '2026-04-15T00:00:00Z',
+      scan_duration: 12,
+    };
+    vi.mocked(discoveryApi.getDiscovery).mockResolvedValue(discovered);
+    vi.mocked(discoveryApi.getDiscoveryInfo).mockResolvedValue(discoveryInfoWithProvider());
+
+    render(() => (
+      <DiscoveryTab
+        resourceType="agent"
+        agentId="agent-1"
+        resourceId="agent-1"
+        hostname="pve1"
+        showManualRunAction
+      />
+    ));
+
+    // Control block states recency.
+    expect(await screen.findByText(/Last run:/i)).toBeInTheDocument();
+    // Service card must not repeat it.
+    expect(screen.queryByText(/Last observed/i)).toBeNull();
+  });
+
   it('disables the run action until an AI provider is configured', async () => {
     vi.mocked(discoveryApi.getDiscovery).mockResolvedValue(null);
     // No provider configured (default getDiscoveryInfo → null): a scan would be
