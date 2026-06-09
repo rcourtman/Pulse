@@ -1807,8 +1807,24 @@ func (s *Service) QuickAnalysis(ctx context.Context, req QuickAnalysisRequest) (
 func (s *Service) requestSanitizerForModel(model string) func(providers.ChatRequest) providers.ChatRequest {
 	s.mu.RLock()
 	urp := s.unifiedResourceProvider
+	cfg := s.cfg
 	s.mu.RUnlock()
-	return modelboundary.RequestSanitizerForModel(model, urp)
+	// Honor the cloud_context_privacy dial on every non-chat model-bound path
+	// (discovery analysis, report/fleet narrators, quick analysis, ExecuteAgentic),
+	// not just the interactive chat seam. Fail closed to redacted when no config
+	// snapshot. At "full" the redaction narrows to the local-only floor so real
+	// identifiers reach the model for ordinary/Sensitive resources — otherwise the
+	// dial would silently over-redact (e.g. discovery could not identify a governed
+	// service even though the operator chose full).
+	opts := []modelboundary.RequestSanitizerOption{}
+	cloudPrivacy := config.CloudContextPrivacyRedacted
+	if cfg != nil {
+		cloudPrivacy = cfg.GetCloudContextPrivacy()
+	}
+	if cloudPrivacy == config.CloudContextPrivacyFull {
+		opts = append(opts, modelboundary.RedactLocalOnlyResourcesOnly())
+	}
+	return modelboundary.RequestSanitizerForModel(model, urp, opts...)
 }
 
 // GetConfig returns a copy of the current AI config

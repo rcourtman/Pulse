@@ -158,6 +158,15 @@ deriving an older display status from `workflowStatusHistory`.
    request path that skips the sanitizer is a leak and is not permitted. (Static
    capability probes with no resource content, e.g. the Patrol preflight self-test,
    are exempt only because their payload is fixed and carries no identifiers.)
+   The dial-aware option (`RedactLocalOnlyResourcesOnly()` at `full`) is not only
+   the chat seam's concern: the shared service helper
+   `(*Service).requestSanitizerForModel` (`internal/ai/service.go`), used by
+   discovery analysis, the report and fleet narrators, quick analysis, and the
+   ExecuteAgentic paths, MUST resolve the dial and pass that option at `full` too —
+   otherwise those non-chat paths silently over-redact governed resources even when
+   the operator chose `full` (e.g. discovery cannot identify a governed service).
+   Honoring the dial there is functional parity, and the local-only floor still
+   protects must-not-leave resources.
    Redaction-placeholder hygiene: Pulse-authored model-bound directives (the
    resource-context handoff instructions in `internal/ai/chat/service.go` and
    `internal/ai/chat/plain_text_resource_context.go`) must NOT inject the literal
