@@ -1284,6 +1284,23 @@ deriving an older display status from `workflowStatusHistory`.
    (`internal/ai/chat/service_execute_additional_test.go`) are the regression
    proofs that previously-scoped prompt families all reach the model with the
    same governed manifest and an unmodified user message.
+   The system prompt's missing-target policy is resolve-before-asking, not
+   ask-first: when a command or diagnostic request names no target, the
+   Assistant must first use read-only query/topology tools to identify
+   plausible targets, proceed against a sole plausible match for read-only
+   diagnostics while naming the target in the answer, and ask the operator
+   only when several plausible targets remain or the action changes state.
+   The earlier ask-first framing ("Missing target information is not a safe
+   default... ask for the missing target") made the Assistant deflect every
+   "run X" request back to the operator — including on single-host
+   deployments where no real ambiguity exists — instead of investigating
+   like a competent operator (the OpenCode-parity gap this supersedes).
+   Placeholder targets remain forbidden in all modes: the model must never
+   guess an unresolved target or substitute `current_resource` outside an
+   attached-resource turn, and write actions still require an explicit or
+   operator-confirmed target.
+   `TestBuildSystemPrompt_CurrentResourceRequiresResourceHandoff`
+   (`internal/ai/chat/service_tooling_test.go`) pins this boundary.
    Deterministic count-only inventory prompts remain the single Pulse-owned
    local answer shortcut, and it is an answer path, not tool selection: when
    canonical topology state already carries the complete aggregate counts,
@@ -2310,6 +2327,21 @@ deriving an older display status from `workflowStatusHistory`.
     named by their source rather than as generic dashboard briefs.
 
 ## Current State
+
+The Assistant system prompt's missing-target policy is resolve-before-asking
+(`buildSystemPromptWithToolGovernance`, `internal/ai/chat/service.go`): a
+command or diagnostic request that names no target sends the model to
+read-only query/topology tools first; a sole plausible match is used directly
+for read-only diagnostics and named in the answer; the operator is asked only
+when several plausible targets remain or the action changes state. This
+supersedes the ask-first framing ("Missing target information is not a safe
+default") that deflected every untargeted "run X" request back to the
+operator even on single-host deployments. Placeholder targets
+(`current_resource` outside an attached-resource turn) remain forbidden in
+all modes, and write actions still require an explicit operator-confirmed
+target. `TestBuildSystemPrompt_CurrentResourceRequiresResourceHandoff` pins
+the boundary strings; the full Extension-Points entry sits beside the
+model-owned tool-manifest rule.
 
 The per-turn Assistant system prompt carries the current wall-clock time (the
 Pulse server clock) so the Assistant answers "what time/date is it" directly
