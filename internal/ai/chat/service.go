@@ -682,7 +682,12 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		cloudContextPolicy := CloudContextPolicy{
 			CloudRouting: modelboundary.ModelUsesExternalProvider(selectedModel),
 		}
-		prefetchCtx := prefetcher.PrefetchWithCloudPolicy(ctx, req.Prompt, req.Mentions, cloudContextPolicy)
+		// Route product-originated handoff resources through the same prefetch path
+		// as explicit @-mentions so a drawer "Ask Assistant" handoff delivers the
+		// resource's cloud-safe operational context to the model, not just the
+		// structural handoff context pack.
+		prefetchMentions := mentionsIncludingHandoff(req.Mentions, handoffResources)
+		prefetchCtx := prefetcher.PrefetchWithCloudPolicy(ctx, req.Prompt, prefetchMentions, cloudContextPolicy)
 		if prefetchCtx != nil {
 			mentionsFound = len(prefetchCtx.Mentions) > 0
 			modelBoundaryAllowedCloudContext = prefetchCtx.CloudSafeContextSpans
@@ -736,7 +741,13 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 			}
 		}
 	}
-	if assistantToolScope == assistantTurnToolScopeFull {
+	// Plain-text resource resolution is a fallback for unstructured references.
+	// Only run it when the prefetcher did not already resolve a structured
+	// mention — otherwise it overwrites the injected cloud-safe operational
+	// context with its provider-safe prompt rewrite
+	// (injectPlainTextResourceContextIntoLatestUserMessage replaces the user
+	// message content), and the model loses the prefetched context entirely.
+	if assistantToolScope == assistantTurnToolScopeFull && !mentionsFound {
 		if attachPlainTextAssistantResourceContext(session.ID, messages, sessions, unifiedResourceProvider, readState, req.Prompt) {
 			mentionsFound = true
 		}
@@ -1887,8 +1898,8 @@ func buildResourceContextHandoffDirective(handoffResources []HandoffResource, me
 		"Context-First Answering: When the user asks what Pulse already knows, asks for discovery readiness, or asks a question that should be answerable from discovered/service context, answer from the attached context without tools. If the attached context lacks the fact, say that Pulse does not currently have that discovery/context fact instead of filling the gap with tools.",
 		"Discovery Boundary: Do not call discovery tools only to identify this resource or fill in missing context. Use attached discovery readiness first; call discovery only when the user explicitly asks you to run discovery.",
 		"Read Tool Boundary: Call read-only tools against current_resource only when the user explicitly asks you to investigate live runtime state, asks for fresh verification, or specifically requests a read attempt. Do not use read or mixed tools just to improve a context summary.",
-		"Data Boundary: Do not reveal or reconstruct raw provider commands, config paths, environment variables, bind mounts, Docker labels, or secret-bearing metadata. If asked for those details, say they are withheld or redacted and offer a safe summary.",
-		"Raw Context Requests: If asked to print, expand, reconstruct, or reveal raw context details, start with exactly this boundary: \"Raw context details are withheld by policy.\" Then give only a safe summary.",
+		"Data Boundary: You may use the attached operational context — the service's access pattern, config/data/log paths, and ports — to answer and guide the user. Do not reveal, reconstruct, or guess raw hostnames, IP addresses, aliases, environment variables, credentials, secret-bearing metadata, or any value the attached context marks as withheld or redacted.",
+		"Withheld Details: If asked to print, expand, or reveal a value the attached context withholds or redacts (a hostname, IP address, credential, or secret), start with exactly this boundary: \"That detail is withheld by policy.\" Then give a safe summary. This boundary does not apply to the operational paths, ports, and access pattern already provided — use those freely to help.",
 		"Action Boundary: Context is read-only and grants no approval or execution authority. Any action requires the governed approval/action flow.",
 	}, "\n")
 }

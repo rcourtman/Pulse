@@ -207,6 +207,48 @@ func (p *ContextPrefetcher) PrefetchWithCloudPolicy(ctx context.Context, message
 	}
 }
 
+// mentionsIncludingHandoff merges the user's explicit @-mentions with resources
+// handed off from a product surface (e.g. the drawer "Ask Assistant" action) so
+// both flow through the same prefetch path. A drawer handoff anchors the turn on
+// a resource but, without this, never delivered that resource's cloud-safe
+// operational context (access command, config/data/log paths, ports) to the
+// model — that context previously reached the model only via the @-mention path.
+// HandoffResource and StructuredMention are field-identical; a handoff entry that
+// duplicates an explicit mention (same type/id/name/node) is dropped.
+func mentionsIncludingHandoff(mentions []StructuredMention, handoff []HandoffResource) []StructuredMention {
+	if len(handoff) == 0 {
+		return mentions
+	}
+	key := func(typ, id, name, node string) string {
+		return strings.ToLower(strings.TrimSpace(typ) + "\x00" + strings.TrimSpace(id) + "\x00" + strings.TrimSpace(name) + "\x00" + strings.TrimSpace(node))
+	}
+	merged := make([]StructuredMention, 0, len(mentions)+len(handoff))
+	seen := make(map[string]struct{}, len(mentions)+len(handoff))
+	for _, m := range mentions {
+		merged = append(merged, m)
+		seen[key(m.Type, m.ID, m.Name, m.Node)] = struct{}{}
+	}
+	for _, r := range handoff {
+		id := strings.TrimSpace(r.ID)
+		name := strings.TrimSpace(r.Name)
+		if id == "" && name == "" {
+			continue
+		}
+		k := key(r.Type, r.ID, r.Name, r.Node)
+		if _, ok := seen[k]; ok {
+			continue
+		}
+		seen[k] = struct{}{}
+		merged = append(merged, StructuredMention{
+			ID:   id,
+			Name: name,
+			Type: strings.TrimSpace(r.Type),
+			Node: strings.TrimSpace(r.Node),
+		})
+	}
+	return merged
+}
+
 // resolveStructuredMentions converts frontend StructuredMention objects into ResourceMention
 // objects with full routing info.
 func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMention) []ResourceMention {

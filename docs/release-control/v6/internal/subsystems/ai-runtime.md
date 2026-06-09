@@ -1769,9 +1769,12 @@ deriving an older display status from `workflowStatusHistory`.
    regression proof for this path: the model must not ask which resource the
    user means, must not call discovery just to identify the attached resource,
    must report attached discovery readiness from context without a discovery
-   tool call, must use the safe handle for scoped reads, must refuse raw
-   provider/config/environment/secret-bearing context expansion, and must not
-   leak configured forbidden resource details in content or tool inputs.
+   tool call, must use the safe handle for scoped reads, may use the attached
+   PII-free operational context (service access pattern, config/data/log paths,
+   ports) to answer and guide the operator, must still refuse to expand
+   environment variables, credentials, or other secret-bearing content, must not
+   reveal raw hostnames, IPs, or aliases, and must not leak configured forbidden
+   resource details in content or tool inputs.
    Plain-text resource references in live read, log, verification, or
    command-intent Assistant prompts may use the same selected-resource handle
    only after backend-owned canonical inventory resolution proves exactly one
@@ -1780,7 +1783,11 @@ deriving an older display status from `workflowStatusHistory`.
    That path must register the resource in the session resolved context, mark it
    as explicit current-turn access, and prepend a safe resource-context directive
    that exposes `current_resource` but not raw aliases, hostnames, platform IDs,
-   paths, or other policy-redacted labels to external providers. Ambiguous or
+   paths, or other policy-redacted labels to external providers. Because that
+   provider-safe rewrite replaces the user message, plain-text resolution runs
+   only as a fallback when the prefetcher did not already resolve a structured
+   mention or handoff resource; otherwise it would discard the injected
+   cloud-safe operational context. Ambiguous or
    non-live prompts must fail closed to normal model clarification/query
    behavior; this is not a prompt-keyword router and must not choose, retry, or
    execute the model's next investigative action.
@@ -1793,7 +1800,13 @@ deriving an older display status from `workflowStatusHistory`.
    canonical discovery readiness state (`fresh`, `stale`, `missing`, `running`,
    `failed`, `unavailable`, or `unsupported`) with provenance and freshness
    metadata so Assistant can explain whether it is grounded in current
-   discovery data before choosing any tool.
+   discovery data before choosing any tool. Drawer handoffs route their attached
+   resources through the same context-prefetch path as explicit `@`-mentions, so
+   on a cloud turn the resource's cloud-safe operational context (access pattern,
+   config/data/log paths, ports) reaches the model exactly as it does for an
+   `@`-mention; identifying fields (hostname, IP, alias) stay redacted at the
+   model boundary. The handoff path must not withhold operational context that
+   the `@`-mention path delivers.
    Patrol deterministic triage signals are prioritized evidence seeds for the
    configured model; they must not be described as a Pulse-authored final
    diagnosis, proof that unflagged resources are healthy, or a reason to

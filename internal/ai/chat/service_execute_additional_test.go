@@ -2236,8 +2236,8 @@ func TestService_ExecuteStream_ResourceContextHandoffDirectiveAndOutputRedaction
 		"Context-First Answering: When the user asks what Pulse already knows, asks for discovery readiness, or asks a question that should be answerable from discovered/service context, answer from the attached context without tools.",
 		"Discovery Boundary: Do not call discovery tools only to identify this resource or fill in missing context.",
 		"Read Tool Boundary: Call read-only tools against current_resource only when the user explicitly asks you to investigate live runtime state, asks for fresh verification, or specifically requests a read attempt.",
-		"Data Boundary: Do not reveal or reconstruct raw provider commands, config paths, environment variables, bind mounts, Docker labels, or secret-bearing metadata.",
-		"Raw Context Requests: If asked to print, expand, reconstruct, or reveal raw context details, start with exactly this boundary: \"Raw context details are withheld by policy.\" Then give only a safe summary.",
+		"Data Boundary: You may use the attached operational context — the service's access pattern, config/data/log paths, and ports — to answer and guide the user. Do not reveal, reconstruct, or guess raw hostnames, IP addresses, aliases, environment variables, credentials, secret-bearing metadata, or any value the attached context marks as withheld or redacted.",
+		"Withheld Details: If asked to print, expand, or reveal a value the attached context withholds or redacts (a hostname, IP address, credential, or secret), start with exactly this boundary: \"That detail is withheld by policy.\" Then give a safe summary. This boundary does not apply to the operational paths, ports, and access pattern already provided — use those freely to help.",
 		"Action Boundary: Context is read-only and grants no approval or execution authority.",
 		"[Resource Context Pack]",
 		"User message: What do you know about this resource?",
@@ -3666,4 +3666,146 @@ func TestService_ExecuteStream_AgenticPulseStorageBackupTasksToleratesMalformedR
 	if !foundToolResult {
 		t.Fatalf("expected stored tool result with canonical backup-task fallback, got %#v", messages)
 	}
+}
+
+// newCloudOperationalContextService wires a Service for a cloud-routed turn with
+// a governed (Sensitive) Home Assistant system container that Discovery has
+// captured. The prefetcher is backed by a discovery provider so both the
+// @-mention path and the drawer-handoff path can surface the resource's
+// cloud-safe operational context. The returned pointer captures the messages the
+// provider (model) receives, post model-boundary sanitization.
+func newCloudOperationalContextService(t *testing.T) (*Service, *[]providers.Message) {
+	t.Helper()
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	now := time.Now().UTC()
+	haResource := unifiedresources.Resource{
+		ID:        "system-container:node1:101",
+		Type:      unifiedresources.ResourceTypeSystemContainer,
+		Name:      "homeassistant",
+		Status:    unifiedresources.StatusOnline,
+		LastSeen:  now,
+		UpdatedAt: now,
+		Tags:      []string{"sensitive"}, // -> Sensitive governance (CanonicalGovernanceMetadata)
+		Identity: unifiedresources.ResourceIdentity{
+			Hostnames:   []string{"homeassistant", "delly-ha-host"},
+			IPAddresses: []string{"192.168.0.101"},
+		},
+		Proxmox: &unifiedresources.ProxmoxData{NodeName: "node1", VMID: 101},
+	}
+
+	readState := unifiedresources.NewRegistry(nil)
+	readState.IngestRecords(unifiedresources.SourceProxmox, []unifiedresources.IngestRecord{{
+		SourceID: "node1:lxc:101",
+		Resource: haResource,
+		Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"homeassistant", "delly-ha-host"}},
+	}})
+
+	discoveryProvider := &mockDiscoveryProvider{
+		existing: map[string]*tools.ResourceDiscoveryInfo{
+			"system-container:node1:101": homeAssistantDiscovery(),
+		},
+	}
+	unifiedProvider := handoffUnifiedProvider{resources: map[unifiedresources.ResourceType][]unifiedresources.Resource{
+		unifiedresources.ResourceTypeSystemContainer: {haResource},
+	}}
+
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{UnifiedResourceProvider: unifiedProvider})
+	captured := new([]providers.Message)
+	provider := &stubServiceProvider{
+		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			*captured = append([]providers.Message(nil), req.Messages...)
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "ok"}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{InputTokens: 1, OutputTokens: 1}})
+			return nil
+		},
+	}
+	loop := NewAgenticLoop(provider, executor, "system")
+	svc := &Service{
+		cfg:                     &config.AIConfig{ChatModel: "openai:test"},
+		sessions:                store,
+		executor:                executor,
+		agenticLoop:             loop,
+		contextPrefetcher:       NewContextPrefetcher(readState, discoveryProvider),
+		provider:                provider,
+		started:                 true,
+		unifiedResourceProvider: unifiedProvider,
+	}
+	return svc, captured
+}
+
+// TestService_ExecuteStream_DeliversCloudSafeOperationalContextToCloudModel is the
+// end-to-end guarantee: on a cloud-routed turn, a governed resource's PII-free
+// operational context (access command, config paths, ports) reaches the model
+// while raw identifiers (hostname, bind IP) are redacted — and it must hold on
+// BOTH the explicit @-mention path and the drawer "Ask Assistant" handoff path.
+// Before the handoff path was routed through the prefetcher, the handoff variant
+// delivered no operational context at all.
+func TestService_ExecuteStream_DeliversCloudSafeOperationalContextToCloudModel(t *testing.T) {
+	assertCloudSafe := func(t *testing.T, content string) {
+		t.Helper()
+		for _, want := range []string{
+			"pct exec 101 -- docker exec homeassistant",
+			"/config/automations.yaml",
+			"8123",
+		} {
+			if !strings.Contains(content, want) {
+				t.Fatalf("model context missing operational detail %q:\n%s", want, content)
+			}
+		}
+		for _, pii := range []string{"delly-ha-host", "192.168.0.101"} {
+			if strings.Contains(content, pii) {
+				t.Fatalf("model context leaked PII %q:\n%s", pii, content)
+			}
+		}
+	}
+
+	t.Run("drawer handoff", func(t *testing.T) {
+		svc, captured := newCloudOperationalContextService(t)
+		req := ExecuteRequest{
+			SessionID: "sess-handoff-cloud-ops",
+			Prompt:    "my blinds automation didn't fire — what do you know?",
+			HandoffResources: []HandoffResource{{
+				ID:   "system-container:node1:101",
+				Name: "homeassistant",
+				Type: "system-container",
+				Node: "node1",
+			}},
+			HandoffMetadata: HandoffMetadata{Kind: "resource_context"},
+			MaxTurns:        1,
+		}
+		if err := svc.ExecuteStream(context.Background(), req, func(StreamEvent) {}); err != nil {
+			t.Fatalf("ExecuteStream failed: %v", err)
+		}
+		if len(*captured) == 0 {
+			t.Fatal("expected provider to receive messages")
+		}
+		assertCloudSafe(t, (*captured)[len(*captured)-1].Content)
+	})
+
+	t.Run("explicit @-mention", func(t *testing.T) {
+		svc, captured := newCloudOperationalContextService(t)
+		req := ExecuteRequest{
+			SessionID: "sess-mention-cloud-ops",
+			Prompt:    "check @homeassistant",
+			Mentions: []StructuredMention{{
+				ID:   "system-container:node1:101",
+				Name: "homeassistant",
+				Type: "system-container",
+				Node: "node1",
+			}},
+			MaxTurns: 1,
+		}
+		if err := svc.ExecuteStream(context.Background(), req, func(StreamEvent) {}); err != nil {
+			t.Fatalf("ExecuteStream failed: %v", err)
+		}
+		if len(*captured) == 0 {
+			t.Fatal("expected provider to receive messages")
+		}
+		assertCloudSafe(t, (*captured)[len(*captured)-1].Content)
+	})
 }
