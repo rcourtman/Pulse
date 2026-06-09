@@ -434,6 +434,18 @@ Patrol-specific presentation helpers.
 
 ## Current State
 
+The finding lifecycle timeline renders backend lifecycle event types through
+the shared label map in
+`frontend-modern/src/utils/aiFindingPresentation.ts`
+(`formatFindingLifecycleType`), with unknown types falling back to the
+identifier formatter. The `content_replaced` event — emitted by the
+ai-runtime findings store when a same-key re-detection's text is
+substantially different from the existing finding (a key collision; see the
+ai-runtime contract's Current State entry) — is labeled "Re-detected with
+different details" so the operator timeline explains the shift in plain
+language; the event's metadata carries the previous and new titles.
+`FindingsPanel.test.ts` (`lifecycleLabels`) pins the label.
+
 The Patrol findings panel
 (`frontend-modern/src/components/AI/FindingsPanel.tsx`) dropped its "Open
 related infrastructure / workloads / storage / recovery" cross-jump chip

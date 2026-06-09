@@ -1000,6 +1000,16 @@ describe('aiFindingPresentation', () => {
     it('has dismissed label', () => {
       expect(formatFindingLifecycleType('dismissed')).toBe('Dismissed');
     });
+
+    it('labels a key-collision content replacement as a re-detection with different details', () => {
+      // Backend emits content_replaced when a same-key re-detection's text
+      // is substantially different from the existing finding (a key
+      // collision); the timeline label must explain the shift in operator
+      // language rather than the raw identifier fallback.
+      expect(formatFindingLifecycleType('content_replaced')).toBe(
+        'Re-detected with different details',
+      );
+    });
   });
 
   describe('formatLifecycleType', () => {

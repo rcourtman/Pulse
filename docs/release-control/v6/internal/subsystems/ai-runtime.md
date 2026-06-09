@@ -2343,10 +2343,8 @@ old issue: both `content_replaced` and `regressed` events appear).
 Rephrasings and identical re-detections stay event-free per the
 heartbeat-not-transition rule. The shared lifecycle presentation
 (`frontend-modern/src/utils/aiFindingPresentation.ts`,
-patrol-intelligence subsystem) renders unknown lifecycle types through the
-identifier-formatter fallback, so the event reads "Content replaced" today;
-a dedicated label is patrol-intelligence UI work and lands with that
-subsystem's own ceremony.
+patrol-intelligence subsystem) labels the event "Re-detected with different
+details" — see that contract's Current State entry for the UI-side rule.
 `TestFindingsStore_KeyCollisionRecordsContentReplacedEvent` and its
 companion tests (`internal/ai/findings_lifecycle_test.go`) pin the behavior.
 

@@ -109,6 +109,7 @@ const FINDING_LIFECYCLE_LABELS: Record<string, string> = {
   loop_state: 'Loop state changed',
   seen_while_suppressed: 'Seen while suppressed',
   loop_transition_violation: 'Invalid transition blocked',
+  content_replaced: 'Re-detected with different details',
 };
 
 const FINDING_STATUS_BADGE_CLASSES: Record<string, string> = {
