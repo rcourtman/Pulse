@@ -3705,9 +3705,11 @@ func newCloudOperationalContextService(t *testing.T) (*Service, *[]providers.Mes
 		Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"homeassistant", "delly-ha-host"}},
 	}})
 
+	disc := homeAssistantDiscovery()
+	disc.UpdatedAt = now.Add(-2 * 24 * time.Hour) // exercise freshness end-to-end
 	discoveryProvider := &mockDiscoveryProvider{
 		existing: map[string]*tools.ResourceDiscoveryInfo{
-			"system-container:node1:101": homeAssistantDiscovery(),
+			"system-container:node1:101": disc,
 		},
 	}
 	unifiedProvider := handoffUnifiedProvider{resources: map[unifiedresources.ResourceType][]unifiedresources.Resource{
@@ -3752,6 +3754,7 @@ func TestService_ExecuteStream_DeliversCloudSafeOperationalContextToCloudModel(t
 			"pct exec 101 -- docker exec homeassistant",
 			"/config/automations.yaml",
 			"8123",
+			"Last discovered: 2 days ago", // freshness reaches the model end-to-end
 		} {
 			if !strings.Contains(content, want) {
 				t.Fatalf("model context missing operational detail %q:\n%s", want, content)
