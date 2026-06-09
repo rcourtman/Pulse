@@ -4038,6 +4038,61 @@ EOF
     safe_systemctl daemon-reload
 }
 
+# Tracks whether Pulse was running before an update-time stop, so start_pulse can
+# guarantee it comes back up afterward instead of silently leaving it stopped
+# (#1323: on unprivileged LXC the installer's restart can silently fail).
+PULSE_WAS_ACTIVE="false"
+
+# Poll until the service is active, up to timeout_seconds (default 20).
+wait_for_service_active() {
+    local service_name=$1
+    local timeout_seconds="${2:-20}"
+    local elapsed=0
+    while (( elapsed < timeout_seconds )); do
+        if timeout 5 systemctl is-active --quiet "$service_name" 2>/dev/null; then
+            return 0
+        fi
+        sleep 1
+        ((elapsed += 1))
+    done
+    return 1
+}
+
+# Stop Pulse for an update, remembering whether it was running so start_pulse can
+# guarantee it comes back up afterward (#1323).
+stop_pulse_for_update() {
+    PULSE_WAS_ACTIVE="false"
+    if timeout 5 systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+        PULSE_WAS_ACTIVE="true"
+    fi
+    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+}
+
+# After an update, if Pulse was running beforehand, make sure it is running again:
+# retry one explicit start, and surface a clear error if it still will not come up
+# — rather than printing a success completion over a stopped service (#1323).
+ensure_pulse_running_after_update() {
+    [[ "$PULSE_WAS_ACTIVE" == "true" ]] || return 0
+    PULSE_WAS_ACTIVE="false"
+
+    if wait_for_service_active "$SERVICE_NAME" 20; then
+        return 0
+    fi
+
+    print_warn "Pulse did not come back up after the update; retrying start..."
+    safe_systemctl start "$SERVICE_NAME" || true
+    if wait_for_service_active "$SERVICE_NAME" 20; then
+        print_success "Pulse is running again."
+        return 0
+    fi
+
+    print_error "Pulse was running before the update but did not come back up (#1323)."
+    print_info "The new binary is installed; investigate why the service will not start:"
+    print_info "  systemctl status $SERVICE_NAME"
+    print_info "  journalctl -u $SERVICE_NAME -n 50"
+    return 1
+}
+
 start_pulse() {
     print_info "Starting Pulse..."
     
@@ -4048,8 +4103,12 @@ start_pulse() {
     
     if ! safe_systemctl start $SERVICE_NAME; then
         print_info "Note: systemctl start failed (common in unprivileged containers)"
-        print_info "The service will start automatically when the container starts"
-        return 0
+        if [[ "$PULSE_WAS_ACTIVE" != "true" ]]; then
+            print_info "The service will start automatically when the container starts"
+            return 0
+        fi
+        # An update stopped a running Pulse; do not accept a silent start failure
+        # here — fall through to the active-state verification below (#1323).
     fi
     
     # Wait for service to start
@@ -4063,6 +4122,8 @@ start_pulse() {
         # Don't exit, just warn
         print_info "Service may not be running. You might need to start it manually."
     fi
+
+    ensure_pulse_running_after_update
 }
 
 create_marker_file() {
@@ -4284,7 +4345,7 @@ main() {
             fi
             
             backup_existing
-            systemctl stop $SERVICE_NAME || true
+            stop_pulse_for_update
             create_user
             download_pulse
             setup_update_command
@@ -4484,7 +4545,7 @@ main() {
                 fi
                 
                 backup_existing
-                systemctl stop $SERVICE_NAME || true
+                stop_pulse_for_update
                 create_user
                 download_pulse
                 setup_update_command
@@ -4539,7 +4600,7 @@ main() {
                 fi
                 
                 backup_existing
-                systemctl stop $SERVICE_NAME || true
+                stop_pulse_for_update
                 create_user
                 download_pulse
                 setup_directories
@@ -4765,6 +4826,10 @@ reset_pulse() {
     echo "Access Pulse at: http://$(hostname -I | awk '{print $1}'):$(current_frontend_port)"
     exit 0
 }
+
+# When sourced (e.g. by tests) rather than executed, define the functions above
+# but do not run the installer.
+[[ "${BASH_SOURCE[0]}" == "$0" ]] || return 0
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
