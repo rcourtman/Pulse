@@ -2022,7 +2022,19 @@ func (s *Service) normalizeDiscoveryRequest(req DiscoveryRequest, aliasIDs *[]st
 	req = normalizeDiscoveryRequestAliases(req)
 	requestTargetID := req.TargetID
 
-	if req.ResourceType != ResourceTypeAgent {
+	switch req.ResourceType {
+	case ResourceTypeVM, ResourceTypeSystemContainer:
+		// Proxmox guests are canonically keyed by node name + VMID. The browser
+		// action path addresses them by the linked agent UUID (the
+		// discoveryTarget.agentId action-authorization target); resolve that back
+		// to the hosting node so the stored/looked-up record key matches the
+		// background fingerprint loop and the Assistant prefetch (which already
+		// use node name). See canonicalizeProxmoxGuestDiscoveryTarget.
+		return s.canonicalizeProxmoxGuestDiscoveryTarget(req, requestTargetID)
+	case ResourceTypeAgent:
+		// Agent discovery is canonically keyed by the agent UUID; the logic below
+		// redirects a node-name/hostname target to its linked agent.
+	default:
 		return req
 	}
 	snap, ok := s.getSnapshot()
@@ -2074,6 +2086,75 @@ func (s *Service) normalizeDiscoveryRequest(req DiscoveryRequest, aliasIDs *[]st
 			}
 			req.TargetID = node.Name
 			req.ResourceID = node.Name
+			return req
+		}
+	}
+
+	return req
+}
+
+// canonicalizeProxmoxGuestDiscoveryTarget canonicalizes a Proxmox guest (VM /
+// system-container) discovery request to the stable NODE-NAME key. Discovery
+// records for guests are canonically keyed by node name + VMID — the form the
+// background fingerprint loop and the Assistant prefetch already use. The browser
+// action path, however, addresses guests by the linked agent UUID (the
+// discoveryTarget.agentId action-authorization target). Left unnormalized, a
+// UUID-targeted request stored and looked records up under a second, divergent
+// key, so the resource drawer reported "not discovered" for a guest the
+// background loop had already discovered. Resolve a UUID-form target back to its
+// hosting node name; the caller has already registered the original (UUID-form)
+// ID as an alias, so any record previously stored under it is still found by
+// lookups and consolidated onto the canonical key on the next discovery run.
+//
+// The agent UUID is unchanged as the action target — this only governs the
+// record key. Resolution prefers the node→linked-agent map, then falls back to
+// the agent host's hostname when that hostname is itself a known node (a
+// Proxmox-node agent reports hostname == node name, which is how the command
+// executor already resolves targets).
+func (s *Service) canonicalizeProxmoxGuestDiscoveryTarget(req DiscoveryRequest, requestTargetID string) DiscoveryRequest {
+	if strings.TrimSpace(requestTargetID) == "" {
+		return req
+	}
+	snap, ok := s.getSnapshot()
+	if !ok {
+		return req
+	}
+
+	nodeNames := make(map[string]struct{}, len(snap.Nodes))
+	nodeByLinkedAgent := make(map[string]string, len(snap.Nodes))
+	for _, node := range snap.Nodes {
+		if node.Name != "" {
+			nodeNames[node.Name] = struct{}{}
+		}
+		if node.LinkedAgentID != "" && node.Name != "" {
+			nodeByLinkedAgent[node.LinkedAgentID] = node.Name
+		}
+	}
+
+	// Already a node name — canonical, nothing to resolve.
+	if _, ok := nodeNames[requestTargetID]; ok {
+		return req
+	}
+
+	// The target is the linked agent UUID: resolve it to the hosting node name.
+	if nodeName := nodeByLinkedAgent[requestTargetID]; nodeName != "" {
+		req.TargetID = nodeName
+		if req.Hostname == "" {
+			req.Hostname = nodeName
+		}
+		return req
+	}
+
+	// Fallback: match the agent host by ID and adopt its hostname when that
+	// hostname is a known node.
+	for _, host := range snap.Hosts {
+		if host.ID == requestTargetID && host.Hostname != "" {
+			if _, ok := nodeNames[host.Hostname]; ok {
+				req.TargetID = host.Hostname
+				if req.Hostname == "" {
+					req.Hostname = host.Hostname
+				}
+			}
 			return req
 		}
 	}

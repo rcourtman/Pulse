@@ -1663,6 +1663,55 @@ func TestParseDockerMounts(t *testing.T) {
 	}
 }
 
+func TestService_ProxmoxGuestDiscoveryCanonicalizesToNodeKey(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	// A Proxmox node "delly" whose linked agent is a UUID, hosting CT 101.
+	const nodeName = "delly"
+	const agentUUID = "7d465a78-80b8-4255-999c-88224ae57b4f"
+	state := StateSnapshot{
+		Nodes: []Node{{ID: "delly-id", Name: nodeName, LinkedAgentID: agentUUID}},
+		Hosts: []Host{{ID: agentUUID, Hostname: nodeName}},
+	}
+	service := NewService(store, nil, DefaultConfig())
+	service.SetReadState(readStateFromSnapshot(state))
+
+	// The background loop stored the discovery under the canonical node-name key.
+	canonicalID := MakeResourceID(ResourceTypeSystemContainer, nodeName, "101")
+	if err := store.Save(&ResourceDiscovery{
+		ID:           canonicalID,
+		ResourceType: ResourceTypeSystemContainer,
+		TargetID:     nodeName,
+		ResourceID:   "101",
+		ServiceName:  "Home Assistant",
+	}); err != nil {
+		t.Fatalf("seed discovery: %v", err)
+	}
+
+	// The drawer/readiness path looks the record up by the linked agent UUID (the
+	// discoveryTarget.agentId action target). It must canonicalize to the
+	// node-name key and find the record, not report "not discovered".
+	got, err := service.GetDiscoveryByResource(ResourceTypeSystemContainer, agentUUID, "101")
+	if err != nil {
+		t.Fatalf("GetDiscoveryByResource(agent-uuid) error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected the node-name discovery record to be found via the agent-UUID target")
+	}
+	if got.ID != canonicalID {
+		t.Fatalf("found discovery ID = %q, want canonical node-name key %q", got.ID, canonicalID)
+	}
+
+	// The node-name target (background loop / Assistant) still finds it directly.
+	if got2, err := service.GetDiscoveryByResource(ResourceTypeSystemContainer, nodeName, "101"); err != nil || got2 == nil {
+		t.Fatalf("node-name lookup failed: got=%v err=%v", got2, err)
+	}
+}
+
 func TestService_Redirection(t *testing.T) {
 	// Setup store
 	store, err := NewStore(t.TempDir())
