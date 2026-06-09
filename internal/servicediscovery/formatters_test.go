@@ -315,4 +315,17 @@ func TestFormatCloudSafeContext(t *testing.T) {
 			t.Errorf("cloud-safe context leaked PII %q\n--- output ---\n%s", bad, out)
 		}
 	}
+
+	// No freshness line when the discovery carries no timestamp.
+	if strings.Contains(out, "Last discovered:") {
+		t.Errorf("cloud-safe context must omit freshness when UpdatedAt is zero\n--- output ---\n%s", out)
+	}
+
+	// Freshness lets the model caveat staleness when the timestamp is known.
+	fresh := *d
+	fresh.UpdatedAt = time.Now().Add(-3 * time.Hour)
+	freshOut := FormatCloudSafeContext(&fresh)
+	if !strings.Contains(freshOut, "Last discovered: 3 hours ago") {
+		t.Errorf("cloud-safe context must report discovery age\n--- output ---\n%s", freshOut)
+	}
 }

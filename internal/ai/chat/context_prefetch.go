@@ -977,6 +977,9 @@ func cloudSafeOperationalContext(d *tools.ResourceDiscoveryInfo) string {
 		DataPaths:      d.DataPaths,
 		LogPaths:       d.LogPaths,
 		Ports:          ports,
+		// Carry freshness so the cloud-safe context can tell the model how old
+		// the discovery is (a timestamp is non-identifying).
+		UpdatedAt: d.UpdatedAt,
 	})
 }
 

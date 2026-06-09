@@ -1803,10 +1803,13 @@ deriving an older display status from `workflowStatusHistory`.
    discovery data before choosing any tool. Drawer handoffs route their attached
    resources through the same context-prefetch path as explicit `@`-mentions, so
    on a cloud turn the resource's cloud-safe operational context (access pattern,
-   config/data/log paths, ports) reaches the model exactly as it does for an
-   `@`-mention; identifying fields (hostname, IP, alias) stay redacted at the
-   model boundary. The handoff path must not withhold operational context that
-   the `@`-mention path delivers.
+   config/data/log paths, ports, and discovery freshness/age) reaches the model
+   exactly as it does for an `@`-mention; identifying fields (hostname, IP, alias)
+   stay redacted at the model boundary. The cloud-safe context must carry the
+   discovery's age (a non-identifying timestamp) when known so the model can
+   caveat staleness rather than presenting cached operational detail as current.
+   The handoff path must not withhold operational context that the `@`-mention
+   path delivers.
    Patrol deterministic triage signals are prioritized evidence seeds for the
    configured model; they must not be described as a Pulse-authored final
    diagnosis, proof that unflagged resources are healthy, or a reason to

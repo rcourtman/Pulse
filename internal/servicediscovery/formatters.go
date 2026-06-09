@@ -99,6 +99,13 @@ func FormatCloudSafeContext(d *ResourceDiscovery) string {
 		}
 	}
 
+	// Freshness: tell the model how old this discovery is so it can caveat
+	// staleness ("based on discovery from 2 days ago") instead of presenting
+	// cached operational detail as current. A timestamp is non-identifying.
+	if !d.UpdatedAt.IsZero() {
+		sb.WriteString("Last discovered: " + FormatDiscoveryAge(d) + "\n")
+	}
+
 	return strings.TrimSpace(sb.String())
 }
 

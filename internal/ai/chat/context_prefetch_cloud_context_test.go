@@ -3,6 +3,7 @@ package chat
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/modelboundary"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
@@ -142,6 +143,22 @@ func TestPrefetcherCloudContext_LocalRoutingUnaffected(t *testing.T) {
 	}
 	if len(spans) != 0 {
 		t.Fatalf("local routing must not return cloud-safe spans, got %#v", spans)
+	}
+}
+
+func TestCloudSafeOperationalContext_CarriesDiscoveryFreshness(t *testing.T) {
+	// The push-path conversion must carry UpdatedAt so the cloud-safe context
+	// can tell the model how old the discovery is.
+	d := homeAssistantDiscovery()
+	d.UpdatedAt = time.Now().Add(-2 * 24 * time.Hour)
+
+	out := cloudSafeOperationalContext(d)
+	if !strings.Contains(out, "Last discovered: 2 days ago") {
+		t.Fatalf("cloud-safe operational context must carry discovery freshness, got:\n%s", out)
+	}
+	// Freshness is non-identifying; PII still must not appear.
+	if strings.Contains(out, "delly-ha-host") || strings.Contains(out, "192.168.0.101") {
+		t.Fatalf("freshness must not bring PII into the cloud-safe context, got:\n%s", out)
 	}
 }
 
