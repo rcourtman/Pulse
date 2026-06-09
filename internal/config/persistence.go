@@ -2802,43 +2802,50 @@ type AIUsageEventRecord struct {
 	FindingID     string    `json:"finding_id,omitempty"`
 }
 
-// SaveAIUsageHistory persists AI usage events to disk.
-func (c *ConfigPersistence) SaveAIUsageHistory(events []AIUsageEventRecord) error {
+// saveHistoryData is the save-side counterpart of loadHistoryData: it
+// marshals the payload, encrypts it when crypto is configured, and writes it
+// under the persistence lock. errLabel is the lowercase error-wrapping label
+// ("ai usage history"); logLabel is the display label ("AI usage history").
+func saveHistoryData(c *ConfigPersistence, filePath string, payload any, count int, errLabel, logLabel string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return fmt.Errorf("prepare config directory for ai usage history: %w", err)
+		return fmt.Errorf("prepare config directory for %s: %w", errLabel, err)
 	}
 
-	data := AIUsageHistoryData{
-		Version:   1,
-		LastSaved: time.Now(),
-		Events:    events,
-	}
-
-	jsonData, err := json.Marshal(data)
+	jsonData, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("marshal ai usage history: %w", err)
+		return fmt.Errorf("marshal %s: %w", errLabel, err)
 	}
 
 	if c.crypto != nil {
 		if encrypted, encErr := c.crypto.Encrypt(jsonData); encErr == nil {
 			jsonData = encrypted
 		} else {
-			return fmt.Errorf("encrypt ai usage history: %w", encErr)
+			return fmt.Errorf("encrypt %s: %w", errLabel, encErr)
 		}
 	}
 
-	if err := c.writeConfigFileLocked(c.aiUsageHistoryFile, jsonData, 0600); err != nil {
-		return fmt.Errorf("persist ai usage history: %w", err)
+	if err := c.writeConfigFileLocked(filePath, jsonData, 0600); err != nil {
+		return fmt.Errorf("persist %s: %w", errLabel, err)
 	}
 
 	log.Debug().
-		Str("file", c.aiUsageHistoryFile).
-		Int("count", len(events)).
-		Msg("AI usage history saved")
+		Str("file", filePath).
+		Int("count", count).
+		Msg(logLabel + " saved")
 	return nil
+}
+
+// SaveAIUsageHistory persists AI usage events to disk.
+func (c *ConfigPersistence) SaveAIUsageHistory(events []AIUsageEventRecord) error {
+	data := AIUsageHistoryData{
+		Version:   1,
+		LastSaved: time.Now(),
+		Events:    events,
+	}
+	return saveHistoryData(c, c.aiUsageHistoryFile, data, len(events), "ai usage history", "AI usage history")
 }
 
 func newEmptyAIUsageHistoryData() *AIUsageHistoryData {
@@ -2939,41 +2946,12 @@ func (c *ConfigPersistence) LoadAIUsageHistory() (*AIUsageHistoryData, error) {
 
 // SavePatrolRunHistory persists patrol run history to disk
 func (c *ConfigPersistence) SavePatrolRunHistory(runs []PatrolRunRecord) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if err := c.EnsureConfigDir(); err != nil {
-		return fmt.Errorf("prepare config directory for patrol run history: %w", err)
-	}
-
 	data := PatrolRunHistoryData{
 		Version:   1,
 		LastSaved: time.Now(),
 		Runs:      runs,
 	}
-
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return fmt.Errorf("marshal patrol run history: %w", err)
-	}
-
-	if c.crypto != nil {
-		if encrypted, encErr := c.crypto.Encrypt(jsonData); encErr == nil {
-			jsonData = encrypted
-		} else {
-			return fmt.Errorf("encrypt patrol run history: %w", encErr)
-		}
-	}
-
-	if err := c.writeConfigFileLocked(c.aiPatrolRunsFile, jsonData, 0600); err != nil {
-		return fmt.Errorf("persist patrol run history: %w", err)
-	}
-
-	log.Debug().
-		Str("file", c.aiPatrolRunsFile).
-		Int("count", len(runs)).
-		Msg("Patrol run history saved")
-	return nil
+	return saveHistoryData(c, c.aiPatrolRunsFile, data, len(runs), "patrol run history", "Patrol run history")
 }
 
 func newEmptyPatrolRunHistoryData() *PatrolRunHistoryData {
