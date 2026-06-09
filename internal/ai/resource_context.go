@@ -5,7 +5,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
@@ -52,16 +51,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 	urp := s.unifiedResourceProvider
 	ap := s.alertProvider
 	agentServer := s.agentServer
-	cfg := s.cfg
 	s.mu.RUnlock()
-
-	// Resolve the cloud_context_privacy dial for inventory-context redaction.
-	// Fail closed to "redacted" when no config snapshot is available so a missing
-	// setting never widens what reaches a cloud model.
-	cloudPrivacy := config.CloudContextPrivacyRedacted
-	if cfg != nil {
-		cloudPrivacy = cfg.GetCloudContextPrivacy()
-	}
 
 	if urp != nil {
 		var sections []string
@@ -112,7 +102,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 		workloads := unifiedresources.RefreshCanonicalMetadataSlice(urp.GetWorkloads())
 		allResources := unifiedresources.RefreshCanonicalMetadataSlice(urp.GetAll())
 		policyPosture := unifiedresources.SummarizePolicyPosture(allResources)
-		policyContext := buildUnifiedResourcePolicyContext(policyPosture, destinationModel, cloudPrivacy)
+		policyContext := buildUnifiedResourcePolicyContext(policyPosture, destinationModel)
 		detailedInfrastructure := policyContext.filterDetailedResources(infrastructure)
 		detailedWorkloads := policyContext.filterDetailedResources(workloads)
 		byResourceID := make(map[string]unifiedresources.Resource, len(allResources))
@@ -189,7 +179,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 					}
 
 					sections = append(sections, fmt.Sprintf("- **%s** (%s)%s%s [%s]",
-						policyContext.resourceLabel(node.Name, node.AISafeSummary, node.Policy), agentStatus, clusterInfo, metrics, node.Status))
+						unifiedresources.ResourcePolicyLabel(node.Name, node.AISafeSummary, node.Policy), agentStatus, clusterInfo, metrics, node.Status))
 				}
 			}
 
@@ -210,7 +200,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 					}
 
 					sections = append(sections, fmt.Sprintf("- **%s**%s%s [%s]",
-						policyContext.resourceLabel(host.Name, host.AISafeSummary, host.Policy), ips, metrics, host.Status))
+						unifiedresources.ResourcePolicyLabel(host.Name, host.AISafeSummary, host.Policy), ips, metrics, host.Status))
 				}
 			}
 
@@ -227,7 +217,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 					}
 
 					sections = append(sections, fmt.Sprintf("- **%s**%s [%s]",
-						policyContext.resourceLabel(host.Name, host.AISafeSummary, host.Policy), metrics, host.Status))
+						unifiedresources.ResourcePolicyLabel(host.Name, host.AISafeSummary, host.Policy), metrics, host.Status))
 				}
 			}
 
@@ -250,7 +240,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 					}
 
 					sections = append(sections, fmt.Sprintf("- **%s** (%d/%d containers running) [%s]",
-						policyContext.resourceLabel(host.Name, host.AISafeSummary, host.Policy), runningCount, containerCount, host.Status))
+						unifiedresources.ResourcePolicyLabel(host.Name, host.AISafeSummary, host.Policy), runningCount, containerCount, host.Status))
 				}
 			}
 
@@ -269,7 +259,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 						clusterInfo = fmt.Sprintf(" [cluster: %s]", name)
 					}
 					sections = append(sections, fmt.Sprintf("- **%s** (Cluster%s, %d nodes) [%s]",
-						policyContext.resourceLabel(cluster.Name, cluster.AISafeSummary, cluster.Policy), clusterInfo, nodeCount, cluster.Status))
+						unifiedresources.ResourcePolicyLabel(cluster.Name, cluster.AISafeSummary, cluster.Policy), clusterInfo, nodeCount, cluster.Status))
 				}
 
 				for _, node := range k8sNodes {
@@ -295,7 +285,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 					}
 
 					sections = append(sections, fmt.Sprintf("- **%s** (Node, %s)%s%s [%s]",
-						policyContext.resourceLabel(node.Name, node.AISafeSummary, node.Policy), agentStatus, clusterInfo, metrics, node.Status))
+						unifiedresources.ResourcePolicyLabel(node.Name, node.AISafeSummary, node.Policy), agentStatus, clusterInfo, metrics, node.Status))
 				}
 			}
 		}
@@ -327,7 +317,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 			for _, parentID := range parentIDs {
 				parentName := "unresolved parent resource"
 				if parent, ok := infraMap[parentID]; ok {
-					parentName = policyContext.resourceLabel(parent.Name, parent.AISafeSummary, parent.Policy)
+					parentName = unifiedresources.ResourcePolicyLabel(parent.Name, parent.AISafeSummary, parent.Policy)
 				}
 
 				sections = append(sections, fmt.Sprintf("\n**On %s:**", parentName))
@@ -355,7 +345,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 					ips := unifiedresources.ResourceIPSummary(workload, 2)
 
 					sections = append(sections, fmt.Sprintf("  - **%s** (%s%s)%s [%s]",
-						policyContext.resourceLabel(workload.Name, workload.AISafeSummary, workload.Policy), typeLabel, vmidInfo, ips, workload.Status))
+						unifiedresources.ResourcePolicyLabel(workload.Name, workload.AISafeSummary, workload.Policy), typeLabel, vmidInfo, ips, workload.Status))
 				}
 			}
 
@@ -367,7 +357,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 				for _, workload := range noParent {
 					ips := unifiedresources.ResourceIPSummary(workload, 2)
 					sections = append(sections, fmt.Sprintf("  - **%s** (%s)%s [%s]",
-						policyContext.resourceLabel(workload.Name, workload.AISafeSummary, workload.Policy), workload.Type, ips, workload.Status))
+						unifiedresources.ResourcePolicyLabel(workload.Name, workload.AISafeSummary, workload.Policy), workload.Type, ips, workload.Status))
 				}
 			}
 		}
@@ -411,7 +401,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 					}
 
 					sections = append(sections, fmt.Sprintf("- **%s**%s%s [%s]",
-						policyContext.resourceLabel(pool.Name, pool.AISafeSummary, pool.Policy), typeLabel, usage, pool.Status))
+						unifiedresources.ResourcePolicyLabel(pool.Name, pool.AISafeSummary, pool.Policy), typeLabel, usage, pool.Status))
 				}
 			}
 
@@ -451,7 +441,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 						}
 
 						sections = append(sections, fmt.Sprintf("- **%s**%s%s [%s]",
-							policyContext.resourceLabel(disk.Name, disk.AISafeSummary, disk.Policy), healthSummary, temperature, disk.Status))
+							unifiedresources.ResourcePolicyLabel(disk.Name, disk.AISafeSummary, disk.Policy), healthSummary, temperature, disk.Status))
 					}
 				}
 			}
@@ -474,7 +464,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 							omittedLocalOnlyAlerts++
 							continue
 						}
-						displayName = policyContext.resourceLabel(resource.Name, resource.AISafeSummary, resource.Policy)
+						displayName = unifiedresources.ResourcePolicyLabel(resource.Name, resource.AISafeSummary, resource.Policy)
 						message = unifiedresources.ResourcePolicyRedactedText(message, resource)
 					} else if displayName == "" {
 						displayName = resourceID
@@ -562,7 +552,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 					cpuPercent = unifiedMetricPercent(resource.Metrics.CPU)
 				}
 				sections = append(sections, fmt.Sprintf("%d. **%s** (%s): %.1f%%",
-					i+1, policyContext.resourceLabel(resource.Name, resource.AISafeSummary, resource.Policy), resource.Type, cpuPercent))
+					i+1, unifiedresources.ResourcePolicyLabel(resource.Name, resource.AISafeSummary, resource.Policy), resource.Type, cpuPercent))
 			}
 		}
 
@@ -575,7 +565,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 					memPercent = unifiedMetricPercent(resource.Metrics.Memory)
 				}
 				sections = append(sections, fmt.Sprintf("%d. **%s** (%s): %.1f%%",
-					i+1, policyContext.resourceLabel(resource.Name, resource.AISafeSummary, resource.Policy), resource.Type, memPercent))
+					i+1, unifiedresources.ResourcePolicyLabel(resource.Name, resource.AISafeSummary, resource.Policy), resource.Type, memPercent))
 			}
 		}
 
@@ -588,7 +578,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 					diskPercent = unifiedMetricPercent(resource.Metrics.Disk)
 				}
 				sections = append(sections, fmt.Sprintf("%d. **%s** (%s): %.1f%%",
-					i+1, policyContext.resourceLabel(resource.Name, resource.AISafeSummary, resource.Policy), resource.Type, diskPercent))
+					i+1, unifiedresources.ResourcePolicyLabel(resource.Name, resource.AISafeSummary, resource.Policy), resource.Type, diskPercent))
 			}
 		}
 

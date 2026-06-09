@@ -2,8 +2,6 @@
 
 export type AIProvider = 'anthropic' | 'openai' | 'openrouter' | 'ollama' | 'deepseek' | 'gemini';
 export type AuthMethod = 'api_key' | 'oauth';
-// Cloud context privacy dial - what infrastructure context cloud models may see.
-export type CloudContextPrivacy = 'full' | 'redacted' | 'local_only';
 export type PatrolReadinessStatus = 'ready' | 'warning' | 'not_ready';
 
 export interface PatrolReadinessCheck {
@@ -84,14 +82,6 @@ export interface AISettings {
   discovery_enabled?: boolean;
   discovery_interval_hours?: number;
 
-  // Cloud operational-context sharing - legacy boolean superseded by
-  // cloud_context_privacy; the backend keeps it in sync for back-compat.
-  share_operational_context_with_cloud?: boolean;
-
-  // Cloud context privacy dial - canonical control for what infrastructure
-  // context cloud models may see. Always serialized by the backend.
-  cloud_context_privacy?: CloudContextPrivacy;
-
   // Current Pulse Patrol runtime readiness for this settings snapshot
   patrol_readiness?: PatrolReadiness;
   // Most recent Patrol tool-call preflight result, recorded by Pulse so
@@ -165,13 +155,6 @@ export interface AISettingsUpdateRequest {
   // AI Discovery settings
   discovery_enabled?: boolean;
   discovery_interval_hours?: number;
-
-  // Cloud operational-context sharing - legacy boolean superseded by
-  // cloud_context_privacy; kept for back-compat with older API clients.
-  share_operational_context_with_cloud?: boolean;
-
-  // Cloud context privacy dial - canonical control for cloud model context.
-  cloud_context_privacy?: CloudContextPrivacy;
 }
 
 export interface AITestResult {

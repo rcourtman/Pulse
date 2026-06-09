@@ -519,18 +519,15 @@ not a replacement status card, CTA band, or page-local nested card.
    such as workload discovery show the persisted option instead of falling back
    to the first option while the collapsed summary shows a different value.
    The Assistant runtime controls in
-   `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx` — the
-   workload discovery `Toggle` and the `Cloud model privacy` 3-option dial — are
-   settings-shell chrome bound to the canonical `useAISettingsState` form and
-   `/api/settings/ai` payload, not local browser state. Each must bind to a
-   `state.form.*` field and round-trip through the field-by-field settings
-   payload: discovery via its `Toggle`, and cloud model privacy via the shared
-   `FormSelect` primitive bound to `state.form.cloudContextPrivacy` and the
-   `cloud_context_privacy` payload field (which mirrors `discovery_enabled`'s
-   field-by-field round-trip and defaults to `full`). Both must source their
-   label, help, option, and summary copy from
-   `frontend-modern/src/utils/aiSettingsPresentation.ts` rather than inlining
-   strings or reaching for a bespoke fetch outside the canonical payload.
+   `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx` — e.g. the
+   workload discovery `Toggle` — are settings-shell chrome bound to the canonical
+   `useAISettingsState` form and `/api/settings/ai` payload, not local browser
+   state. Each must bind to a `state.form.*` field, round-trip through the
+   field-by-field settings payload, and source its label, help, and summary copy
+   from `frontend-modern/src/utils/aiSettingsPresentation.ts` rather than inlining
+   strings or reaching for a bespoke fetch outside the canonical payload. There is
+   no cloud-context-privacy control here: cloud context behavior is a fixed posture
+   (see `ai-runtime`), not an operator setting.
 3. Add feature-specific presentation only when no shared primitive should own it.
    Feature surfaces under `frontend-modern/src/features/` that display
    product labels must consume the owning subsystem's presentation utilities

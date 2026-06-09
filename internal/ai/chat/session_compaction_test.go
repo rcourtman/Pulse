@@ -159,7 +159,7 @@ func TestServiceSummarizeSessionRedactsResourceIdentifiersForCloud(t *testing.T)
 		started:                 true,
 		sessions:                store,
 		provider:                provider,
-		cfg:                     &config.AIConfig{ChatModel: "openrouter:test-model", CloudContextPrivacy: config.CloudContextPrivacyRedacted},
+		cfg:                     &config.AIConfig{ChatModel: "openrouter:test-model"},
 		unifiedResourceProvider: unifiedProvider,
 	}
 

@@ -2130,25 +2130,7 @@ func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
 	}
 	migratedQuickstartAliases := settings.NormalizeQuickstartModelAliases()
 
-	// Migration: derive the cloud_context_privacy dial from the legacy
-	// share_operational_context_with_cloud toggle for configs persisted before
-	// the dial existed. This preserves each existing install's current cloud
-	// behavior (legacy on -> "full", legacy off/absent -> "redacted") instead of
-	// silently adopting the fresh-install default ("full"). The legacy boolean is
-	// left untouched so the redaction seam that still reads it behaves identically
-	// until the dial is wired into the seam directly (privacy-redesign increment 2).
-	migratedCloudContextPrivacy := false
-	if _, cloudPrivacyPresent := legacyRaw["cloud_context_privacy"]; !cloudPrivacyPresent {
-		legacyShare, _ := decodeOptionalJSONBool(legacyRaw["share_operational_context_with_cloud"])
-		if legacyShare {
-			settings.CloudContextPrivacy = CloudContextPrivacyFull
-		} else {
-			settings.CloudContextPrivacy = CloudContextPrivacyRedacted
-		}
-		migratedCloudContextPrivacy = true
-	}
-
-	if migratedPlaintext || migratedLegacyFields || migratedControlLevel || migratedPatrolTriggerFields || migratedQuickstartAliases || migratedCloudContextPrivacy {
+	if migratedPlaintext || migratedLegacyFields || migratedControlLevel || migratedPatrolTriggerFields || migratedQuickstartAliases {
 		jsonData, err := json.Marshal(*settings)
 		if err != nil {
 			return nil, fmt.Errorf("marshal ai config migration rewrite: %w", err)
@@ -2161,8 +2143,6 @@ func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
 			Bool("legacy_fields_migrated", migratedLegacyFields).
 			Bool("patrol_trigger_fields_migrated", migratedPatrolTriggerFields).
 			Bool("quickstart_aliases_migrated", migratedQuickstartAliases).
-			Bool("cloud_context_privacy_migrated", migratedCloudContextPrivacy).
-			Str("cloud_context_privacy", settings.CloudContextPrivacy).
 			Bool("plaintext_migrated", migratedPlaintext).
 			Msg("Migrated AI configuration")
 	}

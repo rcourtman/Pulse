@@ -114,7 +114,7 @@ func TestRequestSanitizerForModelAllowsPulseGeneratedInventoryExportOnly(t *test
 		ID:   "vm-100",
 		Type: unifiedresources.ResourceTypeVM,
 		Name: "vm1",
-		Tags: []string{"sensitive"},
+		Tags: []string{"secret"}, // Restricted -> local-only -> identity redacted in free text
 		Identity: unifiedresources.ResourceIdentity{
 			Hostnames: []string{"vm1"},
 		},
@@ -149,15 +149,16 @@ func TestRequestSanitizerForModelAllowsPulseGeneratedInventoryExportOnly(t *test
 	}
 }
 
-func TestRequestSanitizerForModel_RedactLocalOnlyResourcesOnlyKeepsFloorAndSecrets(t *testing.T) {
-	// The "full" cloud_context_privacy level. A Sensitive (local-first) resource's
-	// identifiers may reach the cloud model, but a Restricted (local-only) resource
-	// stays redacted as a hard floor, and credentials are always stripped.
+func TestRequestSanitizerForModel_FloorsLocalOnlyAndStripsSecrets(t *testing.T) {
+	// Pulse shares real infrastructure detail with cloud models, with two always-on
+	// invariants: a Sensitive (local-first) resource's identifiers flow, a Restricted
+	// (local-only) resource stays redacted as the hard floor, and credentials are
+	// always stripped.
 	sensitiveVM := unifiedresources.Resource{
 		ID:   "vm-200",
 		Type: unifiedresources.ResourceTypeVM,
 		Name: "finance-vm",
-		Tags: []string{"sensitive"}, // -> Sensitive -> local-first (flows at full)
+		Tags: []string{"sensitive"}, // -> Sensitive -> local-first (flows)
 		Identity: unifiedresources.ResourceIdentity{
 			Hostnames:   []string{"finance-vm.lan"},
 			IPAddresses: []string{"10.0.0.7"},
@@ -180,30 +181,22 @@ func TestRequestSanitizerForModel_RedactLocalOnlyResourcesOnlyKeepsFloorAndSecre
 		System: "finance-vm.lan is 10.0.0.7; vault.lan is 10.0.0.9. Authorization: Bearer sk-leaked-secret-token",
 	}
 
-	// Default (redacted): BOTH resources' identifiers are stripped.
-	redacted := RequestSanitizerForModel("openai:gpt-4o", provider)(req)
-	for _, identifier := range []string{"finance-vm.lan", "10.0.0.7", "vault.lan", "10.0.0.9"} {
-		if strings.Contains(redacted.System, identifier) {
-			t.Fatalf("default sanitizer must redact identifier %q, got: %s", identifier, redacted.System)
-		}
-	}
-
-	// Full (local-only floor): the Sensitive resource's identifiers flow...
-	full := RequestSanitizerForModel("openai:gpt-4o", provider, RedactLocalOnlyResourcesOnly())(req)
+	out := RequestSanitizerForModel("openai:gpt-4o", provider)(req)
+	// The Sensitive resource's identifiers flow.
 	for _, identifier := range []string{"finance-vm.lan", "10.0.0.7"} {
-		if !strings.Contains(full.System, identifier) {
-			t.Fatalf("full sanitizer must preserve sensitive (non-local-only) identifier %q, got: %s", identifier, full.System)
+		if !strings.Contains(out.System, identifier) {
+			t.Fatalf("sanitizer must preserve the sensitive (non-local-only) identifier %q, got: %s", identifier, out.System)
 		}
 	}
-	// ...but the Restricted (local-only) resource stays redacted as the hard floor...
+	// The Restricted (local-only) resource stays redacted as the hard floor.
 	for _, identifier := range []string{"vault.lan", "10.0.0.9"} {
-		if strings.Contains(full.System, identifier) {
-			t.Fatalf("full sanitizer must keep the local-only floor for %q, got: %s", identifier, full.System)
+		if strings.Contains(out.System, identifier) {
+			t.Fatalf("sanitizer must keep the local-only floor for %q, got: %s", identifier, out.System)
 		}
 	}
-	// ...and the credential is STILL redacted, even at full.
-	if strings.Contains(full.System, "sk-leaked-secret-token") {
-		t.Fatalf("full sanitizer must still redact the bearer token, got: %s", full.System)
+	// The credential is always redacted.
+	if strings.Contains(out.System, "sk-leaked-secret-token") {
+		t.Fatalf("sanitizer must redact the bearer token, got: %s", out.System)
 	}
 }
 

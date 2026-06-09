@@ -379,26 +379,6 @@ describe('settings architecture guardrails', () => {
     expect(aiRuntimeControlsSectionSource).not.toContain("fetch('/api/discovery/run");
   });
 
-  it('keeps the cloud model privacy dial wired through the canonical settings state', () => {
-    // The "Cloud model privacy" dial must bind to the canonical AI settings
-    // form/store and round-trip the cloud_context_privacy API field rather than
-    // reaching for a bespoke fetch or local-only flag.
-    expect(aiRuntimeControlsSectionSource).toContain('AI_SETTINGS_CLOUD_CONTEXT_PRIVACY_LABEL');
-    expect(aiRuntimeControlsSectionSource).toContain('getAISettingsCloudContextPrivacyHelpContent');
-    expect(aiRuntimeControlsSectionSource).toContain('getAISettingsCloudContextPrivacyOptions');
-    expect(aiRuntimeControlsSectionSource).toContain('state.form.cloudContextPrivacy');
-    expect(aiRuntimeControlsSectionSource).toContain(
-      "state.setForm('cloudContextPrivacy', e.currentTarget.value as CloudContextPrivacy)",
-    );
-    expect(aiSettingsStateSource).toContain('cloudContextPrivacy');
-    expect(aiSettingsStateSource).toContain(
-      'payload.cloud_context_privacy = form.cloudContextPrivacy;',
-    );
-    expect(aiSettingsStateSource).toContain(
-      "cloudContextPrivacy: data.cloud_context_privacy ?? 'full',",
-    );
-  });
-
   it('hydrates the Patrol preflight panel from the cached settings snapshot', () => {
     // The cached preflight outcome arrives on /api/settings/ai as
     // patrol_preflight; loadSettings and updateSettings must project it

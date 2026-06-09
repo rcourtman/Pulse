@@ -101,72 +101,37 @@ deriving an older display status from `workflowStatusHistory`.
    and `internal/ai/providers/ollama.go` is the only layer that turns it into
    the Ollama `keep_alive` request field. An empty configured value means
    Pulse omits `keep_alive` so the Ollama server default applies.
-   Cloud context privacy is a runtime privacy option owned by this path. The
-   canonical operator control is the `cloud_context_privacy` dial in
-   `internal/config/ai.go` (`AIConfig.CloudContextPrivacy`, normalized through
-   `GetCloudContextPrivacy` / `NormalizeCloudContextPrivacy`) with three levels:
-   `full` (default), `redacted`, and `local_only`. It supersedes the legacy
-   boolean `AIConfig.ShareOperationalContextWithCloud`
-   (`ShouldShareOperationalContextWithCloud`), which is retained only for API
-   back-compat and is no longer read by the redaction seam. `/api/settings/ai`
-   keeps the legacy boolean in sync with the dial (`full` → true,
-   `redacted`/`local_only` → false), and `internal/config` config load migrates
-   the dial out of the legacy boolean for pre-dial configs (legacy on → `full`,
-   off/absent → `redacted`) without mutating the boolean, so existing installs
-   keep their current cloud behavior. A fresh install defaults to `full` so a
-   self-hosted Pulse answers with real resource detail out of the box.
-   The redaction seam reads the dial directly across THREE model-bound paths,
-   each resolving the dial and failing closed to `redacted` when no config
-   snapshot is available: the proactive prefetch and the model-boundary sanitizer
-   (`internal/ai/chat/service.go`, `cloudPrivacyLevel` once per turn), AND the
-   broad inventory-context builder (`internal/ai/resource_context.go`
-   `buildUnifiedResourceContextForModel` → `unifiedResourcePolicyContext.resourceLabel`).
-   The inventory builder MUST render resource display names through the dial, not
-   the unconditional `unifiedresources.ResourcePolicyLabel`: known-local (Ollama)
-   destinations always get real names; cloud destinations get real names only at
-   `full` and only for resources not routed `ResourceRoutingScopeLocalOnly` (the
-   same hard floor); an unknown/empty destination fails closed to the governed
-   label. All three paths enforce the same posture:
-   - `full`: the model-bound resource-policy sanitizer is invoked with
-     `modelboundary.RedactLocalOnlyResourcesOnly()`, so real identifiers (hostname,
-     IP, alias, name) for ordinary (Internal) and Sensitive (local-first) resources
-     reach the cloud model, while resources the policy engine routes
-     `ResourceRoutingScopeLocalOnly` (Restricted) stay redacted as a HARD FLOOR a
-     blanket dial must never override. Prompt-secret sanitation (credentials) always
-     runs — credentials never cross the boundary at any level.
-   - `redacted`: the sanitizer redacts every policied resource's identifiers as
-     before, and `internal/ai/chat/context_prefetch.go` surfaces the PII-free
-     operational context from `servicediscovery.FormatCloudSafeContext` (service
-     identity, access command, config/data/log paths, ports) for governed
-     resources, allow-listed through `modelboundary.AllowResourcePolicyText` so it
-     is not re-stripped. Identifying fields stay redacted.
-   - `local_only`: `context_prefetch.go` injects NO proactive infrastructure
-     context for the cloud turn (only a transparency directive telling the
-     Assistant to disclose the withholding and point at the `Cloud model privacy`
-     setting / a local model), and the sanitizer still redacts identifiers as a
-     backstop for any context arriving via tool results, handoff text, or user text.
-   Local (Ollama) routing is unaffected and always receives full context
-   (`RequestSanitizerForModel` returns nil for local models).
+   Cloud context privacy is a FIXED posture, not a user setting. Pulse is a
+   self-hosted homelab/SMB tool: when the operator points the Assistant at a cloud
+   model they have accepted that their (non-secret) infrastructure detail reaches
+   that provider, so the cloud model receives real resource context (names, IPs,
+   config) and the Assistant is actually useful. There is intentionally NO
+   `cloud_context_privacy` dial and NO `share_operational_context_with_cloud`
+   toggle — the privacy control users understand is the choice of model (a cloud
+   provider vs. a local Ollama model). Granular per-resource governance is an
+   enterprise concern, not the homelab default.
+   Two invariants always hold at the model boundary and are NOT configurable:
+   1. Prompt-secret sanitation strips credentials (API keys, passwords, tokens) —
+      credentials never reach a cloud model.
+   2. The local-only floor: resources the policy engine routes
+      `ResourceRoutingScopeLocalOnly` (Restricted sensitivity — tagged secret/pii,
+      PMG, k8s-secrets, ...) have their identifiers redacted and never leave the
+      local trust boundary. Everything else (Internal and Sensitive) flows.
+   Both are enforced by the model-boundary sanitizer
+   `modelboundary.RequestSanitizerForModel(model, provider)` (`internal/ai/modelboundary`),
+   which returns nil for local (Ollama) models — local always receives full context.
    UNIVERSAL backstop rule: EVERY code path that sends infrastructure-derived
-   content to an external model MUST install the dial-aware
-   `modelboundary.RequestSanitizerForModel` (with `RedactLocalOnlyResourcesOnly()`
-   at the `full` dial) before the provider request — not only the interactive
-   agentic loop. This explicitly includes session compaction
-   (`internal/ai/chat/session_compaction.go` `SummarizeSession`), which sends the
-   PERSISTED transcript (original user prompts and tool outputs carry raw
-   identifiers regardless of how the live turns were redacted). A new model-bound
-   request path that skips the sanitizer is a leak and is not permitted. (Static
-   capability probes with no resource content, e.g. the Patrol preflight self-test,
-   are exempt only because their payload is fixed and carries no identifiers.)
-   The dial-aware option (`RedactLocalOnlyResourcesOnly()` at `full`) is not only
-   the chat seam's concern: the shared service helper
-   `(*Service).requestSanitizerForModel` (`internal/ai/service.go`), used by
+   content to an external model MUST install `RequestSanitizerForModel` before the
+   provider request — not only the interactive agentic loop. This explicitly
+   includes session compaction (`internal/ai/chat/session_compaction.go`
+   `SummarizeSession`), which sends the PERSISTED transcript (original user prompts
+   and tool outputs carry raw identifiers), and the shared service helper
+   `(*Service).requestSanitizerForModel` (`internal/ai/service.go`) used by
    discovery analysis, the report and fleet narrators, quick analysis, and the
-   ExecuteAgentic paths, MUST resolve the dial and pass that option at `full` too —
-   otherwise those non-chat paths silently over-redact governed resources even when
-   the operator chose `full` (e.g. discovery cannot identify a governed service).
-   Honoring the dial there is functional parity, and the local-only floor still
-   protects must-not-leave resources.
+   ExecuteAgentic paths. A new model-bound request path that skips the sanitizer is
+   a leak and is not permitted. (Static capability probes with no resource content,
+   e.g. the Patrol preflight self-test, are exempt only because their payload is
+   fixed and carries no identifiers.)
    Redaction-placeholder hygiene: Pulse-authored model-bound directives (the
    resource-context handoff instructions in `internal/ai/chat/service.go` and
    `internal/ai/chat/plain_text_resource_context.go`) must NOT inject the literal
@@ -176,28 +141,6 @@ deriving an older display status from `workflowStatusHistory`.
    ("a withheld or placeholder label") and must instruct the model not to repeat a
    withheld placeholder back to the user as the resource identity; the
    `current_resource` handle remains the authoritative target.
-   The dial must be operator-reachable, not config-file-only. `/api/settings/ai`
-   round-trips `cloud_context_privacy` field-by-field exactly like
-   `discovery_enabled`: `internal/api/ai_handlers.go` always serializes the
-   current value on the settings response from `settings.GetCloudContextPrivacy()`
-   (no `omitempty`, so a 3-option control can bind to the concrete value),
-   validates the optional request `*string` against
-   `config.NormalizeCloudContextPrivacy` (rejecting unknown values with 400),
-   leaves the persisted dial untouched when the field is omitted, and syncs the
-   legacy boolean from the chosen level. The operator surface is the `Cloud model
-   privacy` 3-option control in the Assistant runtime controls
-   (`frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx`),
-   bound to the canonical `useAISettingsState` form and the `AISettings` /
-   `AISettingsUpdateRequest` payload contract in
-   `frontend-modern/src/types/ai.ts` (consumed by
-   `frontend-modern/src/api/ai.ts`). The dial defaults to `full`, carries the
-   privacy-level and Ollama-always-full-context caveats in its help and per-option
-   copy (`getAISettingsCloudContextPrivacyHelpContent` /
-   `getAISettingsCloudContextPrivacyOptions` /
-   `getAISettingsCloudContextPrivacySummary` in
-   `frontend-modern/src/utils/aiSettingsPresentation.ts`), and must not be
-   reimplemented as a local-only browser flag or a bespoke fetch outside the
-   canonical settings payload.
 3. Add or change Pulse Assistant request flow through `internal/api/ai_handler.go`, `frontend-modern/src/api/ai.ts`, and `frontend-modern/src/api/aiChat.ts`
    Assistant session compaction is a runtime-backed session workflow, not a
    local waiting message, transcript-only UI action, or stubbed summarize

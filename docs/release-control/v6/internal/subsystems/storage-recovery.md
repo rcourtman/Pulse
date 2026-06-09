@@ -582,11 +582,10 @@ recovery scope, or a storage/recovery-owned secret source.
     investigation streams, is likewise Assistant/API transport liveness only,
     not recovery acquisition progress, backup task freshness, restore readiness,
     provider health, or storage/recovery job status.
-    The `/api/settings/ai` `cloud_context_privacy` dial on that same handler
-    (and the legacy `share_operational_context_with_cloud` boolean it supersedes)
-    governs only how much Assistant infrastructure context reaches cloud models;
-    it is not a storage/recovery restore approval, backup freshness,
-    recovery-scope, or restore-command signal.
+    The AI-runtime model-boundary sanitizer that governs how much Assistant
+    infrastructure context reaches cloud models (credentials and local-only
+    resources always withheld) is not a storage/recovery restore approval, backup
+    freshness, recovery-scope, or restore-command signal.
     Patrol finding chat handoff execution controls in `internal/api/ai_handler.go`
     follow the same boundary: backend-forced `autonomous_mode:false` for
     `finding_id` handoffs with model-only Patrol briefing, resource, or action

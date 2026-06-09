@@ -26,7 +26,6 @@ import (
 
 type stubServiceProvider struct {
 	streamFn func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error
-	chatFn   func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error)
 }
 
 type sessionAwareStateProvider struct {
@@ -323,9 +322,6 @@ func TestService_ListSessionsRefreshesHandoffActionSummary(t *testing.T) {
 }
 
 func (s *stubServiceProvider) Chat(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
-	if s.chatFn != nil {
-		return s.chatFn(ctx, req)
-	}
 	return &providers.ChatResponse{Content: "ok", Model: req.Model}, nil
 }
 
@@ -2578,7 +2574,7 @@ func TestService_ExecuteStream_HandoffResourceRelationshipContextIsModelOnly(t *
 			Type:   unifiedresources.ResourceTypeStorage,
 			Name:   "secret-storage",
 			Status: unifiedresources.StatusOnline,
-			Tags:   []string{"backup"},
+			Tags:   []string{"secret"}, // Restricted -> local-only floor -> redacted for cloud
 		}},
 	}}
 
@@ -2601,12 +2597,10 @@ func TestService_ExecuteStream_HandoffResourceRelationshipContextIsModelOnly(t *
 	loop := NewAgenticLoop(provider, executor, "system")
 
 	svc := &Service{
-		// Redacted cloud privacy: governed identities must be stripped at the
-		// external-provider boundary (the behavior this test pins). With the dial
-		// at "full" the local-only floor would still protect Restricted resources,
-		// but Sensitive ones would flow — that path is covered by the modelboundary
-		// sanitizer tests.
-		cfg:                     &config.AIConfig{ChatModel: "openai:test", CloudContextPrivacy: config.CloudContextPrivacyRedacted},
+		// Both governed resources here are local-only (Restricted), so their
+		// identities must be stripped at the external-provider boundary — the
+		// local-only floor that always holds for cloud routing.
+		cfg:                     &config.AIConfig{ChatModel: "openai:test"},
 		sessions:                store,
 		executor:                executor,
 		agenticLoop:             loop,

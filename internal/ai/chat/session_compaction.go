@@ -12,7 +12,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/modelboundary"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
-	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 const (
@@ -143,20 +142,11 @@ func (s *Service) SummarizeSession(ctx context.Context, sessionID string) (map[s
 	}
 
 	// The transcript is built from PERSISTED messages (original user prompts and
-	// tool outputs), which carry raw resource identifiers regardless of how the
-	// live turns were redacted. Run it through the same dial-aware model-boundary
-	// sanitizer as a normal turn so compaction never leaks identifiers to a cloud
-	// model: redacted/local_only strip them, full keeps the local-only floor, and
-	// local (Ollama) is unaffected (RequestSanitizerForModel returns nil).
-	sanitizerOptions := []modelboundary.RequestSanitizerOption{}
-	cloudPrivacyLevel := config.CloudContextPrivacyRedacted
-	if cfgSnapshot != nil {
-		cloudPrivacyLevel = cfgSnapshot.GetCloudContextPrivacy()
-	}
-	if cloudPrivacyLevel == config.CloudContextPrivacyFull {
-		sanitizerOptions = append(sanitizerOptions, modelboundary.RedactLocalOnlyResourcesOnly())
-	}
-	if sanitizer := modelboundary.RequestSanitizerForModel(requestModel, unifiedResourceProvider, sanitizerOptions...); sanitizer != nil {
+	// tool outputs), which carry raw resource identifiers. Run it through the same
+	// model-boundary sanitizer as a normal turn so compaction never leaks
+	// local-only identifiers or credentials to a cloud model (local Ollama is
+	// unaffected — RequestSanitizerForModel returns nil).
+	if sanitizer := modelboundary.RequestSanitizerForModel(requestModel, unifiedResourceProvider); sanitizer != nil {
 		compactionRequest = sanitizer(compactionRequest)
 	}
 

@@ -104,36 +104,6 @@ type AIConfig struct {
 	DiscoveryEnabled       bool `json:"discovery_enabled"`                  // Enable infrastructure discovery
 	DiscoveryIntervalHours int  `json:"discovery_interval_hours,omitempty"` // Hours between automatic re-scans (0 = manual only, default: 0)
 
-	// Cloud operational-context sharing - controls whether PII-free operational
-	// context (service identity, access commands, config/data/log paths, port
-	// numbers) for governed resources may be sent to CLOUD models. Default false:
-	// cloud-routed governed resources are redacted to a terse summary, which makes
-	// the Assistant unable to give resource-specific guidance on cloud models.
-	// Opting in shares the cloud-safe operational context while genuinely
-	// identifying fields (hostname, IP, alias, platform ID) stay redacted. Local
-	// (Ollama) models always receive full context and are unaffected by this flag.
-	//
-	// Deprecated: superseded by CloudContextPrivacy. Retained as the load-bearing
-	// behavior field the redaction seam still reads until the dial is wired into
-	// the seam directly (privacy-redesign increment 2). CloudContextPrivacy is the
-	// canonical operator control; the settings handler keeps this field in sync
-	// (full -> true, redacted/local_only -> false) and config load migrates the
-	// dial out of it for pre-dial configs.
-	ShareOperationalContextWithCloud bool `json:"share_operational_context_with_cloud,omitempty"`
-
-	// CloudContextPrivacy is the single privacy dial governing what infrastructure
-	// context cloud models may see. It supersedes the boolean
-	// ShareOperationalContextWithCloud with three explicit levels:
-	//   - "full"       (default) cloud models get the same operational context as
-	//                  local models so the Assistant can answer with real detail.
-	//   - "redacted"   cloud models get the PII-free operational context only
-	//                  (today's opt-in behavior): commands/paths/ports yes,
-	//                  identifying hostnames/IPs/aliases stripped.
-	//   - "local_only" no infrastructure context is sent to cloud models at all;
-	//                  use a local (Ollama) model for resource-specific answers.
-	// Local (Ollama) models always receive full context regardless of this dial.
-	// Empty normalizes to "full" via GetCloudContextPrivacy.
-	CloudContextPrivacy string `json:"cloud_context_privacy,omitempty"`
 }
 
 // AIProvider constants
@@ -145,21 +115,6 @@ const (
 	AIProviderDeepSeek   = "deepseek"
 	AIProviderGemini     = "gemini"
 	AIProviderQuickstart = "quickstart" // Retired Pulse-hosted proxy marker retained only for legacy config migration.
-)
-
-// Cloud context privacy dial constants. These are the canonical values for
-// AIConfig.CloudContextPrivacy — the single dial controlling what infrastructure
-// context cloud models may see. Local (Ollama) models always receive full context.
-const (
-	// CloudContextPrivacyFull - cloud models receive the same operational context
-	// as local models so the Assistant answers with real, resource-specific detail.
-	CloudContextPrivacyFull = "full"
-	// CloudContextPrivacyRedacted - cloud models receive only PII-free operational
-	// context (commands/paths/ports); identifying hostnames/IPs/aliases are stripped.
-	CloudContextPrivacyRedacted = "redacted"
-	// CloudContextPrivacyLocalOnly - no infrastructure context is sent to cloud
-	// models; resource-specific answers require a local model.
-	CloudContextPrivacyLocalOnly = "local_only"
 )
 
 // AI Control Level constants
@@ -267,10 +222,6 @@ func NewDefaultAIConfig() *AIConfig {
 		// Default to critical-only so alert-triggered investigations stay
 		// token-conservative out of the box. Operators can opt warnings in.
 		PatrolAlertTriggerMinSeverity: AlertTriggerSeverityCritical,
-		// Cloud context privacy defaults to "full": a self-hosted Pulse should
-		// answer with real resource detail on cloud models out of the box.
-		// Operators who want redaction or a local-only posture pick it explicitly.
-		CloudContextPrivacy: CloudContextPrivacyFull,
 	}
 }
 
@@ -948,45 +899,4 @@ func (c *AIConfig) GetDiscoveryInterval() time.Duration {
 		return 0 // Manual only
 	}
 	return time.Duration(c.DiscoveryIntervalHours) * time.Hour
-}
-
-// ShouldShareOperationalContextWithCloud reports whether PII-free operational
-// context for governed resources may be sent to cloud models. Nil-safe and
-// defaults to false so cloud routing keeps the terse governed redaction unless
-// the operator explicitly opts in.
-func (c *AIConfig) ShouldShareOperationalContextWithCloud() bool {
-	if c == nil {
-		return false
-	}
-	return c.ShareOperationalContextWithCloud
-}
-
-// NormalizeCloudContextPrivacy validates and canonicalizes a cloud context
-// privacy value. It returns the normalized value and whether the input was a
-// recognized level. Empty input is treated as the default ("full") and reported
-// as valid; any other unrecognized value reports invalid (so the settings API
-// can reject hand-crafted payloads) while still returning the safe default.
-func NormalizeCloudContextPrivacy(value string) (string, bool) {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "":
-		return CloudContextPrivacyFull, true
-	case CloudContextPrivacyFull:
-		return CloudContextPrivacyFull, true
-	case CloudContextPrivacyRedacted:
-		return CloudContextPrivacyRedacted, true
-	case CloudContextPrivacyLocalOnly:
-		return CloudContextPrivacyLocalOnly, true
-	default:
-		return CloudContextPrivacyFull, false
-	}
-}
-
-// GetCloudContextPrivacy returns the canonical cloud context privacy level,
-// normalizing empty/unknown values to the default ("full"). Nil-safe.
-func (c *AIConfig) GetCloudContextPrivacy() string {
-	if c == nil {
-		return CloudContextPrivacyFull
-	}
-	normalized, _ := NormalizeCloudContextPrivacy(c.CloudContextPrivacy)
-	return normalized
 }

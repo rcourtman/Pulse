@@ -2,14 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE,
   AI_SETTINGS_ASSISTANT_SESSIONS_TITLE,
-  AI_SETTINGS_CLOUD_CONTEXT_PRIVACY_LABEL,
   AI_SETTINGS_MODEL_OVERRIDES_TITLE,
   AI_SETTINGS_PANEL_DESCRIPTION,
   AI_SETTINGS_PANEL_TITLE,
   getAICredentialsClearErrorMessage,
-  getAISettingsCloudContextPrivacyHelpContent,
-  getAISettingsCloudContextPrivacyOptions,
-  getAISettingsCloudContextPrivacySummary,
   getAIOAuthErrorMessage,
   getAIChatSessionsEmptyState,
   getAIChatSessionsLoadErrorMessage,
@@ -44,41 +40,6 @@ describe('aiSettingsPresentation', () => {
     });
     expect(getAISettingsWorkloadDiscoverySummary()).toEqual({
       text: 'Workload discovery stores concrete service context for Assistant chat and Patrol verification, so responses and findings can reference real services and commands instead of generic advice.',
-    });
-    expect(AI_SETTINGS_CLOUD_CONTEXT_PRIVACY_LABEL).toBe('Cloud model privacy');
-    expect(getAISettingsCloudContextPrivacyHelpContent()).toEqual({
-      title: 'What cloud models can see',
-      description:
-        'When the Assistant runs on a cloud model (Anthropic, OpenAI, OpenRouter, and similar), this dial controls how much of your real infrastructure it includes in the request. Local models (Ollama) always receive full context regardless of this setting. Most self-hosted setups keep this on Full so the Assistant can answer with real detail; raise the privacy level if you would rather limit what leaves your network.',
-    });
-    expect(getAISettingsCloudContextPrivacyOptions()).toEqual([
-      {
-        value: 'full',
-        label: 'Full — answer with real detail',
-        description:
-          'Cloud models receive your infrastructure context so the Assistant gives resource-specific answers instead of generic advice. Best for a private, self-hosted Pulse.',
-      },
-      {
-        value: 'redacted',
-        label: 'Redacted — hide identifying detail',
-        description:
-          'Cloud models receive operational context like service commands, paths, and ports, but identifying details such as hostnames, IP addresses, and aliases are removed before the request leaves Pulse.',
-      },
-      {
-        value: 'local_only',
-        label: 'Local only — send nothing to cloud',
-        description:
-          'Cloud models receive no infrastructure context. Switch the Assistant to a local model to get resource-specific answers.',
-      },
-    ]);
-    expect(getAISettingsCloudContextPrivacySummary('full')).toEqual({
-      text: 'Cloud models receive your infrastructure context so answers stay specific. Choose Redacted or Local only to limit what leaves Pulse.',
-    });
-    expect(getAISettingsCloudContextPrivacySummary('redacted')).toEqual({
-      text: 'Cloud models get cloud-safe operational details (commands, paths, ports); hostnames, IP addresses, and aliases are redacted.',
-    });
-    expect(getAISettingsCloudContextPrivacySummary('local_only')).toEqual({
-      text: 'No infrastructure context is sent to cloud models. Use a local model for resource-specific answers.',
     });
     expect(getAISettingsSetupDialogPresentation()).toEqual({
       ariaLabel: 'Set up Assistant and Patrol',
