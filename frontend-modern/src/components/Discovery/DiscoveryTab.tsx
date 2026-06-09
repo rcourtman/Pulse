@@ -700,10 +700,26 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                   d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              <p class="text-sm">Unknown Service</p>
-              <p class="text-xs text-muted mt-1">
-                Discovery completed but couldn't identify a known service.
+              <p class="text-sm">
+                {discovery()?.ai_reasoning ? 'Service not identified' : 'Unknown Service'}
               </p>
+              <p class="text-xs text-muted mt-1">
+                {/* The backend abstains (empty service, confidence 0) rather than
+                    confabulate a service when it has no in-guest command evidence,
+                    and explains why in ai_reasoning. Surface that explanation
+                    instead of a dead-end "couldn't identify a known service", so a
+                    completed-but-empty scan tells the user what happened and how to
+                    get real results. */}
+                {discovery()?.ai_reasoning ||
+                  "Discovery completed but couldn't identify a known service."}
+              </p>
+              <Show when={discovery()?.ai_reasoning && props.commandsEnabled !== true}>
+                <p class="text-xs mt-2">
+                  <a href={commandSettingsTarget.href} class="underline hover:no-underline">
+                    Open {commandSettingsTarget.label}
+                  </a>
+                </p>
+              </Show>
               <Show when={discovery()?.updated_at}>
                 <p class="text-xs text-muted mt-2">
                   Last scanned: {formatDiscoveryAge(discovery()!.updated_at)}

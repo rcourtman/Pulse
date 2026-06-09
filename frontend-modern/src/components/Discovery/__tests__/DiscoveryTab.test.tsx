@@ -139,6 +139,55 @@ describe('DiscoveryTab', () => {
     expect(screen.queryByText('Unknown Container')).toBeNull();
   });
 
+  it('surfaces the abstention reason and a settings link when a completed scan had no command evidence', async () => {
+    // The backend abstains (empty service, confidence 0) rather than confabulate
+    // a service when it has no in-guest command evidence, and explains why in
+    // ai_reasoning. The tab must surface that explanation + an actionable settings
+    // link instead of a dead-end "couldn't identify a known service".
+    vi.mocked(discoveryApi.getDiscovery).mockResolvedValue({
+      id: 'system-container:minipc:112',
+      resource_type: 'system-container',
+      resource_id: '112',
+      target_id: 'minipc',
+      hostname: 'debian-go',
+      service_type: '',
+      service_name: '',
+      service_version: '',
+      category: 'unknown',
+      cli_access: 'pct exec 112 -- /bin/bash',
+      facts: [],
+      config_paths: [],
+      data_paths: [],
+      log_paths: [],
+      ports: [],
+      user_notes: '',
+      user_secrets: {},
+      confidence: 0,
+      ai_reasoning:
+        'Discovery could not run commands on this resource, so its service was not identified. Enable "Pulse Commands" for the host agent (Settings → Infrastructure) to run real discovery instead of guessing.',
+      discovered_at: '2026-06-09T00:00:00Z',
+      updated_at: '2026-06-09T00:00:00Z',
+      scan_duration: 0,
+    });
+
+    render(() => (
+      <DiscoveryTab
+        resourceType="system-container"
+        agentId="minipc"
+        resourceId="112"
+        hostname="debian-go"
+      />
+    ));
+
+    expect(await screen.findByText('Service not identified')).toBeInTheDocument();
+    expect(screen.getByText(/Discovery could not run commands on this resource/i)).toBeInTheDocument();
+    const settingsLink = screen.getByRole('link', { name: /Open Settings → Infrastructure/i });
+    expect(settingsLink).toHaveAttribute('href', '/settings/infrastructure');
+    expect(
+      screen.queryByText("Discovery completed but couldn't identify a known service"),
+    ).toBeNull();
+  });
+
   it('shows a drawer run action and triggers discovery for the current resource', async () => {
     const discovered: ResourceDiscovery = {
       id: 'discovery-1',
