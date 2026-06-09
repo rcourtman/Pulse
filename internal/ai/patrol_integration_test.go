@@ -138,17 +138,19 @@ func TestIntegration_PatrolRunCreatesFindings(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 
-	// Verify finding was created
+	// Verify finding was created. The LLM stub reports key "high-cpu",
+	// which normalizes onto the canonical verifier vocabulary ("cpu-high")
+	// at creation so dedup and deterministic verification share one key.
 	allFindings := ps.findings.GetActive(FindingSeverityInfo)
 	found := false
 	for _, f := range allFindings {
-		if f.ResourceID == "vm-100" && f.Key == "high-cpu" {
+		if f.ResourceID == "vm-100" && f.Key == "cpu-high" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Fatalf("expected finding for vm-100 with key 'high-cpu', got %d active findings", len(allFindings))
+		t.Fatalf("expected finding for vm-100 with key 'cpu-high', got %d active findings", len(allFindings))
 	}
 
 	// Verify investigation was triggered (check with timeout due to async goroutine)

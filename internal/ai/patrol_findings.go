@@ -938,6 +938,18 @@ func (a *patrolFindingCreatorAdapter) getResolvedIDs() []string {
 	return result
 }
 
+// findingKeyAliases maps directional synonyms the LLM plausibly assigns onto
+// the canonical verifier vocabulary (the verifyFixDeterministically switch),
+// so deduplication and deterministic verification meet on one key. Only
+// unambiguous aliases belong here — node-offline is NOT guest-unreachable
+// and pbs-job-failed is NOT backup-failed; mapping those would point the
+// verifier at the wrong resource model.
+var findingKeyAliases = map[string]string{
+	"high-cpu":    "cpu-high",
+	"high-memory": "memory-high",
+	"high-disk":   "disk-high",
+}
+
 func normalizeFindingKey(key string) string {
 	if key == "" {
 		return ""
@@ -954,7 +966,11 @@ func normalizeFindingKey(key string) string {
 			b.WriteRune(r)
 		}
 	}
-	return strings.Trim(b.String(), "-")
+	normalized := strings.Trim(b.String(), "-")
+	if canonical, ok := findingKeyAliases[normalized]; ok {
+		return canonical
+	}
+	return normalized
 }
 
 // recoverStuckInvestigations detects findings stuck in "running" state for longer than
@@ -1365,13 +1381,18 @@ func (p *PatrolService) verifyFixDeterministically(
 }
 
 // hasDeterministicVerifierForKey reports whether a deterministic
-// verifier exists for the given finding key. Used by ResolveFinding to
-// decide whether an LLM-driven resolve attempt on an event/persistent
-// category finding can be grounded in deterministic evidence. Keep this
-// list aligned with the switch in verifyFixDeterministically.
+// verifier exists for the given finding key. It is the single source of
+// truth consulted by both the LLM-resolve gate (ResolveFinding) and the
+// verified stale-finding reconcile pass (reconcileStaleFindings), and it
+// must stay aligned with the dispatch switch in verifyFixDeterministically.
+// It previously listed only smart-failure and backup-failed despite the
+// dispatch handling seven keys, which made the resolve gate silently skip
+// verification that existed (trust-the-LLM fallback) for backup-stale and
+// guest-unreachable findings.
 func (p *PatrolService) hasDeterministicVerifierForKey(key string) bool {
-	switch key {
-	case "smart-failure", "backup-failed":
+	switch normalizeFindingKey(key) {
+	case "backup-stale", "cpu-high", "memory-high", "disk-high",
+		"guest-unreachable", "smart-failure", "backup-failed":
 		return true
 	default:
 		return false

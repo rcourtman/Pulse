@@ -3547,6 +3547,35 @@ func seedFormatTimeAgo(now, t time.Time) string {
 //     a security vulnerability does not mean the issue has been addressed, and silent
 //     auto-resolve there produced bogus auto_resolved → re-detected → regressed
 //     cycles that inflated the trust strip and the regression counter.
+//
+// maxVerifiedStaleResolvesPerRun bounds how many deterministic verifications
+// one reconcile pass may run. Verifications hit live state (and for
+// smart-failure/backup-failed, governed tool calls), so a pathological store
+// must not turn the end-of-run reconcile into a verification storm. Deferred
+// candidates are logged and retried on the next successful full patrol.
+const maxVerifiedStaleResolvesPerRun = 3
+
+// verifiedStaleResolveReason is the resolve reason for event/persistent
+// findings cleared by an affirmative deterministic verification (as opposed
+// to the absence-based "No longer detected by patrol" used for
+// performance/capacity findings).
+const verifiedStaleResolveReason = "Deterministic verification confirmed the issue cleared"
+
+// verifyStaleFindingResolved runs the deterministic verifier for a finding's
+// key with the same timeout the LLM-resolve gate uses. The injectable seam
+// (verifyFixResolvedFn) exists for tests; production uses VerifyFixResolved.
+func (p *PatrolService) verifyStaleFindingResolved(finding *Finding) (bool, error) {
+	p.mu.RLock()
+	verify := p.verifyFixResolvedFn
+	p.mu.RUnlock()
+	if verify == nil {
+		verify = p.VerifyFixResolved
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return verify(ctx, finding.ResourceID, finding.ResourceType, finding.Key, finding.ID)
+}
+
 func (p *PatrolService) reconcileStaleFindings(reportedIDs, resolvedIDs, seededFindingIDs []string, runHadErrors bool) int {
 	if runHadErrors {
 		return 0
@@ -3569,18 +3598,65 @@ func (p *PatrolService) reconcileStaleFindings(reportedIDs, resolvedIDs, seededF
 	}
 
 	count := 0
+	verifyAttempts := 0
 	for _, id := range seededFindingIDs {
 		if reported[id] || resolved[id] {
 			continue
 		}
 		// Category gate: only continuous current-state categories are safe to
 		// auto-resolve from absence. Event/persistent categories stay active
-		// until explicitly resolved.
+		// until explicitly resolved — unless a deterministic verifier can
+		// affirmatively confirm the underlying signal is gone.
 		finding := p.findings.Get(id)
 		if finding == nil {
 			continue
 		}
 		if !CategorySupportsStaleAutoResolve(finding.Category) {
+			// Absence of a re-report is not evidence for these categories,
+			// but an affirmative deterministic verification is — the same
+			// standard the LLM-resolve gate demands before honoring a
+			// patrol_resolve_finding call. Without this pass, a fixed backup
+			// or recovered service stays an active finding forever unless
+			// the LLM happens to call resolve: the asymmetric half of the
+			// "Backup failed" flap. Resolve only on a positive "signal gone"
+			// verification; on "still present" or inconclusive, fail closed
+			// and leave the finding active.
+			if p.hasDeterministicVerifierForKey(finding.Key) {
+				if verifyAttempts >= maxVerifiedStaleResolvesPerRun {
+					log.Info().
+						Str("finding_id", id).
+						Str("key", finding.Key).
+						Msg("AI Patrol: deferring verified stale-finding check — per-run verification cap reached, will retry next run")
+					continue
+				}
+				verifyAttempts++
+				verified, verifyErr := p.verifyStaleFindingResolved(finding)
+				if verifyErr == nil && verified {
+					if ok := p.findings.ResolveWithReason(id, verifiedStaleResolveReason); ok {
+						count++
+						p.mu.RLock()
+						resolveUnified := p.unifiedFindingResolver
+						p.mu.RUnlock()
+						if resolveUnified != nil {
+							resolveUnified(id)
+						}
+						log.Info().
+							Str("finding_id", id).
+							Str("category", string(finding.Category)).
+							Str("key", finding.Key).
+							Msg("AI Patrol: Auto-resolved event/persistent finding — deterministic verification confirmed the issue cleared")
+					}
+					continue
+				}
+				log.Debug().
+					Err(verifyErr).
+					Str("finding_id", id).
+					Str("category", string(finding.Category)).
+					Str("key", finding.Key).
+					Bool("still_present", verifyErr == nil && !verified).
+					Msg("AI Patrol: keeping event/persistent finding active — deterministic verification did not confirm resolution (fail closed)")
+				continue
+			}
 			log.Debug().
 				Str("finding_id", id).
 				Str("category", string(finding.Category)).

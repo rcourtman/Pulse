@@ -36,6 +36,7 @@
 package ai
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"sync"
@@ -452,6 +453,11 @@ type PatrolService struct {
 	correlationDetector *CorrelationDetector    // For multi-resource correlation
 	incidentStore       *memory.IncidentStore   // For incident timeline capture
 	alertResolver       AlertResolver           // For AI-based alert resolution
+
+	// verifyFixResolvedFn is the deterministic-verification seam used by the
+	// stale-finding reconcile pass. Tests inject a stub; nil means use the
+	// real VerifyFixResolved.
+	verifyFixResolvedFn func(ctx context.Context, resourceID, resourceType, findingKey, findingID string) (bool, error)
 
 	// Unified resource provider — reads physical disks, Ceph, etc. from canonical model
 	unifiedResourceProvider UnifiedResourceProvider

@@ -1175,16 +1175,22 @@ func TestPatrolService_GetAllFindingsIncludingResolved_IncludesResolvedAndDismis
 func TestPatrolService_HasDeterministicVerifierForKey(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 
-	// Keys with deterministic verifiers (mirrors the switch in
-	// verifyFixDeterministically). Keep this test in lockstep with that
-	// switch — the gate in ResolveFinding depends on the two staying
-	// aligned.
-	for _, key := range []string{"smart-failure", "backup-failed"} {
+	// Keys with deterministic verifiers (mirrors the FULL dispatch switch in
+	// verifyFixDeterministically — hasDeterministicVerifierForKey is the
+	// single source of truth for both the LLM-resolve gate and the verified
+	// stale-finding reconcile pass; it previously listed only the two
+	// tool-based keys and silently skipped verification that existed for
+	// the state-only verifiers). Alias keys normalize onto canonical keys.
+	for _, key := range []string{
+		"backup-stale", "cpu-high", "memory-high", "disk-high",
+		"guest-unreachable", "smart-failure", "backup-failed",
+		"high-cpu", "high-memory", "high-disk",
+	} {
 		if !ps.hasDeterministicVerifierForKey(key) {
 			t.Errorf("hasDeterministicVerifierForKey(%q) = false, want true", key)
 		}
 	}
-	for _, key := range []string{"", "unknown-key", "cpu-high", "node-offline", "service-restart"} {
+	for _, key := range []string{"", "unknown-key", "node-offline", "service-restart", "pbs-job-failed", "restart-loop"} {
 		if ps.hasDeterministicVerifierForKey(key) {
 			t.Errorf("hasDeterministicVerifierForKey(%q) = true, want false", key)
 		}

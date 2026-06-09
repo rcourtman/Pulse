@@ -1164,9 +1164,11 @@ func TestNormalizeFindingKey(t *testing.T) {
 			expected: "cpu100warning",
 		},
 		{
+			// Trim applies before alias lookup, so the trimmed key still
+			// canonicalizes onto the verifier vocabulary (high-cpu → cpu-high).
 			name:     "leading/trailing whitespace",
 			input:    "  high-cpu  ",
-			expected: "high-cpu",
+			expected: "cpu-high",
 		},
 		{
 			name:     "with numbers",
@@ -1176,7 +1178,7 @@ func TestNormalizeFindingKey(t *testing.T) {
 		{
 			name:     "leading/trailing dashes trimmed",
 			input:    "-high-cpu-",
-			expected: "high-cpu",
+			expected: "cpu-high",
 		},
 	}
 

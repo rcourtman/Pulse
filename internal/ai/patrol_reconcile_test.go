@@ -1,6 +1,8 @@
 package ai
 
 import (
+	"context"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -282,5 +284,180 @@ func TestCategorySupportsStaleAutoResolve(t *testing.T) {
 				t.Fatalf("CategorySupportsStaleAutoResolve(%s) = %v, want %v", tc.category, got, tc.want)
 			}
 		})
+	}
+}
+
+// --- Verified auto-clear of event/persistent findings ---------------------
+//
+// Event/persistent categories must not auto-resolve from absence, but an
+// affirmative deterministic verification ("the failure signal is gone") is
+// stronger evidence than absence — the same standard the LLM-resolve gate
+// demands. These tests pin the asymmetric half of the "Backup failed" flap
+// fix: a fixed issue clears once the verifier confirms it, and anything
+// short of an affirmative confirmation fails closed.
+
+func newVerifierFinding(id, key string) *Finding {
+	return &Finding{
+		ID:           id,
+		Key:          key,
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryBackup,
+		ResourceID:   "vm-100",
+		ResourceName: "web",
+		Title:        "Backup failed",
+		DetectedAt:   time.Now().Add(-1 * time.Hour),
+	}
+}
+
+func TestReconcileStaleFindings_VerifiedAutoClearResolvesFixedFinding(t *testing.T) {
+	f := newVerifierFinding("find-backup", "backup-failed")
+	p := newTestPatrolWithFindings([]*Finding{f})
+	p.verifyFixResolvedFn = func(ctx context.Context, resourceID, resourceType, findingKey, findingID string) (bool, error) {
+		if resourceID != "vm-100" || findingKey != "backup-failed" || findingID != "find-backup" {
+			t.Fatalf("verifier called with wrong identity: %s/%s/%s", resourceID, findingKey, findingID)
+		}
+		return true, nil // signal affirmatively gone
+	}
+
+	resolved := p.reconcileStaleFindings(nil, nil, []string{f.ID}, false)
+
+	if resolved != 1 {
+		t.Fatalf("expected 1 verified auto-resolve, got %d", resolved)
+	}
+	stored := p.findings.Get(f.ID)
+	if stored == nil || stored.ResolvedAt == nil {
+		t.Fatal("finding should be resolved after affirmative verification")
+	}
+	if !stored.AutoResolved {
+		t.Fatal("verified clear should be marked auto-resolved")
+	}
+	if stored.ResolveReason != verifiedStaleResolveReason {
+		t.Fatalf("unexpected resolve reason: %s", stored.ResolveReason)
+	}
+}
+
+func TestReconcileStaleFindings_VerifierStillDetectsKeepsActive(t *testing.T) {
+	f := newVerifierFinding("find-backup", "backup-failed")
+	p := newTestPatrolWithFindings([]*Finding{f})
+	p.verifyFixResolvedFn = func(ctx context.Context, resourceID, resourceType, findingKey, findingID string) (bool, error) {
+		return false, nil // failure signal still present
+	}
+
+	if resolved := p.reconcileStaleFindings(nil, nil, []string{f.ID}, false); resolved != 0 {
+		t.Fatalf("expected 0 resolves while signal still present, got %d", resolved)
+	}
+	if stored := p.findings.Get(f.ID); stored == nil || stored.ResolvedAt != nil {
+		t.Fatal("finding must stay active while the failure signal is still present")
+	}
+}
+
+func TestReconcileStaleFindings_VerifierInconclusiveFailsClosed(t *testing.T) {
+	f := newVerifierFinding("find-backup", "backup-failed")
+	p := newTestPatrolWithFindings([]*Finding{f})
+	p.verifyFixResolvedFn = func(ctx context.Context, resourceID, resourceType, findingKey, findingID string) (bool, error) {
+		return false, context.DeadlineExceeded // inconclusive
+	}
+
+	if resolved := p.reconcileStaleFindings(nil, nil, []string{f.ID}, false); resolved != 0 {
+		t.Fatalf("expected 0 resolves on inconclusive verification, got %d", resolved)
+	}
+	if stored := p.findings.Get(f.ID); stored == nil || stored.ResolvedAt != nil {
+		t.Fatal("finding must stay active when verification is inconclusive (fail closed)")
+	}
+}
+
+func TestReconcileStaleFindings_NoVerifierEventFindingStaysActive(t *testing.T) {
+	// pbs-job-failed has no deterministic verifier and must not be mapped
+	// onto backup-failed; the finding stays active until LLM/operator resolve.
+	f := newVerifierFinding("find-pbs", "pbs-job-failed")
+	p := newTestPatrolWithFindings([]*Finding{f})
+	p.verifyFixResolvedFn = func(ctx context.Context, resourceID, resourceType, findingKey, findingID string) (bool, error) {
+		t.Fatal("verifier must not be called for keys without a deterministic verifier")
+		return false, nil
+	}
+
+	if resolved := p.reconcileStaleFindings(nil, nil, []string{f.ID}, false); resolved != 0 {
+		t.Fatalf("expected 0 resolves for verifier-less event finding, got %d", resolved)
+	}
+	if stored := p.findings.Get(f.ID); stored == nil || stored.ResolvedAt != nil {
+		t.Fatal("verifier-less event finding must stay active")
+	}
+}
+
+func TestReconcileStaleFindings_VerifiedAutoClearIsIdempotent(t *testing.T) {
+	// The no-noise invariant: repeating reconcile over unchanged state must
+	// not produce new resolves, lifecycle events, or resolve/re-detect cycles.
+	f := newVerifierFinding("find-backup", "backup-failed")
+	p := newTestPatrolWithFindings([]*Finding{f})
+	p.verifyFixResolvedFn = func(ctx context.Context, resourceID, resourceType, findingKey, findingID string) (bool, error) {
+		return true, nil
+	}
+
+	if first := p.reconcileStaleFindings(nil, nil, []string{f.ID}, false); first != 1 {
+		t.Fatalf("expected first pass to resolve 1, got %d", first)
+	}
+	stored := p.findings.Get(f.ID)
+	resolvedAt := *stored.ResolvedAt
+	lifecycleLen := len(stored.Lifecycle)
+
+	if second := p.reconcileStaleFindings(nil, nil, []string{f.ID}, false); second != 0 {
+		t.Fatalf("expected second pass over unchanged state to resolve 0, got %d", second)
+	}
+	stored = p.findings.Get(f.ID)
+	if stored.ResolvedAt == nil || !stored.ResolvedAt.Equal(resolvedAt) {
+		t.Fatal("second pass must not touch the resolution")
+	}
+	if len(stored.Lifecycle) != lifecycleLen {
+		t.Fatalf("second pass must not append lifecycle events: %d -> %d", lifecycleLen, len(stored.Lifecycle))
+	}
+}
+
+func TestReconcileStaleFindings_VerificationCapDefersExcessCandidates(t *testing.T) {
+	findings := []*Finding{
+		newVerifierFinding("find-1", "backup-failed"),
+		newVerifierFinding("find-2", "backup-failed"),
+		newVerifierFinding("find-3", "backup-failed"),
+		newVerifierFinding("find-4", "backup-failed"),
+	}
+	// Distinct resources so the store keeps all four.
+	for i, f := range findings {
+		f.ResourceID = fmt.Sprintf("vm-%d", 100+i)
+	}
+	p := newTestPatrolWithFindings(findings)
+	calls := 0
+	p.verifyFixResolvedFn = func(ctx context.Context, resourceID, resourceType, findingKey, findingID string) (bool, error) {
+		calls++
+		return true, nil
+	}
+
+	ids := []string{"find-1", "find-2", "find-3", "find-4"}
+	resolved := p.reconcileStaleFindings(nil, nil, ids, false)
+
+	if calls != maxVerifiedStaleResolvesPerRun {
+		t.Fatalf("expected verification calls capped at %d, got %d", maxVerifiedStaleResolvesPerRun, calls)
+	}
+	if resolved != maxVerifiedStaleResolvesPerRun {
+		t.Fatalf("expected %d resolves this run, got %d", maxVerifiedStaleResolvesPerRun, resolved)
+	}
+	deferred := p.findings.Get("find-4")
+	if deferred == nil || deferred.ResolvedAt != nil {
+		t.Fatal("candidate beyond the cap must stay active and retry next run")
+	}
+}
+
+func TestNormalizeFindingKey_CanonicalAliases(t *testing.T) {
+	cases := map[string]string{
+		"high-cpu":     "cpu-high",
+		"High_Memory":  "memory-high",
+		"high disk":    "disk-high",
+		"cpu-high":     "cpu-high",
+		"backup-stale": "backup-stale",
+		// Non-aliased keys pass through normalization unchanged.
+		"pbs-job-failed": "pbs-job-failed",
+	}
+	for in, want := range cases {
+		if got := normalizeFindingKey(in); got != want {
+			t.Fatalf("normalizeFindingKey(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

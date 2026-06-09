@@ -25,7 +25,7 @@ Returns: {"ok": true, "finding_id": "...", "is_new": true/false} on success.`,
 				Properties: map[string]PropertySchema{
 					"key": {
 						Type:        "string",
-						Description: "Stable issue key for deduplication (e.g. high-cpu, high-memory, high-disk, backup-stale, backup-never, storage-high-usage, node-offline, restart-loop, pbs-job-failed)",
+						Description: "Stable issue key for deduplication. Use the canonical key when one fits — cpu-high, memory-high, disk-high, backup-stale, backup-failed, smart-failure, guest-unreachable (these have deterministic verifiers that ground resolution) — otherwise a stable kebab-case key like backup-never, storage-high-usage, node-offline, restart-loop, pbs-job-failed.",
 					},
 					"severity": {
 						Type:        "string",
