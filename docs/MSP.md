@@ -120,6 +120,42 @@ the tunnels and keep the management port out of them.
    in the default org, so every boundary in the instance is an explicit org
    boundary.
 
+## Connecting a client's Proxmox or PBS over your VPN
+
+Most MSP estates pair one or two Proxmox nodes per client site with a
+site-to-site VPN or tunnel back to the provider network. Proxmox and PBS are
+**polled**: the client's Pulse runtime reaches out to the client-site API
+(port `8006` for PVE, `8007` for PBS) — nothing at the client site connects
+inbound to the runtime for this. That inverts the agent direction, so check
+both paths in your firewall:
+
+| Traffic | Direction | Port |
+|---------|-----------|------|
+| Proxmox/PBS polling | provider → client site, through the tunnel | 8006 / 8007 |
+| Agent check-in (hosts) | client site → provider agent ingest | `PULSE_AGENT_INGEST_PORT` (7656) |
+
+Per client, the steps are:
+
+1. Make the client's PVE/PBS API address reachable from the Docker host that
+   runs the client workspaces (route or interface into that client's
+   tunnel). From the host, `curl -sk https://<client-pve>:8006` should
+   answer before you involve Pulse.
+2. Open the client's workspace (portal → workspace → **Open**) and add the
+   node under **Settings → Infrastructure**, using the tunnel-reachable
+   address. The guided flow generates a setup command to run once on the
+   client's Proxmox host (over SSH through the same tunnel); it creates the
+   monitoring user, API token, and permissions. Self-signed certificates
+   are handled automatically (the certificate fingerprint is pinned on
+   first connect).
+3. If you create the token by hand instead, note that Proxmox
+   privilege-separated tokens need ACLs on the **token** as well as the
+   user, and the built-in `PVEAuditor` role is not sufficient on its own —
+   see [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for the exact role setup.
+
+Because each client workspace is its own runtime, overlapping RFC1918
+subnets across client sites never collide inside Pulse: each workspace only
+ever dials its own client's tunnel addresses.
+
 ## Per-client alert routing
 
 Configure notification destinations inside each client's scope — the client
