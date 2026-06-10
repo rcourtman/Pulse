@@ -158,6 +158,24 @@ type WriteMetric struct {
 	Tier         Tier
 }
 
+// SeriesKey identifies one stored metric series in the normalized form the
+// write path persists (lower-cased resource/metric types, trimmed id).
+type SeriesKey struct {
+	ResourceType string
+	ResourceID   string
+	MetricType   string
+}
+
+// NormalizedSeriesKey builds the SeriesKey the write path would store for the
+// given identifiers, so callers can match MaxTimestampsForTier results.
+func NormalizedSeriesKey(resourceType, resourceID, metricType string) SeriesKey {
+	return SeriesKey{
+		ResourceType: normalizeMetricResourceType(resourceType),
+		ResourceID:   normalizeMetricIdentifier(resourceID),
+		MetricType:   normalizeMetricType(metricType),
+	}
+}
+
 type maintenanceRequest struct {
 	run  func()
 	done chan struct{}
@@ -1705,6 +1723,33 @@ func (s *Store) getMaxTimestampForTier(tier Tier) (int64, bool) {
 		return 0, false
 	}
 	return maxTs.Int64, true
+}
+
+// MaxTimestampsForTier returns the newest stored timestamp for every series
+// present in the given tier. Backfill seeders use it to write only the gap
+// between existing coverage and now instead of re-writing whole windows.
+func (s *Store) MaxTimestampsForTier(tier Tier) (map[SeriesKey]time.Time, error) {
+	rows, err := s.db.Query(`
+		SELECT resource_type, resource_id, metric_type, MAX(timestamp)
+		FROM metrics
+		WHERE tier = ?
+		GROUP BY resource_type, resource_id, metric_type
+	`, string(tier))
+	if err != nil {
+		return nil, fmt.Errorf("failed to query metrics coverage for tier %q: %w", tier, err)
+	}
+	defer rows.Close()
+
+	coverage := make(map[SeriesKey]time.Time)
+	for rows.Next() {
+		var key SeriesKey
+		var ts int64
+		if err := rows.Scan(&key.ResourceType, &key.ResourceID, &key.MetricType, &ts); err != nil {
+			return nil, fmt.Errorf("failed to scan metrics coverage row: %w", err)
+		}
+		coverage[key] = time.Unix(ts, 0).UTC()
+	}
+	return coverage, rows.Err()
 }
 
 // runRetention deletes data older than retention period

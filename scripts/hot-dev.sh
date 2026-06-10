@@ -381,6 +381,10 @@ else
     if [[ "${HOT_DEV_MOCK_FLAG}" == "true" ]]; then
         export PULSE_DATA_DIR="${ROOT_DIR}/tmp/mock-data"
         mkdir -p "$PULSE_DATA_DIR"
+        # The mock data dir holds no real history, so the backend may safely
+        # backfill mock metrics history into its metrics.db (powers reports
+        # and long-range charts in mock mode).
+        export PULSE_MOCK_SEED_METRICS_STORE=true
         log_info "Mock mode: using isolated mock data directory: ${PULSE_DATA_DIR}"
     else
         DEV_CONFIG_DIR="${ROOT_DIR}/tmp/dev-config"

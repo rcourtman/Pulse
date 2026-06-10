@@ -604,6 +604,10 @@ start_standalone_runtime() {
     load_env_file "${PULSE_DATA_DIR}/.env"
 
     if [[ "$PULSE_DATA_DIR" == "$MOCK_DATA_DIR" ]]; then
+        # The isolated mock data dir holds no real history, so the backend may
+        # safely backfill mock metrics history into its metrics.db (powers
+        # reports and long-range charts in mock mode).
+        export PULSE_MOCK_SEED_METRICS_STORE=true
         log_warn "Using isolated mock data dir (${MOCK_DATA_DIR}); production metrics history will pause while mock mode is on"
     else
         ensure_dev_key

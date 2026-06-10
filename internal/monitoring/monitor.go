@@ -1447,11 +1447,12 @@ func New(cfg *config.Config) (*Monitor, error) {
 		metricsStoreConfig.RetentionDaily = time.Duration(cfg.MetricsRetentionDailyDays) * 24 * time.Hour
 	}
 
-	// In mock mode, extend hourly/daily retention to 90 days to match the
-	// seeded data range (seeds write directly to hourly+daily tiers).
-	// Raw and minute tiers keep production defaults — seeded data doesn't
-	// use them, and live mock ticks at 2s intervals would bloat the DB
-	// (the old 90-day raw retention caused metrics.db to grow to ~2 GB).
+	// In mock mode, extend hourly/daily retention to 90 days so seeded mock
+	// backfill (daily tier 30d, hourly tier 7d — see mockStoreSeedPlans)
+	// outlives its windows. Raw and minute tiers keep production defaults —
+	// the minute seed window (24h) matches the default retention, and short
+	// raw retention keeps live mock ticks from bloating the DB (the old
+	// 90-day raw retention caused metrics.db to grow to ~2 GB).
 	if mock.IsMockEnabled() {
 		metricsStoreConfig.WriteBufferSize = 2000
 		metricsStoreConfig.RetentionHourly = 90 * 24 * time.Hour

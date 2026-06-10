@@ -23,6 +23,10 @@ func setMockSamplerTestEnv(t *testing.T, seedDuration, sampleInterval time.Durat
 	t.Helper()
 	t.Setenv("PULSE_MOCK_TRENDS_SEED_DURATION", seedDuration.String())
 	t.Setenv("PULSE_MOCK_TRENDS_SAMPLE_INTERVAL", sampleInterval.String())
+	// Default to the production-safe path even when the dev shell (hot-dev
+	// exports this) leaks the store-seeding opt-in into the test run; tests
+	// that exercise the opt-in re-set it to true explicitly.
+	t.Setenv("PULSE_MOCK_SEED_METRICS_STORE", "false")
 }
 
 func compactMockFixtureConfig() mock.MockConfig {
@@ -43,34 +47,11 @@ func compactMockFixtureConfig() mock.MockConfig {
 
 const boundedMockHistoryProofWindow = 4 * time.Hour
 
-func expectedCanonicalStoreBucketAverage(t *testing.T, resourceType, resourceID, metricType string, now time.Time, seedDuration, interval time.Duration, bucket time.Time, stepSecs int64) float64 {
-	t.Helper()
-	if stepSecs <= 0 {
-		t.Fatalf("expected positive step seconds, got %d", stepSecs)
-	}
-
-	alignedNow := normalizeMockMetricTimestamp(now, interval)
-	startUnix := now.Add(-seedDuration).Unix()
-	endUnix := now.Unix()
-	bucketUnix := bucket.Unix()
-	var sum float64
-	var count int
-
-	for _, ts := range buildTieredTimestamps(alignedNow, seedDuration) {
-		tsUnix := ts.Unix()
-		if tsUnix < startUnix || tsUnix > endUnix {
-			continue
-		}
-		if (tsUnix/stepSecs)*stepSecs+(stepSecs/2) != bucketUnix {
-			continue
-		}
-		sum += mock.SampleMetric(resourceType, resourceID, metricType, ts)
-		count++
-	}
-	if count == 0 {
-		t.Fatalf("expected seeded samples in %s bucket at %s", metricType, bucket.Format(time.RFC3339))
-	}
-	return sum / float64(count)
+// expectedCanonicalStoreUsageSample returns the value the store seeder writes
+// for a storage usage series at the given aligned timestamp: the canonical
+// mock runtime sample, clamped to a valid percentage.
+func expectedCanonicalStoreUsageSample(resourceID string, ts time.Time) float64 {
+	return clampFloat(mock.SampleMetric("storage", resourceID, "usage", ts), 0, 100)
 }
 
 func compactMockChartFixtureConfig() mock.MockConfig {
@@ -482,6 +463,82 @@ func TestSeedMockMetricsHistory_SeedsMetricsStore(t *testing.T) {
 	}
 }
 
+func TestSeedMockMetricsHistory_StoreSeedGapFillsWithoutDuplicates(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Minute)
+	seedDuration := boundedMockHistoryProofWindow
+
+	state := models.StateSnapshot{
+		VMs: []models.VM{
+			{
+				ID:     "mock-cluster-pve1-100",
+				Status: "running",
+				CPU:    0.21,
+				Memory: models.Memory{Usage: 47, Total: 8 * 1024 * 1024 * 1024},
+				Disk:   models.Disk{Usage: 28, Total: 1024, Used: 256},
+			},
+		},
+	}
+
+	cfg := metrics.DefaultConfig(t.TempDir())
+	cfg.RetentionRaw = 90 * 24 * time.Hour
+	cfg.RetentionMinute = 90 * 24 * time.Hour
+	cfg.RetentionHourly = 90 * 24 * time.Hour
+	cfg.RetentionDaily = 90 * 24 * time.Hour
+	cfg.WriteBufferSize = 500
+
+	store, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatalf("failed to create metrics store: %v", err)
+	}
+	defer store.Close()
+
+	// The query window stays under 24h so it always reads the minute tier,
+	// which has the densest grid (10m spacing) and therefore the most
+	// sensitive duplicate / gap-fill signal.
+	countPoints := func(end time.Time) int {
+		t.Helper()
+		points, err := store.Query("vm", "mock-cluster-pve1-100", "cpu", now.Add(-seedDuration-time.Hour), end, 0)
+		if err != nil {
+			t.Fatalf("failed to query seeded vm cpu points: %v", err)
+		}
+		return len(points)
+	}
+
+	seedMockMetricsHistory(NewMetricsHistory(1000, seedDuration), store, fixtureGraphWithState(state), now, seedDuration, time.Minute)
+	first := countPoints(now)
+	if first == 0 {
+		t.Fatal("expected initial store seed to write minute-tier points")
+	}
+
+	// Re-seeding at the same instant must not add rows: timestamps sit on the
+	// tier spacing grids and existing coverage short-circuits the backfill.
+	seedMockMetricsHistory(NewMetricsHistory(1000, seedDuration), store, fixtureGraphWithState(state), now, seedDuration, time.Minute)
+	if got := countPoints(now); got != first {
+		t.Fatalf("expected idempotent reseed to keep %d points, got %d", first, got)
+	}
+
+	// A later boot fills only the gap between previous coverage and the new
+	// now: exactly the minute-tier grid points inside (now, later].
+	later := now.Add(30 * time.Minute)
+	var minutePlan mockStoreSeedPlan
+	for _, plan := range mockStoreSeedPlans {
+		if plan.tier == metrics.TierMinute {
+			minutePlan = plan
+		}
+	}
+	if minutePlan.spacing <= 0 {
+		t.Fatal("expected a minute-tier store seed plan")
+	}
+	gapPoints := len(timestampsAfter(mockStoreSeedTimestamps(later, seedDuration, minutePlan.spacing), now))
+	if gapPoints == 0 {
+		t.Fatal("expected the advanced clock to expose new minute-tier grid points")
+	}
+	seedMockMetricsHistory(NewMetricsHistory(1000, seedDuration), store, fixtureGraphWithState(state), later, seedDuration, time.Minute)
+	if got, want := countPoints(later), first+gapPoints; got != want {
+		t.Fatalf("expected gap fill to append exactly the missing grid points (%d), got %d", want, got)
+	}
+}
+
 func TestSeedMockMetricsHistory_SeedsDiskTemperatureMetricsStore(t *testing.T) {
 	now := time.Now()
 	seedDuration := boundedMockHistoryProofWindow
@@ -566,7 +623,7 @@ func TestSeedMockMetricsHistory_SeedsVMwareMetricsStore(t *testing.T) {
 		t.Fatal("expected metrics store to have seeded VMware VM cpu points")
 	}
 
-	storagePoints, err := store.Query("storage", "vc-mock-1:datastore:datastore-201", "usage", now.Add(-seedDuration), now, 3600)
+	storagePoints, err := store.Query("storage", "vc-mock-1:datastore:datastore-201", "usage", now.Add(-seedDuration), now, 0)
 	if err != nil {
 		t.Fatalf("failed to query VMware datastore usage metrics: %v", err)
 	}
@@ -574,8 +631,8 @@ func TestSeedMockMetricsHistory_SeedsVMwareMetricsStore(t *testing.T) {
 		t.Fatal("expected metrics store to have seeded VMware datastore usage points")
 	}
 	lastStoragePoint := storagePoints[len(storagePoints)-1]
-	if got, want := lastStoragePoint.Value, expectedCanonicalStoreBucketAverage(t, "storage", "vc-mock-1:datastore:datastore-201", "usage", now, seedDuration, time.Minute, lastStoragePoint.Timestamp, 3600); math.Abs(got-want) > 1e-9 {
-		t.Fatalf("expected VMware datastore usage seed at %s to match canonical downsample bucket, got=%v want=%v", lastStoragePoint.Timestamp.Format(time.RFC3339), got, want)
+	if got, want := lastStoragePoint.Value, expectedCanonicalStoreUsageSample("vc-mock-1:datastore:datastore-201", lastStoragePoint.Timestamp); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected VMware datastore usage seed at %s to match canonical mock runtime sample, got=%v want=%v", lastStoragePoint.Timestamp.Format(time.RFC3339), got, want)
 	}
 
 	storageUsedPoints, err := store.Query("storage", "vc-mock-1:datastore:datastore-201", "used", now.Add(-seedDuration), now, 3600)
@@ -638,7 +695,7 @@ func TestSeedMockMetricsHistory_SeedsTrueNASMetricsStore(t *testing.T) {
 	}
 
 	datasetID := mock.TrueNASDatasetMetricID(fixtures.System.Hostname, fixtures.Datasets[0].Name)
-	datasetPoints, err := store.Query("storage", datasetID, "usage", now.Add(-seedDuration), now, 3600)
+	datasetPoints, err := store.Query("storage", datasetID, "usage", now.Add(-seedDuration), now, 0)
 	if err != nil {
 		t.Fatalf("failed to query canonical TrueNAS dataset usage metrics: %v", err)
 	}
@@ -646,8 +703,8 @@ func TestSeedMockMetricsHistory_SeedsTrueNASMetricsStore(t *testing.T) {
 		t.Fatal("expected metrics store to have seeded canonical TrueNAS dataset usage points")
 	}
 	lastDatasetPoint := datasetPoints[len(datasetPoints)-1]
-	if got, want := lastDatasetPoint.Value, expectedCanonicalStoreBucketAverage(t, "storage", datasetID, "usage", now, seedDuration, time.Minute, lastDatasetPoint.Timestamp, 3600); math.Abs(got-want) > 1e-9 {
-		t.Fatalf("expected TrueNAS dataset usage seed at %s to match canonical downsample bucket, got=%v want=%v", lastDatasetPoint.Timestamp.Format(time.RFC3339), got, want)
+	if got, want := lastDatasetPoint.Value, expectedCanonicalStoreUsageSample(datasetID, lastDatasetPoint.Timestamp); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected TrueNAS dataset usage seed at %s to match canonical mock runtime sample, got=%v want=%v", lastDatasetPoint.Timestamp.Format(time.RFC3339), got, want)
 	}
 
 	poolID := mock.TrueNASPoolMetricID(fixtures.System.Hostname, fixtures.Pools[0].Name)
@@ -825,6 +882,82 @@ func TestStartMockMetricsSampler_DoesNotClearExistingMetricsStoreData(t *testing
 	}
 	if !found {
 		t.Fatal("expected to find original production metric value after mock sampler start")
+	}
+
+	// Without the PULSE_MOCK_SEED_METRICS_STORE opt-in the sampler must not
+	// persist any mock series to the store.
+	graph := mock.CurrentFixtureGraph()
+	if len(graph.State.Nodes) == 0 {
+		t.Fatal("expected mock fixture graph to include a node")
+	}
+	mockPoints, err := store.Query("node", graph.State.Nodes[0].ID, "cpu", now.Add(-48*time.Hour), now.Add(time.Hour), 0)
+	if err != nil {
+		t.Fatalf("failed to query mock node metrics: %v", err)
+	}
+	if len(mockPoints) != 0 {
+		t.Fatalf("expected no mock node store history without the seed opt-in, got %d points", len(mockPoints))
+	}
+}
+
+func TestStartMockMetricsSampler_SeedsMetricsStoreWhenOptedIn(t *testing.T) {
+	setMockSamplerTestEnv(t, time.Hour, 5*time.Minute)
+	t.Setenv("PULSE_MOCK_SEED_METRICS_STORE", "true")
+
+	previousEnabled := mock.IsMockEnabled()
+	previousConfig := mock.GetConfig()
+	t.Cleanup(func() {
+		mustSetMockEnabled(t, false)
+		mock.SetMockConfig(previousConfig)
+		if previousEnabled {
+			mustSetMockEnabled(t, true)
+			mock.SetMockConfig(previousConfig)
+		}
+	})
+
+	cfg := metrics.DefaultConfig(t.TempDir())
+	cfg.RetentionRaw = 90 * 24 * time.Hour
+	cfg.RetentionMinute = 90 * 24 * time.Hour
+	cfg.RetentionHourly = 90 * 24 * time.Hour
+	cfg.RetentionDaily = 90 * 24 * time.Hour
+	cfg.WriteBufferSize = 100
+
+	store, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatalf("failed to create metrics store: %v", err)
+	}
+	defer store.Close()
+
+	mockCfg := compactMockFixtureConfig()
+	mockCfg.VMsPerNode = 1
+
+	mustSetMockEnabled(t, false)
+	mock.SetMockConfig(mockCfg)
+	mustSetMockEnabled(t, true)
+
+	monitor := &Monitor{
+		metricsHistory: NewMetricsHistory(1000, 24*time.Hour),
+		metricsStore:   store,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	monitor.startMockMetricsSampler(ctx)
+	t.Cleanup(func() { monitor.stopMockMetricsSampler() })
+
+	graph := mock.CurrentFixtureGraph()
+	if len(graph.State.VMs) == 0 {
+		t.Fatal("expected mock fixture graph to include a PVE guest")
+	}
+	vmID := graph.State.VMs[0].ID
+
+	now := time.Now()
+	points, err := store.Query("vm", vmID, "cpu", now.Add(-2*time.Hour), now, 0)
+	if err != nil {
+		t.Fatalf("failed to query mock PVE guest store history: %v", err)
+	}
+	if len(points) < 2 {
+		t.Fatalf("expected seeded mock PVE guest store history when opted in, got %d points", len(points))
 	}
 }
 

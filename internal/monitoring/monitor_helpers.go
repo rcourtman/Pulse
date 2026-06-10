@@ -61,6 +61,24 @@ func makeGuestID(instanceName string, node string, vmid int) string {
 	return fmt.Sprintf("%s:%s:%d", instanceName, node, vmid)
 }
 
+// parseBoolEnv parses a boolean from an environment variable, returning defaultVal if not set or invalid
+func parseBoolEnv(key string, defaultVal bool) bool {
+	val := strings.TrimSpace(os.Getenv(key))
+	if val == "" {
+		return defaultVal
+	}
+	parsed, err := strconv.ParseBool(val)
+	if err != nil {
+		log.Warn().
+			Str("key", key).
+			Str("value", val).
+			Bool("default", defaultVal).
+			Msg("Failed to parse boolean from environment variable, using default")
+		return defaultVal
+	}
+	return parsed
+}
+
 // parseDurationEnv parses a duration from an environment variable, returning defaultVal if not set or invalid
 func parseDurationEnv(key string, defaultVal time.Duration) time.Duration {
 	val := os.Getenv(key)

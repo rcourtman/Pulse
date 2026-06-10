@@ -6,6 +6,7 @@ import (
 	"hash/fnv"
 	"math"
 	"math/rand"
+	"sort"
 	"strings"
 	"time"
 
@@ -27,11 +28,17 @@ const (
 type mockMetricsSamplerConfig struct {
 	SeedDuration   time.Duration
 	SampleInterval time.Duration
+	// SeedStore opts the sampler into persisting mock history to the metrics
+	// store. Only the dev harness sets it (alongside pointing PULSE_DATA_DIR
+	// at the isolated tmp/mock-data dir), because seeded mock rows must never
+	// land in a metrics.db that also holds real history.
+	SeedStore bool
 }
 
 func mockMetricsSamplerConfigFromEnv() mockMetricsSamplerConfig {
 	seedDuration := parseDurationEnv("PULSE_MOCK_TRENDS_SEED_DURATION", defaultMockSeedDuration)
 	sampleInterval := parseDurationEnv("PULSE_MOCK_TRENDS_SAMPLE_INTERVAL", defaultMockSampleInterval)
+	seedStore := parseBoolEnv("PULSE_MOCK_SEED_METRICS_STORE", false)
 
 	// Guardrails to keep memory and CPU bounded in demo mode.
 	if seedDuration < 5*time.Minute {
@@ -55,7 +62,64 @@ func mockMetricsSamplerConfigFromEnv() mockMetricsSamplerConfig {
 	return mockMetricsSamplerConfig{
 		SeedDuration:   seedDuration,
 		SampleInterval: sampleInterval,
+		SeedStore:      seedStore,
 	}
+}
+
+// Store-tier backfill plans for mock mode. Each tier is seeded over its own
+// window at its own spacing: report queries read exactly one tier (picked by
+// range, falling back only when it is empty), so each tier needs enough rows
+// of its own for charts without exploding total row count:
+//
+//	daily:  30d window, 4h spacing  -> 180 rows/series, serves >7d queries
+//	hourly:  7d window, 2h spacing  ->  84 rows/series, serves 24h-7d queries
+//	minute: 24h window, 15m spacing ->  96 rows/series, serves 2h-24h queries
+//
+// That is 360 rows/series; at the default mock estate (~750 series) the seed
+// stays under ~100MB of SQLite. The raw tier is left to the live mock tick.
+// Mock mode extends hourly/daily retention to 90d (see monitoring.New), so
+// seeded rows outlive their windows. Timestamps sit on the spacing grid, so
+// restarts target the same rows (the store upserts on timestamp+tier) and
+// only the gap since the previous boot is written.
+type mockStoreSeedPlan struct {
+	tier    metrics.Tier
+	window  time.Duration
+	spacing time.Duration
+}
+
+var mockStoreSeedPlans = []mockStoreSeedPlan{
+	{tier: metrics.TierDaily, window: 30 * 24 * time.Hour, spacing: 4 * time.Hour},
+	{tier: metrics.TierHourly, window: 7 * 24 * time.Hour, spacing: 2 * time.Hour},
+	{tier: metrics.TierMinute, window: 24 * time.Hour, spacing: 15 * time.Minute},
+}
+
+const mockStoreSeedBatchSize = 8192
+
+// mockStoreSeedTimestamps returns the spacing-aligned timestamps covering
+// [now-window, now], oldest first.
+func mockStoreSeedTimestamps(now time.Time, window, spacing time.Duration) []time.Time {
+	if window <= 0 || spacing <= 0 {
+		return nil
+	}
+	windowStart := now.Add(-window)
+	start := windowStart.Truncate(spacing)
+	if start.Before(windowStart) {
+		start = start.Add(spacing)
+	}
+	var out []time.Time
+	for ts := start; !ts.After(now); ts = ts.Add(spacing) {
+		out = append(out, ts)
+	}
+	return out
+}
+
+// timestampsAfter returns the suffix of the sorted slice strictly after the
+// given time.
+func timestampsAfter(timestamps []time.Time, after time.Time) []time.Time {
+	idx := sort.Search(len(timestamps), func(i int) bool {
+		return timestamps[i].After(after)
+	})
+	return timestamps[idx:]
 }
 
 // HashSeed produces a deterministic uint64 from the given parts.
@@ -437,35 +501,103 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 	//   2h–24h:    2min intervals  (~660 points)
 	//   24h–90d:   ~65min intervals (~1920 points)
 	seedTimestamps := buildTieredTimestamps(now, seedDuration)
-	const seedBatchSize = 5000
 	numPoints := len(seedTimestamps)
-	var seedBatch []metrics.WriteMetric
-	queueMetric := func(resourceType, resourceID, metricType string, value float64, ts time.Time) {
-		if ms == nil {
+
+	// Store backfill state: aligned timestamps per tier plan (capped by the
+	// seed duration) plus existing coverage so restarts only fill the gap.
+	storeSeedStart := time.Now()
+	storeRows := 0
+	var storePlanTimestamps map[metrics.Tier][]time.Time
+	var storeCoverage map[metrics.Tier]map[metrics.SeriesKey]time.Time
+	var storeBatch []metrics.WriteMetric
+	if ms != nil {
+		storePlanTimestamps = make(map[metrics.Tier][]time.Time, len(mockStoreSeedPlans))
+		storeCoverage = make(map[metrics.Tier]map[metrics.SeriesKey]time.Time, len(mockStoreSeedPlans))
+		for _, plan := range mockStoreSeedPlans {
+			window := plan.window
+			if window > seedDuration {
+				window = seedDuration
+			}
+			storePlanTimestamps[plan.tier] = mockStoreSeedTimestamps(now, window, plan.spacing)
+			coverage, err := ms.MaxTimestampsForTier(plan.tier)
+			if err != nil {
+				log.Warn().Err(err).Str("tier", string(plan.tier)).Msg("mock seeding: failed to read store coverage; reseeding full window")
+				coverage = nil
+			}
+			storeCoverage[plan.tier] = coverage
+		}
+	}
+
+	flushStoreBatch := func() {
+		if ms == nil || len(storeBatch) == 0 {
 			return
 		}
-		seedBatch = append(seedBatch,
-			metrics.WriteMetric{
-				ResourceType: resourceType,
-				ResourceID:   resourceID,
-				MetricType:   metricType,
-				Value:        value,
-				Timestamp:    ts,
-				Tier:         metrics.TierHourly,
-			},
-			metrics.WriteMetric{
-				ResourceType: resourceType,
-				ResourceID:   resourceID,
-				MetricType:   metricType,
-				Value:        value,
-				Timestamp:    ts,
-				Tier:         metrics.TierDaily,
-			},
-		)
+		ms.WriteBatchSync(storeBatch)
+		storeBatch = storeBatch[:0]
+	}
 
-		if len(seedBatch) >= seedBatchSize {
-			ms.WriteBatchSync(seedBatch)
-			seedBatch = seedBatch[:0]
+	queueStorePoint := func(resourceType, resourceID, metricType string, value float64, ts time.Time, tier metrics.Tier) {
+		storeBatch = append(storeBatch, metrics.WriteMetric{
+			ResourceType: resourceType,
+			ResourceID:   resourceID,
+			MetricType:   metricType,
+			Value:        value,
+			Timestamp:    ts,
+			Tier:         tier,
+		})
+		storeRows++
+		if len(storeBatch) >= mockStoreSeedBatchSize {
+			flushStoreBatch()
+		}
+	}
+
+	// seedStoreGapTimestamps returns the plan timestamps still missing for the
+	// series whose coverage is tracked under coverageKey.
+	seedStoreGapTimestamps := func(plan mockStoreSeedPlan, coverageKey metrics.SeriesKey) []time.Time {
+		timestamps := storePlanTimestamps[plan.tier]
+		if len(timestamps) == 0 {
+			return nil
+		}
+		if coverage := storeCoverage[plan.tier]; coverage != nil {
+			if maxTs, ok := coverage[coverageKey]; ok {
+				timestamps = timestampsAfter(timestamps, maxTs)
+			}
+		}
+		return timestamps
+	}
+
+	seedStoreSeries := func(resourceType, resourceID string, metricNames ...string) {
+		if ms == nil || strings.TrimSpace(resourceID) == "" {
+			return
+		}
+		for _, metricType := range metricNames {
+			for _, plan := range mockStoreSeedPlans {
+				coverageKey := metrics.NormalizedSeriesKey(resourceType, resourceID, metricType)
+				for _, ts := range seedStoreGapTimestamps(plan, coverageKey) {
+					queueStorePoint(resourceType, resourceID, metricType, mock.SampleMetric(resourceType, resourceID, metricType, ts), ts, plan.tier)
+				}
+			}
+		}
+	}
+
+	// seedStoreStorageSeries derives the used/avail/total companions from the
+	// sampled usage percentage, mirroring how live storage ticks persist
+	// capacity metrics.
+	seedStoreStorageSeries := func(storageID string, currentTotal float64) {
+		if ms == nil || strings.TrimSpace(storageID) == "" || currentTotal <= 0 {
+			return
+		}
+		for _, plan := range mockStoreSeedPlans {
+			coverageKey := metrics.NormalizedSeriesKey("storage", storageID, "usage")
+			for _, ts := range seedStoreGapTimestamps(plan, coverageKey) {
+				usage := clampFloat(mock.SampleMetric("storage", storageID, "usage", ts), 0, 100)
+				used := currentTotal * (usage / 100.0)
+				avail := math.Max(0, currentTotal-used)
+				queueStorePoint("storage", storageID, "usage", usage, ts, plan.tier)
+				queueStorePoint("storage", storageID, "used", used, ts, plan.tier)
+				queueStorePoint("storage", storageID, "avail", avail, ts, plan.tier)
+				queueStorePoint("storage", storageID, "total", currentTotal, ts, plan.tier)
+			}
 		}
 	}
 	recordStorageTimeline := func(storageID string, currentTotal float64) {
@@ -483,12 +615,8 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			mh.AddStorageMetric(storageID, "used", used, ts)
 			mh.AddStorageMetric(storageID, "avail", avail, ts)
 			mh.AddStorageMetric(storageID, "total", currentTotal, ts)
-			queueMetric("storage", storageID, "usage", usage, ts)
-			queueMetric("storage", storageID, "used", used, ts)
-			queueMetric("storage", storageID, "avail", avail, ts)
-			queueMetric("storage", storageID, "total", currentTotal, ts)
 		}
-
+		seedStoreStorageSeries(storageID, currentTotal)
 	}
 
 	recordNode := func(node models.Node) {
@@ -505,11 +633,8 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			mh.AddNodeMetric(node.ID, "cpu", cpuSeries[i], ts)
 			mh.AddNodeMetric(node.ID, "memory", memSeries[i], ts)
 			mh.AddNodeMetric(node.ID, "disk", diskSeries[i], ts)
-			queueMetric("node", node.ID, "cpu", cpuSeries[i], ts)
-			queueMetric("node", node.ID, "memory", memSeries[i], ts)
-			queueMetric("node", node.ID, "disk", diskSeries[i], ts)
 		}
-
+		seedStoreSeries("node", node.ID, "cpu", "memory", "disk")
 	}
 
 	recordGuest := func(
@@ -560,32 +685,36 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 				mh.AddGuestMetric(metricID, "cpu", cpuSeries[i], ts)
 				mh.AddGuestMetric(metricID, "memory", memSeries[i], ts)
 			}
-			queueMetric(storeType, storeID, "cpu", cpuSeries[i], ts)
-			queueMetric(storeType, storeID, "memory", memSeries[i], ts)
 			if includeDisk {
 				for _, metricID := range uniqueMetricIDs {
 					mh.AddGuestMetric(metricID, "disk", diskSeries[i], ts)
 				}
-				queueMetric(storeType, storeID, "disk", diskSeries[i], ts)
 			}
 			if includeDiskIO {
 				for _, metricID := range uniqueMetricIDs {
 					mh.AddGuestMetric(metricID, "diskread", diskReadSeries[i], ts)
 					mh.AddGuestMetric(metricID, "diskwrite", diskWriteSeries[i], ts)
 				}
-				queueMetric(storeType, storeID, "diskread", diskReadSeries[i], ts)
-				queueMetric(storeType, storeID, "diskwrite", diskWriteSeries[i], ts)
 			}
 			if includeNetwork {
 				for _, metricID := range uniqueMetricIDs {
 					mh.AddGuestMetric(metricID, "netin", netInSeries[i], ts)
 					mh.AddGuestMetric(metricID, "netout", netOutSeries[i], ts)
 				}
-				queueMetric(storeType, storeID, "netin", netInSeries[i], ts)
-				queueMetric(storeType, storeID, "netout", netOutSeries[i], ts)
 			}
 		}
 
+		storeMetrics := []string{"cpu", "memory"}
+		if includeDisk {
+			storeMetrics = append(storeMetrics, "disk")
+		}
+		if includeDiskIO {
+			storeMetrics = append(storeMetrics, "diskread", "diskwrite")
+		}
+		if includeNetwork {
+			storeMetrics = append(storeMetrics, "netin", "netout")
+		}
+		seedStoreSeries(storeType, storeID, storeMetrics...)
 	}
 
 	log.Debug().Int("count", len(state.Nodes)).Msg("mock seeding: processing nodes")
@@ -693,11 +822,8 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			mh.AddDiskMetric(resourceID, "disk", busySeries[i], ts)
 			mh.AddDiskMetric(resourceID, "diskread", diskReadSeries[i], ts)
 			mh.AddDiskMetric(resourceID, "diskwrite", diskWriteSeries[i], ts)
-			queueMetric("disk", resourceID, "smart_temp", tempSeries[i], ts)
-			queueMetric("disk", resourceID, "disk", busySeries[i], ts)
-			queueMetric("disk", resourceID, "diskread", diskReadSeries[i], ts)
-			queueMetric("disk", resourceID, "diskwrite", diskWriteSeries[i], ts)
 		}
+		seedStoreSeries("disk", resourceID, "smart_temp", "disk", "diskread", "diskwrite")
 	}
 
 	log.Debug().Int("count", len(state.PhysicalDisks)).Msg("mock seeding: processing physical disks")
@@ -725,12 +851,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			continue
 		}
 
-		usageSeries := canonicalMetricSeries("ceph", cephID, "usage", seedTimestamps)
-		for i := 0; i < numPoints; i++ {
-			ts := seedTimestamps[i]
-			queueMetric("ceph", cephID, "usage", usageSeries[i], ts)
-		}
-
+		seedStoreSeries("ceph", cephID, "usage")
 	}
 
 	log.Debug().Int("count", len(state.DockerHosts)).Msg("mock seeding: processing docker hosts")
@@ -893,8 +1014,12 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		recordStorageTimeline(sourceID, float64(total))
 	}
 
-	if ms != nil && len(seedBatch) > 0 {
-		ms.WriteBatchSync(seedBatch)
+	flushStoreBatch()
+	if ms != nil {
+		log.Info().
+			Int("rows", storeRows).
+			Dur("took", time.Since(storeSeedStart)).
+			Msg("mock seeding: metrics store backfill completed")
 	}
 	log.Debug().Msg("mock seeding: completed")
 }
@@ -1535,9 +1660,21 @@ func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 		Dur("seedDuration", seedDuration).
 		Dur("sampleInterval", cfg.SampleInterval).
 		Msg("Mock metrics sampler: seeding historical data")
-	// Keep mock trend generation in-memory only so production history in the
-	// persistent metrics store remains untouched while mock mode is active.
-	seedMockMetricsHistory(m.metricsHistory, nil, graph, normalizeMockMetricTimestamp(time.Now(), cfg.SampleInterval), seedDuration, cfg.SampleInterval)
+	// Persist mock history into the metrics store only when the dev harness
+	// opted in via PULSE_MOCK_SEED_METRICS_STORE — scripts/hot-dev.sh and
+	// scripts/toggle-mock.sh set it exactly where they point PULSE_DATA_DIR at
+	// the isolated tmp/mock-data dir. Without the opt-in (e.g. a production
+	// install flipping PULSE_MOCK_MODE on its real data dir) the store may
+	// hold real history, which seeded mock rows must never touch, so trend
+	// generation stays in-memory only.
+	var storeSink *metrics.Store
+	if cfg.SeedStore {
+		storeSink = m.metricsStore
+		if storeSink == nil {
+			log.Warn().Msg("PULSE_MOCK_SEED_METRICS_STORE is set but the metrics store is unavailable; mock report history will stay empty")
+		}
+	}
+	seedMockMetricsHistory(m.metricsHistory, storeSink, graph, normalizeMockMetricTimestamp(time.Now(), cfg.SampleInterval), seedDuration, cfg.SampleInterval)
 	m.invalidateMockChartCaches()
 	m.prewarmMockDashboardChartCaches()
 
@@ -1556,7 +1693,7 @@ func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 				if !mock.IsMockEnabled() {
 					continue
 				}
-				recordMockStateToMetricsHistory(m.metricsHistory, nil, mock.CurrentFixtureGraph(), normalizeMockMetricTimestamp(time.Now(), cfg.SampleInterval))
+				recordMockStateToMetricsHistory(m.metricsHistory, storeSink, mock.CurrentFixtureGraph(), normalizeMockMetricTimestamp(time.Now(), cfg.SampleInterval))
 				m.invalidateMockChartCaches()
 				m.prewarmMockDashboardChartCaches()
 			}
