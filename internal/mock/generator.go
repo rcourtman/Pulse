@@ -2033,8 +2033,8 @@ func generateKubernetesPods(clusterID string, nodes []models.KubernetesNode, cou
 	pods := make([]models.KubernetesPod, 0, count)
 
 	for i := 0; i < count; i++ {
-		namespace := k8sNamespaces[rand.Intn(len(k8sNamespaces))]
-		prefix := k8sPodPrefixes[rand.Intn(len(k8sPodPrefixes))]
+		namespace := k8sNamespaces[mockStableChoice(len(k8sNamespaces), clusterID, fmt.Sprintf("%d", i), "k8s-pod-namespace")]
+		prefix := k8sPodPrefixes[mockStableChoice(len(k8sPodPrefixes), clusterID, fmt.Sprintf("%d", i), "k8s-pod-prefix")]
 		name := fmt.Sprintf("%s-%s-%d", prefix, mockStableHexString(5, clusterID, namespace, prefix, fmt.Sprintf("%d", i), "k8s-pod-name"), i+1)
 		nodeName := ""
 		if len(nodes) > 0 && rand.Float64() > 0.08 {
@@ -2149,8 +2149,8 @@ func generateKubernetesDeployments(clusterID string, count int, now time.Time) [
 
 	deployments := make([]models.KubernetesDeployment, 0, count)
 	for i := 0; i < count; i++ {
-		namespace := k8sNamespaces[rand.Intn(len(k8sNamespaces))]
-		prefix := k8sPodPrefixes[rand.Intn(len(k8sPodPrefixes))]
+		namespace := k8sNamespaces[mockStableChoice(len(k8sNamespaces), clusterID, fmt.Sprintf("%d", i), "k8s-deployment-namespace")]
+		prefix := k8sPodPrefixes[mockStableChoice(len(k8sPodPrefixes), clusterID, fmt.Sprintf("%d", i), "k8s-deployment-prefix")]
 		name := fmt.Sprintf("%s-%s", prefix, mockStableHexString(4, clusterID, namespace, prefix, fmt.Sprintf("%d", i), "k8s-deployment-name"))
 
 		desired := int32(1 + rand.Intn(6))
@@ -2850,10 +2850,10 @@ func generateHosts(config MockConfig) []models.Host {
 	usedNames := make(map[string]struct{}, count)
 
 	for i := 0; i < count; i++ {
-		profile := genericHostProfiles[rand.Intn(len(genericHostProfiles))]
+		profile := genericHostProfiles[mockStableChoice(len(genericHostProfiles), fmt.Sprintf("%d", i), "generic-host-profile")]
 
-		baseName := genericHostPrefixes[rand.Intn(len(genericHostPrefixes))]
-		suffix := 1 + rand.Intn(900)
+		baseName := genericHostPrefixes[mockStableChoice(len(genericHostPrefixes), fmt.Sprintf("%d", i), "generic-host-prefix")]
+		suffix := 1 + mockStableChoice(900, fmt.Sprintf("%d", i), "generic-host-suffix")
 		hostname := fmt.Sprintf("%s-%d", baseName, suffix)
 		for {
 			if _, exists := usedNames[hostname]; !exists {
@@ -4732,7 +4732,7 @@ func generateCephClusters(nodes []models.Node, storage []models.Storage) []model
 			ID:             fmt.Sprintf("%s-ceph", instanceName),
 			Instance:       instanceName,
 			Name:           fmt.Sprintf("%s Ceph", titleCase(instanceName)),
-			FSID:           fmt.Sprintf("00000000-0000-4000-8000-%012d", rand.Int63n(1_000_000_000_000)),
+			FSID:           fmt.Sprintf("00000000-0000-4000-8000-%s", mockStableDecimalString(12, instanceName, "ceph-fsid")),
 			Health:         health,
 			HealthMessage:  healthMessage,
 			TotalBytes:     totalBytes,

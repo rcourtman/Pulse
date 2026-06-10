@@ -1,7 +1,9 @@
 package mock
 
 import (
+	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -637,4 +639,125 @@ func TestBuildFixtureStateInitializesIgnoredInfrastructureSlices(t *testing.T) {
 	if data.RemovedKubernetesClusters == nil {
 		t.Fatal("expected buildFixtureState to initialize RemovedKubernetesClusters")
 	}
+}
+
+// collectFixtureIdentities gathers every identity-bearing ID the fixture
+// graph produces, keyed by category. Metric series resource IDs in the mock
+// metrics store derive from these, so any per-boot churn here orphans stored
+// history and breaks resource continuity across backend restarts.
+func collectFixtureIdentities(graph FixtureGraph) map[string][]string {
+	ids := map[string][]string{}
+	add := func(category, id string) {
+		ids[category] = append(ids[category], id)
+	}
+
+	state := graph.State
+	for _, node := range state.Nodes {
+		add("node", node.ID)
+	}
+	for _, vm := range state.VMs {
+		add("vm", vm.ID)
+	}
+	for _, ct := range state.Containers {
+		add("container", ct.ID)
+	}
+	for _, host := range state.Hosts {
+		add("host", host.ID)
+		add("host-hostname", host.Hostname)
+	}
+	for _, dockerHost := range state.DockerHosts {
+		add("docker-host", dockerHost.ID)
+		for _, c := range dockerHost.Containers {
+			add("docker-container", c.ID)
+		}
+	}
+	for _, cluster := range state.KubernetesClusters {
+		add("k8s-cluster", cluster.ID)
+		for _, node := range cluster.Nodes {
+			add("k8s-node", node.UID)
+		}
+		for _, pod := range cluster.Pods {
+			add("k8s-pod", pod.UID)
+		}
+		for _, deployment := range cluster.Deployments {
+			add("k8s-deployment", deployment.UID)
+		}
+		for _, svc := range cluster.Services {
+			add("k8s-service", svc.UID)
+		}
+	}
+	for _, storage := range state.Storage {
+		add("storage", storage.ID)
+	}
+	for _, ceph := range state.CephClusters {
+		add("ceph-cluster", ceph.ID)
+		add("ceph-fsid", ceph.FSID)
+	}
+	for _, disk := range state.PhysicalDisks {
+		add("physical-disk", disk.ID)
+	}
+
+	for category := range ids {
+		sort.Strings(ids[category])
+	}
+	return ids
+}
+
+// TestFixtureIdentityStableAcrossBoots simulates two backend boots (the
+// package-global rand source is in a different state for each build, exactly
+// as two freshly seeded processes would be) and requires every identity set
+// to match. Guards the generator's "stable IDs" contract end to end.
+func TestFixtureIdentityStableAcrossBoots(t *testing.T) {
+	now := time.Date(2026, time.June, 10, 12, 0, 0, 0, time.UTC)
+
+	first := collectFixtureIdentities(buildFixtureGraph(DefaultConfig, now))
+	second := collectFixtureIdentities(buildFixtureGraph(DefaultConfig, now))
+
+	categories := map[string]struct{}{}
+	for category := range first {
+		categories[category] = struct{}{}
+	}
+	for category := range second {
+		categories[category] = struct{}{}
+	}
+
+	for category := range categories {
+		diff := diffIdentitySets(first[category], second[category])
+		if diff != "" {
+			t.Errorf("%s identities churned across boots:\n%s", category, diff)
+		}
+	}
+}
+
+func diffIdentitySets(first, second []string) string {
+	firstSet := make(map[string]struct{}, len(first))
+	for _, id := range first {
+		firstSet[id] = struct{}{}
+	}
+	secondSet := make(map[string]struct{}, len(second))
+	for _, id := range second {
+		secondSet[id] = struct{}{}
+	}
+
+	var lines []string
+	for _, id := range first {
+		if _, ok := secondSet[id]; !ok {
+			lines = append(lines, fmt.Sprintf("  only in first boot:  %s", id))
+		}
+	}
+	for _, id := range second {
+		if _, ok := firstSet[id]; !ok {
+			lines = append(lines, fmt.Sprintf("  only in second boot: %s", id))
+		}
+	}
+
+	if len(lines) == 0 {
+		return ""
+	}
+	sort.Strings(lines)
+	out := ""
+	for _, line := range lines {
+		out += line + "\n"
+	}
+	return out
 }
