@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"sort"
 	"sync"
 	"time"
 
@@ -312,37 +311,12 @@ func (r *RemediationLog) saveToDisk() error {
 
 // loadFromDisk loads records from JSON file
 func (r *RemediationLog) loadFromDisk() error {
-	if r.dataDir == "" {
-		return nil
-	}
-
-	path, err := memoryPersistencePath(r.dataDir, remediationHistoryFileName)
-	if err != nil {
-		return err
-	}
-	if st, err := os.Stat(path); err == nil {
-		const maxOnDiskBytes = 10 << 20 // 10 MiB safety cap
-		if st.Size() > maxOnDiskBytes {
-			return fmt.Errorf("remediation history file too large (%d bytes)", st.Size())
-		}
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-
-	var records []RemediationRecord
-	if err := json.Unmarshal(data, &records); err != nil {
-		return err
-	}
-
-	// Sort by timestamp
-	sort.Slice(records, func(i, j int) bool {
-		return records[i].Timestamp.Before(records[j].Timestamp)
+	records, ok, err := loadMemoryHistory(r.dataDir, remediationHistoryFileName, "remediation history", func(a, b RemediationRecord) bool {
+		return a.Timestamp.Before(b.Timestamp)
 	})
+	if err != nil || !ok {
+		return err
+	}
 
 	r.records = records
 	r.trimRecords()

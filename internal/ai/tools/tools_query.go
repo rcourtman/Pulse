@@ -2911,6 +2911,188 @@ func canonicalGuestManagedID(resource unifiedresources.Resource) string {
 	return ""
 }
 
+// queryGuestView is the read-state view method subset the guest get/search
+// paths consume; *unifiedresources.VMView and *unifiedresources.ContainerView
+// both satisfy it.
+type queryGuestView interface {
+	ID() string
+	Name() string
+	VMID() int
+	Node() string
+	Instance() string
+	Status() unifiedresources.ResourceStatus
+	CPUPercent() float64
+	CPUs() int
+	MemoryPercent() float64
+	MemoryUsed() int64
+	MemoryTotal() int64
+	Tags() []string
+	IPAddresses() []string
+	LastBackup() time.Time
+}
+
+// addCanonicalGuestSearchMatches appends search matches for canonical guest
+// resources of one kind ("vm" / "system-container"), shared by the
+// resource-search guest arms.
+func addCanonicalGuestSearchMatches(
+	kind string,
+	resources []unifiedresources.Resource,
+	queryLower, statusFilter string,
+	governance *governedQueryMetadataResolver,
+	connectedAgentHostnames map[string]bool,
+	matchesQuery func(query string, candidates ...string) bool,
+	addMatch func(ResourceMatch),
+) {
+	for _, resource := range resources {
+		status := string(resource.Status)
+		if !statusMatchesFilter(status, statusFilter) {
+			continue
+		}
+		candidates := canonicalGuestSearchCandidates(kind, resource)
+		if !matchesQuery(queryLower, candidates...) {
+			continue
+		}
+
+		vmid := 0
+		if resource.Proxmox != nil && resource.Proxmox.VMID > 0 {
+			vmid = resource.Proxmox.VMID
+		}
+		node := canonicalGuestTarget(resource)
+		metadataCandidates := append([]string{resourceDisplayName(resource), resource.ID}, candidates...)
+		addMatch(ResourceMatch{
+			GovernedResourceMetadata: governance.Resolve(metadataCandidates...),
+			Type:                     kind,
+			ID:                       resource.ID,
+			Name:                     resourceDisplayName(resource),
+			Status:                   status,
+			Node:                     node,
+			NodeHasAgent:             connectedAgentHostnames[node],
+			Platform:                 canonicalResourcePlatform(resource),
+			VMID:                     vmid,
+			AgentConnected:           resourceAgentConnected(resource, connectedAgentHostnames),
+		})
+	}
+}
+
+// addGuestViewSearchMatches appends search matches for read-state guest views
+// of one kind, the legacy fallback when no canonical guest resources exist.
+func addGuestViewSearchMatches[V queryGuestView](
+	kind string,
+	guests []V,
+	queryLower, statusFilter string,
+	governance *governedQueryMetadataResolver,
+	connectedAgentHostnames map[string]bool,
+	matchesQuery func(query string, candidates ...string) bool,
+	addMatch func(ResourceMatch),
+) {
+	for _, g := range guests {
+		status := string(g.Status())
+		if !statusMatchesFilter(status, statusFilter) {
+			continue
+		}
+		// Build searchable candidates: name, ID, VMID, canonical type-prefixed VMID, IPs, tags
+		vmidStr := fmt.Sprintf("%d", g.VMID())
+		candidates := []string{g.Name(), g.ID(), vmidStr, kind + vmidStr}
+		candidates = append(candidates, g.IPAddresses()...)
+		candidates = append(candidates, g.Tags()...)
+
+		if !matchesQuery(queryLower, candidates...) {
+			continue
+		}
+		addMatch(ResourceMatch{
+			GovernedResourceMetadata: governance.Resolve(g.Name(), g.ID(), vmidStr),
+			Type:                     kind,
+			ID:                       g.ID(),
+			Name:                     g.Name(),
+			Status:                   status,
+			Node:                     g.Node(),
+			NodeHasAgent:             connectedAgentHostnames[g.Node()],
+			Platform:                 "proxmox",
+			VMID:                     g.VMID(),
+			AgentConnected:           connectedAgentHostnames[g.Name()],
+		})
+	}
+}
+
+// notFoundResourceResult is the shared not-found envelope for resource gets.
+func notFoundResourceResult(kind, resourceID string) CallToolResult {
+	return NewJSONResult(map[string]interface{}{
+		"error":       "not_found",
+		"resource_id": resourceID,
+		"type":        kind,
+	})
+}
+
+// canonicalGuestGetResult resolves a single-guest get against canonical
+// unified resources, registering resolved-context access on a hit.
+func (e *PulseToolExecutor) canonicalGuestGetResult(kind, resourceID string, governance *governedQueryMetadataResolver) (CallToolResult, bool) {
+	resource, ok := findCanonicalGuestResource(e.unifiedResourceProvider, kind, resourceID)
+	if !ok {
+		return CallToolResult{}, false
+	}
+	response := canonicalGuestResponse(kind, resource, governance)
+	if reg, ok := canonicalGuestRegistration(kind, resource); ok {
+		e.registerResolvedResourceWithExplicitAccess(reg)
+	}
+	return NewJSONResult(response), true
+}
+
+// guestViewGetResult resolves a single-guest get against read-state views
+// (VMs or system containers), registering resolved-context access with the
+// guest-exec adapter ("qm" / "pct") on a hit.
+func guestViewGetResult[V queryGuestView](e *PulseToolExecutor, guests []V, kind, adapter, resourceID string, governance *governedQueryMetadataResolver) (CallToolResult, bool) {
+	for _, g := range guests {
+		if fmt.Sprintf("%d", g.VMID()) != resourceID && g.Name() != resourceID && g.ID() != resourceID {
+			continue
+		}
+		used := g.MemoryUsed()
+		total := g.MemoryTotal()
+		response := EmptyResourceResponse()
+		response.GovernedResourceMetadata = governance.Resolve(g.Name(), g.ID(), fmt.Sprintf("%d", g.VMID()))
+		response.Type = kind
+		response.ID = g.ID()
+		response.Name = g.Name()
+		response.Status = string(g.Status())
+		response.Node = g.Node()
+		response.CPU = ResourceCPU{
+			Percent: g.CPUPercent(),
+			Cores:   g.CPUs(),
+		}
+		response.Memory = ResourceMemory{
+			Percent: g.MemoryPercent(),
+			UsedGB:  float64(used) / (1024 * 1024 * 1024),
+			TotalGB: float64(total) / (1024 * 1024 * 1024),
+		}
+		response.Tags = g.Tags()
+		if !g.LastBackup().IsZero() {
+			t := g.LastBackup()
+			response.LastBackup = &t
+		}
+
+		// Register in resolved context WITH explicit access (single-resource get operation)
+		e.registerResolvedResourceWithExplicitAccess(ResourceRegistration{
+			Kind:          kind,
+			ProviderUID:   fmt.Sprintf("%d", g.VMID()), // VMID is the stable provider ID
+			Name:          g.Name(),
+			Aliases:       []string{g.Name(), fmt.Sprintf("%d", g.VMID()), g.ID()},
+			HostUID:       g.Node(),
+			HostName:      g.Node(),
+			VMID:          g.VMID(),
+			Node:          g.Node(),
+			LocationChain: []string{"node:" + g.Node(), kind + ":" + g.Name()},
+			Executors: []ExecutorRegistration{{
+				ExecutorID: g.Node(),
+				Adapter:    adapter,
+				Actions:    guestExecutorActions(),
+				Priority:   10,
+			}},
+		})
+
+		return NewJSONResult(response.NormalizeCollections()), true
+	}
+	return CallToolResult{}, false
+}
+
 func canonicalGuestTarget(resource unifiedresources.Resource) string {
 	if resource.Proxmox != nil {
 		return strings.TrimSpace(resource.Proxmox.NodeName)
@@ -4662,128 +4844,22 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 		}), nil
 
 	case "vm":
-		if resource, ok := findCanonicalGuestResource(e.unifiedResourceProvider, "vm", resourceID); ok {
-			response := canonicalGuestResponse("vm", resource, governance)
-			if reg, ok := canonicalGuestRegistration("vm", resource); ok {
-				e.registerResolvedResourceWithExplicitAccess(reg)
-			}
-			return NewJSONResult(response), nil
+		if result, ok := e.canonicalGuestGetResult("vm", resourceID, governance); ok {
+			return result, nil
 		}
-		for _, vm := range rs.VMs() {
-			if fmt.Sprintf("%d", vm.VMID()) == resourceID || vm.Name() == resourceID || vm.ID() == resourceID {
-				used := vm.MemoryUsed()
-				total := vm.MemoryTotal()
-				response := EmptyResourceResponse()
-				response.GovernedResourceMetadata = governance.Resolve(vm.Name(), vm.ID(), fmt.Sprintf("%d", vm.VMID()))
-				response.Type = "vm"
-				response.ID = vm.ID()
-				response.Name = vm.Name()
-				response.Status = string(vm.Status())
-				response.Node = vm.Node()
-				response.CPU = ResourceCPU{
-					Percent: vm.CPUPercent(),
-					Cores:   vm.CPUs(),
-				}
-				response.Memory = ResourceMemory{
-					Percent: vm.MemoryPercent(),
-					UsedGB:  float64(used) / (1024 * 1024 * 1024),
-					TotalGB: float64(total) / (1024 * 1024 * 1024),
-				}
-				response.Tags = vm.Tags()
-				if !vm.LastBackup().IsZero() {
-					t := vm.LastBackup()
-					response.LastBackup = &t
-				}
-
-				// Register in resolved context WITH explicit access (single-resource get operation)
-				e.registerResolvedResourceWithExplicitAccess(ResourceRegistration{
-					Kind:          "vm",
-					ProviderUID:   fmt.Sprintf("%d", vm.VMID()), // VMID is the stable provider ID
-					Name:          vm.Name(),
-					Aliases:       []string{vm.Name(), fmt.Sprintf("%d", vm.VMID()), vm.ID()},
-					HostUID:       vm.Node(),
-					HostName:      vm.Node(),
-					VMID:          vm.VMID(),
-					Node:          vm.Node(),
-					LocationChain: []string{"node:" + vm.Node(), "vm:" + vm.Name()},
-					Executors: []ExecutorRegistration{{
-						ExecutorID: vm.Node(),
-						Adapter:    "qm",
-						Actions:    guestExecutorActions(),
-						Priority:   10,
-					}},
-				})
-
-				return NewJSONResult(response.NormalizeCollections()), nil
-			}
+		if result, ok := guestViewGetResult(e, rs.VMs(), "vm", "qm", resourceID, governance); ok {
+			return result, nil
 		}
-		return NewJSONResult(map[string]interface{}{
-			"error":       "not_found",
-			"resource_id": resourceID,
-			"type":        "vm",
-		}), nil
+		return notFoundResourceResult("vm", resourceID), nil
 
 	case "system-container":
-		if resource, ok := findCanonicalGuestResource(e.unifiedResourceProvider, "system-container", resourceID); ok {
-			response := canonicalGuestResponse("system-container", resource, governance)
-			if reg, ok := canonicalGuestRegistration("system-container", resource); ok {
-				e.registerResolvedResourceWithExplicitAccess(reg)
-			}
-			return NewJSONResult(response), nil
+		if result, ok := e.canonicalGuestGetResult("system-container", resourceID, governance); ok {
+			return result, nil
 		}
-		for _, ct := range rs.Containers() {
-			if fmt.Sprintf("%d", ct.VMID()) == resourceID || ct.Name() == resourceID || ct.ID() == resourceID {
-				used := ct.MemoryUsed()
-				total := ct.MemoryTotal()
-				response := EmptyResourceResponse()
-				response.GovernedResourceMetadata = governance.Resolve(ct.Name(), ct.ID(), fmt.Sprintf("%d", ct.VMID()))
-				response.Type = "system-container"
-				response.ID = ct.ID()
-				response.Name = ct.Name()
-				response.Status = string(ct.Status())
-				response.Node = ct.Node()
-				response.CPU = ResourceCPU{
-					Percent: ct.CPUPercent(),
-					Cores:   ct.CPUs(),
-				}
-				response.Memory = ResourceMemory{
-					Percent: ct.MemoryPercent(),
-					UsedGB:  float64(used) / (1024 * 1024 * 1024),
-					TotalGB: float64(total) / (1024 * 1024 * 1024),
-				}
-				response.Tags = ct.Tags()
-				if !ct.LastBackup().IsZero() {
-					t := ct.LastBackup()
-					response.LastBackup = &t
-				}
-
-				// Register in resolved context WITH explicit access (single-resource get operation)
-				e.registerResolvedResourceWithExplicitAccess(ResourceRegistration{
-					Kind:          "system-container",
-					ProviderUID:   fmt.Sprintf("%d", ct.VMID()), // VMID is the stable provider ID
-					Name:          ct.Name(),
-					Aliases:       []string{ct.Name(), fmt.Sprintf("%d", ct.VMID()), ct.ID()},
-					HostUID:       ct.Node(),
-					HostName:      ct.Node(),
-					VMID:          ct.VMID(),
-					Node:          ct.Node(),
-					LocationChain: []string{"node:" + ct.Node(), "system-container:" + ct.Name()},
-					Executors: []ExecutorRegistration{{
-						ExecutorID: ct.Node(),
-						Adapter:    "pct",
-						Actions:    guestExecutorActions(),
-						Priority:   10,
-					}},
-				})
-
-				return NewJSONResult(response.NormalizeCollections()), nil
-			}
+		if result, ok := guestViewGetResult(e, rs.Containers(), "system-container", "pct", resourceID, governance); ok {
+			return result, nil
 		}
-		return NewJSONResult(map[string]interface{}{
-			"error":       "not_found",
-			"resource_id": resourceID,
-			"type":        "system-container",
-		}), nil
+		return notFoundResourceResult("system-container", resourceID), nil
 
 	case "app-container":
 		if resource, containerID, ok := findCanonicalAppContainerResource(e.unifiedResourceProvider, resourceID); ok {
@@ -5543,123 +5619,15 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 	}
 
 	if (typeFilter == "" || typeFilter == "vm") && len(vmResources) > 0 {
-		for _, resource := range vmResources {
-			status := string(resource.Status)
-			if !statusMatchesFilter(status, statusFilter) {
-				continue
-			}
-			candidates := canonicalGuestSearchCandidates("vm", resource)
-			if !matchesQuery(queryLower, candidates...) {
-				continue
-			}
-
-			vmid := 0
-			if resource.Proxmox != nil && resource.Proxmox.VMID > 0 {
-				vmid = resource.Proxmox.VMID
-			}
-			node := canonicalGuestTarget(resource)
-			metadataCandidates := append([]string{resourceDisplayName(resource), resource.ID}, candidates...)
-			addMatch(ResourceMatch{
-				GovernedResourceMetadata: governance.Resolve(metadataCandidates...),
-				Type:                     "vm",
-				ID:                       resource.ID,
-				Name:                     resourceDisplayName(resource),
-				Status:                   status,
-				Node:                     node,
-				NodeHasAgent:             connectedAgentHostnames[node],
-				Platform:                 canonicalResourcePlatform(resource),
-				VMID:                     vmid,
-				AgentConnected:           resourceAgentConnected(resource, connectedAgentHostnames),
-			})
-		}
+		addCanonicalGuestSearchMatches("vm", vmResources, queryLower, statusFilter, governance, connectedAgentHostnames, matchesQuery, addMatch)
 	} else if typeFilter == "" || typeFilter == "vm" {
-		for _, vm := range rs.VMs() {
-			status := string(vm.Status())
-			if !statusMatchesFilter(status, statusFilter) {
-				continue
-			}
-			// Build searchable candidates: name, ID, VMID, canonical type-prefixed VMID, IPs, tags
-			vmidStr := fmt.Sprintf("%d", vm.VMID())
-			candidates := []string{vm.Name(), vm.ID(), vmidStr, "vm" + vmidStr}
-			candidates = append(candidates, vm.IPAddresses()...)
-			candidates = append(candidates, vm.Tags()...)
-
-			if !matchesQuery(queryLower, candidates...) {
-				continue
-			}
-			addMatch(ResourceMatch{
-				GovernedResourceMetadata: governance.Resolve(vm.Name(), vm.ID(), vmidStr),
-				Type:                     "vm",
-				ID:                       vm.ID(),
-				Name:                     vm.Name(),
-				Status:                   status,
-				Node:                     vm.Node(),
-				NodeHasAgent:             connectedAgentHostnames[vm.Node()],
-				Platform:                 "proxmox",
-				VMID:                     vm.VMID(),
-				AgentConnected:           connectedAgentHostnames[vm.Name()],
-			})
-		}
+		addGuestViewSearchMatches("vm", rs.VMs(), queryLower, statusFilter, governance, connectedAgentHostnames, matchesQuery, addMatch)
 	}
 
 	if (typeFilter == "" || typeFilter == "system-container") && len(systemContainerResources) > 0 {
-		for _, resource := range systemContainerResources {
-			status := string(resource.Status)
-			if !statusMatchesFilter(status, statusFilter) {
-				continue
-			}
-			candidates := canonicalGuestSearchCandidates("system-container", resource)
-			if !matchesQuery(queryLower, candidates...) {
-				continue
-			}
-
-			vmid := 0
-			if resource.Proxmox != nil && resource.Proxmox.VMID > 0 {
-				vmid = resource.Proxmox.VMID
-			}
-			node := canonicalGuestTarget(resource)
-			metadataCandidates := append([]string{resourceDisplayName(resource), resource.ID}, candidates...)
-			addMatch(ResourceMatch{
-				GovernedResourceMetadata: governance.Resolve(metadataCandidates...),
-				Type:                     "system-container",
-				ID:                       resource.ID,
-				Name:                     resourceDisplayName(resource),
-				Status:                   status,
-				Node:                     node,
-				NodeHasAgent:             connectedAgentHostnames[node],
-				Platform:                 canonicalResourcePlatform(resource),
-				VMID:                     vmid,
-				AgentConnected:           resourceAgentConnected(resource, connectedAgentHostnames),
-			})
-		}
+		addCanonicalGuestSearchMatches("system-container", systemContainerResources, queryLower, statusFilter, governance, connectedAgentHostnames, matchesQuery, addMatch)
 	} else if typeFilter == "" || typeFilter == "system-container" {
-		for _, ct := range rs.Containers() {
-			status := string(ct.Status())
-			if !statusMatchesFilter(status, statusFilter) {
-				continue
-			}
-			// Build searchable candidates: name, ID, VMID, canonical type-prefixed VMID, IPs, tags
-			vmidStr := fmt.Sprintf("%d", ct.VMID())
-			candidates := []string{ct.Name(), ct.ID(), vmidStr, "system-container" + vmidStr}
-			candidates = append(candidates, ct.IPAddresses()...)
-			candidates = append(candidates, ct.Tags()...)
-
-			if !matchesQuery(queryLower, candidates...) {
-				continue
-			}
-			addMatch(ResourceMatch{
-				GovernedResourceMetadata: governance.Resolve(ct.Name(), ct.ID(), vmidStr),
-				Type:                     "system-container",
-				ID:                       ct.ID(),
-				Name:                     ct.Name(),
-				Status:                   status,
-				Node:                     ct.Node(),
-				NodeHasAgent:             connectedAgentHostnames[ct.Node()],
-				Platform:                 "proxmox",
-				VMID:                     ct.VMID(),
-				AgentConnected:           connectedAgentHostnames[ct.Name()],
-			})
-		}
+		addGuestViewSearchMatches("system-container", rs.Containers(), queryLower, statusFilter, governance, connectedAgentHostnames, matchesQuery, addMatch)
 	}
 
 	if typeFilter == "" || typeFilter == "docker-host" {

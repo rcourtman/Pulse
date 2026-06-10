@@ -598,109 +598,69 @@ func (e *PulseToolExecutor) executeKubernetesScale(ctx context.Context, args map
 	return NewTextResult(fmt.Sprintf("kubectl command failed (exit code %d):\n%s", result.ExitCode, output)), nil
 }
 
+// kubernetesResourceAction captures how the namespaced kubectl actions
+// (deployment restart, pod delete) diverge inside the shared
+// approval/audit/execution pipeline. The kubectl command text doubles as the
+// approval command, so command construction must stay stable per action.
+type kubernetesResourceAction struct {
+	argKey         string // resource argument name: "deployment" / "pod"
+	kindLabel      string // approval target kind segment: "deployment" / "pod"
+	approvalAction string // formatKubernetesApprovalNeeded action: "restart" / "delete_pod"
+	command        func(namespace, name string) string
+	approvalDetail func(name string) string
+	auditDetail    func(name string) string
+	successMessage func(name, namespace, output string) string
+}
+
 // executeKubernetesRestart restarts a deployment via rollout restart
 func (e *PulseToolExecutor) executeKubernetesRestart(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
-	clusterArg, _ := args["cluster"].(string)
-	namespace, _ := args["namespace"].(string)
-	deployment, _ := args["deployment"].(string)
-	approvalID, _ := args["_approval_id"].(string)
-	approvalID = strings.TrimSpace(approvalID)
-
-	if clusterArg == "" {
-		return NewErrorResult(fmt.Errorf("cluster is required")), nil
-	}
-	if deployment == "" {
-		return NewErrorResult(fmt.Errorf("deployment is required")), nil
-	}
-	if namespace == "" {
-		namespace = "default"
-	}
-
-	// Validate identifiers
-	if err := validateKubernetesResourceID(namespace); err != nil {
-		return NewErrorResult(fmt.Errorf("invalid namespace: %w", err)), nil
-	}
-	if err := validateKubernetesResourceID(deployment); err != nil {
-		return NewErrorResult(fmt.Errorf("invalid deployment: %w", err)), nil
-	}
-
-	// Check control level
-	if e.controlLevel == ControlLevelReadOnly {
-		return NewTextResult("Kubernetes control operations are not available in read-only mode."), nil
-	}
-
-	agentID, cluster, err := e.findAgentForKubernetesCluster(clusterArg)
-	if err != nil {
-		return NewTextResult(err.Error()), nil
-	}
-
-	// Build command
-	command := fmt.Sprintf("kubectl -n %s rollout restart deployment/%s", shellEscape(namespace), shellEscape(deployment))
-	clusterScope := cluster.ID
-	if clusterScope == "" {
-		clusterScope = clusterArg
-	}
-	approvalTargetID := fmt.Sprintf("%s:%s:deployment:%s", clusterScope, namespace, deployment)
-
-	// Check if pre-approved (validated + single-use).
-	preApproved := consumeApprovalWithValidation(args, e.orgID, command, "kubernetes", approvalTargetID)
-	requiresApproval := !e.isAutonomous && e.controlLevel == ControlLevelControlled
-
-	// Request approval if needed
-	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
-		displayName := cluster.DisplayName
-		approvalID := e.createApprovalRecord(command, "kubernetes", approvalTargetID, displayName, fmt.Sprintf("Restart deployment %s", deployment))
-		return NewTextResult(formatKubernetesApprovalNeeded("restart", deployment, namespace, displayName, command, approvalID)), nil
-	}
-
-	if e.agentServer == nil {
-		return NewErrorResult(fmt.Errorf("no agent server available")), nil
-	}
-
-	result, err := e.executeCommandWithAudit(
-		ctx,
-		"pulse_kubernetes",
-		fmt.Sprintf("%s:%s:deployment:%s", clusterScope, namespace, deployment),
-		approvalID,
-		requiresApproval,
-		agentID,
-		agentexec.ExecuteCommandPayload{
-			Command:    command,
-			TargetType: "agent",
-			TargetID:   "",
+	return e.executeKubernetesResourceAction(ctx, args, kubernetesResourceAction{
+		argKey:         "deployment",
+		kindLabel:      "deployment",
+		approvalAction: "restart",
+		command: func(namespace, name string) string {
+			return fmt.Sprintf("kubectl -n %s rollout restart deployment/%s", shellEscape(namespace), shellEscape(name))
 		},
-		"pulse_kubernetes",
-		fmt.Sprintf("restart deployment %s", deployment),
-	)
-	if err != nil {
-		return NewErrorResult(fmt.Errorf("failed to execute kubectl: %w", err)), nil
-	}
-
-	output := result.Stdout
-	if result.Stderr != "" {
-		output += "\n" + result.Stderr
-	}
-
-	if result.ExitCode == 0 {
-		return NewTextResult(fmt.Sprintf("✓ Successfully initiated rollout restart for deployment '%s' in namespace '%s'. Action complete - pods will restart gradually.\n%s", deployment, namespace, output)), nil
-	}
-
-	return NewTextResult(fmt.Sprintf("kubectl command failed (exit code %d):\n%s", result.ExitCode, output)), nil
+		approvalDetail: func(name string) string { return fmt.Sprintf("Restart deployment %s", name) },
+		auditDetail:    func(name string) string { return fmt.Sprintf("restart deployment %s", name) },
+		successMessage: func(name, namespace, output string) string {
+			return fmt.Sprintf("✓ Successfully initiated rollout restart for deployment '%s' in namespace '%s'. Action complete - pods will restart gradually.\n%s", name, namespace, output)
+		},
+	})
 }
 
 // executeKubernetesDeletePod deletes a pod
 func (e *PulseToolExecutor) executeKubernetesDeletePod(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
+	return e.executeKubernetesResourceAction(ctx, args, kubernetesResourceAction{
+		argKey:         "pod",
+		kindLabel:      "pod",
+		approvalAction: "delete_pod",
+		command: func(namespace, name string) string {
+			return fmt.Sprintf("kubectl -n %s delete pod %s", shellEscape(namespace), shellEscape(name))
+		},
+		approvalDetail: func(name string) string { return fmt.Sprintf("Delete pod %s", name) },
+		auditDetail:    func(name string) string { return fmt.Sprintf("delete pod %s", name) },
+		successMessage: func(name, namespace, output string) string {
+			return fmt.Sprintf("✓ Successfully deleted pod '%s' in namespace '%s'. If managed by a controller, a new pod will be created.\n%s", name, namespace, output)
+		},
+	})
+}
+
+// executeKubernetesResourceAction runs the shared namespaced kubectl action
+// pipeline: argument validation, control-level gating, cluster agent
+// resolution, approval gating, and audited execution.
+func (e *PulseToolExecutor) executeKubernetesResourceAction(ctx context.Context, args map[string]interface{}, spec kubernetesResourceAction) (CallToolResult, error) {
 	clusterArg, _ := args["cluster"].(string)
 	namespace, _ := args["namespace"].(string)
-	pod, _ := args["pod"].(string)
+	name, _ := args[spec.argKey].(string)
 	approvalID, _ := args["_approval_id"].(string)
 	approvalID = strings.TrimSpace(approvalID)
 
 	if clusterArg == "" {
 		return NewErrorResult(fmt.Errorf("cluster is required")), nil
 	}
-	if pod == "" {
-		return NewErrorResult(fmt.Errorf("pod is required")), nil
+	if name == "" {
+		return NewErrorResult(fmt.Errorf("%s is required", spec.argKey)), nil
 	}
 	if namespace == "" {
 		namespace = "default"
@@ -710,8 +670,8 @@ func (e *PulseToolExecutor) executeKubernetesDeletePod(ctx context.Context, args
 	if err := validateKubernetesResourceID(namespace); err != nil {
 		return NewErrorResult(fmt.Errorf("invalid namespace: %w", err)), nil
 	}
-	if err := validateKubernetesResourceID(pod); err != nil {
-		return NewErrorResult(fmt.Errorf("invalid pod: %w", err)), nil
+	if err := validateKubernetesResourceID(name); err != nil {
+		return NewErrorResult(fmt.Errorf("invalid %s: %w", spec.argKey, err)), nil
 	}
 
 	// Check control level
@@ -725,12 +685,12 @@ func (e *PulseToolExecutor) executeKubernetesDeletePod(ctx context.Context, args
 	}
 
 	// Build command
-	command := fmt.Sprintf("kubectl -n %s delete pod %s", shellEscape(namespace), shellEscape(pod))
+	command := spec.command(namespace, name)
 	clusterScope := cluster.ID
 	if clusterScope == "" {
 		clusterScope = clusterArg
 	}
-	approvalTargetID := fmt.Sprintf("%s:%s:pod:%s", clusterScope, namespace, pod)
+	approvalTargetID := fmt.Sprintf("%s:%s:%s:%s", clusterScope, namespace, spec.kindLabel, name)
 
 	// Check if pre-approved (validated + single-use).
 	preApproved := consumeApprovalWithValidation(args, e.orgID, command, "kubernetes", approvalTargetID)
@@ -739,8 +699,8 @@ func (e *PulseToolExecutor) executeKubernetesDeletePod(ctx context.Context, args
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
 		displayName := cluster.DisplayName
-		approvalID := e.createApprovalRecord(command, "kubernetes", approvalTargetID, displayName, fmt.Sprintf("Delete pod %s", pod))
-		return NewTextResult(formatKubernetesApprovalNeeded("delete_pod", pod, namespace, displayName, command, approvalID)), nil
+		approvalID := e.createApprovalRecord(command, "kubernetes", approvalTargetID, displayName, spec.approvalDetail(name))
+		return NewTextResult(formatKubernetesApprovalNeeded(spec.approvalAction, name, namespace, displayName, command, approvalID)), nil
 	}
 
 	if e.agentServer == nil {
@@ -750,7 +710,7 @@ func (e *PulseToolExecutor) executeKubernetesDeletePod(ctx context.Context, args
 	result, err := e.executeCommandWithAudit(
 		ctx,
 		"pulse_kubernetes",
-		fmt.Sprintf("%s:%s:pod:%s", clusterScope, namespace, pod),
+		approvalTargetID,
 		approvalID,
 		requiresApproval,
 		agentID,
@@ -760,7 +720,7 @@ func (e *PulseToolExecutor) executeKubernetesDeletePod(ctx context.Context, args
 			TargetID:   "",
 		},
 		"pulse_kubernetes",
-		fmt.Sprintf("delete pod %s", pod),
+		spec.auditDetail(name),
 	)
 	if err != nil {
 		return NewErrorResult(fmt.Errorf("failed to execute kubectl: %w", err)), nil
@@ -772,7 +732,7 @@ func (e *PulseToolExecutor) executeKubernetesDeletePod(ctx context.Context, args
 	}
 
 	if result.ExitCode == 0 {
-		return NewTextResult(fmt.Sprintf("✓ Successfully deleted pod '%s' in namespace '%s'. If managed by a controller, a new pod will be created.\n%s", pod, namespace, output)), nil
+		return NewTextResult(spec.successMessage(name, namespace, output)), nil
 	}
 
 	return NewTextResult(fmt.Sprintf("kubectl command failed (exit code %d):\n%s", result.ExitCode, output)), nil

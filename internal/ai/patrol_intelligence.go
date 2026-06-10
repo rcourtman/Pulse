@@ -183,6 +183,20 @@ func (p *PatrolService) gatherGuestIntelligence(ctx context.Context) map[string]
 	return intel
 }
 
+// patrolGuestView is the read-state view method subset patrol intelligence
+// consumes from VMs and system containers.
+type patrolGuestView interface {
+	Template() bool
+	Name() string
+	VMID() int
+	Node() string
+	Instance() string
+	SourceID() string
+	ID() string
+	Status() unifiedresources.ResourceStatus
+	IPAddresses() []string
+}
+
 // gatherGuestsFromReadState iterates VMs and Containers via ReadState typed views.
 // Keys are SourceID() (the legacy guest ID like "qemu/100") for compatibility with
 // downstream consumers (scope matching, triage, finding dedup). Status checks use
@@ -193,28 +207,43 @@ func gatherGuestsFromReadState(
 	intel map[string]*GuestIntelligence,
 	nodeGuests map[string][]guestIPInfo,
 ) {
-	for _, vm := range rs.VMs() {
-		if vm.Template() {
+	gatherGuestIntelligenceFromViews(rs.VMs(), "vm", servicediscovery.ResourceTypeVM, discoveryIndex, intel, nodeGuests)
+	gatherGuestIntelligenceFromViews(rs.Containers(), "system-container", servicediscovery.ResourceTypeSystemContainer, discoveryIndex, intel, nodeGuests)
+}
+
+// gatherGuestIntelligenceFromViews collects per-guest intelligence for one
+// guest family (VMs or system containers), resolving discovery metadata by
+// node first and instance second.
+func gatherGuestIntelligenceFromViews[V patrolGuestView](
+	guests []V,
+	guestType string,
+	discoveryResourceType servicediscovery.ResourceType,
+	discoveryIndex map[discoveryKey]*servicediscovery.ResourceDiscovery,
+	intel map[string]*GuestIntelligence,
+	nodeGuests map[string][]guestIPInfo,
+) {
+	for _, g := range guests {
+		if g.Template() {
 			continue
 		}
 		gi := &GuestIntelligence{
-			Name:      vm.Name(),
-			GuestType: "vm",
+			Name:      g.Name(),
+			GuestType: guestType,
 		}
 
-		vmidStr := strconv.Itoa(vm.VMID())
+		vmidStr := strconv.Itoa(g.VMID())
 		if d, ok := discoveryIndex[discoveryKey{
-			resourceType: servicediscovery.ResourceTypeVM,
-			targetID:     vm.Node(),
+			resourceType: discoveryResourceType,
+			targetID:     g.Node(),
 			resourceID:   vmidStr,
 		}]; ok {
 			gi.ServiceName = d.ServiceName
 			gi.ServiceType = d.ServiceType
 		}
-		if gi.ServiceName == "" && vm.Instance() != "" && vm.Instance() != vm.Node() {
+		if gi.ServiceName == "" && g.Instance() != "" && g.Instance() != g.Node() {
 			if d, ok := discoveryIndex[discoveryKey{
-				resourceType: servicediscovery.ResourceTypeVM,
-				targetID:     vm.Instance(),
+				resourceType: discoveryResourceType,
+				targetID:     g.Instance(),
 				resourceID:   vmidStr,
 			}]; ok {
 				gi.ServiceName = d.ServiceName
@@ -225,60 +254,15 @@ func gatherGuestsFromReadState(
 		// Use SourceID (legacy guest ID like "qemu/100") as the map key
 		// to stay compatible with downstream consumers. Fall back to
 		// unified ID() if SourceID is empty (defensive).
-		sourceID := vm.SourceID()
+		sourceID := g.SourceID()
 		if sourceID == "" {
-			sourceID = vm.ID()
+			sourceID = g.ID()
 		}
 		intel[sourceID] = gi
 
-		if vm.Status() == unifiedresources.StatusOnline && len(vm.IPAddresses()) > 0 {
-			for _, ip := range vm.IPAddresses() {
-				nodeGuests[vm.Node()] = append(nodeGuests[vm.Node()], guestIPInfo{
-					guestID: sourceID,
-					ip:      ip,
-				})
-			}
-		}
-	}
-
-	for _, ct := range rs.Containers() {
-		if ct.Template() {
-			continue
-		}
-		gi := &GuestIntelligence{
-			Name:      ct.Name(),
-			GuestType: "system-container",
-		}
-
-		vmidStr := strconv.Itoa(ct.VMID())
-		if d, ok := discoveryIndex[discoveryKey{
-			resourceType: servicediscovery.ResourceTypeSystemContainer,
-			targetID:     ct.Node(),
-			resourceID:   vmidStr,
-		}]; ok {
-			gi.ServiceName = d.ServiceName
-			gi.ServiceType = d.ServiceType
-		}
-		if gi.ServiceName == "" && ct.Instance() != "" && ct.Instance() != ct.Node() {
-			if d, ok := discoveryIndex[discoveryKey{
-				resourceType: servicediscovery.ResourceTypeSystemContainer,
-				targetID:     ct.Instance(),
-				resourceID:   vmidStr,
-			}]; ok {
-				gi.ServiceName = d.ServiceName
-				gi.ServiceType = d.ServiceType
-			}
-		}
-
-		sourceID := ct.SourceID()
-		if sourceID == "" {
-			sourceID = ct.ID()
-		}
-		intel[sourceID] = gi
-
-		if ct.Status() == unifiedresources.StatusOnline && len(ct.IPAddresses()) > 0 {
-			for _, ip := range ct.IPAddresses() {
-				nodeGuests[ct.Node()] = append(nodeGuests[ct.Node()], guestIPInfo{
+		if g.Status() == unifiedresources.StatusOnline && len(g.IPAddresses()) > 0 {
+			for _, ip := range g.IPAddresses() {
+				nodeGuests[g.Node()] = append(nodeGuests[g.Node()], guestIPInfo{
 					guestID: sourceID,
 					ip:      ip,
 				})

@@ -150,7 +150,12 @@ type FindingLifecycleEvent struct {
 
 const maxFindingLifecycleEvents = 50
 
-// Finding represents an AI-discovered insight about infrastructure
+// Finding represents an AI-discovered insight about infrastructure.
+// findingJSON deliberately mirrors this struct field-for-field
+// (marshal-mirror pattern); merging them would change the public literal API.
+// TestFindingJSONMirrorStaysInSync enforces the mirror.
+//
+//nolint:dupl // deliberate marshal-mirror twin of findingJSON
 type Finding struct {
 	ID           string          `json:"id"`
 	Key          string          `json:"key,omitempty"` // Stable issue key for runbook matching
@@ -215,6 +220,12 @@ type Finding struct {
 	LastRegressionAt       *time.Time                       `json:"last_regression_at,omitempty"`       // Timestamp of most recent regression
 }
 
+// findingJSON is the marshal mirror of Finding: identical fields, but
+// AlertIdentifier round-trips as "alert_identifier" in persistence while the
+// public struct hides it from generic encoders with `json:"-"`. The mirror is
+// enforced by TestFindingJSONMirrorStaysInSync.
+//
+//nolint:dupl // deliberate marshal-mirror twin of Finding
 type findingJSON struct {
 	ID                         string                           `json:"id"`
 	Key                        string                           `json:"key,omitempty"`

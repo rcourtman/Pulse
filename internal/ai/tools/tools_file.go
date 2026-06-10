@@ -230,161 +230,49 @@ func (e *PulseToolExecutor) executeFileRead(ctx context.Context, path, targetHos
 	return NewJSONResult(response), nil
 }
 
+// fileMutationSpec captures how the append and write actions diverge inside
+// the shared file-mutation pipeline. Approval command/detail strings must stay
+// stable: pre-approval consumption matches on the exact command text.
+type fileMutationSpec struct {
+	action          string // response/validation verb: "append" / "write"
+	approvalCommand string // exact approval command text
+	approvalDetail  string // human approval description
+	redirect        string // shell redirect: ">>" / ">"
+	failureVerb     string // error wrap: "append to file" / "write file"
+	auditDetail     string // audit log description
+	verify          func(ctx context.Context, routing CommandRoutingResult, path, dockerContainer, content string) map[string]interface{}
+}
+
 // executeFileAppend appends content to a file
 func (e *PulseToolExecutor) executeFileAppend(ctx context.Context, path, content, targetHost, dockerContainer string, args map[string]interface{}) (CallToolResult, error) {
-	if e.agentServer == nil {
-		return NewErrorResult(fmt.Errorf("no agent server available")), nil
-	}
-	approvalID, _ := args["_approval_id"].(string)
-	approvalID = strings.TrimSpace(approvalID)
-
-	if blocked, reason := safety.IsSensitivePath(path); blocked {
-		return NewToolResponseResult(NewToolBlockedError(
-			"SENSITIVE_PATH",
-			fmt.Sprintf("Refusing to write sensitive path '%s' (%s).", path, reason),
-			map[string]interface{}{
-				"path":            path,
-				"reason":          reason,
-				"policy_boundary": "Credential files cannot be modified through AI tools.",
-			},
-		)), nil
-	}
-
-	// Validate routing context - block if targeting a host node when child resources exist
-	// This prevents accidentally writing files to the host when user meant to write to an container/VM
-	routingResult := e.validateRoutingContext(targetHost)
-	if routingResult.IsBlocked() {
-		return NewToolResponseResult(routingResult.RoutingError.ToToolResponse()), nil
-	}
-
-	// Validate resource is in resolved context (write operation)
-	// With PULSE_STRICT_RESOLUTION=true, this blocks execution on undiscovered resources
-	validation := e.validateResolvedResource(targetHost, "append", true)
-	if validation.IsBlocked() {
-		// Hard validation failure - return consistent error envelope
-		return NewToolResponseResult(validation.StrictError.ToToolResponse()), nil
-	}
-	// Soft validation warnings are logged inside validateResolvedResource
-
-	// Use full routing resolution - includes provenance for debugging
-	routing := e.resolveTargetForCommandFull(targetHost)
-	if routing.AgentID == "" {
-		if routing.TargetType == "container" || routing.TargetType == "vm" {
-			return NewTextResult(fmt.Sprintf("'%s' is a %s but no agent is available on its host node. Install Pulse Unified Agent on the node.", targetHost, routing.TargetType)), nil
-		}
-		return NewTextResult(fmt.Sprintf("No agent found for host '%s'. Check that the hostname is correct and an agent is connected.", targetHost)), nil
-	}
-
-	// INVARIANT: If the target resolves to a child resource (container/VM), writes MUST execute
-	// inside that context via pct_exec/qm_guest_exec. No silent node fallback.
-	if err := e.validateWriteExecutionContext(targetHost, routing); err != nil {
-		return NewToolResponseResult(err.ToToolResponse()), nil
-	}
-
-	approvalCommand := fmt.Sprintf("Append to file: %s", path)
-	approvalTargetID := fmt.Sprintf("host=%s|container=%s|path=%s", targetHost, dockerContainer, path)
-
-	// Check if pre-approved (validated + single-use).
-	preApproved := consumeApprovalWithValidation(args, e.orgID, approvalCommand, "file", approvalTargetID)
-	requiresApproval := !e.isAutonomous && e.controlLevel == ControlLevelControlled
-
-	// Skip approval checks if pre-approved or in autonomous mode
-	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
-		target := targetHost
-		if dockerContainer != "" {
-			target = fmt.Sprintf("%s (container: %s)", targetHost, dockerContainer)
-		}
-		approvalID := e.createApprovalRecord(
-			approvalCommand,
-			"file",
-			approvalTargetID,
-			target,
-			fmt.Sprintf("Append %d bytes to %s", len(content), path),
-		)
-		return NewTextResult(formatFileApprovalNeeded(path, target, "append", len(content), approvalID)), nil
-	}
-
-	// Use base64 encoding to safely transfer content
-	encoded := base64.StdEncoding.EncodeToString([]byte(content))
-	var command string
-	if dockerContainer != "" {
-		// Append inside Docker container - escape the full inner command to avoid nested quote breakage.
-		innerCommand := fmt.Sprintf("echo %s | base64 -d >> %s", shellEscape(encoded), shellEscape(path))
-		command = fmt.Sprintf("docker exec %s sh -c %s", shellEscape(dockerContainer), shellEscape(innerCommand))
-	} else {
-		// For host/container/VM targets - agent handles sh -c wrapping for container/VM
-		command = fmt.Sprintf("echo %s | base64 -d >> %s", shellEscape(encoded), shellEscape(path))
-	}
-
-	result, err := e.executeCommandWithAudit(
-		ctx,
-		"pulse_file_edit",
-		func() string {
-			if dockerContainer != "" {
-				return fmt.Sprintf("%s:%s:%s", targetHost, dockerContainer, path)
-			}
-			return fmt.Sprintf("%s:%s", targetHost, path)
-		}(),
-		approvalID,
-		requiresApproval,
-		routing.AgentID,
-		agentexec.ExecuteCommandPayload{
-			Command:    command,
-			TargetType: routing.TargetType,
-			TargetID:   routing.TargetID,
-		},
-		"pulse_file_edit",
-		fmt.Sprintf("append %d bytes to %s", len(content), path),
-	)
-	if err != nil {
-		return NewErrorResult(fmt.Errorf("failed to append to file: %w", err)), nil
-	}
-
-	if result.ExitCode != 0 {
-		errMsg := result.Stderr
-		if errMsg == "" {
-			errMsg = result.Stdout
-		}
-		if dockerContainer != "" {
-			response := map[string]interface{}{
-				"success":   false,
-				"action":    "append",
-				"path":      path,
-				"host":      targetHost,
-				"exit_code": result.ExitCode,
-				"error":     errMsg,
-			}
-			setContainerResponseFields(response, dockerContainer)
-			return NewJSONResultWithIsError(response, true), nil
-		}
-		return NewJSONResultWithIsError(map[string]interface{}{
-			"success":   false,
-			"action":    "append",
-			"path":      path,
-			"host":      targetHost,
-			"exit_code": result.ExitCode,
-			"error":     errMsg,
-		}, true), nil
-	}
-
-	verify := e.verifyFileTailHash(ctx, routing, path, dockerContainer, content)
-
-	response := map[string]interface{}{
-		"success":       true,
-		"action":        "append",
-		"path":          path,
-		"host":          targetHost,
-		"bytes_written": len(content),
-		"verification":  verify,
-	}
-	setContainerResponseFields(response, dockerContainer)
-	// Include execution provenance for observability
-	response["execution"] = buildExecutionProvenance(targetHost, routing)
-	return NewJSONResult(response), nil
+	return e.executeFileMutation(ctx, path, content, targetHost, dockerContainer, args, fileMutationSpec{
+		action:          "append",
+		approvalCommand: fmt.Sprintf("Append to file: %s", path),
+		approvalDetail:  fmt.Sprintf("Append %d bytes to %s", len(content), path),
+		redirect:        ">>",
+		failureVerb:     "append to file",
+		auditDetail:     fmt.Sprintf("append %d bytes to %s", len(content), path),
+		verify:          e.verifyFileTailHash,
+	})
 }
 
 // executeFileWrite writes content to a file (overwrites)
 func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content, targetHost, dockerContainer string, args map[string]interface{}) (CallToolResult, error) {
+	return e.executeFileMutation(ctx, path, content, targetHost, dockerContainer, args, fileMutationSpec{
+		action:          "write",
+		approvalCommand: fmt.Sprintf("Write file: %s", path),
+		approvalDetail:  fmt.Sprintf("Write %d bytes to %s", len(content), path),
+		redirect:        ">",
+		failureVerb:     "write file",
+		auditDetail:     fmt.Sprintf("write %d bytes to %s", len(content), path),
+		verify:          e.verifyFileSHA256,
+	})
+}
+
+// executeFileMutation runs the shared append/write pipeline: sensitive-path
+// blocking, routing + resolved-resource validation, approval gating, base64
+// transfer, audited execution, and post-write verification.
+func (e *PulseToolExecutor) executeFileMutation(ctx context.Context, path, content, targetHost, dockerContainer string, args map[string]interface{}, spec fileMutationSpec) (CallToolResult, error) {
 	if e.agentServer == nil {
 		return NewErrorResult(fmt.Errorf("no agent server available")), nil
 	}
@@ -412,7 +300,7 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 
 	// Validate resource is in resolved context (write operation)
 	// With PULSE_STRICT_RESOLUTION=true, this blocks execution on undiscovered resources
-	validation := e.validateResolvedResource(targetHost, "write", true)
+	validation := e.validateResolvedResource(targetHost, spec.action, true)
 	if validation.IsBlocked() {
 		// Hard validation failure - return consistent error envelope
 		return NewToolResponseResult(validation.StrictError.ToToolResponse()), nil
@@ -434,11 +322,10 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 		return NewToolResponseResult(err.ToToolResponse()), nil
 	}
 
-	approvalCommand := fmt.Sprintf("Write file: %s", path)
 	approvalTargetID := fmt.Sprintf("host=%s|container=%s|path=%s", targetHost, dockerContainer, path)
 
 	// Check if pre-approved (validated + single-use).
-	preApproved := consumeApprovalWithValidation(args, e.orgID, approvalCommand, "file", approvalTargetID)
+	preApproved := consumeApprovalWithValidation(args, e.orgID, spec.approvalCommand, "file", approvalTargetID)
 	requiresApproval := !e.isAutonomous && e.controlLevel == ControlLevelControlled
 
 	// Skip approval checks if pre-approved or in autonomous mode
@@ -448,25 +335,25 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 			target = fmt.Sprintf("%s (container: %s)", targetHost, dockerContainer)
 		}
 		approvalID := e.createApprovalRecord(
-			approvalCommand,
+			spec.approvalCommand,
 			"file",
 			approvalTargetID,
 			target,
-			fmt.Sprintf("Write %d bytes to %s", len(content), path),
+			spec.approvalDetail,
 		)
-		return NewTextResult(formatFileApprovalNeeded(path, target, "write", len(content), approvalID)), nil
+		return NewTextResult(formatFileApprovalNeeded(path, target, spec.action, len(content), approvalID)), nil
 	}
 
 	// Use base64 encoding to safely transfer content
 	encoded := base64.StdEncoding.EncodeToString([]byte(content))
 	var command string
 	if dockerContainer != "" {
-		// Write inside Docker container - escape the full inner command to avoid nested quote breakage.
-		innerCommand := fmt.Sprintf("echo %s | base64 -d > %s", shellEscape(encoded), shellEscape(path))
+		// Mutate inside Docker container - escape the full inner command to avoid nested quote breakage.
+		innerCommand := fmt.Sprintf("echo %s | base64 -d %s %s", shellEscape(encoded), spec.redirect, shellEscape(path))
 		command = fmt.Sprintf("docker exec %s sh -c %s", shellEscape(dockerContainer), shellEscape(innerCommand))
 	} else {
 		// For host/container/VM targets - agent handles sh -c wrapping for container/VM
-		command = fmt.Sprintf("echo %s | base64 -d > %s", shellEscape(encoded), shellEscape(path))
+		command = fmt.Sprintf("echo %s | base64 -d %s %s", shellEscape(encoded), spec.redirect, shellEscape(path))
 	}
 
 	result, err := e.executeCommandWithAudit(
@@ -487,10 +374,10 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 			TargetID:   routing.TargetID,
 		},
 		"pulse_file_edit",
-		fmt.Sprintf("write %d bytes to %s", len(content), path),
+		spec.auditDetail,
 	)
 	if err != nil {
-		return NewErrorResult(fmt.Errorf("failed to write file: %w", err)), nil
+		return NewErrorResult(fmt.Errorf("failed to %s: %w", spec.failureVerb, err)), nil
 	}
 
 	if result.ExitCode != 0 {
@@ -498,33 +385,23 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 		if errMsg == "" {
 			errMsg = result.Stdout
 		}
-		if dockerContainer != "" {
-			response := map[string]interface{}{
-				"success":   false,
-				"action":    "write",
-				"path":      path,
-				"host":      targetHost,
-				"exit_code": result.ExitCode,
-				"error":     errMsg,
-			}
-			setContainerResponseFields(response, dockerContainer)
-			return NewJSONResultWithIsError(response, true), nil
-		}
-		return NewJSONResultWithIsError(map[string]interface{}{
+		response := map[string]interface{}{
 			"success":   false,
-			"action":    "write",
+			"action":    spec.action,
 			"path":      path,
 			"host":      targetHost,
 			"exit_code": result.ExitCode,
 			"error":     errMsg,
-		}, true), nil
+		}
+		setContainerResponseFields(response, dockerContainer)
+		return NewJSONResultWithIsError(response, true), nil
 	}
 
-	verify := e.verifyFileSHA256(ctx, routing, path, dockerContainer, content)
+	verify := spec.verify(ctx, routing, path, dockerContainer, content)
 
 	response := map[string]interface{}{
 		"success":       true,
-		"action":        "write",
+		"action":        spec.action,
 		"path":          path,
 		"host":          targetHost,
 		"bytes_written": len(content),

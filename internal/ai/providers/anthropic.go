@@ -139,11 +139,14 @@ type anthropicErrorDetail struct {
 	Message string `json:"message"`
 }
 
-// Chat sends a chat request to the Anthropic API
-func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
-	// Convert messages to Anthropic format
-	messages := make([]anthropicMessage, 0, len(req.Messages))
-	for _, m := range req.Messages {
+// convertMessagesToAnthropic converts provider-neutral chat messages into
+// Anthropic-format messages: system messages are dropped (Anthropic carries
+// the system prompt as a top-level field), tool results become user
+// tool_result content blocks, and assistant tool calls become tool_use
+// blocks. Shared by the API-key and OAuth clients.
+func convertMessagesToAnthropic(reqMessages []Message) ([]anthropicMessage, error) {
+	messages := make([]anthropicMessage, 0, len(reqMessages))
+	for _, m := range reqMessages {
 		// Anthropic doesn't use "system" role in messages array
 		if m.Role == "system" {
 			continue
@@ -199,6 +202,16 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 			Role:    m.Role,
 			Content: m.Content,
 		})
+	}
+	return messages, nil
+}
+
+// Chat sends a chat request to the Anthropic API
+func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
+	// Convert messages to Anthropic format
+	messages, err := convertMessagesToAnthropic(req.Messages)
+	if err != nil {
+		return nil, err
 	}
 
 	// Use provided model or fall back to client default

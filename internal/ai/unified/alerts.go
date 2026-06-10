@@ -66,7 +66,12 @@ type UnifiedFindingLifecycleEvent struct {
 }
 
 // UnifiedFinding represents a unified finding that can originate from
-// threshold alerts, AI analysis, or other detection methods
+// threshold alerts, AI analysis, or other detection methods.
+// unifiedFindingJSON deliberately mirrors this struct field-for-field
+// (marshal-mirror pattern); merging them would change the public literal API.
+// TestUnifiedFindingJSONMirrorStaysInSync enforces the mirror.
+//
+//nolint:dupl // deliberate marshal-mirror twin of unifiedFindingJSON
 type UnifiedFinding struct {
 	ID                         string          `json:"id"`
 	Source                     FindingSource   `json:"source"`
@@ -136,6 +141,12 @@ type UnifiedFinding struct {
 	RemindAt *time.Time `json:"remind_at,omitempty"`
 }
 
+// unifiedFindingJSON is the marshal mirror of UnifiedFinding: identical
+// fields, but AlertIdentifier round-trips as "alert_identifier" in
+// persistence while the public struct hides it with `json:"-"`. The mirror is
+// enforced by TestUnifiedFindingJSONMirrorStaysInSync.
+//
+//nolint:dupl // deliberate marshal-mirror twin of UnifiedFinding
 type unifiedFindingJSON struct {
 	ID                         string                           `json:"id"`
 	Source                     FindingSource                    `json:"source"`

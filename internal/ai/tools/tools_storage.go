@@ -1547,6 +1547,100 @@ func toolHostLabel(host *unifiedresources.HostView) string {
 	return toolHostTargetID(host)
 }
 
+// guestDiskView is the read-state view method subset the disk-summary path
+// consumes; *unifiedresources.VMView and *unifiedresources.ContainerView both
+// satisfy it.
+type guestDiskView interface {
+	comparable
+	ID() string
+	SourceID() string
+	Name() string
+	VMID() int
+	Node() string
+	Instance() string
+	Disks() []unifiedresources.DiskInfo
+}
+
+// appendGuestDiskSummaries appends per-guest disk summaries for one guest
+// family (VMs or system containers), applying the shared resource/instance/
+// min-usage filters and usage derivation.
+func appendGuestDiskSummaries[V guestDiskView](resources []ResourceDisksSummary, guests []V, kind, resourceFilter, instanceFilter string, minUsage float64) []ResourceDisksSummary {
+	var zero V
+	for _, g := range guests {
+		if g == zero {
+			continue
+		}
+
+		guestVMID := g.VMID()
+		guestVMIDStr := strconv.Itoa(guestVMID)
+		guestSourceID := strings.TrimSpace(g.SourceID())
+		if guestSourceID == "" {
+			guestSourceID = g.ID()
+		}
+
+		// Apply filters
+		if resourceFilter != "" && guestSourceID != resourceFilter && guestVMIDStr != resourceFilter {
+			continue
+		}
+		if instanceFilter != "" && g.Instance() != instanceFilter {
+			continue
+		}
+
+		guestDisks := g.Disks()
+		// Skip guests without disk data
+		if len(guestDisks) == 0 {
+			continue
+		}
+
+		var disks []ResourceDiskInfo
+		maxUsage := 0.0
+
+		for _, disk := range guestDisks {
+			usage := disk.Usage
+			if usage <= 0 && disk.Total > 0 {
+				usage = (float64(disk.Used) / float64(disk.Total)) * 100
+			}
+			if usage <= 0 && disk.Used > 0 {
+				usage = 100
+			}
+
+			if usage > maxUsage {
+				maxUsage = usage
+			}
+
+			disks = append(disks, ResourceDiskInfo{
+				Device:     disk.Device,
+				Mountpoint: disk.Mountpoint,
+				Type:       disk.Filesystem,
+				TotalBytes: disk.Total,
+				UsedBytes:  disk.Used,
+				FreeBytes:  disk.Free,
+				Usage:      usage,
+			})
+		}
+
+		// Apply min_usage filter
+		if minUsage > 0 && maxUsage < minUsage {
+			continue
+		}
+
+		if disks == nil {
+			disks = []ResourceDiskInfo{}
+		}
+
+		resources = append(resources, ResourceDisksSummary{
+			ID:       guestSourceID,
+			VMID:     guestVMID,
+			Name:     g.Name(),
+			Type:     kind,
+			Node:     g.Node(),
+			Instance: g.Instance(),
+			Disks:    disks,
+		})
+	}
+	return resources
+}
+
 func (e *PulseToolExecutor) executeGetResourceDisks(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
 	rs, err := e.readStateForControl()
 	if err != nil {
@@ -1567,154 +1661,12 @@ func (e *PulseToolExecutor) executeGetResourceDisks(_ context.Context, args map[
 
 	// Process VMs
 	if typeFilter == "" || typeFilter == "vm" {
-		for _, vm := range rs.VMs() {
-			if vm == nil {
-				continue
-			}
-
-			vmID := vm.VMID()
-			vmIDStr := strconv.Itoa(vmID)
-			vmSourceID := strings.TrimSpace(vm.SourceID())
-			if vmSourceID == "" {
-				vmSourceID = vm.ID()
-			}
-
-			// Apply filters
-			if resourceFilter != "" && vmSourceID != resourceFilter && vmIDStr != resourceFilter {
-				continue
-			}
-			if instanceFilter != "" && vm.Instance() != instanceFilter {
-				continue
-			}
-
-			vmDisks := vm.Disks()
-			// Skip VMs without disk data
-			if len(vmDisks) == 0 {
-				continue
-			}
-
-			var disks []ResourceDiskInfo
-			maxUsage := 0.0
-
-			for _, disk := range vmDisks {
-				usage := disk.Usage
-				if usage <= 0 && disk.Total > 0 {
-					usage = (float64(disk.Used) / float64(disk.Total)) * 100
-				}
-				if usage <= 0 && disk.Used > 0 {
-					usage = 100
-				}
-
-				if usage > maxUsage {
-					maxUsage = usage
-				}
-
-				disks = append(disks, ResourceDiskInfo{
-					Device:     disk.Device,
-					Mountpoint: disk.Mountpoint,
-					Type:       disk.Filesystem,
-					TotalBytes: disk.Total,
-					UsedBytes:  disk.Used,
-					FreeBytes:  disk.Free,
-					Usage:      usage,
-				})
-			}
-
-			// Apply min_usage filter
-			if minUsage > 0 && maxUsage < minUsage {
-				continue
-			}
-
-			if disks == nil {
-				disks = []ResourceDiskInfo{}
-			}
-
-			resources = append(resources, ResourceDisksSummary{
-				ID:       vmSourceID,
-				VMID:     vmID,
-				Name:     vm.Name(),
-				Type:     "vm",
-				Node:     vm.Node(),
-				Instance: vm.Instance(),
-				Disks:    disks,
-			})
-		}
+		resources = appendGuestDiskSummaries(resources, rs.VMs(), "vm", resourceFilter, instanceFilter, minUsage)
 	}
 
 	// Process containers
 	if typeFilter == "" || typeFilter == "system-container" {
-		for _, ct := range rs.Containers() {
-			if ct == nil {
-				continue
-			}
-
-			ctID := ct.VMID()
-			ctIDStr := strconv.Itoa(ctID)
-			ctSourceID := strings.TrimSpace(ct.SourceID())
-			if ctSourceID == "" {
-				ctSourceID = ct.ID()
-			}
-
-			// Apply filters
-			if resourceFilter != "" && ctSourceID != resourceFilter && ctIDStr != resourceFilter {
-				continue
-			}
-			if instanceFilter != "" && ct.Instance() != instanceFilter {
-				continue
-			}
-
-			ctDisks := ct.Disks()
-			// Skip containers without disk data
-			if len(ctDisks) == 0 {
-				continue
-			}
-
-			var disks []ResourceDiskInfo
-			maxUsage := 0.0
-
-			for _, disk := range ctDisks {
-				usage := disk.Usage
-				if usage <= 0 && disk.Total > 0 {
-					usage = (float64(disk.Used) / float64(disk.Total)) * 100
-				}
-				if usage <= 0 && disk.Used > 0 {
-					usage = 100
-				}
-
-				if usage > maxUsage {
-					maxUsage = usage
-				}
-
-				disks = append(disks, ResourceDiskInfo{
-					Device:     disk.Device,
-					Mountpoint: disk.Mountpoint,
-					Type:       disk.Filesystem,
-					TotalBytes: disk.Total,
-					UsedBytes:  disk.Used,
-					FreeBytes:  disk.Free,
-					Usage:      usage,
-				})
-			}
-
-			// Apply min_usage filter
-			if minUsage > 0 && maxUsage < minUsage {
-				continue
-			}
-
-			if disks == nil {
-				disks = []ResourceDiskInfo{}
-			}
-
-			resources = append(resources, ResourceDisksSummary{
-				ID:       ctSourceID,
-				VMID:     ctID,
-				Name:     ct.Name(),
-				Type:     "system-container",
-				Node:     ct.Node(),
-				Instance: ct.Instance(),
-				Disks:    disks,
-			})
-		}
+		resources = appendGuestDiskSummaries(resources, rs.Containers(), "system-container", resourceFilter, instanceFilter, minUsage)
 	}
 
 	if resources == nil {

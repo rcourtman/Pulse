@@ -5,9 +5,7 @@ package memory
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -338,37 +336,12 @@ func (d *ChangeDetector) saveToDisk() error {
 
 // loadFromDisk loads changes from JSON file
 func (d *ChangeDetector) loadFromDisk() error {
-	if d.dataDir == "" {
-		return nil
-	}
-
-	path, err := memoryPersistencePath(d.dataDir, changeHistoryFileName)
-	if err != nil {
-		return err
-	}
-	if st, err := os.Stat(path); err == nil {
-		const maxOnDiskBytes = 10 << 20 // 10 MiB safety cap
-		if st.Size() > maxOnDiskBytes {
-			return fmt.Errorf("change history file too large (%d bytes)", st.Size())
-		}
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-
-	var changes []Change
-	if err := json.Unmarshal(data, &changes); err != nil {
-		return err
-	}
-
-	// Sort by time
-	sort.Slice(changes, func(i, j int) bool {
-		return changes[i].DetectedAt.Before(changes[j].DetectedAt)
+	changes, ok, err := loadMemoryHistory(d.dataDir, changeHistoryFileName, "change history", func(a, b Change) bool {
+		return a.DetectedAt.Before(b.DetectedAt)
 	})
+	if err != nil || !ok {
+		return err
+	}
 
 	d.changes = changes
 	d.trimChanges()

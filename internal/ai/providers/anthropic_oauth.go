@@ -402,58 +402,9 @@ func (c *AnthropicOAuthClient) Chat(ctx context.Context, req ChatRequest) (*Chat
 	}
 
 	// Convert messages to Anthropic format (same as regular client)
-	messages := make([]anthropicMessage, 0, len(req.Messages))
-	for _, m := range req.Messages {
-		if m.Role == "system" {
-			continue
-		}
-
-		if m.ToolResult != nil {
-			contentJSON, err := json.Marshal(m.ToolResult.Content)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal tool result content for %s: %w", m.ToolResult.ToolUseID, err)
-			}
-			messages = append(messages, anthropicMessage{
-				Role: "user",
-				Content: []anthropicContent{
-					{
-						Type:      "tool_result",
-						ToolUseID: m.ToolResult.ToolUseID,
-						Content:   contentJSON,
-						IsError:   m.ToolResult.IsError,
-					},
-				},
-			})
-			continue
-		}
-
-		if m.Role == "assistant" && len(m.ToolCalls) > 0 {
-			contentBlocks := make([]anthropicContent, 0)
-			if m.Content != "" {
-				contentBlocks = append(contentBlocks, anthropicContent{
-					Type: "text",
-					Text: m.Content,
-				})
-			}
-			for _, tc := range m.ToolCalls {
-				contentBlocks = append(contentBlocks, anthropicContent{
-					Type:  "tool_use",
-					ID:    tc.ID,
-					Name:  tc.Name,
-					Input: tc.Input,
-				})
-			}
-			messages = append(messages, anthropicMessage{
-				Role:    "assistant",
-				Content: contentBlocks,
-			})
-			continue
-		}
-
-		messages = append(messages, anthropicMessage{
-			Role:    m.Role,
-			Content: m.Content,
-		})
+	messages, err := convertMessagesToAnthropic(req.Messages)
+	if err != nil {
+		return nil, err
 	}
 
 	model := req.Model

@@ -55,6 +55,32 @@ leave the transcript without exposing hidden provider/tool metadata.
 
 ## Extension Points
 
+Guest-family AI runtime code paths (VMs and LXC system containers) share
+generic helpers instead of per-family copies. Patrol guest intelligence
+gathers both families through `gatherGuestIntelligenceFromViews` in
+`internal/ai/patrol_intelligence.go`; the Assistant query tool resolves
+single-guest gets through `canonicalGuestGetResult` / `guestViewGetResult`
+and search matches through `addCanonicalGuestSearchMatches` /
+`addGuestViewSearchMatches` in `internal/ai/tools/tools_query.go`; per-guest
+disk summaries flow through `appendGuestDiskSummaries` in
+`internal/ai/tools/tools_storage.go`. A new guest family extends those
+helpers (their view-constraint interfaces name the read-state methods they
+need) rather than re-rolling a parallel loop. The same shape applies to
+mutating tool pipelines: file append/write share `executeFileMutation`
+driven by `fileMutationSpec` (`internal/ai/tools/tools_file.go`), and
+namespaced kubectl actions share `executeKubernetesResourceAction` driven by
+`kubernetesResourceAction` (`internal/ai/tools/tools_kubernetes.go`) — new
+file or kubectl actions add a spec, keeping approval-command text stable,
+instead of duplicating the approval/audit pipeline. Anthropic message
+conversion is shared by the API-key and OAuth clients through
+`convertMessagesToAnthropic` (`internal/ai/providers/anthropic.go`), and AI
+memory history files load through the generic `loadMemoryHistory`
+(`internal/ai/memory/paths.go`). `Finding`/`findingJSON` and
+`UnifiedFinding`/`unifiedFindingJSON` are deliberate marshal-mirror twins —
+do not merge them; the mirror invariants are enforced by
+`TestFindingJSONMirrorStaysInSync` and
+`TestUnifiedFindingJSONMirrorStaysInSync`.
+
 Assistant frontend presentation changes under
 `frontend-modern/src/components/AI/Chat/` must keep live tool activity aligned
 with OpenCode's mutable tool-part pattern without losing Pulse's operator audit
