@@ -806,3 +806,50 @@ func TestResourceFromKubernetesDeployment_NilMetricsOutsideMockMode(t *testing.T
 		t.Fatalf("expected nil Metrics outside mock mode (no canonical aggregation yet), got %+v", resource.Metrics)
 	}
 }
+
+func TestNamespacedKubernetesResourceScaffold(t *testing.T) {
+	lastSeen := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	cluster := models.KubernetesCluster{ID: "cluster-3", Name: "prod", LastSeen: lastSeen}
+	labels := map[string]string{"app": "ingest"}
+	data := baseKubernetesData(cluster, "prod", "Job", nil)
+	data.Namespace = "pipelines"
+
+	resource, identity := namespacedKubernetesResource(cluster, "prod", "pipelines", "nightly", ResourceTypeK8sJob, StatusOnline, data, labels)
+
+	if resource.Type != ResourceTypeK8sJob {
+		t.Fatalf("type = %q, want %q", resource.Type, ResourceTypeK8sJob)
+	}
+	if resource.Technology != "kubernetes" {
+		t.Fatalf("technology = %q, want kubernetes", resource.Technology)
+	}
+	if resource.Name != "nightly" {
+		t.Fatalf("name = %q, want nightly", resource.Name)
+	}
+	if resource.Status != StatusOnline {
+		t.Fatalf("status = %q, want %q", resource.Status, StatusOnline)
+	}
+	if !resource.LastSeen.Equal(lastSeen) {
+		t.Fatalf("lastSeen = %s, want cluster lastSeen %s", resource.LastSeen, lastSeen)
+	}
+	if resource.UpdatedAt.IsZero() {
+		t.Fatal("expected UpdatedAt to be stamped")
+	}
+	if resource.Kubernetes == nil || resource.Kubernetes.Namespace != "pipelines" {
+		t.Fatalf("expected Kubernetes facet with namespace, got %+v", resource.Kubernetes)
+	}
+	if len(resource.Tags) == 0 {
+		t.Fatal("expected label-derived tags on the scaffold")
+	}
+	wantHostnames := []string{"nightly", "pipelines/nightly", "prod:nightly"}
+	if len(identity.Hostnames) != len(wantHostnames) {
+		t.Fatalf("identity hostnames = %v, want %v", identity.Hostnames, wantHostnames)
+	}
+	for i, want := range wantHostnames {
+		if identity.Hostnames[i] != want {
+			t.Fatalf("identity hostnames[%d] = %q, want %q", i, identity.Hostnames[i], want)
+		}
+	}
+	if identity.ClusterName != "prod" {
+		t.Fatalf("identity clusterName = %q, want prod", identity.ClusterName)
+	}
+}

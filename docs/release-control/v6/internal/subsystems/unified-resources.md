@@ -500,6 +500,17 @@ AI-only summary payloads, or page-local heuristics.
    `mockmode.IsEnabled()` and scales with the deployment's
    ready/desired/available replica state so degraded deployments read as
    elevated pressure on the surviving replicas.
+   Namespaced Kubernetes adapters share one Resource scaffold: a new
+   namespaced kind populates its kind-specific `K8sData` fields (after
+   `baseKubernetesData`) and delegates Resource assembly and identity to
+   `namespacedKubernetesResource(cluster, clusterName, namespace, name,
+   resourceType, status, data, labels)` in
+   `internal/unifiedresources/adapters.go` instead of hand-rolling the
+   `Resource{...}` literal plus `namespacedKubernetesIdentity` return.
+   The scaffold owns `Technology: "kubernetes"`, `LastSeen` from the
+   cluster, `UpdatedAt`, the `Kubernetes` facet pointer, and label-derived
+   tags; only cluster-scoped or non-namespaced kinds (cluster, node, PV,
+   StorageClass, namespace itself) keep bespoke identity construction.
 5. Add platform registry, resolution, host-dedup, or monitored-system
    projection behavior through `internal/unifiedresources/registry.go`,
    `internal/unifiedresources/resolve.go`,
