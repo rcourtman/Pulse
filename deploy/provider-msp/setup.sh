@@ -297,6 +297,42 @@ ensure_generated_secrets() {
   chmod 0600 "${env_path}"
 }
 
+# derive_lease_signing_public_key prints the base64 Ed25519 public key for
+# CP_TRIAL_ACTIVATION_PRIVATE_KEY. The provider MSP license must bind this
+# exact key (entitlement_signing_public_key) or the control plane will refuse
+# to start; include it when requesting your license. The private key never
+# leaves this host.
+derive_lease_signing_public_key() {
+  local env_path="${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env"
+  [[ -f "${env_path}" ]] || die "missing ${env_path}"
+  have openssl || die "openssl is required to derive the lease signing public key"
+
+  local key_b64 key_len tmp_der
+  key_b64="$(env_value CP_TRIAL_ACTIVATION_PRIVATE_KEY "${env_path}")"
+  [[ -n "${key_b64}" ]] || die "CP_TRIAL_ACTIVATION_PRIVATE_KEY is not set; run setup.sh first"
+  key_len="$(printf '%s' "${key_b64}" | base64 -d 2>/dev/null | wc -c | tr -d ' ')"
+  case "${key_len}" in
+    64)
+      # 64-byte Ed25519 private key: the public key is the trailing 32 bytes.
+      printf '%s' "${key_b64}" | base64 -d | tail -c 32 | base64 | tr -d '\n'
+      ;;
+    32)
+      # 32-byte seed: wrap in a PKCS#8 DER envelope and let openssl derive
+      # the public key (raw key = trailing 32 bytes of the SPKI DER).
+      tmp_der="$(mktemp)"
+      {
+        printf '\x30\x2e\x02\x01\x00\x30\x05\x06\x03\x2b\x65\x70\x04\x22\x04\x20'
+        printf '%s' "${key_b64}" | base64 -d
+      } >"${tmp_der}"
+      openssl pkey -inform DER -in "${tmp_der}" -pubout -outform DER 2>/dev/null | tail -c 32 | base64 | tr -d '\n'
+      rm -f "${tmp_der}"
+      ;;
+    *)
+      die "CP_TRIAL_ACTIVATION_PRIVATE_KEY must decode to a 32-byte seed or 64-byte Ed25519 key (got ${key_len} bytes)"
+      ;;
+  esac
+}
+
 truthy() {
   case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
     true|1|yes|on) return 0 ;;
@@ -454,7 +490,13 @@ validate_env_file() {
   if [[ "${license_file}" != /* ]]; then
     license_file="${PULSE_PROVIDER_MSP_INSTALL_DIR}/${license_file}"
   fi
-  [[ -f "${license_file}" ]] || die "CP_PROVIDER_MSP_LICENSE_FILE does not exist: ${license_file}"
+  if [[ ! -f "${license_file}" ]]; then
+    die "CP_PROVIDER_MSP_LICENSE_FILE does not exist: ${license_file}
+Request your provider MSP license with this lease signing public key
+(./setup.sh --print-lease-signing-public-key):
+  $(derive_lease_signing_public_key)
+The license must bind this key or the control plane will refuse to start."
+  fi
 }
 
 validate_compose_config() {
@@ -521,11 +563,23 @@ Proof:
 Portal:
   https://${domain}/
 
+Lease signing public key (your provider MSP license must bind this key;
+re-print any time with ./setup.sh --print-lease-signing-public-key):
+  $(derive_lease_signing_public_key)
+
 EOF
 }
 
 main() {
   need_root
+
+  if [[ "${1:-}" == "--print-lease-signing-public-key" ]]; then
+    ensure_env_file
+    ensure_generated_secrets
+    derive_lease_signing_public_key
+    printf '\n'
+    exit 0
+  fi
 
   log "starting provider MSP first-time setup"
   apt_install apt-transport-https

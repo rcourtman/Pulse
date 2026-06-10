@@ -11,8 +11,23 @@ alert routing, and reporting. It assumes you have read
 runtime per client workspace. Alerts, webhook destinations, branded report
 settings, users, audit history, and metrics stay inside the client runtime;
 duplicate hostnames across clients never collide because they never share a
-runtime namespace. The stack is operated with the `pulse-control-plane`
-binary:
+runtime namespace.
+
+The canonical install is the deploy bundle at
+[`deploy/provider-msp/`](../deploy/provider-msp/): a Docker Compose stack
+(Traefik ingress with wildcard TLS, a hardened Docker socket proxy, and the
+control plane), a guided `setup.sh` for fresh hosts, `upgrade.sh` for
+backup-gated upgrades, and `run-install-proof.sh` for an end-to-end fresh
+install proof. `.env.example` in that directory doubles as the operator
+runbook. Start there rather than wiring containers by hand; among other
+things the compose stack provides the `pulse.provider-msp.role=traefik` and
+`pulse.provider-msp.role=control-plane` container labels that client
+workspace provisioning requires for isolated tenant networking, and it
+terminates TLS — the management portal sets a `__Host-` (HTTPS-only) session
+cookie, so the portal does not work over plain HTTP.
+
+Day-2 operations run through the `pulse-control-plane` binary (via
+`docker compose run --rm control-plane …` in the bundle):
 
 ```bash
 pulse-control-plane provider-msp bootstrap --account-name "Your MSP" --owner-email you@example.com
@@ -162,3 +177,26 @@ are carried on the licence key. MSP plans are sized by client workspace count
 (Starter 5, Growth 15, Scale 40); workspace creation is blocked, not billed,
 when the limit is reached. MSP and Enterprise keys are issued through sales —
 contact support to get set up or to join the MSP design-partner program.
+
+In the provider-hosted model the licence is a signed file
+(`CP_PROVIDER_MSP_LICENSE_FILE`) that also binds your control plane's
+entitlement lease signing key:
+
+1. `setup.sh` generates `CP_TRIAL_ACTIVATION_PRIVATE_KEY` locally; the
+   private key never leaves your host.
+2. Send the derived public key
+   (`./setup.sh --print-lease-signing-public-key`) with your licence request.
+3. The issued licence binds that key. The control plane refuses to start in
+   provider mode if the licence and key do not match, so a misconfigured
+   stack fails at startup instead of provisioning client workspaces that
+   silently run unlicensed.
+
+Client runtimes lease their entitlements from your control plane (the
+control plane injects the refresh endpoint; nothing phones Pulse Cloud) and
+verify each lease through the licence chain: Pulse's embedded key signs your
+licence, your licence binds your signing key, your signing key signs the
+lease. Leases carry the MSP capability set plus `white_label`, so branded
+per-client reports work inside every client workspace. When the licence
+expires, leases stop verifying after the grace period and client runtimes
+fall back to Community behavior; renew and restart the control plane to
+restore them.
