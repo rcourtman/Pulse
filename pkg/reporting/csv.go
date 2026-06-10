@@ -366,10 +366,25 @@ func (g *CSVGenerator) GenerateMulti(data *MultiReportData) ([]byte, error) {
 
 // formatValue formats a metric value with appropriate precision.
 func formatValue(value float64, unit string) string {
-	if unit == "bytes" {
+	switch unit {
+	case "bytes":
 		return formatBytes(value)
+	case "bytes/s":
+		return formatBytes(value) + "/s"
 	}
 	return fmt.Sprintf("%.2f", value)
+}
+
+// formatMetricValue renders a value with its unit for display. Byte-based
+// units are self-describing ("1.50 GiB", "880 KiB/s"); symbolic units are
+// appended ("22.10%"); unitless values render bare.
+func formatMetricValue(value float64, unit string) string {
+	switch unit {
+	case "bytes", "bytes/s", "":
+		return formatValue(value, unit)
+	default:
+		return formatValue(value, unit) + unit
+	}
 }
 
 // formatBytes converts bytes to human-readable format.

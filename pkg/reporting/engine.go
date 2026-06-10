@@ -707,6 +707,18 @@ func GetMetricTypeDisplayName(metricType string) string {
 		return "Total Space"
 	case "avail":
 		return "Available Space"
+	case "diskread":
+		return "Disk Read"
+	case "diskwrite":
+		return "Disk Write"
+	case "netin":
+		return "Network In"
+	case "netout":
+		return "Network Out"
+	case "iops":
+		return "Disk IOPS"
+	case "temperature":
+		return "Temperature"
 	default:
 		return metricType
 	}
@@ -719,6 +731,10 @@ func GetMetricUnit(metricType string) string {
 		return "%"
 	case "used", "total", "avail":
 		return "bytes"
+	case "diskread", "diskwrite", "netin", "netout":
+		return "bytes/s"
+	case "temperature":
+		return "C"
 	default:
 		return ""
 	}

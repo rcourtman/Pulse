@@ -3,8 +3,10 @@ package reporting
 import (
 	"bytes"
 	"compress/zlib"
+	"fmt"
 	"io"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -392,5 +394,76 @@ func TestAvailabilityUptimeLabel_NeverOverstates(t *testing.T) {
 	}
 	if got := availabilityUptimeLabel(99.4249); got != "99.42%" {
 		t.Fatalf("availabilityUptimeLabel(99.4249) = %q, want 99.42%%", got)
+	}
+}
+
+// TestMetricFormatting_RateMetricsAreHumanReadable pins the display
+// vocabulary for the rate metrics that previously rendered as raw keys
+// with unformatted values ("diskread 880000.00") in client-facing
+// reports.
+func TestMetricFormatting_RateMetricsAreHumanReadable(t *testing.T) {
+	if got := GetMetricTypeDisplayName("diskread"); got != "Disk Read" {
+		t.Fatalf("GetMetricTypeDisplayName(diskread) = %q", got)
+	}
+	if got := GetMetricTypeDisplayName("netout"); got != "Network Out" {
+		t.Fatalf("GetMetricTypeDisplayName(netout) = %q", got)
+	}
+	if got := GetMetricUnit("diskwrite"); got != "bytes/s" {
+		t.Fatalf("GetMetricUnit(diskwrite) = %q", got)
+	}
+	if got := formatMetricValue(880000, "bytes/s"); got != "859.38 KiB/s" {
+		t.Fatalf("formatMetricValue(880000, bytes/s) = %q", got)
+	}
+	if got := formatMetricValue(22.1, "%"); got != "22.10%" {
+		t.Fatalf("formatMetricValue(22.1, %%) = %q", got)
+	}
+	// Byte units are self-describing; the old +unit concatenation
+	// produced "12.00 GiBbytes".
+	if got := formatMetricValue(12884901888, "bytes"); got != "12.00 GiB" {
+		t.Fatalf("formatMetricValue(12GiB, bytes) = %q", got)
+	}
+}
+
+// TestGenerateMulti_FlowsResourceBlocksOntoSharedPages asserts the fleet
+// report no longer spends one near-empty A4 page per resource: six sparse
+// resources must fit on a handful of pages, not eight.
+func TestGenerateMulti_FlowsResourceBlocksOntoSharedPages(t *testing.T) {
+	now := time.Now()
+	multi := &MultiReportData{
+		Title:       "Fleet",
+		Start:       now.Add(-24 * time.Hour),
+		End:         now,
+		GeneratedAt: now,
+	}
+	for i := 0; i < 6; i++ {
+		multi.Resources = append(multi.Resources, &ReportData{
+			ResourceID:   fmt.Sprintf("vm-%d", i),
+			ResourceType: "vm",
+			Resource:     &ResourceInfo{Name: fmt.Sprintf("guest-%02d", i), Status: "online"},
+			Summary:      MetricSummary{ByMetric: map[string]MetricStats{"cpu": {Avg: 10, Max: 20, Count: 1}}},
+			TotalPoints:  1,
+			Availability: &AvailabilityInfo{UptimePercent: 100, ObservedPercent: 100},
+		})
+	}
+
+	gen := NewPDFGenerator()
+	out, err := gen.GenerateMulti(multi)
+	if err != nil {
+		t.Fatalf("GenerateMulti: %v", err)
+	}
+	text := extractPDFText(t, out)
+
+	pageTotal := regexp.MustCompile(`Page \d+ of (\d+)`).FindStringSubmatch(text)
+	if pageTotal == nil {
+		t.Fatalf("no page footer found in:\n%s", text)
+	}
+	if pages, _ := strconv.Atoi(pageTotal[1]); pages > 4 {
+		t.Fatalf("6 sparse resources rendered %d pages; blocks must flow onto shared pages", pages)
+	}
+	for i := 0; i < 6; i++ {
+		name := fmt.Sprintf("guest-%02d", i)
+		if !strings.Contains(text, name) {
+			t.Fatalf("resource %s missing from flowed detail pages:\n%s", name, text)
+		}
 	}
 }

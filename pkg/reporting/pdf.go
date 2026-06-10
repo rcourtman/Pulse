@@ -172,10 +172,21 @@ func (g *PDFGenerator) Generate(data *ReportData) ([]byte, error) {
 	g.addPageHeader(pdf, data, "Executive Summary")
 	g.writeExecutiveSummary(pdf, data)
 
-	// Resource details page (if enrichment data available)
+	// Resource details (if enrichment data available). The details grid is
+	// usually a third of a page; giving it a page of its own left the
+	// report mostly whitespace, so it shares the executive summary page
+	// whenever there is room.
 	if data.Resource != nil {
-		pdf.AddPage()
-		g.addPageHeader(pdf, data, "Resource Details")
+		if pdf.GetY() > 160 {
+			pdf.AddPage()
+			g.addPageHeader(pdf, data, "Resource Details")
+		} else {
+			pdf.Ln(4)
+			pdf.SetFont("Arial", "B", 14)
+			pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+			pdf.CellFormat(0, 9, "Resource Details", "", 1, "L", false, 0, "")
+			pdf.Ln(2)
+		}
 		g.writeResourceDetails(pdf, data)
 
 		// Storage section for nodes
@@ -203,9 +214,19 @@ func (g *PDFGenerator) Generate(data *ReportData) ([]byte, error) {
 		g.writeAlertsSection(pdf, data)
 	}
 
-	// Summary page with metrics
-	pdf.AddPage()
-	g.addPageHeader(pdf, data, "Performance Summary")
+	// Summary with metrics. The details grid above is usually short, so
+	// the performance summary continues on the same page when it fits
+	// instead of stranding the details on a nearly blank page.
+	if pdf.GetY() > 110 {
+		pdf.AddPage()
+		g.addPageHeader(pdf, data, "Performance Summary")
+	} else {
+		pdf.Ln(6)
+		pdf.SetFont("Arial", "B", 14)
+		pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+		pdf.CellFormat(0, 9, "Performance Summary", "", 1, "L", false, 0, "")
+		pdf.Ln(2)
+	}
 	g.writeSummarySection(pdf, data)
 
 	// Charts page(s)
@@ -900,46 +921,29 @@ func (g *PDFGenerator) writeSummarySection(pdf *fpdf.Fpdf, data *ReportData) {
 		pdf.SetXY(cardX+5, cardY+14)
 		pdf.SetFont("Arial", "B", 20)
 		pdf.SetTextColor(headerColor[0], headerColor[1], headerColor[2])
-		pdf.CellFormat(cardWidth-10, 10, formatValue(stats.Current, unit)+unit, "", 1, "L", false, 0, "")
+		pdf.CellFormat(cardWidth-10, 10, formatMetricValue(stats.Current, unit), "", 1, "L", false, 0, "")
 
 		// Stats row
 		pdf.SetFont("Arial", "", 8)
 		pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
 		statsY := cardY + 28
 
-		// Min
-		pdf.SetXY(cardX+5, statsY)
-		pdf.CellFormat(25, 5, "Min", "", 0, "L", false, 0, "")
-		pdf.SetFont("Arial", "B", 8)
-		pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
-		pdf.CellFormat(0, 5, formatValue(stats.Min, unit)+unit, "", 1, "L", false, 0, "")
-
-		// Max
-		pdf.SetFont("Arial", "", 8)
-		pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
-		pdf.SetXY(cardX+5, statsY+6)
-		pdf.CellFormat(25, 5, "Max", "", 0, "L", false, 0, "")
-		pdf.SetFont("Arial", "B", 8)
-		pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
-		pdf.CellFormat(0, 5, formatValue(stats.Max, unit)+unit, "", 1, "L", false, 0, "")
-
-		// Avg
-		pdf.SetFont("Arial", "", 8)
-		pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
-		pdf.SetXY(cardX+45, statsY)
-		pdf.CellFormat(15, 5, "Avg", "", 0, "L", false, 0, "")
-		pdf.SetFont("Arial", "B", 8)
-		pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
-		pdf.CellFormat(0, 5, formatValue(stats.Avg, unit)+unit, "", 1, "L", false, 0, "")
-
-		// Count
-		pdf.SetFont("Arial", "", 8)
-		pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
-		pdf.SetXY(cardX+45, statsY+6)
-		pdf.CellFormat(15, 5, "Samples", "", 0, "L", false, 0, "")
-		pdf.SetFont("Arial", "B", 8)
-		pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
-		pdf.CellFormat(0, 5, fmt.Sprintf("%d", stats.Count), "", 1, "L", false, 0, "")
+		// Two bounded label/value column pairs. Value cells must not use
+		// width 0 (extend to margin): long byte-rate values would run
+		// under the second column's labels.
+		writeStat := func(x, y float64, label, value string) {
+			pdf.SetFont("Arial", "", 8)
+			pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
+			pdf.SetXY(x, y)
+			pdf.CellFormat(13, 5, label, "", 0, "L", false, 0, "")
+			pdf.SetFont("Arial", "B", 8)
+			pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+			pdf.CellFormat(26, 5, value, "", 0, "L", false, 0, "")
+		}
+		writeStat(cardX+5, statsY, "Min", formatMetricValue(stats.Min, unit))
+		writeStat(cardX+5, statsY+6, "Max", formatMetricValue(stats.Max, unit))
+		writeStat(cardX+46, statsY, "Avg", formatMetricValue(stats.Avg, unit))
+		writeStat(cardX+46, statsY+6, "Samples", fmt.Sprintf("%d", stats.Count))
 	}
 
 	// Calculate final Y position based on number of rows
@@ -1784,10 +1788,24 @@ func (g *PDFGenerator) GenerateMulti(data *MultiReportData) ([]byte, error) {
 	g.addMultiPageHeader(pdf, data, "Fleet Summary")
 	g.writeFleetSummary(pdf, data)
 
-	// Pages 3+: Condensed per-resource pages
+	// Pages 3+: condensed per-resource blocks, flowed several to a page.
+	// One near-empty A4 page per resource read as padding in client-facing
+	// reports, so a new page starts only when the next block will not fit.
+	_, pageHeight := pdf.GetPageSize()
+	bottomLimit := pageHeight - 30
+	pageOpen := false
 	for _, rd := range data.Resources {
-		pdf.AddPage()
-		g.addMultiPageHeader(pdf, data, "Resource Detail")
+		startNewPage := !pageOpen || pdf.GetY()+condensedResourceBlockHeight(rd) > bottomLimit
+		if startNewPage {
+			pdf.AddPage()
+			g.addMultiPageHeader(pdf, data, "Resource Details")
+			pageOpen = true
+		} else {
+			pdf.Ln(3)
+			pdf.SetDrawColor(colorGridLine[0], colorGridLine[1], colorGridLine[2])
+			pdf.Line(20, pdf.GetY(), 190, pdf.GetY())
+			pdf.Ln(5)
+		}
 		g.writeCondensedResourcePage(pdf, rd)
 	}
 
@@ -2329,6 +2347,37 @@ func writeFleetNarrativeSection(pdf *fpdf.Fpdf, fn *FleetNarrative) {
 }
 
 // writeCondensedResourcePage writes a condensed single-page view for one resource.
+// condensedResourceBlockHeight estimates the vertical space a condensed
+// resource block needs so the fleet layout can decide whether it fits on
+// the current page. Estimates err slightly high; a block that still
+// overflows is carried across pages by fpdf's auto page break.
+func condensedResourceBlockHeight(rd *ReportData) float64 {
+	height := 11.0 + 6.0 + 27.0 + 8.0 // name header + availability line + stats bar + padding
+	if len(rd.Metrics["cpu"]) >= 2 || len(rd.Metrics["memory"]) >= 2 {
+		height += 58 // chart title + canvas + legend
+	}
+	active := 0
+	for _, alert := range rd.Alerts {
+		if alert.ResolvedTime == nil {
+			active++
+		}
+	}
+	if active > 0 {
+		shown := active
+		if shown > 3 {
+			shown = 4 // three alerts plus the "and N more" line
+		}
+		height += 10 + float64(shown)*5
+	}
+	if len(rd.Storage) > 0 {
+		height += 10 + float64(len(rd.Storage))*5
+	}
+	if len(rd.Backups) > 0 {
+		height += 20
+	}
+	return height
+}
+
 func (g *PDFGenerator) writeCondensedResourcePage(pdf *fpdf.Fpdf, rd *ReportData) {
 	// Resource header
 	resourceName := rd.ResourceID
@@ -2364,6 +2413,26 @@ func (g *PDFGenerator) writeCondensedResourcePage(pdf *fpdf.Fpdf, rd *ReportData
 		statusStr += fmt.Sprintf("  |  Uptime: %s", formatUptime(rd.Resource.Uptime))
 	}
 	pdf.CellFormat(0, 8, statusStr, "", 1, "L", false, 0, "")
+
+	// Availability over the window, when the state timeline produced one.
+	if rd.Availability != nil {
+		line := "Availability: not observed this period"
+		lineColor := colorTextMuted
+		if rd.Availability.Observed() {
+			line = fmt.Sprintf("Availability: %s", availabilityUptimeLabel(rd.Availability.UptimePercent))
+			if rd.Availability.DownIncidents > 0 {
+				outageWord := "outages"
+				if rd.Availability.DownIncidents == 1 {
+					outageWord = "outage"
+				}
+				line += fmt.Sprintf(" (%d %s, %s down)", rd.Availability.DownIncidents, outageWord, formatOutageDuration(rd.Availability.TotalDowntime))
+			}
+			lineColor = colorTextDark
+		}
+		pdf.SetFont("Arial", "", 9)
+		pdf.SetTextColor(lineColor[0], lineColor[1], lineColor[2])
+		pdf.CellFormat(0, 5, line, "", 1, "L", false, 0, "")
+	}
 	pdf.Ln(3)
 
 	// Stats bar - CPU, Memory, Disk averages and maxes
