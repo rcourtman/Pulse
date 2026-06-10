@@ -3893,10 +3893,11 @@ configure_auto_update_script_repo() {
     chmod +x "$dest"
 }
 
-setup_auto_updates() {
-    print_info "Setting up automatic updates..."
-    local desired_channel
-    desired_channel=$(selected_update_channel)
+# Installs the auto-update helper script and rewrites the systemd
+# service/timer units. Shared by setup_auto_updates (first-time enable) and
+# refresh_auto_updates (updates/reinstalls where the timer already exists).
+# Does not touch system.json or the timer's enabled/started state.
+install_auto_update_assets() {
     local service_name="${SERVICE_NAME:-${PULSE_SERVICE_NAME:-pulse}}"
     local install_dir="${INSTALL_DIR:-${PULSE_INSTALL_DIR:-/opt/pulse}}"
     local config_dir="${CONFIG_DIR:-${PULSE_CONFIG_DIR:-/etc/pulse}}"
@@ -3914,21 +3915,20 @@ setup_auto_updates() {
         print_info "Downloading auto-update script..."
         if ! download_auto_update_script; then
             print_warn "Could not download the auto-update helper after multiple attempts."
-            print_warn "Continuing without automatic updates. Re-run install.sh with --enable-auto-updates once connectivity is stable."
-            ENABLE_AUTO_UPDATES=false
-            return 0
+            return 1
         fi
     fi
 
     if ! configure_auto_update_script_repo "$auto_update_dest"; then
         print_warn "Could not configure the auto-update helper for the selected release repo."
-        print_warn "Continuing without automatic updates. Re-run install.sh once filesystem access is stable."
         rm -f "$auto_update_dest"
-        ENABLE_AUTO_UPDATES=false
-        return 0
+        return 1
     fi
-    
-    # Install systemd timer and service
+
+    # Install systemd timer and service. The heredoc is unquoted so the
+    # installer substitutes paths/names; the rendered unit must contain no
+    # unexpanded $ (in particular never $$, which bash expands to the
+    # installer's PID and which broke ExecCondition before v6.0.0).
     cat > "$update_service_path" <<EOF
 [Unit]
 Description=Automatic Pulse update check and install
@@ -3940,8 +3940,8 @@ Wants=network-online.target
 Type=oneshot
 User=root
 Group=root
-# Skip auto-update run unless a supported Pulse service is active
-ExecCondition=/bin/sh -c 'systemctl is-active --quiet "$${PULSE_SERVICE_NAME}"'
+# Skip auto-update run unless the Pulse service it updates is active
+ExecCondition=/bin/sh -c 'systemctl is-active --quiet ${service_name}'
 ExecStart=${auto_update_dest}
 Restart=no
 TimeoutStartSec=600
@@ -3983,10 +3983,27 @@ EOF
 
     # Reload systemd daemon
     safe_systemctl daemon-reload
-    
-    # Enable timer but don't start it yet  
+}
+
+setup_auto_updates() {
+    print_info "Setting up automatic updates..."
+    local desired_channel
+    desired_channel=$(selected_update_channel)
+    local service_name="${SERVICE_NAME:-${PULSE_SERVICE_NAME:-pulse}}"
+    local config_dir="${CONFIG_DIR:-${PULSE_CONFIG_DIR:-/etc/pulse}}"
+    local update_timer_path="${UPDATE_TIMER_PATH:-${PULSE_UPDATE_TIMER_PATH:-/etc/systemd/system/${service_name}-update.timer}}"
+    local update_timer_unit
+    update_timer_unit="$(basename "$update_timer_path")"
+
+    if ! install_auto_update_assets; then
+        print_warn "Continuing without automatic updates. Re-run install.sh with --enable-auto-updates once the issue above is resolved."
+        ENABLE_AUTO_UPDATES=false
+        return 0
+    fi
+
+    # Enable timer but don't start it yet
     safe_systemctl enable "$update_timer_unit" || true
-    
+
     # Update system.json to enable auto-updates
     if [[ -f "$config_dir/system.json" ]]; then
         # Update existing file
@@ -4018,8 +4035,23 @@ EOF
     
     # Start the timer
     safe_systemctl start "$update_timer_unit" || true
-    
+
     print_success "Automatic updates enabled (daily check with 2-6 hour random delay)"
+}
+
+# Updates and reinstalls only run setup_auto_updates when the user opts in,
+# but a box that already has the timer keeps whatever helper script and units
+# a previous install wrote — e.g. a v5.1-pinned helper that never selects a
+# v6 release, so unattended updates silently never resume after upgrading.
+# Refresh the installed assets unconditionally instead, without changing the
+# user's choices: system.json and the timer's enabled state stay untouched.
+refresh_auto_updates() {
+    print_info "Refreshing the installed auto-update helper..."
+    if ! install_auto_update_assets; then
+        print_warn "Could not refresh the auto-update helper; the previously installed one may be stale."
+        print_warn "Re-run install.sh with --enable-auto-updates to repair it."
+    fi
+    return 0
 }
 
 install_systemd_service() {
@@ -4320,6 +4352,8 @@ main() {
 
             if [[ "$ENABLE_AUTO_UPDATES" == "true" ]]; then
                 setup_auto_updates
+            elif update_timer_exists; then
+                refresh_auto_updates
             fi
 
             start_pulse
@@ -4395,8 +4429,10 @@ main() {
             # Setup auto-updates if requested
             if [[ "$ENABLE_AUTO_UPDATES" == "true" ]]; then
                 setup_auto_updates
+            elif update_timer_exists; then
+                refresh_auto_updates
             fi
-            
+
             start_pulse
             create_marker_file
             print_completion
@@ -4592,9 +4628,13 @@ main() {
                 download_pulse
                 setup_update_command
                 
-                # Setup auto-updates if requested during update
+                # Setup auto-updates if requested during update; otherwise
+                # refresh assets a previous install already put in place so a
+                # stale helper (e.g. v5-pinned) doesn't survive the upgrade
                 if [[ "$ENABLE_AUTO_UPDATES" == "true" ]]; then
                     setup_auto_updates
+                elif update_timer_exists; then
+                    refresh_auto_updates
                 fi
                 
                 start_pulse
@@ -4649,9 +4689,12 @@ main() {
                 setup_update_command
                 install_systemd_service
                 
-                # Setup auto-updates if requested during reinstall
+                # Setup auto-updates if requested during reinstall; otherwise
+                # refresh assets a previous install already put in place
                 if [[ "$ENABLE_AUTO_UPDATES" == "true" ]]; then
                     setup_auto_updates
+                elif update_timer_exists; then
+                    refresh_auto_updates
                 fi
                 
                 start_pulse
@@ -4768,9 +4811,12 @@ main() {
         setup_update_command
         install_systemd_service
         
-        # Setup auto-updates if requested
+        # Setup auto-updates if requested; a leftover timer from a previous
+        # install still gets its helper script and units refreshed
         if [[ "$ENABLE_AUTO_UPDATES" == "true" ]]; then
             setup_auto_updates
+        elif update_timer_exists; then
+            refresh_auto_updates
         fi
         
         start_pulse

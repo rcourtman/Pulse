@@ -1230,6 +1230,7 @@ func extractSetupAutoUpdatesShellFunctions(t *testing.T) string {
 	return extractSelectedUpdateChannelShellFunctions(t) + "\n" +
 		extractRootInstallShellFunction(t, "repo_web_url") + "\n" +
 		extractRootInstallShellFunction(t, "configure_auto_update_script_repo") + "\n" +
+		extractRootInstallShellFunction(t, "install_auto_update_assets") + "\n" +
 		extractRootInstallShellFunction(t, "setup_auto_updates")
 }
 

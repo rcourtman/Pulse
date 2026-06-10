@@ -1119,6 +1119,28 @@ installs too: the root `install.sh`, generated update helper, and
 identity across install, update, reset, uninstall, and timer/service wiring so
 stable and preview Pulse runtimes can coexist on one host without drifting back
 onto the default `pulse.service` paths.
+The generated auto-update systemd wiring is itself contract surface: the root
+`install.sh` writes the `pulse-update.service` / `pulse-update.timer` units
+(or the service-scoped equivalents) through one shared
+`install_auto_update_assets` helper, and the rendered units must contain no
+unexpanded `$` reference — every variable is substituted at render time, and
+in particular `$$` (which bash expands to the installer's PID inside the
+unquoted heredoc) must never reach the unit, because a PID-corrupted
+`ExecCondition` makes systemd silently skip every scheduled run. The rendered
+`ExecCondition` must gate the run on the detected Pulse service identity
+being active. Because updates and reinstalls only run the opt-in
+`setup_auto_updates` flow when the operator asks for it, every install flow
+over an existing box (update, reinstall, `--version`, `--source`, and the
+fresh-install tail behind a leftover timer) must instead refresh
+already-installed auto-update assets unconditionally via
+`refresh_auto_updates` when the update timer already exists — replacing the
+helper script and rewriting the units so a version-pinned helper from a
+previous major (which never selects newer releases and reports "Already
+running latest version" forever) cannot survive an upgrade — while leaving
+`system.json` and the timer's enabled/started state untouched. The
+rendered-unit execution, refresh-behavior, and call-site wiring tests in
+`scripts/installtests/root_install_sh_test.go` are the owned proof surface
+for these invariants.
 That same server-installer uninstall must also leave no legacy companion
 footprint behind on the host: `install.sh --uninstall` removes the local
 `pulse-sensor-proxy` artifacts a v5-era Proxmox host may still carry — the

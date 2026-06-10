@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -840,5 +841,226 @@ func TestRootInstallDeployAgentScriptsDeploysSignatureSidecars(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(installDir, "scripts", name)); err != nil {
 			t.Fatalf("deploy_agent_scripts did not deploy %s next to the served script: %v", name, err)
 		}
+	}
+}
+
+// Regression test for the corrupted ExecCondition: setup_auto_updates used to
+// render the pulse-update.service unit through an unquoted heredoc containing
+// `$${PULSE_SERVICE_NAME}`, which bash expanded to the installer's PID. The
+// resulting condition always failed, so systemd silently skipped every
+// scheduled auto-update run. This test renders the real unit and executes the
+// rendered ExecCondition command, instead of asserting source-text fragments.
+func TestSetupAutoUpdatesRendersExecutableExecCondition(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		serviceName string // empty = rely on the default
+		want        string
+	}{
+		{name: "default service name", serviceName: "", want: "pulse"},
+		{name: "instance-scoped service name", serviceName: "pulse-blue", want: "pulse-blue"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			configDir := filepath.Join(tmpDir, "config")
+			installDir := filepath.Join(tmpDir, "install")
+			autoUpdateSrc := filepath.Join(installDir, "scripts", "pulse-auto-update.sh")
+			autoUpdateDest, servicePath, timerPath := prepareAutoUpdatePaths(t, tmpDir)
+
+			if err := os.MkdirAll(configDir, 0755); err != nil {
+				t.Fatalf("mkdir config dir: %v", err)
+			}
+			if err := os.MkdirAll(filepath.Dir(autoUpdateSrc), 0755); err != nil {
+				t.Fatalf("mkdir auto-update src dir: %v", err)
+			}
+			if err := os.WriteFile(autoUpdateSrc, []byte("#!/usr/bin/env bash\n"), 0755); err != nil {
+				t.Fatalf("write auto-update src: %v", err)
+			}
+
+			serviceNameLine := ""
+			if tc.serviceName != "" {
+				serviceNameLine = `SERVICE_NAME="` + tc.serviceName + `"`
+			}
+			script := `
+		CONFIG_DIR="` + configDir + `"
+		INSTALL_DIR="` + installDir + `"
+		PULSE_AUTO_UPDATE_DEST="` + autoUpdateDest + `"
+		PULSE_UPDATE_SERVICE_PATH="` + servicePath + `"
+		PULSE_UPDATE_TIMER_PATH="` + timerPath + `"
+		` + serviceNameLine + `
+		FORCE_CHANNEL=""
+		UPDATE_CHANNEL=""
+		GITHUB_REPO="rcourtman/Pulse"
+		print_info() { :; }
+		print_warn() { :; }
+		print_success() { :; }
+		safe_systemctl() { :; }
+		systemctl() { return 0; }
+		chown() { :; }
+` + extractSetupAutoUpdatesShellFunctions(t) + `
+		setup_auto_updates
+	`
+
+			out, err := exec.Command("bash", "-c", script).CombinedOutput()
+			if err != nil {
+				t.Fatalf("bash: %v\n%s", err, out)
+			}
+
+			unitBytes, err := os.ReadFile(servicePath)
+			if err != nil {
+				t.Fatalf("read rendered service unit: %v", err)
+			}
+			unit := string(unitBytes)
+
+			wantLine := `ExecCondition=/bin/sh -c 'systemctl is-active --quiet ` + tc.want + `'`
+			if !strings.Contains(unit, wantLine+"\n") {
+				t.Fatalf("rendered unit missing %q:\n%s", wantLine, unit)
+			}
+			// The heredoc substitutes every variable at render time; any $
+			// left in the unit means an unexpanded (or PID-corrupted)
+			// reference leaked through again.
+			if strings.Contains(unit, "$") {
+				t.Fatalf("rendered unit contains an unexpanded $:\n%s", unit)
+			}
+
+			// Execute the rendered condition the way systemd would, with a
+			// recording systemctl stub, to prove the command itself is sound.
+			binDir := filepath.Join(tmpDir, "stub-bin")
+			if err := os.MkdirAll(binDir, 0755); err != nil {
+				t.Fatalf("mkdir stub bin: %v", err)
+			}
+			recordPath := filepath.Join(tmpDir, "systemctl-args")
+			stub := "#!/bin/sh\nprintf '%s' \"$*\" > \"" + recordPath + "\"\nexit 0\n"
+			if err := os.WriteFile(filepath.Join(binDir, "systemctl"), []byte(stub), 0755); err != nil {
+				t.Fatalf("write systemctl stub: %v", err)
+			}
+			condition := strings.TrimPrefix(wantLine, "ExecCondition=")
+			condOut, err := exec.Command("bash", "-c", `PATH="`+binDir+`:$PATH" `+condition).CombinedOutput()
+			if err != nil {
+				t.Fatalf("rendered ExecCondition failed to execute: %v\n%s", err, condOut)
+			}
+			recorded, err := os.ReadFile(recordPath)
+			if err != nil {
+				t.Fatalf("ExecCondition never invoked systemctl: %v", err)
+			}
+			if got, want := string(recorded), "is-active --quiet "+tc.want; got != want {
+				t.Fatalf("ExecCondition invoked systemctl %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+// Regression test for stale updater scripts surviving upgrades: a v5 box with
+// auto-updates already enabled keeps pulse-update.timer, so the update flow
+// never re-ran setup_auto_updates and the v5.1-pinned helper script stayed in
+// place, logging "Already running latest version" forever. refresh_auto_updates
+// must replace the helper and units without touching system.json or the
+// timer's enabled/started state.
+func TestRefreshAutoUpdatesReplacesStaleHelperWithoutChangingEnablement(t *testing.T) {
+	tmpDir := t.TempDir()
+	configDir := filepath.Join(tmpDir, "config")
+	installDir := filepath.Join(tmpDir, "install")
+	autoUpdateSrc := filepath.Join(installDir, "scripts", "pulse-auto-update.sh")
+	autoUpdateDest, servicePath, timerPath := prepareAutoUpdatePaths(t, tmpDir)
+	callsPath := filepath.Join(tmpDir, "systemctl-calls")
+
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(autoUpdateSrc), 0755); err != nil {
+		t.Fatalf("mkdir auto-update src dir: %v", err)
+	}
+	if err := os.WriteFile(autoUpdateSrc, []byte("#!/usr/bin/env bash\necho v6-helper\n"), 0755); err != nil {
+		t.Fatalf("write auto-update src: %v", err)
+	}
+	// The stale v5.1-pinned helper and a v5-style unit without ExecCondition.
+	if err := os.WriteFile(autoUpdateDest, []byte("#!/usr/bin/env bash\necho v5-stale-helper\n"), 0755); err != nil {
+		t.Fatalf("write stale auto-update dest: %v", err)
+	}
+	if err := os.WriteFile(servicePath, []byte("[Service]\nExecStart="+autoUpdateDest+"\n"), 0644); err != nil {
+		t.Fatalf("write stale service unit: %v", err)
+	}
+	// The user explicitly disabled auto-updates; a refresh must not flip it.
+	systemJSON := `{"autoUpdateEnabled":false,"updateChannel":"stable"}`
+	if err := os.WriteFile(filepath.Join(configDir, "system.json"), []byte(systemJSON), 0644); err != nil {
+		t.Fatalf("write system.json: %v", err)
+	}
+
+	script := `
+		CONFIG_DIR="` + configDir + `"
+		INSTALL_DIR="` + installDir + `"
+		PULSE_AUTO_UPDATE_DEST="` + autoUpdateDest + `"
+		PULSE_UPDATE_SERVICE_PATH="` + servicePath + `"
+		PULSE_UPDATE_TIMER_PATH="` + timerPath + `"
+		GITHUB_REPO="rcourtman/Pulse"
+		print_info() { :; }
+		print_warn() { :; }
+		safe_systemctl() { printf '%s\n' "$*" >> "` + callsPath + `"; }
+` + extractRootInstallShellFunction(t, "repo_web_url") + `
+` + extractRootInstallShellFunction(t, "configure_auto_update_script_repo") + `
+` + extractRootInstallShellFunction(t, "install_auto_update_assets") + `
+` + extractRootInstallShellFunction(t, "refresh_auto_updates") + `
+		refresh_auto_updates
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+
+	helper, err := os.ReadFile(autoUpdateDest)
+	if err != nil {
+		t.Fatalf("read refreshed helper: %v", err)
+	}
+	if strings.Contains(string(helper), "v5-stale-helper") {
+		t.Fatalf("refresh left the stale helper in place:\n%s", helper)
+	}
+	if !strings.Contains(string(helper), "v6-helper") {
+		t.Fatalf("refresh did not install the release helper:\n%s", helper)
+	}
+
+	unit, err := os.ReadFile(servicePath)
+	if err != nil {
+		t.Fatalf("read refreshed service unit: %v", err)
+	}
+	if !strings.Contains(string(unit), "ExecCondition=/bin/sh -c 'systemctl is-active --quiet pulse'") {
+		t.Fatalf("refresh did not rewrite the service unit:\n%s", unit)
+	}
+	if _, err := os.Stat(timerPath); err != nil {
+		t.Fatalf("refresh did not write the timer unit: %v", err)
+	}
+
+	gotJSON, err := os.ReadFile(filepath.Join(configDir, "system.json"))
+	if err != nil {
+		t.Fatalf("read system.json: %v", err)
+	}
+	if string(gotJSON) != systemJSON {
+		t.Fatalf("refresh modified system.json:\n got: %s\nwant: %s", gotJSON, systemJSON)
+	}
+
+	calls, err := os.ReadFile(callsPath)
+	if err != nil {
+		t.Fatalf("read recorded systemctl calls: %v", err)
+	}
+	if string(calls) != "daemon-reload\n" {
+		t.Fatalf("refresh changed systemd state beyond daemon-reload:\n%s", calls)
+	}
+}
+
+// Pins the wiring: every existing-install flow (update, reinstall, --version,
+// --source) and the fresh-install tail must refresh already-installed
+// auto-update assets when the user did not opt into a full re-setup.
+func TestRootInstallScriptUpdateFlowsRefreshExistingAutoUpdateAssets(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
+	if err != nil {
+		t.Fatalf("read root install.sh: %v", err)
+	}
+
+	if !strings.Contains(string(content), "refresh_auto_updates() {") {
+		t.Fatal("install.sh missing refresh_auto_updates definition")
+	}
+
+	wired := regexp.MustCompile(`(?m)^\s*elif update_timer_exists; then\n\s*refresh_auto_updates$`)
+	if got := len(wired.FindAll(content, -1)); got < 5 {
+		t.Fatalf("expected at least 5 install flows to refresh existing auto-update assets, found %d", got)
 	}
 }
