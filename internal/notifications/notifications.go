@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -228,12 +229,15 @@ type NotificationManager struct {
 	webhookRateMu      sync.Mutex                   // Separate mutex for webhook rate limiting
 	webhookRateCleanup time.Time                    // Last cleanup time for webhook rate limit entries
 	appriseExec        appriseExecFunc
-	queue              *NotificationQueue // Persistent notification queue
-	webhookClient      *http.Client       // Shared HTTP client for webhooks
-	stopCleanup        chan struct{}      // Signal to stop cleanup goroutine
-	cleanupDone        chan struct{}      // Signals cleanup goroutine exit during shutdown
-	allowedPrivateNets []*net.IPNet       // Parsed CIDR ranges allowed for private webhook targets
-	allowedPrivateMu   sync.RWMutex       // Protects allowedPrivateNets
+	queue              *NotificationQueue              // Persistent notification queue
+	tenantID           string                          // Tenant identity stamped into webhook payloads (env default)
+	tenantName         string                          // Tenant display name stamped into webhook payloads (env default)
+	tenantResolver     func() (id string, name string) // Org-backed tenant identity override (multi-tenant)
+	webhookClient      *http.Client                    // Shared HTTP client for webhooks
+	stopCleanup        chan struct{}                   // Signal to stop cleanup goroutine
+	cleanupDone        chan struct{}                   // Signals cleanup goroutine exit during shutdown
+	allowedPrivateNets []*net.IPNet                    // Parsed CIDR ranges allowed for private webhook targets
+	allowedPrivateMu   sync.RWMutex                    // Protects allowedPrivateNets
 }
 
 type webhookHTTPResult struct {
@@ -669,6 +673,8 @@ func NewNotificationManagerWithDataDir(publicURL string, dataDir string) *Notifi
 			APIKeyHeader:   "X-API-KEY",
 		},
 		groupWindow:       30 * time.Second,
+		tenantID:          strings.TrimSpace(os.Getenv("PULSE_TENANT_ID")),
+		tenantName:        strings.TrimSpace(os.Getenv("PULSE_TENANT_NAME")),
 		pendingAlerts:     make([]*alerts.Alert, 0),
 		groupByNode:       true,
 		groupByGuest:      false,
@@ -694,6 +700,36 @@ func NewNotificationManagerWithDataDir(publicURL string, dataDir string) *Notifi
 	go nm.cleanupOldNotificationRecords()
 
 	return nm
+}
+
+// SetTenantIdentityResolver installs an org-backed resolver for the tenant
+// identity stamped into webhook payloads. It overrides the
+// PULSE_TENANT_ID / PULSE_TENANT_NAME environment defaults; multi-tenant
+// deployments use it so each org's manager reports that org's identity.
+func (n *NotificationManager) SetTenantIdentityResolver(resolver func() (id string, name string)) {
+	n.mu.Lock()
+	n.tenantResolver = resolver
+	n.mu.Unlock()
+}
+
+// TenantIdentity returns the tenant ID and display name stamped into webhook
+// payloads. The name falls back to the ID so receivers always get a usable
+// label when any tenant identity is configured at all.
+func (n *NotificationManager) TenantIdentity() (string, string) {
+	n.mu.RLock()
+	resolver := n.tenantResolver
+	id, name := n.tenantID, n.tenantName
+	n.mu.RUnlock()
+
+	if resolver != nil {
+		if rid, rname := resolver(); strings.TrimSpace(rid) != "" {
+			id, name = strings.TrimSpace(rid), strings.TrimSpace(rname)
+		}
+	}
+	if name == "" {
+		name = id
+	}
+	return id, name
 }
 
 // SetPublicURL updates the public URL used for webhook payloads.
@@ -2605,6 +2641,8 @@ func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFiel
 	roundedValue := math.Round(alert.Value*10) / 10
 	roundedThreshold := math.Round(alert.Threshold*10) / 10
 
+	tenantID, tenantName := n.TenantIdentity()
+
 	return WebhookPayloadData{
 		ID:                 alert.ID,
 		Level:              string(alert.Level),
@@ -2627,6 +2665,8 @@ func (n *NotificationManager) prepareWebhookData(alert *alerts.Alert, customFiel
 		AckTime:            ackTime,
 		AckUser:            alert.AckUser,
 		Event:              "alert",
+		TenantID:           tenantID,
+		TenantName:         tenantName,
 		Metadata:           metadataCopy,
 		CustomFields:       customFields,
 		AlertCount:         1,

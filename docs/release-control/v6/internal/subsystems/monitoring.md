@@ -845,6 +845,14 @@ shares, TrueNAS systems/VMs/apps, VMware hosts/VMs/datastores, availability
 targets, and active alerts. Telemetry callers may consume those coarse totals,
 but they must not bypass monitoring to read provider-local identifiers or
 tenant-local resource names.
+That same reloadable multi-tenant monitor boundary also owns wiring tenant
+identity into per-org notification delivery. When a tenant monitor is
+initialized for a non-default org, monitoring installs an org-backed tenant
+identity resolver on that org's notification manager so webhook payloads can
+stamp the org ID and current display name; the resolver reads the org record
+lazily so display-name renames propagate without monitor restarts. The
+default org keeps environment-provided identity and must not be overridden
+here.
 
 Consumer packages already use `ReadState`, but the monitoring core still has
 dual truth between unified resources and `StateSnapshot`. This is the main

@@ -121,6 +121,18 @@ Enhanced webhook test/live delivery must follow that same ownership model:
 into the canonical webhook render and transport path instead of maintaining a
 parallel URL-rendering, enrichment, Telegram URL sanitization, or single-send
 HTTP stack.
+That same webhook payload boundary also owns tenant identity stamping. Webhook
+payload data carries the tenant ID and display name of the runtime or
+organization that fired the alert: environment-provided identity
+(`PULSE_TENANT_ID` / `PULSE_TENANT_NAME`) is the construction-time default for
+isolated client runtimes, the display name falls back to the ID, and
+shared-process multi-tenant deployments override it through an org-backed
+resolver installed by the monitoring subsystem. Templates consume it as
+`{{.TenantID}}` / `{{.TenantName}}`, and the canonical generic template emits
+its tenant block only when an identity is present so single-tenant payloads
+keep their existing shape. PSA/ticket-bridge receivers must get tenant routing
+identity from this payload boundary, not by inferring it from webhook endpoint
+configuration.
 That same transport boundary also owns webhook request normalization. Rendered
 webhook URLs must reject userinfo during validation, and request construction
 must route through a validated absolute URL object instead of reparsing raw URL

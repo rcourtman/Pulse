@@ -174,6 +174,21 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 	// Set org ID for tenant isolation
 	// This enables tenant-scoped WebSocket broadcasts
 	monitor.SetOrgID(orgID)
+
+	// Stamp this org's identity into webhook payloads so external receivers
+	// (PSA/ticketing bridges) can route by tenant. Resolved lazily so a
+	// display-name rename is picked up without restarting the monitor. The
+	// default org keeps the PULSE_TENANT_ID/PULSE_TENANT_NAME env defaults.
+	if nm := monitor.GetNotificationManager(); nm != nil && orgID != "default" {
+		persistence := mtm.persistence
+		nm.SetTenantIdentityResolver(func() (string, string) {
+			name := ""
+			if org, err := persistence.LoadOrganization(orgID); err == nil && org != nil {
+				name = org.DisplayName
+			}
+			return orgID, name
+		})
+	}
 	if mtm.recoveryMgr != nil {
 		monitor.SetRecoveryManager(mtm.recoveryMgr)
 	}

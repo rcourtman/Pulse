@@ -545,7 +545,11 @@ View in Pulse: {{.Instance}}`,
 					"threshold": {{.Threshold}},
 					"start_time": "{{.StartTime | jsonString}}",
 					"duration": "{{.Duration | jsonString}}"
-				},
+				},{{if .TenantID}}
+				"tenant": {
+					"id": "{{.TenantID | jsonString}}",
+					"name": "{{.TenantName | jsonString}}"
+				},{{end}}
 				"timestamp": "{{.Timestamp | jsonString}}",
 				"source": "pulse-monitoring"
 			}`,
@@ -559,7 +563,11 @@ View in Pulse: {{.Instance}}`,
 					"message": "{{.Message | jsonString}}",
 					"start_time": "{{.StartTime | jsonString}}",
 					"duration": "{{.Duration | jsonString}}"
-				},
+				},{{if .TenantID}}
+				"tenant": {
+					"id": "{{.TenantID | jsonString}}",
+					"name": "{{.TenantName | jsonString}}"
+				},{{end}}
 				"resolved_at": "{{.ResolvedAt | jsonString}}",
 				"timestamp": "{{.Timestamp | jsonString}}",
 				"source": "pulse-monitoring"

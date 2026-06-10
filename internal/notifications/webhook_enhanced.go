@@ -65,6 +65,11 @@ type WebhookPayloadData struct {
 	ResolvedAt    string // RFC3339 timestamp when alert was resolved
 	ResolvedAtISO string // Same as ResolvedAt (alias for template consistency)
 
+	// Tenant identity (multi-tenant orgs and MSP client runtimes).
+	// Empty on plain single-tenant installs.
+	TenantID   string
+	TenantName string
+
 	// Additional context
 	Metadata     map[string]interface{}
 	CustomFields map[string]interface{}

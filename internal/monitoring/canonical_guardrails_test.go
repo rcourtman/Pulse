@@ -2234,3 +2234,50 @@ func TestMonitorUptimeFallsBackToCanonicalResourceUptime(t *testing.T) {
 		}
 	})
 }
+
+// Tenant monitors must stamp their org's identity into notification webhook
+// payloads via an org-backed resolver, so PSA/ticket-bridge receivers get
+// tenant routing identity from the payload boundary and display-name renames
+// propagate without a monitor restart.
+func TestTenantMonitorWiresOrgIdentityIntoNotifications(t *testing.T) {
+	mtp, _ := newTestTenantPersistence(t)
+	baseCfg := &config.Config{DataPath: t.TempDir()}
+	mtm := NewMultiTenantMonitor(baseCfg, mtp, nil)
+	t.Cleanup(mtm.Stop)
+
+	if err := mtp.SaveOrganization(&models.Organization{
+		ID:          "org-acme",
+		DisplayName: "Acme Corp",
+	}); err != nil {
+		t.Fatalf("SaveOrganization(org-acme) error = %v", err)
+	}
+
+	monitor, err := mtm.GetMonitor("org-acme")
+	if err != nil {
+		t.Fatalf("GetMonitor(org-acme) error = %v", err)
+	}
+
+	nm := monitor.GetNotificationManager()
+	if nm == nil {
+		t.Fatal("expected tenant monitor to have a notification manager")
+	}
+
+	tenantID, tenantName := nm.TenantIdentity()
+	if tenantID != "org-acme" {
+		t.Fatalf("TenantIdentity() id = %q, want %q", tenantID, "org-acme")
+	}
+	if tenantName != "Acme Corp" {
+		t.Fatalf("TenantIdentity() name = %q, want %q", tenantName, "Acme Corp")
+	}
+
+	// Display-name renames must propagate lazily without monitor restarts.
+	if err := mtp.SaveOrganization(&models.Organization{
+		ID:          "org-acme",
+		DisplayName: "Acme Corp Renamed",
+	}); err != nil {
+		t.Fatalf("SaveOrganization(rename) error = %v", err)
+	}
+	if _, tenantName = nm.TenantIdentity(); tenantName != "Acme Corp Renamed" {
+		t.Fatalf("TenantIdentity() name after rename = %q, want %q", tenantName, "Acme Corp Renamed")
+	}
+}
