@@ -216,11 +216,12 @@ type ReportData struct {
 	Brand        *ReportBrand
 
 	// Enrichment data (optional, for richer PDF reports)
-	Resource *ResourceInfo
-	Alerts   []AlertInfo
-	Backups  []BackupInfo
-	Storage  []StorageInfo
-	Disks    []DiskInfo
+	Resource     *ResourceInfo
+	Alerts       []AlertInfo
+	Backups      []BackupInfo
+	Storage      []StorageInfo
+	Disks        []DiskInfo
+	Availability *AvailabilityInfo
 
 	// Interpretation layer (optional). When set, the renderer prefers these
 	// over recomputing heuristic observations/recommendations inline. The
@@ -284,6 +285,7 @@ func (e *ReportEngine) queryMetrics(req MetricReportRequest) (*ReportData, error
 	data.Backups = req.Backups
 	data.Storage = req.Storage
 	data.Disks = req.Disks
+	data.Availability = req.Availability
 
 	store := e.getMetricsStore()
 	storeTypes := metricsStoreResourceTypes(canonicalType)

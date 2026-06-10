@@ -218,6 +218,11 @@ func TestPaidDomainBoundaryAudit(t *testing.T) {
 	knownPublicReportingFiles := map[string]bool{
 		"reporting_catalog_handlers.go":   true,
 		"reporting_inventory_handlers.go": true,
+		// Availability computation for the default report handlers. Since
+		// the enterprise reporting binder delegates generation to these
+		// defaults (the enterprise fork silently drifted and was removed),
+		// internal/api is the canonical home for the report pipeline.
+		"reporting_availability.go": true,
 	}
 
 	for name := range goFiles {

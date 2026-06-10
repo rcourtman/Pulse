@@ -226,6 +226,91 @@ func (g *PDFGenerator) Generate(data *ReportData) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// formatOutageDuration renders a downtime duration for report copy,
+// never collapsing a real outage to "0 minutes".
+func formatOutageDuration(d time.Duration) string {
+	if d > 0 && d < time.Minute {
+		return "under a minute"
+	}
+	return formatDuration(d)
+}
+
+// availabilityUptimeLabel renders an uptime percentage for report copy.
+// Two decimal places keep "99.97%" distinguishable from "100%"; values
+// that round up to a clean boundary are clamped so the label never
+// overstates availability.
+func availabilityUptimeLabel(percent float64) string {
+	if percent >= 100 {
+		return "100%"
+	}
+	label := fmt.Sprintf("%.2f%%", percent)
+	if label == "100.00%" {
+		return "99.99%"
+	}
+	return label
+}
+
+// writeAvailabilitySection renders the observed-availability block in the
+// executive summary. This is the number a managed-service client reads the
+// report for: uptime over the period, outage count, and total downtime.
+// Skipped entirely when no availability data was attached (no resource
+// timeline available); renders a muted note when the resource was not
+// observed during the window.
+func (g *PDFGenerator) writeAvailabilitySection(pdf *fpdf.Fpdf, availability *AvailabilityInfo) {
+	if availability == nil {
+		return
+	}
+
+	pdf.SetFont("Arial", "B", 11)
+	pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+	pdf.CellFormat(0, 8, "Availability", "", 1, "L", false, 0, "")
+	pdf.Ln(1)
+
+	if !availability.Observed() {
+		pdf.SetFont("Arial", "", 10)
+		pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
+		pdf.CellFormat(0, 6, "Not observed during this window - no state history was recorded for this resource.", "", 1, "L", false, 0, "")
+		pdf.Ln(4)
+		return
+	}
+
+	uptimeColor := colorAccent
+	if availability.TotalDowntime > 0 {
+		uptimeColor = colorWarning
+	}
+	if availability.UptimePercent < 99 {
+		uptimeColor = colorDanger
+	}
+
+	pdf.SetFont("Arial", "B", 20)
+	pdf.SetTextColor(uptimeColor[0], uptimeColor[1], uptimeColor[2])
+	pdf.CellFormat(50, 10, availabilityUptimeLabel(availability.UptimePercent), "", 0, "L", false, 0, "")
+
+	detail := "No outages observed"
+	if availability.DownIncidents > 0 {
+		outageWord := "outages"
+		if availability.DownIncidents == 1 {
+			outageWord = "outage"
+		}
+		detail = fmt.Sprintf("%d %s, %s total downtime (longest %s)",
+			availability.DownIncidents, outageWord,
+			formatOutageDuration(availability.TotalDowntime),
+			formatOutageDuration(availability.LongestOutage))
+	}
+	pdf.SetFont("Arial", "", 10)
+	pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+	pdf.CellFormat(0, 10, detail, "", 1, "L", false, 0, "")
+
+	// Disclose partial observation instead of letting a monitoring gap
+	// silently inflate (or deflate) the headline number.
+	if availability.ObservedPercent < 99.5 {
+		pdf.SetFont("Arial", "", 8)
+		pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
+		pdf.CellFormat(0, 5, fmt.Sprintf("Based on the %.1f%% of this period Pulse was observing the resource; monitoring gaps are excluded, not counted as downtime.", availability.ObservedPercent), "", 1, "L", false, 0, "")
+	}
+	pdf.Ln(4)
+}
+
 // reportSubjectDisplayName returns the human-readable name for the report
 // subject, falling back to the raw resource ID when enrichment did not
 // resolve one.
@@ -409,6 +494,8 @@ func (g *PDFGenerator) writeExecutiveSummary(pdf *fpdf.Fpdf, data *ReportData) {
 		pdf.MultiCell(cardWidth, 5, data.Narrative.ExecutiveSummary, "", "L", false)
 		pdf.Ln(3)
 	}
+
+	g.writeAvailabilitySection(pdf, data.Availability)
 
 	// Quick Stats - simple table format (avoids fpdf positioning bugs)
 	pdf.SetFont("Arial", "B", 11)
@@ -1956,8 +2043,8 @@ func (g *PDFGenerator) writeFleetSummary(pdf *fpdf.Fpdf, data *MultiReportData) 
 	pdf.Ln(2)
 
 	// Table header
-	colWidths := []float64{40, 25, 20, 23, 23, 23, 16}
-	headers := []string{"Resource", "Type", "Status", "Avg CPU", "Avg Mem", "Avg Disk", "Alerts"}
+	colWidths := []float64{37, 22, 16, 19, 19, 19, 19, 19}
+	headers := []string{"Resource", "Type", "Status", "Uptime", "Avg CPU", "Avg Mem", "Avg Disk", "Alerts"}
 
 	pdf.SetFillColor(colorTableHeader[0], colorTableHeader[1], colorTableHeader[2])
 	pdf.SetTextColor(255, 255, 255)
@@ -2013,13 +2100,30 @@ func (g *PDFGenerator) writeFleetSummary(pdf *fpdf.Fpdf, data *MultiReportData) 
 		}
 		pdf.CellFormat(colWidths[2], 6, status, "1", 0, "C", fill, 0, "")
 
+		// Uptime over the window. A dash means the resource was never
+		// observed (or no timeline was available) - distinct from 100%.
+		uptimeLabel := "-"
+		uptimeColor := colorTextMuted
+		if rd.Availability.Observed() {
+			uptimeLabel = availabilityUptimeLabel(rd.Availability.UptimePercent)
+			uptimeColor = colorAccent
+			if rd.Availability.TotalDowntime > 0 {
+				uptimeColor = colorWarning
+			}
+			if rd.Availability.UptimePercent < 99 {
+				uptimeColor = colorDanger
+			}
+		}
+		pdf.SetTextColor(uptimeColor[0], uptimeColor[1], uptimeColor[2])
+		pdf.CellFormat(colWidths[3], 6, uptimeLabel, "1", 0, "C", fill, 0, "")
+
 		// Avg CPU
 		var avgCPU float64
 		if stats, ok := rd.Summary.ByMetric["cpu"]; ok {
 			avgCPU = stats.Avg
 		}
 		pdf.SetTextColor(getStatColor(avgCPU)[0], getStatColor(avgCPU)[1], getStatColor(avgCPU)[2])
-		pdf.CellFormat(colWidths[3], 6, fmt.Sprintf("%.1f%%", avgCPU), "1", 0, "C", fill, 0, "")
+		pdf.CellFormat(colWidths[4], 6, fmt.Sprintf("%.1f%%", avgCPU), "1", 0, "C", fill, 0, "")
 
 		if avgCPU > highestCPUVal {
 			highestCPUVal = avgCPU
@@ -2036,7 +2140,7 @@ func (g *PDFGenerator) writeFleetSummary(pdf *fpdf.Fpdf, data *MultiReportData) 
 			avgMem = stats.Avg
 		}
 		pdf.SetTextColor(getStatColor(avgMem)[0], getStatColor(avgMem)[1], getStatColor(avgMem)[2])
-		pdf.CellFormat(colWidths[4], 6, fmt.Sprintf("%.1f%%", avgMem), "1", 0, "C", fill, 0, "")
+		pdf.CellFormat(colWidths[5], 6, fmt.Sprintf("%.1f%%", avgMem), "1", 0, "C", fill, 0, "")
 
 		// Avg Disk
 		var avgDisk float64
@@ -2046,7 +2150,7 @@ func (g *PDFGenerator) writeFleetSummary(pdf *fpdf.Fpdf, data *MultiReportData) 
 			avgDisk = stats.Avg
 		}
 		pdf.SetTextColor(getStatColor(avgDisk)[0], getStatColor(avgDisk)[1], getStatColor(avgDisk)[2])
-		pdf.CellFormat(colWidths[5], 6, fmt.Sprintf("%.1f%%", avgDisk), "1", 0, "C", fill, 0, "")
+		pdf.CellFormat(colWidths[6], 6, fmt.Sprintf("%.1f%%", avgDisk), "1", 0, "C", fill, 0, "")
 
 		// Alerts count
 		alertCount := 0
@@ -2056,7 +2160,7 @@ func (g *PDFGenerator) writeFleetSummary(pdf *fpdf.Fpdf, data *MultiReportData) 
 			}
 		}
 		pdf.SetTextColor(getAlertCountColor(alertCount)[0], getAlertCountColor(alertCount)[1], getAlertCountColor(alertCount)[2])
-		pdf.CellFormat(colWidths[6], 6, fmt.Sprintf("%d", alertCount), "1", 0, "C", fill, 0, "")
+		pdf.CellFormat(colWidths[7], 6, fmt.Sprintf("%d", alertCount), "1", 0, "C", fill, 0, "")
 
 		if alertCount > mostAlertsCount {
 			mostAlertsCount = alertCount

@@ -33,11 +33,12 @@ type MetricReportRequest struct {
 	MetricsResourceID string
 
 	// Optional enrichment data (populated by handler from monitor state)
-	Resource *ResourceInfo // Details about the resource being reported on
-	Alerts   []AlertInfo   // Active and recently resolved alerts for this resource
-	Backups  []BackupInfo  // Backup information for VMs/containers
-	Storage  []StorageInfo // Storage pools (for nodes)
-	Disks    []DiskInfo    // Physical disk health (for nodes)
+	Resource     *ResourceInfo     // Details about the resource being reported on
+	Alerts       []AlertInfo       // Active and recently resolved alerts for this resource
+	Backups      []BackupInfo      // Backup information for VMs/containers
+	Storage      []StorageInfo     // Storage pools (for nodes)
+	Disks        []DiskInfo        // Physical disk health (for nodes)
+	Availability *AvailabilityInfo // Observed availability over the window (from the state timeline)
 
 	// Optional narrative interpretation. When Narrator is non-nil the
 	// engine builds a NarrativeInput from the queried report data and asks
@@ -46,6 +47,36 @@ type MetricReportRequest struct {
 	// so a narrator can reference Patrol activity in the period.
 	Narrator         Narrator
 	FindingsProvider FindingsProvider
+}
+
+// AvailabilityInfo summarizes a resource's observed availability over the
+// report window, derived from the recorded resource state timeline.
+//
+// Time the resource was absent from the registry or in an unknown state
+// (for example while the monitor itself was restarting) is treated as
+// unobserved: it is excluded from the uptime calculation entirely rather
+// than counted as downtime, and disclosed through ObservedPercent. A
+// monitoring gap is not an outage, and a client-facing stability report
+// must not present one as such.
+type AvailabilityInfo struct {
+	// UptimePercent is up / (up + down) over the observed portion of the
+	// window. Online and warning states count as up; offline counts as
+	// down. Zero when the resource was never observed in the window.
+	UptimePercent float64
+	// ObservedPercent is the share of the report window during which the
+	// resource state was actually being recorded.
+	ObservedPercent float64
+	// TotalDowntime is the cumulative time spent in a down state.
+	TotalDowntime time.Duration
+	// LongestOutage is the longest contiguous stretch of down time.
+	LongestOutage time.Duration
+	// DownIncidents counts distinct transitions into a down state.
+	DownIncidents int
+}
+
+// Observed reports whether the resource was observed at all in the window.
+func (a *AvailabilityInfo) Observed() bool {
+	return a != nil && a.ObservedPercent > 0
 }
 
 // ResourceInfo contains details about the resource being reported on

@@ -636,6 +636,7 @@ func sanitizeFilename(s string) string {
 // enrichReportRequest populates enrichment data from the monitor state
 func (h *ReportingHandlers) enrichReportRequest(ctx context.Context, orgID string, req *reporting.MetricReportRequest, snapshot reportingEnrichmentSnapshot, start, end time.Time) {
 	h.resolveReportSubject(orgID, req, snapshot)
+	h.resolveReportAvailability(orgID, req, snapshot, start, end)
 	switch req.ResourceType {
 	case "node":
 		h.enrichNodeReport(req, snapshot, start, end)

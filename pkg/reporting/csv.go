@@ -54,8 +54,16 @@ func (g *CSVGenerator) writeHeader(w *csv.Writer, data *ReportData) error {
 		{"# Period:", fmt.Sprintf("%s to %s", data.Start.Format(time.RFC3339), data.End.Format(time.RFC3339))},
 		{"# Generated:", data.GeneratedAt.Format(time.RFC3339)},
 		{"# Total Data Points:", fmt.Sprintf("%d", data.TotalPoints)},
-		{""}, // Empty row as separator
 	}
+	if data.Availability.Observed() {
+		headers = append(headers,
+			[]string{"# Uptime:", fmt.Sprintf("%.2f%%", data.Availability.UptimePercent)},
+			[]string{"# Outages:", fmt.Sprintf("%d", data.Availability.DownIncidents)},
+			[]string{"# Total Downtime:", data.Availability.TotalDowntime.Round(time.Second).String()},
+			[]string{"# Observed:", fmt.Sprintf("%.1f%% of period", data.Availability.ObservedPercent)},
+		)
+	}
+	headers = append(headers, []string{""}) // Empty row as separator
 
 	for _, row := range headers {
 		if err := w.Write(row); err != nil {

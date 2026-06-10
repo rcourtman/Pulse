@@ -287,3 +287,110 @@ func inflateStream(b []byte) ([]byte, error) {
 // pdf.go but tests referencing fpdf.New constants confirm we still
 // resolve the package.
 var _ = fpdf.New
+
+// TestExecutiveSummary_AvailabilitySectionRendersUptime asserts the
+// availability block renders the headline uptime number, outage detail,
+// and the partial-observation disclosure. This is the number an MSP's
+// client reads the report for.
+func TestExecutiveSummary_AvailabilitySectionRendersUptime(t *testing.T) {
+	data := &ReportData{
+		Title:        "Avail",
+		ResourceType: "vm",
+		ResourceID:   "vm-1",
+		Start:        time.Now().Add(-30 * 24 * time.Hour),
+		End:          time.Now(),
+		GeneratedAt:  time.Now(),
+		Summary:      MetricSummary{ByMetric: map[string]MetricStats{"cpu": {Avg: 10, Count: 10}}},
+		TotalPoints:  10,
+		Availability: &AvailabilityInfo{
+			UptimePercent:   99.42,
+			ObservedPercent: 87.5,
+			TotalDowntime:   4 * time.Hour,
+			LongestOutage:   3 * time.Hour,
+			DownIncidents:   2,
+		},
+	}
+	text := renderExecutiveSummaryText(t, data)
+	if !strings.Contains(text, "Availability") {
+		t.Errorf("expected Availability section, got:\n%s", text)
+	}
+	if !strings.Contains(text, "99.42%") {
+		t.Errorf("expected uptime percentage, got:\n%s", text)
+	}
+	if !strings.Contains(text, "2 outages") || !strings.Contains(text, "4 hours total downtime") {
+		t.Errorf("expected outage detail, got:\n%s", text)
+	}
+	if !strings.Contains(text, "87.5% of this period") {
+		t.Errorf("expected partial-observation disclosure, got:\n%s", text)
+	}
+}
+
+// TestExecutiveSummary_AvailabilityOmittedWhenUnavailable asserts reports
+// without a resource timeline render no availability section at all (no
+// fabricated 100%).
+func TestExecutiveSummary_AvailabilityOmittedWhenUnavailable(t *testing.T) {
+	data := &ReportData{
+		Title:        "NoAvail",
+		ResourceType: "vm",
+		ResourceID:   "vm-1",
+		Start:        time.Now().Add(-time.Hour),
+		End:          time.Now(),
+		GeneratedAt:  time.Now(),
+		Summary:      MetricSummary{ByMetric: map[string]MetricStats{"cpu": {Avg: 10, Count: 10}}},
+		TotalPoints:  10,
+	}
+	text := renderExecutiveSummaryText(t, data)
+	if strings.Contains(text, "Availability") {
+		t.Errorf("expected no availability section without data, got:\n%s", text)
+	}
+}
+
+// TestFleetSummary_UptimeColumn asserts the fleet table carries the
+// per-resource uptime column, with a dash for unobserved resources.
+func TestFleetSummary_UptimeColumn(t *testing.T) {
+	now := time.Now()
+	multi := &MultiReportData{
+		Title:       "Fleet",
+		Start:       now.Add(-30 * 24 * time.Hour),
+		End:         now,
+		GeneratedAt: now,
+		Resources: []*ReportData{
+			{
+				ResourceID:   "vm-a",
+				ResourceType: "vm",
+				Resource:     &ResourceInfo{Name: "alpha", Status: "online"},
+				Summary:      MetricSummary{ByMetric: map[string]MetricStats{"cpu": {Avg: 10, Count: 60}}},
+				TotalPoints:  60,
+				Availability: &AvailabilityInfo{UptimePercent: 99.95, ObservedPercent: 100, TotalDowntime: 20 * time.Minute, DownIncidents: 1},
+			},
+			{
+				ResourceID:   "vm-b",
+				ResourceType: "vm",
+				Resource:     &ResourceInfo{Name: "beta", Status: "online"},
+				Summary:      MetricSummary{ByMetric: map[string]MetricStats{"cpu": {Avg: 10, Count: 60}}},
+				TotalPoints:  60,
+			},
+		},
+	}
+	text := renderFleetSummaryText(t, multi)
+	if !strings.Contains(text, "Uptime") {
+		t.Errorf("expected Uptime column header, got:\n%s", text)
+	}
+	if !strings.Contains(text, "99.95%") {
+		t.Errorf("expected uptime value for observed resource, got:\n%s", text)
+	}
+}
+
+// TestAvailabilityUptimeLabel_NeverOverstates pins the rounding clamp: a
+// window with any downtime must not round up to a clean 100%.
+func TestAvailabilityUptimeLabel_NeverOverstates(t *testing.T) {
+	if got := availabilityUptimeLabel(99.999); got != "99.99%" {
+		t.Fatalf("availabilityUptimeLabel(99.999) = %q, want 99.99%%", got)
+	}
+	if got := availabilityUptimeLabel(100); got != "100%" {
+		t.Fatalf("availabilityUptimeLabel(100) = %q, want 100%%", got)
+	}
+	if got := availabilityUptimeLabel(99.4249); got != "99.42%" {
+		t.Fatalf("availabilityUptimeLabel(99.4249) = %q, want 99.42%%", got)
+	}
+}

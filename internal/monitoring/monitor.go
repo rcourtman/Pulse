@@ -4126,6 +4126,39 @@ func (m *Monitor) MetricsTargetForResource(resourceID string) *unifiedresources.
 	return resolver.MetricsTargetForResource(resourceID)
 }
 
+// resourceChangeTimeline is the slice of the resource store needed to read
+// the recorded state timeline for a canonical resource ID.
+type resourceChangeTimeline interface {
+	GetRecentChanges(canonicalID string, since time.Time, limit int) ([]unifiedresources.ResourceChange, error)
+}
+
+// RecentResourceChanges returns the recorded change timeline for a canonical
+// unified resource ID since the given time, newest first (store order).
+// Returns nil when no resource store is wired or it does not record changes.
+func (m *Monitor) RecentResourceChanges(resourceID string, since time.Time, limit int) []unifiedresources.ResourceChange {
+	if m == nil {
+		return nil
+	}
+
+	m.mu.RLock()
+	store := m.resourceStore
+	m.mu.RUnlock()
+	if store == nil {
+		return nil
+	}
+
+	timeline, ok := store.(resourceChangeTimeline)
+	if !ok {
+		return nil
+	}
+	changes, err := timeline.GetRecentChanges(resourceID, since, limit)
+	if err != nil {
+		log.Warn().Err(err).Str("resourceID", resourceID).Msg("failed to read resource change timeline")
+		return nil
+	}
+	return changes
+}
+
 type monitorUnifiedStateView struct {
 	resources []unifiedresources.Resource
 	readState unifiedresources.ReadState
