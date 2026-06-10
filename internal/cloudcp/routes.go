@@ -138,6 +138,9 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	hostedEntitlements := deps.HostedEntitlements
 	if hostedEntitlements == nil {
 		hostedEntitlements = entitlements.NewService(deps.Registry, deps.Config.BaseURL, deps.Config.TrialActivationPrivateKey)
+		if deps.Config.IsProviderHostedMSP() {
+			hostedEntitlements.SetProviderLicense(deps.Config.ProviderMSPLicenseKey)
+		}
 	}
 	provisioner := deps.Provisioner
 	if provisioner == nil {

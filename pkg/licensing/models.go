@@ -36,6 +36,14 @@ type Claims struct {
 	PlanVersion   string            `json:"plan_version,omitempty"`
 	SubState      SubscriptionState `json:"subscription_state,omitempty"`
 
+	// EntitlementSigningPublicKey binds a provider-operated control plane's
+	// entitlement lease signing key (base64 Ed25519 public key) to this
+	// license. Hosted entitlement leases signed by the bound key chain back
+	// to the embedded Pulse trust root through this license, so release
+	// builds can verify provider-minted leases without trusting environment
+	// wiring. Only meaningful on MSP-tier licenses.
+	EntitlementSigningPublicKey string `json:"entitlement_signing_public_key,omitempty"`
+
 	// CoreMonitoringUncapped is a local runtime marker used when a self-hosted
 	// activation/grant should remain uncapped even if stale legacy limit fields
 	// are still present in the persisted claims. It is intentionally excluded

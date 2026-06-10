@@ -27,6 +27,7 @@ type Service struct {
 	registry                  *registry.TenantRegistry
 	baseURL                   string
 	trialActivationPrivateKey string
+	providerLicense           string
 	now                       func() time.Time
 }
 
@@ -48,6 +49,17 @@ func (s *Service) SetNow(now func() time.Time) {
 		return
 	}
 	s.now = func() time.Time { return now().UTC() }
+}
+
+// SetProviderLicense chains the Pulse-signed provider MSP license into every
+// lease this service signs. Release-build client runtimes only trust lease
+// signing keys bound into such a license, so provider-hosted control planes
+// must set this for their leases to verify.
+func (s *Service) SetProviderLicense(licenseKey string) {
+	if s == nil {
+		return
+	}
+	s.providerLicense = strings.TrimSpace(licenseKey)
 }
 
 func (s *Service) IssueTenantBillingState(tenant *registry.Tenant, requestedSubState pkglicensing.SubscriptionState, requestedPlanVersion, stripeCustomerID, stripeSubscriptionID, stripePriceID string) (*pkglicensing.BillingState, error) {
@@ -142,6 +154,7 @@ type tenantLeaseContext struct {
 	stripeAccount     *registry.StripeAccount
 	subscriptionState pkglicensing.SubscriptionState
 	planVersion       string
+	providerChained   bool
 }
 
 type trialEntitlementContext struct {
@@ -234,6 +247,7 @@ func (s *Service) resolveTenantLeaseContext(tenant *registry.Tenant, requestedSu
 		tenant:            tenant,
 		subscriptionState: requestedSubState,
 		planVersion:       pkglicensing.CanonicalizePlanVersion(requestedPlanVersion),
+		providerChained:   strings.TrimSpace(s.providerLicense) != "",
 	}
 	if ctx.planVersion == "" {
 		ctx.planVersion = pkglicensing.CanonicalizePlanVersion(tenant.PlanVersion)
@@ -296,6 +310,7 @@ func (s *Service) signPaidLease(ctx *tenantLeaseContext, instanceHost string, no
 		return "", err
 	}
 	claims := buildPaidEntitlementLeaseClaims(ctx, instanceHost, now)
+	claims.ProviderLicense = s.providerLicense
 	signed, err := pkglicensing.SignEntitlementLeaseToken(privateKey, claims)
 	if err != nil {
 		return "", fmt.Errorf("sign hosted entitlement lease: %w", err)
@@ -332,6 +347,10 @@ func randomRefreshToken() (string, error) {
 	return "etr_hosted_" + hex.EncodeToString(raw), nil
 }
 
+func isMSPPlanVersion(planVersion string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(planVersion)), "msp_")
+}
+
 func tenantSubscriptionState(tenant *registry.Tenant) pkglicensing.SubscriptionState {
 	if tenant == nil {
 		return pkglicensing.SubStateExpired
@@ -349,7 +368,21 @@ func tenantSubscriptionState(tenant *registry.Tenant) pkglicensing.SubscriptionS
 func buildPaidEntitlementLeaseClaims(ctx *tenantLeaseContext, instanceHost string, now time.Time) pkglicensing.EntitlementLeaseClaims {
 	var capabilities []string
 	if pkglicensing.ShouldGrantPaidCapabilities(ctx.subscriptionState) {
-		capabilities = pkglicensing.DeriveCapabilitiesFromTier(pkglicensing.TierCloud, nil)
+		switch {
+		case isMSPPlanVersion(ctx.planVersion) && ctx.providerChained:
+			// Provider-hosted MSP client workspaces lease the chained
+			// ceiling: MSP tier plus white_label (branded per-client
+			// reports), minus Pulse-service-backed capabilities (relay,
+			// mobile, push) the provider deployment cannot grant. Mirrors
+			// the chain-verification cap in pkg/licensing.
+			capabilities = pkglicensing.ProviderChainedLeaseCapabilities()
+		case isMSPPlanVersion(ctx.planVersion):
+			// Pulse-hosted MSP workspaces run against Pulse-operated
+			// services, so they keep the full MSP tier set.
+			capabilities = pkglicensing.DeriveCapabilitiesFromTier(pkglicensing.TierMSP, []string{pkglicensing.FeatureWhiteLabel})
+		default:
+			capabilities = pkglicensing.DeriveCapabilitiesFromTier(pkglicensing.TierCloud, nil)
+		}
 	}
 	claims := pkglicensing.EntitlementLeaseClaims{
 		OrgID:             "default",

@@ -59,6 +59,7 @@ func Run(ctx context.Context, version string) error {
 		IsolateTenantNetworks:    cfg.IsMSPControlPlane(),
 		BaseDomain:               baseDomainFromURL(cfg.BaseURL),
 		TrialActivationPublicKey: cfg.TrialActivationPublicKey,
+		ControlPlaneBaseURL:      cfg.BaseURL,
 		TrustedProxyCIDRs:        cfg.TrustedProxyCIDRs,
 		TenantDisplayName:        tenantDisplayNameResolver(reg),
 		TenantReportBrand: cpDocker.TenantReportBrandConfig{
@@ -112,6 +113,9 @@ func Run(ctx context.Context, version string) error {
 	// Build HTTP routes
 	mux := http.NewServeMux()
 	hostedEntitlements := entitlements.NewService(reg, cfg.BaseURL, cfg.TrialActivationPrivateKey)
+	if cfg.IsProviderHostedMSP() {
+		hostedEntitlements.SetProviderLicense(cfg.ProviderMSPLicenseKey)
+	}
 	provisioner := cpstripe.NewProvisioner(
 		reg,
 		cfg.TenantsDir(),

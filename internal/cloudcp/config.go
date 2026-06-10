@@ -83,6 +83,8 @@ type CPConfig struct {
 	ProviderMSPLicenseFile            string // Signed provider MSP license source
 	ProviderMSPLicenseID              string // Validated provider MSP license ID
 	ProviderMSPLicenseEmail           string // Validated provider MSP license holder
+	ProviderMSPLicenseKey             string // Raw validated provider MSP license (chained into tenant leases)
+	ProviderMSPLeaseSigningPublicKey  string // entitlement_signing_public_key claim from the provider MSP license
 	LicenseServerURL                  string
 	LicenseAdminToken                 string
 	TrialActivationPrivateKey         string
@@ -189,15 +191,19 @@ func LoadConfig() (*CPConfig, error) {
 	providerMSPPlanSource := ProviderMSPPlanSourceEnvFallback
 	providerMSPLicenseID := ""
 	providerMSPLicenseEmail := ""
+	providerMSPLicenseKey := ""
+	providerMSPLeaseSigningPublicKey := ""
 	if isMSPControlPlaneMode(controlPlaneMode) && providerMSPLicenseFile != "" {
-		resolvedPlan, licenseID, licenseEmail, err := resolveProviderMSPPlanFromLicenseFile(providerMSPLicenseFile)
+		resolved, err := resolveProviderMSPPlanFromLicenseFile(providerMSPLicenseFile)
 		if err != nil {
 			return nil, fmt.Errorf("resolve provider MSP license: %w", err)
 		}
-		providerMSPPlanVersion = resolvedPlan
+		providerMSPPlanVersion = resolved.PlanVersion
 		providerMSPPlanSource = ProviderMSPPlanSourceLicenseFile
-		providerMSPLicenseID = licenseID
-		providerMSPLicenseEmail = licenseEmail
+		providerMSPLicenseID = resolved.LicenseID
+		providerMSPLicenseEmail = resolved.LicenseEmail
+		providerMSPLicenseKey = resolved.LicenseKey
+		providerMSPLeaseSigningPublicKey = resolved.LeaseSigningPublicKey
 	}
 
 	cfg := &CPConfig{
@@ -250,6 +256,8 @@ func LoadConfig() (*CPConfig, error) {
 		ProviderMSPPlanVersion:            providerMSPPlanVersion,
 		ProviderMSPPlanSource:             providerMSPPlanSource,
 		ProviderMSPLicenseFile:            providerMSPLicenseFile,
+		ProviderMSPLicenseKey:             providerMSPLicenseKey,
+		ProviderMSPLeaseSigningPublicKey:  providerMSPLeaseSigningPublicKey,
 		ProviderMSPLicenseID:              providerMSPLicenseID,
 		ProviderMSPLicenseEmail:           providerMSPLicenseEmail,
 		LicenseServerURL:                  envOrDefault("PULSE_LICENSE_SERVER_URL", "https://license.pulserelay.pro"),
@@ -271,7 +279,41 @@ func LoadConfig() (*CPConfig, error) {
 	if err := cfg.validate(); err != nil {
 		return nil, fmt.Errorf("validate control plane config: %w", err)
 	}
+
+	if err := cfg.validateProviderMSPLeaseSigningBinding(); err != nil {
+		return nil, err
+	}
 	return cfg, nil
+}
+
+// validateProviderMSPLeaseSigningBinding fails fast when a provider-hosted
+// MSP control plane cannot mint entitlement leases that client runtimes will
+// verify. Release-build tenant runtimes only trust lease signing keys bound
+// into the Pulse-signed provider MSP license, so a missing or mismatched
+// binding would provision client workspaces that silently run unlicensed.
+func (c *CPConfig) validateProviderMSPLeaseSigningBinding() error {
+	if c == nil || !c.IsProviderHostedMSP() || strings.TrimSpace(c.ProviderMSPLicenseKey) == "" {
+		// Pulse-hosted modes sign with Pulse's own key, and the env-fallback
+		// plan path (dev/install-proof without a license file) has nothing
+		// to bind against.
+		return nil
+	}
+	boundKey := strings.TrimSpace(c.ProviderMSPLeaseSigningPublicKey)
+	if boundKey == "" {
+		return fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE does not bind an entitlement lease signing key (entitlement_signing_public_key); request an updated provider MSP license bound to this control plane's CP_TRIAL_ACTIVATION_PRIVATE_KEY public key %q", c.TrialActivationPublicKey)
+	}
+	bound, err := pkglicensing.DecodePublicKey(boundKey)
+	if err != nil {
+		return fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE entitlement_signing_public_key is malformed: %w", err)
+	}
+	derived, err := pkglicensing.DecodePublicKey(c.TrialActivationPublicKey)
+	if err != nil {
+		return fmt.Errorf("derive trial activation public key: %w", err)
+	}
+	if !bound.Equal(derived) {
+		return fmt.Errorf("CP_TRIAL_ACTIVATION_PRIVATE_KEY does not match the entitlement lease signing key bound in CP_PROVIDER_MSP_LICENSE_FILE (license binds %q, control plane derives %q); use the keypair the license was issued for, or request a license bound to this key", boundKey, c.TrialActivationPublicKey)
+	}
+	return nil
 }
 
 func deriveTrialActivationPublicKey(encodedPrivateKey string) (string, error) {
@@ -537,37 +579,51 @@ func isMSPControlPlaneMode(mode ControlPlaneMode) bool {
 	}
 }
 
-func resolveProviderMSPPlanFromLicenseFile(path string) (planVersion, licenseID, licenseEmail string, err error) {
+type providerMSPLicenseResolution struct {
+	PlanVersion           string
+	LicenseID             string
+	LicenseEmail          string
+	LicenseKey            string // raw signed license, chained into tenant entitlement leases
+	LeaseSigningPublicKey string // entitlement_signing_public_key claim, empty when the license predates lease chaining
+}
+
+func resolveProviderMSPPlanFromLicenseFile(path string) (*providerMSPLicenseResolution, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
-		return "", "", "", fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE is required")
+		return nil, fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE is required")
 	}
 	licenseKey, err := readProviderMSPLicenseFile(path)
 	if err != nil {
-		return "", "", "", err
+		return nil, err
 	}
 	pkglicensing.InitEmbeddedPublicKey()
 	license, err := pkglicensing.ValidateLicense(licenseKey)
 	if err != nil {
-		return "", "", "", fmt.Errorf("validate CP_PROVIDER_MSP_LICENSE_FILE: %w", err)
+		return nil, fmt.Errorf("validate CP_PROVIDER_MSP_LICENSE_FILE: %w", err)
 	}
 	if license == nil {
-		return "", "", "", fmt.Errorf("validate CP_PROVIDER_MSP_LICENSE_FILE: no license returned")
+		return nil, fmt.Errorf("validate CP_PROVIDER_MSP_LICENSE_FILE: no license returned")
 	}
 	if license.Claims.Tier != pkglicensing.TierMSP {
-		return "", "", "", fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE must contain an MSP license tier, got %q", license.Claims.Tier)
+		return nil, fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE must contain an MSP license tier, got %q", license.Claims.Tier)
 	}
 	plan := license.Claims.EntitlementPlanVersion()
 	if strings.TrimSpace(plan) == "" {
-		return "", "", "", fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE must contain plan_version")
+		return nil, fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE must contain plan_version")
 	}
 	if !strings.HasPrefix(strings.ToLower(plan), "msp_") {
-		return "", "", "", fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE plan_version must be a canonical MSP plan version, got %q", plan)
+		return nil, fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE plan_version must be a canonical MSP plan version, got %q", plan)
 	}
 	if _, known := pkglicensing.WorkspaceLimitForPlan(plan); !known {
-		return "", "", "", fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE plan_version must have a known workspace limit, got %q", plan)
+		return nil, fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE plan_version must have a known workspace limit, got %q", plan)
 	}
-	return plan, strings.TrimSpace(license.Claims.LicenseID), strings.ToLower(strings.TrimSpace(license.Claims.Email)), nil
+	return &providerMSPLicenseResolution{
+		PlanVersion:           plan,
+		LicenseID:             strings.TrimSpace(license.Claims.LicenseID),
+		LicenseEmail:          strings.ToLower(strings.TrimSpace(license.Claims.Email)),
+		LicenseKey:            licenseKey,
+		LeaseSigningPublicKey: strings.TrimSpace(license.Claims.EntitlementSigningPublicKey),
+	}, nil
 }
 
 func readProviderMSPLicenseFile(path string) (string, error) {

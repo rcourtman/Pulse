@@ -189,6 +189,7 @@ func providerMSPDockerManagerConfig(cfg *cloudcp.CPConfig) cpDocker.ManagerConfi
 		IsolateTenantNetworks:    true,
 		BaseDomain:               providerMSPBaseDomainFromURL(cfg.BaseURL),
 		TrialActivationPublicKey: cfg.TrialActivationPublicKey,
+		ControlPlaneBaseURL:      cfg.BaseURL,
 		TrustedProxyCIDRs:        cfg.TrustedProxyCIDRs,
 		MemoryLimit:              cfg.TenantMemoryLimit,
 		CPUShares:                cfg.TenantCPUShares,

@@ -45,6 +45,15 @@ type EntitlementLeaseClaims struct {
 	MetersEnabled     []string          `json:"meters_enabled,omitempty"`
 	TrialStartedAt    *int64            `json:"trial_started_at,omitempty"`
 	TrialEndsAt       *int64            `json:"trial_ends_at,omitempty"`
+
+	// ProviderLicense carries the Pulse-signed provider MSP license whose
+	// entitlement_signing_public_key claim binds the key this lease was
+	// signed with. Release builds verify the chain (embedded Pulse root →
+	// provider license → lease signature), so provider-hosted control
+	// planes can mint verifiable leases for the client runtimes they
+	// operate without holding Pulse's signing key.
+	ProviderLicense string `json:"provider_license,omitempty"`
+
 	jwt.RegisteredClaims
 }
 
@@ -135,12 +144,28 @@ func parseEntitlementLeaseToken(token string, publicKey ed25519.PublicKey, expec
 	if skipTimeValidation {
 		parseOpts = append(parseOpts, jwt.WithoutClaimsValidation())
 	}
+	chained := false
 	parsed, err := jwt.ParseWithClaims(
 		token,
 		claims,
 		func(t *jwt.Token) (any, error) {
 			if t.Method.Alg() != jwt.SigningMethodEdDSA.Alg() {
 				return nil, fmt.Errorf("unexpected signing method: %s", t.Method.Alg())
+			}
+			// A lease carrying a provider license selects the provider's
+			// bound signing key instead of the direct trust root. The
+			// provider license itself must verify against the embedded
+			// Pulse root before its bound key is trusted, so the chain
+			// never widens beyond Pulse-issued MSP licenses.
+			if leaseClaims, ok := t.Claims.(*EntitlementLeaseClaims); ok {
+				if providerLicense := strings.TrimSpace(leaseClaims.ProviderLicense); providerLicense != "" {
+					providerKey, err := providerLeaseSigningKeyFromLicense(providerLicense)
+					if err != nil {
+						return nil, err
+					}
+					chained = true
+					return providerKey, nil
+				}
 			}
 			return publicKey, nil
 		},
@@ -151,6 +176,9 @@ func parseEntitlementLeaseToken(token string, publicKey ed25519.PublicKey, expec
 	}
 	if !parsed.Valid {
 		return nil, errors.New("entitlement lease token is invalid")
+	}
+	if chained {
+		capProviderChainedLeaseClaims(claims)
 	}
 
 	claims.OrgID = strings.TrimSpace(claims.OrgID)
@@ -167,6 +195,78 @@ func parseEntitlementLeaseToken(token string, publicKey ed25519.PublicKey, expec
 	}
 	normalizeEntitlementLeaseClaims(claims)
 	return claims, nil
+}
+
+// providerLeaseSigningKeyFromLicense validates a Pulse-signed provider MSP
+// license against the runtime license trust root and returns the entitlement
+// lease signing key it binds. Every failure is terminal for the lease: an
+// unverifiable provider license must never fall back to the direct root,
+// or a forged chain would downgrade into a confusing signature error.
+func providerLeaseSigningKeyFromLicense(licenseKey string) (ed25519.PublicKey, error) {
+	license, err := ValidateLicense(licenseKey)
+	if err != nil {
+		return nil, fmt.Errorf("provider license in entitlement lease is invalid: %w", err)
+	}
+	if license == nil {
+		return nil, errors.New("provider license in entitlement lease is invalid")
+	}
+	if license.Claims.Tier != TierMSP {
+		return nil, fmt.Errorf("provider license tier %q cannot bind an entitlement lease signing key", license.Claims.Tier)
+	}
+	encoded := strings.TrimSpace(license.Claims.EntitlementSigningPublicKey)
+	if encoded == "" {
+		return nil, errors.New("provider license does not bind an entitlement lease signing key")
+	}
+	key, err := DecodePublicKey(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("provider license entitlement signing key is malformed: %w", err)
+	}
+	return key, nil
+}
+
+// ProviderChainedLeaseCapabilities returns the capability ceiling for
+// entitlement leases verified through a provider MSP license chain: the MSP
+// tier set plus white_label (branded per-client reports are the hosted MSP
+// packaging of that feature), minus capabilities backed by Pulse-operated
+// services (relay, mobile app pairing, push routing). A provider-hosted
+// deployment cannot grant those — client runtimes holding them would loop
+// doomed registrations against Pulse's relay with credentials it can never
+// verify.
+func ProviderChainedLeaseCapabilities() []string {
+	excluded := map[string]struct{}{
+		FeatureRelay:             {},
+		FeatureMobileApp:         {},
+		FeaturePushNotifications: {},
+	}
+	capabilities := make([]string, 0)
+	for _, capability := range DeriveCapabilitiesFromTier(TierMSP, []string{FeatureWhiteLabel}) {
+		if _, drop := excluded[capability]; drop {
+			continue
+		}
+		capabilities = append(capabilities, capability)
+	}
+	return capabilities
+}
+
+// capProviderChainedLeaseClaims bounds a chain-verified lease to
+// ProviderChainedLeaseCapabilities. A provider key can therefore never mint
+// enterprise-only, Pulse-service-backed, or future capabilities, regardless
+// of what the lease claims.
+func capProviderChainedLeaseClaims(claims *EntitlementLeaseClaims) {
+	if claims == nil {
+		return
+	}
+	allowed := make(map[string]struct{})
+	for _, capability := range ProviderChainedLeaseCapabilities() {
+		allowed[capability] = struct{}{}
+	}
+	kept := make([]string, 0, len(claims.Capabilities))
+	for _, capability := range claims.Capabilities {
+		if _, ok := allowed[capability]; ok {
+			kept = append(kept, capability)
+		}
+	}
+	claims.Capabilities = kept
 }
 
 // ResolveEntitlementLeaseBillingState applies a signed hosted entitlement lease

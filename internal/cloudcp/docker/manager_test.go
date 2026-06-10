@@ -73,7 +73,7 @@ func TestTenantMountsKeepImmutableFilesReadOnly(t *testing.T) {
 func TestTenantEnvIncludesImmutableOwnershipContract(t *testing.T) {
 	t.Parallel()
 
-	env := tenantEnv("t-example", "", "cloud.pulserelay.pro", "pubkey-123", []string{"172.18.0.0/16", "127.0.0.1/32"}, TenantReportBrandConfig{})
+	env := tenantEnv("t-example", "", "cloud.pulserelay.pro", "pubkey-123", "https://cp.example-msp.com", []string{"172.18.0.0/16", "127.0.0.1/32"}, TenantReportBrandConfig{})
 	want := map[string]bool{
 		"PULSE_DATA_DIR=/etc/pulse":       true,
 		"PULSE_HOSTED_MODE=true":          true,
@@ -83,6 +83,7 @@ func TestTenantEnvIncludesImmutableOwnershipContract(t *testing.T) {
 		"PGID=1000":                       true,
 		"PULSE_PUBLIC_URL=https://t-example.cloud.pulserelay.pro":                                    true,
 		"PULSE_TRIAL_ACTIVATION_PUBLIC_KEY=pubkey-123":                                               true,
+		"PULSE_PRO_TRIAL_SIGNUP_URL=https://cp.example-msp.com":                                      true,
 		"PULSE_TRUSTED_PROXY_CIDRS=172.18.0.0/16,127.0.0.1/32":                                       true,
 		immutableOwnershipPathsEnv + "=/etc/pulse/secrets/handoff.key:/etc/pulse/.cloud_handoff_key": true,
 	}
@@ -92,6 +93,17 @@ func TestTenantEnvIncludesImmutableOwnershipContract(t *testing.T) {
 	for _, item := range env {
 		if !want[item] {
 			t.Fatalf("unexpected env item %q", item)
+		}
+	}
+}
+
+func TestTenantEnvOmitsEntitlementRefreshURLWhenUnset(t *testing.T) {
+	t.Parallel()
+
+	env := tenantEnv("t-example", "", "cloud.pulserelay.pro", "", "", nil, TenantReportBrandConfig{})
+	for _, item := range env {
+		if strings.HasPrefix(item, "PULSE_PRO_TRIAL_SIGNUP_URL=") {
+			t.Fatalf("PULSE_PRO_TRIAL_SIGNUP_URL should be omitted when no control plane base URL is configured, got %q", item)
 		}
 	}
 }
@@ -181,7 +193,7 @@ func TestHealthCheckPrefersProviderMSPIsolatedTenantNetwork(t *testing.T) {
 func TestTenantEnvLowercasesPublicURLHost(t *testing.T) {
 	t.Parallel()
 
-	env := tenantEnv("T-AbCd123", "", "Cloud.PulseRelay.Pro", "", nil, TenantReportBrandConfig{})
+	env := tenantEnv("T-AbCd123", "", "Cloud.PulseRelay.Pro", "", "", nil, TenantReportBrandConfig{})
 	want := "PULSE_PUBLIC_URL=https://t-abcd123.cloud.pulserelay.pro"
 	for _, item := range env {
 		if item == want {
@@ -194,7 +206,7 @@ func TestTenantEnvLowercasesPublicURLHost(t *testing.T) {
 func TestTenantEnvOmitsPublicURLWithoutTenantContext(t *testing.T) {
 	t.Parallel()
 
-	env := tenantEnv("", "", "", "", nil, TenantReportBrandConfig{})
+	env := tenantEnv("", "", "", "", "", nil, TenantReportBrandConfig{})
 	sawTenantID := false
 	for _, item := range env {
 		if strings.HasPrefix(item, "PULSE_PUBLIC_URL=") {
@@ -212,7 +224,7 @@ func TestTenantEnvOmitsPublicURLWithoutTenantContext(t *testing.T) {
 func TestTenantEnvStampsWorkspaceDisplayName(t *testing.T) {
 	t.Parallel()
 
-	env := tenantEnv("t-acme", "  Acme Rentals  ", "cloud.pulserelay.pro", "", nil, TenantReportBrandConfig{})
+	env := tenantEnv("t-acme", "  Acme Rentals  ", "cloud.pulserelay.pro", "", "", nil, TenantReportBrandConfig{})
 	want := "PULSE_TENANT_NAME=Acme Rentals"
 	for _, item := range env {
 		if item == want {
@@ -225,7 +237,7 @@ func TestTenantEnvStampsWorkspaceDisplayName(t *testing.T) {
 func TestTenantEnvOmitsTenantNameWhenUnresolved(t *testing.T) {
 	t.Parallel()
 
-	env := tenantEnv("t-acme", "", "cloud.pulserelay.pro", "", nil, TenantReportBrandConfig{})
+	env := tenantEnv("t-acme", "", "cloud.pulserelay.pro", "", "", nil, TenantReportBrandConfig{})
 	for _, item := range env {
 		if strings.HasPrefix(item, "PULSE_TENANT_NAME=") {
 			t.Fatalf("unexpected tenant name env item %q; name must be omitted so payloads fall back to the tenant ID", item)
@@ -262,7 +274,7 @@ func TestTenantRuntimeContainerConfigResolvesTenantDisplayName(t *testing.T) {
 func TestTenantEnvIncludesProviderReportBrandDefaults(t *testing.T) {
 	t.Parallel()
 
-	env := tenantEnv("t-acme", "", "msp.example.com", "", nil, TenantReportBrandConfig{
+	env := tenantEnv("t-acme", "", "msp.example.com", "", "", nil, TenantReportBrandConfig{
 		DisplayName: "Acme Managed IT",
 		LogoBase64:  "iVBORw0KGgo=",
 		LogoFormat:  "png",

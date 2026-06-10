@@ -18,6 +18,8 @@ import (
 	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
 	"github.com/rs/zerolog/log"
+
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 // ManagerConfig holds Docker manager settings.
@@ -29,7 +31,12 @@ type ManagerConfig struct {
 	SupportContainerLabels   []string
 	BaseDomain               string
 	TrialActivationPublicKey string
-	TrustedProxyCIDRs        []string
+	// ControlPlaneBaseURL is the control plane's own external base URL
+	// (CP_BASE_URL). It is injected into client runtimes as the hosted
+	// commercial base URL so entitlement lease refresh targets this
+	// control plane instead of the built-in Pulse Cloud default.
+	ControlPlaneBaseURL string
+	TrustedProxyCIDRs   []string
 	// TenantDisplayName resolves a tenant's workspace display name at
 	// container-create time; the value is injected as PULSE_TENANT_NAME so
 	// alert webhook payloads carry a human-readable workspace label instead
@@ -554,7 +561,7 @@ func tenantRuntimeContainerConfig(tenantID string, cfg ManagerConfig, labels map
 		Image:  cfg.Image,
 		User:   tenantRuntimeUserFor(cfg),
 		Labels: labels,
-		Env:    tenantEnvForRuntime(tenantID, tenantDisplayNameFor(cfg, tenantID), cfg.BaseDomain, cfg.TrialActivationPublicKey, trustedProxyCIDRs, tenantRuntimeUIDFor(cfg), tenantRuntimeGIDFor(cfg), cfg.TenantReportBrand),
+		Env:    tenantEnvForRuntime(tenantID, tenantDisplayNameFor(cfg, tenantID), cfg.BaseDomain, cfg.TrialActivationPublicKey, cfg.ControlPlaneBaseURL, trustedProxyCIDRs, tenantRuntimeUIDFor(cfg), tenantRuntimeGIDFor(cfg), cfg.TenantReportBrand),
 	}
 }
 
@@ -640,11 +647,11 @@ func tenantRuntimeOwnershipPaths() []string {
 	}
 }
 
-func tenantEnv(tenantID, tenantName, baseDomain, trialActivationPublicKey string, trustedProxyCIDRs []string, reportBrand TenantReportBrandConfig) []string {
-	return tenantEnvForRuntime(tenantID, tenantName, baseDomain, trialActivationPublicKey, trustedProxyCIDRs, tenantRuntimeUID, tenantRuntimeGID, reportBrand)
+func tenantEnv(tenantID, tenantName, baseDomain, trialActivationPublicKey, controlPlaneBaseURL string, trustedProxyCIDRs []string, reportBrand TenantReportBrandConfig) []string {
+	return tenantEnvForRuntime(tenantID, tenantName, baseDomain, trialActivationPublicKey, controlPlaneBaseURL, trustedProxyCIDRs, tenantRuntimeUID, tenantRuntimeGID, reportBrand)
 }
 
-func tenantEnvForRuntime(tenantID, tenantName, baseDomain, trialActivationPublicKey string, trustedProxyCIDRs []string, runtimeUID, runtimeGID int, reportBrand TenantReportBrandConfig) []string {
+func tenantEnvForRuntime(tenantID, tenantName, baseDomain, trialActivationPublicKey, controlPlaneBaseURL string, trustedProxyCIDRs []string, runtimeUID, runtimeGID int, reportBrand TenantReportBrandConfig) []string {
 	routing := CanonicalTenantRuntimeRouting(tenantID, baseDomain)
 	tenantID = strings.TrimSpace(tenantID)
 
@@ -665,6 +672,12 @@ func tenantEnvForRuntime(tenantID, tenantName, baseDomain, trialActivationPublic
 	}
 	if strings.TrimSpace(trialActivationPublicKey) != "" {
 		env = append(env, "PULSE_TRIAL_ACTIVATION_PUBLIC_KEY="+strings.TrimSpace(trialActivationPublicKey))
+	}
+	if value := strings.TrimSpace(controlPlaneBaseURL); value != "" {
+		// Point hosted entitlement lease refresh at this control plane.
+		// Without it the runtime falls back to the built-in Pulse Cloud
+		// URL, which a provider-hosted control plane does not operate.
+		env = append(env, pkglicensing.ProTrialSignupURLEnvVar+"="+value)
 	}
 	if len(trustedProxyCIDRs) > 0 {
 		env = append(env, "PULSE_TRUSTED_PROXY_CIDRS="+strings.Join(trustedProxyCIDRs, ","))

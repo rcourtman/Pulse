@@ -221,6 +221,7 @@ func newTenantRuntimeRolloutServiceFromConfig(
 		IsolateTenantNetworks:    cfg.IsMSPControlPlane(),
 		BaseDomain:               baseDomainFromURL(cfg.BaseURL),
 		TrialActivationPublicKey: cfg.TrialActivationPublicKey,
+		ControlPlaneBaseURL:      cfg.BaseURL,
 		TrustedProxyCIDRs:        cfg.TrustedProxyCIDRs,
 		TenantDisplayName:        tenantDisplayNameResolver(reg),
 		TenantReportBrand: cpDocker.TenantReportBrandConfig{

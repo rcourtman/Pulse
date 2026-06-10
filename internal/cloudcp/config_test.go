@@ -475,6 +475,22 @@ func setPulseHostedMSPEnv(t *testing.T) {
 
 func writeProviderMSPLicenseForTest(t *testing.T, tier pkglicensing.Tier, planVersion string) string {
 	t.Helper()
+	return writeProviderMSPLicenseForTestWithBinding(t, tier, planVersion, nil)
+}
+
+// trialSigningEnvPublicKey derives the public key for the fixed
+// CP_TRIAL_ACTIVATION_PRIVATE_KEY seed installed by setTrialSigningEnv.
+func trialSigningEnvPublicKey(t *testing.T) ed25519.PublicKey {
+	t.Helper()
+	seed, err := base64.StdEncoding.DecodeString("A8medgdNdm12GXfTXWo6+TMZ2BeHPCLg2kd0znn6ZUk=")
+	if err != nil {
+		t.Fatalf("decode trial signing seed: %v", err)
+	}
+	return ed25519.NewKeyFromSeed(seed).Public().(ed25519.PublicKey)
+}
+
+func writeProviderMSPLicenseForTestWithBinding(t *testing.T, tier pkglicensing.Tier, planVersion string, leaseSigningPublicKey ed25519.PublicKey) string {
+	t.Helper()
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
@@ -490,6 +506,9 @@ func writeProviderMSPLicenseForTest(t *testing.T, tier pkglicensing.Tier, planVe
 		IssuedAt:    time.Now().Add(-time.Minute).Unix(),
 		ExpiresAt:   time.Now().Add(24 * time.Hour).Unix(),
 		PlanVersion: planVersion,
+	}
+	if len(leaseSigningPublicKey) > 0 {
+		claims.EntitlementSigningPublicKey = base64.StdEncoding.EncodeToString(leaseSigningPublicKey)
 	}
 	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"EdDSA","typ":"JWT"}`))
 	payloadBytes, err := json.Marshal(claims)
@@ -698,7 +717,7 @@ func TestLoadConfig_ProviderHostedMSPUsesSignedLicenseFilePlan(t *testing.T) {
 	setProviderHostedMSPEnv(t)
 	t.Setenv("CP_ENV", "production")
 	t.Setenv("CP_PROVIDER_MSP_PLAN_VERSION", "msp_starter")
-	t.Setenv("CP_PROVIDER_MSP_LICENSE_FILE", writeProviderMSPLicenseForTest(t, pkglicensing.TierMSP, "msp_growth"))
+	t.Setenv("CP_PROVIDER_MSP_LICENSE_FILE", writeProviderMSPLicenseForTestWithBinding(t, pkglicensing.TierMSP, "msp_growth", trialSigningEnvPublicKey(t)))
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -715,6 +734,54 @@ func TestLoadConfig_ProviderHostedMSPUsesSignedLicenseFilePlan(t *testing.T) {
 	}
 	if cfg.ProviderMSPLicenseEmail != "provider@example.com" {
 		t.Fatalf("ProviderMSPLicenseEmail = %q", cfg.ProviderMSPLicenseEmail)
+	}
+	if strings.TrimSpace(cfg.ProviderMSPLicenseKey) == "" {
+		t.Fatal("ProviderMSPLicenseKey should retain the raw license for lease chaining")
+	}
+	if cfg.ProviderMSPLeaseSigningPublicKey != base64.StdEncoding.EncodeToString(trialSigningEnvPublicKey(t)) {
+		t.Fatalf("ProviderMSPLeaseSigningPublicKey = %q", cfg.ProviderMSPLeaseSigningPublicKey)
+	}
+}
+
+func TestLoadConfig_ProviderHostedMSPRequiresLeaseSigningBinding(t *testing.T) {
+	setProviderHostedMSPEnv(t)
+	t.Setenv("CP_ENV", "production")
+	t.Setenv("CP_PROVIDER_MSP_LICENSE_FILE", writeProviderMSPLicenseForTest(t, pkglicensing.TierMSP, "msp_growth"))
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatal("expected error when the provider MSP license does not bind a lease signing key")
+	}
+	if !strings.Contains(err.Error(), "entitlement_signing_public_key") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadConfig_ProviderHostedMSPRejectsMismatchedLeaseSigningKey(t *testing.T) {
+	setProviderHostedMSPEnv(t)
+	t.Setenv("CP_ENV", "production")
+	otherPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	t.Setenv("CP_PROVIDER_MSP_LICENSE_FILE", writeProviderMSPLicenseForTestWithBinding(t, pkglicensing.TierMSP, "msp_growth", otherPub))
+
+	_, err = LoadConfig()
+	if err == nil {
+		t.Fatal("expected error when CP_TRIAL_ACTIVATION_PRIVATE_KEY does not match the license binding")
+	}
+	if !strings.Contains(err.Error(), "does not match the entitlement lease signing key") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadConfig_PulseHostedMSPDoesNotRequireLeaseSigningBinding(t *testing.T) {
+	setPulseHostedMSPEnv(t)
+	t.Setenv("CP_ENV", "production")
+	t.Setenv("CP_PROVIDER_MSP_LICENSE_FILE", writeProviderMSPLicenseForTest(t, pkglicensing.TierMSP, "msp_scale"))
+
+	if _, err := LoadConfig(); err != nil {
+		t.Fatalf("Pulse-hosted MSP must accept licenses without a lease signing binding: %v", err)
 	}
 }
 

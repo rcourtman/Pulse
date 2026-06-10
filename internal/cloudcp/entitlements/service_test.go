@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"database/sql"
 	"encoding/base64"
+	"encoding/json"
 	"path/filepath"
 	"testing"
 	"time"
@@ -418,5 +419,147 @@ func seedLegacyTrialHostedEntitlement(t *testing.T, registryDir string, now time
 	)
 	if err != nil {
 		t.Fatalf("seed legacy trial hosted entitlement: %v", err)
+	}
+}
+
+// mintChainTestProviderLicense installs a test license root and returns a
+// Pulse-signed MSP license binding the given lease signing public key, so
+// chained lease verification works end-to-end in service tests.
+func mintChainTestProviderLicense(t *testing.T, leaseSigningPublicKey ed25519.PublicKey) string {
+	t.Helper()
+
+	rootPub, rootPriv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey root: %v", err)
+	}
+	pkglicensing.SetPublicKey(rootPub)
+	t.Cleanup(func() { pkglicensing.SetPublicKey(nil) })
+
+	claims := pkglicensing.Claims{
+		LicenseID:                   "lic_msp_lease_shape_test",
+		Email:                       "provider@example-msp.com",
+		Tier:                        pkglicensing.TierMSP,
+		IssuedAt:                    time.Now().Add(-time.Minute).Unix(),
+		ExpiresAt:                   time.Now().Add(24 * time.Hour).Unix(),
+		PlanVersion:                 "msp_starter",
+		EntitlementSigningPublicKey: base64.StdEncoding.EncodeToString(leaseSigningPublicKey),
+	}
+	payloadBytes, err := json.Marshal(claims)
+	if err != nil {
+		t.Fatalf("marshal provider license claims: %v", err)
+	}
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"EdDSA","typ":"JWT"}`))
+	payload := base64.RawURLEncoding.EncodeToString(payloadBytes)
+	signature := base64.RawURLEncoding.EncodeToString(ed25519.Sign(rootPriv, []byte(header+"."+payload)))
+	return header + "." + payload + "." + signature
+}
+
+func TestIssueTenantBillingStateMSPWorkspaceLeaseShape(t *testing.T) {
+	svc, pub, reg := newTestService(t)
+	providerLicense := mintChainTestProviderLicense(t, pub)
+	svc.SetProviderLicense(providerLicense)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatalf("GenerateAccountID: %v", err)
+	}
+	if err := reg.CreateAccount(&registry.Account{
+		ID:          accountID,
+		Kind:        registry.AccountKindMSP,
+		DisplayName: "Example MSP",
+	}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+
+	tenant := &registry.Tenant{
+		ID:          "t-MSPCLIENT1",
+		AccountID:   accountID,
+		Email:       "owner@example-msp.com",
+		State:       registry.TenantStateActive,
+		PlanVersion: "msp_starter",
+	}
+	if err := reg.Create(tenant); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	now := time.Unix(1710000000, 0).UTC()
+	svc.SetNow(func() time.Time { return now })
+
+	state, err := svc.IssueTenantBillingState(tenant, pkglicensing.SubStateActive, "msp_starter", "", "", "")
+	if err != nil {
+		t.Fatalf("IssueTenantBillingState: %v", err)
+	}
+	claims, err := pkglicensing.VerifyEntitlementLeaseToken(state.EntitlementJWT, pub, "t-MSPCLIENT1.cloud.example.com", now)
+	if err != nil {
+		t.Fatalf("VerifyEntitlementLeaseToken: %v", err)
+	}
+	if claims.ProviderLicense != providerLicense {
+		t.Fatalf("claims.ProviderLicense = %q, want chained provider license", claims.ProviderLicense)
+	}
+	capabilities := map[string]bool{}
+	for _, capability := range claims.Capabilities {
+		capabilities[capability] = true
+	}
+	if !capabilities[pkglicensing.FeatureWhiteLabel] {
+		t.Fatalf("MSP workspace lease must carry white_label for branded client reports, got %v", claims.Capabilities)
+	}
+	if !capabilities[pkglicensing.FeatureMultiTenant] {
+		t.Fatalf("MSP workspace lease missing MSP tier capability multi_tenant: %v", claims.Capabilities)
+	}
+	if capabilities[pkglicensing.FeatureMultiUser] {
+		t.Fatalf("MSP workspace lease must not carry enterprise-only multi_user: %v", claims.Capabilities)
+	}
+	for _, serviceBacked := range []string{pkglicensing.FeatureRelay, pkglicensing.FeatureMobileApp, pkglicensing.FeaturePushNotifications} {
+		if capabilities[serviceBacked] {
+			t.Fatalf("provider-chained MSP lease must not grant Pulse-service-backed capability %q: %v", serviceBacked, claims.Capabilities)
+		}
+	}
+}
+
+func TestIssueTenantBillingStateCloudPlanOmitsProviderLicenseWhenUnset(t *testing.T) {
+	svc, pub, reg := newTestService(t)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatalf("GenerateAccountID: %v", err)
+	}
+	if err := reg.CreateAccount(&registry.Account{
+		ID:          accountID,
+		Kind:        registry.AccountKindIndividual,
+		DisplayName: "Pulse Labs",
+	}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+	tenant := &registry.Tenant{
+		ID:          "t-CLOUD01",
+		AccountID:   accountID,
+		Email:       "owner@example.com",
+		State:       registry.TenantStateActive,
+		PlanVersion: "cloud_starter",
+	}
+	if err := reg.Create(tenant); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	now := time.Unix(1710000000, 0).UTC()
+	svc.SetNow(func() time.Time { return now })
+
+	state, err := svc.IssueTenantBillingState(tenant, pkglicensing.SubStateActive, "cloud_starter", "", "", "")
+	if err != nil {
+		t.Fatalf("IssueTenantBillingState: %v", err)
+	}
+	claims, err := pkglicensing.VerifyEntitlementLeaseToken(state.EntitlementJWT, pub, "t-CLOUD01.cloud.example.com", now)
+	if err != nil {
+		t.Fatalf("VerifyEntitlementLeaseToken: %v", err)
+	}
+	if claims.ProviderLicense != "" {
+		t.Fatalf("cloud lease should not chain a provider license, got %q", claims.ProviderLicense)
+	}
+	capabilities := map[string]bool{}
+	for _, capability := range claims.Capabilities {
+		capabilities[capability] = true
+	}
+	if capabilities[pkglicensing.FeatureWhiteLabel] {
+		t.Fatalf("cloud lease should not carry white_label, got %v", claims.Capabilities)
 	}
 }

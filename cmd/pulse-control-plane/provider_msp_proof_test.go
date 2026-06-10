@@ -312,13 +312,23 @@ func writeProviderMSPProofLicenseForTest(t *testing.T, licenseID, email, planVer
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 	t.Cleanup(func() { pkglicensing.SetPublicKey(nil) })
 
+	// Bind the lease signing key for the fixed CP_TRIAL_ACTIVATION_PRIVATE_KEY
+	// seed installed by setProviderMSPProofLoadConfigEnv; provider-hosted MSP
+	// config loading requires the license to bind the control plane's key.
+	leaseSigningSeed, err := base64.StdEncoding.DecodeString("A8medgdNdm12GXfTXWo6+TMZ2BeHPCLg2kd0znn6ZUk=")
+	if err != nil {
+		t.Fatalf("decode lease signing seed: %v", err)
+	}
+	leaseSigningPublicKey := ed25519.NewKeyFromSeed(leaseSigningSeed).Public().(ed25519.PublicKey)
+
 	claims := pkglicensing.Claims{
-		LicenseID:   licenseID,
-		Email:       email,
-		Tier:        pkglicensing.TierMSP,
-		IssuedAt:    time.Now().Add(-time.Minute).Unix(),
-		ExpiresAt:   time.Now().Add(24 * time.Hour).Unix(),
-		PlanVersion: planVersion,
+		LicenseID:                   licenseID,
+		Email:                       email,
+		Tier:                        pkglicensing.TierMSP,
+		IssuedAt:                    time.Now().Add(-time.Minute).Unix(),
+		ExpiresAt:                   time.Now().Add(24 * time.Hour).Unix(),
+		PlanVersion:                 planVersion,
+		EntitlementSigningPublicKey: base64.StdEncoding.EncodeToString(leaseSigningPublicKey),
 	}
 	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"EdDSA","typ":"JWT"}`))
 	payloadBytes, err := json.Marshal(claims)

@@ -318,6 +318,7 @@ func newMobileProofRuntime(ctx context.Context) (*mobileProofRuntime, error) {
 		Network:                  cfg.DockerNetwork,
 		BaseDomain:               mobileProofBaseDomainFromURL(cfg.BaseURL),
 		TrialActivationPublicKey: cfg.TrialActivationPublicKey,
+		ControlPlaneBaseURL:      cfg.BaseURL,
 		TrustedProxyCIDRs:        cfg.TrustedProxyCIDRs,
 		MemoryLimit:              cfg.TenantMemoryLimit,
 		CPUShares:                cfg.TenantCPUShares,

@@ -117,6 +117,7 @@ func AuditCloud(ctx context.Context, cfg *CPConfig) (*CloudAuditReport, error) {
 		Network:                  cfg.DockerNetwork,
 		BaseDomain:               baseDomainFromURL(cfg.BaseURL),
 		TrialActivationPublicKey: cfg.TrialActivationPublicKey,
+		ControlPlaneBaseURL:      cfg.BaseURL,
 		TrustedProxyCIDRs:        cfg.TrustedProxyCIDRs,
 		TenantReportBrand: cpDocker.TenantReportBrandConfig{
 			DisplayName: cfg.ReportBrandDisplayName,
