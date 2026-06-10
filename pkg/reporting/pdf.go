@@ -156,6 +156,14 @@ func (g *PDFGenerator) Generate(data *ReportData) ([]byte, error) {
 	pdf.SetMargins(20, 20, 20)
 	pdf.SetAutoPageBreak(true, 25)
 
+	// Core fonts are cp1252: translate the UTF-8 report strings (AI
+	// narrative prose, resource names, alert messages) once up front so
+	// em dashes and curly quotes render as glyphs instead of mojibake.
+	// The translator is built per call because fpdf's closure reuses an
+	// internal buffer and this generator is shared across concurrent
+	// requests; see pdf_codepage.go.
+	translateReportStrings(data, pdf.UnicodeTranslatorFromDescriptor(""))
+
 	// Cover page
 	g.writeCoverPage(pdf, data)
 
@@ -1676,6 +1684,10 @@ func (g *PDFGenerator) GenerateMulti(data *MultiReportData) ([]byte, error) {
 	pdf := fpdf.New("P", "mm", "A4", "")
 	pdf.SetMargins(20, 20, 20)
 	pdf.SetAutoPageBreak(true, 25)
+
+	// Translate UTF-8 strings to the cp1252 space the core fonts expect;
+	// see the matching call in Generate and pdf_codepage.go.
+	translateMultiReportStrings(data, pdf.UnicodeTranslatorFromDescriptor(""))
 
 	// Page 1: Cover page
 	g.writeMultiCoverPage(pdf, data)
