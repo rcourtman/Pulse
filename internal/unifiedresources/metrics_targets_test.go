@@ -76,6 +76,31 @@ func TestBuildMetricsTarget_UsesCanonicalAgentTypeForInfrastructureFamilies(t *t
 	}
 }
 
+func TestBuildMetricsTarget_AgentSourceWinsForMergedHostResources(t *testing.T) {
+	// Real-mode agent metrics are stored under the host agent ID (the
+	// monitor_agents.go writer keys "agent" rows by host.ID, which is also
+	// the SourceAgent ingest key). A host that is simultaneously a Proxmox
+	// node (or VMware host) must still resolve its metrics target to the
+	// agent key, or store readers query an ID nothing writes.
+	target := BuildMetricsTarget(
+		Resource{Type: ResourceTypeAgent},
+		[]SourceTarget{
+			{Source: SourceProxmox, SourceID: "homelab-delly"},
+			{Source: SourceVMware, SourceID: "vc-1:host:host-101"},
+			{Source: SourceAgent, SourceID: "7d465a78-80b8-4255-999c-88224ae57b4f"},
+		},
+	)
+	if target == nil {
+		t.Fatal("BuildMetricsTarget() returned nil")
+	}
+	if target.ResourceType != "agent" {
+		t.Fatalf("ResourceType = %q, want agent", target.ResourceType)
+	}
+	if target.ResourceID != "7d465a78-80b8-4255-999c-88224ae57b4f" {
+		t.Fatalf("ResourceID = %q, want the agent source ID (the metrics-store write key)", target.ResourceID)
+	}
+}
+
 func TestMetricsFromUnraidDiskCapacityUsesNativeCapacityFields(t *testing.T) {
 	metrics := metricsFromUnraidDiskCapacity(1_000, 650, 65)
 	if metrics == nil || metrics.Disk == nil {

@@ -20,13 +20,20 @@ func BuildMetricsTarget(resource Resource, sourceTargets []SourceTarget) *Metric
 
 	switch CanonicalResourceType(resource.Type) {
 	case ResourceTypeAgent:
+		// The agent source must win over platform sources (Proxmox/VMware):
+		// real-mode agent metrics are written under the host agent ID
+		// (monitor_agents.go writes "agent"/host.ID, the same ID ingestHost
+		// registers for SourceAgent), so a merged node+agent resource must
+		// advertise that key. Preferring the platform source ID here would
+		// point store readers (reports, drawer history) at an "agent"-typed
+		// key nothing ever writes.
+		if st, ok := bySource[SourceAgent]; ok {
+			return &MetricsTarget{ResourceType: "agent", ResourceID: st.SourceID}
+		}
 		if st, ok := bySource[SourceProxmox]; ok {
 			return &MetricsTarget{ResourceType: "agent", ResourceID: st.SourceID}
 		}
 		if st, ok := bySource[SourceVMware]; ok {
-			return &MetricsTarget{ResourceType: "agent", ResourceID: st.SourceID}
-		}
-		if st, ok := bySource[SourceAgent]; ok {
 			return &MetricsTarget{ResourceType: "agent", ResourceID: st.SourceID}
 		}
 		if st, ok := bySource[SourceTrueNAS]; ok {

@@ -357,8 +357,10 @@ func TestResourceRegistry_IngestResourcesRebuildsSourceMappingsForMetricsTargets
 	if target == nil {
 		t.Fatal("expected seeded unified agent to rebuild a metrics target")
 	}
-	if target.ResourceType != "agent" || target.ResourceID != "homelab-delly" {
-		t.Fatalf("metrics target = %+v, want agent/homelab-delly", target)
+	// The agent source ID wins over the proxmox node ID: it is the host.ID
+	// key the agent metrics writer stores rows under.
+	if target.ResourceType != "agent" || target.ResourceID != "agent-source-delly" {
+		t.Fatalf("metrics target = %+v, want agent/agent-source-delly", target)
 	}
 
 	targets := rr.SourceTargets("agent-dashboard-1")
@@ -1656,6 +1658,70 @@ func TestResourceRegistry_IngestSnapshotParentsClusterNamedProxmoxGuestsToMerged
 	}
 	if parent.ChildCount != 2 {
 		t.Fatalf("expected parent child count 2, got %d", parent.ChildCount)
+	}
+}
+
+func TestResourceRegistry_MergedNodeAgentMetricsTargetMatchesAgentStoreWriteKey(t *testing.T) {
+	// Real-mode agent metrics land in the metrics store keyed by host.ID
+	// (monitor_agents.go: m.metricsStore.Write("agent", host.ID, ...), the
+	// write key is pinned by a canonical guardrail in internal/monitoring).
+	// The registry's metrics target for the merged node+agent resource must
+	// resolve to that same key, or every store reader that trusts the
+	// target — performance reports via MetricsResourceID, the drawer
+	// history endpoint — queries an ID with zero rows.
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 6, 10, 10, 0, 0, 0, time.UTC)
+
+	rr.IngestSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{
+			{
+				ID:              "homelab-delly",
+				Name:            "delly",
+				Instance:        "delly",
+				ClusterName:     "homelab",
+				IsClusterMember: true,
+				Host:            "https://10.0.0.9:8006",
+				LinkedAgentID:   "host-1",
+				Status:          "online",
+				LastSeen:        now,
+			},
+		},
+		Hosts: []models.Host{
+			{
+				ID:           "host-1",
+				Hostname:     "delly.local",
+				MachineID:    "machine-delly",
+				ReportIP:     "10.0.0.9",
+				Status:       "online",
+				LastSeen:     now,
+				LinkedNodeID: "homelab-delly",
+				NetworkInterfaces: []models.HostNetworkInterface{
+					{Name: "eth0", MAC: "00:11:22:33:44:66", Addresses: []string{"10.0.0.9/24"}},
+				},
+			},
+		},
+	})
+
+	agents := rr.ListByType(ResourceTypeAgent)
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 merged delly resource, got %d", len(agents))
+	}
+	resource := agents[0]
+
+	targets := rr.SourceTargets(resource.ID)
+	if len(targets) != 2 {
+		t.Fatalf("expected merged proxmox+agent source targets, got %+v", targets)
+	}
+
+	target := BuildMetricsTargetForRegistry(rr, resource.ID)
+	if target == nil {
+		t.Fatal("BuildMetricsTargetForRegistry() returned nil")
+	}
+	if target.ResourceType != "agent" {
+		t.Fatalf("ResourceType = %q, want agent", target.ResourceType)
+	}
+	if target.ResourceID != "host-1" {
+		t.Fatalf("ResourceID = %q, want host-1 (the host.ID key the agent metrics writer uses)", target.ResourceID)
 	}
 }
 
