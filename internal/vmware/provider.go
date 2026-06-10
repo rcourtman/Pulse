@@ -828,171 +828,132 @@ func cloneInventorySnapshot(in *InventorySnapshot) *InventorySnapshot {
 	return &out
 }
 
-func cloneInventoryHosts(in []InventoryHost) []InventoryHost {
+// cloneSliceWith deep-copies a slice, applying fix to each copied element so
+// it can re-clone its pointer- and slice-typed fields.
+func cloneSliceWith[T any](in []T, fix func(*T)) []T {
 	if in == nil {
 		return nil
 	}
-	out := make([]InventoryHost, len(in))
+	out := make([]T, len(in))
 	for i := range in {
 		out[i] = in[i]
-		out[i].ClusterHAEnabled = cloneBoolPointer(in[i].ClusterHAEnabled)
-		out[i].ClusterDRSEnabled = cloneBoolPointer(in[i].ClusterDRSEnabled)
-		out[i].DatastoreIDs = cloneStringSlice(in[i].DatastoreIDs)
-		out[i].DatastoreNames = cloneStringSlice(in[i].DatastoreNames)
-		out[i].TriggeredAlarms = cloneInventoryAlarms(in[i].TriggeredAlarms)
-		out[i].RecentTasks = cloneInventoryTasks(in[i].RecentTasks)
-		out[i].RecentEvents = cloneInventoryEvents(in[i].RecentEvents)
-		out[i].Metrics = cloneInventoryMetrics(in[i].Metrics)
+		fix(&out[i])
 	}
 	return out
+}
+
+// cloneShallowSlice copies a slice whose elements carry no shared references.
+func cloneShallowSlice[T any](in []T) []T {
+	if in == nil {
+		return nil
+	}
+	out := make([]T, len(in))
+	copy(out, in)
+	return out
+}
+
+func cloneInventoryHosts(in []InventoryHost) []InventoryHost {
+	return cloneSliceWith(in, func(item *InventoryHost) {
+		item.ClusterHAEnabled = cloneBoolPointer(item.ClusterHAEnabled)
+		item.ClusterDRSEnabled = cloneBoolPointer(item.ClusterDRSEnabled)
+		item.DatastoreIDs = cloneStringSlice(item.DatastoreIDs)
+		item.DatastoreNames = cloneStringSlice(item.DatastoreNames)
+		item.TriggeredAlarms = cloneInventoryAlarms(item.TriggeredAlarms)
+		item.RecentTasks = cloneInventoryTasks(item.RecentTasks)
+		item.RecentEvents = cloneInventoryEvents(item.RecentEvents)
+		item.Metrics = cloneInventoryMetrics(item.Metrics)
+	})
 }
 
 func cloneInventoryVMs(in []InventoryVM) []InventoryVM {
-	if in == nil {
-		return nil
-	}
-	out := make([]InventoryVM, len(in))
-	for i := range in {
-		out[i] = in[i]
-		out[i].ClusterHAEnabled = cloneBoolPointer(in[i].ClusterHAEnabled)
-		out[i].ClusterDRSEnabled = cloneBoolPointer(in[i].ClusterDRSEnabled)
-		out[i].DatastoreIDs = cloneStringSlice(in[i].DatastoreIDs)
-		out[i].DatastoreNames = cloneStringSlice(in[i].DatastoreNames)
-		out[i].GuestIPAddresses = cloneStringSlice(in[i].GuestIPAddresses)
-		out[i].TriggeredAlarms = cloneInventoryAlarms(in[i].TriggeredAlarms)
-		out[i].RecentTasks = cloneInventoryTasks(in[i].RecentTasks)
-		out[i].RecentEvents = cloneInventoryEvents(in[i].RecentEvents)
-		out[i].SnapshotTree = cloneInventoryVMSnapshots(in[i].SnapshotTree)
-		out[i].NetworkAdapters = cloneInventoryVMNetworkAdapters(in[i].NetworkAdapters)
-		out[i].VirtualDisks = cloneInventoryVMVirtualDisks(in[i].VirtualDisks)
-		out[i].Tools = cloneInventoryVMTools(in[i].Tools)
-		out[i].Hardware = cloneInventoryVMHardware(in[i].Hardware)
-		out[i].Metrics = cloneInventoryMetrics(in[i].Metrics)
-	}
-	return out
+	return cloneSliceWith(in, func(item *InventoryVM) {
+		item.ClusterHAEnabled = cloneBoolPointer(item.ClusterHAEnabled)
+		item.ClusterDRSEnabled = cloneBoolPointer(item.ClusterDRSEnabled)
+		item.DatastoreIDs = cloneStringSlice(item.DatastoreIDs)
+		item.DatastoreNames = cloneStringSlice(item.DatastoreNames)
+		item.GuestIPAddresses = cloneStringSlice(item.GuestIPAddresses)
+		item.TriggeredAlarms = cloneInventoryAlarms(item.TriggeredAlarms)
+		item.RecentTasks = cloneInventoryTasks(item.RecentTasks)
+		item.RecentEvents = cloneInventoryEvents(item.RecentEvents)
+		item.SnapshotTree = cloneInventoryVMSnapshots(item.SnapshotTree)
+		item.NetworkAdapters = cloneInventoryVMNetworkAdapters(item.NetworkAdapters)
+		item.VirtualDisks = cloneInventoryVMVirtualDisks(item.VirtualDisks)
+		item.Tools = cloneInventoryVMTools(item.Tools)
+		item.Hardware = cloneInventoryVMHardware(item.Hardware)
+		item.Metrics = cloneInventoryMetrics(item.Metrics)
+	})
 }
 
 func cloneInventoryDatastores(in []InventoryDatastore) []InventoryDatastore {
-	if in == nil {
-		return nil
-	}
-	out := make([]InventoryDatastore, len(in))
-	for i := range in {
-		out[i] = in[i]
-		out[i].HostIDs = cloneStringSlice(in[i].HostIDs)
-		out[i].HostNames = cloneStringSlice(in[i].HostNames)
-		out[i].VMIDs = cloneStringSlice(in[i].VMIDs)
-		out[i].VMNames = cloneStringSlice(in[i].VMNames)
-		out[i].Accessible = cloneBoolPointer(in[i].Accessible)
-		out[i].MultipleHostAccess = cloneBoolPointer(in[i].MultipleHostAccess)
-		out[i].TriggeredAlarms = cloneInventoryAlarms(in[i].TriggeredAlarms)
-		out[i].RecentTasks = cloneInventoryTasks(in[i].RecentTasks)
-		out[i].RecentEvents = cloneInventoryEvents(in[i].RecentEvents)
-	}
-	return out
+	return cloneSliceWith(in, func(item *InventoryDatastore) {
+		item.HostIDs = cloneStringSlice(item.HostIDs)
+		item.HostNames = cloneStringSlice(item.HostNames)
+		item.VMIDs = cloneStringSlice(item.VMIDs)
+		item.VMNames = cloneStringSlice(item.VMNames)
+		item.Accessible = cloneBoolPointer(item.Accessible)
+		item.MultipleHostAccess = cloneBoolPointer(item.MultipleHostAccess)
+		item.TriggeredAlarms = cloneInventoryAlarms(item.TriggeredAlarms)
+		item.RecentTasks = cloneInventoryTasks(item.RecentTasks)
+		item.RecentEvents = cloneInventoryEvents(item.RecentEvents)
+	})
 }
 
 func cloneInventoryClusters(in []InventoryCluster) []InventoryCluster {
-	if in == nil {
-		return nil
-	}
-	out := make([]InventoryCluster, len(in))
-	for i := range in {
-		out[i] = in[i]
-		out[i].HAEnabled = cloneBoolPointer(in[i].HAEnabled)
-		out[i].DRSEnabled = cloneBoolPointer(in[i].DRSEnabled)
-	}
-	return out
+	return cloneSliceWith(in, func(item *InventoryCluster) {
+		item.HAEnabled = cloneBoolPointer(item.HAEnabled)
+		item.DRSEnabled = cloneBoolPointer(item.DRSEnabled)
+	})
 }
 
 func cloneInventoryNetworks(in []InventoryNetwork) []InventoryNetwork {
-	if in == nil {
-		return nil
-	}
-	out := make([]InventoryNetwork, len(in))
-	for i := range in {
-		out[i] = in[i]
-		out[i].HostIDs = cloneStringSlice(in[i].HostIDs)
-		out[i].HostNames = cloneStringSlice(in[i].HostNames)
-		out[i].VMIDs = cloneStringSlice(in[i].VMIDs)
-		out[i].VMNames = cloneStringSlice(in[i].VMNames)
-		out[i].TriggeredAlarms = cloneInventoryAlarms(in[i].TriggeredAlarms)
-		out[i].RecentTasks = cloneInventoryTasks(in[i].RecentTasks)
-		out[i].RecentEvents = cloneInventoryEvents(in[i].RecentEvents)
-	}
-	return out
+	return cloneSliceWith(in, func(item *InventoryNetwork) {
+		item.HostIDs = cloneStringSlice(item.HostIDs)
+		item.HostNames = cloneStringSlice(item.HostNames)
+		item.VMIDs = cloneStringSlice(item.VMIDs)
+		item.VMNames = cloneStringSlice(item.VMNames)
+		item.TriggeredAlarms = cloneInventoryAlarms(item.TriggeredAlarms)
+		item.RecentTasks = cloneInventoryTasks(item.RecentTasks)
+		item.RecentEvents = cloneInventoryEvents(item.RecentEvents)
+	})
 }
 
 func cloneInventoryAlarms(in []InventoryAlarm) []InventoryAlarm {
-	if in == nil {
-		return nil
-	}
-	out := make([]InventoryAlarm, len(in))
-	copy(out, in)
-	return out
+	return cloneShallowSlice(in)
 }
 
 func cloneInventoryTasks(in []InventoryTask) []InventoryTask {
-	if in == nil {
-		return nil
-	}
-	out := make([]InventoryTask, len(in))
-	copy(out, in)
-	return out
+	return cloneShallowSlice(in)
 }
 
 func cloneInventoryEvents(in []InventoryEvent) []InventoryEvent {
-	if in == nil {
-		return nil
-	}
-	out := make([]InventoryEvent, len(in))
-	copy(out, in)
-	return out
+	return cloneShallowSlice(in)
 }
 
 func cloneInventoryVMSnapshots(in []InventoryVMSnapshot) []InventoryVMSnapshot {
-	if in == nil {
-		return nil
-	}
-	out := make([]InventoryVMSnapshot, len(in))
-	for i := range in {
-		out[i] = in[i]
-		out[i].CreatedAt = cloneTimePointer(in[i].CreatedAt)
-		out[i].Children = cloneInventoryVMSnapshots(in[i].Children)
-	}
-	return out
+	return cloneSliceWith(in, func(item *InventoryVMSnapshot) {
+		item.CreatedAt = cloneTimePointer(item.CreatedAt)
+		item.Children = cloneInventoryVMSnapshots(item.Children)
+	})
 }
 
 func cloneInventoryVMNetworkAdapters(in []InventoryVMNetworkAdapter) []InventoryVMNetworkAdapter {
-	if in == nil {
-		return nil
-	}
-	out := make([]InventoryVMNetworkAdapter, len(in))
-	for i := range in {
-		out[i] = in[i]
-		out[i].PCISlotNumber = cloneInt64Pointer(in[i].PCISlotNumber)
-	}
-	return out
+	return cloneSliceWith(in, func(item *InventoryVMNetworkAdapter) {
+		item.PCISlotNumber = cloneInt64Pointer(item.PCISlotNumber)
+	})
 }
 
 func cloneInventoryVMVirtualDisks(in []InventoryVMVirtualDisk) []InventoryVMVirtualDisk {
-	if in == nil {
-		return nil
-	}
-	out := make([]InventoryVMVirtualDisk, len(in))
-	for i := range in {
-		out[i] = in[i]
-		out[i].IDEPrimary = cloneBoolPointer(in[i].IDEPrimary)
-		out[i].IDEMaster = cloneBoolPointer(in[i].IDEMaster)
-		out[i].SCSIBus = cloneInt64Pointer(in[i].SCSIBus)
-		out[i].SCSIUnit = cloneInt64Pointer(in[i].SCSIUnit)
-		out[i].SATABus = cloneInt64Pointer(in[i].SATABus)
-		out[i].SATAUnit = cloneInt64Pointer(in[i].SATAUnit)
-		out[i].NVMEBus = cloneInt64Pointer(in[i].NVMEBus)
-		out[i].NVMEUnit = cloneInt64Pointer(in[i].NVMEUnit)
-		out[i].CapacityBytes = cloneInt64Pointer(in[i].CapacityBytes)
-	}
-	return out
+	return cloneSliceWith(in, func(item *InventoryVMVirtualDisk) {
+		item.IDEPrimary = cloneBoolPointer(item.IDEPrimary)
+		item.IDEMaster = cloneBoolPointer(item.IDEMaster)
+		item.SCSIBus = cloneInt64Pointer(item.SCSIBus)
+		item.SCSIUnit = cloneInt64Pointer(item.SCSIUnit)
+		item.SATABus = cloneInt64Pointer(item.SATABus)
+		item.SATAUnit = cloneInt64Pointer(item.SATAUnit)
+		item.NVMEBus = cloneInt64Pointer(item.NVMEBus)
+		item.NVMEUnit = cloneInt64Pointer(item.NVMEUnit)
+		item.CapacityBytes = cloneInt64Pointer(item.CapacityBytes)
+	})
 }
 
 func cloneInventoryVMTools(in *InventoryVMTools) *InventoryVMTools {
@@ -1030,24 +991,13 @@ func cloneInventoryVMHardware(in *InventoryVMHardware) *InventoryVMHardware {
 }
 
 func cloneInventoryVMBootDevices(in []InventoryVMBootDevice) []InventoryVMBootDevice {
-	if in == nil {
-		return nil
-	}
-	out := make([]InventoryVMBootDevice, len(in))
-	for i := range in {
-		out[i] = in[i]
-		out[i].Disks = cloneStringSlice(in[i].Disks)
-	}
-	return out
+	return cloneSliceWith(in, func(item *InventoryVMBootDevice) {
+		item.Disks = cloneStringSlice(item.Disks)
+	})
 }
 
 func cloneInventoryEnrichmentIssues(in []InventoryEnrichmentIssue) []InventoryEnrichmentIssue {
-	if in == nil {
-		return nil
-	}
-	out := make([]InventoryEnrichmentIssue, len(in))
-	copy(out, in)
-	return out
+	return cloneShallowSlice(in)
 }
 
 func inventoryEnrichmentIssueSortKey(issue InventoryEnrichmentIssue) string {
@@ -1731,12 +1681,7 @@ func cloneBoolPointer(in *bool) *bool {
 }
 
 func cloneStringSlice(in []string) []string {
-	if in == nil {
-		return nil
-	}
-	out := make([]string, len(in))
-	copy(out, in)
-	return out
+	return cloneShallowSlice(in)
 }
 
 func firstNonEmptyTrimmed(values ...string) string {

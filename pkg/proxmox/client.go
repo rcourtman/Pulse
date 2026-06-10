@@ -889,8 +889,9 @@ func (c *Client) GetNodeRRDData(ctx context.Context, node, timeframe, cf string,
 	return result.Data, nil
 }
 
-// GetLXCRRDData retrieves RRD metrics for an LXC container.
-func (c *Client) GetLXCRRDData(ctx context.Context, node string, vmid int, timeframe, cf string, ds []string) ([]GuestRRDPoint, error) {
+// getGuestRRDData retrieves RRD metrics for a guest. guestPath is the PVE API
+// guest segment ("lxc", "qemu").
+func (c *Client) getGuestRRDData(ctx context.Context, node, guestPath string, vmid int, timeframe, cf string) ([]GuestRRDPoint, error) {
 	if timeframe == "" {
 		timeframe = "hour"
 	}
@@ -904,7 +905,7 @@ func (c *Client) GetLXCRRDData(ctx context.Context, node string, vmid int, timef
 	// Note: the "ds" parameter is not sent because older PVE versions
 	// (including 9.x) reject it as an unknown property.
 
-	path := fmt.Sprintf("/nodes/%s/lxc/%d/rrddata", url.PathEscape(node), vmid)
+	path := fmt.Sprintf("/nodes/%s/%s/%d/rrddata", url.PathEscape(node), guestPath, vmid)
 	if query := params.Encode(); query != "" {
 		path = fmt.Sprintf("%s?%s", path, query)
 	}
@@ -926,41 +927,14 @@ func (c *Client) GetLXCRRDData(ctx context.Context, node string, vmid int, timef
 	return result.Data, nil
 }
 
+// GetLXCRRDData retrieves RRD metrics for an LXC container.
+func (c *Client) GetLXCRRDData(ctx context.Context, node string, vmid int, timeframe, cf string, ds []string) ([]GuestRRDPoint, error) {
+	return c.getGuestRRDData(ctx, node, "lxc", vmid, timeframe, cf)
+}
+
 // GetVMRRDData retrieves RRD metrics for a QEMU VM.
 func (c *Client) GetVMRRDData(ctx context.Context, node string, vmid int, timeframe, cf string, ds []string) ([]GuestRRDPoint, error) {
-	if timeframe == "" {
-		timeframe = "hour"
-	}
-	if cf == "" {
-		cf = "AVERAGE"
-	}
-
-	params := url.Values{}
-	params.Set("timeframe", timeframe)
-	params.Set("cf", cf)
-	// Note: the "ds" parameter is not sent because older PVE versions
-	// (including 9.x) reject it as an unknown property.
-
-	path := fmt.Sprintf("/nodes/%s/qemu/%d/rrddata", url.PathEscape(node), vmid)
-	if query := params.Encode(); query != "" {
-		path = fmt.Sprintf("%s?%s", path, query)
-	}
-
-	resp, err := c.get(ctx, path)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []GuestRRDPoint `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	return result.Data, nil
+	return c.getGuestRRDData(ctx, node, "qemu", vmid, timeframe, cf)
 }
 
 // VM represents a Proxmox VE virtual machine

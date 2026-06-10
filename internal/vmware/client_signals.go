@@ -2,10 +2,7 @@ package vmware
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"sort"
 	"strings"
 	"sync"
@@ -588,30 +585,7 @@ func (c *Client) resolveAlarmName(ctx context.Context, release, sessionID, alarm
 }
 
 func (c *Client) getVIJSONJSON(ctx context.Context, sessionID, path, label string, target any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL.String()+path, nil)
-	if err != nil {
-		return fmt.Errorf("build %s request: %w", label, err)
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("vmware-api-session-id", sessionID)
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return classifyTransportError(label, err)
-	}
-	defer resp.Body.Close()
-	body, readErr := io.ReadAll(io.LimitReader(resp.Body, inventoryResponseLimitByte))
-	if readErr != nil {
-		return fmt.Errorf("read %s response: %w", label, readErr)
-	}
-	switch resp.StatusCode {
-	case http.StatusOK:
-	default:
-		return classifyReadStatusCode(label, resp.StatusCode)
-	}
-	if err := json.Unmarshal(body, target); err != nil {
-		return &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware %s response was not valid JSON", label)}
-	}
-	return nil
+	return c.getSessionScopedJSON(ctx, sessionID, path, label, target)
 }
 
 func isVIJSONNotFound(err error) bool {

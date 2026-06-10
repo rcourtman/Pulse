@@ -398,6 +398,61 @@ func (m *Manager) checkPMGOldestMessage(pmg models.PMGInstance, defaults PMGThre
 	}
 }
 
+// evaluatePMGNodeQueueAlert runs one per-node PMG queue threshold check
+// (total / deferred / hold share this shape). messageNoun is the operator
+// phrasing ("total messages in queue", "deferred messages", "held messages")
+// and specLabel feeds the invalid-spec log line. It returns true when the
+// caller must skip the node's remaining checks — either the below-threshold
+// clear or an invalid spec — preserving the historical per-node
+// short-circuit semantics.
+func (m *Manager) evaluatePMGNodeQueueAlert(pmg models.PMGInstance, nodeName, metric, specLabel, messageNoun string, observed, scaledWarn, scaledCrit, median int) bool {
+	if scaledWarn <= 0 && scaledCrit <= 0 {
+		return false
+	}
+
+	alertID := fmt.Sprintf("%s-%s-%s", pmg.ID, nodeName, metric)
+	if (scaledCrit <= 0 || observed < scaledCrit) && (scaledWarn <= 0 || observed < scaledWarn) {
+		m.clearAlert(buildCanonicalStateID(pmg.ID, alertID))
+		return true
+	}
+
+	// Add outlier indicator to message if applicable
+	isOutlier := isQueueOutlier(observed, median)
+	outlierNote := ""
+	if isOutlier {
+		outlierNote = ", outlier"
+	}
+
+	spec, err := buildCanonicalSeverityThresholdSpec(alertID, pmg.ID, pmg.Name, unifiedresources.ResourceTypePMG, metric, float64(scaledWarn), float64(scaledCrit), false)
+	if err != nil {
+		log.Warn().Err(err).Str("pmg", pmg.Name).Str("alertID", alertID).Msg("Skipping invalid canonical PMG node " + specLabel + " spec")
+		return true
+	}
+	_, _ = m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
+		Spec: spec,
+		Evidence: alertspecs.AlertEvidence{
+			ObservedAt: time.Now(),
+			SeverityThreshold: &alertspecs.SeverityThresholdEvidence{
+				Metric:    metric,
+				Direction: alertspecs.ThresholdDirectionAbove,
+				Observed:  float64(observed),
+			},
+		},
+		AlertID:      alertID,
+		AlertType:    metric,
+		ResourceID:   pmg.ID,
+		ResourceName: pmg.Name,
+		Node:         nodeName,
+		Instance:     pmg.Name,
+		MessageBuilder: func(result alertspecs.EvaluationResult) (string, float64, float64) {
+			currentThreshold := thresholdForCanonicalSeverity(result.State.Severity, float64(scaledWarn), float64(scaledCrit))
+			return fmt.Sprintf("PMG node %s on %s has %d %s (threshold: %d%s)", nodeName, pmg.Name, observed, messageNoun, int(currentThreshold), outlierNote), float64(observed), currentThreshold
+		},
+		DispatchAsync: true,
+	})
+	return false
+}
+
 // checkPMGNodeQueues checks individual PMG node queue health
 // Uses scaled thresholds (60% warn, 80% crit) and outlier detection
 func (m *Manager) checkPMGNodeQueues(pmg models.PMGInstance, defaults PMGThresholdConfig) {
@@ -439,137 +494,18 @@ func (m *Manager) checkPMGNodeQueues(pmg models.PMGInstance, defaults PMGThresho
 		}
 
 		// Check total queue - always check thresholds
-		if scaledQueueWarn > 0 || scaledQueueCrit > 0 {
-			total := node.QueueStatus.Total
-			alertID := fmt.Sprintf("%s-%s-queue-total", pmg.ID, node.Name)
-			if (scaledQueueCrit <= 0 || total < scaledQueueCrit) && (scaledQueueWarn <= 0 || total < scaledQueueWarn) {
-				m.clearAlert(buildCanonicalStateID(pmg.ID, alertID))
-				continue
-			}
-
-			isOutlier := isQueueOutlier(total, medianTotal)
-			outlierNote := ""
-			if isOutlier {
-				outlierNote = ", outlier"
-			}
-
-			spec, err := buildCanonicalSeverityThresholdSpec(alertID, pmg.ID, pmg.Name, unifiedresources.ResourceTypePMG, "queue-total", float64(scaledQueueWarn), float64(scaledQueueCrit), false)
-			if err != nil {
-				log.Warn().Err(err).Str("pmg", pmg.Name).Str("alertID", alertID).Msg("Skipping invalid canonical PMG node queue spec")
-				continue
-			}
-			_, _ = m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
-				Spec: spec,
-				Evidence: alertspecs.AlertEvidence{
-					ObservedAt: time.Now(),
-					SeverityThreshold: &alertspecs.SeverityThresholdEvidence{
-						Metric:    "queue-total",
-						Direction: alertspecs.ThresholdDirectionAbove,
-						Observed:  float64(total),
-					},
-				},
-				AlertID:      alertID,
-				AlertType:    "queue-total",
-				ResourceID:   pmg.ID,
-				ResourceName: pmg.Name,
-				Node:         node.Name,
-				Instance:     pmg.Name,
-				MessageBuilder: func(result alertspecs.EvaluationResult) (string, float64, float64) {
-					currentThreshold := thresholdForCanonicalSeverity(result.State.Severity, float64(scaledQueueWarn), float64(scaledQueueCrit))
-					return fmt.Sprintf("PMG node %s on %s has %d total messages in queue (threshold: %d%s)", node.Name, pmg.Name, total, int(currentThreshold), outlierNote), float64(total), currentThreshold
-				},
-				DispatchAsync: true,
-			})
+		if m.evaluatePMGNodeQueueAlert(pmg, node.Name, "queue-total", "queue", "total messages in queue", node.QueueStatus.Total, scaledQueueWarn, scaledQueueCrit, medianTotal) {
+			continue
 		}
 
 		// Check deferred queue - always check thresholds
-		if scaledDeferredWarn > 0 || scaledDeferredCrit > 0 {
-			deferred := node.QueueStatus.Deferred
-			alertID := fmt.Sprintf("%s-%s-queue-deferred", pmg.ID, node.Name)
-			if (scaledDeferredCrit <= 0 || deferred < scaledDeferredCrit) && (scaledDeferredWarn <= 0 || deferred < scaledDeferredWarn) {
-				m.clearAlert(buildCanonicalStateID(pmg.ID, alertID))
-				continue
-			}
-
-			// Add outlier indicator to message if applicable
-			isOutlier := isQueueOutlier(deferred, medianDeferred)
-			outlierNote := ""
-			if isOutlier {
-				outlierNote = ", outlier"
-			}
-
-			spec, err := buildCanonicalSeverityThresholdSpec(alertID, pmg.ID, pmg.Name, unifiedresources.ResourceTypePMG, "queue-deferred", float64(scaledDeferredWarn), float64(scaledDeferredCrit), false)
-			if err != nil {
-				log.Warn().Err(err).Str("pmg", pmg.Name).Str("alertID", alertID).Msg("Skipping invalid canonical PMG node deferred queue spec")
-				continue
-			}
-			_, _ = m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
-				Spec: spec,
-				Evidence: alertspecs.AlertEvidence{
-					ObservedAt: time.Now(),
-					SeverityThreshold: &alertspecs.SeverityThresholdEvidence{
-						Metric:    "queue-deferred",
-						Direction: alertspecs.ThresholdDirectionAbove,
-						Observed:  float64(deferred),
-					},
-				},
-				AlertID:      alertID,
-				AlertType:    "queue-deferred",
-				ResourceID:   pmg.ID,
-				ResourceName: pmg.Name,
-				Node:         node.Name,
-				Instance:     pmg.Name,
-				MessageBuilder: func(result alertspecs.EvaluationResult) (string, float64, float64) {
-					currentThreshold := thresholdForCanonicalSeverity(result.State.Severity, float64(scaledDeferredWarn), float64(scaledDeferredCrit))
-					return fmt.Sprintf("PMG node %s on %s has %d deferred messages (threshold: %d%s)", node.Name, pmg.Name, deferred, int(currentThreshold), outlierNote), float64(deferred), currentThreshold
-				},
-				DispatchAsync: true,
-			})
+		if m.evaluatePMGNodeQueueAlert(pmg, node.Name, "queue-deferred", "deferred queue", "deferred messages", node.QueueStatus.Deferred, scaledDeferredWarn, scaledDeferredCrit, medianDeferred) {
+			continue
 		}
 
 		// Check hold queue - always check thresholds
-		if scaledHoldWarn > 0 || scaledHoldCrit > 0 {
-			hold := node.QueueStatus.Hold
-			alertID := fmt.Sprintf("%s-%s-queue-hold", pmg.ID, node.Name)
-			if (scaledHoldCrit <= 0 || hold < scaledHoldCrit) && (scaledHoldWarn <= 0 || hold < scaledHoldWarn) {
-				m.clearAlert(buildCanonicalStateID(pmg.ID, alertID))
-				continue
-			}
-
-			// Add outlier indicator to message if applicable
-			isOutlier := isQueueOutlier(hold, medianHold)
-			outlierNote := ""
-			if isOutlier {
-				outlierNote = ", outlier"
-			}
-
-			spec, err := buildCanonicalSeverityThresholdSpec(alertID, pmg.ID, pmg.Name, unifiedresources.ResourceTypePMG, "queue-hold", float64(scaledHoldWarn), float64(scaledHoldCrit), false)
-			if err != nil {
-				log.Warn().Err(err).Str("pmg", pmg.Name).Str("alertID", alertID).Msg("Skipping invalid canonical PMG node hold queue spec")
-				continue
-			}
-			_, _ = m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
-				Spec: spec,
-				Evidence: alertspecs.AlertEvidence{
-					ObservedAt: time.Now(),
-					SeverityThreshold: &alertspecs.SeverityThresholdEvidence{
-						Metric:    "queue-hold",
-						Direction: alertspecs.ThresholdDirectionAbove,
-						Observed:  float64(hold),
-					},
-				},
-				AlertID:      alertID,
-				AlertType:    "queue-hold",
-				ResourceID:   pmg.ID,
-				ResourceName: pmg.Name,
-				Node:         node.Name,
-				Instance:     pmg.Name,
-				MessageBuilder: func(result alertspecs.EvaluationResult) (string, float64, float64) {
-					currentThreshold := thresholdForCanonicalSeverity(result.State.Severity, float64(scaledHoldWarn), float64(scaledHoldCrit))
-					return fmt.Sprintf("PMG node %s on %s has %d held messages (threshold: %d%s)", node.Name, pmg.Name, hold, int(currentThreshold), outlierNote), float64(hold), currentThreshold
-				},
-				DispatchAsync: true,
-			})
+		if m.evaluatePMGNodeQueueAlert(pmg, node.Name, "queue-hold", "hold queue", "held messages", node.QueueStatus.Hold, scaledHoldWarn, scaledHoldCrit, medianHold) {
+			continue
 		}
 
 		// Check oldest message age per node

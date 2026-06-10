@@ -19,6 +19,10 @@ issues:
       path: "_test\\.go$"
     - linters: [dupl]
       path: "internal/mock/"
+    # Platform mock fixture catalogs outside internal/mock/ are the same
+    # category: explicit literal fixture records that deliberately share shape.
+    - linters: [dupl]
+      path: "internal/vmware/fixtures\\.go$"
 linters-settings:
   gofmt:
     simplify: true

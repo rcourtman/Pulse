@@ -106,27 +106,29 @@ func (c *LicenseServerClient) ready() error {
 	return nil
 }
 
-// Activate calls the license server to create an installation and receive a relay grant.
-func (c *LicenseServerClient) Activate(ctx context.Context, req ActivateInstallationRequest) (*ActivateInstallationResponse, error) {
+// postActivationRequest POSTs an idempotent JSON request to the license
+// server and decodes the shared activation response shape. label feeds error
+// wrapping ("activate", "exchange").
+func (c *LicenseServerClient) postActivationRequest(ctx context.Context, path, label string, req any) (*ActivateInstallationResponse, error) {
 	if err := c.ready(); err != nil {
 		return nil, err
 	}
 
 	body, err := json.Marshal(req)
 	if err != nil {
-		return nil, fmt.Errorf("marshal activate request: %w", err)
+		return nil, fmt.Errorf("marshal %s request: %w", label, err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/activate", bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("create activate request: %w", err)
+		return nil, fmt.Errorf("create %s request: %w", label, err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Idempotency-Key", generateIdempotencyKey())
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("activate request failed: %w", err)
+		return nil, fmt.Errorf("%s request failed: %w", label, err)
 	}
 	defer resp.Body.Close()
 
@@ -136,46 +138,21 @@ func (c *LicenseServerClient) Activate(ctx context.Context, req ActivateInstalla
 
 	var result ActivateInstallationResponse
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decode activate response: %w", err)
+		return nil, fmt.Errorf("decode %s response: %w", label, err)
 	}
 	return &result, nil
+}
+
+// Activate calls the license server to create an installation and receive a relay grant.
+func (c *LicenseServerClient) Activate(ctx context.Context, req ActivateInstallationRequest) (*ActivateInstallationResponse, error) {
+	return c.postActivationRequest(ctx, "/v1/activate", "activate", req)
 }
 
 // ExchangeLegacyLicense converts a legacy v5 JWT-style license into a v6 activation.
 // The response shape matches normal activation so the runtime can persist activation
 // state and start using grant refresh immediately.
 func (c *LicenseServerClient) ExchangeLegacyLicense(ctx context.Context, req ExchangeLegacyLicenseRequest) (*ActivateInstallationResponse, error) {
-	if err := c.ready(); err != nil {
-		return nil, err
-	}
-
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal exchange request: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/licenses/exchange", bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("create exchange request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Idempotency-Key", generateIdempotencyKey())
-
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("exchange request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return nil, c.parseError(resp)
-	}
-
-	var result ActivateInstallationResponse
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decode exchange response: %w", err)
-	}
-	return &result, nil
+	return c.postActivationRequest(ctx, "/v1/licenses/exchange", "exchange", req)
 }
 
 // RefreshGrant calls the license server to refresh a relay grant.

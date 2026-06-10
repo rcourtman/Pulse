@@ -327,7 +327,10 @@ func (c *Client) listAutomationResources(
 	return c.getAutomationJSON(ctx, sessionID, path, label, target)
 }
 
-func (c *Client) getAutomationJSON(
+// getSessionScopedJSON fetches a session-authenticated vCenter JSON endpoint
+// (shared by the Automation API and VI/JSON API paths) into target with the
+// inventory response size cap and shared error classification.
+func (c *Client) getSessionScopedJSON(
 	ctx context.Context,
 	sessionID string,
 	path string,
@@ -358,6 +361,16 @@ func (c *Client) getAutomationJSON(
 		return &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware %s response was not valid JSON", label)}
 	}
 	return nil
+}
+
+func (c *Client) getAutomationJSON(
+	ctx context.Context,
+	sessionID string,
+	path string,
+	label string,
+	target any,
+) error {
+	return c.getSessionScopedJSON(ctx, sessionID, path, label, target)
 }
 
 func (c *Client) resolveVIJSONRelease(ctx context.Context) (string, viJSONServiceContentRefs, error) {
