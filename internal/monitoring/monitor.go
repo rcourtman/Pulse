@@ -2368,6 +2368,14 @@ func (m *Monitor) recordTaskResult(instanceType InstanceType, instance string, p
 		status.LastSuccess = now
 		status.ConsecutiveFailures = 0
 		status.FirstFailureAt = time.Time{}
+		// A recorded error means "current outstanding failure", not "last error
+		// ever". Clearing it on success keeps downstream consumers honest: the
+		// connections aggregator surfaces LastError as a live error banner and
+		// derives Unauthorized state from it, so a stale entry would show a
+		// red error on a healthy connection forever (#1493).
+		status.LastErrorAt = time.Time{}
+		status.LastErrorMessage = ""
+		status.LastErrorCategory = ""
 		m.mu.Unlock()
 		if breaker != nil {
 			breaker.recordSuccess()

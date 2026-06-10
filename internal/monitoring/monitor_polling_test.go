@@ -1308,6 +1308,18 @@ func TestRecordTaskResult_SuccessResetsFailures(t *testing.T) {
 	if !m.pollStatusMap[key].FirstFailureAt.IsZero() {
 		t.Error("expected FirstFailureAt to be reset to zero")
 	}
+	// The recorded error must clear too: it means "current outstanding
+	// failure", and the connections UI renders it as a live error banner.
+	// A stale entry would show a red error on a healthy connection (#1493).
+	if m.pollStatusMap[key].LastErrorMessage != "" {
+		t.Errorf("expected LastErrorMessage to be cleared, got %q", m.pollStatusMap[key].LastErrorMessage)
+	}
+	if !m.pollStatusMap[key].LastErrorAt.IsZero() {
+		t.Error("expected LastErrorAt to be reset to zero")
+	}
+	if m.pollStatusMap[key].LastErrorCategory != "" {
+		t.Errorf("expected LastErrorCategory to be cleared, got %q", m.pollStatusMap[key].LastErrorCategory)
+	}
 }
 
 func TestRecordTaskResult_NilMaps(t *testing.T) {
