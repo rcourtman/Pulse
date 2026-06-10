@@ -231,9 +231,29 @@ func TestLoad_EnvOverrides_InvalidFrontendPortIgnored(t *testing.T) {
 		assert.Equal(t, 7655, cfg.FrontendPort)
 	})
 
-	t.Run("legacy PORT ignored", func(t *testing.T) {
+	t.Run("legacy PORT honored as fallback", func(t *testing.T) {
 		t.Setenv("PULSE_DATA_DIR", t.TempDir())
 		t.Setenv("PORT", "8080")
+
+		cfg, err := Load()
+		require.NoError(t, err)
+		assert.Equal(t, 8080, cfg.FrontendPort)
+		assert.True(t, cfg.EnvOverrides["FRONTEND_PORT"])
+	})
+
+	t.Run("FRONTEND_PORT wins over legacy PORT", func(t *testing.T) {
+		t.Setenv("PULSE_DATA_DIR", t.TempDir())
+		t.Setenv("FRONTEND_PORT", "9090")
+		t.Setenv("PORT", "8080")
+
+		cfg, err := Load()
+		require.NoError(t, err)
+		assert.Equal(t, 9090, cfg.FrontendPort)
+	})
+
+	t.Run("invalid legacy PORT ignored", func(t *testing.T) {
+		t.Setenv("PULSE_DATA_DIR", t.TempDir())
+		t.Setenv("PORT", "not-a-port")
 
 		cfg, err := Load()
 		require.NoError(t, err)

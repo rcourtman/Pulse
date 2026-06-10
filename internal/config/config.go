@@ -1313,6 +1313,16 @@ func load(initLogging bool) (*Config, error) {
 		} else {
 			log.Warn().Str("value", frontendPort).Msg("Ignoring invalid FRONTEND_PORT from environment")
 		}
+	} else if legacyPort := utils.GetenvTrim("PORT"); legacyPort != "" {
+		// v5 honored PORT as a documented alias for FRONTEND_PORT; keep it as a
+		// lowest-precedence fallback so upgraded installs stay reachable.
+		if p, err := parsePortOverride("PORT", legacyPort); err == nil {
+			cfg.FrontendPort = p
+			cfg.EnvOverrides["FRONTEND_PORT"] = true
+			log.Warn().Int("port", p).Msg("Overriding frontend port from legacy PORT env var. PORT is deprecated; set FRONTEND_PORT instead")
+		} else {
+			log.Warn().Str("value", legacyPort).Msg("Ignoring invalid legacy PORT from environment")
+		}
 	}
 
 	if agentIngestPort := utils.GetenvTrim("PULSE_AGENT_INGEST_PORT"); agentIngestPort != "" {

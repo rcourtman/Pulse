@@ -199,6 +199,7 @@ Environment variables take precedence over `system.json`.
 | Variable | Description | Default |
 | ---------- | ------------- | --------- |
 | `FRONTEND_PORT` | Public listening port (web UI, API, and agent ingest) | `7655` |
+| `PORT` | **Deprecated** legacy alias for `FRONTEND_PORT`, honored only when `FRONTEND_PORT` is unset. Logs a deprecation warning at startup; switch to `FRONTEND_PORT`. | *(unset)* |
 | `PULSE_AGENT_INGEST_PORT` | Optional dedicated port that serves **only** agent ingest (`/api/agents/*`), network-isolated from the web UI and the rest of the API. `0` = disabled (single port). See [Split-Port Agent Ingest](#split-port-agent-ingest-network-isolation). | `0` |
 | `LOG_LEVEL` | Log verbosity (see below) | `info` |
 | `LOG_FORMAT` | Log output format (`auto`, `json`, `console`) | `auto` |

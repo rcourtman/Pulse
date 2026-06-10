@@ -122,6 +122,8 @@ the navigation shape you already know.
 
 - **Bootstrap material is more controlled.** Setup-script flows now use explicit short-lived setup tokens and generated commands with governed privilege-escalation wrappers. Automation that assumed the older install-command shape may need changes.
 
+- **The legacy `PORT` variable is deprecated.** V6 still honors `PORT` as a fallback for `FRONTEND_PORT` so existing Docker and manual installs keep their configured port after upgrade, but it logs a deprecation warning at startup and `FRONTEND_PORT` wins when both are set. Move deployments to `FRONTEND_PORT`.
+
 ## Under the hood but important
 
 - **V6 ships with a real v5 upgrade path.** The migration tests cover config
