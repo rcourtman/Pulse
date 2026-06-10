@@ -26,6 +26,7 @@ import {
   connectionAgentVersionPresentation,
   infrastructureSourcePresentation,
   surfaceLabel,
+  type InfrastructureSourcePresentation,
   type InfrastructureSystemMemberRow,
   type InfrastructureSystemRow,
 } from './connectionsTableModel';
@@ -178,6 +179,22 @@ const memberMethodTitleFor = (
     connectionAgentVersionPresentation(member.agentConnection)?.title ??
     'Pulse Agent attached to cluster member'
   );
+};
+
+// Cluster member rows describe nodes reached through the cluster's single API
+// connection. Repeating the connection-level "API" badge on every node reads
+// as per-node API credentials (#1493), so member rows only badge sources that
+// are actually node-local: an attached Pulse Agent. API-only members render a
+// muted dash with an explanatory tooltip instead.
+const MEMBER_SHARED_API_TITLE =
+  "Monitored through the cluster's API connection. One connection covers every node in the cluster.";
+
+const memberMethodPresentation = (
+  member: InfrastructureSystemMemberRow,
+): InfrastructureSourcePresentation | null => {
+  if (member.source === 'api') return null;
+  if (member.source === 'both') return infrastructureSourcePresentation('agent');
+  return infrastructureSourcePresentation(member.source);
 };
 
 type SetupConfidenceActionKind = 'add' | 'agent' | 'detect' | 'review' | 'scan';
@@ -1044,10 +1061,11 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                       <For each={row.members}>
                                         {(member, memberIndex) => {
                                           const memberPresentation =
-                                            infrastructureSourcePresentation(member.source);
-                                          const memberSourceTitle =
-                                            memberMethodTitleFor(row, memberIndex()) ??
-                                            memberPresentation.title;
+                                            memberMethodPresentation(member);
+                                          const memberSourceTitle = memberPresentation
+                                            ? (memberMethodTitleFor(row, memberIndex()) ??
+                                              memberPresentation.title)
+                                            : MEMBER_SHARED_API_TITLE;
                                           return (
                                             <>
                                               <TableRow class="border-b border-border-subtle bg-surface-alt/30">
@@ -1064,12 +1082,26 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                 </TableCell>
 
                                                 <TableCell class="px-3 py-1.5 align-middle">
-                                                  <span
-                                                    class={`${memberPresentation.badgeClassName} whitespace-nowrap`}
-                                                    title={memberSourceTitle}
+                                                  <Show
+                                                    when={memberPresentation}
+                                                    fallback={
+                                                      <span
+                                                        class="text-xs text-muted"
+                                                        title={memberSourceTitle}
+                                                      >
+                                                        —
+                                                      </span>
+                                                    }
                                                   >
-                                                    {memberPresentation.label}
-                                                  </span>
+                                                    {(presentation) => (
+                                                      <span
+                                                        class={`${presentation().badgeClassName} whitespace-nowrap`}
+                                                        title={memberSourceTitle}
+                                                      >
+                                                        {presentation().label}
+                                                      </span>
+                                                    )}
+                                                  </Show>
                                                 </TableCell>
 
                                                 <TableCell class="px-3 py-1.5 align-middle">
@@ -1365,10 +1397,11 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                       <For each={row.members}>
                                         {(member, memberIndex) => {
                                           const memberPresentation =
-                                            infrastructureSourcePresentation(member.source);
-                                          const memberSourceTitle =
-                                            memberMethodTitleFor(row, memberIndex()) ??
-                                            memberPresentation.title;
+                                            memberMethodPresentation(member);
+                                          const memberSourceTitle = memberPresentation
+                                            ? (memberMethodTitleFor(row, memberIndex()) ??
+                                              memberPresentation.title)
+                                            : MEMBER_SHARED_API_TITLE;
                                           return (
                                             <div class="rounded-md border border-border-subtle bg-surface-alt/30 px-2.5 py-2">
                                               <div class="flex items-start justify-between gap-2">
@@ -1383,12 +1416,16 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                     {member.subtitle}
                                                   </div>
                                                 </div>
-                                                <span
-                                                  class={`${memberPresentation.badgeClassName} flex-shrink-0`}
-                                                  title={memberSourceTitle}
-                                                >
-                                                  {memberPresentation.label}
-                                                </span>
+                                                <Show when={memberPresentation}>
+                                                  {(presentation) => (
+                                                    <span
+                                                      class={`${presentation().badgeClassName} flex-shrink-0`}
+                                                      title={memberSourceTitle}
+                                                    >
+                                                      {presentation().label}
+                                                    </span>
+                                                  )}
+                                                </Show>
                                               </div>
 
                                               <Show when={member.host}>
