@@ -292,31 +292,25 @@ func parseBoolQuery(qs map[string][]string, key string) bool {
 	}
 }
 
-func (h *RecoveryHandlers) HandleListSeries(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	qs := r.URL.Query()
-
+// parseRecoveryListPointsOptions parses the recovery points filter options
+// shared by the points-series and points-facets handlers. It writes a 400
+// response and returns false when a time bound is not RFC3339.
+func parseRecoveryListPointsOptions(w http.ResponseWriter, qs url.Values) (recovery.ListPointsOptions, bool) {
 	var from, to *time.Time
 	if t, err := parseRFC3339QueryTime(qs.Get("from")); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_from", "Invalid from time; must be RFC3339", map[string]string{"error": err.Error()})
-		return
+		return recovery.ListPointsOptions{}, false
 	} else {
 		from = t
 	}
 	if t, err := parseRFC3339QueryTime(qs.Get("to")); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_to", "Invalid to time; must be RFC3339", map[string]string{"error": err.Error()})
-		return
+		return recovery.ListPointsOptions{}, false
 	} else {
 		to = t
 	}
 
-	tzOffsetMin := parseIntQuery(qs, "tzOffsetMinutes", 0)
-
-	opts := recovery.ListPointsOptions{
+	return recovery.ListPointsOptions{
 		Provider:          parseRecoveryPlatformQuery(qs),
 		Kind:              recovery.Kind(strings.TrimSpace(qs.Get("kind"))),
 		Mode:              recovery.Mode(strings.TrimSpace(qs.Get("mode"))),
@@ -332,7 +326,22 @@ func (h *RecoveryHandlers) HandleListSeries(w http.ResponseWriter, r *http.Reque
 		NamespaceLabel:    strings.TrimSpace(firstNonEmpty(qs.Get("namespace"), qs.Get("namespaceLabel"))),
 		WorkloadOnly:      strings.TrimSpace(qs.Get("scope")) == "workload" || parseBoolQuery(qs, "workloadOnly"),
 		Verification:      strings.TrimSpace(firstNonEmpty(qs.Get("verification"), qs.Get("verified"))),
+	}, true
+}
+
+func (h *RecoveryHandlers) HandleListSeries(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
 	}
+
+	qs := r.URL.Query()
+
+	opts, ok := parseRecoveryListPointsOptions(w, qs)
+	if !ok {
+		return
+	}
+	tzOffsetMin := parseIntQuery(qs, "tzOffsetMinutes", 0)
 
 	var series []recovery.PointsSeriesBucket
 	if mock.IsMockEnabled() {
@@ -368,36 +377,9 @@ func (h *RecoveryHandlers) HandleListFacets(w http.ResponseWriter, r *http.Reque
 
 	qs := r.URL.Query()
 
-	var from, to *time.Time
-	if t, err := parseRFC3339QueryTime(qs.Get("from")); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_from", "Invalid from time; must be RFC3339", map[string]string{"error": err.Error()})
+	opts, ok := parseRecoveryListPointsOptions(w, qs)
+	if !ok {
 		return
-	} else {
-		from = t
-	}
-	if t, err := parseRFC3339QueryTime(qs.Get("to")); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_to", "Invalid to time; must be RFC3339", map[string]string{"error": err.Error()})
-		return
-	} else {
-		to = t
-	}
-
-	opts := recovery.ListPointsOptions{
-		Provider:          parseRecoveryPlatformQuery(qs),
-		Kind:              recovery.Kind(strings.TrimSpace(qs.Get("kind"))),
-		Mode:              recovery.Mode(strings.TrimSpace(qs.Get("mode"))),
-		Outcome:           recovery.Outcome(strings.TrimSpace(qs.Get("outcome"))),
-		ItemType:          recovery.NormalizeRecoveryItemType(firstNonEmpty(qs.Get("itemType"), qs.Get("type"))),
-		SubjectResourceID: parseRecoveryItemResourceIDQuery(qs),
-		RollupID:          strings.TrimSpace(qs.Get("rollupId")),
-		From:              from,
-		To:                to,
-		Query:             strings.TrimSpace(firstNonEmpty(qs.Get("q"), qs.Get("query"))),
-		ClusterLabel:      strings.TrimSpace(firstNonEmpty(qs.Get("cluster"), qs.Get("clusterLabel"))),
-		NodeHostLabel:     strings.TrimSpace(firstNonEmpty(qs.Get("node"), qs.Get("nodeHost"), qs.Get("nodeHostLabel"))),
-		NamespaceLabel:    strings.TrimSpace(firstNonEmpty(qs.Get("namespace"), qs.Get("namespaceLabel"))),
-		WorkloadOnly:      strings.TrimSpace(qs.Get("scope")) == "workload" || parseBoolQuery(qs, "workloadOnly"),
-		Verification:      strings.TrimSpace(firstNonEmpty(qs.Get("verification"), qs.Get("verified"))),
 	}
 
 	var facets recovery.PointsFacets

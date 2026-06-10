@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -52,88 +51,25 @@ func (h *GuestMetadataHandler) Store() *config.GuestMetadataStore {
 
 // HandleGetMetadata retrieves metadata for a specific guest or all guests
 func (h *GuestMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Check if requesting specific guest
-	path := r.URL.Path
-	// Handle both /api/guests/metadata and /api/guests/metadata/
-	if path == "/api/guests/metadata" || path == "/api/guests/metadata/" {
-		// Get all metadata
-		w.Header().Set("Content-Type", "application/json")
-		store := h.getStore(r.Context())
-		allMeta := store.GetAll()
-		if allMeta == nil {
-			// Return empty object instead of null
-			json.NewEncoder(w).Encode(make(map[string]*config.GuestMetadata))
-		} else {
-			json.NewEncoder(w).Encode(allMeta)
-		}
-		return
-	}
-
-	// Get specific guest ID from path
-	guestID := strings.TrimPrefix(path, "/api/guests/metadata/")
-
-	w.Header().Set("Content-Type", "application/json")
-
-	if guestID != "" {
-		// Get specific guest metadata
-		store := h.getStore(r.Context())
-		meta := store.Get(guestID)
-		if meta == nil {
-			// Return empty metadata instead of 404
-			json.NewEncoder(w).Encode(&config.GuestMetadata{ID: guestID})
-		} else {
-			json.NewEncoder(w).Encode(meta)
-		}
-	} else {
-		// This shouldn't happen with current routing, but handle it anyway
-		http.Error(w, "Invalid request path", http.StatusBadRequest)
-	}
+	handleMetadataGetRequest(w, r, "/api/guests/metadata",
+		func(ctx context.Context) map[string]*config.GuestMetadata { return h.getStore(ctx).GetAll() },
+		func(ctx context.Context, id string) *config.GuestMetadata { return h.getStore(ctx).Get(id) },
+		func(id string) *config.GuestMetadata { return &config.GuestMetadata{ID: id} },
+	)
 }
 
 // HandleUpdateMetadata updates metadata for a guest
 func (h *GuestMetadataHandler) HandleUpdateMetadata(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPut && r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	guestID := strings.TrimPrefix(r.URL.Path, "/api/guests/metadata/")
-	if guestID == "" || guestID == "metadata" {
-		http.Error(w, "Guest ID required", http.StatusBadRequest)
-		return
-	}
-
-	// Limit request body to 16KB to prevent memory exhaustion
-	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
-
-	var meta config.GuestMetadata
-	if err := json.NewDecoder(r.Body).Decode(&meta); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	// Validate URL if provided
-	if errMsg := validateCustomURL(meta.CustomURL); errMsg != "" {
-		http.Error(w, errMsg, http.StatusBadRequest)
-		return
-	}
-
-	store := h.getStore(r.Context())
-	if err := store.Set(guestID, &meta); err != nil {
-		log.Error().Err(err).Str("guestID", guestID).Msg("Failed to save guest metadata")
-		http.Error(w, metadataSaveErrorMessage(err), http.StatusInternalServerError)
-		return
-	}
-
-	log.Info().Str("guestID", guestID).Str("url", meta.CustomURL).Msg("Updated guest metadata")
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(&meta)
+	handleMetadataUpdateRequest(w, r, "/api/guests/metadata",
+		"Guest ID required",
+		"guestID",
+		"Failed to save guest metadata",
+		"Updated guest metadata",
+		func(meta *config.GuestMetadata) string { return meta.CustomURL },
+		func(ctx context.Context, id string, meta *config.GuestMetadata) error {
+			return h.getStore(ctx).Set(id, meta)
+		},
+	)
 }
 
 // HandleDeleteMetadata removes metadata for a guest

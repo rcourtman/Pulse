@@ -45,88 +45,25 @@ func (h *DockerMetadataHandler) Store() *config.DockerMetadataStore {
 
 // HandleGetMetadata retrieves metadata for a specific Docker resource or all resources
 func (h *DockerMetadataHandler) HandleGetMetadata(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Check if requesting specific resource
-	path := r.URL.Path
-	// Handle both /api/docker/metadata and /api/docker/metadata/
-	if path == "/api/docker/metadata" || path == "/api/docker/metadata/" {
-		// Get all metadata
-		w.Header().Set("Content-Type", "application/json")
-		store := h.getStore(r.Context())
-		allMeta := store.GetAll()
-		if allMeta == nil {
-			// Return empty object instead of null
-			json.NewEncoder(w).Encode(make(map[string]*config.DockerMetadata))
-		} else {
-			json.NewEncoder(w).Encode(allMeta)
-		}
-		return
-	}
-
-	// Get specific resource ID from path
-	resourceID := strings.TrimPrefix(path, "/api/docker/metadata/")
-
-	w.Header().Set("Content-Type", "application/json")
-
-	if resourceID != "" {
-		// Get specific Docker resource metadata
-		store := h.getStore(r.Context())
-		meta := store.Get(resourceID)
-		if meta == nil {
-			// Return empty metadata instead of 404
-			json.NewEncoder(w).Encode(&config.DockerMetadata{ID: resourceID})
-		} else {
-			json.NewEncoder(w).Encode(meta)
-		}
-	} else {
-		// This shouldn't happen with current routing, but handle it anyway
-		http.Error(w, "Invalid request path", http.StatusBadRequest)
-	}
+	handleMetadataGetRequest(w, r, "/api/docker/metadata",
+		func(ctx context.Context) map[string]*config.DockerMetadata { return h.getStore(ctx).GetAll() },
+		func(ctx context.Context, id string) *config.DockerMetadata { return h.getStore(ctx).Get(id) },
+		func(id string) *config.DockerMetadata { return &config.DockerMetadata{ID: id} },
+	)
 }
 
 // HandleUpdateMetadata updates metadata for a Docker resource
 func (h *DockerMetadataHandler) HandleUpdateMetadata(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPut && r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	resourceID := strings.TrimPrefix(r.URL.Path, "/api/docker/metadata/")
-	if resourceID == "" || resourceID == "metadata" {
-		http.Error(w, "Resource ID required", http.StatusBadRequest)
-		return
-	}
-
-	// Limit request body to 16KB to prevent memory exhaustion
-	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
-
-	var meta config.DockerMetadata
-	if err := json.NewDecoder(r.Body).Decode(&meta); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	// Validate URL if provided
-	if errMsg := validateCustomURL(meta.CustomURL); errMsg != "" {
-		http.Error(w, errMsg, http.StatusBadRequest)
-		return
-	}
-
-	store := h.getStore(r.Context())
-	if err := store.Set(resourceID, &meta); err != nil {
-		log.Error().Err(err).Str("resourceID", resourceID).Msg("Failed to save Docker metadata")
-		http.Error(w, metadataSaveErrorMessage(err), http.StatusInternalServerError)
-		return
-	}
-
-	log.Info().Str("resourceID", resourceID).Str("url", meta.CustomURL).Msg("Updated Docker metadata")
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(&meta)
+	handleMetadataUpdateRequest(w, r, "/api/docker/metadata",
+		"Resource ID required",
+		"resourceID",
+		"Failed to save Docker metadata",
+		"Updated Docker metadata",
+		func(meta *config.DockerMetadata) string { return meta.CustomURL },
+		func(ctx context.Context, id string, meta *config.DockerMetadata) error {
+			return h.getStore(ctx).Set(id, meta)
+		},
+	)
 }
 
 // HandleDeleteMetadata removes metadata for a Docker resource

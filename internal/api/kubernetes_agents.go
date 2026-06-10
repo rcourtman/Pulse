@@ -194,22 +194,31 @@ func (h *KubernetesAgentHandlers) HandleAllowReenroll(w http.ResponseWriter, r *
 	}
 }
 
-// HandleUnhideCluster unhides a previously hidden kubernetes cluster.
-func (h *KubernetesAgentHandlers) HandleUnhideCluster(w http.ResponseWriter, r *http.Request) {
+// handleClusterLifecycleAction runs the shared PUT cluster lifecycle flow:
+// resolve the cluster ID from the suffixed route, apply the monitor action,
+// broadcast state, and respond. action returns the canonical cluster ID.
+func (h *KubernetesAgentHandlers) handleClusterLifecycleAction(
+	w http.ResponseWriter,
+	r *http.Request,
+	pathSuffix string,
+	successMsg string,
+	logMsg string,
+	action func(ctx context.Context, clusterID string) (string, error),
+) {
 	if r.Method != http.MethodPut {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only PUT is allowed", nil)
 		return
 	}
 
 	trimmedPath := strings.TrimPrefix(r.URL.Path, "/api/agents/kubernetes/clusters/")
-	trimmedPath = strings.TrimSuffix(trimmedPath, "/unhide")
+	trimmedPath = strings.TrimSuffix(trimmedPath, pathSuffix)
 	clusterID := strings.TrimSpace(trimmedPath)
 	if clusterID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_cluster_id", "Kubernetes cluster ID is required", nil)
 		return
 	}
 
-	cluster, err := h.getMonitor(r.Context()).UnhideKubernetesCluster(clusterID)
+	canonicalID, err := action(r.Context(), clusterID)
 	if err != nil {
 		writeErrorResponse(w, http.StatusNotFound, "k8s_cluster_not_found", err.Error(), nil)
 		return
@@ -219,43 +228,35 @@ func (h *KubernetesAgentHandlers) HandleUnhideCluster(w http.ResponseWriter, r *
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success":   true,
-		"clusterId": cluster.ID,
-		"message":   "Kubernetes cluster unhidden",
+		"clusterId": canonicalID,
+		"message":   successMsg,
 	}); err != nil {
-		log.Error().Err(err).Msg("Failed to serialize kubernetes cluster unhide response")
+		log.Error().Err(err).Msg(logMsg)
 	}
+}
+
+// HandleUnhideCluster unhides a previously hidden kubernetes cluster.
+func (h *KubernetesAgentHandlers) HandleUnhideCluster(w http.ResponseWriter, r *http.Request) {
+	h.handleClusterLifecycleAction(w, r, "/unhide", "Kubernetes cluster unhidden", "Failed to serialize kubernetes cluster unhide response",
+		func(ctx context.Context, clusterID string) (string, error) {
+			cluster, err := h.getMonitor(ctx).UnhideKubernetesCluster(clusterID)
+			if err != nil {
+				return "", err
+			}
+			return cluster.ID, nil
+		})
 }
 
 // HandleMarkPendingUninstall marks a cluster as pending uninstall.
 func (h *KubernetesAgentHandlers) HandleMarkPendingUninstall(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPut {
-		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only PUT is allowed", nil)
-		return
-	}
-
-	trimmedPath := strings.TrimPrefix(r.URL.Path, "/api/agents/kubernetes/clusters/")
-	trimmedPath = strings.TrimSuffix(trimmedPath, "/pending-uninstall")
-	clusterID := strings.TrimSpace(trimmedPath)
-	if clusterID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_cluster_id", "Kubernetes cluster ID is required", nil)
-		return
-	}
-
-	cluster, err := h.getMonitor(r.Context()).MarkKubernetesClusterPendingUninstall(clusterID)
-	if err != nil {
-		writeErrorResponse(w, http.StatusNotFound, "k8s_cluster_not_found", err.Error(), nil)
-		return
-	}
-
-	h.broadcastState(r.Context())
-
-	if err := utils.WriteJSONResponse(w, map[string]any{
-		"success":   true,
-		"clusterId": cluster.ID,
-		"message":   "Kubernetes cluster marked as pending uninstall",
-	}); err != nil {
-		log.Error().Err(err).Msg("Failed to serialize kubernetes cluster pending uninstall response")
-	}
+	h.handleClusterLifecycleAction(w, r, "/pending-uninstall", "Kubernetes cluster marked as pending uninstall", "Failed to serialize kubernetes cluster pending uninstall response",
+		func(ctx context.Context, clusterID string) (string, error) {
+			cluster, err := h.getMonitor(ctx).MarkKubernetesClusterPendingUninstall(clusterID)
+			if err != nil {
+				return "", err
+			}
+			return cluster.ID, nil
+		})
 }
 
 // HandleSetCustomDisplayName updates the custom display name for a kubernetes cluster.

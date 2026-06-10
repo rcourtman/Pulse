@@ -1,10 +1,8 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -202,6 +200,8 @@ func (h *VMwareHandlers) HandleDelete(w http.ResponseWriter, r *http.Request) {
 
 // HandleUpdate replaces a configured VMware vCenter connection by ID while
 // preserving unchanged masked secrets from the stored record.
+//
+//nolint:dupl // parallel platform wiring of the shared updatePlatformConnection flow; only platform symbols differ
 func (h *VMwareHandlers) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 	if !h.featureEnabled(w) {
 		return
@@ -228,36 +228,21 @@ func (h *VMwareHandlers) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	index := -1
-	for i := range instances {
-		if strings.TrimSpace(instances[i].ID) == connectionID {
-			index = i
-			break
-		}
-	}
-	if index < 0 {
-		writeErrorResponse(w, http.StatusNotFound, "vmware_not_found", "Connection not found", nil)
-		return
-	}
-
-	instance, ok := decodeVMwareInstanceRequest(w, r, instances[index])
-	if !ok {
-		return
-	}
-	instance.ID = connectionID
-	normalizeVMwareInstance(&instance)
-	instance.PreserveMaskedSecrets(instances[index])
-	if err := instance.Validate(); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
-		return
-	}
-	instances[index] = instance
-	if err := persistence.SaveVMwareConfig(instances); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "vmware_save_failed", "Failed to save VMware configuration", map[string]string{"error": err.Error()})
-		return
-	}
-
-	writeJSON(w, http.StatusOK, instance.Redacted())
+	updatePlatformConnection(w, r, connectionID, instances, platformConnectionUpdateSpec[config.VMwareVCenterInstance]{
+		notFoundCode: "vmware_not_found",
+		saveFailCode: "vmware_save_failed",
+		saveFailMsg:  "Failed to save VMware configuration",
+		id:           func(inst config.VMwareVCenterInstance) string { return inst.ID },
+		decode:       decodeVMwareInstanceRequest,
+		setID:        func(inst *config.VMwareVCenterInstance, id string) { inst.ID = id },
+		normalize:    normalizeVMwareInstance,
+		preserve: func(updated *config.VMwareVCenterInstance, stored config.VMwareVCenterInstance) {
+			updated.PreserveMaskedSecrets(stored)
+		},
+		validate: func(inst config.VMwareVCenterInstance) error { return inst.Validate() },
+		redacted: func(inst config.VMwareVCenterInstance) any { return inst.Redacted() },
+		save:     persistence.SaveVMwareConfig,
+	})
 }
 
 // HandlePreviewConnection projects the monitored-system impact of a proposed
@@ -606,25 +591,7 @@ func decodeOptionalVMwareInstanceRequest(
 	r *http.Request,
 	base config.VMwareVCenterInstance,
 ) (config.VMwareVCenterInstance, bool, bool) {
-	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
-	defer r.Body.Close()
-
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
-		return config.VMwareVCenterInstance{}, false, false
-	}
-	if len(bytes.TrimSpace(body)) == 0 {
-		return base, false, true
-	}
-
-	instance := base
-	if err := json.Unmarshal(body, &instance); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
-		return config.VMwareVCenterInstance{}, false, false
-	}
-
-	return instance, true, true
+	return decodeOptionalInstanceRequest(w, r, base)
 }
 
 func (h *VMwareHandlers) featureEnabled(w http.ResponseWriter) bool {

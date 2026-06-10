@@ -1,10 +1,8 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -188,6 +186,8 @@ func (h *TrueNASHandlers) HandleDelete(w http.ResponseWriter, r *http.Request) {
 
 // HandleUpdate replaces a configured TrueNAS connection by ID while preserving
 // unchanged masked secrets from the stored record.
+//
+//nolint:dupl // parallel platform wiring of the shared updatePlatformConnection flow; only platform symbols differ
 func (h *TrueNASHandlers) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 	if !h.featureEnabled(w) {
 		return
@@ -214,36 +214,21 @@ func (h *TrueNASHandlers) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	index := -1
-	for i := range instances {
-		if strings.TrimSpace(instances[i].ID) == connectionID {
-			index = i
-			break
-		}
-	}
-	if index < 0 {
-		writeErrorResponse(w, http.StatusNotFound, "truenas_not_found", "Connection not found", nil)
-		return
-	}
-
-	instance, ok := decodeTrueNASInstanceRequest(w, r, instances[index])
-	if !ok {
-		return
-	}
-	instance.ID = connectionID
-	normalizeTrueNASInstance(&instance)
-	instance.PreserveMaskedSecrets(instances[index])
-	if err := instance.Validate(); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
-		return
-	}
-	instances[index] = instance
-	if err := persistence.SaveTrueNASConfig(instances); err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "truenas_save_failed", "Failed to save TrueNAS configuration", map[string]string{"error": err.Error()})
-		return
-	}
-
-	writeJSON(w, http.StatusOK, instance.Redacted())
+	updatePlatformConnection(w, r, connectionID, instances, platformConnectionUpdateSpec[config.TrueNASInstance]{
+		notFoundCode: "truenas_not_found",
+		saveFailCode: "truenas_save_failed",
+		saveFailMsg:  "Failed to save TrueNAS configuration",
+		id:           func(inst config.TrueNASInstance) string { return inst.ID },
+		decode:       decodeTrueNASInstanceRequest,
+		setID:        func(inst *config.TrueNASInstance, id string) { inst.ID = id },
+		normalize:    normalizeTrueNASInstance,
+		preserve: func(updated *config.TrueNASInstance, stored config.TrueNASInstance) {
+			updated.PreserveMaskedSecrets(stored)
+		},
+		validate: func(inst config.TrueNASInstance) error { return inst.Validate() },
+		redacted: func(inst config.TrueNASInstance) any { return inst.Redacted() },
+		save:     persistence.SaveTrueNASConfig,
+	})
 }
 
 // HandlePreviewConnection projects the monitored-system impact of a proposed
@@ -535,25 +520,7 @@ func decodeOptionalTrueNASInstanceRequest(
 	r *http.Request,
 	base config.TrueNASInstance,
 ) (config.TrueNASInstance, bool, bool) {
-	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
-	defer r.Body.Close()
-
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
-		return config.TrueNASInstance{}, false, false
-	}
-	if len(bytes.TrimSpace(body)) == 0 {
-		return base, false, true
-	}
-
-	instance := base
-	if err := json.Unmarshal(body, &instance); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
-		return config.TrueNASInstance{}, false, false
-	}
-
-	return instance, true, true
+	return decodeOptionalInstanceRequest(w, r, base)
 }
 
 func (h *TrueNASHandlers) featureEnabled(w http.ResponseWriter) bool {

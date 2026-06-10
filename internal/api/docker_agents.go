@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -407,20 +408,29 @@ func (h *DockerAgentHandlers) HandleAllowReenroll(w http.ResponseWriter, r *http
 	}
 }
 
-// HandleUnhideHost unhides a previously hidden Docker / Podman host.
-func (h *DockerAgentHandlers) HandleUnhideHost(w http.ResponseWriter, r *http.Request) {
+// handleHostLifecycleAction runs the shared PUT docker host lifecycle flow:
+// resolve the agent ID from the suffixed route, apply the monitor action,
+// broadcast state, and respond. action returns the canonical host ID.
+func (h *DockerAgentHandlers) handleHostLifecycleAction(
+	w http.ResponseWriter,
+	r *http.Request,
+	pathSuffix string,
+	successMsg string,
+	logMsg string,
+	action func(ctx context.Context, agentID string) (string, error),
+) {
 	if r.Method != http.MethodPut {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only PUT is allowed", nil)
 		return
 	}
 
-	agentID := dockerRuntimeAgentIDFromPath(r.URL.Path, "/unhide")
+	agentID := dockerRuntimeAgentIDFromPath(r.URL.Path, pathSuffix)
 	if agentID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "Agent ID is required", nil)
 		return
 	}
 
-	host, err := h.getMonitor(r.Context()).UnhideDockerHost(agentID)
+	hostID, err := action(r.Context(), agentID)
 	if err != nil {
 		writeErrorResponse(w, http.StatusNotFound, "docker_agent_not_found", err.Error(), nil)
 		return
@@ -430,41 +440,35 @@ func (h *DockerAgentHandlers) HandleUnhideHost(w http.ResponseWriter, r *http.Re
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,
-		"agentId": host.ID,
-		"message": "Docker / Podman module unhidden",
+		"agentId": hostID,
+		"message": successMsg,
 	}); err != nil {
-		log.Error().Err(err).Msg("Failed to serialize docker host unhide response")
+		log.Error().Err(err).Msg(logMsg)
 	}
+}
+
+// HandleUnhideHost unhides a previously hidden Docker / Podman host.
+func (h *DockerAgentHandlers) HandleUnhideHost(w http.ResponseWriter, r *http.Request) {
+	h.handleHostLifecycleAction(w, r, "/unhide", "Docker / Podman module unhidden", "Failed to serialize docker host unhide response",
+		func(ctx context.Context, agentID string) (string, error) {
+			host, err := h.getMonitor(ctx).UnhideDockerHost(agentID)
+			if err != nil {
+				return "", err
+			}
+			return host.ID, nil
+		})
 }
 
 // HandleMarkPendingUninstall marks a Docker / Podman host as pending uninstall.
 func (h *DockerAgentHandlers) HandleMarkPendingUninstall(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPut {
-		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only PUT is allowed", nil)
-		return
-	}
-
-	agentID := dockerRuntimeAgentIDFromPath(r.URL.Path, "/pending-uninstall")
-	if agentID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_agent_id", "Agent ID is required", nil)
-		return
-	}
-
-	host, err := h.getMonitor(r.Context()).MarkDockerHostPendingUninstall(agentID)
-	if err != nil {
-		writeErrorResponse(w, http.StatusNotFound, "docker_agent_not_found", err.Error(), nil)
-		return
-	}
-
-	h.broadcastState(r.Context())
-
-	if err := utils.WriteJSONResponse(w, map[string]any{
-		"success": true,
-		"agentId": host.ID,
-		"message": "Docker / Podman module marked as pending uninstall",
-	}); err != nil {
-		log.Error().Err(err).Msg("Failed to serialize docker host pending uninstall response")
-	}
+	h.handleHostLifecycleAction(w, r, "/pending-uninstall", "Docker / Podman module marked as pending uninstall", "Failed to serialize docker host pending uninstall response",
+		func(ctx context.Context, agentID string) (string, error) {
+			host, err := h.getMonitor(ctx).MarkDockerHostPendingUninstall(agentID)
+			if err != nil {
+				return "", err
+			}
+			return host.ID, nil
+		})
 }
 
 // HandleSetCustomDisplayName updates the custom display name for a Docker / Podman host.

@@ -1948,21 +1948,16 @@ func (h *ConfigHandlers) handleTestNode(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(testResult)
 }
 
-func testProxmoxBackupConnection(req NodeConfigRequest) map[string]interface{} {
+// testProxmoxPlatformConnection runs the shared PBS/PMG node connection
+// probe: build a client from the request credentials, exercise one read
+// endpoint with a 10s timeout, and report latency. connect returns the
+// platform-specific probe call.
+func testProxmoxPlatformConnection(req NodeConfigRequest, successMsg string, connect func(verifySSL bool) (func(context.Context) error, error)) map[string]interface{} {
 	verifySSL := false
 	if req.VerifySSL != nil {
 		verifySSL = *req.VerifySSL
 	}
-	clientConfig := pbs.ClientConfig{
-		Host:        req.Host,
-		User:        req.User,
-		Password:    req.Password,
-		TokenName:   req.TokenName,
-		TokenValue:  req.TokenValue,
-		VerifySSL:   verifySSL,
-		Fingerprint: req.Fingerprint,
-	}
-	client, err := pbs.NewClient(clientConfig)
+	probe, err := connect(verifySSL)
 	if err != nil {
 		return map[string]interface{}{
 			"status":  "error",
@@ -1974,7 +1969,7 @@ func testProxmoxBackupConnection(req NodeConfigRequest) map[string]interface{} {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if _, err := client.GetDatastores(ctx); err != nil {
+	if err := probe(ctx); err != nil {
 		return map[string]interface{}{
 			"status":  "error",
 			"message": sanitizeErrorMessage(err, "connection"),
@@ -1983,47 +1978,49 @@ func testProxmoxBackupConnection(req NodeConfigRequest) map[string]interface{} {
 	latency := time.Since(startTime).Milliseconds()
 	return map[string]interface{}{
 		"status":  "success",
-		"message": "Connected to PBS instance",
+		"message": successMsg,
 		"latency": latency,
 	}
 }
 
+func testProxmoxBackupConnection(req NodeConfigRequest) map[string]interface{} {
+	return testProxmoxPlatformConnection(req, "Connected to PBS instance", func(verifySSL bool) (func(context.Context) error, error) {
+		client, err := pbs.NewClient(pbs.ClientConfig{
+			Host:        req.Host,
+			User:        req.User,
+			Password:    req.Password,
+			TokenName:   req.TokenName,
+			TokenValue:  req.TokenValue,
+			VerifySSL:   verifySSL,
+			Fingerprint: req.Fingerprint,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return func(ctx context.Context) error {
+			_, err := client.GetDatastores(ctx)
+			return err
+		}, nil
+	})
+}
+
 func testProxmoxMailGatewayConnection(req NodeConfigRequest) map[string]interface{} {
-	verifySSL := false
-	if req.VerifySSL != nil {
-		verifySSL = *req.VerifySSL
-	}
-	clientConfig := pmg.ClientConfig{
-		Host:        req.Host,
-		User:        req.User,
-		Password:    req.Password,
-		TokenName:   req.TokenName,
-		TokenValue:  req.TokenValue,
-		VerifySSL:   verifySSL,
-		Fingerprint: req.Fingerprint,
-	}
-	client, err := pmg.NewClient(clientConfig)
-	if err != nil {
-		return map[string]interface{}{
-			"status":  "error",
-			"message": sanitizeErrorMessage(err, "create_client"),
+	return testProxmoxPlatformConnection(req, "Connected to PMG instance", func(verifySSL bool) (func(context.Context) error, error) {
+		client, err := pmg.NewClient(pmg.ClientConfig{
+			Host:        req.Host,
+			User:        req.User,
+			Password:    req.Password,
+			TokenName:   req.TokenName,
+			TokenValue:  req.TokenValue,
+			VerifySSL:   verifySSL,
+			Fingerprint: req.Fingerprint,
+		})
+		if err != nil {
+			return nil, err
 		}
-	}
-
-	startTime := time.Now()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if _, err := client.GetVersion(ctx); err != nil {
-		return map[string]interface{}{
-			"status":  "error",
-			"message": sanitizeErrorMessage(err, "connection"),
-		}
-	}
-	latency := time.Since(startTime).Milliseconds()
-	return map[string]interface{}{
-		"status":  "success",
-		"message": "Connected to PMG instance",
-		"latency": latency,
-	}
+		return func(ctx context.Context) error {
+			_, err := client.GetVersion(ctx)
+			return err
+		}, nil
+	})
 }

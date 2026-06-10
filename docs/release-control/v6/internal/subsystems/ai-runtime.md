@@ -79,7 +79,13 @@ memory history files load through the generic `loadMemoryHistory`
 `UnifiedFinding`/`unifiedFindingJSON` are deliberate marshal-mirror twins —
 do not merge them; the mirror invariants are enforced by
 `TestFindingJSONMirrorStaysInSync` and
-`TestUnifiedFindingJSONMirrorStaysInSync`.
+`TestUnifiedFindingJSONMirrorStaysInSync`. The same mirror posture applies on
+the transport side: `orchestratorChatAdapter.GetMessages`
+(`internal/api/ai_handlers.go`) and `chatServiceAdapter.GetMessages`
+(`internal/api/chat_service_adapter.go`) convert the same chat-service
+messages onto deliberately separate output contracts; do not merge them, and
+keep their field mapping aligned —
+`TestOrchestratorAndChatAdaptersMapTheSameMessageFields` enforces it.
 
 Assistant frontend presentation changes under
 `frontend-modern/src/components/AI/Chat/` must keep live tool activity aligned

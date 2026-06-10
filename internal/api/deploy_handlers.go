@@ -393,43 +393,45 @@ func (h *DeployHandlers) HandleCreatePreflight(w http.ResponseWriter, r *http.Re
 	json.NewEncoder(w).Encode(resp)
 }
 
-// HandleGetPreflight returns the current status of a preflight job.
-// GET /api/agent-deploy/preflights/{preflightId}
-func (h *DeployHandlers) HandleGetPreflight(w http.ResponseWriter, r *http.Request) {
+// handleDeployJobStatus serves the shared GET status handler for preflight
+// and deploy jobs (both are deploy.Job records in the same store). pathPrefix
+// is the route prefix to strip, label the user-facing noun ("Preflight",
+// "Job"), logNoun the log vocabulary ("preflight", "deploy").
+func (h *DeployHandlers) handleDeployJobStatus(w http.ResponseWriter, r *http.Request, pathPrefix, label, logNoun string) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	preflightID := extractPathSuffix(r.URL.Path, "/api/agent-deploy/preflights/")
-	if preflightID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Preflight ID is required", nil)
+	jobID := extractPathSuffix(r.URL.Path, pathPrefix)
+	if jobID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_id", label+" ID is required", nil)
 		return
 	}
 	// Strip /events suffix if present (shouldn't happen via routing, but be safe).
-	preflightID = strings.TrimSuffix(preflightID, "/events")
+	jobID = strings.TrimSuffix(jobID, "/events")
 
-	job, err := h.store.GetJob(r.Context(), preflightID)
+	job, err := h.store.GetJob(r.Context(), jobID)
 	if err != nil {
-		log.Error().Err(err).Str("id", preflightID).Msg("Failed to get preflight job")
-		writeErrorResponse(w, http.StatusInternalServerError, "store_error", "Failed to get preflight", nil)
+		log.Error().Err(err).Str("id", jobID).Msgf("Failed to get %s job", logNoun)
+		writeErrorResponse(w, http.StatusInternalServerError, "store_error", "Failed to get "+strings.ToLower(label), nil)
 		return
 	}
 	if job == nil {
-		writeErrorResponse(w, http.StatusNotFound, "not_found", "Preflight not found", nil)
+		writeErrorResponse(w, http.StatusNotFound, "not_found", label+" not found", nil)
 		return
 	}
 
 	// Tenant isolation: verify the job belongs to the caller's org.
 	orgID := resolveTenantOrgID(r)
 	if job.OrgID != orgID {
-		writeErrorResponse(w, http.StatusNotFound, "not_found", "Preflight not found", nil)
+		writeErrorResponse(w, http.StatusNotFound, "not_found", label+" not found", nil)
 		return
 	}
 
-	targets, err := h.store.GetTargetsForJob(r.Context(), preflightID)
+	targets, err := h.store.GetTargetsForJob(r.Context(), jobID)
 	if err != nil {
-		log.Error().Err(err).Str("id", preflightID).Msg("Failed to get preflight targets")
+		log.Error().Err(err).Str("id", jobID).Msgf("Failed to get %s targets", strings.ToLower(label))
 		writeErrorResponse(w, http.StatusInternalServerError, "store_error", "Failed to get targets", nil)
 		return
 	}
@@ -446,38 +448,39 @@ func (h *DeployHandlers) HandleGetPreflight(w http.ResponseWriter, r *http.Reque
 	json.NewEncoder(w).Encode(resp)
 }
 
-// HandlePreflightEvents streams SSE events for a preflight job.
-// GET /api/agent-deploy/preflights/{preflightId}/events
-func (h *DeployHandlers) HandlePreflightEvents(w http.ResponseWriter, r *http.Request) {
+// handleDeployJobEvents streams SSE events for a preflight or deploy job:
+// replay persisted events, then live events with heartbeats until the client
+// disconnects or the job completes.
+func (h *DeployHandlers) handleDeployJobEvents(w http.ResponseWriter, r *http.Request, pathPrefix, label, logNoun string) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Extract preflight ID: /api/agent-deploy/preflights/{id}/events
-	path := strings.TrimPrefix(r.URL.Path, "/api/agent-deploy/preflights/")
-	preflightID := strings.TrimSuffix(path, "/events")
-	if preflightID == "" || preflightID == path {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Preflight ID is required", nil)
+	// Extract the job ID: <pathPrefix>{id}/events
+	path := strings.TrimPrefix(r.URL.Path, pathPrefix)
+	jobID := strings.TrimSuffix(path, "/events")
+	if jobID == "" || jobID == path {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_id", label+" ID is required", nil)
 		return
 	}
 
-	// Verify the preflight exists.
-	job, err := h.store.GetJob(r.Context(), preflightID)
+	// Verify the job exists.
+	job, err := h.store.GetJob(r.Context(), jobID)
 	if err != nil {
-		log.Error().Err(err).Str("id", preflightID).Msg("Failed to get preflight job for SSE")
-		writeErrorResponse(w, http.StatusInternalServerError, "store_error", "Failed to get preflight", nil)
+		log.Error().Err(err).Str("id", jobID).Msgf("Failed to get %s job for SSE", logNoun)
+		writeErrorResponse(w, http.StatusInternalServerError, "store_error", "Failed to get "+strings.ToLower(label), nil)
 		return
 	}
 	if job == nil {
-		writeErrorResponse(w, http.StatusNotFound, "not_found", "Preflight not found", nil)
+		writeErrorResponse(w, http.StatusNotFound, "not_found", label+" not found", nil)
 		return
 	}
 
 	// Tenant isolation: verify the job belongs to the caller's org.
 	orgID := resolveTenantOrgID(r)
 	if job.OrgID != orgID {
-		writeErrorResponse(w, http.StatusNotFound, "not_found", "Preflight not found", nil)
+		writeErrorResponse(w, http.StatusNotFound, "not_found", label+" not found", nil)
 		return
 	}
 
@@ -493,13 +496,13 @@ func (h *DeployHandlers) HandlePreflightEvents(w http.ResponseWriter, r *http.Re
 
 	// Register SSE client.
 	clientID := generateID("sse")
-	eventCh := h.addSSEClient(preflightID, clientID)
-	defer h.removeSSEClient(preflightID, clientID)
+	eventCh := h.addSSEClient(jobID, clientID)
+	defer h.removeSSEClient(jobID, clientID)
 
 	// Send existing events first (replay).
-	events, replayErr := h.store.GetEventsForJob(r.Context(), preflightID)
+	events, replayErr := h.store.GetEventsForJob(r.Context(), jobID)
 	if replayErr != nil {
-		log.Error().Err(replayErr).Str("id", preflightID).Msg("Failed to load events for SSE replay")
+		log.Error().Err(replayErr).Str("id", jobID).Msg("Failed to load events for SSE replay")
 		// Send an error event so the client knows replay is incomplete.
 		fmt.Fprintf(w, "event: error\ndata: {\"message\":\"failed to load event history\"}\n\n")
 	}
@@ -539,6 +542,18 @@ func (h *DeployHandlers) HandlePreflightEvents(w http.ResponseWriter, r *http.Re
 			flusher.Flush()
 		}
 	}
+}
+
+// HandleGetPreflight returns the current status of a preflight job.
+// GET /api/agent-deploy/preflights/{preflightId}
+func (h *DeployHandlers) HandleGetPreflight(w http.ResponseWriter, r *http.Request) {
+	h.handleDeployJobStatus(w, r, "/api/agent-deploy/preflights/", "Preflight", "preflight")
+}
+
+// HandlePreflightEvents streams SSE events for a preflight job.
+// GET /api/agent-deploy/preflights/{preflightId}/events
+func (h *DeployHandlers) HandlePreflightEvents(w http.ResponseWriter, r *http.Request) {
+	h.handleDeployJobEvents(w, r, "/api/agent-deploy/preflights/", "Preflight", "preflight")
 }
 
 // --- Progress processing ---
@@ -1255,143 +1270,13 @@ func (h *DeployHandlers) HandleCreateJob(w http.ResponseWriter, r *http.Request)
 // HandleGetJob returns the current status of a deploy job.
 // GET /api/agent-deploy/jobs/{jobId}
 func (h *DeployHandlers) HandleGetJob(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	jobID := extractPathSuffix(r.URL.Path, "/api/agent-deploy/jobs/")
-	if jobID == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Job ID is required", nil)
-		return
-	}
-	jobID = strings.TrimSuffix(jobID, "/events")
-
-	job, err := h.store.GetJob(r.Context(), jobID)
-	if err != nil {
-		log.Error().Err(err).Str("id", jobID).Msg("Failed to get deploy job")
-		writeErrorResponse(w, http.StatusInternalServerError, "store_error", "Failed to get job", nil)
-		return
-	}
-	if job == nil {
-		writeErrorResponse(w, http.StatusNotFound, "not_found", "Job not found", nil)
-		return
-	}
-
-	orgID := resolveTenantOrgID(r)
-	if job.OrgID != orgID {
-		writeErrorResponse(w, http.StatusNotFound, "not_found", "Job not found", nil)
-		return
-	}
-
-	targets, err := h.store.GetTargetsForJob(r.Context(), jobID)
-	if err != nil {
-		log.Error().Err(err).Str("id", jobID).Msg("Failed to get job targets")
-		writeErrorResponse(w, http.StatusInternalServerError, "store_error", "Failed to get targets", nil)
-		return
-	}
-
-	resp := struct {
-		*deploy.Job
-		Targets []deploy.Target `json:"targets"`
-	}{
-		Job:     job,
-		Targets: targets,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	h.handleDeployJobStatus(w, r, "/api/agent-deploy/jobs/", "Job", "deploy")
 }
 
 // HandleJobEvents streams SSE events for a deploy job.
 // GET /api/agent-deploy/jobs/{jobId}/events
 func (h *DeployHandlers) HandleJobEvents(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Extract job ID: /api/agent-deploy/jobs/{id}/events
-	path := strings.TrimPrefix(r.URL.Path, "/api/agent-deploy/jobs/")
-	jobID := strings.TrimSuffix(path, "/events")
-	if jobID == "" || jobID == path {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Job ID is required", nil)
-		return
-	}
-
-	job, err := h.store.GetJob(r.Context(), jobID)
-	if err != nil {
-		log.Error().Err(err).Str("id", jobID).Msg("Failed to get deploy job for SSE")
-		writeErrorResponse(w, http.StatusInternalServerError, "store_error", "Failed to get job", nil)
-		return
-	}
-	if job == nil {
-		writeErrorResponse(w, http.StatusNotFound, "not_found", "Job not found", nil)
-		return
-	}
-
-	orgID := resolveTenantOrgID(r)
-	if job.OrgID != orgID {
-		writeErrorResponse(w, http.StatusNotFound, "not_found", "Job not found", nil)
-		return
-	}
-
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		writeErrorResponse(w, http.StatusInternalServerError, "streaming_unsupported", "Streaming not supported", nil)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-
-	clientID := generateID("sse")
-	eventCh := h.addSSEClient(jobID, clientID)
-	defer h.removeSSEClient(jobID, clientID)
-
-	// Replay existing events.
-	events, replayErr := h.store.GetEventsForJob(r.Context(), jobID)
-	if replayErr != nil {
-		log.Error().Err(replayErr).Str("id", jobID).Msg("Failed to load events for SSE replay")
-		fmt.Fprintf(w, "event: error\ndata: {\"message\":\"failed to load event history\"}\n\n")
-	}
-	for _, evt := range events {
-		data, _ := json.Marshal(evt)
-		fmt.Fprintf(w, "data: %s\n\n", data)
-	}
-	flusher.Flush()
-
-	// If job is terminal, send final and close.
-	if isDeployJobTerminal(job.Status) {
-		data, _ := json.Marshal(map[string]string{
-			"type":   "job_complete",
-			"status": string(job.Status),
-		})
-		fmt.Fprintf(w, "data: %s\n\n", data)
-		flusher.Flush()
-		return
-	}
-
-	// Stream new events.
-	heartbeat := time.NewTicker(15 * time.Second)
-	defer heartbeat.Stop()
-
-	for {
-		select {
-		case <-r.Context().Done():
-			return
-		case eventData, ok := <-eventCh:
-			if !ok {
-				return
-			}
-			fmt.Fprintf(w, "data: %s\n\n", eventData)
-			flusher.Flush()
-		case <-heartbeat.C:
-			fmt.Fprint(w, ": heartbeat\n\n")
-			flusher.Flush()
-		}
-	}
+	h.handleDeployJobEvents(w, r, "/api/agent-deploy/jobs/", "Job", "deploy")
 }
 
 // HandleCancelJob cancels a running deploy job.

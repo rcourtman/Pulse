@@ -289,24 +289,17 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 		}
 	})
 
-	r.mux.HandleFunc("/api/truenas/connections/", func(w http.ResponseWriter, req *http.Request) {
+	r.mux.HandleFunc("/api/truenas/connections/", r.platformConnectionItemRoute("truenas_unavailable", "TrueNAS service unavailable", func() *platformConnectionItemHandlers {
 		if r.trueNASHandlers == nil {
-			writeErrorResponse(w, http.StatusServiceUnavailable, "truenas_unavailable", "TrueNAS service unavailable", nil)
-			return
+			return nil
 		}
-
-		if req.Method == http.MethodPost && strings.HasSuffix(strings.Trim(req.URL.Path, "/"), "/test") {
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.trueNASHandlers.HandleTestSavedConnection))(w, req)
-		} else if req.Method == http.MethodPost && strings.HasSuffix(strings.Trim(req.URL.Path, "/"), "/preview") {
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.trueNASHandlers.HandlePreviewSavedConnection))(w, req)
-		} else if req.Method == http.MethodDelete {
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.trueNASHandlers.HandleDelete))(w, req)
-		} else if req.Method == http.MethodPut {
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.trueNASHandlers.HandleUpdate))(w, req)
-		} else {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return &platformConnectionItemHandlers{
+			test:    r.trueNASHandlers.HandleTestSavedConnection,
+			preview: r.trueNASHandlers.HandlePreviewSavedConnection,
+			delete:  r.trueNASHandlers.HandleDelete,
+			update:  r.trueNASHandlers.HandleUpdate,
 		}
-	})
+	}))
 
 	// VMware vCenter connection management
 	r.mux.HandleFunc("/api/vmware/connections", func(w http.ResponseWriter, req *http.Request) {
@@ -351,24 +344,17 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 		}
 	})
 
-	r.mux.HandleFunc("/api/vmware/connections/", func(w http.ResponseWriter, req *http.Request) {
+	r.mux.HandleFunc("/api/vmware/connections/", r.platformConnectionItemRoute("vmware_unavailable", "VMware service unavailable", func() *platformConnectionItemHandlers {
 		if r.vmwareHandlers == nil {
-			writeErrorResponse(w, http.StatusServiceUnavailable, "vmware_unavailable", "VMware service unavailable", nil)
-			return
+			return nil
 		}
-
-		if req.Method == http.MethodPost && strings.HasSuffix(strings.Trim(req.URL.Path, "/"), "/test") {
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.vmwareHandlers.HandleTestSavedConnection))(w, req)
-		} else if req.Method == http.MethodPost && strings.HasSuffix(strings.Trim(req.URL.Path, "/"), "/preview") {
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.vmwareHandlers.HandlePreviewSavedConnection))(w, req)
-		} else if req.Method == http.MethodDelete {
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.vmwareHandlers.HandleDelete))(w, req)
-		} else if req.Method == http.MethodPut {
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.vmwareHandlers.HandleUpdate))(w, req)
-		} else {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return &platformConnectionItemHandlers{
+			test:    r.vmwareHandlers.HandleTestSavedConnection,
+			preview: r.vmwareHandlers.HandlePreviewSavedConnection,
+			delete:  r.vmwareHandlers.HandleDelete,
+			update:  r.vmwareHandlers.HandleUpdate,
 		}
-	})
+	}))
 
 	// Config Profile Routes - Protected by Admin Auth, Settings Scope, and Pro License
 	// SECURITY: Require settings:write scope to prevent low-privilege tokens from modifying agent profiles

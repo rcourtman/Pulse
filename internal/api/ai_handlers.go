@@ -2029,6 +2029,7 @@ func (a *orchestratorChatAdapter) ExecuteStream(ctx context.Context, req aicontr
 	})
 }
 
+//nolint:dupl // mirrors chatServiceAdapter.GetMessages: same source messages mapped onto a deliberately separate output contract that may diverge
 func (a *orchestratorChatAdapter) GetMessages(ctx context.Context, sessionID string) ([]aicontracts.OrchestratorMessage, error) {
 	chatMessages, err := a.svc.GetMessages(ctx, sessionID)
 	if err != nil {

@@ -12,6 +12,10 @@ linters:
 issues:
   max-same-issues: 0
   max-issues-per-linter: 0
+  # tmp/ is gitignored scratch (dev-mode module/toolchain caches live there);
+  # ./... must not typecheck it.
+  exclude-dirs:
+    - tmp
   exclude-rules:
     # Exclude dupl findings in test files and mock generators — test boilerplate
     # is inherently repetitive and mock data generators share patterns by design.

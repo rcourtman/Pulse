@@ -109,18 +109,26 @@ type actionExecutionResponse struct {
 	Audit    unified.ActionAuditRecord `json:"audit"`
 }
 
+// actionAPIDefaults seeds the shared Pulse API URL and token defaults for
+// action subcommands from the environment.
+func actionAPIDefaults(deps *ActionsDeps) (apiURL, token string) {
+	apiURL = strings.TrimSpace(actionGetenv(deps, "PULSE_API_URL"))
+	if apiURL == "" {
+		apiURL = defaultPulseAPIURL
+	}
+	return apiURL, strings.TrimSpace(actionGetenv(deps, "PULSE_API_TOKEN"))
+}
+
 func newActionsCmd(deps *ActionsDeps) *cobra.Command {
 	actionsCmd := &cobra.Command{
 		Use:   "actions",
 		Short: "Inspect and plan governed Pulse actions",
 	}
 
+	apiURL, token := actionAPIDefaults(deps)
 	opts := actionPlanOptions{
-		APIURL: strings.TrimSpace(actionGetenv(deps, "PULSE_API_URL")),
-		Token:  strings.TrimSpace(actionGetenv(deps, "PULSE_API_TOKEN")),
-	}
-	if opts.APIURL == "" {
-		opts.APIURL = defaultPulseAPIURL
+		APIURL: apiURL,
+		Token:  token,
 	}
 
 	planCmd := &cobra.Command{
@@ -152,12 +160,10 @@ func newActionsCmd(deps *ActionsDeps) *cobra.Command {
 }
 
 func newActionCapabilitiesCmd(deps *ActionsDeps) *cobra.Command {
+	apiURL, token := actionAPIDefaults(deps)
 	opts := actionCapabilitiesOptions{
-		APIURL: strings.TrimSpace(actionGetenv(deps, "PULSE_API_URL")),
-		Token:  strings.TrimSpace(actionGetenv(deps, "PULSE_API_TOKEN")),
-	}
-	if opts.APIURL == "" {
-		opts.APIURL = defaultPulseAPIURL
+		APIURL: apiURL,
+		Token:  token,
 	}
 
 	cmd := &cobra.Command{
@@ -174,12 +180,10 @@ func newActionCapabilitiesCmd(deps *ActionsDeps) *cobra.Command {
 }
 
 func newActionDecisionCmd(deps *ActionsDeps) *cobra.Command {
+	apiURL, token := actionAPIDefaults(deps)
 	opts := actionDecisionOptions{
-		APIURL: strings.TrimSpace(actionGetenv(deps, "PULSE_API_URL")),
-		Token:  strings.TrimSpace(actionGetenv(deps, "PULSE_API_TOKEN")),
-	}
-	if opts.APIURL == "" {
-		opts.APIURL = defaultPulseAPIURL
+		APIURL: apiURL,
+		Token:  token,
 	}
 
 	cmd := &cobra.Command{
@@ -198,12 +202,10 @@ func newActionDecisionCmd(deps *ActionsDeps) *cobra.Command {
 }
 
 func newActionExecutionCmd(deps *ActionsDeps) *cobra.Command {
+	apiURL, token := actionAPIDefaults(deps)
 	opts := actionExecutionOptions{
-		APIURL: strings.TrimSpace(actionGetenv(deps, "PULSE_API_URL")),
-		Token:  strings.TrimSpace(actionGetenv(deps, "PULSE_API_TOKEN")),
-	}
-	if opts.APIURL == "" {
-		opts.APIURL = defaultPulseAPIURL
+		APIURL: apiURL,
+		Token:  token,
 	}
 
 	cmd := &cobra.Command{
@@ -220,14 +222,13 @@ func newActionExecutionCmd(deps *ActionsDeps) *cobra.Command {
 	return cmd
 }
 
+//nolint:dupl // parallel cobra subcommand registration; flags/help diverge per command
 func newActionAuditCmd(deps *ActionsDeps) *cobra.Command {
+	apiURL, token := actionAPIDefaults(deps)
 	opts := actionAuditOptions{
-		APIURL: strings.TrimSpace(actionGetenv(deps, "PULSE_API_URL")),
-		Token:  strings.TrimSpace(actionGetenv(deps, "PULSE_API_TOKEN")),
+		APIURL: apiURL,
+		Token:  token,
 		Limit:  100,
-	}
-	if opts.APIURL == "" {
-		opts.APIURL = defaultPulseAPIURL
 	}
 
 	cmd := &cobra.Command{
@@ -245,14 +246,13 @@ func newActionAuditCmd(deps *ActionsDeps) *cobra.Command {
 	return cmd
 }
 
+//nolint:dupl // parallel cobra subcommand registration; flags/help diverge per command
 func newActionEventsCmd(deps *ActionsDeps) *cobra.Command {
+	apiURL, token := actionAPIDefaults(deps)
 	opts := actionEventsOptions{
-		APIURL: strings.TrimSpace(actionGetenv(deps, "PULSE_API_URL")),
-		Token:  strings.TrimSpace(actionGetenv(deps, "PULSE_API_TOKEN")),
+		APIURL: apiURL,
+		Token:  token,
 		Limit:  100,
-	}
-	if opts.APIURL == "" {
-		opts.APIURL = defaultPulseAPIURL
 	}
 
 	cmd := &cobra.Command{

@@ -26,6 +26,8 @@ product API routes free of maintainer commercial analytics.
 
 ## Canonical Files
 1. `internal/api/contract_test.go`
+1a. `internal/api/platform_connection_shared.go`
+1b. `internal/api/metadata_handlers_shared.go`
 2. `internal/api/resources.go`
 3. `internal/api/discovery_handlers.go`
 3. `internal/api/alerts.go`
@@ -814,6 +816,30 @@ the canonical monitored-system blocked payload.
 
 ## Extension Points
 
+0. Parallel platform/resource handler families share their flow logic instead
+   of per-platform copies. `internal/api/platform_connection_shared.go` owns
+   the platform connection update flow (locate by trimmed ID, decode with
+   stored-record fallback via the generic `decodeOptionalInstanceRequest`,
+   normalize, preserve masked secrets, validate, persist, respond redacted —
+   `updatePlatformConnection` + `platformConnectionUpdateSpec`) and the
+   admin+settings:write item-route mux builder
+   (`platformConnectionItemRoute`); a new platform connection surface wires a
+   spec instead of re-rolling the flow, so masked-secret preservation cannot
+   be forgotten. `internal/api/metadata_handlers_shared.go` owns the
+   guest/docker metadata GET/PUT payload semantics (empty object instead of
+   null, zero record instead of 404 — pinned by
+   `TestContract_MetadataGetPayloadsUseZeroRecordsInsteadOf404`). Deploy
+   preflights and jobs share `handleDeployJobStatus` /
+   `handleDeployJobEvents` in `internal/api/deploy_handlers.go`; recovery
+   points series/facets share `parseRecoveryListPointsOptions`; docker and
+   kubernetes agent lifecycle PUTs share per-handler
+   `handleHostLifecycleAction` / `handleClusterLifecycleAction`; PBS/PMG node
+   connection probes share `testProxmoxPlatformConnection`; secrets-backed
+   sqlite stores (handoff JTI, purchase-return redemptions) open through
+   `openHardenedSecretsDB` so the private-permission hardening policy stays
+   single-sourced; privileged settings endpoints gate through
+   `serveSetupTokenOrSettingsWrite` in `internal/api/router.go`; patrol
+   findings convert to the unified store through one `unifiedFindingFromAI`.
 1. Add or change payload fields through handler + contract tests together
 2. Update frontend API types in lockstep with backend contract changes.
    Websocket-backed API consumers such as `frontend-modern/src/components/Settings/useAPITokenManagerState.ts` and `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` may read runtime context only through `frontend-modern/src/contexts/appRuntime.ts`; they must not import `frontend-modern/src/App.tsx`, because payload ownership remains in the API contract rather than the root shell.

@@ -56,41 +56,57 @@ const deleteExpiredHandoffJTIQuery = `
 DELETE FROM handoff_jti INDEXED BY idx_handoff_jti_expires_at
 WHERE expires_at <= ?`
 
+// openHardenedSecretsDB opens (creating if needed) a single-connection WAL
+// sqlite database under <configDir>/secrets with private dir/file
+// permissions, applying schema. dirLabel and label feed error wrapping
+// ("handoff" / "handoff jti", "purchase return" / "purchase return
+// redemption"). Single-sourcing keeps the permission-hardening policy shared
+// by every secrets-backed store.
+func openHardenedSecretsDB(configDir, fileName, dirLabel, label, schema string) (*sql.DB, error) {
+	dir := filepath.Clean(configDir)
+	if strings.TrimSpace(dir) == "" {
+		return nil, fmt.Errorf("configDir is required")
+	}
+	secretsDir := filepath.Join(dir, "secrets")
+	if err := os.MkdirAll(secretsDir, handoffPrivateDirPerm); err != nil {
+		return nil, fmt.Errorf("create %s secrets dir: %w", dirLabel, err)
+	}
+	if err := os.Chmod(secretsDir, handoffPrivateDirPerm); err != nil {
+		return nil, fmt.Errorf("chmod %s secrets dir: %w", dirLabel, err)
+	}
+
+	dbPath := filepath.Join(secretsDir, fileName)
+	dsn := dbPath + "?" + url.Values{
+		"_pragma": []string{
+			"busy_timeout(30000)",
+			"journal_mode(WAL)",
+			"synchronous(NORMAL)",
+		},
+	}.Encode()
+
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("open %s db: %w", label, err)
+	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	db.SetConnMaxLifetime(0)
+
+	if _, err := db.Exec(schema); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("init %s schema: %w", label, err)
+	}
+	for _, path := range []string{dbPath, dbPath + "-wal", dbPath + "-shm"} {
+		if err := hardenPrivateFile(path, handoffPrivateFilePerm); err != nil {
+			_ = db.Close()
+			return nil, fmt.Errorf("harden %s file permissions: %w", label, err)
+		}
+	}
+	return db, nil
+}
+
 func (s *jtiReplayStore) init() {
 	s.once.Do(func() {
-		dir := filepath.Clean(s.configDir)
-		if strings.TrimSpace(dir) == "" {
-			s.initErr = fmt.Errorf("configDir is required")
-			return
-		}
-		secretsDir := filepath.Join(dir, "secrets")
-		if err := os.MkdirAll(secretsDir, handoffPrivateDirPerm); err != nil {
-			s.initErr = fmt.Errorf("create handoff secrets dir: %w", err)
-			return
-		}
-		if err := os.Chmod(secretsDir, handoffPrivateDirPerm); err != nil {
-			s.initErr = fmt.Errorf("chmod handoff secrets dir: %w", err)
-			return
-		}
-
-		dbPath := filepath.Join(secretsDir, "handoff_jti.db")
-		dsn := dbPath + "?" + url.Values{
-			"_pragma": []string{
-				"busy_timeout(30000)",
-				"journal_mode(WAL)",
-				"synchronous(NORMAL)",
-			},
-		}.Encode()
-
-		db, err := sql.Open("sqlite", dsn)
-		if err != nil {
-			s.initErr = fmt.Errorf("open handoff jti db: %w", err)
-			return
-		}
-		db.SetMaxOpenConns(1)
-		db.SetMaxIdleConns(1)
-		db.SetConnMaxLifetime(0)
-
 		schema := `
 		CREATE TABLE IF NOT EXISTS handoff_jti (
 			jti TEXT PRIMARY KEY,
@@ -98,19 +114,11 @@ func (s *jtiReplayStore) init() {
 		);
 		CREATE INDEX IF NOT EXISTS idx_handoff_jti_expires_at ON handoff_jti(expires_at);
 		`
-		if _, err := db.Exec(schema); err != nil {
-			_ = db.Close()
-			s.initErr = fmt.Errorf("init handoff jti schema: %w", err)
+		db, err := openHardenedSecretsDB(s.configDir, "handoff_jti.db", "handoff", "handoff jti", schema)
+		if err != nil {
+			s.initErr = err
 			return
 		}
-		for _, path := range []string{dbPath, dbPath + "-wal", dbPath + "-shm"} {
-			if err := hardenPrivateFile(path, handoffPrivateFilePerm); err != nil {
-				_ = db.Close()
-				s.initErr = fmt.Errorf("harden handoff jti file permissions: %w", err)
-				return
-			}
-		}
-
 		s.db = db
 	})
 }

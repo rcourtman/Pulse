@@ -3,9 +3,6 @@ package api
 import (
 	"database/sql"
 	"fmt"
-	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -59,39 +56,6 @@ type purchaseReturnRedemptionRecord struct {
 
 func (s *purchaseReturnRedemptionStore) init() {
 	s.once.Do(func() {
-		dir := filepath.Clean(s.configDir)
-		if strings.TrimSpace(dir) == "" {
-			s.initErr = fmt.Errorf("configDir is required")
-			return
-		}
-		secretsDir := filepath.Join(dir, "secrets")
-		if err := os.MkdirAll(secretsDir, handoffPrivateDirPerm); err != nil {
-			s.initErr = fmt.Errorf("create purchase return secrets dir: %w", err)
-			return
-		}
-		if err := os.Chmod(secretsDir, handoffPrivateDirPerm); err != nil {
-			s.initErr = fmt.Errorf("chmod purchase return secrets dir: %w", err)
-			return
-		}
-
-		dbPath := filepath.Join(secretsDir, "purchase_return_redemptions.db")
-		dsn := dbPath + "?" + url.Values{
-			"_pragma": []string{
-				"busy_timeout(30000)",
-				"journal_mode(WAL)",
-				"synchronous(NORMAL)",
-			},
-		}.Encode()
-
-		db, err := sql.Open("sqlite", dsn)
-		if err != nil {
-			s.initErr = fmt.Errorf("open purchase return redemption db: %w", err)
-			return
-		}
-		db.SetMaxOpenConns(1)
-		db.SetMaxIdleConns(1)
-		db.SetConnMaxLifetime(0)
-
 		schema := `
 		CREATE TABLE IF NOT EXISTS purchase_return_redemptions (
 			portal_handoff_id TEXT NOT NULL,
@@ -115,19 +79,11 @@ func (s *purchaseReturnRedemptionStore) init() {
 		CREATE INDEX IF NOT EXISTS idx_purchase_return_redemptions_status
 			ON purchase_return_redemptions(status);
 		`
-		if _, err := db.Exec(schema); err != nil {
-			_ = db.Close()
-			s.initErr = fmt.Errorf("init purchase return redemption schema: %w", err)
+		db, err := openHardenedSecretsDB(s.configDir, "purchase_return_redemptions.db", "purchase return", "purchase return redemption", schema)
+		if err != nil {
+			s.initErr = err
 			return
 		}
-		for _, path := range []string{dbPath, dbPath + "-wal", dbPath + "-shm"} {
-			if err := hardenPrivateFile(path, handoffPrivateFilePerm); err != nil {
-				_ = db.Close()
-				s.initErr = fmt.Errorf("harden purchase return redemption file permissions: %w", err)
-				return
-			}
-		}
-
 		s.db = db
 	})
 }

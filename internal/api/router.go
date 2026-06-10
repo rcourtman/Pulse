@@ -1075,15 +1075,14 @@ func (r *Router) handleAgentWebSocket(w http.ResponseWriter, req *http.Request) 
 	r.agentExecServer.HandleWebSocket(w, req)
 }
 
-func (r *Router) handleVerifyTemperatureSSH(w http.ResponseWriter, req *http.Request) {
-	if r.configHandlers == nil {
-		http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
-		return
-	}
-
+// serveSetupTokenOrSettingsWrite gates a privileged settings endpoint behind
+// either a valid setup token (setup scripts) or full authentication plus
+// proxy-auth admin and settings:write scope. logLabel tags the unauthorized
+// log line; nonAdminMsg is the proxy-auth denial log message.
+func (r *Router) serveSetupTokenOrSettingsWrite(w http.ResponseWriter, req *http.Request, logLabel, nonAdminMsg string, delegate http.HandlerFunc) {
 	// Check setup token first (for setup scripts)
 	if r.isValidSetupTokenForRequest(req) {
-		r.configHandlers.HandleVerifyTemperatureSSH(w, req)
+		delegate(w, req)
 		return
 	}
 
@@ -1094,7 +1093,7 @@ func (r *Router) handleVerifyTemperatureSSH(w http.ResponseWriter, req *http.Req
 			Str("ip", req.RemoteAddr).
 			Str("path", req.URL.Path).
 			Str("method", req.Method).
-			Msg("Unauthorized access attempt (verify-temperature-ssh)")
+			Msg("Unauthorized access attempt (" + logLabel + ")")
 
 		if !authWriter.wrote {
 			writeAuthenticationRequired(w, req)
@@ -1108,18 +1107,26 @@ func (r *Router) handleVerifyTemperatureSSH(w http.ResponseWriter, req *http.Req
 			log.Warn().
 				Str("ip", GetClientIP(req)).
 				Str("username", username).
-				Msg("Non-admin user attempted verify-temperature-ssh")
+				Msg(nonAdminMsg)
 			http.Error(w, "Admin privileges required", http.StatusForbidden)
 			return
 		}
 	}
 
-	// Require admin session identity or settings:write token for privileged SSH probes.
+	// Require admin session identity or settings:write token for privileged writes.
 	if !ensureSettingsWriteScope(r.config, w, req) {
 		return
 	}
 
-	r.configHandlers.HandleVerifyTemperatureSSH(w, req)
+	delegate(w, req)
+}
+
+func (r *Router) handleVerifyTemperatureSSH(w http.ResponseWriter, req *http.Request) {
+	if r.configHandlers == nil {
+		http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	r.serveSetupTokenOrSettingsWrite(w, req, "verify-temperature-ssh", "Non-admin user attempted verify-temperature-ssh", r.configHandlers.HandleVerifyTemperatureSSH)
 }
 
 // handleSSHConfig handles SSH config writes with setup token or API auth
@@ -1128,46 +1135,7 @@ func (r *Router) handleSSHConfig(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
 		return
 	}
-
-	// Check setup token first (for setup scripts)
-	if r.isValidSetupTokenForRequest(req) {
-		r.systemSettingsHandler.HandleSSHConfig(w, req)
-		return
-	}
-
-	// Require authentication
-	authWriter := &responseCapture{ResponseWriter: w}
-	if !checkAuth(r.config, authWriter, req, false) {
-		log.Warn().
-			Str("ip", req.RemoteAddr).
-			Str("path", req.URL.Path).
-			Str("method", req.Method).
-			Msg("Unauthorized access attempt (ssh-config)")
-
-		if !authWriter.wrote {
-			writeAuthenticationRequired(w, req)
-		}
-		return
-	}
-
-	// Check admin privileges for proxy auth users
-	if r.config.ProxyAuthSecret != "" {
-		if valid, username, isAdmin := CheckProxyAuth(r.config, req); valid && !isAdmin {
-			log.Warn().
-				Str("ip", GetClientIP(req)).
-				Str("username", username).
-				Msg("Non-admin user attempted ssh-config update")
-			http.Error(w, "Admin privileges required", http.StatusForbidden)
-			return
-		}
-	}
-
-	// Require admin session identity or settings:write token for privileged SSH config writes.
-	if !ensureSettingsWriteScope(r.config, w, req) {
-		return
-	}
-
-	r.systemSettingsHandler.HandleSSHConfig(w, req)
+	r.serveSetupTokenOrSettingsWrite(w, req, "ssh-config", "Non-admin user attempted ssh-config update", r.systemSettingsHandler.HandleSSHConfig)
 }
 
 func extractSetupToken(req *http.Request) string {
@@ -1693,6 +1661,69 @@ func (r *Router) StartPatrolForOrg(ctx context.Context, orgID string) {
 	}
 }
 
+// unifiedLifecycleFromAI converts patrol finding lifecycle events into their
+// unified-store representation.
+func unifiedLifecycleFromAI(events []ai.FindingLifecycleEvent) []unified.UnifiedFindingLifecycleEvent {
+	if len(events) == 0 {
+		return nil
+	}
+	out := make([]unified.UnifiedFindingLifecycleEvent, 0, len(events))
+	for _, e := range events {
+		out = append(out, unified.UnifiedFindingLifecycleEvent{
+			At:       e.At,
+			Type:     e.Type,
+			Message:  e.Message,
+			From:     e.From,
+			To:       e.To,
+			Metadata: e.Metadata,
+		})
+	}
+	return out
+}
+
+// unifiedFindingFromAI converts a patrol ai.Finding into its unified-store
+// representation. Shared by the live patrol callback and the startup sync of
+// persisted findings.
+func unifiedFindingFromAI(f *ai.Finding) *unified.UnifiedFinding {
+	return &unified.UnifiedFinding{
+		ID:                         f.ID,
+		Source:                     unified.SourceAIPatrol,
+		Severity:                   unified.UnifiedSeverity(f.Severity),
+		Category:                   unified.UnifiedCategory(f.Category),
+		ResourceID:                 f.ResourceID,
+		ResourceName:               f.ResourceName,
+		ResourceType:               f.ResourceType,
+		Node:                       f.Node,
+		Title:                      f.Title,
+		Description:                f.Description,
+		Impact:                     f.Impact,
+		PreviousResolvedFixSummary: f.PreviousResolvedFixSummary,
+		Recommendation:             f.Recommendation,
+		Evidence:                   f.Evidence,
+		DetectedAt:                 f.DetectedAt,
+		LastSeenAt:                 f.LastSeenAt,
+		ResolvedAt:                 f.ResolvedAt,
+		AutoResolved:               f.AutoResolved,
+		InvestigationSessionID:     f.InvestigationSessionID,
+		InvestigationStatus:        f.InvestigationStatus,
+		InvestigationOutcome:       f.InvestigationOutcome,
+		LastInvestigatedAt:         f.LastInvestigatedAt,
+		InvestigationAttempts:      f.InvestigationAttempts,
+		InvestigationRecord:        f.InvestigationRecord,
+		LoopState:                  f.LoopState,
+		Lifecycle:                  unifiedLifecycleFromAI(f.Lifecycle),
+		RegressionCount:            f.RegressionCount,
+		LastRegressionAt:           f.LastRegressionAt,
+		AcknowledgedAt:             f.AcknowledgedAt,
+		SnoozedUntil:               f.SnoozedUntil,
+		DismissedReason:            f.DismissedReason,
+		UserNote:                   f.UserNote,
+		Suppressed:                 f.Suppressed,
+		TimesRaised:                f.TimesRaised,
+		RemindAt:                   f.RemindAt,
+	}
+}
+
 func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 	if r == nil || r.aiSettingsHandler == nil {
 		return false
@@ -1865,62 +1896,8 @@ func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 	patrol := aiService.GetPatrolService()
 	if patrol != nil {
 		if unifiedStore := r.aiSettingsHandler.GetUnifiedStoreForOrg(orgID); unifiedStore != nil {
-			toUnifiedLifecycle := func(events []ai.FindingLifecycleEvent) []unified.UnifiedFindingLifecycleEvent {
-				if len(events) == 0 {
-					return nil
-				}
-				out := make([]unified.UnifiedFindingLifecycleEvent, 0, len(events))
-				for _, e := range events {
-					out = append(out, unified.UnifiedFindingLifecycleEvent{
-						At:       e.At,
-						Type:     e.Type,
-						Message:  e.Message,
-						From:     e.From,
-						To:       e.To,
-						Metadata: e.Metadata,
-					})
-				}
-				return out
-			}
 			patrol.SetUnifiedFindingCallback(func(f *ai.Finding) bool {
-				// Convert ai.Finding to unified.UnifiedFinding
-				uf := &unified.UnifiedFinding{
-					ID:                         f.ID,
-					Source:                     unified.SourceAIPatrol,
-					Severity:                   unified.UnifiedSeverity(f.Severity),
-					Category:                   unified.UnifiedCategory(f.Category),
-					ResourceID:                 f.ResourceID,
-					ResourceName:               f.ResourceName,
-					ResourceType:               f.ResourceType,
-					Node:                       f.Node,
-					Title:                      f.Title,
-					Description:                f.Description,
-					Impact:                     f.Impact,
-					PreviousResolvedFixSummary: f.PreviousResolvedFixSummary,
-					Recommendation:             f.Recommendation,
-					Evidence:                   f.Evidence,
-					DetectedAt:                 f.DetectedAt,
-					LastSeenAt:                 f.LastSeenAt,
-					ResolvedAt:                 f.ResolvedAt,
-					AutoResolved:               f.AutoResolved,
-					InvestigationSessionID:     f.InvestigationSessionID,
-					InvestigationStatus:        f.InvestigationStatus,
-					InvestigationOutcome:       f.InvestigationOutcome,
-					LastInvestigatedAt:         f.LastInvestigatedAt,
-					InvestigationAttempts:      f.InvestigationAttempts,
-					InvestigationRecord:        f.InvestigationRecord,
-					LoopState:                  f.LoopState,
-					Lifecycle:                  toUnifiedLifecycle(f.Lifecycle),
-					RegressionCount:            f.RegressionCount,
-					LastRegressionAt:           f.LastRegressionAt,
-					AcknowledgedAt:             f.AcknowledgedAt,
-					SnoozedUntil:               f.SnoozedUntil,
-					DismissedReason:            f.DismissedReason,
-					UserNote:                   f.UserNote,
-					Suppressed:                 f.Suppressed,
-					TimesRaised:                f.TimesRaised,
-					RemindAt:                   f.RemindAt,
-				}
+				uf := unifiedFindingFromAI(f)
 				_, isNew := unifiedStore.AddFromAI(uf)
 				// Publish a finding.created event to the agent SSE
 				// stream when the finding is new and not auto-dismissed
@@ -2051,43 +2028,7 @@ func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 					if f == nil {
 						continue
 					}
-					uf := &unified.UnifiedFinding{
-						ID:                         f.ID,
-						Source:                     unified.SourceAIPatrol,
-						Severity:                   unified.UnifiedSeverity(f.Severity),
-						Category:                   unified.UnifiedCategory(f.Category),
-						ResourceID:                 f.ResourceID,
-						ResourceName:               f.ResourceName,
-						ResourceType:               f.ResourceType,
-						Node:                       f.Node,
-						Title:                      f.Title,
-						Description:                f.Description,
-						Impact:                     f.Impact,
-						PreviousResolvedFixSummary: f.PreviousResolvedFixSummary,
-						Recommendation:             f.Recommendation,
-						Evidence:                   f.Evidence,
-						DetectedAt:                 f.DetectedAt,
-						LastSeenAt:                 f.LastSeenAt,
-						ResolvedAt:                 f.ResolvedAt,
-						AutoResolved:               f.AutoResolved,
-						InvestigationSessionID:     f.InvestigationSessionID,
-						InvestigationStatus:        f.InvestigationStatus,
-						InvestigationOutcome:       f.InvestigationOutcome,
-						LastInvestigatedAt:         f.LastInvestigatedAt,
-						InvestigationAttempts:      f.InvestigationAttempts,
-						InvestigationRecord:        f.InvestigationRecord,
-						LoopState:                  f.LoopState,
-						Lifecycle:                  toUnifiedLifecycle(f.Lifecycle),
-						RegressionCount:            f.RegressionCount,
-						LastRegressionAt:           f.LastRegressionAt,
-						AcknowledgedAt:             f.AcknowledgedAt,
-						SnoozedUntil:               f.SnoozedUntil,
-						DismissedReason:            f.DismissedReason,
-						UserNote:                   f.UserNote,
-						Suppressed:                 f.Suppressed,
-						TimesRaised:                f.TimesRaised,
-						RemindAt:                   f.RemindAt,
-					}
+					uf := unifiedFindingFromAI(f)
 					// Copy resolution timestamp if resolved
 					if f.ResolvedAt != nil || f.AutoResolved {
 						now := time.Now()
@@ -5471,101 +5412,10 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 	currentTime := time.Now().UnixMilli() // JavaScript timestamp format
 	oldestTimestamp := currentTime
 
-	// Process VMs - batch-load historical data (1-2 SQL calls instead of N).
-	vmList := readState.VMs()
-	vmRequests := make([]monitoring.GuestChartRequest, 0, len(vmList))
-	for _, vm := range vmList {
-		if vm == nil {
-			continue
-		}
-		if vid := vm.SourceID(); vid != "" {
-			vmRequests = append(vmRequests, monitoring.GuestChartRequest{InMemoryKey: vid, SQLResourceID: vid})
-		}
-	}
-	vmBatchMetrics := monitor.GetGuestMetricsForChartBatch("vm", vmRequests, duration, infrastructureSummaryMetricOrder...)
-	for _, vm := range vmList {
-		if vm == nil {
-			continue
-		}
-		vid := vm.SourceID()
-		if vid == "" {
-			continue
-		}
-		chartData[vid] = make(VMChartData)
-		if batchMetrics, ok := vmBatchMetrics[vid]; ok {
-			for metricType, points := range batchMetrics {
-				if !sparklineMetrics[metricType] {
-					continue
-				}
-				chartData[vid][metricType] = make([]MetricPoint, len(points))
-				for i, point := range points {
-					ts := point.Timestamp.UnixMilli()
-					if ts < oldestTimestamp {
-						oldestTimestamp = ts
-					}
-					chartData[vid][metricType][i] = MetricPoint{
-						Timestamp: ts,
-						Value:     point.Value,
-					}
-				}
-			}
-		}
-		if len(chartData[vid]["cpu"]) == 0 {
-			chartData[vid]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: vm.CPUPercent()}}
-			chartData[vid]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: vm.MemoryPercent()}}
-			chartData[vid]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: vm.DiskPercent()}}
-			chartData[vid]["netin"] = []MetricPoint{{Timestamp: currentTime, Value: vm.NetIn()}}
-			chartData[vid]["netout"] = []MetricPoint{{Timestamp: currentTime, Value: vm.NetOut()}}
-		}
-	}
-
-	// Process Containers - batch-load historical data (1-2 SQL calls instead of N).
-	ctList := readState.Containers()
-	ctRequests := make([]monitoring.GuestChartRequest, 0, len(ctList))
-	for _, ct := range ctList {
-		if ct == nil {
-			continue
-		}
-		if cid := ct.SourceID(); cid != "" {
-			ctRequests = append(ctRequests, monitoring.GuestChartRequest{InMemoryKey: cid, SQLResourceID: cid})
-		}
-	}
-	ctBatchMetrics := monitor.GetGuestMetricsForChartBatch("container", ctRequests, duration, infrastructureSummaryMetricOrder...)
-	for _, ct := range ctList {
-		if ct == nil {
-			continue
-		}
-		cid := ct.SourceID()
-		if cid == "" {
-			continue
-		}
-		chartData[cid] = make(VMChartData)
-		if batchMetrics, ok := ctBatchMetrics[cid]; ok {
-			for metricType, points := range batchMetrics {
-				if !sparklineMetrics[metricType] {
-					continue
-				}
-				chartData[cid][metricType] = make([]MetricPoint, len(points))
-				for i, point := range points {
-					ts := point.Timestamp.UnixMilli()
-					if ts < oldestTimestamp {
-						oldestTimestamp = ts
-					}
-					chartData[cid][metricType][i] = MetricPoint{
-						Timestamp: ts,
-						Value:     point.Value,
-					}
-				}
-			}
-		}
-		if len(chartData[cid]["cpu"]) == 0 {
-			chartData[cid]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: ct.CPUPercent()}}
-			chartData[cid]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: ct.MemoryPercent()}}
-			chartData[cid]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: ct.DiskPercent()}}
-			chartData[cid]["netin"] = []MetricPoint{{Timestamp: currentTime, Value: ct.NetIn()}}
-			chartData[cid]["netout"] = []MetricPoint{{Timestamp: currentTime, Value: ct.NetOut()}}
-		}
-	}
+	// Process VMs and Containers - batch-load historical data (1-2 SQL calls
+	// per family instead of N).
+	oldestTimestamp = collectGuestChartData(monitor, "vm", readState.VMs(), duration, chartData, currentTime, oldestTimestamp)
+	oldestTimestamp = collectGuestChartData(monitor, "container", readState.Containers(), duration, chartData, currentTime, oldestTimestamp)
 
 	// Process Storage - batch-load historical data (1-2 SQL calls instead of N).
 	storageData := make(map[string]StorageChartData)
@@ -5721,22 +5571,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		}
 		dockerData[responseKey] = make(VMChartData)
 		if batchMetrics, ok := dcBatchMetrics[request.SQLResourceID]; ok {
-			for metricType, points := range batchMetrics {
-				if !sparklineMetrics[metricType] {
-					continue
-				}
-				dockerData[responseKey][metricType] = make([]MetricPoint, len(points))
-				for i, point := range points {
-					ts := point.Timestamp.UnixMilli()
-					if ts < oldestTimestamp {
-						oldestTimestamp = ts
-					}
-					dockerData[responseKey][metricType][i] = MetricPoint{
-						Timestamp: ts,
-						Value:     point.Value,
-					}
-				}
-			}
+			oldestTimestamp = fillChartSeriesFromBatch(dockerData[responseKey], batchMetrics, oldestTimestamp)
 		}
 		if len(dockerData[responseKey]["cpu"]) == 0 {
 			dockerData[responseKey]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: dc.CPUPercent()}}
@@ -5771,22 +5606,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		}
 		dockerHostData[dhID] = make(VMChartData)
 		if batchMetrics, ok := dhBatchMetrics[dhID]; ok {
-			for metricType, points := range batchMetrics {
-				if !sparklineMetrics[metricType] {
-					continue
-				}
-				dockerHostData[dhID][metricType] = make([]MetricPoint, len(points))
-				for i, point := range points {
-					ts := point.Timestamp.UnixMilli()
-					if ts < oldestTimestamp {
-						oldestTimestamp = ts
-					}
-					dockerHostData[dhID][metricType][i] = MetricPoint{
-						Timestamp: ts,
-						Value:     point.Value,
-					}
-				}
-			}
+			oldestTimestamp = fillChartSeriesFromBatch(dockerHostData[dhID], batchMetrics, oldestTimestamp)
 		}
 		if len(dockerHostData[dhID]["cpu"]) == 0 {
 			dockerHostData[dhID]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: dh.CPUPercent()}}
@@ -5818,22 +5638,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		}
 		agentData[hID] = make(VMChartData)
 		if batchMetrics, ok := agentBatchMetrics[request.SQLResourceID]; ok {
-			for metricType, points := range batchMetrics {
-				if !sparklineMetrics[metricType] {
-					continue
-				}
-				agentData[hID][metricType] = make([]MetricPoint, len(points))
-				for i, point := range points {
-					ts := point.Timestamp.UnixMilli()
-					if ts < oldestTimestamp {
-						oldestTimestamp = ts
-					}
-					agentData[hID][metricType][i] = MetricPoint{
-						Timestamp: ts,
-						Value:     point.Value,
-					}
-				}
-			}
+			oldestTimestamp = fillChartSeriesFromBatch(agentData[hID], batchMetrics, oldestTimestamp)
 		}
 		if len(agentData[hID]["cpu"]) == 0 {
 			agentData[hID]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: h.CPUPercent()}}
@@ -6449,6 +6254,87 @@ func normalizeInfrastructureSummaryChartSeries(
 
 // sparklineMetrics lists the metric types consumed by summary sparklines
 // and density maps. Metrics not in this set are omitted to keep payloads small.
+// guestChartSourceView is the guest view subset the infrastructure summary
+// chart builder consumes from VMs and LXC containers.
+type guestChartSourceView interface {
+	comparable
+	SourceID() string
+	CPUPercent() float64
+	MemoryPercent() float64
+	DiskPercent() float64
+	NetIn() float64
+	NetOut() float64
+}
+
+// collectGuestChartData batch-loads sparkline history for one proxmox guest
+// family into chartData (1-2 SQL calls instead of N) and returns the updated
+// oldest chart timestamp. Guests without history fall back to a single
+// current-value point per metric.
+func collectGuestChartData[V guestChartSourceView](
+	monitor *monitoring.Monitor,
+	storeType string,
+	guests []V,
+	duration time.Duration,
+	chartData map[string]VMChartData,
+	currentTime, oldestTimestamp int64,
+) int64 {
+	var zero V
+	requests := make([]monitoring.GuestChartRequest, 0, len(guests))
+	for _, g := range guests {
+		if g == zero {
+			continue
+		}
+		if id := g.SourceID(); id != "" {
+			requests = append(requests, monitoring.GuestChartRequest{InMemoryKey: id, SQLResourceID: id})
+		}
+	}
+	batch := monitor.GetGuestMetricsForChartBatch(storeType, requests, duration, infrastructureSummaryMetricOrder...)
+	for _, g := range guests {
+		if g == zero {
+			continue
+		}
+		id := g.SourceID()
+		if id == "" {
+			continue
+		}
+		chartData[id] = make(VMChartData)
+		if batchMetrics, ok := batch[id]; ok {
+			oldestTimestamp = fillChartSeriesFromBatch(chartData[id], batchMetrics, oldestTimestamp)
+		}
+		if len(chartData[id]["cpu"]) == 0 {
+			chartData[id]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: g.CPUPercent()}}
+			chartData[id]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: g.MemoryPercent()}}
+			chartData[id]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: g.DiskPercent()}}
+			chartData[id]["netin"] = []MetricPoint{{Timestamp: currentTime, Value: g.NetIn()}}
+			chartData[id]["netout"] = []MetricPoint{{Timestamp: currentTime, Value: g.NetOut()}}
+		}
+	}
+	return oldestTimestamp
+}
+
+// fillChartSeriesFromBatch copies sparkline-eligible batch metric points
+// into dst and returns the updated oldest chart timestamp. Shared by the
+// per-family infrastructure summary chart loops.
+func fillChartSeriesFromBatch(dst VMChartData, batchMetrics map[string][]monitoring.MetricPoint, oldestTimestamp int64) int64 {
+	for metricType, points := range batchMetrics {
+		if !sparklineMetrics[metricType] {
+			continue
+		}
+		dst[metricType] = make([]MetricPoint, len(points))
+		for i, point := range points {
+			ts := point.Timestamp.UnixMilli()
+			if ts < oldestTimestamp {
+				oldestTimestamp = ts
+			}
+			dst[metricType][i] = MetricPoint{
+				Timestamp: ts,
+				Value:     point.Value,
+			}
+		}
+	}
+	return oldestTimestamp
+}
+
 var sparklineMetrics = map[string]bool{
 	"cpu":       true,
 	"memory":    true,
@@ -8007,117 +7893,12 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 	}()
 	workloadsSummaryBatchWG.Wait()
 
-	for idx, vm := range vmList {
-		responseKey := vmResponseKeys[idx]
-		metricID := vmRequests[idx].SQLResourceID
-		guestCounts.Total++
-		if workloadSummaryStatusIsRunning("", vm.Status()) {
-			guestCounts.Running++
-		} else {
-			guestCounts.Stopped++
-		}
+	var guestSummaryPoints int
+	snapshots, guestSummaryPoints = appendGuestWorkloadSummaries(vmList, vmResponseKeys, vmRequests, vmBatchMetrics, currentTimeTime, &guestCounts, buckets, snapshots, &oldestTimestamp)
+	guestPointCount += guestSummaryPoints
 
-		snapshot := workloadsSummarySnapshot{
-			id:      responseKey,
-			name:    strings.TrimSpace(vm.Name()),
-			cpu:     clampWorkloadPercent(vm.CPUPercent()),
-			memory:  clampWorkloadPercent(vm.MemoryPercent()),
-			disk:    clampWorkloadPercent(vm.DiskPercent()),
-			network: clampNonNegativeWorkloadValue(vm.NetIn() + vm.NetOut()),
-		}
-		if snapshot.name == "" {
-			snapshot.name = responseKey
-		}
-
-		metrics := vmBatchMetrics[metricID]
-		cpuPoints := metrics["cpu"]
-		if len(cpuPoints) == 0 {
-			cpuPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: vm.CPUPercent()}}
-		}
-		memoryPoints := metrics["memory"]
-		if len(memoryPoints) == 0 {
-			memoryPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: vm.MemoryPercent()}}
-		}
-		diskPoints := metrics["disk"]
-		if len(diskPoints) == 0 {
-			diskPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: vm.DiskPercent()}}
-		}
-		netInPoints := metrics["netin"]
-		netOutPoints := metrics["netout"]
-		if len(netInPoints) == 0 && len(netOutPoints) == 0 {
-			netInPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: vm.NetIn()}}
-			netOutPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: vm.NetOut()}}
-		}
-
-		networkPoints := mergeWorkloadNetworkPoints(netInPoints, netOutPoints)
-
-		snapshot.cpu = latestSummaryMetricValue(cpuPoints, snapshot.cpu, clampWorkloadPercent)
-		snapshot.memory = latestSummaryMetricValue(memoryPoints, snapshot.memory, clampWorkloadPercent)
-		snapshot.disk = latestSummaryMetricValue(diskPoints, snapshot.disk, clampWorkloadPercent)
-		snapshot.network = latestSummaryMetricValue(networkPoints, snapshot.network, clampNonNegativeWorkloadValue)
-
-		guestPointCount += appendWorkloadMetricPoints(buckets, cpuPoints, "cpu", &oldestTimestamp)
-		guestPointCount += appendWorkloadMetricPoints(buckets, memoryPoints, "memory", &oldestTimestamp)
-		guestPointCount += appendWorkloadMetricPoints(buckets, diskPoints, "disk", &oldestTimestamp)
-		guestPointCount += appendWorkloadMetricPoints(buckets, networkPoints, "network", &oldestTimestamp)
-		snapshots = append(snapshots, snapshot)
-	}
-
-	for idx, ct := range containerList {
-		responseKey := containerResponseKeys[idx]
-		metricID := containerRequests[idx].SQLResourceID
-		guestCounts.Total++
-		if workloadSummaryStatusIsRunning("", ct.Status()) {
-			guestCounts.Running++
-		} else {
-			guestCounts.Stopped++
-		}
-
-		snapshot := workloadsSummarySnapshot{
-			id:      responseKey,
-			name:    strings.TrimSpace(ct.Name()),
-			cpu:     clampWorkloadPercent(ct.CPUPercent()),
-			memory:  clampWorkloadPercent(ct.MemoryPercent()),
-			disk:    clampWorkloadPercent(ct.DiskPercent()),
-			network: clampNonNegativeWorkloadValue(ct.NetIn() + ct.NetOut()),
-		}
-		if snapshot.name == "" {
-			snapshot.name = responseKey
-		}
-
-		metrics := containerBatchMetrics[metricID]
-		cpuPoints := metrics["cpu"]
-		if len(cpuPoints) == 0 {
-			cpuPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: ct.CPUPercent()}}
-		}
-		memoryPoints := metrics["memory"]
-		if len(memoryPoints) == 0 {
-			memoryPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: ct.MemoryPercent()}}
-		}
-		diskPoints := metrics["disk"]
-		if len(diskPoints) == 0 {
-			diskPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: ct.DiskPercent()}}
-		}
-		netInPoints := metrics["netin"]
-		netOutPoints := metrics["netout"]
-		if len(netInPoints) == 0 && len(netOutPoints) == 0 {
-			netInPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: ct.NetIn()}}
-			netOutPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: ct.NetOut()}}
-		}
-
-		networkPoints := mergeWorkloadNetworkPoints(netInPoints, netOutPoints)
-
-		snapshot.cpu = latestSummaryMetricValue(cpuPoints, snapshot.cpu, clampWorkloadPercent)
-		snapshot.memory = latestSummaryMetricValue(memoryPoints, snapshot.memory, clampWorkloadPercent)
-		snapshot.disk = latestSummaryMetricValue(diskPoints, snapshot.disk, clampWorkloadPercent)
-		snapshot.network = latestSummaryMetricValue(networkPoints, snapshot.network, clampNonNegativeWorkloadValue)
-
-		guestPointCount += appendWorkloadMetricPoints(buckets, cpuPoints, "cpu", &oldestTimestamp)
-		guestPointCount += appendWorkloadMetricPoints(buckets, memoryPoints, "memory", &oldestTimestamp)
-		guestPointCount += appendWorkloadMetricPoints(buckets, diskPoints, "disk", &oldestTimestamp)
-		guestPointCount += appendWorkloadMetricPoints(buckets, networkPoints, "network", &oldestTimestamp)
-		snapshots = append(snapshots, snapshot)
-	}
+	snapshots, guestSummaryPoints = appendGuestWorkloadSummaries(containerList, containerResponseKeys, containerRequests, containerBatchMetrics, currentTimeTime, &guestCounts, buckets, snapshots, &oldestTimestamp)
+	guestPointCount += guestSummaryPoints
 
 	for _, pod := range podList {
 		metricKey := kubernetesPodMetricIDFromView(pod)
@@ -8348,6 +8129,91 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		log.Error().Err(err).Msg("Failed to encode workloads summary chart data response")
 		return
 	}
+}
+
+// guestWorkloadSummaryView is the guest view subset the workloads summary
+// loop consumes from VMs and LXC containers.
+type guestWorkloadSummaryView interface {
+	Status() unifiedresources.ResourceStatus
+	Name() string
+	CPUPercent() float64
+	MemoryPercent() float64
+	DiskPercent() float64
+	NetIn() float64
+	NetOut() float64
+}
+
+// appendGuestWorkloadSummaries accumulates workload-summary snapshots and
+// chart points for one proxmox guest family (VMs or LXC containers),
+// returning the extended snapshot slice and the number of points added.
+func appendGuestWorkloadSummaries[V guestWorkloadSummaryView](
+	guests []V,
+	responseKeys []string,
+	requests []monitoring.GuestChartRequest,
+	batchMetrics map[string]map[string][]monitoring.MetricPoint,
+	currentTimeTime time.Time,
+	guestCounts *WorkloadsGuestCounts,
+	buckets map[int64]*workloadSummaryBuckets,
+	snapshots []workloadsSummarySnapshot,
+	oldestTimestamp *int64,
+) ([]workloadsSummarySnapshot, int) {
+	added := 0
+	for idx, g := range guests {
+		responseKey := responseKeys[idx]
+		metricID := requests[idx].SQLResourceID
+		guestCounts.Total++
+		if workloadSummaryStatusIsRunning("", g.Status()) {
+			guestCounts.Running++
+		} else {
+			guestCounts.Stopped++
+		}
+
+		snapshot := workloadsSummarySnapshot{
+			id:      responseKey,
+			name:    strings.TrimSpace(g.Name()),
+			cpu:     clampWorkloadPercent(g.CPUPercent()),
+			memory:  clampWorkloadPercent(g.MemoryPercent()),
+			disk:    clampWorkloadPercent(g.DiskPercent()),
+			network: clampNonNegativeWorkloadValue(g.NetIn() + g.NetOut()),
+		}
+		if snapshot.name == "" {
+			snapshot.name = responseKey
+		}
+
+		metrics := batchMetrics[metricID]
+		cpuPoints := metrics["cpu"]
+		if len(cpuPoints) == 0 {
+			cpuPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: g.CPUPercent()}}
+		}
+		memoryPoints := metrics["memory"]
+		if len(memoryPoints) == 0 {
+			memoryPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: g.MemoryPercent()}}
+		}
+		diskPoints := metrics["disk"]
+		if len(diskPoints) == 0 {
+			diskPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: g.DiskPercent()}}
+		}
+		netInPoints := metrics["netin"]
+		netOutPoints := metrics["netout"]
+		if len(netInPoints) == 0 && len(netOutPoints) == 0 {
+			netInPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: g.NetIn()}}
+			netOutPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: g.NetOut()}}
+		}
+
+		networkPoints := mergeWorkloadNetworkPoints(netInPoints, netOutPoints)
+
+		snapshot.cpu = latestSummaryMetricValue(cpuPoints, snapshot.cpu, clampWorkloadPercent)
+		snapshot.memory = latestSummaryMetricValue(memoryPoints, snapshot.memory, clampWorkloadPercent)
+		snapshot.disk = latestSummaryMetricValue(diskPoints, snapshot.disk, clampWorkloadPercent)
+		snapshot.network = latestSummaryMetricValue(networkPoints, snapshot.network, clampNonNegativeWorkloadValue)
+
+		added += appendWorkloadMetricPoints(buckets, cpuPoints, "cpu", oldestTimestamp)
+		added += appendWorkloadMetricPoints(buckets, memoryPoints, "memory", oldestTimestamp)
+		added += appendWorkloadMetricPoints(buckets, diskPoints, "disk", oldestTimestamp)
+		added += appendWorkloadMetricPoints(buckets, networkPoints, "network", oldestTimestamp)
+		snapshots = append(snapshots, snapshot)
+	}
+	return snapshots, added
 }
 
 func workloadSummaryStatusIsRunning(runtimeState string, status unifiedresources.ResourceStatus) bool {

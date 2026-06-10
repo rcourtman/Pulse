@@ -651,3 +651,31 @@ func newTestActionsRootCommand(env map[string]string) *cobra.Command {
 		},
 	)
 }
+
+func TestActionAPIDefaultsSeedsFromEnvironment(t *testing.T) {
+	deps := &ActionsDeps{Getenv: func(key string) string {
+		switch key {
+		case "PULSE_API_URL":
+			return "  https://pulse.example.test  "
+		case "PULSE_API_TOKEN":
+			return "  token-123  "
+		}
+		return ""
+	}}
+	apiURL, token := actionAPIDefaults(deps)
+	if apiURL != "https://pulse.example.test" {
+		t.Fatalf("apiURL = %q, want trimmed env value", apiURL)
+	}
+	if token != "token-123" {
+		t.Fatalf("token = %q, want trimmed env value", token)
+	}
+
+	empty := &ActionsDeps{Getenv: func(string) string { return "" }}
+	apiURL, token = actionAPIDefaults(empty)
+	if apiURL != defaultPulseAPIURL {
+		t.Fatalf("apiURL = %q, want default %q when env is unset", apiURL, defaultPulseAPIURL)
+	}
+	if token != "" {
+		t.Fatalf("token = %q, want empty when env is unset", token)
+	}
+}

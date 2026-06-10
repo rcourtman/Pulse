@@ -59,6 +59,7 @@ func (a *chatServiceAdapter) ExecutePatrolStream(ctx context.Context, req ai.Pat
 	}, nil
 }
 
+//nolint:dupl // mirrors orchestratorChatAdapter.GetMessages: same source messages mapped onto a deliberately separate output contract that may diverge
 func (a *chatServiceAdapter) GetMessages(ctx context.Context, sessionID string) ([]ai.ChatMessage, error) {
 	messages, err := a.svc.GetMessages(ctx, sessionID)
 	if err != nil {

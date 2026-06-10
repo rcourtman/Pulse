@@ -3316,3 +3316,49 @@ func TestAISettingsHandler_PatrolPreflight_RejectsInvalidProviderName(t *testing
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
+
+// TestOrchestratorAndChatAdaptersMapTheSameMessageFields keeps the deliberate
+// GetMessages mirror between orchestratorChatAdapter (ai_handlers.go) and
+// chatServiceAdapter (chat_service_adapter.go) honest: both convert the same
+// chat-service messages onto separate output contracts, and a field mapped by
+// one must be mapped by the other.
+func TestOrchestratorAndChatAdaptersMapTheSameMessageFields(t *testing.T) {
+	requiredMappings := []string{
+		"ID:",
+		"Role:",
+		"Content:",
+		"ReasoningContent:",
+		"Timestamp:",
+		"ToolUseID:",
+		"IsError:",
+		".NormalizeCollections()",
+	}
+
+	for _, tc := range []struct {
+		file string
+		fn   string
+	}{
+		{"ai_handlers.go", "func (a *orchestratorChatAdapter) GetMessages("},
+		{"chat_service_adapter.go", "func (a *chatServiceAdapter) GetMessages("},
+	} {
+		source, err := os.ReadFile(tc.file)
+		if err != nil {
+			t.Fatalf("read %s: %v", tc.file, err)
+		}
+		text := string(source)
+		start := strings.Index(text, tc.fn)
+		if start < 0 {
+			t.Fatalf("%s must define %q", tc.file, tc.fn)
+		}
+		end := strings.Index(text[start:], "\nfunc ")
+		if end < 0 {
+			end = len(text) - start
+		}
+		body := text[start : start+end]
+		for _, required := range requiredMappings {
+			if !strings.Contains(body, required) {
+				t.Errorf("%s GetMessages must map %q — keep the adapter mirror in sync", tc.file, required)
+			}
+		}
+	}
+}
