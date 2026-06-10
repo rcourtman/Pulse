@@ -605,7 +605,7 @@ func printProviderMSPInstallProofReport(report *providerMSPInstallProofReport) {
 	fmt.Printf("final_status_unhealthy_tenants=%d\n", report.FinalStatusUnhealthyTenants)
 	fmt.Printf("final_status_stuck_provisioning_tenants=%d\n", report.FinalStatusStuckProvisioningTenants)
 	for _, workspace := range report.Workspaces {
-		fmt.Printf("workspace=%s display_name=%q state=%s plan_version=%s container_id=%s public_url=%s install_type=%s install_token_id=%s install_command_generated=%t agent_token_auth_verified=%t setup_facts_token_use_visible=%t agent_report_ingest_verified=%t agent_report_agent_id=%s agent_report_hostname=%s token_rotation_verified=%t rotated_install_token_id=%s old_install_token_rejected=%t rotated_agent_report_verified=%t handoff_exchange_verified=%t handoff_target_path=%s\n",
+		fmt.Printf("workspace=%s display_name=%q state=%s plan_version=%s container_id=%s public_url=%s install_type=%s install_token_id=%s install_command_generated=%t agent_token_auth_verified=%t setup_facts_token_use_visible=%t agent_report_ingest_verified=%t agent_report_agent_id=%s agent_report_hostname=%s token_rotation_verified=%t rotated_install_token_id=%s old_install_token_rejected=%t rotated_agent_report_verified=%t handoff_exchange_verified=%t handoff_target_path=%s entitlement_lease_checked=%t entitlement_lease_verified=%t entitlement_white_label=%t entitlement_skipped_reason=%s\n",
 			workspace.TenantID,
 			workspace.DisplayName,
 			workspace.State,
@@ -626,6 +626,10 @@ func printProviderMSPInstallProofReport(report *providerMSPInstallProofReport) {
 			workspace.RotatedAgentReportVerified,
 			workspace.HandoffExchangeVerified,
 			workspace.HandoffTargetPath,
+			workspace.EntitlementLeaseChecked,
+			workspace.EntitlementLeaseVerified,
+			workspace.EntitlementWhiteLabel,
+			workspace.EntitlementSkippedReason,
 		)
 	}
 	for _, failure := range report.Failures {

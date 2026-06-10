@@ -193,6 +193,15 @@ func TestProviderMSPProofExercisesWorkspaceInstallHandoffAndIsolation(t *testing
 		if !workspace.HandoffExchangeVerified || workspace.HandoffTargetPath != "/settings/infrastructure?add=linux-host" {
 			t.Fatalf("handoff exchange proof mismatch: %#v", workspace)
 		}
+		if !workspace.EntitlementLeaseChecked {
+			t.Fatalf("entitlement lease was not checked for %s despite a provider MSP license being configured", workspace.TenantID)
+		}
+		if !workspace.EntitlementLeaseVerified {
+			t.Fatalf("entitlement lease did not chain-verify for %s", workspace.TenantID)
+		}
+		if !workspace.EntitlementWhiteLabel {
+			t.Fatalf("entitlement lease for %s is missing white_label", workspace.TenantID)
+		}
 	}
 }
 
@@ -250,12 +259,47 @@ func TestProviderMSPProofLoadsSignedLicenseFilePlan(t *testing.T) {
 	}
 }
 
+// mintProviderMSPProofLicense installs a fresh license trust root via env
+// (dev builds only) and returns a root-signed MSP license binding the given
+// lease signing public key, mirroring what LoadConfig resolves from
+// CP_PROVIDER_MSP_LICENSE_FILE in a real deployment.
+func mintProviderMSPProofLicense(t *testing.T, planVersion string, leaseSigningPublicKey ed25519.PublicKey) string {
+	t.Helper()
+	rootPub, rootPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey root: %v", err)
+	}
+	t.Setenv("PULSE_LICENSE_PUBLIC_KEY", base64.StdEncoding.EncodeToString(rootPub))
+	t.Setenv("PULSE_TRIAL_ACTIVATION_PUBLIC_KEY", base64.StdEncoding.EncodeToString(rootPub))
+	t.Cleanup(func() { pkglicensing.SetPublicKey(nil) })
+	pkglicensing.InitEmbeddedPublicKey()
+
+	claims := pkglicensing.Claims{
+		LicenseID:                   "lic_provider_msp_test",
+		Email:                       "provider@example.com",
+		Tier:                        pkglicensing.TierMSP,
+		IssuedAt:                    time.Now().Add(-time.Minute).Unix(),
+		ExpiresAt:                   time.Now().Add(24 * time.Hour).Unix(),
+		PlanVersion:                 planVersion,
+		EntitlementSigningPublicKey: base64.StdEncoding.EncodeToString(leaseSigningPublicKey),
+	}
+	payloadBytes, err := json.Marshal(claims)
+	if err != nil {
+		t.Fatalf("Marshal claims: %v", err)
+	}
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"EdDSA","typ":"JWT"}`))
+	payload := base64.RawURLEncoding.EncodeToString(payloadBytes)
+	signature := base64.RawURLEncoding.EncodeToString(ed25519.Sign(rootPriv, []byte(header+"."+payload)))
+	return header + "." + payload + "." + signature
+}
+
 func testProviderMSPProofConfig(t *testing.T) *cloudcp.CPConfig {
 	t.Helper()
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
 	}
+	licenseKey := mintProviderMSPProofLicense(t, "msp_growth", publicKey)
 	return &cloudcp.CPConfig{
 		DataDir:                     t.TempDir(),
 		Environment:                 "development",
@@ -273,6 +317,7 @@ func testProviderMSPProofConfig(t *testing.T) *cloudcp.CPConfig {
 		ProviderMSPPlanSource:       cloudcp.ProviderMSPPlanSourceLicenseFile,
 		ProviderMSPLicenseID:        "lic_provider_msp_test",
 		ProviderMSPLicenseEmail:     "provider@example.com",
+		ProviderMSPLicenseKey:       licenseKey,
 		TrialActivationPrivateKey:   base64.StdEncoding.EncodeToString(privateKey),
 		TrialActivationPublicKey:    base64.StdEncoding.EncodeToString(publicKey),
 		EmailFrom:                   "noreply@example.com",
@@ -309,6 +354,10 @@ func writeProviderMSPProofLicenseForTest(t *testing.T, licenseID, email, planVer
 		t.Fatalf("GenerateKey: %v", err)
 	}
 	t.Setenv("PULSE_LICENSE_PUBLIC_KEY", base64.StdEncoding.EncodeToString(publicKey))
+	// Release binaries embed one key as both the license root and the hosted
+	// entitlement verification root; mirror that so the proof's lease
+	// verification can resolve a root in dev test builds.
+	t.Setenv("PULSE_TRIAL_ACTIVATION_PUBLIC_KEY", base64.StdEncoding.EncodeToString(publicKey))
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 	t.Cleanup(func() { pkglicensing.SetPublicKey(nil) })
 

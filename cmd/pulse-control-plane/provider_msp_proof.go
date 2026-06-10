@@ -27,6 +27,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/spf13/cobra"
 )
 
@@ -76,6 +77,10 @@ type providerMSPProofWorkspace struct {
 	RotatedAgentReportVerified bool
 	HandoffExchangeVerified    bool
 	HandoffTargetPath          string
+	EntitlementLeaseChecked    bool
+	EntitlementLeaseVerified   bool
+	EntitlementWhiteLabel      bool
+	EntitlementSkippedReason   string
 }
 
 type providerMSPProofReport struct {
@@ -451,6 +456,11 @@ func (rt *providerMSPProofRuntime) proveProviderMSPWorkspace(ctx context.Context
 		return providerMSPProofWorkspace{}, err
 	}
 
+	entitlement, err := rt.verifyProviderMSPProofEntitlementLease(tenant, tenantDataDir)
+	if err != nil {
+		return providerMSPProofWorkspace{}, err
+	}
+
 	return providerMSPProofWorkspace{
 		TenantID:                   tenant.ID,
 		DisplayName:                tenant.DisplayName,
@@ -474,7 +484,70 @@ func (rt *providerMSPProofRuntime) proveProviderMSPWorkspace(ctx context.Context
 		RotatedAgentReportVerified: rotation.RotatedAgentReportVerified,
 		HandoffExchangeVerified:    exchangedTargetPath == targetPath,
 		HandoffTargetPath:          exchangedTargetPath,
+		EntitlementLeaseChecked:    entitlement.Checked,
+		EntitlementLeaseVerified:   entitlement.Verified,
+		EntitlementWhiteLabel:      entitlement.WhiteLabel,
+		EntitlementSkippedReason:   entitlement.SkippedReason,
 	}, nil
+}
+
+type providerMSPProofEntitlementLease struct {
+	Checked       bool
+	Verified      bool
+	WhiteLabel    bool
+	SkippedReason string
+}
+
+// verifyProviderMSPProofEntitlementLease verifies the provisioned workspace's
+// hosted entitlement lease exactly the way a release-build client runtime
+// will: against the embedded entitlement trust root, through the provider
+// MSP license chain. The proof previously passed while every workspace ran
+// unlicensed; a present license with an unverifiable lease must fail here,
+// not in the client's first branded report.
+func (rt *providerMSPProofRuntime) verifyProviderMSPProofEntitlementLease(tenant *registry.Tenant, tenantDataDir string) (providerMSPProofEntitlementLease, error) {
+	result := providerMSPProofEntitlementLease{}
+	if tenant == nil {
+		return result, fmt.Errorf("tenant is required")
+	}
+	if !rt.cfg.IsProviderHostedMSP() || strings.TrimSpace(rt.cfg.ProviderMSPLicenseKey) == "" {
+		result.SkippedReason = "no_provider_msp_license"
+		return result, nil
+	}
+	result.Checked = true
+
+	state, err := runtimeconfig.NewFileBillingStore(tenantDataDir).GetBillingState("default")
+	if err != nil {
+		return result, fmt.Errorf("read provisioned billing state for workspace %s: %w", tenant.ID, err)
+	}
+	if state == nil || strings.TrimSpace(state.EntitlementJWT) == "" {
+		return result, fmt.Errorf("workspace %s was provisioned without a hosted entitlement lease", tenant.ID)
+	}
+	if strings.TrimSpace(state.EntitlementRefreshToken) == "" {
+		return result, fmt.Errorf("workspace %s was provisioned without an entitlement refresh token", tenant.ID)
+	}
+
+	root, err := pkglicensing.HostedEntitlementPublicKey()
+	if err != nil {
+		return result, fmt.Errorf("resolve the entitlement verification root a client runtime would use: %w", err)
+	}
+	claims, err := pkglicensing.VerifyEntitlementLeaseToken(state.EntitlementJWT, root, "", time.Now().UTC())
+	if err != nil {
+		return result, fmt.Errorf("workspace %s entitlement lease does not verify the way a client runtime would: %w", tenant.ID, err)
+	}
+	if strings.TrimSpace(claims.ProviderLicense) == "" {
+		return result, fmt.Errorf("workspace %s entitlement lease does not chain the provider MSP license; release-build client runtimes would reject it", tenant.ID)
+	}
+	result.Verified = true
+	for _, capability := range claims.Capabilities {
+		if capability == pkglicensing.FeatureWhiteLabel {
+			result.WhiteLabel = true
+			break
+		}
+	}
+	if !result.WhiteLabel {
+		return result, fmt.Errorf("workspace %s entitlement lease is missing white_label; branded client reports would be locked", tenant.ID)
+	}
+	return result, nil
 }
 
 type providerMSPProofAgentReportIngest struct {
@@ -1030,7 +1103,7 @@ func printProviderMSPProofReport(report *providerMSPProofReport) {
 	fmt.Printf("token_rotation_verified=%t\n", report.TokenRotationVerified)
 	fmt.Printf("cleanup=%t\n", report.Cleanup)
 	for _, workspace := range report.Workspaces {
-		fmt.Printf("workspace=%s display_name=%q state=%s plan_version=%s container_id=%s public_url=%s install_type=%s install_token_id=%s install_command_generated=%t agent_token_auth_verified=%t setup_facts_token_use_visible=%t agent_report_ingest_verified=%t agent_report_agent_id=%s agent_report_hostname=%s token_rotation_verified=%t rotated_install_token_id=%s old_install_token_rejected=%t rotated_agent_report_verified=%t handoff_exchange_verified=%t handoff_target_path=%s\n",
+		fmt.Printf("workspace=%s display_name=%q state=%s plan_version=%s container_id=%s public_url=%s install_type=%s install_token_id=%s install_command_generated=%t agent_token_auth_verified=%t setup_facts_token_use_visible=%t agent_report_ingest_verified=%t agent_report_agent_id=%s agent_report_hostname=%s token_rotation_verified=%t rotated_install_token_id=%s old_install_token_rejected=%t rotated_agent_report_verified=%t handoff_exchange_verified=%t handoff_target_path=%s entitlement_lease_checked=%t entitlement_lease_verified=%t entitlement_white_label=%t entitlement_skipped_reason=%s\n",
 			workspace.TenantID,
 			workspace.DisplayName,
 			workspace.State,
@@ -1051,6 +1124,10 @@ func printProviderMSPProofReport(report *providerMSPProofReport) {
 			workspace.RotatedAgentReportVerified,
 			workspace.HandoffExchangeVerified,
 			workspace.HandoffTargetPath,
+			workspace.EntitlementLeaseChecked,
+			workspace.EntitlementLeaseVerified,
+			workspace.EntitlementWhiteLabel,
+			workspace.EntitlementSkippedReason,
 		)
 	}
 }
