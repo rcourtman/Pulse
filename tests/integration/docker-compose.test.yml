@@ -42,8 +42,12 @@ services:
     container_name: pulse-test-server
     ports:
       - "${PULSE_E2E_PORT:-7655}:7655"
+      - "${PULSE_E2E_AGENT_PORT:-7656}:7656"
     environment:
       - TZ=UTC
+      # Dedicated agent-ingest listener so E2E can prove the split-port
+      # isolation contract (only /api/agents/* served on this port).
+      - PULSE_AGENT_INGEST_PORT=7656
       # Point to mock GitHub server
       - PULSE_UPDATE_SERVER=http://mock-github:8080
       # Use /data which is already owned by pulse user via entrypoint
@@ -57,6 +61,9 @@ services:
       - PULSE_UPDATE_STAGE_DELAY_MS=250
     volumes:
       - test-data:/data
+    extra_hosts:
+      # Lets webhook E2E point Pulse at a capture listener on the test host.
+      - "host.docker.internal:host-gateway"
     depends_on:
       seed-bootstrap-token:
         condition: service_completed_successfully
