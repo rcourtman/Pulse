@@ -218,6 +218,21 @@ func (g *PDFGenerator) Generate(data *ReportData) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// reportSubjectDisplayName returns the human-readable name for the report
+// subject, falling back to the raw resource ID when enrichment did not
+// resolve one.
+func reportSubjectDisplayName(data *ReportData) string {
+	if data == nil {
+		return ""
+	}
+	if data.Resource != nil {
+		if name := strings.TrimSpace(data.Resource.Name); name != "" {
+			return name
+		}
+	}
+	return data.ResourceID
+}
+
 // writeCoverPage creates a professional cover page.
 func (g *PDFGenerator) writeCoverPage(pdf *fpdf.Fpdf, data *ReportData) {
 	pdf.AddPage()
@@ -258,7 +273,9 @@ func (g *PDFGenerator) writeCoverPage(pdf *fpdf.Fpdf, data *ReportData) {
 	pdf.SetDrawColor(colorGridLine[0], colorGridLine[1], colorGridLine[2])
 	pdf.RoundedRect(boxX, pdf.GetY(), boxWidth, boxHeight, 3, "1234", "FD")
 
-	// Resource details inside box
+	// Resource details inside box. Lead with the human-readable resource
+	// name when enrichment resolved one; the raw resource ID is operator
+	// plumbing, not something a report reader can act on.
 	pdf.SetY(pdf.GetY() + 10)
 	pdf.SetFont("Arial", "B", 11)
 	pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
@@ -266,7 +283,7 @@ func (g *PDFGenerator) writeCoverPage(pdf *fpdf.Fpdf, data *ReportData) {
 
 	pdf.SetFont("Arial", "B", 16)
 	pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
-	pdf.CellFormat(0, 10, data.ResourceID, "", 1, "C", false, 0, "")
+	pdf.CellFormat(0, 10, reportSubjectDisplayName(data), "", 1, "C", false, 0, "")
 
 	pdf.SetFont("Arial", "", 11)
 	pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
@@ -707,7 +724,7 @@ func (g *PDFGenerator) addPageHeader(pdf *fpdf.Fpdf, data *ReportData, section s
 	pdf.SetFont("Arial", "", 9)
 	pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
 	pdf.SetXY(20, 18)
-	pdf.CellFormat(pageWidth-40, 5, data.ResourceID, "", 1, "R", false, 0, "")
+	pdf.CellFormat(pageWidth-40, 5, reportSubjectDisplayName(data), "", 1, "R", false, 0, "")
 
 	// Section title
 	pdf.SetY(30)
@@ -1878,6 +1895,11 @@ func (g *PDFGenerator) writeFleetSummary(pdf *fpdf.Fpdf, data *MultiReportData) 
 		}
 	}
 
+	fleetTotalPoints := 0
+	for _, rd := range data.Resources {
+		fleetTotalPoints += rd.TotalPoints
+	}
+
 	if totalCritical > 0 {
 		healthStatus = "CRITICAL"
 		healthColor = colorDanger
@@ -1886,6 +1908,16 @@ func (g *PDFGenerator) writeFleetSummary(pdf *fpdf.Fpdf, data *MultiReportData) 
 		healthStatus = "WARNING"
 		healthColor = colorWarning
 		healthMessage = fmt.Sprintf("%d warnings across fleet", totalWarning)
+	} else if fleetTotalPoints == 0 {
+		// No metrics arrived for any resource in the window. Reporting
+		// HEALTHY would green-light an empty report and tell the reader
+		// their fleet is fine when Pulse has nothing to evaluate — the
+		// worst failure mode for a report whose job is reassurance.
+		// Mirror the single-resource executive summary's muted NO DATA
+		// card instead.
+		healthStatus = "NO DATA"
+		healthColor = colorTextMuted
+		healthMessage = "No metrics reported during the selected window"
 	}
 
 	// Health status card
@@ -2108,7 +2140,7 @@ func writeFleetNarrativeSection(pdf *fpdf.Fpdf, fn *FleetNarrative) {
 			if label == "" {
 				label = o.ResourceID
 			}
-			pdf.CellFormat(0, 6, fmt.Sprintf("%s — %s", label, o.Reason), "", 1, "L", false, 0, "")
+			pdf.CellFormat(0, 6, fmt.Sprintf("%s - %s", label, o.Reason), "", 1, "L", false, 0, "")
 			pdf.Ln(1)
 		}
 	}

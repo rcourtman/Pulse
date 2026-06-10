@@ -144,9 +144,9 @@ func fleetHeuristicHealthMessage(in FleetNarrativeInput) string {
 	case a.TotalCriticalAlerts > 1:
 		return fmt.Sprintf("%d critical alerts across the fleet require immediate attention", a.TotalCriticalAlerts)
 	case a.TotalActiveAlerts == 1:
-		return "1 active alert across the fleet — review recommended"
+		return "1 active alert across the fleet - review recommended"
 	case a.TotalActiveAlerts > 1:
-		return fmt.Sprintf("%d active alerts across the fleet — review recommended", a.TotalActiveAlerts)
+		return fmt.Sprintf("%d active alerts across the fleet - review recommended", a.TotalActiveAlerts)
 	case a.ResourceCount == 0:
 		return "No resources in this fleet report"
 	default:
@@ -204,7 +204,7 @@ func fleetHeuristicOutliers(in FleetNarrativeInput) []FleetOutlier {
 				outlier: FleetOutlier{
 					ResourceID:   r.ResourceID,
 					ResourceName: displayResourceName(r),
-					Reason:       fmt.Sprintf("Memory averaging %.1f%% — sustained pressure", r.AvgMemory),
+					Reason:       fmt.Sprintf("Memory averaging %.1f%% - sustained pressure", r.AvgMemory),
 					Severity:     NarrativeSeverityWarning,
 				},
 				rank: 500 + int(r.AvgMemory),
@@ -374,7 +374,7 @@ func fleetHeuristicRecommendations(in FleetNarrativeInput) []string {
 		recs = append(recs, "Replace failing or end-of-life disks before they cause outage")
 	}
 	if len(recs) == 0 {
-		recs = append(recs, "No fleet-wide action required — continue routine monitoring")
+		recs = append(recs, "No fleet-wide action required - continue routine monitoring")
 	}
 	return recs
 }

@@ -164,6 +164,66 @@ func TestFleetSummary_HeuristicSourceShowsDiscoverabilityTip(t *testing.T) {
 	}
 }
 
+// TestFleetSummary_EmptyDataShowsNoData mirrors the single-resource
+// empty-window guard for fleet reports. A fleet PDF whose every resource
+// returned zero data points must not render the green HEALTHY card —
+// "All systems operating normally" over no evidence is false assurance,
+// which is the worst failure mode for a report whose job is to prove
+// stability to a client.
+func TestFleetSummary_EmptyDataShowsNoData(t *testing.T) {
+	now := time.Now()
+	multi := &MultiReportData{
+		Title:       "Fleet",
+		Start:       now.Add(-time.Hour),
+		End:         now,
+		GeneratedAt: now,
+		Resources: []*ReportData{
+			{
+				ResourceID:   "vm-aaaa",
+				ResourceType: "vm",
+				Summary:      MetricSummary{ByMetric: map[string]MetricStats{}},
+				TotalPoints:  0,
+			},
+			{
+				ResourceID:   "vm-bbbb",
+				ResourceType: "vm",
+				Summary:      MetricSummary{ByMetric: map[string]MetricStats{}},
+				TotalPoints:  0,
+			},
+		},
+	}
+	text := renderFleetSummaryText(t, multi)
+	if !strings.Contains(text, "NO DATA") {
+		t.Errorf("expected 'NO DATA' card on empty fleet data, got:\n%s", text)
+	}
+	if strings.Contains(text, "All systems operating normally") {
+		t.Errorf("HEALTHY message should not appear on empty fleet data, got:\n%s", text)
+	}
+}
+
+// TestCoverPage_PrefersResourceName asserts the cover page and the page
+// header lead with the human-readable resource name when enrichment
+// resolved one. Canonical v6 resource IDs are opaque hashes
+// (vm-7f8b2b6cd98c2089); a client reading a monthly report cannot map
+// those to their machines.
+func TestCoverPage_PrefersResourceName(t *testing.T) {
+	data := &ReportData{
+		Title:        "Named",
+		ResourceType: "vm",
+		ResourceID:   "vm-7f8b2b6cd98c2089",
+		Resource:     &ResourceInfo{Name: "checkout-web-01", Status: "running"},
+		Start:        time.Now().Add(-time.Hour),
+		End:          time.Now(),
+		GeneratedAt:  time.Now(),
+		Metrics:      map[string][]MetricDataPoint{},
+		Summary:      MetricSummary{ByMetric: map[string]MetricStats{}},
+	}
+	text := renderExecutiveSummaryText(t, data)
+	if !strings.Contains(text, "checkout-web-01") {
+		t.Errorf("expected resource name on cover, got:\n%s", text)
+	}
+}
+
 // renderExecutiveSummaryText runs writeExecutiveSummary against a
 // fresh fpdf, extracts text by parsing the resulting PDF, and returns
 // the rendered text content. Used by the UX assertions above.

@@ -914,3 +914,60 @@ func TestBuildVMInventoryRows_UsesCanonicalFieldsAndDiskFallback(t *testing.T) {
 		t.Fatalf("expected disk status reason to be preserved, got %+v", row)
 	}
 }
+
+// TestResolveReportSubject_TranslatesUnifiedIDToMetricsTarget pins the
+// unified-ID → metrics-target translation. The v6 UI addresses report
+// subjects by canonical unified ID while the metrics store is keyed by the
+// platform-native source ID carried in the resource's metricsTarget;
+// without the translation every report rendered "Data Points: 0".
+func TestResolveReportSubject_TranslatesUnifiedIDToMetricsTarget(t *testing.T) {
+	handlers := NewReportingHandlers(nil, nil)
+	snapshot := reportingEnrichmentSnapshot{
+		Resources: []unifiedresources.Resource{
+			{
+				ID:   "vm-7f8b2b6cd98c2089",
+				Name: "checkout-web-01",
+				Type: unifiedresources.ResourceTypeVM,
+				MetricsTarget: &unifiedresources.MetricsTarget{
+					ResourceType: "vm",
+					ResourceID:   "mock-cluster-pve1-100",
+				},
+			},
+		},
+	}
+
+	req := reporting.MetricReportRequest{
+		ResourceType: "vm",
+		ResourceID:   "vm-7f8b2b6cd98c2089",
+	}
+	handlers.resolveReportSubject("default", &req, snapshot)
+
+	if req.MetricsResourceID != "mock-cluster-pve1-100" {
+		t.Fatalf("MetricsResourceID = %q, want mock-cluster-pve1-100", req.MetricsResourceID)
+	}
+	if req.ResourceID != "vm-7f8b2b6cd98c2089" {
+		t.Fatalf("ResourceID must stay canonical, got %q", req.ResourceID)
+	}
+	if req.Resource == nil || req.Resource.Name != "checkout-web-01" {
+		t.Fatalf("expected display name seeded from unified resource, got %+v", req.Resource)
+	}
+
+	// Legacy snapshot models and alerts are keyed by the metrics-target ID;
+	// both ID spaces must match the subject.
+	if !reportSubjectIDMatches(&req, "vm-7f8b2b6cd98c2089") {
+		t.Fatal("expected canonical unified ID to match subject")
+	}
+	if !reportSubjectIDMatches(&req, "mock-cluster-pve1-100") {
+		t.Fatal("expected metrics-target ID to match subject")
+	}
+	if reportSubjectIDMatches(&req, "mock-cluster-pve1-101") {
+		t.Fatal("unrelated ID must not match subject")
+	}
+
+	// Unknown resources pass through untouched.
+	unknown := reporting.MetricReportRequest{ResourceType: "vm", ResourceID: "vm-missing"}
+	handlers.resolveReportSubject("default", &unknown, snapshot)
+	if unknown.MetricsResourceID != "" || unknown.Resource != nil {
+		t.Fatalf("expected no translation for unknown resource, got %+v", unknown)
+	}
+}

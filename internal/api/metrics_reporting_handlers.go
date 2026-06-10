@@ -635,6 +635,7 @@ func sanitizeFilename(s string) string {
 
 // enrichReportRequest populates enrichment data from the monitor state
 func (h *ReportingHandlers) enrichReportRequest(ctx context.Context, orgID string, req *reporting.MetricReportRequest, snapshot reportingEnrichmentSnapshot, start, end time.Time) {
+	h.resolveReportSubject(orgID, req, snapshot)
 	switch req.ResourceType {
 	case "node":
 		h.enrichNodeReport(req, snapshot, start, end)
@@ -645,12 +646,71 @@ func (h *ReportingHandlers) enrichReportRequest(ctx context.Context, orgID strin
 	}
 }
 
+// resolveReportSubject maps the request's canonical unified-resource ID onto
+// the metrics-store ID space and seeds a display name. The v6 UI and API
+// callers address resources by unified ID (`vm-<hash>`), while the metrics
+// store is keyed by each platform's native source ID (the resource's
+// metricsTarget) — without this translation the store query silently
+// returns zero points. Recovery points and Patrol findings stay keyed by
+// the unified ID, so the translation rides MetricsResourceID instead of
+// rewriting ResourceID.
+func (h *ReportingHandlers) resolveReportSubject(orgID string, req *reporting.MetricReportRequest, snapshot reportingEnrichmentSnapshot) {
+	if req == nil {
+		return
+	}
+	for i := range snapshot.Resources {
+		resource := &snapshot.Resources[i]
+		if resource.ID != req.ResourceID {
+			continue
+		}
+		// The registry computes metrics targets on demand; the Resource
+		// structs in the snapshot only carry one when a fixture populated
+		// it explicitly, so ask the tenant monitor first and fall back to
+		// the struct field.
+		var target *unifiedresources.MetricsTarget
+		if h != nil && h.mtMonitor != nil {
+			if monitor, err := h.mtMonitor.GetMonitor(orgID); err == nil && monitor != nil {
+				target = monitor.MetricsTargetForResource(req.ResourceID)
+			}
+		}
+		if target == nil {
+			target = resource.MetricsTarget
+		}
+		if target != nil {
+			if targetID := strings.TrimSpace(target.ResourceID); targetID != "" {
+				req.MetricsResourceID = targetID
+			}
+		}
+		if req.Resource == nil && strings.TrimSpace(resource.Name) != "" {
+			req.Resource = &reporting.ResourceInfo{
+				Name:   resource.Name,
+				Status: string(resource.Status),
+			}
+		}
+		return
+	}
+}
+
+// reportSubjectIDMatches reports whether a legacy state-model ID refers to
+// the report subject. Legacy snapshots (and the alerts raised on them) are
+// keyed by the metrics-target ID, while the request carries the canonical
+// unified ID, so both are accepted.
+func reportSubjectIDMatches(req *reporting.MetricReportRequest, candidateID string) bool {
+	if req == nil || candidateID == "" {
+		return false
+	}
+	if candidateID == req.ResourceID {
+		return true
+	}
+	return req.MetricsResourceID != "" && candidateID == req.MetricsResourceID
+}
+
 // enrichNodeReport adds node-specific data to the report request
 func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest, snapshot reportingEnrichmentSnapshot, start, end time.Time) {
 	// Find the node
 	var node *models.Node
 	for i := range snapshot.Nodes {
-		if snapshot.Nodes[i].ID == req.ResourceID {
+		if reportSubjectIDMatches(req, snapshot.Nodes[i].ID) {
 			node = &snapshot.Nodes[i]
 			break
 		}
@@ -685,7 +745,7 @@ func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest,
 
 	// Find alerts for this node
 	for _, alert := range snapshot.ActiveAlerts {
-		if alert.ResourceID == req.ResourceID || alert.Node == node.Name {
+		if reportSubjectIDMatches(req, alert.ResourceID) || alert.Node == node.Name {
 			req.Alerts = append(req.Alerts, reporting.AlertInfo{
 				Type:      alert.Type,
 				Level:     alert.Level,
@@ -697,7 +757,7 @@ func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest,
 		}
 	}
 	for _, resolved := range snapshot.RecentlyResolved {
-		if (resolved.ResourceID == req.ResourceID || resolved.Node == node.Name) &&
+		if (reportSubjectIDMatches(req, resolved.ResourceID) || resolved.Node == node.Name) &&
 			resolved.ResolvedTime.After(start) && resolved.ResolvedTime.Before(end) {
 			resolvedTime := resolved.ResolvedTime
 			req.Alerts = append(req.Alerts, reporting.AlertInfo{
@@ -789,7 +849,7 @@ func (h *ReportingHandlers) enrichVMReport(ctx context.Context, orgID string, re
 	// Find the VM
 	var vm *models.VM
 	for i := range snapshot.VMs {
-		if snapshot.VMs[i].ID == req.ResourceID {
+		if reportSubjectIDMatches(req, snapshot.VMs[i].ID) {
 			vm = &snapshot.VMs[i]
 			break
 		}
@@ -816,7 +876,7 @@ func (h *ReportingHandlers) enrichVMReport(ctx context.Context, orgID string, re
 
 	// Find alerts for this VM
 	for _, alert := range snapshot.ActiveAlerts {
-		if alert.ResourceID == req.ResourceID {
+		if reportSubjectIDMatches(req, alert.ResourceID) {
 			req.Alerts = append(req.Alerts, reporting.AlertInfo{
 				Type:      alert.Type,
 				Level:     alert.Level,
@@ -828,7 +888,7 @@ func (h *ReportingHandlers) enrichVMReport(ctx context.Context, orgID string, re
 		}
 	}
 	for _, resolved := range snapshot.RecentlyResolved {
-		if resolved.ResourceID == req.ResourceID &&
+		if reportSubjectIDMatches(req, resolved.ResourceID) &&
 			resolved.ResolvedTime.After(start) && resolved.ResolvedTime.Before(end) {
 			resolvedTime := resolved.ResolvedTime
 			req.Alerts = append(req.Alerts, reporting.AlertInfo{
@@ -1022,7 +1082,7 @@ func (h *ReportingHandlers) enrichContainerReport(ctx context.Context, orgID str
 	// Find the container
 	var ct *models.Container
 	for i := range snapshot.Containers {
-		if snapshot.Containers[i].ID == req.ResourceID {
+		if reportSubjectIDMatches(req, snapshot.Containers[i].ID) {
 			ct = &snapshot.Containers[i]
 			break
 		}
@@ -1048,7 +1108,7 @@ func (h *ReportingHandlers) enrichContainerReport(ctx context.Context, orgID str
 
 	// Find alerts for this container
 	for _, alert := range snapshot.ActiveAlerts {
-		if alert.ResourceID == req.ResourceID {
+		if reportSubjectIDMatches(req, alert.ResourceID) {
 			req.Alerts = append(req.Alerts, reporting.AlertInfo{
 				Type:      alert.Type,
 				Level:     alert.Level,
@@ -1060,7 +1120,7 @@ func (h *ReportingHandlers) enrichContainerReport(ctx context.Context, orgID str
 		}
 	}
 	for _, resolved := range snapshot.RecentlyResolved {
-		if resolved.ResourceID == req.ResourceID &&
+		if reportSubjectIDMatches(req, resolved.ResourceID) &&
 			resolved.ResolvedTime.After(start) && resolved.ResolvedTime.Before(end) {
 			resolvedTime := resolved.ResolvedTime
 			req.Alerts = append(req.Alerts, reporting.AlertInfo{

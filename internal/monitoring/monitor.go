@@ -4101,6 +4101,31 @@ func (m *Monitor) GetUnifiedResources() []unifiedresources.Resource {
 	return store.GetAll()
 }
 
+// MetricsTargetForResource resolves the metrics-store target for a canonical
+// unified resource ID via the wired resource store. The metrics store is
+// keyed by platform-native source IDs, and the target is computed on demand
+// by the resource registry rather than persisted on the Resource structs
+// GetUnifiedResources returns. Returns nil when no store is wired, the
+// store cannot resolve targets, or the resource has none.
+func (m *Monitor) MetricsTargetForResource(resourceID string) *unifiedresources.MetricsTarget {
+	if m == nil {
+		return nil
+	}
+
+	m.mu.RLock()
+	store := m.resourceStore
+	m.mu.RUnlock()
+	if store == nil {
+		return nil
+	}
+
+	resolver, ok := store.(MetricsTargetResourceStore)
+	if !ok {
+		return nil
+	}
+	return resolver.MetricsTargetForResource(resourceID)
+}
+
 type monitorUnifiedStateView struct {
 	resources []unifiedresources.Resource
 	readState unifiedresources.ReadState

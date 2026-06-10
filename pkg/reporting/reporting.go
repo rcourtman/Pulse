@@ -23,6 +23,15 @@ type MetricReportRequest struct {
 	Title        string
 	Branding     ReportBranding
 
+	// MetricsResourceID overrides ResourceID for metrics-store queries.
+	// The v6 API addresses resources by canonical unified ID while the
+	// metrics store is keyed by each platform's native source ID (the
+	// resource's metricsTarget); recovery points and Patrol findings stay
+	// keyed by the unified ID. Handlers set this from the resource's
+	// metricsTarget so the store query can match without changing the
+	// identity the rest of the report pipeline sees.
+	MetricsResourceID string
+
 	// Optional enrichment data (populated by handler from monitor state)
 	Resource *ResourceInfo // Details about the resource being reported on
 	Alerts   []AlertInfo   // Active and recently resolved alerts for this resource

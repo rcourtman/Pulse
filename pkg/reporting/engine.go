@@ -291,13 +291,18 @@ func (e *ReportEngine) queryMetrics(req MetricReportRequest) (*ReportData, error
 		storeTypes = []string{canonicalType}
 	}
 
+	queryID := strings.TrimSpace(req.MetricsResourceID)
+	if queryID == "" {
+		queryID = req.ResourceID
+	}
+
 	var metricsMap map[string][]metrics.MetricPoint
 
 	if req.MetricType != "" {
 		// Query specific metric, merging across storage aliases during migrations.
 		var points []metrics.MetricPoint
 		for _, storeType := range storeTypes {
-			aliasPoints, queryErr := store.Query(storeType, req.ResourceID, req.MetricType, req.Start, req.End, 0)
+			aliasPoints, queryErr := store.Query(storeType, queryID, req.MetricType, req.Start, req.End, 0)
 			if queryErr != nil {
 				return nil, queryErr
 			}
@@ -310,7 +315,7 @@ func (e *ReportEngine) queryMetrics(req MetricReportRequest) (*ReportData, error
 		// Query all metrics for the resource, merging across storage aliases.
 		metricsMap = make(map[string][]metrics.MetricPoint)
 		for _, storeType := range storeTypes {
-			aliasMap, queryErr := store.QueryAll(storeType, req.ResourceID, req.Start, req.End, 0)
+			aliasMap, queryErr := store.QueryAll(storeType, queryID, req.Start, req.End, 0)
 			if queryErr != nil {
 				return nil, queryErr
 			}
@@ -322,6 +327,7 @@ func (e *ReportEngine) queryMetrics(req MetricReportRequest) (*ReportData, error
 		log.Warn().
 			Str("resourceType", data.ResourceType).
 			Str("resourceID", req.ResourceID).
+			Str("metricsQueryID", queryID).
 			Str("metricType", req.MetricType).
 			Time("start", req.Start).
 			Time("end", req.End).
