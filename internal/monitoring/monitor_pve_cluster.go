@@ -17,11 +17,12 @@ var detectMonitorPVECluster = defaultDetectMonitorPVECluster
 
 func (m *Monitor) detectClusterMembership(ctx context.Context, instanceName string, instanceCfg *config.PVEInstance, client PVEClientInterface) {
 	_ = client
-	if instanceCfg.IsCluster {
-		return
-	}
 
-	// Check every 5 minutes if this is actually a cluster
+	// Re-check cluster status every 5 minutes. Standalone instances may turn
+	// out to be cluster members (#437). Cluster instances re-discover their
+	// endpoints, because the addresses captured at add time go stale when the
+	// cluster re-IPs - without a refresh Pulse keeps dialing (and displaying)
+	// dead addresses forever (#1493).
 	if time.Since(m.lastClusterCheck[instanceName]) <= 5*time.Minute {
 		return
 	}
@@ -31,6 +32,11 @@ func (m *Monitor) detectClusterMembership(ctx context.Context, instanceName stri
 	clientConfig := config.CreateProxmoxConfig(instanceCfg)
 	isCluster, clusterName, clusterEndpoints := detectMonitorPVECluster(clientConfig, instanceCfg.ClusterEndpoints)
 	if !isCluster || strings.TrimSpace(clusterName) == "" || len(clusterEndpoints) == 0 {
+		return
+	}
+
+	if instanceCfg.IsCluster {
+		m.refreshClusterEndpoints(instanceName, instanceCfg, clusterName, clusterEndpoints)
 		return
 	}
 
@@ -64,6 +70,142 @@ func (m *Monitor) detectClusterMembership(ctx context.Context, instanceName stri
 			log.Warn().Err(err).Msg("failed to persist updated node configuration")
 		}
 	}
+}
+
+// refreshClusterEndpoints reconciles the stored cluster endpoints with what
+// the cluster reports now, keeping user-managed fields (IP overrides, guest
+// URLs, fingerprints - already carried over by the discovery helpers). When
+// node addresses changed, the config is persisted and the failover client is
+// rebuilt so polling stops dialing the dead addresses.
+func (m *Monitor) refreshClusterEndpoints(instanceName string, instanceCfg *config.PVEInstance, clusterName string, discovered []config.ClusterEndpoint) {
+	refreshed := mergeRefreshedClusterEndpoints(instanceCfg.ClusterEndpoints, discovered)
+	if !clusterEndpointIdentityChanged(instanceCfg.ClusterEndpoints, refreshed) {
+		return
+	}
+
+	log.Info().
+		Str("instance", instanceName).
+		Str("cluster", clusterName).
+		Int("endpoints", len(refreshed)).
+		Msg("Cluster node addresses changed since discovery - refreshing stored endpoints")
+
+	instanceCfg.ClusterEndpoints = refreshed
+	if !strings.EqualFold(clusterName, "unknown cluster") {
+		instanceCfg.ClusterName = clusterName
+	}
+
+	updated := false
+	for i := range m.config.PVEInstances {
+		if m.config.PVEInstances[i].Name == instanceName {
+			m.config.PVEInstances[i].ClusterName = instanceCfg.ClusterName
+			m.config.PVEInstances[i].ClusterEndpoints = refreshed
+			updated = true
+			break
+		}
+	}
+	if !updated {
+		return
+	}
+
+	m.normalizePVEConfigState()
+	if m.persistence != nil {
+		if err := m.persistence.SaveNodesConfig(m.config.PVEInstances, m.config.PBSInstances, m.config.PMGInstances); err != nil {
+			log.Warn().Err(err).Msg("failed to persist refreshed cluster endpoints")
+		}
+	}
+
+	m.rebuildPVEClusterClient(instanceName)
+}
+
+// mergeRefreshedClusterEndpoints folds freshly discovered endpoints over the
+// stored set. The cluster status API can omit per-node fields, so discovery
+// never erases information Pulse already had; Pulse-side reachability
+// bookkeeping is carried over because it is recomputed each poll and dropping
+// it would flap the UI to "unknown" after every refresh.
+func mergeRefreshedClusterEndpoints(existing, discovered []config.ClusterEndpoint) []config.ClusterEndpoint {
+	merged := make([]config.ClusterEndpoint, 0, len(discovered))
+	for _, ep := range discovered {
+		for _, old := range existing {
+			if !strings.EqualFold(strings.TrimSpace(old.NodeName), strings.TrimSpace(ep.NodeName)) {
+				continue
+			}
+			if strings.TrimSpace(ep.IP) == "" {
+				ep.IP = old.IP
+			}
+			if strings.TrimSpace(ep.Host) == "" {
+				ep.Host = old.Host
+			}
+			if strings.TrimSpace(ep.NodeID) == "" {
+				ep.NodeID = old.NodeID
+			}
+			ep.PulseReachable = old.PulseReachable
+			ep.LastPulseCheck = old.LastPulseCheck
+			ep.PulseError = old.PulseError
+			break
+		}
+		merged = append(merged, ep)
+	}
+	return merged
+}
+
+// clusterEndpointIdentityChanged reports whether the set of nodes or any
+// node's address changed. Volatile fields (Online, LastSeen, Pulse
+// reachability) are deliberately ignored - they change every poll and are not
+// a reason to rewrite config or rebuild clients.
+func clusterEndpointIdentityChanged(existing, refreshed []config.ClusterEndpoint) bool {
+	if len(existing) != len(refreshed) {
+		return true
+	}
+	byName := make(map[string]config.ClusterEndpoint, len(existing))
+	for _, ep := range existing {
+		byName[strings.ToLower(strings.TrimSpace(ep.NodeName))] = ep
+	}
+	for _, ep := range refreshed {
+		old, ok := byName[strings.ToLower(strings.TrimSpace(ep.NodeName))]
+		if !ok {
+			return true
+		}
+		if strings.TrimSpace(old.IP) != strings.TrimSpace(ep.IP) ||
+			strings.TrimSpace(old.Host) != strings.TrimSpace(ep.Host) ||
+			strings.TrimSpace(old.NodeID) != strings.TrimSpace(ep.NodeID) {
+			return true
+		}
+	}
+	return false
+}
+
+// rebuildPVEClusterClient swaps the failover client for a cluster instance so
+// it picks up the refreshed endpoint list. The in-flight poll keeps using the
+// old client; the next poll cycle gets the new one.
+func (m *Monitor) rebuildPVEClusterClient(instanceName string) {
+	if m.config == nil || m.pveClients == nil {
+		return
+	}
+
+	var pve *config.PVEInstance
+	for i := range m.config.PVEInstances {
+		if m.config.PVEInstances[i].Name == instanceName {
+			pve = &m.config.PVEInstances[i]
+			break
+		}
+	}
+	if pve == nil || !pve.IsCluster || len(pve.ClusterEndpoints) == 0 {
+		return
+	}
+
+	endpoints, endpointFingerprints := m.buildClusterEndpointsForReconnect(*pve)
+	clientConfig := config.CreateProxmoxConfig(pve)
+	clientConfig.Timeout = m.config.ConnectionTimeout
+	clusterClient := proxmox.NewClusterClient(pve.Name, clientConfig, endpoints, endpointFingerprints)
+
+	m.mu.Lock()
+	m.pveClients[instanceName] = clusterClient
+	m.mu.Unlock()
+
+	log.Info().
+		Str("instance", instanceName).
+		Strs("endpoints", endpoints).
+		Msg("Rebuilt cluster client with refreshed endpoints")
 }
 
 func (m *Monitor) updateClusterEndpointStatus(instanceName string, instanceCfg *config.PVEInstance, client PVEClientInterface, modelNodes []models.Node) {
