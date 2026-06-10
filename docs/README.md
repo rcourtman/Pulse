@@ -78,6 +78,7 @@ All other documents are supporting references unless explicitly required for evi
 - **[Mail Gateway](MAIL_GATEWAY.md)** – Proxmox Mail Gateway (PMG) monitoring.
 - **[Auto Updates](AUTO_UPDATE.md)** – One-click updates for supported deployments.
 - **[Multi-Tenant Organizations](MULTI_TENANT.md)** – Isolate infrastructure by organization (Enterprise, opt-in).
+- **[Pulse for MSPs](MSP.md)** – Provider operations guide: per-client isolation, split ingress, alert routing, branded reports.
 - **[Entitlements Overhaul](PULSE_PRO.md)** – Capability-key-based feature gating across Community/Relay/Pro/Cloud, with legacy Pro+ continuity still supported.
 
 ## 💳 Plans (Community / Relay / Pro / Cloud)
