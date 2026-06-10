@@ -134,6 +134,33 @@ func (h *SystemSettingsHandler) SetMultiTenantMonitor(mtm *monitoring.MultiTenan
 	}
 }
 
+// forEachNotificationManager applies fn to the notification manager of every
+// live tenant monitor when multi-tenant iteration is available, falling back
+// to the request's monitor otherwise. Instance-wide notification settings
+// (webhook security allowlist, public URL) must reach every org's manager.
+func (h *SystemSettingsHandler) forEachNotificationManager(r *http.Request, fn func(*notifications.NotificationManager)) {
+	h.stateMu.RLock()
+	mtMonitor := h.mtMonitor
+	h.stateMu.RUnlock()
+
+	type monitorRanger interface {
+		ForEachMonitor(func(*monitoring.Monitor))
+	}
+	if ranger, ok := mtMonitor.(monitorRanger); ok && ranger != nil {
+		ranger.ForEachMonitor(func(m *monitoring.Monitor) {
+			if nm := m.GetNotificationManager(); nm != nil {
+				fn(nm)
+			}
+		})
+		return
+	}
+	if monitor := h.getMonitor(r.Context()); monitor != nil {
+		if nm := monitor.GetNotificationManager(); nm != nil {
+			fn(nm)
+		}
+	}
+}
+
 func (h *SystemSettingsHandler) getMonitor(ctx context.Context) SystemSettingsMonitor {
 	h.stateMu.RLock()
 	mtMonitor := h.mtMonitor
@@ -1045,18 +1072,19 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 			h.getMonitor(r.Context()).DisableTemperatureMonitoring()
 		}
 	}
-	if cidrUpdateRequested && h.getMonitor(r.Context()) != nil {
-		if nm := h.getMonitor(r.Context()).GetNotificationManager(); nm != nil {
+	// Webhook security allowlist and public URL are instance-wide settings:
+	// apply them to every live tenant monitor's notification manager, not
+	// just the org the admin happened to have selected.
+	if cidrUpdateRequested {
+		h.forEachNotificationManager(r, func(nm *notifications.NotificationManager) {
 			nm.ApplyAllowedPrivateCIDRs(settings.WebhookAllowedPrivateCIDRs, parsedCIDRNets)
-		}
+		})
 	}
 	if _, ok := rawRequest["publicURL"]; ok {
-		if h.getMonitor(r.Context()) != nil {
-			if nm := h.getMonitor(r.Context()).GetNotificationManager(); nm != nil {
-				nm.SetPublicURL(settings.PublicURL)
-				log.Info().Str("publicURL", settings.PublicURL).Msg("Updated notification public URL from settings")
-			}
-		}
+		h.forEachNotificationManager(r, func(nm *notifications.NotificationManager) {
+			nm.SetPublicURL(settings.PublicURL)
+		})
+		log.Info().Str("publicURL", settings.PublicURL).Msg("Updated notification public URL from settings")
 	}
 
 	// Reload cached system settings after successful save

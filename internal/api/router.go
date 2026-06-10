@@ -1421,6 +1421,27 @@ func (r *Router) configureMonitorDependencies(m *monitoring.Monitor) {
 		m.SetResourceStore(adapter)
 	}
 
+	// Tenant monitors must inherit the persisted instance-wide notification
+	// settings. System settings are stored globally, so without this a tenant
+	// monitor created after the allowlist was saved (or after a restart)
+	// silently falls back to deny-all-private and per-client private webhook
+	// targets (e.g. MSP Gotify endpoints reached over VPN) fail SSRF
+	// validation with no org-side way to allow them.
+	if r.persistence != nil {
+		if settings, err := r.persistence.LoadSystemSettings(); err == nil && settings != nil {
+			if nm := m.GetNotificationManager(); nm != nil {
+				if settings.WebhookAllowedPrivateCIDRs != "" {
+					if err := nm.UpdateAllowedPrivateCIDRs(settings.WebhookAllowedPrivateCIDRs); err != nil {
+						log.Error().Err(err).Msg("Failed to apply webhook allowed private CIDRs to tenant monitor")
+					}
+				}
+				if settings.PublicURL != "" {
+					nm.SetPublicURL(settings.PublicURL)
+				}
+			}
+		}
+	}
+
 	if len(r.monitorSupplementalRecords) == 0 {
 		return
 	}
@@ -3737,13 +3758,24 @@ func (r *Router) reloadSystemSettings() {
 			r.config.HideLocalLogin = systemSettings.HideLocalLogin
 		}
 
-		// Update webhook allowed private CIDRs in notification manager
+		// Update webhook allowed private CIDRs in notification managers.
+		// The setting is instance-wide, so every tenant monitor's manager
+		// must observe it, not just the default org's.
 		if r.monitor != nil {
 			if nm := r.monitor.GetNotificationManager(); nm != nil {
 				if err := nm.UpdateAllowedPrivateCIDRs(systemSettings.WebhookAllowedPrivateCIDRs); err != nil {
 					log.Error().Err(err).Msg("Failed to update webhook allowed private CIDRs during settings reload")
 				}
 			}
+		}
+		if r.mtMonitor != nil {
+			r.mtMonitor.ForEachMonitor(func(m *monitoring.Monitor) {
+				if nm := m.GetNotificationManager(); nm != nil {
+					if err := nm.UpdateAllowedPrivateCIDRs(systemSettings.WebhookAllowedPrivateCIDRs); err != nil {
+						log.Error().Err(err).Msg("Failed to update webhook allowed private CIDRs on tenant monitor during settings reload")
+					}
+				}
+			})
 		}
 	} else {
 		// On error, use safe defaults

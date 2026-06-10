@@ -84,6 +84,26 @@ func (mtm *MultiTenantMonitor) SetMonitorInitializer(initializer func(*Monitor))
 	}
 }
 
+// ForEachMonitor runs fn against every live tenant monitor. Use it to
+// propagate instance-wide runtime settings (e.g. webhook security allowlist)
+// that every org's monitor must observe.
+func (mtm *MultiTenantMonitor) ForEachMonitor(fn func(*Monitor)) {
+	if mtm == nil || fn == nil {
+		return
+	}
+	mtm.mu.RLock()
+	monitors := make([]*Monitor, 0, len(mtm.monitors))
+	for _, monitor := range mtm.monitors {
+		if monitor != nil {
+			monitors = append(monitors, monitor)
+		}
+	}
+	mtm.mu.RUnlock()
+	for _, monitor := range monitors {
+		fn(monitor)
+	}
+}
+
 // GetMonitor returns the monitor instance for a specific organization.
 // It lazily initializes the monitor if it doesn't exist.
 func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {

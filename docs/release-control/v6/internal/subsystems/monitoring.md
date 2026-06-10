@@ -314,6 +314,14 @@ truth for live infrastructure data.
 
 ## Current State
 
+That same reloadable multi-tenant monitor boundary also owns instance-wide
+notification settings fan-out. `ForEachMonitor` visits every live tenant
+monitor so callers can propagate the webhook security allowlist and public
+URL to each org's notification manager, and tenant monitors inherit those
+persisted settings at creation through the router's monitor initializer, so
+an org created after the settings were saved (or after a restart) observes
+the same allowlist as the default org.
+
 This subsystem now sits under the dedicated core monitoring runtime lane so
 discovery, metrics-history correctness, and platform-specific runtime coverage
 can be governed as first-class product work instead of staying diluted inside

@@ -2281,3 +2281,33 @@ func TestTenantMonitorWiresOrgIdentityIntoNotifications(t *testing.T) {
 		t.Fatalf("TenantIdentity() name after rename = %q, want %q", tenantName, "Acme Corp Renamed")
 	}
 }
+
+// Instance-wide notification settings (webhook security allowlist, public
+// URL) propagate through ForEachMonitor; it must visit every live tenant
+// monitor so no org's manager is left observing stale security settings.
+func TestForEachMonitorVisitsAllTenantMonitors(t *testing.T) {
+	mtm := &MultiTenantMonitor{
+		monitors: map[string]*Monitor{
+			"default": {},
+			"org-a":   {},
+			"org-b":   {},
+			"nil-org": nil,
+		},
+	}
+
+	visited := 0
+	mtm.ForEachMonitor(func(m *Monitor) {
+		if m == nil {
+			t.Fatal("ForEachMonitor must skip nil monitors")
+		}
+		visited++
+	})
+	if visited != 3 {
+		t.Fatalf("ForEachMonitor visited %d monitors, want 3", visited)
+	}
+
+	// Nil receiver and nil callback are safe no-ops.
+	var nilMTM *MultiTenantMonitor
+	nilMTM.ForEachMonitor(func(*Monitor) { t.Fatal("nil receiver must not invoke callback") })
+	mtm.ForEachMonitor(nil)
+}

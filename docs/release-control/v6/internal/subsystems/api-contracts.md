@@ -2024,6 +2024,18 @@ the canonical monitored-system blocked payload.
 
 ## Current State
 
+That same shared API boundary now also owns the default-org token scoping
+rule and instance-wide notification settings propagation. A token explicitly
+bound to one or more organizations is scoped to those organizations only and
+must not implicitly reach the default org's data; authenticated users and
+legacy unbound tokens retain default-org access, and binding `default`
+explicitly still grants it (pinned by
+`TestContract_OrgBoundTokenIsScopedAwayFromDefaultOrg`). System settings that
+shape notification transport (webhook private-target allowlist, public URL)
+are stored instance-wide and must be applied to every live tenant monitor's
+notification manager on update and reload, and inherited by tenant monitors at
+creation, instead of reaching only the request's org or the default monitor.
+
 That same notifications boundary also carries the webhook signing-secret
 payload contract: webhook management payloads may include an optional
 `signingSecret` that enables HMAC-signed deliveries, the list API must mask a

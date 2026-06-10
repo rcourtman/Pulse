@@ -229,6 +229,17 @@ controls as normal product settings.
 
 ## Current State
 
+The multi-tenant authorization boundary now also owns default-org token
+scoping. An org-bound API token is a client-scoped credential: it must be
+denied implicit access to the default org so a token that leaks from a client
+site cannot read the provider's own estate, while authenticated users and
+legacy unbound tokens keep default-org access for compatibility. The webhook
+SSRF allowlist is the related instance-wide security setting: it must
+propagate to every tenant org's notification manager (update, reload, and
+tenant-monitor creation), because an allowlist that only the default org
+observes silently denies legitimate per-client private webhook targets and
+invites per-org security drift.
+
 This subsystem now gives `L14` an explicit governed home for privacy guidance
 and telemetry disclosures instead of leaving those trust surfaces as lane-level
 evidence with no subsystem ownership.

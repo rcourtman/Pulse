@@ -144,4 +144,29 @@ func TestDefaultAuthorizationChecker_CheckAccess(t *testing.T) {
 		assert.False(t, res.Allowed)
 		assert.Equal(t, "No authentication context provided", res.Reason)
 	})
+
+	t.Run("default org access by principal kind", func(t *testing.T) {
+		// Users keep implicit default-org access.
+		res := checker.CheckAccess(nil, "user1", "default")
+		assert.True(t, res.Allowed)
+
+		// Legacy unbound tokens keep implicit default-org access.
+		res = checker.CheckAccess(&config.APITokenRecord{}, "", "default")
+		assert.True(t, res.Allowed)
+
+		// A token bound to a client org must NOT implicitly reach the
+		// default org — binding expresses intent to limit. This is the MSP
+		// isolation boundary: a leaked client-site token cannot read the
+		// provider's own estate.
+		res = checker.CheckAccess(&config.APITokenRecord{OrgID: "client-acme"}, "", "default")
+		assert.False(t, res.Allowed)
+		res = checker.CheckAccess(&config.APITokenRecord{OrgIDs: []string{"client-acme", "client-beta"}}, "", "default")
+		assert.False(t, res.Allowed)
+
+		// Binding "default" explicitly still grants it.
+		res = checker.CheckAccess(&config.APITokenRecord{OrgID: "default"}, "", "default")
+		assert.True(t, res.Allowed)
+		res = checker.CheckAccess(&config.APITokenRecord{OrgIDs: []string{"default", "client-acme"}}, "", "default")
+		assert.True(t, res.Allowed)
+	})
 }

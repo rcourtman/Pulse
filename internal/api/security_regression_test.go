@@ -17,6 +17,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	pulsews "github.com/rcourtman/pulse-go-rewrite/internal/websocket"
@@ -4765,5 +4766,75 @@ func TestRequirePermissionUsesContextUsername(t *testing.T) {
 	}
 	if observedSubject != "real-authenticated-user" {
 		t.Fatalf("RBAC subject must come from context, got %q (header was %q)", observedSubject, "evil-spoofed-user")
+	}
+}
+
+// Instance-wide webhook security settings must reach every tenant org's
+// notification manager: the allowlist is stored globally, so applying it only
+// to the request's org (or only to the default org on reload) leaves other
+// tenants' webhook targets failing SSRF validation with no org-side remedy.
+func TestSystemSettingsWebhookAllowlistPropagatesToAllTenantManagers(t *testing.T) {
+	t.Setenv("PULSE_MULTI_TENANT_ENABLED", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	dataDir := t.TempDir()
+	tokenVal := "allowlist-propagation-token-123.12345678"
+	cfg := &config.Config{
+		DataPath: dataDir,
+		APITokens: []config.APITokenRecord{
+			{ID: "tok-allowlist", Hash: auth.HashAPIToken(tokenVal), Name: "Allowlist Test Token"},
+		},
+	}
+	persistence := config.NewConfigPersistence(dataDir)
+	mtp := config.NewMultiTenantPersistence(dataDir)
+	mtm := monitoring.NewMultiTenantMonitor(cfg, mtp, nil)
+	t.Cleanup(mtm.Stop)
+
+	for _, org := range []struct{ id, name string }{
+		{"org-a", "Org A"},
+		{"org-b", "Org B"},
+	} {
+		if err := mtp.SaveOrganization(&models.Organization{ID: org.id, DisplayName: org.name}); err != nil {
+			t.Fatalf("SaveOrganization(%s): %v", org.id, err)
+		}
+		if _, err := mtm.GetMonitor(org.id); err != nil {
+			t.Fatalf("GetMonitor(%s): %v", org.id, err)
+		}
+	}
+
+	h := NewSystemSettingsHandler(cfg, persistence, nil, mtm, nil, func() {}, nil)
+
+	// Both org managers must reject the private target before the update.
+	for _, orgID := range []string{"org-a", "org-b"} {
+		m, err := mtm.GetMonitor(orgID)
+		if err != nil {
+			t.Fatalf("GetMonitor(%s): %v", orgID, err)
+		}
+		if err := m.GetNotificationManager().ValidateWebhookURL("http://192.0.2.10:9999/hook"); err == nil {
+			t.Fatalf("%s: expected private webhook target to be rejected before allowlist update", orgID)
+		}
+	}
+
+	body := bytes.NewBufferString(`{"webhookAllowedPrivateCIDRs":"192.0.2.0/24"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/system/settings/update", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-Token", tokenVal)
+	rec := httptest.NewRecorder()
+	h.HandleUpdateSystemSettings(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HandleUpdateSystemSettings responded %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Every live tenant manager must observe the new allowlist, regardless of
+	// which org the admin's request context pointed at.
+	for _, orgID := range []string{"org-a", "org-b"} {
+		m, err := mtm.GetMonitor(orgID)
+		if err != nil {
+			t.Fatalf("GetMonitor(%s): %v", orgID, err)
+		}
+		if err := m.GetNotificationManager().ValidateWebhookURL("http://192.0.2.10:9999/hook"); err != nil {
+			t.Fatalf("%s: expected private webhook target to be allowed after allowlist update, got %v", orgID, err)
+		}
 	}
 }

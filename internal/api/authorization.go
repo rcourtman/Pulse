@@ -142,11 +142,27 @@ type AuthorizationResult struct {
 
 // CheckAccess performs a comprehensive authorization check for a request.
 func (c *DefaultAuthorizationChecker) CheckAccess(token *config.APITokenRecord, userID, orgID string) AuthorizationResult {
-	// The default organization is always accessible to any authenticated principal.
-	if orgID == "default" && (token != nil || userID != "") {
-		return AuthorizationResult{
-			Allowed: true,
-			Reason:  "Default organization is accessible to all authenticated users",
+	// The default organization stays accessible to authenticated users and to
+	// legacy unbound tokens. A token explicitly bound to organizations is
+	// scoped to those organizations only — binding expresses intent to limit,
+	// so it must not implicitly reach the default org's data (bind "default"
+	// explicitly to grant that). Without this, a client-bound MSP token that
+	// leaks from a client site could read the provider's own default-org
+	// estate.
+	if orgID == "default" {
+		if token != nil {
+			if token.IsLegacyToken() {
+				return AuthorizationResult{
+					Allowed: true,
+					Reason:  "Default organization is accessible to unbound tokens",
+				}
+			}
+			// Org-bound tokens fall through to the explicit binding check.
+		} else if userID != "" {
+			return AuthorizationResult{
+				Allowed: true,
+				Reason:  "Default organization is accessible to all authenticated users",
+			}
 		}
 	}
 

@@ -1180,6 +1180,11 @@ recovery scope, or a storage/recovery-owned secret source.
 
 ## Current State
 
+Default-org token scoping and notification-settings fan-out on shared
+`internal/api/` handlers are likewise adjacent only: they are
+api-contract/security owned and create no storage, recovery-point, or
+backup-surface semantics.
+
 Notification webhook management changes on shared `internal/api/` handlers are
 likewise adjacent only: the webhook `signingSecret` payload field and its
 masking semantics are notifications/API-contract owned and create no storage,

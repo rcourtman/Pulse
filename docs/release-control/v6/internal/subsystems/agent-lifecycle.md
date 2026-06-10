@@ -1204,6 +1204,13 @@ profile and assignment columns, but embedded table framing must route through
 
 ## Current State
 
+Default-org token scoping and notification-settings fan-out on shared
+`internal/api/` handlers are likewise adjacent only: org-bound token denial
+for the default org and instance-wide webhook allowlist propagation are
+api-contract/security owned and change no install, enrollment, setup-token,
+or fleet command authority. Agent tokens keep routing agents into their bound
+org exactly as before.
+
 Notification webhook management changes on shared `internal/api/` handlers are
 likewise adjacent only: the webhook `signingSecret` payload field, its masked
 list representation, and masked-echo preservation on update are

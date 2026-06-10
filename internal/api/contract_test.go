@@ -15480,3 +15480,28 @@ func TestContract_WebhookSigningSecretMaskedAndPreserved(t *testing.T) {
 	}
 	mockManager.AssertExpectations(t)
 }
+
+// TestContract_OrgBoundTokenIsScopedAwayFromDefaultOrg pins the MSP tenant
+// isolation boundary: a token explicitly bound to client organizations must
+// not implicitly reach the default org's data (a leaked client-site token
+// must not read the provider's own estate), while users and legacy unbound
+// tokens retain default-org access for backward compatibility.
+func TestContract_OrgBoundTokenIsScopedAwayFromDefaultOrg(t *testing.T) {
+	checker := NewAuthorizationChecker(nil)
+
+	if res := checker.CheckAccess(&config.APITokenRecord{OrgID: "client-acme"}, "", "default"); res.Allowed {
+		t.Fatal("org-bound token must not implicitly access the default org")
+	}
+	if res := checker.CheckAccess(&config.APITokenRecord{OrgIDs: []string{"client-a", "client-b"}}, "", "default"); res.Allowed {
+		t.Fatal("multi-org-bound token must not implicitly access the default org")
+	}
+	if res := checker.CheckAccess(&config.APITokenRecord{OrgID: "default"}, "", "default"); !res.Allowed {
+		t.Fatal("token explicitly bound to default must access the default org")
+	}
+	if res := checker.CheckAccess(&config.APITokenRecord{}, "", "default"); !res.Allowed {
+		t.Fatal("legacy unbound token must retain default-org access")
+	}
+	if res := checker.CheckAccess(nil, "admin", "default"); !res.Allowed {
+		t.Fatal("authenticated users must retain default-org access")
+	}
+}

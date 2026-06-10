@@ -627,6 +627,11 @@ shell clickable behind another overlay.
 
 ## Current State
 
+Default-org token scoping and notification-settings fan-out on shared
+`internal/api/router.go` are likewise adjacent only: the tenant-monitor
+settings inheritance hook runs once per tenant-monitor creation and changes
+no chart transport, downsampling, or polling behavior.
+
 The bars / sparklines toggle and its sparkline-range picker on the
 WorkloadsSurface support page-level ownership through four optional
 overrides exposed by

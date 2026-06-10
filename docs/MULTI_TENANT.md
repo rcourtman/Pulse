@@ -129,7 +129,7 @@ Use this for one company operating many internal sites, teams, departments, or e
 To onboard an internal estate:
 
 1. **Create an organization for the estate** (see [Creating an Organization](#creating-an-organization)).
-2. **Create an org-bound API token** with the `agent:report` scope, bound to that estate's organization (`orgId`). A token bound to a single organization automatically routes every agent that uses it into that organization, with no extra header required.
+2. **Create an org-bound API token** with the `agent:report` scope, bound to that estate's organization (`orgId`). A token bound to a single organization automatically routes every agent that uses it into that organization, with no extra header required. Binding also scopes the token: an org-bound token cannot access other organizations, including the default org (bind `default` explicitly if a token genuinely needs it). Legacy unbound tokens keep their default-org access.
 3. **Install the estate's agents** (Proxmox host, Docker, Kubernetes) using that token. Their telemetry lands in the selected organization.
 4. **(Optional) Alias node names per estate.** If two estates both use the default `pve` hostname and you want them visually distinct, set `--hostname` (or the `PULSE_HOSTNAME` environment variable) on the agent, for example `--hostname "acme-pve1"`. See [UNIFIED_AGENT.md](UNIFIED_AGENT.md).
 5. **(Optional) Isolate agent check-in on its own port.** When remote nodes reach the central server across the internet, enable [Split-Port Agent Ingest](CONFIGURATION.md#split-port-agent-ingest-network-isolation) so agents connect on a dedicated, firewalled port that exposes only `/api/agents/*` and never the web UI or management API.

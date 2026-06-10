@@ -88,13 +88,22 @@ the tunnels and keep the management port out of them.
    ```
 
 4. **Cross-tenant isolation (shared-process mode only).** A token bound to one
-   organization must get `403` when targeting another:
+   organization must get `403` when targeting another organization AND when
+   targeting the default org (a leaked client-site token must not read the
+   provider's own estate):
 
    ```bash
    curl -sk -o /dev/null -w '%{http_code}\n' \
      -H "X-API-Token: <org-A token>" -H "X-Pulse-Org-ID: org-b" \
      https://pulse.internal:7655/api/alerts/active  # 403
+   curl -sk -o /dev/null -w '%{http_code}\n' \
+     -H "X-API-Token: <org-A token>" -H "X-Pulse-Org-ID: default" \
+     https://pulse.internal:7655/api/alerts/active  # 403
    ```
+
+   Keep your own monitoring estate in its own organization too, rather than
+   in the default org, so every boundary in the instance is an explicit org
+   boundary.
 
 ## Per-client alert routing
 
@@ -102,6 +111,12 @@ Configure notification destinations inside each client's scope — the client
 runtime in the provider-hosted model, or the organization in shared-process
 mode. A per-client Gotify server, Slack channel, or PSA endpoint only ever
 sees that client's alerts.
+
+Webhook targets on private IPs (a Gotify server reached over a VPN tunnel,
+for example) are blocked by default for SSRF safety. Allow them once in
+**Settings → System → Network → Webhook Security**; the allowlist is
+instance-wide and applies to every organization, including ones created
+later.
 
 Alert webhook payloads carry the firing tenant's identity (`{{.TenantID}}`,
 `{{.TenantName}}`), so a single central PSA endpoint can also route by client.
