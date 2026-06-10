@@ -37,6 +37,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
@@ -53,6 +54,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 	"github.com/rs/zerolog"
+	tmock "github.com/stretchr/testify/mock"
 )
 
 type resourceContractSnapshot struct {
@@ -15368,4 +15370,113 @@ func TestContract_UpdateReadinessIncludesV5AgentMigrationSecurityGuidance(t *tes
 			t.Errorf("update_readiness.go must preserve v5-to-v6 migration security guidance %q", required)
 		}
 	}
+}
+
+func TestContract_MetadataGetPayloadsUseZeroRecordsInsteadOf404(t *testing.T) {
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+	guestHandler := NewGuestMetadataHandler(mtp)
+	dockerHandler := NewDockerMetadataHandler(mtp)
+
+	// An empty store must serialize as an empty JSON object, never null.
+	rec := httptest.NewRecorder()
+	guestHandler.HandleGetMetadata(rec, httptest.NewRequest(http.MethodGet, "/api/guests/metadata", nil))
+	if body := strings.TrimSpace(rec.Body.String()); body != "{}" {
+		t.Fatalf("empty guest metadata map must serialize as {}, got %q", body)
+	}
+	rec = httptest.NewRecorder()
+	dockerHandler.HandleGetMetadata(rec, httptest.NewRequest(http.MethodGet, "/api/docker/metadata", nil))
+	if body := strings.TrimSpace(rec.Body.String()); body != "{}" {
+		t.Fatalf("empty docker metadata map must serialize as {}, got %q", body)
+	}
+
+	// A missing resource must return a zero record carrying the requested ID,
+	// never a 404 — clients rely on this to render empty metadata forms.
+	rec = httptest.NewRecorder()
+	guestHandler.HandleGetMetadata(rec, httptest.NewRequest(http.MethodGet, "/api/guests/metadata/qemu-100", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("missing guest metadata must respond 200, got %d", rec.Code)
+	}
+	var guestMeta config.GuestMetadata
+	if err := json.Unmarshal(rec.Body.Bytes(), &guestMeta); err != nil {
+		t.Fatalf("decode guest metadata response: %v", err)
+	}
+	if guestMeta.ID != "qemu-100" {
+		t.Fatalf("missing guest metadata must echo the requested ID, got %q", guestMeta.ID)
+	}
+
+	rec = httptest.NewRecorder()
+	dockerHandler.HandleGetMetadata(rec, httptest.NewRequest(http.MethodGet, "/api/docker/metadata/host-1", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("missing docker metadata must respond 200, got %d", rec.Code)
+	}
+	var dockerMeta config.DockerMetadata
+	if err := json.Unmarshal(rec.Body.Bytes(), &dockerMeta); err != nil {
+		t.Fatalf("decode docker metadata response: %v", err)
+	}
+	if dockerMeta.ID != "host-1" {
+		t.Fatalf("missing docker metadata must echo the requested ID, got %q", dockerMeta.ID)
+	}
+}
+
+// TestContract_WebhookSigningSecretMaskedAndPreserved pins the webhook
+// management payload contract for delivery signing secrets: the list API must
+// mask a configured secret with the shared redaction placeholder, and an
+// update that echoes the placeholder must preserve the stored secret instead
+// of overwriting it with the literal placeholder string.
+func TestContract_WebhookSigningSecretMaskedAndPreserved(t *testing.T) {
+	mockMonitor := new(MockNotificationMonitor)
+	mockManager := new(MockNotificationManager)
+	mockPersistence := new(MockNotificationConfigPersistence)
+	mockMonitor.On("GetNotificationManager").Return(mockManager)
+	mockMonitor.On("GetConfigPersistence").Return(mockPersistence)
+	h := NewNotificationHandlers(nil, mockMonitor)
+
+	stored := notifications.WebhookConfig{
+		ID:            "wh-signed",
+		Name:          "Signed Webhook",
+		URL:           "https://psa.example.com/inbound/pulse",
+		Enabled:       true,
+		Service:       "generic",
+		SigningSecret: "stored-secret",
+	}
+
+	// List must mask the configured secret.
+	mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{stored}).Once()
+	rec := httptest.NewRecorder()
+	h.GetWebhooks(rec, httptest.NewRequest(http.MethodGet, "/api/notifications/webhooks", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GetWebhooks responded %d", rec.Code)
+	}
+	var listed []map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &listed); err != nil {
+		t.Fatalf("decode webhook list: %v", err)
+	}
+	if len(listed) != 1 {
+		t.Fatalf("expected one webhook in list, got %d", len(listed))
+	}
+	if got := listed[0]["signingSecret"]; got != "***REDACTED***" {
+		t.Fatalf("list signingSecret = %v, want masked placeholder", got)
+	}
+
+	// Update echoing the masked placeholder must preserve the stored secret.
+	mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{stored}).Once()
+	mockManager.On("ValidateWebhookURL", stored.URL).Return(nil).Once()
+	mockManager.On("UpdateWebhook", "wh-signed", tmock.MatchedBy(func(w notifications.WebhookConfig) bool {
+		return w.SigningSecret == "stored-secret"
+	})).Return(nil).Once()
+	mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{stored}).Once()
+	mockPersistence.On("SaveWebhooks", tmock.Anything).Return(nil).Once()
+
+	update := stored
+	update.SigningSecret = "***REDACTED***"
+	body, err := json.Marshal(update)
+	if err != nil {
+		t.Fatalf("marshal update: %v", err)
+	}
+	rec = httptest.NewRecorder()
+	h.UpdateWebhook(rec, httptest.NewRequest(http.MethodPut, "/api/notifications/webhooks/wh-signed", bytes.NewReader(body)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("UpdateWebhook responded %d: %s", rec.Code, rec.Body.String())
+	}
+	mockManager.AssertExpectations(t)
 }

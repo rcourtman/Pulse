@@ -265,7 +265,7 @@ func TestSendWebhookWithRetry_429RetryAfter(t *testing.T) {
 		RetryCount:   2,
 	}
 
-	err := nm.sendWebhookWithRetry(webhook, []byte(`{"test":true}`))
+	err := nm.sendWebhookWithRetry(webhook, []byte(`{"test":true}`), "test-alert:alert")
 	assert.NoError(t, err)
 	assert.Equal(t, 2, attempts)
 }
@@ -298,7 +298,7 @@ func TestSendWebhookWithRetry_InvalidRetryAfterFallsBackToExponentialBackoff(t *
 	}
 
 	start := time.Now()
-	err := nm.sendWebhookWithRetry(webhook, []byte(`{"test":true}`))
+	err := nm.sendWebhookWithRetry(webhook, []byte(`{"test":true}`), "test-alert:alert")
 	elapsed := time.Since(start)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, attempts)
@@ -332,7 +332,7 @@ func TestSendWebhookWithRetry_RetriesRequestTimeoutResponses(t *testing.T) {
 		RetryCount:   1,
 	}
 
-	err := nm.sendWebhookWithRetry(webhook, []byte(`{"test":true}`))
+	err := nm.sendWebhookWithRetry(webhook, []byte(`{"test":true}`), "test-alert:alert")
 	assert.NoError(t, err)
 	assert.Equal(t, 2, attempts)
 }
@@ -361,7 +361,7 @@ func TestSendWebhookWithRetry_RetriesMisdirectedRequestResponses(t *testing.T) {
 		RetryCount:   1,
 	}
 
-	err := nm.sendWebhookWithRetry(webhook, []byte(`{"test":true}`))
+	err := nm.sendWebhookWithRetry(webhook, []byte(`{"test":true}`), "test-alert:alert")
 	assert.NoError(t, err)
 	assert.Equal(t, 2, attempts)
 }
@@ -390,7 +390,7 @@ func TestSendWebhookWithRetry_RetriesLockedResponses(t *testing.T) {
 		RetryCount:   1,
 	}
 
-	err := nm.sendWebhookWithRetry(webhook, []byte(`{"test":true}`))
+	err := nm.sendWebhookWithRetry(webhook, []byte(`{"test":true}`), "test-alert:alert")
 	assert.NoError(t, err)
 	assert.Equal(t, 2, attempts)
 }
@@ -419,7 +419,7 @@ func TestSendWebhookWithRetry_RetriesTooEarlyResponses(t *testing.T) {
 		RetryCount:   1,
 	}
 
-	err := nm.sendWebhookWithRetry(webhook, []byte(`{"test":true}`))
+	err := nm.sendWebhookWithRetry(webhook, []byte(`{"test":true}`), "test-alert:alert")
 	assert.NoError(t, err)
 	assert.Equal(t, 2, attempts)
 }
@@ -453,7 +453,7 @@ func TestSendWebhookWithRetry_StopsOnNonRetryableErrorAfterRetryable(t *testing.
 		RetryCount:   5,
 	}
 
-	err := nm.sendWebhookWithRetry(webhook, []byte(`{"test":true}`))
+	err := nm.sendWebhookWithRetry(webhook, []byte(`{"test":true}`), "test-alert:alert")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "HTTP 400")
 	assert.Contains(t, err.Error(), "after 2 attempts")
@@ -478,7 +478,7 @@ func TestSendWebhookWithRetry_PreservesSuccessfulStatusCodeInHistory(t *testing.
 		RetryCount:   1,
 	}
 
-	err := nm.sendWebhookWithRetry(webhook, []byte(`{"test":true}`))
+	err := nm.sendWebhookWithRetry(webhook, []byte(`{"test":true}`), "test-alert:alert")
 	assert.NoError(t, err)
 
 	history := nm.GetWebhookHistory()
@@ -508,7 +508,7 @@ func TestSendWebhookWithRetry_PreservesFailedStatusCodeInHistory(t *testing.T) {
 		RetryCount:   0,
 	}
 
-	err := nm.sendWebhookWithRetry(webhook, []byte(`{"test":true}`))
+	err := nm.sendWebhookWithRetry(webhook, []byte(`{"test":true}`), "test-alert:alert")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "HTTP 400")
 

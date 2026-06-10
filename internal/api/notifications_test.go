@@ -980,3 +980,55 @@ func TestNotificationHandlers_SetMonitorConcurrentAccess(t *testing.T) {
 	wg.Wait()
 	assert.NotNil(t, h.getMonitor(context.Background()))
 }
+
+// Webhook signing secrets must be masked on list reads and preserved when an
+// update echoes the masked placeholder back.
+func TestNotificationHandlersWebhookSigningSecretLifecycle(t *testing.T) {
+	mockMonitor := new(MockNotificationMonitor)
+	mockManager := new(MockNotificationManager)
+	mockPersistence := new(MockNotificationConfigPersistence)
+	mockMonitor.On("GetNotificationManager").Return(mockManager)
+	mockMonitor.On("GetConfigPersistence").Return(mockPersistence)
+	h := NewNotificationHandlers(nil, mockMonitor)
+
+	stored := notifications.WebhookConfig{
+		ID:            "wh-signed",
+		Name:          "Signed Webhook",
+		URL:           "https://psa.example.com/inbound/pulse",
+		Enabled:       true,
+		Service:       "generic",
+		SigningSecret: "stored-secret",
+	}
+
+	t.Run("GetWebhooksMasksSigningSecret", func(t *testing.T) {
+		mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{stored}).Once()
+		req := httptest.NewRequest("GET", "/api/notifications/webhooks", nil)
+		w := httptest.NewRecorder()
+		h.GetWebhooks(w, req)
+
+		assert.Equal(t, 200, w.Code)
+		var resp []map[string]interface{}
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
+		assert.Equal(t, 1, len(resp))
+		assert.Equal(t, "***REDACTED***", resp[0]["signingSecret"])
+	})
+
+	t.Run("UpdateWebhookPreservesRedactedSigningSecret", func(t *testing.T) {
+		mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{stored}).Once()
+		mockManager.On("ValidateWebhookURL", stored.URL).Return(nil).Once()
+		mockManager.On("UpdateWebhook", "wh-signed", mock.MatchedBy(func(w notifications.WebhookConfig) bool {
+			return w.SigningSecret == "stored-secret"
+		})).Return(nil).Once()
+		mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{stored}).Once()
+		mockPersistence.On("SaveWebhooks", mock.Anything).Return(nil).Once()
+
+		update := stored
+		update.SigningSecret = "***REDACTED***"
+		body, _ := json.Marshal(update)
+		req := httptest.NewRequest("PUT", "/api/notifications/webhooks/wh-signed", bytes.NewReader(body))
+		w := httptest.NewRecorder()
+		h.UpdateWebhook(w, req)
+		assert.Equal(t, 200, w.Code)
+		mockManager.AssertExpectations(t)
+	})
+}

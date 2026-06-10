@@ -215,12 +215,14 @@ func (n *NotificationManager) SendEnhancedWebhook(webhook EnhancedWebhookConfig,
 		return fmt.Errorf("rate limit exceeded for webhook %s", webhook.Name)
 	}
 
+	eventID := webhookEventID(alert.ID, "alert")
+
 	// Send with retry logic
 	if webhook.RetryEnabled {
-		return n.sendWebhookWithRetry(webhook, payload)
+		return n.sendWebhookWithRetry(webhook, payload, eventID)
 	}
 
-	_, err = n.executeEnhancedWebhookRequest(webhook, payload, WebhookTimeout, "Pulse-Monitoring/2.0")
+	_, err = n.executeEnhancedWebhookRequest(webhook, payload, WebhookTimeout, "Pulse-Monitoring/2.0", eventID)
 	if err != nil {
 		return fmt.Errorf("send webhook %q once: %w", webhook.Name, err)
 	}
@@ -303,7 +305,7 @@ func (n *NotificationManager) shouldSendWebhook(webhook EnhancedWebhookConfig, a
 // - Queue retries: up to MaxAttempts (default 3) with exponential backoff
 // Total attempts = RetryCount * MaxAttempts (e.g., 3 * 3 = 9 HTTP calls for a single notification)
 // This ensures delivery even during transient failures at either layer.
-func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig, payload []byte) error {
+func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig, payload []byte, eventID string) error {
 	maxRetries := webhook.RetryCount
 	if maxRetries <= 0 {
 		maxRetries = WebhookDefaultRetries
@@ -364,7 +366,7 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 			}
 		}
 
-		resp, err := n.executeEnhancedWebhookRequest(webhook, payload, WebhookTimeout, "Pulse-Monitoring/2.0")
+		resp, err := n.executeEnhancedWebhookRequest(webhook, payload, WebhookTimeout, "Pulse-Monitoring/2.0", eventID)
 		totalAttempts = attempt + 1
 		lastResp = resp
 		if err == nil {
@@ -538,9 +540,10 @@ func webhookErrorStatusCode(err error) (int, bool) {
 }
 
 // executeEnhancedWebhookRequest sends a single enhanced webhook request and returns response metadata.
-func (n *NotificationManager) executeEnhancedWebhookRequest(webhook EnhancedWebhookConfig, payload []byte, timeout time.Duration, userAgent string) (*webhookHTTPResult, error) {
+func (n *NotificationManager) executeEnhancedWebhookRequest(webhook EnhancedWebhookConfig, payload []byte, timeout time.Duration, userAgent string, eventID string) (*webhookHTTPResult, error) {
 	canonical := canonicalWebhookConfigForEnhanced(webhook)
 	return n.executeWebhookRequest(canonical, payload, webhookRequestOptions{
+		eventID:         eventID,
 		timeout:         timeout,
 		userAgent:       userAgent,
 		responseLogging: webhook.ResponseLogging,
@@ -618,7 +621,7 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 		webhook.Headers["Tags"] = tags
 	}
 
-	result, err := n.executeEnhancedWebhookRequest(webhook, payload, WebhookTestTimeout, "Pulse-Monitoring/2.0 (Test)")
+	result, err := n.executeEnhancedWebhookRequest(webhook, payload, WebhookTestTimeout, "Pulse-Monitoring/2.0 (Test)", webhookEventID(testAlert.ID, "alert"))
 	if err != nil {
 		if result != nil {
 			return result.statusCode, result.body, err

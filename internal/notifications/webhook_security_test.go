@@ -14,7 +14,7 @@ func TestSendWebhookRequestRevalidatesURL(t *testing.T) {
 		URL:  "http://127.0.0.1/webhook",
 	}
 
-	err := nm.sendWebhookRequest(webhook, []byte(`{}`), "alert")
+	err := nm.sendWebhookRequest(webhook, []byte(`{}`), "alert", "test-alert:alert")
 	if err == nil {
 		t.Fatalf("expected validation error for localhost webhook URL")
 	}

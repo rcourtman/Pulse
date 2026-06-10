@@ -323,6 +323,11 @@ func (h *NotificationHandlers) GetWebhooks(w http.ResponseWriter, r *http.Reques
 			whMap["mention"] = webhook.Mention
 		}
 
+		// Signal that a signing secret is configured without revealing it
+		if webhook.SigningSecret != "" {
+			whMap["signingSecret"] = "***REDACTED***"
+		}
+
 		maskedWebhooks[i] = whMap
 	}
 
@@ -441,6 +446,10 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 				if hasRedacted {
 					webhook.CustomFields = existing.CustomFields
 				}
+			}
+			// Preserve the signing secret if the incoming value is redacted
+			if webhook.SigningSecret == "***REDACTED***" {
+				webhook.SigningSecret = existing.SigningSecret
 			}
 			break
 		}

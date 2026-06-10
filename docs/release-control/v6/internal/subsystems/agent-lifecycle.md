@@ -1204,6 +1204,12 @@ profile and assignment columns, but embedded table framing must route through
 
 ## Current State
 
+Notification webhook management changes on shared `internal/api/` handlers are
+likewise adjacent only: the webhook `signingSecret` payload field, its masked
+list representation, and masked-echo preservation on update are
+notifications/API-contract owned and grant no agent install, enrollment,
+setup-token, or fleet command authority.
+
 The router projection-builder (`internal/api/router.go`) that wires
 the operator-state provider into the findings runtime now also
 populates `NeverAutoRemediate` on the projection. The investigation

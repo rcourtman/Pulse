@@ -133,6 +133,17 @@ its tenant block only when an identity is present so single-tenant payloads
 keep their existing shape. PSA/ticket-bridge receivers must get tenant routing
 identity from this payload boundary, not by inferring it from webhook endpoint
 configuration.
+That same transport boundary also owns outbound delivery integrity. A webhook
+config may carry an optional signing secret; when present, every JSON delivery
+through the canonical webhook transport must send `X-Pulse-Timestamp` and
+`X-Pulse-Signature` (`v1=` + hex HMAC-SHA256 over `timestamp + "." + body`),
+computed at the single request-construction choke point and set after custom
+headers so user-provided header maps cannot shadow them. Alert deliveries also
+send `X-Pulse-Event-ID` (`alertID:event`) as the idempotency token; it must be
+stable across both transport-layer and queue-layer retries of the same alert
+occurrence. The management API must mask a configured signing secret on read
+and preserve the stored secret when an update echoes the masked placeholder,
+the same ownership rule it applies to header and custom-field secrets.
 That same transport boundary also owns webhook request normalization. Rendered
 webhook URLs must reject userinfo during validation, and request construction
 must route through a validated absolute URL object instead of reparsing raw URL

@@ -1180,6 +1180,11 @@ recovery scope, or a storage/recovery-owned secret source.
 
 ## Current State
 
+Notification webhook management changes on shared `internal/api/` handlers are
+likewise adjacent only: the webhook `signingSecret` payload field and its
+masking semantics are notifications/API-contract owned and create no storage,
+recovery-point, or backup-surface semantics.
+
 Kubernetes pod metadata decoded by `frontend-modern/src/hooks/useUnifiedResources.ts`
 is shared inventory context for storage/recovery handoffs only; Pod phase,
 container readiness, owner, image, and restart fields do not become protection

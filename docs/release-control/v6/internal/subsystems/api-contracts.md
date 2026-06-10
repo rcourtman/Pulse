@@ -2024,6 +2024,14 @@ the canonical monitored-system blocked payload.
 
 ## Current State
 
+That same notifications boundary also carries the webhook signing-secret
+payload contract: webhook management payloads may include an optional
+`signingSecret` that enables HMAC-signed deliveries, the list API must mask a
+configured secret with the shared redaction placeholder instead of returning
+it, and an update that echoes the masked placeholder must preserve the stored
+secret rather than overwriting it, matching the header and custom-field
+secret-handling rules above.
+
 Proxmox setup bootstrap now includes a non-destructive Audit/Repair path in the
 generated PVE script and existing-source setup guide. That path audits token
 presence, token expiry, Pulse-managed token drift, and expected ACLs, then

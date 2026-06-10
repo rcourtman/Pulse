@@ -3,7 +3,10 @@ package notifications
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -14,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"text/template"
@@ -248,6 +252,7 @@ type webhookHTTPResult struct {
 
 type webhookRequestOptions struct {
 	alertType       string
+	eventID         string // Idempotency token sent as X-Pulse-Event-ID (stable across retries)
 	timeout         time.Duration
 	userAgent       string
 	responseLogging bool
@@ -551,6 +556,11 @@ type WebhookConfig struct {
 	Template     string            `json:"template"` // Custom payload template
 	CustomFields map[string]string `json:"customFields,omitempty"`
 	Mention      string            `json:"mention,omitempty"` // Platform-specific mention (e.g., @everyone, @channel, <@USER_ID>)
+	// SigningSecret enables HMAC-SHA256 signing of outbound deliveries.
+	// When set, requests carry X-Pulse-Timestamp and X-Pulse-Signature
+	// (v1=hex(hmac_sha256(secret, timestamp + "." + body))) so receivers
+	// can verify origin and integrity.
+	SigningSecret string `json:"signingSecret,omitempty"`
 }
 
 // AppriseMode identifies how Pulse should deliver notifications through Apprise.
@@ -2173,7 +2183,7 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 	}
 
 	// Send using same request logic
-	return n.sendWebhookRequest(webhook, jsonData, "grouped")
+	return n.sendWebhookRequest(webhook, jsonData, "grouped", webhookEventID(data.ID, data.Event))
 }
 
 func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertList []*alerts.Alert, resolvedAt time.Time) error {
@@ -2251,7 +2261,7 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 		return fmt.Errorf("render resolved webhook payload: %w", err)
 	}
 
-	return n.sendWebhookRequest(webhook, jsonData, "resolved")
+	return n.sendWebhookRequest(webhook, jsonData, "resolved", webhookEventID(data.ID, data.Event))
 }
 
 // sendResolvedWebhookNtfy sends a resolved webhook formatted for ntfy (plain text + headers)
@@ -2466,6 +2476,17 @@ func (n *NotificationManager) executeWebhookRequest(webhook WebhookConfig, paylo
 		req.Header.Set(key, value)
 	}
 
+	// Delivery integrity headers are set after custom headers so user-provided
+	// header maps cannot shadow them.
+	if opts.eventID != "" {
+		req.Header.Set("X-Pulse-Event-ID", opts.eventID)
+	}
+	if secret := strings.TrimSpace(webhook.SigningSecret); secret != "" {
+		timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+		req.Header.Set("X-Pulse-Timestamp", timestamp)
+		req.Header.Set("X-Pulse-Signature", "v1="+signWebhookPayload(secret, timestamp, payload))
+	}
+
 	client := n.webhookClient
 	if client == nil || (opts.timeout > 0 && opts.timeout != WebhookTimeout) {
 		client = n.createSecureWebhookClient(opts.timeout)
@@ -2512,7 +2533,7 @@ func (n *NotificationManager) executeWebhookRequest(webhook WebhookConfig, paylo
 	return result, nil
 }
 
-func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData []byte, alertType string) error {
+func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData []byte, alertType string, eventID string) error {
 	// Re-validate webhook URL to prevent DNS rebinding attacks
 	if err := n.ValidateWebhookURL(webhook.URL); err != nil {
 		log.Error().
@@ -2534,6 +2555,7 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 
 	result, err := n.executeWebhookRequest(webhook, jsonData, webhookRequestOptions{
 		alertType:       alertType,
+		eventID:         eventID,
 		timeout:         WebhookTimeout,
 		userAgent:       "Pulse-Monitoring/2.0",
 		responseLogging: false,
@@ -2600,6 +2622,30 @@ func isEmptyInterface(value interface{}) bool {
 	default:
 		return false
 	}
+}
+
+// signWebhookPayload computes the hex HMAC-SHA256 of "timestamp.body" with
+// the webhook's signing secret. Binding the timestamp into the MAC lets
+// receivers reject replayed deliveries.
+func signWebhookPayload(secret, timestamp string, payload []byte) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(timestamp))
+	mac.Write([]byte("."))
+	mac.Write(payload)
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// webhookEventID builds the idempotency token for a delivery: stable for the
+// same alert occurrence and event so receivers can deduplicate retries at
+// either retry layer (transport or queue).
+func webhookEventID(alertID, event string) string {
+	if alertID == "" {
+		return ""
+	}
+	if event == "" {
+		event = "alert"
+	}
+	return alertID + ":" + event
 }
 
 // prepareWebhookData prepares data for template rendering
