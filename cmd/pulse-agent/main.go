@@ -1115,46 +1115,49 @@ func resolveTokenInternal(tokenFlag, tokenFileFlag, envToken string, readFile fu
 	return ""
 }
 
-// initDockerWithRetry attempts to initialize the Docker / Podman collection module with exponential backoff.
-// It returns the module when Docker / Podman becomes available, or nil if the context is cancelled.
+// initModuleWithRetry attempts to initialize an agent module with exponential
+// backoff. It returns the module when its backend becomes available, or a zero
+// value if the context is cancelled. component and displayName feed the
+// structured log fields; unavailableMsg is the per-module retry log line.
 // Retry intervals: 5s, 10s, 20s, 40s, 80s, 160s, then cap at 5 minutes.
-func initDockerWithRetry(ctx context.Context, cfg dockeragent.Config, logger *zerolog.Logger) RunnableCloser {
+func initModuleWithRetry[T any](ctx context.Context, logger *zerolog.Logger, component, displayName, unavailableMsg string, connect func() (T, error)) T {
 	const multiplier = 2.0
 
+	var zero T
 	delay := retryInitialDelay
 	attempt := 0
 
 	for {
 		if err := ctx.Err(); err != nil {
-			logger.Info().Msg("Docker retry cancelled, context done")
-			return nil
+			logger.Info().Msg(displayName + " retry cancelled, context done")
+			return zero
 		}
 
-		agent, err := newDockerAgent(cfg)
+		module, err := connect()
 		if err == nil {
 			logger.Info().
-				Str("component", "docker_agent").
+				Str("component", component).
 				Str("action", "retry_connect_succeeded").
 				Int("attempts", attempt+1).
-				Msg("Successfully connected to Docker after retry")
-			return agent
+				Msg("Successfully connected to " + displayName + " after retry")
+			return module
 		}
 
 		attempt++
 		retryLogEvent(logger, attempt).
 			Err(err).
-			Str("component", "docker_agent").
+			Str("component", component).
 			Str("action", "retry_connect_failed").
 			Int("attempt", attempt).
 			Str("next_retry", delay.String()).
-			Msg("Docker not available, will retry")
+			Msg(unavailableMsg)
 
 		if !waitForRetryDelay(ctx, delay) {
 			logger.Info().
-				Str("component", "docker_agent").
+				Str("component", component).
 				Str("action", "retry_cancelled").
-				Msg("Docker retry cancelled, context done")
-			return nil
+				Msg(displayName + " retry cancelled, context done")
+			return zero
 		}
 
 		// Calculate next delay with exponential backoff, capped at retryMaxDelay
@@ -1165,54 +1168,20 @@ func initDockerWithRetry(ctx context.Context, cfg dockeragent.Config, logger *ze
 	}
 }
 
+// initDockerWithRetry attempts to initialize the Docker / Podman collection module with exponential backoff.
+// It returns the module when Docker / Podman becomes available, or nil if the context is cancelled.
+func initDockerWithRetry(ctx context.Context, cfg dockeragent.Config, logger *zerolog.Logger) RunnableCloser {
+	return initModuleWithRetry(ctx, logger, "docker_agent", "Docker", "Docker not available, will retry", func() (RunnableCloser, error) {
+		return newDockerAgent(cfg)
+	})
+}
+
 // initKubernetesWithRetry attempts to initialize the Kubernetes agent with exponential backoff.
 // It returns the agent when Kubernetes becomes available, or nil if the context is cancelled.
-// Retry intervals: 5s, 10s, 20s, 40s, 80s, 160s, then cap at 5 minutes.
 func initKubernetesWithRetry(ctx context.Context, cfg kubernetesagent.Config, logger *zerolog.Logger) Runnable {
-	const multiplier = 2.0
-
-	delay := retryInitialDelay
-	attempt := 0
-
-	for {
-		if err := ctx.Err(); err != nil {
-			logger.Info().Msg("Kubernetes retry cancelled, context done")
-			return nil
-		}
-
-		agent, err := newKubeAgent(cfg)
-		if err == nil {
-			logger.Info().
-				Str("component", "kubernetes_agent").
-				Str("action", "retry_connect_succeeded").
-				Int("attempts", attempt+1).
-				Msg("Successfully connected to Kubernetes after retry")
-			return agent
-		}
-
-		attempt++
-		retryLogEvent(logger, attempt).
-			Err(err).
-			Str("component", "kubernetes_agent").
-			Str("action", "retry_connect_failed").
-			Int("attempt", attempt).
-			Str("next_retry", delay.String()).
-			Msg("Kubernetes still not available, will retry")
-
-		if !waitForRetryDelay(ctx, delay) {
-			logger.Info().
-				Str("component", "kubernetes_agent").
-				Str("action", "retry_cancelled").
-				Msg("Kubernetes retry cancelled, context done")
-			return nil
-		}
-
-		// Calculate next delay with exponential backoff, capped at retryMaxDelay
-		delay = time.Duration(float64(delay) * multiplier)
-		if delay > retryMaxDelay {
-			delay = retryMaxDelay
-		}
-	}
+	return initModuleWithRetry(ctx, logger, "kubernetes_agent", "Kubernetes", "Kubernetes still not available, will retry", func() (Runnable, error) {
+		return newKubeAgent(cfg)
+	})
 }
 
 func waitForRetryDelay(ctx context.Context, delay time.Duration) bool {
