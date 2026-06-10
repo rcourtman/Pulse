@@ -121,18 +121,9 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 			if vm.Status != "running" {
 				continue
 			}
-			m.metricsHistory.AddGuestMetric(vm.ID, "cpu", vm.CPU*100, now)
-			m.metricsHistory.AddGuestMetric(vm.ID, "memory", vm.Memory.Usage, now)
-			if vm.Disk.Usage >= 0 {
-				m.metricsHistory.AddGuestMetric(vm.ID, "disk", vm.Disk.Usage, now)
-			}
-			if m.metricsStore != nil {
-				m.metricsStore.Write("vm", vm.ID, "cpu", vm.CPU*100, now)
-				m.metricsStore.Write("vm", vm.ID, "memory", vm.Memory.Usage, now)
-				if vm.Disk.Usage >= 0 {
-					m.metricsStore.Write("vm", vm.ID, "disk", vm.Disk.Usage, now)
-				}
-			}
+			// IO/network series are not recorded on the traditional polling
+			// path (parity with the historical inline writes).
+			m.recordGuestMetric("vm", vm.ID, vm.CPU*100, vm.Memory.Usage, vm.Disk.Usage, -1, -1, -1, -1, now)
 		}
 	}
 

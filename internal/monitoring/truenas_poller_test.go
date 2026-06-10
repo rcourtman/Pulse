@@ -1764,3 +1764,56 @@ type failingTrueNASFetcher struct {
 func (f failingTrueNASFetcher) Fetch(context.Context) (*truenas.FixtureSnapshot, error) {
 	return nil, f.err
 }
+
+func TestTrueNASPollerDoubleStartKeepsSingleLoop(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+
+	mock := newTrueNASMockServer(t, "nas-double-start")
+	t.Cleanup(mock.Close)
+
+	mtp, persistence := newTestTenantPersistence(t)
+	connection := trueNASInstanceForServer(t, "double-start-conn", mock.URL(), true)
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+		t.Fatalf("SaveTrueNASConfig() error = %v", err)
+	}
+
+	poller := NewTrueNASPoller(mtp, 50*time.Millisecond, nil)
+	poller.Start(context.Background())
+	t.Cleanup(poller.Stop)
+
+	poller.mu.Lock()
+	firstStopped := poller.stopped
+	poller.mu.Unlock()
+	if firstStopped == nil {
+		t.Fatal("expected Start() to install a poller loop")
+	}
+
+	// A second Start while the first loop is live must be a no-op: the
+	// lifecycle slots keep pointing at the original run.
+	poller.Start(context.Background())
+	poller.mu.Lock()
+	secondStopped := poller.stopped
+	poller.mu.Unlock()
+	if secondStopped != firstStopped {
+		t.Fatal("expected double Start() to keep the original poller loop")
+	}
+
+	// Stop must clear the cancel slot so a later Start can run a fresh loop.
+	poller.Stop()
+	poller.mu.Lock()
+	cancelAfterStop := poller.cancel
+	poller.mu.Unlock()
+	if cancelAfterStop != nil {
+		t.Fatal("expected Stop() to clear the lifecycle cancel slot")
+	}
+
+	poller.Start(context.Background())
+	poller.mu.Lock()
+	thirdStopped := poller.stopped
+	poller.mu.Unlock()
+	if thirdStopped == firstStopped {
+		t.Fatal("expected restart to install a fresh poller loop")
+	}
+}

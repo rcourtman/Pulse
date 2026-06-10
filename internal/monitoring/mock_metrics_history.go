@@ -679,16 +679,10 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		recordStorageTimeline(storage.ID, total)
 	}
 
-	log.Debug().Int("count", len(state.PhysicalDisks)).Msg("mock seeding: processing physical disks")
-	for _, disk := range state.PhysicalDisks {
-		if disk.Temperature <= 0 {
-			continue
-		}
-		resourceID := diskMetricsResourceID(disk)
-		if resourceID == "" {
-			continue
-		}
-
+	// seedDiskTelemetry seeds the canonical smart_temp/busy/read/write disk
+	// series for one physical disk, shared by the native and TrueNAS fixture
+	// disk loops below.
+	seedDiskTelemetry := func(resourceID string) {
 		tempSeries := canonicalMetricSeries("disk", resourceID, "smart_temp", seedTimestamps)
 		busySeries := canonicalMetricSeries("disk", resourceID, "disk", seedTimestamps)
 		diskReadSeries := canonicalMetricSeries("disk", resourceID, "diskread", seedTimestamps)
@@ -704,7 +698,18 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			queueMetric("disk", resourceID, "diskread", diskReadSeries[i], ts)
 			queueMetric("disk", resourceID, "diskwrite", diskWriteSeries[i], ts)
 		}
+	}
 
+	log.Debug().Int("count", len(state.PhysicalDisks)).Msg("mock seeding: processing physical disks")
+	for _, disk := range state.PhysicalDisks {
+		if disk.Temperature <= 0 {
+			continue
+		}
+		resourceID := diskMetricsResourceID(disk)
+		if resourceID == "" {
+			continue
+		}
+		seedDiskTelemetry(resourceID)
 	}
 
 	log.Debug().Int("count", len(state.CephClusters)).Msg("mock seeding: processing ceph clusters")
@@ -821,22 +826,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		if resourceID == "" {
 			continue
 		}
-
-		tempSeries := canonicalMetricSeries("disk", resourceID, "smart_temp", seedTimestamps)
-		busySeries := canonicalMetricSeries("disk", resourceID, "disk", seedTimestamps)
-		diskReadSeries := canonicalMetricSeries("disk", resourceID, "diskread", seedTimestamps)
-		diskWriteSeries := canonicalMetricSeries("disk", resourceID, "diskwrite", seedTimestamps)
-		for i := 0; i < numPoints; i++ {
-			ts := seedTimestamps[i]
-			mh.AddDiskMetric(resourceID, "smart_temp", tempSeries[i], ts)
-			mh.AddDiskMetric(resourceID, "disk", busySeries[i], ts)
-			mh.AddDiskMetric(resourceID, "diskread", diskReadSeries[i], ts)
-			mh.AddDiskMetric(resourceID, "diskwrite", diskWriteSeries[i], ts)
-			queueMetric("disk", resourceID, "smart_temp", tempSeries[i], ts)
-			queueMetric("disk", resourceID, "disk", busySeries[i], ts)
-			queueMetric("disk", resourceID, "diskread", diskReadSeries[i], ts)
-			queueMetric("disk", resourceID, "diskwrite", diskWriteSeries[i], ts)
-		}
+		seedDiskTelemetry(resourceID)
 	}
 
 	for _, app := range trueNASFixtures.Apps {

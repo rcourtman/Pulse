@@ -6,7 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
 )
 
 // PollProvider defines how a monitoring backend participates in scheduling and
@@ -123,111 +126,185 @@ func (p pollProviderAdapter) BuildPollTask(m *Monitor, instanceName string) (Pol
 	return p.buildPollTask(m, instanceName)
 }
 
+// pollProviderInstanceConfig is one configured instance entry (name + host)
+// independent of the per-platform config struct type.
+type pollProviderInstanceConfig struct {
+	Name string
+	Host string
+}
+
+// sortedClientNames returns the sorted key set of a provider client map read
+// under the monitor lock.
+func sortedClientNames[C any](m *Monitor, clientsOf func(*Monitor) map[string]C) []string {
+	if m == nil {
+		return nil
+	}
+	m.mu.RLock()
+	clients := clientsOf(m)
+	names := make([]string, 0, len(clients))
+	for name := range clients {
+		names = append(names, name)
+	}
+	m.mu.RUnlock()
+	sort.Strings(names)
+	return names
+}
+
+// describeProviderInstances merges configured instances with live client map
+// entries into the sorted instance info list shared by the PVE/PBS/PMG
+// providers. configInstances and clientsOf are invoked under the monitor lock.
+func describeProviderInstances[C any](
+	m *Monitor,
+	fallbackName string,
+	configInstances func(*Monitor) []pollProviderInstanceConfig,
+	clientsOf func(*Monitor) map[string]C,
+) []PollProviderInstanceInfo {
+	if m == nil {
+		return nil
+	}
+
+	byName := make(map[string]PollProviderInstanceInfo)
+	m.mu.RLock()
+	for _, inst := range configInstances(m) {
+		name := strings.TrimSpace(inst.Name)
+		if name == "" {
+			name = strings.TrimSpace(inst.Host)
+		}
+		if name == "" {
+			name = fallbackName
+		}
+
+		display := strings.TrimSpace(inst.Name)
+		if display == "" {
+			display = name
+		}
+		connection := strings.TrimSpace(inst.Host)
+		byName[name] = PollProviderInstanceInfo{
+			Name:        name,
+			DisplayName: display,
+			Connection:  connection,
+		}
+	}
+	for name := range clientsOf(m) {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" {
+			continue
+		}
+		if _, exists := byName[trimmed]; exists {
+			continue
+		}
+		byName[trimmed] = PollProviderInstanceInfo{Name: trimmed, DisplayName: trimmed}
+	}
+	m.mu.RUnlock()
+
+	if len(byName) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(byName))
+	for name := range byName {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	infos := make([]PollProviderInstanceInfo, 0, len(names))
+	for _, name := range names {
+		infos = append(infos, byName[name])
+	}
+	return infos
+}
+
+// providerConnectionStatuses publishes per-instance connection booleans keyed
+// by "<keyPrefix><name>" for configured instances, shared by the PVE/PBS/PMG
+// providers. configInstances and clientsOf are invoked under the monitor lock.
+func providerConnectionStatuses[C comparable](
+	m *Monitor,
+	instanceType InstanceType,
+	keyPrefix string,
+	configInstances func(*Monitor) []pollProviderInstanceConfig,
+	clientsOf func(*Monitor) map[string]C,
+) map[string]bool {
+	if m == nil {
+		return nil
+	}
+
+	var zero C
+	statuses := make(map[string]bool)
+	m.mu.RLock()
+	clients := clientsOf(m)
+	for _, inst := range configInstances(m) {
+		name := strings.TrimSpace(inst.Name)
+		if name == "" {
+			name = strings.TrimSpace(inst.Host)
+		}
+		if name == "" {
+			continue
+		}
+		key := keyPrefix + name
+		connected := false
+		if client, exists := clients[name]; exists && client != zero {
+			if m.state != nil && m.state.ConnectionHealth != nil {
+				stateKey := m.connectionHealthStateKey(instanceType, name)
+				connected = m.state.ConnectionHealth[stateKey]
+			} else {
+				connected = true
+			}
+		}
+		statuses[key] = connected
+	}
+	m.mu.RUnlock()
+	if len(statuses) == 0 {
+		return nil
+	}
+	return statuses
+}
+
+func pveInstanceConfigs(m *Monitor) []pollProviderInstanceConfig {
+	if m.config == nil {
+		return nil
+	}
+	out := make([]pollProviderInstanceConfig, 0, len(m.config.PVEInstances))
+	for _, inst := range m.config.PVEInstances {
+		out = append(out, pollProviderInstanceConfig{Name: inst.Name, Host: inst.Host})
+	}
+	return out
+}
+
+func pbsInstanceConfigs(m *Monitor) []pollProviderInstanceConfig {
+	if m.config == nil {
+		return nil
+	}
+	out := make([]pollProviderInstanceConfig, 0, len(m.config.PBSInstances))
+	for _, inst := range m.config.PBSInstances {
+		out = append(out, pollProviderInstanceConfig{Name: inst.Name, Host: inst.Host})
+	}
+	return out
+}
+
+func pmgInstanceConfigs(m *Monitor) []pollProviderInstanceConfig {
+	if m.config == nil {
+		return nil
+	}
+	out := make([]pollProviderInstanceConfig, 0, len(m.config.PMGInstances))
+	for _, inst := range m.config.PMGInstances {
+		out = append(out, pollProviderInstanceConfig{Name: inst.Name, Host: inst.Host})
+	}
+	return out
+}
+
+func pveClientMap(m *Monitor) map[string]PVEClientInterface { return m.pveClients }
+func pbsClientMap(m *Monitor) map[string]*pbs.Client        { return m.pbsClients }
+func pmgClientMap(m *Monitor) map[string]*pmg.Client        { return m.pmgClients }
+
 func newPVEPollProvider() PollProvider {
 	return pollProviderAdapter{
 		instanceType: InstanceTypePVE,
 		listInstances: func(m *Monitor) []string {
-			if m == nil {
-				return nil
-			}
-			m.mu.RLock()
-			names := make([]string, 0, len(m.pveClients))
-			for name := range m.pveClients {
-				names = append(names, name)
-			}
-			m.mu.RUnlock()
-			sort.Strings(names)
-			return names
+			return sortedClientNames(m, pveClientMap)
 		},
 		describeInstances: func(m *Monitor) []PollProviderInstanceInfo {
-			if m == nil {
-				return nil
-			}
-
-			byName := make(map[string]PollProviderInstanceInfo)
-			m.mu.RLock()
-			if m.config != nil {
-				for _, inst := range m.config.PVEInstances {
-					name := strings.TrimSpace(inst.Name)
-					if name == "" {
-						name = strings.TrimSpace(inst.Host)
-					}
-					if name == "" {
-						name = "pve-instance"
-					}
-
-					display := strings.TrimSpace(inst.Name)
-					if display == "" {
-						display = name
-					}
-					connection := strings.TrimSpace(inst.Host)
-					byName[name] = PollProviderInstanceInfo{
-						Name:        name,
-						DisplayName: display,
-						Connection:  connection,
-					}
-				}
-			}
-			for name := range m.pveClients {
-				trimmed := strings.TrimSpace(name)
-				if trimmed == "" {
-					continue
-				}
-				if _, exists := byName[trimmed]; exists {
-					continue
-				}
-				byName[trimmed] = PollProviderInstanceInfo{Name: trimmed, DisplayName: trimmed}
-			}
-			m.mu.RUnlock()
-
-			if len(byName) == 0 {
-				return nil
-			}
-			names := make([]string, 0, len(byName))
-			for name := range byName {
-				names = append(names, name)
-			}
-			sort.Strings(names)
-			infos := make([]PollProviderInstanceInfo, 0, len(names))
-			for _, name := range names {
-				infos = append(infos, byName[name])
-			}
-			return infos
+			return describeProviderInstances(m, "pve-instance", pveInstanceConfigs, pveClientMap)
 		},
 		connectionStatus: func(m *Monitor) map[string]bool {
-			if m == nil {
-				return nil
-			}
-
-			statuses := make(map[string]bool)
-			m.mu.RLock()
-			if m.config != nil {
-				for _, inst := range m.config.PVEInstances {
-					name := strings.TrimSpace(inst.Name)
-					if name == "" {
-						name = strings.TrimSpace(inst.Host)
-					}
-					if name == "" {
-						continue
-					}
-					key := "pve-" + name
-					connected := false
-					if client, exists := m.pveClients[name]; exists && client != nil {
-						if m.state != nil && m.state.ConnectionHealth != nil {
-							stateKey := m.connectionHealthStateKey(InstanceTypePVE, name)
-							connected = m.state.ConnectionHealth[stateKey]
-						} else {
-							connected = true
-						}
-					}
-					statuses[key] = connected
-				}
-			}
-			m.mu.RUnlock()
-			if len(statuses) == 0 {
-				return nil
-			}
-			return statuses
+			return providerConnectionStatuses(m, InstanceTypePVE, "pve-", pveInstanceConfigs, pveClientMap)
 		},
 		connectionKey: func(_ *Monitor, instanceName string) string {
 			return strings.TrimSpace(instanceName)
@@ -255,125 +332,55 @@ func newPVEPollProvider() PollProvider {
 	}
 }
 
-func newPBSPollProvider() PollProvider {
+// prefixedPollProviderSpec captures the bits that differ between the PBS and
+// PMG providers, which otherwise share the full adapter wiring. prefix
+// ("pbs-", "pmg-") namespaces connection status keys and connection health
+// keys, and derives the "<prefix>instance" fallback display name.
+type prefixedPollProviderSpec[C comparable] struct {
+	instanceType    InstanceType
+	prefix          string
+	configInstances func(*Monitor) []pollProviderInstanceConfig
+	clients         func(*Monitor) map[string]C
+	pollingInterval func(*config.Config) time.Duration
+	buildPollTask   func(*Monitor, string) (PollTask, error)
+}
+
+func newPrefixedPollProvider[C comparable](spec prefixedPollProviderSpec[C]) PollProvider {
 	return pollProviderAdapter{
-		instanceType: InstanceTypePBS,
+		instanceType: spec.instanceType,
 		listInstances: func(m *Monitor) []string {
-			if m == nil {
-				return nil
-			}
-			m.mu.RLock()
-			names := make([]string, 0, len(m.pbsClients))
-			for name := range m.pbsClients {
-				names = append(names, name)
-			}
-			m.mu.RUnlock()
-			sort.Strings(names)
-			return names
+			return sortedClientNames(m, spec.clients)
 		},
 		describeInstances: func(m *Monitor) []PollProviderInstanceInfo {
-			if m == nil {
-				return nil
-			}
-
-			byName := make(map[string]PollProviderInstanceInfo)
-			m.mu.RLock()
-			if m.config != nil {
-				for _, inst := range m.config.PBSInstances {
-					name := strings.TrimSpace(inst.Name)
-					if name == "" {
-						name = strings.TrimSpace(inst.Host)
-					}
-					if name == "" {
-						name = "pbs-instance"
-					}
-
-					display := strings.TrimSpace(inst.Name)
-					if display == "" {
-						display = name
-					}
-					connection := strings.TrimSpace(inst.Host)
-					byName[name] = PollProviderInstanceInfo{
-						Name:        name,
-						DisplayName: display,
-						Connection:  connection,
-					}
-				}
-			}
-			for name := range m.pbsClients {
-				trimmed := strings.TrimSpace(name)
-				if trimmed == "" {
-					continue
-				}
-				if _, exists := byName[trimmed]; exists {
-					continue
-				}
-				byName[trimmed] = PollProviderInstanceInfo{Name: trimmed, DisplayName: trimmed}
-			}
-			m.mu.RUnlock()
-
-			if len(byName) == 0 {
-				return nil
-			}
-			names := make([]string, 0, len(byName))
-			for name := range byName {
-				names = append(names, name)
-			}
-			sort.Strings(names)
-			infos := make([]PollProviderInstanceInfo, 0, len(names))
-			for _, name := range names {
-				infos = append(infos, byName[name])
-			}
-			return infos
+			return describeProviderInstances(m, spec.prefix+"instance", spec.configInstances, spec.clients)
 		},
 		connectionStatus: func(m *Monitor) map[string]bool {
-			if m == nil {
-				return nil
-			}
-
-			statuses := make(map[string]bool)
-			m.mu.RLock()
-			if m.config != nil {
-				for _, inst := range m.config.PBSInstances {
-					name := strings.TrimSpace(inst.Name)
-					if name == "" {
-						name = strings.TrimSpace(inst.Host)
-					}
-					if name == "" {
-						continue
-					}
-					key := "pbs-" + name
-					connected := false
-					if client, exists := m.pbsClients[name]; exists && client != nil {
-						if m.state != nil && m.state.ConnectionHealth != nil {
-							stateKey := m.connectionHealthStateKey(InstanceTypePBS, name)
-							connected = m.state.ConnectionHealth[stateKey]
-						} else {
-							connected = true
-						}
-					}
-					statuses[key] = connected
-				}
-			}
-			m.mu.RUnlock()
-			if len(statuses) == 0 {
-				return nil
-			}
-			return statuses
+			return providerConnectionStatuses(m, spec.instanceType, spec.prefix, spec.configInstances, spec.clients)
 		},
 		connectionKey: func(_ *Monitor, instanceName string) string {
 			trimmed := strings.TrimSpace(instanceName)
 			if trimmed == "" {
 				return ""
 			}
-			return "pbs-" + trimmed
+			return spec.prefix + trimmed
 		},
 		baseInterval: func(m *Monitor) time.Duration {
 			if m == nil || m.config == nil {
 				return 0
 			}
-			return clampInterval(m.config.PBSPollingInterval, 10*time.Second, time.Hour)
+			return clampInterval(spec.pollingInterval(m.config), 10*time.Second, time.Hour)
 		},
+		buildPollTask: spec.buildPollTask,
+	}
+}
+
+func newPBSPollProvider() PollProvider {
+	return newPrefixedPollProvider(prefixedPollProviderSpec[*pbs.Client]{
+		instanceType:    InstanceTypePBS,
+		prefix:          "pbs-",
+		configInstances: pbsInstanceConfigs,
+		clients:         pbsClientMap,
+		pollingInterval: func(cfg *config.Config) time.Duration { return cfg.PBSPollingInterval },
 		buildPollTask: func(m *Monitor, instanceName string) (PollTask, error) {
 			if m == nil {
 				return PollTask{}, fmt.Errorf("monitor is nil")
@@ -388,128 +395,16 @@ func newPBSPollProvider() PollProvider {
 				PBSClient:    client,
 			}, nil
 		},
-	}
+	})
 }
 
 func newPMGPollProvider() PollProvider {
-	return pollProviderAdapter{
-		instanceType: InstanceTypePMG,
-		listInstances: func(m *Monitor) []string {
-			if m == nil {
-				return nil
-			}
-			m.mu.RLock()
-			names := make([]string, 0, len(m.pmgClients))
-			for name := range m.pmgClients {
-				names = append(names, name)
-			}
-			m.mu.RUnlock()
-			sort.Strings(names)
-			return names
-		},
-		describeInstances: func(m *Monitor) []PollProviderInstanceInfo {
-			if m == nil {
-				return nil
-			}
-
-			byName := make(map[string]PollProviderInstanceInfo)
-			m.mu.RLock()
-			if m.config != nil {
-				for _, inst := range m.config.PMGInstances {
-					name := strings.TrimSpace(inst.Name)
-					if name == "" {
-						name = strings.TrimSpace(inst.Host)
-					}
-					if name == "" {
-						name = "pmg-instance"
-					}
-
-					display := strings.TrimSpace(inst.Name)
-					if display == "" {
-						display = name
-					}
-					connection := strings.TrimSpace(inst.Host)
-					byName[name] = PollProviderInstanceInfo{
-						Name:        name,
-						DisplayName: display,
-						Connection:  connection,
-					}
-				}
-			}
-			for name := range m.pmgClients {
-				trimmed := strings.TrimSpace(name)
-				if trimmed == "" {
-					continue
-				}
-				if _, exists := byName[trimmed]; exists {
-					continue
-				}
-				byName[trimmed] = PollProviderInstanceInfo{Name: trimmed, DisplayName: trimmed}
-			}
-			m.mu.RUnlock()
-
-			if len(byName) == 0 {
-				return nil
-			}
-			names := make([]string, 0, len(byName))
-			for name := range byName {
-				names = append(names, name)
-			}
-			sort.Strings(names)
-			infos := make([]PollProviderInstanceInfo, 0, len(names))
-			for _, name := range names {
-				infos = append(infos, byName[name])
-			}
-			return infos
-		},
-		connectionStatus: func(m *Monitor) map[string]bool {
-			if m == nil {
-				return nil
-			}
-
-			statuses := make(map[string]bool)
-			m.mu.RLock()
-			if m.config != nil {
-				for _, inst := range m.config.PMGInstances {
-					name := strings.TrimSpace(inst.Name)
-					if name == "" {
-						name = strings.TrimSpace(inst.Host)
-					}
-					if name == "" {
-						continue
-					}
-					key := "pmg-" + name
-					connected := false
-					if client, exists := m.pmgClients[name]; exists && client != nil {
-						if m.state != nil && m.state.ConnectionHealth != nil {
-							stateKey := m.connectionHealthStateKey(InstanceTypePMG, name)
-							connected = m.state.ConnectionHealth[stateKey]
-						} else {
-							connected = true
-						}
-					}
-					statuses[key] = connected
-				}
-			}
-			m.mu.RUnlock()
-			if len(statuses) == 0 {
-				return nil
-			}
-			return statuses
-		},
-		connectionKey: func(_ *Monitor, instanceName string) string {
-			trimmed := strings.TrimSpace(instanceName)
-			if trimmed == "" {
-				return ""
-			}
-			return "pmg-" + trimmed
-		},
-		baseInterval: func(m *Monitor) time.Duration {
-			if m == nil || m.config == nil {
-				return 0
-			}
-			return clampInterval(m.config.PMGPollingInterval, 10*time.Second, time.Hour)
-		},
+	return newPrefixedPollProvider(prefixedPollProviderSpec[*pmg.Client]{
+		instanceType:    InstanceTypePMG,
+		prefix:          "pmg-",
+		configInstances: pmgInstanceConfigs,
+		clients:         pmgClientMap,
+		pollingInterval: func(cfg *config.Config) time.Duration { return cfg.PMGPollingInterval },
 		buildPollTask: func(m *Monitor, instanceName string) (PollTask, error) {
 			if m == nil {
 				return PollTask{}, fmt.Errorf("monitor is nil")
@@ -524,7 +419,7 @@ func newPMGPollProvider() PollProvider {
 				PMGClient:    client,
 			}, nil
 		},
-	}
+	})
 }
 
 // RegisterPollProvider registers or replaces a polling provider for an

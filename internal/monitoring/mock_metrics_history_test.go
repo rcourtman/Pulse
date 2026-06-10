@@ -1754,3 +1754,44 @@ func TestRecordMockStateToMetricsHistory_UsesCanonicalMetricModelForPlatformFixt
 		t.Fatalf("expected VMware datastore usage live tick to use canonical metric model: got=%f want=%f", got, want)
 	}
 }
+
+func TestSeedMockMetricsHistory_DiskTelemetryParityAcrossNativeAndTrueNAS(t *testing.T) {
+	now := time.Now()
+	seedDuration := boundedMockHistoryProofWindow
+
+	state := models.StateSnapshot{
+		PhysicalDisks: []models.PhysicalDisk{
+			{
+				ID:          "disk-parity",
+				Instance:    "pve1",
+				Node:        "node1",
+				DevPath:     "/dev/nvme0n1",
+				Serial:      "SERIAL-PARITY",
+				Temperature: 41,
+			},
+		},
+	}
+	fixtures := truenas.DefaultFixtures()
+	if len(fixtures.Disks) == 0 {
+		t.Fatal("expected canonical truenas disk fixtures")
+	}
+
+	mh := NewMetricsHistory(1000, seedDuration)
+	seedMockMetricsHistory(mh, nil, mock.FixtureGraph{
+		State: state,
+		PlatformFixtures: mock.PlatformFixtures{
+			TrueNAS: fixtures,
+		},
+	}, now, seedDuration, time.Minute)
+
+	// Native physical disks and TrueNAS fixture disks share one seeding
+	// helper, so both must carry the same four telemetry series.
+	for _, metric := range []string{"smart_temp", "disk", "diskread", "diskwrite"} {
+		if len(mh.GetDiskMetrics("SERIAL-PARITY", metric, seedDuration)) == 0 {
+			t.Fatalf("expected native disk %q series to be seeded", metric)
+		}
+		if len(mh.GetDiskMetrics(fixtures.Disks[0].Serial, metric, seedDuration)) == 0 {
+			t.Fatalf("expected TrueNAS disk %q series to be seeded", metric)
+		}
+	}
+}

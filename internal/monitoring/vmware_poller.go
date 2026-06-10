@@ -146,52 +146,7 @@ func (p *VMwarePoller) Start(ctx context.Context) {
 	if p == nil || !vmware.IsFeatureEnabled() {
 		return
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	p.mu.Lock()
-	if p.cancel != nil {
-		p.mu.Unlock()
-		return
-	}
-
-	runCtx, cancel := context.WithCancel(ctx)
-	p.cancel = cancel
-	p.stopped = make(chan struct{})
-	stopped := p.stopped
-	p.mu.Unlock()
-
-	go func() {
-		defer close(stopped)
-		defer func() {
-			p.mu.Lock()
-			if p.stopped == stopped {
-				p.cancel = nil
-			}
-			p.mu.Unlock()
-		}()
-
-		p.syncConnections()
-		p.pollAll(runCtx)
-		for {
-			wait := p.nextWaitDuration(time.Now())
-			timer := time.NewTimer(wait)
-			select {
-			case <-runCtx.Done():
-				if !timer.Stop() {
-					select {
-					case <-timer.C:
-					default:
-					}
-				}
-				return
-			case <-timer.C:
-				p.syncConnections()
-				p.pollAll(runCtx)
-			}
-		}
-	}()
+	startPollerLoop(ctx, &p.mu, &p.cancel, &p.stopped, p.syncConnections, p.pollAll, p.nextWaitDuration)
 }
 
 // Stop requests poller shutdown and waits up to five seconds for exit.
@@ -666,33 +621,15 @@ func (p *VMwarePoller) activeConnectionConfigsForOrg(orgID string) map[string]co
 	p.mu.Lock()
 	cached := cloneVMwareConnectionConfigMap(p.configsByOrg[orgID])
 	p.mu.Unlock()
-	if len(cached) > 0 || p.multiTenant == nil {
-		return cached
-	}
-
-	persistence, err := p.multiTenant.GetPersistence(orgID)
-	if err != nil || persistence == nil {
-		return cached
-	}
-	instances, err := persistence.LoadVMwareConfig()
-	if err != nil {
-		return cached
-	}
-
-	active := make(map[string]config.VMwareVCenterInstance)
-	for i := range instances {
-		instance := instances[i]
-		instance.ApplyDefaults()
-		if !instance.Enabled {
-			continue
-		}
-		connID := strings.TrimSpace(instance.ID)
-		if connID == "" {
-			continue
-		}
-		active[connID] = instance
-	}
-	return active
+	return loadActiveInstanceConfigs(
+		cached,
+		p.multiTenant,
+		orgID,
+		(*config.ConfigPersistence).LoadVMwareConfig,
+		func(instance *config.VMwareVCenterInstance) { instance.ApplyDefaults() },
+		func(instance config.VMwareVCenterInstance) bool { return instance.Enabled },
+		func(instance config.VMwareVCenterInstance) string { return instance.ID },
+	)
 }
 
 func cloneVMwareConnectionConfigMap(

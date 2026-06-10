@@ -333,19 +333,9 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 			if ct.Status != "running" {
 				continue
 			}
-			m.metricsHistory.AddGuestMetric(ct.ID, "cpu", ct.CPU*100, now)
-			m.metricsHistory.AddGuestMetric(ct.ID, "memory", ct.Memory.Usage, now)
-			if ct.Disk.Usage >= 0 {
-				m.metricsHistory.AddGuestMetric(ct.ID, "disk", ct.Disk.Usage, now)
-			}
-			// Also write to persistent store
-			if m.metricsStore != nil {
-				m.metricsStore.Write("container", ct.ID, "cpu", ct.CPU*100, now)
-				m.metricsStore.Write("container", ct.ID, "memory", ct.Memory.Usage, now)
-				if ct.Disk.Usage >= 0 {
-					m.metricsStore.Write("container", ct.ID, "disk", ct.Disk.Usage, now)
-				}
-			}
+			// IO/network series are not recorded on the traditional polling
+			// path (parity with the historical inline writes).
+			m.recordGuestMetric("container", ct.ID, ct.CPU*100, ct.Memory.Usage, ct.Disk.Usage, -1, -1, -1, -1, now)
 		}
 	}
 

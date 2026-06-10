@@ -73,6 +73,7 @@ truth for live infrastructure data.
 49. `internal/models/ceph_cluster_identity.go`
 50. `internal/truenas/types.go`
 51. `internal/monitoring/monitor_alert_sync.go`
+52. `internal/monitoring/platform_poller_shared.go`
 
 ## Shared Boundaries
 
@@ -81,6 +82,25 @@ truth for live infrastructure data.
 ## Extension Points
 
 1. Add pollers/providers and discovery-provider coordination through `internal/monitoring/poll_providers.go` and `internal/monitoring/monitor_discovery_helpers.go`
+   The PVE/PBS/PMG providers share one wiring layer inside
+   `internal/monitoring/poll_providers.go`: instance listing, instance
+   description, and connection-status publication go through the generic
+   `sortedClientNames` / `describeProviderInstances` /
+   `providerConnectionStatuses` helpers, and the prefixed PBS/PMG providers
+   are built by `newPrefixedPollProvider` from a `prefixedPollProviderSpec`.
+   New scheduler-backed platform providers extend those helpers instead of
+   re-rolling per-platform copies of the same loops.
+   Periodic out-of-scheduler platform pollers (TrueNAS, VMware) share their
+   lifecycle and config-resolution scaffold through
+   `internal/monitoring/platform_poller_shared.go`: `startPollerLoop` owns
+   the double-start guard, stopped-channel handshake, and sync+poll cadence,
+   and `loadActiveInstanceConfigs` owns the "enabled instances keyed by
+   trimmed connection ID with defaults applied" active-connection policy. A
+   new platform poller of this family must reuse both rather than copying
+   the TrueNAS/VMware loop, and traditional PVE guest polling records
+   per-guest series through the canonical `recordGuestMetric` helper in
+   `internal/monitoring/monitor_pve_guest_helpers.go` instead of inline
+   metric writes.
 2. Add metrics capture or history-retention behavior through `internal/monitoring/metrics.go` and `internal/monitoring/metrics_history.go`
 3. Add typed read access through `internal/unifiedresources/views.go`
 4. Add unified supplemental ingest through `internal/monitoring/poll_providers.go`

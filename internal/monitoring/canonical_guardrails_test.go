@@ -1728,14 +1728,14 @@ func TestMockNativePollersDeferToCanonicalMockSampler(t *testing.T) {
 			file: "monitor_polling_vm.go",
 			snippets: []string{
 				"if !shouldSkipNativeMockStateMetricWrites() {",
-				`m.metricsStore.Write("vm", vm.ID, "cpu", vm.CPU*100, now)`,
+				`m.recordGuestMetric("vm", vm.ID, vm.CPU*100, vm.Memory.Usage, vm.Disk.Usage, -1, -1, -1, -1, now)`,
 			},
 		},
 		{
 			file: "monitor_polling_containers.go",
 			snippets: []string{
 				"if !shouldSkipNativeMockStateMetricWrites() {",
-				`m.metricsStore.Write("container", ct.ID, "cpu", ct.CPU*100, now)`,
+				`m.recordGuestMetric("container", ct.ID, ct.CPU*100, ct.Memory.Usage, ct.Disk.Usage, -1, -1, -1, -1, now)`,
 			},
 		},
 		{
