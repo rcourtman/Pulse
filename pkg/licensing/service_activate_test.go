@@ -567,6 +567,38 @@ func TestServiceStatus_DevModeKeepsCustomerFacingStatusCommunityWithoutLicense(t
 	}
 }
 
+func TestServiceHasFeature_DevModeHonorsActivatedLicenseForExcludedFeatures(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	t.Setenv("PULSE_MOCK_MODE", "true")
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
+	t.Setenv("PULSE_MULTI_TENANT_ENABLED", "")
+	SetPublicKey(nil)
+	t.Cleanup(func() { SetPublicKey(nil) })
+
+	svc := NewService()
+	if svc.HasFeature(FeatureWhiteLabel) {
+		t.Fatalf("HasFeature(%q)=true without a license, want false in dev mode", FeatureWhiteLabel)
+	}
+
+	licenseKey, err := GenerateLicenseForTesting("dev-white-label@example.com", TierEnterprise, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("GenerateLicenseForTesting: %v", err)
+	}
+	if _, err := svc.Activate(licenseKey); err != nil {
+		t.Fatalf("Activate in dev mode: %v", err)
+	}
+
+	// The implicit dev grant excludes white_label, but an explicitly
+	// activated license that carries it must behave like a release build.
+	if !svc.HasFeature(FeatureWhiteLabel) {
+		t.Fatalf("HasFeature(%q)=false with an activated enterprise license, want true", FeatureWhiteLabel)
+	}
+	// Features the dev grant already enables stay enabled.
+	if !svc.HasFeature(FeatureAdvancedReporting) {
+		t.Fatalf("HasFeature(%q)=false, want true for dev-mode backend gate bypass", FeatureAdvancedReporting)
+	}
+}
+
 func TestServiceStatus_DevModeMultiTenantBypassDoesNotChangeCustomerFacingStatus(t *testing.T) {
 	t.Setenv("PULSE_DEV", "true")
 	t.Setenv("PULSE_MULTI_TENANT_ENABLED", "true")

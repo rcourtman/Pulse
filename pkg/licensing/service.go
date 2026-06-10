@@ -535,7 +535,13 @@ func (s *Service) IsValid() bool {
 func (s *Service) HasFeature(feature string) bool {
 	// In demo mode or dev mode, grant all Pro features
 	if isDemoMode() || isDevMode() {
-		return devModeFeatureEnabled(feature)
+		if devModeFeatureEnabled(feature) {
+			return true
+		}
+		// Features excluded from the implicit dev grant (white_label,
+		// multi_user, unlimited, env-gated multi_tenant) fall through to
+		// real entitlement evaluation, so an explicitly activated license
+		// behaves the same in dev builds as in release builds.
 	}
 
 	s.mu.Lock() // Need write lock since we may update grace period
