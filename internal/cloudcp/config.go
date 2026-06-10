@@ -262,11 +262,14 @@ func LoadConfig() (*CPConfig, error) {
 		ProviderMSPLicenseEmail:           providerMSPLicenseEmail,
 		LicenseServerURL:                  envOrDefault("PULSE_LICENSE_SERVER_URL", "https://license.pulserelay.pro"),
 		LicenseAdminToken:                 strings.TrimSpace(os.Getenv("PULSE_LICENSE_ADMIN_TOKEN")),
-		TrialActivationPrivateKey:         strings.TrimSpace(os.Getenv("CP_TRIAL_ACTIVATION_PRIVATE_KEY")),
-		RequireEmailProvider:              envOrDefaultBool("CP_REQUIRE_EMAIL_PROVIDER", true),
-		ResendAPIKey:                      strings.TrimSpace(os.Getenv("RESEND_API_KEY")),
-		EmailFrom:                         envOrDefault("PULSE_EMAIL_FROM", "noreply@pulserelay.pro"),
-		EmailReplyTo:                      envOrDefault("PULSE_EMAIL_REPLY_TO", "support@pulserelay.pro"),
+		// Canonical name first; CP_TRIAL_ACTIVATION_PRIVATE_KEY is the
+		// legacy spelling from the retired trial-activation era, kept as a
+		// fallback for already-deployed control planes.
+		TrialActivationPrivateKey: envFirstNonEmpty("CP_ENTITLEMENT_SIGNING_PRIVATE_KEY", "CP_TRIAL_ACTIVATION_PRIVATE_KEY"),
+		RequireEmailProvider:      envOrDefaultBool("CP_REQUIRE_EMAIL_PROVIDER", true),
+		ResendAPIKey:              strings.TrimSpace(os.Getenv("RESEND_API_KEY")),
+		EmailFrom:                 envOrDefault("PULSE_EMAIL_FROM", "noreply@pulserelay.pro"),
+		EmailReplyTo:              envOrDefault("PULSE_EMAIL_REPLY_TO", "support@pulserelay.pro"),
 	}
 	if strings.TrimSpace(cfg.TrialActivationPrivateKey) != "" {
 		publicKey, err := deriveTrialActivationPublicKey(cfg.TrialActivationPrivateKey)
@@ -300,7 +303,7 @@ func (c *CPConfig) validateProviderMSPLeaseSigningBinding() error {
 	}
 	boundKey := strings.TrimSpace(c.ProviderMSPLeaseSigningPublicKey)
 	if boundKey == "" {
-		return fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE does not bind an entitlement lease signing key (entitlement_signing_public_key); request an updated provider MSP license bound to this control plane's CP_TRIAL_ACTIVATION_PRIVATE_KEY public key %q", c.TrialActivationPublicKey)
+		return fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE does not bind an entitlement lease signing key (entitlement_signing_public_key); request an updated provider MSP license bound to this control plane's CP_ENTITLEMENT_SIGNING_PRIVATE_KEY public key %q", c.TrialActivationPublicKey)
 	}
 	bound, err := pkglicensing.DecodePublicKey(boundKey)
 	if err != nil {
@@ -311,7 +314,7 @@ func (c *CPConfig) validateProviderMSPLeaseSigningBinding() error {
 		return fmt.Errorf("derive trial activation public key: %w", err)
 	}
 	if !bound.Equal(derived) {
-		return fmt.Errorf("CP_TRIAL_ACTIVATION_PRIVATE_KEY does not match the entitlement lease signing key bound in CP_PROVIDER_MSP_LICENSE_FILE (license binds %q, control plane derives %q); use the keypair the license was issued for, or request a license bound to this key", boundKey, c.TrialActivationPublicKey)
+		return fmt.Errorf("CP_ENTITLEMENT_SIGNING_PRIVATE_KEY does not match the entitlement lease signing key bound in CP_PROVIDER_MSP_LICENSE_FILE (license binds %q, control plane derives %q); use the keypair the license was issued for, or request a license bound to this key", boundKey, c.TrialActivationPublicKey)
 	}
 	return nil
 }
@@ -411,7 +414,7 @@ func (c *CPConfig) validate() error {
 			return fmt.Errorf("CP_MSP_*_PRICE_ID must not be configured when CP_CONTROL_PLANE_MODE=%s", c.ControlPlaneMode)
 		}
 		if strings.TrimSpace(c.TrialActivationPrivateKey) == "" {
-			return fmt.Errorf("CP_TRIAL_ACTIVATION_PRIVATE_KEY is required when CP_CONTROL_PLANE_MODE=%s", c.ControlPlaneMode)
+			return fmt.Errorf("CP_ENTITLEMENT_SIGNING_PRIVATE_KEY is required when CP_CONTROL_PLANE_MODE=%s", c.ControlPlaneMode)
 		}
 		if c.Environment == "production" && strings.TrimSpace(c.ProviderMSPLicenseFile) == "" {
 			return fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE is required in production when CP_CONTROL_PLANE_MODE=%s", c.ControlPlaneMode)
@@ -464,7 +467,7 @@ func (c *CPConfig) validate() error {
 		return fmt.Errorf("CP_TRIAL_SIGNUP_PRICE_ID is required when STRIPE_API_KEY is configured")
 	}
 	if strings.TrimSpace(c.StripeAPIKey) != "" && strings.TrimSpace(c.TrialActivationPrivateKey) == "" {
-		return fmt.Errorf("CP_TRIAL_ACTIVATION_PRIVATE_KEY is required when STRIPE_API_KEY is configured")
+		return fmt.Errorf("CP_ENTITLEMENT_SIGNING_PRIVATE_KEY is required when STRIPE_API_KEY is configured")
 	}
 	if err := validateCloudStripePriceID(c.Environment, c.StripeAPIKey, "CP_TRIAL_SIGNUP_PRICE_ID", c.TrialSignupPriceID, "cloud_starter"); err != nil {
 		return err
@@ -657,6 +660,17 @@ func stripeSecretKeyMode(raw string) string {
 	default:
 		return "unknown"
 	}
+}
+
+// envFirstNonEmpty returns the first environment variable in keys with a
+// non-empty trimmed value.
+func envFirstNonEmpty(keys ...string) string {
+	for _, key := range keys {
+		if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func envOrDefault(key, fallback string) string {

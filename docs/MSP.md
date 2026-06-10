@@ -182,7 +182,7 @@ In the provider-hosted model the licence is a signed file
 (`CP_PROVIDER_MSP_LICENSE_FILE`) that also binds your control plane's
 entitlement lease signing key:
 
-1. `setup.sh` generates `CP_TRIAL_ACTIVATION_PRIVATE_KEY` locally; the
+1. `setup.sh` generates `CP_ENTITLEMENT_SIGNING_PRIVATE_KEY` locally; the
    private key never leaves your host.
 2. Send the derived public key
    (`./setup.sh --print-lease-signing-public-key`) with your licence request.

@@ -927,3 +927,31 @@ func TestStripeSecretKeyMode(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadConfig_EntitlementSigningKeyNamePrecedence(t *testing.T) {
+	setRequiredCPEnv(t)
+	// Canonical name wins over the legacy trial-era spelling.
+	t.Setenv("CP_ENTITLEMENT_SIGNING_PRIVATE_KEY", "A8medgdNdm12GXfTXWo6+TMZ2BeHPCLg2kd0znn6ZUk=")
+	t.Setenv("CP_TRIAL_ACTIVATION_PRIVATE_KEY", "not-even-base64")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.TrialActivationPublicKey != base64.StdEncoding.EncodeToString(trialSigningEnvPublicKey(t)) {
+		t.Fatalf("canonical CP_ENTITLEMENT_SIGNING_PRIVATE_KEY was not preferred; derived %q", cfg.TrialActivationPublicKey)
+	}
+}
+
+func TestLoadConfig_LegacyTrialActivationKeyNameStillWorks(t *testing.T) {
+	setRequiredCPEnv(t)
+	t.Setenv("CP_TRIAL_ACTIVATION_PRIVATE_KEY", "A8medgdNdm12GXfTXWo6+TMZ2BeHPCLg2kd0znn6ZUk=")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.TrialActivationPublicKey == "" {
+		t.Fatal("legacy CP_TRIAL_ACTIVATION_PRIVATE_KEY fallback no longer derives a key")
+	}
+}

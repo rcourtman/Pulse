@@ -290,15 +290,15 @@ ensure_generated_secrets() {
     log "generating CP_ADMIN_KEY"
     set_env_value CP_ADMIN_KEY "$(openssl rand -hex 32)" "${env_path}"
   fi
-  if [[ -z "$(env_value CP_TRIAL_ACTIVATION_PRIVATE_KEY "${env_path}")" ]]; then
-    log "generating CP_TRIAL_ACTIVATION_PRIVATE_KEY"
-    set_env_value CP_TRIAL_ACTIVATION_PRIVATE_KEY "$(openssl rand -base64 32 | tr -d '\n')" "${env_path}"
+  if [[ -z "$(env_value CP_ENTITLEMENT_SIGNING_PRIVATE_KEY "${env_path}")" ]]; then
+    log "generating CP_ENTITLEMENT_SIGNING_PRIVATE_KEY"
+    set_env_value CP_ENTITLEMENT_SIGNING_PRIVATE_KEY "$(openssl rand -base64 32 | tr -d '\n')" "${env_path}"
   fi
   chmod 0600 "${env_path}"
 }
 
 # derive_lease_signing_public_key prints the base64 Ed25519 public key for
-# CP_TRIAL_ACTIVATION_PRIVATE_KEY. The provider MSP license must bind this
+# CP_ENTITLEMENT_SIGNING_PRIVATE_KEY. The provider MSP license must bind this
 # exact key (entitlement_signing_public_key) or the control plane will refuse
 # to start; include it when requesting your license. The private key never
 # leaves this host.
@@ -308,8 +308,8 @@ derive_lease_signing_public_key() {
   have openssl || die "openssl is required to derive the lease signing public key"
 
   local key_b64 key_len tmp_der
-  key_b64="$(env_value CP_TRIAL_ACTIVATION_PRIVATE_KEY "${env_path}")"
-  [[ -n "${key_b64}" ]] || die "CP_TRIAL_ACTIVATION_PRIVATE_KEY is not set; run setup.sh first"
+  key_b64="$(env_value CP_ENTITLEMENT_SIGNING_PRIVATE_KEY "${env_path}")"
+  [[ -n "${key_b64}" ]] || die "CP_ENTITLEMENT_SIGNING_PRIVATE_KEY is not set; run setup.sh first"
   key_len="$(printf '%s' "${key_b64}" | base64 -d 2>/dev/null | wc -c | tr -d ' ')"
   case "${key_len}" in
     64)
@@ -328,7 +328,7 @@ derive_lease_signing_public_key() {
       rm -f "${tmp_der}"
       ;;
     *)
-      die "CP_TRIAL_ACTIVATION_PRIVATE_KEY must decode to a 32-byte seed or 64-byte Ed25519 key (got ${key_len} bytes)"
+      die "CP_ENTITLEMENT_SIGNING_PRIVATE_KEY must decode to a 32-byte seed or 64-byte Ed25519 key (got ${key_len} bytes)"
       ;;
   esac
 }
@@ -379,7 +379,7 @@ Edit it now and set required values:
   - CP_TRUSTED_PROXY_CIDRS
   - CP_PROVIDER_MSP_LICENSE_FILE
 
-setup.sh will generate CP_ADMIN_KEY and CP_TRIAL_ACTIVATION_PRIVATE_KEY if they
+setup.sh will generate CP_ADMIN_KEY and CP_ENTITLEMENT_SIGNING_PRIVATE_KEY if they
 are still blank.
 
 EOF
@@ -404,7 +404,7 @@ validate_env_file() {
 
   local missing=()
   local k v
-  for k in DOMAIN ACME_EMAIL CF_DNS_API_TOKEN CP_ENV TRAEFIK_IMAGE DOCKER_SOCKET_PROXY_IMAGE CONTROL_PLANE_IMAGE CP_ADMIN_KEY CP_PULSE_IMAGE PULSE_PROVIDER_MSP_DATA_DIR PULSE_PROVIDER_MSP_DOCKER_NETWORK PULSE_PROVIDER_MSP_DOCKER_SUBNET PULSE_PROVIDER_MSP_DOCKER_SOCKET PULSE_PROVIDER_MSP_ROOT_SPACECHECK_DIR PULSE_PROVIDER_MSP_DOCKER_SPACECHECK_DIR CP_TRUSTED_PROXY_CIDRS CP_PROVIDER_MSP_LICENSE_FILE CP_TRIAL_ACTIVATION_PRIVATE_KEY CP_TENANT_MEMORY_LIMIT CP_ALLOW_DOCKERLESS_PROVISIONING CP_STORAGE_GUARDRAILS_ENABLED CP_STORAGE_MIN_ROOT_AVAILABLE CP_STORAGE_MIN_DATA_AVAILABLE CP_STORAGE_MIN_DOCKER_AVAILABLE CP_STORAGE_MAX_DOCKER_BUILD_CACHE CP_PROOF_TENANT_MAX_AGE CP_PROOF_TENANT_MATCHERS CP_REQUIRE_EMAIL_PROVIDER PULSE_EMAIL_FROM PULSE_EMAIL_REPLY_TO; do
+  for k in DOMAIN ACME_EMAIL CF_DNS_API_TOKEN CP_ENV TRAEFIK_IMAGE DOCKER_SOCKET_PROXY_IMAGE CONTROL_PLANE_IMAGE CP_ADMIN_KEY CP_PULSE_IMAGE PULSE_PROVIDER_MSP_DATA_DIR PULSE_PROVIDER_MSP_DOCKER_NETWORK PULSE_PROVIDER_MSP_DOCKER_SUBNET PULSE_PROVIDER_MSP_DOCKER_SOCKET PULSE_PROVIDER_MSP_ROOT_SPACECHECK_DIR PULSE_PROVIDER_MSP_DOCKER_SPACECHECK_DIR CP_TRUSTED_PROXY_CIDRS CP_PROVIDER_MSP_LICENSE_FILE CP_ENTITLEMENT_SIGNING_PRIVATE_KEY CP_TENANT_MEMORY_LIMIT CP_ALLOW_DOCKERLESS_PROVISIONING CP_STORAGE_GUARDRAILS_ENABLED CP_STORAGE_MIN_ROOT_AVAILABLE CP_STORAGE_MIN_DATA_AVAILABLE CP_STORAGE_MIN_DOCKER_AVAILABLE CP_STORAGE_MAX_DOCKER_BUILD_CACHE CP_PROOF_TENANT_MAX_AGE CP_PROOF_TENANT_MATCHERS CP_REQUIRE_EMAIL_PROVIDER PULSE_EMAIL_FROM PULSE_EMAIL_REPLY_TO; do
     v="$(env_value "${k}" "${env_path}")"
     if [[ -z "${v}" ]]; then
       missing+=("${k}")
@@ -458,9 +458,9 @@ validate_env_file() {
   if [[ "${#admin_key}" -lt 32 ]]; then
     die "CP_ADMIN_KEY must be at least 32 characters"
   fi
-  trial_key="$(env_value CP_TRIAL_ACTIVATION_PRIVATE_KEY "${env_path}")"
+  trial_key="$(env_value CP_ENTITLEMENT_SIGNING_PRIVATE_KEY "${env_path}")"
   if ! printf '%s' "${trial_key}" | base64 -d >/dev/null 2>&1; then
-    die "CP_TRIAL_ACTIVATION_PRIVATE_KEY must be valid base64"
+    die "CP_ENTITLEMENT_SIGNING_PRIVATE_KEY must be valid base64"
   fi
   docker_subnet="$(env_value PULSE_PROVIDER_MSP_DOCKER_SUBNET "${env_path}")"
   trusted_cidrs="$(env_value CP_TRUSTED_PROXY_CIDRS "${env_path}" | tr -d '[:space:]')"
