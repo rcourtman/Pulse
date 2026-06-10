@@ -352,6 +352,12 @@ func (h *ReportingHandlers) getReportingEnrichmentSnapshot(ctx context.Context, 
 		return emptyReportingEnrichmentSnapshot(), false
 	}
 
+	// Resources must come from the canonical unified view (the same
+	// re-ingested registry the UI and /api/state read), NOT the raw
+	// resource store: the raw store's canonical IDs depend on per-boot
+	// ingest order for merged-source hosts, so a UI-supplied resource ID
+	// can be missing from it entirely.
+	unifiedResources, _ := monitor.UnifiedResourceSnapshot()
 	snapshot := reportingEnrichmentSnapshot{
 		Nodes:            monitor.NodesSnapshot(),
 		VMs:              monitor.VMsSnapshot(),
@@ -359,7 +365,7 @@ func (h *ReportingHandlers) getReportingEnrichmentSnapshot(ctx context.Context, 
 		ActiveAlerts:     monitor.ActiveAlertsSnapshot(),
 		RecentlyResolved: monitor.RecentlyResolvedSnapshot(),
 		LegacyBackups:    monitor.PVEBackupsSnapshot(),
-		Resources:        monitor.GetUnifiedResources(),
+		Resources:        unifiedResources,
 	}
 	snapshot.normalizeCollections()
 	return snapshot, true

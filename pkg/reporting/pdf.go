@@ -884,6 +884,9 @@ func (g *PDFGenerator) writeSummarySection(pdf *fpdf.Fpdf, data *ReportData) {
 	startX := 20.0
 	rowStartY := pdf.GetY()
 
+	_, pageHeight := pdf.GetPageSize()
+	cardBottomLimit := pageHeight - 30
+
 	for i, metricType := range metricNames {
 		stats := data.Summary.ByMetric[metricType]
 		unit := GetMetricUnit(metricType)
@@ -895,6 +898,16 @@ func (g *PDFGenerator) writeSummarySection(pdf *fpdf.Fpdf, data *ReportData) {
 			pdf.SetY(rowStartY)
 		} else if col == 1 {
 			// Second column - return to row start Y
+			pdf.SetY(rowStartY)
+		}
+
+		// The grid positions cards absolutely, so it must paginate
+		// itself: a row that would cross the bottom margin previously
+		// fought fpdf's auto page break and scattered one orphan
+		// element per page for the rest of the section.
+		if col == 0 && rowStartY+cardHeight > cardBottomLimit {
+			pdf.AddPage()
+			rowStartY = pdf.GetY()
 			pdf.SetY(rowStartY)
 		}
 
@@ -946,10 +959,9 @@ func (g *PDFGenerator) writeSummarySection(pdf *fpdf.Fpdf, data *ReportData) {
 		writeStat(cardX+46, statsY+6, "Samples", fmt.Sprintf("%d", stats.Count))
 	}
 
-	// Calculate final Y position based on number of rows
-	numRows := (len(metricNames) + 1) / 2 // Round up
-	finalY := rowStartY + float64(numRows)*(cardHeight+cardGap)
-	pdf.SetY(finalY)
+	// rowStartY tracks the current (possibly paginated) row, so the
+	// section ends just below the last row of cards.
+	pdf.SetY(rowStartY + cardHeight + cardGap)
 }
 
 // writeChartsSection writes charts for each metric.

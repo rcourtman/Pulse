@@ -467,3 +467,46 @@ func TestGenerateMulti_FlowsResourceBlocksOntoSharedPages(t *testing.T) {
 		}
 	}
 }
+
+// TestSummarySection_PaginatesCardGridForManyMetrics pins the card grid's
+// self-pagination. Agent hosts report 8+ metric families; the absolutely
+// positioned grid previously walked off the page bottom and fought fpdf's
+// auto page break, scattering one orphan element per page for the rest of
+// the section (observed live as ten near-blank pages).
+func TestSummarySection_PaginatesCardGridForManyMetrics(t *testing.T) {
+	byMetric := map[string]MetricStats{}
+	for _, m := range []string{"cpu", "memory", "disk", "diskread", "diskwrite", "netin", "netout", "temperature", "iops", "usage"} {
+		byMetric[m] = MetricStats{Min: 1, Max: 9, Avg: 5, Current: 5, Count: 100}
+	}
+	data := &ReportData{
+		Title:        "Many metrics",
+		ResourceType: "agent",
+		ResourceID:   "agent-1",
+		Resource:     &ResourceInfo{Name: "host-01", Status: "online"},
+		Start:        time.Now().Add(-7 * 24 * time.Hour),
+		End:          time.Now(),
+		GeneratedAt:  time.Now(),
+		Summary:      MetricSummary{ByMetric: byMetric},
+		TotalPoints:  1000,
+	}
+
+	gen := NewPDFGenerator()
+	out, err := gen.Generate(data)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	text := extractPDFText(t, out)
+
+	pageTotal := regexp.MustCompile(`Page \d+ of (\d+)`).FindStringSubmatch(text)
+	if pageTotal == nil {
+		t.Fatalf("no page footer found in:\n%s", text)
+	}
+	if pages, _ := strconv.Atoi(pageTotal[1]); pages > 6 {
+		t.Fatalf("10-metric report rendered %d pages; the card grid must paginate compactly", pages)
+	}
+	for _, label := range []string{"Disk Read", "Network Out", "Temperature"} {
+		if !strings.Contains(text, label) {
+			t.Fatalf("metric card %q missing after pagination:\n%s", label, text)
+		}
+	}
+}

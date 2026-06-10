@@ -4103,14 +4103,23 @@ func (m *Monitor) GetUnifiedResources() []unifiedresources.Resource {
 }
 
 // MetricsTargetForResource resolves the metrics-store target for a canonical
-// unified resource ID via the wired resource store. The metrics store is
-// keyed by platform-native source IDs, and the target is computed on demand
-// by the resource registry rather than persisted on the Resource structs
-// GetUnifiedResources returns. Returns nil when no store is wired, the
-// store cannot resolve targets, or the resource has none.
+// unified resource ID. Resolution goes through the canonical unified view
+// (the same re-ingested registry the UI and /api/state read) because
+// callers hold IDs from that view: the raw resource store's canonical IDs
+// depend on per-boot ingest order for merged-source hosts, so the view and
+// the store can disagree about the same machine's ID. The raw store stays
+// as a fallback. Returns nil when nothing can resolve a target.
 func (m *Monitor) MetricsTargetForResource(resourceID string) *unifiedresources.MetricsTarget {
 	if m == nil {
 		return nil
+	}
+
+	if view := m.GetUnifiedReadStateOrSnapshot(); view != nil {
+		if resolver, ok := view.(MetricsTargetResourceStore); ok {
+			if target := resolver.MetricsTargetForResource(resourceID); target != nil {
+				return target
+			}
+		}
 	}
 
 	m.mu.RLock()
