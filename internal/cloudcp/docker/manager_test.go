@@ -73,7 +73,7 @@ func TestTenantMountsKeepImmutableFilesReadOnly(t *testing.T) {
 func TestTenantEnvIncludesImmutableOwnershipContract(t *testing.T) {
 	t.Parallel()
 
-	env := tenantEnv("t-example", "cloud.pulserelay.pro", "pubkey-123", []string{"172.18.0.0/16", "127.0.0.1/32"}, TenantReportBrandConfig{})
+	env := tenantEnv("t-example", "", "cloud.pulserelay.pro", "pubkey-123", []string{"172.18.0.0/16", "127.0.0.1/32"}, TenantReportBrandConfig{})
 	want := map[string]bool{
 		"PULSE_DATA_DIR=/etc/pulse":       true,
 		"PULSE_HOSTED_MODE=true":          true,
@@ -181,7 +181,7 @@ func TestHealthCheckPrefersProviderMSPIsolatedTenantNetwork(t *testing.T) {
 func TestTenantEnvLowercasesPublicURLHost(t *testing.T) {
 	t.Parallel()
 
-	env := tenantEnv("T-AbCd123", "Cloud.PulseRelay.Pro", "", nil, TenantReportBrandConfig{})
+	env := tenantEnv("T-AbCd123", "", "Cloud.PulseRelay.Pro", "", nil, TenantReportBrandConfig{})
 	want := "PULSE_PUBLIC_URL=https://t-abcd123.cloud.pulserelay.pro"
 	for _, item := range env {
 		if item == want {
@@ -194,7 +194,7 @@ func TestTenantEnvLowercasesPublicURLHost(t *testing.T) {
 func TestTenantEnvOmitsPublicURLWithoutTenantContext(t *testing.T) {
 	t.Parallel()
 
-	env := tenantEnv("", "", "", nil, TenantReportBrandConfig{})
+	env := tenantEnv("", "", "", "", nil, TenantReportBrandConfig{})
 	sawTenantID := false
 	for _, item := range env {
 		if strings.HasPrefix(item, "PULSE_PUBLIC_URL=") {
@@ -209,10 +209,60 @@ func TestTenantEnvOmitsPublicURLWithoutTenantContext(t *testing.T) {
 	}
 }
 
+func TestTenantEnvStampsWorkspaceDisplayName(t *testing.T) {
+	t.Parallel()
+
+	env := tenantEnv("t-acme", "  Acme Rentals  ", "cloud.pulserelay.pro", "", nil, TenantReportBrandConfig{})
+	want := "PULSE_TENANT_NAME=Acme Rentals"
+	for _, item := range env {
+		if item == want {
+			return
+		}
+	}
+	t.Fatalf("tenantEnv() missing %q in %v", want, env)
+}
+
+func TestTenantEnvOmitsTenantNameWhenUnresolved(t *testing.T) {
+	t.Parallel()
+
+	env := tenantEnv("t-acme", "", "cloud.pulserelay.pro", "", nil, TenantReportBrandConfig{})
+	for _, item := range env {
+		if strings.HasPrefix(item, "PULSE_TENANT_NAME=") {
+			t.Fatalf("unexpected tenant name env item %q; name must be omitted so payloads fall back to the tenant ID", item)
+		}
+	}
+}
+
+func TestTenantRuntimeContainerConfigResolvesTenantDisplayName(t *testing.T) {
+	t.Parallel()
+
+	cfg := ManagerConfig{
+		Image:      "pulse:test",
+		BaseDomain: "cloud.pulserelay.pro",
+		TenantDisplayName: func(tenantID string) string {
+			if tenantID != "t-acme" {
+				t.Fatalf("resolver received tenant id %q, want t-acme", tenantID)
+			}
+			return "Acme Rentals"
+		},
+	}
+	containerCfg := tenantRuntimeContainerConfig("t-acme", cfg, nil, nil)
+	if got := envValue(containerCfg.Env, "PULSE_TENANT_NAME"); got != "Acme Rentals" {
+		t.Fatalf("PULSE_TENANT_NAME = %q, want %q; env=%v", got, "Acme Rentals", containerCfg.Env)
+	}
+
+	withoutResolver := tenantRuntimeContainerConfig("t-acme", ManagerConfig{Image: "pulse:test", BaseDomain: "cloud.pulserelay.pro"}, nil, nil)
+	for _, item := range withoutResolver.Env {
+		if strings.HasPrefix(item, "PULSE_TENANT_NAME=") {
+			t.Fatalf("unexpected tenant name env item %q without a resolver", item)
+		}
+	}
+}
+
 func TestTenantEnvIncludesProviderReportBrandDefaults(t *testing.T) {
 	t.Parallel()
 
-	env := tenantEnv("t-acme", "msp.example.com", "", nil, TenantReportBrandConfig{
+	env := tenantEnv("t-acme", "", "msp.example.com", "", nil, TenantReportBrandConfig{
 		DisplayName: "Acme Managed IT",
 		LogoBase64:  "iVBORw0KGgo=",
 		LogoFormat:  "png",

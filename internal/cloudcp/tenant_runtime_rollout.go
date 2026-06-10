@@ -222,6 +222,7 @@ func newTenantRuntimeRolloutServiceFromConfig(
 		BaseDomain:               baseDomainFromURL(cfg.BaseURL),
 		TrialActivationPublicKey: cfg.TrialActivationPublicKey,
 		TrustedProxyCIDRs:        cfg.TrustedProxyCIDRs,
+		TenantDisplayName:        tenantDisplayNameResolver(reg),
 		TenantReportBrand: cpDocker.TenantReportBrandConfig{
 			DisplayName: cfg.ReportBrandDisplayName,
 			LogoPath:    cfg.ReportBrandLogoPath,

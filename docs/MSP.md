@@ -109,10 +109,12 @@ For ticket bridges (ConnectWise and similar), use the delivery contract —
 stable severity/type fields, `X-Pulse-Event-ID` deduplication, and HMAC-signed
 deliveries via `signingSecret` — documented in [WEBHOOKS.md](WEBHOOKS.md).
 
-In the provider-hosted model, client runtimes receive `PULSE_TENANT_ID` from
-the control plane; set `PULSE_TENANT_NAME` alongside it for a human-readable
-client label in payloads. Shared-process organizations stamp the org ID and
-display name automatically.
+In the provider-hosted model, client runtimes receive `PULSE_TENANT_ID` and
+`PULSE_TENANT_NAME` (the workspace display name) from the control plane, so
+payloads carry a human-readable client label automatically. A display-name
+change applies on the client runtime's next rollout, which recreates the
+container. Shared-process organizations stamp the org ID and display name
+automatically.
 
 ## Per-client reports
 

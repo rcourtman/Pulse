@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -59,6 +60,7 @@ func Run(ctx context.Context, version string) error {
 		BaseDomain:               baseDomainFromURL(cfg.BaseURL),
 		TrialActivationPublicKey: cfg.TrialActivationPublicKey,
 		TrustedProxyCIDRs:        cfg.TrustedProxyCIDRs,
+		TenantDisplayName:        tenantDisplayNameResolver(reg),
 		TenantReportBrand: cpDocker.TenantReportBrandConfig{
 			DisplayName: cfg.ReportBrandDisplayName,
 			LogoPath:    cfg.ReportBrandLogoPath,
@@ -204,6 +206,20 @@ func Run(ctx context.Context, version string) error {
 	cancel()
 	log.Info().Msg("Control plane stopped")
 	return nil
+}
+
+// tenantDisplayNameResolver resolves the workspace display name stamped into
+// tenant runtime env (PULSE_TENANT_NAME) from the tenant registry. The lookup
+// happens at container-create time, so display-name changes after creation
+// apply on the next runtime rollout, which recreates the container.
+func tenantDisplayNameResolver(reg *registry.TenantRegistry) func(string) string {
+	return func(tenantID string) string {
+		tenant, err := reg.Get(tenantID)
+		if err != nil || tenant == nil {
+			return ""
+		}
+		return strings.TrimSpace(tenant.DisplayName)
+	}
 }
 
 // baseDomainFromURL extracts a base domain from a URL like "https://cloud.pulserelay.pro".

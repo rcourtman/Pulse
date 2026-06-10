@@ -138,6 +138,11 @@ TLS floor in the dynamic config.
    Tenant runtime containers must use bounded Docker `json-file`
    logging so rollout and canary fleets cannot consume unbounded production
    host storage while they remain running.
+   Tenant runtime creation and rollout must also resolve the workspace display
+   name from the tenant registry and inject it as `PULSE_TENANT_NAME` next to
+   `PULSE_TENANT_ID`; the rollout path is the canonical way a display-name
+   change reaches a running client container, because rollout recreates the
+   container with freshly resolved environment.
    Provider-hosted MSP workspace creation and preflight must prepare or report
    the configured tenant runtime image, configured Docker network, Docker
    daemon reachability, and storage-admission guardrails before the provider

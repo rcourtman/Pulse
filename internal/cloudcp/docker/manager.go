@@ -30,14 +30,21 @@ type ManagerConfig struct {
 	BaseDomain               string
 	TrialActivationPublicKey string
 	TrustedProxyCIDRs        []string
-	TenantReportBrand        TenantReportBrandConfig
-	TenantRuntimeUID         int
-	TenantRuntimeGID         int
-	MemoryLimit              int64 // bytes
-	CPUShares                int64
-	TenantLogMaxSize         string
-	TenantLogMaxFile         int
-	ContainerPort            int // port inside the container (default 7655)
+	// TenantDisplayName resolves a tenant's workspace display name at
+	// container-create time; the value is injected as PULSE_TENANT_NAME so
+	// alert webhook payloads carry a human-readable workspace label instead
+	// of falling back to the tenant ID. Display-name changes after creation
+	// apply on the next runtime rollout, which recreates the container with
+	// freshly resolved env. May be nil.
+	TenantDisplayName func(tenantID string) string
+	TenantReportBrand TenantReportBrandConfig
+	TenantRuntimeUID  int
+	TenantRuntimeGID  int
+	MemoryLimit       int64 // bytes
+	CPUShares         int64
+	TenantLogMaxSize  string
+	TenantLogMaxFile  int
+	ContainerPort     int // port inside the container (default 7655)
 }
 
 type TenantReportBrandConfig struct {
@@ -547,8 +554,15 @@ func tenantRuntimeContainerConfig(tenantID string, cfg ManagerConfig, labels map
 		Image:  cfg.Image,
 		User:   tenantRuntimeUserFor(cfg),
 		Labels: labels,
-		Env:    tenantEnvForRuntime(tenantID, cfg.BaseDomain, cfg.TrialActivationPublicKey, trustedProxyCIDRs, tenantRuntimeUIDFor(cfg), tenantRuntimeGIDFor(cfg), cfg.TenantReportBrand),
+		Env:    tenantEnvForRuntime(tenantID, tenantDisplayNameFor(cfg, tenantID), cfg.BaseDomain, cfg.TrialActivationPublicKey, trustedProxyCIDRs, tenantRuntimeUIDFor(cfg), tenantRuntimeGIDFor(cfg), cfg.TenantReportBrand),
 	}
+}
+
+func tenantDisplayNameFor(cfg ManagerConfig, tenantID string) string {
+	if cfg.TenantDisplayName == nil {
+		return ""
+	}
+	return strings.TrimSpace(cfg.TenantDisplayName(tenantID))
 }
 
 func tenantRuntimeUserFor(cfg ManagerConfig) string {
@@ -626,11 +640,11 @@ func tenantRuntimeOwnershipPaths() []string {
 	}
 }
 
-func tenantEnv(tenantID, baseDomain, trialActivationPublicKey string, trustedProxyCIDRs []string, reportBrand TenantReportBrandConfig) []string {
-	return tenantEnvForRuntime(tenantID, baseDomain, trialActivationPublicKey, trustedProxyCIDRs, tenantRuntimeUID, tenantRuntimeGID, reportBrand)
+func tenantEnv(tenantID, tenantName, baseDomain, trialActivationPublicKey string, trustedProxyCIDRs []string, reportBrand TenantReportBrandConfig) []string {
+	return tenantEnvForRuntime(tenantID, tenantName, baseDomain, trialActivationPublicKey, trustedProxyCIDRs, tenantRuntimeUID, tenantRuntimeGID, reportBrand)
 }
 
-func tenantEnvForRuntime(tenantID, baseDomain, trialActivationPublicKey string, trustedProxyCIDRs []string, runtimeUID, runtimeGID int, reportBrand TenantReportBrandConfig) []string {
+func tenantEnvForRuntime(tenantID, tenantName, baseDomain, trialActivationPublicKey string, trustedProxyCIDRs []string, runtimeUID, runtimeGID int, reportBrand TenantReportBrandConfig) []string {
 	routing := CanonicalTenantRuntimeRouting(tenantID, baseDomain)
 	tenantID = strings.TrimSpace(tenantID)
 
@@ -642,6 +656,9 @@ func tenantEnvForRuntime(tenantID, baseDomain, trialActivationPublicKey string, 
 		fmt.Sprintf("PUID=%d", runtimeUID),
 		fmt.Sprintf("PGID=%d", runtimeGID),
 		fmt.Sprintf("%s=%s", immutableOwnershipPathsEnv, strings.Join(tenantImmutableOwnershipPaths(), ":")),
+	}
+	if name := strings.TrimSpace(tenantName); name != "" {
+		env = append(env, "PULSE_TENANT_NAME="+name)
 	}
 	if routing.PublicURL != "" {
 		env = append(env, "PULSE_PUBLIC_URL="+routing.PublicURL)

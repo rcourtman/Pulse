@@ -189,6 +189,14 @@ Stripe-free and avoids a cloud-control-plane report data path across clients.
    Hosted tenant container creation must also bound Docker `json-file` logs
    through the control-plane Docker manager so tenant runtime logging cannot
    fill the live Pulse Cloud host independently of tenant data quotas.
+   Hosted tenant container creation must also stamp tenant identity into the
+   runtime environment: the Docker manager resolves the workspace display name
+   from the tenant registry at container-create time and injects
+   `PULSE_TENANT_NAME` alongside `PULSE_TENANT_ID`, so alert webhook payloads
+   from hosted client runtimes carry a human-readable workspace label instead
+   of falling back to the tenant ID. Display-name changes after creation apply
+   on the next tenant runtime rollout, which recreates the container with
+   freshly resolved environment.
    Provider-hosted MSP and Pulse-hosted tenant creation must also prepare or
    fail closed on the configured tenant runtime image before mutating the
    workspace into a state that expects a live runtime container; readiness
