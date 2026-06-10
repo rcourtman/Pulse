@@ -613,6 +613,25 @@ func (m *Monitor) preserveNodesWhenEmpty(instanceName string, modelNodes []model
 	// Mark connection health as degraded to reflect polling failure
 	m.setProviderConnectionHealth(InstanceTypePVE, instanceName, false)
 
+	return m.preserveOrExpireNodes(prevInstanceNodes)
+}
+
+// markPVEInstanceNodesUnreachable applies the node offline grace policy to an
+// instance whose poll failed outright (connection refused, timeout, all
+// cluster endpoints down). Without this, the early return on a poll error
+// leaves the last successful snapshot in state forever, so a shut-down host
+// keeps showing its final online status (#1441).
+func (m *Monitor) markPVEInstanceNodesUnreachable(instanceName string) {
+	_, prevInstanceNodes := m.snapshotPrevNodes(instanceName)
+	if len(prevInstanceNodes) == 0 {
+		return
+	}
+	m.state.UpdateNodesForInstance(instanceName, m.preserveOrExpireNodes(prevInstanceNodes))
+}
+
+// preserveOrExpireNodes keeps recently seen nodes online through transient
+// gaps and marks nodes offline once the grace period has lapsed.
+func (m *Monitor) preserveOrExpireNodes(prevInstanceNodes []models.Node) []models.Node {
 	preserved := make([]models.Node, 0, len(prevInstanceNodes))
 	now := time.Now()
 	for _, prevNode := range prevInstanceNodes {
@@ -1044,6 +1063,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 	nodes, updatedClient, err := m.fetchPVENodes(ctx, instanceName, instanceCfg, client)
 	if err != nil {
 		pollErr = err
+		m.markPVEInstanceNodesUnreachable(instanceName)
 		return
 	}
 	client = updatedClient
