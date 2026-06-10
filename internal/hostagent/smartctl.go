@@ -235,7 +235,14 @@ func CollectSMARTLocal(ctx context.Context, diskExclude []string) ([]DiskSMART, 
 	}
 
 	var results []DiskSMART
+	var missed []smartctlTarget
+	collected := make(map[string]struct{}, len(targets))
+	multiplexed := make(map[string]struct{})
 	for _, target := range targets {
+		block := canonicalBlockDeviceForScanPath(target.Path)
+		if isMultiplexedDeviceType(target.DeviceType) && block != "" {
+			multiplexed[block] = struct{}{}
+		}
 		smart, err := collectSMARTTarget(ctx, target)
 		if err != nil {
 			if errors.Is(err, errSMARTDataUnavailable) {
@@ -252,13 +259,34 @@ func CollectSMARTLocal(ctx context.Context, diskExclude []string) ([]DiskSMART, 
 					Err(err).
 					Msg("Failed to collect SMART data for device")
 			}
+			missed = append(missed, target)
 			continue
 		}
-		if smart != nil {
-			refineLinuxBlockDeviceIdentity(smart, target)
-			results = append(results, *smart)
+		if smart == nil {
+			missed = append(missed, target)
+			continue
+		}
+		refineLinuxBlockDeviceIdentity(smart, target)
+		// The refine step can rename the device (nvme0 -> nvme0n1), so re-apply
+		// exclusions against the canonical name the user actually sees.
+		if matchesDeviceExclude(smart.Device, "/dev/"+smart.Device, diskExclude) {
+			log.Debug().
+				Str("component", smartctlComponent).
+				Str("action", "skip_excluded_device").
+				Str("device", smart.Device).
+				Msg("Skipping excluded device for SMART collection")
+			if block != "" {
+				collected[block] = struct{}{}
+			}
+			continue
+		}
+		results = append(results, *smart)
+		if block != "" {
+			collected[block] = struct{}{}
 		}
 	}
+
+	results = append(results, linuxIdentityOnlyDisks(missed, collected, multiplexed, diskExclude)...)
 
 	log.Debug().
 		Str("component", smartctlComponent).
@@ -294,22 +322,65 @@ func smartctlTargetsFromDevices(devices []string) []smartctlTarget {
 }
 
 func listSMARTTargetsLinux(ctx context.Context, diskExclude []string) ([]smartctlTarget, error) {
-	targets, err := listSMARTTargetsLinuxFromScanOpen(ctx, diskExclude)
-	if err == nil && len(targets) > 0 {
-		return targets, nil
-	}
-	if err != nil {
+	scanTargets, scanErr := listSMARTTargetsLinuxFromScanOpen(ctx, diskExclude)
+	if scanErr != nil {
 		log.Debug().
 			Str("component", smartctlComponent).
-			Err(err).
-			Msg("Failed to enumerate Linux SMART targets via smartctl --scan-open, falling back to block device discovery")
+			Err(scanErr).
+			Msg("Failed to enumerate Linux SMART targets via smartctl --scan-open, relying on block device discovery")
 	}
 
-	devices, fallbackErr := listBlockDevicesLinux(ctx, diskExclude)
-	if fallbackErr != nil {
-		return nil, fallbackErr
+	// smartctl --scan-open silently omits any device it fails to open at scan
+	// time (the failure is only a #-comment in its output), so the scan alone
+	// can hide a real disk while listing its neighbours (#1483: a SATA SSD
+	// missing while two NVMe controllers were reported). The kernel block
+	// device list is the ground truth for which disks exist; scan-open only
+	// contributes device-type hints. Union the two.
+	devices, devErr := listBlockDevicesLinux(ctx, diskExclude)
+	if devErr != nil {
+		if len(scanTargets) > 0 {
+			log.Debug().
+				Str("component", smartctlComponent).
+				Err(devErr).
+				Msg("Block device discovery failed; using smartctl --scan-open targets only")
+			return scanTargets, nil
+		}
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		return nil, devErr
 	}
-	return smartctlTargetsFromDevices(devices), nil
+
+	return unionSMARTTargets(scanTargets, devices), nil
+}
+
+// unionSMARTTargets returns scanTargets plus an untyped target for every block
+// device that no scan target covers. A scan target covers its own path's
+// basename and, for an NVMe controller, the namespace it canonicalizes to.
+func unionSMARTTargets(scanTargets []smartctlTarget, devices []string) []smartctlTarget {
+	covered := make(map[string]struct{}, len(scanTargets)*2)
+	for _, target := range scanTargets {
+		if name := filepath.Base(strings.TrimSpace(target.Path)); name != "" && name != "." {
+			covered[name] = struct{}{}
+		}
+		if block := canonicalBlockDeviceForScanPath(target.Path); block != "" {
+			covered[block] = struct{}{}
+		}
+	}
+
+	targets := append([]smartctlTarget(nil), scanTargets...)
+	for _, device := range devices {
+		name := filepath.Base(strings.TrimSpace(device))
+		if name == "" || name == "." {
+			continue
+		}
+		if _, ok := covered[name]; ok {
+			continue
+		}
+		covered[name] = struct{}{}
+		targets = append(targets, smartctlTarget{Path: device})
+	}
+	return targets
 }
 
 func listSMARTTargetsLinuxFromScanOpen(ctx context.Context, diskExclude []string) ([]smartctlTarget, error) {
@@ -745,6 +816,74 @@ func refineLinuxBlockDeviceIdentity(smart *DiskSMART, target smartctlTarget) {
 	}
 }
 
+// linuxIdentityOnlyDisks builds identity-only entries for physical disks whose
+// SMART probes produced nothing usable. A real disk that refuses SMART must
+// still be listed — Proxmox's own disks/list shows it, and a monitoring view
+// that silently hides a present disk reads as data loss (#1483: a SATA SSD
+// vanished from the UI because its probe yielded no data). Each entry carries
+// only the identity /sys/block can prove (name, capacity, model, serial) plus
+// health UNKNOWN; no SMART data is fabricated. Multiplexed controller paths
+// are skipped: their per-member typed targets describe the real disks, and the
+// shared /dev path is the array, not a disk.
+func linuxIdentityOnlyDisks(missed []smartctlTarget, collected, multiplexed map[string]struct{}, diskExclude []string) []DiskSMART {
+	if runtimeGOOS != "linux" || len(missed) == 0 {
+		return nil
+	}
+
+	var results []DiskSMART
+	seen := make(map[string]struct{}, len(missed))
+	for _, target := range missed {
+		if isMultiplexedDeviceType(target.DeviceType) {
+			continue
+		}
+		block := canonicalBlockDeviceForScanPath(target.Path)
+		if block == "" {
+			continue
+		}
+		if _, ok := collected[block]; ok {
+			continue
+		}
+		if _, ok := multiplexed[block]; ok {
+			continue
+		}
+		if _, ok := seen[block]; ok {
+			continue
+		}
+		seen[block] = struct{}{}
+
+		size := blockDeviceSizeBytes(block)
+		if size <= 0 {
+			// Zero capacity means no medium (card readers, empty bridges) or
+			// no /sys/block entry at all; nothing real to report.
+			continue
+		}
+		if matchesDeviceExclude(block, "/dev/"+block, diskExclude) {
+			continue
+		}
+
+		diskType := "sata"
+		if strings.HasPrefix(block, "nvme") {
+			diskType = "nvme"
+		}
+		results = append(results, DiskSMART{
+			Device:      block,
+			Model:       readTrimmedFile(filepath.Join("/sys/block", block, "device", "model")),
+			Serial:      readTrimmedFile(filepath.Join("/sys/block", block, "device", "serial")),
+			Type:        diskType,
+			SizeBytes:   size,
+			Health:      "UNKNOWN",
+			LastUpdated: timeNow(),
+		})
+		log.Debug().
+			Str("component", smartctlComponent).
+			Str("action", "identity_only_disk").
+			Str("device", block).
+			Int64("sizeBytes", size).
+			Msg("Reporting identity-only entry for physical disk without usable SMART data")
+	}
+	return results
+}
+
 // isMultiplexedDeviceType reports whether a smartctl -d type addresses a member
 // disk behind a controller (e.g. "megaraid,7"), as opposed to a directly
 // attached device ("", "sat", "nvme", "scsi", "sat,auto").
@@ -925,6 +1064,16 @@ func collectSMARTTarget(ctx context.Context, target smartctlTarget) (*DiskSMART,
 						}
 						continue
 					}
+					// -n standby,3 makes a real standby exit 3; exit bit 2 with
+					// no output is an open/identify failure, not standby. When
+					// another attempt remains (Linux untyped retry), try it
+					// before reporting a phantom standby disk.
+					if runtimeGOOS == "linux" && i < len(attempts)-1 && exitCode != smartctlStandbyExitStatus {
+						if firstStandby == nil {
+							firstStandby = standbyResult
+						}
+						continue
+					}
 					log.Debug().
 						Str("component", smartctlComponent).
 						Str("action", "device_in_standby").
@@ -1000,9 +1149,19 @@ func collectSMARTTarget(ctx context.Context, target smartctlTarget) (*DiskSMART,
 func smartctlProbeAttempts(target smartctlTarget) [][]string {
 	device := target.Path
 	if target.DeviceType != "" {
-		return [][]string{
+		attempts := [][]string{
 			smartctlArgs(device, target.DeviceType),
 		}
+		// A scan-open device type is a hint, not ground truth: smartctl can
+		// suggest a type whose full query (-i -A -H) fails or returns no usable
+		// data even though untyped auto-detection works (#1483: a SATA SSD
+		// dropped after its typed probe yielded nothing). Retry untyped before
+		// giving up. Multiplexed controller members are exempt because dropping
+		// the -d would re-probe the shared array device, not the member.
+		if runtimeGOOS == "linux" && !isMultiplexedDeviceType(target.DeviceType) {
+			attempts = append(attempts, smartctlArgs(device, ""))
+		}
+		return attempts
 	}
 
 	if runtimeGOOS == "freebsd" {

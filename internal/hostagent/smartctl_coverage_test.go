@@ -247,14 +247,19 @@ func TestCollectSMARTLocalUsesSmartctlScanOpenTargetsOnLinux(t *testing.T) {
 	origRun := smartRunCommandOutput
 	origLook := execLookPath
 	origGOOS := runtimeGOOS
+	origReadDir := readDir
 	t.Cleanup(func() {
 		smartRunCommandOutput = origRun
 		execLookPath = origLook
 		runtimeGOOS = origGOOS
+		readDir = origReadDir
 	})
 
 	runtimeGOOS = "linux"
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
+	// Empty /sys/block: the scan-open target is the only discovery source, so
+	// the seenArgs order below stays scan -> probe.
+	readDir = func(string) ([]os.DirEntry, error) { return nil, nil }
 
 	var seenArgs [][]string
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
