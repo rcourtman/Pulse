@@ -304,8 +304,21 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
         return !!evt.pendingTool;
       case 'tool_cancel':
         return !!evt.toolCancel;
-      case 'model_switch':
-        return !!evt.model?.trim();
+      case 'model_switch': {
+        if (!evt.model?.trim()) return false;
+        if (!isSelectedModelRouteEvent(evt)) return true;
+        // A plain selected-route row repeats the route badge already shown in
+        // the turn header. Keep it only when it adds information: the header
+        // has no route, the route differs from the turn's final model, or a
+        // later switch makes the starting route part of the turn's story.
+        const hasRouteSwitch = (props.message.streamEvents || []).some(
+          (event) =>
+            event.type === 'model_switch' &&
+            !!event.model?.trim() &&
+            !isSelectedModelRouteEvent(event),
+        );
+        return hasRouteSwitch || !props.message.model || evt.model !== props.message.model;
+      }
       case 'approval':
         return !!evt.approval;
       case 'question':

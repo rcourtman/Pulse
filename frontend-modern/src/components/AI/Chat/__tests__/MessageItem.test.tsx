@@ -1170,6 +1170,70 @@ describe('MessageItem', () => {
       ).toHaveTextContent('Using Qwen 3.7 Plus via OpenRouter');
     });
 
+    it('hides the selected-route row when the turn header badge already shows the same route', () => {
+      const events: StreamDisplayEvent[] = [
+        {
+          type: 'model_switch',
+          model: 'openrouter:qwen/qwen3.7-plus',
+          modelEvent: 'selected',
+        },
+      ];
+
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            model: 'openrouter:qwen/qwen3.7-plus',
+            streamEvents: events,
+          })}
+          getModelRouteLabel={(model) =>
+            model === 'openrouter:qwen/qwen3.7-plus' ? 'Qwen 3.7 Plus via OpenRouter' : model
+          }
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(
+        screen.queryByRole('status', { name: 'Assistant model route selected' }),
+      ).not.toBeInTheDocument();
+      // The route is still visible exactly once, in the header badge.
+      expect(screen.getByText('Qwen 3.7 Plus via OpenRouter')).toBeInTheDocument();
+    });
+
+    it('keeps the selected-route row when a later switch makes it part of the turn story', () => {
+      const events: StreamDisplayEvent[] = [
+        {
+          type: 'model_switch',
+          model: 'openrouter:qwen/qwen3.7-plus',
+          modelEvent: 'selected',
+        },
+        {
+          type: 'model_switch',
+          failedModel: 'openrouter:qwen/qwen3.7-plus',
+          model: 'gemini:gemini-3.1-flash-lite',
+        },
+      ];
+
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            model: 'gemini:gemini-3.1-flash-lite',
+            streamEvents: events,
+          })}
+          getModelRouteLabel={(model) => model}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(
+        screen.getByRole('status', { name: 'Assistant model route selected' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('status', { name: 'Assistant model route changed' }),
+      ).toBeInTheDocument();
+    });
+
     it('does not render request-start progress as a transcript row next to selected model route evidence (footer-owned)', () => {
       const events: StreamDisplayEvent[] = [
         {
