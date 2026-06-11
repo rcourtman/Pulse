@@ -32,8 +32,7 @@ export function CommercialMigrationBanner() {
     const state = migration()?.state;
     if (!state) return false;
     return (
-      dismissedState() === state ||
-      sessionStorage.getItem(DISMISSED_KEY_PREFIX + state) === 'true'
+      dismissedState() === state || sessionStorage.getItem(DISMISSED_KEY_PREFIX + state) === 'true'
     );
   });
 
