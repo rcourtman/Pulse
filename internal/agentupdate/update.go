@@ -115,6 +115,13 @@ func New(cfg Config) *Updater {
 		client: &http.Client{
 			Transport: transport,
 			Timeout:   downloadTimeout,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				// Prevent credential leakage (X-API-Token / Authorization) on redirects.
+				// Go's net/http strips Authorization/Cookie on a cross-host redirect but
+				// forwards custom headers such as X-API-Token, so refuse to follow any
+				// redirect rather than re-send the agent token to a redirect target.
+				return fmt.Errorf("server returned redirect to %s", req.URL.Redacted())
+			},
 		},
 		logger: logger,
 	}

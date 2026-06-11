@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -132,5 +133,73 @@ func TestUpdater_CheckAndUpdate_VersionComparePaths(t *testing.T) {
 				t.Fatalf("performUpdate called=%v, want %v", called, tc.expectUpdate)
 			}
 		})
+	}
+}
+
+// TestUpdater_getServerVersion_RejectsRedirects guards against the agent API
+// token (X-API-Token) leaking to a cross-host redirect target. Go's net/http
+// strips Authorization/Cookie on a cross-host redirect but forwards custom
+// headers such as X-API-Token, so the client must refuse to follow redirects.
+func TestUpdater_getServerVersion_RejectsRedirects(t *testing.T) {
+	var redirectedHits int32
+	redirectTarget := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&redirectedHits, 1)
+		_ = json.NewEncoder(w).Encode(map[string]string{"version": "9.9.9"})
+	}))
+	defer redirectTarget.Close()
+
+	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, redirectTarget.URL+r.URL.Path, http.StatusFound)
+	}))
+	defer redirector.Close()
+
+	u := New(Config{
+		PulseURL:       redirector.URL,
+		APIToken:       "token",
+		CurrentVersion: "1.0.0",
+	})
+
+	_, err := u.getServerVersion(context.Background())
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "redirect") {
+		t.Fatalf("expected redirect rejection error, got: %v", err)
+	}
+	if atomic.LoadInt32(&redirectedHits) != 0 {
+		t.Fatalf("expected no redirected request to be sent")
+	}
+}
+
+// TestUpdater_performUpdateWithExecPath_RejectsRedirects guards the binary
+// download path against the same cross-host redirect token leak.
+func TestUpdater_performUpdateWithExecPath_RejectsRedirects(t *testing.T) {
+	var redirectedHits int32
+	redirectTarget := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&redirectedHits, 1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer redirectTarget.Close()
+
+	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, redirectTarget.URL+r.URL.RequestURI(), http.StatusFound)
+	}))
+	defer redirector.Close()
+
+	_, execPath := writeTempExec(t)
+	u := New(Config{
+		PulseURL:       redirector.URL,
+		APIToken:       "token",
+		AgentName:      "pulse-agent",
+		CurrentVersion: "1.0.0",
+	})
+
+	origRestart := restartProcessFn
+	t.Cleanup(func() { restartProcessFn = origRestart })
+	restartProcessFn = func(string) error { return nil }
+
+	err := u.performUpdateWithExecPath(context.Background(), execPath)
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "redirect") {
+		t.Fatalf("expected redirect rejection error, got: %v", err)
+	}
+	if atomic.LoadInt32(&redirectedHits) != 0 {
+		t.Fatalf("expected no redirected download request to be sent")
 	}
 }
